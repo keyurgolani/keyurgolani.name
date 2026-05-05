@@ -14,6 +14,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..', '..', '..');
 const APPS_WEB = path.resolve(__dirname, '..');
 const OUTPUT = path.join(APPS_WEB, 'src', 'lib', 'registry.generated.ts');
+const STYLES_OUTPUT = path.join(APPS_WEB, 'src', 'lib', 'registry.styles.generated.ts');
 
 const ROOTS = [path.join(ROOT, 'packages')];
 if (process.env.INCLUDE_EXPERIMENTS === '1') {
@@ -62,6 +63,26 @@ function safeIdent(slug) {
   return slug.replace(/[^a-zA-Z0-9_]/g, '_');
 }
 
+function generateStyles(variants) {
+  const lines = [];
+  lines.push('// AUTO-GENERATED — do not edit by hand.');
+  lines.push("// Regenerate with `pnpm --filter @portfolio/web build:registry`.");
+  lines.push('//');
+  lines.push('// Side-effect imports for every registered variant\'s stylesheet. The host');
+  lines.push('// layout imports this single file so all variants get their CSS injected,');
+  lines.push("// without hard-coding any one variant's import path.");
+  lines.push('');
+  for (const v of variants) {
+    lines.push(`import '${v.pkg}/styles.css';`);
+  }
+  if (variants.length === 0) {
+    lines.push('// (no variants discovered)');
+  }
+  lines.push('');
+  lines.push('export {};');
+  return lines.join('\n') + '\n';
+}
+
 function generate(variants) {
   const lines = [];
   lines.push('// AUTO-GENERATED — do not edit by hand.');
@@ -103,6 +124,8 @@ function main() {
   const variants = discoverVariants();
   ensureDir(OUTPUT);
   writeFileSync(OUTPUT, generate(variants));
+  ensureDir(STYLES_OUTPUT);
+  writeFileSync(STYLES_OUTPUT, generateStyles(variants));
   const labels = variants.map((v) => `${v.slug}${v.isExperiment ? '*' : ''}`);
   console.log(
     `[registry] Wrote ${path.relative(ROOT, OUTPUT)} with ${variants.length} variant(s)` +

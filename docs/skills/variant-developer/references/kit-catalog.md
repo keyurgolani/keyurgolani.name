@@ -97,6 +97,14 @@ If they disagree, the source wins.
 
 `Portfolio`, `Section`, `SectionKind`, `ThemePreference`, `MotionPreference`, `Identity`, `Link`, `Image`, `Period` — re-exported for ergonomic imports inside variants without depending directly on `@portfolio/schema`.
 
+## Animated text + counters (`@portfolio/kit`)
+
+| Export | Signature | Use when |
+|--------|-----------|----------|
+| `TypingAnimation` | React component `{ texts, typingSpeed?, deletingSpeed?, pauseDuration?, pauseDurations?, className?, motionPreference?, caret? }` | Cycling through a list of role/tagline strings character by character; reduced-motion users see the first text statically. |
+| `AnimatedCounter` | React component `{ end, durationMs?, prefix?, suffix?, decimals?, startOnView?, motionPreference?, className? }` | IntersectionObserver-triggered number ramp for stats tiles; cubic ease-out, no spring. |
+| `TypingAnimationProps`, `AnimatedCounterProps` (types) | — | Annotating consumers. |
+
 ## Pretext — text-measurement hooks (`@portfolio/kit`, also `@portfolio/kit/pretext`)
 
 | Export | Signature | Use when |
@@ -148,6 +156,54 @@ If they disagree, the source wins.
 | `ScanlineOverlay` | component `{ scanlineColor?, scanlineSpacing?, scrollSpeed?, chromaticAberration?, vignette?, tint?, ... }` | CRT scanline + chromatic-aberration overlay (medium tier). |
 | `WavePlaneCanvas` | component `{ colorA?, colorB?, colorC?, speed?, amplitude?, frequency?, zIndex? }` | WebGL2 fragment-shader animated plane (medium tier). |
 | `SpatialContractValues`, `UseSpatialContractOptions` (types) | — | Annotating contract consumers. |
+
+## Timeline primitives (`@portfolio/kit/timeline`)
+
+> Pure data utilities + presentational React wrappers for chronology
+> visualizations. No framework lock-in; the React wrappers stay deliberately
+> dumb (consumer composes cards + animations on top).
+
+| Export | Signature | Use when |
+|--------|-----------|----------|
+| `assignTimelineLanes` | `(events: T[], opts?) => LaneAssignment<T>[]` | Distributing overlapping events across left/right sides + slot lanes so visual collisions don't happen. Pure function. |
+| `maxSlot` | `(assignments) => number` | Finding the outermost slot used; helpful for SVG canvas sizing. |
+| `computeDensityProjection` | `(events, assignments, opts?) => TimelineProjection` | Topology-driven Y mapping — dense intervals get more vertical space, sparse intervals don't blast the canvas apart. |
+| `invertProjection` | `(projection) => TimelineProjection` | "Newest-at-top" inversion of a forward projection. |
+| `buildBranchPath` | `({ centerX, branchX, startY, endY, options? }) => BranchPath` | Returns SVG `d` strings for fork/trunk/merge curves connecting an axis to a branch. |
+| `buildAxisPath` | `(centerX, topY, bottomY) => string` | Vertical axis `d` string. |
+| `inferKindFromText` | `(haystack, rules, opts) => K` | Generalized keyword classifier — caller supplies the priority-ordered rule set. |
+| `TimelineAxis` | React component `{ centerX, topY, bottomY, ...svgProps }` | Renders an SVG axis path with sane defaults. Restyle freely via `stroke`, `strokeWidth`. |
+| `TimelineBranch` | React component | Renders the three SVG branch paths; accepts a per-segment `renderSegment` render-prop so consumers can wrap with framer-motion for entrance animation. |
+| `layoutBranchCard` | `({ branchX, startY, endY, side, cardWidth, cardHeight, pad? }) => { x, y, width, height, style }` | Coordinates for a `<foreignObject>`-based card placed at a branch midpoint. |
+| `Side`, `LaneInputEvent`, `LaneAssignment`, `AssignTimelineLanesOptions`, `TimelineProjection`, `DensityProjectionOptions`, `BranchPath`, `BranchPathOptions`, `ClassifyRules`, `ClassifyOptions`, `TimelineAxisProps`, `TimelineBranchProps` (types) | — | Annotating callers and renderer props. |
+
+## Motion-fx hooks (`@portfolio/kit/motion-fx`)
+
+> framer-motion-backed interaction primitives. Lives behind a sub-path so
+> still-tier variants don't pull in framer-motion. framer-motion is an
+> optional peer dependency of @portfolio/kit; consumers must install it
+> themselves (kinetic variants do).
+
+| Export | Signature | Use when |
+|--------|-----------|----------|
+| `useScrollVelocityInertia` | `(opts?) => { y, rotateX, smoothVelocity }` | Cards/panels that should "stretch" when the scroll wheel is spun rapidly. Returns spring-smoothed motion values. |
+| `useMouseTilt` | `(opts?) => { ref, rotateX, rotateY, mouseX, mouseY, onMouseMove, onMouseLeave }` | 3D parallax card tilt with hover-glow position. Apply rotateX/Y via `style` and use mouseX/Y for radial-gradient backgrounds. |
+| `useViewportCenterActive` | `(opts?) => { ref, isActive }` | "Element is in the viewport center" predicate for scroll-tied highlights; defaults to the `-40% 0px -40% 0px` margin band. |
+| `useFirstInteraction` | `(opts?) => boolean` | Gates expensive UI (particles, draggable cards) until the user first interacts with the page (scroll/click/move/touch/key); listeners self-detach after the first fire. |
+| `useScrollDispersal` | `({ position, maxDispersal?, multiplier?, scrollRange?, opacityCurve?, scaleRange?, spring?, enabled? }) => { x, y, opacity, scale }` | Anchored elements drift outward radially from viewport center as the page scrolls past them; spring-smoothed motion values. |
+| `ScrollVelocityInertiaOptions`, `ScrollVelocityInertiaValues`, `MouseTiltOptions`, `MouseTiltValues`, `ViewportCenterActiveOptions`, `ViewportCenterActive`, `FirstInteractionOptions`, `ScrollDispersalOptions`, `ScrollDispersalValues` (types) | — | Annotating consumers and call sites. |
+
+## Social brand registry (`@portfolio/kit/social-brand`)
+
+> Brand-aware visual treatments for known platforms — used by variants
+> rendering social profile cards. Static lookup; no React, no DOM.
+
+| Export | Signature | Use when |
+|--------|-----------|----------|
+| `getSocialBrandStyle` | `(platform?: string \| null) => SocialBrandStyle` | Resolving the gradient/accent/glow/iconBg/pattern for a platform (case-insensitive, with aliases and fallback). |
+| `inferPlatformFromUrl` | `(url: string) => string \| null` | Best-effort platform key derivation when you only have a URL (host matching). |
+| `listSocialBrands` | `() => string[]` | Listing every registered platform key (excludes the `default` fallback). |
+| `SocialBrandStyle` (type) | — | Annotating render-prop consumers. |
 
 ## Spatial R3F — react-three-fiber primitives (`@portfolio/kit/spatial-r3f`)
 
