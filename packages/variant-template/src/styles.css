@@ -1,0 +1,101 @@
+/* === Template variant — minimal baseline =================================
+ *
+ * This file is your starting canvas. It declares CSS custom-property tokens
+ * with sensible light/dark defaults and provides bare layout chrome. The
+ * fallback section renderer in @portfolio/kit uses currentColor + opacity
+ * so it picks up these tokens automatically.
+ *
+ * Extend by adding bespoke renderer styles below the marker. */
+
+.vt-root {
+  --vt-paper: #fbfbf9;
+  --vt-ink: #1a1a1a;
+  --vt-ink-muted: rgba(26, 26, 26, 0.6);
+  --vt-rule: rgba(26, 26, 26, 0.12);
+  --vt-accent: #2451a4;
+
+  background: var(--vt-paper);
+  color: var(--vt-ink);
+  min-height: 100vh;
+  font-family:
+    'Inter',
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+  font-size: 16px;
+  line-height: 1.55;
+}
+
+[data-theme='dark'] .vt-root {
+  --vt-paper: #0d0d0e;
+  --vt-ink: #e9e9e6;
+  --vt-ink-muted: rgba(233, 233, 230, 0.65);
+  --vt-rule: rgba(233, 233, 230, 0.14);
+  --vt-accent: #7a9bd9;
+  color-scheme: dark;
+}
+
+.vt-page {
+  max-width: 64rem;
+  margin: 0 auto;
+  padding: 4rem 1.5rem 6rem;
+}
+
+.vt-page section {
+  margin-top: 2.5rem;
+  padding-top: 2.5rem;
+  border-top: 1px solid var(--vt-rule);
+}
+
+.vt-page section:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
+.vt-page a {
+  color: var(--vt-accent);
+  text-decoration: none;
+  border-bottom: 1px solid currentColor;
+}
+
+.vt-page a:hover {
+  opacity: 0.75;
+}
+
+.vt-theme-toggle {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  display: flex;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  background: var(--vt-paper);
+  border: 1px solid var(--vt-rule);
+  border-radius: 999px;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  z-index: 50;
+}
+
+.vt-theme-toggle__option {
+  padding: 0.35rem 0.75rem;
+  background: none;
+  border: none;
+  color: var(--vt-ink-muted);
+  cursor: pointer;
+  border-radius: 999px;
+  font: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+}
+
+.vt-theme-toggle__option[data-active='true'] {
+  background: var(--vt-ink);
+  color: var(--vt-paper);
+}
+
+/* === Bespoke renderer styles ============================================
+ * Add styles for the renderers you write below this marker. */

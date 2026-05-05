@@ -1,0 +1,59 @@
+# dependencies
+node_modules
+.pnpm-store
+.pnp
+.pnp.*
+
+# build outputs
+dist
+build
+.next
+out
+*.tsbuildinfo
+next-env.d.ts
+
+# generated
+**/registry.generated.ts
+**/manifests.generated.ts
+
+# coverage / test
+coverage
+test-results
+playwright-report
+
+# env
+.env
+.env.*
+!.env.example
+
+# editor
+.vscode
+.idea
+
+# macOS
+.DS_Store
+._*
+.AppleDouble
+.LSOverride
+
+# logs
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# vercel
+.vercel
+
+# misc
+*.pem
+.cache
+
+# variant experiments — gitignored holding pen for non-curated variant candidates
+/experiments/
+
+# visual companion preview screenshots — generated locally by docs/skills/variant-developer
+/.variant-preview/
+
+# archive of the prior single-app project state — local reference only
+/archive/

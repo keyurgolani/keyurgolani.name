@@ -1,0 +1,12 @@
+identity:
+  name: 42
+  tagline: Engineer & writer
+
+variant: editorial
+theme: system
+
+links: []
+
+sections:
+  - kind: hero
+    tagline: I build calm software at scale.

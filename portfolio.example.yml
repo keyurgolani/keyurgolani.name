@@ -1,0 +1,585 @@
+# ────────────────────────────────────────────────────────────────────────────
+# Portfolio configuration
+#
+# Edit this file directly or via http://localhost:3000/admin
+# All section kinds documented at packages/schema/src/kinds/index.ts
+# ────────────────────────────────────────────────────────────────────────────
+
+identity:
+  name: Anamika Devi
+  tagline: Engineer, writer, speaker
+  pronouns: she/her
+  location: Bengaluru, India
+  email: anamika@example.com
+  avatar:
+    src: https://picsum.photos/seed/anamika-portrait/400/400
+    alt: Anamika in her studio
+
+variant: editorial
+theme: system
+
+links:
+  - platform: github
+    url: https://github.com/anamika
+    label: GitHub
+  - platform: linkedin
+    url: https://linkedin.com/in/anamika
+    label: LinkedIn
+  - platform: mastodon
+    url: https://hachyderm.io/@anamika
+    label: Mastodon
+  - platform: website
+    url: https://anamika.example.com
+    label: anamika.example.com
+  - platform: resume
+    url: https://anamika.example.com/cv.pdf
+    label: Resume
+
+meta:
+  title: Anamika Devi — Portfolio
+  description: Distributed-systems engineer, technology essayist, and conference speaker.
+  url: https://anamika.example.com
+
+sections:
+  # ── Hero ─────────────────────────────────────────────────────────────────
+  - kind: hero
+    greeting: Hello, I'm
+    tagline: I build calm software at scale, write essays about its quieter parts, and speak at conferences when the topic warrants it.
+    subtagline: Currently leading reliability for a platform that handles 10B requests a day.
+    ctas:
+      - url: '#contact'
+        label: Get in touch
+      - url: 'https://anamika.example.com/cv.pdf'
+        label: Resume
+
+  # ── Lede (long-form bio) ────────────────────────────────────────────────
+  - kind: lede
+    title: About
+    body: |
+      I work at the messy intersection of **distributed systems** and **organizational psychology** — the places where the engineering decisions
+      depend more on how a team thinks than on what the database does. My day job is improving reliability for a payments platform that processes
+      ten billion requests a day across thirty-eight services. My side projects are a long-running essay series on *system illegibility*, a
+      podcast about the history of software incidents, and an open-source toolkit for writing better postmortems.
+
+      Before this I spent five years at a search-and-discovery startup, where I learned that the hardest distributed-systems problem is usually
+      whichever one your most senior engineer is currently afraid of. Before that, a research assistantship in formal verification taught me both
+      that proofs scale poorly and that *the people writing them* scale even worse. I have not entirely recovered from this.
+
+      I write because thinking on paper makes me a better engineer, and I speak because I want fewer people to have to learn the same lessons twice.
+
+  # ── Now ──────────────────────────────────────────────────────────────────
+  - kind: now
+    title: Now
+    asOf: 2026-04-15
+    body: |
+      I'm spending the first half of this year on three things: shipping a service-mesh migration without an incident; writing a book on the
+      *anthropology of on-call*; and (slowly, very slowly) learning enough Carnatic music theory to embarrass myself at a kacheri.
+
+  # ── Stats ────────────────────────────────────────────────────────────────
+  - kind: stats
+    title: At a glance
+    items:
+      - value: '12'
+        label: Years engineering
+        description: From research code to production systems
+      - value: '38'
+        label: Services owned
+        description: Across three platform teams
+      - value: '47'
+        label: Essays published
+      - value: '3'
+        label: Books in progress
+
+  # ── Tenure (career duration as a single accent figure) ──────────────────
+  - kind: tenure
+    title: Years in
+    years: 12
+    summary: From research code to production systems handling ten billion requests a day.
+
+  # ── Current focus (short labels — what you're putting energy into now) ──
+  - kind: focus
+    title: Currently focused on
+    items:
+      - Service-mesh migration
+      - Postmortem culture
+      - Anthropology of on-call (book draft)
+      - Carnatic music theory
+
+  # ── Projects ────────────────────────────────────────────────────────────
+  - kind: projects
+    title: Work Showcase
+    items:
+      - name: postmortem-template-kit
+        summary: An opinionated, batteries-included template kit for writing better incident postmortems.
+        description: |
+          Three years of running postmortem reviews convinced me that the *template* is doing most of the work. This kit ships with twelve
+          templates spanning availability, latency, security, and process incidents, plus a CLI that walks an author through the questions
+          that don't get asked enough — *what was the smallest signal that was missed* and *what did the room assume that wasn't true*.
+
+          Used at a dozen mid-size engineering teams and one government agency I'm not allowed to name.
+        period:
+          start: 2022-01
+        role: Author and maintainer
+        technologies: [TypeScript, Bun, Markdown]
+        image:
+          src: https://picsum.photos/seed/postmortem-kit/640/420
+          alt: Screenshot of the postmortem CLI tool
+          credit: ''
+        links:
+          - url: https://github.com/anamika/postmortem-template-kit
+            label: GitHub
+          - url: https://postmortems.example.com
+            label: Project site
+        highlights:
+          - 3,200+ GitHub stars
+          - Cited in three SREcon talks
+          - Plain-language explainer in The Pragmatic Engineer
+      - name: small-traces
+        summary: A minimalist tracing library for understanding latency in serverless workloads — designed for legibility over completeness.
+        description: |
+          OpenTelemetry is a wonderful thing, but for the kind of system where you have eleven cold-started Lambdas and you want to know
+          *which one* spent fourteen seconds doing nothing, it is overkill. small-traces ships in 800 lines of TypeScript, has zero
+          dependencies, and prints traces as ASCII flame graphs.
+        period:
+          start: 2024-06
+        role: Author
+        technologies: [TypeScript, AWS Lambda]
+        image:
+          src: https://picsum.photos/seed/small-traces/640/420
+          alt: ASCII flame graph rendered in a terminal
+        links:
+          - url: https://github.com/anamika/small-traces
+            label: GitHub
+      - name: chaos-curriculum
+        summary: A four-week curriculum for teaching engineering teams how to run their first chaos-engineering experiment safely.
+        description: |
+          Written for teams with no game-day tradition — emphasis on "what could go wrong" rather than "what went wrong." Includes
+          facilitator notes, a sample blast-radius worksheet, and three case studies.
+        role: Curriculum author
+        technologies: [Curriculum design, Markdown]
+        links:
+          - url: https://example.com/chaos-curriculum
+            label: Read the curriculum
+
+  # ── Skills ──────────────────────────────────────────────────────────────
+  - kind: skills
+    title: Skills
+    groups:
+      - name: Distributed systems
+        description: My professional centre of gravity
+        items: [Consensus, Replication, Anti-entropy, Service meshes, Geo-replication]
+      - name: Reliability
+        items: [SLO design, Error budgets, Incident response, Postmortem facilitation, Chaos engineering]
+      - name: Languages
+        items: [Go, TypeScript, Python, Rust]
+      - name: Writing
+        items: [Long-form essay, Conference talks, Curriculum]
+
+  # ── Fun facts (playful personal details) ────────────────────────────────
+  - kind: fun-facts
+    title: Off the page
+    items:
+      - I have visited 47 USENIX SREcons; only one of them on purpose.
+      - I produce ambient music nobody asked for.
+      - The first program I wrote was a Tic-Tac-Toe AI in QBASIC that always lost.
+      - I keep a paper notebook of incidents, indexed by hand.
+
+  # ── Experience ──────────────────────────────────────────────────────────
+  - kind: experience
+    title: Experience
+    items:
+      - role: Principal Engineer, Reliability
+        organization: Solstice Payments
+        organizationUrl: https://example.com/solstice
+        location: Bengaluru, India
+        period:
+          start: 2023-04
+        description: |
+          Lead the reliability practice across thirty-eight services for a real-time payments platform. Own SLO governance, the
+          incident-response curriculum, and the quarterly chaos-engineering program. Drove our error budget policy through three executive
+          reorganizations without losing it.
+        highlights:
+          - Reduced mean-time-to-detect from 14 min to 3 min by rebuilding the alerting taxonomy
+          - Founded the platform's incident-review program; we now do 100% of postmortems within seven days
+          - Wrote and open-sourced the postmortem-template-kit (3.2k stars)
+        skills: [Distributed systems, SRE, Kubernetes, Go, OpenTelemetry, Incident response]
+        logo:
+          src: https://picsum.photos/seed/solstice-logo/120/120
+      - role: Senior Engineer
+        organization: Mosaic Search
+        organizationUrl: https://example.com/mosaic
+        location: Remote
+        period:
+          start: 2018-08
+          end: 2023-03
+        description: |
+          Built the relevance pipeline that powered Mosaic's enterprise search across three SaaS verticals. Migrated the team from
+          quarterly releases to continuous deployment in eighteen months, which mostly involved un-doing previous attempts at the same.
+        highlights:
+          - Designed the "intent-aware" reranker that became the company's most quoted launch
+          - Mentored seven engineers; five moved into senior roles within their first two years
+          - Wrote the engineering handbook chapter on writing design documents
+        skills: [Information retrieval, Python, Go, Kafka, Postgres, Mentorship]
+      - role: Research Assistant
+        organization: IIT Bombay, Formal Methods Lab
+        location: Mumbai, India
+        period:
+          start: 2014-08
+          end: 2016-06
+        description: Worked on probabilistic model checking for distributed protocols. Co-authored two papers and learned the limits of proof.
+        skills: [TLA+, Coq, Distributed protocols]
+
+  # ── Education ───────────────────────────────────────────────────────────
+  - kind: education
+    title: Education
+    items:
+      - degree: M.S.
+        field: Computer Science
+        institution: IIT Bombay
+        institutionUrl: https://www.iitb.ac.in
+        location: Mumbai, India
+        period:
+          start: '2014'
+          end: '2016'
+        description: Thesis on probabilistic model checking applied to consensus protocols.
+        achievements:
+          - Institute silver medal for academic excellence
+          - Best M.S. thesis (Department of Computer Science, 2016)
+      - degree: B.Tech.
+        field: Information Technology
+        institution: NIT Karnataka
+        location: Surathkal, India
+        period:
+          start: '2010'
+          end: '2014'
+        achievements:
+          - Founder, NITK Open Source Group
+
+  # ── Writings ────────────────────────────────────────────────────────────
+  - kind: writings
+    title: Essays
+    items:
+      - title: The Quiet Cost of Legible Systems
+        excerpt: When you make a system easy to read, you also make its boundaries easy to argue about.
+        summary: On how observability turns engineering trade-offs into political ones, and what to do about it.
+        publication: anamika.example.com
+        publishedAt: 2026-02-08
+        url: https://anamika.example.com/essays/legible-systems
+        readingTimeMinutes: 14
+        tags: [observability, organizations, essay]
+      - title: A Brief History of the Phrase "Cattle, Not Pets"
+        excerpt: It started as a joke at a 2012 Velocity conference and outlived everyone who was in the room.
+        summary: A short etymology of the most-quoted phrase in modern infrastructure, with a defense of pets.
+        publication: anamika.example.com
+        publishedAt: 2025-11-22
+        url: https://anamika.example.com/essays/cattle-not-pets
+        readingTimeMinutes: 9
+        tags: [history, infrastructure]
+      - title: Postmortems Are an Editing Problem
+        excerpt: The first draft is always too long, too defensive, and too sure of itself.
+        summary: How to get an honest postmortem out of a reluctant team — borrow from the rules of essay editing.
+        publication: SREcon Proceedings
+        publishedAt: 2024-06-04
+        url: https://example.com/srecon-2024-anamika
+        readingTimeMinutes: 11
+        tags: [postmortems, writing]
+
+  # ── Publications ────────────────────────────────────────────────────────
+  - kind: publications
+    title: Publications
+    items:
+      - title: Probabilistic Model Checking of Eventually-Consistent Stores
+        authors: [Anamika Devi, Rajesh Kumar, S. Vasudevan]
+        venue: Proc. FSTTCS 2016
+        publishedAt: 2016-12-12
+        abstract: We show that the verification of bounded staleness in a class of eventually-consistent stores reduces to a probabilistic model checking problem with polynomial-time decidability.
+        doi: 10.4230/LIPIcs.FSTTCS.2016.42
+        url: https://example.com/fsttcs-2016
+        pdfUrl: https://example.com/papers/fsttcs-2016.pdf
+        awards: [Best student paper]
+      - title: A Survey of Anti-Entropy Mechanisms in Production Systems
+        authors: [Anamika Devi]
+        venue: ACM Computing Surveys
+        publishedAt: 2021-03
+        abstract: A practitioner-oriented survey of anti-entropy techniques (Merkle trees, gossip, hinted handoff) used in production deployments of the largest distributed databases of the past decade.
+        url: https://example.com/csur-anti-entropy
+        citation: Devi, A. (2021). A Survey of Anti-Entropy Mechanisms in Production Systems. ACM Computing Surveys, 54(2), 1–34.
+
+  # ── Talks ───────────────────────────────────────────────────────────────
+  - kind: talks
+    title: Talks
+    items:
+      - title: The Anthropology of On-Call
+        venue: SREcon Asia/Pacific
+        location: Singapore
+        presentedAt: 2025-09-18
+        type: keynote
+        description: A field-anthropology view of why on-call rotations behave the way they do, and what that tells us about resilience.
+        slidesUrl: https://example.com/talks/anthropology-on-call/slides.pdf
+        videoUrl: https://example.com/talks/anthropology-on-call
+      - title: When Latency Lies
+        venue: QCon London
+        location: London, UK
+        presentedAt: 2025-04-10
+        type: session
+        description: How sampling biases in tracing tools hide the worst-case tails — with three real-world cautionary tales.
+        videoUrl: https://example.com/qcon-when-latency-lies
+      - title: Postmortems as Memory
+        venue: Monitorama
+        location: Portland, OR
+        presentedAt: 2024-06-20
+        type: session
+        slidesUrl: https://example.com/talks/postmortems-as-memory.pdf
+
+  # ── Awards ──────────────────────────────────────────────────────────────
+  - kind: awards
+    title: Awards
+    items:
+      - name: SREcon Practitioner Award
+        organization: USENIX
+        receivedAt: '2025'
+        description: For sustained contributions to the SRE practice, including the postmortem-template-kit and three years of conference programming.
+      - name: Best Student Paper, FSTTCS
+        organization: ACM/Springer
+        receivedAt: '2016'
+        description: For the eventually-consistent stores paper.
+
+  # ── Episodes (podcast) ──────────────────────────────────────────────────
+  - kind: episodes
+    title: Incident History
+    showName: Incident History
+    showDescription: A monthly podcast about famous software incidents, what they revealed, and what we got wrong about them in retrospect.
+    items:
+      - number: 24
+        title: The 2010 BlackBerry Outage Was Not About BlackBerry
+        publishedAt: 2026-03-12
+        durationMinutes: 58
+        description: Three days in October 2011 when the world's most secure messaging platform went silent — and what an obscure SAN failure has to teach us about modern multi-region replication.
+        guests: [Mira Anand]
+        audioUrl: https://example.com/incident-history/24
+      - number: 23
+        title: Knight Capital, Twelve Years On
+        publishedAt: 2026-02-08
+        durationMinutes: 51
+        description: A re-reading of the 45-minute trading-floor meltdown that erased a company, with new attention to the deployment script that did it.
+        audioUrl: https://example.com/incident-history/23
+      - number: 22
+        title: The S3 Console Day
+        publishedAt: 2025-12-14
+        durationMinutes: 47
+        description: Why the 2017 S3 outage made us all rethink "static" status pages.
+        audioUrl: https://example.com/incident-history/22
+
+  # ── Patents ─────────────────────────────────────────────────────────────
+  - kind: patents
+    title: Patents
+    items:
+      - title: System and method for adaptive consensus quorum sizing in geo-distributed clusters
+        number: US-11,234,567 B2
+        status: granted
+        filedAt: 2019-06-21
+        grantedAt: 2022-04-12
+        inventors: [Anamika Devi, Karthik Subramanian]
+        assignee: Mosaic Search Technologies
+        description: A consensus protocol whose quorum size adapts to observed latency distributions across geo-distributed regions.
+        url: https://patents.example.com/US11234567
+
+  # ── Gallery (photography or other visual work) ──────────────────────────
+  - kind: gallery
+    title: Looking
+    subtitle: Photographs from the road, when I'm reminded the world keeps making things worth looking at.
+    items:
+      - image:
+          src: https://picsum.photos/seed/photo-1/800/600
+          alt: A market in Hampi at dusk
+        caption: Hampi market, just before close
+        location: Hampi, India
+        takenAt: 2025-11
+      - image:
+          src: https://picsum.photos/seed/photo-2/800/1000
+          alt: A long staircase in a temple
+        caption: 1,300 steps to the Sri Bhramaramba temple
+        location: Srisailam, India
+        takenAt: 2025-09
+      - image:
+          src: https://picsum.photos/seed/photo-3/800/600
+          alt: A cup of filter coffee on a porch
+        caption: Filter coffee at the right temperature is a kind of engineering
+        location: Mysore, India
+        takenAt: 2025-07
+
+  # ── Discography ─────────────────────────────────────────────────────────
+  - kind: discography
+    title: Listening (a small experiment)
+    subtitle: I produced a small ambient EP during a sabbatical year. It is not very good and I am proud of it anyway.
+    items:
+      - title: Field Recordings, vol. 1
+        artist: Anamika Devi
+        role: Producer, composer
+        releasedAt: 2024-12
+        label: Self-released
+        cover:
+          src: https://picsum.photos/seed/album-1/600/600
+          alt: A grainy photograph of fog over a hill
+        description: Six tracks built from unprocessed field recordings made in the Western Ghats during August.
+        tracks:
+          - title: Morning, before the bus
+            durationSeconds: 312
+          - title: Cardamom estate
+            durationSeconds: 254
+          - title: A long walk to the post office
+            durationSeconds: 401
+          - title: Cicadas
+            durationSeconds: 198
+          - title: Rain at the rest house
+            durationSeconds: 372
+          - title: Last bus
+            durationSeconds: 240
+        links:
+          - platform: bandcamp
+            url: https://example.bandcamp.com/album/field-recordings-vol-1
+            label: Bandcamp
+
+  # ── Press ───────────────────────────────────────────────────────────────
+  - kind: press
+    title: Press
+    items:
+      - title: 'Lessons from a 38-service migration: a conversation with Anamika Devi'
+        publication: The Pragmatic Engineer
+        publishedAt: 2025-10-04
+        author: Gergely Orosz
+        excerpt: Devi's reframing of "error budget" as a budget for *organizational* attention — not just availability — is the most useful idea I've encountered this year.
+        url: https://example.com/pragmatic-anamika-interview
+      - title: How to Write a Postmortem That Doesn't Make Things Worse
+        publication: IEEE Software
+        publishedAt: 2025-05-12
+        author: Caitie McCaffrey
+        excerpt: Anamika Devi's template kit is the closest thing the industry has to a shared rubric for what good incident writing looks like.
+        url: https://example.com/ieee-postmortem-piece
+
+  # ── Testimonials ────────────────────────────────────────────────────────
+  - kind: testimonials
+    title: Words from collaborators
+    items:
+      - quote: Anamika has the rare ability to make a hostile room agree on what just went wrong, and then to make them want to write it down.
+        author: Mira Anand
+        authorRole: VP Engineering
+        authorOrganization: Solstice Payments
+        authorAvatar:
+          src: https://picsum.photos/seed/avatar-mira/64/64
+      - quote: Half of what I now know about running incidents I learned by watching her facilitate a single review at our offsite. The other half I'm still working on.
+        author: Karthik Subramanian
+        authorRole: Staff Engineer
+        authorOrganization: Mosaic Search
+      - quote: She is the only engineer I trust to give me bad news first.
+        author: Priya Iyer
+        authorRole: Engineering Director
+        authorOrganization: Solstice Payments
+
+  # ── Quote (standalone epigraph) ─────────────────────────────────────────
+  - kind: quote
+    text: Programmers, like poets, work only slightly removed from pure thought-stuff.
+    attribution: Fred Brooks
+    source: The Mythical Man-Month
+    sourceUrl: https://en.wikipedia.org/wiki/The_Mythical_Man-Month
+
+  # ── Stack ───────────────────────────────────────────────────────────────
+  - kind: stack
+    title: Stack I currently reach for
+    groups:
+      - name: Runtimes
+        items:
+          - { name: Go, version: '1.23' }
+          - { name: TypeScript }
+          - { name: Bun, version: '1.1' }
+      - name: Infrastructure
+        items:
+          - { name: Kubernetes }
+          - { name: Linkerd, url: https://linkerd.io }
+          - { name: PostgreSQL }
+          - { name: NATS, url: https://nats.io }
+      - name: Observability
+        items:
+          - { name: OpenTelemetry, url: https://opentelemetry.io }
+          - { name: Grafana }
+          - { name: Honeycomb }
+      - name: Authoring
+        items:
+          - { name: Obsidian }
+          - { name: Pandoc }
+          - { name: Tufte CSS, url: https://edwardtufte.github.io/tufte-css/ }
+
+  # ── Services ────────────────────────────────────────────────────────────
+  - kind: services
+    title: Engagements
+    subtitle: A small consulting practice — I take on two engagements a quarter.
+    items:
+      - name: Reliability review
+        description: A one-week review of an engineering organization's reliability posture — SLOs, incident response, and postmortem culture. Ends with a written report and a 90-minute readout.
+        pricing: Fixed engagement, contact for rate
+        highlights:
+          - One-week embedded
+          - Written report (typeset, 20-40 pages)
+          - 90-minute leadership readout
+        url: mailto:anamika@example.com?subject=Reliability%20review
+      - name: Workshop — Postmortems as Editing
+        description: A two-day workshop for engineering managers on running postmortem reviews. Limited to twelve participants per cohort.
+        pricing: Quarterly cohorts
+        url: mailto:anamika@example.com?subject=Postmortem%20workshop
+
+  # ── External portfolios (sites the author maintains elsewhere) ─────────
+  - kind: external-portfolios
+    title: Elsewhere
+    subtitle: A few homes for work that doesn't belong here.
+    items:
+      - url: https://anamika.photography
+        brandName: Anamika Photography
+        locationLabel: Bengaluru, IN
+        description: A long-running photo journal of small-town India and Carnatic music halls.
+        categories: [Photography, Travel, Documentary]
+        highlights:
+          - { label: '120+', sub: Published frames }
+          - { label: '8', sub: Cities documented }
+        urlLabel: anamika.photography
+        buttonText: Visit gallery
+        iconName: camera
+      - url: https://incidenthistory.fm
+        brandName: Incident History
+        locationLabel: online
+        description: Monthly podcast about famous software incidents, what they revealed, and what we got wrong about them.
+        categories: [Podcast, History]
+        highlights:
+          - { label: '24', sub: Episodes }
+          - { label: '~52min', sub: Avg length }
+        urlLabel: incidenthistory.fm
+        buttonText: Listen
+        iconName: mic
+
+  # ── GitHub (data fetched server-side at render time) ────────────────────
+  - kind: github
+    title: On GitHub
+    username: anamika
+    showContributionGraph: true
+    showPinnedRepos: true
+    showTotalStars: true
+    showLanguageBreakdown: false
+    featuredRepos: [postmortem-template-kit]
+    excludeRepos: [scratch, dotfiles-private]
+
+  # ── Contact ─────────────────────────────────────────────────────────────
+  - kind: contact
+    title: Get in touch
+    id: contact
+    message: Best route is email, with a note about what you're working on. I read everything; I reply within a week.
+    showAvailability: true
+
+  # ── CTA ──────────────────────────────────────────────────────────────────
+  - kind: cta
+    title: Want to work together?
+    description: I take on two consulting engagements a quarter. Most of my client work starts with a single email.
+    primaryAction:
+      url: mailto:anamika@example.com
+      label: Email me
+    secondaryAction:
+      url: https://anamika.example.com/cv.pdf
+      label: Download CV

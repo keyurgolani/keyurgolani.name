@@ -1,0 +1,24 @@
+identity:
+  name: Test User
+  tagline: Engineer & writer
+  pronouns: they/them
+  location: Bengaluru, India
+  email: test@example.com
+
+variant: editorial
+theme: system
+
+links: []
+
+meta:
+  title: Test User — Portfolio
+  description: A minimal valid portfolio fixture.
+
+sections:
+  - kind: hero
+    greeting: Hello, I'm
+    tagline: I build calm software at scale.
+    subtagline: Currently focused on reliability.
+    ctas:
+      - url: '#contact'
+        label: Get in touch

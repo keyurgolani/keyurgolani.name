@@ -1,0 +1,13 @@
+identity:
+  tagline: Engineer & writer
+  pronouns: they/them
+  location: Bengaluru, India
+
+variant: editorial
+theme: system
+
+links: []
+
+sections:
+  - kind: hero
+    tagline: I build calm software at scale.

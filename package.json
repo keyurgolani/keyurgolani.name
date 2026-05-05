@@ -1,0 +1,30 @@
+{
+  "name": "portfolio-monorepo",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Self-hostable portfolio platform with pluggable visual variants",
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @portfolio/web dev",
+    "build": "pnpm -r --filter='./packages/*' build && pnpm --filter @portfolio/web build",
+    "build:packages": "pnpm -r --filter='./packages/*' build",
+    "start": "pnpm --filter @portfolio/web start",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "clean": "pnpm -r exec rm -rf dist .next node_modules tsconfig.tsbuildinfo && rm -rf node_modules",
+    "new-variant": "node scripts/new-variant.mjs",
+    "check-coverage": "node scripts/check-coverage.mjs",
+    "check:skills": "node docs/skills/scripts/sync-checks.mjs",
+    "postinstall": "pnpm --filter @portfolio/web build:registry || true"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "playwright": "1.58.2",
+    "tsx": "^4.21.0",
+    "typescript": "^5.7.2"
+  }
+}

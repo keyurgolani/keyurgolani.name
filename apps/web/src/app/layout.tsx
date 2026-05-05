@@ -1,0 +1,77 @@
+import type { ReactNode } from 'react';
+import type { Metadata } from 'next';
+import type { ThemePreference } from '@portfolio/schema';
+import { THEME_INIT_SCRIPT, ThemeProvider } from '@portfolio/kit';
+import { buildStructuredData } from '@portfolio/kit/seo';
+import { manifest as editorialManifest } from '@portfolio/variant-editorial';
+import { loadPortfolio } from '~/lib/portfolio';
+import './globals.css';
+import '@portfolio/variant-editorial/styles.css';
+
+export async function generateMetadata(): Promise<Metadata> {
+  try {
+    const { portfolio } = await loadPortfolio();
+    const title = portfolio.meta?.title ?? `${portfolio.identity.name} — Portfolio`;
+    const description = portfolio.meta?.description ?? portfolio.identity.tagline;
+    const url = portfolio.meta?.url;
+
+    const meta: Metadata = {
+      title,
+      description,
+      authors: [{ name: portfolio.identity.name }],
+      creator: portfolio.identity.name,
+      ...(url ? { metadataBase: new URL(url) } : {}),
+      openGraph: {
+        type: 'profile',
+        title,
+        description,
+        siteName: title,
+        ...(url ? { url } : {}),
+      },
+      twitter: {
+        card: 'summary_large_image',
+        title,
+        description,
+      },
+    };
+
+    return meta;
+  } catch {
+    return { title: 'Portfolio' };
+  }
+}
+
+export default async function RootLayout({ children }: { children: ReactNode }) {
+  let defaultPreference: ThemePreference = 'system';
+  let jsonLdBlocks: string[] = [];
+  try {
+    const { portfolio } = await loadPortfolio();
+    defaultPreference = portfolio.theme;
+    jsonLdBlocks = buildStructuredData(portfolio).map((block) => JSON.stringify(block));
+  } catch {
+    // ignore — error page handled in route
+  }
+
+  return (
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+        {jsonLdBlocks.map((json, i) => (
+          <script
+            key={i}
+            type="application/ld+json"
+            dangerouslySetInnerHTML={{ __html: json }}
+          />
+        ))}
+      </head>
+      <body>
+        <ThemeProvider
+          defaultPreference={defaultPreference}
+          supportedThemes={editorialManifest.themes}
+        >
+          {children}
+        </ThemeProvider>
+      </body>
+    </html>
+  );
+}

@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<!--
+  Variant Builder Visual Companion frame template.
+  Inspired by superpowers:brainstorming's visual companion (Anthropic, MIT).
+  Tuned for variant-developer work: palette boards, type pairings, section
+  sketches, density grids, plus the standard option/split/label classes.
+
+  The Node server (server.cjs) injects content fragments at {{__CONTENT__}}.
+  Full-document HTML fragments are served as-is with helper.js injected
+  before </body>.
+-->
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Variant Builder Companion</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=JetBrains+Mono:wght@400;500&display=swap');
+
+    /* ===== THEME VARIABLES (light default) ===== */
+    :root {
+      --paper: #fbfaf6;
+      --paper-elevated: #ffffff;
+      --ink: #1a1a1a;
+      --ink-muted: #4a4845;
+      --accent: #b54a32;
+      --rule: rgba(26, 26, 26, 0.08);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --paper: #0c0b0a;
+        --paper-elevated: #161412;
+        --ink: #ebe7df;
+        --ink-muted: #b3afa6;
+        --accent: #e09578;
+        --rule: rgba(235, 231, 223, 0.08);
+      }
+    }
+
+    /* ===== RESET / BASE ===== */
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: var(--paper); color: var(--ink);
+      line-height: 1.5; min-height: 100vh;
+      padding-bottom: 3rem; /* room for fixed indicator bar */
+    }
+
+    /* ===== FRAME CHROME ===== */
+    header.frame-header {
+      position: sticky; top: 0; z-index: 10;
+      background: var(--paper); border-bottom: 1px solid var(--rule);
+      padding: 0.6rem 1.5rem;
+      font-size: 0.8rem; font-weight: 500;
+      color: var(--ink-muted); letter-spacing: 0.02em;
+    }
+    main.frame-main {
+      max-width: 960px; margin: 0 auto;
+      padding: 2.5rem 1.5rem 2rem;
+    }
+    main.frame-main h1 { font-size: 1.85rem; font-weight: 700; margin: 0 0 0.5rem; }
+    main.frame-main h2 { font-size: 1.4rem; font-weight: 600; margin: 1.5rem 0 0.5rem; }
+    main.frame-main h3 { font-size: 1.05rem; font-weight: 600; margin: 1rem 0 0.4rem; }
+    main.frame-main p  { margin: 0 0 1rem; color: var(--ink); }
+    main.frame-main code, main.frame-main pre { font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; }
+
+    /* ===== SECTION / LABEL ===== */
+    .section { margin-bottom: 2rem; }
+    .label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--ink-muted); }
+
+    /* ===== OPTIONS (A/B/C choices) ===== */
+    .options { display: grid; gap: 1rem; margin: 1.5rem 0; }
+    .option {
+      display: grid; grid-template-columns: 3rem 1fr; gap: 1rem;
+      padding: 1rem; border: 1px solid var(--rule);
+      cursor: pointer; transition: border-color 0.15s;
+      background: var(--paper-elevated);
+    }
+    .option:hover { border-color: var(--accent); }
+    .option.selected { border-color: var(--accent); border-width: 2px; }
+    .option .letter { font-size: 1.5rem; font-weight: 600; align-self: center; text-align: center; color: var(--accent); }
+    .option .content h3 { margin: 0 0 0.5rem 0; font-size: 1.05rem; }
+    .option .content p { margin: 0; font-size: 0.9rem; color: var(--ink-muted); }
+
+    /* ===== CARDS / MOCKUP ===== */
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; margin: 1.5rem 0; }
+    .card { border: 1px solid var(--rule); background: var(--paper-elevated); padding: 1rem; cursor: pointer; transition: border-color 0.15s; }
+    .card:hover { border-color: var(--accent); }
+    .card.selected { border-color: var(--accent); border-width: 2px; }
+    .mockup { border: 1px solid var(--rule); background: var(--paper-elevated); padding: 1.5rem; margin: 1.5rem 0; }
+
+    /* ===== SPLIT / PROS-CONS ===== */
+    .split { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin: 1.5rem 0; }
+    @media (max-width: 700px) { .split { grid-template-columns: 1fr; } }
+    .pros-cons { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0; }
+    .pros, .cons { border: 1px solid var(--rule); padding: 1rem; background: var(--paper-elevated); }
+    .pros h4 { font-size: 0.85rem; margin: 0 0 0.5rem; color: var(--accent); }
+    .cons h4 { font-size: 0.85rem; margin: 0 0 0.5rem; color: var(--ink-muted); }
+    .pros ul, .cons ul { margin: 0; padding-left: 1.25rem; font-size: 0.9rem; color: var(--ink-muted); }
+    .pros li, .cons li { margin-bottom: 0.25rem; }
+
+    /* ===== PALETTE BOARD ===== */
+    .palette-board {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1.5rem; margin: 2rem 0;
+    }
+    .palette-card {
+      border: 1px solid var(--rule); padding: 1rem;
+      cursor: pointer; transition: border-color 0.15s, transform 0.15s;
+      background: var(--paper-elevated);
+    }
+    .palette-card:hover { border-color: var(--accent); }
+    .palette-card.selected { border-color: var(--accent); border-width: 2px; }
+    .palette-swatch {
+      display: grid; grid-template-columns: 1fr 1fr 1fr;
+      gap: 4px; height: 80px; margin-bottom: 0.75rem;
+    }
+    .palette-swatch > * {
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.75rem; font-family: 'JetBrains Mono', monospace;
+    }
+    .palette-meta { font-size: 0.85rem; color: var(--ink-muted); }
+    .palette-name { font-weight: 600; margin-bottom: 0.25rem; }
+    .palette-sample-heading { font-size: 1.5rem; line-height: 1.1; margin-bottom: 0.5rem; }
+    .palette-sample-body { font-size: 0.95rem; line-height: 1.5; }
+
+    /* ===== TYPE PAIRING ===== */
+    .type-pairing {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 1.5rem; margin: 2rem 0;
+    }
+    .type-card {
+      border: 1px solid var(--rule); padding: 1.5rem;
+      cursor: pointer; transition: border-color 0.15s;
+      background: var(--paper-elevated);
+    }
+    .type-card:hover { border-color: var(--accent); }
+    .type-card.selected { border-color: var(--accent); border-width: 2px; }
+    .type-display { font-size: 2.5rem; line-height: 1.05; margin-bottom: 1rem; }
+    .type-body { font-size: 1rem; line-height: 1.55; margin-bottom: 1rem; }
+    .type-meta { font-size: 0.8rem; color: var(--ink-muted); border-top: 1px solid var(--rule); padding-top: 0.75rem; }
+
+    /* ===== SECTION SKETCH ===== */
+    .section-sketch {
+      border: 1px dashed var(--rule); padding: 2rem; margin: 1.5rem 0;
+      cursor: pointer; transition: border-color 0.15s;
+    }
+    .section-sketch:hover { border-color: var(--accent); }
+    .section-sketch.selected { border-color: var(--accent); border-style: solid; }
+    .sketch-title { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--ink-muted); margin-bottom: 1rem; }
+    .sketch-row { background: var(--rule); height: 1rem; margin-bottom: 0.5rem; border-radius: 2px; }
+    .sketch-row.short { width: 40%; }
+    .sketch-row.medium { width: 70%; }
+    .sketch-row.long { width: 100%; }
+    .sketch-row.heading { height: 1.5rem; background: var(--ink-muted); }
+    .sketch-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; }
+
+    /* ===== DENSITY GRID ===== */
+    .density-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin: 2rem 0; }
+    .density-option {
+      border: 1px solid var(--rule); padding: 1.5rem 1rem;
+      cursor: pointer; text-align: center; transition: border-color 0.15s;
+      background: var(--paper-elevated);
+    }
+    .density-option:hover { border-color: var(--accent); }
+    .density-option.selected { border-color: var(--accent); border-width: 2px; }
+    .density-name { font-weight: 600; margin-bottom: 0.5rem; text-transform: capitalize; }
+    .density-preview { background: var(--rule); height: 60px; margin-top: 0.5rem; }
+    .density-option.minimal .density-preview { background-image: linear-gradient(to bottom, var(--rule) 30%, transparent 30%); }
+    .density-option.balanced .density-preview { background-image: linear-gradient(to bottom, var(--rule) 50%, transparent 50%, transparent 70%, var(--rule) 70%); }
+    .density-option.dense .density-preview { background-image: linear-gradient(to bottom, var(--rule) 20%, transparent 20%, transparent 35%, var(--rule) 35%, var(--rule) 55%, transparent 55%, transparent 70%, var(--rule) 70%, var(--rule) 90%, transparent 90%); }
+
+    /* ===== INDICATOR (bottom bar) ===== */
+    #indicator {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      background: var(--paper); border-top: 1px solid var(--rule);
+      padding: 0.5rem 1rem; font-size: 0.85rem;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    #indicator .label { font-family: 'JetBrains Mono', monospace; }
+  </style>
+</head>
+<body>
+  <header class="frame-header">Variant Builder Companion</header>
+  <main class="frame-main">
+    {{__CONTENT__}}
+  </main>
+  <div id="indicator"><span class="label">no selection</span></div>
+  <script src="/__helper.js"></script>
+</body>
+</html>

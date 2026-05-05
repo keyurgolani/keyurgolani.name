@@ -1,0 +1,24 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: portfolio:latest
+    container_name: portfolio
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      PORTFOLIO_PATH: /data/portfolio.yml
+      NODE_ENV: production
+    volumes:
+      # Bind-mount the user's portfolio file. Read-write so /admin can save.
+      - ./portfolio.yml:/data/portfolio.yml:rw
+      # Optional: bind-mount user assets into the public dir.
+      - ./assets:/app/apps/web/public/assets:ro
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s

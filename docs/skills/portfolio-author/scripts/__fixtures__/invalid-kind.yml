@@ -1,0 +1,13 @@
+identity:
+  name: Test User
+  tagline: Engineer & writer
+
+variant: editorial
+theme: system
+
+links: []
+
+sections:
+  - kind: heroo
+    greeting: Hello, I'm
+    tagline: I build calm software at scale.
