@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * sync-checks.mjs — drift-prevention CI for docs/skills/.
+ * sync-checks.mjs — drift-prevention CI for skills/.
  *
  * Asserts:
  *   1. Both skills' references/section-kinds.md are content-identical.
@@ -17,9 +17,9 @@ import { readFileSync, existsSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// __dirname is docs/skills/scripts; up 3 levels = repo root.
+// SCRIPT_FILE is skills/scripts/sync-checks.mjs; up 3 dirs = repo root.
 const SCRIPT_FILE = fileURLToPath(import.meta.url);
-const ROOT = path.dirname(path.dirname(path.dirname(path.dirname(SCRIPT_FILE))));
+const ROOT = path.dirname(path.dirname(path.dirname(SCRIPT_FILE)));
 
 let failures = 0;
 function fail(msg) { console.error('FAIL: ' + msg); failures++; }
@@ -31,8 +31,8 @@ function readFileOrNull(p) {
 
 // ─── Check 1: section-kinds.md parity ─────────────────────────────────
 function checkSectionKindsParity() {
-  const a = path.join(ROOT, 'docs/skills/portfolio-author/references/section-kinds.md');
-  const b = path.join(ROOT, 'docs/skills/variant-developer/references/section-kinds.md');
+  const a = path.join(ROOT, 'skills/portfolio-author/references/section-kinds.md');
+  const b = path.join(ROOT, 'skills/variant-developer/references/section-kinds.md');
   const aText = readFileOrNull(a);
   const bText = readFileOrNull(b);
   if (aText === null || bText === null) {
@@ -117,7 +117,7 @@ function checkKitCatalogParity() {
     for (const n of listExportsInFile(entry, visited)) allNames.add(n);
   }
 
-  const catalogPath = path.join(ROOT, 'docs/skills/variant-developer/references/kit-catalog.md');
+  const catalogPath = path.join(ROOT, 'skills/variant-developer/references/kit-catalog.md');
   const catalog = readFileOrNull(catalogPath);
   if (!catalog) {
     fail('kit-catalog.md missing');
@@ -134,7 +134,7 @@ function checkKitCatalogParity() {
 
 // ─── Check 3: schema.md kinds coverage ────────────────────────────────
 function checkSchemaMdCoverage() {
-  const schemaMdPath = path.join(ROOT, 'docs/skills/portfolio-author/references/schema.md');
+  const schemaMdPath = path.join(ROOT, 'skills/portfolio-author/references/schema.md');
   const kindsIndexPath = path.join(ROOT, 'packages/schema/src/kinds/index.ts');
   const schemaMd = readFileOrNull(schemaMdPath);
   const kindsIndex = readFileOrNull(kindsIndexPath);
@@ -213,8 +213,8 @@ async function main() {
   checkSchemaMdCoverage();
 
   const yamlParser = await loadYamlParser();
-  await checkSkillMd(path.join(ROOT, 'docs/skills/portfolio-author/SKILL.md'), yamlParser);
-  await checkSkillMd(path.join(ROOT, 'docs/skills/variant-developer/SKILL.md'), yamlParser);
+  await checkSkillMd(path.join(ROOT, 'skills/portfolio-author/SKILL.md'), yamlParser);
+  await checkSkillMd(path.join(ROOT, 'skills/variant-developer/SKILL.md'), yamlParser);
 
   if (failures > 0) {
     console.error(`\n${failures} failure(s)`);

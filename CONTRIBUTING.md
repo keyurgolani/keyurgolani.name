@@ -26,7 +26,7 @@ This is a pnpm workspace monorepo. Two apps and four packages:
 | `packages/schema` | Zod schemas for `portfolio.yml`. Source of truth for section kinds. |
 | `packages/kit` | Shared variant-author utilities: theme provider, GitHub fetcher, format helpers, SEO, spatial primitives |
 | `packages/variant-editorial` | The first variant — a typographic editorial spread |
-| `packages/variant-template` | Scaffold copied by `scripts/new-variant.mjs` |
+| `packages/variant-template` | Scaffold copied by `pnpm new-variant` (`skills/variant-developer/scripts/new-variant.mjs`) |
 
 All packages are workspace-linked via `workspace:*` in their dependencies.
 
@@ -37,7 +37,7 @@ All packages are workspace-linked via `workspace:*` in their dependencies.
 Just edit `portfolio.yml` at the repo root. `pnpm dev` hot-reloads on change. Validate with:
 
 ```sh
-node docs/skills/portfolio-author/scripts/validate.mjs portfolio.yml
+node skills/portfolio-author/scripts/validate.mjs portfolio.yml
 ```
 
 ### Add a new variant
@@ -49,7 +49,7 @@ pnpm new-variant my-slug
 Then implement the manifest, renderers, and CSS in `packages/variant-my-slug/`. Audit your work with:
 
 ```sh
-node docs/skills/variant-developer/scripts/audit.mjs packages/variant-my-slug
+node skills/variant-developer/scripts/audit.mjs packages/variant-my-slug
 ```
 
 See [docs/variants.md](docs/variants.md) for the full walkthrough.
@@ -58,8 +58,8 @@ See [docs/variants.md](docs/variants.md) for the full walkthrough.
 
 If you add or change a section kind in `packages/schema/src/kinds/`, you must also:
 
-1. Update `docs/skills/portfolio-author/references/section-kinds.md` and `docs/skills/variant-developer/references/section-kinds.md` (kept byte-identical by `sync-checks.mjs`).
-2. Update `docs/skills/portfolio-author/references/schema.md`.
+1. Update `skills/portfolio-author/references/section-kinds.md` and `skills/variant-developer/references/section-kinds.md` (kept byte-identical by `sync-checks.mjs`).
+2. Update `skills/portfolio-author/references/schema.md`.
 3. Add the kind to every variant's `supportedKinds` (or to `ALL_SECTION_KINDS` filter).
 4. Implement a renderer (or rely on `FallbackSection`).
 
@@ -77,9 +77,9 @@ pnpm check:skills      # parity between schema, kit, skill refs, frontmatter
 Per-script tests:
 
 ```sh
-pnpm exec node --test docs/skills/portfolio-author/scripts/validate.test.mjs
-pnpm exec node --test docs/skills/variant-developer/scripts/audit.test.mjs
-pnpm exec node --test docs/skills/variant-developer/scripts/kit-dedup.test.mjs
+pnpm exec node --test skills/portfolio-author/scripts/validate.test.mjs
+pnpm exec node --test skills/variant-developer/scripts/audit.test.mjs
+pnpm exec node --test skills/variant-developer/scripts/kit-dedup.test.mjs
 pnpm exec tsx --test packages/kit/src/format.test.ts
 pnpm exec tsx --test packages/kit/src/theme.test.ts
 pnpm exec tsx --test packages/schema/src/portfolio.test.ts

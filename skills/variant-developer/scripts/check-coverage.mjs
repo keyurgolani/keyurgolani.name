@@ -24,7 +24,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.resolve(__dirname, '..');
+// __dirname is skills/variant-developer/scripts; up 3 levels = repo root.
+const ROOT = path.resolve(__dirname, '..', '..', '..');
 const PACKAGES_DIR = path.join(ROOT, 'packages');
 const SCHEMA_KINDS_INDEX = path.join(ROOT, 'packages', 'schema', 'src', 'kinds', 'index.ts');
 

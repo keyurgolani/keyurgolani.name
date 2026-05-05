@@ -63,7 +63,7 @@ Compose end-to-end before writing. Hold the file in scratch memory; don't sprink
 
 ### Validate
 
-After every write, run `node docs/skills/portfolio-author/scripts/validate.mjs portfolio.yml`. Read every error, fix the field at the location it points to, re-run. Iterate until clean. Don't ship a portfolio that doesn't validate. Section 7 has the full loop.
+After every write, run `node skills/portfolio-author/scripts/validate.mjs portfolio.yml`. Read every error, fix the field at the location it points to, re-run. Iterate until clean. Don't ship a portfolio that doesn't validate. Section 7 has the full loop.
 
 ## 3. Working with the user's sources
 
@@ -124,7 +124,7 @@ The output is the artifact. Everything else — the gathered notes, the curation
 
 The loop is non-negotiable. Run after every write.
 
-1. After every write to `portfolio.yml`, run `node docs/skills/portfolio-author/scripts/validate.mjs portfolio.yml`.
+1. After every write to `portfolio.yml`, run `node skills/portfolio-author/scripts/validate.mjs portfolio.yml`.
 2. **Exit 0** — done with validation. Hand off (Section 9).
 3. **Exit 1** — read the errors. Each error has format `<file>:<line>:<col>  <zod-path>  <message>`. The line/col points to the YAML position; the zod-path tells you which schema field failed; the message tells you why. Fix the field at that location.
 4. Re-run validate.mjs.

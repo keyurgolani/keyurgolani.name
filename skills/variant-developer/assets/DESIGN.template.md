@@ -1,13 +1,13 @@
 # DESIGN.md — variant-<slug>
 
 > Fill this out BEFORE writing any code. Get user approval before proceeding to
-> implementation. See `docs/skills/variant-developer/references/design-contract.md`.
+> implementation. See `skills/variant-developer/references/design-contract.md`.
 
 > **Porting from a reference?** (archive variant, another platform's design,
 > Figma mockup) — also fill out the `## Component inventory`, `## Signature
 > interactions`, `## Data-shape diff`, and `## Fidelity targets` sections at the
 > bottom. These drive Wave 2's scope and Phase 3's sign-off. See
-> `docs/skills/variant-developer/references/fidelity-comparison.md`.
+> `skills/variant-developer/references/fidelity-comparison.md`.
 
 ## Metaphor
 

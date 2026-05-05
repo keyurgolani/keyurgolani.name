@@ -16,9 +16,9 @@
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
     "clean": "pnpm -r exec rm -rf dist .next node_modules tsconfig.tsbuildinfo && rm -rf node_modules",
-    "new-variant": "node scripts/new-variant.mjs",
-    "check-coverage": "node scripts/check-coverage.mjs",
-    "check:skills": "node docs/skills/scripts/sync-checks.mjs",
+    "new-variant": "node skills/variant-developer/scripts/new-variant.mjs",
+    "check-coverage": "node skills/variant-developer/scripts/check-coverage.mjs",
+    "check:skills": "node skills/scripts/sync-checks.mjs",
     "postinstall": "pnpm --filter @portfolio/web build:registry || true"
   },
   "devDependencies": {

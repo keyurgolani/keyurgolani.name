@@ -2,7 +2,7 @@
 
 A practical guide to writing a portfolio that reads well and renders cleanly.
 
-For an AI-assisted authoring flow, point an agent at [docs/skills/portfolio-author/SKILL.md](skills/portfolio-author/SKILL.md).
+For an AI-assisted authoring flow, point an agent at [skills/portfolio-author/SKILL.md](../skills/portfolio-author/SKILL.md).
 
 ## Top-level shape
 
@@ -35,7 +35,7 @@ sections:
   # … more sections
 ```
 
-Every field on `identity`, every section `kind`, every enum is defined in `packages/schema/src/`. That's the source of truth. The fast-reference catalog is at [`docs/skills/portfolio-author/references/schema.md`](skills/portfolio-author/references/schema.md).
+Every field on `identity`, every section `kind`, every enum is defined in `packages/schema/src/`. That's the source of truth. The fast-reference catalog is at [`skills/portfolio-author/references/schema.md`](../skills/portfolio-author/references/schema.md).
 
 ## Picking sections
 
@@ -61,7 +61,7 @@ The schema offers ~28 section kinds. Strong portfolios use 6–10. More than tha
 | Open-source / maker | github, projects, focus, fun-facts | services, testimonials |
 | Photographer / artist | gallery, external-portfolios | skills, stack |
 
-The full matrix lives at [`docs/skills/portfolio-author/references/curation.md`](skills/portfolio-author/references/curation.md).
+The full matrix lives at [`skills/portfolio-author/references/curation.md`](../skills/portfolio-author/references/curation.md).
 
 ## Section ordering
 
@@ -112,11 +112,11 @@ The first three sections appear in OG image previews, so treat them like the fro
 | `external-portfolios` | Links to other sites where work lives | Cross-discipline |
 | `github` | Live GitHub data | Engineers |
 
-Full per-kind schema with field-by-field docs: [`docs/skills/portfolio-author/references/section-kinds.md`](skills/portfolio-author/references/section-kinds.md).
+Full per-kind schema with field-by-field docs: [`skills/portfolio-author/references/section-kinds.md`](../skills/portfolio-author/references/section-kinds.md).
 
 ## Quality rules
 
-Concrete length numbers and tone guidance for user-facing copy live at [`docs/skills/portfolio-author/references/quality-rules.md`](skills/portfolio-author/references/quality-rules.md). The short version:
+Concrete length numbers and tone guidance for user-facing copy live at [`skills/portfolio-author/references/quality-rules.md`](../skills/portfolio-author/references/quality-rules.md). The short version:
 
 - **Hero `tagline`:** 4–10 words. One claim, no commas-as-conjunctions.
 - **`subtagline`:** 1 sentence, ≤ 120 chars. Adds context to the tagline.
@@ -129,7 +129,7 @@ Concrete length numbers and tone guidance for user-facing copy live at [`docs/sk
 ## Validation
 
 ```sh
-node docs/skills/portfolio-author/scripts/validate.mjs portfolio.yml
+node skills/portfolio-author/scripts/validate.mjs portfolio.yml
 ```
 
 Exit 0 = valid. Exit 1 = errors with `<file>:<line>:<col>  <zod-path>  <message>` per error.
@@ -138,4 +138,4 @@ Exit 0 = valid. Exit 1 = errors with `<file>:<line>:<col>  <zod-path>  <message>
 
 ## When you're stuck
 
-If you're not sure which sections fit your situation, hand the [`docs/skills/portfolio-author/`](skills/portfolio-author/) skill to an AI agent (Claude Code, Copilot CLI, Cursor) along with your raw materials (resume, LinkedIn export, GitHub username). The skill is designed to interview you and produce a valid `portfolio.yml`.
+If you're not sure which sections fit your situation, hand the [`skills/portfolio-author/`](../skills/portfolio-author/) skill to an AI agent (Claude Code, Copilot CLI, Cursor) along with your raw materials (resume, LinkedIn export, GitHub username). The skill is designed to interview you and produce a valid `portfolio.yml`.

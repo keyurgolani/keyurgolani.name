@@ -13,13 +13,13 @@ Each agent harness expects skills in a different place. Pick the row that matche
 
 | Agent | Expected path | Wiring command |
 | --- | --- | --- |
-| Claude Code (project) | `.claude/skills/<name>` | `ln -s "$(pwd)/docs/skills/<name>" .claude/skills/<name>` |
-| Claude Code (user-global) | `~/.claude/skills/<name>` | `ln -s "$(pwd)/docs/skills/<name>" ~/.claude/skills/<name>` |
-| VS Code Copilot | `.agents/skills/<name>` | `ln -s "$(pwd)/docs/skills/<name>" .agents/skills/<name>` |
+| Claude Code (project) | `.claude/skills/<name>` | `ln -s "$(pwd)/skills/<name>" .claude/skills/<name>` |
+| Claude Code (user-global) | `~/.claude/skills/<name>` | `ln -s "$(pwd)/skills/<name>" ~/.claude/skills/<name>` |
+| VS Code Copilot | `.agents/skills/<name>` | `ln -s "$(pwd)/skills/<name>" .agents/skills/<name>` |
 | Cursor | (no discovery dir) | Paste the `SKILL.md` path into the system prompt or project instructions. |
 | Codex | (no discovery dir) | Paste the `SKILL.md` path into the system prompt or project instructions. |
 | Goose | (no discovery dir) | Paste the `SKILL.md` path into the system prompt or project instructions. |
-| Anything else | — | Open `docs/skills/<name>/SKILL.md` and paste its contents into the agent's system instructions. |
+| Anything else | — | Open `skills/<name>/SKILL.md` and paste its contents into the agent's system instructions. |
 
 Replace `<name>` with `portfolio-author` or `variant-developer`.
 
@@ -28,7 +28,7 @@ Replace `<name>` with `portfolio-author` or `variant-developer`.
 Run the bundled installer to symlink both skills into whichever discovery directories already exist on your machine. It is idempotent and skips any directory that doesn't exist or any link that's already in place.
 
 ```bash
-bash docs/skills/install.sh
+bash skills/install.sh
 ```
 
 The script links both `portfolio-author` and `variant-developer` into:
@@ -41,7 +41,7 @@ Nothing else is touched. Remove a stale symlink manually if you want the install
 
 ## Validate before commit
 
-If you edit anything under `docs/skills/`, run:
+If you edit anything under `skills/`, run:
 
 ```bash
 pnpm check:skills

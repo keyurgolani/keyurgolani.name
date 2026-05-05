@@ -53,7 +53,7 @@ cp portfolio.example.yml portfolio.yml
 ### 2. Validate as you go
 
 ```sh
-node docs/skills/portfolio-author/scripts/validate.mjs portfolio.yml
+node skills/portfolio-author/scripts/validate.mjs portfolio.yml
 ```
 
 Errors point to the YAML line and column. The schema is strict — typos in `kind` discriminants silently drop sections from rendering, so validate often.

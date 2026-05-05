@@ -2,7 +2,7 @@
 
 A variant is a workspace package that takes a validated `Portfolio` object and renders it. Variants are real packages — not config — so they can pull in heavy dependencies, ship custom CSS, define their own primitives, and stay isolated from each other.
 
-For an AI-assisted variant build, point an agent at [docs/skills/variant-developer/SKILL.md](skills/variant-developer/SKILL.md).
+For an AI-assisted variant build, point an agent at [skills/variant-developer/SKILL.md](../skills/variant-developer/SKILL.md).
 
 ## Anatomy of a variant
 
@@ -59,7 +59,7 @@ export const manifest: VariantManifest = {
 };
 ```
 
-The full per-field reference is at [`docs/skills/variant-developer/references/manifest-contract.md`](skills/variant-developer/references/manifest-contract.md).
+The full per-field reference is at [`skills/variant-developer/references/manifest-contract.md`](../skills/variant-developer/references/manifest-contract.md).
 
 ### `themes`
 
@@ -136,12 +136,12 @@ Build your toggle UI in `src/primitives/theme-toggle.tsx`. Filter the rendered b
 - **Use CSS custom properties** for tokens (`--paper`, `--ink`, `--accent`, etc.) so color schemes and themes are token swaps, not selector explosions.
 - **Define dark/bright/black blocks** as descendant selectors on `[data-theme='X'] [data-variant='<slug>']`.
 
-The full conventions doc is at [`docs/skills/variant-developer/references/styling-conventions.md`](skills/variant-developer/references/styling-conventions.md).
+The full conventions doc is at [`skills/variant-developer/references/styling-conventions.md`](../skills/variant-developer/references/styling-conventions.md).
 
 ## Audit your variant
 
 ```sh
-node docs/skills/variant-developer/scripts/audit.mjs packages/variant-my-slug
+node skills/variant-developer/scripts/audit.mjs packages/variant-my-slug
 ```
 
 Hard fails:
@@ -154,11 +154,11 @@ Warnings:
 - Only one typography preset declared (same).
 - `themes` claims `'bright'` or `'black'` but `styles.css` has no `[data-theme='X']` block.
 
-The full audit checklist is at [`docs/skills/variant-developer/references/audit-checklist.md`](skills/variant-developer/references/audit-checklist.md).
+The full audit checklist is at [`skills/variant-developer/references/audit-checklist.md`](../skills/variant-developer/references/audit-checklist.md).
 
 ## Visual companion
 
-The variant-developer skill ships a visual companion at `docs/skills/variant-developer/scripts/visual-companion/`:
+The variant-developer skill ships a visual companion at `skills/variant-developer/scripts/visual-companion/`:
 
 - **Mockup mode** (HTTP server + file watcher) for prototyping CSS without spinning up Next.js.
 - **Preview mode** (Playwright matrix screenshots) for capturing every theme × scheme × typography combo.
@@ -166,19 +166,19 @@ The variant-developer skill ships a visual companion at `docs/skills/variant-dev
 Start mockup mode:
 
 ```sh
-bash docs/skills/variant-developer/scripts/visual-companion/start.sh
+bash skills/variant-developer/scripts/visual-companion/start.sh
 ```
 
 Run preview matrix:
 
 ```sh
-pnpm exec tsx docs/skills/variant-developer/scripts/visual-companion/preview-matrix.mjs <slug>
+pnpm exec tsx skills/variant-developer/scripts/visual-companion/preview-matrix.mjs <slug>
 ```
 
 Output lands in `.variant-preview/<slug>/` (gitignored).
 
 ## What to read next
 
-- AI-assisted variant building: [`docs/skills/variant-developer/SKILL.md`](skills/variant-developer/SKILL.md)
+- AI-assisted variant building: [`skills/variant-developer/SKILL.md`](../skills/variant-developer/SKILL.md)
 - System internals: [architecture.md](architecture.md)
 - Available section kinds: [authoring.md](authoring.md)

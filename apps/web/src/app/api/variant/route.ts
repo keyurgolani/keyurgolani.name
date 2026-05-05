@@ -7,8 +7,10 @@ import { findManifest } from '~/lib/registry';
 export const dynamic = 'force-dynamic';
 
 /**
- * Activate a variant. Resets colorScheme and typography to the variant's
- * declared defaults — keeps state coherent when switching variants.
+ * Activate a variant with a chosen color scheme and typography preset.
+ * The body may include `colorScheme` and `typography`; either or both are
+ * optional and fall back to the variant's declared defaults. Both fields
+ * are validated against the manifest's offered options.
  */
 export async function PUT(request: Request) {
   const body = await request.json().catch(() => null);
@@ -29,24 +31,41 @@ export async function PUT(request: Request) {
     manifest.typographyPresets?.[0]?.id ??
     null;
 
+  const requestedScheme = typeof body?.colorScheme === 'string' ? body.colorScheme : undefined;
+  const requestedTypography = typeof body?.typography === 'string' ? body.typography : undefined;
+
+  if (requestedScheme && !manifest.colorSchemes?.some((s) => s.id === requestedScheme)) {
+    return NextResponse.json(
+      { error: `Unknown colorScheme '${requestedScheme}' for variant '${slug}'.` },
+      { status: 400 },
+    );
+  }
+  if (
+    requestedTypography &&
+    !manifest.typographyPresets?.some((p) => p.id === requestedTypography)
+  ) {
+    return NextResponse.json(
+      { error: `Unknown typography preset '${requestedTypography}' for variant '${slug}'.` },
+      { status: 400 },
+    );
+  }
+
+  const colorScheme = requestedScheme ?? defaultScheme;
+  const typography = requestedTypography ?? defaultTypography;
+
   const { source, path } = await loadPortfolioRaw();
   const format = detectFormat(path);
   const updated = updateScalars(source, format, {
     variant: slug,
-    colorScheme: defaultScheme,
-    typography: defaultTypography,
+    colorScheme,
+    typography,
   });
 
   const result = await savePortfolioRaw(updated);
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: 400 });
   }
-  return NextResponse.json({
-    ok: true,
-    slug,
-    colorScheme: defaultScheme,
-    typography: defaultTypography,
-  });
+  return NextResponse.json({ ok: true, slug, colorScheme, typography });
 }
 
 interface Scalars {

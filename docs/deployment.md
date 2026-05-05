@@ -103,7 +103,7 @@ The Next.js app ships static assets under `_next/static/...`. Any CDN that respe
 
 - `pnpm typecheck` exits 0
 - `pnpm check:skills` exits 0
-- `node docs/skills/portfolio-author/scripts/validate.mjs portfolio.yml` exits 0
+- `node skills/portfolio-author/scripts/validate.mjs portfolio.yml` exits 0
 - `pnpm build` exits 0
 - The dev server renders correctly in light, dark, bright, black, and system themes
 - `/feed.xml`, `/robots.txt`, `/sitemap.xml` all 200 if your variant declares those capabilities

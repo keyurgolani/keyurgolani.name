@@ -103,22 +103,22 @@ The `THEME_INIT_SCRIPT` runs before React hydration to set `data-theme` on `<htm
 
 ## Drift gates
 
-Three scripts under `docs/skills/scripts/` and `docs/skills/<skill>/scripts/` enforce parity:
+Three scripts under `skills/scripts/` and `skills/<skill>/scripts/` enforce parity:
 
-- **`docs/skills/scripts/sync-checks.mjs`** — checks `section-kinds.md` matches `ALL_SECTION_KINDS`, `kit-catalog.md` mentions every kit export, `schema.md` mentions every section kind, both SKILL.md frontmatters parse and stay under length caps.
-- **`docs/skills/portfolio-author/scripts/validate.mjs`** — Zod-parses any `portfolio.yml` and reports YAML line/col on failure.
-- **`docs/skills/variant-developer/scripts/audit.mjs`** — checks variant manifests against the schema (every required kind handled), warns on suspicious patterns (only one color scheme, themes claimed without CSS).
+- **`skills/scripts/sync-checks.mjs`** — checks `section-kinds.md` matches `ALL_SECTION_KINDS`, `kit-catalog.md` mentions every kit export, `schema.md` mentions every section kind, both SKILL.md frontmatters parse and stay under length caps.
+- **`skills/portfolio-author/scripts/validate.mjs`** — Zod-parses any `portfolio.yml` and reports YAML line/col on failure.
+- **`skills/variant-developer/scripts/audit.mjs`** — checks variant manifests against the schema (every required kind handled), warns on suspicious patterns (only one color scheme, themes claimed without CSS).
 
 Run them with `pnpm check:skills` and the per-script test suites listed in [CONTRIBUTING.md](../CONTRIBUTING.md#drift-gates).
 
 ## Skills
 
-Two AI-agent skills under `docs/skills/`:
+Two AI-agent skills under `skills/`:
 
 - **`portfolio-author`** — guides an agent to build `portfolio.yml` from any source (resume PDF, LinkedIn export, GitHub username, conversation). The agent loads references on demand: schema, curation principles, quality rules, section-kinds catalog, examples.
 - **`variant-developer`** — guides an agent to build a new variant from concept to ship. Walks through DESIGN.md → manifest → renderers → CSS → audit, with a visual companion (HTTP server + file watcher in mockup mode, Playwright matrix screenshots in preview mode).
 
-Both skills enforce drift parity through the gates above. See [docs/skills/](skills/) for the SKILL.md and references.
+Both skills enforce drift parity through the gates above. See [skills/](../skills/) for the SKILL.md and references.
 
 ## Why this shape
 

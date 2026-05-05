@@ -43,7 +43,7 @@ Wait for the user's response. If they decline, proceed entirely in the terminal 
 ### Starting a session
 
 ```bash
-docs/skills/variant-developer/scripts/visual-companion/start.sh \
+skills/variant-developer/scripts/visual-companion/start.sh \
   --mode mockup --project-dir /home/user/code/keyurgolani.name --foreground --port 0
 ```
 
@@ -183,7 +183,7 @@ Used in Phases 2–3, once the variant has actual code rendering through `apps/w
 ### Starting
 
 ```bash
-docs/skills/variant-developer/scripts/visual-companion/start.sh \
+skills/variant-developer/scripts/visual-companion/start.sh \
   --mode preview --variant <slug>
 ```
 
@@ -192,7 +192,7 @@ This runs `pnpm --filter @portfolio/web dev`. Once the dev server is up, tell th
 ### Matrix screenshots (optional)
 
 ```bash
-docs/skills/variant-developer/scripts/visual-companion/start.sh \
+skills/variant-developer/scripts/visual-companion/start.sh \
   --mode preview --variant <slug> --matrix
 ```
 
@@ -234,7 +234,7 @@ The server clears `state_dir/events` whenever a new fragment file appears in `sc
 When the work is done, stop the server:
 
 ```bash
-docs/skills/variant-developer/scripts/visual-companion/stop.sh <state_dir>
+skills/variant-developer/scripts/visual-companion/stop.sh <state_dir>
 ```
 
 The server also auto-shuts down after 30 minutes of inactivity (configurable via `--inactivity-minutes` to start.sh).

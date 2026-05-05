@@ -2,7 +2,8 @@
 /**
  * Scaffold a new variant package by cloning packages/variant-template.
  *
- *   node scripts/new-variant.mjs <slug>
+ *   node skills/variant-developer/scripts/new-variant.mjs <slug>
+ *   pnpm new-variant <slug>
  *
  * Slug must be lowercase, hyphen-separated, and not collide with an
  * existing variant package. The script:
@@ -11,7 +12,8 @@
  *   2. Rewrites package name (@portfolio/variant-<slug>)
  *   3. Sets `portfolio.variant: true` and updates `portfolio.slug`
  *   4. Updates the manifest's `slug` and `name`
- *   5. Reminds you to run `pnpm install` and `pnpm --filter @portfolio/web build:registry`
+ *   5. Reminds you to run `pnpm install`, `pnpm --filter @portfolio/web build:registry`,
+ *      and to fill out DESIGN.md before any code.
  */
 
 import { cpSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
@@ -19,7 +21,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.resolve(__dirname, '..');
+// __dirname is skills/variant-developer/scripts; up 3 levels = repo root.
+const ROOT = path.resolve(__dirname, '..', '..', '..');
 const TEMPLATE_DIR = path.join(ROOT, 'packages', 'variant-template');
 
 function fail(message) {
@@ -37,7 +40,7 @@ function toTitleCase(slug) {
 
 function main() {
   const [, , slugArg] = process.argv;
-  if (!slugArg) fail('usage: node scripts/new-variant.mjs <slug>');
+  if (!slugArg) fail('usage: pnpm new-variant <slug>');
   const slug = slugArg.trim().toLowerCase();
   if (!/^[a-z][a-z0-9]*(-[a-z0-9]+)*$/.test(slug)) {
     fail(`slug must be lowercase + hyphen-separated; got "${slugArg}"`);
@@ -50,7 +53,6 @@ function main() {
 
   cpSync(TEMPLATE_DIR, targetDir, { recursive: true });
 
-  // Update package.json: name, portfolio block.
   const pkgPath = path.join(targetDir, 'package.json');
   const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
   pkg.name = `@portfolio/variant-${slug}`;
@@ -58,7 +60,6 @@ function main() {
   pkg.portfolio = { variant: true, slug };
   writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n', 'utf8');
 
-  // Update manifest: slug + name.
   const manifestPath = path.join(targetDir, 'src', 'manifest.ts');
   let manifest = readFileSync(manifestPath, 'utf8');
   const titleCased = toTitleCase(slug);
@@ -67,8 +68,6 @@ function main() {
     .replace(/name:\s*'Template'/, `name: '${titleCased}'`);
   writeFileSync(manifestPath, manifest, 'utf8');
 
-  // Add as a workspace dependency of apps/web so it gets symlinked into
-  // apps/web/node_modules and the auto-generated registry can resolve it.
   const hostPkgPath = path.join(ROOT, 'apps', 'web', 'package.json');
   if (existsSync(hostPkgPath)) {
     const hostPkg = JSON.parse(readFileSync(hostPkgPath, 'utf8'));
@@ -82,7 +81,9 @@ function main() {
   console.log('next steps:');
   console.log('  1. pnpm install');
   console.log('  2. pnpm --filter @portfolio/web build:registry');
-  console.log(`  3. open packages/variant-${slug}/src/manifest.ts and fill in tagline/description/aesthetic`);
+  console.log(`  3. copy skills/variant-developer/assets/DESIGN.template.md`);
+  console.log(`     to packages/variant-${slug}/DESIGN.md and fill it out.`);
+  console.log(`     get user approval on DESIGN.md before writing any code.`);
 }
 
 main();

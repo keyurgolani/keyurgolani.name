@@ -12,14 +12,14 @@
 
 Run frequently during Wave 2/3, and once final at Phase 3 entry.
 
-- [ ] `node docs/skills/variant-developer/scripts/audit.mjs packages/variant-<slug>` exits 0.
+- [ ] `node skills/variant-developer/scripts/audit.mjs packages/variant-<slug>` exits 0.
 - [ ] `pnpm typecheck` passes for the variant package and the rest of the monorepo.
 - [ ] `pnpm --filter @portfolio/variant-<slug> lint` passes (full `pnpm lint` may fail on host-level scripting bugs unrelated to your variant — file an issue if so).
 - [ ] `pnpm --filter @portfolio/web build` succeeds.
 - [ ] `pnpm --filter @portfolio/web build:registry` lists the new variant in `registry.generated.ts` AND adds an import to `registry.styles.generated.ts`.
-- [ ] `node docs/skills/variant-developer/scripts/kit-dedup.mjs packages/variant-<slug>` candidates are all resolved (hoisted or marked `// LOCAL: <reason>`).
+- [ ] `node skills/variant-developer/scripts/kit-dedup.mjs packages/variant-<slug>` candidates are all resolved (hoisted or marked `// LOCAL: <reason>`).
 - [ ] If you hoisted to `@portfolio/kit`: `pnpm --filter @portfolio/kit test` passes (≥ 80% branch coverage on pure utilities).
-- [ ] `node docs/skills/scripts/sync-checks.mjs` passes — every kit export appears by name in `references/kit-catalog.md`.
+- [ ] `node skills/scripts/sync-checks.mjs` passes — every kit export appears by name in `references/kit-catalog.md`.
 
 ## Coverage
 

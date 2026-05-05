@@ -6,7 +6,8 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = path.resolve(__dirname, '..', '..', '..');
+// __dirname is skills/scripts; up 2 = repo root.
+const REPO_ROOT = path.resolve(__dirname, '..', '..');
 const SCRIPT = path.join(__dirname, 'sync-checks.mjs');
 
 function run() {
@@ -19,7 +20,7 @@ test('sync-checks passes on the live tree', () => {
 });
 
 test('sync-checks detects when section-kinds.md files differ', () => {
-  const filePath = path.join(REPO_ROOT, 'docs/skills/variant-developer/references/section-kinds.md');
+  const filePath = path.join(REPO_ROOT, 'skills/variant-developer/references/section-kinds.md');
   const original = readFileSync(filePath, 'utf8');
   try {
     writeFileSync(filePath, original + '\n<!-- drift -->\n');
@@ -46,7 +47,7 @@ test('sync-checks detects missing kit export in catalog', () => {
 });
 
 test('sync-checks detects schema.md missing a kind', () => {
-  const schemaMd = path.join(REPO_ROOT, 'docs/skills/portfolio-author/references/schema.md');
+  const schemaMd = path.join(REPO_ROOT, 'skills/portfolio-author/references/schema.md');
   const original = readFileSync(schemaMd, 'utf8');
   try {
     // Remove every mention of "kind: hero" so schema.md no longer covers it
@@ -61,7 +62,7 @@ test('sync-checks detects schema.md missing a kind', () => {
 });
 
 test('sync-checks detects malformed SKILL.md frontmatter', () => {
-  const skillPath = path.join(REPO_ROOT, 'docs/skills/portfolio-author/SKILL.md');
+  const skillPath = path.join(REPO_ROOT, 'skills/portfolio-author/SKILL.md');
   const original = readFileSync(skillPath, 'utf8');
   try {
     // Replace 'name: portfolio-author' with an invalid uppercase name

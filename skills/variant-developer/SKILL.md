@@ -90,7 +90,7 @@ Implement in three waves. Do not jump around; finish each wave before starting t
 
 Scaffold and stand up a renderable variant that uses `FallbackSection` for every kind. The goal is "every page route renders without crashing", not "looks good".
 
-- Scaffold: `node docs/skills/variant-developer/scripts/new-variant.mjs <slug>`. Wraps the root scaffold, copies `packages/variant-template`, and reminds you to fill out DESIGN.md.
+- Scaffold: `pnpm new-variant <slug>` (or `node skills/variant-developer/scripts/new-variant.mjs <slug>`). Copies `packages/variant-template`, rewrites the package name + manifest slug, wires it as a workspace dep of `apps/web`, and reminds you to fill out DESIGN.md before any code.
 - Edit `packages/variant-<slug>/src/manifest.ts` to match DESIGN.md:
   - `supportedKinds`: `ALL_SECTION_KINDS` — or an explicit list matching it.
   - `themes: ['light', 'dark']` — both are required by the platform.
@@ -133,7 +133,7 @@ The work:
 2. Implement each as a kit module under the appropriate sub-path (`@portfolio/kit/<topic>` or main barrel).
 3. Add tests for pure utilities (`tsx --test`). Aim for ≥ 80% branch coverage on lane assignment, density projection, classifiers — they're load-bearing.
 4. Update `references/kit-catalog.md` with the new exports. The `sync-checks.mjs` script enforces this — every export must appear by name in the catalog.
-5. Run `node docs/skills/scripts/sync-checks.mjs` to verify catalog parity.
+5. Run `node skills/scripts/sync-checks.mjs` to verify catalog parity.
 6. Run `pnpm typecheck` and the kit's tests.
 
 After Wave 1.5, the kit knows the primitives. Wave 2 is composition.
@@ -148,7 +148,7 @@ For each cluster:
 2. Load `references/section-kinds.md` for the data each kind actually carries — what's required, what's optional, what shapes nest.
 3. Implement renderers in `src/renderers/<kind>.tsx` (or whatever file structure your variant uses; consistency matters more than the path).
 4. Update `src/section.tsx` (the section dispatch) to route the new renderers; remove the cluster's kinds from the `FallbackSection` fallback path.
-5. Before closing the cluster, run `node docs/skills/variant-developer/scripts/kit-dedup.mjs packages/variant-<slug>`. Resolve every candidate either by **hoisting** the helper to `packages/kit/src/<topic>.ts` and importing it back, or by leaving a `// LOCAL: <reason>` comment justifying the local copy.
+5. Before closing the cluster, run `node skills/variant-developer/scripts/kit-dedup.mjs packages/variant-<slug>`. Resolve every candidate either by **hoisting** the helper to `packages/kit/src/<topic>.ts` and importing it back, or by leaving a `// LOCAL: <reason>` comment justifying the local copy.
 6. **Visual checkpoint at end of cluster.** Run `/preview/<slug>` against `portfolio.example.yml` AND the user's actual `portfolio.yml` (real-data testing surfaces bugs that example data hides — long org names, missing optional fields, non-ASCII characters). Verify each cluster's renderers display correctly. *Don't trust HTTP 200 as proof the cluster is done.*
 
 Renderer quality reminders (from real-session bugs):
@@ -184,13 +184,13 @@ Run `references/audit-checklist.md` for the scripted gates and `references/quali
 
 ### Scripted gates (cheap, run frequently)
 
-1. `node docs/skills/variant-developer/scripts/audit.mjs packages/variant-<slug>` — exits 0. Catches manifest schema breaks, missing `light`/`dark` themes, unsupported kinds, missing screenshots referenced by the manifest.
+1. `node skills/variant-developer/scripts/audit.mjs packages/variant-<slug>` — exits 0. Catches manifest schema breaks, missing `light`/`dark` themes, unsupported kinds, missing screenshots referenced by the manifest.
 2. `pnpm typecheck` — passes for the whole workspace, not just your package.
 3. `pnpm lint` — passes for the variant package (`pnpm --filter @portfolio/variant-<slug> lint`).
 4. `pnpm --filter @portfolio/web build` — succeeds. The host build is the integration test.
-5. `node docs/skills/variant-developer/scripts/kit-dedup.mjs packages/variant-<slug>` — every candidate hoisted or marked `// LOCAL: <reason>`.
+5. `node skills/variant-developer/scripts/kit-dedup.mjs packages/variant-<slug>` — every candidate hoisted or marked `// LOCAL: <reason>`.
 6. `pnpm --filter @portfolio/kit test` — kit tests pass (relevant if you hoisted in Wave 1.5).
-7. `node docs/skills/scripts/sync-checks.mjs` — `kit-catalog.md` parity, `schema.md` parity.
+7. `node skills/scripts/sync-checks.mjs` — `kit-catalog.md` parity, `schema.md` parity.
 
 ### Visual gates (expensive, run at sign-off)
 

@@ -26,6 +26,11 @@ playwright-report
 .env.*
 !.env.example
 
+# personal portfolio data — like .env, never commit your own values. Use
+# portfolio.example.yml as the starting point and copy it locally.
+/portfolio.yml
+/portfolio.yaml
+
 # editor
 .vscode
 .idea
@@ -52,7 +57,7 @@ yarn-error.log*
 # variant experiments — gitignored holding pen for non-curated variant candidates
 /experiments/
 
-# visual companion preview screenshots — generated locally by docs/skills/variant-developer
+# visual companion preview screenshots — generated locally by skills/variant-developer
 /.variant-preview/
 
 # archive of the prior single-app project state — local reference only

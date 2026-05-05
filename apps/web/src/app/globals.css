@@ -50,9 +50,9 @@ html[data-theme='dark'] ::selection {
 
 .host-chrome {
   font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
-  max-width: 60rem;
-  margin: 0 auto;
-  padding: 3rem 1.5rem;
+  max-width: none;
+  margin: 0;
+  padding: 3rem clamp(1.5rem, 4vw, 4rem);
   line-height: 1.6;
 }
 

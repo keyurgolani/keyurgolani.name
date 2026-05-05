@@ -23,7 +23,7 @@ overrides, the way `variant-editorial` does.
 ## Cloning
 
 ```bash
-node scripts/new-variant.mjs my-slug
+pnpm new-variant my-slug
 ```
 
 That copies this directory to `packages/variant-my-slug/`, rewrites the

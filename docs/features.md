@@ -61,7 +61,7 @@ What the platform can do today.
 
 ## Skills (AI-assisted authoring + development)
 
-Two skills under [docs/skills/](skills/):
+Two skills under [skills/](../skills/):
 
 - **`portfolio-author`** — guides an AI agent to extract details from any source (resume PDF, LinkedIn export, GitHub username, conversation) and produce a valid `portfolio.yml`. Includes references for schema, curation, quality rules, section kinds, and three real-world examples (engineer, photographer, writer).
 - **`variant-developer`** — guides an AI agent through the full variant build: design contract → manifest → renderers → CSS → audit. Includes a visual companion (HTTP server + Playwright matrix screenshots), a 56-name kit catalog, manifest contract reference, styling conventions, coherence rules, and an audit checklist.

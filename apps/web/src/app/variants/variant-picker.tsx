@@ -85,13 +85,17 @@ export function VariantPicker({
     });
   }, [variants, search, aesthetics, motions, typographies, densities, requiredKinds]);
 
-  async function activate(slug: string) {
+  async function activate(slug: string, scheme: string, typography: string) {
     setError(null);
     setSuccess(null);
     const res = await fetch('/api/variant', {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ slug }),
+      body: JSON.stringify({
+        slug,
+        ...(scheme ? { colorScheme: scheme } : {}),
+        ...(typography ? { typography } : {}),
+      }),
     });
     if (!res.ok) {
       const body = await res.json().catch(() => ({ error: 'Unknown error' }));
@@ -192,77 +196,17 @@ export function VariantPicker({
       </div>
 
       <div className="host-chrome__variant-grid">
-        {filtered.map((v) => {
-          const isActive = v.slug === active;
-          return (
-            <article
-              key={v.slug}
-              className="host-chrome__variant-card"
-              data-active={isActive}
-              data-experimental={v.experimental}
-            >
-              <div>
-                <h3>
-                  {v.name}
-                  {v.experimental ? <span className="variant-card__exp"> · experimental</span> : null}
-                </h3>
-                <div className="meta">
-                  {v.author ? `${v.author} · ` : ''}v{v.version} · {v.supportedKinds.length} kinds
-                </div>
-              </div>
-              {v.tagline ? <p>{v.tagline}</p> : null}
-              {isActive ? (
-                <VariantCustomizer
-                  variantSlug={v.slug}
-                  colorSchemes={v.colorSchemes}
-                  typographyPresets={v.typographyPresets}
-                  activeColorScheme={activeColorScheme}
-                  activeTypography={activeTypography}
-                />
-              ) : null}
-              {v.description ? (
-                <p style={{ fontSize: '0.875rem', color: '#8a8780' }}>{v.description}</p>
-              ) : null}
-
-              <div className="variant-card__attrs">
-                <span className="variant-card__attr">{v.aesthetic}</span>
-                <span className="variant-card__attr">{v.motion}</span>
-                <span className="variant-card__attr">{v.typography}</span>
-                <span className="variant-card__attr">{v.density}</span>
-                {v.colorSchemes.length > 1 ? (
-                  <span className="variant-card__attr">{v.colorSchemes.length} schemes</span>
-                ) : null}
-                {v.typographyPresets.length > 1 ? (
-                  <span className="variant-card__attr">{v.typographyPresets.length} typesets</span>
-                ) : null}
-              </div>
-
-              {v.bestFor.length ? (
-                <div className="variant-card__bestfor">
-                  Best for: {v.bestFor.join(', ')}
-                </div>
-              ) : null}
-
-              <div className="variant-card__actions">
-                <button
-                  type="button"
-                  className={
-                    isActive
-                      ? 'host-chrome__button'
-                      : 'host-chrome__button host-chrome__button--primary'
-                  }
-                  disabled={isActive || pending}
-                  onClick={() => activate(v.slug)}
-                >
-                  {isActive ? 'Active' : 'Activate'}
-                </button>
-                <Link href={`/preview/${v.slug}`} className="host-chrome__button">
-                  Preview
-                </Link>
-              </div>
-            </article>
-          );
-        })}
+        {filtered.map((v) => (
+          <VariantCard
+            key={v.slug}
+            variant={v}
+            isActive={v.slug === active}
+            activeColorScheme={activeColorScheme}
+            activeTypography={activeTypography}
+            pending={pending}
+            onActivate={activate}
+          />
+        ))}
         {filtered.length === 0 ? (
           <p style={{ gridColumn: '1 / -1', textAlign: 'center', color: '#8a8780' }}>
             No variants match these filters. <button onClick={clearAll}>Clear all</button>
@@ -270,6 +214,125 @@ export function VariantPicker({
         ) : null}
       </div>
     </>
+  );
+}
+
+interface VariantCardProps {
+  variant: VariantSummary;
+  isActive: boolean;
+  activeColorScheme: string | null;
+  activeTypography: string | null;
+  pending: boolean;
+  onActivate: (slug: string, scheme: string, typography: string) => void;
+}
+
+function VariantCard({
+  variant: v,
+  isActive,
+  activeColorScheme,
+  activeTypography,
+  pending,
+  onActivate,
+}: VariantCardProps) {
+  // Default the picker to the active values when this is the live variant,
+  // otherwise to the manifest's `default: true` entries (or the first one).
+  // Preview-without-selection has no meaning — every variant has at least
+  // one scheme + typography, even when only one is offered.
+  const defaultScheme =
+    v.colorSchemes.find((s) => s.default)?.id ?? v.colorSchemes[0]?.id ?? '';
+  const defaultTypography =
+    v.typographyPresets.find((p) => p.default)?.id ?? v.typographyPresets[0]?.id ?? '';
+
+  // What the YAML-resolved active state of this card looks like — when
+  // activeColorScheme/typography are unset on the active variant, that's
+  // semantically the same as the variant's default.
+  const effectiveActiveScheme = isActive ? activeColorScheme ?? defaultScheme : defaultScheme;
+  const effectiveActiveTypography = isActive
+    ? activeTypography ?? defaultTypography
+    : defaultTypography;
+
+  const [scheme, setScheme] = useState(effectiveActiveScheme);
+  const [typography, setTypography] = useState(effectiveActiveTypography);
+
+  const previewParams = new URLSearchParams();
+  if (scheme) previewParams.set('scheme', scheme);
+  if (typography) previewParams.set('typography', typography);
+  const previewQuery = previewParams.toString();
+  const previewHref = `/preview/${v.slug}${previewQuery ? `?${previewQuery}` : ''}`;
+
+  // The card is "current" only when this is the active variant *and* the
+  // picker matches what's already saved. Activating with a new combination
+  // makes the active card non-current until you click Activate again.
+  const isCurrent =
+    isActive && scheme === effectiveActiveScheme && typography === effectiveActiveTypography;
+
+  return (
+    <article
+      className="host-chrome__variant-card"
+      data-active={isActive}
+      data-current={isCurrent}
+      data-experimental={v.experimental}
+    >
+      <div>
+        <h3>
+          {v.name}
+          {v.experimental ? <span className="variant-card__exp"> · experimental</span> : null}
+        </h3>
+        <div className="meta">
+          {v.author ? `${v.author} · ` : ''}v{v.version} · {v.supportedKinds.length} kinds
+        </div>
+      </div>
+      {v.tagline ? <p>{v.tagline}</p> : null}
+
+      <VariantCustomizer
+        colorSchemes={v.colorSchemes}
+        typographyPresets={v.typographyPresets}
+        scheme={scheme}
+        typography={typography}
+        onSchemeChange={setScheme}
+        onTypographyChange={setTypography}
+        disabled={pending}
+      />
+
+      {v.description ? (
+        <p style={{ fontSize: '0.875rem', color: '#8a8780' }}>{v.description}</p>
+      ) : null}
+
+      <div className="variant-card__attrs">
+        <span className="variant-card__attr">{v.aesthetic}</span>
+        <span className="variant-card__attr">{v.motion}</span>
+        <span className="variant-card__attr">{v.typography}</span>
+        <span className="variant-card__attr">{v.density}</span>
+        {v.colorSchemes.length > 1 ? (
+          <span className="variant-card__attr">{v.colorSchemes.length} schemes</span>
+        ) : null}
+        {v.typographyPresets.length > 1 ? (
+          <span className="variant-card__attr">{v.typographyPresets.length} typesets</span>
+        ) : null}
+      </div>
+
+      {v.bestFor.length ? (
+        <div className="variant-card__bestfor">Best for: {v.bestFor.join(', ')}</div>
+      ) : null}
+
+      <div className="variant-card__actions">
+        <button
+          type="button"
+          className={
+            isCurrent
+              ? 'host-chrome__button'
+              : 'host-chrome__button host-chrome__button--primary'
+          }
+          disabled={isCurrent || pending}
+          onClick={() => onActivate(v.slug, scheme, typography)}
+        >
+          {isCurrent ? 'Active' : 'Activate'}
+        </button>
+        <Link href={previewHref} className="host-chrome__button">
+          Preview
+        </Link>
+      </div>
+    </article>
   );
 }
 
