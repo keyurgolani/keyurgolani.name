@@ -13,6 +13,14 @@ Designed for engineers, makers, photographers, writers, and academics who want t
 
 **Live demo:** [keyurgolani.name](https://keyurgolani.name)
 
+<p align="center">
+  <img src="docs/screenshots/01-home-hero-editorial.png" alt="Editorial variant" width="49%" />
+  <img src="docs/screenshots/05-variant-kinetic-cosmos.png" alt="Kinetic Cosmos variant" width="49%" />
+</p>
+
+<p align="center"><em>The same <code>portfolio.yml</code> rendered through two variants — Editorial and Kinetic Cosmos. Switch the look without touching content.</em><br/>
+📸 <strong><a href="SHOWCASE.md">See the full visual showcase »</a></strong></p>
+
 ## Quick start
 
 ```sh
