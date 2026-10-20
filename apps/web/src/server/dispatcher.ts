@@ -1,5 +1,6 @@
 import { authorize, type Authorized } from './authorize';
 import { getDeploymentConfig, NOT_LOADED } from './config-store';
+import { log } from './log';
 import {
   ERRORS,
   MAX_BODY_BYTES,
@@ -224,9 +225,14 @@ export function createDispatcher(options: DispatcherOptions): Dispatch {
       return respond(operation, answer);
     } catch {
       // The error itself stays out of the log: it can carry draft content.
-      console.error(
-        JSON.stringify({ level: 'error', event: 'operation.failed', operation: name, requestId }),
-      );
+      // So does a name no entry has, which is only part of a URL.
+      log({
+        level: 'error',
+        event: 'operation.failed',
+        profile: getDeploymentConfig()?.profile,
+        operation: byName.has(name) ? name : undefined,
+        requestId,
+      });
       return fail('internal_error');
     }
   };
@@ -241,14 +247,12 @@ async function touch(
   } catch {
     // #2: a failed lastSeenAt write serves the request. The error stays out
     // of the log, as a handler's does.
-    console.warn(
-      JSON.stringify({
-        level: 'warn',
-        event: 'session.touch_failed',
-        operation: context.operation.name,
-        requestId: context.requestId,
-      }),
-    );
+    log({
+      level: 'warn',
+      event: 'session.touch_failed',
+      operation: context.operation.name,
+      requestId: context.requestId,
+    });
   }
 }
 

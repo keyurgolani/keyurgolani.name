@@ -3,14 +3,16 @@ import path from 'node:path';
 import { issueLogLine, type ConfigIssue, type Profile } from './config';
 import { setDeploymentState } from './config-store';
 import { CONTENT_EXTENSIONS } from './content-extensions';
+import { log } from './log';
 import type { Registration } from './start-or-exit';
 import { runStartup, type StartupResult } from './startup';
 
 /**
- * Validates the deployment. When it can start, stores the result and logs
- * any warnings. Otherwise returns the log line for every finding, which
- * startOrExit writes before it exits. Runs from instrumentation register()
- * on the Node.js runtime, before the server handles a request.
+ * Validates the deployment. When it can start, stores the result, logs any
+ * warnings, and logs the redacted summary once as `deployment.config`.
+ * Otherwise returns the log line for every finding, which startOrExit writes
+ * before it exits. Runs from instrumentation register() on the Node.js
+ * runtime, before the server handles a request.
  */
 export async function registerDeployment(): Promise<Registration> {
   const cwd = process.cwd();
@@ -22,14 +24,19 @@ export async function registerDeployment(): Promise<Registration> {
     extensions: CONTENT_EXTENSIONS,
     // Called only after startup, by re-validation under next dev.
     report: (issue) => {
-      process.stdout.write(logLine(issue, result.profile));
+      console.log(issueLogLine(issue, result.profile));
     },
   });
-  const log = result.issues.map((issue) => logLine(issue, result.profile)).join('');
-  if (!result.ok) return { ok: false, log };
+  if (!result.ok) {
+    return {
+      ok: false,
+      log: result.issues.map((issue) => logLine(issue, result.profile)).join(''),
+    };
+  }
   setDeploymentState(result.state);
   // The server keeps running, so stdout can take its time with these.
-  if (log) process.stdout.write(log);
+  for (const issue of result.issues) console.log(issueLogLine(issue, result.profile));
+  log({ level: 'info', event: 'deployment.config', ...result.summary });
   return { ok: true };
 }
 

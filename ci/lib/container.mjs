@@ -1,6 +1,6 @@
-// Checks that run inside a container under test. The two in-container
-// functions are serialized into `node -e` snippets, so they may use only Node
-// built-ins and nothing from their enclosing scope.
+// Checks that run inside a container under test. The in-container functions
+// are serialized into `node -e` snippets, so they may use only Node built-ins
+// and nothing from their enclosing scope.
 
 /**
  * Fetches a path from the app inside its own container, at the address
@@ -23,6 +23,41 @@ function probeFromInside(pathname) {
       process.stdout.write(JSON.stringify({ error: String(error.cause?.code ?? error.message) }));
       process.exitCode = 1;
     });
+}
+
+/**
+ * Sends each request in `requests`, a JSON array of { method, path, body? },
+ * to the app inside its own container, one after another, at the address the
+ * image HEALTHCHECK uses. A body goes as JSON. Prints a JSON array with one
+ * { status, headers, body } or { error } per request.
+ */
+function requestsFromInside(requests) {
+  const h = process.env.HOSTNAME;
+  const host = !h || h === '0.0.0.0' || h === '::' ? '127.0.0.1' : h.includes(':') ? `[${h}]` : h;
+  const base = `http://${host}:${process.env.PORT || 3000}`;
+  (async () => {
+    const results = [];
+    for (const { method, path, body } of JSON.parse(requests)) {
+      try {
+        const response = await fetch(`${base}${path}`, {
+          method,
+          redirect: 'manual',
+          signal: AbortSignal.timeout(15000),
+          ...(body === undefined
+            ? {}
+            : { body: JSON.stringify(body), headers: { 'content-type': 'application/json' } }),
+        });
+        results.push({
+          status: response.status,
+          headers: Object.fromEntries(response.headers),
+          body: await response.text(),
+        });
+      } catch (error) {
+        results.push({ error: String(error.cause?.code ?? error.message) });
+      }
+    }
+    process.stdout.write(JSON.stringify(results));
+  })();
 }
 
 /**
@@ -54,6 +89,7 @@ function scanFromInside(root) {
 }
 
 export const PROBE_SNIPPET = `(${probeFromInside.toString()})(process.argv[1])`;
+export const REQUESTS_SNIPPET = `(${requestsFromInside.toString()})(process.argv[1])`;
 export const SCAN_SNIPPET = `(${scanFromInside.toString()})(process.argv[1])`;
 
 /**

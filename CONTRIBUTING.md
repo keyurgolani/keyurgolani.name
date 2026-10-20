@@ -73,13 +73,15 @@ CI runs these on every pull request. Each CI step runs the matching `pnpm ci:<jo
 pnpm format:check      # Prettier; pnpm format fixes it
 pnpm lint              # ESLint; warnings fail too
 pnpm typecheck         # tsc across the workspace and the test harness
-pnpm test              # package suites plus the ci/ and skills/ script tests
+pnpm test              # package suites plus the ci/, skills/, and test harness script tests
 pnpm check:skills      # parity between schema, kit, skill refs, frontmatter
 pnpm build             # production build of apps/web
 pnpm ci:browser        # Playwright smoke against that build
 ```
 
 Run `pnpm exec playwright install chromium` once before the browser smoke. `pnpm ci:image` builds and checks the container image with Docker (`CONTAINER_CLI=finch` for Finch).
+
+Two more check the deployment profiles. `pnpm --filter @portfolio/web test:profiles` builds once with no profile set and runs the route matrix and the canary scan against the built server under `read-only` and `demo`. `pnpm smoke:profiles` builds the image and runs it under every profile and every startup row that refuses to start, with the same `CONTAINER_CLI` choice.
 
 Tests use Node's built-in `node:test`, through `tsx` for TypeScript. A single file runs directly, for example `pnpm exec tsx --test packages/kit/src/format.test.ts`. In `apps/web`, `*.test.ts` files cover server modules and run with `--conditions=react-server`; `*.test.tsx` files render pages with `react-dom/server`, which needs the default conditions, so they run without it.
 

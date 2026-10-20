@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import {
   accessIn,
   CAPABILITIES,
@@ -73,4 +75,37 @@ test('only owner grants a capability by session', () => {
 
 test('crawlers may index owner and read-only, and nothing under demo until #9 and #22', () => {
   assert.deepEqual(INDEXABLE, { owner: true, demo: false, 'read-only': true });
+});
+
+test("docs/deployment.md's profile matrix is this matrix (#1, item 24)", () => {
+  const doc = readFileSync(
+    fileURLToPath(new URL('../../../../docs/deployment.md', import.meta.url)),
+    'utf8',
+  );
+  const start = doc.indexOf('<!-- profile-matrix:start -->');
+  const end = doc.indexOf('<!-- profile-matrix:end -->');
+  assert.ok(start >= 0 && end > start, 'the profile-matrix markers');
+  const [header, , ...rows] = doc
+    .slice(start, end)
+    .split('\n')
+    .filter((line) => line.startsWith('|'))
+    .map((line) =>
+      line
+        .split('|')
+        .slice(1, -1)
+        .map((cell) => cell.trim().replace(/^`|`$/g, '')),
+    );
+  // Capability, what it covers, then one column per profile.
+  assert.deepEqual(header!.slice(2), [...PROFILES]);
+  assert.deepEqual(
+    rows.map(([capability]) => capability),
+    [...CAPABILITIES],
+  );
+  for (const [capability, , ...cells] of rows) {
+    assert.deepEqual(
+      cells,
+      PROFILES.map((profile) => accessIn(profile, capability as Capability)),
+      capability,
+    );
+  }
 });

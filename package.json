@@ -38,6 +38,7 @@
     "ci:image": "node ci/run.mjs image -- node ci/image-smoke.mjs",
     "ci:proxy": "node ci/run.mjs proxy -- node ci/proxy-smoke.mjs",
     "ci:summary": "node ci/summarize.mjs",
+    "smoke:profiles": "node --import tsx ci/smoke-profiles.mjs",
     "clean": "pnpm -r exec rm -rf dist .next node_modules tsconfig.tsbuildinfo && rm -rf node_modules",
     "new-variant": "node skills/variant-developer/scripts/new-variant.mjs",
     "check-coverage": "node skills/variant-developer/scripts/check-coverage.mjs",

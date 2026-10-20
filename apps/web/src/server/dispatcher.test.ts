@@ -235,7 +235,7 @@ test("1: the policy is the stored deployment's, read per request", async (t) => 
     assert.equal((await errorOf(response)).code, 'not_available_in_profile');
   });
   await t.test('none stored', async (t) => {
-    t.mock.method(console, 'error', () => {});
+    t.mock.method(console, 'log', () => {});
     const response = await dispatch(signedIn(), 'fake.draft.read');
     assert.equal((await errorOf(response)).code, 'internal_error');
   });
@@ -450,7 +450,7 @@ test('4: touchSession slides a session only once the request is authorized', asy
 });
 
 test('4: a failed touch is logged without its cause, and the request goes on', async (t) => {
-  const logged = t.mock.method(console, 'warn', () => {});
+  const logged = t.mock.method(console, 'log', () => {});
   const { handler, calls } = spy();
   const dispatch = owner(
     t,
@@ -473,7 +473,9 @@ test('4: a failed touch is logged without its cause, and the request goes on', a
   const lines = logged.mock.calls.map((entry) => String(entry.arguments[0]));
   assert.equal(lines.length, 1);
   assert.ok(!lines[0]!.includes('canary'), lines[0]);
-  assert.deepEqual(JSON.parse(lines[0]!), {
+  const { ts, ...line } = JSON.parse(lines[0]!) as Record<string, unknown>;
+  assert.match(String(ts), /^\d{4}-\d{2}-\d{2}T/);
+  assert.deepEqual(line, {
     level: 'warn',
     event: 'session.touch_failed',
     operation: 'fake.draft.read',
@@ -543,14 +545,14 @@ test('4: a throttle can answer a form post with a 303, never with data', async (
   );
   assert.equal(redirected.headers.get('cache-control'), 'no-store');
 
-  t.mock.method(console, 'error', () => {});
+  t.mock.method(console, 'log', () => {});
   answer = dataResult({ ok: true });
   const data = await dispatch(call('POST', 'fake.login', form).request, 'fake.login');
   assert.equal((await errorOf(data)).code, 'internal_error');
 });
 
 test("4: a throttle answer the entry doesn't declare is a 500", async (t) => {
-  t.mock.method(console, 'error', () => {});
+  t.mock.method(console, 'log', () => {});
   const login = fake('auth.session', { name: 'fake.login', kind: 'command', session: false });
   const dispatch = owner(
     t,
@@ -690,7 +692,7 @@ test('6: a stale expected version is 409 before the handler runs', async (t) => 
 });
 
 test('7: a failing handler, output outside its schema, or no handler at all is 500', async (t) => {
-  const logged = t.mock.method(console, 'error', () => {});
+  const logged = t.mock.method(console, 'log', () => {});
   const dispatch = owner(
     t,
     [fake('draft.read'), fake('history.read'), fake('studio.view')],
@@ -712,7 +714,14 @@ test('7: a failing handler, output outside its schema, or no handler at all is 5
   assert.equal(lines.length, 3);
   for (const line of lines) {
     assert.ok(!line.includes('canary'), line);
-    assert.deepEqual(Object.keys(JSON.parse(line)), ['level', 'event', 'operation', 'requestId']);
+    assert.deepEqual(Object.keys(JSON.parse(line)), [
+      'ts',
+      'level',
+      'event',
+      'profile',
+      'operation',
+      'requestId',
+    ]);
   }
 });
 
@@ -774,7 +783,7 @@ test('7: a handler redirects a form post within the site, and nowhere else', asy
   assert.equal(response.headers.get('cache-control'), 'no-store');
   assert.equal(await response.text(), '');
 
-  t.mock.method(console, 'error', () => {});
+  t.mock.method(console, 'log', () => {});
   for (location of [
     'https://elsewhere.test/',
     '//elsewhere.test',
@@ -789,7 +798,7 @@ test('7: a handler redirects a form post within the site, and nowhere else', asy
 });
 
 test("7: a handler's declared error carries its headers; an undeclared one is a 500", async (t) => {
-  t.mock.method(console, 'error', () => {});
+  t.mock.method(console, 'log', () => {});
   const dispatch = owner(
     t,
     [
@@ -811,7 +820,7 @@ test("7: a handler's declared error carries its headers; an undeclared one is a 
 });
 
 test('7: no binding or result replaces a header the dispatcher sets', async (t) => {
-  t.mock.method(console, 'error', () => {});
+  t.mock.method(console, 'log', () => {});
   const fromHandler = owner(
     t,
     [fake('draft.read')],
@@ -856,4 +865,20 @@ test('HEAD runs a query as GET', async (t) => {
   );
   assert.equal(response.status, 200);
   assert.equal(calls.length, 1);
+});
+
+test('a failure logs the operation only when the registry has it', async (t) => {
+  const logged = t.mock.method(console, 'log', () => {});
+  // No stored deployment: every request fails before step 1.
+  const dispatch = createDispatcher({ operations: [fake('draft.read')], ...doubles({}) });
+  await dispatch(call('GET', 'fake.draft.read').request, 'fake.draft.read');
+  await dispatch(call('GET', 'canary-name').request, 'canary-name');
+  const lines = logged.mock.calls.map((entry) => JSON.parse(String(entry.arguments[0])));
+  assert.deepEqual(
+    lines.map((line) => [line.event, line.operation]),
+    [
+      ['operation.failed', 'fake.draft.read'],
+      ['operation.failed', undefined],
+    ],
+  );
 });

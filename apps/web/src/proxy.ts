@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { INDEXABLE } from './server/capabilities';
 import { getDeploymentConfig } from './server/config-store';
+import { READY_PATH, STARTING, STARTING_HEADERS } from './server/ready-starting';
 import { resolveRoute } from './server/routes';
 
 // Defense in depth (#1, item 15). Each route checks its profile itself; this
@@ -14,7 +15,16 @@ import { resolveRoute } from './server/routes';
 export function proxy(request: NextRequest): NextResponse {
   const requestId = crypto.randomUUID();
   const deployment = getDeploymentConfig();
-  if (!deployment) return plain(503, 'Service unavailable.', requestId, {});
+  if (!deployment) {
+    // Readiness answers its own `starting` body, as served() does.
+    if (request.nextUrl.pathname === READY_PATH) {
+      return NextResponse.json(STARTING, {
+        status: 503,
+        headers: { ...STARTING_HEADERS, 'x-request-id': requestId },
+      });
+    }
+    return plain(503, 'Service unavailable.', requestId, {});
+  }
   const robots: Record<string, string> = INDEXABLE[deployment.profile]
     ? {}
     : { 'x-robots-tag': 'noindex' };

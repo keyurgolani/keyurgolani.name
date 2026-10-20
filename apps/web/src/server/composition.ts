@@ -5,10 +5,10 @@ import { openDocumentsCatalog } from './catalog-documents';
 import type { CatalogReader } from './catalog-port';
 import { openSampleCatalog } from './catalog-sample';
 import type { ConfigIssue, DeploymentConfig } from './config';
-import type { CatalogAdapter } from './config-summary';
+import { configSummary, type CatalogAdapter } from './config-summary';
 import type { DeploymentState } from './config-store';
 import { createDispatcher, NO_BINDINGS, type StudioBindings } from './dispatcher';
-import { listOperations } from './operations';
+import { listOperations, type ConfigSummary } from './operations';
 import type { Session } from './session';
 
 // The composition root (#1, item 14). It builds what one profile needs and
@@ -159,7 +159,13 @@ export interface CompositionInput {
 }
 
 export type Composition =
-  | { readonly ok: true; readonly state: DeploymentState; readonly issues: ConfigIssue[] }
+  | {
+      readonly ok: true;
+      readonly state: DeploymentState;
+      readonly issues: ConfigIssue[];
+      /** The redacted summary register() logs once as `deployment.config` (#1, item 20). */
+      readonly summary: ConfigSummary;
+    }
   | { readonly ok: false; readonly issues: ConfigIssue[] };
 
 export async function compose(input: CompositionInput): Promise<Composition> {
@@ -178,13 +184,25 @@ export async function compose(input: CompositionInput): Promise<Composition> {
       });
       const issues = [...early.issues, ...sample.issues];
       if (!sample.ok) return { ok: false, issues };
-      return built(config, sample.reader, NO_BINDINGS, issues, early.degraded);
+      return built(config, {
+        reader: sample.reader,
+        adapter: 'sample',
+        bindings: NO_BINDINGS,
+        issues,
+        degraded: early.degraded,
+      });
     }
     case 'read-only': {
       const documents = openDocuments(input);
       const issues = [...early.issues, ...documents.issues];
       if (!documents.ok) return { ok: false, issues };
-      return built(config, documents.reader, NO_BINDINGS, issues, early.degraded);
+      return built(config, {
+        reader: documents.reader,
+        adapter: 'documents',
+        bindings: NO_BINDINGS,
+        issues,
+        degraded: early.degraded,
+      });
     }
     case 'owner': {
       // Until #3, owner serves the mounted documents too.
@@ -210,10 +228,13 @@ export async function compose(input: CompositionInput): Promise<Composition> {
         throttle: (context) =>
           provider.throttle ? provider.throttle(context) : NO_BINDINGS.throttle(context),
       };
-      return built(config, documents.reader, bindings, issues, [
-        ...early.degraded,
-        ...late.degraded,
-      ]);
+      return built(config, {
+        reader: documents.reader,
+        adapter: catalog,
+        bindings,
+        issues,
+        degraded: [...early.degraded, ...late.degraded],
+      });
     }
   }
 }
@@ -229,20 +250,22 @@ function openDocuments(input: CompositionInput) {
   });
 }
 
-function built(
-  config: DeploymentConfig,
-  catalog: CatalogReader,
-  bindings: StudioBindings,
-  issues: ConfigIssue[],
-  degraded: readonly string[],
-): Composition {
+interface Built {
+  readonly reader: CatalogReader;
+  readonly adapter: CatalogAdapter;
+  readonly bindings: StudioBindings;
+  readonly issues: ConfigIssue[];
+  readonly degraded: readonly string[];
+}
+
+function built(config: DeploymentConfig, parts: Built): Composition {
   // It reads the policy from the deployment register() stores, per request.
-  const dispatch = createDispatcher({ ...bindings, operations: listOperations() });
+  const dispatch = createDispatcher({ ...parts.bindings, operations: listOperations() });
   const state = Object.freeze({
     config,
-    catalog,
+    catalog: parts.reader,
     dispatch,
-    degraded: Object.freeze([...degraded]),
+    degraded: Object.freeze([...parts.degraded]),
   });
-  return { ok: true, state, issues };
+  return { ok: true, state, issues: parts.issues, summary: configSummary(config, parts.adapter) };
 }

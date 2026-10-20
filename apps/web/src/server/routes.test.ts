@@ -471,12 +471,13 @@ test('the Studio transport is served in every profile', () => {
   for (const profile of PROFILES) assert.equal(serves(profile, '/api/studio/[name]'), true);
 });
 
-test('what every profile serves at the close of slice 3', () => {
+test('what every profile serves at the close of #1', () => {
   const served = (profile: Profile) =>
     PATTERNS.filter((pattern) => serves(profile, pattern as RoutePattern));
   const everywhere = [
     '/',
     '/api/health',
+    '/api/ready',
     '/api/studio/[name]',
     '/opengraph-image',
     '/robots.txt',

@@ -1,3 +1,6 @@
+# The read-only profile: your portfolio from ./config, with no editing
+# surface. deploy/compose.demo.yml and deploy/compose.owner.yml are the other
+# two profiles (docs/deployment.md).
 services:
   web:
     build:
@@ -6,14 +9,19 @@ services:
     image: portfolio:latest
     container_name: portfolio
     restart: unless-stopped
+    # Loopback only: the TLS-terminating proxy in front publishes the site.
     ports:
-      - '${PORT:-3000}:3000'
+      - '127.0.0.1:${PORT:-3000}:3000'
     environment:
       PORTFOLIO_PROFILE: read-only
       # The origin visitors use, such as https://jane.name. Set it in .env.
       PORTFOLIO_ORIGIN: ${PORTFOLIO_ORIGIN:?set PORTFOLIO_ORIGIN in .env to the origin visitors use}
       PORTFOLIO_SOURCE_DIR: /config
       NODE_ENV: production
+    # Nothing in the container is writable but Next's cache.
+    read_only: true
+    tmpfs:
+      - /app/apps/web/.next/cache
     volumes:
       # config/ holds your portfolio.yml. The server reads it once at startup;
       # restart the container after you edit it.

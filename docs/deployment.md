@@ -1,12 +1,65 @@
 # Deployment
 
-The server runs one deployment profile, chosen by `PORTFOLIO_PROFILE` at startup. This release serves `read-only`, the portfolio in a mounted directory with no editing surface, and `demo`, the bundled sample for a product demo. Run it in Docker (recommended) or on Node.
+The server runs one deployment profile, chosen by `PORTFOLIO_PROFILE` at startup:
 
-The browser editor, the variant gallery, the variant preview pages, and their write APIs are gone in every profile, `pnpm dev` included. Edit `config/portfolio.yml` instead: `pnpm dev` picks up each save, and a production server picks it up when it restarts. `pnpm dev` listens on every network interface; on a network you don't trust, run `pnpm dev --hostname 127.0.0.1`.
+- `read-only` serves your portfolio from a mounted directory, with no editing surface.
+- `demo` serves the bundled sample, for a product demo, and asks crawlers to index nothing.
+- `owner` adds Studio, drafts, and revisions to your portfolio. It doesn't start yet: it needs an authentication provider, and none ships.
+
+Run it in a container (recommended) or on Node. The browser editor, the variant gallery, the variant preview pages, and their write APIs are gone in every profile, `pnpm dev` included. Edit `config/portfolio.yml` instead: `pnpm dev` picks up each save, and a production server picks it up when it restarts. `pnpm dev` listens on every network interface; on a network you don't trust, run `pnpm dev --hostname 127.0.0.1`.
+
+## Profiles
+
+What each profile grants. `public` is anyone, `session` is a signed-in owner (no release can sign in yet), and `absent` means the profile has no page, route, or operation for it, so a request gets a 404. A unit test keeps this table in step with `apps/web/src/server/capabilities.ts`.
+
+<!-- profile-matrix:start -->
+
+| Capability       | What it covers                               | `owner`   | `demo`   | `read-only` |
+| ---------------- | -------------------------------------------- | --------- | -------- | ----------- |
+| `catalog.read`   | The portfolio's pages and metadata routes    | `public`  | `public` | `public`    |
+| `feed.read`      | `/feed.xml`                                  | `public`  | `absent` | `public`    |
+| `sample.read`    | `/sample`, the bundled sample in any variant | `absent`  | `public` | `absent`    |
+| `reference.read` | The reference portfolio (not built yet)      | `absent`  | `public` | `absent`    |
+| `sandbox.view`   | The demo Studio (not built yet)              | `absent`  | `public` | `absent`    |
+| `health.read`    | `/api/health`                                | `public`  | `public` | `public`    |
+| `ready.read`     | `/api/ready`                                 | `public`  | `public` | `public`    |
+| `auth.session`   | Signing in and out                           | `public`  | `absent` | `absent`    |
+| `source.read`    | The portfolio's source document              | `session` | `absent` | `absent`    |
+| `draft.read`     | The draft                                    | `session` | `absent` | `absent`    |
+| `history.read`   | Published revisions                          | `session` | `absent` | `absent`    |
+| `draft.write`    | Draft edits, variant changes included        | `session` | `absent` | `absent`    |
+| `config.import`  | Importing a portfolio                        | `session` | `absent` | `absent`    |
+| `config.export`  | Exporting the portfolio                      | `session` | `absent` | `absent`    |
+| `studio.view`    | Studio's pages                               | `session` | `absent` | `absent`    |
+| `config.status`  | The redacted deployment summary              | `session` | `absent` | `absent`    |
+| `publish`        | Publishing the draft                         | `session` | `absent` | `absent`    |
+| `rollback`       | Going back to an earlier revision            | `session` | `absent` | `absent`    |
+| `asset.write`    | Uploading assets                             | `session` | `absent` | `absent`    |
+| `preview.grant`  | Preview links                                | `session` | `absent` | `absent`    |
+
+<!-- profile-matrix:end -->
+
+Every profile serves `/`, `/robots.txt`, `/sitemap.xml`, `/opengraph-image`, `/api/health`, `/api/ready`, and `/api/studio/<operation>`. `owner` and `read-only` add `/feed.xml`, and `demo` adds `/sample`. Every Studio operation goes through `/api/studio/<operation>`, and one the profile lacks answers with the 404 envelope, `{"error":{"code":"not_available_in_profile",...}}`. There is no image optimizer: images load as they are, and `/_next/image` answers with the 404 page in every profile.
+
+## Supported hosts
+
+- `owner` needs a container with a persistent volume for its data directory.
+- `read-only` and `demo` run in a container or on plain Node.
+- Serverless hosts (Vercel, Netlify, and the like) aren't supported yet. Nothing verifies there that the server finds its source directory or stops on a bad setting.
 
 ## Docker (recommended for self-hosting)
 
-The repo ships a `Dockerfile` and `docker-compose.yml`.
+The repo ships a `Dockerfile` and one Compose example per profile. They all build the same image; only the environment and the mounts differ.
+
+| File                       | Profile     | Run it from |
+| -------------------------- | ----------- | ----------- |
+| `docker-compose.yml`       | `read-only` | the repo    |
+| `deploy/compose.demo.yml`  | `demo`      | `deploy/`   |
+| `deploy/compose.owner.yml` | `owner`     | `deploy/`   |
+
+Each one publishes the server on `127.0.0.1` only, on port `3000` unless `PORT` is set, for the TLS-terminating proxy in front of it (see [Reverse proxy and HTTPS](#reverse-proxy-and-https)). Each reads `PORTFOLIO_ORIGIN` from the `.env` beside it and refuses to start without one.
+
+### `read-only`
 
 ```sh
 cp portfolio.example.yml config/portfolio.yml   # then make it yours
@@ -14,31 +67,31 @@ echo 'PORTFOLIO_ORIGIN=https://jane.name' > .env
 docker compose up --build
 ```
 
-This builds a production image, mounts `config/` into the container read-only, and serves on port 3000 under the `read-only` profile. Edit `docker-compose.yml` to change the port or add a reverse proxy.
+This mounts `config/` read-only at `/config` and `assets/` at the site's `/assets/`. Nothing in the container is writable but a tmpfs at Next.js's cache, `/app/apps/web/.next/cache`.
+
+### `demo`
+
+```sh
+cd deploy
+echo 'PORTFOLIO_ORIGIN=https://demo.jane.name' > .env
+docker compose -f compose.demo.yml up --build
+```
+
+`demo` renders the bundled sample and mounts nothing, on the same read-only root and cache tmpfs as `read-only`.
+
+### `owner`
+
+`deploy/compose.owner.yml` mounts `../config` and `../assets` as `read-only` does, and keeps drafts and revisions in the `portfolio-data` volume at `/var/lib/portfolio` (`PORTFOLIO_DATA_DIR`). The image creates that directory for the server's user (uid 1001, mode `0700`), so a new volume starts out writable by the server and no one else. Run one server per volume: the fixed container name stops `docker compose up --scale`. Back the volume up.
+
+It refuses to start until a release ships an authentication provider.
 
 ### What the image does
 
-- Multi-stage build: deps → build → run.
+- Multi-stage build: deps, build, then run.
 - Installs only production dependencies in the runtime stage.
-- Runs `pnpm build` to produce a Next.js standalone output. The build needs no deployment settings, and the image sets no `PORTFOLIO_*` defaults.
+- Runs `pnpm build` to produce a Next.js standalone output. The build needs no deployment settings, and the image sets no `PORTFOLIO_*` defaults: a setting outside the profile's column stops a production server, so a default would stop `demo`.
 - Under `read-only` and `owner`, reads the portfolio from `PORTFOLIO_SOURCE_DIR`, the mounted `config/`, and never renders the bundled example in production.
-
-### Startup checks
-
-Before it takes a request, the server validates its settings and the portfolio. A problem stops it with exit code 1 and one `config.fatal` JSON line per problem on stdout. Each line names the setting, never its value, and for the portfolio adds the file, the JSON pointer, and the line and column. The server refuses to start on:
-
-- a required setting that is missing or malformed;
-- in production, a setting that doesn't apply to the profile, such as `GITHUB_TOKEN` under `read-only` (`pnpm dev` warns and ignores it);
-- `PORTFOLIO_PATH` or `NEXT_PUBLIC_BASE_URL`, which `PORTFOLIO_SOURCE_DIR` and `PORTFOLIO_ORIGIN` replaced;
-- a source directory that is missing or unreadable, that is a file rather than the directory holding it, that holds zero or several portfolio documents, or that holds a `portfolio.toml`, which can only be the old format;
-- a portfolio in the old one-file format: no `schemaVersion`, and `identity`, `sections`, `variant`, `theme`, `motionPreference`, `colorScheme`, or `typography` at the top. It gets one `document_legacy` line, naming each old field and where it goes now, and nothing else is reported. [Migrating from the one-file format](#migrating-from-the-one-file-format) converts it;
-- a portfolio that isn't one plain YAML or JSON document (anchors, aliases, merge keys, tags, directives, and a second document are refused), that repeats a key in a mapping, that is over 1 MiB, nests more than 64 levels deep, or holds more than 10,000 entries in one mapping or list, that doesn't declare `schemaVersion: 2`, that fails the schema, or that gives two sections the same `id`;
-- a key the schema doesn't define, anywhere but inside `extensions` (the message suggests the closest allowed key), or a `url`, `src`, or `*Url` value that isn't an `https`, `http`, `mailto`, or `tel` URL, a relative path, or a `#fragment` (image sources may also be raster `data:image` URLs);
-- in production under `read-only` and `owner`, an origin on a reserved example domain, or the bundled sample's `identity.name`.
-
-Data under an `extensions` key, or a section whose `kind` is `<npm package name>/<name>`, belongs to a content extension. This release registers none, so the server keeps that data as written, logs a `config.warning` with code `extension_unregistered` for each use, and never renders it.
-
-`owner` doesn't start yet: it needs an authentication provider, and none ships.
+- Its `HEALTHCHECK` asks `/api/health`.
 
 ### Updating the portfolio
 
@@ -48,7 +101,7 @@ The server reads `config/portfolio.yml` once, at startup. After you edit it, res
 docker compose restart web
 ```
 
-If the edit is invalid, the server logs its `config.fatal` lines and exits 1. `docker-compose.yml` sets `restart: unless-stopped`, so Docker restarts the container in a loop, and each restart logs the same `config.fatal` block again until you fix the file. `docker compose logs web` shows where the problem is. Once the file is fixed, the next restart serves the site, or run `docker compose restart web` to start it right away.
+If the edit is invalid, the server logs its `config.fatal` lines and exits 1. The examples set `restart: unless-stopped`, so Docker restarts the container in a loop, and each restart logs the same `config.fatal` block again until you fix the file. `docker compose logs web` shows where the problem is. Once the file is fixed, the next restart serves the site, or run `docker compose restart web` to start it right away.
 
 To add a variant package or pick up a new release, rebuild:
 
@@ -88,13 +141,90 @@ docker run --rm --network none -v "$PWD/config:/config" portfolio-builder \
 
 Add the `--set`, `--drop-unknown`, and `--write --out /config/new` arguments to the second command to write the documents. They're written as root; `chown` them afterwards if the host needs another owner.
 
-### Reverse proxy
+### Reverse proxy and HTTPS
 
-For production behind Nginx, Caddy, or Traefik, point your proxy at `http://localhost:3000` (or whatever port you mapped) and terminate TLS there. The app builds every absolute URL from `PORTFOLIO_ORIGIN`; it never reads `Host` or `X-Forwarded-*` for one.
+Put Nginx, Caddy, or Traefik in front, pointed at `http://127.0.0.1:3000` (or the port you set), and terminate TLS there. The app builds every absolute URL from `PORTFOLIO_ORIGIN`; it never reads `Host` or `X-Forwarded-*` for one. Set `PORTFOLIO_TRUSTED_PROXY_HOPS` to the number of proxies that append to `X-Forwarded-For`.
 
-## Serverless hosts
+That address is for a proxy on the host. A proxy in another container can't reach a port published on the host's `127.0.0.1`: put the proxy and the app on one Docker network, point the proxy at the app's service name (`http://web:3000` in these examples), and drop the `ports:` entry if nothing on the host needs it.
 
-Vercel, Netlify, and similar hosts aren't supported yet. Nothing verifies that the server finds its source directory or stops on a bad setting there. Use Docker or plain Node.
+The proxy knows the site is on HTTPS, so it sends `Strict-Transport-Security`. In a Caddy site block, for example:
+
+```
+header Strict-Transport-Security "max-age=31536000"
+```
+
+Add `includeSubDomains` only when every subdomain serves HTTPS.
+
+## Startup checks
+
+Before it takes a request, the server validates its settings and the portfolio. A problem stops it with exit code 1 and one `config.fatal` JSON line per problem on stdout. Each line names the setting, never its value, and for the portfolio adds the file, the JSON pointer, and the line and column.
+
+| The server finds                                                                                     | Profiles         | It                                                                                                  |
+| ---------------------------------------------------------------------------------------------------- | ---------------- | --------------------------------------------------------------------------------------------------- |
+| `PORTFOLIO_PROFILE` missing, or not exactly `owner`, `demo`, or `read-only`                          | all              | refuses to start                                                                                    |
+| `PORTFOLIO_ORIGIN` missing, not a bare origin, or `http` for an `owner` host that isn't loopback     | all              | refuses to start                                                                                    |
+| A key and its `_FILE` both set, or an unreadable `_FILE`                                             | all              | refuses to start                                                                                    |
+| Proxy hops that aren't a whole number, or a preview origin that is invalid or `PORTFOLIO_ORIGIN`     | all              | refuses to start                                                                                    |
+| `PORTFOLIO_PATH` or `NEXT_PUBLIC_BASE_URL`                                                           | all              | refuses to start, naming the setting that replaced it                                               |
+| A setting outside the profile's column, such as `GITHUB_TOKEN` under `read-only`                     | all              | refuses to start in production; `pnpm dev` warns and ignores it                                     |
+| A source directory that is missing, unreadable, or a file rather than the directory holding it       | owner, read-only | refuses to start                                                                                    |
+| A source directory with several portfolio documents                                                  | owner, read-only | refuses to start                                                                                    |
+| A portfolio in the old one-file format, or a `portfolio.toml`                                        | owner, read-only | refuses to start with one `document_legacy` line; [migrate it](#migrating-from-the-one-file-format) |
+| A source directory with no portfolio document                                                        | owner, read-only | refuses to start; `pnpm dev` renders the bundled example and warns                                  |
+| A portfolio that isn't one plain YAML or JSON document                                               | owner, read-only | refuses to start                                                                                    |
+| A portfolio over 1 MiB, nested more than 64 levels, or with over 10,000 entries in a mapping or list | owner, read-only | refuses to start                                                                                    |
+| A portfolio without `schemaVersion: 2`, that fails the schema, or with two sections on one `id`      | owner, read-only | refuses to start                                                                                    |
+| A key the schema doesn't define, outside `extensions`                                                | owner, read-only | refuses to start, suggesting the closest allowed key                                                |
+| A `url`, `src`, or `*Url` that isn't `https`, `http`, `mailto`, `tel`, relative, or a `#fragment`    | owner, read-only | refuses to start                                                                                    |
+| An origin on a reserved example domain, or the bundled sample's `identity.name`                      | owner, read-only | refuses to start in production; `pnpm dev` warns                                                    |
+| No authentication provider                                                                           | owner            | refuses to start: configure sign-in or choose `read-only`                                           |
+| A bundled sample that is missing or doesn't validate, so the build is broken                         | demo             | refuses to start                                                                                    |
+
+The old one-file format has no `schemaVersion` and has `identity`, `sections`, `variant`, `theme`, `motionPreference`, `colorScheme`, or `typography` at the top. Its one `document_legacy` line names each old field and where it goes now, and nothing else is reported; a `portfolio.toml` can only be that format. A plain YAML document has no anchors, aliases, merge keys, tags, directives, repeated keys, or second document. The reserved example domains are `example.com`, `.net`, and `.org` with their subdomains, `.example`, and `.invalid`. Image sources may also be raster `data:image` URLs.
+
+Data under an `extensions` key, or a section whose `kind` is `<npm package name>/<name>`, belongs to a content extension. This release registers none, so the server keeps that data as written, logs a `config.warning` with code `extension_unregistered` for each use, and never renders it.
+
+## Health and readiness
+
+`GET /api/health` is liveness. It does no I/O and answers 200 with `{"status":"ok","profile":"read-only"}` while the server runs. The image `HEALTHCHECK` uses it.
+
+`GET /api/ready` is readiness, for a load balancer or an orchestrator. Next holds requests until startup finishes, so a client usually just waits; one that reaches the app before then gets 503 with `{"status":"starting"}`. After startup it answers:
+
+```json
+{
+  "status": "ready",
+  "profile": "read-only",
+  "capabilities": [{ "id": "catalog.read", "access": "public" }],
+  "checks": [
+    { "id": "catalog", "status": "ok" },
+    { "id": "packs", "status": "ok" },
+    { "id": "owner-modules", "status": "ok" }
+  ]
+}
+```
+
+`capabilities` lists every capability the profile grants. The checks are `catalog` (the portfolio loads), `packs` (the variant the host renders loads), and, under `demo` and `read-only`, `owner-modules` (no Studio, storage, or sign-in code has loaded). A failed check makes it 503 with `"status": "unavailable"`. When a startup requirement fell back to a degraded mode, it's 200 with `"status": "degraded"`. Neither endpoint returns a path, a value, or portfolio content, and both send `Cache-Control: no-store`.
+
+## Logs
+
+The app writes its log as one JSON object per line on stdout, with `ts`, `level`, and `event`, and only these other fields: `requestId`, `profile`, `route` (the route pattern, never the URL), `operation`, `capability`, `status`, `code`, `key`, and `digest`. `config.fatal` and `config.warning` add `file` (relative to the source directory), `path`, `line`, `column`, `issueCode`, and `message`. No line of the app's carries a request body, a cookie, `Authorization`, a raw URL, or a secret value.
+
+Next writes its own lines to the same streams, as plain text: its startup banner on stdout (`▲ Next.js`, the address, `✓ Ready`), and on stderr, the message and stack of each error it catches, next to the app's `request.error` line, and a line naming the request URL when a request handler crashes. Those can name server paths and request URLs. None of them is JSON, so a log pipeline keeps the app's lines by parsing each line as a JSON object.
+
+| Event               | When                                                                                                                          |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `config.fatal`      | A startup check failed. The server exits 1 after the last one.                                                                |
+| `config.warning`    | A startup check found something to fix that doesn't stop the server.                                                          |
+| `deployment.config` | Once, at startup: the redacted settings summary.                                                                              |
+| `request.error`     | A page or route failed. `digest` is the reference code the error page shows the visitor.                                      |
+| `operation.failed`  | A Studio operation failed. Its response carries the same `requestId`.                                                         |
+| `feed.failed`       | `/feed.xml` couldn't be built: `code` is `catalog_unavailable` or `render_failed`. Its response carries the same `requestId`. |
+
+`deployment.config` adds `origin`, `previewOrigin`, `proxyHops`, `capabilities`, `adapters` (which catalog the profile reads), and `secrets`, each secret only as `set` or `unset`. The owner-session `config.status` operation returns the same summary; no anonymous route does.
+
+## Response headers
+
+Every response the app sends carries `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, and `Content-Security-Policy: frame-ancestors 'none'`, so no other site can frame the pages, and a fresh `X-Request-Id`. Under `demo`, each adds `X-Robots-Tag: noindex`. Next's redirect for a trailing slash has none of them: Next answers `/sample/` with a 308 to `/sample`, whose body is only that path, before the app sees the request. `Strict-Transport-Security` belongs at the TLS proxy (see [Reverse proxy and HTTPS](#reverse-proxy-and-https)).
 
 ## Plain Node
 
@@ -107,6 +237,8 @@ PORTFOLIO_PROFILE=read-only PORTFOLIO_ORIGIN=https://jane.name \
 
 `pnpm start` runs from `apps/web`, so the relative source directory is the repo's `config/`. The host listens on `process.env.PORT` (defaults to 3000).
 
+For a process manager (PM2, systemd, etc.), wrap `pnpm start` with the same environment. You don't need to ship `node_modules` to your runtime if you copy `apps/web/.next/standalone/` and the public assets.
+
 ### Demo
 
 `demo` renders the bundled sample, `portfolio.example.yml`, and reads no source directory; setting `PORTFOLIO_SOURCE_DIR` stops a production server. Its origin is the demo hostname:
@@ -115,9 +247,7 @@ PORTFOLIO_PROFILE=read-only PORTFOLIO_ORIGIN=https://jane.name \
 PORTFOLIO_PROFILE=demo PORTFOLIO_ORIGIN=https://demo.jane.name pnpm start
 ```
 
-`/` shows the sample in the default variant, and `/sample?variant=<slug>&scheme=<id>&typography=<id>` in any registered variant, color scheme, and typography preset. An unknown variant is a 404, and an unknown scheme or preset falls back to the variant's default. Until the demo's indexing rules are settled, every response sends `X-Robots-Tag: noindex`, `robots.txt` disallows everything, the sitemap is empty, and there is no feed. Every Studio operation answers with the 404 envelope.
-
-For a process manager (PM2, systemd, etc.), wrap `pnpm start` with the same environment. The Next.js standalone output makes the container surface minimal — you don't need to ship `node_modules` to your runtime if you copy `apps/web/.next/standalone/` and the public assets.
+`/` shows the sample in the default variant, and `/sample?variant=<slug>&scheme=<id>&typography=<id>` in any registered variant, color scheme, and typography preset. An unknown variant is a 404, and an unknown scheme or preset falls back to the variant's default. The sample's `github` section doesn't render, since it would fetch a live account. Until the demo's indexing rules are settled, every response the app sends has `X-Robots-Tag: noindex`, `robots.txt` disallows everything, the sitemap is empty, and there is no feed. Every Studio operation answers with the 404 envelope.
 
 ## Environment variables
 
@@ -130,7 +260,7 @@ The server reads these from its environment only. Every key also accepts `<KEY>_
 | `PORTFOLIO_SOURCE_DIR`         | owner, read-only | Directory holding exactly one `portfolio.{yml,yaml,json}`, not the file.          |
 | `PORTFOLIO_TRUSTED_PROXY_HOPS` | all              | How many trusted proxies append to `X-Forwarded-For`. Whole number, default `0`.  |
 | `PORTFOLIO_PREVIEW_ORIGIN`     | owner, demo      | Optional preview origin, different from `PORTFOLIO_ORIGIN`.                       |
-| `PORTFOLIO_DATA_DIR`           | owner            | Reserved: the writable data directory.                                            |
+| `PORTFOLIO_DATA_DIR`           | owner            | The writable data directory: `/var/lib/portfolio` in the owner example.           |
 | `PORTFOLIO_AUTH_PASSWORD_HASH` | owner            | Reserved: the Studio password hash.                                               |
 | `GITHUB_TOKEN`                 | owner            | Reserved. Public GitHub sections use unauthenticated REST and never send a token. |
 | `PORT`                         | all              | Port the host binds to. Default `3000`.                                           |
@@ -143,7 +273,7 @@ A key outside its profile's list stops a production server; `pnpm dev` warns and
 
 The host uses Next.js fetch revalidation:
 
-- **GitHub data:** 1 hour (`revalidate: 3600`). The `cache()` wrapper memoizes within a request.
+- **GitHub data:** 1 hour (`revalidate: 3600`), and each request gives up after 3 seconds. The `cache()` wrapper memoizes within a request.
 - **Metadata:** rendered per request (`robots.txt`, `sitemap.xml`, the Open Graph image, and the feed), from the portfolio loaded at startup and `PORTFOLIO_ORIGIN`.
 - **Variant CSS:** served as static assets.
 
@@ -165,6 +295,7 @@ The Next.js app ships static assets under `_next/static/...`. Any CDN that respe
 - `pnpm build` exits 0
 - The dev server renders correctly in light, dark, bright, black, and system themes
 - `/feed.xml`, `/robots.txt`, `/sitemap.xml` all 200, with URLs on your `PORTFOLIO_ORIGIN`
+- `/api/ready` answers 200 with `"status": "ready"`
 - With the production build running, `node apps/web/scripts/check-containment.mjs http://127.0.0.1:3000 --direct --expect-name "<your identity.name>" --expect-origin "<your PORTFOLIO_ORIGIN>"` exits 0. Drop `--direct` when the URL goes through your reverse proxy.
 
 ## Updating

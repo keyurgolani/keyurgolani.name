@@ -1,12 +1,25 @@
-import { chmodSync, copyFileSync, mkdirSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { expect, test } from '@playwright/test';
-import { DEFAULT_PORTFOLIO, runAppToExit } from '../harness/app-server.mjs';
+import { runAppToExit } from '../harness/app-server.mjs';
+import {
+  fatalFields,
+  HEAD,
+  mentions,
+  neverValues,
+  ORIGIN,
+  rowDocuments,
+  STARTUP_ROWS,
+  type RowPaths,
+  type StartupRow,
+} from '../harness/startup-rows.mjs';
 
 // Every startup-matrix row without an issue tag (#1, item 2), against the
-// built standalone server. Each must stop the process with exit 1 before it
-// serves a request, log a config.fatal line naming the key, and never print
-// the configured value. No browser: these only start and stop the server.
+// built standalone server. The rows live in tests/harness/startup-rows.mjs,
+// which `pnpm smoke:profiles` runs against the image too. Each must stop the
+// process with exit 1 before it serves a request, log a config.fatal line
+// naming the key, and never print the configured value. No browser: these
+// only start and stop the server.
 
 interface Fatal {
   event: string;
@@ -21,41 +34,6 @@ interface Fatal {
 }
 
 type Env = Record<string, string>;
-
-const ORIGIN = 'https://rowan.test';
-const DEMO_ORIGIN = 'https://demo.rowan.test';
-/** The lines every version 2 portfolio document starts with. */
-const HEAD = 'schemaVersion: 2\nlocale: en\ndirection: ltr\n';
-
-/** A source directory holding the given documents (name to text). */
-function sourceDir(documents: Record<string, string>): string {
-  const dir = test.info().outputPath('config');
-  mkdirSync(dir, { recursive: true });
-  for (const [name, text] of Object.entries(documents)) writeFileSync(path.join(dir, name), text);
-  return dir;
-}
-
-/** A source directory holding the harness fixture, which every browser test renders. */
-function fixtureDir(): string {
-  const dir = test.info().outputPath('fixture');
-  mkdirSync(dir, { recursive: true });
-  copyFileSync(DEFAULT_PORTFOLIO, path.join(dir, 'portfolio.yml'));
-  return dir;
-}
-
-/** A read-only deployment that starts, until a test changes it. */
-function readOnly(extra: Env = {}): Env {
-  return {
-    PORTFOLIO_PROFILE: 'read-only',
-    PORTFOLIO_ORIGIN: ORIGIN,
-    PORTFOLIO_SOURCE_DIR: extra.PORTFOLIO_SOURCE_DIR ?? fixtureDir(),
-    ...extra,
-  };
-}
-
-function without(env: Env, key: string): Env {
-  return Object.fromEntries(Object.entries(env).filter(([name]) => name !== key));
-}
 
 /** Starts the server, expects it to stop with exit 1, and returns its config.fatal lines. */
 async function expectRefusal(
@@ -78,344 +56,54 @@ async function expectRefusal(
   return fatal;
 }
 
-const keysAndCodes = (fatal: Fatal[]) => fatal.map((entry) => `${entry.key}:${entry.code}`);
+/** Writes the row's documents and files under the test's output directory. */
+function place(row: StartupRow): RowPaths {
+  const source = test.info().outputPath('config');
+  mkdirSync(source, { recursive: true });
+  for (const [name, text] of Object.entries(rowDocuments(row))) {
+    writeFileSync(path.join(source, name), text);
+  }
+  const beside = (name: string) => test.info().outputPath(name);
+  for (const [name, text] of Object.entries(row.files ?? {})) writeFileSync(beside(name), text);
+  return { source, beside };
+}
 
-test.describe('in every mode', () => {
-  test('a missing profile', async () => {
-    const fatal = await expectRefusal(without(readOnly(), 'PORTFOLIO_PROFILE'));
-    expect(keysAndCodes(fatal)).toEqual(['PORTFOLIO_PROFILE:required']);
-  });
-
-  test('an inexact profile', async () => {
-    const fatal = await expectRefusal(readOnly({ PORTFOLIO_PROFILE: 'Readonly-Canary' }), {
-      never: ['Readonly-Canary'],
-    });
-    expect(keysAndCodes(fatal)).toEqual(['PORTFOLIO_PROFILE:invalid']);
-  });
-
-  test('a missing origin', async () => {
-    const fatal = await expectRefusal(without(readOnly(), 'PORTFOLIO_ORIGIN'));
-    expect(keysAndCodes(fatal)).toEqual(['PORTFOLIO_ORIGIN:required']);
-  });
-
-  test('an origin that is not bare', async () => {
-    const fatal = await expectRefusal(
-      readOnly({ PORTFOLIO_ORIGIN: 'https://canary-origin.test/blog' }),
-      { never: ['canary-origin'] },
-    );
-    expect(keysAndCodes(fatal)).toEqual(['PORTFOLIO_ORIGIN:invalid']);
-  });
-
-  test('an http origin on a non-loopback owner host', async () => {
-    const fatal = await expectRefusal(
-      readOnly({ PORTFOLIO_PROFILE: 'owner', PORTFOLIO_ORIGIN: 'http://canary-owner.test' }),
-      { never: ['canary-owner'] },
-    );
-    expect(keysAndCodes(fatal)).toEqual(['PORTFOLIO_ORIGIN:insecure']);
-  });
-
-  test('a key and its _FILE both set', async () => {
-    const file = test.info().outputPath('origin.txt');
-    writeFileSync(file, `${ORIGIN}\n`);
-    const fatal = await expectRefusal(readOnly({ PORTFOLIO_ORIGIN_FILE: file }));
-    expect(keysAndCodes(fatal)).toEqual(['PORTFOLIO_ORIGIN:value_and_file']);
-  });
-
-  test('an unreadable _FILE', async () => {
-    const env = readOnly({ PORTFOLIO_ORIGIN_FILE: test.info().outputPath('canary-missing-file') });
-    const fatal = await expectRefusal(without(env, 'PORTFOLIO_ORIGIN'), {
-      never: ['canary-missing-file'],
-    });
-    expect(keysAndCodes(fatal)).toEqual(['PORTFOLIO_ORIGIN_FILE:file_unreadable']);
-  });
-
-  test('non-integer trusted proxy hops', async () => {
-    const fatal = await expectRefusal(readOnly({ PORTFOLIO_TRUSTED_PROXY_HOPS: 'canary-hops' }), {
-      never: ['canary-hops'],
-    });
-    expect(keysAndCodes(fatal)).toEqual(['PORTFOLIO_TRUSTED_PROXY_HOPS:invalid']);
-  });
-
-  test('an invalid preview origin', async () => {
-    const fatal = await expectRefusal(
-      {
-        PORTFOLIO_PROFILE: 'demo',
-        PORTFOLIO_ORIGIN: DEMO_ORIGIN,
-        PORTFOLIO_PREVIEW_ORIGIN: 'canary-preview',
-      },
-      { never: ['canary-preview'] },
-    );
-    expect(keysAndCodes(fatal)).toEqual(['PORTFOLIO_PREVIEW_ORIGIN:invalid']);
-  });
-
-  test('a preview origin equal to the canonical origin', async () => {
-    const fatal = await expectRefusal({
-      PORTFOLIO_PROFILE: 'demo',
-      PORTFOLIO_ORIGIN: DEMO_ORIGIN,
-      PORTFOLIO_PREVIEW_ORIGIN: DEMO_ORIGIN,
-    });
-    expect(keysAndCodes(fatal)).toEqual(['PORTFOLIO_PREVIEW_ORIGIN:same_as_origin']);
-  });
-
-  test('PORTFOLIO_PATH set, naming its replacement', async () => {
-    const fatal = await expectRefusal(readOnly({ PORTFOLIO_PATH: '/data/canary-portfolio.yml' }), {
-      never: ['canary-portfolio'],
-    });
-    expect(keysAndCodes(fatal)).toEqual(['PORTFOLIO_PATH:key_replaced']);
-    expect(fatal[0]!.message).toContain('PORTFOLIO_SOURCE_DIR');
-  });
-
-  test('NEXT_PUBLIC_BASE_URL set, naming its replacement', async () => {
-    const fatal = await expectRefusal(
-      readOnly({ NEXT_PUBLIC_BASE_URL: 'https://canary-base.test' }),
-      {
-        never: ['canary-base'],
-      },
-    );
-    expect(keysAndCodes(fatal)).toEqual(['NEXT_PUBLIC_BASE_URL:key_replaced']);
-    expect(fatal[0]!.message).toContain('PORTFOLIO_ORIGIN');
-  });
-});
-
-test.describe('in production', () => {
-  test('GITHUB_TOKEN under demo, a key outside the profile column', async () => {
-    const fatal = await expectRefusal(
-      { PORTFOLIO_PROFILE: 'demo', PORTFOLIO_ORIGIN: DEMO_ORIGIN, GITHUB_TOKEN: 'canary-token' },
-      { never: ['canary-token'] },
-    );
-    expect(keysAndCodes(fatal)).toEqual(['GITHUB_TOKEN:not_in_profile']);
-  });
-
-  test('a source directory under demo, which renders only the bundled sample', async () => {
-    const fatal = await expectRefusal({
-      PORTFOLIO_PROFILE: 'demo',
-      PORTFOLIO_ORIGIN: DEMO_ORIGIN,
-      PORTFOLIO_SOURCE_DIR: fixtureDir(),
-    });
-    expect(keysAndCodes(fatal)).toEqual(['PORTFOLIO_SOURCE_DIR:not_in_profile']);
-  });
-
-  test('GITHUB_TOKEN under read-only', async () => {
-    const fatal = await expectRefusal(readOnly({ GITHUB_TOKEN: 'canary-token' }), {
-      never: ['canary-token'],
-    });
-    expect(keysAndCodes(fatal)).toEqual(['GITHUB_TOKEN:not_in_profile']);
-  });
-
-  test('an origin on a reserved example domain', async () => {
-    const fatal = await expectRefusal(readOnly({ PORTFOLIO_ORIGIN: 'https://jane.example.com' }));
-    expect(keysAndCodes(fatal)).toEqual(['PORTFOLIO_ORIGIN:reserved_domain']);
-  });
-
-  test('the bundled sample identity', async () => {
-    const dir = sourceDir({ 'portfolio.yml': `${HEAD}identity:\n  name: Anamika Devi\n` });
-    const fatal = await expectRefusal(readOnly({ PORTFOLIO_SOURCE_DIR: dir }));
-    expect(fatal.map((entry) => [entry.code, entry.file, entry.path, entry.line])).toEqual([
-      ['sample_identity', 'portfolio.yml', '/identity/name', 5],
-    ]);
-  });
-});
-
-test.describe('the source directory', () => {
-  test('missing', async () => {
-    const dir = test.info().outputPath('canary-absent-dir');
-    const fatal = await expectRefusal(readOnly({ PORTFOLIO_SOURCE_DIR: dir }), {
-      never: ['canary-absent-dir'],
-    });
-    expect(keysAndCodes(fatal)).toEqual(['PORTFOLIO_SOURCE_DIR:source_missing']);
-  });
-
-  test('naming the document instead, as PORTFOLIO_PATH did', async () => {
-    const file = path.join(fixtureDir(), 'portfolio.yml');
-    const fatal = await expectRefusal(readOnly({ PORTFOLIO_SOURCE_DIR: file }), { never: [file] });
-    expect(keysAndCodes(fatal)).toEqual(['PORTFOLIO_SOURCE_DIR:source_not_directory']);
-    expect(fatal[0]!.message).toContain('directory that holds portfolio.yml');
-  });
-
-  test('unreadable', async () => {
-    test.skip(process.getuid?.() === 0, 'root reads any directory');
-    const dir = fixtureDir();
-    chmodSync(dir, 0o000);
-    try {
-      const fatal = await expectRefusal(readOnly({ PORTFOLIO_SOURCE_DIR: dir }));
-      expect(keysAndCodes(fatal)).toEqual(['PORTFOLIO_SOURCE_DIR:source_unreadable']);
-    } finally {
-      chmodSync(dir, 0o700);
+for (const group of new Set(STARTUP_ROWS.map((row) => row.group))) {
+  test.describe(group, () => {
+    for (const row of STARTUP_ROWS.filter((entry) => entry.group === group)) {
+      test(row.name, async () => {
+        test.skip(Boolean(row.unreadable) && process.getuid?.() === 0, 'root reads any directory');
+        const paths = place(row);
+        if (row.unreadable) chmodSync(paths.source, 0o000);
+        try {
+          const fatal = await expectRefusal(row.env(paths), { never: neverValues(row, paths) });
+          expect(fatalFields(row, fatal)).toEqual(row.fatal);
+          for (const text of mentions(row)) expect(fatal[0]!.message).toContain(text);
+        } finally {
+          if (row.unreadable) chmodSync(paths.source, 0o700);
+        }
+      });
     }
   });
-
-  test('holding no portfolio document', async () => {
-    const dir = sourceDir({ 'notes.md': 'not a portfolio' });
-    const fatal = await expectRefusal(readOnly({ PORTFOLIO_SOURCE_DIR: dir }));
-    expect(keysAndCodes(fatal)).toEqual(['PORTFOLIO_SOURCE_DIR:source_empty']);
-  });
-
-  test('holding several portfolio documents', async () => {
-    const dir = fixtureDir();
-    writeFileSync(path.join(dir, 'portfolio.json'), '{"identity":{"name":"Rowan Fixture"}}');
-    const fatal = await expectRefusal(readOnly({ PORTFOLIO_SOURCE_DIR: dir }));
-    expect(keysAndCodes(fatal)).toEqual(['PORTFOLIO_SOURCE_DIR:source_several']);
-  });
-});
-
-test.describe('the document', () => {
-  test('invalid YAML, located by line and column', async () => {
-    const dir = sourceDir({
-      'portfolio.yml': `${HEAD}identity:\n  name: Rowan Fixture\nsections:\n  - kind: canary-kind\n    id: x\n`,
-    });
-    const fatal = await expectRefusal(readOnly({ PORTFOLIO_SOURCE_DIR: dir }), {
-      never: ['canary-kind'],
-    });
-    expect(fatal.map((e) => [e.code, e.file, e.path, e.line, e.column])).toEqual([
-      ['document_invalid', 'portfolio.yml', '/sections/0/kind', 7, 11],
-    ]);
-  });
-
-  test('invalid JSON, located by line and column', async () => {
-    const json = [
-      '{',
-      '  "schemaVersion": 2,',
-      '  "locale": "en",',
-      '  "direction": "ltr",',
-      '  "identity": {',
-      '    "name": 42',
-      '  }',
-      '}',
-      '',
-    ].join('\n');
-    const dir = sourceDir({ 'portfolio.json': json });
-    const fatal = await expectRefusal(readOnly({ PORTFOLIO_SOURCE_DIR: dir }));
-    expect(fatal.map((e) => [e.code, e.file, e.path, e.line, e.column])).toEqual([
-      ['document_invalid', 'portfolio.json', '/identity/name', 6, 13],
-    ]);
-  });
-
-  test('a JSON syntax error V8 gives no position for, located anyway', async () => {
-    const json = '{\n  "schemaVersion": 2,\n  "locale": NaN\n}\n';
-    const dir = sourceDir({ 'portfolio.json': json });
-    const fatal = await expectRefusal(readOnly({ PORTFOLIO_SOURCE_DIR: dir }));
-    expect(fatal.map((e) => [e.code, e.issueCode, e.line, e.column])).toEqual([
-      ['document_syntax', 'JSON_SYNTAX', 3, 13],
-    ]);
-  });
-
-  test('an unknown key, refused at the key with a did-you-mean hint', async () => {
-    const dir = sourceDir({
-      'portfolio.yml': `${HEAD}identity:\n  name: Rowan Fixture\n  tagine: canary-tagline\n`,
-    });
-    const fatal = await expectRefusal(readOnly({ PORTFOLIO_SOURCE_DIR: dir }), {
-      never: ['canary-tagline'],
-    });
-    expect(fatal.map((e) => [e.code, e.issueCode, e.path, e.line, e.column])).toEqual([
-      ['document_invalid', 'unrecognized_keys', '/identity/tagine', 6, 3],
-    ]);
-    expect(fatal[0]!.message).toContain('Did you mean tagline?');
-  });
-
-  test('a javascript: URL, refused without quoting it', async () => {
-    const dir = sourceDir({
-      'portfolio.yml': `${HEAD}identity:\n  name: Rowan Fixture\nlinks:\n  - url: 'JavaScript:canary_script()'\n`,
-    });
-    const fatal = await expectRefusal(readOnly({ PORTFOLIO_SOURCE_DIR: dir }), {
-      never: ['canary_script'],
-    });
-    expect(fatal.map((e) => [e.code, e.path, e.line])).toEqual([
-      ['document_invalid', '/links/0/url', 7],
-    ]);
-  });
-
-  test('nesting past 64 levels, refused before any parser reads it', async () => {
-    const dir = sourceDir({ 'portfolio.json': `${'['.repeat(100_000)}${']'.repeat(100_000)}` });
-    const fatal = await expectRefusal(readOnly({ PORTFOLIO_SOURCE_DIR: dir }));
-    expect(fatal.map((e) => [e.code, e.issueCode, e.line, e.column])).toEqual([
-      ['document_syntax', 'TOO_DEEP', 1, 65],
-    ]);
-  });
-
-  test('a mapping past 10,000 entries, refused before any parser composes it', async () => {
-    const keys = Array.from({ length: 10_001 }, (_, i) => `  k${i}: 1`).join('\n');
-    const dir = sourceDir({
-      'portfolio.yml': `${HEAD}identity:\n  name: Rowan Fixture\nmeta:\n${keys}\n`,
-    });
-    const fatal = await expectRefusal(readOnly({ PORTFOLIO_SOURCE_DIR: dir }));
-    expect(fatal.map((e) => [e.code, e.issueCode, e.line, e.column])).toEqual([
-      ['document_syntax', 'TOO_MANY', 7 + 10_000, 3],
-    ]);
-  });
-
-  test('a document over 1 MiB, refused where it passes the limit', async () => {
-    const dir = sourceDir({
-      'portfolio.yml': `${HEAD}identity:\n  name: Rowan Fixture\n# ${'x'.repeat(1024 * 1024)}\n`,
-    });
-    const fatal = await expectRefusal(readOnly({ PORTFOLIO_SOURCE_DIR: dir }));
-    expect(fatal.map((e) => [e.code, e.issueCode, e.line])).toEqual([
-      ['document_syntax', 'TOO_LARGE', 6],
-    ]);
-  });
-
-  test('a YAML alias, refused where it appears', async () => {
-    const dir = sourceDir({
-      'portfolio.yml': `${HEAD}identity:\n  name: &canary-anchor Rowan Fixture\nmeta:\n  title: *canary-anchor\n`,
-    });
-    const fatal = await expectRefusal(readOnly({ PORTFOLIO_SOURCE_DIR: dir }), {
-      never: ['canary-anchor'],
-    });
-    expect(fatal.map((e) => [e.code, e.path, e.line])).toEqual([
-      ['document_syntax', '/identity/name', 5],
-      ['document_syntax', '/meta/title', 7],
-    ]);
-  });
-
-  test('a portfolio.toml, refused by name as the old format', async () => {
-    const dir = sourceDir({ 'portfolio.toml': '[identity]\nname = "Rowan Fixture"\n' });
-    const fatal = await expectRefusal(readOnly({ PORTFOLIO_SOURCE_DIR: dir }));
-    expect(fatal.map((e) => [e.code, e.file])).toEqual([['document_legacy', 'portfolio.toml']]);
-    expect(fatal[0]!.message).toContain('Convert it to YAML or JSON first');
-  });
-
-  test('an old-format document, refused with one issue naming its old fields', async () => {
-    const dir = sourceDir({
-      'portfolio.yml': 'identity:\n  name: Rowan Fixture\nvariant: canary-variant\n',
-    });
-    const fatal = await expectRefusal(readOnly({ PORTFOLIO_SOURCE_DIR: dir }), {
-      never: ['canary-variant'],
-    });
-    expect(fatal.map((e) => [e.code, e.path, e.line])).toEqual([['document_legacy', '', 3]]);
-    expect(fatal[0]!.message).toContain('/variant to appearance.variant in site.yml');
-    expect(fatal[0]!.message).toContain('pnpm config:migrate portfolio.yml');
-  });
-
-  test('two sections sharing an id', async () => {
-    const dir = sourceDir({
-      'portfolio.yml': `${HEAD}identity:\n  name: Rowan Fixture\nsections:\n  - kind: lede\n    id: about\n    body: A\n  - kind: now\n    id: about\n    body: B\n`,
-    });
-    const fatal = await expectRefusal(readOnly({ PORTFOLIO_SOURCE_DIR: dir }));
-    expect(fatal.map((e) => [e.code, e.path, e.line])).toEqual([
-      ['document_invalid', '/sections/1/id', 11],
-    ]);
-  });
-});
+}
 
 test.describe('the refusal log', () => {
   test('reaches a slow reader in full before the server exits', async () => {
     // Over 300 KB of config.fatal lines: more than the pipe and the reader's
     // buffer hold while nothing reads, so the server must wait to write them.
     const count = 1000;
-    const dir = sourceDir({
-      'portfolio.yml': `${HEAD}identity:\n  name: Rowan Fixture\nsections:\n${'  - kind: canary-kind\n'.repeat(count)}`,
-    });
-    const fatal = await expectRefusal(readOnly({ PORTFOLIO_SOURCE_DIR: dir }), {
-      readDelayMs: 2_000,
-    });
+    const source = test.info().outputPath('config');
+    mkdirSync(source, { recursive: true });
+    writeFileSync(
+      path.join(source, 'portfolio.yml'),
+      `${HEAD}identity:\n  name: Rowan Fixture\nsections:\n${'  - kind: canary-kind\n'.repeat(count)}`,
+    );
+    const fatal = await expectRefusal(
+      { PORTFOLIO_PROFILE: 'read-only', PORTFOLIO_ORIGIN: ORIGIN, PORTFOLIO_SOURCE_DIR: source },
+      { readDelayMs: 2_000 },
+    );
     expect(fatal.map((entry) => entry.path)).toEqual(
       Array.from({ length: count }, (_, index) => `/sections/${index}/kind`),
     );
-  });
-});
-
-test.describe('profiles this build cannot start', () => {
-  test('owner, with no authentication provider registered', async () => {
-    const fatal = await expectRefusal(readOnly({ PORTFOLIO_PROFILE: 'owner' }));
-    expect(keysAndCodes(fatal)).toEqual(['PORTFOLIO_PROFILE:auth_provider_missing']);
   });
 });

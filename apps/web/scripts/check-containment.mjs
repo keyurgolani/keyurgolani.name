@@ -14,8 +14,9 @@
  *                    origin and no reserved example host (example.com, .net,
  *                    .org, or a subdomain of one).
  *   --direct         The URL is the app itself with no proxy in front, so a
- *                    denial must be the app's own 404 and /_next/image must be
- *                    the app's own 400.
+ *                    denial must be the app's own 404, and /_next/image must be
+ *                    the app's own 400, or its 404 page once a build turns the
+ *                    optimizer off (images.unoptimized, as #1 does).
  *   --no-put         Skip the three PUT probes.
  *
  * Needs Node 22 or newer and nothing else. Each request uses redirect:
@@ -166,8 +167,10 @@ function imageVerdict(res, direct) {
     ...(accepted ? ['optimizer accepted the URL'] : []),
   ].join(', ');
   if (res.status === 400 && denied) return { actual, pass: true };
-  const proxyDenied = !direct && (res.status === 403 || res.status === 404) && !accepted;
-  return { actual, pass: proxyDenied };
+  // A build with the optimizer off answers with its 404 page before it
+  // reads the URL; so does a proxy that denies the path with a 404.
+  if (res.status === 404 && !accepted) return { actual, pass: true };
+  return { actual, pass: !direct && res.status === 403 && !accepted };
 }
 
 async function main() {
@@ -206,7 +209,9 @@ async function main() {
     {
       method: 'GET',
       path: IMAGE_PATH,
-      expected: opts.direct ? `400 with ${IMAGE_DENIED}` : `400 with ${IMAGE_DENIED}, 403, or 404`,
+      expected: opts.direct
+        ? `400 with ${IMAGE_DENIED}, or 404 with the optimizer off`
+        : `400 with ${IMAGE_DENIED}, 403, or 404`,
       check: (res) => imageVerdict(res, opts.direct),
     },
     ok('/'),
