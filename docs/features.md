@@ -4,9 +4,9 @@ What the platform can do today.
 
 ## Content model
 
-- **YAML-driven content.** Edit `config/portfolio.yml`; never touch code to change content.
+- **YAML-driven content.** Edit `config/portfolio.yml` for the content and `config/site.yml` for how it looks and which sections show; never touch code to change either.
 - **28 section kinds** spanning narrative, dated entries, lists, visual, voice, accent, personal, external, and connection categories. See [authoring.md](authoring.md#section-kind-quick-reference).
-- **Schema validation.** Zod-typed source of truth. Typos in `kind` discriminants fail loudly via the `validate.mjs` script, and the server refuses to start on an invalid file, naming its line and column.
+- **Schema validation.** Zod-typed source of truth. Typos in `kind` discriminants fail loudly via the `validate.mjs` script, and the server refuses to start on an invalid document, naming its file, line, and column.
 - **Loose date strings.** `period: { start: "Jan 2024", end: "present" }` is fine — humans read this output, not parsers. ISO dates work too.
 - **Markdown in prose fields.** `lede.body`, `experience.items[].highlights[]`, etc. honor a curated subset of Markdown.
 - **External assets via `apps/web/public/`.** Resume PDFs, avatar images, gallery photos all reference `/path` and resolve to `apps/web/public/path`.
@@ -73,7 +73,7 @@ Both skills are usable in any harness that supports skills (Claude Code, Copilot
 Three scripts keep the system honest:
 
 - **`pnpm check:skills`** — verifies `section-kinds.md` matches the schema's `ALL_SECTION_KINDS`, `kit-catalog.md` mentions every export from `@portfolio/kit`, `schema.md` mentions every section kind, and both SKILL.md frontmatters parse and stay under length caps.
-- **`validate.mjs`** — Zod-parses any portfolio YAML and reports YAML line/column on failure.
+- **`validate.mjs`** — validates a directory's portfolio and site documents together and reports each problem's file, line, and column.
 - **`audit.mjs`** — checks variant manifests against the schema (every required kind handled), warns on suspicious patterns (single color scheme, themes claimed without CSS).
 
 ## Developer ergonomics

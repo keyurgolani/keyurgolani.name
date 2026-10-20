@@ -129,10 +129,10 @@ Concrete length numbers and tone guidance for user-facing copy live at [`skills/
 ## Validation
 
 ```sh
-node skills/portfolio-author/scripts/validate.mjs config/portfolio.yml
+node skills/portfolio-author/scripts/validate.mjs config
 ```
 
-Exit 0 = valid. Exit 1 = errors with `<file>:<line>:<col>  <zod-path>  <message>` per error.
+It checks `config/portfolio.yml` and `config/site.yml` together. Exit 0 = valid, warnings aside. Exit 1 = a problem blocks the pair, each printed with its file, line, column, JSON pointer, code, and how to fix it.
 
 `portfolio.example.yml` is the canonical reference — if your file diverges from its shape and the schema rejects it, look at the example for the right shape.
 
