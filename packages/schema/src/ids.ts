@@ -1,5 +1,4 @@
-// Id and language-tag rules, kept free of zod and yaml so client code (the
-// kit's section ids) can use them without bundling the schemas.
+// Id and language-tag rules, free of zod and yaml.
 
 /**
  * Section ids: lowercase letters and digits in hyphen-separated words, at most

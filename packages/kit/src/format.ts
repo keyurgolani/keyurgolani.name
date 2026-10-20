@@ -1,5 +1,4 @@
 import type { Period } from '@portfolio/schema';
-import { isSectionId } from '@portfolio/schema/ids';
 
 const MONTHS = [
   'January',
@@ -146,12 +145,11 @@ export function slugify(text: string): string {
 }
 
 /**
- * The DOM id for a section. A schema-valid section id comes back unchanged, so
- * the DOM id is always the content id; anything else is slugified, falling
- * back to `fallback`.
+ * The DOM id for a section: the id or title slugified, falling back to
+ * `fallback`. Slugifying leaves a schema-valid section id unchanged, so the DOM
+ * id is always the content id.
  */
 export function ensureSectionId(idOrTitle: string | undefined, fallback: string): string {
-  if (idOrTitle && isSectionId(idOrTitle)) return idOrTitle;
   if (idOrTitle) {
     const s = slugify(idOrTitle);
     if (s) return s;
