@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { getLive } from './catalog';
 import type { Env } from './config';
 import { getDeploymentConfig, requireDeploymentConfig, setDeploymentState } from './config-store';
-import { runStartup } from './startup';
+import { runStartup, type StartupResult } from './startup';
 
 const EXAMPLE = fileURLToPath(new URL('../../../../portfolio.example.yml', import.meta.url));
 const VALID = 'schemaVersion: 2\nlocale: en\ndirection: ltr\nidentity:\n  name: Rowan Test\n';
@@ -31,7 +31,7 @@ function start(env: Env) {
   });
 }
 
-function fatalCodes(result: ReturnType<typeof start>): string[] {
+function fatalCodes(result: StartupResult): string[] {
   return result.issues
     .filter((issue) => issue.severity === 'fatal')
     .map((issue) => `${issue.key}:${issue.code}`);
@@ -41,7 +41,7 @@ const PRODUCTION = { NODE_ENV: 'production', PORTFOLIO_ORIGIN: 'https://jane.tes
 
 test('read-only starts from a valid source directory', async (t) => {
   const dir = sourceDir(t, VALID);
-  const result = start({
+  const result = await start({
     ...PRODUCTION,
     PORTFOLIO_PROFILE: 'read-only',
     PORTFOLIO_SOURCE_DIR: dir,
@@ -55,17 +55,21 @@ test('read-only starts from a valid source directory', async (t) => {
   assert.equal(live.unit.portfolio.identity.name, 'Rowan Test');
 });
 
-test('owner refuses to start: no authentication provider is registered', (t) => {
+test('owner refuses to start: no authentication provider is registered', async (t) => {
   const dir = sourceDir(t, VALID);
-  const result = start({ ...PRODUCTION, PORTFOLIO_PROFILE: 'owner', PORTFOLIO_SOURCE_DIR: dir });
+  const result = await start({
+    ...PRODUCTION,
+    PORTFOLIO_PROFILE: 'owner',
+    PORTFOLIO_SOURCE_DIR: dir,
+  });
   assert.equal(result.ok, false);
   assert.equal(result.profile, 'owner');
   assert.deepEqual(fatalCodes(result), ['PORTFOLIO_PROFILE:auth_provider_missing']);
   assert.match(result.issues[0]!.message, /read-only/);
 });
 
-test('owner reports configuration problems before the missing provider', () => {
-  const result = start({
+test('owner reports configuration problems before the missing provider', async () => {
+  const result = await start({
     ...PRODUCTION,
     PORTFOLIO_PROFILE: 'owner',
     PORTFOLIO_ORIGIN: 'http://jane.test',
@@ -76,15 +80,15 @@ test('owner reports configuration problems before the missing provider', () => {
   ]);
 });
 
-test('demo refuses to start in this build', () => {
-  const result = start({ ...PRODUCTION, PORTFOLIO_PROFILE: 'demo' });
+test('demo refuses to start in this build', async () => {
+  const result = await start({ ...PRODUCTION, PORTFOLIO_PROFILE: 'demo' });
   assert.equal(result.ok, false);
   assert.deepEqual(fatalCodes(result), ['PORTFOLIO_PROFILE:profile_unavailable']);
 });
 
-test('read-only with an old-shape document reports the document', (t) => {
+test('read-only with an old-shape document reports the document', async (t) => {
   const dir = sourceDir(t, 'identity:\n  name: Rowan Test\nvariant: kinetic-cosmos\n');
-  const result = start({
+  const result = await start({
     ...PRODUCTION,
     PORTFOLIO_PROFILE: 'read-only',
     PORTFOLIO_SOURCE_DIR: dir,
@@ -94,9 +98,9 @@ test('read-only with an old-shape document reports the document', (t) => {
   assert.equal(result.issues[0]?.path, '/schemaVersion');
 });
 
-test('warnings from the configuration reach the startup result', (t) => {
+test('warnings from the configuration reach the startup result', async (t) => {
   const dir = sourceDir(t, VALID);
-  const result = start({
+  const result = await start({
     ...PRODUCTION,
     PORTFOLIO_PROFILE: 'read-only',
     PORTFOLIO_SOURCE_DIR: dir,
@@ -117,7 +121,7 @@ test('the store hands the frozen state to getLive() and the config readers', asy
   await assert.rejects(getLive(), /not loaded/);
 
   const dir = sourceDir(t, VALID);
-  const result = start({
+  const result = await start({
     ...PRODUCTION,
     PORTFOLIO_PROFILE: 'read-only',
     PORTFOLIO_SOURCE_DIR: dir,

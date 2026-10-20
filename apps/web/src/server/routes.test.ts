@@ -153,10 +153,21 @@ test('every entry names a known capability, profiles, and kind', () => {
   }
 });
 
+test('the Studio transport is served in every profile', () => {
+  for (const profile of PROFILES) assert.equal(serves(profile, '/api/studio/[name]'), true);
+});
+
 test('what every profile serves at the close of slice 2', () => {
   const served = (profile: (typeof PROFILES)[number]) =>
     PATTERNS.filter((pattern) => serves(profile, pattern as RoutePattern));
-  const everywhere = ['/', '/api/health', '/opengraph-image', '/robots.txt', '/sitemap.xml'];
+  const everywhere = [
+    '/',
+    '/api/health',
+    '/api/studio/[name]',
+    '/opengraph-image',
+    '/robots.txt',
+    '/sitemap.xml',
+  ];
   assert.deepEqual(served('owner'), [...everywhere, '/feed.xml'].sort());
   assert.deepEqual(served('read-only'), [...everywhere, '/feed.xml'].sort());
   assert.deepEqual(served('demo'), everywhere);
