@@ -1,4 +1,5 @@
-import type { Portfolio, Section } from '@portfolio/schema';
+import type { CoreSection, Portfolio, SectionKind } from '@portfolio/schema';
+import { isExtensionSection } from '@portfolio/schema/ids';
 import { ensureSectionId } from './format';
 
 export interface NavItem {
@@ -10,18 +11,19 @@ export interface DeriveNavItemsOptions {
   /** Cap on returned items. Defaults to no cap. */
   limit?: number;
   /** Section kinds to skip even if they have a title. */
-  excludeKinds?: ReadonlyArray<Section['kind']>;
+  excludeKinds?: ReadonlyArray<SectionKind>;
   /** Override the label for a given section kind. Returns null to skip. */
-  labelFor?: (section: Section) => string | null;
+  labelFor?: (section: CoreSection) => string | null;
 }
 
-const DEFAULT_EXCLUDE: ReadonlyArray<Section['kind']> = ['hero', 'cta'];
+const DEFAULT_EXCLUDE: ReadonlyArray<SectionKind> = ['hero', 'cta'];
 
 /**
  * Walk the portfolio's sections in declaration order and produce the
  * same `{ label, href }` pairs a manual nav config would. Skips hidden
- * sections, skips sections without a derivable label (no title, no
- * fallback in `labelFor`), and skips kinds in `excludeKinds`.
+ * sections, sections from content extensions (no variant renders them yet),
+ * sections without a derivable label (no title, no fallback in `labelFor`),
+ * and kinds in `excludeKinds`.
  *
  * Variants render the result however they want — top bar, side rail,
  * sticky pill — but all draw from this single source of truth so the
@@ -35,7 +37,7 @@ export function deriveNavItems(
   const items: NavItem[] = [];
 
   for (const section of portfolio.sections) {
-    if (section.hidden) continue;
+    if (section.hidden || isExtensionSection(section)) continue;
     if (exclude.has(section.kind)) continue;
 
     const override = options.labelFor?.(section);

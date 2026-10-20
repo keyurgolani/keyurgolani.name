@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { PortfolioSchema } from './portfolio';
+import { PortfolioSchema } from './compose';
 import { ALL_SECTION_KINDS } from './kinds';
 
 const BASE = {
@@ -50,8 +50,8 @@ test('direction is ltr or rtl', () => {
   assert.deepEqual(codes({ ...BASE, direction: 'auto' }), ['direction:invalid_enum_value']);
 });
 
-test('the presentation fields and meta.url are gone from the model', () => {
-  const out = PortfolioSchema.parse({
+test('the presentation fields and meta.url are refused as unknown keys', () => {
+  const result = PortfolioSchema.safeParse({
     ...BASE,
     variant: 'editorial',
     theme: 'dark',
@@ -60,10 +60,23 @@ test('the presentation fields and meta.url are gone from the model', () => {
     typography: 'classic',
     meta: { title: 'T', url: 'https://rowan.test' },
   });
-  for (const key of ['variant', 'theme', 'motionPreference', 'colorScheme', 'typography']) {
-    assert.equal(key in out, false, key);
-  }
-  assert.deepEqual(out.meta, { title: 'T' });
+  assert.equal(result.success, false);
+  if (result.success) return;
+  assert.deepEqual(
+    result.error.issues.map((issue) => [
+      issue.path.join('/'),
+      issue.code,
+      issue.code === 'unrecognized_keys' ? issue.keys : [],
+    ]),
+    [
+      ['meta', 'unrecognized_keys', ['url']],
+      [
+        '',
+        'unrecognized_keys',
+        ['variant', 'theme', 'motionPreference', 'colorScheme', 'typography'],
+      ],
+    ],
+  );
 });
 
 test('every section needs an id', () => {

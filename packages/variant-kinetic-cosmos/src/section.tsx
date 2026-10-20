@@ -1,4 +1,5 @@
 import type { Portfolio, Section } from '@portfolio/schema';
+import { isExtensionSection } from '@portfolio/schema/ids';
 import { HeroRenderer } from './renderers/hero';
 import { LongFormRenderer } from './renderers/long-form';
 import { ContactRenderer } from './renderers/contact';
@@ -33,7 +34,8 @@ interface DispatchProps {
 }
 
 export function SectionDispatch({ section, portfolio }: DispatchProps) {
-  if (section.hidden) return null;
+  // No variant renders a content extension's section kinds yet.
+  if (section.hidden || isExtensionSection(section)) return null;
   switch (section.kind) {
     case 'hero':
       return (

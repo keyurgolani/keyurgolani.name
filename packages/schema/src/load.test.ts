@@ -154,7 +154,7 @@ test('messages say what is wrong for the common schema problems', () => {
   );
   assert.equal(
     message(`${HEAD}sections:\n  - kind: nope\n    id: x\n`),
-    '/sections/0/kind is not a known section kind.',
+    '/sections/0/kind is not a known section kind. A section kind from an extension is <npm package name>/<name>.',
   );
 });
 

@@ -1,4 +1,5 @@
 import 'server-only';
+import type { ContentExtension } from '@portfolio/schema';
 import type { Profile } from './capabilities';
 import { openDocumentsCatalog } from './catalog-documents';
 import type { CatalogReader } from './catalog-port';
@@ -146,6 +147,8 @@ export interface CompositionInput {
   readonly config: DeploymentConfig;
   /** The bundled example document. */
   readonly examplePath: string;
+  /** The content extensions documents are checked against. */
+  readonly extensions?: readonly ContentExtension[];
   /** Receives findings made after startup (re-validation under next dev). */
   readonly report: (issue: ConfigIssue) => void;
   /** Defaults to AUTH_PROVIDERS. In-process owner tests pass a test double. */
@@ -225,6 +228,7 @@ function openDocuments(input: CompositionInput) {
     sourceDir: input.config.sourceDir ?? '',
     mode: input.config.mode,
     examplePath: input.examplePath,
+    extensions: input.extensions,
     report: input.report,
   });
 }

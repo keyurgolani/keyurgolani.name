@@ -7,6 +7,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  truncateSync,
   utimesSync,
   writeFileSync,
 } from 'node:fs';
@@ -14,6 +15,8 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse as parseYaml } from 'yaml';
+// The schema package's test extension, shared with its own tests.
+import { acmePortfolioPhotography } from '../../../../packages/schema/src/__fixtures__/acme-portfolio-photography';
 import {
   BUNDLED_SAMPLE_NAMES,
   openDocumentsCatalog,
@@ -237,6 +240,81 @@ test('a YAML syntax error carries the parser code and position', (t) => {
   );
 });
 
+const WITH_EXTENSIONS = `${HEAD}${[
+  'identity:',
+  '  name: Rowan Test',
+  '  extensions:',
+  "    '@acme/portfolio-photography': { camera: canary-camera-3 }",
+  'sections:',
+  "  - kind: '@acme/portfolio-photography/exhibitions'",
+  '    id: exhibitions',
+  '    data:',
+  '      items: [{ title: canary-show-3, venue: V, year: 2024 }]',
+  '',
+].join('\n')}`;
+
+test('data from an unregistered extension loads as written, and each use is a warning', async (t) => {
+  const dir = tempDir(t);
+  writeFileSync(path.join(dir, 'portfolio.yml'), WITH_EXTENSIONS);
+  const result = open(dir, 'production');
+  assert.equal(result.ok, true, JSON.stringify(result.issues));
+  assert.deepEqual(
+    result.issues.map((issue) => [
+      issue.severity,
+      issue.key,
+      issue.code,
+      issue.file,
+      issue.path,
+      issue.line,
+      issue.column,
+    ]),
+    [
+      [
+        'warning',
+        'PORTFOLIO_SOURCE_DIR',
+        'extension_unregistered',
+        'portfolio.yml',
+        '/identity/extensions/@acme~1portfolio-photography',
+        7,
+        5,
+      ],
+      [
+        'warning',
+        'PORTFOLIO_SOURCE_DIR',
+        'extension_unregistered',
+        'portfolio.yml',
+        '/sections/0',
+        9,
+        5,
+      ],
+    ],
+  );
+  assert.ok(!JSON.stringify(result.issues).includes('canary'));
+  if (!result.ok) return;
+  const { portfolio } = (await result.reader.getLive()).unit;
+  assert.deepEqual(portfolio.identity.extensions, {
+    '@acme/portfolio-photography': { camera: 'canary-camera-3' },
+  });
+});
+
+test('a registered extension checks its data, and a problem in it is fatal', async (t) => {
+  const dir = tempDir(t);
+  writeFileSync(
+    path.join(dir, 'portfolio.yml'),
+    WITH_EXTENSIONS.replace('year: 2024', 'year: soon'),
+  );
+  const result = open(dir, 'production', { extensions: [acmePortfolioPhotography] });
+  const issue = only(result);
+  assert.deepEqual(
+    [issue.code, issue.issueCode, issue.path, issue.line],
+    ['document_invalid', 'invalid_type', '/sections/0/data/items/0/year', 12],
+  );
+  writeFileSync(path.join(dir, 'portfolio.yml'), WITH_EXTENSIONS);
+  const valid = open(dir, 'production', { extensions: [acmePortfolioPhotography] });
+  assert.equal(valid.ok, true);
+  assert.deepEqual(valid.issues, []);
+});
+
 test('YAML anchors and aliases are refused where they appear', (t) => {
   const dir = tempDir(t);
   writeFileSync(
@@ -294,6 +372,16 @@ test('a schema error in JSON carries the line and column too', (t) => {
     [issue.code, issue.file, issue.path, issue.line, issue.column],
     ['document_invalid', 'portfolio.json', '/links/0/url', 6, 13],
   );
+});
+
+test('a document far past 1 MiB is refused where it passes the limit, without being read whole', (t) => {
+  const dir = tempDir(t);
+  const file = path.join(dir, 'portfolio.yml');
+  writeFileSync(file, `${HEAD}identity:\n  name: Rowan Test\n`);
+  // A sparse 3 GiB file: reading it whole would fail, or take gigabytes.
+  truncateSync(file, 3 * 1024 ** 3);
+  const issue = only(open(dir, 'production'));
+  assert.deepEqual([issue.code, issue.issueCode, issue.line], ['document_syntax', 'TOO_LARGE', 6]);
 });
 
 test('a JSON file must be JSON, not YAML', (t) => {

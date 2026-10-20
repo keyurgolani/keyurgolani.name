@@ -1,4 +1,5 @@
 import 'server-only';
+import type { ContentExtension } from '@portfolio/schema';
 import { compose, type AuthProviderFactory } from './composition';
 import { readDeploymentConfig, type ConfigIssue, type Env, type Profile } from './config';
 import type { DeploymentState } from './config-store';
@@ -12,6 +13,8 @@ export interface StartupInput {
   readonly cwd: string;
   /** The bundled example document. */
   readonly examplePath: string;
+  /** The content extensions documents are checked against. */
+  readonly extensions?: readonly ContentExtension[];
   /** Receives findings made after startup (re-validation under next dev). */
   readonly report: (issue: ConfigIssue) => void;
   /** Reads <KEY>_FILE values; tests replace it. */
@@ -36,6 +39,7 @@ export async function runStartup(input: StartupInput): Promise<StartupResult> {
   const composed = await compose({
     config,
     examplePath: input.examplePath,
+    extensions: input.extensions,
     report: input.report,
     authProviders: input.authProviders,
   });

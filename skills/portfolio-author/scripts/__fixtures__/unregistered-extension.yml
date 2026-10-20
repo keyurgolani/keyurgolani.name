@@ -1,0 +1,19 @@
+schemaVersion: 2
+locale: en
+direction: ltr
+
+identity:
+  name: Test User
+  extensions:
+    '@acme/portfolio-photography':
+      camera: Leica M6
+
+sections:
+  - kind: '@acme/portfolio-photography/exhibitions'
+    id: exhibitions
+    title: Exhibitions
+    data:
+      items:
+        - title: Low Tide
+          venue: Harbor Gallery
+          year: 2024

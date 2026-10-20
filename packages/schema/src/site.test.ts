@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { DisplayModeSchema, MotionPolicySchema, SiteSchema } from './site';
+import { SiteSchema } from './compose';
+import { DisplayModeSchema, MotionPolicySchema } from './site';
 
 // The shape from the issue: every top-level key, optional ones included.
 const FULL = {

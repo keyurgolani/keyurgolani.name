@@ -1,15 +1,19 @@
 import { z } from 'zod';
-import { SectionBase } from './common';
+import type { SchemaParts } from './common';
 
-export const StatsSchema = z.object({
-  kind: z.literal('stats'),
-  ...SectionBase,
-  items: z.array(
-    z.object({
-      value: z.union([z.string(), z.number()]),
-      label: z.string(),
-      description: z.string().optional(),
-    }),
-  ),
-});
-export type Stats = z.infer<typeof StatsSchema>;
+export function accentSchemas({ object, section }: SchemaParts) {
+  const StatsSchema = section('stats', {
+    items: z.array(
+      object({
+        value: z.union([z.string(), z.number()]),
+        label: z.string(),
+        description: z.string().optional(),
+      }),
+    ),
+  });
+
+  return { StatsSchema };
+}
+
+type Schemas = ReturnType<typeof accentSchemas>;
+export type Stats = z.infer<Schemas['StatsSchema']>;

@@ -1,6 +1,16 @@
 import type { z } from 'zod';
-import { PortfolioSchema, SCHEMA_VERSION, type Portfolio } from './portfolio';
-import { SiteSchema, type Site } from './site';
+import { composeSchemas, DEFAULT_SCHEMAS, type ComposedSchemas } from './compose';
+import {
+  findUnregisteredExtensions,
+  type ContentExtension,
+  type ExtensionRegistry,
+} from './extensions';
+import { closestWord, keyContext } from './hints';
+import { parseExtensionKind } from './ids';
+import { isPlainObject } from './json';
+import type { Portfolio } from './portfolio';
+import { SCHEMA_VERSION } from './portfolio';
+import type { Site } from './site';
 import { parseSource, toPointer, type DocumentFormat, type Locate } from './source';
 
 // Reads a portfolio or site document from source text into its typed model,
@@ -9,9 +19,10 @@ import { parseSource, toPointer, type DocumentFormat, type Locate } from './sour
 
 export interface DocumentProblem {
   /**
-   * `syntax`: not one plain YAML or JSON document. `version`: no
-   * `schemaVersion: 2`, so nothing else was checked. `schema`: the data
-   * doesn't match the schema. `duplicate-id`: two sections share an id.
+   * `syntax`: not one plain YAML or JSON document within the size and
+   * nesting limits. `version`: no `schemaVersion: 2`, so nothing else was
+   * checked. `schema`: the data doesn't match the schema. `duplicate-id`:
+   * two sections share an id.
    */
   readonly kind: 'syntax' | 'version' | 'schema' | 'duplicate-id';
   /** The parser's or the schema's own code, such as DUPLICATE_KEY or invalid_type. */
@@ -23,18 +34,51 @@ export interface DocumentProblem {
   readonly column?: number;
 }
 
+/** Something a valid document holds that the reader should know about. */
+export interface DocumentWarning {
+  /** `extension_unregistered`: data from an extension this build doesn't register. */
+  readonly code: 'extension_unregistered';
+  readonly pointer: string;
+  readonly message: string;
+  readonly line?: number;
+  readonly column?: number;
+}
+
 export type DocumentResult<T> =
-  | { readonly ok: true; readonly value: T; readonly locate: Locate }
+  | {
+      readonly ok: true;
+      readonly value: T;
+      readonly locate: Locate;
+      readonly warnings: readonly DocumentWarning[];
+    }
   | { readonly ok: false; readonly problems: readonly DocumentProblem[] };
 
+export interface ParseOptions {
+  /**
+   * The content extensions to check against. Data from any other extension
+   * is kept as written, unchecked, with a warning.
+   */
+  readonly extensions?: readonly ContentExtension[];
+}
+
 /** Parses and validates a portfolio document, section ids included. */
-export function parsePortfolio(source: string, format: DocumentFormat): DocumentResult<Portfolio> {
-  return parseWith(PortfolioSchema, source, format, repeatedSectionIds);
+export function parsePortfolio(
+  source: string,
+  format: DocumentFormat,
+  options: ParseOptions = {},
+): DocumentResult<Portfolio> {
+  const schemas = schemasFor(options.extensions);
+  return parseWith(schemas.PortfolioSchema, schemas.registry, source, format, repeatedSectionIds);
 }
 
 /** Parses and validates a site document. */
-export function parseSite(source: string, format: DocumentFormat): DocumentResult<Site> {
-  return parseWith(SiteSchema, source, format);
+export function parseSite(
+  source: string,
+  format: DocumentFormat,
+  options: ParseOptions = {},
+): DocumentResult<Site> {
+  const schemas = schemasFor(options.extensions);
+  return parseWith(schemas.SiteSchema, schemas.registry, source, format);
 }
 
 /** Every section whose id an earlier section already has, with that earlier index. */
@@ -57,9 +101,9 @@ export function duplicateSectionIds(
  * problem anywhere else in the document doesn't hide them.
  */
 function repeatedSectionIds(data: unknown, locate: Locate): DocumentProblem[] {
-  const sections = isRecord(data) && Array.isArray(data.sections) ? data.sections : [];
+  const sections = isPlainObject(data) && Array.isArray(data.sections) ? data.sections : [];
   const ids = sections.map((section: unknown) => ({
-    id: isRecord(section) ? section.id : undefined,
+    id: isPlainObject(section) ? section.id : undefined,
   }));
   return duplicateSectionIds(ids).map(({ index, firstIndex }) => ({
     kind: 'duplicate-id',
@@ -70,8 +114,21 @@ function repeatedSectionIds(data: unknown, locate: Locate): DocumentProblem[] {
   }));
 }
 
+const composed = new WeakMap<readonly ContentExtension[], ComposedSchemas>();
+
+function schemasFor(extensions: readonly ContentExtension[] | undefined): ComposedSchemas {
+  if (!extensions || extensions.length === 0) return DEFAULT_SCHEMAS;
+  let schemas = composed.get(extensions);
+  if (!schemas) {
+    schemas = composeSchemas(extensions);
+    composed.set(extensions, schemas);
+  }
+  return schemas;
+}
+
 function parseWith<T>(
   schema: z.ZodType<T, z.ZodTypeDef, unknown>,
+  registry: ExtensionRegistry,
   source: string,
   format: DocumentFormat,
   check: (data: unknown, locate: Locate) => DocumentProblem[] = () => [],
@@ -86,7 +143,7 @@ function parseWith<T>(
   const { data, locate } = parsed;
 
   // Checking the rest against version 2 would only bury this one problem.
-  if (isRecord(data) && data.schemaVersion !== SCHEMA_VERSION) {
+  if (isPlainObject(data) && data.schemaVersion !== SCHEMA_VERSION) {
     const missing = data.schemaVersion === undefined;
     return {
       ok: false,
@@ -104,17 +161,152 @@ function parseWith<T>(
 
   const result = schema.safeParse(data);
   const checked = check(data, locate);
-  if (result.success && checked.length === 0) return { ok: true, value: result.data, locate };
-  const invalid: DocumentProblem[] = result.success
-    ? []
-    : result.error.issues.map((issue) => ({
+  if (!result.success || checked.length > 0) {
+    const invalid: DocumentProblem[] = result.success
+      ? []
+      : result.error.issues.flatMap((issue) =>
+          issueProblems(issue, schema, data).map(({ path, at, ...problem }) => ({
+            ...problem,
+            ...locate(path, at),
+          })),
+        );
+    return { ok: false, problems: [...invalid, ...checked] };
+  }
+  const warnings = findUnregisteredExtensions(result.data, registry).map(
+    ({ path, use }): DocumentWarning => {
+      const pointer = toPointer(path);
+      const what = use === 'section' ? 'is a section from' : 'belongs to';
+      return {
+        code: 'extension_unregistered',
+        pointer,
+        message: `${pointer} ${what} an extension this build doesn't register. It's kept as written, unchecked, and never shown to visitors.`,
+        // An extensions entry is located at its namespace key.
+        ...locate(path, use === 'fields' ? 'key' : 'value'),
+      };
+    },
+  );
+  return { ok: true, value: result.data, locate, warnings };
+}
+
+type IssueProblem = Omit<DocumentProblem, 'line' | 'column'> & {
+  path: (string | number)[];
+  /** An unknown key is located at the key, not its value. */
+  at?: 'key';
+};
+
+/**
+ * One problem per schema issue, except that an object with several unknown
+ * keys gets one problem per key. Unknown keys and kinds carry a did-you-mean
+ * hint when an allowed one is close.
+ */
+function issueProblems(issue: z.ZodIssue, schema: z.ZodTypeAny, data: unknown): IssueProblem[] {
+  if (issue.code === 'unrecognized_keys') {
+    const { allowed = [], extension } = keyContext(schema, data, issue.path);
+    const present = new Set(Object.keys(valueAt(data, issue.path) ?? {}));
+    return issue.keys.map((key) => {
+      const path = [...issue.path, key];
+      const pointer = toPointer(path);
+      const suggestion = closestWord(
+        key,
+        allowed.filter((candidate) => !present.has(candidate)),
+      );
+      const hint = suggestion
+        ? `Did you mean ${suggestion}?`
+        : extension
+          ? "Its extension doesn't define it."
+          : 'Custom data goes under extensions, keyed by an npm package name.';
+      return {
         kind: 'schema',
         code: issue.code,
-        pointer: toPointer(issue.path),
-        message: describeIssue(issue),
-        ...locate(issue.path),
-      }));
-  return { ok: false, problems: [...invalid, ...checked] };
+        pointer,
+        path,
+        at: 'key',
+        message: `${pointer} isn't a field here. ${hint}`,
+      };
+    });
+  }
+  if (issue.code === 'invalid_union') {
+    // When every shape fails and the closest one names an unknown key, its
+    // problems say more than "matches no shape": the key gets its hint.
+    const closest = closestUnionFailure(issue.unionErrors);
+    if (closest?.issues.some(({ code }) => code === 'unrecognized_keys')) {
+      return closest.issues.flatMap((inner) => issueProblems(inner, schema, data));
+    }
+  }
+  const problem: IssueProblem = {
+    kind: 'schema',
+    code: issue.code,
+    pointer: toPointer(issue.path),
+    path: issue.path,
+    message: describeIssue(issue),
+  };
+  if (issue.code === 'invalid_union_discriminator') {
+    const hint = kindHint(valueAt(data, issue.path), issue.options.map(String));
+    return [{ ...problem, message: `${problem.message}${hint}` }];
+  }
+  return [problem];
+}
+
+/** The failed union shape with the fewest unknown keys, then the fewest problems; the first on a tie. */
+function closestUnionFailure(failures: readonly z.ZodError[]): z.ZodError | undefined {
+  const unknown = (failure: z.ZodError) =>
+    failure.issues.reduce(
+      (count, issue) => count + (issue.code === 'unrecognized_keys' ? issue.keys.length : 0),
+      0,
+    );
+  let best: z.ZodError | undefined;
+  for (const failure of failures) {
+    if (
+      !best ||
+      unknown(failure) < unknown(best) ||
+      (unknown(failure) === unknown(best) && failure.issues.length < best.issues.length)
+    ) {
+      best = failure;
+    }
+  }
+  return best;
+}
+
+/** A hint for a section kind the schemas don't know, given the kinds they do. */
+function kindHint(kind: unknown, known: readonly string[]): string {
+  if (typeof kind !== 'string') return '';
+  const extensionKinds = known.flatMap((option) => parseExtensionKind(option) ?? []);
+  const extension = parseExtensionKind(kind);
+  if (extension) {
+    // The router refuses a namespaced kind only when its extension is
+    // registered, so compare the name with the names that extension adds.
+    const names = extensionKinds
+      .filter(({ namespace }) => namespace === extension.namespace)
+      .map(({ name }) => name);
+    const name = closestWord(extension.name, names);
+    return name
+      ? ` Did you mean ${extension.namespace}/${name}?`
+      : " Its extension doesn't add a section kind by that name.";
+  }
+  const core = closestWord(
+    kind,
+    known.filter((option) => !parseExtensionKind(option)),
+  );
+  if (core) return ` Did you mean ${core}?`;
+  // A registered extension's kind written without its namespace.
+  const name = closestWord(
+    kind,
+    extensionKinds.map(({ name }) => name),
+  );
+  const match = extensionKinds.find((option) => option.name === name);
+  if (match) return ` Did you mean ${match.namespace}/${match.name}?`;
+  return kind.includes('/')
+    ? ' An extension section kind is <npm package name>/<name>, such as @acme/portfolio-photography/exhibitions.'
+    : ' A section kind from an extension is <npm package name>/<name>.';
+}
+
+function valueAt(data: unknown, path: readonly (string | number)[]): unknown {
+  let value = data;
+  for (const segment of path) {
+    if (!isPlainObject(value) && !Array.isArray(value)) return undefined;
+    value = (value as Record<string | number, unknown>)[segment];
+  }
+  return value;
 }
 
 /** What a schema issue says is wrong, without quoting any value from the document. */
@@ -135,6 +327,8 @@ export function describeIssue(issue: z.ZodIssue): string {
       return `${where} doesn't match any of the shapes it allows.`;
     case 'invalid_enum_value':
       return `${where} should be one of: ${issue.options.join(', ')}.`;
+    case 'unrecognized_keys':
+      return `${where} has fields that aren't allowed here.`;
     case 'too_small':
       return `${where} ${boundPhrase(issue.type, issue.inclusive ? 'at least' : 'more than', Number(issue.minimum))}.`;
     case 'too_big':
@@ -158,8 +352,4 @@ function boundPhrase(type: string, bound: string, limit: number): string {
     default:
       return `must be ${bound} ${limit}`;
   }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === 'object' && !Array.isArray(value);
 }

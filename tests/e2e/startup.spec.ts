@@ -289,6 +289,60 @@ test.describe('the document', () => {
     ]);
   });
 
+  test('an unknown key, refused at the key with a did-you-mean hint', async () => {
+    const dir = sourceDir({
+      'portfolio.yml': `${HEAD}identity:\n  name: Rowan Fixture\n  tagine: canary-tagline\n`,
+    });
+    const fatal = await expectRefusal(readOnly({ PORTFOLIO_SOURCE_DIR: dir }), {
+      never: ['canary-tagline'],
+    });
+    expect(fatal.map((e) => [e.code, e.issueCode, e.path, e.line, e.column])).toEqual([
+      ['document_invalid', 'unrecognized_keys', '/identity/tagine', 6, 3],
+    ]);
+    expect(fatal[0]!.message).toContain('Did you mean tagline?');
+  });
+
+  test('a javascript: URL, refused without quoting it', async () => {
+    const dir = sourceDir({
+      'portfolio.yml': `${HEAD}identity:\n  name: Rowan Fixture\nlinks:\n  - url: 'JavaScript:canary_script()'\n`,
+    });
+    const fatal = await expectRefusal(readOnly({ PORTFOLIO_SOURCE_DIR: dir }), {
+      never: ['canary_script'],
+    });
+    expect(fatal.map((e) => [e.code, e.path, e.line])).toEqual([
+      ['document_invalid', '/links/0/url', 7],
+    ]);
+  });
+
+  test('nesting past 64 levels, refused before any parser reads it', async () => {
+    const dir = sourceDir({ 'portfolio.json': `${'['.repeat(100_000)}${']'.repeat(100_000)}` });
+    const fatal = await expectRefusal(readOnly({ PORTFOLIO_SOURCE_DIR: dir }));
+    expect(fatal.map((e) => [e.code, e.issueCode, e.line, e.column])).toEqual([
+      ['document_syntax', 'TOO_DEEP', 1, 65],
+    ]);
+  });
+
+  test('a mapping past 10,000 entries, refused before any parser composes it', async () => {
+    const keys = Array.from({ length: 10_001 }, (_, i) => `  k${i}: 1`).join('\n');
+    const dir = sourceDir({
+      'portfolio.yml': `${HEAD}identity:\n  name: Rowan Fixture\nmeta:\n${keys}\n`,
+    });
+    const fatal = await expectRefusal(readOnly({ PORTFOLIO_SOURCE_DIR: dir }));
+    expect(fatal.map((e) => [e.code, e.issueCode, e.line, e.column])).toEqual([
+      ['document_syntax', 'TOO_MANY', 7 + 10_000, 3],
+    ]);
+  });
+
+  test('a document over 1 MiB, refused where it passes the limit', async () => {
+    const dir = sourceDir({
+      'portfolio.yml': `${HEAD}identity:\n  name: Rowan Fixture\n# ${'x'.repeat(1024 * 1024)}\n`,
+    });
+    const fatal = await expectRefusal(readOnly({ PORTFOLIO_SOURCE_DIR: dir }));
+    expect(fatal.map((e) => [e.code, e.issueCode, e.line])).toEqual([
+      ['document_syntax', 'TOO_LARGE', 6],
+    ]);
+  });
+
   test('a YAML alias, refused where it appears', async () => {
     const dir = sourceDir({
       'portfolio.yml': `${HEAD}identity:\n  name: &canary-anchor Rowan Fixture\nmeta:\n  title: *canary-anchor\n`,

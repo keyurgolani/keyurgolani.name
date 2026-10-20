@@ -1,4 +1,5 @@
-// Id and language-tag rules, free of zod and yaml.
+// Id, language-tag, and extension-kind rules, kept free of zod and yaml so
+// the kit and the variants can use them without bundling the schemas.
 
 /**
  * Section ids: lowercase letters and digits in hyphen-separated words, at most
@@ -25,4 +26,41 @@ export function isLanguageTag(value: string): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * An npm package name, scoped or not, as npm accepts it for new packages. A
+ * content extension's package name is its namespace, both as the key of its
+ * `extensions` entries and as the first part of its section kinds.
+ */
+export const PACKAGE_NAME_PATTERN = /^(?:@[a-z0-9-][a-z0-9._-]*\/)?[a-z0-9-][a-z0-9._-]*$/;
+export const PACKAGE_NAME_MAX_LENGTH = 214;
+
+export function isPackageName(value: string): boolean {
+  return value.length <= PACKAGE_NAME_MAX_LENGTH && PACKAGE_NAME_PATTERN.test(value);
+}
+
+/** The name in an extension section kind, after the package name. */
+export const EXTENSION_SECTION_NAME_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+
+/**
+ * Splits an extension section kind, `<package name>/<name>` such as
+ * `@acme/portfolio-photography/exhibitions`, or returns null for any other
+ * string, the core kinds included.
+ */
+export function parseExtensionKind(kind: string): { namespace: string; name: string } | null {
+  const slash = kind.lastIndexOf('/');
+  if (slash <= 0) return null;
+  const namespace = kind.slice(0, slash);
+  const name = kind.slice(slash + 1);
+  return isPackageName(namespace) && EXTENSION_SECTION_NAME_PATTERN.test(name)
+    ? { namespace, name }
+    : null;
+}
+
+/** Whether a section comes from a content extension rather than the core kinds. */
+export function isExtensionSection<S extends { readonly kind: string }>(
+  section: S,
+): section is Extract<S, { readonly kind: `${string}/${string}` }> {
+  return parseExtensionKind(section.kind) !== null;
 }

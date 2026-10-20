@@ -3,8 +3,10 @@
  * validate.mjs — validate a portfolio document against @portfolio/schema.
  *
  * Usage:   node validate.mjs <path/to/portfolio.yml | portfolio.json>
- * Output:  on error, prints "<file>:<line>:<col>  <message>" for each
- *          problem. Exit 1 on any error, 0 on success.
+ * Output:  prints "<file>:<line>:<col>  <message>" for each problem, and
+ *          "<file>:<line>:<col>  warning: <message>" for each warning, such
+ *          as data from a content extension it doesn't register. Exit 1 on
+ *          any problem, 0 otherwise.
  *
  * It reads the document the way the server does: @portfolio/schema's
  * parsePortfolio, so the same YAML and JSON rules, schema, and unique section
@@ -67,10 +69,11 @@ try {
 }
 
 const result = parsePortfolio(readFileSync(file, 'utf8'), format);
-if (result.ok) process.exit(0);
-
-for (const problem of result.problems) {
-  const where = problem.line !== undefined ? `${file}:${problem.line}:${problem.column}` : file;
-  console.log(`${where}  ${problem.message}`);
+const where = ({ line, column }) => (line !== undefined ? `${file}:${line}:${column}` : file);
+if (result.ok) {
+  for (const warning of result.warnings)
+    console.log(`${where(warning)}  warning: ${warning.message}`);
+  process.exit(0);
 }
+for (const problem of result.problems) console.log(`${where(problem)}  ${problem.message}`);
 process.exit(1);

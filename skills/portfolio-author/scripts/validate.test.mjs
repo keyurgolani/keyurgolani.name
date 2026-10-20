@@ -38,6 +38,18 @@ test('wrong-type.yml exits 1 and mentions the type mismatch', () => {
   assert.match(r.stdout + r.stderr, /string|expected/i);
 });
 
+test('unregistered-extension.yml exits 0 and warns where each extension is used', () => {
+  const r = run('unregistered-extension.yml');
+  assert.equal(r.code, 0, `stdout: ${r.stdout}\nstderr: ${r.stderr}`);
+  const warnings = r.stdout.trim().split('\n');
+  assert.equal(warnings.length, 2, r.stdout);
+  assert.match(warnings[0], /unregistered-extension\.yml:8:5 {2}warning: \/identity\/extensions\//);
+  assert.match(
+    warnings[1],
+    /unregistered-extension\.yml:12:5 {2}warning: \/sections\/0 is a section/,
+  );
+});
+
 test('error output includes line numbers for at least one error', () => {
   const r = run('invalid-kind.yml');
   assert.match(r.stdout + r.stderr, /:\d+:|line \d+/i);

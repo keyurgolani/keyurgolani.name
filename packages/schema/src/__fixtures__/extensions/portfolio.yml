@@ -1,0 +1,48 @@
+# A portfolio using two content extensions: @acme/portfolio-photography,
+# which tests register (see ../acme-portfolio-photography.ts), and
+# @other/portfolio-music, which nothing registers. portfolio.json is its twin.
+schemaVersion: 2
+locale: en
+direction: ltr
+
+identity:
+  name: Rowan Fixture
+  extensions:
+    '@acme/portfolio-photography':
+      camera: Leica M6
+      film: true
+    '@other/portfolio-music':
+      instrument: cello
+      ensembles: [Quartet, Orchestra]
+
+sections:
+  - kind: gallery
+    id: plates
+    title: Plates
+    items:
+      - image:
+          src: /plates/harbor.jpg
+          alt: A harbor at dawn
+          extensions:
+            '@acme/portfolio-photography':
+              lens: 35mm
+        caption: Harbor
+
+  - kind: '@acme/portfolio-photography/exhibitions'
+    id: exhibitions
+    title: Exhibitions
+    data:
+      items:
+        - title: Low Tide
+          venue: Harbor Gallery
+          city: Nowhere
+          year: 2024
+          url: https://harbor.test/low-tide
+
+  - kind: '@other/portfolio-music/releases'
+    id: releases
+    title: Releases
+    data:
+      albums:
+        - name: First Light
+          tracks: 9
