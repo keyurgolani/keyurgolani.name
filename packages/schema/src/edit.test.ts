@@ -118,6 +118,142 @@ test('a YAML delete takes out only its entry', () => {
   assert.equal(edit(YAML, { pointer: '/meta/title', op: 'delete' }), YAML);
 });
 
+test('a YAML delete stops before the next entry and the comments that introduce it', () => {
+  // yaml counts the comment lines after a block collection in its range, up
+  // to the next entry's key or dash. Those indented under the deleted entry
+  // go with it; the rest belong to what follows.
+  const identity = (...between: string[]) =>
+    lines(
+      'identity:',
+      '  name: Rowan',
+      '  avatar:',
+      '    src: /me.jpg',
+      ...between,
+      '  location: Lisbon',
+    );
+  const kept = (...between: string[]) =>
+    lines('identity:', '  name: Rowan', ...between, '  location: Lisbon');
+  const deleteAvatar = (text: string) => edit(text, { pointer: '/identity/avatar', op: 'delete' });
+  assert.equal(deleteAvatar(identity('    # under avatar')), kept());
+  assert.equal(deleteAvatar(identity('  # about location')), kept('  # about location'));
+  assert.equal(
+    deleteAvatar(identity('    # under avatar', '  # about location')),
+    kept('  # about location'),
+  );
+  assert.equal(deleteAvatar(identity('    # under avatar', '# a note')), kept('# a note'));
+
+  const sections = (...between: string[]) =>
+    lines('sections:', '  - kind: lede', '    items:', '      - a', ...between, '  - kind: now');
+  const deleteFirst = (text: string) => edit(text, { pointer: '/sections/0', op: 'delete' });
+  assert.equal(
+    deleteFirst(sections('      # under the item')),
+    lines('sections:', '  - kind: now'),
+  );
+  assert.equal(
+    deleteFirst(sections('      # under the list', '    # under the section', '  # about now')),
+    lines('sections:', '  # about now', '  - kind: now'),
+  );
+  // The last item goes, and the comment after the list stays.
+  assert.equal(
+    edit(lines('a:', '  - x: 1', '    # under x', '# about b', 'b: 2'), {
+      pointer: '/a/0',
+      op: 'delete',
+    }),
+    lines('a: []', '# about b', 'b: 2'),
+  );
+  // A first key shares the dash's line, so a comment introducing the next key moves up beside it.
+  assert.equal(
+    edit(lines('links:', '  - url: x', '    # the label', '    label: y'), {
+      pointer: '/links/0/url',
+      op: 'delete',
+    }),
+    lines('links:', '  - # the label', '    label: y'),
+  );
+  assert.equal(
+    edit(lines('links:', '  - url:', '      a: 1', '      # under url', '    label: y'), {
+      pointer: '/links/0/url',
+      op: 'delete',
+    }),
+    lines('links:', '  - label: y'),
+  );
+});
+
+test('a YAML set adds and replaces before the comments that introduce what follows', () => {
+  const text = lines('a:', '  - x: 1', '    # under x', '# about b', 'b: 2');
+  assert.equal(
+    edit(text, { pointer: '/a/-', op: 'set', value: 2 }),
+    lines('a:', '  - x: 1', '    # under x', '  - 2', '# about b', 'b: 2'),
+  );
+  assert.equal(
+    edit(text, { pointer: '/a/0/y', op: 'set', value: 2 }),
+    lines('a:', '  - x: 1', '    y: 2', '    # under x', '# about b', 'b: 2'),
+  );
+  assert.equal(
+    edit(text, { pointer: '/a', op: 'set', value: 1 }),
+    lines('a: 1', '# about b', 'b: 2'),
+  );
+});
+
+test('a set through a scalar or null makes the same document in YAML and JSON', () => {
+  const read = (text: string, format: 'yaml' | 'json') => {
+    const parsed = parseSource(text, format);
+    assert.ok(parsed.ok, text);
+    return parsed.data;
+  };
+  for (const [before, pointer, after] of [
+    [{ a: 1 }, '/a/b', { a: { b: 'x' } }],
+    [{ a: null }, '/a/-', { a: ['x'] }],
+    [{ a: 'text' }, '/a/b/-', { a: { b: ['x'] } }],
+    [{ a: [1] }, '/a/0/b', { a: [{ b: 'x' }] }],
+  ] as const) {
+    const edits: Edit[] = [{ pointer, op: 'set', value: 'x' }];
+    const yamlText = applyEdits(`a: ${JSON.stringify(before.a)}\n`, 'yaml', edits);
+    const jsonText = applyEdits(JSON.stringify(before), 'json', edits);
+    assert.deepEqual(read(yamlText, 'yaml'), after, pointer);
+    assert.deepEqual(read(jsonText, 'json'), after, pointer);
+  }
+});
+
+test('a YAML edit keeps a CRLF document in CRLF', () => {
+  const crlf = (...text: string[]) => `${text.join('\r\n')}\r\n`;
+  const text = crlf(
+    'a:',
+    '  b:',
+    '    c: 1',
+    '    # under b',
+    '  e: 3',
+    'list:',
+    '  - 1',
+    'body: |',
+    '  one',
+    '  two',
+  );
+  const result = edit(
+    text,
+    { pointer: '/a/b', op: 'set', value: 'x' },
+    { pointer: '/a/f', op: 'set', value: 4 },
+    { pointer: '/list/-', op: 'set', value: 2 },
+    { pointer: '/body', op: 'set', value: { short: true } },
+    { pointer: '/g', op: 'set', value: 5 },
+    { pointer: '/a/e', op: 'delete' },
+  );
+  assert.equal(
+    result,
+    crlf(
+      'a:',
+      '  b: x',
+      '    # under b',
+      '  f: 4',
+      'list:',
+      '  - 1',
+      '  - 2',
+      'body: { short: true }',
+      'g: 5',
+    ),
+  );
+  assert.ok(!/[^\r]\n/.test(result));
+});
+
 test('values and keys are quoted when they would read back differently', () => {
   const text = edit(
     'a: 1\n',
@@ -183,8 +319,27 @@ test('an edit that cannot apply throws, and so does text that does not parse', (
   );
   assert.throws(
     () => edit(YAML, { pointer: '/a', op: 'set', value: new Date(0) }),
-    /couldn't apply/,
+    /plain JSON values/,
   );
+  assert.throws(
+    () => applyEdits('{}', 'json', [{ pointer: '/a', op: 'set', value: new Map() }]),
+    /plain JSON values/,
+  );
+});
+
+test('an own __proto__ key is a key like any other', () => {
+  const value = JSON.parse('{ "__proto__": { "polluted": true }, "b": 1 }');
+  for (const format of ['yaml', 'json'] as const) {
+    const text = applyEdits(format === 'yaml' ? 'a: 1\n' : '{ "a": 1 }', format, [
+      { pointer: '/a', op: 'set', value },
+    ]);
+    const read = parseSource(text, format);
+    assert.ok(read.ok, text);
+    const a = (read.data as { a: object }).a;
+    assert.deepEqual(Object.keys(a), ['__proto__', 'b'], format);
+    assert.equal(Object.getPrototypeOf(a), Object.prototype, format);
+  }
+  assert.equal(({} as { polluted?: boolean }).polluted, undefined);
 });
 
 const JSON_TEXT =
