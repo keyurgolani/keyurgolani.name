@@ -19,15 +19,11 @@ function deploy(t: TestContext, getLive: CatalogReader['getLive']): void {
     { cwd: '/' },
   );
   assert.ok(read.ok, JSON.stringify(read.issues));
-  setDeploymentState({ config: read.config, catalog: { getLive } });
+  setDeploymentState({
+    config: read.config,
+    catalog: { getLive },
+  });
   t.after(() => setDeploymentState(undefined));
-}
-
-async function assertFixedFailure(response: Response): Promise<void> {
-  assert.equal(response.status, 500);
-  assert.equal(await response.text(), 'Feed unavailable.');
-  assert.equal(response.headers.get('content-type'), 'text/plain; charset=utf-8');
-  assert.equal(response.headers.get('cache-control'), 'no-store');
 }
 
 test('a catalog that fails gives a fixed 500 and logs the cause', async (t) => {
@@ -37,12 +33,15 @@ test('a catalog that fails gives a fixed 500 and logs the cause', async (t) => {
       new Error('canary: /srv/canary-config/portfolio.yml: /identity/name is required'),
     ),
   );
-  await assertFixedFailure(await GET());
+  const response = await GET();
+  assert.equal(response.status, 500);
+  assert.equal(await response.text(), 'Feed unavailable.');
+  assert.equal(response.headers.get('content-type'), 'text/plain; charset=utf-8');
+  assert.equal(response.headers.get('cache-control'), 'no-store');
   assert.equal(logged.mock.callCount(), 1);
 });
 
-test('a server with no deployment state gives the same 500', async (t) => {
-  t.mock.method(console, 'error', () => {});
+test('a server with no deployment state serves no feed', async () => {
   setDeploymentState(undefined);
-  await assertFixedFailure(await GET());
+  await assert.rejects(GET(), /not loaded/);
 });

@@ -1,10 +1,13 @@
 import { renderRssFeed } from '@portfolio/kit/seo';
 import { getLive } from '~/server/catalog';
 import { requireDeploymentConfig } from '~/server/config-store';
+import { notServed } from '~/server/route-guard';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
+  const absent = notServed('/feed.xml');
+  if (absent) return absent;
   try {
     const { origin } = requireDeploymentConfig();
     const { portfolio } = (await getLive()).unit;

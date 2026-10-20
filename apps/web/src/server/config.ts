@@ -1,6 +1,7 @@
 import 'server-only';
 import fs from 'node:fs';
 import path from 'node:path';
+import { PROFILES, type Profile } from './capabilities';
 
 // The deployment configuration. This is the only module that reads
 // deployment environment variables; everything else gets the frozen result
@@ -10,8 +11,8 @@ import path from 'node:path';
 // trailing newline trimmed. An empty value counts as unset. Lookups go through
 // a variable key, so Next.js never inlines a build-time value.
 
-export const PROFILES = ['owner', 'demo', 'read-only'] as const;
-export type Profile = (typeof PROFILES)[number];
+// The profiles live with the capability matrix; config reads one of them.
+export { PROFILES, type Profile };
 
 /** `production` when NODE_ENV is production; `next dev` and tests are development. */
 export type RuntimeMode = 'production' | 'development';

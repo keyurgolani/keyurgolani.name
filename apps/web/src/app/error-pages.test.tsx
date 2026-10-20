@@ -4,6 +4,9 @@ import Module from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { PROFILES } from '~/server/capabilities';
+import { setDeploymentState } from '~/server/config-store';
+import { capabilityPolicy } from '~/server/policy';
 import ErrorPage from './error';
 import NotFound from './not-found';
 
@@ -55,4 +58,29 @@ test('not-found.tsx links only home', () => {
   const html = renderToStaticMarkup(<NotFound />);
   assert.match(html, /<h1>Page not found<\/h1>/);
   assertGeneric(html);
+});
+
+test("not-found.tsx links the pages the profile's policy lists", (t) => {
+  t.after(() => setDeploymentState(undefined));
+  for (const profile of PROFILES) {
+    setDeploymentState({
+      config: {
+        profile,
+        mode: 'production',
+        origin: 'https://rowan.test',
+        trustedProxyHops: 0,
+        secrets: {},
+      },
+      catalog: { getLive: () => assert.fail('the 404 page reads no catalog') },
+    });
+    const html = renderToStaticMarkup(<NotFound />);
+    const links = [...html.matchAll(/href="([^"]*)"/g)].map((match) => match[1]);
+    assert.deepEqual(
+      links,
+      capabilityPolicy(profile)
+        .navigation(null)
+        .map((link) => link.href),
+      profile,
+    );
+  }
 });

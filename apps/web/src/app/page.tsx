@@ -1,10 +1,12 @@
 import { loadVariantModule } from '~/lib/registry';
 import { getLive } from '~/server/catalog';
 import { HOST_APPEARANCE } from '~/server/host-defaults';
+import { requireServed } from '~/server/page-guard';
 
 export const dynamic = 'force-dynamic';
 
 export default async function HomePage() {
+  requireServed('/');
   const { portfolio } = (await getLive()).unit;
   // The host's variant is fixed until the site document loads, so this only
   // fails when the build itself is broken. app/error.tsx renders the failure.

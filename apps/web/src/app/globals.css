@@ -80,6 +80,15 @@ html[data-theme='dark'] ::selection {
   text-underline-offset: 2px;
 }
 
+.host-chrome__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
 .host-chrome__reference {
   font-size: 0.875rem;
   color: #6b6863;
