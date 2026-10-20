@@ -54,16 +54,22 @@ test('reproCommand must be a pnpm command that needs no secrets', () => {
     'pnpm ci:unit',
     'TZ=UTC pnpm ci:browser tests/e2e/smoke.spec.ts:5',
     'pnpm --filter @portfolio/kit test',
+    // Words like these in a file name are not secrets.
+    'pnpm ci:browser tests/e2e/owner-password.spec.ts:12',
+    'pnpm ci:browser tests/e2e/session-token.spec.ts:3',
+    'SMOKE_IMAGE=ghcr.io/x/y:sha-abc1234 IMAGE_PLATFORM=linux/arm64 pnpm ci:image',
   ]) {
     assert.equal(validate({ ...minimal, reproCommand }), true, reproCommand);
   }
   for (const reproCommand of [
     'node ci/run.mjs unit',
     'GITHUB_TOKEN=abc pnpm ci:unit',
-    'pnpm ci:unit --token abc',
+    'TZ=UTC NPM_TOKEN=abc pnpm ci:unit',
+    'DB_PASSWORD_FILE=/run/x pnpm ci:unit',
+    'CLIENT_SECRET=abc pnpm ci:unit',
     'pnpm ci:deploy $SECRET_KEY',
     'pnpm ci:x ${{ secrets.NPM }}',
-    'PASSWORD=hunter2 pnpm ci:unit',
+    'pnpm ci:x secrets.NPM',
   ]) {
     assert.equal(validate({ ...minimal, reproCommand }), false, reproCommand);
   }

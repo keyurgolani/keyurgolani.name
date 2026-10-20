@@ -43,9 +43,9 @@
       "items": { "$ref": "#/$defs/label" }
     },
     "reproCommand": {
-      "description": "Local command that reproduces the failure. It starts with pnpm (optionally after VAR=value pairs) and names no secret, token, password, or variable expansion.",
+      "description": "Local command that reproduces the failure. It starts with pnpm, optionally after VAR=value pairs, and needs no secrets: no $ expansion, no secrets. reference, and no variable named like a token, secret, or password.",
       "type": "string",
-      "pattern": "^(?![^\\n]*(?:\\$|secrets\\.|[Tt]oken|TOKEN|[Ss]ecret|SECRET|[Pp]assword|PASSWORD))(?:[A-Z][A-Z0-9_]*=[^\\s]+ )*pnpm [^\\s][^\\n]*$"
+      "pattern": "^(?![^\\n]*\\$)(?![^\\n]*secrets\\.)(?:(?![A-Z0-9_]*(?:TOKEN|SECRET|PASSWORD))[A-Z][A-Z0-9_]*=[^\\s]+ )*pnpm [^\\s][^\\n]*$"
     }
   },
   "$defs": {

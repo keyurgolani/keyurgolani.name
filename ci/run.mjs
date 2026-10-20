@@ -6,6 +6,7 @@
 // the command already wrote a failure record for this gate, writes a generic
 // one. It exits with the command's status.
 import { spawnSync } from 'node:child_process';
+import { rmSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readFailureRecords, reportError, writeFailureRecord } from './lib/reports.mjs';
@@ -24,6 +25,11 @@ function main(argv) {
   }
 
   const repro = reproCommandFor(gate);
+  // A rerun replaces this gate's records, so an old failure never shows up as
+  // a new one. Other gates' records stay.
+  for (const { file, record } of readFailureRecords()) {
+    if (record?.gate === gate) rmSync(file, { force: true });
+  }
   const seen = new Set(readFailureRecords().map(({ file }) => file));
   const started = Date.now();
   const result = spawnSync(command[0], command.slice(1), {
