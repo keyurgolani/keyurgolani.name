@@ -27,7 +27,7 @@ On a deployed site, edit `portfolio.yml` on the host and mount it `:ro`, as `doc
 
 ### Updating the portfolio without rebuilding
 
-The app reads `portfolio.yml` on every request, so a host edit shows up on the next page load as long as the edit rewrites the file in place.
+Every page, the 404 page, the feed, `robots.txt`, `sitemap.xml`, and the Open Graph image render from `portfolio.yml` when they're requested. Nothing is prerendered from it at build time, so an image built without your file (the CI image, for example) still serves your content, and a host edit shows up on the next request as long as the edit rewrites the file in place.
 
 A single-file bind mount follows the file's inode, not its path. A tool that saves by writing a new file and renaming it over the old one gives the path a new inode, and the container keeps reading the old copy. `sed -i` works this way, and so do some editors. On a Linux Docker host (Docker Engine 29.9, on ext4 and on overlayfs), after `sed -i` the container kept serving the old content until `docker restart`, while writing the file in place (for example `cat new.yml > portfolio.yml`) showed up on the next request without a restart. If a change doesn't show, restart the container:
 
@@ -119,7 +119,7 @@ The Next.js app ships static assets under `_next/static/...`. Any CDN that respe
 - `pnpm build` exits 0
 - The dev server renders correctly in light, dark, bright, black, and system themes
 - `/feed.xml`, `/robots.txt`, `/sitemap.xml` all 200 if your variant declares those capabilities
-- With the production build running, `node apps/web/scripts/check-containment.mjs http://127.0.0.1:3000 --direct --expect-name "<your identity.name>"` exits 0. Drop `--direct` when the URL goes through your reverse proxy.
+- With the production build running, `node apps/web/scripts/check-containment.mjs http://127.0.0.1:3000 --direct --expect-name "<your identity.name>" --expect-origin "<your meta.url origin>"` exits 0. Drop `--direct` when the URL goes through your reverse proxy.
 
 ## Updating
 

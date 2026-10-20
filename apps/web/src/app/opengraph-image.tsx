@@ -2,6 +2,10 @@ import { ImageResponse } from 'next/og';
 import { loadPortfolio } from '~/lib/portfolio';
 
 export const runtime = 'nodejs';
+// Render from the mounted portfolio file on each request. A build-time
+// prerender would bake in whatever file the build saw, which for a CI image
+// is the bundled example persona.
+export const dynamic = 'force-dynamic';
 export const alt = 'Portfolio';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
