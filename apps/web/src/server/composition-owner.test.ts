@@ -116,11 +116,20 @@ function studio(method: string, name: string, headers: Record<string, string> = 
 }
 
 test('owner loads its modules only through the composition root', () => {
-  // Owner code, then the auth.secret check, which reads the hash through
-  // @portfolio/core (#2).
+  // Owner code, then the auth.secret check, which loads all of
+  // @portfolio/core through its one entry (#2).
   assert.deepEqual([...loadedOwnerModules()].sort(), [
+    'core/audit/record',
+    'core/audit/sink',
+    'core/audit/source',
+    'core/auth/fingerprint',
     'core/auth/phc',
     'core/auth/provider',
+    'core/auth/session-files',
+    'core/auth/session-store',
+    'core/auth/sessions',
+    'core/auth/token',
+    'core/data/layout',
     'core/owner',
     'server/owner/auth-secret',
     'server/owner/config-status',
