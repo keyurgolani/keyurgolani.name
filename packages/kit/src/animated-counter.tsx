@@ -88,7 +88,9 @@ export function AnimatedCounter({
   }, [end, durationMs, decimals, startOnView, reduce]);
 
   const shown = reduce ? end : value;
-  const formatted = decimals > 0 ? shown.toFixed(decimals) : shown.toLocaleString();
+  // A fixed locale, so the server's number matches the browser's during
+  // hydration. #4 adds the portfolio's own locale.
+  const formatted = decimals > 0 ? shown.toFixed(decimals) : shown.toLocaleString('en-US');
   return (
     <span ref={ref} className={className} aria-label={`${prefix ?? ''}${end}${suffix ?? ''}`}>
       {prefix}
