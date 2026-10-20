@@ -17,8 +17,23 @@ export interface ParsedPair {
   readonly site: Site;
 }
 
+declare const PUBLIC: unique symbol;
+
+/**
+ * A document as visitors may see it. Only toPublicView() makes one, so a
+ * renderer that takes it can't be handed a parsed document directly. The
+ * brand is a type alone; nothing at run time carries it.
+ */
+export type Public<T> = T & { readonly [PUBLIC]: true };
+
+/** The portfolio a renderer takes: no hidden section and no unregistered extension data. */
+export type PublicPortfolio = Public<Portfolio>;
+
 /** The pair with hidden sections and unregistered extension data taken out. */
-export type PublicView = ParsedPair;
+export interface PublicView {
+  readonly portfolio: PublicPortfolio;
+  readonly site: Public<Site>;
+}
 
 export interface PublicViewContext {
   /** The content extensions this build registers. Data from any other is dropped. */
@@ -43,8 +58,8 @@ export function toPublicView(pair: ParsedPair, context: PublicViewContext = {}):
     return !extension || registry.extension(extension.namespace) !== undefined;
   });
   return {
-    portfolio: withoutUnregistered({ ...pair.portfolio, sections }, registry),
-    site: withoutUnregistered(pair.site, registry),
+    portfolio: withoutUnregistered({ ...pair.portfolio, sections }, registry) as PublicPortfolio,
+    site: withoutUnregistered(pair.site, registry) as Public<Site>,
   };
 }
 
@@ -59,18 +74,19 @@ function withoutUnregistered<T>(value: T, registry: ExtensionRegistry): T {
     if (!isPlainObject(node)) return node;
     const extensionSection = typeof node.kind === 'string' && parseExtensionKind(node.kind);
     const control = path.length === 2 && path[0] === 'variantControls';
-    const copy: Record<string, unknown> = {};
+    const entries: Array<[string, unknown]> = [];
     for (const [key, child] of Object.entries(node)) {
       if (key === 'extensions' && isPlainObject(child)) {
         const kept = Object.entries(child).filter(([namespace]) => registry.extension(namespace));
-        if (kept.length > 0) copy[key] = Object.fromEntries(kept);
+        if (kept.length > 0) entries.push([key, Object.fromEntries(kept)]);
       } else if ((extensionSection && key === 'data') || (control && key === 'values')) {
-        copy[key] = child;
+        entries.push([key, child]);
       } else {
-        copy[key] = walk(child, [...path, key]);
+        entries.push([key, walk(child, [...path, key])]);
       }
     }
-    return copy;
+    // fromEntries, so an own __proto__ key stays a key.
+    return Object.fromEntries(entries);
   };
   return walk(value, []) as T;
 }

@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import type { Metadata } from 'next';
-import type { Portfolio } from '@portfolio/schema';
+import type { PublicPortfolio } from '@portfolio/schema';
 import { THEME_INIT_SCRIPT, ThemeProvider } from '@portfolio/kit';
 import { buildStructuredData } from '@portfolio/kit/seo';
 import { jsonLdScript } from '~/lib/json-ld';
@@ -24,7 +24,7 @@ export const dynamic = 'force-dynamic';
  * produce one. Under `next dev` an invalid edit lands here; the layout renders
  * neutral defaults and the page's own failure reaches app/error.tsx.
  */
-async function livePortfolio(): Promise<Portfolio | null> {
+async function livePortfolio(): Promise<PublicPortfolio | null> {
   try {
     return (await getPublicView()).portfolio;
   } catch {

@@ -1,4 +1,4 @@
-import type { Portfolio, Section } from '@portfolio/schema';
+import type { Portfolio, PublicPortfolio, Section } from '@portfolio/schema';
 
 export interface FeedEntry {
   /** Stable identifier — URL when present, otherwise a slug from title+date. */
@@ -127,9 +127,10 @@ export interface RenderRssOptions {
 /**
  * Produce an RSS 2.0 feed (with the Atom self-link extension) from the
  * portfolio's writings/publications/episodes. Returns the XML as a string;
- * callers wrap it in a `Response` with `application/rss+xml`.
+ * callers wrap it in a `Response` with `application/rss+xml`. It takes the
+ * public view's portfolio only, so no hidden section reaches the feed.
  */
-export function renderRssFeed(portfolio: Portfolio, options: RenderRssOptions = {}): string {
+export function renderRssFeed(portfolio: PublicPortfolio, options: RenderRssOptions = {}): string {
   const site = options.siteUrl ?? '';
   const feed = options.feedUrl ?? (site ? `${site.replace(/\/$/, '')}/feed.xml` : '');
   const title = portfolio.meta?.title ?? `${portfolio.identity.name} — Portfolio`;

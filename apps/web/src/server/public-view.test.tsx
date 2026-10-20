@@ -7,7 +7,7 @@ import {
   parseSite,
   toPublicView,
   type ParsedPair,
-  type Portfolio,
+  type PublicPortfolio,
 } from '@portfolio/schema';
 // The registry loads the variant packages, which need React's client build,
 // so this test runs without the react-server condition (a .test.tsx file).
@@ -160,7 +160,7 @@ test('no variant sends a browser a hidden section or unregistered extension data
   for (const slug of slugs) {
     const variant = await loadVariantModule(slug);
     assert.ok(variant, slug);
-    const render = (portfolio: Portfolio) =>
+    const render = (portfolio: PublicPortfolio) =>
       payloadStrings(
         createElement(variant.default, { portfolio, colorScheme: 'warm', typography: 'classic' }),
         clients,
@@ -171,10 +171,20 @@ test('no variant sends a browser a hidden section or unregistered extension data
     assert.ok(strings.includes('Rowan Visible') && strings.includes('Visible Engineer'), slug);
     assert.deepEqual(found(strings), [], slug);
 
-    // Given the parsed pair instead, the same walk finds the hidden section,
-    // so it would see a leak.
-    assert.ok(found(await render(input.portfolio)).includes('canary-hidden-role'), slug);
+    // Given the parsed pair instead (forced past the type's brand, which
+    // otherwise refuses it), the same walk finds the hidden section, so it
+    // would see a leak.
+    const raw = input.portfolio as PublicPortfolio;
+    assert.ok(found(await render(raw)).includes('canary-hidden-role'), slug);
   }
+});
+
+test('a variant takes only the public view, by type', () => {
+  const input = pair();
+  const props = (portfolio: PublicPortfolio) => ({ portfolio });
+  // @ts-expect-error A parsed portfolio isn't the public view's.
+  assert.ok(props(input.portfolio));
+  assert.ok(props(toPublicView(input).portfolio));
 });
 
 test("Kinetic Cosmos's client components get identity and links whole", async () => {
@@ -184,7 +194,7 @@ test("Kinetic Cosmos's client components get identity and links whole", async ()
   const variant = await loadVariantModule('kinetic-cosmos');
   assert.ok(variant);
   const strings = await payloadStrings(
-    createElement(variant.default, { portfolio: pair().portfolio }),
+    createElement(variant.default, { portfolio: pair().portfolio as PublicPortfolio }),
     clients,
   );
   assert.ok(found(strings).includes('canary-unregistered-field'));

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { acmePortfolioPhotography } from './__fixtures__/acme-portfolio-photography';
 import { parsePortfolio, parseSite } from './load';
-import { toPublicView, type ParsedPair } from './public-view';
+import { toPublicView, type ParsedPair, type PublicPortfolio } from './public-view';
 
 const SITE = [
   'schemaVersion: 2',
@@ -77,4 +77,12 @@ test('with nothing registered, every extension section and extensions entry is d
   assert.equal('extensions' in view.portfolio.identity, false);
   assert.equal('extensions' in view.site.appearance, false);
   assert.ok(!JSON.stringify(view.portfolio).includes('@other/portfolio-music'));
+});
+
+test('only toPublicView makes the portfolio a renderer takes', () => {
+  const input = pair();
+  const render = (portfolio: PublicPortfolio) => portfolio.identity.name;
+  // @ts-expect-error A parsed portfolio isn't the public view's.
+  assert.ok(render(input.portfolio));
+  assert.ok(render(toPublicView(input).portfolio));
 });
