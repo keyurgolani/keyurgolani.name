@@ -22,7 +22,7 @@ export function FallbackSection({
   const heading = section.title ?? defaultHeading(section.kind);
 
   return (
-    <section id={id} data-fallback-kind={section.kind} style={style.section}>
+    <section id={id} lang={section.lang} data-fallback-kind={section.kind} style={style.section}>
       {heading ? <h2 style={style.heading}>{heading}</h2> : null}
       {section.subtitle ? <p style={style.subtitle}>{section.subtitle}</p> : null}
       <FallbackBody section={section} portfolio={portfolio} />

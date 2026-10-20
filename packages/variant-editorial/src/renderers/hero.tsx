@@ -14,7 +14,7 @@ export function HeroRenderer({ section, identity }: HeroProps) {
   const tagline = section.tagline ?? identity.tagline;
 
   return (
-    <section id={id} className="editorial-section editorial-hero">
+    <section id={id} lang={section.lang} className="editorial-section editorial-hero">
       {section.greeting ? <p className="editorial-hero__greeting">{section.greeting}</p> : null}
       {name ? <h1 className="editorial-hero__name">{name}</h1> : null}
       {tagline ? <p className="editorial-hero__tagline">{tagline}</p> : null}

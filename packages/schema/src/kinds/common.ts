@@ -1,4 +1,10 @@
 import { z } from 'zod';
+import {
+  isLanguageTag,
+  RESERVED_SECTION_IDS,
+  SECTION_ID_MAX_LENGTH,
+  SECTION_ID_PATTERN,
+} from '../ids';
 
 export const LinkSchema = z.object({
   platform: z.string().optional(),
@@ -67,11 +73,9 @@ function isLooseDate(raw: string): boolean {
   return false;
 }
 
-const DATE_HINT = 'expected one of: YYYY, YYYY-MM, YYYY-MM-DD, "Month YYYY", or "present"';
-
-export const LooseDateSchema = z
-  .string()
-  .refine(isLooseDate, { message: `Invalid date — ${DATE_HINT}` });
+export const LooseDateSchema = z.string().refine(isLooseDate, {
+  message: `isn't a date. Use YYYY, YYYY-MM, YYYY-MM-DD, "Month YYYY", or "present".`,
+});
 
 export const PeriodSchema = z
   .object({
@@ -86,7 +90,7 @@ export const PeriodSchema = z
       if (startN == null || endN == null) return true;
       return endN >= startN;
     },
-    { message: 'Period.end must not precede Period.start.' },
+    { message: 'ends before it starts: end must not precede start.' },
   );
 export type Period = z.infer<typeof PeriodSchema>;
 
@@ -124,10 +128,31 @@ function looseDateOrder(raw: string): number | null {
   return null;
 }
 
+/** A section id. The rules are in ../ids.ts. */
+export const SectionIdSchema = z
+  .string()
+  .max(SECTION_ID_MAX_LENGTH)
+  .regex(SECTION_ID_PATTERN, {
+    message:
+      'must be lowercase letters and digits in hyphen-separated words, such as get-in-touch.',
+  })
+  .refine((id) => !RESERVED_SECTION_IDS.includes(id), {
+    message: "can't be main, which every variant uses for its <main> element.",
+  });
+
+/** A BCP 47 language tag, such as `en` or `pt-BR`. */
+export const LanguageTagSchema = z.string().refine(isLanguageTag, {
+  message: "isn't a BCP 47 language tag, such as en or pt-BR.",
+});
+
 const SectionBase = {
-  id: z.string().optional(),
+  /** Required and unique within the portfolio. See SECTION_ID_PATTERN. */
+  id: SectionIdSchema,
   title: z.string().optional(),
   subtitle: z.string().optional(),
+  /** The section's language when it differs from the portfolio's `locale`. */
+  lang: LanguageTagSchema.optional(),
+  /** Until hiding moves to the site document's `sections.<id>.hidden`. */
   hidden: z.boolean().optional(),
 };
 

@@ -1,12 +1,13 @@
+schemaVersion: 2
+locale: en
+direction: ltr
+
 identity:
   name: Test User
   tagline: Engineer & writer
   pronouns: they/them
   location: Bengaluru, India
   email: test@example.com
-
-variant: editorial
-theme: system
 
 links: []
 
@@ -16,6 +17,7 @@ meta:
 
 sections:
   - kind: hero
+    id: top
     greeting: Hello, I'm
     tagline: I build calm software at scale.
     subtagline: Currently focused on reliability.

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useSyncExternalStore } from 'react';
 import { useMotionPreference } from '../motion';
-import type { MotionPreference } from '@portfolio/schema';
+import type { MotionPolicy } from '@portfolio/schema';
 
 const COARSE_POINTER_QUERY = '(pointer: coarse)';
 
@@ -22,7 +22,7 @@ function serverHasCoarsePointer(): boolean {
 }
 
 interface MagneticCursorProps {
-  motionPreference?: MotionPreference;
+  motionPreference?: MotionPolicy;
   /** Inner dot diameter (px). */
   dotSize?: number;
   /** Outer halo diameter (px). */

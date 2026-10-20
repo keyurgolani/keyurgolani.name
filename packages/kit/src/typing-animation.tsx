@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useMotionPreference } from './motion';
-import type { MotionPreference } from '@portfolio/schema';
+import type { MotionPolicy } from '@portfolio/schema';
 
 export interface TypingAnimationProps {
   /** Strings to cycle through. Empty array renders nothing. */
@@ -17,7 +17,7 @@ export interface TypingAnimationProps {
   pauseDurations?: number[];
   className?: string;
   /** Override portfolio motion preference; default `respect-os`. */
-  motionPreference?: MotionPreference;
+  motionPreference?: MotionPolicy;
   /**
    * Render the blinking caret. Default true. Set false if your variant
    * supplies its own caret CSS.

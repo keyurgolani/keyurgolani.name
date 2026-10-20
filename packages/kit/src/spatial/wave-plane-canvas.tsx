@@ -2,10 +2,10 @@
 
 import { useEffect, useRef } from 'react';
 import { useMotionPreference } from '../motion';
-import type { MotionPreference } from '@portfolio/schema';
+import type { MotionPolicy } from '@portfolio/schema';
 
 interface WavePlaneCanvasProps {
-  motionPreference?: MotionPreference;
+  motionPreference?: MotionPolicy;
   /** Three RGB color stops [r,g,b] each 0-1. */
   colorA?: [number, number, number];
   colorB?: [number, number, number];

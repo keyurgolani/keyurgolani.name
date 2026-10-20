@@ -1,6 +1,12 @@
+import { readFileSync } from 'node:fs';
 import { expect, test } from '../harness/fixtures';
 
 const FIXTURE_IMAGE = 'https://media.rowan.test/fixture-garden.png';
+// The root attributes the baseline rendered, which the host keeps until it
+// loads the site document.
+const BASELINE = JSON.parse(
+  readFileSync(new URL('../fixtures/baseline/example-home.json', import.meta.url), 'utf8'),
+) as { root: Record<string, string> };
 
 test(
   'home renders the mounted portfolio',
@@ -23,6 +29,22 @@ test(
         contentType: 'text/plain',
       });
     }
+  },
+);
+
+test(
+  "home renders Editorial's default scheme and typeset, each section under its content id",
+  { annotation: { type: 'route', description: '/' } },
+  async ({ page }) => {
+    await page.goto('/');
+    const root = page.locator('[data-variant]');
+    for (const [name, value] of Object.entries(BASELINE.root)) {
+      await expect(root).toHaveAttribute(name, value);
+    }
+    const ids = await page
+      .locator('main > section')
+      .evaluateAll((sections) => sections.map((section) => section.id));
+    expect(ids).toEqual(['top', 'selected-work', 'contact']);
   },
 );
 

@@ -12,8 +12,8 @@ interface VariantProps {
 }
 
 export default function EditorialVariant({ portfolio, colorScheme, typography }: VariantProps) {
-  const scheme = resolveColorScheme(manifest, colorScheme, portfolio.colorScheme);
-  const type = resolveTypographyPreset(manifest, typography, portfolio.typography);
+  const scheme = resolveColorScheme(manifest, colorScheme);
+  const type = resolveTypographyPreset(manifest, typography);
   const navItems = deriveNavItems(portfolio, { limit: 9 });
   const showToc = navItems.length >= 2;
 
@@ -31,12 +31,8 @@ export default function EditorialVariant({ portfolio, colorScheme, typography }:
       {showToc ? <TableOfContents items={navItems} brand={portfolio.identity.name} /> : null}
       <EditorialThemeToggle />
       <main id="main" className="editorial-page">
-        {portfolio.sections.map((section, i) => (
-          <SectionDispatch
-            key={section.id ?? `${section.kind}-${i}`}
-            section={section}
-            portfolio={portfolio}
-          />
+        {portfolio.sections.map((section) => (
+          <SectionDispatch key={section.id} section={section} portfolio={portfolio} />
         ))}
       </main>
     </div>

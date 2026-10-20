@@ -1,13 +1,15 @@
+schemaVersion: 2
+locale: en
+direction: ltr
+
 identity:
   name: Test User
   tagline: Engineer & writer
-
-variant: editorial
-theme: system
 
 links: []
 
 sections:
   - kind: heroo
+    id: top
     greeting: Hello, I'm
     tagline: I build calm software at scale.

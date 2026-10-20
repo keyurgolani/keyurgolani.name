@@ -105,8 +105,8 @@ export default function MyVariant({
   colorScheme?: string;
   typography?: string;
 }) {
-  const scheme = resolveColorScheme(manifest, colorScheme, portfolio.colorScheme);
-  const type = resolveTypographyPreset(manifest, typography, portfolio.typography);
+  const scheme = resolveColorScheme(manifest, colorScheme);
+  const type = resolveTypographyPreset(manifest, typography);
 
   return (
     <div
@@ -115,12 +115,8 @@ export default function MyVariant({
       data-typography={type ?? undefined}
     >
       <main>
-        {portfolio.sections.map((section, i) => (
-          <SectionDispatch
-            key={section.id ?? `${section.kind}-${i}`}
-            section={section}
-            portfolio={portfolio}
-          />
+        {portfolio.sections.map((section) => (
+          <SectionDispatch key={section.id} section={section} portfolio={portfolio} />
         ))}
       </main>
     </div>

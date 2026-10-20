@@ -59,6 +59,7 @@ yarn-error.log*
 # misc
 *.pem
 .cache
+.impeccable/
 
 # variant experiments — gitignored holding pen for non-curated variant candidates
 /experiments/

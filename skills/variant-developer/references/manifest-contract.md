@@ -157,8 +157,8 @@ The concrete `data-theme` values your variant renders correctly via CSS. Valid v
 
 ## Helpers exported alongside the type
 
-- `resolveColorScheme(manifest, override, portfolioChoice)` — picks the active color scheme id with the fallback chain: explicit override → portfolio.yaml choice → default-flagged scheme → first scheme → `null` (when none declared).
-- `resolveTypographyPreset(manifest, override, portfolioChoice)` — same chain for typography.
+- `resolveColorScheme(manifest, requested)` — picks the active color scheme id with the fallback chain: the requested id when the manifest declares it → default-flagged scheme → first scheme → `null` (when none declared).
+- `resolveTypographyPreset(manifest, requested)` — same chain for typography.
 - `resolveTheme(preference, supported, systemMatch)` — pure function the kit's `ThemeProvider` uses to map a `ThemePreference` to a concrete `data-theme` value, applying the `bright→light` / `black→dark` fallback per the resolution table above.
 
 Use these in your variant's render path so portfolio.yaml's `colorScheme` and `typography` fields work consistently across variants.

@@ -5,10 +5,10 @@ import { useFrame } from '@react-three/fiber';
 import { Float, MeshTransmissionMaterial } from '@react-three/drei';
 import * as THREE from 'three';
 import { useMotionPreference } from '../motion';
-import type { MotionPreference } from '@portfolio/schema';
+import type { MotionPolicy } from '@portfolio/schema';
 
 interface TransmissionGemProps {
-  motionPreference?: MotionPreference;
+  motionPreference?: MotionPolicy;
   /** Geometry: 'icos' = icosahedron (default, faceted), 'sphere' = smooth. */
   geometry?: 'icos' | 'sphere';
   /** Detail level (icos subdivisions, sphere segments). */

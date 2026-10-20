@@ -1,6 +1,5 @@
 import 'server-only';
 import path from 'node:path';
-import { listManifests } from '~/lib/registry';
 import { issueLogLine, type ConfigIssue, type Profile } from './config';
 import { setDeploymentState } from './config-store';
 import type { Registration } from './start-or-exit';
@@ -19,7 +18,6 @@ export function registerDeployment(): Registration {
     cwd,
     // The image and `next dev` both keep it two levels above apps/web.
     examplePath: path.resolve(/*turbopackIgnore: true*/ cwd, '..', '..', 'portfolio.example.yml'),
-    variantSlugs: listManifests().map((manifest) => manifest.slug),
     // Called only after startup, by re-validation under next dev.
     report: (issue) => {
       process.stdout.write(logLine(issue, result.profile));

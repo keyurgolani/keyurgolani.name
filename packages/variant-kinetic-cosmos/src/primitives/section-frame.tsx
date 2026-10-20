@@ -25,7 +25,7 @@ export function SectionFrame({
   const heading = section.title ?? fallbackTitle;
 
   return (
-    <section id={id} className={cn('kc-section', className)}>
+    <section id={id} lang={section.lang} className={cn('kc-section', className)}>
       <div className="kc-section__inner">
         {(showHeading && heading) || section.subtitle ? (
           <header className="kc-section__header">

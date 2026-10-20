@@ -1,12 +1,14 @@
+schemaVersion: 2
+locale: en
+direction: ltr
+
 identity:
   name: 42
   tagline: Engineer & writer
-
-variant: editorial
-theme: system
 
 links: []
 
 sections:
   - kind: hero
+    id: top
     tagline: I build calm software at scale.

@@ -2,11 +2,11 @@
 
 import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
 import { useMotionPreference } from '../motion';
-import type { MotionPreference } from '@portfolio/schema';
+import type { MotionPolicy } from '@portfolio/schema';
 
 interface ParallaxLayerProps {
   children: ReactNode;
-  motionPreference?: MotionPreference;
+  motionPreference?: MotionPolicy;
   /** Scroll multiplier (0 = locked, 1 = scrolls normally, -0.3 = drifts up slowly, etc.). */
   scrollSpeed?: number;
   /** How much pointer movement translates the layer (0-1). */

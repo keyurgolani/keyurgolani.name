@@ -16,6 +16,7 @@ interface Fatal {
   path?: string;
   line?: number;
   column?: number;
+  issueCode?: string;
   message: string;
 }
 
@@ -23,6 +24,8 @@ type Env = Record<string, string>;
 
 const ORIGIN = 'https://rowan.test';
 const DEMO_ORIGIN = 'https://demo.rowan.test';
+/** The lines every version 2 portfolio document starts with. */
+const HEAD = 'schemaVersion: 2\nlocale: en\ndirection: ltr\n';
 
 /** A source directory holding the given documents (name to text). */
 function sourceDir(documents: Record<string, string>): string {
@@ -195,10 +198,10 @@ test.describe('in production', () => {
   });
 
   test('the bundled sample identity', async () => {
-    const dir = sourceDir({ 'portfolio.yml': 'identity:\n  name: Anamika Devi\n' });
+    const dir = sourceDir({ 'portfolio.yml': `${HEAD}identity:\n  name: Anamika Devi\n` });
     const fatal = await expectRefusal(readOnly({ PORTFOLIO_SOURCE_DIR: dir }));
     expect(fatal.map((entry) => [entry.code, entry.file, entry.path, entry.line])).toEqual([
-      ['sample_identity', 'portfolio.yml', '/identity/name', 2],
+      ['sample_identity', 'portfolio.yml', '/identity/name', 5],
     ]);
   });
 });
@@ -248,33 +251,66 @@ test.describe('the source directory', () => {
 test.describe('the document', () => {
   test('invalid YAML, located by line and column', async () => {
     const dir = sourceDir({
-      'portfolio.yml': 'identity:\n  name: Rowan Fixture\nsections:\n  - kind: canary-kind\n',
+      'portfolio.yml': `${HEAD}identity:\n  name: Rowan Fixture\nsections:\n  - kind: canary-kind\n    id: x\n`,
     });
     const fatal = await expectRefusal(readOnly({ PORTFOLIO_SOURCE_DIR: dir }), {
       never: ['canary-kind'],
     });
     expect(fatal.map((e) => [e.code, e.file, e.path, e.line, e.column])).toEqual([
-      ['document_invalid', 'portfolio.yml', '/sections/0/kind', 4, 11],
+      ['document_invalid', 'portfolio.yml', '/sections/0/kind', 7, 11],
     ]);
   });
 
   test('invalid JSON, located by line and column', async () => {
-    const dir = sourceDir({ 'portfolio.json': '{\n  "identity": {\n    "name": 42\n  }\n}\n' });
+    const json = [
+      '{',
+      '  "schemaVersion": 2,',
+      '  "locale": "en",',
+      '  "direction": "ltr",',
+      '  "identity": {',
+      '    "name": 42',
+      '  }',
+      '}',
+      '',
+    ].join('\n');
+    const dir = sourceDir({ 'portfolio.json': json });
     const fatal = await expectRefusal(readOnly({ PORTFOLIO_SOURCE_DIR: dir }));
     expect(fatal.map((e) => [e.code, e.file, e.path, e.line, e.column])).toEqual([
-      ['document_invalid', 'portfolio.json', '/identity/name', 3, 13],
+      ['document_invalid', 'portfolio.json', '/identity/name', 6, 13],
     ]);
   });
 
-  test('invalid TOML, with the key path', async () => {
-    const dir = sourceDir({ 'portfolio.toml': '[identity]\nname = 42\n' });
+  test('a JSON syntax error V8 gives no position for, located anyway', async () => {
+    const json = '{\n  "schemaVersion": 2,\n  "locale": NaN\n}\n';
+    const dir = sourceDir({ 'portfolio.json': json });
     const fatal = await expectRefusal(readOnly({ PORTFOLIO_SOURCE_DIR: dir }));
-    expect(fatal.map((e) => [e.code, e.file, e.path])).toEqual([
-      ['document_invalid', 'portfolio.toml', '/identity/name'],
+    expect(fatal.map((e) => [e.code, e.issueCode, e.line, e.column])).toEqual([
+      ['document_syntax', 'JSON_SYNTAX', 3, 13],
     ]);
   });
 
-  test('an unresolved variant', async () => {
+  test('a YAML alias, refused where it appears', async () => {
+    const dir = sourceDir({
+      'portfolio.yml': `${HEAD}identity:\n  name: &canary-anchor Rowan Fixture\nmeta:\n  title: *canary-anchor\n`,
+    });
+    const fatal = await expectRefusal(readOnly({ PORTFOLIO_SOURCE_DIR: dir }), {
+      never: ['canary-anchor'],
+    });
+    expect(fatal.map((e) => [e.code, e.path, e.line])).toEqual([
+      ['document_syntax', '/identity/name', 5],
+      ['document_syntax', '/meta/title', 7],
+    ]);
+  });
+
+  test('a portfolio.toml, refused by name', async () => {
+    const dir = sourceDir({ 'portfolio.toml': '[identity]\nname = "Rowan Fixture"\n' });
+    const fatal = await expectRefusal(readOnly({ PORTFOLIO_SOURCE_DIR: dir }));
+    expect(fatal.map((e) => [e.code, e.file])).toEqual([
+      ['document_unsupported', 'portfolio.toml'],
+    ]);
+  });
+
+  test('an old-shape document, refused for its missing schemaVersion', async () => {
     const dir = sourceDir({
       'portfolio.yml': 'identity:\n  name: Rowan Fixture\nvariant: canary-variant\n',
     });
@@ -282,7 +318,17 @@ test.describe('the document', () => {
       never: ['canary-variant'],
     });
     expect(fatal.map((e) => [e.code, e.path, e.line])).toEqual([
-      ['variant_unresolved', '/variant', 3],
+      ['document_invalid', '/schemaVersion', 1],
+    ]);
+  });
+
+  test('two sections sharing an id', async () => {
+    const dir = sourceDir({
+      'portfolio.yml': `${HEAD}identity:\n  name: Rowan Fixture\nsections:\n  - kind: lede\n    id: about\n    body: A\n  - kind: now\n    id: about\n    body: B\n`,
+    });
+    const fatal = await expectRefusal(readOnly({ PORTFOLIO_SOURCE_DIR: dir }));
+    expect(fatal.map((e) => [e.code, e.path, e.line])).toEqual([
+      ['document_invalid', '/sections/1/id', 11],
     ]);
   });
 });
@@ -293,7 +339,7 @@ test.describe('the refusal log', () => {
     // buffer hold while nothing reads, so the server must wait to write them.
     const count = 1000;
     const dir = sourceDir({
-      'portfolio.yml': `identity:\n  name: Rowan Fixture\nsections:\n${'  - kind: canary-kind\n'.repeat(count)}`,
+      'portfolio.yml': `${HEAD}identity:\n  name: Rowan Fixture\nsections:\n${'  - kind: canary-kind\n'.repeat(count)}`,
     });
     const fatal = await expectRefusal(readOnly({ PORTFOLIO_SOURCE_DIR: dir }), {
       readDelayMs: 2_000,

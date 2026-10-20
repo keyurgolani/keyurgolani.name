@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { GithubSchema } from './github';
 
-const BASE = { kind: 'github' as const, username: 'octocat' };
+const BASE = { kind: 'github' as const, id: 'github', username: 'octocat' };
 
 test('default parses to defaults including showRecentlyActive=true and recentlyActiveLimit=10', () => {
   const out = GithubSchema.parse(BASE);

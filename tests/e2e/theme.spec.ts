@@ -1,7 +1,8 @@
 import { expect, test } from '../harness/fixtures';
 
-// The fixture's theme is `system`. The pre-hydration script sets data-theme,
-// and ThemeProvider must leave the same value after hydration.
+// The host starts visitors at the `system` display mode. The pre-hydration
+// script sets data-theme, and ThemeProvider must leave the same value after
+// hydration.
 
 test(
   'a stored theme preference survives hydration',

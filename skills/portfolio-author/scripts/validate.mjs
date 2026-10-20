@@ -1,19 +1,19 @@
 #!/usr/bin/env node
 /**
- * validate.mjs — validate a portfolio.yml file against @portfolio/schema.
+ * validate.mjs — validate a portfolio document against @portfolio/schema.
  *
- * Usage:   node validate.mjs <path/to/portfolio.yml>
- * Output:  on error, prints "<file>:<line>:<col>  <zod-path>  <message>"
- *          for each issue. Exit 1 on any error, 0 on success.
+ * Usage:   node validate.mjs <path/to/portfolio.yml | portfolio.json>
+ * Output:  on error, prints "<file>:<line>:<col>  <message>" for each
+ *          problem. Exit 1 on any error, 0 on success.
  *
- * Resolves @portfolio/schema relative to repo root. Uses yaml package
- * (workspace dep, available via @portfolio/schema's node_modules) for
- * AST-based source positions.
+ * It reads the document the way the server does: @portfolio/schema's
+ * parsePortfolio, so the same YAML and JSON rules, schema, and unique section
+ * ids apply, and every problem carries its JSON pointer and position.
  *
  * Loads the schema's TypeScript source via the `tsx` loader because
  * @portfolio/schema has no build step (it exports src/index.ts directly).
  */
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import path from 'node:path';
 
@@ -46,85 +46,31 @@ const REPO_ROOT = findRepoRoot(__filename);
 
 // Dynamic import after tsx is registered.
 const schemaIndex = path.join(REPO_ROOT, 'packages/schema/src/index.ts');
-const schemaModule = await import(pathToFileURL(schemaIndex).href);
-const PortfolioSchema = schemaModule.PortfolioSchema;
-if (!PortfolioSchema) {
-  console.error('error: @portfolio/schema does not export PortfolioSchema');
+const { detectFormat, parsePortfolio } = await import(pathToFileURL(schemaIndex).href);
+if (!parsePortfolio) {
+  console.error('error: @portfolio/schema does not export parsePortfolio');
   process.exit(2);
 }
-
-// Resolve `yaml` package: try repo root, then schema package's node_modules,
-// then bare specifier (in case it's hoisted).
-async function loadYaml() {
-  const candidates = [
-    path.join(REPO_ROOT, 'node_modules/yaml/dist/index.js'),
-    path.join(REPO_ROOT, 'packages/schema/node_modules/yaml/dist/index.js'),
-    path.join(REPO_ROOT, 'apps/web/node_modules/yaml/dist/index.js'),
-  ];
-  for (const candidate of candidates) {
-    if (existsSync(candidate)) {
-      return import(pathToFileURL(candidate).href);
-    }
-  }
-  return import('yaml');
-}
-
-const yamlModule = await loadYaml();
-const { parseDocument } = yamlModule;
 
 const file = process.argv[2];
 if (!file) {
-  console.error('usage: node validate.mjs <portfolio.yml>');
+  console.error('usage: node validate.mjs <portfolio.yml | portfolio.json>');
   process.exit(2);
 }
 
-const text = readFileSync(file, 'utf8');
-const doc = parseDocument(text, { keepSourceTokens: true });
-
-if (doc.errors.length) {
-  for (const err of doc.errors) {
-    const pos = err.linePos?.[0];
-    const where = pos ? `${file}:${pos.line}:${pos.col}` : file;
-    console.log(`${where}  yaml  ${err.message}`);
-  }
-  process.exit(1);
+let format;
+try {
+  format = detectFormat(file);
+} catch (error) {
+  console.error(`error: ${error.message}`);
+  process.exit(2);
 }
 
-const data = doc.toJS();
-const result = PortfolioSchema.safeParse(data);
-if (result.success) {
-  process.exit(0);
-}
+const result = parsePortfolio(readFileSync(file, 'utf8'), format);
+if (result.ok) process.exit(0);
 
-function offsetToLineCol(textArg, offset) {
-  const before = textArg.slice(0, offset);
-  const line = (before.match(/\n/g)?.length ?? 0) + 1;
-  const lastNl = before.lastIndexOf('\n');
-  const col = offset - (lastNl < 0 ? -1 : lastNl);
-  return { line, col };
-}
-
-function resolveLine(astDoc, zodPath, sourceText) {
-  let node = astDoc.contents;
-  for (const segment of zodPath) {
-    if (!node) return null;
-    if (typeof segment === 'number' && node.items) {
-      const item = node.items[segment];
-      node = item?.value ?? item ?? null;
-    } else if (typeof node.get === 'function') {
-      node = node.get(segment, true);
-    } else {
-      return null;
-    }
-  }
-  if (!node || !node.range) return null;
-  return offsetToLineCol(sourceText, node.range[0]);
-}
-
-for (const issue of result.error.issues) {
-  const pos = resolveLine(doc, issue.path, text);
-  const where = pos ? `${file}:${pos.line}:${pos.col}` : file;
-  const zodPath = issue.path.join('.') || '<root>';
-  console.log(`${where}  ${zodPath}  ${issue.message}`);
+for (const problem of result.problems) {
+  const where = problem.line !== undefined ? `${file}:${problem.line}:${problem.column}` : file;
+  console.log(`${where}  ${problem.message}`);
 }
 process.exit(1);

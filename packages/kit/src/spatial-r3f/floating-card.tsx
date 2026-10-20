@@ -3,11 +3,11 @@
 import type { ReactNode } from 'react';
 import { Html, Float } from '@react-three/drei';
 import { useMotionPreference } from '../motion';
-import type { MotionPreference } from '@portfolio/schema';
+import type { MotionPolicy } from '@portfolio/schema';
 
 interface FloatingCardProps {
   children: ReactNode;
-  motionPreference?: MotionPreference;
+  motionPreference?: MotionPolicy;
   position?: [number, number, number];
   rotation?: [number, number, number];
   /** Float intensity for idle drift. */

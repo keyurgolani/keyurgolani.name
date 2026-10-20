@@ -13,8 +13,8 @@ interface VariantProps {
 }
 
 export default function KineticCosmosVariant({ portfolio, colorScheme, typography }: VariantProps) {
-  const scheme = resolveColorScheme(manifest, colorScheme, portfolio.colorScheme);
-  const type = resolveTypographyPreset(manifest, typography, portfolio.typography);
+  const scheme = resolveColorScheme(manifest, colorScheme);
+  const type = resolveTypographyPreset(manifest, typography);
   const navItems = deriveNavItems(portfolio, { limit: 8 });
 
   return (
@@ -31,12 +31,8 @@ export default function KineticCosmosVariant({ portfolio, colorScheme, typograph
       <Navigation items={navItems} brand={portfolio.identity.name} />
       <KineticCosmosThemeToggle />
       <main id="main" className="kc-page">
-        {portfolio.sections.map((section, i) => (
-          <SectionDispatch
-            key={section.id ?? `${section.kind}-${i}`}
-            section={section}
-            portfolio={portfolio}
-          />
+        {portfolio.sections.map((section) => (
+          <SectionDispatch key={section.id} section={section} portfolio={portfolio} />
         ))}
       </main>
     </div>

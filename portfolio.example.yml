@@ -1,9 +1,17 @@
 # ────────────────────────────────────────────────────────────────────────────
-# Portfolio configuration
+# Portfolio content
 #
 # Copy this file to config/portfolio.yml and edit it there
+# Content only: no variant, theme, or other presentation setting, and no site
+# URL (the deployment sets PORTFOLIO_ORIGIN)
 # All section kinds documented at packages/schema/src/kinds/index.ts
+# Every section needs an id: lowercase words joined by hyphens, unique in the
+# file. It is the section's anchor, such as #about
 # ────────────────────────────────────────────────────────────────────────────
+
+schemaVersion: 2
+locale: en
+direction: ltr
 
 identity:
   name: Anamika Devi
@@ -14,9 +22,6 @@ identity:
   avatar:
     src: https://picsum.photos/seed/anamika-portrait/400/400
     alt: Anamika in her studio
-
-variant: editorial
-theme: system
 
 links:
   - platform: github
@@ -38,11 +43,11 @@ links:
 meta:
   title: Anamika Devi — Portfolio
   description: Distributed-systems engineer, technology essayist, and conference speaker.
-  url: https://anamika.example.com
 
 sections:
   # ── Hero ─────────────────────────────────────────────────────────────────
   - kind: hero
+    id: top
     greeting: Hello, I'm
     tagline: I build calm software at scale, write essays about its quieter parts, and speak at conferences when the topic warrants it.
     subtagline: Currently leading reliability for a platform that handles 10B requests a day.
@@ -54,6 +59,7 @@ sections:
 
   # ── Lede (long-form bio) ────────────────────────────────────────────────
   - kind: lede
+    id: about
     title: About
     body: |
       I work at the messy intersection of **distributed systems** and **organizational psychology** — the places where the engineering decisions
@@ -69,6 +75,7 @@ sections:
 
   # ── Now ──────────────────────────────────────────────────────────────────
   - kind: now
+    id: now
     title: Now
     asOf: 2026-04-15
     body: |
@@ -77,6 +84,7 @@ sections:
 
   # ── Stats ────────────────────────────────────────────────────────────────
   - kind: stats
+    id: at-a-glance
     title: At a glance
     items:
       - value: '12'
@@ -92,12 +100,14 @@ sections:
 
   # ── Tenure (career duration as a single accent figure) ──────────────────
   - kind: tenure
+    id: years-in
     title: Years in
     years: 12
     summary: From research code to production systems handling ten billion requests a day.
 
   # ── Current focus (short labels — what you're putting energy into now) ──
   - kind: focus
+    id: currently-focused-on
     title: Currently focused on
     items:
       - Service-mesh migration
@@ -107,6 +117,7 @@ sections:
 
   # ── Projects ────────────────────────────────────────────────────────────
   - kind: projects
+    id: work-showcase
     title: Work Showcase
     items:
       - name: postmortem-template-kit
@@ -163,6 +174,7 @@ sections:
 
   # ── Skills ──────────────────────────────────────────────────────────────
   - kind: skills
+    id: skills
     title: Skills
     groups:
       - name: Distributed systems
@@ -178,6 +190,7 @@ sections:
 
   # ── Fun facts (playful personal details) ────────────────────────────────
   - kind: fun-facts
+    id: off-the-page
     title: Off the page
     items:
       - I have visited 47 USENIX SREcons; only one of them on purpose.
@@ -187,6 +200,7 @@ sections:
 
   # ── Experience ──────────────────────────────────────────────────────────
   - kind: experience
+    id: experience
     title: Experience
     items:
       - role: Principal Engineer, Reliability
@@ -232,6 +246,7 @@ sections:
 
   # ── Education ───────────────────────────────────────────────────────────
   - kind: education
+    id: education
     title: Education
     items:
       - degree: M.S.
@@ -258,6 +273,7 @@ sections:
 
   # ── Writings ────────────────────────────────────────────────────────────
   - kind: writings
+    id: essays
     title: Essays
     items:
       - title: The Quiet Cost of Legible Systems
@@ -287,6 +303,7 @@ sections:
 
   # ── Publications ────────────────────────────────────────────────────────
   - kind: publications
+    id: publications
     title: Publications
     items:
       - title: Probabilistic Model Checking of Eventually-Consistent Stores
@@ -308,6 +325,7 @@ sections:
 
   # ── Talks ───────────────────────────────────────────────────────────────
   - kind: talks
+    id: talks
     title: Talks
     items:
       - title: The Anthropology of On-Call
@@ -334,6 +352,7 @@ sections:
 
   # ── Awards ──────────────────────────────────────────────────────────────
   - kind: awards
+    id: awards
     title: Awards
     items:
       - name: SREcon Practitioner Award
@@ -347,6 +366,7 @@ sections:
 
   # ── Episodes (podcast) ──────────────────────────────────────────────────
   - kind: episodes
+    id: incident-history
     title: Incident History
     showName: Incident History
     showDescription: A monthly podcast about famous software incidents, what they revealed, and what we got wrong about them in retrospect.
@@ -373,6 +393,7 @@ sections:
 
   # ── Patents ─────────────────────────────────────────────────────────────
   - kind: patents
+    id: patents
     title: Patents
     items:
       - title: System and method for adaptive consensus quorum sizing in geo-distributed clusters
@@ -387,6 +408,7 @@ sections:
 
   # ── Gallery (photography or other visual work) ──────────────────────────
   - kind: gallery
+    id: looking
     title: Looking
     subtitle: Photographs from the road, when I'm reminded the world keeps making things worth looking at.
     items:
@@ -411,6 +433,7 @@ sections:
 
   # ── Discography ─────────────────────────────────────────────────────────
   - kind: discography
+    id: listening-a-small-experiment
     title: Listening (a small experiment)
     subtitle: I produced a small ambient EP during a sabbatical year. It is not very good and I am proud of it anyway.
     items:
@@ -443,6 +466,7 @@ sections:
 
   # ── Press ───────────────────────────────────────────────────────────────
   - kind: press
+    id: press
     title: Press
     items:
       - title: 'Lessons from a 38-service migration: a conversation with Anamika Devi'
@@ -460,6 +484,7 @@ sections:
 
   # ── Testimonials ────────────────────────────────────────────────────────
   - kind: testimonials
+    id: words-from-collaborators
     title: Words from collaborators
     items:
       - quote: Anamika has the rare ability to make a hostile room agree on what just went wrong, and then to make them want to write it down.
@@ -479,6 +504,7 @@ sections:
 
   # ── Quote (standalone epigraph) ─────────────────────────────────────────
   - kind: quote
+    id: quote
     text: Programmers, like poets, work only slightly removed from pure thought-stuff.
     attribution: Fred Brooks
     source: The Mythical Man-Month
@@ -486,6 +512,7 @@ sections:
 
   # ── Stack ───────────────────────────────────────────────────────────────
   - kind: stack
+    id: stack-i-currently-reach-for
     title: Stack I currently reach for
     groups:
       - name: Runtimes
@@ -512,6 +539,7 @@ sections:
 
   # ── Services ────────────────────────────────────────────────────────────
   - kind: services
+    id: engagements
     title: Engagements
     subtitle: A small consulting practice — I take on two engagements a quarter.
     items:
@@ -530,6 +558,7 @@ sections:
 
   # ── External portfolios (sites the author maintains elsewhere) ─────────
   - kind: external-portfolios
+    id: elsewhere
     title: Elsewhere
     subtitle: A few homes for work that doesn't belong here.
     items:
@@ -558,6 +587,7 @@ sections:
 
   # ── GitHub (data fetched server-side at render time) ────────────────────
   - kind: github
+    id: on-github
     title: On GitHub
     username: anamika
     showContributionGraph: true
@@ -569,13 +599,14 @@ sections:
 
   # ── Contact ─────────────────────────────────────────────────────────────
   - kind: contact
-    title: Get in touch
     id: contact
+    title: Get in touch
     message: Best route is email, with a note about what you're working on. I read everything; I reply within a week.
     showAvailability: true
 
   # ── CTA ──────────────────────────────────────────────────────────────────
   - kind: cta
+    id: want-to-work-together
     title: Want to work together?
     description: I take on two consulting engagements a quarter. Most of my client work starts with a single email.
     primaryAction:

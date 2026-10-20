@@ -12,8 +12,6 @@ export interface StartupInput {
   readonly cwd: string;
   /** The bundled example document. */
   readonly examplePath: string;
-  /** Slugs of the registered variants. */
-  readonly variantSlugs: readonly string[];
   /** Receives findings made after startup (re-validation under next dev). */
   readonly report: (issue: ConfigIssue) => void;
   /** Reads <KEY>_FILE values; tests replace it. */
@@ -59,7 +57,6 @@ export function runStartup(input: StartupInput): StartupResult {
         sourceDir: config.sourceDir ?? '',
         mode: config.mode,
         examplePath: input.examplePath,
-        variantSlugs: input.variantSlugs,
         report: input.report,
       });
       if (!opened.ok) {

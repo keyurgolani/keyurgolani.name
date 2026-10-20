@@ -21,14 +21,6 @@ export function listManifests(): VariantManifest[] {
   return MANIFESTS;
 }
 
-export function defaultManifest(): VariantManifest {
-  const editorial = BY_SLUG['editorial']?.manifest;
-  if (editorial) return editorial;
-  const first = MANIFESTS[0];
-  if (!first) throw new Error('No variants registered');
-  return first;
-}
-
 export function isExperimental(slug: string): boolean {
   return BY_SLUG[slug]?.experimental ?? false;
 }

@@ -40,11 +40,13 @@ If they disagree, the source wins.
 
 ## Motion (`@portfolio/kit`)
 
-| Export                  | Signature                                | Use when                                                |
-| ----------------------- | ---------------------------------------- | ------------------------------------------------------- |
-| `useMotionPreference`   | `(portfolioPref?) => 'reduce' \| 'full'` | Reading the resolved motion mode in a client component. |
-| `shouldReduceMotion`    | `(portfolioPref, osReduce) => boolean`   | Synchronous server-side check or non-hook contexts.     |
-| `ResolvedMotion` (type) | `'reduce' \| 'full'`                     | Annotating motion-aware props.                          |
+| Export                  | Signature                                       | Use when                                                |
+| ----------------------- | ----------------------------------------------- | ------------------------------------------------------- |
+| `useMotionPreference`   | `(policy?: MotionPolicy) => 'reduce' \| 'full'` | Reading the resolved motion mode in a client component. |
+| `shouldReduceMotion`    | `(policy: MotionPolicy, osReduce) => boolean`   | Synchronous server-side check or non-hook contexts.     |
+| `ResolvedMotion` (type) | `'reduce' \| 'full'`                            | Annotating motion-aware props.                          |
+
+`MotionPolicy` is `respect-os` (the default: follow `prefers-reduced-motion`) or `reduce`. No policy animates past an OS reduce preference.
 
 ## Theme system (`@portfolio/kit`)
 
@@ -58,12 +60,12 @@ If they disagree, the source wins.
 
 ## Manifest helpers (`@portfolio/kit`)
 
-| Export                                                                                                                         | Signature                                                   | Use when                                                           |
-| ------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------- | ------------------------------------------------------------------ |
-| `resolveColorScheme`                                                                                                           | `(manifest, override?, portfolioChoice?) => string \| null` | Resolving the active color-scheme id at render.                    |
-| `resolveTypographyPreset`                                                                                                      | `(manifest, override?, portfolioChoice?) => string \| null` | Same for typography presets.                                       |
-| `VariantManifest` / `VariantProps` / `VariantModule` (types)                                                                   | —                                                           | Typing the manifest, render props, and module shape.               |
-| `Aesthetic`, `MotionIntensity`, `Density`, `TypographyCharacter`, `PerformanceTier`, `ColorScheme`, `TypographyPreset` (types) | —                                                           | Annotating manifest values; see `manifest-contract.md` for fields. |
+| Export                                                                                                                         | Signature                                  | Use when                                                           |
+| ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------ | ------------------------------------------------------------------ |
+| `resolveColorScheme`                                                                                                           | `(manifest, requested?) => string \| null` | Resolving the active color-scheme id at render.                    |
+| `resolveTypographyPreset`                                                                                                      | `(manifest, requested?) => string \| null` | Same for typography presets.                                       |
+| `VariantManifest` / `VariantProps` / `VariantModule` (types)                                                                   | —                                          | Typing the manifest, render props, and module shape.               |
+| `Aesthetic`, `MotionIntensity`, `Density`, `TypographyCharacter`, `PerformanceTier`, `ColorScheme`, `TypographyPreset` (types) | —                                          | Annotating manifest values; see `manifest-contract.md` for fields. |
 
 ## Fallback section (`@portfolio/kit`)
 
@@ -95,7 +97,7 @@ If they disagree, the source wins.
 
 ## Re-exported schema types (`@portfolio/kit`)
 
-`Portfolio`, `Section`, `SectionKind`, `ThemePreference`, `MotionPreference`, `Identity`, `Link`, `Image`, `Period` — re-exported for ergonomic imports inside variants without depending directly on `@portfolio/schema`.
+`Portfolio`, `Section`, `SectionKind`, `MotionPolicy`, `Identity`, `Link`, `Image`, `Period` — re-exported for ergonomic imports inside variants without depending directly on `@portfolio/schema`. `ThemePreference` is the kit's own type, exported from its theme module.
 
 ## Animated text + counters (`@portfolio/kit`)
 

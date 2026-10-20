@@ -20,8 +20,8 @@ import {
 
 interface ExperienceProps {
   portfolio: Portfolio;
-  /** The host section (used for id + title chrome). */
-  section: { id?: string; title?: string; subtitle?: string };
+  /** The host section (used for id, language, and title chrome). */
+  section: { id?: string; title?: string; subtitle?: string; lang?: string };
 }
 
 const KIND_HUE: Record<TimelineEventKind, { h: number; s: number; l: number; label: string }> = {
@@ -109,7 +109,7 @@ export function ExperienceRenderer({ portfolio, section }: ExperienceProps) {
   if (positioned.length === 0) {
     // No data to plot — render a heading + a friendly empty state.
     return (
-      <section id={id} className="kc-timeline">
+      <section id={id} lang={section.lang} className="kc-timeline">
         <div className="kc-timeline__header">
           <h2 className="kc-timeline__title">{section.title ?? 'Timeline'}</h2>
           {section.subtitle ? <p className="kc-timeline__subtitle">{section.subtitle}</p> : null}
@@ -120,7 +120,13 @@ export function ExperienceRenderer({ portfolio, section }: ExperienceProps) {
   }
 
   return (
-    <section id={id} ref={containerRef} className="kc-timeline" onClick={() => setExpandedId(null)}>
+    <section
+      id={id}
+      lang={section.lang}
+      ref={containerRef}
+      className="kc-timeline"
+      onClick={() => setExpandedId(null)}
+    >
       <div className="kc-timeline__header">
         <h2 className="kc-timeline__title">{section.title ?? 'Timeline Odyssey'}</h2>
         <p className="kc-timeline__subtitle">

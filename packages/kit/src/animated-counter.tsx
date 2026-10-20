@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useMotionPreference } from './motion';
-import type { MotionPreference } from '@portfolio/schema';
+import type { MotionPolicy } from '@portfolio/schema';
 
 export interface AnimatedCounterProps {
   /** Target numeric value to count up to. */
@@ -18,7 +18,7 @@ export interface AnimatedCounterProps {
   /** Start the count when the element scrolls into view. Default true. */
   startOnView?: boolean;
   /** Override portfolio motion preference; default `respect-os`. */
-  motionPreference?: MotionPreference;
+  motionPreference?: MotionPolicy;
   className?: string;
 }
 

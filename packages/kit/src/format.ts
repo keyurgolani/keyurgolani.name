@@ -144,6 +144,11 @@ export function slugify(text: string): string {
     .replace(/^-+|-+$/g, '');
 }
 
+/**
+ * The DOM id for a section: the id or title slugified, falling back to
+ * `fallback`. Slugifying leaves a schema-valid section id unchanged, so the DOM
+ * id is always the content id.
+ */
 export function ensureSectionId(idOrTitle: string | undefined, fallback: string): string {
   if (idOrTitle) {
     const s = slugify(idOrTitle);

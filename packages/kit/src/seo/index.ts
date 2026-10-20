@@ -27,7 +27,7 @@ export interface JsonLd {
 }
 
 export interface StructuredDataOptions {
-  /** The site's canonical URL. Defaults to portfolio.meta.url. */
+  /** The site's canonical origin, from the deployment. Without it no block carries a URL. */
   siteUrl?: string;
 }
 
@@ -35,7 +35,7 @@ export function buildStructuredData(
   portfolio: Portfolio,
   options: StructuredDataOptions = {},
 ): JsonLd[] {
-  const url = options.siteUrl ?? portfolio.meta?.url;
+  const url = options.siteUrl;
   const out: JsonLd[] = [];
   out.push(buildPersonSchema(portfolio, url));
   out.push(buildProfilePageSchema(portfolio, url));

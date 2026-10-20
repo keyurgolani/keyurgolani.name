@@ -2,10 +2,10 @@
 
 import type { CSSProperties } from 'react';
 import { useMotionPreference } from '../motion';
-import type { MotionPreference } from '@portfolio/schema';
+import type { MotionPolicy } from '@portfolio/schema';
 
 interface ScanlineOverlayProps {
-  motionPreference?: MotionPreference;
+  motionPreference?: MotionPolicy;
   /** Scanline color (rgba). */
   scanlineColor?: string;
   /** Distance between scanlines (px). */

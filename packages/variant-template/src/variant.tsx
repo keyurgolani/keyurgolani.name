@@ -19,12 +19,8 @@ export default function TemplateVariant({ portfolio, colorScheme, typography }: 
     >
       <ThemeToggleHost />
       <main className="vt-page">
-        {portfolio.sections.map((section, i) => (
-          <FallbackSection
-            key={section.id ?? `${section.kind}-${i}`}
-            section={section}
-            portfolio={portfolio}
-          />
+        {portfolio.sections.map((section) => (
+          <FallbackSection key={section.id} section={section} portfolio={portfolio} />
         ))}
       </main>
     </div>

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import type { MotionPolicy } from '@portfolio/schema';
 import { useMotionPreference, type ResolvedMotion } from '../motion';
 import type { PerformanceTier } from '../manifest';
 
@@ -32,10 +33,10 @@ export interface UseSpatialContractOptions {
   /** Variant's declared performance tier — read from `manifest.performanceTier`. */
   tier?: PerformanceTier;
   /**
-   * Override the OS prefers-reduced-motion. Pass the portfolio-level
-   * preference here so authors can force-reduce regardless of OS.
+   * The site's motion policy. `reduce` reduces motion regardless of the OS;
+   * `respect-os` (the default) follows prefers-reduced-motion.
    */
-  motionPreference?: 'respect-os' | 'reduce' | 'full';
+  motionPreference?: MotionPolicy;
   /** Width breakpoint in px below which `isMobile === true`. Default 768. */
   mobileBreakpoint?: number;
   /**

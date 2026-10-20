@@ -119,7 +119,7 @@ function toIso(raw: string | undefined | null): string | null {
 }
 
 export interface RenderRssOptions {
-  /** Optional override for the `<link>` element. Defaults to portfolio.meta.url. */
+  /** The site's canonical origin, for `<link>`, from the deployment. */
   siteUrl?: string;
   /** Override for `<atom:link rel="self">`. Defaults to siteUrl + '/feed.xml'. */
   feedUrl?: string;
@@ -133,7 +133,7 @@ export interface RenderRssOptions {
  * callers wrap it in a `Response` with `application/rss+xml`.
  */
 export function renderRssFeed(portfolio: Portfolio, options: RenderRssOptions = {}): string {
-  const site = options.siteUrl ?? portfolio.meta?.url ?? '';
+  const site = options.siteUrl ?? '';
   const feed = options.feedUrl ?? (site ? `${site.replace(/\/$/, '')}/feed.xml` : '');
   const title = portfolio.meta?.title ?? `${portfolio.identity.name} — Portfolio`;
   const description =
