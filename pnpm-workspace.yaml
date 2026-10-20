@@ -19,3 +19,7 @@ ignoredBuiltDependencies:
   # script compiles from source only when a system libvips or a source build
   # is requested.
   - sharp
+  # ESLint's import resolver. The native binding arrives as an optional
+  # dependency (@unrs/resolver-binding-*). The script only downloads one when
+  # it is missing.
+  - unrs-resolver

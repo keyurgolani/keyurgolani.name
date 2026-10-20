@@ -13,7 +13,7 @@
     "start": "pnpm --filter @portfolio/web start",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "lint": "pnpm -r lint",
+    "lint": "eslint --max-warnings=0 .",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
     "clean": "pnpm -r exec rm -rf dist .next node_modules tsconfig.tsbuildinfo && rm -rf node_modules",
@@ -24,6 +24,8 @@
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "16.2.4",
     "playwright": "1.58.2",
     "prettier": "3.9.10",
     "tsx": "^4.21.0",
