@@ -27,6 +27,20 @@ module.exports = {
       to: { path: ['^apps/web/src/server/owner/', '^packages/core/src/owner([./]|$)'] },
     },
     {
+      name: 'proxy-reads-only-the-route-table-and-config',
+      severity: 'error',
+      comment:
+        'proxy.ts runs before every request; it imports only the route table, the capability ' +
+        'matrix behind it, and the frozen config (#1, item 15).',
+      from: { path: '^apps/web/src/proxy\\.ts$' },
+      to: {
+        pathNot: [
+          '^apps/web/src/server/(capabilities|routes|config-store)\\.ts$',
+          '^node_modules/(\\.pnpm/next@|next/)',
+        ],
+      },
+    },
+    {
       name: 'operation-registry-imports-no-handlers',
       severity: 'error',
       comment:

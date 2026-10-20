@@ -5,7 +5,7 @@ import { notServed } from '~/server/route-guard';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(request: Request) {
   const absent = notServed('/feed.xml');
   if (absent) return absent;
   try {
@@ -21,7 +21,9 @@ export async function GET() {
   } catch (error) {
     // The public body stays fixed; the cause goes to the server log only.
     console.error('[feed] Could not build the feed:', error);
-    return new Response('Feed unavailable.', {
+    // proxy.ts sets a fresh request ID on every request.
+    const requestId = request.headers.get('x-request-id') ?? 'none';
+    return new Response(`Feed unavailable. Request ID: ${requestId}`, {
       status: 500,
       headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' },
     });
