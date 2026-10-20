@@ -4,8 +4,8 @@
 // each one it serves answers. Every response carries the baseline headers
 // and no cookie, and under a profile crawlers may not index (demo), says so.
 // Health and readiness answer their documented shapes, and the canary scan
-// (#1, Verification item 2) finds no path or secret in any response. A spec
-// runs it for the profile its app options start.
+// (#1, Verification item 2) finds no path, secret, or config summary in any
+// response. A spec runs it for the profile its app options start.
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import type { APIResponse } from '@playwright/test';
@@ -200,12 +200,21 @@ export function profileMatrix(profile: Profile): void {
   );
 
   test(
-    'no response to GET or POST carries a path or a secret, and no owner module loads',
+    'no response to GET or POST carries a path, a secret, or the config summary, and no owner module loads',
     { annotation: [{ type: 'route', description: 'every route' }, annotation] },
     async ({ app, request }) => {
       // Every path the server could leak sits under its own directory: the
-      // build, the bundled example, and the source directory.
-      const canaries = [CANARY_SECRET, CANARY_SOURCE, CANARY_BODY, path.basename(app.root)];
+      // build, the bundled example, and the source directory. The last two
+      // are fields only the config summary has, which only an owner session
+      // gets, through config.status (#1, item 20).
+      const canaries = [
+        CANARY_SECRET,
+        CANARY_SOURCE,
+        CANARY_BODY,
+        path.basename(app.root),
+        '"proxyHops"',
+        '"adapters"',
+      ];
       expect(app.env.CANARY_SECRET).toBe(CANARY_SECRET);
       const targets = [
         ...listRoutes()
