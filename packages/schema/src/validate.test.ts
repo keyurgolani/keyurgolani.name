@@ -1,9 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
+import { parse as parseYaml } from 'yaml';
 import { defineContentExtension } from './extensions';
 import type { AppearanceSelection } from './site';
 import {
+  DIAGNOSTIC_SEVERITIES,
   validatePublicationUnit,
   type AppearanceCatalog,
   type Context,
@@ -493,6 +495,60 @@ test('the bundled example has no blocking diagnostic', () => {
     result.diagnostics.filter(({ severity }) => severity !== 'warning'),
     [],
   );
+});
+
+test('every diagnostic code comes with a line and column, in YAML and JSON', () => {
+  const token = `ghp_${'w'.repeat(36)}`;
+  const stats = (id: string, value: string) =>
+    lines(
+      '  - kind: stats',
+      `    id: ${id}`,
+      '    items:',
+      `      - { metric: talks, value: "${value}", label: Talks }`,
+    );
+  const links = [
+    '  - url: "#nowhere"',
+    '  - url: https://example.org',
+    '  - url: https://rowan.com',
+    `  - url: https://rowan.name\n    label: ${JSON.stringify(token)}`,
+    "    extensions: { '@other/x': { a: 1 } }",
+  ].join('\n');
+  // Each YAML unit but the first has a JSON twin; JSON's syntax error is its own.
+  const units: Array<{ portfolio?: string; site?: string; json?: string }> = [
+    { portfolio: PORTFOLIO.replace('identity:', 'identity: &a'), json: '{ "schemaVersion": 2, }' },
+    { portfolio: PORTFOLIO.replace('  name: Rowan Test', '  name: 7') },
+    { site: SITE.replace('schemaVersion: 2', 'schemaVersion: 1') },
+    { site: `${SITE}origin: x\n` },
+    { site: SITE.replace('colorScheme: warm', 'colorScheme: neon') },
+    { portfolio: PORTFOLIO.replace('    id: contact', '    id: about') },
+    { site: `${SITE}sections:\n  gone: { hidden: true }\n` },
+    { portfolio: PORTFOLIO.concat(stats('one', '1'), stats('two', '1'), stats('three', '2')) },
+    { portfolio: PORTFOLIO.replace('  - url: https://rowan.name', links) },
+    { site: `${SITE}sections:\n  about: { hidden: true }\n  contact: { hidden: true }\n` },
+  ];
+  const twin = (yaml: string) => `${JSON.stringify(parseYaml(yaml), null, 2)}\n`;
+  for (const format of ['yaml', 'json'] as const) {
+    const seen = new Set<string>();
+    for (const { portfolio = PORTFOLIO, site = SITE, json } of units) {
+      const document = (text: string, name: string): SourceDocument =>
+        format === 'yaml' ? { text, format, name } : { text: twin(text), format, name };
+      const unit = {
+        portfolio:
+          format === 'json' && json !== undefined
+            ? { text: json, format, name: 'portfolio.json' }
+            : document(portfolio, `portfolio.${format}`),
+        site: document(site, `site.${format}`),
+      };
+      for (const diagnostic of validatePublicationUnit(unit, CONTEXT).diagnostics) {
+        seen.add(diagnostic.code);
+        assert.ok(
+          Number.isInteger(diagnostic.line) && Number.isInteger(diagnostic.column),
+          `${format}: ${diagnostic.code} at ${diagnostic.pointer} has no position`,
+        );
+      }
+    }
+    assert.deepEqual([...seen].sort(), Object.keys(DIAGNOSTIC_SEVERITIES).sort(), format);
+  }
 });
 
 test('the validator and everything it imports stay browser-safe', () => {
