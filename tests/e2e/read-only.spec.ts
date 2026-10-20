@@ -1,4 +1,7 @@
+import { createHash } from 'node:crypto';
+import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
+import { DEFAULT_PORTFOLIO } from '../harness/app-server.mjs';
 import { expect, test } from '../harness/fixtures';
 
 // The read-only profile from a mounted source directory. The canonical origin
@@ -6,6 +9,8 @@ import { expect, test } from '../harness/fixtures';
 // URL below has to come from PORTFOLIO_ORIGIN.
 const ORIGIN = 'https://canonical.test';
 const READ_ONLY = { type: 'profile', description: 'read-only' };
+
+const sha256 = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex');
 
 test.use({ appOptions: { env: { PORTFOLIO_ORIGIN: ORIGIN } } });
 
@@ -34,12 +39,25 @@ for (const [method, route, body] of DELETED) {
 }
 
 test(
-  'a rejected write leaves the portfolio as mounted',
-  { annotation: [{ type: 'route', description: '/' }, READ_ONLY] },
-  async ({ request }) => {
-    await request.put('/api/portfolio', { data: 'identity:\n  name: Overwritten\n' });
-    const home = await request.get('/');
-    expect(await home.text()).toContain('Rowan Fixture');
+  'a rejected write leaves the source directory as mounted',
+  { annotation: [{ type: 'route', description: '/api/portfolio' }, READ_ONLY] },
+  async ({ request, app }) => {
+    // Every file in the directory, by content. The server never re-reads it,
+    // so only the files themselves show whether a write landed.
+    const files = () =>
+      Object.fromEntries(
+        readdirSync(app.sourceDir).map((name) => [
+          name,
+          sha256(readFileSync(path.join(app.sourceDir, name))),
+        ]),
+      );
+    const mounted = { 'portfolio.yml': sha256(readFileSync(DEFAULT_PORTFOLIO)) };
+    expect(files()).toEqual(mounted);
+    for (const [method, route, body] of DELETED.filter(([verb]) => verb === 'PUT')) {
+      const response = await request.fetch(route, { method, data: body, maxRedirects: 0 });
+      expect(response.status(), `${method} ${route}`).toBe(404);
+    }
+    expect(files()).toEqual(mounted);
   },
 );
 
@@ -107,6 +125,19 @@ test(
     await page.goto('/');
     const ogUrl = await page.locator('meta[property="og:url"]').getAttribute('content');
     expect(ogUrl?.replace(/\/$/, '')).toBe(ORIGIN);
+    // Every absolute URL the head advertises, the share images included.
+    const advertised = await page
+      .locator('head meta[content^="http"], head link[href^="http"]')
+      .evaluateAll((tags) =>
+        tags.map((tag) => ({
+          name: tag.getAttribute('property') ?? tag.getAttribute('name') ?? tag.getAttribute('rel'),
+          url: tag.getAttribute('content') ?? tag.getAttribute('href') ?? '',
+        })),
+      );
+    expect(advertised.map((tag) => tag.name)).toEqual(
+      expect.arrayContaining(['og:url', 'og:image', 'twitter:image']),
+    );
+    for (const { name, url } of advertised) expect(new URL(url).origin, `${name}`).toBe(ORIGIN);
     const blocks = await page
       .locator('script[type="application/ld+json"]')
       .evaluateAll((scripts) => scripts.map((script) => JSON.parse(script.textContent ?? '')));

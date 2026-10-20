@@ -10,7 +10,7 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "pnpm build:registry && tsc --noEmit",
-    "test": "tsx --conditions=react-server --test 'src/**/*.test.ts' && node --test 'scripts/**/*.test.mjs'"
+    "test": "tsx --conditions=react-server --test 'src/**/*.test.ts' && tsx --test 'src/**/*.test.tsx' && node --test 'scripts/**/*.test.mjs'"
   },
   "dependencies": {
     "@portfolio/kit": "workspace:*",

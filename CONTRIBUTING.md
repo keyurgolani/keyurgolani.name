@@ -81,7 +81,7 @@ pnpm ci:browser        # Playwright smoke against that build
 
 Run `pnpm exec playwright install chromium` once before the browser smoke. `pnpm ci:image` builds and checks the container image with Docker (`CONTAINER_CLI=finch` for Finch).
 
-Tests use Node's built-in `node:test`, through `tsx` for TypeScript. A single file runs directly, for example `pnpm exec tsx --test packages/kit/src/format.test.ts`.
+Tests use Node's built-in `node:test`, through `tsx` for TypeScript. A single file runs directly, for example `pnpm exec tsx --test packages/kit/src/format.test.ts`. In `apps/web`, `*.test.ts` files cover server modules and run with `--conditions=react-server`; `*.test.tsx` files render pages with `react-dom/server`, which needs the default conditions, so they run without it.
 
 ## Conventions
 
