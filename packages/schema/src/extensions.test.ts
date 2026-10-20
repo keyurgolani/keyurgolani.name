@@ -10,7 +10,10 @@ import {
   findUnregisteredExtensions,
 } from './extensions';
 import { parsePortfolio, parseSite, type DocumentResult } from './load';
-import { parseSource } from './source';
+import { applyEdits } from './edit';
+import { serialize } from './serialize';
+import { parseSource, type DocumentFormat } from './source';
+import { validatePublicationUnit } from './validate';
 
 const fixture = (name: string) =>
   readFileSync(new URL(`./__fixtures__/extensions/${name}`, import.meta.url), 'utf8');
@@ -546,4 +549,83 @@ test('composeSchemas builds both documents for a set of extensions', () => {
     }).success,
     false,
   );
+});
+
+test('extension fields and sections, registered or not, survive parse, validate, an edit, and serialize', () => {
+  const SITE = [
+    'schemaVersion: 2',
+    'appearance:',
+    '  variant: editorial',
+    '  designLanguage: platform-neutral',
+    '  colorScheme: warm',
+    '  typography: classic',
+    '  displayMode: system',
+    '  extensions:',
+    "    '@acme/portfolio-photography': { camera: Leica }",
+    'visitorControls:',
+    '  variant: locked',
+    '  designLanguage: locked',
+    '  colorScheme: selectable',
+    '  typography: locked',
+    '  displayMode: selectable',
+    'motionPolicy: respect-os',
+    'features:',
+    '  feed: true',
+    'extensions:',
+    "  '@other/portfolio-music': { tempo: 90 }",
+    '',
+  ].join('\n');
+  const authored = (text: string, format: DocumentFormat) => {
+    const parsed = parseSource(text, format);
+    assert.ok(parsed.ok);
+    return parsed.data as Record<string, unknown>;
+  };
+  const extensionParts = (document: Record<string, unknown>) => ({
+    identity: (document.identity as Record<string, unknown>).extensions,
+    sections: document.sections,
+  });
+  const original = extensionParts(authored(YAML, 'yaml'));
+
+  for (const extensions of [REGISTERED, []]) {
+    for (const [text, format] of [
+      [YAML, 'yaml'],
+      [JSON_TWIN, 'json'],
+    ] as const) {
+      const unit = (portfolio: string, as: DocumentFormat) => ({
+        portfolio: { text: portfolio, format: as, name: `portfolio.${as}` },
+        site: { text: SITE, format: 'yaml' as const, name: 'site.yml' },
+      });
+      const result = validatePublicationUnit(unit(text, format), { extensions });
+      assert.ok(result.pair, JSON.stringify(result.diagnostics));
+      assert.deepEqual(
+        result.diagnostics.filter(({ severity }) => severity !== 'warning'),
+        [],
+      );
+      // The model keeps what was written, registered or not.
+      assert.deepEqual(extensionParts(result.pair.portfolio as never), original);
+      assert.deepEqual(result.pair.site.extensions, { '@other/portfolio-music': { tempo: 90 } });
+
+      const edited = applyEdits(text, format, [
+        { pointer: '/identity/name', op: 'set', value: 'Rowan Edited' },
+      ]);
+      if (format === 'yaml') {
+        assert.equal(edited, text.replace('name: Rowan Fixture', 'name: Rowan Edited'));
+      }
+      const data = authored(edited, format);
+      assert.equal((data.identity as Record<string, unknown>).name, 'Rowan Edited');
+      assert.deepEqual(extensionParts(data), original);
+
+      for (const to of ['yaml', 'json'] as const) {
+        const written = serialize(data, to);
+        assert.deepEqual(authored(written, to), data);
+        assert.ok(validatePublicationUnit(unit(written, to), { extensions }).pair);
+      }
+    }
+  }
+  const site = authored(
+    applyEdits(SITE, 'yaml', [{ pointer: '/features/feed', op: 'set', value: false }]),
+    'yaml',
+  );
+  assert.deepEqual(site.extensions, { '@other/portfolio-music': { tempo: 90 } });
+  assert.deepEqual(authored(serialize(site, 'json'), 'json'), site);
 });

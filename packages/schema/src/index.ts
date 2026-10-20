@@ -11,4 +11,6 @@ export * from './load';
 export * from './secrets';
 export * from './public-view';
 export * from './validate';
+export * from './edit';
+export * from './serialize';
 export { allowedKeysAt, closestWord } from './hints';
