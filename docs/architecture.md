@@ -82,6 +82,10 @@ The Next.js host. Responsibilities:
 
 - **Startup** — `src/instrumentation.ts` validates the deployment settings (`src/server/config.ts`, the only code that reads them) and builds the catalog reader before the server takes a request. Any fatal finding logs a `config.fatal` line and stops the process.
 - **`getLive()`** — `src/server/catalog.ts`, the one way pages and metadata routes read the portfolio: the frozen revision the documents adapter loaded from `PORTFOLIO_SOURCE_DIR` at startup.
+- **Capabilities** — `src/server/capabilities.ts` is the profile matrix: what `owner`, `demo`, and `read-only` may do, as data. `CapabilityPolicy` (`server/policy.ts`) answers from it and builds the server-side navigation.
+- **Route table** — `server/routes.ts` maps every route file to a capability. Pages and metadata routes call `requireServed()` with their own pattern, and route handlers return `notServed()`'s 404; `pnpm test` fails on a route file without an entry or its guard, and on any `'use server'` module. `src/proxy.ts` answers 404 early for routes the profile doesn't serve and gives each request a fresh `x-request-id`.
+- **Operations** — Studio queries and commands are entries in `server/operations.ts`, run only through `/api/studio/[name]`. Its dispatcher checks the profile, the session, the origin, the capability, the input, and the version, in that order. `config.status` is the one operation so far.
+- **Composition** — `server/composition.ts` builds what the profile needs and runs the named startup requirements later issues implement. It's the only module that imports `server/owner/`, through `import()`, and `pnpm check:deps` fails any other.
 - **Variant registry** — `scripts/build-registry.mjs` scans `packages/variant-*` at build time and generates `src/lib/registry.generated.ts` mapping slug → component.
 - **Routing** — `app/page.tsx` renders the active variant. `app/not-found.tsx`, `app/error.tsx`, and `app/global-error.tsx` show generic pages that never print error details.
 - **`layout.tsx`** — wraps everything in `<ThemeProvider supportedThemes={editorialManifest.themes}>` and injects the pre-hydration theme init script.
