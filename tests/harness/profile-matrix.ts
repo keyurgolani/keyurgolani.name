@@ -12,6 +12,13 @@ import type { APIResponse } from '@playwright/test';
 import type * as Capabilities from '../../apps/web/src/server/capabilities';
 import type * as Operations from '../../apps/web/src/server/operations';
 import type * as Routes from '../../apps/web/src/server/routes';
+import {
+  CANARY_BODY,
+  CANARY_SECRET,
+  CANARY_SOURCE,
+  canaries as leakCanaries,
+  HOPS_FILE,
+} from './canaries.mjs';
 import { expect, test, type AppOptions } from './fixtures';
 
 // apps/web has no "type": "module", so its modules are CommonJS to Node and
@@ -25,19 +32,18 @@ const { listRoutes, RETIRED_PATTERNS, routeAccess } =
 type Profile = Capabilities.Profile;
 type Operation = Operations.Operation;
 
-/** A secret in every server's environment, which no response may carry. */
-const CANARY_SECRET = 'canary-secret-5d81c2e7';
-/** The read-only source directory's name, so its path holds a canary. */
-const CANARY_SOURCE = 'canary-source-0f3b9a64';
-/** Sent in every POST body, which no response may echo. */
-const CANARY_BODY = 'canary-draft-7c1e04aa';
+/** A _FILE every profile reads, in a canary-named directory. */
+const ENV_FILES: AppOptions['envFiles'] = {
+  [HOPS_FILE.key]: { path: `${CANARY_SECRET}/${HOPS_FILE.name}`, text: HOPS_FILE.text },
+};
 
 /** The read-only profile on the harness fixture, seeded for the canary scan. */
-export const READ_ONLY_APP: AppOptions = { sourceName: CANARY_SOURCE, env: { CANARY_SECRET } };
+export const READ_ONLY_APP: AppOptions = { sourceName: CANARY_SOURCE, envFiles: ENV_FILES };
 
 /** The demo profile on the bundled sample, with no source directory: demo reads none. */
 export const DEMO_APP: AppOptions = {
-  env: { PORTFOLIO_PROFILE: 'demo', PORTFOLIO_SOURCE_DIR: '', CANARY_SECRET },
+  env: { PORTFOLIO_PROFILE: 'demo', PORTFOLIO_SOURCE_DIR: '' },
+  envFiles: ENV_FILES,
   portfolio: null,
 };
 
@@ -204,18 +210,12 @@ export function profileMatrix(profile: Profile): void {
     { annotation: [{ type: 'route', description: 'every route' }, annotation] },
     async ({ app, request }) => {
       // Every path the server could leak sits under its own directory: the
-      // build, the bundled example, and the source directory. The last two
-      // are fields only the config summary has, which only an owner session
-      // gets, through config.status (#1, item 20).
-      const canaries = [
-        CANARY_SECRET,
-        CANARY_SOURCE,
-        CANARY_BODY,
-        path.basename(app.root),
-        '"proxyHops"',
-        '"adapters"',
-      ];
-      expect(app.env.CANARY_SECRET).toBe(CANARY_SECRET);
+      // build, the bundled example, the source directory, and the _FILE it
+      // read at startup. The summary's own fields go only to an owner
+      // session, through config.status (#1, item 20).
+      const canaries = leakCanaries(path.basename(app.root));
+      expect(app.env[HOPS_FILE.key]).toContain(CANARY_SECRET);
+      if (profile === 'read-only') expect(app.env.PORTFOLIO_SOURCE_DIR).toContain(CANARY_SOURCE);
       const targets = [
         ...listRoutes()
           .filter((route) => route.capability !== 'operations')

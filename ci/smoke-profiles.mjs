@@ -9,9 +9,10 @@
 //   Next's cache, as the Compose examples run them. Health and readiness
 //   answer their documented shapes; every route the profile serves answers,
 //   and every other route, retired route, and operation fails closed; every
-//   response carries the baseline headers and no cookie. After all of that,
-//   readiness still reports no owner module loaded, and the log holds one
-//   deployment.config line with every secret unset.
+//   response carries the baseline headers and no cookie, and none carries a
+//   canary (tests/harness/canaries.mjs) or the server's own path. After all
+//   of that, readiness still reports no owner module loaded, and the log
+//   holds one deployment.config line with every secret unset.
 // - owner, with deploy/compose.owner.yml's data directory on a named volume,
 //   refuses to start with no authentication provider (until #2). The volume
 //   starts out owned by uid 1001, mode 0700, as the image's directory is.
@@ -32,6 +33,13 @@ import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { DEFAULT_PORTFOLIO } from '../tests/harness/app-server.mjs';
+import {
+  CANARY_BODY,
+  CANARY_SECRET,
+  CANARY_SOURCE,
+  canaries,
+  HOPS_FILE,
+} from '../tests/harness/canaries.mjs';
 import { waitFor } from '../tests/harness/net.mjs';
 import { checkRefusal, rowDocuments, STARTUP_ROWS } from '../tests/harness/startup-rows.mjs';
 import { PROBE_SNIPPET, REQUESTS_SNIPPET } from './lib/container.mjs';
@@ -68,6 +76,10 @@ const DEMO_ORIGIN = 'https://demo.rowan.test';
 const FIXTURE_NAME = 'Rowan Fixture';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const METHODS = ['GET', 'POST', 'PUT', 'DELETE'];
+// The server's working directory in the image, which no response may name.
+const SERVER_DIR = '/app/apps/web';
+// The canary _FILE, mounted read-only in every profile's container.
+const SECRET_DIR = `/run/${CANARY_SECRET}`;
 const BASELINE_HEADERS = {
   'x-content-type-options': 'nosniff',
   'referrer-policy': 'strict-origin-when-cross-origin',
@@ -133,7 +145,12 @@ function parse(body) {
 function plan(profile) {
   const requests = [];
   const add = (method, pathname, check) =>
-    requests.push({ method, path: pathname, ...(method === 'GET' ? {} : { body: {} }), check });
+    requests.push({
+      method,
+      path: pathname,
+      ...(method === 'GET' ? {} : { body: { draft: CANARY_BODY } }),
+      check,
+    });
   const status = (expected) => (response) =>
     response.status === expected ? [] : [`answered ${response.status}, not ${expected}`];
   const noStore = (response) =>
@@ -183,13 +200,21 @@ function plan(profile) {
       });
     }
   }
-  // Every response: the baseline headers, no cookie, and noindex exactly
-  // where the profile can't be indexed.
+  // Every response: the baseline headers, no cookie, noindex exactly where
+  // the profile can't be indexed, and no canary in a header or the body.
+  const leaks = canaries(SERVER_DIR);
   for (const request of requests) {
     const own = request.check;
     request.check = (response) => {
       if (response.error) return [`no answer (${response.error})`];
       const problems = own(response);
+      const headers = Object.entries(response.headers)
+        .map(([name, value]) => `${name}: ${value}`)
+        .join('\n');
+      for (const canary of leaks) {
+        if (headers.includes(canary)) problems.push(`a header carries ${canary}`);
+        if (response.body.includes(canary)) problems.push(`the body carries ${canary}`);
+      }
       for (const [name, value] of Object.entries(BASELINE_HEADERS)) {
         if (response.headers[name] !== value) problems.push(`${name} is ${response.headers[name]}`);
       }
@@ -245,8 +270,10 @@ async function profileRun(profile, { env, mounts = [] }) {
     '--read-only',
     '--tmpfs',
     '/app/apps/web/.next/cache',
+    '-v',
+    `${path.join(stateDir, CANARY_SECRET)}:${SECRET_DIR}:ro`,
     ...mounts,
-    ...envArgs({ TZ: 'UTC', ...env }),
+    ...envArgs({ TZ: 'UTC', [HOPS_FILE.key]: `${SECRET_DIR}/${HOPS_FILE.name}`, ...env }),
     image,
   ]);
   if (started.status !== 0) {
@@ -428,15 +455,18 @@ async function smoke() {
   if (container(['volume', 'create', volume]).status !== 0) {
     throw new Error('could not create the data volume');
   }
-  mkdirSync(stateDir, { recursive: true });
+  mkdirSync(path.join(stateDir, CANARY_SECRET), { recursive: true });
+  writeFileSync(path.join(stateDir, CANARY_SECRET, HOPS_FILE.name), HOPS_FILE.text);
 
+  // The source directory at a canary path, so a response naming it shows.
+  const source = `/${CANARY_SOURCE}`;
   await profileRun('read-only', {
     env: {
       PORTFOLIO_PROFILE: 'read-only',
       PORTFOLIO_ORIGIN: ORIGIN,
-      PORTFOLIO_SOURCE_DIR: '/config',
+      PORTFOLIO_SOURCE_DIR: source,
     },
-    mounts: ['-v', `${path.dirname(DEFAULT_PORTFOLIO)}:/config:ro`],
+    mounts: ['-v', `${path.dirname(DEFAULT_PORTFOLIO)}:${source}:ro`],
   });
   await profileRun('demo', {
     env: { PORTFOLIO_PROFILE: 'demo', PORTFOLIO_ORIGIN: DEMO_ORIGIN },

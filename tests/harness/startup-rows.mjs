@@ -452,7 +452,8 @@ export function mentions(row) {
 }
 
 /**
- * The config.fatal entries among a process's JSON log lines.
+ * The config.fatal entries among a process's JSON log lines. A line that
+ * only looks like JSON is skipped, so it can't stop the rows after it.
  *
  * @param {string} output
  * @returns {Record<string, unknown>[]}
@@ -461,8 +462,14 @@ export function fatalLines(output) {
   return output
     .split('\n')
     .filter((line) => line.startsWith('{'))
-    .map((line) => JSON.parse(line))
-    .filter((entry) => entry.event === 'config.fatal');
+    .flatMap((line) => {
+      try {
+        return [JSON.parse(line)];
+      } catch {
+        return [];
+      }
+    })
+    .filter((entry) => entry?.event === 'config.fatal');
 }
 
 /**

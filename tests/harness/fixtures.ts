@@ -34,6 +34,12 @@ export interface AppOptions {
   portfolio?: string | null;
   /** The source directory's name (default `config`). */
   sourceName?: string;
+  /**
+   * Files written before the server starts, by the variable that names each
+   * one: `path` is relative to the app's root, and the variable gets the
+   * absolute path.
+   */
+  envFiles?: Record<string, { path: string; text: string }>;
 }
 
 export interface App {
