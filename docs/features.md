@@ -13,7 +13,7 @@ What the platform can do today.
 
 ## Visual system
 
-- **Pluggable variants.** Each variant is a workspace package. The active one is selected by the `variant:` field in `portfolio.yml`.
+- **Pluggable variants.** Each variant is a workspace package. A deployment renders Editorial until the site document picks one; under the `demo` profile, `/sample?variant=<slug>` renders the bundled sample in any of them.
 - **Variant registry built at install/build time.** New variants are auto-discovered.
 - **Per-variant color schemes.** Editorial ships 3 (warm, noir, ink-and-paper). Variants are encouraged to ship multiple.
 - **Per-variant typography presets.** Editorial ships 2 (classic, modernist). Same encouragement.
@@ -85,8 +85,7 @@ Three scripts keep the system honest:
 
 ## Roadmap (deferred / not yet shipped)
 
-- End-user UI toggles for color scheme and typography preset (today these are baked into `portfolio.yml`).
-- Multi-variant host registry (today `apps/web/src/app/layout.tsx` hardcodes the active variant for `supportedThemes` wiring).
+- Choosing a deployment's variant, color scheme, and typography preset, and toggles for visitors (today every deployment renders Editorial's defaults).
 - More variants (currently editorial is the only one).
 - CI/CD workflow templates.
 
