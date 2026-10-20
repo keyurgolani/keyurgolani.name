@@ -16,6 +16,7 @@ interface Fatal {
   path?: string;
   line?: number;
   column?: number;
+  issueCode?: string;
   message: string;
 }
 
@@ -276,6 +277,15 @@ test.describe('the document', () => {
     const fatal = await expectRefusal(readOnly({ PORTFOLIO_SOURCE_DIR: dir }));
     expect(fatal.map((e) => [e.code, e.file, e.path, e.line, e.column])).toEqual([
       ['document_invalid', 'portfolio.json', '/identity/name', 6, 13],
+    ]);
+  });
+
+  test('a JSON syntax error V8 gives no position for, located anyway', async () => {
+    const json = '{\n  "schemaVersion": 2,\n  "locale": NaN\n}\n';
+    const dir = sourceDir({ 'portfolio.json': json });
+    const fatal = await expectRefusal(readOnly({ PORTFOLIO_SOURCE_DIR: dir }));
+    expect(fatal.map((e) => [e.code, e.issueCode, e.line, e.column])).toEqual([
+      ['document_syntax', 'JSON_SYNTAX', 3, 13],
     ]);
   });
 

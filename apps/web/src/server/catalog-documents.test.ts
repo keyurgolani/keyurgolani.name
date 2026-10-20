@@ -246,10 +246,16 @@ test('YAML anchors and aliases are refused where they appear', (t) => {
   const result = open(dir, 'production');
   assert.equal(result.ok, false);
   assert.deepEqual(
-    result.issues.map((issue) => [issue.code, issue.issueCode, issue.path, issue.line]),
+    result.issues.map((issue) => [
+      issue.code,
+      issue.issueCode,
+      issue.path,
+      issue.line,
+      issue.column,
+    ]),
     [
-      ['document_syntax', 'ANCHOR', '/identity', 5],
-      ['document_syntax', 'ALIAS', '/meta/title', 7],
+      ['document_syntax', 'ANCHOR', '/identity', 4, 11],
+      ['document_syntax', 'ALIAS', '/meta/title', 7, 10],
     ],
   );
   assert.ok(!JSON.stringify(result.issues).includes('canary-anchor-4'));

@@ -47,7 +47,7 @@ test('a duplicate key is refused with its position', () => {
   ]);
 });
 
-test('anchors, aliases, merge keys, and tags are refused, each located', () => {
+test('anchors, aliases, merge keys, and tags are refused, each located where it is written', () => {
   const source = [
     'base: &base',
     '  x: 1',
@@ -58,15 +58,33 @@ test('anchors, aliases, merge keys, and tags are refused, each located', () => {
     'custom: !thing value',
     'list:',
     '  - !!map {}',
+    'text: !!str |',
+    '  block',
     '',
   ].join('\n');
   assert.deepEqual(problems(parseSource(source, 'yaml')), [
-    { code: 'ANCHOR', pointer: '/base', line: 2, column: 3 },
+    { code: 'ANCHOR', pointer: '/base', line: 1, column: 7 },
     { code: 'ALIAS', pointer: '/copy', line: 3, column: 7 },
     { code: 'MERGE_KEY', pointer: '/merged/<<', line: 5, column: 3 },
-    { code: 'TAG', pointer: '/typed', line: 6, column: 14 },
-    { code: 'TAG', pointer: '/custom', line: 7, column: 16 },
-    { code: 'TAG', pointer: '/list/0', line: 9, column: 11 },
+    { code: 'TAG', pointer: '/typed', line: 6, column: 8 },
+    { code: 'TAG', pointer: '/custom', line: 7, column: 9 },
+    { code: 'TAG', pointer: '/list/0', line: 9, column: 5 },
+    { code: 'TAG', pointer: '/text', line: 10, column: 7 },
+  ]);
+});
+
+test('a collection and its first key, both anchored, each get their own anchor', () => {
+  // The mapping's content and its first key start at the same place.
+  const source = 'outer: &map\n  &key first: &value 1\n  second: 2\nseq: !!seq\n  - !!str a\n';
+  assert.deepEqual(problems(parseSource(source, 'yaml')), [
+    { code: 'ANCHOR', pointer: '/outer', line: 1, column: 8 },
+    { code: 'ANCHOR', pointer: '/outer/first', line: 2, column: 3 },
+    { code: 'ANCHOR', pointer: '/outer/first', line: 2, column: 15 },
+    { code: 'TAG', pointer: '/seq', line: 4, column: 6 },
+    { code: 'TAG', pointer: '/seq/0', line: 5, column: 5 },
+  ]);
+  assert.deepEqual(problems(parseSource('--- &root\nkey: v\n', 'yaml')), [
+    { code: 'ANCHOR', pointer: '', line: 1, column: 5 },
   ]);
 });
 
@@ -76,16 +94,25 @@ test('a second document is refused', () => {
   ]);
 });
 
-test('directives are refused, so no document switches to YAML 1.1', () => {
+test('every directive is refused where it is written, so no document switches to YAML 1.1', () => {
   for (const source of [
     '%YAML 1.1\n---\na: yes\n',
     '%TAG !e! tag:example.com,2000:\n---\na: 1\n',
+    // Redefines the !! handle the core schema's tags use.
+    '%TAG !! tag:example.com,2000:\n---\na: !!str 1\n',
+    '%RESERVED anything\n---\na: 1\n',
   ]) {
-    assert.deepEqual(
-      problems(parseSource(source, 'yaml')).map((p) => p.code),
-      ['DIRECTIVE'],
-    );
+    assert.deepEqual(problems(parseSource(source, 'yaml')), [
+      { code: 'DIRECTIVE', pointer: undefined, line: 1, column: 1 },
+    ]);
   }
+  assert.deepEqual(
+    problems(parseSource('# note\n%YAML 1.2\n%TAG !e! tag:example.com,2000:\n---\na: 1\n', 'yaml')),
+    [
+      { code: 'DIRECTIVE', pointer: undefined, line: 2, column: 1 },
+      { code: 'DIRECTIVE', pointer: undefined, line: 3, column: 1 },
+    ],
+  );
 });
 
 test('mapping keys are strings', () => {
@@ -96,16 +123,55 @@ test('mapping keys are strings', () => {
   );
 });
 
-test('JSON must pass JSON.parse, and a syntax error is located', () => {
+test('JSON must pass JSON.parse, and every syntax error is located', () => {
   assert.deepEqual(data(parseSource('{\n  "a": [1, 2]\n}\n', 'json')), { a: [1, 2] });
-  // Valid YAML flow syntax, invalid JSON.
-  assert.deepEqual(problems(parseSource('{\n  "a": 1,\n}\n', 'json')), [
-    { code: 'JSON_SYNTAX', pointer: undefined, line: 3, column: 1 },
+  assert.deepEqual(data(parseSource('[1, -0.5e+3, "\\u00e9\\n", true, false, null, {}]', 'json')), [
+    1,
+    -500,
+    'é\n',
+    true,
+    false,
+    null,
+    {},
   ]);
-  assert.deepEqual(
-    problems(parseSource('# comment\na: 1\n', 'json')).map((p) => p.code),
-    ['JSON_SYNTAX'],
-  );
+  // Where the first character that can't continue the JSON is, or the end
+  // when the text stops short. V8 names no position for most of these.
+  const cases: Array<[source: string, line: number, column: number]> = [
+    ['{\n  "a": 1,\n}\n', 3, 1], // valid YAML flow syntax
+    ['[1,]', 1, 4],
+    ['tru', 1, 4],
+    ['NaN', 1, 1],
+    ['undefined', 1, 1],
+    ['.5', 1, 1],
+    ['# comment\na: 1\n', 1, 1],
+    ['', 1, 1],
+    ['  \n', 2, 1],
+    ['{"a" 1}', 1, 6],
+    ['{"a": 01}', 1, 8],
+    ['{"a": "\\x"}', 1, 9],
+    ['{"a": "\\u12G4"}', 1, 12],
+    ['{"a": "tab\there"}', 1, 11],
+    ['{"a": 1}}', 1, 9],
+    ['[\n  [1, 2],\n  {"b": -}\n]', 3, 10],
+    ['"unterminated', 1, 14],
+  ];
+  for (const [source, line, column] of cases) {
+    const result = parseSource(source, 'json');
+    assert.deepEqual(
+      problems(result),
+      [{ code: 'JSON_SYNTAX', pointer: undefined, line, column }],
+      source,
+    );
+    if (!result.ok)
+      assert.equal(result.problems[0]!.message, "The file isn't valid JSON at this position.");
+  }
+});
+
+test('deeply nested JSON is scanned without recursion', () => {
+  const depth = 20_000;
+  assert.deepEqual(problems(parseSource(`${'['.repeat(depth)}1,${']'.repeat(depth)}`, 'json')), [
+    { code: 'JSON_SYNTAX', pointer: undefined, line: 1, column: depth + 3 },
+  ]);
 });
 
 test('a duplicate key in JSON is refused even though JSON.parse would keep the last', () => {

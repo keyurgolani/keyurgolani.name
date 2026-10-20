@@ -31,7 +31,7 @@ Before it takes a request, the server validates its settings and the portfolio. 
 - in production, a setting that doesn't apply to the profile, such as `GITHUB_TOKEN` under `read-only` (`pnpm dev` warns and ignores it);
 - `PORTFOLIO_PATH` or `NEXT_PUBLIC_BASE_URL`, which `PORTFOLIO_SOURCE_DIR` and `PORTFOLIO_ORIGIN` replaced;
 - a source directory that is missing or unreadable, that is a file rather than the directory holding it, that holds zero or several portfolio documents, or that holds a `portfolio.toml` (TOML is no longer read);
-- a portfolio that isn't one plain YAML or JSON document (anchors, aliases, merge keys, tags, and a second document are refused), that doesn't declare `schemaVersion: 2`, that fails the schema, or that gives two sections the same `id`;
+- a portfolio that isn't one plain YAML or JSON document (anchors, aliases, merge keys, tags, directives, and a second document are refused), that doesn't declare `schemaVersion: 2`, that fails the schema, or that gives two sections the same `id`;
 - in production, an origin on a reserved example domain, or the bundled sample's `identity.name`.
 
 `owner` and `demo` don't start yet. `owner` needs an authentication provider, and none ships; `demo` waits on its bundled-sample catalog.
