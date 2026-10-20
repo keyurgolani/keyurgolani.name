@@ -14,12 +14,10 @@
 Smoke test, ~30 seconds. Catches "the page renders as plain HTML".
 
 ```bash
-cp portfolio.example.yml config/portfolio.yml   # if config/ is empty
-# set `variant: <slug>` in config/portfolio.yml
-pnpm dev
+skills/variant-developer/scripts/visual-companion/start.sh --mode preview --variant <slug>
 ```
 
-Open `http://localhost:3000/`. `pnpm dev` picks up each save to `config/portfolio.yml` on the next page load.
+Open `http://localhost:3000/sample?variant=<slug>`. The script runs `pnpm dev` under `PORTFOLIO_PROFILE=demo`, which renders the bundled sample in any registered variant.
 
 **You must see:**
 
@@ -59,16 +57,13 @@ localStorage.setItem('portfolio:theme', 'bright');
 location.reload();
 ```
 
-### Switch scheme/typography in the file
+### Switch scheme/typography in the URL
 
-```yaml
-# config/portfolio.yml
-variant: <slug>
-colorScheme: <id>
-typography: <id>
+```
+http://localhost:3000/sample?variant=<slug>&scheme=<id>&typography=<id>
 ```
 
-Save and reload.
+Only ids the manifest declares apply; anything else renders the variant's default.
 
 ### What "looks correct" means
 
@@ -214,10 +209,10 @@ Gate E checked the variant's card in the variant gallery, which the platform no 
 
 ### Recipe (manual)
 
-For each manifest entry, set `variant: <slug>`, `colorScheme: <id>`, and `typography: <id>` in `config/portfolio.yml`, then capture:
+For each manifest entry, with the visual companion's dev server running, capture:
 
 ```
-http://localhost:3000/
+http://localhost:3000/sample?variant=<slug>&scheme=<id>&typography=<id>
 ```
 
 with the desired theme set via `localStorage.setItem('portfolio:theme', '...')` before reload.
@@ -226,7 +221,7 @@ Wait for first paint + 1.2s for animations to settle (typing cursor, dispersal e
 
 ### Recipe (automated, optional)
 
-The visual companion's `--matrix` mode runs `preview-matrix.mjs`, which captures every theme for the scheme and typography `config/portfolio.yml` selects. Requires Playwright. See `references/visual-companion.md`.
+The visual companion's `--matrix` mode runs `preview-matrix.mjs`, which captures every theme of `/sample?variant=<slug>`, in the scheme and typography its `--scheme` and `--typography` flags pick. Requires Playwright. See `references/visual-companion.md`.
 
 ### Image quality
 
