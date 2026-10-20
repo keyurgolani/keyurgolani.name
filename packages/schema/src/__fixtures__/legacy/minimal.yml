@@ -1,0 +1,5 @@
+# Mapping row: where the old file has nothing, the migration fills locale,
+# direction, the variant, the display mode, the design language, the visitor
+# controls, the motion policy, and the feed.
+identity:
+  name: Rowan Minimal

@@ -1,0 +1,31 @@
+# Mapping row: section ids. A hero gets top, others their slugified title or
+# else their kind, cut at a hyphen to 64 characters, with the next free -2 for
+# a taken or reserved id. Ids in the wrong shape are slugified the same way.
+identity:
+  name: Rowan Ids
+sections:
+  - kind: hero
+    tagline: Hi.
+  - kind: lede
+    title: About
+    body: A
+  - kind: lede
+    title: About
+    body: B
+  - kind: quote
+    text: Q
+  - kind: lede
+    id: About Me
+    body: C
+  - kind: lede
+    id: main
+    body: D
+  - kind: lede
+    title: A very long title that keeps going well past the sixty four character limit for ids
+    body: E
+  - kind: lede
+    id: contact
+    body: F
+  - kind: contact
+    id: contact
+    title: Contact

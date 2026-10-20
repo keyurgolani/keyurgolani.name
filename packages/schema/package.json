@@ -8,7 +8,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./ids": "./src/ids.ts",
-    "./kinds": "./src/kinds/index.ts"
+    "./kinds": "./src/kinds/index.ts",
+    "./migrate": "./src/migrate/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
