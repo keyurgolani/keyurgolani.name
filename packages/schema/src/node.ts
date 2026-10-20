@@ -6,6 +6,7 @@ import { detectFormat, DOCUMENT_MAX_BYTES, type DocumentFormat } from './source'
 import {
   DIAGNOSTIC_REMEDIATIONS,
   DIAGNOSTIC_SEVERITIES,
+  legacyDocumentRecord,
   validatePublicationUnit,
   type Context,
   type Diagnostic,
@@ -58,8 +59,8 @@ export type LoadPairResult =
       readonly directory?: 'missing' | 'not-directory' | 'unreadable';
       /** Which documents the directory lacks, when that's the problem. */
       readonly missing?: readonly PairDocument[];
-      /** The pair's two files, once there are both. */
-      readonly files?: PairFiles;
+      /** The pair's two files once there are both, or the portfolio's alone when it's in the old format. */
+      readonly files?: Partial<PairFiles>;
     };
 
 export type PairFiles = { readonly [D in PairDocument]: string };
@@ -86,9 +87,11 @@ const record = (
  * Finds the pair in a directory: exactly one `portfolio.{yml,yaml,json}` and
  * one `site.{yml,yaml,json}`. A document it lacks is `source.missing`, and
  * one in two formats `source.duplicate`. A `portfolio.toml` is the old
- * format, and the only thing reported. Other files are ignored.
+ * format, and the only thing reported, as is an old-format portfolio with no
+ * site document beside it, the layout an upgrade finds. Other files are
+ * ignored. `ctx` names the ids the old format's record suggests.
  */
-export function findPair(dir: string): FindPairResult {
+export function findPair(dir: string, ctx: Context = {}): FindPairResult {
   let names: string[];
   try {
     // Not a path the build can know: the comment keeps Turbopack from tracing it.
@@ -142,6 +145,11 @@ export function findPair(dir: string): FindPairResult {
       );
     }
   }
+  if (missing.length === 1 && missing[0] === 'site' && found.portfolio.length === 1) {
+    const portfolio = path.join(/*turbopackIgnore: true*/ dir, found.portfolio[0]!);
+    const legacy = legacyRecord(portfolio, ctx);
+    if (legacy) return { ok: false, diagnostics: [legacy], notChecked: [], files: { portfolio } };
+  }
   if (diagnostics.length > 0) {
     return { ok: false, diagnostics, notChecked: [], ...(missing.length ? { missing } : {}) };
   }
@@ -160,7 +168,7 @@ export function findPair(dir: string): FindPairResult {
  * never throws.
  */
 export function loadPair(dir: string, ctx: Context = {}): LoadPairResult {
-  const found = findPair(dir);
+  const found = findPair(dir, ctx);
   return found.ok ? readPair(found.files, ctx) : found;
 }
 
@@ -203,14 +211,25 @@ export function readPair(files: PairFiles, ctx: Context = {}): LoadPairResult {
   };
 }
 
-/** The names of the pair's two files, once there are both. */
-export function pairFileNames(result: LoadPairResult): PairFiles | undefined {
+/** The old format's record for the portfolio in `file`, or undefined when it's current or can't be read. */
+function legacyRecord(file: string, ctx: Context): Diagnostic | undefined {
+  const name = path.basename(file);
+  try {
+    return legacyDocumentRecord({ name, format: detectFormat(name), text: readBounded(file) }, ctx);
+  } catch {
+    return undefined;
+  }
+}
+
+/** The names of the files the result is about: both once there are both. */
+export function pairFileNames(result: LoadPairResult): Partial<PairFiles> | undefined {
   if (result.ok)
     return { portfolio: result.sources.portfolio.name, site: result.sources.site.name };
   if (!result.files) return undefined;
+  const { portfolio, site } = result.files;
   return {
-    portfolio: path.basename(result.files.portfolio),
-    site: path.basename(result.files.site),
+    ...(portfolio !== undefined ? { portfolio: path.basename(portfolio) } : {}),
+    ...(site !== undefined ? { site: path.basename(site) } : {}),
   };
 }
 

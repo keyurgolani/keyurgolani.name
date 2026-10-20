@@ -1,0 +1,10 @@
+# The old one-file format with no site document beside it, as an upgrade
+# finds it: startup reports legacy.document alone, never source.missing.
+identity:
+  name: Rowan Fixture
+variant: editorial
+theme: dark
+sections:
+  - kind: lede
+    title: About
+    body: Builds calm software.

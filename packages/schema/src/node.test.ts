@@ -6,7 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineContentExtension } from './extensions';
 import { parsePortfolio, parseSite } from './load';
-import { findPair, loadPair, readPair, type LoadPairResult } from './node';
+import { findPair, loadPair, pairFileNames, readPair, type LoadPairResult } from './node';
 import { canonicalize, serialize } from './serialize';
 import { parseSource } from './source';
 import {
@@ -189,7 +189,7 @@ test('a broken build is validator.failed, not a problem with the pair', () => {
   assert.deepEqual(codes(result), ['validator.failed']);
 });
 
-test('the startup cases: neither document, one of them, and the old TOML file', () => {
+test('the startup cases: neither document, one of them, and the old format alone', () => {
   const empty = loadPair(fixture('startup', 'empty'));
   assert.equal(empty.ok, false);
   assert.deepEqual(
@@ -218,6 +218,30 @@ test('the startup cases: neither document, one of them, and the old TOML file', 
   assert.deepEqual(codes(toml), ['legacy.document']);
   assert.match(toml.diagnostics[0]!.remediation, /Convert it to YAML or JSON first/);
   assert.match(toml.diagnostics[0]!.remediation, /pnpm config:migrate/);
+
+  // The old file with no site document, as an upgrade finds it: the old
+  // format is the one thing reported, as it is with a site document beside it.
+  const dir = fixture('startup', 'legacy-only');
+  const legacyOnly = loadPair(dir, { catalog: CATALOG });
+  assert.equal(legacyOnly.ok, false);
+  assert.deepEqual(
+    legacyOnly.diagnostics.map(({ code, document, pointer, line }) => [
+      code,
+      document,
+      pointer,
+      line,
+    ]),
+    [['legacy.document', 'portfolio', '', 5]],
+  );
+  assert.equal(!legacyOnly.ok && legacyOnly.missing, undefined);
+  assert.deepEqual(pairFileNames(legacyOnly), { portfolio: 'portfolio.yml' });
+  assert.match(legacyOnly.diagnostics[0]!.message, /portfolio\.yml is in the old one-file format/);
+  assert.match(legacyOnly.diagnostics[0]!.remediation, /--write --out <dir>/);
+  const beside = tempDir({
+    'portfolio.yml': text('startup', 'legacy-only', 'portfolio.yml'),
+    'site.yml': text('invalid', 'source.duplicate', 'site.yml'),
+  });
+  assert.deepEqual(legacyOnly.diagnostics, loadPair(beside, { catalog: CATALOG }).diagnostics);
 });
 
 test('a document in two formats names each file', () => {

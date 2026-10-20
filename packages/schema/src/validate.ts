@@ -233,6 +233,33 @@ export function validatePublicationUnit(
   }
 }
 
+/**
+ * The legacy.document record the pair check reports for a portfolio document
+ * in the old one-file format, or undefined when it isn't one. For a directory
+ * that holds the old file and no site document yet, as an upgrade finds it.
+ */
+export function legacyDocumentRecord(
+  source: SourceDocument,
+  ctx: Context = {},
+): Diagnostic | undefined {
+  const read = readPortfolio(source.text, source.format, {
+    extensions: ctx.extensions,
+    name: source.name,
+  });
+  const [problem] = read.problems;
+  if (problem?.kind !== 'legacy') return undefined;
+  const found = located(problem);
+  return {
+    code: 'legacy.document',
+    severity: DIAGNOSTIC_SEVERITIES['legacy.document'],
+    document: 'portfolio',
+    pointer: found.pointer,
+    ...(found.line !== undefined ? { line: found.line, column: found.column } : {}),
+    message: found.message,
+    remediation: legacyRemediation(source.name, read.data, ctx.catalog),
+  };
+}
+
 function check(
   unit: { readonly portfolio: SourceDocument; readonly site: SourceDocument },
   ctx: Context,

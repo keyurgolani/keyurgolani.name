@@ -173,17 +173,22 @@ test.describe('the shared fixtures', () => {
     });
   }
 
-  for (const [name, records] of [
-    [
-      'empty',
-      [
-        ['source.missing', 'portfolio'],
-        ['source.missing', 'site'],
-      ],
+  const STARTUP: Record<string, [string, string | undefined][]> = {
+    empty: [
+      ['source.missing', 'portfolio'],
+      ['source.missing', 'site'],
     ],
-    ['site-only', [['source.missing', 'portfolio']]],
-    ['toml', [['legacy.document', 'portfolio']]],
-  ] as const) {
+    // An old one-file portfolio with no site.yml, as an upgrade finds it.
+    'legacy-only': [['legacy.document', 'portfolio']],
+    'site-only': [['source.missing', 'portfolio']],
+    toml: [['legacy.document', 'portfolio']],
+  };
+
+  test('every startup fixture has its records here', () => {
+    expect(Object.keys(STARTUP).sort()).toEqual(readdirSync(path.join(FIXTURES, 'startup')).sort());
+  });
+
+  for (const [name, records] of Object.entries(STARTUP)) {
     test(`startup/${name} stops the server`, async () => {
       const dir = path.join(FIXTURES, 'startup', name);
       const fatal = await expectRefusal(readOnly(dir));

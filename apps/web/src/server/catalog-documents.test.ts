@@ -185,6 +185,20 @@ test('a portfolio.toml is the old format, refused by name in every mode, even be
   }
 });
 
+test('an old-format portfolio with no site document is the old format, not a missing site', (t) => {
+  // The layout an upgrade finds: the one file, before the migration splits it.
+  const old = 'identity:\n  name: Rowan Test\nvariant: editorial\ntheme: dark\n';
+  for (const mode of ['production', 'development'] as const) {
+    const issues = fatal(open(tempDir(t, { 'portfolio.yml': old }), mode));
+    assert.deepEqual(
+      issues.map((issue) => [issue.code, issue.file, issue.document, issue.line]),
+      [['legacy.document', 'portfolio.yml', 'portfolio', 3]],
+      mode,
+    );
+    assert.match(issues[0]!.remediation ?? '', /--write --out <dir>/);
+  }
+});
+
 test('an unreadable document is source.missing, naming the file', { skip: !canRestrict }, (t) => {
   const dir = tempDir(t, pair());
   chmodSync(path.join(dir, 'site.yml'), 0o000);

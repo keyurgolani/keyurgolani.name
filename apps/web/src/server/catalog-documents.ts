@@ -91,7 +91,12 @@ function loadRevision(options: DocumentsCatalogOptions): Loaded {
     fingerprint: stamp,
   });
 
-  const found = findPair(sourceDir);
+  const ctx = {
+    catalog: options.catalog,
+    extensions: options.extensions,
+    ...(options.origin ? { canonicalOrigin: options.origin } : {}),
+  };
+  const found = findPair(sourceDir, ctx);
   let files: PairFiles;
   let usingExamples = false;
   if (found.ok) {
@@ -111,15 +116,12 @@ function loadRevision(options: DocumentsCatalogOptions): Loaded {
     files = options.examples;
     usingExamples = true;
   } else {
-    // A missing or doubled document, or the old TOML file.
-    return fail(...found.diagnostics.map((record) => recordIssue(record, KEY)));
+    // A missing or doubled document, or one in the old format with no site document.
+    const names = pairFileNames(found);
+    return fail(...found.diagnostics.map((record) => recordIssue(record, KEY, names)));
   }
 
-  const result = readPair(files, {
-    catalog: options.catalog,
-    extensions: options.extensions,
-    ...(options.origin ? { canonicalOrigin: options.origin } : {}),
-  });
+  const result = readPair(files, ctx);
   const names = pairFileNames(result);
   const records = result.diagnostics.map((record) => recordIssue(record, KEY, names));
   if (!result.ok) return fail(...records);

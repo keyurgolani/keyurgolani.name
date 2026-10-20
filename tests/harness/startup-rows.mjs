@@ -460,8 +460,11 @@ export const STARTUP_ROWS = [
     documents: { 'portfolio.yml': LEGACY },
     env: (paths) => readOnly(paths),
     never: ['canary-variant'],
-    fatal: [{ code: 'legacy.document', document: 'portfolio', path: '', line: 3 }],
+    fatal: [
+      { code: 'legacy.document', file: 'portfolio.yml', document: 'portfolio', path: '', line: 3 },
+    ],
     mentions: ['/variant to appearance.variant in site.yml', 'pnpm config:migrate portfolio.yml'],
+    remediates: '--write --out <dir>',
   },
   {
     group: DOCUMENT,
