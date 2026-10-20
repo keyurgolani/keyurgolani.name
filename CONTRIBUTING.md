@@ -90,7 +90,7 @@ Tests use Node's built-in `node:test`, through `tsx` for TypeScript. A single fi
 - **TDD** for kit helpers, schema validators, and audit scripts: write the test first, watch it fail, implement, watch it pass.
 - **No emojis in code or files** unless explicitly authored by the user. Use Lucide icons in UI.
 - **Stay focused.** Don't restructure unrelated code as part of a feature change.
-- **Routes** in `apps/web/src/app` need an entry in `apps/web/src/server/routes.ts` and a guard with their own pattern: `requireServed()` in pages and metadata routes, `notServed()` in route handlers. Server Functions (`'use server'`) aren't allowed; add an operation to `server/operations.ts` instead. `pnpm test` fails on either.
+- **Routes** in `apps/web/src/app` need an entry in `apps/web/src/server/routes.ts`, and their guard wraps what they export, with their own pattern: `export default servedPage('<pattern>', render)` in pages and metadata routes, `export const GET = served('<pattern>', handler)` for each route handler method. Server Functions (`'use server'`) aren't allowed; add an operation to `server/operations.ts` instead. `pnpm test` fails on either.
 
 ## Code review
 
