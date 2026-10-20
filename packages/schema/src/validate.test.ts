@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readdirSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { build } from 'esbuild';
 import { parse as parseYaml } from 'yaml';
 import { defineContentExtension } from './extensions';
 import type { AppearanceSelection } from './site';
@@ -805,15 +807,43 @@ test('every diagnostic code comes with a line and column, in YAML and JSON', () 
   }
 });
 
-test('the validator and everything it imports stay browser-safe', () => {
-  const dir = new URL('./', import.meta.url);
-  const sources = readdirSync(dir, { recursive: true, encoding: 'utf8' }).filter(
-    (name) =>
-      name.endsWith('.ts') && !name.endsWith('.test.ts') && !name.startsWith('__fixtures__'),
+test('the validator, and the package root Studio imports, bundle for a browser', async () => {
+  // A real bundle: a Node.js built-in anywhere in the import graph fails to
+  // resolve for the browser platform, where a text search could miss one.
+  const result = await build({
+    entryPoints: ['validate.ts', 'index.ts'].map((file) =>
+      fileURLToPath(new URL(file, import.meta.url)),
+    ),
+    bundle: true,
+    platform: 'browser',
+    format: 'esm',
+    write: false,
+    outdir: 'bundle',
+    metafile: true,
+    logLevel: 'silent',
+  });
+  assert.deepEqual(result.errors, []);
+  const inputs = Object.keys(result.metafile.inputs);
+  assert.ok(
+    inputs.some((file) => file.endsWith('src/validate.ts')),
+    inputs.join(', '),
   );
-  assert.ok(sources.includes('validate.ts') && sources.length > 20, sources.join(', '));
-  for (const file of sources) {
-    const source = readFileSync(new URL(file, dir), 'utf8');
-    assert.ok(!/from 'node:|require\(/.test(source), `${file} uses a Node.js module`);
-  }
+  assert.ok(
+    inputs.some((file) => file.includes('node_modules/yaml/')),
+    inputs.join(', '),
+  );
+  assert.deepEqual(
+    inputs.filter((file) => file.startsWith('node:') || /^(?:fs|path|crypto)$/.test(file)),
+    [],
+  );
+  // And it does fail on one: a module that imports node:fs doesn't bundle.
+  await assert.rejects(
+    build({
+      stdin: { contents: "import { readFileSync } from 'node:fs'; export const a = readFileSync;" },
+      bundle: true,
+      platform: 'browser',
+      write: false,
+      logLevel: 'silent',
+    }),
+  );
 });
