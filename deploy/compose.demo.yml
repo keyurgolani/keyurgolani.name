@@ -1,0 +1,36 @@
+# The demo profile: the bundled sample, for a product demo, with nothing for
+# crawlers to index. It reads no portfolio of yours. Run it from deploy/,
+# with PORTFOLIO_ORIGIN in deploy/.env:
+#
+#   docker compose -f compose.demo.yml up --build
+name: portfolio-demo
+services:
+  web:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: portfolio:latest
+    restart: unless-stopped
+    # Loopback only: the TLS-terminating proxy in front publishes the site.
+    ports:
+      - '127.0.0.1:${PORT:-3000}:3000'
+    environment:
+      PORTFOLIO_PROFILE: demo
+      # The demo hostname, such as https://demo.jane.name.
+      PORTFOLIO_ORIGIN: ${PORTFOLIO_ORIGIN:?set PORTFOLIO_ORIGIN in .env to the demo hostname}
+      NODE_ENV: production
+    # Nothing in the container is writable but Next's cache.
+    read_only: true
+    tmpfs:
+      - /app/apps/web/.next/cache
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        # Same probe as the image HEALTHCHECK (see the Dockerfile).
+        - "const h=process.env.HOSTNAME;const a=!h||h==='0.0.0.0'||h==='::'?'127.0.0.1':h.includes(':')?'['+h+']':h;fetch('http://'+a+':'+(process.env.PORT||3000)+'/api/health',{signal:AbortSignal.timeout(4000)}).then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s

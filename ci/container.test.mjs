@@ -17,9 +17,19 @@ function dockerfileHealthcheck() {
   return JSON.parse(/HEALTHCHECK[^\n]*\\\n\s*CMD (\[.*\])/.exec(text)[1]);
 }
 
-function composeHealthcheck() {
-  const compose = parseYaml(readFileSync(path.join(ROOT, 'docker-compose.yml'), 'utf8'));
-  const [kind, ...command] = compose.services.web.healthcheck.test;
+/** The Compose example for each profile (#1, item 23). */
+const EXAMPLES = {
+  'read-only': 'docker-compose.yml',
+  demo: 'deploy/compose.demo.yml',
+  owner: 'deploy/compose.owner.yml',
+};
+
+function compose(file) {
+  return parseYaml(readFileSync(path.join(ROOT, file), 'utf8'));
+}
+
+function composeHealthcheck(file) {
+  const [kind, ...command] = compose(file).services.web.healthcheck.test;
   assert.equal(kind, 'CMD');
   return command;
 }
@@ -56,8 +66,56 @@ async function withServer(host, fn) {
 
 const ipv6 = await withServer('::1', async () => true).catch(() => false);
 
-test('the Compose healthcheck is the image HEALTHCHECK', () => {
-  assert.deepEqual(composeHealthcheck(), dockerfileHealthcheck());
+test('every Compose healthcheck is the image HEALTHCHECK', () => {
+  for (const file of Object.values(EXAMPLES)) {
+    assert.deepEqual(composeHealthcheck(file), dockerfileHealthcheck(), file);
+  }
+});
+
+test('each Compose example runs its profile from the one image, on loopback', () => {
+  for (const [profile, file] of Object.entries(EXAMPLES)) {
+    const { services, ...top } = compose(file);
+    assert.deepEqual(Object.keys(services), ['web'], file);
+    const web = services.web;
+    // Paths in deploy/ resolve against deploy/.
+    const dir = path.dirname(file) === '.' ? '.' : '..';
+    assert.equal(web.build.context, dir, file);
+    assert.equal(web.image, 'portfolio:latest', file);
+    assert.equal(web.environment.PORTFOLIO_PROFILE, profile, file);
+    assert.match(web.environment.PORTFOLIO_ORIGIN, /^\$\{PORTFOLIO_ORIGIN:\?.+\}$/, file);
+    for (const port of web.ports) assert.match(port, /^127\.0\.0\.1:/, file);
+    assert.equal('profiles' in web, false, `${file}: no Compose profiles`);
+    const volumes = web.volumes ?? [];
+    if (profile === 'demo') {
+      assert.equal(web.environment.PORTFOLIO_SOURCE_DIR, undefined, file);
+      assert.deepEqual(volumes, [], `${file}: demo mounts nothing`);
+    } else {
+      assert.equal(web.environment.PORTFOLIO_SOURCE_DIR, '/config', file);
+      assert.ok(volumes.includes(`${dir}/config:/config:ro`), file);
+      assert.ok(volumes.includes(`${dir}/assets:/app/apps/web/public/assets:ro`), file);
+    }
+    if (profile === 'owner') {
+      // One writable named volume at the data directory, for one replica.
+      assert.equal(web.environment.PORTFOLIO_DATA_DIR, '/var/lib/portfolio', file);
+      assert.ok(volumes.includes('portfolio-data:/var/lib/portfolio'), file);
+      assert.ok('portfolio-data' in top.volumes, file);
+      assert.ok(web.container_name, `${file}: a fixed name stops --scale`);
+    } else {
+      assert.equal(web.environment.PORTFOLIO_DATA_DIR, undefined, file);
+      assert.equal(web.read_only, true, file);
+      assert.deepEqual(web.tmpfs, ['/app/apps/web/.next/cache'], file);
+    }
+  }
+});
+
+test('the image sets no PORTFOLIO_* default and creates the data directory for uid 1001', () => {
+  const text = readFileSync(path.join(ROOT, 'Dockerfile'), 'utf8');
+  assert.doesNotMatch(text, /^\s*ENV\s+PORTFOLIO_/m);
+  assert.match(
+    text,
+    /mkdir -p \/var\/lib\/portfolio && chown nextjs:nodejs \/var\/lib\/portfolio && chmod 0700 \/var\/lib\/portfolio/,
+  );
+  assert.match(text, /adduser -S nextjs -u 1001/);
 });
 
 for (const hostname of [undefined, '0.0.0.0', '::', '127.0.0.1']) {

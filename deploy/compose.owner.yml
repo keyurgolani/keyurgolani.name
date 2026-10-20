@@ -1,0 +1,45 @@
+# The owner profile: your portfolio from ../config, with Studio, drafts, and
+# revisions in a data volume. It refuses to start until #2 ships an
+# authentication provider. Run it from deploy/, with PORTFOLIO_ORIGIN in
+# deploy/.env:
+#
+#   docker compose -f compose.owner.yml up --build
+name: portfolio-owner
+services:
+  web:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: portfolio:latest
+    # A fixed name also stops `--scale`: one server per data volume.
+    container_name: portfolio-owner
+    restart: unless-stopped
+    # Loopback only: the TLS-terminating proxy in front publishes the site.
+    ports:
+      - '127.0.0.1:${PORT:-3000}:3000'
+    environment:
+      PORTFOLIO_PROFILE: owner
+      # The origin visitors use, https unless it's loopback.
+      PORTFOLIO_ORIGIN: ${PORTFOLIO_ORIGIN:?set PORTFOLIO_ORIGIN in .env to the origin visitors use}
+      PORTFOLIO_SOURCE_DIR: /config
+      PORTFOLIO_DATA_DIR: /var/lib/portfolio
+      NODE_ENV: production
+    volumes:
+      - ../config:/config:ro
+      - ../assets:/app/apps/web/public/assets:ro
+      # Drafts and revisions (#2, #3). Back this volume up.
+      - portfolio-data:/var/lib/portfolio
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        # Same probe as the image HEALTHCHECK (see the Dockerfile).
+        - "const h=process.env.HOSTNAME;const a=!h||h==='0.0.0.0'||h==='::'?'127.0.0.1':h.includes(':')?'['+h+']':h;fetch('http://'+a+':'+(process.env.PORT||3000)+'/api/health',{signal:AbortSignal.timeout(4000)}).then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+volumes:
+  portfolio-data: {}

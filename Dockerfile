@@ -47,6 +47,11 @@ ENV HOSTNAME=0.0.0.0
 
 RUN addgroup -g 1001 -S nodejs && adduser -S nextjs -u 1001 -G nodejs
 
+# The owner profile's data directory (#2, #3). A named volume mounted here
+# starts out owned by uid 1001, so the server can write to it; nothing else
+# can read it. demo and read-only never use it.
+RUN mkdir -p /var/lib/portfolio && chown nextjs:nodejs /var/lib/portfolio && chmod 0700 /var/lib/portfolio
+
 # Standalone output ships its own minimal node_modules + server.js
 COPY --from=builder --chown=nextjs:nodejs /repo/apps/web/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /repo/apps/web/.next/static ./apps/web/.next/static
