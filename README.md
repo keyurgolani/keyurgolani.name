@@ -93,6 +93,7 @@ site.example.yml                Example site document
 | Developers building variants       | [docs/variants.md](docs/variants.md)                   |
 | Architects understanding internals | [docs/architecture.md](docs/architecture.md)           |
 | Operators deploying to production  | [docs/deployment.md](docs/deployment.md)               |
+| Reviewers checking security        | [docs/threat-model.md](docs/threat-model.md)           |
 | Looking for a feature              | [docs/features.md](docs/features.md)                   |
 | AI agents authoring portfolios     | [skills/portfolio-author/](skills/portfolio-author/)   |
 | AI agents building variants        | [skills/variant-developer/](skills/variant-developer/) |
