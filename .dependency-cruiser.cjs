@@ -1,5 +1,6 @@
-// Module boundary rules for `pnpm check:deps`. #5 (variant contract) adds the
-// variant-to-host rules here.
+// Module boundary rules for `pnpm check:deps`, including the variant contract's
+// (#5): what a variant may import, and what the contract's browser-safe root
+// entry may.
 /** @type {import('dependency-cruiser').IConfiguration} */
 module.exports = {
   forbidden: [
@@ -16,6 +17,38 @@ module.exports = {
       comment: 'Shared packages must not depend on an app; apps depend on packages.',
       from: { path: '^packages/' },
       to: { path: '^apps/' },
+    },
+    {
+      name: 'variants-import-only-the-contract-packages',
+      severity: 'error',
+      comment:
+        "A variant imports @portfolio/schema, @portfolio/variant-contract, @portfolio/kit, and #19's " +
+        '@portfolio/appearance, never the host, the server-only @portfolio/core, or another variant ' +
+        '(#5). Its own files and third-party libraries are fine.',
+      from: { path: '^packages/(variant-(?!contract/)[^/]+)/' },
+      to: {
+        path: '^(?:packages|apps)/',
+        pathNot: ['^packages/$1/', '^packages/(?:schema|kit|variant-contract|appearance)/'],
+      },
+    },
+    {
+      name: 'variant-contract-root-stays-browser-safe',
+      severity: 'error',
+      comment:
+        "@portfolio/variant-contract's root entry runs in browsers, in #7's preview frame and #9's " +
+        'in-browser render, so it imports only zod and the browser-safe @portfolio/schema (#5, ' +
+        'Slice 1). Node-only code goes in its ./node subpath; tests may import anything.',
+      from: {
+        path: '^packages/variant-contract/src/',
+        pathNot: ['\\.test\\.ts$', '^packages/variant-contract/src/node/'],
+      },
+      to: {
+        pathNot: [
+          '^packages/variant-contract/src/(?!node/)',
+          '^packages/schema/src/(?!node\\.ts$|migrate/)',
+          '^node_modules/(\\.pnpm/zod@|zod/)',
+        ],
+      },
     },
     {
       name: 'owner-code-only-from-composition',
