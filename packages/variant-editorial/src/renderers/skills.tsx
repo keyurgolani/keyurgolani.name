@@ -16,7 +16,9 @@ export function SkillsRenderer({ section }: { section: Skills }) {
                 {group.items.map((item, j) => (
                   <li key={j} className="editorial-group__item">
                     {item}
-                    {j < group.items.length - 1 ? <span style={{ color: 'var(--ink-subtle)' }}> · </span> : null}
+                    {j < group.items.length - 1 ? (
+                      <span style={{ color: 'var(--ink-subtle)' }}> · </span>
+                    ) : null}
                   </li>
                 ))}
               </ul>

@@ -56,9 +56,9 @@ export default async function VariantsPage() {
       </nav>
       <h1>Variants</h1>
       <p>
-        {summaries.length} variant{summaries.length === 1 ? '' : 's'} registered. Filter by aesthetic,
-        motion, typography, or density. Click any card to preview. Color scheme and typography
-        options live on the active variant.
+        {summaries.length} variant{summaries.length === 1 ? '' : 's'} registered. Filter by
+        aesthetic, motion, typography, or density. Click any card to preview. Color scheme and
+        typography options live on the active variant.
       </p>
       <VariantPicker
         activeSlug={activeSlug}

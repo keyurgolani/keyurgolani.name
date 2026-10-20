@@ -95,9 +95,7 @@ function main() {
 
   for (const v of variants) {
     const declared = readManifestKinds(v.manifestPath);
-    const declaredKinds = declared.fullCoverage
-      ? new Set(allKinds)
-      : new Set(declared.kinds ?? []);
+    const declaredKinds = declared.fullCoverage ? new Set(allKinds) : new Set(declared.kinds ?? []);
 
     const unknown = [...declaredKinds].filter((k) => !allKinds.has(k));
     const unsupported = [...allKinds].filter((k) => !declaredKinds.has(k));
@@ -110,9 +108,7 @@ function main() {
       console.log(`    UNKNOWN:    ${unknown.join(', ')}  ← invalid kinds, fix the manifest`);
     }
     if (unsupported.length > 0) {
-      console.log(
-        `    fallback:   ${unsupported.join(', ')}  ← will render via FallbackSection`,
-      );
+      console.log(`    fallback:   ${unsupported.join(', ')}  ← will render via FallbackSection`);
     } else if (!declared.fullCoverage && unknown.length === 0) {
       console.log('    fallback:   none — full coverage via explicit list');
     }

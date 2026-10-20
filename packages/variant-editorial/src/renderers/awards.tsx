@@ -9,7 +9,9 @@ export function AwardsRenderer({ section }: { section: Awards }) {
       {section.items.map((item, i) => (
         <article key={`${item.name}-${i}`} className="editorial-entry">
           <aside className="editorial-entry__marginalia">
-            <span className="editorial-entry__marginalia-period">{formatDate(item.receivedAt, { short: true })}</span>
+            <span className="editorial-entry__marginalia-period">
+              {formatDate(item.receivedAt, { short: true })}
+            </span>
             {item.organization ? <span>{item.organization}</span> : null}
           </aside>
           <div className="editorial-entry__body">

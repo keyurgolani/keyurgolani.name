@@ -66,11 +66,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
         {jsonLdBlocks.map((json, i) => (
-          <script
-            key={i}
-            type="application/ld+json"
-            dangerouslySetInnerHTML={{ __html: json }}
-          />
+          <script key={i} type="application/ld+json" dangerouslySetInnerHTML={{ __html: json }} />
         ))}
       </head>
       <body>

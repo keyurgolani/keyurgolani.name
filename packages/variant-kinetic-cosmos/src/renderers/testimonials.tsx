@@ -23,7 +23,9 @@ export function TestimonialsRenderer({ section }: { section: Testimonials }) {
                     <a href={item.authorUrl} target="_blank" rel="noopener noreferrer">
                       {item.author}
                     </a>
-                  ) : item.author}
+                  ) : (
+                    item.author
+                  )}
                 </cite>
                 {(item.authorRole || item.authorOrganization) && (
                   <p className="kc-testimonial__role">

@@ -85,11 +85,11 @@ For a process manager (PM2, systemd, etc.), wrap `pnpm start`. The Next.js stand
 
 ## Environment variables
 
-| Variable | Purpose | Default |
-|---|---|---|
-| `GITHUB_TOKEN` | GitHub GraphQL token for richer GitHub data (5000 req/hr, contribution heatmap, full pinned items) | unset (REST fallback at 60 req/hr) |
-| `PORT` | Port the host binds to | `3000` |
-| `NEXT_PUBLIC_BASE_URL` | Canonical URL for OG/SEO | inferred from request |
+| Variable               | Purpose                                                                                            | Default                            |
+| ---------------------- | -------------------------------------------------------------------------------------------------- | ---------------------------------- |
+| `GITHUB_TOKEN`         | GitHub GraphQL token for richer GitHub data (5000 req/hr, contribution heatmap, full pinned items) | unset (REST fallback at 60 req/hr) |
+| `PORT`                 | Port the host binds to                                                                             | `3000`                             |
+| `NEXT_PUBLIC_BASE_URL` | Canonical URL for OG/SEO                                                                           | inferred from request              |
 
 `.env` files are gitignored. Use `.env.example` as a template.
 

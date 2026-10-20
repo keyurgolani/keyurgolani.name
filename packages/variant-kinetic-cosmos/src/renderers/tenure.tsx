@@ -9,9 +9,7 @@ export function TenureRenderer({ section }: { section: Tenure }) {
           {section.years != null ? `${section.years}+` : '—'}
         </span>
         <span className="kc-tenure__label">Years</span>
-        {section.summary ? (
-          <p className="kc-tenure__summary">{section.summary}</p>
-        ) : null}
+        {section.summary ? <p className="kc-tenure__summary">{section.summary}</p> : null}
       </div>
     </SectionFrame>
   );

@@ -62,8 +62,7 @@ export function AnimatedCounter({
         const t = Math.min(1, (now - start) / durationMs);
         const eased = 1 - Math.pow(1 - t, 3);
         const next = end * eased;
-        const rounded =
-          decimals > 0 ? Number.parseFloat(next.toFixed(decimals)) : Math.round(next);
+        const rounded = decimals > 0 ? Number.parseFloat(next.toFixed(decimals)) : Math.round(next);
         setValue(rounded);
         if (t < 1) requestAnimationFrame(tick);
       };
@@ -92,11 +91,7 @@ export function AnimatedCounter({
 
   const formatted = decimals > 0 ? value.toFixed(decimals) : value.toLocaleString();
   return (
-    <span
-      ref={ref}
-      className={className}
-      aria-label={`${prefix ?? ''}${end}${suffix ?? ''}`}
-    >
+    <span ref={ref} className={className} aria-label={`${prefix ?? ''}${end}${suffix ?? ''}`}>
       {prefix}
       {formatted}
       {suffix}

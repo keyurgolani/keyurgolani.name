@@ -22,11 +22,20 @@ const SCRIPT_FILE = fileURLToPath(import.meta.url);
 const ROOT = path.dirname(path.dirname(path.dirname(SCRIPT_FILE)));
 
 let failures = 0;
-function fail(msg) { console.error('FAIL: ' + msg); failures++; }
-function pass(msg) { console.log('ok:   ' + msg); }
+function fail(msg) {
+  console.error('FAIL: ' + msg);
+  failures++;
+}
+function pass(msg) {
+  console.log('ok:   ' + msg);
+}
 
 function readFileOrNull(p) {
-  try { return readFileSync(p, 'utf8'); } catch { return null; }
+  try {
+    return readFileSync(p, 'utf8');
+  } catch {
+    return null;
+  }
 }
 
 // ─── Check 1: section-kinds.md parity ─────────────────────────────────
@@ -36,7 +45,9 @@ function checkSectionKindsParity() {
   const aText = readFileOrNull(a);
   const bText = readFileOrNull(b);
   if (aText === null || bText === null) {
-    fail(`section-kinds.md missing — portfolio-author: ${aText !== null}, variant-developer: ${bText !== null}`);
+    fail(
+      `section-kinds.md missing — portfolio-author: ${aText !== null}, variant-developer: ${bText !== null}`,
+    );
     return;
   }
   if (aText !== bText) {
@@ -147,7 +158,10 @@ function checkSchemaMdCoverage() {
     fail('could not parse ALL_SECTION_KINDS from packages/schema');
     return;
   }
-  const allKinds = m[1].split(',').map((s) => s.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean);
+  const allKinds = m[1]
+    .split(',')
+    .map((s) => s.trim().replace(/^['"]|['"]$/g, ''))
+    .filter(Boolean);
   const missing = allKinds.filter((k) => !schemaMd.includes(`kind: ${k}`));
   if (missing.length) {
     fail(`schema.md missing kinds: ${missing.join(', ')}`);

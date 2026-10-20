@@ -24,7 +24,11 @@ html[data-theme='dark'] {
 }
 
 body {
-  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
 }
 
 a {
@@ -49,7 +53,11 @@ html[data-theme='dark'] ::selection {
 /* Host chrome (admin, variants picker, error pages) */
 
 .host-chrome {
-  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
   max-width: none;
   margin: 0;
   padding: 3rem clamp(1.5rem, 4vw, 4rem);
@@ -276,7 +284,11 @@ html[data-theme='dark'] .host-chrome__variant-card .meta {
   background: #1a1a1a;
   color: #fbfaf6;
   border-radius: 999px;
-  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
   font-size: 0.8125rem;
   letter-spacing: 0.02em;
   white-space: nowrap;
@@ -284,7 +296,10 @@ html[data-theme='dark'] .host-chrome__variant-card .meta {
   overflow: hidden;
   opacity: 0.18;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
-  transition: opacity 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+  transition:
+    opacity 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
 }
 
 .preview-banner:hover,

@@ -74,7 +74,9 @@ export function formatDate(raw: string | undefined | null, opts: { short?: boole
   const months = opts.short ? SHORT_MONTHS : MONTHS;
   if (parsed.month != null) {
     const month = months[parsed.month] ?? '';
-    return parsed.day != null ? `${month} ${parsed.day}, ${parsed.year}` : `${month} ${parsed.year}`;
+    return parsed.day != null
+      ? `${month} ${parsed.day}, ${parsed.year}`
+      : `${month} ${parsed.year}`;
   }
   return String(parsed.year);
 }

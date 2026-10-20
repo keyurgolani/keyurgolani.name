@@ -15,7 +15,7 @@
   --ink-muted: #4a4845;
   --ink-subtle: #8a8780;
 
-  --accent: #b54a32;       /* warm sienna, used sparingly */
+  --accent: #b54a32; /* warm sienna, used sparingly */
   --accent-muted: #d4a292;
 
   --rule: #1a1a1a14;
@@ -23,7 +23,7 @@
 
   /* Type scale (modular, ratio ~1.25) */
   --type-display-xl: 4.2rem;
-  --type-display-lg: 3.0rem;
+  --type-display-lg: 3rem;
   --type-display-md: 2.2rem;
   --type-display-sm: 1.6rem;
   --type-body-lg: 1.125rem;
@@ -34,7 +34,7 @@
   --type-stat: 3.6rem;
 
   /* Measure (line length) */
-  --measure: 38rem;             /* ~64ch at body size */
+  --measure: 38rem; /* ~64ch at body size */
   --measure-narrow: 28rem;
   --measure-wide: 44rem;
 
@@ -335,7 +335,9 @@
   border: 1px solid var(--ink);
   color: var(--ink);
   background: transparent;
-  transition: background 0.15s ease, color 0.15s ease;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
 }
 
 .editorial-action:hover {
@@ -1712,7 +1714,9 @@
   -webkit-backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--rule-subtle);
   transform: translateY(0);
-  transition: transform 220ms ease, opacity 220ms ease;
+  transition:
+    transform 220ms ease,
+    opacity 220ms ease;
 }
 
 .editorial-toc[data-hidden='true'] {
@@ -1769,7 +1773,9 @@
   text-decoration: none;
   padding: 0.2rem 0;
   border-bottom: 1px solid transparent;
-  transition: color 150ms ease, border-color 150ms ease;
+  transition:
+    color 150ms ease,
+    border-color 150ms ease;
   white-space: nowrap;
 }
 

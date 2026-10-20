@@ -75,19 +75,26 @@ function stripComment(value) {
 }
 
 /** Hide the user and password part of any URL, such as a Git build context with a token. */
-const maskCredentials = (text) => text.replace(/([a-z][a-z0-9+.-]*:\/\/)[^\s/@'"]+@/gi, '$1<credentials not shown>@');
+const maskCredentials = (text) =>
+  text.replace(/([a-z][a-z0-9+.-]*:\/\/)[^\s/@'"]+@/gi, '$1<credentials not shown>@');
 
 // ---------------------------------------------------------------------------
 // Compose: facts from `docker compose config --format json`
 
-const HIDDEN_SERVICE_FIELDS = 'environment, labels, command, entrypoint, healthcheck, build args, secrets, configs';
+const HIDDEN_SERVICE_FIELDS =
+  'environment, labels, command, entrypoint, healthcheck, build args, secrets, configs';
 
 function describePort(p) {
   if (!p || typeof p !== 'object') return 'port: <not in long form, not shown>';
-  const published = p.published === undefined || p.published === null || p.published === '' ? '' : printable(p.published);
+  const published =
+    p.published === undefined || p.published === null || p.published === ''
+      ? ''
+      : printable(p.published);
   const target = `${printable(p.target ?? '?')}/${printable(p.protocol ?? 'tcp')}`;
   if (!published) return `port: ${target}, not published`;
-  return p.host_ip ? `port: ${printable(p.host_ip)}:${published} -> ${target}` : `port: ${published} -> ${target}, every interface`;
+  return p.host_ip
+    ? `port: ${printable(p.host_ip)}:${published} -> ${target}`
+    : `port: ${published} -> ${target}, every interface`;
 }
 
 function describeVolume(v) {
@@ -112,7 +119,8 @@ function composeFacts(text, { service, expectImage, expectReadOnly }) {
   if (!services || typeof services !== 'object' || Array.isArray(services)) {
     throw new ToolError('The JSON has no services, so it is not Compose config output.');
   }
-  if (service !== undefined && !Object.hasOwn(services, service)) throw new ToolError(`No service "${service}" in the Compose config.`);
+  if (service !== undefined && !Object.hasOwn(services, service))
+    throw new ToolError(`No service "${service}" in the Compose config.`);
   const out = [];
   if (typeof config.name === 'string') out.push(`project: ${printable(config.name)}`);
   for (const name of service !== undefined ? [service] : Object.keys(services)) {
@@ -122,11 +130,15 @@ function composeFacts(text, { service, expectImage, expectReadOnly }) {
     out.push(`  image: ${s.image ? printable(s.image) : 'not set'}`);
     if (s.build && typeof s.build === 'object') {
       const dockerfile = s.build.dockerfile ? ` (dockerfile ${printable(s.build.dockerfile)})` : '';
-      out.push(`  build context: ${maskCredentials(printable(s.build.context ?? '.'))}${dockerfile}`);
-    } else if (typeof s.build === 'string') out.push(`  build context: ${maskCredentials(printable(s.build))}`);
+      out.push(
+        `  build context: ${maskCredentials(printable(s.build.context ?? '.'))}${dockerfile}`,
+      );
+    } else if (typeof s.build === 'string')
+      out.push(`  build context: ${maskCredentials(printable(s.build))}`);
     for (const e of [s.env_file ?? []].flat()) {
       const path = typeof e === 'string' ? e : e?.path;
-      if (path) out.push(`  env_file: ${printable(path)}${e?.required === false ? ' (optional)' : ''}`);
+      if (path)
+        out.push(`  env_file: ${printable(path)}${e?.required === false ? ' (optional)' : ''}`);
     }
     for (const p of Array.isArray(s.ports) ? s.ports : []) out.push(`  ${describePort(p)}`);
     for (const v of Array.isArray(s.volumes) ? s.volumes : []) out.push(`  ${describeVolume(v)}`);
@@ -135,19 +147,25 @@ function composeFacts(text, { service, expectImage, expectReadOnly }) {
       : Object.keys(s.networks && typeof s.networks === 'object' ? s.networks : {}).map(printable);
     if (networks.length) out.push(`  networks: ${networks.join(', ')}`);
   }
-  for (const [name, n] of Object.entries(config.networks && typeof config.networks === 'object' ? config.networks : {})) {
+  for (const [name, n] of Object.entries(
+    config.networks && typeof config.networks === 'object' ? config.networks : {},
+  )) {
     if (!n || typeof n !== 'object') continue;
-    out.push(`network ${printable(name)}: ${printable(n.name ?? name)}${n.external ? ' (external)' : ''}`);
+    out.push(
+      `network ${printable(name)}: ${printable(n.name ?? name)}${n.external ? ' (external)' : ''}`,
+    );
   }
   out.push(`not shown: ${HIDDEN_SERVICE_FIELDS}`);
 
   const failures = [];
-  const s = service !== undefined ? services[service] ?? {} : {};
+  const s = service !== undefined ? (services[service] ?? {}) : {};
   if (expectImage !== undefined && s.image !== expectImage) {
     failures.push(`image is ${s.image ? printable(s.image) : 'not set'}, expected ${expectImage}`);
   }
   if (expectReadOnly !== undefined) {
-    const mount = (Array.isArray(s.volumes) ? s.volumes : []).find((v) => v?.target === expectReadOnly);
+    const mount = (Array.isArray(s.volumes) ? s.volumes : []).find(
+      (v) => v?.target === expectReadOnly,
+    );
     if (!mount) failures.push(`no mount targets ${expectReadOnly}`);
     else if (!mount.read_only) failures.push(`the mount at ${expectReadOnly} is read-write`);
   }
@@ -159,11 +177,16 @@ function configCheck(text, exit) {
   const lines = text.split(/\r?\n/).filter((l) => l.trim());
   let first = 'none';
   if (lines.length) {
-    const level = lines[0].match(/\blevel=([a-z]+)/i) ?? lines[0].match(/^(WARN|ERRO|FATA|INFO|DEBU)\[/);
+    const level =
+      lines[0].match(/\blevel=([a-z]+)/i) ?? lines[0].match(/^(WARN|ERRO|FATA|INFO|DEBU)\[/);
     const names = { WARN: 'warning', ERRO: 'error', FATA: 'fatal', INFO: 'info', DEBU: 'debug' };
     first = level
       ? (names[level[1]] ?? level[1].toLowerCase())
-      : lines[0].trim().split(/\s+/)[0].replace(/[^A-Za-z0-9_.:-]/g, '').slice(0, 24) || 'other';
+      : lines[0]
+          .trim()
+          .split(/\s+/)[0]
+          .replace(/[^A-Za-z0-9_.:-]/g, '')
+          .slice(0, 24) || 'other';
   }
   const ok = exit === 0 && lines.length === 0;
   return {
@@ -182,11 +205,15 @@ function validateCheck(text, exit) {
   const locations = new Set();
   for (const line of lines) {
     if (!/\[emerg\]|\berror\b|"level":"error"/i.test(line)) continue;
-    for (const m of line.matchAll(/((?:\/[\w.@+-]+)+|Caddyfile):(\d+)/g)) locations.add(`${m[1]}:${m[2]}`);
+    for (const m of line.matchAll(/((?:\/[\w.@+-]+)+|Caddyfile):(\d+)/g))
+      locations.add(`${m[1]}:${m[2]}`);
   }
   const where = locations.size ? [...locations].join(', ') : 'none given';
   return {
-    text: exit === 0 ? `validator: exit 0, config is valid` : `validator: exit ${exit}, ${plural(lines.length, 'line')} of output (not shown), error locations: ${where}`,
+    text:
+      exit === 0
+        ? `validator: exit 0, config is valid`
+        : `validator: exit ${exit}, ${plural(lines.length, 'line')} of output (not shown), error locations: ${where}`,
     ok: exit === 0,
   };
 }
@@ -212,7 +239,13 @@ function parseYamlLine(line) {
   if (!m || (itemIndent < 0 && content.startsWith('-'))) {
     return { indent, itemIndent, contentIndent, key: null, value: content };
   }
-  return { indent, itemIndent, contentIndent, key: (m[1] ?? m[2] ?? m[3]).trim(), value: (m[4] ?? '').trim() };
+  return {
+    indent,
+    itemIndent,
+    contentIndent,
+    key: (m[1] ?? m[2] ?? m[3]).trim(),
+    value: (m[4] ?? '').trim(),
+  };
 }
 
 /**
@@ -249,7 +282,11 @@ function walkYaml(text, visit) {
     if (parsed.key !== null) {
       const value = stripComment(parsed.value);
       if (/^[|>][-+0-9]*$/.test(value)) scalarIndent = parsed.contentIndent;
-      stack.push({ indent: parsed.contentIndent, key: parsed.key, open: value === '' || /^&\S+$/.test(value) });
+      stack.push({
+        indent: parsed.contentIndent,
+        key: parsed.key,
+        open: value === '' || /^&\S+$/.test(value),
+      });
     }
   }
   return lines;
@@ -276,19 +313,38 @@ const modeText = (mode) => mode.replace(/[^a-z,]/gi, '').slice(0, 32) || '?';
 function analyzeService(text, service, target) {
   const records = [];
   const lines = walkYaml(text, (n, line, info) => records.push({ n, ...info }));
-  const a = { lines, svc: null, imageLine: null, buildLine: null, mount: null, refusal: null, childIndent: 0 };
+  const a = {
+    lines,
+    svc: null,
+    imageLine: null,
+    buildLine: null,
+    mount: null,
+    refusal: null,
+    childIndent: 0,
+  };
   const refuse = (reason) => {
     a.refusal ??= reason;
   };
-  const svc = records.find((r) => !r.scalar && !r.isItem && r.key === service && r.path.length === 1 && r.path[0] === 'services');
+  const svc = records.find(
+    (r) =>
+      !r.scalar &&
+      !r.isItem &&
+      r.key === service &&
+      r.path.length === 1 &&
+      r.path[0] === 'services',
+  );
   if (!svc) {
     refuse(`No service "${service}" under services: in this file.`);
     return a;
   }
   a.svc = svc;
   const svcValue = stripComment(svc.value);
-  if (svcValue.startsWith('&')) refuse(`The service "${service}" carries a YAML anchor, so other services can share its settings. Ask the owner.`);
-  else if (svcValue.startsWith('*')) refuse(`The service "${service}" is a YAML alias of another node. Ask the owner.`);
+  if (svcValue.startsWith('&'))
+    refuse(
+      `The service "${service}" carries a YAML anchor, so other services can share its settings. Ask the owner.`,
+    );
+  else if (svcValue.startsWith('*'))
+    refuse(`The service "${service}" is a YAML alias of another node. Ask the owner.`);
   else if (svcValue) refuse(`The service "${service}" is written inline. Ask the owner.`);
   const end = records.find((r) => r.n > svc.n && !r.scalar && r.indent <= svc.indent);
   const block = records.filter((r) => r.n > svc.n && (!end || r.n < end.n) && !r.scalar);
@@ -299,11 +355,15 @@ function analyzeService(text, service, target) {
   }
   a.childIndent = children[0].indent;
   for (const key of ['<<', 'extends']) {
-    if (children.some((c) => c.key === key)) refuse(`Service "${service}" uses "${key}", so its image or mounts can come from elsewhere. Ask the owner.`);
+    if (children.some((c) => c.key === key))
+      refuse(
+        `Service "${service}" uses "${key}", so its image or mounts can come from elsewhere. Ask the owner.`,
+      );
   }
   a.imageLine = children.find((c) => c.key === 'image') ?? null;
   a.buildLine = children.find((c) => c.key === 'build') ?? null;
-  if (a.imageLine && /^[&*!]/.test(stripComment(a.imageLine.value))) refuse('The image line uses a YAML anchor, alias, or tag. Ask the owner.');
+  if (a.imageLine && /^[&*!]/.test(stripComment(a.imageLine.value)))
+    refuse('The image line uses a YAML anchor, alias, or tag. Ask the owner.');
 
   const volumes = children.find((c) => c.key === 'volumes');
   if (!volumes) return a;
@@ -311,7 +371,9 @@ function analyzeService(text, service, target) {
     refuse('The volumes list is written inline or by reference. Ask the owner.');
     return a;
   }
-  const inVolumes = block.filter((r) => r.n > volumes.n && r.path[2] === 'volumes' && r.path.length >= 4);
+  const inVolumes = block.filter(
+    (r) => r.n > volumes.n && r.path[2] === 'volumes' && r.path.length >= 4,
+  );
   const items = inVolumes.filter((r) => r.isItem && r.path.length === 4);
   if (items.some((r) => /^[&*]/.test(stripComment(r.value)))) {
     refuse('An entry in the volumes list uses a YAML anchor or alias. Ask the owner.');
@@ -321,11 +383,19 @@ function analyzeService(text, service, target) {
     if (item.key === null) {
       const result = readOnlySpec(stripComment(item.value), target);
       if (!result) continue;
-      a.mount = { kind: 'short', n: item.n, item, result, mode: result.was === 'no mode' ? 'no mode' : `mode ${modeText(result.was)}` };
+      a.mount = {
+        kind: 'short',
+        n: item.n,
+        item,
+        result,
+        mode: result.was === 'no mode' ? 'no mode' : `mode ${modeText(result.was)}`,
+      };
       break;
     }
     const next = items.find((r) => r.n > item.n);
-    const fields = inVolumes.filter((r) => r.n >= item.n && (!next || r.n < next.n) && r.key !== null && r.path.length === 4);
+    const fields = inVolumes.filter(
+      (r) => r.n >= item.n && (!next || r.n < next.n) && r.key !== null && r.path.length === 4,
+    );
     const unquote = (v) => stripComment(v).replace(/^["']|["']$/g, '');
     const targetField = fields.find((f) => f.key === 'target' && unquote(f.value) === target);
     if (!targetField) continue;
@@ -339,7 +409,8 @@ function analyzeService(text, service, target) {
 
 function composeLocate(text, { service, target }) {
   const a = analyzeService(text, service, target);
-  if (!a.svc) return [`service ${service}: not in this file`, `edit here: no (${a.refusal})`].join('\n');
+  if (!a.svc)
+    return [`service ${service}: not in this file`, `edit here: no (${a.refusal})`].join('\n');
   const reason = a.refusal ?? (a.mount ? null : `no mount targets ${target} in this file`);
   return [
     `service ${service}: line ${a.svc.n}`,
@@ -351,7 +422,8 @@ function composeLocate(text, { service, target }) {
 }
 
 function composeEdit(text, { service, image, target }) {
-  if (!/^[\w./:@-]+$/.test(image)) throw new ToolError('The image reference has unexpected characters.');
+  if (!/^[\w./:@-]+$/.test(image))
+    throw new ToolError('The image reference has unexpected characters.');
   const a = analyzeService(text, service, target);
   if (a.refusal) throw new ToolError(a.refusal);
   if (!a.mount) throw new ToolError(`No mount in service "${service}" targets ${target}.`);
@@ -377,7 +449,10 @@ function composeEdit(text, { service, image, target }) {
       : `${' '.repeat(m.readOnly.indent)}read_only: true`;
     changes.push(`mount: line ${m.readOnly.n} set to read_only: true`);
   } else {
-    inserts.push({ after: m.targetField.n, text: `${' '.repeat(m.targetField.contentIndent)}read_only: true` });
+    inserts.push({
+      after: m.targetField.n,
+      text: `${' '.repeat(m.targetField.contentIndent)}read_only: true`,
+    });
     changes.push(`mount: read_only: true inserted after line ${m.targetField.n}`);
   }
   for (const ins of inserts.sort((x, y) => y.after - x.after)) lines.splice(ins.after, 0, ins.text);
@@ -425,16 +500,50 @@ function composeDiff(text, target) {
 // Directives that route requests or say where logs go. Anything else (headers,
 // auth, TLS, rewrites that can carry a key upstream) prints as hidden.
 const CADDY_DIRECTIVES = new Set([
-  'reverse_proxy', 'handle', 'handle_path', 'route', 'respond', 'redir', 'root', 'file_server',
-  'encode', 'log', 'output', 'format', 'import', 'bind', 'abort', 'error', 'try_files', 'to',
-  'skip_log', 'log_skip', 'auto_https', 'http_port', 'https_port',
+  'reverse_proxy',
+  'handle',
+  'handle_path',
+  'route',
+  'respond',
+  'redir',
+  'root',
+  'file_server',
+  'encode',
+  'log',
+  'output',
+  'format',
+  'import',
+  'bind',
+  'abort',
+  'error',
+  'try_files',
+  'to',
+  'skip_log',
+  'log_skip',
+  'auto_https',
+  'http_port',
+  'https_port',
 ]);
 // Blocks whose every line can be a credential, hidden whatever their contents.
 const CADDY_SECRET_BLOCKS = new Set(['basic_auth', 'basicauth', 'forward_auth']);
 const CADDY_MATCHERS = new Set(['path', 'path_regexp', 'method', 'host', 'protocol']);
 const NGINX_DIRECTIVES = new Set([
-  'http', 'server', 'listen', 'server_name', 'location', 'proxy_pass', 'return', 'access_log',
-  'error_log', 'include', 'root', 'alias', 'try_files', 'upstream', 'index', 'events',
+  'http',
+  'server',
+  'listen',
+  'server_name',
+  'location',
+  'proxy_pass',
+  'return',
+  'access_log',
+  'error_log',
+  'include',
+  'root',
+  'alias',
+  'try_files',
+  'upstream',
+  'index',
+  'events',
 ]);
 
 /** Whether a Caddyfile token can be a site address, such as example.com, :8080, or http://host:port. */
@@ -501,7 +610,8 @@ function caddyLines(text) {
     if (heredoc) {
       hidden++;
       const t = raw.trim();
-      if (t === heredoc || t.startsWith(`${heredoc} `) || t.startsWith(`${heredoc}\t`)) heredoc = null;
+      if (t === heredoc || t.startsWith(`${heredoc} `) || t.startsWith(`${heredoc}\t`))
+        heredoc = null;
       return;
     }
     const scan = scanCaddyLine(raw, quote);
@@ -509,7 +619,8 @@ function caddyLines(text) {
       // The rest of a quoted token that started on an earlier line.
       hidden++;
       quote = scan.quote;
-      if (!quote && scan.tokens.length > 1 && scan.tokens[scan.tokens.length - 1] === '{') hiddenDepth++;
+      if (!quote && scan.tokens.length > 1 && scan.tokens[scan.tokens.length - 1] === '{')
+        hiddenDepth++;
       return;
     }
     const { tokens } = scan;
@@ -555,7 +666,14 @@ function caddyLines(text) {
         stack.push('top');
         return;
       }
-      if (mode === 'start' && !opens && !heredocStart && !opensQuote && first !== 'import' && tokens.every(isSiteAddress)) {
+      if (
+        mode === 'start' &&
+        !opens &&
+        !heredocStart &&
+        !opensQuote &&
+        first !== 'import' &&
+        tokens.every(isSiteAddress)
+      ) {
         mode = 'braceless';
         out.push(numbered(n, maskCredentials(scan.body)));
         return;
@@ -721,7 +839,8 @@ function nginxLines(text) {
     if (st.end === '}') {
       if (first) {
         // A statement closed by the brace without a semicolon.
-        if (NGINX_DIRECTIVES.has(first)) add(st.line, maskCredentials(st.text.replace(/\s+/g, ' ')));
+        if (NGINX_DIRECTIVES.has(first))
+          add(st.line, maskCredentials(st.text.replace(/\s+/g, ' ')));
         else {
           add(st.line, `${label}<not shown>`);
           hidden++;
@@ -739,18 +858,28 @@ function nginxLines(text) {
       } else add(st.line, `${label}<not shown>`);
       continue;
     }
-    add(st.line, `${maskCredentials(st.text.replace(/\s+/g, ' '))}${st.end === '{' ? ' {' : st.end}`);
+    add(
+      st.line,
+      `${maskCredentials(st.text.replace(/\s+/g, ' '))}${st.end === '{' ? ' {' : st.end}`,
+    );
   }
   const out = [...parts.keys()]
     .sort((a, b) => a - b)
-    .map((n) => numbered(n, `${(raw[n - 1] ?? '').slice(0, indentOf(raw[n - 1] ?? ''))}${parts.get(n).join(' ')}`));
+    .map((n) =>
+      numbered(
+        n,
+        `${(raw[n - 1] ?? '').slice(0, indentOf(raw[n - 1] ?? ''))}${parts.get(n).join(' ')}`,
+      ),
+    );
   out.push(`(${plural(hidden, 'statement')} not shown)`);
   return out.join('\n');
 }
 
 function proxyInsert(text, rule, after) {
   if (text.includes(MARKER)) {
-    throw new ToolError('This config already has the kgn-21 rule, so it was not added again. Go straight to the re-run.');
+    throw new ToolError(
+      'This config already has the kgn-21 rule, so it was not added again. Go straight to the re-run.',
+    );
   }
   if (!rule.includes(MARKER)) throw new ToolError(`The rule file has no "# ${MARKER}" comment.`);
   const eol = text.includes('\r\n') ? '\r\n' : '\n';
@@ -759,7 +888,8 @@ function proxyInsert(text, rule, after) {
   const targets = [...new Set(after)].sort((a, b) => b - a);
   for (const n of targets) {
     if (n < 1 || n > lines.length) throw new ToolError(`Line ${n} is not in the file.`);
-    if (!/(^|\s)\{$/.test(stripComment(lines[n - 1]).trim())) throw new ToolError(`Line ${n} doesn't end with {, so it doesn't open a block.`);
+    if (!/(^|\s)\{$/.test(stripComment(lines[n - 1]).trim()))
+      throw new ToolError(`Line ${n} doesn't end with {, so it doesn't open a block.`);
   }
   for (const n of targets) lines.splice(n, 0, ...ruleLines);
   return lines.join(eol);
@@ -773,7 +903,8 @@ function portBindings(json, label) {
     throw new ToolError(`The ${label} value is not JSON.`);
   }
   if (value === null) return [];
-  if (typeof value !== 'object' || Array.isArray(value)) throw new ToolError(`The ${label} value is not a port binding map.`);
+  if (typeof value !== 'object' || Array.isArray(value))
+    throw new ToolError(`The ${label} value is not a port binding map.`);
   const out = [];
   for (const [port, bindings] of Object.entries(value)) {
     for (const b of Array.isArray(bindings) ? bindings : []) {
@@ -790,24 +921,46 @@ function portsSame(before, after) {
   const b = portBindings(after, 'after');
   const same = a.length === b.length && a.every((x, i) => x === b[i]);
   const list = (l) => (l.length ? l.join(', ') : 'none');
-  return { same, text: same ? `published ports unchanged: ${list(a)}` : `published ports changed: ${list(a)} became ${list(b)}` };
+  return {
+    same,
+    text: same
+      ? `published ports unchanged: ${list(a)}`
+      : `published ports changed: ${list(a)} became ${list(b)}`,
+  };
 }
 
 // ---------------------------------------------------------------------------
 // Portfolio facts
 
 const SIMPLE_ESCAPES = {
-  n: '\n', t: '\t', r: '\r', 0: '\0', '"': '"', '\\': '\\', '/': '/', ' ': ' ',
-  e: '\x1b', a: '\x07', b: '\b', f: '\f', v: '\v', N: '\u0085', _: ' ',
+  n: '\n',
+  t: '\t',
+  r: '\r',
+  0: '\0',
+  '"': '"',
+  '\\': '\\',
+  '/': '/',
+  ' ': ' ',
+  e: '\x1b',
+  a: '\x07',
+  b: '\b',
+  f: '\f',
+  v: '\v',
+  N: '\u0085',
+  _: ' ',
 };
 
 /** Parse one YAML scalar written on a single line. */
 function parseScalar(raw, where, { flow = false } = {}) {
-  let s = raw.trim().replace(/^!\S*\s*/, '').replace(/^&\S+\s*/, '');
+  let s = raw
+    .trim()
+    .replace(/^!\S*\s*/, '')
+    .replace(/^&\S+\s*/, '');
   if (!s || s.startsWith('#')) return '';
   if (s.startsWith('*')) throw new ToolError(`${where} is a YAML alias. Read it by hand.`);
   if (/^[|>]/.test(s)) throw new ToolError(`${where} is a multi-line block. Read it by hand.`);
-  if (/^[[{]/.test(s)) throw new ToolError(`${where} is a list or mapping, not text. Read it by hand.`);
+  if (/^[[{]/.test(s))
+    throw new ToolError(`${where} is a list or mapping, not text. Read it by hand.`);
   const afterQuote = (rest) => {
     const tail = rest.trim();
     if (tail && !tail.startsWith('#') && !(flow && /^[,}]/.test(tail))) {
@@ -831,7 +984,8 @@ function parseScalar(raw, where, { flow = false } = {}) {
       else if (e === 'x' || e === 'u' || e === 'U') {
         const len = { x: 2, u: 4, U: 8 }[e];
         const hex = s.slice(i + 1, i + 1 + len);
-        if (hex.length !== len || !/^[0-9a-fA-F]+$/.test(hex)) throw new ToolError(`${where} has a bad escape. Read it by hand.`);
+        if (hex.length !== len || !/^[0-9a-fA-F]+$/.test(hex))
+          throw new ToolError(`${where} has a bad escape. Read it by hand.`);
         value += String.fromCodePoint(parseInt(hex, 16));
         i += len;
       } else throw new ToolError(`${where} has a bad escape. Read it by hand.`);
@@ -940,7 +1094,8 @@ function mappingValue(doc, parent, child) {
   const entry = doc.top.get(parent);
   if (!entry) return undefined;
   const rest = entry.rest.replace(/^!\S*\s*/, '').replace(/^&\S+\s*/, '');
-  if (rest.startsWith('*')) throw new ToolError(`${parent} is a YAML alias. Read ${where} by hand.`);
+  if (rest.startsWith('*'))
+    throw new ToolError(`${parent} is a YAML alias. Read ${where} by hand.`);
   if (rest.startsWith('{')) {
     let flow = rest;
     let scan = scanFlow(flow);
@@ -948,7 +1103,8 @@ function mappingValue(doc, parent, child) {
       flow += ` ${doc.lines[i].trim()}`;
       scan = scanFlow(flow);
     }
-    if (scan.end < 0) throw new ToolError(`${parent} has an unbalanced flow mapping. Read ${where} by hand.`);
+    if (scan.end < 0)
+      throw new ToolError(`${parent} has an unbalanced flow mapping. Read ${where} by hand.`);
     const found = scan.entries.find((e) => e.key === child);
     return found ? parseScalar(found.value, where, { flow: true }) : undefined;
   }
@@ -965,7 +1121,8 @@ function mappingValue(doc, parent, child) {
     if (!m || (m[1] ?? m[2] ?? m[3]) !== child) continue;
     const value = parseScalar(m[4] ?? '', where);
     const next = doc.lines.slice(i + 1).find((l) => !isBlankOrComment(l));
-    if (next && indentOf(next) > indent) throw new ToolError(`${where} spans several lines. Read it by hand.`);
+    if (next && indentOf(next) > indent)
+      throw new ToolError(`${where} spans several lines. Read it by hand.`);
     return value;
   }
   return undefined;
@@ -996,9 +1153,12 @@ function facts(text) {
     variant = v ? parseScalar(v.rest, 'variant') : undefined;
   }
   if (typeof name !== 'string' || !name.trim()) {
-    throw new ToolError('identity.name is missing or empty, so the identity check has nothing to look for. Stop and ask the owner.');
+    throw new ToolError(
+      'identity.name is missing or empty, so the identity check has nothing to look for. Stop and ask the owner.',
+    );
   }
-  if (/[\r\n]/.test(name)) throw new ToolError('identity.name spans several lines. Read it by hand.');
+  if (/[\r\n]/.test(name))
+    throw new ToolError('identity.name spans several lines. Read it by hand.');
   let origin = '';
   if (!url) notes.push('meta.url is not set, so ORIGIN is empty.');
   else {
@@ -1014,9 +1174,14 @@ function facts(text) {
     variant = 'editorial';
     notes.push('variant is not set; the schema default is editorial.');
   }
-  if (!/^[a-z0-9][a-z0-9-]*$/.test(String(variant))) throw new ToolError(`variant "${variant}" is not a variant slug.`);
+  if (!/^[a-z0-9][a-z0-9-]*$/.test(String(variant)))
+    throw new ToolError(`variant "${variant}" is not a variant slug.`);
   return {
-    text: [`NAME=${shellQuote(name.trim())}`, `ORIGIN=${shellQuote(origin)}`, `VARIANT=${shellQuote(variant)}`].join('\n'),
+    text: [
+      `NAME=${shellQuote(name.trim())}`,
+      `ORIGIN=${shellQuote(origin)}`,
+      `VARIANT=${shellQuote(variant)}`,
+    ].join('\n'),
     notes,
   };
 }
@@ -1025,13 +1190,42 @@ function facts(text) {
 // Access-log exposure counts
 
 const BUCKETS = ['/admin', '/variants', '/api/portfolio', '/api/variant', '/api/customize'];
-const MONTHS = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
+const MONTHS = {
+  jan: 0,
+  feb: 1,
+  mar: 2,
+  apr: 3,
+  may: 4,
+  jun: 5,
+  jul: 6,
+  aug: 7,
+  sep: 8,
+  oct: 9,
+  nov: 10,
+  dec: 11,
+};
 const COMBINED = /^\S+ \S+ \S+ \[([^\]]+)\] "(\S+) (\S+)[^"]*" (\d{3})\b/;
 // The user agent check-containment.mjs sends (its USER_AGENT), so an earlier run's probes can be told apart.
 const CHECK_AGENT = 'check-containment (keyurgolani.name #21)';
-const TIME_KEYS = ['ts', 'StartUTC', 'time', 'timestamp', '@timestamp', 'time_iso8601', 'time_local', 'msec', 'start_time'];
+const TIME_KEYS = [
+  'ts',
+  'StartUTC',
+  'time',
+  'timestamp',
+  '@timestamp',
+  'time_iso8601',
+  'time_local',
+  'msec',
+  'start_time',
+];
 const TARGET_KEYS = ['RequestPath', 'uri', 'request_uri', 'path', 'url'];
-const STATUS_KEYS = ['status', 'DownstreamStatus', 'OriginStatus', 'status_code', 'response_status'];
+const STATUS_KEYS = [
+  'status',
+  'DownstreamStatus',
+  'OriginStatus',
+  'status_code',
+  'response_status',
+];
 
 /** Path only, percent-decoded once, lowercased, with dot segments and repeated slashes resolved. */
 function normalizePath(target) {
@@ -1094,7 +1288,8 @@ function parseTime(value) {
 function mentionsAgent(value, skip) {
   if (typeof value === 'string') return !skip.has(value) && value.includes(CHECK_AGENT);
   if (Array.isArray(value)) return value.some((v) => mentionsAgent(v, skip));
-  if (value && typeof value === 'object') return Object.values(value).some((v) => mentionsAgent(v, skip));
+  if (value && typeof value === 'object')
+    return Object.values(value).some((v) => mentionsAgent(v, skip));
   return false;
 }
 
@@ -1124,10 +1319,21 @@ function parseEntry(line) {
     target ??= TARGET_KEYS.map((k) => o[k]).find((v) => typeof v === 'string' && v);
     if (!method && !target && requestLine === null) return { kind: 'other' };
     if (!method || !target) return { kind: 'unknown' };
-    const time = parseTime(TIME_KEYS.map((k) => o[k]).find((v) => v !== undefined && v !== null && v !== ''));
-    const status = Number(STATUS_KEYS.map((k) => o[k]).find((v) => v !== undefined && v !== null && v !== ''));
+    const time = parseTime(
+      TIME_KEYS.map((k) => o[k]).find((v) => v !== undefined && v !== null && v !== ''),
+    );
+    const status = Number(
+      STATUS_KEYS.map((k) => o[k]).find((v) => v !== undefined && v !== null && v !== ''),
+    );
     const skip = new Set([String(target), ...(requestLine === null ? [] : [requestLine])]);
-    return { kind: 'request', time, method: String(method).toUpperCase(), target: String(target), status, ours: mentionsAgent(o, skip) };
+    return {
+      kind: 'request',
+      time,
+      method: String(method).toUpperCase(),
+      target: String(target),
+      status,
+      ours: mentionsAgent(o, skip),
+    };
   }
   const m = trimmed.match(COMBINED);
   if (!m) return { kind: 'unknown' };
@@ -1177,7 +1383,16 @@ function exposure(text, before) {
     if (e.ours) tally.ours++;
     const day = new Date(e.time).toISOString().slice(0, 10);
     const key = `${day} ${bucket} ${e.method}`;
-    const row = rows.get(key) ?? { day, bucket, method: e.method, '2xx': 0, '3xx': 0, '4xx': 0, '5xx': 0, other: 0 };
+    const row = rows.get(key) ?? {
+      day,
+      bucket,
+      method: e.method,
+      '2xx': 0,
+      '3xx': 0,
+      '4xx': 0,
+      '5xx': 0,
+      other: 0,
+    };
     const cls = e.status >= 200 && e.status < 600 ? `${Math.floor(e.status / 100)}xx` : 'other';
     row[cls]++;
     rows.set(key, row);
@@ -1189,18 +1404,29 @@ function exposure(text, before) {
   out.push(
     `read ${plural(tally.read, 'line')}: ${plural(tally.requests, 'request')}, ${plural(tally.other, 'other log line')}, ${tally.unknown} not recognized`,
     `not counted: ${tally.late} at or after the start time, ${tally.untimed} without a usable time`,
-    Number.isFinite(first) ? `counted requests run from ${day(first)} to ${day(last)} (UTC)` : 'no dated requests before the start time',
+    Number.isFinite(first)
+      ? `counted requests run from ${day(first)} to ${day(last)} (UTC)`
+      : 'no dated requests before the start time',
     `${tally.ours} of the counted requests carry check-containment's user agent, so an earlier run of this check sent them`,
   );
   const sorted = [...rows.values()].sort(
-    (a, b) => a.day.localeCompare(b.day) || BUCKETS.indexOf(a.bucket) - BUCKETS.indexOf(b.bucket) || a.method.localeCompare(b.method),
+    (a, b) =>
+      a.day.localeCompare(b.day) ||
+      BUCKETS.indexOf(a.bucket) - BUCKETS.indexOf(b.bucket) ||
+      a.method.localeCompare(b.method),
   );
   if (!sorted.length) out.push(`no requests to ${BUCKETS.join(', ')}`);
   else {
     out.push('date        path            method  2xx  3xx  4xx  5xx  other');
     for (const r of sorted) {
       out.push(
-        [r.day.padEnd(10), r.bucket.padEnd(14), r.method.padEnd(6), ...['2xx', '3xx', '4xx', '5xx'].map((c) => String(r[c]).padStart(3)), String(r.other).padStart(5)].join('  '),
+        [
+          r.day.padEnd(10),
+          r.bucket.padEnd(14),
+          r.method.padEnd(6),
+          ...['2xx', '3xx', '4xx', '5xx'].map((c) => String(r[c]).padStart(3)),
+          String(r.other).padStart(5),
+        ].join('  '),
       );
     }
   }
@@ -1223,14 +1449,17 @@ function parseArgs(args, { flags = {}, positional = 0 }) {
       const value = eq < 0 ? args[++i] : arg.slice(eq + 1);
       if (value === undefined || value === '') throw new UsageError(`${name} needs a value`);
       if (value.startsWith('--')) throw new UsageError(`${name} needs a value, not another option`);
-      if (spec.pattern && !spec.pattern.test(value)) throw new UsageError(`${name} takes ${spec.what}`);
+      if (spec.pattern && !spec.pattern.test(value))
+        throw new UsageError(`${name} takes ${spec.what}`);
       if (spec.repeat) (values[name] ??= []).push(value);
       else if (Object.hasOwn(values, name)) throw new UsageError(`${name} given twice`);
       else values[name] = value;
     } else rest.push(arg);
   }
   if (rest.length !== positional) {
-    throw new UsageError(rest.length > positional ? `Unexpected argument ${rest[positional]}` : 'Missing argument');
+    throw new UsageError(
+      rest.length > positional ? `Unexpected argument ${rest[positional]}` : 'Missing argument',
+    );
   }
   return { values, rest };
 }
@@ -1258,14 +1487,20 @@ const COMMANDS = {
     spec: { flags: { '--service': {}, '--target': {} } },
     run({ values }) {
       if (!values['--service']) throw new UsageError('compose-locate needs --service');
-      console.log(composeLocate(readStdin(), { service: values['--service'], target: values['--target'] ?? DEFAULT_TARGET }));
+      console.log(
+        composeLocate(readStdin(), {
+          service: values['--service'],
+          target: values['--target'] ?? DEFAULT_TARGET,
+        }),
+      );
       return 0;
     },
   },
   'compose-edit': {
     spec: { flags: { '--service': {}, '--image': {}, '--target': {} } },
     run({ values }) {
-      if (!values['--service'] || !values['--image']) throw new UsageError('compose-edit needs --service and --image');
+      if (!values['--service'] || !values['--image'])
+        throw new UsageError('compose-edit needs --service and --image');
       const { text, changes } = composeEdit(readStdin(), {
         service: values['--service'],
         image: values['--image'],
@@ -1314,7 +1549,8 @@ const COMMANDS = {
   'proxy-insert': {
     spec: { flags: { '--rule': {}, '--after': { ...NUMBER, repeat: true } } },
     run({ values }) {
-      if (!values['--rule'] || !values['--after']) throw new UsageError('proxy-insert needs --rule and at least one --after');
+      if (!values['--rule'] || !values['--after'])
+        throw new UsageError('proxy-insert needs --rule and at least one --after');
       let rule;
       try {
         rule = readFileSync(values['--rule'], 'utf8');
@@ -1345,7 +1581,9 @@ const COMMANDS = {
   exposure: {
     spec: { flags: { '--before': { pattern: /^\d+$/, what: 'epoch seconds' } } },
     run({ values }) {
-      console.log(exposure(readStdin(), values['--before'] === undefined ? null : Number(values['--before'])));
+      console.log(
+        exposure(readStdin(), values['--before'] === undefined ? null : Number(values['--before'])),
+      );
       return 0;
     },
   },

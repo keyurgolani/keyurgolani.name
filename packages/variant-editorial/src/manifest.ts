@@ -92,7 +92,8 @@ export const manifest: VariantManifest = {
     {
       id: 'modernist',
       name: 'Modernist',
-      description: 'Inter Display (display) over Source Serif 4 (body) — Bauhaus-leaning sans for headers, serif for reading.',
+      description:
+        'Inter Display (display) over Source Serif 4 (body) — Bauhaus-leaning sans for headers, serif for reading.',
       preview: {
         display: 'Inter Display',
         body: 'Source Serif 4',

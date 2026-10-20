@@ -9,7 +9,9 @@ export function WritingsRenderer({ section }: { section: Writings }) {
       {section.items.map((item, i) => (
         <article key={`${item.title}-${i}`} className="editorial-entry">
           <aside className="editorial-entry__marginalia">
-            <span className="editorial-entry__marginalia-period">{formatDate(item.publishedAt, { short: true })}</span>
+            <span className="editorial-entry__marginalia-period">
+              {formatDate(item.publishedAt, { short: true })}
+            </span>
             {item.publication ? <span>{item.publication}</span> : null}
             {item.readingTimeMinutes ? <span>{item.readingTimeMinutes} min</span> : null}
           </aside>

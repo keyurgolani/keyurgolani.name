@@ -41,19 +41,29 @@ export async function loadPortfolio(): Promise<LoadedPortfolio> {
   return { portfolio, source: raw, format, path: activePath };
 }
 
-export async function loadPortfolioRaw(): Promise<{ source: string; path: string; format: PortfolioFormat }> {
+export async function loadPortfolioRaw(): Promise<{
+  source: string;
+  path: string;
+  format: PortfolioFormat;
+}> {
   const path = await resolvePortfolioPath();
   const source = await fs.readFile(path, 'utf8');
   const format = detectFormat(path);
   return { source, path, format };
 }
 
-export async function savePortfolioRaw(source: string): Promise<{ ok: true } | { ok: false; error: string; issues?: unknown[] }> {
+export async function savePortfolioRaw(
+  source: string,
+): Promise<{ ok: true } | { ok: false; error: string; issues?: unknown[] }> {
   const path = await resolvePortfolioPath();
   const format = detectFormat(path);
   const result = safeParsePortfolio(source, format);
   if (!result.success) {
-    return { ok: false, error: result.error, issues: 'issues' in result ? result.issues : undefined };
+    return {
+      ok: false,
+      error: result.error,
+      issues: 'issues' in result ? result.issues : undefined,
+    };
   }
   await fs.writeFile(path, source, 'utf8');
   return { ok: true };

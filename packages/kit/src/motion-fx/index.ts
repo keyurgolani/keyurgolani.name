@@ -13,11 +13,7 @@ export {
   type ScrollVelocityInertiaValues,
 } from './use-scroll-velocity-inertia';
 
-export {
-  useMouseTilt,
-  type MouseTiltOptions,
-  type MouseTiltValues,
-} from './use-mouse-tilt';
+export { useMouseTilt, type MouseTiltOptions, type MouseTiltValues } from './use-mouse-tilt';
 
 export {
   useViewportCenterActive,
@@ -25,10 +21,7 @@ export {
   type ViewportCenterActive,
 } from './use-viewport-center-active';
 
-export {
-  useFirstInteraction,
-  type FirstInteractionOptions,
-} from './use-first-interaction';
+export { useFirstInteraction, type FirstInteractionOptions } from './use-first-interaction';
 
 export {
   useScrollDispersal,

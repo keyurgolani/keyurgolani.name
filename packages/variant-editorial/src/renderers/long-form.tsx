@@ -18,7 +18,9 @@ export function LongFormRenderer({ section }: LongFormProps) {
       <div className="editorial-longform">
         <aside className="editorial-longform__marginalia">
           {asOf ? <div>As of {formatDate(asOf)}</div> : null}
-          {minutes ? <div className="editorial-longform__reading-time">{minutes} min read</div> : null}
+          {minutes ? (
+            <div className="editorial-longform__reading-time">{minutes} min read</div>
+          ) : null}
         </aside>
         <div className="editorial-longform__body">
           <MarkdownBody source={section.body} />

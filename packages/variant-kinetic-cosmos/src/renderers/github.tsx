@@ -27,7 +27,11 @@ export async function GithubRenderer({ section }: { section: Github }) {
       <SectionFrame section={section} fallbackTitle="GitHub" gradientTitle>
         <p className="kc-empty">
           GitHub stats unavailable.{' '}
-          <a href={`https://github.com/${section.username}`} target="_blank" rel="noopener noreferrer">
+          <a
+            href={`https://github.com/${section.username}`}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
             @{section.username}
           </a>
         </p>
@@ -124,7 +128,12 @@ function PinnedReposGrid({ repos }: { repos: PinnedRepo[] }) {
     <div className="kc-github__pinned">
       {repos.map((repo) => (
         <article key={repo.url} className="kc-card kc-card--hoverable kc-github__pin">
-          <a className="kc-github__pin-name" href={repo.url} target="_blank" rel="noopener noreferrer">
+          <a
+            className="kc-github__pin-name"
+            href={repo.url}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
             {repo.name}
           </a>
           {repo.description ? <p className="kc-github__pin-desc">{repo.description}</p> : null}
@@ -153,7 +162,12 @@ function RecentlyActiveList({ repos }: { repos: RecentlyActiveRepo[] }) {
     <ul className="kc-card kc-github__recent">
       {repos.map((repo) => (
         <li key={repo.url} className="kc-github__recent-row">
-          <a className="kc-github__recent-name" href={repo.url} target="_blank" rel="noopener noreferrer">
+          <a
+            className="kc-github__recent-name"
+            href={repo.url}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
             {repo.name}
           </a>
           <span className="kc-github__recent-pushed">{formatRelativeTime(repo.pushedAt)}</span>

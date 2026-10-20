@@ -15,39 +15,49 @@ paraphrases it; if you find drift, packages/kit is authoritative.
 ### Identity fields
 
 #### `slug` (required, string)
+
 - Lowercase, hyphen-separated (`/^[a-z][a-z0-9]*(-[a-z0-9]+)*$/`).
 - Must match the package directory name (`packages/variant-<slug>`).
 - Examples: `'editorial'`, `'obsidian-luxury'`, `'crt-terminal'`.
 
 #### `name` (required, string)
+
 - Human-readable. Shown in the `/variants` picker.
 - Example: `'Editorial'`, `'Obsidian Luxury'`.
 
 #### `tagline` (optional, string)
+
 - One-line description shown alongside the variant in the picker.
 
 #### `description` (optional, string)
+
 - Longer paragraph for the variant detail view.
 
 #### `author` (optional, string)
+
 - Display name of the variant author.
 
 #### `authorUrl` (optional, string)
+
 - URL linked from the author display.
 
 #### `version` (required, string)
+
 - Semver string (`'1.0.0'`). Bump on substantive renderer changes.
 
 #### `homepage` (optional, string)
+
 - Marketing/preview URL. Used by tooling and the picker's "View" link.
 
 ### Discovery / filtering fields
 
 #### `aesthetic` (required, enum)
+
 - One of: `editorial | spatial | kinetic | popart | terminal | bento | narrative | custom`.
 - Drives the variant picker's filtering tabs. `custom` is the escape hatch for variants that don't fit a lane.
 
 #### `motion` (required, enum)
+
 - One of: `still | subtle | animated | kinetic`.
 - `still` = no animations beyond CSS transitions.
 - `subtle` = small entrance/hover animations only.
@@ -55,25 +65,30 @@ paraphrases it; if you find drift, packages/kit is authoritative.
 - `kinetic` = continuous rich motion (parallax, particles, etc.).
 
 #### `density` (required, enum)
+
 - One of: `minimal | balanced | dense`.
 - Describes how much content fits per viewport.
 
 #### `typography` (required, enum)
+
 - One of: `serif | sans | mono | mixed`.
-- The variant's *default* typography character. A variant with multiple presets declares its default character here.
+- The variant's _default_ typography character. A variant with multiple presets declares its default character here.
 
 #### `performanceTier` (optional, enum, default `light`)
+
 - One of: `light | medium | heavy`.
 - `light` — flat HTML/CSS, no canvas. Safe everywhere.
 - `medium` — single 2D canvas or one WebGL2 fragment shader. No R3F.
 - `heavy` — R3F / three.js scene with effects. Lazy-mount strongly recommended; mobile fallbacks required.
 
 #### `bestFor` (optional, readonly string[])
+
 - Tags shown alongside the variant. Free-form. Examples: `['long-form','writing','academic']`.
 
 ### Coverage fields
 
 #### `supportedKinds` (required, readonly SectionKind[])
+
 - The kinds the variant declares it can render. Audit verifies this contains every kind in `ALL_SECTION_KINDS`.
 - Use `ALL_SECTION_KINDS` for the common case.
 - Or be explicit: `['hero','lede','experience',...]` — but you must keep this in sync as the schema grows. The audit checks this against the live `ALL_SECTION_KINDS`.
@@ -88,19 +103,20 @@ The concrete `data-theme` values your variant renders correctly via CSS. Valid v
 
 ##### Resolution table
 
-| User preference | Variant has it in `themes` | Resolved `data-theme` |
-|---|---|---|
-| `light`  | always (mandatory) | `light` |
-| `dark`   | always (mandatory) | `dark` |
-| `bright` | yes | `bright` |
-| `bright` | no  | `light` (fallback) |
-| `black`  | yes | `black` |
-| `black`  | no  | `dark` (fallback) |
-| `system` | n/a | `light` or `dark` per `prefers-color-scheme` |
+| User preference | Variant has it in `themes` | Resolved `data-theme`                        |
+| --------------- | -------------------------- | -------------------------------------------- |
+| `light`         | always (mandatory)         | `light`                                      |
+| `dark`          | always (mandatory)         | `dark`                                       |
+| `bright`        | yes                        | `bright`                                     |
+| `bright`        | no                         | `light` (fallback)                           |
+| `black`         | yes                        | `black`                                      |
+| `black`         | no                         | `dark` (fallback)                            |
+| `system`        | n/a                        | `light` or `dark` per `prefers-color-scheme` |
 
 ### Customization fields
 
 #### `colorSchemes` (optional, readonly ColorScheme[])
+
 - An array of named recolors that share the variant's layout. Each `ColorScheme` has:
   - `id` (string, required) — stable id used in CSS selectors and YAML.
   - `name` (string, required) — display label.
@@ -112,6 +128,7 @@ The concrete `data-theme` values your variant renders correctly via CSS. Valid v
 - Omit when the variant only ships its single canonical palette.
 
 #### `typographyPresets` (optional, readonly TypographyPreset[])
+
 - Named font/size/leading combinations. Each `TypographyPreset` has:
   - `id` (string, required), `name` (string, required), `description?`.
   - `default?` (boolean) — mark exactly one as default.
@@ -121,17 +138,21 @@ The concrete `data-theme` values your variant renders correctly via CSS. Valid v
 ### Capabilities
 
 #### `capabilities.print` (optional, boolean)
+
 - The variant ships a print stylesheet (resume-style page). Hosts surface a Print button.
 
 #### `capabilities.rss` (optional, boolean)
+
 - The variant has writings/publications/episodes worth feed-publishing. Hosts surface `/feed.xml`.
 
 #### `capabilities.multiPage` (optional, boolean)
+
 - The variant lays content across multiple routes rather than one scroll. Reserved; most variants are single-page.
 
 ### Marketing
 
 #### `screenshots` (optional, ReadonlyArray<{src, alt?, theme?, colorScheme?, typography?}>)
+
 - Static previews for the picker. `src` is required; `theme/colorScheme/typography` let one variant ship multiple shots that map to specific configurations.
 
 ## Helpers exported alongside the type
@@ -151,30 +172,27 @@ In this repo the integration point is `apps/web/src/app/layout.tsx`:
 ```tsx
 import { manifest as editorialManifest } from '@portfolio/variant-editorial';
 // ...
-<ThemeProvider
-  defaultPreference={defaultPreference}
-  supportedThemes={editorialManifest.themes}
->
+<ThemeProvider defaultPreference={defaultPreference} supportedThemes={editorialManifest.themes}>
   {children}
-</ThemeProvider>
+</ThemeProvider>;
 ```
 
 When you register a new variant that supports bright/black, that file needs to look up the active variant's manifest (today it's hardcoded to editorial; multi-variant hosting will need a registry). Without the wiring, your bright/black CSS blocks never render.
 
 ## Editorial vs. template — side-by-side example
 
-| Field | editorial | template |
-|-------|-----------|----------|
-| slug | `editorial` | `template` |
-| aesthetic | `editorial` | `custom` |
-| motion | `still` | `still` |
-| density | `balanced` | `balanced` |
-| typography | `mixed` | `sans` |
-| performanceTier | `light` | `light` |
-| themes | `['light','dark','bright','black']` | `['light','dark']` |
-| colorSchemes | 3 (warm / noir / ink-and-paper) | none |
-| typographyPresets | 2 (classic / modernist) | none |
-| supportedKinds | every kind (see editorial's actual list) | every kind via FallbackSection |
-| capabilities | `{print: true, rss: true, multiPage: false}` | `{print: true, rss: true, multiPage: false}` |
+| Field             | editorial                                    | template                                     |
+| ----------------- | -------------------------------------------- | -------------------------------------------- |
+| slug              | `editorial`                                  | `template`                                   |
+| aesthetic         | `editorial`                                  | `custom`                                     |
+| motion            | `still`                                      | `still`                                      |
+| density           | `balanced`                                   | `balanced`                                   |
+| typography        | `mixed`                                      | `sans`                                       |
+| performanceTier   | `light`                                      | `light`                                      |
+| themes            | `['light','dark','bright','black']`          | `['light','dark']`                           |
+| colorSchemes      | 3 (warm / noir / ink-and-paper)              | none                                         |
+| typographyPresets | 2 (classic / modernist)                      | none                                         |
+| supportedKinds    | every kind (see editorial's actual list)     | every kind via FallbackSection               |
+| capabilities      | `{print: true, rss: true, multiPage: false}` | `{print: true, rss: true, multiPage: false}` |
 
 The editorial declares concrete schemes/presets. The template declares none — it inherits whatever defaults the renderers handle and routes every kind through `FallbackSection`.

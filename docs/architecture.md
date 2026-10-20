@@ -89,15 +89,15 @@ The Next.js host. Responsibilities:
 
 `ThemePreferenceSchema` has 5 values. Only 4 are concrete render targets; `system` is a resolver:
 
-| Preference | Variant declared it? | `data-theme` attribute |
-|---|---|---|
-| `light` | always (mandatory) | `light` |
-| `dark` | always (mandatory) | `dark` |
-| `bright` | yes | `bright` |
-| `bright` | no | `light` (fallback) |
-| `black` | yes | `black` |
-| `black` | no | `dark` (fallback) |
-| `system` | n/a | `light` or `dark` per `prefers-color-scheme` |
+| Preference | Variant declared it? | `data-theme` attribute                       |
+| ---------- | -------------------- | -------------------------------------------- |
+| `light`    | always (mandatory)   | `light`                                      |
+| `dark`     | always (mandatory)   | `dark`                                       |
+| `bright`   | yes                  | `bright`                                     |
+| `bright`   | no                   | `light` (fallback)                           |
+| `black`    | yes                  | `black`                                      |
+| `black`    | no                   | `dark` (fallback)                            |
+| `system`   | n/a                  | `light` or `dark` per `prefers-color-scheme` |
 
 The `THEME_INIT_SCRIPT` runs before React hydration to set `data-theme` on `<html>`. Bright/black are conservatively painted as light/dark pre-hydration, then swapped in if the variant supports them.
 

@@ -18,14 +18,7 @@ export * from './feed';
  *   - `sameAs`         → portfolio.links[] URLs (excluding mailto/tel)
  */
 
-import type {
-  Portfolio,
-  Section,
-  Experience,
-  Education,
-  Skills,
-  Stack,
-} from '@portfolio/schema';
+import type { Portfolio, Section, Experience, Education, Skills, Stack } from '@portfolio/schema';
 
 export interface JsonLd {
   '@context': string;
@@ -133,9 +126,7 @@ function findFirstOngoingExperience(
   return null;
 }
 
-function findFirstEducationItem(
-  sections: readonly Section[],
-): Education['items'][number] | null {
+function findFirstEducationItem(sections: readonly Section[]): Education['items'][number] | null {
   for (const section of sections) {
     if (section.kind !== 'education') continue;
     if (section.items[0]) return section.items[0];

@@ -98,8 +98,18 @@ sections:
         description: Browser extension turning long-form articles into reading sessions with margin notes that sync across devices.
   - kind: writings
     items:
-      - { title: On legible interfaces, publication: theobrand.studio, publishedAt: 2024-09, url: 'https://theobrand.studio/legible' }
-      - { title: The cost of a setting, publication: theobrand.studio, publishedAt: 2024-04, url: 'https://theobrand.studio/setting-cost' }
+      - {
+          title: On legible interfaces,
+          publication: theobrand.studio,
+          publishedAt: 2024-09,
+          url: 'https://theobrand.studio/legible',
+        }
+      - {
+          title: The cost of a setting,
+          publication: theobrand.studio,
+          publishedAt: 2024-04,
+          url: 'https://theobrand.studio/setting-cost',
+        }
   - kind: github
     username: theobrand
     showLanguageBreakdown: true

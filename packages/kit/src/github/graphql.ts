@@ -165,13 +165,14 @@ export async function fetchViaGraphQL(
     .filter((r) => !exclude.has(r.name))
     .reduce((sum, r) => sum + r.stargazerCount, 0);
 
-  const contributionCalendar: ContributionDay[] = user.contributionsCollection.contributionCalendar.weeks
-    .flatMap((w) => w.contributionDays)
-    .map((d) => ({
-      date: d.date,
-      count: d.contributionCount,
-      level: LEVEL_MAP[d.contributionLevel] ?? 0,
-    }));
+  const contributionCalendar: ContributionDay[] =
+    user.contributionsCollection.contributionCalendar.weeks
+      .flatMap((w) => w.contributionDays)
+      .map((d) => ({
+        date: d.date,
+        count: d.contributionCount,
+        level: LEVEL_MAP[d.contributionLevel] ?? 0,
+      }));
 
   const pinnedRepos: PinnedRepo[] = user.pinnedItems.nodes
     .filter((node) => !exclude.has(node.name))
@@ -244,8 +245,7 @@ export async function fetchViaGraphQL(
     totalRepos: user.repositories.totalCount,
     totalStarsReceived,
     starsGiven: user.starredRepositories.totalCount,
-    contributionsLastYear:
-      user.contributionsCollection.contributionCalendar.totalContributions,
+    contributionsLastYear: user.contributionsCollection.contributionCalendar.totalContributions,
     pinnedRepos,
     recentlyActive,
     contributionCalendar,

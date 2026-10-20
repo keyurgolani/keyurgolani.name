@@ -65,10 +65,10 @@ The `variant:` field at the top of `portfolio.yml` selects the active variant. T
 ### 4. Tune theme, color scheme, typography
 
 ```yaml
-theme: dark              # light | dark | bright | black | system
+theme: dark # light | dark | bright | black | system
 motionPreference: reduce # respect-os | reduce | full
-colorScheme: noir        # editorial offers warm | noir | ink-and-paper
-typography: modernist    # editorial offers classic | modernist
+colorScheme: noir # editorial offers warm | noir | ink-and-paper
+typography: modernist # editorial offers classic | modernist
 ```
 
 The toggle in the corner of the page lets visitors override the theme. The schemes/typography are baked into the YAML for now (per-visitor schemas/typography pickers are a future feature).

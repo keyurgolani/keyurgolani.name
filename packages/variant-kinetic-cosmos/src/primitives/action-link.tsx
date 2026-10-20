@@ -30,7 +30,11 @@ export function ActionLink({
       target={isExternal ? '_blank' : undefined}
       rel={isExternal ? 'noopener noreferrer' : undefined}
     >
-      {icon ? <span className="kc-action__icon" aria-hidden="true">{icon}</span> : null}
+      {icon ? (
+        <span className="kc-action__icon" aria-hidden="true">
+          {icon}
+        </span>
+      ) : null}
       <span>{link.label || link.url}</span>
     </a>
   );

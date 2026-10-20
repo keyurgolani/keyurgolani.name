@@ -8,9 +8,7 @@ export function PressRenderer({ section }: { section: Press }) {
       <div className="editorial-quoted">
         {section.items.map((item, i) => (
           <blockquote key={`${item.title}-${i}`} className="editorial-quoted__item">
-            {item.excerpt ? (
-              <p className="editorial-quoted__text">{item.excerpt}</p>
-            ) : null}
+            {item.excerpt ? <p className="editorial-quoted__text">{item.excerpt}</p> : null}
             <cite className="editorial-quoted__attribution">
               <span className="editorial-quoted__attribution-name">
                 {item.url ? (

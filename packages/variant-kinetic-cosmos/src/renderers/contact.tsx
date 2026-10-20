@@ -25,7 +25,11 @@ export function ContactRenderer({ section, fallbackLinks }: ContactProps) {
         {sortedLinks.length > 0 ? (
           <div className="kc-contact__channels">
             {sortedLinks.map((link, i) => (
-              <ActionLink key={`${link.url}-${i}`} link={link} variant={i === 0 ? 'primary' : 'ghost'} />
+              <ActionLink
+                key={`${link.url}-${i}`}
+                link={link}
+                variant={i === 0 ? 'primary' : 'ghost'}
+              />
             ))}
           </div>
         ) : null}

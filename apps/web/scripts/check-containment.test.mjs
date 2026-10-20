@@ -29,7 +29,8 @@ function respond(mode, req, res) {
     (req.method === 'PUT' && WRITES.has(pathname));
   const site = mode === 'baseline' ? 'https://anamika.example.com' : ORIGIN;
 
-  if (mode === 'proxy' && (isAuthoring || pathname === '/_next/image')) return send(403, 'Forbidden');
+  if (mode === 'proxy' && (isAuthoring || pathname === '/_next/image'))
+    return send(403, 'Forbidden');
   if (isAuthoring) {
     if (mode !== 'baseline') return send(404);
     if (req.method === 'PUT') return send(400, '{"error":"invalid"}');
@@ -39,12 +40,16 @@ function respond(mode, req, res) {
     return send(200, `<pre>${SOURCE_CANARY}</pre>`);
   }
   if (pathname === '/_next/image') {
-    return mode === 'baseline' ? send(404, UPSTREAM_TEXT) : send(400, '"url" parameter is not allowed');
+    return mode === 'baseline'
+      ? send(404, UPSTREAM_TEXT)
+      : send(400, '"url" parameter is not allowed');
   }
   if (pathname === '/') return send(200, '<h1>Containment Canary</h1><p>O&#x27;Brien &amp; Co</p>');
-  if (pathname === '/robots.txt') return send(200, `User-Agent: *\nHost: ${site}\nSitemap: ${site}/sitemap.xml\n`);
+  if (pathname === '/robots.txt')
+    return send(200, `User-Agent: *\nHost: ${site}\nSitemap: ${site}/sitemap.xml\n`);
   if (pathname === '/sitemap.xml') {
-    const extra = mode === 'baseline' ? `<loc>${site}/variants</loc><loc>${site}/preview/editorial</loc>` : '';
+    const extra =
+      mode === 'baseline' ? `<loc>${site}/variants</loc><loc>${site}/preview/editorial</loc>` : '';
     return send(200, `<urlset><loc>${site}</loc>${extra}</urlset>`);
   }
   if (['/feed.xml', '/api/health'].includes(pathname)) return send(200, 'ok');
@@ -110,8 +115,14 @@ test('passes a contained build checked directly', async (t) => {
   assert.equal(code, 0, stdout);
   assert.match(stdout, /18 passed, 0 failed, 0 skipped/);
   assert.match(line(stdout, 'GET', IMAGE_PATH), /actual 400, marker present\s+PASS$/);
-  assert.match(line(stdout, 'ORIGIN', '/robots.txt'), /actual references it, no example host\s+PASS$/);
-  assert.match(line(stdout, 'ORIGIN', '/sitemap.xml'), /actual references it, no example host\s+PASS$/);
+  assert.match(
+    line(stdout, 'ORIGIN', '/robots.txt'),
+    /actual references it, no example host\s+PASS$/,
+  );
+  assert.match(
+    line(stdout, 'ORIGIN', '/sitemap.xml'),
+    /actual references it, no example host\s+PASS$/,
+  );
 });
 
 test('fails a baseline build without printing bodies, header values, or error text', async (t) => {
@@ -133,7 +144,10 @@ test('fails a baseline build without printing bodies, header values, or error te
   ]) {
     assert.match(line(stdout, method, path) ?? '', /FAIL$/, `${method} ${path}`);
   }
-  assert.match(line(stdout, 'GET', IMAGE_PATH), /actual 404, marker absent, optimizer accepted the URL\s+FAIL$/);
+  assert.match(
+    line(stdout, 'GET', IMAGE_PATH),
+    /actual 404, marker absent, optimizer accepted the URL\s+FAIL$/,
+  );
   assert.match(line(stdout, 'ORIGIN', '/robots.txt'), /no reference to it, lists an example host/);
   assert.match(line(stdout, 'HEADER', '(every response)'), /set on GET \/api\/portfolio/);
   for (const secret of [SOURCE_CANARY, PATH_CANARY, 'upstream response', 'anamika.example.com']) {
@@ -161,7 +175,13 @@ test('sends only PUT bodies that fail validation on the baseline', async (t) => 
 test('accepts proxy denials only without --direct', async (t) => {
   const proxy = await serve('proxy');
   t.after(proxy.close);
-  const through = await run([proxy.url, '--expect-name', 'Containment Canary', '--expect-origin', ORIGIN]);
+  const through = await run([
+    proxy.url,
+    '--expect-name',
+    'Containment Canary',
+    '--expect-origin',
+    ORIGIN,
+  ]);
   assert.equal(through.code, 0, through.stdout);
   assert.match(line(through.stdout, 'GET', IMAGE_PATH), /actual 403, marker absent\s+PASS$/);
   const direct = await run([proxy.url, '--direct']);
@@ -191,9 +211,17 @@ test('--expect-name matches HTML-escaped text and fails on a missing name', asyn
 test('--expect-origin fails when robots and sitemap point elsewhere', async (t) => {
   const app = await serve('contained');
   t.after(app.close);
-  const { code, stdout } = await run([app.url, '--direct', '--expect-origin', 'https://other.test']);
+  const { code, stdout } = await run([
+    app.url,
+    '--direct',
+    '--expect-origin',
+    'https://other.test',
+  ]);
   assert.equal(code, 1, stdout);
-  assert.match(line(stdout, 'ORIGIN', '/robots.txt'), /actual no reference to it, no example host\s+FAIL$/);
+  assert.match(
+    line(stdout, 'ORIGIN', '/robots.txt'),
+    /actual no reference to it, no example host\s+FAIL$/,
+  );
 });
 
 test('rejects bad arguments with exit 2', async () => {

@@ -31,17 +31,12 @@ export function SectionFrame({
           <header className="kc-section__header">
             {showHeading && heading ? (
               <h2
-                className={cn(
-                  'kc-section__title',
-                  gradientTitle && 'kc-section__title--gradient',
-                )}
+                className={cn('kc-section__title', gradientTitle && 'kc-section__title--gradient')}
               >
                 {heading}
               </h2>
             ) : null}
-            {section.subtitle ? (
-              <p className="kc-section__subtitle">{section.subtitle}</p>
-            ) : null}
+            {section.subtitle ? <p className="kc-section__subtitle">{section.subtitle}</p> : null}
           </header>
         ) : null}
         {children}

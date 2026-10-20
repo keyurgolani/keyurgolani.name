@@ -51,7 +51,8 @@ function readStoredPreference(): ThemePreference | null {
       raw === 'bright' ||
       raw === 'black' ||
       raw === 'system'
-    ) return raw;
+    )
+      return raw;
   } catch {
     // ignore
   }

@@ -11,8 +11,12 @@ export function AwardsRenderer({ section }: { section: Awards }) {
             <header className="kc-award__head">
               <h3 className="kc-award__name">
                 {item.url ? (
-                  <a href={item.url} target="_blank" rel="noopener noreferrer">{item.name}</a>
-                ) : item.name}
+                  <a href={item.url} target="_blank" rel="noopener noreferrer">
+                    {item.name}
+                  </a>
+                ) : (
+                  item.name
+                )}
               </h3>
               {item.receivedAt ? (
                 <span className="kc-award__date">{formatDate(item.receivedAt)}</span>

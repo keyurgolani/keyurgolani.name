@@ -13,16 +13,35 @@ export const ImageSchema = z.object({
   width: z.number().int().positive().optional(),
   height: z.number().int().positive().optional(),
   credit: z.string().optional(),
-  focalPoint: z
-    .object({ x: z.number().min(0).max(1), y: z.number().min(0).max(1) })
-    .optional(),
+  focalPoint: z.object({ x: z.number().min(0).max(1), y: z.number().min(0).max(1) }).optional(),
 });
 export type Image = z.infer<typeof ImageSchema>;
 
 const MONTH_NAMES = new Set([
-  'jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec',
-  'january', 'february', 'march', 'april', 'may', 'june', 'july', 'august',
-  'september', 'october', 'november', 'december',
+  'jan',
+  'feb',
+  'mar',
+  'apr',
+  'may',
+  'jun',
+  'jul',
+  'aug',
+  'sep',
+  'oct',
+  'nov',
+  'dec',
+  'january',
+  'february',
+  'march',
+  'april',
+  'may',
+  'june',
+  'july',
+  'august',
+  'september',
+  'october',
+  'november',
+  'december',
 ]);
 
 function isLooseDate(raw: string): boolean {
@@ -48,8 +67,7 @@ function isLooseDate(raw: string): boolean {
   return false;
 }
 
-const DATE_HINT =
-  'expected one of: YYYY, YYYY-MM, YYYY-MM-DD, "Month YYYY", or "present"';
+const DATE_HINT = 'expected one of: YYYY, YYYY-MM, YYYY-MM-DD, "Month YYYY", or "present"';
 
 export const LooseDateSchema = z
   .string()
@@ -85,7 +103,20 @@ function looseDateOrder(raw: string): number | null {
   }
   const monthYear = /^([A-Za-z]+)\s+(\d{4})$/.exec(trimmed);
   if (monthYear) {
-    const months = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+    const months = [
+      'jan',
+      'feb',
+      'mar',
+      'apr',
+      'may',
+      'jun',
+      'jul',
+      'aug',
+      'sep',
+      'oct',
+      'nov',
+      'dec',
+    ];
     const m = months.indexOf(monthYear[1]!.toLowerCase().slice(0, 3));
     if (m < 0) return null;
     return Number(monthYear[2]) * 10000 + (m + 1) * 100 + 1;

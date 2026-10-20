@@ -101,11 +101,7 @@ export function TableOfContents({ items, brand, brandHref = '#top' }: TableOfCon
   if (items.length === 0) return null;
 
   return (
-    <nav
-      aria-label="Table of contents"
-      className={cn('editorial-toc')}
-      data-hidden={hidden}
-    >
+    <nav aria-label="Table of contents" className={cn('editorial-toc')} data-hidden={hidden}>
       <div className="editorial-toc__inner">
         <a href={brandHref} className="editorial-toc__brand" onClick={(e) => onClick(e, brandHref)}>
           {brand}

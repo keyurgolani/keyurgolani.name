@@ -18,7 +18,9 @@ export function HeroRenderer({ section, identity }: HeroProps) {
       {section.greeting ? <p className="editorial-hero__greeting">{section.greeting}</p> : null}
       {name ? <h1 className="editorial-hero__name">{name}</h1> : null}
       {tagline ? <p className="editorial-hero__tagline">{tagline}</p> : null}
-      {section.subtagline ? <p className="editorial-hero__subtagline">{section.subtagline}</p> : null}
+      {section.subtagline ? (
+        <p className="editorial-hero__subtagline">{section.subtagline}</p>
+      ) : null}
 
       {(identity.location || identity.pronouns || identity.email) && (
         <div className="editorial-hero__meta">

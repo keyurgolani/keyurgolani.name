@@ -4,7 +4,11 @@ import { ActionLink } from '../primitives/action-link';
 
 export function CtaRenderer({ section }: { section: Cta }) {
   return (
-    <SectionFrame section={section} fallbackTitle={section.title ?? 'Work with me'} showHeading={false}>
+    <SectionFrame
+      section={section}
+      fallbackTitle={section.title ?? 'Work with me'}
+      showHeading={false}
+    >
       <div className="editorial-endnote editorial-endnote--accent">
         {section.title ? <p className="editorial-endnote__message">{section.title}</p> : null}
         {section.description ? <p>{section.description}</p> : null}

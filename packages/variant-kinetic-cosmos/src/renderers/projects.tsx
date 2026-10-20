@@ -59,7 +59,10 @@ export function ProjectsRenderer({ section }: { section: Projects }) {
             <motion.article
               key={`${project.name}-${i}`}
               layout
-              className={cn('kc-card kc-card--hoverable kc-project', isExpanded && 'kc-project--expanded')}
+              className={cn(
+                'kc-card kc-card--hoverable kc-project',
+                isExpanded && 'kc-project--expanded',
+              )}
               onClick={() => setExpandedIdx(isExpanded ? null : i)}
               role="button"
               tabIndex={0}
@@ -93,7 +96,9 @@ export function ProjectsRenderer({ section }: { section: Projects }) {
               {project.technologies && project.technologies.length > 0 ? (
                 <ul className="kc-project__tech">
                   {project.technologies.slice(0, isExpanded ? undefined : 5).map((tech, j) => (
-                    <li key={j} className="kc-project__tech-chip">{tech}</li>
+                    <li key={j} className="kc-project__tech-chip">
+                      {tech}
+                    </li>
                   ))}
                 </ul>
               ) : null}
@@ -116,10 +121,7 @@ export function ProjectsRenderer({ section }: { section: Projects }) {
                       </ul>
                     ) : null}
                     {project.links && project.links.length > 0 ? (
-                      <div
-                        className="kc-project__links"
-                        onClick={(e) => e.stopPropagation()}
-                      >
+                      <div className="kc-project__links" onClick={(e) => e.stopPropagation()}>
                         {project.links.map((link, j) => (
                           <ActionLink
                             key={`${link.url}-${j}`}

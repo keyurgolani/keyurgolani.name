@@ -9,7 +9,9 @@ export function TalksRenderer({ section }: { section: Talks }) {
       {section.items.map((item, i) => (
         <article key={`${item.title}-${i}`} className="editorial-entry">
           <aside className="editorial-entry__marginalia">
-            <span className="editorial-entry__marginalia-period">{formatDate(item.presentedAt, { short: true })}</span>
+            <span className="editorial-entry__marginalia-period">
+              {formatDate(item.presentedAt, { short: true })}
+            </span>
             {item.type ? <span>{item.type}</span> : null}
             {item.location ? <span>{item.location}</span> : null}
           </aside>

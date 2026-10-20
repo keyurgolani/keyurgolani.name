@@ -5,10 +5,7 @@ import { useState } from 'react';
 import type { Link as PortfolioLink } from '@portfolio/schema';
 import { useMotionPreference } from '@portfolio/kit';
 import { useFirstInteraction, useScrollDispersal } from '@portfolio/kit/motion-fx';
-import {
-  getSocialBrandStyle,
-  inferPlatformFromUrl,
-} from '@portfolio/kit/social-brand';
+import { getSocialBrandStyle, inferPlatformFromUrl } from '@portfolio/kit/social-brand';
 
 interface FloatingProfileClusterProps {
   links: PortfolioLink[];
@@ -44,7 +41,13 @@ export function FloatingProfileCluster({ links, limit = 5 }: FloatingProfileClus
   if (usable.length === 0) return null;
 
   // Pre-baked positions distributed around the hero center.
-  const POSITIONS: Array<{ x: string; y: string; rotation: string; multiplier: number; delay: number }> = [
+  const POSITIONS: Array<{
+    x: string;
+    y: string;
+    rotation: string;
+    multiplier: number;
+    delay: number;
+  }> = [
     { x: '12%', y: '22%', rotation: '-6deg', multiplier: 1.0, delay: 0.1 },
     { x: '85%', y: '18%', rotation: '7deg', multiplier: 1.1, delay: 0.18 },
     { x: '8%', y: '70%', rotation: '5deg', multiplier: 1.2, delay: 0.28 },
@@ -172,16 +175,15 @@ function FloatingProfile({
 
         <motion.div
           className="kc-floater__shimmer"
-          animate={!reduceMotion ? { opacity: [0, 0.18, 0], x: ['-100%', '100%', '100%'] } : undefined}
+          animate={
+            !reduceMotion ? { opacity: [0, 0.18, 0], x: ['-100%', '100%', '100%'] } : undefined
+          }
           transition={{ duration: 3, repeat: Infinity, repeatDelay: 4, ease: 'easeInOut' }}
           aria-hidden="true"
         />
 
         <div className="kc-floater__content">
-          <div
-            className="kc-floater__icon"
-            style={{ background: style.iconBg }}
-          >
+          <div className="kc-floater__icon" style={{ background: style.iconBg }}>
             <FloaterGlyph platform={platform} />
           </div>
           <span className="kc-floater__label">{label}</span>

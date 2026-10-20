@@ -20,13 +20,13 @@ Requirements:
 
 This is a pnpm workspace monorepo. Two apps and four packages:
 
-| Package | What it is |
-|---|---|
-| `apps/web` | Next.js 16 host: routes, portfolio loading, SEO, the variant picker |
-| `packages/schema` | Zod schemas for `portfolio.yml`. Source of truth for section kinds. |
-| `packages/kit` | Shared variant-author utilities: theme provider, GitHub fetcher, format helpers, SEO, spatial primitives |
-| `packages/variant-editorial` | The first variant — a typographic editorial spread |
-| `packages/variant-template` | Scaffold copied by `pnpm new-variant` (`skills/variant-developer/scripts/new-variant.mjs`) |
+| Package                      | What it is                                                                                               |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `apps/web`                   | Next.js 16 host: routes, portfolio loading, SEO, the variant picker                                      |
+| `packages/schema`            | Zod schemas for `portfolio.yml`. Source of truth for section kinds.                                      |
+| `packages/kit`               | Shared variant-author utilities: theme provider, GitHub fetcher, format helpers, SEO, spatial primitives |
+| `packages/variant-editorial` | The first variant — a typographic editorial spread                                                       |
+| `packages/variant-template`  | Scaffold copied by `pnpm new-variant` (`skills/variant-developer/scripts/new-variant.mjs`)               |
 
 All packages are workspace-linked via `workspace:*` in their dependencies.
 

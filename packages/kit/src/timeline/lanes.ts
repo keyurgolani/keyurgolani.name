@@ -114,10 +114,7 @@ export function assignTimelineLanes<T extends LaneInputEvent>(
       while (true) {
         const conflict = occupants.find((occupant) => {
           if (occupant.slot !== slot) return false;
-          return (
-            it.event.startTs < occupant.event.endTs &&
-            it.event.endTs > occupant.event.startTs
-          );
+          return it.event.startTs < occupant.event.endTs && it.event.endTs > occupant.event.startTs;
         });
         if (!conflict) break;
         slot += 1;

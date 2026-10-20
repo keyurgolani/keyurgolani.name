@@ -9,7 +9,13 @@ import { renderInlineMarkdown, renderMarkdown } from './markdown';
  * Intentionally simple: title, body, list. Inherits the variant's CSS tokens
  * so it looks like part of the variant rather than foreign chrome.
  */
-export function FallbackSection({ section, portfolio }: { section: Section; portfolio: Portfolio }) {
+export function FallbackSection({
+  section,
+  portfolio,
+}: {
+  section: Section;
+  portfolio: Portfolio;
+}) {
   if (section.hidden) return null;
   const id = ensureSectionId(section.id, section.title ?? section.kind);
 
@@ -105,7 +111,10 @@ function FallbackBody({ section, portfolio }: { section: Section; portfolio: Por
       return (
         <ul style={style.list}>
           {items.map((item, i) => {
-            const t = (item as { title?: string; name?: string }).title ?? (item as { name?: string }).name ?? '';
+            const t =
+              (item as { title?: string; name?: string }).title ??
+              (item as { name?: string }).name ??
+              '';
             const date =
               (item as { publishedAt?: string }).publishedAt ??
               (item as { presentedAt?: string }).presentedAt ??
@@ -149,7 +158,9 @@ function FallbackBody({ section, portfolio }: { section: Section; portfolio: Por
             <li key={i} style={style.entry}>
               <strong>{item.title}</strong>
               {item.role ? <span> — {item.role}</span> : null}
-              {item.releasedAt ? <div style={style.muted}>{formatDate(item.releasedAt)}</div> : null}
+              {item.releasedAt ? (
+                <div style={style.muted}>{formatDate(item.releasedAt)}</div>
+              ) : null}
             </li>
           ))}
         </ul>
@@ -176,7 +187,9 @@ function FallbackBody({ section, portfolio }: { section: Section; portfolio: Por
               {item.url ? <a href={item.url}>{item.title}</a> : <strong>{item.title}</strong>}
               {' — '}
               <em>{item.publication}</em>
-              {item.publishedAt ? <div style={style.muted}>{formatDate(item.publishedAt)}</div> : null}
+              {item.publishedAt ? (
+                <div style={style.muted}>{formatDate(item.publishedAt)}</div>
+              ) : null}
             </li>
           ))}
         </ul>
@@ -185,7 +198,9 @@ function FallbackBody({ section, portfolio }: { section: Section; portfolio: Por
       return (
         <blockquote style={style.quote}>
           &ldquo;{section.text}&rdquo;
-          {section.attribution ? <footer style={style.muted}>— {section.attribution}</footer> : null}
+          {section.attribution ? (
+            <footer style={style.muted}>— {section.attribution}</footer>
+          ) : null}
         </blockquote>
       );
     case 'skills':
@@ -282,9 +297,7 @@ function FallbackBody({ section, portfolio }: { section: Section; portfolio: Por
     case 'tenure':
       return (
         <div>
-          {section.years != null ? (
-            <div style={style.heroName}>{section.years}+ years</div>
-          ) : null}
+          {section.years != null ? <div style={style.heroName}>{section.years}+ years</div> : null}
           {section.summary ? <p style={style.lede}>{section.summary}</p> : null}
         </div>
       );
@@ -297,9 +310,7 @@ function FallbackBody({ section, portfolio }: { section: Section; portfolio: Por
                 <strong>{item.brandName}</strong>
               </a>
               {item.locationLabel ? <span style={style.muted}> — {item.locationLabel}</span> : null}
-              {item.description ? (
-                <p style={style.proseInline}>{item.description}</p>
-              ) : null}
+              {item.description ? <p style={style.proseInline}>{item.description}</p> : null}
             </li>
           ))}
         </ul>
@@ -320,14 +331,30 @@ function FallbackBody({ section, portfolio }: { section: Section; portfolio: Por
 
 const style = {
   section: { padding: '2rem 0', borderTop: '1px solid currentColor' } as const,
-  heading: { fontSize: '0.875rem', textTransform: 'uppercase', letterSpacing: '0.18em', opacity: 0.6, margin: '0 0 1rem' } as const,
+  heading: {
+    fontSize: '0.875rem',
+    textTransform: 'uppercase',
+    letterSpacing: '0.18em',
+    opacity: 0.6,
+    margin: '0 0 1rem',
+  } as const,
   subtitle: { fontStyle: 'italic', opacity: 0.7, margin: '0 0 1rem' } as const,
   heroName: { fontSize: '3rem', margin: '0 0 0.5rem', fontWeight: 600 } as const,
   lede: { fontSize: '1.25rem', opacity: 0.85, margin: 0 } as const,
   prose: { maxWidth: '40rem', lineHeight: 1.6 } as const,
   proseInline: { margin: '0.5rem 0', maxWidth: '40rem' } as const,
   list: { listStyle: 'none', margin: 0, padding: 0 } as const,
-  entry: { padding: '0.5rem 0', borderBottom: '1px solid currentColor', borderColor: 'rgba(0,0,0,0.06)' } as const,
+  entry: {
+    padding: '0.5rem 0',
+    borderBottom: '1px solid currentColor',
+    borderColor: 'rgba(0,0,0,0.06)',
+  } as const,
   muted: { fontSize: '0.875rem', opacity: 0.6, margin: '0.25rem 0 0' } as const,
-  quote: { borderLeft: '2px solid currentColor', paddingLeft: '1rem', margin: '1rem 0', fontStyle: 'italic', opacity: 0.85 } as const,
+  quote: {
+    borderLeft: '2px solid currentColor',
+    paddingLeft: '1rem',
+    margin: '1rem 0',
+    fontStyle: 'italic',
+    opacity: 0.85,
+  } as const,
 };

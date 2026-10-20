@@ -21,10 +21,16 @@ function startServer(projectDir) {
       const m = buf.match(/\{[^{}]*"port"[^{}]*\}/);
       if (m) {
         clearTimeout(timer);
-        try { resolve({ proc, info: JSON.parse(m[0]) }); } catch (e) { reject(e); }
+        try {
+          resolve({ proc, info: JSON.parse(m[0]) });
+        } catch (e) {
+          reject(e);
+        }
       }
     });
-    proc.stderr.on('data', (c) => { buf += c.toString(); });
+    proc.stderr.on('data', (c) => {
+      buf += c.toString();
+    });
     proc.on('exit', (code) => {
       if (code !== null && code !== 0) {
         clearTimeout(timer);
@@ -69,8 +75,10 @@ test('server serves full-document HTML as-is and injects helper script', async (
   const dir = mkdtempSync(path.join(tmpdir(), 'vc-'));
   const { proc, info } = await startServer(dir);
   after(() => proc.kill('SIGTERM'));
-  writeFileSync(path.join(info.screen_dir, 'full.html'),
-    '<!DOCTYPE html><html><body>full doc body</body></html>');
+  writeFileSync(
+    path.join(info.screen_dir, 'full.html'),
+    '<!DOCTYPE html><html><body>full doc body</body></html>',
+  );
   await sleep(150);
   const r = await fetchText(info.url);
   assert.match(r.text, /full doc body/);
@@ -120,6 +128,8 @@ test('serving a NEW fragment file clears the events file', async () => {
   writeFileSync(path.join(info.screen_dir, 'second.html'), '<h2>second</h2>');
   // Watcher should detect and clear events. Give it generous time.
   await sleep(500);
-  events = existsSync(path.join(info.state_dir, 'events')) ? readFileSync(path.join(info.state_dir, 'events'), 'utf8') : '';
+  events = existsSync(path.join(info.state_dir, 'events'))
+    ? readFileSync(path.join(info.state_dir, 'events'), 'utf8')
+    : '';
   assert.equal(events, '', 'events should be cleared after new screen pushed');
 });

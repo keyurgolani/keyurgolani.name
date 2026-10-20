@@ -32,7 +32,16 @@ interface VariantPickerProps {
   activeTypography: string | null;
 }
 
-const AESTHETIC_OPTIONS = ['editorial', 'spatial', 'kinetic', 'popart', 'terminal', 'bento', 'narrative', 'custom'];
+const AESTHETIC_OPTIONS = [
+  'editorial',
+  'spatial',
+  'kinetic',
+  'popart',
+  'terminal',
+  'bento',
+  'narrative',
+  'custom',
+];
 const MOTION_OPTIONS = ['still', 'subtle', 'animated', 'kinetic'];
 const TYPOGRAPHY_OPTIONS = ['serif', 'sans', 'mono', 'mixed'];
 const DENSITY_OPTIONS = ['minimal', 'balanced', 'dense'];
@@ -238,17 +247,16 @@ function VariantCard({
   // otherwise to the manifest's `default: true` entries (or the first one).
   // Preview-without-selection has no meaning — every variant has at least
   // one scheme + typography, even when only one is offered.
-  const defaultScheme =
-    v.colorSchemes.find((s) => s.default)?.id ?? v.colorSchemes[0]?.id ?? '';
+  const defaultScheme = v.colorSchemes.find((s) => s.default)?.id ?? v.colorSchemes[0]?.id ?? '';
   const defaultTypography =
     v.typographyPresets.find((p) => p.default)?.id ?? v.typographyPresets[0]?.id ?? '';
 
   // What the YAML-resolved active state of this card looks like — when
   // activeColorScheme/typography are unset on the active variant, that's
   // semantically the same as the variant's default.
-  const effectiveActiveScheme = isActive ? activeColorScheme ?? defaultScheme : defaultScheme;
+  const effectiveActiveScheme = isActive ? (activeColorScheme ?? defaultScheme) : defaultScheme;
   const effectiveActiveTypography = isActive
-    ? activeTypography ?? defaultTypography
+    ? (activeTypography ?? defaultTypography)
     : defaultTypography;
 
   const [scheme, setScheme] = useState(effectiveActiveScheme);
@@ -319,9 +327,7 @@ function VariantCard({
         <button
           type="button"
           className={
-            isCurrent
-              ? 'host-chrome__button'
-              : 'host-chrome__button host-chrome__button--primary'
+            isCurrent ? 'host-chrome__button' : 'host-chrome__button host-chrome__button--primary'
           }
           disabled={isCurrent || pending}
           onClick={() => onActivate(v.slug, scheme, typography)}

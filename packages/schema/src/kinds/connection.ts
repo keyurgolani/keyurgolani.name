@@ -18,4 +18,3 @@ export const CtaSchema = z.object({
   secondaryAction: LinkSchema.optional(),
 });
 export type Cta = z.infer<typeof CtaSchema>;
-

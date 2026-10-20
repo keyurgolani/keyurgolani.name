@@ -6,7 +6,7 @@ export const manifest: VariantManifest = {
   name: 'Kinetic Cosmos',
   tagline: 'Gradient nebula, falling code-glyph particles, branching career timeline',
   description:
-    'A faithful re-imagining of the platform\'s original variant zero on the new architecture: ' +
+    "A faithful re-imagining of the platform's original variant zero on the new architecture: " +
     'a kinetic developer cosmos with a 2D-canvas glyph field, brand-colored social profile cards in ' +
     'parallax orbit, glassmorphic bento sections, and an SVG fork/merge "Timeline Odyssey" that ' +
     'merges experience, education, awards, and publications into a single chronology.',
@@ -27,7 +27,8 @@ export const manifest: VariantManifest = {
     {
       id: 'nebula',
       name: 'Nebula Violet',
-      description: 'Deep obsidian background, violet primary, cyan accent — the original variant-zero palette.',
+      description:
+        'Deep obsidian background, violet primary, cyan accent — the original variant-zero palette.',
       themes: ['light', 'dark', 'bright', 'black'],
       default: true,
       swatch: { paper: '#0c0a10', ink: '#e9e9e6', accent: '#8b5cf6' },

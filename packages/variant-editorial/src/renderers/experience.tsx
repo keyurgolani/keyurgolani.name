@@ -9,7 +9,9 @@ export function ExperienceRenderer({ section }: { section: Experience }) {
       {section.items.map((item, i) => (
         <article key={`${item.organization}-${item.role}-${i}`} className="editorial-entry">
           <aside className="editorial-entry__marginalia">
-            <span className="editorial-entry__marginalia-period">{formatPeriod(item.period, { short: true })}</span>
+            <span className="editorial-entry__marginalia-period">
+              {formatPeriod(item.period, { short: true })}
+            </span>
             {formatDuration(item.period) && <span>{formatDuration(item.period)}</span>}
             {item.location && <span>{item.location}</span>}
           </aside>

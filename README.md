@@ -78,16 +78,16 @@ portfolio.example.yml           Fully-populated example
 
 ## Documentation
 
-| For | Read |
-|---|---|
-| First-time visitors | [docs/getting-started.md](docs/getting-started.md) |
-| Authors writing portfolio.yml | [docs/authoring.md](docs/authoring.md) |
-| Developers building variants | [docs/variants.md](docs/variants.md) |
-| Architects understanding internals | [docs/architecture.md](docs/architecture.md) |
-| Operators deploying to production | [docs/deployment.md](docs/deployment.md) |
-| Looking for a feature | [docs/features.md](docs/features.md) |
-| AI agents authoring portfolios | [skills/portfolio-author/](skills/portfolio-author/) |
-| AI agents building variants | [skills/variant-developer/](skills/variant-developer/) |
+| For                                | Read                                                   |
+| ---------------------------------- | ------------------------------------------------------ |
+| First-time visitors                | [docs/getting-started.md](docs/getting-started.md)     |
+| Authors writing portfolio.yml      | [docs/authoring.md](docs/authoring.md)                 |
+| Developers building variants       | [docs/variants.md](docs/variants.md)                   |
+| Architects understanding internals | [docs/architecture.md](docs/architecture.md)           |
+| Operators deploying to production  | [docs/deployment.md](docs/deployment.md)               |
+| Looking for a feature              | [docs/features.md](docs/features.md)                   |
+| AI agents authoring portfolios     | [skills/portfolio-author/](skills/portfolio-author/)   |
+| AI agents building variants        | [skills/variant-developer/](skills/variant-developer/) |
 
 ## Contributing
 

@@ -16,7 +16,7 @@ compatibility: >
   pnpm, Node 22+. Visual companion mockup-mode requires a browser; preview-mode requires
   the apps/web dev server running.
 metadata:
-  version: "1.1.0"
+  version: '1.1.0'
 ---
 
 ## 1. What this platform is + the variant model
@@ -41,7 +41,7 @@ Every variant goes through these phases in order. Skipping or reordering produce
 
 - **Phase 0 — Reference inventory** (when porting from an archive variant, another platform, a Figma, or "make it look like X"). Read the reference end-to-end, list every component and signature interaction, diff the data shape against the schema, decide what's portable vs not. Output drives DESIGN.md. **Skip only when greenfield** (no existing reference).
 - **Phase 1 — Design contract.** Pick a metaphor. Write `packages/variant-<slug>/DESIGN.md`. Get the user to approve it. No code yet.
-- **Phase 2 — Implementation in waves.** Wave 1 is foundation (scaffold + manifest + tokens + base styles, every section rendering via `FallbackSection`). Wave 1.5 is kit hoists (extract reusable patterns identified in Phase 0 *before* Wave 2 consumes them). Wave 2 is bespoke renderers, one cluster at a time. Wave 3 is polish (navigation, screenshots, print stylesheet, performance tier honesty check).
+- **Phase 2 — Implementation in waves.** Wave 1 is foundation (scaffold + manifest + tokens + base styles, every section rendering via `FallbackSection`). Wave 1.5 is kit hoists (extract reusable patterns identified in Phase 0 _before_ Wave 2 consumes them). Wave 2 is bespoke renderers, one cluster at a time. Wave 3 is polish (navigation, screenshots, print stylesheet, performance tier honesty check).
 - **Phase 3 — Pre-merge audit.** Run scripted gates (`audit.mjs`, typecheck, lint, build, kit-dedup) AND visual gates (matrix sweep, contrast, reduced-motion, print, /variants listing, fidelity vs reference, real-data, mobile). See `references/audit-checklist.md` and `references/quality-gates.md`.
 
 **Do not skip Phase 1.** The whole point of a variant is committing to a single visual metaphor and translating it consistently into tokens, typography, layout, motion, and copy. You cannot do that by writing CSS first and explaining it later. Coherence comes from the contract.
@@ -52,13 +52,13 @@ The variant package is not a free-form React project. It is a render of a fixed,
 
 ## 2.5 Phase 0 — Reference inventory (port-only)
 
-When the user says "port variant X", "make it look like archive page0", "match this Figma", run Phase 0 *before* Phase 1.
+When the user says "port variant X", "make it look like archive page0", "match this Figma", run Phase 0 _before_ Phase 1.
 
 The work:
 
 1. Read the reference end-to-end. Every section file, every UI primitive, every helper. Note line counts — a 5,000-line reference and a planned 1,200-line port means you're dropping ~75% of the visual richness; decide if that's intentional.
 2. Build a **component inventory** (table: primitive → what it does → hoist-worthy? → plan).
-3. Build a **signature interactions inventory** (parallax dispersal, 3D tilt, expand-on-click, brand-aware cards, typing animation, animated counters, etc.) — the things that define the *feel*.
+3. Build a **signature interactions inventory** (parallax dispersal, 3D tilt, expand-on-click, brand-aware cards, typing animation, animated counters, etc.) — the things that define the _feel_.
 4. Build a **data-shape diff** vs `@portfolio/schema`. For every Lost field, decide: inferable (heuristic), multi-section composition (pull from multiple kinds), or not portable (drop with documented reason).
 5. Author `## Component inventory`, `## Signature interactions`, and `## Fidelity targets` sections in DESIGN.md. The fidelity targets become Phase 3 sign-off boxes.
 
@@ -68,8 +68,8 @@ Load `references/fidelity-comparison.md` for the recipe. Output is a fidelity co
 
 The work:
 
-1. Pick a metaphor. One sentence. Specific (e.g. *"printed editorial monograph spread"*, *"terminal session log"*, *"museum wall caption next to the work"*) — not vague (*"modern and clean"*, *"professional"*). The metaphor is what every later choice — type, color, motion, copy — points back to. If you cannot say what the variant *is* in one sentence, you do not have a metaphor yet.
-2. Copy `assets/DESIGN.template.md` into `packages/variant-<slug>/DESIGN.md`. Fill out all 11 sections. Do not leave placeholders. If a section doesn't apply, write *"N/A — <reason>"* explicitly.
+1. Pick a metaphor. One sentence. Specific (e.g. _"printed editorial monograph spread"_, _"terminal session log"_, _"museum wall caption next to the work"_) — not vague (_"modern and clean"_, _"professional"_). The metaphor is what every later choice — type, color, motion, copy — points back to. If you cannot say what the variant _is_ in one sentence, you do not have a metaphor yet.
+2. Copy `assets/DESIGN.template.md` into `packages/variant-<slug>/DESIGN.md`. Fill out all 11 sections. Do not leave placeholders. If a section doesn't apply, write _"N/A — <reason>"_ explicitly.
 3. Get the user to approve `DESIGN.md` before touching any code. The approval is the gate from Phase 1 to Phase 2.
 
 Load when:
@@ -78,9 +78,9 @@ Load when:
 - `references/coherence.md` — when translating metaphor → tokens → typography → motion. The hardest part of Phase 1 is making each layer reinforce the metaphor instead of fighting it.
 - `references/manifest-contract.md` — when filling out DESIGN.md's manifest summary and capabilities sections. The manifest is part of the design, not an afterthought.
 
-Color schemes count and typography presets count are encouraged-not-gated. A variant with one of each is allowed; the audit warns but does not fail. Document the count's reasoning in DESIGN.md — *"the metaphor is monochrome, so a second scheme would be theatrical"* is a valid justification; *"didn't get to it"* is not.
+Color schemes count and typography presets count are encouraged-not-gated. A variant with one of each is allowed; the audit warns but does not fail. Document the count's reasoning in DESIGN.md — _"the metaphor is monochrome, so a second scheme would be theatrical"_ is a valid justification; _"didn't get to it"_ is not.
 
-Phase 1 is when the visual companion (mockup-mode) is most useful — it lets the user *see* the metaphor before approving the contract. If you're going to offer it, see section 6.
+Phase 1 is when the visual companion (mockup-mode) is most useful — it lets the user _see_ the metaphor before approving the contract. If you're going to offer it, see section 6.
 
 ## 4. Phase 2 — Implementation in waves
 
@@ -111,7 +111,7 @@ Scaffold and stand up a renderable variant that uses `FallbackSection` for every
   - Load `references/common-bugs.md` while writing this — distilled list of bugs that escape compile/audit and only show up at visual-validation time.
 - Wire theme toggle: import `useTheme` from `@portfolio/kit` and build your own toggle component in `src/primitives/theme-toggle.tsx`. Filter the rendered buttons against your `manifest.themes` so users only see modes your variant supports; always render the `system` button (it resolves to mandatory light/dark). Editorial's toggle in `packages/variant-editorial/src/primitives/theme-toggle.tsx` is the reference implementation.
 - Run `pnpm --filter @portfolio/web build:registry` to regenerate the registry **and** the per-variant CSS imports (`registry.styles.generated.ts`). The host's `apps/web/src/app/layout.tsx` imports the styles entry; without regenerating it, your variant's CSS is orphaned and the page renders as user-agent default. **This is the most common reason a freshly-scaffolded variant looks like plain HTML.**
-- Verify (Gate A from `quality-gates.md`): `pnpm dev`, visit `/preview/<slug>`. Every section should render via `FallbackSection` *with your variant's tokens applied* (paper color, font family, theme toggle visible). If you see plain black-on-white text, the styles entry didn't pick up — check `registry.styles.generated.ts`.
+- Verify (Gate A from `quality-gates.md`): `pnpm dev`, visit `/preview/<slug>`. Every section should render via `FallbackSection` _with your variant's tokens applied_ (paper color, font family, theme toggle visible). If you see plain black-on-white text, the styles entry didn't pick up — check `registry.styles.generated.ts`.
 
 ### Wave 1.5 — Kit hoists (when porting from a reference)
 
@@ -119,13 +119,13 @@ Before writing renderers, hoist the reusable patterns identified in Phase 0's co
 
 The decision matrix:
 
-| Pattern | Hoist when |
-|---|---|
-| Pure data utilities (lane assignment, classifiers, projections, path builders) | Always. They're testable, generic, and likely reused. |
-| Motion hooks (scroll-tied effects, mouse tilt, viewport-center predicates) | When at least one is broadly useful across kinetic variants. Put them under `@portfolio/kit/motion-fx` so still-tier variants don't bundle framer-motion. |
-| Generic React components (typing animation, animated counter, lightbox) | When the component composes data + behavior the same way every variant would. |
-| Brand/data registries (social platform colors, language-color lookups, etc.) | When the lookup is data-driven, not visual style. |
-| Visual chrome (specific card vocabularies, composition-level JSX) | Stays variant-local. Different metaphors will style differently. |
+| Pattern                                                                        | Hoist when                                                                                                                                                |
+| ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Pure data utilities (lane assignment, classifiers, projections, path builders) | Always. They're testable, generic, and likely reused.                                                                                                     |
+| Motion hooks (scroll-tied effects, mouse tilt, viewport-center predicates)     | When at least one is broadly useful across kinetic variants. Put them under `@portfolio/kit/motion-fx` so still-tier variants don't bundle framer-motion. |
+| Generic React components (typing animation, animated counter, lightbox)        | When the component composes data + behavior the same way every variant would.                                                                             |
+| Brand/data registries (social platform colors, language-color lookups, etc.)   | When the lookup is data-driven, not visual style.                                                                                                         |
+| Visual chrome (specific card vocabularies, composition-level JSX)              | Stays variant-local. Different metaphors will style differently.                                                                                          |
 
 The work:
 
@@ -149,7 +149,7 @@ For each cluster:
 3. Implement renderers in `src/renderers/<kind>.tsx` (or whatever file structure your variant uses; consistency matters more than the path).
 4. Update `src/section.tsx` (the section dispatch) to route the new renderers; remove the cluster's kinds from the `FallbackSection` fallback path.
 5. Before closing the cluster, run `node skills/variant-developer/scripts/kit-dedup.mjs packages/variant-<slug>`. Resolve every candidate either by **hoisting** the helper to `packages/kit/src/<topic>.ts` and importing it back, or by leaving a `// LOCAL: <reason>` comment justifying the local copy.
-6. **Visual checkpoint at end of cluster.** Run `/preview/<slug>` against `portfolio.example.yml` AND the user's actual `portfolio.yml` (real-data testing surfaces bugs that example data hides — long org names, missing optional fields, non-ASCII characters). Verify each cluster's renderers display correctly. *Don't trust HTTP 200 as proof the cluster is done.*
+6. **Visual checkpoint at end of cluster.** Run `/preview/<slug>` against `portfolio.example.yml` AND the user's actual `portfolio.yml` (real-data testing surfaces bugs that example data hides — long org names, missing optional fields, non-ASCII characters). Verify each cluster's renderers display correctly. _Don't trust HTTP 200 as proof the cluster is done._
 
 Renderer quality reminders (from real-session bugs):
 
@@ -194,7 +194,7 @@ Run `references/audit-checklist.md` for the scripted gates and `references/quali
 
 ### Visual gates (expensive, run at sign-off)
 
-These are the gates that *catch what compiles fine but looks broken*. Each one corresponds to a real bug class that escaped a previous build:
+These are the gates that _catch what compiles fine but looks broken_. Each one corresponds to a real bug class that escaped a previous build:
 
 - **Gate A — Visual sanity.** `pnpm dev`, open `/preview/<slug>`, confirm CSS reaches the page. Catches "host CSS injection" failures.
 - **Gate B — Theme × scheme × typography matrix.** ≥ 9 screenshots across the meaningful combinations. Catches contrast bugs that only surface in non-default schemes/themes.
@@ -264,7 +264,7 @@ Environment-specific facts that bite agents who skip the references. For the ful
 
 ### Print
 
-- Print stylesheets must reset *every* theme-dependent token (`--kc-paper`, `--kc-card-bg`, `--kc-primary`, `--kc-accent`, etc.) inside the `@media print` block. Without this the active theme bleeds through and cards render unreadable. (`common-bugs.md` §5)
+- Print stylesheets must reset _every_ theme-dependent token (`--kc-paper`, `--kc-card-bg`, `--kc-primary`, `--kc-accent`, etc.) inside the `@media print` block. Without this the active theme bleeds through and cards render unreadable. (`common-bugs.md` §5)
 - Gradient text needs both `color` and `-webkit-text-fill-color` reset to black in print. Either alone won't work in Chrome. (`common-bugs.md` §7)
 
 ### Motion
@@ -276,12 +276,12 @@ Environment-specific facts that bite agents who skip the references. For the ful
 ### Performance
 
 - `@portfolio/kit/spatial-r3f` (react-three-fiber) is heavy — only import if `manifest.performanceTier` is `medium` or `heavy` AND your variant intentionally uses WebGL. The audit cross-checks; pulling R3F into a `light` variant fails.
-- `@portfolio/kit/motion-fx` requires `framer-motion` as an *optional* peer dependency. Variants that import the sub-path must list `framer-motion` in their own dependencies. Variants that don't use motion-fx don't pull it in.
+- `@portfolio/kit/motion-fx` requires `framer-motion` as an _optional_ peer dependency. Variants that import the sub-path must list `framer-motion` in their own dependencies. Variants that don't use motion-fx don't pull it in.
 - `next.config.ts` has `reactStrictMode: false` because R3F survives WebGL context loss only without strict double-mount. **Don't change this from a variant package.** If you need strict mode for your own component, wrap that subtree in `<StrictMode>` locally.
 
 ### Layout
 
-- Add `scroll-margin-top: 5rem` (or your nav height) to every section if the variant has a fixed nav. Without this, programmatic `scrollIntoView({ block: 'start' })` puts headings *behind* the nav. (`common-bugs.md` §6)
+- Add `scroll-margin-top: 5rem` (or your nav height) to every section if the variant has a fixed nav. Without this, programmatic `scrollIntoView({ block: 'start' })` puts headings _behind_ the nav. (`common-bugs.md` §6)
 - Floating decorative elements should `display: none` at mobile breakpoints, not just shrink — they cause horizontal overflow on phones. (`common-bugs.md` §9)
 
 ## 8. Hand-off
@@ -299,21 +299,21 @@ That's the skill. Design, implement in waves, audit, hand off, stop.
 
 Load in order as you progress through phases:
 
-| Phase | Reference | Why |
-|---|---|---|
-| Phase 0 (port-only) | `references/fidelity-comparison.md` | Inventory recipe before opening DESIGN.md. |
-| Phase 1 | `references/design-contract.md` | What each section of DESIGN.md must contain. |
-| Phase 1 | `references/coherence.md` | Metaphor → tokens → typography → motion translation. |
-| Phase 1 | `references/manifest-contract.md` | Every manifest field, valid values, examples. |
-| Phase 2 Wave 1 | `references/styling-conventions.md` | CSS scoping discipline, BEM naming, theme cascade. |
-| Phase 2 Wave 1 | `references/common-bugs.md` | Bug catalog. Read once before writing styles.css. |
-| Phase 2 Wave 1.5 | `references/kit-catalog.md` | What's already in the kit. Don't reinvent. |
-| Phase 2 Wave 2 | `references/section-kinds.md` | Per-kind data shape, edge cases, ideal data. |
-| Phase 2 Wave 2 | `references/kit-catalog.md` | Kit helpers per cluster. |
-| Phase 2 Wave 3 | `references/quality-gates.md` | Visual validation recipes. |
-| Phase 3 | `references/audit-checklist.md` | Sign-off contract. |
-| Phase 3 | `references/quality-gates.md` | Visual gates A–I. |
-| Visual companion | `references/visual-companion.md` | Mockup-mode + preview-mode guide. |
+| Phase               | Reference                           | Why                                                  |
+| ------------------- | ----------------------------------- | ---------------------------------------------------- |
+| Phase 0 (port-only) | `references/fidelity-comparison.md` | Inventory recipe before opening DESIGN.md.           |
+| Phase 1             | `references/design-contract.md`     | What each section of DESIGN.md must contain.         |
+| Phase 1             | `references/coherence.md`           | Metaphor → tokens → typography → motion translation. |
+| Phase 1             | `references/manifest-contract.md`   | Every manifest field, valid values, examples.        |
+| Phase 2 Wave 1      | `references/styling-conventions.md` | CSS scoping discipline, BEM naming, theme cascade.   |
+| Phase 2 Wave 1      | `references/common-bugs.md`         | Bug catalog. Read once before writing styles.css.    |
+| Phase 2 Wave 1.5    | `references/kit-catalog.md`         | What's already in the kit. Don't reinvent.           |
+| Phase 2 Wave 2      | `references/section-kinds.md`       | Per-kind data shape, edge cases, ideal data.         |
+| Phase 2 Wave 2      | `references/kit-catalog.md`         | Kit helpers per cluster.                             |
+| Phase 2 Wave 3      | `references/quality-gates.md`       | Visual validation recipes.                           |
+| Phase 3             | `references/audit-checklist.md`     | Sign-off contract.                                   |
+| Phase 3             | `references/quality-gates.md`       | Visual gates A–I.                                    |
+| Visual companion    | `references/visual-companion.md`    | Mockup-mode + preview-mode guide.                    |
 
 ## 10. Session learnings — what makes a one-shot port land
 
@@ -321,7 +321,7 @@ Distilled from real builds. Each item exists because skipping it cost an iterati
 
 1. **Phase 0 inventory before DESIGN.md when porting.** A scaffold that compiles isn't a port. Without the inventory, DESIGN.md commits to a metaphor sentence while the user is committing to a fidelity expectation. Three rounds of "but the original had…" is the typical cost.
 
-2. **Wave 1.5 hoist before Wave 2 renderers.** Hoisting after-the-fact via `kit-dedup` works but requires retrofitting renderers. Hoisting *first* means renderers consume kit primitives directly. Test the pure utilities — they're load-bearing.
+2. **Wave 1.5 hoist before Wave 2 renderers.** Hoisting after-the-fact via `kit-dedup` works but requires retrofitting renderers. Hoisting _first_ means renderers consume kit primitives directly. Test the pure utilities — they're load-bearing.
 
 3. **Visual sanity check before any other Wave 1 declaration.** "HTTP 200 + typecheck pass" is not "the page renders correctly". Look at it. The host CSS injection bug, the global anchor specificity bug, the SVG-ID-with-spaces bug — all of these compile clean.
 

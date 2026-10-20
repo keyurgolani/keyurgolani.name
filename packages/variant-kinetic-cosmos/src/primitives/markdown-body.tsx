@@ -13,10 +13,5 @@ export function MarkdownBody({ source, inline, className }: MarkdownBodyProps) {
   if (inline) {
     return <span className={className} dangerouslySetInnerHTML={{ __html: html }} />;
   }
-  return (
-    <div
-      className={cn('kc-prose', className)}
-      dangerouslySetInnerHTML={{ __html: html }}
-    />
-  );
+  return <div className={cn('kc-prose', className)} dangerouslySetInnerHTML={{ __html: html }} />;
 }

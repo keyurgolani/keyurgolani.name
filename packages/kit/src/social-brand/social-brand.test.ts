@@ -1,10 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  getSocialBrandStyle,
-  inferPlatformFromUrl,
-  listSocialBrands,
-} from './index';
+import { getSocialBrandStyle, inferPlatformFromUrl, listSocialBrands } from './index';
 
 test('returns the brand style for a known platform', () => {
   const github = getSocialBrandStyle('github');
@@ -58,10 +54,7 @@ test('inferPlatformFromUrl identifies Docker Hub', () => {
 });
 
 test('inferPlatformFromUrl identifies ResearchGate', () => {
-  assert.equal(
-    inferPlatformFromUrl('https://www.researchgate.net/profile/user'),
-    'researchgate',
-  );
+  assert.equal(inferPlatformFromUrl('https://www.researchgate.net/profile/user'), 'researchgate');
 });
 
 test('inferPlatformFromUrl identifies Instagram', () => {

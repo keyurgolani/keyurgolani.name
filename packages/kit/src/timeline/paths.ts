@@ -95,9 +95,7 @@ export function buildBranchPath(opts: {
     `C ${centerX} ${forkControlY}, ${branchX} ${forkControlY}, ${branchX} ${joinTopY}`;
 
   const trunk =
-    joinBottomY > joinTopY
-      ? `M ${branchX} ${joinTopY} L ${branchX} ${joinBottomY}`
-      : '';
+    joinBottomY > joinTopY ? `M ${branchX} ${joinTopY} L ${branchX} ${joinBottomY}` : '';
 
   const merge =
     `M ${branchX} ${joinBottomY} ` +

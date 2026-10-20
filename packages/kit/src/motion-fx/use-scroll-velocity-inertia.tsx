@@ -1,12 +1,6 @@
 'use client';
 
-import {
-  useScroll,
-  useVelocity,
-  useSpring,
-  useTransform,
-  type MotionValue,
-} from 'framer-motion';
+import { useScroll, useVelocity, useSpring, useTransform, type MotionValue } from 'framer-motion';
 
 export interface ScrollVelocityInertiaOptions {
   /**

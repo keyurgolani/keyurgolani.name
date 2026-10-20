@@ -11,8 +11,12 @@ export function PatentsRenderer({ section }: { section: Patents }) {
             <header className="kc-patent__head">
               <h3 className="kc-patent__title">
                 {item.url ? (
-                  <a href={item.url} target="_blank" rel="noopener noreferrer">{item.title}</a>
-                ) : item.title}
+                  <a href={item.url} target="_blank" rel="noopener noreferrer">
+                    {item.title}
+                  </a>
+                ) : (
+                  item.title
+                )}
               </h3>
               {item.number ? <code className="kc-patent__number">{item.number}</code> : null}
             </header>

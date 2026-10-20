@@ -11,15 +11,15 @@ This directory ships [agentskills.io](https://agentskills.io)-format skills bund
 
 Each agent harness expects skills in a different place. Pick the row that matches your harness and run the wiring command from the repo root.
 
-| Agent | Expected path | Wiring command |
-| --- | --- | --- |
-| Claude Code (project) | `.claude/skills/<name>` | `ln -s "$(pwd)/skills/<name>" .claude/skills/<name>` |
-| Claude Code (user-global) | `~/.claude/skills/<name>` | `ln -s "$(pwd)/skills/<name>" ~/.claude/skills/<name>` |
-| VS Code Copilot | `.agents/skills/<name>` | `ln -s "$(pwd)/skills/<name>" .agents/skills/<name>` |
-| Cursor | (no discovery dir) | Paste the `SKILL.md` path into the system prompt or project instructions. |
-| Codex | (no discovery dir) | Paste the `SKILL.md` path into the system prompt or project instructions. |
-| Goose | (no discovery dir) | Paste the `SKILL.md` path into the system prompt or project instructions. |
-| Anything else | — | Open `skills/<name>/SKILL.md` and paste its contents into the agent's system instructions. |
+| Agent                     | Expected path             | Wiring command                                                                             |
+| ------------------------- | ------------------------- | ------------------------------------------------------------------------------------------ |
+| Claude Code (project)     | `.claude/skills/<name>`   | `ln -s "$(pwd)/skills/<name>" .claude/skills/<name>`                                       |
+| Claude Code (user-global) | `~/.claude/skills/<name>` | `ln -s "$(pwd)/skills/<name>" ~/.claude/skills/<name>`                                     |
+| VS Code Copilot           | `.agents/skills/<name>`   | `ln -s "$(pwd)/skills/<name>" .agents/skills/<name>`                                       |
+| Cursor                    | (no discovery dir)        | Paste the `SKILL.md` path into the system prompt or project instructions.                  |
+| Codex                     | (no discovery dir)        | Paste the `SKILL.md` path into the system prompt or project instructions.                  |
+| Goose                     | (no discovery dir)        | Paste the `SKILL.md` path into the system prompt or project instructions.                  |
+| Anything else             | —                         | Open `skills/<name>/SKILL.md` and paste its contents into the agent's system instructions. |
 
 Replace `<name>` with `portfolio-author` or `variant-developer`.
 

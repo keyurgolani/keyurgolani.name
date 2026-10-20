@@ -16,8 +16,7 @@ export async function PUT(request: Request) {
   const body = await request.json().catch(() => ({}));
   const colorScheme: string | null | undefined =
     'colorScheme' in body ? body.colorScheme : undefined;
-  const typography: string | null | undefined =
-    'typography' in body ? body.typography : undefined;
+  const typography: string | null | undefined = 'typography' in body ? body.typography : undefined;
 
   if (colorScheme === undefined && typography === undefined) {
     return NextResponse.json(
@@ -89,7 +88,9 @@ function updateCustomizationFields(
     return JSON.stringify(obj, null, 2);
   }
   let lines = source.split('\n');
-  for (const [key, value] of Object.entries(scalars) as Array<['colorScheme' | 'typography', string | null | undefined]>) {
+  for (const [key, value] of Object.entries(scalars) as Array<
+    ['colorScheme' | 'typography', string | null | undefined]
+  >) {
     if (value === undefined) continue;
     const re = new RegExp(`^\\s*${key}\\s*=`);
     let replaced = false;

@@ -137,7 +137,9 @@ export function renderRssFeed(portfolio: Portfolio, options: RenderRssOptions = 
   const feed = options.feedUrl ?? (site ? `${site.replace(/\/$/, '')}/feed.xml` : '');
   const title = portfolio.meta?.title ?? `${portfolio.identity.name} — Portfolio`;
   const description =
-    portfolio.meta?.description ?? portfolio.identity.tagline ?? `Updates from ${portfolio.identity.name}.`;
+    portfolio.meta?.description ??
+    portfolio.identity.tagline ??
+    `Updates from ${portfolio.identity.name}.`;
 
   const entries = collectFeedEntries(portfolio, { limit: options.limit ?? 50 });
   const items = entries.map(renderItem).join('\n');

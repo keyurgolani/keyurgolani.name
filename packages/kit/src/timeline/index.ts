@@ -35,18 +35,9 @@ export {
   type TimelineProjection,
 } from './density';
 
-export {
-  buildBranchPath,
-  buildAxisPath,
-  type BranchPath,
-  type BranchPathOptions,
-} from './paths';
+export { buildBranchPath, buildAxisPath, type BranchPath, type BranchPathOptions } from './paths';
 
-export {
-  inferKindFromText,
-  type ClassifyRules,
-  type ClassifyOptions,
-} from './classify';
+export { inferKindFromText, type ClassifyRules, type ClassifyOptions } from './classify';
 
 export {
   TimelineAxis,

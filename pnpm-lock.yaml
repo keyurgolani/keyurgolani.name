@@ -14,6 +14,9 @@ importers:
       playwright:
         specifier: 1.58.2
         version: 1.58.2
+      prettier:
+        specifier: 3.9.10
+        version: 3.9.10
       tsx:
         specifier: ^4.21.0
         version: 4.21.0
@@ -898,6 +901,11 @@ packages:
   potpack@1.0.2:
     resolution: {integrity: sha512-choctRBIV9EMT9WGAZHn3V7t0Z2pMQyl0EZE6pFc/6ml3ssw7Dlf/oAOvFwjm1HVsqfQN8GfeFyJ+d8tRzqueQ==}
 
+  prettier@3.9.10:
+    resolution: {integrity: sha512-skGHTH1Yb9QvaTC4hWnRTzEYtCpApF0UMBPz+t/0ZPzP8ihefo/btKd+QA7pUE0fEwA1SbS/NmhyEcstdXOIdA==}
+    engines: {node: '>=14'}
+    hasBin: true
+
   promise-worker-transferable@1.0.4:
     resolution: {integrity: sha512-bN+0ehEnrXfxV2ZQvU2PetO0n4gqBD4ulq3MI1WOPLgr7/Mg9yRQkX5+0v1vagr74ZTsl7XtzlaYDo2EuCeYJw==}
 
@@ -1619,6 +1627,8 @@ snapshots:
       three: 0.170.0
 
   potpack@1.0.2: {}
+
+  prettier@3.9.10: {}
 
   promise-worker-transferable@1.0.4:
     dependencies:

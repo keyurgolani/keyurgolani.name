@@ -66,9 +66,9 @@ function safeIdent(slug) {
 function generateStyles(variants) {
   const lines = [];
   lines.push('// AUTO-GENERATED — do not edit by hand.');
-  lines.push("// Regenerate with `pnpm --filter @portfolio/web build:registry`.");
+  lines.push('// Regenerate with `pnpm --filter @portfolio/web build:registry`.');
   lines.push('//');
-  lines.push('// Side-effect imports for every registered variant\'s stylesheet. The host');
+  lines.push("// Side-effect imports for every registered variant's stylesheet. The host");
   lines.push('// layout imports this single file so all variants get their CSS injected,');
   lines.push("// without hard-coding any one variant's import path.");
   lines.push('');
@@ -86,7 +86,7 @@ function generateStyles(variants) {
 function generate(variants) {
   const lines = [];
   lines.push('// AUTO-GENERATED — do not edit by hand.');
-  lines.push("// Regenerate with `pnpm --filter @portfolio/web build:registry`.");
+  lines.push('// Regenerate with `pnpm --filter @portfolio/web build:registry`.');
   lines.push('// Includes experiments only when INCLUDE_EXPERIMENTS=1.');
   lines.push('');
   lines.push("import type { VariantManifest, VariantModule } from '@portfolio/kit';");
@@ -111,7 +111,9 @@ function generate(variants) {
   }
   lines.push('};');
   lines.push('');
-  lines.push('export const MANIFESTS: VariantManifest[] = Object.values(REGISTRY).map((e) => e.manifest);');
+  lines.push(
+    'export const MANIFESTS: VariantManifest[] = Object.values(REGISTRY).map((e) => e.manifest);',
+  );
   return lines.join('\n') + '\n';
 }
 

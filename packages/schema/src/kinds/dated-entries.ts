@@ -107,7 +107,9 @@ export const TalksSchema = z.object({
       venue: z.string().optional(),
       location: z.string().optional(),
       presentedAt: LooseDateSchema.optional(),
-      type: z.enum(['keynote', 'workshop', 'panel', 'lightning', 'session', 'interview']).optional(),
+      type: z
+        .enum(['keynote', 'workshop', 'panel', 'lightning', 'session', 'interview'])
+        .optional(),
       description: z.string().optional(),
       abstract: z.string().optional(),
       slidesUrl: z.string().optional(),
