@@ -24,6 +24,7 @@ function deploy(t: TestContext, profile: Profile): void {
     config: read.config,
     catalog: { getLive: () => assert.fail('the proxy reads no catalog') },
     dispatch: () => assert.fail('the proxy runs no operation'),
+    degraded: [],
   });
   t.after(() => setDeploymentState(undefined));
 }

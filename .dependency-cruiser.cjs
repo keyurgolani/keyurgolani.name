@@ -22,8 +22,9 @@ module.exports = {
       severity: 'error',
       comment:
         'Owner code loads only through the composition root, so demo and read-only never ' +
-        'evaluate it (#1, item 14). That includes the owner modules @portfolio/core exports.',
-      from: { pathNot: '^apps/web/src/server/(owner/|composition\\.ts$)' },
+        'evaluate it (#1, item 14). That includes the owner modules @portfolio/core exports. ' +
+        'Tests may import it.',
+      from: { pathNot: ['^apps/web/src/server/(owner/|composition\\.ts$)', '\\.test\\.tsx?$'] },
       to: { path: ['^apps/web/src/server/owner/', '^packages/core/src/owner([./]|$)'] },
     },
     {

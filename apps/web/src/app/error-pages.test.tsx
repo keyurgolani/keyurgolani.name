@@ -73,6 +73,7 @@ test("not-found.tsx links the pages the profile's policy lists", (t) => {
       },
       catalog: { getLive: () => assert.fail('the 404 page reads no catalog') },
       dispatch: () => assert.fail('the 404 page runs no operation'),
+      degraded: [],
     });
     const html = renderToStaticMarkup(<NotFound />);
     const links = [...html.matchAll(/href="([^"]*)"/g)].map((match) => match[1]);

@@ -6,27 +6,45 @@ import { CAPABILITIES, PROFILES, type Capability } from './capabilities';
 // handlers; the composition root binds handlers by name, so loading the
 // registry never loads owner code.
 
-/** Every error the dispatcher answers with, and its status. */
-export const ERROR_STATUS = {
-  not_available_in_profile: 404,
-  method_not_allowed: 405,
-  authentication_required: 401,
-  request_origin_rejected: 403,
-  capability_denied: 403,
-  invalid_input: 400,
-  version_conflict: 409,
-  internal_error: 500,
-} as const;
-export type ErrorCode = keyof typeof ERROR_STATUS;
+/**
+ * Every error code the transport answers with: its status and its fixed
+ * message, the only text an error carries. A new code is one entry here,
+ * and an operation that can return it lists it in `errors`.
+ */
+export const ERRORS = {
+  not_available_in_profile: {
+    status: 404,
+    message: "This deployment doesn't offer that operation.",
+  },
+  method_not_allowed: { status: 405, message: "That operation doesn't accept this method." },
+  authentication_required: { status: 401, message: 'Sign in to use that operation.' },
+  request_origin_rejected: { status: 403, message: "The request didn't come from this site." },
+  capability_denied: { status: 403, message: "This session can't use that operation." },
+  invalid_input: { status: 400, message: "The input doesn't match the operation." },
+  version_conflict: { status: 409, message: 'The content changed since it was read.' },
+  // #2: auth.login, with Retry-After.
+  rate_limited: { status: 429, message: 'Too many attempts. Try again later.' },
+  internal_error: {
+    status: 500,
+    message: 'The operation failed. Quote the request ID when you report it.',
+  },
+} as const satisfies Record<string, { readonly status: number; readonly message: string }>;
+export type ErrorCode = keyof typeof ERRORS;
 
 /** Queries are GET; commands are POST. */
 export type OperationKind = 'query' | 'command';
+
+/** How a command's body may arrive. */
+export type BodyType = 'json' | 'form';
+
+/** Largest command body the dispatcher reads, unless the entry sets its own. */
+export const MAX_BODY_BYTES = 1024 * 1024;
 
 export interface Operation {
   readonly name: string;
   readonly kind: OperationKind;
   readonly capability: Capability;
-  /** Validates a query's search parameters or a command's JSON body. */
+  /** Validates a query's search parameters or a command's body. */
   readonly input: z.ZodType;
   /** Validates what the handler returns, before it leaves the server. */
   readonly output: z.ZodType;
@@ -36,7 +54,11 @@ export interface Operation {
   readonly originCheck: boolean;
   /** The version the input names, checked before the handler runs (#3). */
   readonly expects?: 'draft-version' | 'live-revision';
-  /** Every error code the dispatcher can answer this operation with. */
+  /** A command's body types. Default JSON only; #2's auth.login adds form posts. */
+  readonly bodyTypes?: readonly BodyType[];
+  /** A command's body cap in bytes. Default MAX_BODY_BYTES; #2's auth.login takes 4 KB. */
+  readonly maxBodyBytes?: number;
+  /** Every error code the dispatcher or the handler can answer this operation with. */
   readonly errors: readonly ErrorCode[];
 }
 

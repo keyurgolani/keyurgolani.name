@@ -1,13 +1,16 @@
 import type { Capability } from './capabilities';
-import type { CapabilityPolicy, Session } from './policy';
+import { getDeploymentConfig } from './config-store';
+import { capabilityPolicy } from './policy';
+import { isMintedSession, type Session } from './session';
 
-// authorize() (#1, item 12): the dispatcher's step 4. It returns a branded
-// token only when the policy allows the capability, and every owner service
-// method takes that token first and re-checks it with assertAuthorized().
+// authorize() (#1, item 12): the dispatcher's step 4. It decides with the
+// policy of the deployment register() froze, never one a caller passes, and
+// accepts only a session a provider minted. Every owner service method takes
+// the token it returns first and re-checks it with assertAuthorized().
 
 declare const brand: unique symbol;
 
-/** Proof that the policy allowed `capability` for one request. Only authorize() makes one. */
+/** Proof that the deployment's policy allowed `capability` for one request. Only authorize() makes one. */
 export interface Authorized<C extends Capability = Capability> {
   readonly capability: C;
   readonly session: Session | null;
@@ -25,11 +28,14 @@ function issued(): WeakSet<object> {
 }
 
 export function authorize<C extends Capability>(
-  policy: CapabilityPolicy,
   capability: C,
   session: Session | null,
 ): Authorized<C> | null {
-  if (!policy.allows(capability, session)) return null;
+  const deployment = getDeploymentConfig();
+  if (!deployment) return null;
+  // A session no provider minted is a forgery, not an absent session.
+  if (session !== null && !isMintedSession(session)) return null;
+  if (!capabilityPolicy(deployment.profile).allows(capability, session)) return null;
   const token = Object.freeze({ capability, session }) as unknown as Authorized<C>;
   issued().add(token);
   return token;

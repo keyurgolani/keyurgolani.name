@@ -24,6 +24,7 @@ function deploy(t: TestContext, getLive: CatalogReader['getLive']): void {
     config: read.config,
     catalog: { getLive },
     dispatch: () => assert.fail('the feed runs no operation'),
+    degraded: [],
   });
   t.after(() => setDeploymentState(undefined));
 }

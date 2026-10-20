@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { CAPABILITIES } from './capabilities';
-import { ERROR_STATUS, listOperations, type ErrorCode, type Operation } from './operations';
+import { ERRORS, listOperations, type ErrorCode, type Operation } from './operations';
 
-/** The codes the dispatcher can answer `operation` with, from what it declares. */
+/** The codes the dispatcher itself can answer `operation` with, from its flags. */
 function reachable(operation: Operation): ErrorCode[] {
   const codes: ErrorCode[] = ['not_available_in_profile', 'method_not_allowed'];
   if (operation.session) codes.push('authentication_required');
@@ -29,10 +29,21 @@ for (const operation of listOperations()) {
       operation.kind === 'command',
       'commands, and only commands, check origin and CSRF',
     );
-    assert.deepEqual(operation.errors, reachable(operation));
-    for (const code of operation.errors) assert.ok(code in ERROR_STATUS, code);
+    // Each code the dispatcher can reach, plus any its handler or throttle answers with.
+    for (const code of reachable(operation)) assert.ok(operation.errors.includes(code), code);
+    for (const code of operation.errors) assert.ok(Object.hasOwn(ERRORS, code), code);
+    assert.equal(new Set(operation.errors).size, operation.errors.length);
   });
 }
+
+test('every error code has its own status and a fixed message', () => {
+  for (const [code, { status, message }] of Object.entries(ERRORS)) {
+    assert.match(code, /^[a-z]+(_[a-z]+)*$/);
+    assert.ok(status >= 400 && status < 600, code);
+    assert.ok(message.length > 0, code);
+  }
+  assert.equal(ERRORS.rate_limited.status, 429);
+});
 
 test('operation names are unique', () => {
   const names = listOperations().map((operation) => operation.name);
@@ -42,6 +53,7 @@ test('operation names are unique', () => {
 test('config.status takes no input and returns the redacted summary', () => {
   const status = listOperations().find((operation) => operation.name === 'config.status')!;
   assert.equal(status.kind, 'query');
+  assert.deepEqual(status.errors, reachable(status));
   assert.equal(status.session, true);
   assert.equal(status.input.safeParse({}).success, true);
   assert.equal(status.input.safeParse({ path: '/srv' }).success, false);

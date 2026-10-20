@@ -1,0 +1,82 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { authorize, type Authorized } from '../authorize';
+import { accessIn, CAPABILITIES } from '../capabilities';
+import { readDeploymentConfig } from '../config';
+import { setDeploymentState } from '../config-store';
+import type { HandlerContext } from '../dispatcher';
+import { listOperations } from '../operations';
+import { ownerHandlers } from './index';
+import { mintSession } from './session-mint';
+
+// Every owner handler re-checks its token (#1, item 12): one authorize()
+// didn't issue, or one for another capability, throws before it does
+// anything, so a caller that skips the dispatcher gets nothing.
+
+const read = readDeploymentConfig(
+  {
+    NODE_ENV: 'production',
+    PORTFOLIO_PROFILE: 'owner',
+    PORTFOLIO_ORIGIN: 'https://rowan.test',
+    PORTFOLIO_SOURCE_DIR: '/srv/portfolio',
+  },
+  { cwd: '/' },
+);
+assert.ok(read.ok, JSON.stringify(read.issues));
+const config = read.config;
+const handlers = ownerHandlers({ config, catalog: 'documents' });
+const session = mintSession();
+
+test.before(() => {
+  setDeploymentState({
+    config,
+    catalog: { getLive: () => assert.fail('no handler here reads the catalog') },
+    dispatch: () => assert.fail('the handlers are called directly'),
+    degraded: [],
+  });
+});
+test.after(() => setDeploymentState(undefined));
+
+test('every owner handler serves a registered operation', () => {
+  const names = new Set(listOperations().map((operation) => operation.name));
+  for (const name of Object.keys(handlers)) assert.ok(names.has(name), name);
+});
+
+for (const [name, handler] of Object.entries(handlers)) {
+  const operation = listOperations().find((entry) => entry.name === name)!;
+  const context: HandlerContext = {
+    request: new Request(`https://rowan.test/api/studio/${name}`),
+    requestId: 'req-handler',
+    operation,
+    session,
+    inputType: operation.kind === 'query' ? 'search' : 'json',
+  };
+
+  test(`${name} throws on a token authorize() never issued`, async () => {
+    const forged = Object.freeze({
+      capability: operation.capability,
+      session,
+    }) as unknown as Authorized;
+    await assert.rejects(async () => handler(forged, {}, context), /not authorized/);
+  });
+
+  test(`${name} throws on a token for another capability`, async () => {
+    const others = CAPABILITIES.filter(
+      (capability) =>
+        capability !== operation.capability && accessIn('owner', capability) !== 'absent',
+    );
+    assert.ok(others.length > 0);
+    for (const capability of others) {
+      const token = authorize(capability, session);
+      assert.ok(token, capability);
+      await assert.rejects(async () => handler(token, {}, context), /not authorized/, capability);
+    }
+  });
+
+  test(`${name} runs with its own token`, async () => {
+    const token = authorize(operation.capability, session);
+    assert.ok(token);
+    const output = await handler(token, {}, context);
+    assert.equal(operation.output.safeParse(output).success, true);
+  });
+}

@@ -4,30 +4,55 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { compose, type AuthProvider } from './composition';
-import { readDeploymentConfig } from './config';
-import type { DeploymentState } from './config-store';
+import {
+  compose,
+  type AuthProvider,
+  type AuthProviderFactory,
+  type CompositionInput,
+  type StartupRequirement,
+} from './composition';
+import { readDeploymentConfig, type DeploymentConfig } from './config';
+import { setDeploymentState, type DeploymentState } from './config-store';
 import { loadedOwnerModules } from './load-trace';
 import { listOperations } from './operations';
 import { listRoutes, resolveRoute, RETIRED_PATTERNS, routeAccess } from './routes';
 
 // Owner in process, with a test double for #2's provider: the route and
 // operation matrix for owner until #2 ships a real one and reruns it end to
-// end. A request carrying `x-test-session: owner` has a session, and a
-// command passes the origin check when it comes from PORTFOLIO_ORIGIN.
+// end. A request carrying `x-test-session: owner` has a session the double
+// minted, and a command passes the origin check when it comes from
+// PORTFOLIO_ORIGIN.
 
 const EXAMPLE = fileURLToPath(new URL('../../../../portfolio.example.yml', import.meta.url));
 const ORIGIN = 'https://rowan.test';
 
-const PROVIDER: AuthProvider = {
+const PROVIDER: AuthProviderFactory = {
   name: 'test-double',
-  resolveSession: async (request) =>
-    request.headers.get('x-test-session') === 'owner' ? { kind: 'owner' } : null,
-  checkOrigin: async (request) => request.headers.get('origin') === ORIGIN,
+  load: async ({ config, mintSession }) => {
+    const session = mintSession();
+    return {
+      resolveSession: async ({ request }) => ({
+        session: request.headers.get('x-test-session') === 'owner' ? session : null,
+      }),
+      checkOrigin: async ({ request }) => request.headers.get('origin') === config.origin,
+      touchSession: async () => {},
+    };
+  },
 };
 
+let config: DeploymentConfig;
 let state: DeploymentState;
 let sourceDir: string;
+
+function input(overrides: Partial<CompositionInput> = {}): CompositionInput {
+  return {
+    config,
+    examplePath: EXAMPLE,
+    report: () => {},
+    authProviders: [PROVIDER],
+    ...overrides,
+  };
+}
 
 test.before(async () => {
   sourceDir = mkdtempSync(path.join(tmpdir(), 'composition-owner-'));
@@ -47,19 +72,19 @@ test.before(async () => {
     { cwd: '/' },
   );
   assert.ok(read.ok, JSON.stringify(read.issues));
+  config = read.config;
   assert.deepEqual(loadedOwnerModules(), []);
-  const composed = await compose({
-    config: read.config,
-    examplePath: EXAMPLE,
-
-    report: () => {},
-    authProviders: [PROVIDER],
-  });
+  const composed = await compose(input());
   assert.ok(composed.ok, JSON.stringify(composed.issues));
   state = composed.state;
+  // As register() does.
+  setDeploymentState(state);
 });
 
-test.after(() => rmSync(sourceDir, { recursive: true, force: true }));
+test.after(() => {
+  setDeploymentState(undefined);
+  rmSync(sourceDir, { recursive: true, force: true });
+});
 
 function studio(method: string, name: string, headers: Record<string, string> = {}) {
   const init: RequestInit = { method, headers: { 'x-request-id': 'req-owner', ...headers } };
@@ -68,7 +93,12 @@ function studio(method: string, name: string, headers: Record<string, string> = 
 }
 
 test('owner loads its modules only through the composition root', () => {
-  assert.deepEqual(loadedOwnerModules(), ['server/owner/config-status', 'server/owner/index']);
+  assert.deepEqual(loadedOwnerModules(), [
+    'server/owner/config-status',
+    'server/owner/session-mint',
+    'server/owner/index',
+  ]);
+  assert.deepEqual(state.degraded, []);
 });
 
 test('every registered operation fails closed without a session and runs with one', async () => {
@@ -129,4 +159,93 @@ test('the owner route matrix: each route as its capability says, and retired one
   for (const pattern of RETIRED_PATTERNS) {
     assert.equal(resolveRoute('owner', concrete(pattern)).status, 'absent', pattern);
   }
+});
+
+test('owner runs loaded requirements after its code, then loads the provider', async () => {
+  const order: string[] = [];
+  const bindings: AuthProvider = {
+    resolveSession: async () => ({ session: null }),
+    checkOrigin: async () => false,
+    touchSession: async () => {},
+  };
+  const requirement = (id: string, row: Partial<StartupRequirement>): StartupRequirement => ({
+    id,
+    issue: '#1',
+    profiles: ['owner'],
+    failure: 'fatal',
+    ...row,
+  });
+  const composed = await compose(
+    input({
+      authProviders: [
+        {
+          name: 'ordered',
+          load: async (tools) => {
+            assert.equal(tools.config, config);
+            order.push('provider');
+            return bindings;
+          },
+        },
+      ],
+      requirements: [
+        requirement('late', {
+          load: async () => {
+            order.push('load late');
+            return async (context) => {
+              assert.equal(context.config, config);
+              order.push('check late');
+              return [];
+            };
+          },
+        }),
+        requirement('early', {
+          check: async () => {
+            order.push('check early');
+            return [];
+          },
+        }),
+      ],
+    }),
+  );
+  assert.ok(composed.ok, JSON.stringify(composed.issues));
+  assert.deepEqual(order, ['check early', 'load late', 'check late', 'provider']);
+});
+
+test('a fatal loaded requirement stops owner before the provider loads', async () => {
+  let loaded = false;
+  const composed = await compose(
+    input({
+      authProviders: [
+        {
+          name: 'never',
+          load: async () => {
+            loaded = true;
+            throw new Error('the provider loads only after the requirements pass');
+          },
+        },
+      ],
+      requirements: [
+        {
+          id: 'auth.secret',
+          issue: '#2',
+          profiles: ['owner'],
+          failure: 'fatal',
+          load: async () => async () => [
+            {
+              severity: 'fatal',
+              key: 'PORTFOLIO_AUTH_PASSWORD_HASH',
+              code: 'malformed',
+              message: 'test',
+            },
+          ],
+        },
+      ],
+    }),
+  );
+  assert.equal(composed.ok, false);
+  assert.deepEqual(
+    composed.issues.map((issue) => `${issue.severity} ${issue.code}`),
+    ['fatal malformed'],
+  );
+  assert.equal(loaded, false);
 });

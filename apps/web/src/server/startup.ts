@@ -1,5 +1,5 @@
 import 'server-only';
-import { compose, type AuthProvider } from './composition';
+import { compose, type AuthProviderFactory } from './composition';
 import { readDeploymentConfig, type ConfigIssue, type Env, type Profile } from './config';
 import type { DeploymentState } from './config-store';
 
@@ -17,7 +17,7 @@ export interface StartupInput {
   /** Reads <KEY>_FILE values; tests replace it. */
   readonly readFile?: (file: string) => string;
   /** Defaults to the providers the build registers; tests pass doubles. */
-  readonly authProviders?: readonly AuthProvider[];
+  readonly authProviders?: readonly AuthProviderFactory[];
 }
 
 export type StartupResult =

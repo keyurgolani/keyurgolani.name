@@ -7,30 +7,52 @@ import type { CatalogAdapter } from './config-summary';
 import type { DeploymentState } from './config-store';
 import { createDispatcher, NO_BINDINGS, type StudioBindings } from './dispatcher';
 import { listOperations } from './operations';
-import { capabilityPolicy, type Session } from './policy';
+import type { Session } from './session';
 
 // The composition root (#1, item 14). It builds what one profile needs and
 // nothing else: read-only and demo get their catalog adapter, and only the
-// owner branch loads owner code, through import(). Before any of that it
-// runs the named startup requirements, the hook #2, #3, and #4 implement
-// their startup checks against.
+// owner branch loads owner code, through import(). startup.ts imports this
+// module in every profile, so check:deps fails any import of owner code
+// here that isn't an import(). Around that it runs the named startup
+// requirements, the hook #2, #3, and #4 implement their startup checks
+// against.
 
-/** An authentication provider. #2 registers one; this build registers none. */
+/** What an auth provider binds into the dispatcher (#2). */
 export interface AuthProvider {
-  readonly name: string;
-  /** Dispatcher step 2: the owner session a request carries, or null. */
-  readonly resolveSession: (request: Request) => Promise<Session | null>;
-  /** Dispatcher step 3: origin and CSRF checks for a command. */
-  readonly checkOrigin: (request: Request) => Promise<boolean>;
+  readonly resolveSession: StudioBindings['resolveSession'];
+  readonly checkOrigin: StudioBindings['checkOrigin'];
+  readonly touchSession: StudioBindings['touchSession'];
+  /** auth.login's rate limit. Without one, nothing is throttled. */
+  readonly throttle?: StudioBindings['throttle'];
 }
 
-/** The providers this build registers. #2 adds its own here. */
-export const AUTH_PROVIDERS: readonly AuthProvider[] = [];
+/** What the owner branch hands a provider as it loads it. */
+export interface ProviderTools {
+  readonly config: DeploymentConfig;
+  /** Makes the sessions resolveSession returns. The dispatcher and authorize() accept no other. */
+  readonly mintSession: <T extends object>(fields?: T) => Session & Readonly<T>;
+}
+
+/**
+ * An auth provider, by name. Only the owner branch calls `load`, after
+ * owner code and the owner startup requirements, so a provider's module
+ * loads through import() and no other profile evaluates it:
+ * `load: (tools) => import('./owner/…').then((module) => module.provider(tools))`.
+ */
+export interface AuthProviderFactory {
+  readonly name: string;
+  readonly load: (tools: ProviderTools) => Promise<AuthProvider>;
+}
+
+/** The providers this build registers; the first one serves. #2 adds its own. */
+export const AUTH_PROVIDERS: readonly AuthProviderFactory[] = [];
 
 export interface RequirementContext {
   readonly config: DeploymentConfig;
-  readonly authProviders: readonly AuthProvider[];
+  readonly authProviders: readonly AuthProviderFactory[];
 }
+
+export type RequirementCheck = (context: RequirementContext) => Promise<readonly ConfigIssue[]>;
 
 export interface StartupRequirement {
   /** Stable name. Each issue implements its check against it. */
@@ -38,10 +60,21 @@ export interface StartupRequirement {
   /** The issue that owns the check. */
   readonly issue: string;
   readonly profiles: readonly Profile[];
-  /** `degraded` serves the last-known-good revision instead of stopping. */
+  /**
+   * What a fatal finding does. `fatal` stops startup. `degraded` starts
+   * anyway, logs the finding as a warning, and lists the requirement in
+   * DeploymentState.degraded, so #3 can serve the last-known-good revision.
+   */
   readonly failure: 'fatal' | 'degraded';
-  /** The check, once its issue implements it. Until then the requirement is a named slot. */
-  readonly check?: (context: RequirementContext) => readonly ConfigIssue[];
+  /** A check that needs no owner code. It runs first, before the profile's code loads. */
+  readonly check?: RequirementCheck;
+  /**
+   * Owner only: imports a check that lives in owner code, such as #2's
+   * auth.secret. It runs after the owner branch imports server/owner/index
+   * and before the provider loads:
+   * `load: () => import('./owner/…').then((module) => module.check)`.
+   */
+  readonly load?: () => Promise<RequirementCheck>;
 }
 
 /** The tagged rows of the #1 startup matrix, plus the provider check this build makes itself. */
@@ -51,7 +84,7 @@ export const STARTUP_REQUIREMENTS: readonly StartupRequirement[] = [
     issue: '#1',
     profiles: ['owner'],
     failure: 'fatal',
-    check: ({ authProviders }) =>
+    check: async ({ authProviders }) =>
       authProviders.length > 0
         ? []
         : [
@@ -74,14 +107,40 @@ export const STARTUP_REQUIREMENTS: readonly StartupRequirement[] = [
   { id: 'revision.integrity', issue: '#3', profiles: ['owner'], failure: 'degraded' },
 ];
 
-/** The startup-requirement hook: every implemented requirement for the profile, in order. */
-export function checkStartupRequirements(context: RequirementContext): ConfigIssue[] {
-  return STARTUP_REQUIREMENTS.flatMap((requirement) =>
-    requirement.check && requirement.profiles.includes(context.config.profile)
-      ? requirement.check(context)
-      : [],
-  );
+interface Checked {
+  readonly issues: ConfigIssue[];
+  readonly degraded: string[];
 }
+
+/**
+ * The startup-requirement hook: runs each requirement for the profile that
+ * `pick` finds a check for, in table order. A degraded requirement's fatal
+ * findings become warnings, and its ID joins `degraded`.
+ */
+async function runRequirements(
+  requirements: readonly StartupRequirement[],
+  context: RequirementContext,
+  pick: (requirement: StartupRequirement) => Promise<RequirementCheck | undefined>,
+): Promise<Checked> {
+  const checked: Checked = { issues: [], degraded: [] };
+  for (const requirement of requirements) {
+    if (!requirement.profiles.includes(context.config.profile)) continue;
+    const check = await pick(requirement);
+    if (!check) continue;
+    for (const issue of await check(context)) {
+      if (issue.severity === 'fatal' && requirement.failure === 'degraded') {
+        checked.issues.push({ ...issue, severity: 'warning' });
+        if (!checked.degraded.includes(requirement.id)) checked.degraded.push(requirement.id);
+      } else {
+        checked.issues.push(issue);
+      }
+    }
+  }
+  return checked;
+}
+
+const failed = (issues: readonly ConfigIssue[]) =>
+  issues.some((issue) => issue.severity === 'fatal');
 
 export interface CompositionInput {
   readonly config: DeploymentConfig;
@@ -90,7 +149,9 @@ export interface CompositionInput {
   /** Receives findings made after startup (re-validation under next dev). */
   readonly report: (issue: ConfigIssue) => void;
   /** Defaults to AUTH_PROVIDERS. In-process owner tests pass a test double. */
-  readonly authProviders?: readonly AuthProvider[];
+  readonly authProviders?: readonly AuthProviderFactory[];
+  /** Defaults to STARTUP_REQUIREMENTS. Tests pass their own. */
+  readonly requirements?: readonly StartupRequirement[];
 }
 
 export type Composition =
@@ -100,15 +161,17 @@ export type Composition =
 export async function compose(input: CompositionInput): Promise<Composition> {
   const { config } = input;
   const authProviders = input.authProviders ?? AUTH_PROVIDERS;
-  const required = checkStartupRequirements({ config, authProviders });
-  if (required.some((issue) => issue.severity === 'fatal')) return { ok: false, issues: required };
+  const requirements = input.requirements ?? STARTUP_REQUIREMENTS;
+  const context: RequirementContext = { config, authProviders };
+  const early = await runRequirements(requirements, context, async (row) => row.check);
+  if (failed(early.issues)) return { ok: false, issues: early.issues };
 
   switch (config.profile) {
     case 'demo':
       return {
         ok: false,
         issues: [
-          ...required,
+          ...early.issues,
           {
             severity: 'fatal',
             key: 'PORTFOLIO_PROFILE',
@@ -120,28 +183,38 @@ export async function compose(input: CompositionInput): Promise<Composition> {
       };
     case 'read-only': {
       const documents = openDocuments(input);
-      if (!documents.ok) return { ok: false, issues: [...required, ...documents.issues] };
-      return built(config, documents.reader, NO_BINDINGS, [...required, ...documents.issues]);
+      const issues = [...early.issues, ...documents.issues];
+      if (!documents.ok) return { ok: false, issues };
+      return built(config, documents.reader, NO_BINDINGS, issues, early.degraded);
     }
     case 'owner': {
       // Until #3, owner serves the mounted documents too.
       const documents = openDocuments(input);
-      if (!documents.ok) return { ok: false, issues: [...required, ...documents.issues] };
-      // The one place owner code loads. checkStartupRequirements made sure of a provider.
+      let issues = [...early.issues, ...documents.issues];
+      if (!documents.ok) return { ok: false, issues };
+      // The one place owner code loads.
       const owner = await import('./owner/index');
-      const provider = authProviders[0]!;
+      const late = await runRequirements(requirements, context, async (row) => row.load?.());
+      issues = [...issues, ...late.issues];
+      if (failed(late.issues)) return { ok: false, issues };
+      // The auth.provider requirement made sure of one.
+      const factory = authProviders[0];
+      if (!factory) throw new Error('The owner profile has no authentication provider.');
+      const provider = await factory.load({ config, mintSession: owner.mintSession });
       const catalog: CatalogAdapter = 'documents';
-      return built(
-        config,
-        documents.reader,
-        {
-          ...NO_BINDINGS,
-          handlers: owner.ownerHandlers({ config, catalog }),
-          resolveSession: (request) => provider.resolveSession(request),
-          checkOrigin: (request) => provider.checkOrigin(request),
-        },
-        [...required, ...documents.issues],
-      );
+      const bindings: StudioBindings = {
+        ...NO_BINDINGS,
+        handlers: owner.ownerHandlers({ config, catalog }),
+        resolveSession: (context) => provider.resolveSession(context),
+        checkOrigin: (context) => provider.checkOrigin(context),
+        touchSession: (context) => provider.touchSession(context),
+        throttle: (context) =>
+          provider.throttle ? provider.throttle(context) : NO_BINDINGS.throttle(context),
+      };
+      return built(config, documents.reader, bindings, issues, [
+        ...early.degraded,
+        ...late.degraded,
+      ]);
     }
   }
 }
@@ -161,11 +234,15 @@ function built(
   catalog: CatalogReader,
   bindings: StudioBindings,
   issues: ConfigIssue[],
+  degraded: readonly string[],
 ): Composition {
-  const dispatch = createDispatcher({
-    ...bindings,
-    policy: capabilityPolicy(config.profile),
-    operations: listOperations(),
+  // It reads the policy from the deployment register() stores, per request.
+  const dispatch = createDispatcher({ ...bindings, operations: listOperations() });
+  const state = Object.freeze({
+    config,
+    catalog,
+    dispatch,
+    degraded: Object.freeze([...degraded]),
   });
-  return { ok: true, state: Object.freeze({ config, catalog, dispatch }), issues };
+  return { ok: true, state, issues };
 }

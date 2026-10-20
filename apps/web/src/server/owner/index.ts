@@ -6,10 +6,13 @@ import { recordOwnerModule } from '../load-trace';
 import { configStatus } from './config-status';
 
 // Owner code. Only composition.ts loads it, through import() in its owner
-// branch; check:deps fails any other import, so demo and read-only never
-// evaluate a module here.
+// branch; check:deps fails any other import outside tests, so demo and
+// read-only never evaluate a module here.
 
 recordOwnerModule('server/owner/index');
+
+/** For the auth provider: composition.ts hands it on as the provider loads. */
+export { mintSession } from './session-mint';
 
 export interface OwnerInput {
   readonly config: DeploymentConfig;
