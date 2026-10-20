@@ -17,8 +17,9 @@ export default defineConfig({
   outputDir: path.join(reports, 'results'),
   fullyParallel: true,
   forbidOnly: Boolean(process.env.CI),
-  // Browser interaction tests retry once in CI; a pass on retry is a flake.
-  retries: process.env.CI ? 1 : 0,
+  // Nothing retries by default: contract, render, accessibility, and
+  // performance checks never do. See the interaction project below.
+  retries: 0,
   workers: 2,
   reporter: [
     ['list'],
@@ -32,5 +33,15 @@ export default defineConfig({
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  projects: [
+    { name: 'chromium', use: { ...devices['Desktop Chrome'] }, grepInvert: /@interaction/ },
+    // Browser interaction tests opt in with `{ tag: '@interaction' }` and retry
+    // once in CI. A pass on retry is a flake, which PR runs only report.
+    {
+      name: 'chromium-interaction',
+      use: { ...devices['Desktop Chrome'] },
+      grep: /@interaction/,
+      retries: process.env.CI ? 1 : 0,
+    },
+  ],
 });

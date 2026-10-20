@@ -5,13 +5,22 @@
 //
 // `app` is worker-scoped: every distinct `appOptions` gets its own server, data
 // directory, and port. Every request the browser makes outside the app's
-// origin fails (third-party fonts and images included), and the blocked URLs
-// are attached to the test.
+// origin fails, and the blocked URLs are attached to the test. A blocked
+// request to a host outside EXPECTED_BLOCKED_HOSTS fails the test.
 import path from 'node:path';
 import { test as base } from '@playwright/test';
 import { startApp } from './app-server.mjs';
 
 export { expect } from '@playwright/test';
+
+// Outside requests a page may make today, which stay blocked: third-party
+// fonts until #6 self-hosts them, and the fixtures' own .test hosts.
+const EXPECTED_BLOCKED_HOSTS = new Set(['fonts.googleapis.com', 'fonts.gstatic.com']);
+
+function expectedBlock(url: string): boolean {
+  const { hostname } = new URL(url);
+  return EXPECTED_BLOCKED_HOSTS.has(hostname) || hostname.endsWith('.test');
+}
 
 export interface AppOptions {
   /** Extra server environment, such as a deployment profile. */
@@ -83,6 +92,17 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
           body: `${blocked.join('\n')}\n`,
           contentType: 'text/plain',
         });
+      }
+      const unexpected = [...new Set(blocked.filter((url) => !expectedBlock(url)))];
+      if (unexpected.length > 0) {
+        throw new Error(
+          [
+            `The page requested ${unexpected.length} URL(s) outside the app: ${unexpected.join(', ')}`,
+            '',
+            'Expected: only the app, third-party fonts, and .test fixture hosts',
+            `Received: ${unexpected.join(', ')}`,
+          ].join('\n'),
+        );
       }
     },
     { auto: true },
