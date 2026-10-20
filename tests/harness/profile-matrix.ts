@@ -6,6 +6,7 @@
 // Health and readiness answer their documented shapes, and the canary scan
 // (#1, Verification item 2) finds no path, secret, or config summary in any
 // response. A spec runs it for the profile its app options start.
+import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import type { APIResponse } from '@playwright/test';
@@ -17,7 +18,9 @@ import {
   CANARY_SECRET,
   CANARY_SOURCE,
   canaries as leakCanaries,
+  FORGED_LINE,
   HOPS_FILE,
+  IMAGE_PROBE,
 } from './canaries.mjs';
 import { expect, test, type AppOptions } from './fixtures';
 
@@ -225,6 +228,7 @@ export function profileMatrix(profile: Profile): void {
         '/api/studio/no.such.operation',
         '/no-such-page',
         '/api/no-such-route',
+        IMAGE_PROBE,
       ];
       for (const target of targets) {
         for (const method of ['GET', 'POST'] as const) {
@@ -260,6 +264,28 @@ export function profileMatrix(profile: Profile): void {
         const { error } = (await response.json()) as { error: Record<string, string> };
         expect(error.code, name).toBe('not_available_in_profile');
         expectProfileHeaders(profile, response, name);
+      }
+    },
+  );
+
+  test(
+    'the image optimizer is off: /_next/image is the 404 page, and its url never reaches the log',
+    { annotation: [{ type: 'route', description: '/_next/image' }, annotation] },
+    async ({ app, request }) => {
+      // images.unoptimized (next.config.ts): Next answers with the 404 page,
+      // under the baseline headers, before it reads the url. On, it sent its
+      // own CSP and wrote the url to stderr as it came, line breaks included.
+      const responses: [method: string, response: APIResponse][] = [];
+      for (const method of METHODS) {
+        responses.push([method, await request.fetch(IMAGE_PROBE, { method, maxRedirects: 0 })]);
+      }
+      // The server writes its log a line at a time; give it a moment. The
+      // log comes first, so an optimizer back on fails here as well.
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      expect.soft(readFileSync(app.log, 'utf8'), 'the server log').not.toContain(FORGED_LINE);
+      for (const [method, response] of responses) {
+        expect(response.status(), method).toBe(404);
+        expectProfileHeaders(profile, response, method);
       }
     },
   );

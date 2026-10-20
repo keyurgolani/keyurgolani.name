@@ -32,3 +32,13 @@ export const HOPS_FILE = {
 export function canaries(root) {
   return [CANARY_SECRET, CANARY_SOURCE, CANARY_BODY, root, ...SUMMARY_FIELDS];
 }
+
+/** A JSON log line no server writes, so a request that gets it into the log forged it. */
+export const FORGED_LINE = '{"level":"fatal","event":"config.fatal","key":"FORGED_7d2a"}';
+
+/**
+ * /_next/image with a url that ends the line, writes FORGED_LINE, and opens
+ * a terminal escape. With the optimizer on, Next wrote the url to stderr as
+ * it came.
+ */
+export const IMAGE_PROBE = `/_next/image?url=${encodeURIComponent(`/x\n${FORGED_LINE}\n\u001b[31m`)}&w=64&q=75`;

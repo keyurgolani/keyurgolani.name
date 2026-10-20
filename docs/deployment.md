@@ -39,7 +39,7 @@ What each profile grants. `public` is anyone, `session` is a signed-in owner (no
 
 <!-- profile-matrix:end -->
 
-Every profile serves `/`, `/robots.txt`, `/sitemap.xml`, `/opengraph-image`, `/api/health`, `/api/ready`, and `/api/studio/<operation>`. `owner` and `read-only` add `/feed.xml`, and `demo` adds `/sample`. Every Studio operation goes through `/api/studio/<operation>`, and one the profile lacks answers with the 404 envelope, `{"error":{"code":"not_available_in_profile",...}}`.
+Every profile serves `/`, `/robots.txt`, `/sitemap.xml`, `/opengraph-image`, `/api/health`, `/api/ready`, and `/api/studio/<operation>`. `owner` and `read-only` add `/feed.xml`, and `demo` adds `/sample`. Every Studio operation goes through `/api/studio/<operation>`, and one the profile lacks answers with the 404 envelope, `{"error":{"code":"not_available_in_profile",...}}`. There is no image optimizer: images load as they are, and `/_next/image` answers with the 404 page in every profile.
 
 ## Supported hosts
 

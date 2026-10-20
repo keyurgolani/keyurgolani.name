@@ -10,6 +10,11 @@ const config: NextConfig = {
   // output. Nothing imports it, so the tracer can't find it on its own.
   outputFileTracingIncludes: { '/**': ['../../portfolio.example.yml'] },
   transpilePackages: ['@portfolio/schema', '@portfolio/kit', '@portfolio/variant-editorial'],
+  // No image optimizer: images render as plain <img>. Left on, /_next/image
+  // sends its own CSP in place of the baseline one below and writes the
+  // decoded url parameter to stderr as it came, so a visitor could forge log
+  // lines. Off, Next answers it with the 404 page.
+  images: { unoptimized: true },
   // Baseline headers on every route (#1, item 22). A route that sends its own
   // Content-Security-Policy sets frame-ancestors there and leaves this entry's
   // source, so each response carries one CSP: Studio and login (#2), public

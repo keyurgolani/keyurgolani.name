@@ -15,9 +15,10 @@ const UPSTREAM_TEXT = '"url" parameter is valid but upstream response is invalid
 const ORIGIN = 'https://canary.test';
 
 // Fake deployments. 'contained' is a production build with the gate,
-// 'baseline' answers like the ungated 62a0f06 build with build-time metadata
-// from the example persona, and 'proxy' is a contained build behind a proxy
-// that denies with 403.
+// 'unoptimized' is one with the image optimizer off, which answers
+// /_next/image with its 404 page, 'baseline' answers like the ungated
+// 62a0f06 build with build-time metadata from the example persona, and
+// 'proxy' is a contained build behind a proxy that denies with 403.
 function respond(mode, req, res) {
   const { pathname } = new URL(req.url, 'http://x');
   const send = (status, text = '', headers = {}) => {
@@ -40,6 +41,7 @@ function respond(mode, req, res) {
     return send(200, `<pre>${SOURCE_CANARY}</pre>`);
   }
   if (pathname === '/_next/image') {
+    if (mode === 'unoptimized') return send(404, '<h1>Page not found</h1>');
     return mode === 'baseline'
       ? send(404, UPSTREAM_TEXT)
       : send(400, '"url" parameter is not allowed');
@@ -122,6 +124,17 @@ test('passes a contained build checked directly', async (t) => {
   assert.match(
     line(stdout, 'ORIGIN', '/sitemap.xml'),
     /actual references it, no example host\s+PASS$/,
+  );
+});
+
+test('passes a build with the image optimizer off, checked directly', async (t) => {
+  const app = await serve('unoptimized');
+  t.after(app.close);
+  const { code, stdout } = await run([app.url, '--direct', '--expect-origin', ORIGIN]);
+  assert.equal(code, 0, stdout);
+  assert.match(
+    line(stdout, 'GET', IMAGE_PATH),
+    /optimizer off\s+actual 404, marker absent\s+PASS$/,
   );
 });
 

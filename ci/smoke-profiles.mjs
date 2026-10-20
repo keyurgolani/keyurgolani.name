@@ -8,7 +8,8 @@
 //   bundled sample, each on a read-only root filesystem with a tmpfs at
 //   Next's cache, as the Compose examples run them. Health and readiness
 //   answer their documented shapes; every route the profile serves answers,
-//   and every other route, retired route, and operation fails closed; every
+//   and every other route, retired route, and operation fails closed, as
+//   /_next/image does, with the optimizer off and nothing logged; every
 //   response carries the baseline headers and no cookie, and none carries a
 //   canary (tests/harness/canaries.mjs) or the server's own path. After all
 //   of that, readiness still reports no owner module loaded, and the log
@@ -38,7 +39,9 @@ import {
   CANARY_SECRET,
   CANARY_SOURCE,
   canaries,
+  FORGED_LINE,
   HOPS_FILE,
+  IMAGE_PROBE,
 } from '../tests/harness/canaries.mjs';
 import { waitFor } from '../tests/harness/net.mjs';
 import { checkRefusal, rowDocuments, STARTUP_ROWS } from '../tests/harness/startup-rows.mjs';
@@ -188,6 +191,8 @@ function plan(profile) {
       ]);
     }
   }
+  // No image optimizer (next.config.ts): the 404 page, whatever the url says.
+  for (const method of METHODS) add(method, IMAGE_PROBE, status(404));
   for (const operation of listOperations()) {
     for (const method of METHODS) {
       const [expected, code] = expectedOperation(profile, operation, method);
@@ -336,6 +341,7 @@ async function profileRun(profile, { env, mounts = [] }) {
         fail(profile, `deployment.config secrets are ${JSON.stringify(summary.secrets)}`);
       }
     }
+    if (text.includes(FORGED_LINE)) fail(profile, 'a /_next/image url reached the log as a line');
     // A write the read-only root refused shows up as EROFS.
     if (/EROFS|read-only file system/i.test(text)) {
       fail(profile, 'a write hit the read-only root filesystem');
