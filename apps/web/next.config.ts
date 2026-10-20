@@ -10,6 +10,23 @@ const config: NextConfig = {
   // output. Nothing imports it, so the tracer can't find it on its own.
   outputFileTracingIncludes: { '/**': ['../../portfolio.example.yml'] },
   transpilePackages: ['@portfolio/schema', '@portfolio/kit', '@portfolio/variant-editorial'],
+  // Baseline headers on every route (#1, item 22). A route that sends its own
+  // Content-Security-Policy sets frame-ancestors there and leaves this entry's
+  // source, so each response carries one CSP: Studio and login (#2), public
+  // pages (#6), preview (#7), and /sample (#9). None does yet. HSTS belongs at
+  // the TLS-terminating proxy (docs/deployment.md).
+  async headers() {
+    return [
+      {
+        source: '/:path*',
+        headers: [
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+          { key: 'Content-Security-Policy', value: "frame-ancestors 'none'" },
+        ],
+      },
+    ];
+  },
 };
 
 export default config;

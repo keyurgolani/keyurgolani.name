@@ -1,10 +1,10 @@
 // The route-level matrix (#1, AC4) for one profile, generated from the route
 // table and the operation registry and run against the built server: every
 // page, route, and operation the profile doesn't serve fails closed, and
-// each one it serves answers. No response sets a cookie, and under a profile
-// crawlers may not index (demo), every response says so. Health and
-// readiness answer their documented shapes. A spec runs it for the profile
-// its app options start.
+// each one it serves answers. Every response carries the baseline headers
+// and no cookie, and under a profile crawlers may not index (demo), says so.
+// Health and readiness answer their documented shapes. A spec runs it for
+// the profile its app options start.
 import { createRequire } from 'node:module';
 import type { APIResponse } from '@playwright/test';
 import type * as Capabilities from '../../apps/web/src/server/capabilities';
@@ -51,6 +51,13 @@ function expected(
   return [200, null];
 }
 
+/** The headers next.config.ts sets on every route (#1, item 22). */
+const BASELINE_HEADERS = {
+  'x-content-type-options': 'nosniff',
+  'referrer-policy': 'strict-origin-when-cross-origin',
+  'content-security-policy': "frame-ancestors 'none'",
+} as const;
+
 /** What /api/ready answers for a profile whose checks all pass. */
 function readyBody(profile: Profile) {
   return {
@@ -68,9 +75,15 @@ function readyBody(profile: Profile) {
   };
 }
 
-/** No cookie, and noindex exactly where the profile can't be indexed. */
+/**
+ * The baseline headers, no cookie, and noindex exactly where the profile
+ * can't be indexed.
+ */
 function expectProfileHeaders(profile: Profile, response: APIResponse, what: string) {
   const headers = response.headers();
+  for (const [name, value] of Object.entries(BASELINE_HEADERS)) {
+    expect(headers[name], `${what}: ${name}`).toBe(value);
+  }
   expect(headers['set-cookie'], `${what}: no cookie`).toBeUndefined();
   expect(headers['x-robots-tag'], `${what}: X-Robots-Tag`).toBe(
     INDEXABLE[profile] ? undefined : 'noindex',
