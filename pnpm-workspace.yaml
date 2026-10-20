@@ -2,3 +2,20 @@ packages:
   - 'apps/*'
   - 'packages/*'
   - 'experiments/*'
+
+# Dependency install scripts are reviewed. A dependency that ships one must be
+# listed below, or the install fails (strictDepBuilds).
+strictDepBuilds: true
+
+# Allowed to run install scripts. None needs one today.
+onlyBuiltDependencies: []
+
+# Reviewed and not run.
+ignoredBuiltDependencies:
+  # The platform binary arrives as an optional dependency (@esbuild/*). The
+  # script only re-checks it and swaps in a faster launcher.
+  - esbuild
+  # Prebuilt binaries arrive as optional dependencies (@img/sharp-*). The
+  # script compiles from source only when a system libvips or a source build
+  # is requested.
+  - sharp
