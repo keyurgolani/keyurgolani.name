@@ -64,15 +64,17 @@ Earlier releases read one unversioned `portfolio.yml` that held the content and 
 pnpm config:migrate config/portfolio.yml
 ```
 
-It prints each field it moves and each value it fills in, the values it needs from you with the ids this build accepts, the section ids it gives, the old file's comments it can't keep, a diff of the new portfolio document, and the whole site document. The color scheme and typography always need a value: no old id carries over. Give each with `--set`, drop the keys the old schema ignored with `--drop-unknown` (or remove them from the file), then write both documents into a directory:
+It prints each field it moves and each value it fills in, the values it needs from you with the ids this build accepts, the section ids it gives, the old file's comments it can't keep, the new documents' diagnostics, a diff of the new portfolio document, and the whole site document. The color scheme and typography always need a value: no old id carries over. Until you give them, the diagnostics come from a check with placeholders in their place, so content problems show on the first run. Give each value with `--set`, drop the keys the old schema ignored with `--drop-unknown` (or remove them from the file), pass the site's real public origin with `--origin` to check the links against it, then write both documents into a directory:
 
 ```sh
 pnpm config:migrate config/portfolio.yml \
   --set site.appearance.colorScheme=warm --set site.appearance.typography=classic \
-  --drop-unknown --write --out config/new
+  --drop-unknown --origin https://example.com --write --out config/new
 ```
 
-It never writes over a file and never changes the old one, so move the new `portfolio.yml` and `site.yml` into `config/` yourself. A JSON file becomes `portfolio.json` and `site.json`. The old `meta.url` has no place in either document; the migration prints its origin to use as `PORTFOLIO_ORIGIN`. Section ids come from the anchors the old navigation linked to, and `--set portfolio.sections.<n>.id=<id>` keeps any other. A `portfolio.toml` has to become YAML or JSON first.
+It never writes over a file and never changes the old one, so move the new `portfolio.yml` and `site.yml` into `config/` yourself. A JSON file becomes `portfolio.json` and `site.json`. The old `meta.url` has no place in either document. The migration prints its origin as a starting point for `PORTFOLIO_ORIGIN`, but never checks links against it, since it often names an old domain. Section ids come from the anchors the old navigation linked to, the linked sections first, and the report names each section whose anchor changes. `--set portfolio.sections.<n>.id=<id>` keeps any other. A `locale`, `direction`, or section `lang` the old file already has carries over. A `portfolio.toml` has to become YAML or JSON first.
+
+If the old file holds anything shaped like a secret (a GitHub token, a private key, a password hash, an AWS key ID), in a field, a key, or a comment, the report says where and what kind, and shows no value, diff, or document until you remove it. Revoke it too.
 
 It exits 0 when the file is already current or nothing stopped the migration, 2 when it needs a value, a decision on unknown keys, or a fix for a problem the new documents would have, and 1 for anything else. `--summary` leaves every value from the documents out of the report, so it can go to a log.
 
