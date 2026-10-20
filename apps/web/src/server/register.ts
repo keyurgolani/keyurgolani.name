@@ -1,17 +1,18 @@
 import 'server-only';
-import fs from 'node:fs';
 import path from 'node:path';
 import { listManifests } from '~/lib/registry';
 import { issueLogLine, type ConfigIssue, type Profile } from './config';
 import { setDeploymentState } from './config-store';
+import type { Registration } from './start-or-exit';
 import { runStartup, type StartupResult } from './startup';
 
 /**
- * Validates the deployment and stores the result, or logs every fatal
- * finding as a config.fatal line and exits 1. Runs from instrumentation
- * register() on the Node.js runtime, before the server handles a request.
+ * Validates the deployment. When it can start, stores the result and logs
+ * any warnings. Otherwise returns the log line for every finding, which
+ * startOrExit writes before it exits. Runs from instrumentation register()
+ * on the Node.js runtime, before the server handles a request.
  */
-export function registerDeployment(): void {
+export function registerDeployment(): Registration {
   const cwd = process.cwd();
   const result: StartupResult = runStartup({
     env: process.env,
@@ -20,14 +21,18 @@ export function registerDeployment(): void {
     examplePath: path.resolve(/*turbopackIgnore: true*/ cwd, '..', '..', 'portfolio.example.yml'),
     variantSlugs: listManifests().map((manifest) => manifest.slug),
     // Called only after startup, by re-validation under next dev.
-    report: (issue) => writeIssue(issue, result.profile),
+    report: (issue) => {
+      process.stdout.write(logLine(issue, result.profile));
+    },
   });
-  for (const issue of result.issues) writeIssue(issue, result.profile);
-  if (!result.ok) process.exit(1);
+  const log = result.issues.map((issue) => logLine(issue, result.profile)).join('');
+  if (!result.ok) return { ok: false, log };
   setDeploymentState(result.state);
+  // The server keeps running, so stdout can take its time with these.
+  if (log) process.stdout.write(log);
+  return { ok: true };
 }
 
-/** Writes synchronously, so the line is out before process.exit(). */
-function writeIssue(issue: ConfigIssue, profile: Profile | undefined): void {
-  fs.writeSync(1, `${issueLogLine(issue, profile)}\n`);
+function logLine(issue: ConfigIssue, profile: Profile | undefined): string {
+  return `${issueLogLine(issue, profile)}\n`;
 }

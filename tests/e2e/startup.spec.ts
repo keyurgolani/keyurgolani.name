@@ -55,10 +55,13 @@ function without(env: Env, key: string): Env {
 }
 
 /** Starts the server, expects it to stop with exit 1, and returns its config.fatal lines. */
-async function expectRefusal(env: Env, { never = [] }: { never?: string[] } = {}) {
+async function expectRefusal(
+  env: Env,
+  { never = [], readDelayMs }: { never?: string[]; readDelayMs?: number } = {},
+) {
   // Well inside the test timeout, so a server that wrongly keeps running is
   // killed and reported rather than left behind.
-  const run = await runAppToExit({ env, timeoutMs: 15_000 });
+  const run = await runAppToExit({ env, timeoutMs: 15_000, readDelayMs });
   expect(run.exited, `the server kept running:\n${run.output}`).toBe(true);
   expect(run.code, run.output).toBe(1);
   for (const value of never) expect(run.output).not.toContain(value);
@@ -281,6 +284,23 @@ test.describe('the document', () => {
     expect(fatal.map((e) => [e.code, e.path, e.line])).toEqual([
       ['variant_unresolved', '/variant', 3],
     ]);
+  });
+});
+
+test.describe('the refusal log', () => {
+  test('reaches a slow reader in full before the server exits', async () => {
+    // Over 300 KB of config.fatal lines: more than the pipe and the reader's
+    // buffer hold while nothing reads, so the server must wait to write them.
+    const count = 1000;
+    const dir = sourceDir({
+      'portfolio.yml': `identity:\n  name: Rowan Fixture\nsections:\n${'  - kind: canary-kind\n'.repeat(count)}`,
+    });
+    const fatal = await expectRefusal(readOnly({ PORTFOLIO_SOURCE_DIR: dir }), {
+      readDelayMs: 2_000,
+    });
+    expect(fatal.map((entry) => entry.path)).toEqual(
+      Array.from({ length: count }, (_, index) => `/sections/${index}/kind`),
+    );
   });
 });
 

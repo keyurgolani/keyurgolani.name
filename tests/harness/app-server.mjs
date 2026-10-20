@@ -117,17 +117,23 @@ export async function startApp({ env = {}, portfolio = DEFAULT_PORTFOLIO, logFil
 
 /**
  * Starts the built server with exactly the base environment plus `env`, for
- * a configuration that must stop it at startup, and waits for it to exit. A
- * server still running after `timeoutMs` is killed and reported as
- * `exited: false`. It runs from the build output in place: nothing is
- * requested, so it writes nothing there.
+ * a configuration that must stop it at startup, and waits for it to exit and
+ * for its output to close, so no trailing line is missed. A server still
+ * running after `timeoutMs` is killed and reported as `exited: false`. It
+ * runs from the build output in place: nothing is requested, so it writes
+ * nothing there.
+ *
+ * With `readDelayMs`, nothing takes the server's output off the pipes until
+ * that long after it starts: a slow log reader. A long enough log fills them,
+ * so the server's writes have to wait for the reader.
  *
  * @param {object} options
  * @param {Record<string, string>} options.env deployment environment
  * @param {number} [options.timeoutMs]
+ * @param {number} [options.readDelayMs]
  * @returns {Promise<{ exited: boolean, code: number | null, output: string }>}
  */
-export async function runAppToExit({ env, timeoutMs = 30_000 }) {
+export async function runAppToExit({ env, timeoutMs = 30_000, readDelayMs = 0 }) {
   requireBuild();
   const home = mkdtempSync(path.join(tmpdir(), 'portfolio-run-'));
   const child = spawn(process.execPath, [SERVER_JS], {
@@ -136,11 +142,28 @@ export async function runAppToExit({ env, timeoutMs = 30_000 }) {
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let output = '';
-  child.stdout.on('data', (chunk) => (output += chunk));
-  child.stderr.on('data', (chunk) => (output += chunk));
-  const timer = setTimeout(() => child.kill('SIGKILL'), timeoutMs);
-  const [code, signal] = await once(child, 'exit');
+  for (const stream of [child.stdout, child.stderr]) {
+    stream.setEncoding('utf8');
+    // Paused streams stop reading once their buffer fills.
+    if (readDelayMs > 0) stream.pause();
+    stream.on('data', (chunk) => (output += chunk));
+  }
+  const reader =
+    readDelayMs > 0
+      ? setTimeout(() => {
+          child.stdout.resume();
+          child.stderr.resume();
+        }, readDelayMs)
+      : undefined;
+  const timer = setTimeout(() => {
+    child.kill('SIGKILL');
+    // A killed server's pipes still have to drain before 'close'.
+    child.stdout.resume();
+    child.stderr.resume();
+  }, timeoutMs);
+  const [code, signal] = await once(child, 'close');
   clearTimeout(timer);
+  clearTimeout(reader);
   rmSync(home, { recursive: true, force: true });
   return { exited: signal === null, code, output };
 }
