@@ -339,7 +339,7 @@ test.describe('the refusal log', () => {
     // buffer hold while nothing reads, so the server must wait to write them.
     const count = 1000;
     const dir = sourceDir({
-      'portfolio.yml': `identity:\n  name: Rowan Fixture\nsections:\n${'  - kind: canary-kind\n'.repeat(count)}`,
+      'portfolio.yml': `${HEAD}identity:\n  name: Rowan Fixture\nsections:\n${'  - kind: canary-kind\n'.repeat(count)}`,
     });
     const fatal = await expectRefusal(readOnly({ PORTFOLIO_SOURCE_DIR: dir }), {
       readDelayMs: 2_000,
