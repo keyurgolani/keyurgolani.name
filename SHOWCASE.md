@@ -42,7 +42,7 @@ The **same content**, a completely different aesthetic — gradient nebula, fall
 
 ## 🧬 Variant gallery
 
-Browse registered variants and filter by aesthetic, motion, typography, and density. Each variant ships its own color schemes and typography presets.
+Under `pnpm dev`, `/variants` lists the registered variants and filters them by aesthetic, motion, typography, and density. Each variant ships its own color schemes and typography presets. Production builds don't serve the gallery.
 
 ![Variants gallery](docs/screenshots/08-variants-gallery.png)
 
@@ -50,7 +50,7 @@ Browse registered variants and filter by aesthetic, motion, typography, and dens
 
 ## ⚙️ Admin editor
 
-Edit `portfolio.yml` from the browser at `/admin`. Changes validate against the schema and save back to disk. Motion preference and per-variant scheme/typography are configurable here.
+Under `pnpm dev`, edit `portfolio.yml` from the browser at `/admin`. Changes validate against the schema and save back to disk. Motion preference and per-variant scheme/typography are configurable here. Production builds don't serve the editor; on a deployed site you edit the file on the host.
 
 ![Admin editor](docs/screenshots/07-admin-editor.png)
 
@@ -67,7 +67,7 @@ Edit `portfolio.yml` from the browser at `/admin`. Changes validate against the 
 | **Per-variant** | Color schemes + typography presets (editorial ships 3 schemes, 2 type pairings) |
 | **GitHub** | Pinned repos, recent activity, contribution heatmap, language breakdown |
 | **Extras** | Print stylesheet, RSS feed, structured data, OG image generation |
-| **Editing** | Browser `/admin` editor with schema validation, or edit YAML directly |
+| **Editing** | Browser `/admin` editor with schema validation under `pnpm dev`, or edit YAML directly |
 | **Stack** | Next.js, TypeScript, pnpm workspace, Docker |
 
 ---

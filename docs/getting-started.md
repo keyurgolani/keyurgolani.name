@@ -60,7 +60,7 @@ Errors point to the YAML line and column. The schema is strict — typos in `kin
 
 ### 3. Pick a variant
 
-The `variant:` field at the top of `portfolio.yml` selects the active variant. The default is `editorial`. As more variants ship, you can preview them at `/variants` and switch with one line.
+The `variant:` field at the top of `portfolio.yml` selects the active variant. The default is `editorial`. While `pnpm dev` runs, you can preview every variant at `/variants` and switch with one line. Production builds don't serve `/variants`.
 
 ### 4. Tune theme, color scheme, typography
 
