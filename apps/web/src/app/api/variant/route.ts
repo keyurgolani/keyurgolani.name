@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { parseDocument } from 'yaml';
 import { detectFormat } from '@portfolio/schema';
+import { authoringRoutesEnabled } from '~/lib/authoring';
 import { loadPortfolioRaw, savePortfolioRaw } from '~/lib/portfolio';
 import { findManifest } from '~/lib/registry';
 
@@ -13,6 +14,7 @@ export const dynamic = 'force-dynamic';
  * are validated against the manifest's offered options.
  */
 export async function PUT(request: Request) {
+  if (!authoringRoutesEnabled()) return new Response(null, { status: 404 });
   const body = await request.json().catch(() => null);
   const slug = body?.slug;
   if (typeof slug !== 'string' || !slug) {

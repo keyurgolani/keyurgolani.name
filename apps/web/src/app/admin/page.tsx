@@ -1,5 +1,7 @@
 import Link from 'next/link';
+import { notFound } from 'next/navigation';
 import type { MotionPreference } from '@portfolio/schema';
+import { authoringRoutesEnabled } from '~/lib/authoring';
 import { loadPortfolio, loadPortfolioRaw } from '~/lib/portfolio';
 import { ThemeToggle } from '~/components/theme-toggle';
 import { AdminEditor } from './admin-editor';
@@ -8,20 +10,22 @@ import { MotionPanel } from './motion-panel';
 export const dynamic = 'force-dynamic';
 
 export default async function AdminPage() {
+  if (!authoringRoutesEnabled()) notFound();
   let initialSource = '';
-  let path = '';
   let format: 'yaml' | 'toml' | 'json' = 'yaml';
-  let loadError: string | null = null;
+  let loadFailed = false;
   let activeMotionPreference: MotionPreference = 'respect-os';
   try {
     const loadedRaw = await loadPortfolioRaw();
     initialSource = loadedRaw.source;
-    path = loadedRaw.path;
     format = loadedRaw.format;
     const loaded = await loadPortfolio();
     activeMotionPreference = loaded.portfolio.motionPreference;
   } catch (e) {
-    loadError = e instanceof Error ? e.message : String(e);
+    // The message can carry the absolute file path (ENOENT does), so it goes
+    // to the server log only.
+    console.error('[admin] Could not load the portfolio file:', e);
+    loadFailed = true;
   }
 
   return (
@@ -38,10 +42,11 @@ export default async function AdminPage() {
       </nav>
       <h1>Edit portfolio</h1>
       <p>
-        Editing <code>{path || '(no file resolved)'}</code> ({format}). Changes save back to disk
-        after schema validation.
+        Editing the portfolio file ({format}). Changes save back to disk after schema validation.
       </p>
-      {loadError ? <pre className="host-chrome__error">{loadError}</pre> : null}
+      {loadFailed ? (
+        <p className="host-chrome__error">Could not load the portfolio file. See the server log.</p>
+      ) : null}
 
       <MotionPanel activeMotionPreference={activeMotionPreference} />
 

@@ -1,6 +1,5 @@
 import type { MetadataRoute } from 'next';
 import { loadPortfolio } from '~/lib/portfolio';
-import { listManifests } from '~/lib/registry';
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   let baseUrl: string | null = null;
@@ -14,25 +13,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   if (!baseUrl) return [];
 
-  const lastModified = new Date();
-  const entries: MetadataRoute.Sitemap = [
-    { url: baseUrl, lastModified, changeFrequency: 'weekly', priority: 1 },
-    {
-      url: `${baseUrl}/variants`,
-      lastModified,
-      changeFrequency: 'monthly',
-      priority: 0.5,
-    },
-  ];
-
-  for (const manifest of listManifests()) {
-    entries.push({
-      url: `${baseUrl}/preview/${manifest.slug}`,
-      lastModified,
-      changeFrequency: 'monthly',
-      priority: 0.3,
-    });
-  }
-
-  return entries;
+  return [{ url: baseUrl, lastModified: new Date(), changeFrequency: 'weekly', priority: 1 }];
 }
