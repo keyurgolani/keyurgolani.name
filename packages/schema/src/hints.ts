@@ -46,7 +46,9 @@ export function keyContext(
     } else {
       const typeName = current._def.typeName as z.ZodFirstPartyTypeKind;
       if (typeName === z.ZodFirstPartyTypeKind.ZodObject) {
-        current = (current as z.AnyZodObject).shape[segment];
+        // Own keys only: a __proto__ in the data names no field.
+        const { shape } = current as z.AnyZodObject;
+        current = Object.hasOwn(shape, segment) ? shape[segment] : undefined;
         if (current && EXTENSION_DATA in current) extension = true;
       } else if (typeName === z.ZodFirstPartyTypeKind.ZodArray) {
         current = (current as z.ZodArray<z.ZodTypeAny>).element;
@@ -54,7 +56,10 @@ export function keyContext(
         current = (current as z.ZodRecord).valueSchema;
       } else return { extension };
     }
-    value = isPlainObject(value) || Array.isArray(value) ? (value as never)[segment] : undefined;
+    value =
+      (isPlainObject(value) || Array.isArray(value)) && Object.hasOwn(value, segment)
+        ? (value as never)[segment]
+        : undefined;
   }
   current = resolve(current, value);
   return current?._def.typeName === z.ZodFirstPartyTypeKind.ZodObject

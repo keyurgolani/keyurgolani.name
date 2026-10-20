@@ -35,3 +35,22 @@ export function isPlainObject(value: unknown): value is Record<string, unknown> 
   const prototype = Object.getPrototypeOf(value);
   return prototype === Object.prototype || prototype === null;
 }
+
+/** Whether two plain JSON values are equal, objects in any key order. */
+export function isJsonEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (Array.isArray(a) || Array.isArray(b)) {
+    return (
+      Array.isArray(a) &&
+      Array.isArray(b) &&
+      a.length === b.length &&
+      a.every((item, index) => isJsonEqual(item, b[index]))
+    );
+  }
+  if (!isPlainObject(a) || !isPlainObject(b)) return false;
+  const keys = Object.keys(a);
+  return (
+    keys.length === Object.keys(b).length &&
+    keys.every((key) => Object.hasOwn(b, key) && isJsonEqual(a[key], b[key]))
+  );
+}

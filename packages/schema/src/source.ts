@@ -7,10 +7,12 @@ import {
   LineCounter,
   Parser,
   parseDocument,
+  Scalar,
   type CST,
   type Pair,
   type YAMLMap,
 } from 'yaml';
+import { redactedPointer } from './secrets';
 
 // Reads one portfolio or site document from its source text. The text has to
 // be plain data: one document, no anchors, aliases, merge keys, tags, or
@@ -103,9 +105,46 @@ const SYNTAX_MESSAGES: Record<string, string> = {
 };
 const JSON_SYNTAX_UNLOCATED = "The file isn't valid JSON.";
 
-/** RFC 6901 JSON pointer for a path; '' is the whole document. */
-export function toPointer(path: readonly PropertyKey[]): string {
-  return path.map((part) => `/${String(part).replace(/~/g, '~0').replace(/\//g, '~1')}`).join('');
+export { parsePointer, toPointer } from './pointer';
+
+/** A YAML comment: its text from the `#`, and where it starts. */
+export interface YamlComment extends SourcePosition {
+  readonly text: string;
+}
+
+/**
+ * Every comment in YAML text, in order. It reads the syntax tree only, which
+ * keeps its own stack, so no text can make it recurse; text over the size
+ * limit has none.
+ */
+export function yamlComments(source: string): YamlComment[] {
+  const text = source.charCodeAt(0) === BYTE_ORDER_MARK ? source.slice(1) : source;
+  if (oversizeOffset(text) !== undefined) return [];
+  const lineCounter = new LineCounter();
+  const found: Array<{ offset: number; text: string }> = [];
+  const pending: unknown[] = [...new Parser(lineCounter.addNewLine).parse(text)];
+  while (pending.length > 0) {
+    const next = pending.pop();
+    if (next === null || typeof next !== 'object') continue;
+    const token = next as Record<string, unknown>;
+    if (token.type === 'comment') {
+      found.push({ offset: token.offset as number, text: token.source as string });
+      continue;
+    }
+    // Documents, collections and their items, and scalars hold comments in these.
+    for (const field of ['start', 'props', 'sep', 'end', 'items']) {
+      const list = token[field];
+      if (Array.isArray(list)) for (const child of list) pending.push(child);
+    }
+    if (token.key) pending.push(token.key);
+    if (token.value) pending.push(token.value);
+  }
+  return found
+    .sort((a, b) => a.offset - b.offset)
+    .map(({ offset, text: comment }) => {
+      const { line, col } = lineCounter.linePos(offset);
+      return { text: comment, line, column: col };
+    });
 }
 
 export function parseSource(source: string, format: DocumentFormat): ParsedSource {
@@ -390,7 +429,8 @@ function findConstructs(
   let anchors = 0;
   let tags = 0;
   const report = (code: string, path: readonly PropertyKey[], offset: number | undefined) => {
-    const pointer = toPointer(path);
+    // A key could be a pasted secret, so none reaches a pointer or a message.
+    const pointer = redactedPointer(path);
     found.push({
       code,
       pointer,
@@ -410,7 +450,8 @@ function findConstructs(
       for (const pair of node.items) {
         const key = isScalar(pair.key) ? String(pair.key.value) : String(pair.key);
         const at = [...path, key];
-        if (key === '<<') {
+        // Only a plain << merges; "<<" is a key like any other.
+        if (key === '<<' && (!isScalar(pair.key) || pair.key.type === Scalar.PLAIN)) {
           report('MERGE_KEY', at, isNode(pair.key) ? pair.key.range?.[0] : undefined);
         }
         walk(pair.key, at);

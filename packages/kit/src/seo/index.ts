@@ -18,7 +18,15 @@ export * from './feed';
  *   - `sameAs`         → portfolio.links[] URLs (excluding mailto/tel)
  */
 
-import type { Portfolio, Section, Experience, Education, Skills, Stack } from '@portfolio/schema';
+import type {
+  Education,
+  Experience,
+  Portfolio,
+  PublicPortfolio,
+  Section,
+  Skills,
+  Stack,
+} from '@portfolio/schema';
 
 export interface JsonLd {
   '@context': string;
@@ -31,8 +39,9 @@ export interface StructuredDataOptions {
   siteUrl?: string;
 }
 
+/** Takes the public view's portfolio only, so no hidden section reaches the JSON-LD. */
 export function buildStructuredData(
-  portfolio: Portfolio,
+  portfolio: PublicPortfolio,
   options: StructuredDataOptions = {},
 ): JsonLd[] {
   const url = options.siteUrl;

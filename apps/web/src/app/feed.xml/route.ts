@@ -1,6 +1,6 @@
 import { renderRssFeed } from '@portfolio/kit/seo';
-import { getLive } from '~/server/catalog';
 import { requireDeploymentConfig } from '~/server/config-store';
+import { getPublicView } from '~/server/public-view';
 import { served } from '~/server/route-guard';
 
 export const dynamic = 'force-dynamic';
@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 async function feed(request: Request): Promise<Response> {
   try {
     const { origin } = requireDeploymentConfig();
-    const { portfolio } = (await getLive()).unit;
+    const { portfolio } = await getPublicView();
     const xml = renderRssFeed(portfolio, { siteUrl: origin });
     return new Response(xml, {
       headers: {

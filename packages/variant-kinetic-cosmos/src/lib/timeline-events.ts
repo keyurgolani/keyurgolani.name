@@ -86,10 +86,7 @@ export function collectTimelineEvents(
 ): TimelineEvent[] {
   const events: TimelineEvent[] = [];
 
-  for (const section of portfolio.sections) {
-    if (section.hidden) continue;
-    pushFromSection(events, section, now);
-  }
+  for (const section of portfolio.sections) pushFromSection(events, section, now);
 
   return events.sort((a, b) => {
     if (a.startTs !== b.startTs) return a.startTs - b.startTs;

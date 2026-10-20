@@ -1,5 +1,5 @@
 import type { ComponentType } from 'react';
-import type { Portfolio, SectionKind } from '@portfolio/schema';
+import type { PublicPortfolio, SectionKind } from '@portfolio/schema';
 import type { ThemePreference } from './theme';
 
 /**
@@ -112,7 +112,8 @@ export interface VariantManifest {
 }
 
 export interface VariantProps {
-  portfolio: Portfolio;
+  /** The public view's portfolio: toPublicView() makes one, and nothing else does. */
+  portfolio: PublicPortfolio;
   /** The selected color scheme and typography preset. Omitted, the variant uses its defaults. */
   colorScheme?: string;
   typography?: string;
