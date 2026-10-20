@@ -46,10 +46,7 @@ function parseArgs(argv) {
 function findRepoRoot(start) {
   let dir = path.dirname(start);
   for (let i = 0; i < 12; i++) {
-    if (
-      fs.existsSync(path.join(dir, 'package.json')) ||
-      fs.existsSync(path.join(dir, '.git'))
-    ) {
+    if (fs.existsSync(path.join(dir, 'package.json')) || fs.existsSync(path.join(dir, '.git'))) {
       return dir;
     }
     const parent = path.dirname(dir);
@@ -63,13 +60,10 @@ const args = parseArgs(process.argv.slice(2));
 const REPO_ROOT = findRepoRoot(__filename);
 const ASSETS_DIR = path.join(
   REPO_ROOT || path.resolve(__dirname, '..', '..', '..', '..'),
-  'docs/skills/variant-developer/assets/visual-companion'
+  'docs/skills/variant-developer/assets/visual-companion',
 );
 
-const FRAME_TEMPLATE = fs.readFileSync(
-  path.join(ASSETS_DIR, 'frame-template.html'),
-  'utf8'
-);
+const FRAME_TEMPLATE = fs.readFileSync(path.join(ASSETS_DIR, 'frame-template.html'), 'utf8');
 const HELPER_JS = fs.readFileSync(path.join(ASSETS_DIR, 'helper.js'), 'utf8');
 
 // ----- session directory layout ---------------------------------------------
@@ -180,10 +174,7 @@ function recordEvent(req, res) {
       return;
     }
     try {
-      fs.appendFileSync(
-        path.join(stateDir, 'events'),
-        buf.replace(/\s+$/, '') + '\n'
-      );
+      fs.appendFileSync(path.join(stateDir, 'events'), buf.replace(/\s+$/, '') + '\n');
     } catch (e) {
       res.writeHead(500, { 'content-type': 'text/plain; charset=utf-8' });
       res.end('failed to append event: ' + e.message);

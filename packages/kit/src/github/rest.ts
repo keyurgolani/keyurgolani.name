@@ -59,8 +59,9 @@ export async function fetchViaREST(input: FetchGitHubDataInput): Promise<GitHubD
 
   const exclude = new Set(input.excludeRepos ?? []);
   const featured = new Set(input.featuredRepos ?? []);
-  const repos = ((await reposRes.json()) as RESTRepo[])
-    .filter((r) => !r.fork && !exclude.has(r.name));
+  const repos = ((await reposRes.json()) as RESTRepo[]).filter(
+    (r) => !r.fork && !exclude.has(r.name),
+  );
 
   const recentLimit = clampLimit(input.recentlyActiveLimit ?? 10);
   let recentlyActive: RecentlyActiveRepo[] = [];

@@ -29,10 +29,7 @@ test('returns fallback when no rule matches', () => {
 });
 
 test('is case-insensitive', () => {
-  assert.equal(
-    inferKindFromText<Kind>('IEEE PUBLICATION', RULES, { fallback: 'job' }),
-    'research',
-  );
+  assert.equal(inferKindFromText<Kind>('IEEE PUBLICATION', RULES, { fallback: 'job' }), 'research');
 });
 
 test('priority follows insertion order, not specificity', () => {
@@ -49,10 +46,7 @@ test('handles empty haystack', () => {
 });
 
 test('handles empty rule set', () => {
-  assert.equal(
-    inferKindFromText<'job'>('any text', {}, { fallback: 'job' }),
-    'job',
-  );
+  assert.equal(inferKindFromText<'job'>('any text', {}, { fallback: 'job' }), 'job');
 });
 
 test('skips kinds with empty pattern arrays', () => {

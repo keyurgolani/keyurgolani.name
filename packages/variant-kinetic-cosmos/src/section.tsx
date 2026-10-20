@@ -37,11 +37,7 @@ export function SectionDispatch({ section, portfolio }: DispatchProps) {
   switch (section.kind) {
     case 'hero':
       return (
-        <HeroRenderer
-          section={section}
-          identity={portfolio.identity}
-          links={portfolio.links}
-        />
+        <HeroRenderer section={section} identity={portfolio.identity} links={portfolio.links} />
       );
     case 'lede':
     case 'now':

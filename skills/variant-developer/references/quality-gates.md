@@ -20,6 +20,7 @@ pnpm dev
 Open `http://localhost:3000/preview/<slug>`. The preview and `/variants` routes only exist under `pnpm dev`; production builds, the Docker image included, answer 404 for them.
 
 **You must see:**
+
 - Background / paper color matching your scheme (not white-on-white default).
 - Hero-section text using your declared font family (not system-ui).
 - The theme toggle, nav, or any other variant chrome you wired.
@@ -34,17 +35,17 @@ The contrast gate. Run before Phase 3 sign-off.
 
 With `pnpm dev` running, open `/preview/<slug>` for each combination, capture a hero screenshot, and skim the page top-to-bottom. The combinations:
 
-| # | Theme | Scheme | Typography | What to verify |
-|---|---|---|---|---|
-| 1 | dark | default scheme | default typography | baseline |
-| 2 | dark | scheme #2 | default | scheme switch is visibly distinct |
-| 3 | dark | scheme #3 | default | scheme switch is visibly distinct |
-| 4 | light | default | default | paper/ink swap; nothing reads as inverted |
-| 5 | light | scheme #2 | default | scheme readable on light paper |
-| 6 | light | scheme #3 | default | scheme readable on light paper |
-| 7 | bright | default | default | crisp; no contrast loss vs light |
-| 8 | black | default | default | AMOLED; no contrast loss vs dark |
-| 9 | dark | default | typography #2 | type-feel difference visible |
+| #   | Theme  | Scheme         | Typography         | What to verify                            |
+| --- | ------ | -------------- | ------------------ | ----------------------------------------- |
+| 1   | dark   | default scheme | default typography | baseline                                  |
+| 2   | dark   | scheme #2      | default            | scheme switch is visibly distinct         |
+| 3   | dark   | scheme #3      | default            | scheme switch is visibly distinct         |
+| 4   | light  | default        | default            | paper/ink swap; nothing reads as inverted |
+| 5   | light  | scheme #2      | default            | scheme readable on light paper            |
+| 6   | light  | scheme #3      | default            | scheme readable on light paper            |
+| 7   | bright | default        | default            | crisp; no contrast loss vs light          |
+| 8   | black  | default        | default            | AMOLED; no contrast loss vs dark          |
+| 9   | dark   | default        | typography #2      | type-feel difference visible              |
 
 Optionally extend with `bright + scheme #2` and `black + scheme #2` if any user might combine them. Skip if your manifest doesn't claim those themes.
 
@@ -117,9 +118,9 @@ window.matchMedia = (q) => {
 // values must be byte-identical.
 const canvas = document.querySelector('canvas');
 const ctx = canvas.getContext('2d');
-const a = Array.from(ctx.getImageData(canvas.width/2, canvas.height/2, 1, 1).data);
+const a = Array.from(ctx.getImageData(canvas.width / 2, canvas.height / 2, 1, 1).data);
 setTimeout(() => {
-  const b = Array.from(ctx.getImageData(canvas.width/2, canvas.height/2, 1, 1).data);
+  const b = Array.from(ctx.getImageData(canvas.width / 2, canvas.height / 2, 1, 1).data);
   console.log({ stationary: a.every((v, i) => v === b[i]) });
 }, 300);
 ```
@@ -163,6 +164,7 @@ Chrome menu → Print  (or Ctrl/Cmd + P)
 ```
 
 Verify:
+
 - [ ] **Layout doesn't overflow page width.** Cards reflow; SVGs aren't bigger than page width.
 - [ ] **Backgrounds aren't solid black.** White paper, dark ink. Token leaks (gradient backgrounds, dark card-bg) get caught here.
 - [ ] **Decorative chrome is hidden.** Canvas, theme toggle, nav, skip-link, floaters — all `display: none`.
@@ -183,7 +185,9 @@ for (const sheet of document.styleSheets) {
         rule.media.mediaText = 'all';
       }
     }
-  } catch (e) { /* CORS-blocked stylesheets, skip */ }
+  } catch (e) {
+    /* CORS-blocked stylesheets, skip */
+  }
 }
 ```
 
@@ -239,14 +243,14 @@ If your variant is a re-imagining of an archive variant, another platform's desi
 
 For each "signature interaction" identified in DESIGN.md's `## Component inventory` section (see DESIGN.template.md), confirm the new variant has it:
 
-| Reference signature | Present in new variant? | Notes |
-|---|---|---|
-| Floating elements with parallax dispersal | yes / no | … |
-| 3D mouse-tilt cards | yes / no | … |
-| Multi-text typing animation | yes / no | … |
-| Animated counters | yes / no | … |
-| Brand-colored social cards | yes / no | … |
-| (etc.) | | |
+| Reference signature                       | Present in new variant? | Notes |
+| ----------------------------------------- | ----------------------- | ----- |
+| Floating elements with parallax dispersal | yes / no                | …     |
+| 3D mouse-tilt cards                       | yes / no                | …     |
+| Multi-text typing animation               | yes / no                | …     |
+| Animated counters                         | yes / no                | …     |
+| Brand-colored social cards                | yes / no                | …     |
+| (etc.)                                    |                         |       |
 
 If any are "no", and they're load-bearing for the metaphor, the variant isn't done. Either implement them or document why they were intentionally dropped (data shape mismatch, scope decision).
 

@@ -14,9 +14,7 @@ export function TenureRenderer({ section }: { section: Tenure }) {
             <span className="editorial-tenure__label">years</span>
           </p>
         ) : null}
-        {section.summary ? (
-          <p className="editorial-tenure__summary">{section.summary}</p>
-        ) : null}
+        {section.summary ? <p className="editorial-tenure__summary">{section.summary}</p> : null}
       </div>
     </SectionFrame>
   );

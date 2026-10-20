@@ -65,7 +65,7 @@ A variant declares 1+ typography preset, each with up to 4 roles:
 
 ### Typography preset count
 
-Multiple presets share the metaphor but vary the *texture*. Editorial ships two: Classic (Fraunces display + Source Serif body — magazine) and Modernist (Inter Display + Source Serif body — Bauhaus-leaning). Both feel editorial; the difference is decisive but small.
+Multiple presets share the metaphor but vary the _texture_. Editorial ships two: Classic (Fraunces display + Source Serif body — magazine) and Modernist (Inter Display + Source Serif body — Bauhaus-leaning). Both feel editorial; the difference is decisive but small.
 
 ## Stage 4 — Motion vocabulary
 

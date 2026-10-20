@@ -11,19 +11,23 @@ A tour of the YAML-driven portfolio platform. You write a single `portfolio.yml`
 A premium, print-quality typographic variant — accessible and navigable, with a serif voice.
 
 ### Hero (dark)
+
 ![Editorial hero — dark](docs/screenshots/01-home-hero-editorial.png)
 
 ### Hero (light)
+
 The same page in the `light` theme — one of five theme modes (`light`, `dark`, `bright`, `black`, `system`).
 
 ![Editorial hero — light](docs/screenshots/04-home-hero-light.png)
 
 ### Work Showcase
+
 Project cards with imagery, rich descriptions, tech tags, and links.
 
 ![Work showcase](docs/screenshots/02-work-showcase.png)
 
 ### Skills
+
 ![Skills section](docs/screenshots/03-skills.png)
 
 ---
@@ -33,9 +37,11 @@ Project cards with imagery, rich descriptions, tech tags, and links.
 The **same content**, a completely different aesthetic — gradient nebula, falling code-glyph particles, and a branching career timeline.
 
 ### Hero
+
 ![Kinetic Cosmos hero](docs/screenshots/05-variant-kinetic-cosmos.png)
 
 ### Projects
+
 ![Kinetic Cosmos projects](docs/screenshots/06-kinetic-cosmos-projects.png)
 
 ---
@@ -58,17 +64,17 @@ Under `pnpm dev`, edit `portfolio.yml` from the browser at `/admin`. Changes val
 
 ## ✨ At a Glance
 
-| Capability | Detail |
-|------------|--------|
-| **Content model** | Single `portfolio.yml`, validated against `@portfolio/schema` |
+| Capability        | Detail                                                                                                        |
+| ----------------- | ------------------------------------------------------------------------------------------------------------- |
+| **Content model** | Single `portfolio.yml`, validated against `@portfolio/schema`                                                 |
 | **Section kinds** | 28 — hero, experience, projects, skills, GitHub, gallery, testimonials, publications, talks, awards, and more |
-| **Variants** | Pluggable styled React trees; swap the entire look without touching content |
-| **Themes** | `light`, `dark`, `bright` (paper-white), `black` (AMOLED), `system` |
-| **Per-variant** | Color schemes + typography presets (editorial ships 3 schemes, 2 type pairings) |
-| **GitHub** | Pinned repos, recent activity, contribution heatmap, language breakdown |
-| **Extras** | Print stylesheet, RSS feed, structured data, OG image generation |
-| **Editing** | Browser `/admin` editor with schema validation under `pnpm dev`, or edit YAML directly |
-| **Stack** | Next.js, TypeScript, pnpm workspace, Docker |
+| **Variants**      | Pluggable styled React trees; swap the entire look without touching content                                   |
+| **Themes**        | `light`, `dark`, `bright` (paper-white), `black` (AMOLED), `system`                                           |
+| **Per-variant**   | Color schemes + typography presets (editorial ships 3 schemes, 2 type pairings)                               |
+| **GitHub**        | Pinned repos, recent activity, contribution heatmap, language breakdown                                       |
+| **Extras**        | Print stylesheet, RSS feed, structured data, OG image generation                                              |
+| **Editing**       | Browser `/admin` editor with schema validation under `pnpm dev`, or edit YAML directly                        |
+| **Stack**         | Next.js, TypeScript, pnpm workspace, Docker                                                                   |
 
 ---
 

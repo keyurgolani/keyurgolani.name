@@ -6,14 +6,7 @@ import type { Portfolio, SectionKind, ThemePreference } from '@portfolio/schema'
  * the variant picker. `custom` is an escape hatch.
  */
 export type Aesthetic =
-  | 'editorial'
-  | 'spatial'
-  | 'kinetic'
-  | 'popart'
-  | 'terminal'
-  | 'bento'
-  | 'narrative'
-  | 'custom';
+  'editorial' | 'spatial' | 'kinetic' | 'popart' | 'terminal' | 'bento' | 'narrative' | 'custom';
 
 /**
  * Motion intensity — how much movement the variant uses. `still` = no
@@ -140,8 +133,7 @@ export function resolveColorScheme(
 ): string | null {
   const schemes = manifest.colorSchemes ?? [];
   if (schemes.length === 0) return null;
-  const match = (id: string | undefined) =>
-    id ? schemes.find((s) => s.id === id) : undefined;
+  const match = (id: string | undefined) => (id ? schemes.find((s) => s.id === id) : undefined);
   return (
     match(override)?.id ??
     match(portfolioChoice)?.id ??
@@ -159,8 +151,7 @@ export function resolveTypographyPreset(
 ): string | null {
   const presets = manifest.typographyPresets ?? [];
   if (presets.length === 0) return null;
-  const match = (id: string | undefined) =>
-    id ? presets.find((p) => p.id === id) : undefined;
+  const match = (id: string | undefined) => (id ? presets.find((p) => p.id === id) : undefined);
   return (
     match(override)?.id ??
     match(portfolioChoice)?.id ??

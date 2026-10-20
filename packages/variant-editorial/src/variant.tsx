@@ -28,9 +28,7 @@ export default function EditorialVariant({ portfolio, colorScheme, typography }:
       <a className="editorial-skip-link" href="#main">
         Skip to content
       </a>
-      {showToc ? (
-        <TableOfContents items={navItems} brand={portfolio.identity.name} />
-      ) : null}
+      {showToc ? <TableOfContents items={navItems} brand={portfolio.identity.name} /> : null}
       <EditorialThemeToggle />
       <main id="main" className="editorial-page">
         {portfolio.sections.map((section, i) => (

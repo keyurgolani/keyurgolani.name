@@ -17,34 +17,34 @@ panes catching the light.
 
 ## Manifest summary
 
-| Field | Value |
-|-------|-------|
-| `slug` / `name` | `kinetic-cosmos` / `Kinetic Cosmos` |
-| `aesthetic` | `kinetic` |
-| `motion` | `kinetic` |
-| `density` | `balanced` |
-| `typography` | `mixed` (display sans + body sans + mono accents) |
-| `themes` | `['light', 'dark', 'bright', 'black']` (all four — page0 supported them) |
-| `performanceTier` | `medium` (one 2D canvas particle field; no R3F) |
+| Field             | Value                                                                    |
+| ----------------- | ------------------------------------------------------------------------ |
+| `slug` / `name`   | `kinetic-cosmos` / `Kinetic Cosmos`                                      |
+| `aesthetic`       | `kinetic`                                                                |
+| `motion`          | `kinetic`                                                                |
+| `density`         | `balanced`                                                               |
+| `typography`      | `mixed` (display sans + body sans + mono accents)                        |
+| `themes`          | `['light', 'dark', 'bright', 'black']` (all four — page0 supported them) |
+| `performanceTier` | `medium` (one 2D canvas particle field; no R3F)                          |
 
 ## Color schemes
 
 > Three schemes, all sharing the cosmos metaphor with different "spectrum" tunings.
 
-| id | Name | Paper | Ink | Accent | Reasoning |
-|----|------|-------|-----|--------|-----------|
-| `nebula` (default) | Nebula Violet | `#0c0a10` (dark) / `#fafafa` (light) | `#e9e9e6` / `#1a1a1a` | `#8b5cf6` violet + `#22d3ee` cyan | The original page-zero palette — violet primary, cyan accent, deep obsidian background. |
-| `aurora` | Aurora | `#0a0e1a` / `#f5f8ff` | `#e6ecff` / `#0f172a` | `#34d399` emerald + `#60a5fa` sky | Aurora-borealis interpretation — cooler, greener plasma. |
-| `solar` | Solar Flare | `#1a0a0a` / `#fffaf0` | `#fef3c7` / `#1a1410` | `#f97316` orange + `#fbbf24` amber | Warmer cosmos — sunset/coronal mass ejection energy. |
+| id                 | Name          | Paper                                | Ink                   | Accent                             | Reasoning                                                                               |
+| ------------------ | ------------- | ------------------------------------ | --------------------- | ---------------------------------- | --------------------------------------------------------------------------------------- |
+| `nebula` (default) | Nebula Violet | `#0c0a10` (dark) / `#fafafa` (light) | `#e9e9e6` / `#1a1a1a` | `#8b5cf6` violet + `#22d3ee` cyan  | The original page-zero palette — violet primary, cyan accent, deep obsidian background. |
+| `aurora`           | Aurora        | `#0a0e1a` / `#f5f8ff`                | `#e6ecff` / `#0f172a` | `#34d399` emerald + `#60a5fa` sky  | Aurora-borealis interpretation — cooler, greener plasma.                                |
+| `solar`            | Solar Flare   | `#1a0a0a` / `#fffaf0`                | `#fef3c7` / `#1a1410` | `#f97316` orange + `#fbbf24` amber | Warmer cosmos — sunset/coronal mass ejection energy.                                    |
 
 ## Typography presets
 
 > Two presets — both share the "developer cosmos" mixed-typography character (sans display, sans body, mono accents for code feel).
 
-| id | Name | Display | Body | UI | Mono | Reasoning |
-|----|------|---------|------|----|------|-----------|
-| `geometric` (default) | Geometric | `Plus Jakarta Sans` | `Inter` | `Inter` | `JetBrains Mono` | Modern geometric sans for the cosmic scale; mono accents reinforce the developer metaphor. |
-| `humanist` | Humanist | `Manrope` | `Source Sans 3` | `Inter` | `JetBrains Mono` | Slightly warmer humanist alternate — same mono backbone, gentler display contour. |
+| id                    | Name      | Display             | Body            | UI      | Mono             | Reasoning                                                                                  |
+| --------------------- | --------- | ------------------- | --------------- | ------- | ---------------- | ------------------------------------------------------------------------------------------ |
+| `geometric` (default) | Geometric | `Plus Jakarta Sans` | `Inter`         | `Inter` | `JetBrains Mono` | Modern geometric sans for the cosmic scale; mono accents reinforce the developer metaphor. |
+| `humanist`            | Humanist  | `Manrope`           | `Source Sans 3` | `Inter` | `JetBrains Mono` | Slightly warmer humanist alternate — same mono backbone, gentler display contour.          |
 
 ## Motion plan
 
@@ -61,7 +61,7 @@ This variant is **kinetic** — motion is part of the expression, not decoration
 
 ## Density plan
 
-`balanced` — a kinetic variant has to *breathe* or motion overwhelms.
+`balanced` — a kinetic variant has to _breathe_ or motion overwhelms.
 
 - **Page padding:** `clamp(1rem, 5vw, 2.5rem)` horizontal; `5rem` vertical between sections.
 - **Section vertical rhythm:** `py-20 sm:py-24 lg:py-32` (~80–128px).
@@ -73,48 +73,50 @@ This variant is **kinetic** — motion is part of the expression, not decoration
 
 > Every kind from `ALL_SECTION_KINDS`. The original page-zero rendered hero/about/experience/projects/github/external-portfolios/contact directly, so those get bespoke renderers. The remaining kinds get bespoke renderers built on the same glass-card vocabulary so the variant claims full coverage with consistent feel.
 
-| Kind | Treatment | Notes |
-|------|-----------|-------|
-| `hero` | bespoke | Typing-animation roles, gradient name, floating profiles + badges, CTA cluster. |
-| `lede` | bespoke | Glass card, "Who I Am" header, paragraph body. (Page-zero's bio block.) |
-| `now` | bespoke | Glass card with "Currently" header + bullet list. |
-| `experience` | bespoke | SVG "Timeline Odyssey" — fork/merge tree with tactile 3D tilt cards. Page-zero's signature renderer; ported faithfully but trimmed for the new schema's `experience` shape (entries with `period`, `highlights`, `skills`). |
-| `education` | bespoke | Glass card list — degree, institution, period, achievements. |
-| `projects` | bespoke | Filterable bento grid with glass cards; expand-on-click reveals skill-with-context list and action links. |
-| `writings` | bespoke | Glass-card list with publication/date metadata; mono date accent. |
-| `publications` | bespoke | Glass card with citation block; DOI rendered as monospace tail. |
-| `talks` | bespoke | Glass-card list with venue/type chip + recording link. |
-| `awards` | bespoke | Glass-card list — organization-prominent, dated tail. |
-| `episodes` | bespoke | Glass-card numbered list with duration + audio affordance. |
-| `patents` | bespoke | Glass-card list; mono patent number prominent. |
-| `gallery` | bespoke | Mosaic grid with lightbox click-to-expand; `focalPoint` honored in object-position. |
-| `discography` | bespoke | Cover-art-prominent cards with track expansion. |
-| `testimonials` | bespoke | Pull-quote cards with avatar; rotates on horizontal scroll. |
-| `press` | bespoke | Outlet-prominent list; excerpt as inline pull-quote. |
-| `quote` | bespoke | Oversized centered epigraph with gradient-traced quotation marks. |
-| `skills` | bespoke | Grouped skill-badge clusters (page-zero's `SkillBadgeList` aesthetic — proficiency chips). |
-| `stack` | bespoke | Grouped tool rows with logo accent. |
-| `services` | bespoke | Glass card with pricing + highlight list + CTA. |
-| `contact` | bespoke | Glass-card channel list — LinkedIn primary; email/socials secondary. |
-| `cta` | bespoke | Full-width band with gradient backdrop + primary button. |
-| `stats` | bespoke | `AnimatedCounter` tiles in row layout — page-zero's "By the Numbers". |
-| `focus` | bespoke | Chip cluster with target-icon header. |
-| `fun-facts` | bespoke | Bullet grid (4-col on desktop) — page-zero's fun-facts card. |
-| `tenure` | bespoke | Oversized number card with caption. |
-| `external-portfolios` | bespoke | Brand-colored profile cards (page-zero's `socialBrandConfig` per-brand glow). |
-| `github` | bespoke | Stats-card row + 52-week heatmap + pinned-repo list (server-fetched via `@portfolio/kit/github`). |
+| Kind                  | Treatment | Notes                                                                                                                                                                                                                       |
+| --------------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `hero`                | bespoke   | Typing-animation roles, gradient name, floating profiles + badges, CTA cluster.                                                                                                                                             |
+| `lede`                | bespoke   | Glass card, "Who I Am" header, paragraph body. (Page-zero's bio block.)                                                                                                                                                     |
+| `now`                 | bespoke   | Glass card with "Currently" header + bullet list.                                                                                                                                                                           |
+| `experience`          | bespoke   | SVG "Timeline Odyssey" — fork/merge tree with tactile 3D tilt cards. Page-zero's signature renderer; ported faithfully but trimmed for the new schema's `experience` shape (entries with `period`, `highlights`, `skills`). |
+| `education`           | bespoke   | Glass card list — degree, institution, period, achievements.                                                                                                                                                                |
+| `projects`            | bespoke   | Filterable bento grid with glass cards; expand-on-click reveals skill-with-context list and action links.                                                                                                                   |
+| `writings`            | bespoke   | Glass-card list with publication/date metadata; mono date accent.                                                                                                                                                           |
+| `publications`        | bespoke   | Glass card with citation block; DOI rendered as monospace tail.                                                                                                                                                             |
+| `talks`               | bespoke   | Glass-card list with venue/type chip + recording link.                                                                                                                                                                      |
+| `awards`              | bespoke   | Glass-card list — organization-prominent, dated tail.                                                                                                                                                                       |
+| `episodes`            | bespoke   | Glass-card numbered list with duration + audio affordance.                                                                                                                                                                  |
+| `patents`             | bespoke   | Glass-card list; mono patent number prominent.                                                                                                                                                                              |
+| `gallery`             | bespoke   | Mosaic grid with lightbox click-to-expand; `focalPoint` honored in object-position.                                                                                                                                         |
+| `discography`         | bespoke   | Cover-art-prominent cards with track expansion.                                                                                                                                                                             |
+| `testimonials`        | bespoke   | Pull-quote cards with avatar; rotates on horizontal scroll.                                                                                                                                                                 |
+| `press`               | bespoke   | Outlet-prominent list; excerpt as inline pull-quote.                                                                                                                                                                        |
+| `quote`               | bespoke   | Oversized centered epigraph with gradient-traced quotation marks.                                                                                                                                                           |
+| `skills`              | bespoke   | Grouped skill-badge clusters (page-zero's `SkillBadgeList` aesthetic — proficiency chips).                                                                                                                                  |
+| `stack`               | bespoke   | Grouped tool rows with logo accent.                                                                                                                                                                                         |
+| `services`            | bespoke   | Glass card with pricing + highlight list + CTA.                                                                                                                                                                             |
+| `contact`             | bespoke   | Glass-card channel list — LinkedIn primary; email/socials secondary.                                                                                                                                                        |
+| `cta`                 | bespoke   | Full-width band with gradient backdrop + primary button.                                                                                                                                                                    |
+| `stats`               | bespoke   | `AnimatedCounter` tiles in row layout — page-zero's "By the Numbers".                                                                                                                                                       |
+| `focus`               | bespoke   | Chip cluster with target-icon header.                                                                                                                                                                                       |
+| `fun-facts`           | bespoke   | Bullet grid (4-col on desktop) — page-zero's fun-facts card.                                                                                                                                                                |
+| `tenure`              | bespoke   | Oversized number card with caption.                                                                                                                                                                                         |
+| `external-portfolios` | bespoke   | Brand-colored profile cards (page-zero's `socialBrandConfig` per-brand glow).                                                                                                                                               |
+| `github`              | bespoke   | Stats-card row + 52-week heatmap + pinned-repo list (server-fetched via `@portfolio/kit/github`).                                                                                                                           |
 
 No fallback usage — the variant claims full coverage with bespoke renderers.
 
 ## Kit usage map
 
 **Will use:**
+
 - `@portfolio/kit` core: `ThemeProvider` + `useTheme`, `resolveColorScheme` / `resolveTypographyPreset`, `cn`, `formatPeriod` / `formatYear` / `formatDate` / `formatList`, `deriveNavItems`, `useMotionPreference`, `renderMarkdown`/`renderInlineMarkdown`, `ensureSectionId`, `slugify`.
 - `@portfolio/kit/github`: `fetchGitHubData`, `contributionLevelFor`, `languageColor` for the GitHub renderer.
 - `@portfolio/kit/spatial`: `ParticleField2D` for the falling-glyph background; possibly `ParallaxLayer` for floating-card dispersal if the API fits.
 - `@portfolio/kit/seo`: structured data is handled at app/layout level; not directly imported in variant.
 
 **Expect to hoist:**
+
 - `useScrollDispersal({ position, multiplier })` — the parallax-out-on-scroll pattern used by page-zero's floating cards. If general enough, hoist to `@portfolio/kit/spatial`. Otherwise mark `// LOCAL: page-zero kinetic dispersal pattern, not yet generalized`.
 - `gradient-text-animated` — the animated-gradient text utility used on the hero name. Likely a CSS-only pattern; keep local under `kinetic-cosmos-hero__name` since it's purely cosmetic.
 - `<TypingAnimation>` — page-zero's roles cycle. If it's the second variant to need cycling text, hoist; otherwise local.

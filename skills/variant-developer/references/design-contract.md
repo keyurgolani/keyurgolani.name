@@ -25,7 +25,7 @@ Each section is a small commitment. Together they form a contract: this is what 
 
 ## Why this isn't optional
 
-Without the contract, the agent cycles between metaphor candidates while writing CSS, producing a mish-mash that has fragments of three different aesthetics fighting each other. The contract forces a *commitment* — once metaphor is chosen, every subsequent decision (token palette, type pairing, motion intensity, renderer composition) is judged against the metaphor.
+Without the contract, the agent cycles between metaphor candidates while writing CSS, producing a mish-mash that has fragments of three different aesthetics fighting each other. The contract forces a _commitment_ — once metaphor is chosen, every subsequent decision (token palette, type pairing, motion intensity, renderer composition) is judged against the metaphor.
 
 When you find yourself in implementation thinking "should this be vintage or futuristic?" — re-read DESIGN.md. The answer is in the metaphor.
 
@@ -40,31 +40,31 @@ Reverse-engineering `packages/variant-editorial/src/manifest.ts` and `styles.css
 
 ### Manifest summary
 
-| Field | Value |
-|-------|-------|
-| slug | `editorial` |
-| aesthetic | `editorial` |
-| motion | `still` |
-| density | `balanced` |
-| typography | `mixed` (Fraunces + Source Serif 4 + Inter + JetBrains Mono) |
-| themes | `['light', 'dark']` |
-| performanceTier | `light` |
+| Field           | Value                                                        |
+| --------------- | ------------------------------------------------------------ |
+| slug            | `editorial`                                                  |
+| aesthetic       | `editorial`                                                  |
+| motion          | `still`                                                      |
+| density         | `balanced`                                                   |
+| typography      | `mixed` (Fraunces + Source Serif 4 + Inter + JetBrains Mono) |
+| themes          | `['light', 'dark']`                                          |
+| performanceTier | `light`                                                      |
 
 ### Color schemes
 
-| id | Name | Paper | Ink | Accent | Reasoning |
-|----|------|-------|-----|--------|-----------|
-| `warm` | Warm Sienna | #fbfaf6 | #1a1a1a | #b54a32 | The default — magazine-paper warmth. |
-| `noir` | Noir | #ffffff | #0a0a0a | #0044ff | High-contrast monochrome with electric accent. |
-| `ink-and-paper` | Ink & Paper | #f5f4ee | #2a2a26 | #1f4e5f | Cool, considered, gray-leaning. |
+| id              | Name        | Paper   | Ink     | Accent  | Reasoning                                      |
+| --------------- | ----------- | ------- | ------- | ------- | ---------------------------------------------- |
+| `warm`          | Warm Sienna | #fbfaf6 | #1a1a1a | #b54a32 | The default — magazine-paper warmth.           |
+| `noir`          | Noir        | #ffffff | #0a0a0a | #0044ff | High-contrast monochrome with electric accent. |
+| `ink-and-paper` | Ink & Paper | #f5f4ee | #2a2a26 | #1f4e5f | Cool, considered, gray-leaning.                |
 
 **Reasoning for count:** three distinct moods that all share the editorial spine — magazine warmth, monochrome rigor, considered cool — give the user real choice without breaking coherence.
 
 ### Typography presets
 
-| id | Display | Body | UI | Mono | Reasoning |
-|----|---------|------|----|------|-----------|
-| `classic` | Fraunces | Source Serif 4 | Inter | JetBrains Mono | Magazine pairing — high-contrast serif display over readable serif body. |
+| id          | Display       | Body           | UI    | Mono           | Reasoning                                                                |
+| ----------- | ------------- | -------------- | ----- | -------------- | ------------------------------------------------------------------------ |
+| `classic`   | Fraunces      | Source Serif 4 | Inter | JetBrains Mono | Magazine pairing — high-contrast serif display over readable serif body. |
 | `modernist` | Inter Display | Source Serif 4 | Inter | JetBrains Mono | Bauhaus-leaning — geometric sans display still framed by editorial body. |
 
 **Reasoning for count:** two presets cover the warm/cool axis without over-fragmenting. Both share the body face so paragraphs stay anchored.

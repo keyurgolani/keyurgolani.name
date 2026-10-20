@@ -10,7 +10,9 @@ export function ServicesRenderer({ section }: { section: Services }) {
           <article key={i} className="kc-card kc-card--hoverable kc-service">
             <h3 className="kc-service__name">{item.name}</h3>
             {item.pricing ? <p className="kc-service__pricing">{item.pricing}</p> : null}
-            {item.description ? <p className="kc-service__description">{item.description}</p> : null}
+            {item.description ? (
+              <p className="kc-service__description">{item.description}</p>
+            ) : null}
             {item.highlights && item.highlights.length > 0 ? (
               <ul className="kc-service__highlights">
                 {item.highlights.map((h, j) => (

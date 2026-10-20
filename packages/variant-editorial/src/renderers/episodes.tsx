@@ -12,7 +12,9 @@ export function EpisodesRenderer({ section }: { section: Episodes }) {
       {section.items.map((item, i) => (
         <article key={`${item.title}-${i}`} className="editorial-entry">
           <aside className="editorial-entry__marginalia">
-            {item.number != null ? <span className="editorial-entry__marginalia-period">No. {item.number}</span> : null}
+            {item.number != null ? (
+              <span className="editorial-entry__marginalia-period">No. {item.number}</span>
+            ) : null}
             {item.publishedAt ? <span>{formatDate(item.publishedAt, { short: true })}</span> : null}
             {formatEpisodeDuration(item.durationMinutes) && (
               <span>{formatEpisodeDuration(item.durationMinutes)}</span>
@@ -26,7 +28,9 @@ export function EpisodesRenderer({ section }: { section: Episodes }) {
             {item.description ? (
               <MarkdownBody source={item.description} className="editorial-entry__description" />
             ) : null}
-            {item.showNotes ? <MarkdownBody source={item.showNotes} className="editorial-entry__description" /> : null}
+            {item.showNotes ? (
+              <MarkdownBody source={item.showNotes} className="editorial-entry__description" />
+            ) : null}
             {(item.audioUrl || item.videoUrl || (item.links && item.links.length > 0)) && (
               <div className="editorial-entry__links">
                 {item.audioUrl && (

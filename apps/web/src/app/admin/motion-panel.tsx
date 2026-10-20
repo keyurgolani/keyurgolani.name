@@ -9,7 +9,11 @@ interface MotionPanelProps {
 }
 
 const OPTIONS: Array<{ value: MotionPreference; label: string; description: string }> = [
-  { value: 'respect-os', label: 'Respect OS', description: 'Follow the visitor’s prefers-reduced-motion.' },
+  {
+    value: 'respect-os',
+    label: 'Respect OS',
+    description: 'Follow the visitor’s prefers-reduced-motion.',
+  },
   { value: 'full', label: 'Full motion', description: 'Animate regardless of OS preference.' },
   { value: 'reduce', label: 'Reduce motion', description: 'Force reduced motion always.' },
 ];
@@ -50,7 +54,11 @@ export function MotionPanel({ activeMotionPreference }: MotionPanelProps) {
       <div className="customize-panel__field">
         <label>
           <span className="customize-panel__label">Motion</span>
-          <select value={motion} disabled={pending} onChange={(e) => setMotion(e.target.value as MotionPreference)}>
+          <select
+            value={motion}
+            disabled={pending}
+            onChange={(e) => setMotion(e.target.value as MotionPreference)}
+          >
             {OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>
                 {opt.label}

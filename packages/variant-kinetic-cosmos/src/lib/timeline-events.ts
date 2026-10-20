@@ -19,13 +19,7 @@ import {
 } from '@portfolio/kit/timeline';
 
 export type TimelineEventKind =
-  | 'job'
-  | 'internship'
-  | 'study'
-  | 'research'
-  | 'project'
-  | 'award'
-  | 'life';
+  'job' | 'internship' | 'study' | 'research' | 'project' | 'award' | 'life';
 
 export interface TimelineEventMeta {
   id: string;
@@ -69,7 +63,10 @@ function tsFromLooseDate(raw: string | undefined, fallback: Date): number {
   return Date.UTC(parsed.year, month, day);
 }
 
-function periodToTs(period: Period | undefined, now: Date): { startTs: number; endTs: number; startRaw: string; endRaw: string } {
+function periodToTs(
+  period: Period | undefined,
+  now: Date,
+): { startTs: number; endTs: number; startRaw: string; endRaw: string } {
   const startRaw = period?.start ?? '';
   const endRaw = period?.end ?? 'Present';
   const startTs = tsFromLooseDate(startRaw, now);
@@ -83,7 +80,10 @@ function periodToTs(period: Period | undefined, now: Date): { startTs: number; e
  * variant cares about. Returns events sorted by start ascending so the
  * lane planner allocates slots deterministically.
  */
-export function collectTimelineEvents(portfolio: Portfolio, now: Date = new Date()): TimelineEvent[] {
+export function collectTimelineEvents(
+  portfolio: Portfolio,
+  now: Date = new Date(),
+): TimelineEvent[] {
   const events: TimelineEvent[] = [];
 
   for (const section of portfolio.sections) {
@@ -106,7 +106,9 @@ function pushFromSection(events: TimelineEvent[], section: Section, now: Date): 
       for (const item of section.items) {
         const period = periodToTs(item.period, now);
         const haystack = `${item.role} ${item.organization} ${(item.highlights ?? []).join(' ')}`;
-        const kind = inferKindFromText<TimelineEventKind>(haystack, KIND_RULES, { fallback: 'job' });
+        const kind = inferKindFromText<TimelineEventKind>(haystack, KIND_RULES, {
+          fallback: 'job',
+        });
         events.push({
           id: slugify(`experience-${item.organization}-${item.role}-${period.startTs}`),
           kind,

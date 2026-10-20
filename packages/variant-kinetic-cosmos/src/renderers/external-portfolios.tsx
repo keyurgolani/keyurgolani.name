@@ -14,9 +14,7 @@ export function ExternalPortfoliosRenderer({ section }: { section: ExternalPortf
                 <span className="kc-external__location">{item.locationLabel}</span>
               ) : null}
             </header>
-            {item.description ? (
-              <p className="kc-external__desc">{item.description}</p>
-            ) : null}
+            {item.description ? <p className="kc-external__desc">{item.description}</p> : null}
             {item.categories && item.categories.length > 0 ? (
               <ul className="kc-external__categories">
                 {item.categories.map((cat, j) => (

@@ -2,7 +2,11 @@ import type { Stats } from '@portfolio/schema';
 import { AnimatedCounter } from '@portfolio/kit';
 import { SectionFrame } from '../primitives/section-frame';
 
-function parseStatValue(raw: string | number): { num: number | null; prefix: string; suffix: string } {
+function parseStatValue(raw: string | number): {
+  num: number | null;
+  prefix: string;
+  suffix: string;
+} {
   if (typeof raw === 'number') return { num: raw, prefix: '', suffix: '' };
   // Pull leading non-digit prefix (e.g. "$", "~"), digit run, trailing suffix ("+", "K", "B+", etc.).
   const m = /^([^\d-]*)(-?\d+(?:\.\d+)?)(.*)$/.exec(raw.trim());
@@ -30,9 +34,7 @@ export function StatsRenderer({ section }: { section: Stats }) {
                 )}
               </div>
               <div className="kc-stat__label">{item.label}</div>
-              {item.description ? (
-                <p className="kc-stat__description">{item.description}</p>
-              ) : null}
+              {item.description ? <p className="kc-stat__description">{item.description}</p> : null}
             </div>
           );
         })}

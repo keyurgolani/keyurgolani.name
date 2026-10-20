@@ -98,8 +98,7 @@ export function computeDensityProjection<T extends LaneInputEvent>(
     const yearGap = Math.abs(next - ts) / MS_PER_YEAR;
     const timeStep = Math.round(Math.min(yearGap * 80, maxYearStep));
     const baseStep = minStep + 60 + timeStep;
-    const densityStep =
-      maxSlotInInterval > 1 ? (maxSlotInInterval - 1) * pixelsPerExtraSlot : 0;
+    const densityStep = maxSlotInInterval > 1 ? (maxSlotInInterval - 1) * pixelsPerExtraSlot : 0;
     const totalStep = (baseStep + densityStep) * globalShrink;
 
     cursorY += totalStep;

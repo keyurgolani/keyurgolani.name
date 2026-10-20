@@ -15,11 +15,11 @@ identity:
   email: anamika@example.com
   avatar: { src: '/me.jpg', alt: 'Author headshot' }
 
-variant: editorial          # which packages/variant-* renders the page
-theme: system               # light | dark | bright | black | system
+variant: editorial # which packages/variant-* renders the page
+theme: system # light | dark | bright | black | system
 motionPreference: respect-os # respect-os | reduce | full
-colorScheme: warm           # variant-defined ids
-typography: classic         # variant-defined ids
+colorScheme: warm # variant-defined ids
+typography: classic # variant-defined ids
 
 links:
   - { url: 'https://github.com/anamika', platform: github }
@@ -43,23 +43,23 @@ The schema offers ~28 section kinds. Strong portfolios use 6–10. More than tha
 
 ### By career stage
 
-| Stage | Lead with | Often skip |
-|---|---|---|
-| Early (0–3 yrs) | hero, lede, projects, skills, education, contact | tenure, stats, awards, press |
-| Mid (3–8 yrs) | + experience, tenure, github, external-portfolios | discography, patents |
-| Senior (8+ yrs) | + stats, awards, talks/publications, focus | education (drop unless prestigious) |
-| Career-changer | hero, lede, projects (new domain), skills | tenure, experience tail |
+| Stage           | Lead with                                         | Often skip                          |
+| --------------- | ------------------------------------------------- | ----------------------------------- |
+| Early (0–3 yrs) | hero, lede, projects, skills, education, contact  | tenure, stats, awards, press        |
+| Mid (3–8 yrs)   | + experience, tenure, github, external-portfolios | discography, patents                |
+| Senior (8+ yrs) | + stats, awards, talks/publications, focus        | education (drop unless prestigious) |
+| Career-changer  | hero, lede, projects (new domain), skills         | tenure, experience tail             |
 
 ### By intent
 
-| Intent | Lean into | Drop |
-|---|---|---|
-| Job hunt | experience, projects, skills, contact, cta | press, testimonials |
-| Personal brand | hero, lede, writings/talks, github, external-portfolios | services |
-| Freelance | services, testimonials, press, cta | skills |
-| Academic | publications, talks, awards, patents, education | projects (unless research code) |
-| Open-source / maker | github, projects, focus, fun-facts | services, testimonials |
-| Photographer / artist | gallery, external-portfolios | skills, stack |
+| Intent                | Lean into                                               | Drop                            |
+| --------------------- | ------------------------------------------------------- | ------------------------------- |
+| Job hunt              | experience, projects, skills, contact, cta              | press, testimonials             |
+| Personal brand        | hero, lede, writings/talks, github, external-portfolios | services                        |
+| Freelance             | services, testimonials, press, cta                      | skills                          |
+| Academic              | publications, talks, awards, patents, education         | projects (unless research code) |
+| Open-source / maker   | github, projects, focus, fun-facts                      | services, testimonials          |
+| Photographer / artist | gallery, external-portfolios                            | skills, stack                   |
 
 The full matrix lives at [`skills/portfolio-author/references/curation.md`](../skills/portfolio-author/references/curation.md).
 
@@ -81,36 +81,36 @@ The first three sections appear in OG image previews, so treat them like the fro
 
 ## Section kind quick reference
 
-| Kind | Purpose | Use when |
-|---|---|---|
-| `hero` | Identity + tagline at the top of the page | Always |
-| `lede` | One-paragraph "what I do and why you should care" | Almost always |
-| `now` | Current focus — what you're working on this week | High-leverage when fresh, costly when stale |
-| `experience` | Chronological work history with role highlights | When jobs matter as proof |
-| `education` | Schools, degrees, dates | When recent or prestigious |
-| `projects` | Curated body of work, often the resume itself for makers | When projects are stronger than employers |
-| `writings` | Blog posts, essays | When you write publicly |
-| `publications` | Academic / formal publications | Academia, research |
-| `talks` | Conference / podcast appearances | When you speak publicly |
-| `awards` | Recognitions | Sparingly |
-| `episodes` | Podcast appearances as a guest | When you guest-podcast often |
-| `patents` | Filed or granted patents | Industrial / hardware |
-| `gallery` | Image grid | Photographers, artists |
-| `discography` | Tracks / releases | Musicians |
-| `testimonials` | Quoted endorsements | Freelancers, consultants |
-| `press` | Articles written about you | Public-facing folks |
-| `quote` | Single quote about your work | Like testimonials but tighter |
-| `skills` | Grouped skills lists | Engineers (with restraint) |
-| `stack` | Curated tools you use | Makers, indies |
-| `services` | What you offer for hire | Freelancers |
-| `contact` | Email + form / message | Always |
-| `cta` | Call-to-action banner before contact | Job hunt, open-to-work |
-| `stats` | "By the numbers" headline figures | When numbers tell a story |
-| `focus` | What you're optimizing for | Senior IC / leadership |
-| `fun-facts` | Off-the-page personal | Personal brand |
-| `tenure` | "X years in" headline | Senior, with strong narrative |
-| `external-portfolios` | Links to other sites where work lives | Cross-discipline |
-| `github` | Live GitHub data | Engineers |
+| Kind                  | Purpose                                                  | Use when                                    |
+| --------------------- | -------------------------------------------------------- | ------------------------------------------- |
+| `hero`                | Identity + tagline at the top of the page                | Always                                      |
+| `lede`                | One-paragraph "what I do and why you should care"        | Almost always                               |
+| `now`                 | Current focus — what you're working on this week         | High-leverage when fresh, costly when stale |
+| `experience`          | Chronological work history with role highlights          | When jobs matter as proof                   |
+| `education`           | Schools, degrees, dates                                  | When recent or prestigious                  |
+| `projects`            | Curated body of work, often the resume itself for makers | When projects are stronger than employers   |
+| `writings`            | Blog posts, essays                                       | When you write publicly                     |
+| `publications`        | Academic / formal publications                           | Academia, research                          |
+| `talks`               | Conference / podcast appearances                         | When you speak publicly                     |
+| `awards`              | Recognitions                                             | Sparingly                                   |
+| `episodes`            | Podcast appearances as a guest                           | When you guest-podcast often                |
+| `patents`             | Filed or granted patents                                 | Industrial / hardware                       |
+| `gallery`             | Image grid                                               | Photographers, artists                      |
+| `discography`         | Tracks / releases                                        | Musicians                                   |
+| `testimonials`        | Quoted endorsements                                      | Freelancers, consultants                    |
+| `press`               | Articles written about you                               | Public-facing folks                         |
+| `quote`               | Single quote about your work                             | Like testimonials but tighter               |
+| `skills`              | Grouped skills lists                                     | Engineers (with restraint)                  |
+| `stack`               | Curated tools you use                                    | Makers, indies                              |
+| `services`            | What you offer for hire                                  | Freelancers                                 |
+| `contact`             | Email + form / message                                   | Always                                      |
+| `cta`                 | Call-to-action banner before contact                     | Job hunt, open-to-work                      |
+| `stats`               | "By the numbers" headline figures                        | When numbers tell a story                   |
+| `focus`               | What you're optimizing for                               | Senior IC / leadership                      |
+| `fun-facts`           | Off-the-page personal                                    | Personal brand                              |
+| `tenure`              | "X years in" headline                                    | Senior, with strong narrative               |
+| `external-portfolios` | Links to other sites where work lives                    | Cross-discipline                            |
+| `github`              | Live GitHub data                                         | Engineers                                   |
 
 Full per-kind schema with field-by-field docs: [`skills/portfolio-author/references/section-kinds.md`](../skills/portfolio-author/references/section-kinds.md).
 

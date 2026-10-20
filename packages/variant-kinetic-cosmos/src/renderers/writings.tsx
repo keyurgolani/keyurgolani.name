@@ -10,8 +10,12 @@ export function WritingsRenderer({ section }: { section: Writings }) {
           <article key={i} className="kc-card kc-card--hoverable kc-writing">
             <h3 className="kc-writing__title">
               {item.url ? (
-                <a href={item.url} target="_blank" rel="noopener noreferrer">{item.title}</a>
-              ) : item.title}
+                <a href={item.url} target="_blank" rel="noopener noreferrer">
+                  {item.title}
+                </a>
+              ) : (
+                item.title
+              )}
             </h3>
             <p className="kc-writing__meta">
               {item.publication ? <span>{item.publication}</span> : null}

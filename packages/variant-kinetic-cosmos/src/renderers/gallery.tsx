@@ -24,7 +24,9 @@ export function GalleryRenderer({ section }: { section: Gallery }) {
               {(item.caption || item.location) && (
                 <figcaption className="kc-gallery__caption">
                   {item.caption ? <span>{item.caption}</span> : null}
-                  {item.location ? <span className="kc-gallery__location">{item.location}</span> : null}
+                  {item.location ? (
+                    <span className="kc-gallery__location">{item.location}</span>
+                  ) : null}
                 </figcaption>
               )}
             </figure>

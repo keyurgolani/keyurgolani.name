@@ -41,9 +41,7 @@ function collectExportsFromFile(filePath, names, visited) {
   const text = readFileSync(filePath, 'utf8');
 
   // export { foo, bar } [from '...']
-  for (const m of text.matchAll(
-    /export\s*\{([^}]+)\}\s*(?:from\s*['"]([^'"]+)['"])?\s*;?/g
-  )) {
+  for (const m of text.matchAll(/export\s*\{([^}]+)\}\s*(?:from\s*['"]([^'"]+)['"])?\s*;?/g)) {
     for (const part of m[1].split(',')) {
       const trimmed = part.trim();
       if (!trimmed) continue;
@@ -59,7 +57,7 @@ function collectExportsFromFile(filePath, names, visited) {
 
   // export function/const/let/var/class <name>
   for (const m of text.matchAll(
-    /export\s+(?:async\s+)?(?:function\s*\*?|const|let|var|class)\s+([A-Za-z_]\w*)/g
+    /export\s+(?:async\s+)?(?:function\s*\*?|const|let|var|class)\s+([A-Za-z_]\w*)/g,
   )) {
     names.add(m[1]);
   }
@@ -149,7 +147,7 @@ for (const file of files) {
   const lines = text.split('\n');
   for (const name of kitExports) {
     const declRe = new RegExp(
-      `\\bfunction\\s+${name}\\s*[<\\(]|\\b(?:const|let|var)\\s+${name}\\s*[:=]`
+      `\\bfunction\\s+${name}\\s*[<\\(]|\\b(?:const|let|var)\\s+${name}\\s*[:=]`,
     );
     if (!declRe.test(text)) continue;
 
@@ -188,5 +186,5 @@ for (const c of candidates) {
 }
 console.log('\nResolve each by either:');
 console.log('  - hoisting the helper to @portfolio/kit (and updating kit-catalog.md), or');
-console.log("  - adding `// LOCAL: <reason>` comment justifying why the local copy stays.");
+console.log('  - adding `// LOCAL: <reason>` comment justifying why the local copy stays.');
 process.exit(0);

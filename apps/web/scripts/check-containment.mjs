@@ -61,7 +61,9 @@ function parseOrigin(value, what) {
     throw new UsageError(`${what} must be http or https: ${value}`);
   }
   if (url.username || url.password || url.pathname !== '/' || url.search || url.hash) {
-    throw new UsageError(`${what} must be a bare origin such as https://host, with no path: ${value}`);
+    throw new UsageError(
+      `${what} must be a bare origin such as https://host, with no path: ${value}`,
+    );
   }
   return url.origin;
 }
@@ -76,9 +78,10 @@ function parseArgs(argv) {
   };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
-    const [flag, inline] = arg.startsWith('--') && arg.includes('=')
-      ? [arg.slice(0, arg.indexOf('=')), arg.slice(arg.indexOf('=') + 1)]
-      : [arg, undefined];
+    const [flag, inline] =
+      arg.startsWith('--') && arg.includes('=')
+        ? [arg.slice(0, arg.indexOf('=')), arg.slice(arg.indexOf('=') + 1)]
+        : [arg, undefined];
     if (flag === '--direct' && inline === undefined) opts.direct = true;
     else if (flag === '--no-put' && inline === undefined) opts.put = false;
     else if (flag === '--expect-name') {
@@ -203,9 +206,7 @@ async function main() {
     {
       method: 'GET',
       path: IMAGE_PATH,
-      expected: opts.direct
-        ? `400 with ${IMAGE_DENIED}`
-        : `400 with ${IMAGE_DENIED}, 403, or 404`,
+      expected: opts.direct ? `400 with ${IMAGE_DENIED}` : `400 with ${IMAGE_DENIED}, 403, or 404`,
       check: (res) => imageVerdict(res, opts.direct),
     },
     ok('/'),
@@ -214,12 +215,20 @@ async function main() {
     ok('/robots.txt'),
     ok('/sitemap.xml'),
   ];
-  const sitemapRow = { method: 'BODY', path: '/sitemap.xml', expected: 'no /variants or /preview/ URL' };
+  const sitemapRow = {
+    method: 'BODY',
+    path: '/sitemap.xml',
+    expected: 'no /variants or /preview/ URL',
+  };
   const originText = opts.expectOrigin
     ? `references ${opts.expectOrigin}, no example.com/.net/.org host`
     : '';
   const originRows = opts.expectOrigin
-    ? ['/robots.txt', '/sitemap.xml'].map((path) => ({ method: 'ORIGIN', path, expected: originText }))
+    ? ['/robots.txt', '/sitemap.xml'].map((path) => ({
+        method: 'ORIGIN',
+        path,
+        expected: originText,
+      }))
     : [];
   const nameRow = opts.expectName
     ? { method: 'BODY', path: '/', expected: `contains "${opts.expectName}"` }

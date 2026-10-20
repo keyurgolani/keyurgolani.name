@@ -9,17 +9,25 @@ export function PatentsRenderer({ section }: { section: Patents }) {
       {section.items.map((item, i) => (
         <article key={`${item.title}-${i}`} className="editorial-entry">
           <aside className="editorial-entry__marginalia">
-            {item.number ? <span className="editorial-entry__marginalia-period">{item.number}</span> : null}
+            {item.number ? (
+              <span className="editorial-entry__marginalia-period">{item.number}</span>
+            ) : null}
             {item.status ? <span>{item.status}</span> : null}
-            {item.grantedAt ? <span>Granted {formatDate(item.grantedAt, { short: true })}</span> : null}
-            {!item.grantedAt && item.filedAt ? <span>Filed {formatDate(item.filedAt, { short: true })}</span> : null}
+            {item.grantedAt ? (
+              <span>Granted {formatDate(item.grantedAt, { short: true })}</span>
+            ) : null}
+            {!item.grantedAt && item.filedAt ? (
+              <span>Filed {formatDate(item.filedAt, { short: true })}</span>
+            ) : null}
           </aside>
           <div className="editorial-entry__body">
             <h3 className="editorial-entry__title">{item.title}</h3>
             {item.inventors && item.inventors.length > 0 ? (
               <p className="editorial-entry__subtitle">{formatList(item.inventors)}</p>
             ) : null}
-            {item.assignee ? <p className="editorial-entry__subtitle">Assignee: {item.assignee}</p> : null}
+            {item.assignee ? (
+              <p className="editorial-entry__subtitle">Assignee: {item.assignee}</p>
+            ) : null}
             {item.description ? (
               <MarkdownBody source={item.description} className="editorial-entry__description" />
             ) : null}

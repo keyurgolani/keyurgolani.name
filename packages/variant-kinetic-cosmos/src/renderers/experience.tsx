@@ -10,12 +10,13 @@ import {
   maxSlot,
   type LaneAssignment,
 } from '@portfolio/kit/timeline';
-import {
-  useMouseTilt,
-  useViewportCenterActive,
-} from '@portfolio/kit/motion-fx';
+import { useMouseTilt, useViewportCenterActive } from '@portfolio/kit/motion-fx';
 import { useMotionTemplate } from 'framer-motion';
-import { buildTimelineLayout, type TimelineEvent, type TimelineEventKind } from '../lib/timeline-events';
+import {
+  buildTimelineLayout,
+  type TimelineEvent,
+  type TimelineEventKind,
+} from '../lib/timeline-events';
 
 interface ExperienceProps {
   portfolio: Portfolio;
@@ -24,13 +25,13 @@ interface ExperienceProps {
 }
 
 const KIND_HUE: Record<TimelineEventKind, { h: number; s: number; l: number; label: string }> = {
-  job:        { h: 174, s: 80, l: 45, label: 'Job' },
+  job: { h: 174, s: 80, l: 45, label: 'Job' },
   internship: { h: 142, s: 71, l: 45, label: 'Intern' },
-  study:      { h: 217, s: 91, l: 60, label: 'Study' },
-  research:   { h: 262, s: 80, l: 66, label: 'Research' },
-  project:    { h: 38,  s: 92, l: 50, label: 'Project' },
-  award:      { h: 45,  s: 96, l: 55, label: 'Award' },
-  life:       { h: 239, s: 84, l: 67, label: 'Life' },
+  study: { h: 217, s: 91, l: 60, label: 'Study' },
+  research: { h: 262, s: 80, l: 66, label: 'Research' },
+  project: { h: 38, s: 92, l: 50, label: 'Project' },
+  award: { h: 45, s: 96, l: 55, label: 'Award' },
+  life: { h: 239, s: 84, l: 67, label: 'Life' },
 };
 
 const COLLAPSED_W = 240;
@@ -119,12 +120,7 @@ export function ExperienceRenderer({ portfolio, section }: ExperienceProps) {
   }
 
   return (
-    <section
-      id={id}
-      ref={containerRef}
-      className="kc-timeline"
-      onClick={() => setExpandedId(null)}
-    >
+    <section id={id} ref={containerRef} className="kc-timeline" onClick={() => setExpandedId(null)}>
       <div className="kc-timeline__header">
         <h2 className="kc-timeline__title">{section.title ?? 'Timeline Odyssey'}</h2>
         <p className="kc-timeline__subtitle">
@@ -144,7 +140,10 @@ export function ExperienceRenderer({ portfolio, section }: ExperienceProps) {
               <linearGradient
                 key={`grad-${p.event.id}`}
                 id={`grad-${p.event.id}`}
-                x1="0%" y1="0%" x2="0%" y2="100%"
+                x1="0%"
+                y1="0%"
+                x2="0%"
+                y2="100%"
               >
                 <stop offset="0%" stopColor={p.lineColor} stopOpacity="0.2" />
                 <stop offset="100%" stopColor={p.lineColor} stopOpacity="0.9" />
@@ -235,12 +234,7 @@ function PresentNode({ y, centerX }: { y: number; centerX: number }) {
       />
       <circle r={6} fill="var(--kc-paper)" stroke="var(--kc-primary)" strokeWidth={2} />
       <circle r={2.5} fill="var(--kc-primary)" />
-      <text
-        x={20}
-        y={4}
-        fill="var(--kc-primary)"
-        className="kc-timeline__present-label"
-      >
+      <text x={20} y={4} fill="var(--kc-primary)" className="kc-timeline__present-label">
         PRESENT
       </text>
     </g>
@@ -343,10 +337,7 @@ function EventCard({
                 className="kc-timeline-card__body"
               >
                 <div className="kc-timeline-card__row">
-                  <span
-                    className="kc-timeline-card__chip"
-                    style={{ background: p.lineColor }}
-                  >
+                  <span className="kc-timeline-card__chip" style={{ background: p.lineColor }}>
                     {visuals.label}
                   </span>
                   <span className="kc-timeline-card__track">{event.trackName}</span>

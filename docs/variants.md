@@ -41,20 +41,23 @@ export const manifest: VariantManifest = {
   slug: 'my-slug',
   name: 'My Slug',
   version: '0.1.0',
-  aesthetic: 'editorial',          // editorial | spatial | kinetic | popart | terminal | bento | narrative | custom
-  motion: 'still',                 // still | subtle | animated | kinetic
-  density: 'balanced',             // minimal | balanced | dense
-  typography: 'mixed',             // serif | sans | mono | mixed
-  performanceTier: 'light',        // light | medium | heavy
+  aesthetic: 'editorial', // editorial | spatial | kinetic | popart | terminal | bento | narrative | custom
+  motion: 'still', // still | subtle | animated | kinetic
+  density: 'balanced', // minimal | balanced | dense
+  typography: 'mixed', // serif | sans | mono | mixed
+  performanceTier: 'light', // light | medium | heavy
   supportedKinds: ALL_SECTION_KINDS,
-  themes: ['light', 'dark', 'bright', 'black'],  // never list 'system' here
+  themes: ['light', 'dark', 'bright', 'black'], // never list 'system' here
   colorSchemes: [
-    { id: 'default', name: 'Default', themes: ['light', 'dark'], default: true,
-      swatch: { paper: '#fff', ink: '#000', accent: '#0044ff' } },
+    {
+      id: 'default',
+      name: 'Default',
+      themes: ['light', 'dark'],
+      default: true,
+      swatch: { paper: '#fff', ink: '#000', accent: '#0044ff' },
+    },
   ],
-  typographyPresets: [
-    { id: 'default', name: 'Default', default: true },
-  ],
+  typographyPresets: [{ id: 'default', name: 'Default', default: true }],
   capabilities: { print: false, rss: false, multiPage: false },
 };
 ```
@@ -113,7 +116,11 @@ export default function MyVariant({
     >
       <main>
         {portfolio.sections.map((section, i) => (
-          <SectionDispatch key={section.id ?? `${section.kind}-${i}`} section={section} portfolio={portfolio} />
+          <SectionDispatch
+            key={section.id ?? `${section.kind}-${i}`}
+            section={section}
+            portfolio={portfolio}
+          />
         ))}
       </main>
     </div>
@@ -145,11 +152,13 @@ node skills/variant-developer/scripts/audit.mjs packages/variant-my-slug
 ```
 
 Hard fails:
+
 - `supportedKinds` is missing a kind from `ALL_SECTION_KINDS`.
 - A renderer dispatch case is missing for a declared kind (and no `FallbackSection` routing).
 - `themes` is missing `'light'` or `'dark'`.
 
 Warnings:
+
 - Only one color scheme declared (multiple is encouraged).
 - Only one typography preset declared (same).
 - `themes` claims `'bright'` or `'black'` but `styles.css` has no `[data-theme='X']` block.

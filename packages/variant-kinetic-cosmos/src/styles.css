@@ -365,7 +365,11 @@
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   box-shadow: var(--kc-card-shadow);
-  transition: border-color 0.3s, box-shadow 0.3s, background 0.3s, transform 0.3s;
+  transition:
+    border-color 0.3s,
+    box-shadow 0.3s,
+    background 0.3s,
+    transform 0.3s;
   position: relative;
 }
 
@@ -390,7 +394,9 @@
   text-decoration-color: rgba(var(--kc-glow-primary), 0.4);
   text-decoration-thickness: 1px;
   text-underline-offset: 0.2em;
-  transition: color 0.2s, text-decoration-color 0.2s;
+  transition:
+    color 0.2s,
+    text-decoration-color 0.2s;
 }
 
 [data-variant='kinetic-cosmos'] a:not([class]):hover {
@@ -428,7 +434,9 @@
   cursor: pointer;
   border-radius: 999px;
   font: inherit;
-  transition: background 0.2s, color 0.2s;
+  transition:
+    background 0.2s,
+    color 0.2s;
 }
 
 .kc-theme-toggle__option:hover {
@@ -686,7 +694,11 @@
   text-decoration: none;
   border: 1px solid transparent;
   cursor: pointer;
-  transition: transform 0.2s, background 0.2s, border-color 0.2s, box-shadow 0.2s;
+  transition:
+    transform 0.2s,
+    background 0.2s,
+    border-color 0.2s,
+    box-shadow 0.2s;
   white-space: nowrap;
 }
 
@@ -779,8 +791,13 @@
 }
 
 @keyframes kc-gradient-shift {
-  0%, 100% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
 }
 
 .kc-hero__roles {
@@ -803,8 +820,14 @@
 }
 
 @keyframes kc-blink {
-  0%, 50% { opacity: 1; }
-  51%, 100% { opacity: 0; }
+  0%,
+  50% {
+    opacity: 1;
+  }
+  51%,
+  100% {
+    opacity: 0;
+  }
 }
 
 .kc-hero__subtagline {
@@ -1068,7 +1091,9 @@
   color: var(--kc-primary);
   border: 1px solid rgba(var(--kc-glow-primary), 0.25);
   border-radius: 999px;
-  transition: background 0.2s, border-color 0.2s;
+  transition:
+    background 0.2s,
+    border-color 0.2s;
 }
 
 .kc-focus__chip:hover {
@@ -1196,7 +1221,12 @@
   cursor: pointer;
   font: inherit;
   text-align: left;
-  transition: border-color 0.3s, box-shadow 0.3s, transform 0.3s, opacity 0.3s, filter 0.3s;
+  transition:
+    border-color 0.3s,
+    box-shadow 0.3s,
+    transform 0.3s,
+    opacity 0.3s,
+    filter 0.3s;
   color: var(--kc-ink);
 }
 
@@ -2105,7 +2135,8 @@
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-  background: linear-gradient(135deg, rgba(var(--kc-glow-primary), 0.06), rgba(var(--kc-glow-accent), 0.06)),
+  background:
+    linear-gradient(135deg, rgba(var(--kc-glow-primary), 0.06), rgba(var(--kc-glow-accent), 0.06)),
     var(--kc-card-bg);
 }
 
@@ -2251,10 +2282,18 @@
   background: rgba(var(--kc-glow-primary), 0.08);
 }
 
-.kc-github__heatmap-cell[data-level='1'] { background: rgba(var(--kc-glow-primary), 0.25); }
-.kc-github__heatmap-cell[data-level='2'] { background: rgba(var(--kc-glow-primary), 0.45); }
-.kc-github__heatmap-cell[data-level='3'] { background: rgba(var(--kc-glow-primary), 0.7); }
-.kc-github__heatmap-cell[data-level='4'] { background: rgba(var(--kc-glow-primary), 1); }
+.kc-github__heatmap-cell[data-level='1'] {
+  background: rgba(var(--kc-glow-primary), 0.25);
+}
+.kc-github__heatmap-cell[data-level='2'] {
+  background: rgba(var(--kc-glow-primary), 0.45);
+}
+.kc-github__heatmap-cell[data-level='3'] {
+  background: rgba(var(--kc-glow-primary), 0.7);
+}
+.kc-github__heatmap-cell[data-level='4'] {
+  background: rgba(var(--kc-glow-primary), 1);
+}
 
 .kc-github__pinned {
   display: grid;
@@ -2408,7 +2447,9 @@
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border-bottom: 1px solid var(--kc-rule);
-  transition: transform 0.3s, opacity 0.3s;
+  transition:
+    transform 0.3s,
+    opacity 0.3s;
 }
 
 .kc-nav[data-hidden] {
@@ -2463,7 +2504,9 @@
   color: var(--kc-ink-muted);
   text-decoration: none;
   border-radius: 999px;
-  transition: color 0.2s, background 0.2s;
+  transition:
+    color 0.2s,
+    background 0.2s;
 }
 
 .kc-nav__link:hover {
@@ -2543,7 +2586,10 @@
   border-radius: var(--kc-card-radius);
   background: var(--kc-card-bg);
   border: 1px solid var(--kc-card-border);
-  transition: background 0.2s, border-color 0.2s, transform 0.2s;
+  transition:
+    background 0.2s,
+    border-color 0.2s,
+    transform 0.2s;
 }
 
 .kc-nav-overlay__link:hover {

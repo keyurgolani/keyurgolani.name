@@ -69,7 +69,8 @@ export function ScanlineOverlay({
             inset: 0,
             pointerEvents: 'none',
             zIndex: zIndex - 1,
-            background: 'radial-gradient(ellipse at center, transparent 0%, transparent 55%, rgba(0,0,0,0.5) 100%)',
+            background:
+              'radial-gradient(ellipse at center, transparent 0%, transparent 55%, rgba(0,0,0,0.5) 100%)',
           }}
         />
       ) : null}
@@ -91,9 +92,11 @@ export function ScanlineOverlay({
           from { background-position: 0 0; }
           to   { background-position: 0 ${scanlineSpacing * 4}px; }
         }
-        ${chromaticAberration
-          ? `[data-crt-filter] { filter: drop-shadow(1px 0 0 rgba(255,0,80,0.35)) drop-shadow(-1px 0 0 rgba(0,200,255,0.35)); }`
-          : ''}
+        ${
+          chromaticAberration
+            ? `[data-crt-filter] { filter: drop-shadow(1px 0 0 rgba(255,0,80,0.35)) drop-shadow(-1px 0 0 rgba(0,200,255,0.35)); }`
+            : ''
+        }
       `}</style>
     </>
   );

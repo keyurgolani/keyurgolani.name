@@ -18,7 +18,9 @@ export type ResolvedMotion = 'reduce' | 'full';
  * Defaults to `full` during SSR to avoid layout-shift on hydration; the OS
  * value is read once on mount.
  */
-export function useMotionPreference(portfolioPref: MotionPreference = 'respect-os'): ResolvedMotion {
+export function useMotionPreference(
+  portfolioPref: MotionPreference = 'respect-os',
+): ResolvedMotion {
   const [osReduce, setOsReduce] = useState(false);
 
   useEffect(() => {

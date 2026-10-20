@@ -30,7 +30,9 @@ export function ProjectsRenderer({ section }: { section: Projects }) {
                   {image.credit ? <figcaption>{image.credit}</figcaption> : null}
                 </figure>
               ) : null}
-              {item.summary ? <MarkdownBody source={item.summary} className="editorial-prose" /> : null}
+              {item.summary ? (
+                <MarkdownBody source={item.summary} className="editorial-prose" />
+              ) : null}
               {item.description ? <MarkdownBody source={item.description} /> : null}
               {item.highlights && item.highlights.length > 0 ? (
                 <ul className="editorial-entry__highlights">

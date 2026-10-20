@@ -21,10 +21,14 @@ export function TalksRenderer({ section }: { section: Talks }) {
             {(item.videoUrl || item.slidesUrl) && (
               <div className="kc-talk__links">
                 {item.videoUrl ? (
-                  <a href={item.videoUrl} target="_blank" rel="noopener noreferrer">Watch</a>
+                  <a href={item.videoUrl} target="_blank" rel="noopener noreferrer">
+                    Watch
+                  </a>
                 ) : null}
                 {item.slidesUrl ? (
-                  <a href={item.slidesUrl} target="_blank" rel="noopener noreferrer">Slides</a>
+                  <a href={item.slidesUrl} target="_blank" rel="noopener noreferrer">
+                    Slides
+                  </a>
                 ) : null}
               </div>
             )}

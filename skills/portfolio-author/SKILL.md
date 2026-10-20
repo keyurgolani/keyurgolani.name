@@ -14,7 +14,7 @@ compatibility: >
   Designed for the keyurgolani/portfolio platform. Requires read access to packages/schema/
   and write access to portfolio.yml at the repo root.
 metadata:
-  version: "1.0.0"
+  version: '1.0.0'
 ---
 
 ## 1. What this platform is
@@ -30,7 +30,7 @@ Concrete pointers:
 - `portfolio.yml` at the repo root — the live file. This is what you write.
 - `apps/web/` — the Next.js host that loads `portfolio.yml`, runs validation at build time, and renders the active variant.
 
-This skill teaches you about *this* platform's schema, taxonomy, and quality bar. It does NOT teach you how to read PDFs, scrape LinkedIn, or interview a user — your harness already provides those capabilities. Reach for the references below when you need platform-specific knowledge; reach for your harness's tools for everything else.
+This skill teaches you about _this_ platform's schema, taxonomy, and quality bar. It does NOT teach you how to read PDFs, scrape LinkedIn, or interview a user — your harness already provides those capabilities. Reach for the references below when you need platform-specific knowledge; reach for your harness's tools for everything else.
 
 ## 2. The workflow
 
@@ -81,7 +81,7 @@ Do not refuse a source format the user gives you. If you cannot read it directly
 
 ## 4. Picking sections (curation principles)
 
-The schema defines roughly two dozen section kinds. Almost no portfolio uses all of them. Curation — choosing which sections fit *this* user, *this* career stage, *this* audience, and *this* intent — is the work. A maximalist YAML that claims everything renders worse than a tight one with five well-chosen sections.
+The schema defines roughly two dozen section kinds. Almost no portfolio uses all of them. Curation — choosing which sections fit _this_ user, _this_ career stage, _this_ audience, and _this_ intent — is the work. A maximalist YAML that claims everything renders worse than a tight one with five well-chosen sections.
 
 Load `references/curation.md` for the career-stage × intent × audience matrices. The matrices answer concrete questions: "should an early-career engineer include `tenure`?", "does an indie maker need `experience` at all?", "does a writer benefit from a `stats` block?" — questions with specific, opinionated answers in this platform.
 

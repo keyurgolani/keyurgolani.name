@@ -9,7 +9,9 @@ export function EducationRenderer({ section }: { section: Education }) {
       {section.items.map((item, i) => (
         <article key={`${item.institution}-${item.degree}-${i}`} className="editorial-entry">
           <aside className="editorial-entry__marginalia">
-            <span className="editorial-entry__marginalia-period">{formatPeriod(item.period, { short: true })}</span>
+            <span className="editorial-entry__marginalia-period">
+              {formatPeriod(item.period, { short: true })}
+            </span>
             {item.location && <span>{item.location}</span>}
           </aside>
           <div className="editorial-entry__body">

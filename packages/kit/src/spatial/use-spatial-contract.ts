@@ -68,9 +68,7 @@ const DESKTOP_DPR_CAP: [number, number] = [1, 2];
  *     </div>
  *   );
  */
-export function useSpatialContract(
-  options: UseSpatialContractOptions = {},
-): SpatialContractValues {
+export function useSpatialContract(options: UseSpatialContractOptions = {}): SpatialContractValues {
   const tier = options.tier ?? 'light';
   const breakpoint = options.mobileBreakpoint ?? 768;
   const rootMargin = options.rootMargin ?? '200px';

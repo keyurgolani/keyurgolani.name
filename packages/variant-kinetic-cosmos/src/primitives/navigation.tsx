@@ -19,9 +19,7 @@ const HEADER_HEIGHT = 64;
  * active section.
  */
 export function Navigation({ items, brand }: NavigationProps) {
-  const [activeId, setActiveId] = useState<string | null>(
-    items[0]?.href.replace(/^#/, '') ?? null,
-  );
+  const [activeId, setActiveId] = useState<string | null>(items[0]?.href.replace(/^#/, '') ?? null);
   const [hidden, setHidden] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const lastScrollY = useRef(0);
@@ -111,11 +109,7 @@ export function Navigation({ items, brand }: NavigationProps) {
 
   return (
     <>
-      <nav
-        aria-label="Site navigation"
-        className={cn('kc-nav')}
-        data-hidden={hidden || undefined}
-      >
+      <nav aria-label="Site navigation" className={cn('kc-nav')} data-hidden={hidden || undefined}>
         <div className="kc-nav__inner">
           <a href="#" className="kc-nav__brand" onClick={onBrandClick}>
             {brand}

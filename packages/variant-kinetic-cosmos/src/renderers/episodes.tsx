@@ -25,7 +25,12 @@ export function EpisodesRenderer({ section }: { section: Episodes }) {
             </p>
             {item.description ? <p className="kc-episode__desc">{item.description}</p> : null}
             {item.audioUrl ? (
-              <a className="kc-episode__listen" href={item.audioUrl} target="_blank" rel="noopener noreferrer">
+              <a
+                className="kc-episode__listen"
+                href={item.audioUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
                 ▶ Listen
               </a>
             ) : null}

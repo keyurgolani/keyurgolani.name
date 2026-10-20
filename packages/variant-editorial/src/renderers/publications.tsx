@@ -9,7 +9,9 @@ export function PublicationsRenderer({ section }: { section: Publications }) {
       {section.items.map((item, i) => (
         <article key={`${item.title}-${i}`} className="editorial-entry">
           <aside className="editorial-entry__marginalia">
-            <span className="editorial-entry__marginalia-period">{formatYear(item.publishedAt)}</span>
+            <span className="editorial-entry__marginalia-period">
+              {formatYear(item.publishedAt)}
+            </span>
             {item.venue ? <span>{item.venue}</span> : null}
             {item.doi ? <span>doi:{item.doi}</span> : null}
           </aside>
@@ -18,8 +20,14 @@ export function PublicationsRenderer({ section }: { section: Publications }) {
             {item.authors && item.authors.length > 0 ? (
               <p className="editorial-entry__subtitle">{formatList(item.authors)}</p>
             ) : null}
-            {item.abstract ? <MarkdownBody source={item.abstract} className="editorial-entry__description" /> : null}
-            {item.citation ? <p className="editorial-entry__description"><em>{item.citation}</em></p> : null}
+            {item.abstract ? (
+              <MarkdownBody source={item.abstract} className="editorial-entry__description" />
+            ) : null}
+            {item.citation ? (
+              <p className="editorial-entry__description">
+                <em>{item.citation}</em>
+              </p>
+            ) : null}
             {(item.url || item.pdfUrl) && (
               <div className="editorial-entry__links">
                 {item.url && (

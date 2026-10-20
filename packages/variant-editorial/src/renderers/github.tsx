@@ -1,5 +1,11 @@
 import type { Github } from '@portfolio/schema';
-import { fetchGitHubData, type ContributionDay, type GitHubData, type PinnedRepo, type RecentlyActiveRepo } from '@portfolio/kit/github';
+import {
+  fetchGitHubData,
+  type ContributionDay,
+  type GitHubData,
+  type PinnedRepo,
+  type RecentlyActiveRepo,
+} from '@portfolio/kit/github';
 import { formatCompactNumber, formatRelativeTime } from '@portfolio/kit';
 import { SectionFrame } from '../primitives/section-frame';
 
@@ -91,7 +97,12 @@ function PinnedReposGrid({ repos }: { repos: PinnedRepo[] }) {
     <ul className="editorial-github__pinned">
       {repos.map((repo) => (
         <li key={repo.url} className="editorial-github__pin">
-          <a className="editorial-github__pin-name" href={repo.url} target="_blank" rel="noopener noreferrer">
+          <a
+            className="editorial-github__pin-name"
+            href={repo.url}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
             {repo.name}
           </a>
           {repo.description ? (
@@ -133,7 +144,11 @@ function ContributionHeatmap({ days }: { days: ContributionDay[] }) {
   if (current.length) weeks.push(current);
 
   return (
-    <div className="editorial-github__heatmap" role="img" aria-label="GitHub contributions over the past year">
+    <div
+      className="editorial-github__heatmap"
+      role="img"
+      aria-label="GitHub contributions over the past year"
+    >
       {weeks.map((week, wi) => (
         <div key={wi} className="editorial-github__heatmap-week">
           {week.map((day) => (

@@ -52,9 +52,7 @@ if (!REPO_ROOT) {
   process.exit(2);
 }
 
-const schemaModule = await import(
-  path.join(REPO_ROOT, 'packages/schema/src/index.ts')
-);
+const schemaModule = await import(path.join(REPO_ROOT, 'packages/schema/src/index.ts'));
 const ALL_SECTION_KINDS = schemaModule.ALL_SECTION_KINDS;
 if (!Array.isArray(ALL_SECTION_KINDS)) {
   console.error('error: ALL_SECTION_KINDS not exported from @portfolio/schema');
@@ -196,9 +194,7 @@ for (const kind of supportedKinds) {
   // Bespoke renderer check: case '<kind>': in dispatch, OR FallbackSection routing.
   const caseRe = new RegExp(`case\\s+['"]${kind}['"]`);
   if (!caseRe.test(dispatchText) && !usesFallbackSection) {
-    console.log(
-      `FAIL: section dispatch has no case for '${kind}' and no FallbackSection routing`,
-    );
+    console.log(`FAIL: section dispatch has no case for '${kind}' and no FallbackSection routing`);
     hardFails++;
   }
 }

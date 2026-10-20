@@ -2,13 +2,13 @@
 
 > Load this when the user says "make it look like X" or "port the
 > archived variant Y" or "match this Figma". Phase 0 / pre-Phase-1 work
-> that the original skill missed: doing this *first* is the difference
+> that the original skill missed: doing this _first_ is the difference
 > between an 80%-accurate one-shot and three rounds of "but the original
 > had…".
 
 ## Why this step exists
 
-When a variant is ported from a reference, the reference *is* the
+When a variant is ported from a reference, the reference _is_ the
 spec — not your interpretation of the metaphor. You can still pick a
 different framework, library, schema, or component organization, but
 the user's mental model of "is the variant done?" is "does it feel like
@@ -17,7 +17,7 @@ the reference?". A scaffold that compiles is not a port.
 The single biggest cause of post-implementation rework is treating
 "the metaphor" as your new design freedom while the user is treating it
 as a fidelity requirement. The reference inventory below resolves that
-ambiguity *before* you write code.
+ambiguity _before_ you write code.
 
 ## Step 1 — Read the reference end-to-end
 
@@ -42,23 +42,23 @@ in disguise). If accidental, you're under-spec'd.
 
 For each visually distinct primitive in the reference, list:
 
-| Primitive | What it does | Hoist-worthy? | Plan |
-|---|---|---|---|
-| `<TypingAnimation>` | Cycles through role text | yes — generalize | Hoist to kit. |
-| `<AnimatedCounter>` | Stats counter ramp | yes | Hoist to kit. |
-| `<FloatingElements>` | Brand-colored profile cards in parallax orbit | partially — extract motion hooks + brand registry | Compose from `useScrollDispersal` + `getSocialBrandStyle`; component itself stays variant-local. |
-| `<TactileEventCard>` | 3D-tilt timeline card | partially — extract `useMouseTilt` | Use kit hook; visual chrome stays local. |
-| `<Lightbox>` | Gallery image overlay | yes | Hoist to kit. |
-| `<ProgressBar>` | Skill proficiency bar | data-shape question first | Schema doesn't carry proficiency — drop or invent. |
-| `<Card variant="glass">` | Glassmorphic card | partially — class vocabulary only | Local CSS + class names. |
+| Primitive                | What it does                                  | Hoist-worthy?                                     | Plan                                                                                             |
+| ------------------------ | --------------------------------------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `<TypingAnimation>`      | Cycles through role text                      | yes — generalize                                  | Hoist to kit.                                                                                    |
+| `<AnimatedCounter>`      | Stats counter ramp                            | yes                                               | Hoist to kit.                                                                                    |
+| `<FloatingElements>`     | Brand-colored profile cards in parallax orbit | partially — extract motion hooks + brand registry | Compose from `useScrollDispersal` + `getSocialBrandStyle`; component itself stays variant-local. |
+| `<TactileEventCard>`     | 3D-tilt timeline card                         | partially — extract `useMouseTilt`                | Use kit hook; visual chrome stays local.                                                         |
+| `<Lightbox>`             | Gallery image overlay                         | yes                                               | Hoist to kit.                                                                                    |
+| `<ProgressBar>`          | Skill proficiency bar                         | data-shape question first                         | Schema doesn't carry proficiency — drop or invent.                                               |
+| `<Card variant="glass">` | Glassmorphic card                             | partially — class vocabulary only                 | Local CSS + class names.                                                                         |
 
 Write this table into DESIGN.md's new `## Component inventory` section
 (see `assets/DESIGN.template.md`).
 
 ## Step 3 — Signature interactions inventory
 
-The visual primitives are *what's there*. Signature interactions are
-*how it feels*. List every motion/interaction that defines the
+The visual primitives are _what's there_. Signature interactions are
+_how it feels_. List every motion/interaction that defines the
 reference's character:
 
 - "Floaters fade and disperse outward as you scroll past the hero."
@@ -85,7 +85,7 @@ diff against the current `@portfolio/schema` types. For every field:
   schema has no equivalent.
 - **Added** — schema has new fields the reference didn't model.
 
-For *Lost* fields, decide per field:
+For _Lost_ fields, decide per field:
 
 - **Inferable** — `track.branch` can be heuristically inferred from
   `role + organization` keywords. Use `inferKindFromText` from
@@ -99,13 +99,13 @@ For *Lost* fields, decide per field:
   bar) or replace with one that uses available data. Document in
   DESIGN.md.
 
-This step is *the* place where porting goes off the rails. A renderer
+This step is _the_ place where porting goes off the rails. A renderer
 that crashes on a missing field at the cluster-walkthrough is a Wave 2
 stall, not a Wave 1 problem. Catching it in Phase 0 is cheap.
 
-## Step 5 — Identify what's *not* portable
+## Step 5 — Identify what's _not_ portable
 
-Be explicit about what you're *not* porting. For example:
+Be explicit about what you're _not_ porting. For example:
 
 - Skill proficiency bars (no schema field).
 - Project filter buttons by category (no schema category field — could
@@ -152,8 +152,8 @@ Gate G). At sign-off, every box is checked or has an inline justification.
 
 If you go straight to Phase 1 without Steps 1–6, the typical failure mode is:
 
-1. DESIGN.md is approved on the *metaphor* (one sentence) without
-   committing to the *implementation richness*.
+1. DESIGN.md is approved on the _metaphor_ (one sentence) without
+   committing to the _implementation richness_.
 2. Wave 2 produces a simpler renderer than the reference had.
 3. Phase 3 audit passes (typecheck, audit script, sync-checks).
 4. User looks at the result and says "it doesn't feel like the original."

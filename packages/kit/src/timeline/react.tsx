@@ -8,8 +8,7 @@ import { buildAxisPath, buildBranchPath, type BranchPath, type BranchPathOptions
  *
  * Variants restyle freely via `stroke`, `strokeWidth`, `className`.
  */
-export interface TimelineAxisProps
-  extends Omit<SVGProps<SVGPathElement>, 'd'> {
+export interface TimelineAxisProps extends Omit<SVGProps<SVGPathElement>, 'd'> {
   centerX: number;
   topY: number;
   bottomY: number;

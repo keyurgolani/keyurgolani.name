@@ -83,7 +83,8 @@ const BRAND_STYLES: Record<string, SocialBrandStyle> = {
   },
   instagram: {
     name: 'Instagram',
-    gradient: 'linear-gradient(135deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)',
+    gradient:
+      'linear-gradient(135deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)',
     accent: '#ffd180',
     glow: 'rgba(220, 39, 67, 0.5)',
     iconBg: 'rgba(255, 255, 255, 0.18)',

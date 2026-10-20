@@ -16,9 +16,7 @@ const ALL_OPTIONS: Array<{ value: Pref; label: string; symbol: string }> = [
 export function EditorialThemeToggle() {
   const { preference, setPreference } = useTheme();
   const supported = new Set(manifest.themes);
-  const visible = ALL_OPTIONS.filter(
-    (opt) => opt.value === 'system' || supported.has(opt.value),
-  );
+  const visible = ALL_OPTIONS.filter((opt) => opt.value === 'system' || supported.has(opt.value));
   return (
     <div className="editorial-theme-toggle" role="radiogroup" aria-label="Theme">
       {visible.map((opt) => (

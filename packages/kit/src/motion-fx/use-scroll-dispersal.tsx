@@ -1,11 +1,6 @@
 'use client';
 
-import {
-  useScroll,
-  useSpring,
-  useTransform,
-  type MotionValue,
-} from 'framer-motion';
+import { useScroll, useSpring, useTransform, type MotionValue } from 'framer-motion';
 import { useMemo } from 'react';
 
 export interface ScrollDispersalOptions {
@@ -123,18 +118,12 @@ export function useScrollDispersal(options: ScrollDispersalOptions): ScrollDispe
 
   const { scrollY } = useScroll();
 
-  const xRange: [number, number] = enabled
-    ? [0, maxDispersal * direction.x * multiplier]
-    : [0, 0];
-  const yRange: [number, number] = enabled
-    ? [0, maxDispersal * direction.y * multiplier]
-    : [0, 0];
+  const xRange: [number, number] = enabled ? [0, maxDispersal * direction.x * multiplier] : [0, 0];
+  const yRange: [number, number] = enabled ? [0, maxDispersal * direction.y * multiplier] : [0, 0];
   const enabledOpacity: [number, number, number, number] = enabled
     ? [opacityCurve[0], opacityCurve[1], opacityCurve[2], opacityCurve[3]]
     : [1, 1, 1, 1];
-  const enabledScale: [number, number] = enabled
-    ? [scaleRange[0], scaleRange[1]]
-    : [1, 1];
+  const enabledScale: [number, number] = enabled ? [scaleRange[0], scaleRange[1]] : [1, 1];
 
   const opacityStops: [number, number, number, number] = [
     scrollRange[0],

@@ -24,7 +24,7 @@ Decide per-question, not per-session. The test: **would the user understand this
 - Manifest field decisions (typography character, motion intensity, etc. — these are enums)
 - Coverage map decisions (which kinds get bespoke vs. fallback — list-based)
 
-A question *about* a UI topic is not automatically a visual question. "Which performance tier should I pick?" is a conceptual question — terminal. "Which of these three palette boards feels closest to the metaphor?" is a visual question — browser.
+A question _about_ a UI topic is not automatically a visual question. "Which performance tier should I pick?" is a conceptual question — terminal. "Which of these three palette boards feels closest to the metaphor?" is a visual question — browser.
 
 ## The disclaimer pattern
 
@@ -81,8 +81,12 @@ The classes below are defined in `assets/visual-companion/frame-template.html`. 
     </div>
     <div class="palette-name">Warm Sienna</div>
     <div class="palette-meta">Cream paper · deep ink · sienna accent</div>
-    <div class="palette-sample-heading" style="font-family:Fraunces,serif;color:#1a1a1a">Editorial display</div>
-    <div class="palette-sample-body" style="font-family:'Source Serif 4',serif;color:#1a1a1a">Body sample over paper. Notice contrast.</div>
+    <div class="palette-sample-heading" style="font-family:Fraunces,serif;color:#1a1a1a">
+      Editorial display
+    </div>
+    <div class="palette-sample-body" style="font-family:'Source Serif 4',serif;color:#1a1a1a">
+      Body sample over paper. Notice contrast.
+    </div>
   </div>
   <!-- 1-3 more palette-card elements -->
 </div>
@@ -97,7 +101,10 @@ Classes: `.palette-board` (container), `.palette-card` (each option), `.palette-
 <div class="type-pairing">
   <div class="type-card" data-choice="classic" onclick="toggleSelect(this)">
     <div class="type-display" style="font-family:Fraunces,serif">Editorial Classic</div>
-    <div class="type-body" style="font-family:'Source Serif 4',serif">Source Serif 4 reads beautifully at 17px with a 1.55 leading. The Fraunces display has high-contrast curves that pair well with the upright serif body.</div>
+    <div class="type-body" style="font-family:'Source Serif 4',serif">
+      Source Serif 4 reads beautifully at 17px with a 1.55 leading. The Fraunces display has
+      high-contrast curves that pair well with the upright serif body.
+    </div>
     <div class="type-meta">display: Fraunces · body: Source Serif 4</div>
   </div>
   <!-- more type-card elements -->
@@ -214,7 +221,7 @@ The agent reads the captured PNGs (if its harness supports image input) to inspe
 `state_dir/events` is JSONL — one JSON object per line. Each line is a click event:
 
 ```json
-{"type":"click","choice":"warm","text":"Warm Sienna","timestamp":1714752000123}
+{ "type": "click", "choice": "warm", "text": "Warm Sienna", "timestamp": 1714752000123 }
 ```
 
 The full stream shows the user's exploration path. They may click multiple options before settling. The last `choice` is typically the final answer, but the pattern of clicks can reveal hesitation worth probing.

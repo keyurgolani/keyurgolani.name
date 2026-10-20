@@ -14,7 +14,9 @@ export function SkillsRenderer({ section }: { section: Skills }) {
               ) : null}
               <ul className="kc-skills__chips">
                 {group.items.map((item, j) => (
-                  <li key={j} className="kc-skills__chip">{item}</li>
+                  <li key={j} className="kc-skills__chip">
+                    {item}
+                  </li>
                 ))}
               </ul>
             </div>
@@ -28,7 +30,9 @@ export function SkillsRenderer({ section }: { section: Skills }) {
       <SectionFrame section={section} fallbackTitle="Skills" gradientTitle>
         <ul className="kc-card kc-skills__chips">
           {section.items.map((item, i) => (
-            <li key={i} className="kc-skills__chip">{item}</li>
+            <li key={i} className="kc-skills__chip">
+              {item}
+            </li>
           ))}
         </ul>
       </SectionFrame>

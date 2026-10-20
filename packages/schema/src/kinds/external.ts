@@ -36,9 +36,7 @@ export const ExternalPortfolioItemSchema = z.object({
   /** Short categorical tags shown on the card. */
   categories: z.array(z.string()).optional(),
   /** Bullet-shaped highlights ({ label, sub }). */
-  highlights: z
-    .array(z.object({ label: z.string(), sub: z.string() }))
-    .optional(),
+  highlights: z.array(z.object({ label: z.string(), sub: z.string() })).optional(),
   /** Override for the visible URL label. Defaults to brandName. */
   urlLabel: z.string().optional(),
   /** Override for the CTA button text. */

@@ -14,7 +14,9 @@
     "lint": "echo \"(no lint configured)\"",
     "test": "echo \"(no tests yet)\""
   },
-  "keywords": ["portfolio-variant-template"],
+  "keywords": [
+    "portfolio-variant-template"
+  ],
   "portfolio": {
     "template": true,
     "slug": "template"

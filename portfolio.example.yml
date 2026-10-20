@@ -169,7 +169,8 @@ sections:
         description: My professional centre of gravity
         items: [Consensus, Replication, Anti-entropy, Service meshes, Geo-replication]
       - name: Reliability
-        items: [SLO design, Error budgets, Incident response, Postmortem facilitation, Chaos engineering]
+        items:
+          [SLO design, Error budgets, Incident response, Postmortem facilitation, Chaos engineering]
       - name: Languages
         items: [Go, TypeScript, Python, Rust]
       - name: Writing

@@ -18,7 +18,9 @@ export function StackRenderer({ section }: { section: Stack }) {
                   ) : (
                     item.name
                   )}
-                  {item.version ? <span className="editorial-group__item-version">{item.version}</span> : null}
+                  {item.version ? (
+                    <span className="editorial-group__item-version">{item.version}</span>
+                  ) : null}
                 </li>
               ))}
             </ul>

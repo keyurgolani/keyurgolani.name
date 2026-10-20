@@ -62,6 +62,7 @@ The rows are:
   - `kgn21_compose up -d --no-build --no-deps "${SERVICE:?}"`.
 
   `command docker compose version` and `command docker compose ls --all --filter name="${PROJECT:?}"` are fine. The Compose file may keep a `build:` key that points at the legacy checkout, so never run `build`, `up --build`, `pull`, `down`, `restart`, or a plain `up`.
+
 - Never print a plaintext password, password hash, cookie, private key, API token, any env file content, or unrelated host data. In practice:
   - Never open an env file with `cat`, `grep`, `head`, `diff`, `source`, or an editor. Copy it with `kgn21_backup`.
   - Never print a Compose file. Read Compose facts with the facts pipeline and file positions with `kgn21_tools compose-locate`, which prints line numbers only. Change Compose files only with the commands in steps 9 and 11.
@@ -144,6 +145,7 @@ Note these down for the report, and append the named values to `vars.sh`.
 2. Whether Docker Compose runs it: `command docker compose version` reports v2 or later (v5 is fine). Read the container's Compose labels, one per command, with the label template from the rules, and append them: `com.docker.compose.project` as `PROJECT`, `com.docker.compose.service` as `SERVICE`, `com.docker.compose.project.working_dir` as `PROJECT_DIR`, `com.docker.compose.project.config_files` as `COMPOSE_FILES` (comma-separated, in order), `com.docker.compose.project.environment_file` as `ENV_FILES` (comma-separated, often empty), and `com.docker.compose.config-hash` as `CONFIG_HASH`. `command docker compose ls --all --filter name="${PROJECT:?}"` must list the project with the same config files. Then define the Compose helper, as described after this list.
 
    If Compose doesn't run the service, or a UI such as Portainer manages the stack, note that and skip the Compose parts: the helper, items 4 and 5 below, and the Compose and env files in step 5. Go on through step 7, then stop at step 8 with an incomplete report; changing the image and the mount needs the owner.
+
 3. The current image: `command docker inspect --format '{{.Config.Image}}' "$CONTAINER"` (append `PREV_IMAGE_REF`) and `command docker inspect --format '{{.Image}}' "$CONTAINER"` (append `PREV_IMAGE_ID`). For `PREV_IMAGE_ID`, read `{{json .RepoDigests}}` and the `org.opencontainers.image.revision` label with `command docker image inspect`.
 4. The Compose facts and files. Run the facts pipeline for the service:
 
@@ -152,6 +154,7 @@ Note these down for the report, and append the named values to `vars.sh`.
    ```
 
    Note the image, the build context, the `env_file` paths, the ports, the volumes, and the networks. Then run `kgn21_tools compose-locate --service "${SERVICE:?}" < <file>` for each config file. Append the one file that says `edit here: yes` as `EDIT_FILE`. If no file or more than one says so, stop and ask the owner. Then run `kgn21_compose config --hash "${SERVICE:?}" 2>/dev/null` and record whether its hash equals `CONFIG_HASH`; step 9 depends on it.
+
 5. If `PROJECT_DIR` is a git checkout, run only `command git -C "$PROJECT_DIR" rev-parse HEAD` and `command git --no-optional-locks -C "$PROJECT_DIR" status --porcelain` there. Record the revision and the changed paths, with modified tracked files apart from untracked ones. Never print file contents from that tree.
 6. Image auto-updaters, by name and count only:
    - `command docker ps --format '{{.Names}}\t{{.Image}}' | command grep -iE 'watchtower|diun|ouroboros|shepherd'`
@@ -160,6 +163,7 @@ Note these down for the report, and append the named values to `vars.sh`.
    - `command systemctl list-timers --all --no-pager | command grep -iE "docker|compose|watchtower|diun|pull|${PROJECT:?}"`
 
    Don't change anything you find. Record "not checked" for any of these you couldn't read.
+
 7. The reverse proxy: the product, whether it runs in a container or as a host service, how it reloads, and where its access logs go. For a Caddy or nginx container, `command docker inspect --format '{{.Path}} {{json .Args}}' <proxy container>` shows the main config file it loads; its `{{json .Mounts}}` shows where that file and any file it imports live on the host. Read the file that holds the app's site blocks with `kgn21_tools proxy-lines caddy < <file>` (or `nginx`), and list every site block that proxies to the app. Leave out blocks that only redirect. Append:
    - `PROXY_KIND`: `caddy` or `nginx`.
    - `PROXY_CONTAINER`: the container's name, empty for a host service.
@@ -171,6 +175,7 @@ Note these down for the report, and append the named values to `vars.sh`.
    - `PROXY_SITE_LINES`: the line number of each app site block's opening line, space-separated. That is the site address line for Caddy and the `server {` line for nginx.
 
    For a host service, use the host paths for the `_IN` values. If the proxy is managed through a UI or a hosted service such as a tunnel, or is configured through labels on the app container, or the app's site blocks are in more than one file, note that; step 7 handles it.
+
 8. The public origins: the site addresses of those blocks, for example `https://<host>`. Take them from the config; never guess. Append `SITE` (the address that answers with the site; the first one if several do) and, if other addresses serve the app too, `OTHER_SITES` (space-separated). Steps 7 and 10 check each of them.
 9. Published ports: `command docker inspect --format '{{json .HostConfig.PortBindings}}' "$CONTAINER"`. Append the whole value as `PREV_PORTS` and the host port as `APP_PORT`. An empty `HostIp` or `0.0.0.0` means every interface. If the port is published beyond loopback, check whether the app answers without the proxy, from this host and from another machine if you have one:
 
@@ -179,6 +184,7 @@ Note these down for the report, and append the named values to `vars.sh`.
    ```
 
    Use the first address `command hostname -I` prints. Docker-published ports usually bypass host firewalls such as `ufw`, so a firewall rule alone doesn't prove the port is closed. Append `APP_PORT_OPEN`: `yes` if it printed 200, `no` if it didn't answer, or `untested`. Record exactly what you tested.
+
 10. Every mount, with its mode: `command docker inspect --format '{{json .Mounts}}' "$CONTAINER"`.
 11. The portfolio file: the host path of the mount whose destination is `/data/portfolio.yml` (append `PORTFOLIO_FILE`), its size and mtime (`command stat`), and its SHA-256 (`command sha256sum`; append `PORTFOLIO_SHA`). Don't print its content. Compare with what the container reads: `command docker exec "$CONTAINER" sha256sum /data/portfolio.yml`. A different hash means the container serves an older copy, which a rename-based save on the host causes; record it.
 12. Existing backups of the portfolio file or the deployment, such as `portfolio.yml.bak*`, from `command ls -lA`. Note them and leave them alone.
@@ -314,6 +320,7 @@ The rule must show right after each site block's opening line. Check the `.new` 
   ```
 
   For Caddy, end the `docker run` with `caddy validate --adapter caddyfile --config "${PROXY_MAIN_IN:?}"` instead of `nginx -t`.
+
 - A host service: the validator reads the live files. Copy the `.new` file into place as below, run `command nginx -t` or `command caddy validate --adapter caddyfile --config "${PROXY_MAIN_IN:?}"` with the same output handling, and if it fails, copy `PROXY_BACKUP` back with `command cp -p` before anything else. Nothing reloads in between, so the running config doesn't change.
 
 If an error is inside the rule's lines (the `proxy-lines` output of the `.new` file numbers them), fix the rule file and rebuild the `.new` file. If an error is elsewhere or has no location (a missing certificate, an import, an upstream that doesn't resolve), stop and ask the owner.
@@ -429,6 +436,7 @@ kgn21_tools ports-same "${PREV_PORTS:?}" "$(command docker inspect --format '{{j
    ```
 
    Use the binding's `HostIp` instead of `127.0.0.1` when it's a specific address. If the app port isn't published, read the container's networks with the `.NetworkSettings.Networks` template and its port with `{{json .Config.ExposedPorts}}`, then run the check on that network: `command docker run --rm --network <network> -v "${CLONE:?}:${CLONE:?}:ro" node:22-alpine node "${CLONE:?}/apps/web/scripts/check-containment.mjs" "http://${CONTAINER:?}:<port>" --direct --expect-name "$NAME" --expect-origin "$ORIGIN"`.
+
 3. Check each public origin from a network outside the homelab, PUT probes included: `kgn21_check "$SITE" --expect-name "$NAME" --expect-origin "$ORIGIN"`, saved as `check-public.txt`, and the same for each address in `OTHER_SITES` as `check-public-2.txt` and so on. If you have no outside network, run them from this host anyway and label them "from the host, not outside". Record what each host name resolves to (`command getent hosts <host>` or `command dig +short <host>`), give the owner the exact commands with the values filled in, mark the outside check pending, and carry on to step 12.
 4. Re-hash the live portfolio file. It must still match the backup.
 
@@ -471,6 +479,7 @@ Urgent owner action: if `APP_PORT_OPEN` is `yes` and the container doesn't run `
 - Writes and file reads: <the PUT rows with a 2xx, and the GET /api/portfolio or /admin rows with a 2xx, from step 4; or "none in the counted logs">
 
 ## Inventory (no secret values; paths and names are fine)
+
 - Project, service, container:
 - Compose config files in order, working directory, env files, the file edited:
 - Compose config hash matches the container: yes | no
@@ -485,30 +494,38 @@ Urgent owner action: if `APP_PORT_OPEN` is `yes` and the container doesn't run `
 - Existing backups:
 
 ## Prior exposure
+
 The exposure counter's output for each log source, the earliest date each covers, whether its counts are complete, and a note that entries from this run's start on aren't counted.
 
 ## Backup
+
 - Directory:
 - Files and SHA-256:
 - Portfolio copy hash matches the live file: yes | no
 
 ## Check runs
+
 For each run (before, proxy, direct, public, rollback, and the -2, -3 runs): the command, the exit code, and the full output.
 
 ## Image
+
 - TARGET_IMAGE:
 - Pulled or built; image ID; revision label; matches the clone commit:
 
 ## Compose diff
+
 The compose-diff output.
 
 ## Proxy rule
+
 The exact rule, where it went, and the validate-check output.
 
 ## Rollback commands
+
 The exact commands that put back the previous Compose file and container, and the previous proxy config.
 
 ## Open items
+
 - App port reachable without the proxy:
 - Image auto-updaters:
 - The Compose file keeps a build: key (if it does): never run docker compose build or up --build for this project.

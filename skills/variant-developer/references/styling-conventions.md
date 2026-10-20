@@ -85,10 +85,14 @@ Class names follow `<variant-slug>-<block>__<element>--<modifier>`.
 Examples (from editorial):
 
 ```css
-.editorial-project { }
-.editorial-project__title { }
-.editorial-project__meta { }
-.editorial-project__title--featured { }
+.editorial-project {
+}
+.editorial-project__title {
+}
+.editorial-project__meta {
+}
+.editorial-project__title--featured {
+}
 ```
 
 Avoid generic class names (`.title`, `.card`) — they collide with other variants on `/variants`.
@@ -106,7 +110,9 @@ Variants use plain CSS with custom properties. No Tailwind classes inside varian
     color: #000000;
   }
   [data-variant='your-slug'] nav,
-  [data-variant='your-slug'] .editorial-toc { display: none; }
+  [data-variant='your-slug'] .editorial-toc {
+    display: none;
+  }
   [data-variant='your-slug'] a::after {
     content: ' (' attr(href) ')';
     color: #555;

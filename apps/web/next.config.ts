@@ -6,11 +6,7 @@ const config: NextConfig = {
   output: 'standalone',
   // For pnpm monorepo: include workspace files in the standalone trace.
   outputFileTracingRoot: path.resolve(process.cwd(), '..', '..'),
-  transpilePackages: [
-    '@portfolio/schema',
-    '@portfolio/kit',
-    '@portfolio/variant-editorial',
-  ],
+  transpilePackages: ['@portfolio/schema', '@portfolio/kit', '@portfolio/variant-editorial'],
 };
 
 export default config;
