@@ -314,6 +314,24 @@ test.describe('the document', () => {
     ]);
   });
 
+  test('nesting past 64 levels, refused before any parser reads it', async () => {
+    const dir = sourceDir({ 'portfolio.json': `${'['.repeat(100_000)}${']'.repeat(100_000)}` });
+    const fatal = await expectRefusal(readOnly({ PORTFOLIO_SOURCE_DIR: dir }));
+    expect(fatal.map((e) => [e.code, e.issueCode, e.line, e.column])).toEqual([
+      ['document_syntax', 'TOO_DEEP', 1, 65],
+    ]);
+  });
+
+  test('a document over 1 MiB, refused where it passes the limit', async () => {
+    const dir = sourceDir({
+      'portfolio.yml': `${HEAD}identity:\n  name: Rowan Fixture\n# ${'x'.repeat(1024 * 1024)}\n`,
+    });
+    const fatal = await expectRefusal(readOnly({ PORTFOLIO_SOURCE_DIR: dir }));
+    expect(fatal.map((e) => [e.code, e.issueCode, e.line])).toEqual([
+      ['document_syntax', 'TOO_LARGE', 6],
+    ]);
+  });
+
   test('a YAML alias, refused where it appears', async () => {
     const dir = sourceDir({
       'portfolio.yml': `${HEAD}identity:\n  name: &canary-anchor Rowan Fixture\nmeta:\n  title: *canary-anchor\n`,

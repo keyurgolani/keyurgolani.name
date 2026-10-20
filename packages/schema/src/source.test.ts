@@ -1,6 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { detectFormat, parseSource, toPointer, type ParsedSource } from './source';
+import {
+  detectFormat,
+  DOCUMENT_MAX_BYTES,
+  DOCUMENT_MAX_DEPTH,
+  parseSource,
+  toPointer,
+  type ParsedSource,
+} from './source';
 
 function problems(result: ParsedSource) {
   assert.equal(result.ok, false, 'expected the source to be refused');
@@ -167,11 +174,50 @@ test('JSON must pass JSON.parse, and every syntax error is located', () => {
   }
 });
 
-test('deeply nested JSON is scanned without recursion', () => {
-  const depth = 20_000;
-  assert.deepEqual(problems(parseSource(`${'['.repeat(depth)}1,${']'.repeat(depth)}`, 'json')), [
-    { code: 'JSON_SYNTAX', pointer: undefined, line: 1, column: depth + 3 },
+test('nesting past 64 levels is refused before any parser reads the text', () => {
+  const brackets = (depth: number) => `${'['.repeat(depth)}${']'.repeat(depth)}`;
+  const blocks = (depth: number) =>
+    Array.from({ length: depth }, (_, i) => `${' '.repeat(i)}k${i}:`).join('\n');
+  const tooDeep = (line: number, column: number) => [
+    { code: 'TOO_DEEP', pointer: undefined, line, column },
+  ];
+
+  assert.deepEqual(DOCUMENT_MAX_DEPTH, 64);
+  assert.deepEqual(data(parseSource(brackets(64), 'json')), JSON.parse(brackets(64)));
+  assert.deepEqual(problems(parseSource(brackets(65), 'json')), tooDeep(1, 65));
+  // Brackets inside a string aren't nesting.
+  assert.equal(parseSource(`{"a": "${'['.repeat(100)}"}`, 'json').ok, true);
+
+  assert.equal(parseSource(brackets(64), 'yaml').ok, true);
+  assert.deepEqual(problems(parseSource(brackets(65), 'yaml')), tooDeep(1, 65));
+  assert.equal(parseSource(blocks(64), 'yaml').ok, true);
+  assert.deepEqual(problems(parseSource(blocks(65), 'yaml')), tooDeep(65, 65));
+  // Brackets in a plain scalar or a comment aren't nesting either.
+  assert.equal(parseSource(`a: x${'['.repeat(100)} # ${'{'.repeat(100)}\n`, 'yaml').ok, true);
+
+  // Far deeper text, which once aborted the process on Node 22, is refused the same way.
+  for (const format of ['json', 'yaml'] as const) {
+    assert.deepEqual(problems(parseSource(`${'['.repeat(200_000)}1`, format)), tooDeep(1, 65));
+  }
+});
+
+test('a document over 1 MiB is refused where it passes the limit', () => {
+  assert.equal(DOCUMENT_MAX_BYTES, 1024 * 1024);
+  const tooLarge = (line: number, column: number) => [
+    { code: 'TOO_LARGE', pointer: undefined, line, column },
+  ];
+  // Exactly the limit is fine.
+  assert.deepEqual(data(parseSource(`#${'x'.repeat(DOCUMENT_MAX_BYTES - 1)}`, 'yaml')), null);
+  const lines = `${'x'.repeat(1023)}\n`.repeat(1024);
+  assert.deepEqual(problems(parseSource(`${lines}tail\n`, 'yaml')), tooLarge(1025, 1));
+  assert.deepEqual(problems(parseSource(`"${'x'.repeat(DOCUMENT_MAX_BYTES)}"`, 'json')), [
+    { code: 'TOO_LARGE', pointer: undefined, line: 1, column: DOCUMENT_MAX_BYTES + 1 },
   ]);
+  // Counted in UTF-8 bytes: each emoji is two UTF-16 units and four bytes.
+  const emoji = `#${'\u{1F600}'.repeat(DOCUMENT_MAX_BYTES / 4)}`;
+  assert.deepEqual(problems(parseSource(emoji, 'yaml')), tooLarge(1, emoji.length - 1));
+  const result = parseSource(`${lines}tail\n`, 'yaml');
+  if (!result.ok) assert.ok(!result.problems[0]!.message.includes('xxx'));
 });
 
 test('a duplicate key in JSON is refused even though JSON.parse would keep the last', () => {
