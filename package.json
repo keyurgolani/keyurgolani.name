@@ -15,12 +15,13 @@
     "format:check": "prettier --check .",
     "lint": "eslint --max-warnings=0 .",
     "typecheck": "pnpm -r typecheck",
-    "test": "pnpm -r test",
+    "test": "pnpm -r test && pnpm test:scripts",
     "clean": "pnpm -r exec rm -rf dist .next node_modules tsconfig.tsbuildinfo && rm -rf node_modules",
     "new-variant": "node skills/variant-developer/scripts/new-variant.mjs",
     "check-coverage": "node skills/variant-developer/scripts/check-coverage.mjs",
     "check:skills": "node skills/scripts/sync-checks.mjs",
-    "postinstall": "node apps/web/scripts/build-registry.mjs"
+    "postinstall": "node apps/web/scripts/build-registry.mjs",
+    "test:scripts": "node --test 'ci/**/*.test.mjs' 'skills/**/*.test.mjs'"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
