@@ -3,6 +3,7 @@ import type { ContentExtension } from '@portfolio/schema';
 import type { Profile } from './capabilities';
 import { openDocumentsCatalog } from './catalog-documents';
 import type { CatalogReader } from './catalog-port';
+import { openSampleCatalog } from './catalog-sample';
 import type { ConfigIssue, DeploymentConfig } from './config';
 import type { CatalogAdapter } from './config-summary';
 import type { DeploymentState } from './config-store';
@@ -11,12 +12,12 @@ import { listOperations } from './operations';
 import type { Session } from './session';
 
 // The composition root (#1, item 14). It builds what one profile needs and
-// nothing else: read-only and demo get their catalog adapter, and only the
-// owner branch loads owner code, through import(). startup.ts imports this
-// module in every profile, so check:deps fails any import of owner code
-// here that isn't an import(). Around that it runs the named startup
-// requirements, the hook #2, #3, and #4 implement their startup checks
-// against.
+// nothing else: read-only gets the documents adapter, demo the bundled
+// sample, and only the owner branch loads owner code, through import().
+// startup.ts imports this module in every profile, so check:deps fails any
+// import of owner code here that isn't an import(). Around that it runs the
+// named startup requirements, the hook #2, #3, and #4 implement their
+// startup checks against.
 
 /** What an auth provider binds into the dispatcher (#2). */
 export interface AuthProvider {
@@ -170,20 +171,15 @@ export async function compose(input: CompositionInput): Promise<Composition> {
   if (failed(early.issues)) return { ok: false, issues: early.issues };
 
   switch (config.profile) {
-    case 'demo':
-      return {
-        ok: false,
-        issues: [
-          ...early.issues,
-          {
-            severity: 'fatal',
-            key: 'PORTFOLIO_PROFILE',
-            code: 'profile_unavailable',
-            message:
-              'The demo profile is not available in this build yet. Set PORTFOLIO_PROFILE=read-only.',
-          },
-        ],
-      };
+    case 'demo': {
+      const sample = openSampleCatalog({
+        examplePath: input.examplePath,
+        extensions: input.extensions,
+      });
+      const issues = [...early.issues, ...sample.issues];
+      if (!sample.ok) return { ok: false, issues };
+      return built(config, sample.reader, NO_BINDINGS, issues, early.degraded);
+    }
     case 'read-only': {
       const documents = openDocuments(input);
       const issues = [...early.issues, ...documents.issues];

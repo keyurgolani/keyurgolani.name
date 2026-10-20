@@ -6,7 +6,9 @@
 // `app` is worker-scoped: every distinct `appOptions` gets its own server,
 // source directory, and port. Every request the browser makes outside the app's
 // origin fails, and the blocked URLs are attached to the test. A blocked
-// request to a host outside EXPECTED_BLOCKED_HOSTS fails the test.
+// request to a host outside EXPECTED_BLOCKED_HOSTS fails the test. The server
+// itself reaches no host outside the app: any attempt it makes while a test
+// runs fails that test.
 import path from 'node:path';
 import { test as base } from '@playwright/test';
 import { startApp } from './app-server.mjs';
@@ -14,12 +16,15 @@ import { startApp } from './app-server.mjs';
 export { expect } from '@playwright/test';
 
 // Outside requests a page may make today, which stay blocked: third-party
-// fonts until #6 self-hosts them, and the fixtures' own .test hosts.
+// fonts until #6 self-hosts them, and the fixtures' own .test hosts. A spec
+// adds the hosts its own content names with the `blockedHosts` option.
 const EXPECTED_BLOCKED_HOSTS = new Set(['fonts.googleapis.com', 'fonts.gstatic.com']);
 
-function expectedBlock(url: string): boolean {
+function expectedBlock(url: string, extra: readonly string[]): boolean {
   const { hostname } = new URL(url);
-  return EXPECTED_BLOCKED_HOSTS.has(hostname) || hostname.endsWith('.test');
+  return (
+    EXPECTED_BLOCKED_HOSTS.has(hostname) || extra.includes(hostname) || hostname.endsWith('.test')
+  );
 }
 
 export interface AppOptions {
@@ -36,11 +41,17 @@ export interface App {
   sourceDir: string;
   log: string;
   env: Record<string, string>;
+  /** Every outside host the server tried to reach, in order (`host:port`). None got out. */
+  egress: () => string[];
 }
 
 interface TestFixtures {
+  /** More hosts a page may try to reach, such as the bundled sample's image host. */
+  blockedHosts: readonly string[];
   /** URLs the browser tried to fetch outside the app; all were aborted. */
   blockedRequests: string[];
+  /** Fails the test when the server tried to reach a host outside the app during it. */
+  serverEgress: void;
 }
 
 interface WorkerFixtures {
@@ -52,6 +63,7 @@ interface WorkerFixtures {
 // here because the React Hooks lint rule mistakes `use(...)` for React's use().
 export const test = base.extend<TestFixtures, WorkerFixtures>({
   appOptions: [{}, { scope: 'worker', option: true }],
+  blockedHosts: [[], { option: true }],
 
   app: [
     async ({ appOptions }, provide, workerInfo) => {
@@ -71,7 +83,7 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
   },
 
   blockedRequests: [
-    async ({ context, app }, provide, testInfo) => {
+    async ({ context, app, blockedHosts }, provide, testInfo) => {
       const blocked: string[] = [];
       const appHost = new URL(app.origin).host;
       await context.route('**/*', (route) => {
@@ -94,14 +106,37 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
           contentType: 'text/plain',
         });
       }
-      const unexpected = [...new Set(blocked.filter((url) => !expectedBlock(url)))];
+      const unexpected = [...new Set(blocked.filter((url) => !expectedBlock(url, blockedHosts)))];
       if (unexpected.length > 0) {
         throw new Error(
           [
             `The page requested ${unexpected.length} URL(s) outside the app: ${unexpected.join(', ')}`,
             '',
-            'Expected: only the app, third-party fonts, and .test fixture hosts',
+            "Expected: only the app, third-party fonts, .test fixture hosts, and the spec's blockedHosts",
             `Received: ${unexpected.join(', ')}`,
+          ].join('\n'),
+        );
+      }
+    },
+    { auto: true },
+  ],
+
+  serverEgress: [
+    async ({ app }, provide, testInfo) => {
+      const before = app.egress().length;
+      await provide();
+      const attempts = app.egress().slice(before);
+      if (attempts.length > 0) {
+        await testInfo.attach('server-egress.txt', {
+          body: `${attempts.join('\n')}\n`,
+          contentType: 'text/plain',
+        });
+        throw new Error(
+          [
+            `The server tried to reach ${attempts.length} host(s) outside the app: ${[...new Set(attempts)].join(', ')}`,
+            '',
+            'Expected: no outbound request from the server under test',
+            `Received: ${attempts.join(', ')}`,
           ].join('\n'),
         );
       }

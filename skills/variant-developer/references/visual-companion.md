@@ -194,7 +194,7 @@ skills/variant-developer/scripts/visual-companion/start.sh \
   --mode preview --variant <slug>
 ```
 
-This runs `pnpm --filter @portfolio/web dev`. The page shows whatever `config/portfolio.yml` selects, so first copy `portfolio.example.yml` there if `config/` is empty and set `variant: <slug>`. Once the dev server is up, tell the user to visit `http://localhost:3000/`.
+This runs `pnpm --filter @portfolio/web dev` with `PORTFOLIO_PROFILE=demo`, which renders the bundled sample in any registered variant. Once the dev server is up, tell the user to visit `http://localhost:3000/sample?variant=<slug>`. Add `&scheme=<id>` or `&typography=<id>` for a color scheme or typography preset the variant declares; an unknown variant is a 404.
 
 ### Matrix screenshots (optional)
 
@@ -203,7 +203,7 @@ skills/variant-developer/scripts/visual-companion/start.sh \
   --mode preview --variant <slug> --matrix
 ```
 
-This launches the dev server and, after it responds, runs `preview-matrix.mjs` to capture every theme for the scheme and typography `config/portfolio.yml` selects, into `<repo-root>/.variant-preview/<slug>/`. It stops if the page isn't rendering `<slug>`. Change `colorScheme:` or `typography:` in the file and run it again for other combinations.
+This launches the dev server and, once `/api/health` answers, runs `preview-matrix.mjs` to capture `/sample?variant=<slug>` in every theme, in the variant's default scheme and typography, into `<repo-root>/.variant-preview/<slug>/`. An unregistered slug is a 404: the script says so and exits 1, as it does when the page renders another variant or a capture fails. For other combinations, run it again against the running server with `node skills/variant-developer/scripts/visual-companion/preview-matrix.mjs <slug> --scheme <id> --typography <id>`. A scheme or preset the variant doesn't declare renders its default, and the script warns.
 
 **Requires Playwright.** If Playwright isn't installed, the script prints the install commands and exits gracefully — the rest of preview-mode still works.
 

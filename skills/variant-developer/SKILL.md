@@ -111,7 +111,7 @@ Scaffold and stand up a renderable variant that uses `FallbackSection` for every
   - Load `references/common-bugs.md` while writing this — distilled list of bugs that escape compile/audit and only show up at visual-validation time.
 - Wire theme toggle: import `useTheme` from `@portfolio/kit` and build your own toggle component in `src/primitives/theme-toggle.tsx`. Filter the rendered buttons against your `manifest.themes` so users only see modes your variant supports; always render the `system` button (it resolves to mandatory light/dark). Editorial's toggle in `packages/variant-editorial/src/primitives/theme-toggle.tsx` is the reference implementation.
 - Run `pnpm --filter @portfolio/web build:registry` to regenerate the registry **and** the per-variant CSS imports (`registry.styles.generated.ts`). The host's `apps/web/src/app/layout.tsx` imports the styles entry; without regenerating it, your variant's CSS is orphaned and the page renders as user-agent default. **This is the most common reason a freshly-scaffolded variant looks like plain HTML.**
-- Verify (Gate A from `quality-gates.md`): copy `portfolio.example.yml` to `config/portfolio.yml`, set `variant: <slug>` there, run `pnpm dev`, and open `http://localhost:3000/`. Every section should render via `FallbackSection` _with your variant's tokens applied_ (paper color, font family, theme toggle visible). If you see plain black-on-white text, the styles entry didn't pick up — check `registry.styles.generated.ts`.
+- Verify (Gate A from `quality-gates.md`): run `skills/variant-developer/scripts/visual-companion/start.sh --mode preview --variant <slug>` and open `http://localhost:3000/sample?variant=<slug>`. Every section should render via `FallbackSection` _with your variant's tokens applied_ (paper color, font family, theme toggle visible). If you see plain black-on-white text, the styles entry didn't pick up — check `registry.styles.generated.ts`.
 
 ### Wave 1.5 — Kit hoists (when porting from a reference)
 
@@ -149,7 +149,7 @@ For each cluster:
 3. Implement renderers in `src/renderers/<kind>.tsx` (or whatever file structure your variant uses; consistency matters more than the path).
 4. Update `src/section.tsx` (the section dispatch) to route the new renderers; remove the cluster's kinds from the `FallbackSection` fallback path.
 5. Before closing the cluster, run `node skills/variant-developer/scripts/kit-dedup.mjs packages/variant-<slug>`. Resolve every candidate either by **hoisting** the helper to `packages/kit/src/<topic>.ts` and importing it back, or by leaving a `// LOCAL: <reason>` comment justifying the local copy.
-6. **Visual checkpoint at end of cluster.** Render your variant at `/` against `portfolio.example.yml` AND the user's actual `portfolio.yml`, each placed in `config/portfolio.yml` with `variant: <slug>` (real-data testing surfaces bugs that example data hides — long org names, missing optional fields, non-ASCII characters). Verify each cluster's renderers display correctly. _Don't trust HTTP 200 as proof the cluster is done._
+6. **Visual checkpoint at end of cluster.** Render your variant on the bundled sample at `/sample?variant=<slug>`, with `scripts/visual-companion/start.sh --mode preview --variant <slug>` running the dev server. Verify each cluster's renderers display correctly. _Don't trust HTTP 200 as proof the cluster is done._ The sample is curated; real data surfaces bugs it hides (long org names, missing optional fields, non-ASCII characters), which Gate H checks before sign-off.
 
 Renderer quality reminders (from real-session bugs):
 
@@ -196,7 +196,7 @@ Run `references/audit-checklist.md` for the scripted gates and `references/quali
 
 These are the gates that _catch what compiles fine but looks broken_. Each one corresponds to a real bug class that escaped a previous build:
 
-- **Gate A — Visual sanity.** `pnpm dev` with `variant: <slug>` in `config/portfolio.yml`, open `/`, confirm CSS reaches the page. Catches "host CSS injection" failures.
+- **Gate A — Visual sanity.** `scripts/visual-companion/start.sh --mode preview --variant <slug>`, open `/sample?variant=<slug>`, confirm CSS reaches the page. Catches "host CSS injection" failures.
 - **Gate B — Theme × scheme × typography matrix.** ≥ 9 screenshots across the meaningful combinations. Catches contrast bugs that only surface in non-default schemes/themes.
 - **Gate C — Reduced-motion programmatic verification.** Pixel-sample, transform-diff, text-diff. Catches motion that wasn't actually disabled.
 - **Gate D — Print preview.** Verify the print stylesheet against the new sections. Catches theme-token leaks into print.
@@ -231,7 +231,7 @@ Even after the user opts in, decide each question separately. The test: **would 
 ### Modes
 
 - **Mockup-mode** (Phase 1, before code exists). Server: `scripts/visual-companion/server.cjs`, launcher: `scripts/visual-companion/start.sh --mode mockup --project-dir <repo-root>`. Agent writes HTML fragments to the watched dir; user clicks options; clicks land in `state_dir/events`.
-- **Preview-mode** (Phases 2–3, code exists). Launcher: `scripts/visual-companion/start.sh --mode preview --variant <slug>`. Starts `pnpm --filter @portfolio/web dev`. The user watches HMR live at `/`, with `variant: <slug>` set in `config/portfolio.yml`. With `--matrix`, also runs `preview-matrix.mjs` to capture screenshots across themes for the scheme and typography that file selects (requires Playwright; fails gracefully otherwise).
+- **Preview-mode** (Phases 2–3, code exists). Launcher: `scripts/visual-companion/start.sh --mode preview --variant <slug>`. Starts `pnpm --filter @portfolio/web dev` under `PORTFOLIO_PROFILE=demo`. The user watches HMR live at `/sample?variant=<slug>`, on the bundled sample. With `--matrix`, also runs `preview-matrix.mjs` to capture screenshots across themes, in the scheme and typography its `--scheme` and `--typography` flags pick (requires Playwright; fails gracefully otherwise).
 
 See `references/visual-companion.md` for the full guide — class hooks, file naming, events file format, session lifecycle.
 
@@ -241,7 +241,7 @@ Environment-specific facts that bite agents who skip the references. For the ful
 
 ### Build / registry
 
-- The variant registry is **auto-generated**. If the dev server says your `variant:` names no registered variant, run `pnpm --filter @portfolio/web build:registry` — the registry isn't re-run on every dev reload.
+- The variant registry is **auto-generated**. If `/sample?variant=<slug>` is a 404 for your new variant, run `pnpm --filter @portfolio/web build:registry` — the registry isn't re-run on every dev reload.
 - The build script also generates `apps/web/src/lib/registry.styles.generated.ts` — a side-effect import file that pulls every variant's `styles.css`. The host layout imports the generated file. **If your variant's styles don't render, regenerate this file first.**
 
 ### Manifest
@@ -288,7 +288,7 @@ Environment-specific facts that bite agents who skip the references. For the ful
 When all gates pass:
 
 - Push `DESIGN.md` and the variant package on the same branch as the PR. The contract and the implementation must travel together.
-- Tell the user how to set `variant: <slug>` in their `config/portfolio.yml` to test the variant against their real data, not just `portfolio.example.yml`.
+- Tell the user how to see the variant: `scripts/visual-companion/start.sh --mode preview --variant <slug>`, then `/sample?variant=<slug>`. It renders the bundled sample; the host renders their own portfolio in the variant once the site document selects one (#4).
 - Don't run `pnpm dev` for them unless they ask. Their dev environment is theirs to control.
 
 That's the skill. Design, implement in waves, audit, hand off, stop.

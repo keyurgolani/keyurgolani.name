@@ -471,7 +471,7 @@ test('the Studio transport is served in every profile', () => {
   for (const profile of PROFILES) assert.equal(serves(profile, '/api/studio/[name]'), true);
 });
 
-test('what every profile serves at the close of slice 2', () => {
+test('what every profile serves at the close of slice 3', () => {
   const served = (profile: Profile) =>
     PATTERNS.filter((pattern) => serves(profile, pattern as RoutePattern));
   const everywhere = [
@@ -484,7 +484,7 @@ test('what every profile serves at the close of slice 2', () => {
   ];
   assert.deepEqual(served('owner'), [...everywhere, '/feed.xml'].sort());
   assert.deepEqual(served('read-only'), [...everywhere, '/feed.xml'].sort());
-  assert.deepEqual(served('demo'), everywhere);
+  assert.deepEqual(served('demo'), [...everywhere, '/sample'].sort());
 });
 
 test('each table route resolves the way its capability says, in every profile', () => {

@@ -6,9 +6,10 @@
 #       Starts a mockup-mode HTTP server (server.cjs).
 #
 #   start.sh --mode preview --variant <slug> [--matrix]
-#       Starts the apps/web dev server, which renders the variant that
-#       config/portfolio.yml selects at /. Set `variant: <slug>` there.
-#       With --matrix, also runs preview-matrix.mjs (requires Playwright).
+#       Starts the apps/web dev server under the demo profile, which renders
+#       the bundled sample in any registered variant at
+#       /sample?variant=<slug>. With --matrix, also runs preview-matrix.mjs
+#       (requires Playwright).
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -54,15 +55,18 @@ case "$MODE" in
       echo "error: --variant <slug> required for preview mode" >&2
       exit 2
     fi
-    echo "Starting dev server. Set 'variant: $VARIANT' in config/portfolio.yml"
-    echo "(copy portfolio.example.yml there first if config/ is empty). Then visit:"
-    echo "  http://localhost:3000/"
+    # next dev listens on $PORT when it is set.
+    BASE="http://localhost:${PORT:-3000}"
+    URL="$BASE/sample?variant=$VARIANT"
+    echo "Starting the dev server under the demo profile, on the bundled sample. Visit:"
+    echo "  $URL"
     if [ "$MATRIX" = "1" ]; then
       # Best-effort matrix capture; runs in background once server is up.
       (
-        # Wait until the dev server responds
+        # Wait until the dev server answers its health check. The page itself
+        # is a 404 for an unregistered slug, which preview-matrix.mjs reports.
         for i in $(seq 1 60); do
-          if curl -sf "http://localhost:3000/" >/dev/null 2>&1; then
+          if curl -sf "$BASE/api/health" >/dev/null 2>&1; then
             break
           fi
           sleep 1
@@ -71,6 +75,10 @@ case "$MODE" in
       ) &
     fi
     cd "$ROOT"
+    # demo serves /sample from the bundled sample. It reads no source
+    # directory, so the empty value overrides the one apps/web/.env.development
+    # sets for read-only.
+    export PORTFOLIO_PROFILE=demo PORTFOLIO_SOURCE_DIR=
     exec pnpm --filter @portfolio/web dev
     ;;
   *)

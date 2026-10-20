@@ -1,0 +1,106 @@
+import 'server-only';
+import { createHash } from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
+import {
+  detectFormat,
+  parsePortfolio,
+  type ContentExtension,
+  type DocumentWarning,
+  type Portfolio,
+} from '@portfolio/schema';
+import type { CatalogReader, LiveRevision } from './catalog-port';
+import type { ConfigIssue } from './config';
+import { deepFreeze } from './freeze';
+
+// The sample adapter (#1, item 16): the CatalogReader for `demo`. It reads
+// the bundled portfolio.example.yml once at startup, which the standalone
+// output ships through outputFileTracingIncludes, and freezes it. It never
+// reads PORTFOLIO_SOURCE_DIR.
+
+export interface SampleCatalogOptions {
+  /** The bundled example document. */
+  readonly examplePath: string;
+  /** The content extensions the sample is checked against, as documents are. Others warn. */
+  readonly extensions?: readonly ContentExtension[];
+}
+
+export type OpenSampleResult =
+  | { readonly ok: true; readonly reader: CatalogReader; readonly issues: ConfigIssue[] }
+  | { readonly ok: false; readonly issues: ConfigIssue[] };
+
+// A broken sample is a broken build, not a configuration mistake. The issue
+// names the profile that needs it.
+const KEY = 'PORTFOLIO_PROFILE';
+
+export function openSampleCatalog({
+  examplePath,
+  extensions,
+}: SampleCatalogOptions): OpenSampleResult {
+  const file = path.basename(examplePath);
+  let bytes: Buffer;
+  try {
+    bytes = fs.readFileSync(/*turbopackIgnore: true*/ examplePath);
+  } catch {
+    return {
+      ok: false,
+      issues: [
+        fatal(
+          'sample_missing',
+          'The demo profile renders the bundled sample, and this build has none.',
+          file,
+        ),
+      ],
+    };
+  }
+  const parsed = parsePortfolio(bytes.toString('utf8'), detectFormat(file), { extensions });
+  if (!parsed.ok) {
+    return {
+      ok: false,
+      issues: [
+        fatal(
+          'sample_invalid',
+          "The bundled sample doesn't validate, so this build is broken.",
+          file,
+        ),
+      ],
+    };
+  }
+  const live: LiveRevision = Object.freeze({
+    revisionId: `sample-${createHash('sha256').update(bytes).digest('hex').slice(0, 12)}`,
+    unit: Object.freeze({ portfolio: deepFreeze(withoutLiveData(parsed.value)) }),
+  });
+  return {
+    ok: true,
+    issues: parsed.warnings.map((warning) => warningIssue(warning, file)),
+    reader: Object.freeze({ getLive: async () => live }),
+  };
+}
+
+/**
+ * The sample without its `github` sections. Until #10 gives renderers
+ * snapshot data, a github section fetches a live account from
+ * api.github.com on every render, so the public demo would show someone's
+ * real repositories and depend on an outside host. demo serves only the
+ * bundled sample, so it drops them.
+ */
+function withoutLiveData(portfolio: Portfolio): Portfolio {
+  return { ...portfolio, sections: portfolio.sections.filter(({ kind }) => kind !== 'github') };
+}
+
+function fatal(code: string, message: string, file: string): ConfigIssue {
+  return { severity: 'fatal', key: KEY, code, message, file };
+}
+
+/** A warning the sample's parse raised, logged as the documents adapter logs one. */
+function warningIssue(warning: DocumentWarning, file: string): ConfigIssue {
+  return {
+    severity: 'warning',
+    key: KEY,
+    code: warning.code,
+    message: warning.message,
+    file,
+    path: warning.pointer,
+    ...(warning.line !== undefined ? { line: warning.line, column: warning.column } : {}),
+  };
+}

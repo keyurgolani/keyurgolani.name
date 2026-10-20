@@ -67,6 +67,7 @@ async function expectRefusal(
   const run = await runAppToExit({ env, timeoutMs: 15_000, readDelayMs });
   expect(run.exited, `the server kept running:\n${run.output}`).toBe(true);
   expect(run.code, run.output).toBe(1);
+  expect(run.egress, 'requests the server tried to send out').toEqual([]);
   for (const value of never) expect(run.output).not.toContain(value);
   const fatal = run.output
     .split('\n')
@@ -183,6 +184,15 @@ test.describe('in production', () => {
       { never: ['canary-token'] },
     );
     expect(keysAndCodes(fatal)).toEqual(['GITHUB_TOKEN:not_in_profile']);
+  });
+
+  test('a source directory under demo, which renders only the bundled sample', async () => {
+    const fatal = await expectRefusal({
+      PORTFOLIO_PROFILE: 'demo',
+      PORTFOLIO_ORIGIN: DEMO_ORIGIN,
+      PORTFOLIO_SOURCE_DIR: fixtureDir(),
+    });
+    expect(keysAndCodes(fatal)).toEqual(['PORTFOLIO_SOURCE_DIR:not_in_profile']);
   });
 
   test('GITHUB_TOKEN under read-only', async () => {
@@ -408,10 +418,5 @@ test.describe('profiles this build cannot start', () => {
   test('owner, with no authentication provider registered', async () => {
     const fatal = await expectRefusal(readOnly({ PORTFOLIO_PROFILE: 'owner' }));
     expect(keysAndCodes(fatal)).toEqual(['PORTFOLIO_PROFILE:auth_provider_missing']);
-  });
-
-  test('demo, until its bundled-sample catalog ships', async () => {
-    const fatal = await expectRefusal({ PORTFOLIO_PROFILE: 'demo', PORTFOLIO_ORIGIN: DEMO_ORIGIN });
-    expect(keysAndCodes(fatal)).toEqual(['PORTFOLIO_PROFILE:profile_unavailable']);
   });
 });

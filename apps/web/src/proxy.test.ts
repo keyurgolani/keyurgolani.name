@@ -7,7 +7,8 @@ import { readDeploymentConfig } from './server/config';
 import { setDeploymentState } from './server/config-store';
 
 // proxy.ts: 404 early for what the profile doesn't serve, a fresh request ID
-// on everything else, and 503 before register() has stored the deployment.
+// on everything else, noindex on every demo response, and 503 before
+// register() has stored the deployment.
 
 function deploy(t: TestContext, profile: Profile): void {
   const read = readDeploymentConfig(
@@ -87,4 +88,23 @@ test("a route outside the profile's matrix is 404 early", (t) => {
   deploy(t, 'demo');
   assert.equal(proxy(request('/feed.xml')).status, 404);
   assert.equal(proxy(request('/')).headers.get('x-middleware-next'), '1');
+});
+
+test('under demo every response asks crawlers not to index it, and elsewhere none does', async (t) => {
+  const paths = ['/', '/sample', '/feed.xml', '/admin', '/_next/static/chunks/app.js', '/nowhere'];
+  for (const profile of ['owner', 'demo', 'read-only'] as const) {
+    await t.test(profile, (t) => {
+      deploy(t, profile);
+      for (const path of paths) {
+        const tag = proxy(request(path)).headers.get('x-robots-tag');
+        assert.equal(tag, profile === 'demo' ? 'noindex' : null, `${profile} ${path}`);
+      }
+    });
+  }
+});
+
+test('build assets and optimized images go through the proxy too', async () => {
+  // No matcher, so no demo response goes out without its X-Robots-Tag.
+  const exported = (await import('./proxy')) as Record<string, unknown>;
+  assert.equal(exported.config, undefined);
 });

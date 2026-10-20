@@ -1,6 +1,6 @@
 # Deployment
 
-The server runs one deployment profile, chosen by `PORTFOLIO_PROFILE` at startup. This release serves `read-only`: the portfolio in a mounted directory, with no editing surface. Run it in Docker (recommended) or on Node.
+The server runs one deployment profile, chosen by `PORTFOLIO_PROFILE` at startup. This release serves `read-only`, the portfolio in a mounted directory with no editing surface, and `demo`, the bundled sample for a product demo. Run it in Docker (recommended) or on Node.
 
 The browser editor, the variant gallery, the variant preview pages, and their write APIs are gone in every profile, `pnpm dev` included. Edit `config/portfolio.yml` instead: `pnpm dev` picks up each save, and a production server picks it up when it restarts. `pnpm dev` listens on every network interface; on a network you don't trust, run `pnpm dev --hostname 127.0.0.1`.
 
@@ -21,7 +21,7 @@ This builds a production image, mounts `config/` into the container read-only, a
 - Multi-stage build: deps → build → run.
 - Installs only production dependencies in the runtime stage.
 - Runs `pnpm build` to produce a Next.js standalone output. The build needs no deployment settings, and the image sets no `PORTFOLIO_*` defaults.
-- Reads the portfolio from `PORTFOLIO_SOURCE_DIR`, the mounted `config/`. It never renders the bundled example in production.
+- Under `read-only` and `owner`, reads the portfolio from `PORTFOLIO_SOURCE_DIR`, the mounted `config/`, and never renders the bundled example in production.
 
 ### Startup checks
 
@@ -33,11 +33,11 @@ Before it takes a request, the server validates its settings and the portfolio. 
 - a source directory that is missing or unreadable, that is a file rather than the directory holding it, that holds zero or several portfolio documents, or that holds a `portfolio.toml` (TOML is no longer read);
 - a portfolio that isn't one plain YAML or JSON document (anchors, aliases, merge keys, tags, directives, and a second document are refused), that repeats a key in a mapping, that is over 1 MiB, nests more than 64 levels deep, or holds more than 10,000 entries in one mapping or list, that doesn't declare `schemaVersion: 2`, that fails the schema, or that gives two sections the same `id`;
 - a key the schema doesn't define, anywhere but inside `extensions` (the message suggests the closest allowed key), or a `url`, `src`, or `*Url` value that isn't an `https`, `http`, `mailto`, or `tel` URL, a relative path, or a `#fragment` (image sources may also be raster `data:image` URLs);
-- in production, an origin on a reserved example domain, or the bundled sample's `identity.name`.
+- in production under `read-only` and `owner`, an origin on a reserved example domain, or the bundled sample's `identity.name`.
 
 Data under an `extensions` key, or a section whose `kind` is `<npm package name>/<name>`, belongs to a content extension. This release registers none, so the server keeps that data as written, logs a `config.warning` with code `extension_unregistered` for each use, and never renders it.
 
-`owner` and `demo` don't start yet. `owner` needs an authentication provider, and none ships; `demo` waits on its bundled-sample catalog.
+`owner` doesn't start yet: it needs an authentication provider, and none ships.
 
 ### Updating the portfolio
 
@@ -73,6 +73,16 @@ PORTFOLIO_PROFILE=read-only PORTFOLIO_ORIGIN=https://jane.name \
 ```
 
 `pnpm start` runs from `apps/web`, so the relative source directory is the repo's `config/`. The host listens on `process.env.PORT` (defaults to 3000).
+
+### Demo
+
+`demo` renders the bundled sample, `portfolio.example.yml`, and reads no source directory; setting `PORTFOLIO_SOURCE_DIR` stops a production server. Its origin is the demo hostname:
+
+```sh
+PORTFOLIO_PROFILE=demo PORTFOLIO_ORIGIN=https://demo.jane.name pnpm start
+```
+
+`/` shows the sample in the default variant, and `/sample?variant=<slug>&scheme=<id>&typography=<id>` in any registered variant, color scheme, and typography preset. An unknown variant is a 404, and an unknown scheme or preset falls back to the variant's default. Until the demo's indexing rules are settled, every response sends `X-Robots-Tag: noindex`, `robots.txt` disallows everything, the sitemap is empty, and there is no feed. Every Studio operation answers with the 404 envelope.
 
 For a process manager (PM2, systemd, etc.), wrap `pnpm start` with the same environment. The Next.js standalone output makes the container surface minimal — you don't need to ship `node_modules` to your runtime if you copy `apps/web/.next/standalone/` and the public assets.
 

@@ -5,13 +5,17 @@
 // The server sees only a fixed base environment plus what the caller passes;
 // nothing else is inherited, so GITHUB_TOKEN and other secrets never reach it.
 // By default it runs the read-only profile from the source directory, with
-// its own address as PORTFOLIO_ORIGIN; `env` overrides any of that.
+// its own address as PORTFOLIO_ORIGIN; `env` overrides any of that. Every
+// server runs behind an egress trap (egress-trap.mjs): no request leaves the
+// machine, and `egress()` lists each one it tried.
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { cpSync, createWriteStream, existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import readline from 'node:readline';
 import { fileURLToPath } from 'node:url';
+import { startEgressTrap } from './egress-trap.mjs';
 import { freePort, getText, waitFor } from './net.mjs';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -64,12 +68,14 @@ export async function startApp({ env = {}, portfolio = DEFAULT_PORTFOLIO, logFil
 
   const port = await freePort();
   const origin = `http://127.0.0.1:${port}`;
+  const trap = await startEgressTrap();
   const serverEnv = {
     ...baseEnv(root, port),
     PORTFOLIO_PROFILE: 'read-only',
     PORTFOLIO_ORIGIN: origin,
     PORTFOLIO_SOURCE_DIR: sourceDir,
     ...env,
+    ...trap.env,
   };
 
   const log = logFile ?? path.join(root, 'server.log');
@@ -80,8 +86,12 @@ export async function startApp({ env = {}, portfolio = DEFAULT_PORTFOLIO, logFil
     env: serverEnv,
     stdio: ['ignore', 'pipe', 'pipe'],
   });
-  child.stdout.pipe(out);
-  child.stderr.pipe(out);
+  // Whole lines, so stderr never splits a JSON line from stdout.
+  for (const stream of [child.stdout, child.stderr]) {
+    readline.createInterface({ input: stream, crlfDelay: Infinity }).on('line', (line) => {
+      out.write(`${line}\n`);
+    });
+  }
   let exited = false;
   child.once('exit', () => {
     exited = true;
@@ -95,6 +105,7 @@ export async function startApp({ env = {}, portfolio = DEFAULT_PORTFOLIO, logFil
       clearTimeout(timer);
     }
     out.end();
+    await trap.close();
     rmSync(root, { recursive: true, force: true });
   }
 
@@ -112,7 +123,7 @@ export async function startApp({ env = {}, portfolio = DEFAULT_PORTFOLIO, logFil
     throw error;
   }
 
-  return { origin, port, sourceDir, log, env: serverEnv, stop };
+  return { origin, port, sourceDir, log, env: serverEnv, egress: trap.attempts, stop };
 }
 
 /**
@@ -131,22 +142,27 @@ export async function startApp({ env = {}, portfolio = DEFAULT_PORTFOLIO, logFil
  * @param {Record<string, string>} options.env deployment environment
  * @param {number} [options.timeoutMs]
  * @param {number} [options.readDelayMs]
- * @returns {Promise<{ exited: boolean, code: number | null, output: string }>}
+ * @returns {Promise<{ exited: boolean, code: number | null, output: string, egress: string[] }>}
  */
 export async function runAppToExit({ env, timeoutMs = 30_000, readDelayMs = 0 }) {
   requireBuild();
   const home = mkdtempSync(path.join(tmpdir(), 'portfolio-run-'));
+  const trap = await startEgressTrap();
   const child = spawn(process.execPath, [SERVER_JS], {
     cwd: path.dirname(SERVER_JS),
-    env: { ...baseEnv(home, await freePort()), ...env },
+    env: { ...baseEnv(home, await freePort()), ...env, ...trap.env },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
-  let output = '';
-  for (const stream of [child.stdout, child.stderr]) {
+  // Each stream on its own, so stderr never splits a JSON line from stdout.
+  const output = { stdout: '', stderr: '' };
+  for (const [name, stream] of /** @type {const} */ ([
+    ['stdout', child.stdout],
+    ['stderr', child.stderr],
+  ])) {
     stream.setEncoding('utf8');
     // Paused streams stop reading once their buffer fills.
     if (readDelayMs > 0) stream.pause();
-    stream.on('data', (chunk) => (output += chunk));
+    stream.on('data', (chunk) => (output[name] += chunk));
   }
   const reader =
     readDelayMs > 0
@@ -164,6 +180,12 @@ export async function runAppToExit({ env, timeoutMs = 30_000, readDelayMs = 0 })
   const [code, signal] = await once(child, 'close');
   clearTimeout(timer);
   clearTimeout(reader);
+  await trap.close();
   rmSync(home, { recursive: true, force: true });
-  return { exited: signal === null, code, output };
+  return {
+    exited: signal === null,
+    code,
+    output: output.stdout + output.stderr,
+    egress: trap.attempts(),
+  };
 }

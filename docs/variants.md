@@ -166,7 +166,7 @@ The full audit checklist is at [`skills/variant-developer/references/audit-check
 The variant-developer skill ships a visual companion at `skills/variant-developer/scripts/visual-companion/`:
 
 - **Mockup mode** (HTTP server + file watcher) for prototyping CSS without spinning up Next.js.
-- **Preview mode** (Playwright matrix screenshots) for capturing every theme of the variant, scheme, and typography that `config/portfolio.yml` selects, with `pnpm dev` running.
+- **Preview mode** (Playwright matrix screenshots) for capturing every theme of `/sample?variant=<slug>`, with the dev server `start.sh --mode preview` runs under `PORTFOLIO_PROFILE=demo`.
 
 Start mockup mode:
 
@@ -177,7 +177,7 @@ bash skills/variant-developer/scripts/visual-companion/start.sh
 Run preview matrix:
 
 ```sh
-pnpm exec tsx skills/variant-developer/scripts/visual-companion/preview-matrix.mjs <slug>
+bash skills/variant-developer/scripts/visual-companion/start.sh --mode preview --variant <slug> --matrix
 ```
 
 Output lands in `.variant-preview/<slug>/` (gitignored).
