@@ -322,6 +322,17 @@ test.describe('the document', () => {
     ]);
   });
 
+  test('a mapping past 10,000 entries, refused before any parser composes it', async () => {
+    const keys = Array.from({ length: 10_001 }, (_, i) => `  k${i}: 1`).join('\n');
+    const dir = sourceDir({
+      'portfolio.yml': `${HEAD}identity:\n  name: Rowan Fixture\nmeta:\n${keys}\n`,
+    });
+    const fatal = await expectRefusal(readOnly({ PORTFOLIO_SOURCE_DIR: dir }));
+    expect(fatal.map((e) => [e.code, e.issueCode, e.line, e.column])).toEqual([
+      ['document_syntax', 'TOO_MANY', 7 + 10_000, 3],
+    ]);
+  });
+
   test('a document over 1 MiB, refused where it passes the limit', async () => {
     const dir = sourceDir({
       'portfolio.yml': `${HEAD}identity:\n  name: Rowan Fixture\n# ${'x'.repeat(1024 * 1024)}\n`,

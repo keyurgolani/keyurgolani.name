@@ -7,6 +7,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  truncateSync,
   utimesSync,
   writeFileSync,
 } from 'node:fs';
@@ -371,6 +372,16 @@ test('a schema error in JSON carries the line and column too', (t) => {
     [issue.code, issue.file, issue.path, issue.line, issue.column],
     ['document_invalid', 'portfolio.json', '/links/0/url', 6, 13],
   );
+});
+
+test('a document far past 1 MiB is refused where it passes the limit, without being read whole', (t) => {
+  const dir = tempDir(t);
+  const file = path.join(dir, 'portfolio.yml');
+  writeFileSync(file, `${HEAD}identity:\n  name: Rowan Test\n`);
+  // A sparse 3 GiB file: reading it whole would fail, or take gigabytes.
+  truncateSync(file, 3 * 1024 ** 3);
+  const issue = only(open(dir, 'production'));
+  assert.deepEqual([issue.code, issue.issueCode, issue.line], ['document_syntax', 'TOO_LARGE', 6]);
 });
 
 test('a JSON file must be JSON, not YAML', (t) => {

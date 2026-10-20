@@ -86,8 +86,8 @@ function resolve(schema: z.ZodTypeAny | undefined, value: unknown): z.ZodTypeAny
         current = current._def.schema as z.ZodTypeAny;
         break;
       case z.ZodFirstPartyTypeKind.ZodPipeline:
-        // The only pipelines check plain JSON first, then an extension's data
-        // schema, which is the one that names keys.
+        // Each pipeline checks the value as a whole first (as plain JSON, or
+        // for both appearance input keys), then with the schema naming its keys.
         current = current._def.out as z.ZodTypeAny;
         break;
       case z.ZodFirstPartyTypeKind.ZodUnion:
@@ -118,12 +118,19 @@ function closestOption(options: z.ZodTypeAny[], value: unknown): z.ZodTypeAny | 
 }
 
 /**
+ * Words longer than this get no hint. No key or kind the schemas allow comes
+ * close, and comparing a long word with each would cost time for nothing.
+ */
+export const HINT_MAX_LENGTH = 64;
+
+/**
  * The allowed word closest to `word`: the same apart from case, or within a
  * quarter of its length in typing mistakes, at least one (a swap counts as
- * one). Undefined when nothing is that close. A third would let
- * organisation match organizationUrl.
+ * one). Undefined when nothing is that close, or the word is longer than
+ * HINT_MAX_LENGTH. A third would let organisation match organizationUrl.
  */
 export function closestWord(word: string, allowed: readonly string[]): string | undefined {
+  if (word.length > HINT_MAX_LENGTH) return undefined;
   const lower = word.toLowerCase();
   const exact = allowed.find((candidate) => candidate.toLowerCase() === lower);
   if (exact) return exact;
@@ -131,7 +138,10 @@ export function closestWord(word: string, allowed: readonly string[]): string | 
   let best: string | undefined;
   let bestDistance = limit + 1;
   for (const candidate of allowed) {
-    const distance = editDistance(lower, candidate.toLowerCase());
+    const other = candidate.toLowerCase();
+    // The distance is at least the difference in length.
+    if (Math.abs(other.length - lower.length) >= bestDistance) continue;
+    const distance = editDistance(lower, other);
     if (distance < bestDistance) {
       best = candidate;
       bestDistance = distance;
@@ -140,22 +150,26 @@ export function closestWord(word: string, allowed: readonly string[]): string | 
   return best;
 }
 
-/** Optimal string alignment distance: insertions, deletions, substitutions, and adjacent swaps. */
+/**
+ * Optimal string alignment distance: insertions, deletions, substitutions, and
+ * adjacent swaps. A swap looks two rows back, so three rows are kept, not the
+ * whole table.
+ */
 function editDistance(a: string, b: string): number {
-  const rows = a.length + 1;
-  const columns = b.length + 1;
-  const d: number[][] = Array.from({ length: rows }, () => new Array<number>(columns).fill(0));
-  for (let i = 0; i < rows; i++) d[i]![0] = i;
-  for (let j = 0; j < columns; j++) d[0]![j] = j;
-  for (let i = 1; i < rows; i++) {
-    for (let j = 1; j < columns; j++) {
+  let twoBack = new Array<number>(b.length + 1).fill(0);
+  let previous = Array.from({ length: b.length + 1 }, (_, j) => j);
+  let current = new Array<number>(b.length + 1).fill(0);
+  for (let i = 1; i <= a.length; i++) {
+    current[0] = i;
+    for (let j = 1; j <= b.length; j++) {
       const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-      let distance = Math.min(d[i - 1]![j]! + 1, d[i]![j - 1]! + 1, d[i - 1]![j - 1]! + cost);
+      let distance = Math.min(previous[j]! + 1, current[j - 1]! + 1, previous[j - 1]! + cost);
       if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) {
-        distance = Math.min(distance, d[i - 2]![j - 2]! + 1);
+        distance = Math.min(distance, twoBack[j - 2]! + 1);
       }
-      d[i]![j] = distance;
+      current[j] = distance;
     }
+    [twoBack, previous, current] = [previous, current, twoBack];
   }
-  return d[rows - 1]![columns - 1]!;
+  return previous[b.length]!;
 }

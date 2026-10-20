@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { acmePortfolioPhotography } from './__fixtures__/acme-portfolio-photography';
 import { composeSchemas, EXTENSION_DATA, SECTION_ROUTE, type ComposedSchemas } from './compose';
 import { EXTENSION_FIELDS } from './extensions';
+import { closestWord, HINT_MAX_LENGTH } from './hints';
 import { ALL_SECTION_KINDS } from './kinds';
 import { parsePortfolio, parseSite } from './load';
 
@@ -228,4 +229,68 @@ test('extension values and variant control values take any keys', () => {
   assert.equal(parsePortfolio(portfolio, 'yaml').ok, true);
   const site = `${SITE}variantControls:\n  editorial:\n    version: 1\n    values: { columns: 3, nested: { free: true } }\n`;
   assert.equal(parseSite(site, 'yaml').ok, true);
+});
+
+/** What `run` returns, and the milliseconds it takes. */
+function timed<T>(run: () => T): [T, number] {
+  const start = performance.now();
+  const value = run();
+  return [value, performance.now() - start];
+}
+
+test('a word longer than any key or kind gets no hint, and costs no time', () => {
+  // A swap is one typing mistake, and hints stop past 64 characters.
+  assert.equal(closestWord('tilte', ['title', 'tagline']), 'title');
+  const long = 'x'.repeat(HINT_MAX_LENGTH);
+  assert.equal(HINT_MAX_LENGTH, 64);
+  assert.equal(closestWord(`${long.slice(1)}y`, [long]), long);
+  assert.equal(closestWord(`${long}y`, [`${long}z`]), undefined);
+  // Comparing a million-character kind or key with each allowed one took
+  // seconds and most of a gigabyte. (YAML keys stop at 1,024 characters, so
+  // the long key is JSON's.)
+  const million = (char: string) => char.repeat(1_000_000);
+  const json = JSON.stringify({
+    schemaVersion: 2,
+    locale: 'en',
+    direction: 'ltr',
+    identity: { name: 'Rowan Test', [million('t')]: 1 },
+  });
+  for (const [document, format, message, line, column] of [
+    [
+      `${HEAD}identity:\n  name: Rowan Test\nsections:\n  - kind: ${million('q')}\n    id: x\n`,
+      'yaml',
+      '/sections/0/kind is not a known section kind. A section kind from an extension is <npm package name>/<name>.',
+      7,
+      11,
+    ],
+    [
+      json,
+      'json',
+      `/identity/${million('t')} isn't a field here. Custom data goes under extensions, keyed by an npm package name.`,
+      1,
+      json.indexOf('"tttt') + 1,
+    ],
+  ] as const) {
+    const [result, ms] = timed(() => parsePortfolio(document, format));
+    assert.deepEqual(
+      unknownKeys(result).map(([, text, at, from]) => [text, at, from]),
+      [[message, line, column]],
+    );
+    assert.ok(ms < 1000, `${ms} ms`);
+  }
+});
+
+test('thousands of unknown keys are each located at the key, in time linear in their number', () => {
+  const keys = Array.from({ length: 9_990 }, (_, i) => `  zz${i}: 1`);
+  const document = `${HEAD}identity:\n  name: Rowan Test\n${keys.join('\n')}\n`;
+  const [result, ms] = timed(() => parsePortfolio(document, 'yaml'));
+  const found = unknownKeys(result);
+  assert.equal(found.length, 9_990);
+  assert.deepEqual(found.at(-1), [
+    'unrecognized_keys',
+    "/identity/zz9989 isn't a field here. Custom data goes under extensions, keyed by an npm package name.",
+    6 + 9_989,
+    3,
+  ]);
+  assert.ok(ms < 3000, `${ms} ms`);
 });
