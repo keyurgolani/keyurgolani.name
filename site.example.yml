@@ -24,7 +24,9 @@ appearance:
   displayMode: system
 
 # Whether visitors may change each appearance field for themselves:
-# locked or selectable, all five required
+# locked or selectable, all five required. This build checks them but doesn't
+# apply them yet: they take effect with #19, and until then every variant's
+# theme toggle lets visitors switch light and dark whatever displayMode says
 visitorControls:
   variant: locked
   designLanguage: locked
