@@ -226,7 +226,7 @@ test('an old-format document gets one issue naming its old fields and the migrat
   );
   assert.equal(
     issue.message,
-    "portfolio.yml is in the old one-file format, which this release doesn't read. Its old fields move: /variant to appearance.variant in site.yml, and /theme to appearance.displayMode in site.yml. Run pnpm config:migrate portfolio.yml to split it into portfolio.yml and site.yml.",
+    "portfolio.yml is in the old one-file format, which this release doesn't read. Its old fields move: /variant to appearance.variant in site.yml and /theme to appearance.displayMode in site.yml. Run pnpm config:migrate portfolio.yml to split it into portfolio.yml and site.yml.",
   );
   assert.ok(!issue.message.includes('canary-variant-8'));
 });

@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 import { parse as parseYaml } from 'yaml';
 import { defineContentExtension } from './extensions';
-import { SITE_SKELETON } from './legacy';
+import { SITE_SKELETON, SITE_SKELETON_JSON } from './legacy';
 import type { AppearanceSelection } from './site';
 import {
   DIAGNOSTIC_SEVERITIES,
@@ -749,12 +749,36 @@ test('an old-format document gets one legacy.document, and nothing else is repor
     legacy!.message,
     "portfolio.yml is in the old one-file format, which this release doesn't read. Its old fields move: /variant to appearance.variant in site.yml, /theme to appearance.displayMode in site.yml, /meta/url to the PORTFOLIO_ORIGIN setting, and /sections/0/hidden to sections.<id>.hidden in site.yml. Run pnpm config:migrate portfolio.yml to split it into portfolio.yml and site.yml.",
   );
-  assert.match(
+  // The run that writes repeats the --set values it would stop on.
+  assert.ok(
+    legacy!.remediation.startsWith(
+      'Run pnpm config:migrate portfolio.yml to see every change it makes, then pnpm config:migrate portfolio.yml --set site.appearance.colorScheme=<value> --set site.appearance.typography=<value> --write --out <dir> to write portfolio.yml and site.yml. A site.yml starts like this:\n',
+    ),
     legacy!.remediation,
-    /^Run pnpm config:migrate portfolio\.yml to see every change it makes, then again with --write --out <dir>/,
   );
   assert.ok(legacy!.remediation.endsWith(SITE_SKELETON));
   assert.deepEqual(result.notChecked, []);
+  // A JSON file, with a variant the catalog doesn't register.
+  const json = validatePublicationUnit(
+    {
+      portfolio: {
+        text: JSON.stringify({ identity: { name: 'R' }, variant: 'retro' }),
+        format: 'json',
+        name: 'config/portfolio.json',
+      },
+      site: { text: '{}', format: 'json', name: 'config/site.json' },
+    },
+    CONTEXT,
+  );
+  const [jsonLegacy] = json.diagnostics;
+  assert.ok(
+    jsonLegacy!.remediation.startsWith(
+      'Run pnpm config:migrate config/portfolio.json to see every change it makes, then pnpm config:migrate config/portfolio.json --set site.appearance.variant=<value> --set site.appearance.colorScheme=<value> --set site.appearance.typography=<value> --write --out <dir> to write portfolio.json and site.json. A site.json starts like this:\n',
+    ),
+    jsonLegacy!.remediation,
+  );
+  assert.ok(jsonLegacy!.remediation.endsWith(SITE_SKELETON_JSON));
+  assert.match(jsonLegacy!.message, /to split it into portfolio\.json and site\.json\.$/);
   for (const canary of ['canary-old-origin', 'canary-unknown']) {
     assert.ok(!JSON.stringify(result.diagnostics).includes(canary), canary);
   }

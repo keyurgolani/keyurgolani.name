@@ -1,7 +1,16 @@
 import type { ContentExtension } from './extensions';
 import { isSectionId, parseExtensionKind, RESERVED_SECTION_IDS } from './ids';
 import { isPlainObject } from './json';
-import { detectDocument, MIGRATE_COMMAND, SITE_SKELETON } from './legacy';
+import {
+  detectDocument,
+  legacyNeeds,
+  MIGRATE_COMMAND,
+  migratedNames,
+  shellQuote,
+  SITE_DEFAULTS,
+  SITE_SKELETON,
+  SITE_SKELETON_JSON,
+} from './legacy';
 import {
   readPortfolio,
   readSite,
@@ -45,6 +54,10 @@ export interface Diagnostic {
 export interface SourceDocument {
   readonly text: string;
   readonly format: DocumentFormat;
+  /**
+   * The file as the reader would type it, such as portfolio.yml or
+   * config/portfolio.yml. A remediation that suggests a command prints it.
+   */
   readonly name: string;
 }
 
@@ -255,7 +268,12 @@ function check(
   if (legacy.length > 0) {
     for (const document of legacy) {
       const [problem] = reads[document].problems;
-      add(document, 'legacy.document', located(problem!), legacyRemediation(unit[document].name));
+      add(
+        document,
+        'legacy.document',
+        located(problem!),
+        legacyRemediation(unit[document].name, reads[document].data, ctx.catalog),
+      );
     }
     diagnostics.sort(compareDiagnostics);
     return { pair: null, diagnostics, notChecked: [] };
@@ -442,10 +460,35 @@ function runValidator(
   return { diagnostics: records, notChecked: notChecked.map((entry) => redactSecrets(entry)) };
 }
 
-/** How to convert an old-format file, with the site document it starts from. */
-function legacyRemediation(file: string): string {
-  return `Run ${MIGRATE_COMMAND} ${file} to see every change it makes, then again with --write --out <dir> to write portfolio.yml and site.yml. A site.yml starts like this:\n${SITE_SKELETON}`;
+/**
+ * How to convert an old-format file: the dry run, then the run that writes,
+ * with the `--set` values it will stop on, and the site document it starts
+ * from, in the file's own format.
+ */
+function legacyRemediation(file: string, data: unknown = {}, catalog?: AppearanceCatalog): string {
+  const names = migratedNames(file);
+  let variants: readonly string[] | null = null;
+  try {
+    variants = catalog?.ids('variant', ANY_SELECTION) ?? null;
+  } catch {
+    variants = null;
+  }
+  const sets = legacyNeeds(data, variants)
+    .map((path) => ` --set ${path}=<value>`)
+    .join('');
+  const skeleton = names.site.endsWith('.json') ? SITE_SKELETON_JSON : SITE_SKELETON;
+  const command = `${MIGRATE_COMMAND} ${shellQuote(file)}`;
+  return `Run ${command} to see every change it makes, then ${command}${sets} --write --out <dir> to write ${names.portfolio} and ${names.site}. A ${names.site} starts like this:\n${skeleton}`;
 }
+
+/** A selection to ask the catalog for its variants, which no selection changes. */
+const ANY_SELECTION: AppearanceSelection = {
+  variant: SITE_DEFAULTS.variant,
+  designLanguage: SITE_DEFAULTS.designLanguage,
+  colorScheme: '',
+  typography: '',
+  displayMode: SITE_DEFAULTS.displayMode,
+};
 
 function problemCode(problem: DocumentProblem): DiagnosticCode {
   switch (problem.kind) {
