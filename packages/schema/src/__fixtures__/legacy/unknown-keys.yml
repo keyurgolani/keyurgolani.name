@@ -1,0 +1,30 @@
+# Mapping row: keys the old schema dropped when it read the file, including
+# ones only version 2 reads (extensions and a stat's metric). Each is listed,
+# and stops --write unless --drop-unknown. A section's lang that's a language
+# tag is the exception: version 2 reads it as it is, so it carries over.
+identity:
+  name: Rowan Unknown
+  nickname: Ro
+  extensions:
+    '@acme/portfolio-photography': { camera: Leica }
+customFooter: Made by hand
+links:
+  - { url: https://rowan.test, label: Site, rel: me }
+meta:
+  title: Rowan Unknown
+  keywords: [calm, software]
+sections:
+  - kind: lede
+    id: about
+    lang: en
+    body: Hello.
+  - kind: stats
+    id: numbers
+    items:
+      - { value: 12, label: Years, metric: tenure-years }
+  - kind: experience
+    id: work
+    items:
+      - role: Engineer
+        organization: Acme
+        period: { start: '2020', note: still there }

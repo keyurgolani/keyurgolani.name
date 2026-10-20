@@ -1,0 +1,8 @@
+# Mapping row: a variant the catalog lists becomes appearance.variant.
+identity:
+  name: Rowan Variant
+variant: kinetic-cosmos
+sections:
+  - kind: lede
+    id: about
+    body: Hello.

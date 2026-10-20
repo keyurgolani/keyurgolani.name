@@ -98,7 +98,7 @@ test('demo starts on the bundled sample, and never reads a source directory', as
   assert.deepEqual(fatalCodes(withSource), ['PORTFOLIO_SOURCE_DIR:not_in_profile']);
 });
 
-test('read-only with an old-shape document reports the document', async (t) => {
+test('read-only with an old-format document reports the document as legacy', async (t) => {
   const dir = sourceDir(t, 'identity:\n  name: Rowan Test\nvariant: kinetic-cosmos\n');
   const result = await start({
     ...PRODUCTION,
@@ -106,8 +106,9 @@ test('read-only with an old-shape document reports the document', async (t) => {
     PORTFOLIO_SOURCE_DIR: dir,
   });
   assert.equal(result.ok, false);
-  assert.deepEqual(fatalCodes(result), ['PORTFOLIO_SOURCE_DIR:document_invalid']);
-  assert.equal(result.issues[0]?.path, '/schemaVersion');
+  assert.deepEqual(fatalCodes(result), ['PORTFOLIO_SOURCE_DIR:document_legacy']);
+  assert.deepEqual([result.issues[0]?.path, result.issues[0]?.line], ['', 3]);
+  assert.match(result.issues[0]!.message, /Run pnpm config:migrate portfolio\.yml/);
 });
 
 test('warnings from the configuration reach the startup result', async (t) => {

@@ -8,6 +8,7 @@ import {
 import { closestWord, keyContext } from './hints';
 import { parseExtensionKind } from './ids';
 import { isPlainObject } from './json';
+import { detectDocument, legacyFields, legacyMessage } from './legacy';
 import type { Portfolio } from './portfolio';
 import { SCHEMA_VERSION } from './portfolio';
 import { redactedPointer, redactSecrets } from './secrets';
@@ -21,11 +22,12 @@ import { parseSource, type DocumentFormat, type Locate } from './source';
 export interface DocumentProblem {
   /**
    * `syntax`: not one plain YAML or JSON document within the size and
-   * nesting limits. `version`: no `schemaVersion: 2`, so nothing else was
-   * checked. `schema`: the data doesn't match the schema. `duplicate-id`:
-   * two sections share an id.
+   * nesting limits. `legacy`: the old one-file format, so nothing else was
+   * checked. `version`: no `schemaVersion: 2`, so nothing else was checked.
+   * `schema`: the data doesn't match the schema. `duplicate-id`: two
+   * sections share an id.
    */
-  readonly kind: 'syntax' | 'version' | 'schema' | 'duplicate-id';
+  readonly kind: 'syntax' | 'legacy' | 'version' | 'schema' | 'duplicate-id';
   /** The parser's or the schema's own code, such as DUPLICATE_KEY or invalid_type. */
   readonly code: string;
   /** JSON pointer into the document; absent for a syntax problem that isn't a node. */
@@ -60,6 +62,8 @@ export interface ParseOptions {
    * is kept as written, unchecked, with a warning.
    */
   readonly extensions?: readonly ContentExtension[];
+  /** The document's file name, such as portfolio.yml, for messages that name the file. */
+  readonly name?: string;
 }
 
 /** Parses and validates a portfolio document, section ids included. */
@@ -104,7 +108,7 @@ export function readPortfolio(
   options: ParseOptions = {},
 ): DocumentRead<Portfolio> & { readonly duplicates: readonly DocumentProblem[] } {
   const schemas = schemasFor(options.extensions);
-  const read = readWith(schemas.PortfolioSchema, schemas.registry, source, format);
+  const read = readWith(schemas.PortfolioSchema, schemas.registry, source, format, options.name);
   const checked = read.problems.every(({ kind }) => kind === 'schema');
   return {
     ...read,
@@ -120,7 +124,7 @@ export function readSite(
   options: ParseOptions = {},
 ): DocumentRead<Site> {
   const schemas = schemasFor(options.extensions);
-  return readWith(schemas.SiteSchema, schemas.registry, source, format);
+  return readWith(schemas.SiteSchema, schemas.registry, source, format, options.name);
 }
 
 function finish<T>(read: DocumentRead<T>, more: readonly DocumentProblem[]): DocumentResult<T> {
@@ -181,6 +185,7 @@ function readWith<T>(
   registry: ExtensionRegistry,
   source: string,
   format: DocumentFormat,
+  name?: string,
 ): DocumentRead<T> {
   const parsed = parseSource(source, format);
   if (!parsed.ok) {
@@ -190,6 +195,25 @@ function readWith<T>(
     };
   }
   const { data, locate } = parsed;
+
+  // The old format gets one problem naming its old fields, at the first one.
+  if (detectDocument(data) === 'legacy') {
+    const [first] = legacyFields(data);
+    return {
+      problems: redactProblems([
+        {
+          kind: 'legacy',
+          code: 'legacy_document',
+          pointer: '',
+          message: legacyMessage(data, name),
+          ...(first ? locate(first.path, 'key') : locate([])),
+        },
+      ]),
+      data,
+      locate,
+      warnings: [],
+    };
+  }
 
   // Checking the rest against version 2 would only bury this one problem.
   if (isPlainObject(data) && data.schemaVersion !== SCHEMA_VERSION) {

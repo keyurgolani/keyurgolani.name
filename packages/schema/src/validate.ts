@@ -2,6 +2,16 @@ import type { ContentExtension } from './extensions';
 import { isSectionId, parseExtensionKind, RESERVED_SECTION_IDS } from './ids';
 import { isPlainObject } from './json';
 import {
+  detectDocument,
+  legacyNeeds,
+  MIGRATE_COMMAND,
+  migratedNames,
+  shellQuote,
+  SITE_DEFAULTS,
+  SITE_SKELETON,
+  SITE_SKELETON_JSON,
+} from './legacy';
+import {
   readPortfolio,
   readSite,
   type DocumentProblem,
@@ -44,6 +54,10 @@ export interface Diagnostic {
 export interface SourceDocument {
   readonly text: string;
   readonly format: DocumentFormat;
+  /**
+   * The file as the reader would type it, such as portfolio.yml or
+   * config/portfolio.yml. A remediation that suggests a command prints it.
+   */
   readonly name: string;
 }
 
@@ -101,6 +115,7 @@ export const DIAGNOSTIC_SEVERITIES = {
   'parse.syntax': 'blocks-preview',
   'schema.invalid': 'blocks-preview',
   'schema.version': 'blocks-preview',
+  'legacy.document': 'blocks-preview',
   'site.deployment-setting': 'blocks-preview',
   'appearance.unknown': 'blocks-preview',
   'id.duplicate': 'blocks-publish',
@@ -124,6 +139,7 @@ const REMEDIATIONS: Record<DiagnosticCode, string> = {
   'schema.invalid':
     "Change the value at this pointer to what the schema expects. Data the schema doesn't define goes under extensions, keyed by an npm package name.",
   'schema.version': 'Set schemaVersion: 2. This release reads only version 2 documents.',
+  'legacy.document': legacyRemediation('<file>'),
   'site.deployment-setting':
     "Remove it. Deployment settings come from the server's environment; docs/deployment.md lists them.",
   'appearance.unknown': 'Pick an id this build registers.',
@@ -215,9 +231,12 @@ function check(
   unit: { readonly portfolio: SourceDocument; readonly site: SourceDocument },
   ctx: Context,
 ): PublicationUnitResult {
-  const options = { extensions: ctx.extensions };
-  const portfolio = readPortfolio(unit.portfolio.text, unit.portfolio.format, options);
-  const site = readSite(unit.site.text, unit.site.format, options);
+  const { extensions } = ctx;
+  const portfolio = readPortfolio(unit.portfolio.text, unit.portfolio.format, {
+    extensions,
+    name: unit.portfolio.name,
+  });
+  const site = readSite(unit.site.text, unit.site.format, { extensions, name: unit.site.name });
   const diagnostics: Diagnostic[] = [];
   const notChecked: string[] = [];
   const data = { portfolio: portfolio.data, site: site.data };
@@ -239,10 +258,59 @@ function check(
     });
   };
 
-  for (const problem of portfolio.problems)
-    add('portfolio', problemCode(problem), located(problem));
-  for (const problem of portfolio.duplicates) add('portfolio', 'id.duplicate', located(problem));
-  for (const problem of site.problems) {
+  const reads = { portfolio, site } as const;
+  const documents = ['portfolio', 'site'] as const;
+
+  // An old-format document is the one thing reported, for either slot (item 18).
+  const legacy = documents.filter((document) =>
+    reads[document].problems.some(({ kind }) => kind === 'legacy'),
+  );
+  if (legacy.length > 0) {
+    for (const document of legacy) {
+      const [problem] = reads[document].problems;
+      add(
+        document,
+        'legacy.document',
+        located(problem!),
+        legacyRemediation(unit[document].name, reads[document].data, ctx.catalog),
+      );
+    }
+    diagnostics.sort(compareDiagnostics);
+    return { pair: null, diagnostics, notChecked: [] };
+  }
+
+  // A document in the other's slot gets one problem, not one per field.
+  const swapped = {
+    portfolio: detectDocument(portfolio.data) === 'site',
+    site: detectDocument(site.data) === 'portfolio',
+  };
+  for (const document of documents) {
+    if (!swapped[document]) continue;
+    const other = document === 'portfolio' ? 'site' : 'portfolio';
+    const marker = other === 'site' ? 'appearance' : 'identity';
+    const name = unit[document].name;
+    const extension = name.includes('.') ? name.slice(name.lastIndexOf('.')) : '';
+    add(
+      document,
+      'schema.invalid',
+      {
+        pointer: '',
+        message: `${name} holds a ${other} document (it has ${marker}), not a ${document} document.`,
+        ...reads[document].locate?.([marker], 'key'),
+      },
+      `Put the ${document} document in ${name}, or rename this file to ${other}${extension}.`,
+    );
+  }
+
+  if (!swapped.portfolio) {
+    for (const problem of portfolio.problems) {
+      add('portfolio', problemCode(problem), located(problem));
+    }
+    for (const problem of portfolio.duplicates) {
+      add('portfolio', 'id.duplicate', located(problem));
+    }
+  }
+  for (const problem of swapped.site ? [] : site.problems) {
     const setting = deploymentSetting(problem);
     if (setting) {
       add(
@@ -392,10 +460,42 @@ function runValidator(
   return { diagnostics: records, notChecked: notChecked.map((entry) => redactSecrets(entry)) };
 }
 
+/**
+ * How to convert an old-format file: the dry run, then the run that writes,
+ * with the `--set` values it will stop on, and the site document it starts
+ * from, in the file's own format.
+ */
+function legacyRemediation(file: string, data: unknown = {}, catalog?: AppearanceCatalog): string {
+  const names = migratedNames(file);
+  let variants: readonly string[] | null = null;
+  try {
+    variants = catalog?.ids('variant', ANY_SELECTION) ?? null;
+  } catch {
+    variants = null;
+  }
+  const sets = legacyNeeds(data, variants)
+    .map((path) => ` --set ${path}=<value>`)
+    .join('');
+  const skeleton = names.site.endsWith('.json') ? SITE_SKELETON_JSON : SITE_SKELETON;
+  const command = `${MIGRATE_COMMAND} ${shellQuote(file)}`;
+  return `Run ${command} to see every change it makes, then ${command}${sets} --write --out <dir> to write ${names.portfolio} and ${names.site}. A ${names.site} starts like this:\n${skeleton}`;
+}
+
+/** A selection to ask the catalog for its variants, which no selection changes. */
+const ANY_SELECTION: AppearanceSelection = {
+  variant: SITE_DEFAULTS.variant,
+  designLanguage: SITE_DEFAULTS.designLanguage,
+  colorScheme: '',
+  typography: '',
+  displayMode: SITE_DEFAULTS.displayMode,
+};
+
 function problemCode(problem: DocumentProblem): DiagnosticCode {
   switch (problem.kind) {
     case 'syntax':
       return 'parse.syntax';
+    case 'legacy':
+      return 'legacy.document';
     case 'version':
       return 'schema.version';
     case 'duplicate-id':

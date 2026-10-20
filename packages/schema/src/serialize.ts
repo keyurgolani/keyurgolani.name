@@ -28,9 +28,22 @@ export function serialize(value: unknown, format: DocumentFormat): string {
     Pair(_, pair) {
       if (isScalar(pair.key) && pair.key.value === '<<') pair.key.type = Scalar.QUOTE_DOUBLE;
     },
+    // Keys and values alike.
+    Scalar(_, scalar) {
+      if (typeof scalar.value === 'string' && YAML_1_1_WORDS.test(scalar.value)) {
+        scalar.type = Scalar.QUOTE_DOUBLE;
+      }
+    },
   });
   return doc.toString({ lineWidth: 0, indent: 2 });
 }
+
+/**
+ * Strings a YAML 1.1 reader would take for a boolean or null. YAML 1.2 reads
+ * them as strings, so yaml leaves them plain, but older readers still parse
+ * documents this writes.
+ */
+const YAML_1_1_WORDS = /^(?:y|yes|n|no|on|off|true|false|null|~)$/i;
 
 /** RFC 8785 JSON: keys sorted by UTF-16 code units, no whitespace, ECMAScript number and string forms. */
 export function canonicalize(value: unknown): string {

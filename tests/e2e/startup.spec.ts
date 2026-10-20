@@ -366,24 +366,23 @@ test.describe('the document', () => {
     ]);
   });
 
-  test('a portfolio.toml, refused by name', async () => {
+  test('a portfolio.toml, refused by name as the old format', async () => {
     const dir = sourceDir({ 'portfolio.toml': '[identity]\nname = "Rowan Fixture"\n' });
     const fatal = await expectRefusal(readOnly({ PORTFOLIO_SOURCE_DIR: dir }));
-    expect(fatal.map((e) => [e.code, e.file])).toEqual([
-      ['document_unsupported', 'portfolio.toml'],
-    ]);
+    expect(fatal.map((e) => [e.code, e.file])).toEqual([['document_legacy', 'portfolio.toml']]);
+    expect(fatal[0]!.message).toContain('Convert it to YAML or JSON first');
   });
 
-  test('an old-shape document, refused for its missing schemaVersion', async () => {
+  test('an old-format document, refused with one issue naming its old fields', async () => {
     const dir = sourceDir({
       'portfolio.yml': 'identity:\n  name: Rowan Fixture\nvariant: canary-variant\n',
     });
     const fatal = await expectRefusal(readOnly({ PORTFOLIO_SOURCE_DIR: dir }), {
       never: ['canary-variant'],
     });
-    expect(fatal.map((e) => [e.code, e.path, e.line])).toEqual([
-      ['document_invalid', '/schemaVersion', 1],
-    ]);
+    expect(fatal.map((e) => [e.code, e.path, e.line])).toEqual([['document_legacy', '', 3]]);
+    expect(fatal[0]!.message).toContain('/variant to appearance.variant in site.yml');
+    expect(fatal[0]!.message).toContain('pnpm config:migrate portfolio.yml');
   });
 
   test('two sections sharing an id', async () => {

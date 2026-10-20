@@ -54,6 +54,18 @@ module.exports = {
       },
     },
     {
+      name: 'migration-only-from-its-command',
+      severity: 'error',
+      comment:
+        'The migration converts old documents offline (#4, item 19). The web runtime, the kit, ' +
+        'the variants, and the rest of the schema package never import it, so no page or ' +
+        'server ships it; pnpm config:migrate and tests may.',
+      from: {
+        pathNot: ['^packages/schema/src/migrate/', '^apps/web/scripts/', '\\.test\\.(?:tsx?|mjs)$'],
+      },
+      to: { path: '^packages/schema/src/migrate/' },
+    },
+    {
       name: 'operation-registry-imports-no-handlers',
       severity: 'error',
       comment:

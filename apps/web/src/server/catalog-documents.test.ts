@@ -125,16 +125,16 @@ test('several portfolio documents are fatal, even under next dev', (t) => {
   }
 });
 
-test('a portfolio.toml is refused by name in every mode, even beside a valid document', (t) => {
+test('a portfolio.toml is the old format, refused by name in every mode, even beside a valid document', (t) => {
   const dir = tempDir(t);
   writeFileSync(path.join(dir, 'portfolio.toml'), '[identity]\nname = "Rowan Test"\n');
   for (const mode of ['production', 'development'] as const) {
     const issue = only(open(dir, mode));
-    assert.deepEqual([issue.code, issue.file], ['document_unsupported', 'portfolio.toml']);
-    assert.match(issue.message, /portfolio\.yml or portfolio\.json/);
+    assert.deepEqual([issue.code, issue.file], ['document_legacy', 'portfolio.toml']);
+    assert.match(issue.message, /Convert it to YAML or JSON first, then run pnpm config:migrate/);
   }
   writeFileSync(path.join(dir, 'portfolio.yml'), VALID_YAML);
-  assert.equal(only(open(dir, 'production')).code, 'document_unsupported');
+  assert.equal(only(open(dir, 'production')).code, 'document_legacy');
 });
 
 test('an unreadable document is fatal', { skip: !canRestrict }, (t) => {
@@ -212,18 +212,22 @@ test('every schema problem in a document is reported', (t) => {
   assert.ok(!JSON.stringify(result.issues).includes('canary-direction-55'));
 });
 
-test('an old-shape document is refused for its missing schemaVersion alone', (t) => {
+test('an old-format document gets one issue naming its old fields and the migrate command', (t) => {
   const dir = tempDir(t);
   writeFileSync(
     path.join(dir, 'portfolio.yml'),
     'identity:\n  name: Rowan Test\nvariant: canary-variant-8\ntheme: dark\nsections:\n  - kind: hero\n',
   );
   const issue = only(open(dir, 'production'));
+  // Located at the first old field, the variant on line 3.
   assert.deepEqual(
-    [issue.code, issue.path, issue.issueCode, issue.line],
-    ['document_invalid', '/schemaVersion', 'invalid_type', 1],
+    [issue.code, issue.file, issue.path, issue.issueCode, issue.line, issue.column],
+    ['document_legacy', 'portfolio.yml', '', 'legacy_document', 3, 1],
   );
-  assert.match(issue.message, /schemaVersion 2/);
+  assert.equal(
+    issue.message,
+    "portfolio.yml is in the old one-file format, which this release doesn't read. Its old fields move: /variant to appearance.variant in site.yml and /theme to appearance.displayMode in site.yml. Run pnpm config:migrate portfolio.yml to split it into portfolio.yml and site.yml.",
+  );
   assert.ok(!issue.message.includes('canary-variant-8'));
 });
 
@@ -525,6 +529,6 @@ test('under next dev adding a portfolio.toml is reported and throws', async (t) 
   await assert.rejects(result.reader.getLive());
   assert.deepEqual(
     reported.map((issue) => issue.code),
-    ['document_unsupported'],
+    ['document_legacy'],
   );
 });

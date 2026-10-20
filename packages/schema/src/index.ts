@@ -8,6 +8,7 @@ export * from './site';
 export * from './compose';
 export * from './source';
 export * from './load';
+export * from './legacy';
 export * from './secrets';
 export * from './public-view';
 export * from './validate';
