@@ -12,8 +12,11 @@ export async function GET() {
       headers: { 'content-type': formatContentType(format) },
     });
   } catch (e) {
+    // The message can carry the absolute file path (ENOENT does), so it goes
+    // to the server log only.
+    console.error('[api/portfolio] Could not read the portfolio file:', e);
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : String(e) },
+      { error: 'Could not read the portfolio file. See the server log.' },
       { status: 500 },
     );
   }
