@@ -174,6 +174,9 @@ function FloatingProfile({
         />
 
         <motion.div
+          // A fresh element when the preference resolves after hydration, so
+          // the endless shimmer stops rather than running on unanimated.
+          key={reduceMotion ? 'still' : 'shimmer'}
           className="kc-floater__shimmer"
           animate={
             !reduceMotion ? { opacity: [0, 0.18, 0], x: ['-100%', '100%', '100%'] } : undefined

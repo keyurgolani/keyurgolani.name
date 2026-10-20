@@ -2,7 +2,7 @@
 
 import { motion } from 'framer-motion';
 import type { Hero, Identity } from '@portfolio/schema';
-import { ensureSectionId, TypingAnimation } from '@portfolio/kit';
+import { ensureSectionId, TypingAnimation, useMotionPreference } from '@portfolio/kit';
 import { ActionLink } from '../primitives/action-link';
 import { FloatingProfileCluster } from '../primitives/floating-profile-cluster';
 import type { Link as PortfolioLink } from '@portfolio/schema';
@@ -48,6 +48,8 @@ export function HeroRenderer({ section, identity, links = [] }: HeroProps) {
     .map((s) => s.trim())
     .filter(Boolean);
   const hasTyping = subtaglineRoles.length > 1;
+  // Under reduce the hero is simply there: no entrance, even a fade.
+  const reduce = useMotionPreference() === 'reduce';
 
   return (
     <section id={id} lang={section.lang} className="kc-hero" aria-label="Hero section">
@@ -55,7 +57,7 @@ export function HeroRenderer({ section, identity, links = [] }: HeroProps) {
       <motion.div
         className="kc-hero__inner"
         variants={containerVariants}
-        initial="hidden"
+        initial={reduce ? false : 'hidden'}
         animate="visible"
       >
         {section.greeting ? (

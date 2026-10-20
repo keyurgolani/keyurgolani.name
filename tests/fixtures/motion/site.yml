@@ -1,0 +1,18 @@
+# Harness fixture: Kinetic Cosmos, following the visitor's reduced-motion
+# setting.
+schemaVersion: 2
+appearance:
+  variant: kinetic-cosmos
+  designLanguage: platform-neutral
+  colorScheme: nebula
+  typography: geometric
+  displayMode: dark
+visitorControls:
+  variant: locked
+  designLanguage: locked
+  colorScheme: selectable
+  typography: locked
+  displayMode: selectable
+motionPolicy: respect-os
+features:
+  feed: true

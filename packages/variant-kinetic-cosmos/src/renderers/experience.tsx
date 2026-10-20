@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Portfolio } from '@portfolio/schema';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ensureSectionId, formatDate } from '@portfolio/kit';
+import { ensureSectionId, formatDate, useMotionPreference } from '@portfolio/kit';
 import {
   TimelineAxis,
   TimelineBranch,
@@ -55,6 +55,7 @@ export function ExperienceRenderer({ portfolio, section }: ExperienceProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [viewportWidth, setViewportWidth] = useState(1280);
   const containerRef = useRef<HTMLDivElement>(null);
+  const reduce = useMotionPreference() === 'reduce';
 
   const layout = useMemo(() => buildTimelineLayout(portfolio, { topPadding: 140 }), [portfolio]);
 
@@ -165,7 +166,7 @@ export function ExperienceRenderer({ portfolio, section }: ExperienceProps) {
             strokeWidth={2}
           />
 
-          <PresentNode y={120} centerX={centerX} />
+          <PresentNode y={120} centerX={centerX} reduce={reduce} />
 
           {positioned.map((p) => {
             const dim = activeId !== null && activeId !== p.event.id;
@@ -197,7 +198,7 @@ export function ExperienceRenderer({ portfolio, section }: ExperienceProps) {
                       strokeWidth={branchWidth}
                       strokeLinecap="round"
                       fill="none"
-                      initial={{ pathLength: 0 }}
+                      initial={reduce ? false : { pathLength: 0 }}
                       animate={{ pathLength: 1 }}
                       transition={{ duration: 1.2, ease: 'easeOut' }}
                     />
@@ -225,19 +226,22 @@ export function ExperienceRenderer({ portfolio, section }: ExperienceProps) {
   );
 }
 
-function PresentNode({ y, centerX }: { y: number; centerX: number }) {
+function PresentNode({ y, centerX, reduce }: { y: number; centerX: number; reduce: boolean }) {
   return (
     <g transform={`translate(${centerX}, ${y})`} className="kc-timeline__present">
       <title>Present Day</title>
-      <motion.circle
-        r={14}
-        fill="transparent"
-        stroke="var(--kc-primary)"
-        strokeWidth={1}
-        initial={{ scale: 0.8, opacity: 0.8 }}
-        animate={{ scale: 1.8, opacity: 0 }}
-        transition={{ duration: 2, repeat: Infinity, ease: 'easeOut' }}
-      />
+      {/* The pulse never stops, so under reduce it isn't there at all. */}
+      {reduce ? null : (
+        <motion.circle
+          r={14}
+          fill="transparent"
+          stroke="var(--kc-primary)"
+          strokeWidth={1}
+          initial={{ scale: 0.8, opacity: 0.8 }}
+          animate={{ scale: 1.8, opacity: 0 }}
+          transition={{ duration: 2, repeat: Infinity, ease: 'easeOut' }}
+        />
+      )}
       <circle r={6} fill="var(--kc-paper)" stroke="var(--kc-primary)" strokeWidth={2} />
       <circle r={2.5} fill="var(--kc-primary)" />
       <text x={20} y={4} fill="var(--kc-primary)" className="kc-timeline__present-label">

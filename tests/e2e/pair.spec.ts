@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { DEFAULT_PORTFOLIO } from '../harness/app-server.mjs';
 import { expect, test } from '../harness/fixtures';
+import { loadHome, scrollTops } from '../harness/motion';
 import { visitorOutput } from '../harness/visitor-output';
 
 // The mounted pair (#4) under Editorial: the site document picks the
@@ -90,5 +91,15 @@ test(
     await page.goto('/', { waitUntil: 'load' });
     expect(refused.length).toBeGreaterThan(0);
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  },
+);
+
+test(
+  'under motionPolicy reduce a link in the table of contents jumps to its section',
+  { annotation: [{ type: 'route', description: '/' }, READ_ONLY] },
+  async ({ page }) => {
+    await loadHome(page);
+    const { first, settled } = await scrollTops(page, '#contact');
+    expect(Math.abs(first - settled)).toBeLessThan(4);
   },
 );
