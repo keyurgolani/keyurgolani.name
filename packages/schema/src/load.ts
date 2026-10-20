@@ -10,9 +10,9 @@ import { parseExtensionKind } from './ids';
 import { isPlainObject } from './json';
 import type { Portfolio } from './portfolio';
 import { SCHEMA_VERSION } from './portfolio';
-import { redactSecrets } from './secrets';
+import { redactedPointer, redactSecrets } from './secrets';
 import type { Site } from './site';
-import { parseSource, toPointer, type DocumentFormat, type Locate } from './source';
+import { parseSource, type DocumentFormat, type Locate } from './source';
 
 // Reads a portfolio or site document from source text into its typed model,
 // or into problems located by JSON pointer, line, and column. No message
@@ -222,7 +222,7 @@ function readWith<T>(
   }
   const warnings = findUnregisteredExtensions(result.data, registry).map(
     ({ path, use }): DocumentWarning => {
-      const pointer = redactSecrets(toPointer(path));
+      const pointer = redactedPointer(path);
       const what = use === 'section' ? 'is a section from' : 'belongs to';
       return {
         code: 'extension_unregistered',
@@ -266,7 +266,7 @@ function issueProblems(issue: z.ZodIssue, schema: z.ZodTypeAny, data: unknown): 
     const present = new Set(Object.keys(valueAt(data, issue.path) ?? {}));
     return issue.keys.map((key) => {
       const path = [...issue.path, key];
-      const pointer = toPointer(path);
+      const pointer = redactedPointer(path);
       const suggestion = closestWord(
         key,
         allowed.filter((candidate) => !present.has(candidate)),
@@ -297,7 +297,7 @@ function issueProblems(issue: z.ZodIssue, schema: z.ZodTypeAny, data: unknown): 
   const problem: IssueProblem = {
     kind: 'schema',
     code: issue.code,
-    pointer: toPointer(issue.path),
+    pointer: redactedPointer(issue.path),
     path: issue.path,
     message: describeIssue(issue),
   };
@@ -372,7 +372,7 @@ function valueAt(data: unknown, path: readonly (string | number)[]): unknown {
 
 /** What a schema issue says is wrong, without quoting any value from the document. */
 export function describeIssue(issue: z.ZodIssue): string {
-  const where = toPointer(issue.path) || 'The document';
+  const where = redactedPointer(issue.path) || 'The document';
   switch (issue.code) {
     case 'invalid_type':
       return issue.received === 'undefined'

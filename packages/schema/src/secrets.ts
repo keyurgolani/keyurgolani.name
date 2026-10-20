@@ -1,4 +1,11 @@
 import { isPlainObject } from './json';
+import { toPointer } from './pointer';
+
+/** Where a path starts in the source, as parseSource()'s `locate` says. */
+type LocatePath = (
+  path: readonly PropertyKey[],
+  at?: 'value' | 'key',
+) => { readonly line: number; readonly column: number } | undefined;
 
 // Secret-shaped text, which no document may hold (#4, item 13): GitHub
 // tokens, PEM private keys, PHC and bcrypt password hashes, and AWS access
@@ -38,22 +45,29 @@ export interface SecretFinding {
   readonly path: readonly (string | number)[];
   readonly kind: SecretKind;
   readonly in: 'value' | 'key';
+  /** Where the value, or the secret-shaped key itself, starts, given `locate`. */
+  readonly line?: number;
+  readonly column?: number;
 }
 
-/** Every secret-shaped string in a parsed document, keys and extension data included. */
-export function findSecrets(document: unknown): SecretFinding[] {
+/**
+ * Every secret-shaped string in a parsed document, keys and extension data
+ * included. With `locate`, each finding says where it starts; a key's
+ * finding is located at the key, though its path stops at the object.
+ */
+export function findSecrets(document: unknown, locate?: LocatePath): SecretFinding[] {
   const found: SecretFinding[] = [];
   const walk = (node: unknown, path: readonly (string | number)[]): void => {
     if (typeof node === 'string') {
       const kind = secretKind(node);
-      if (kind) found.push({ path, kind, in: 'value' });
+      if (kind) found.push({ path, kind, in: 'value', ...locate?.(path) });
     } else if (Array.isArray(node)) {
       node.forEach((child, index) => walk(child, [...path, index]));
     } else if (isPlainObject(node)) {
       for (const [key, child] of Object.entries(node)) {
         const kind = secretKind(key);
         // A secret-shaped key would put the secret in every pointer below it.
-        if (kind) found.push({ path, kind, in: 'key' });
+        if (kind) found.push({ path, kind, in: 'key', ...locate?.([...path, key], 'key') });
         else walk(child, [...path, key]);
       }
     }
@@ -69,4 +83,13 @@ export function redactSecrets(text: string): string {
     redacted = redacted.replace(new RegExp(pattern.source, 'g'), '[secret]');
   }
   return redacted;
+}
+
+/**
+ * A JSON pointer for a path, each key redacted before it's escaped: a bcrypt
+ * or PHC hash holds `/`, which the pointer writes as `~1`, and the escaped
+ * text no longer looks like the secret it still is.
+ */
+export function redactedPointer(path: readonly PropertyKey[]): string {
+  return toPointer(path.map((part) => (typeof part === 'string' ? redactSecrets(part) : part)));
 }
