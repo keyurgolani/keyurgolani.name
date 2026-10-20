@@ -55,3 +55,35 @@ export {
 export { validateManifest, type ManifestContext, type ManifestResult } from './validate-manifest';
 export { keyVerdict, type KeyVerdict } from './keys';
 export { RESERVED_SEGMENTS } from './segments';
+export {
+  dispatch,
+  href,
+  idFor,
+  normalizeBasePath,
+  type DispatchOptions,
+  type DispatchResult,
+  type HrefOptions,
+  type RouteTarget,
+} from './routes';
+export {
+  checkControlValues,
+  contentIndex,
+  hiddenSectionIds,
+  materializeControls,
+  migrateControls,
+  serializeControls,
+  type ContentIndex,
+  type ControlChange,
+  type ControlProblem,
+  type ControlsEntry,
+  type ControlValue,
+  type ControlValues,
+  type MigrationResult,
+} from './controls';
+export { findVariant, type RegisteredVariant, type VariantRegistry } from './registry';
+export {
+  contractValidators,
+  validateControls,
+  validateRoutes,
+  validateSelection,
+} from './validators';
