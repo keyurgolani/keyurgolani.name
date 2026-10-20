@@ -87,3 +87,9 @@ export {
   validateRoutes,
   validateSelection,
 } from './validators';
+export {
+  buildRenderInput,
+  pairSeed,
+  type RenderInputArgs,
+  type VariantRenderInput,
+} from './render-input';
