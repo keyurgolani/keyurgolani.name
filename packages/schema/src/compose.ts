@@ -6,6 +6,7 @@ import {
   type ExtensionRegistry,
 } from './extensions';
 import { parseExtensionKind } from './ids';
+import { addNestedIssue } from './issues';
 import { isPlainObject } from './json';
 import {
   coreSectionSchemas,
@@ -112,7 +113,7 @@ function sectionRouter(
     }
     const result = target.safeParse(value);
     if (result.success) return result.data as Section;
-    for (const issue of result.error.issues) ctx.addIssue(issue);
+    for (const issue of result.error.issues) addNestedIssue(ctx, issue);
     return z.NEVER;
   });
   return Object.assign(schema, { [SECTION_ROUTE]: route });

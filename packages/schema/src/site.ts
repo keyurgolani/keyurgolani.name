@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isPlainObject } from './json';
 import { SectionIdSchema, type SchemaParts } from './kinds/common';
 import { SCHEMA_VERSION } from './portfolio';
 
@@ -59,14 +60,27 @@ export function siteSchemas({ object }: SchemaParts) {
    * Input for a generator-backed color scheme: a seed color, or a media asset
    * whose colors seed the scheme. Asset ids follow the section-id rule.
    */
-  const AppearanceInputSchema = z.union([
-    object({
-      seedColor: z.string().regex(/^#[0-9a-fA-F]{6}$/, {
-        message: 'must be a six-digit hex color, such as #3366ff.',
-      }),
-    }),
-    object({ sourceAsset: SectionIdSchema }),
-  ]);
+  const AppearanceInputSchema = z
+    .unknown()
+    .superRefine((value, ctx) => {
+      // Either shape would call the other's key unknown, which misses the point.
+      if (isPlainObject(value) && 'seedColor' in value && 'sourceAsset' in value) {
+        ctx.addIssue({
+          code: 'custom',
+          message: "has both seedColor and sourceAsset, which can't be used together. Keep one.",
+        });
+      }
+    })
+    .pipe(
+      z.union([
+        object({
+          seedColor: z.string().regex(/^#[0-9a-fA-F]{6}$/, {
+            message: 'must be a six-digit hex color, such as #3366ff.',
+          }),
+        }),
+        object({ sourceAsset: SectionIdSchema }),
+      ]),
+    );
 
   const SiteFeaturesSchema = object({
     /** Serve /feed.xml. */

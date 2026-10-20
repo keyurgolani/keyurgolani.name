@@ -170,6 +170,51 @@ test('registered fields and data are checked, with did-you-mean hints', () => {
   );
 });
 
+test('a union inside a registered schema reports its problems where they are', () => {
+  // Each value below lacks the key either shape requires, so both shapes fail
+  // outright and the union reports the closer one's problems, which come from
+  // a parse of their own and have to be placed under the document's path.
+  const shapes = z.union([
+    z.object({ title: z.string() }).strict(),
+    z.object({ year: z.number() }).strict(),
+  ]);
+  const unions = defineContentExtension({
+    namespace: '@acme/portfolio-unions',
+    sections: { notes: z.object({ items: z.array(shapes) }).strict() },
+    fields: shapes,
+  });
+  const result = parsePortfolio(
+    [
+      `${HEAD}  extensions:`,
+      "    '@acme/portfolio-unions':",
+      '      zzz: 1',
+      'sections:',
+      '  - kind: lede',
+      '    id: about',
+      '    body: Hi',
+      "  - kind: '@acme/portfolio-unions/notes'",
+      '    id: notes',
+      '    data:',
+      '      items:',
+      '        - qqq: 2',
+      '',
+    ].join('\n'),
+    'yaml',
+    { extensions: [unions] },
+  );
+  const fields = '/identity/extensions/@acme~1portfolio-unions';
+  const item = '/sections/1/data/items/0';
+  assert.deepEqual(
+    problems(result).map(({ pointer, message, line, column }) => [pointer, message, line, column]),
+    [
+      [`${fields}/title`, `${fields}/title is required.`, 8, 7],
+      [`${fields}/zzz`, `${fields}/zzz isn't a field here. Its extension doesn't define it.`, 8, 7],
+      [`${item}/title`, `${item}/title is required.`, 17, 11],
+      [`${item}/qqq`, `${item}/qqq isn't a field here. Its extension doesn't define it.`, 17, 11],
+    ],
+  );
+});
+
 test('a registered namespace adds only the section kinds it declares', () => {
   assert.deepEqual(
     problems(
@@ -307,6 +352,80 @@ test('extension data is plain JSON, at most 8 levels deep and 32 KiB per occurre
       ({ pointer }) => pointer,
     ),
     ['/sections/0/data'],
+  );
+});
+
+test("an extension section's data has the same limits, registered or not", () => {
+  const nested = (depth: number): unknown => (depth === 0 ? 'leaf' : { a: nested(depth - 1) });
+  const deepItems = (depth: number) => ({
+    items: [{ title: 'T', venue: 'V', year: 2024, city: JSON.stringify(nested(depth)) }],
+  });
+  const document = (kind: string, data: unknown) =>
+    JSON.stringify({
+      schemaVersion: 2,
+      locale: 'en',
+      direction: 'ltr',
+      identity: { name: 'Rowan Test' },
+      sections: [{ kind, id: 'x', data }],
+    });
+  const messages = (kind: string, data: unknown) => {
+    const result = parsePortfolio(document(kind, data), 'json', { extensions: REGISTERED });
+    return result.ok ? [] : result.problems.map(({ pointer, message }) => [pointer, message]);
+  };
+  const deep = [['/sections/0/data', '/sections/0/data is nested more than 8 levels deep.']];
+  const large = [['/sections/0/data', '/sections/0/data is larger than 32 KiB as JSON.']];
+  // `data` is the first level: eight pass, nine don't.
+  assert.deepEqual(messages('@other/x/y', nested(8)), []);
+  assert.deepEqual(messages('@other/x/y', nested(9)), deep);
+  assert.deepEqual(messages('@other/x/y', { text: 'x'.repeat(32 * 1024 - 64) }), []);
+  assert.deepEqual(messages('@other/x/y', { text: 'x'.repeat(32 * 1024) }), large);
+  // A registered kind is checked the same way before its own schema runs.
+  const exhibitions = '@acme/portfolio-photography/exhibitions';
+  const shows = (extra: unknown) => ({
+    items: [{ title: 'T', venue: 'V', year: 2024, url: '/a', ...(extra as object) }],
+  });
+  assert.deepEqual(messages(exhibitions, deepItems(1)), []);
+  // `data`, then eight more levels: refused before the schema could call `deep` unknown.
+  assert.deepEqual(messages(exhibitions, { ...shows({}), deep: nested(8) }), deep);
+  assert.deepEqual(messages(exhibitions, shows({ city: 'x'.repeat(32 * 1024) })), large);
+});
+
+test('an extension schema that would drop or pass through unknown keys is refused', () => {
+  const loose = [
+    ['fields', { fields: z.object({ a: z.string() }) }],
+    ['fields', { fields: z.object({ a: z.string() }).strict().passthrough() }],
+    [
+      'sections.notes',
+      { sections: { notes: z.object({ items: z.array(z.object({})) }).strict() } },
+    ],
+    [
+      'fields',
+      {
+        fields: z
+          .object({ inner: z.union([z.string(), z.object({ b: z.number() })]).optional() })
+          .strict(),
+      },
+    ],
+    ['fields', { fields: z.object({ b: z.lazy(() => z.object({ c: z.string() })) }).strict() }],
+  ] as const;
+  for (const [where, spec] of loose) {
+    assert.throws(
+      () => defineContentExtension({ namespace: '@acme/loose', ...spec }),
+      new RegExp(
+        `@acme/loose: ${where.replace('.', '\\.')} has an object schema that isn't strict`,
+      ),
+    );
+  }
+  // Strict objects, and objects whose catchall checks the other keys, are fine.
+  assert.doesNotThrow(() =>
+    defineContentExtension({
+      namespace: '@acme/tight',
+      sections: { notes: z.object({ items: z.array(z.object({}).strict()) }).strict() },
+      fields: z
+        .object({ tags: z.record(z.string(), z.string()) })
+        .catchall(z.number())
+        .refine(() => true),
+    }),
   );
 });
 

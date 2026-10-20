@@ -50,6 +50,9 @@ function objects(root: z.ZodTypeAny, schemas: ComposedSchemas): Map<string, z.An
         return visit(def.innerType as z.ZodTypeAny, path);
       case z.ZodFirstPartyTypeKind.ZodEffects:
         return visit(def.schema as z.ZodTypeAny, path);
+      case z.ZodFirstPartyTypeKind.ZodPipeline:
+        visit(def.in as z.ZodTypeAny, path);
+        return visit(def.out as z.ZodTypeAny, path);
       case z.ZodFirstPartyTypeKind.ZodUnion:
         for (const option of def.options as z.ZodTypeAny[]) visit(option, path);
         return;
@@ -206,22 +209,21 @@ test('an appearance input is exactly one of its two shapes', () => {
     parseSite(`${SITE}appearanceInputs:\n  brand-seed: ${value}\n`, 'yaml');
   assert.equal(input("{ seedColor: '#3366ff' }").ok, true);
   assert.equal(input('{ sourceAsset: studio-portrait }').ok, true);
-  // Neither branch drops the other's key to pass.
-  assert.deepEqual(
-    unknownKeys(input("{ seedColor: '#zz0000', sourceAsset: x }")).map(([code]) => code),
-    ['invalid_string', 'unrecognized_keys'],
-  );
-  assert.deepEqual(
-    unknownKeys(input("{ seedColor: '#3366ff', sourceAsset: studio-portrait }")).map(
-      ([code, message]) => [code, message],
-    ),
-    [
+  // Neither shape drops the other's key to pass, and having both says so.
+  for (const both of [
+    "{ seedColor: '#zz0000', sourceAsset: x }",
+    "{ seedColor: '#3366ff', sourceAsset: studio-portrait }",
+  ]) {
+    assert.deepEqual(
+      unknownKeys(input(both)).map(([code, message]) => [code, message]),
       [
-        'unrecognized_keys',
-        "/appearanceInputs/brand-seed/sourceAsset isn't a field here. Custom data goes under extensions, keyed by an npm package name.",
+        [
+          'custom',
+          "/appearanceInputs/brand-seed has both seedColor and sourceAsset, which can't be used together. Keep one.",
+        ],
       ],
-    ],
-  );
+    );
+  }
 });
 
 test('extension values and variant control values take any keys', () => {

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { EXTENSION_SECTION_NAME_PATTERN, isPackageName, parseExtensionKind } from './ids';
+import { addNestedIssue } from './issues';
 import {
   EXTENSION_MAX_BYTES,
   EXTENSION_MAX_DEPTH,
@@ -25,7 +26,12 @@ export interface ContentExtensionSpec {
   readonly fields?: z.ZodTypeAny;
 }
 
-/** Checks and freezes a content extension's definition. Throws when it's malformed. */
+/**
+ * Checks and freezes a content extension's definition. Throws when it's
+ * malformed, including when an object schema in it isn't strict: one that
+ * drops or passes through keys it doesn't name would lose a mistyped key, or
+ * keep it unchecked, instead of reporting it.
+ */
 export function defineContentExtension<const T extends ContentExtensionSpec>(spec: T): Readonly<T> {
   if (!isPackageName(spec.namespace)) {
     throw new Error(`The content extension namespace isn't an npm package name.`);
@@ -37,7 +43,51 @@ export function defineContentExtension<const T extends ContentExtensionSpec>(spe
       );
     }
   }
+  const schemas = [
+    ...Object.entries(spec.sections ?? {}).map(([name, schema]) => [`sections.${name}`, schema]),
+    ...(spec.fields ? [['fields', spec.fields] as const] : []),
+  ] as const;
+  for (const [where, schema] of schemas) {
+    if (hasLooseObject(schema)) {
+      throw new Error(
+        `${spec.namespace}: ${where} has an object schema that isn't strict. Call .strict() on every z.object() in it, so a mistyped key is reported.`,
+      );
+    }
+  }
   return Object.freeze({ ...spec });
+}
+
+/**
+ * Whether the schema, or one inside it, is an object that takes keys it
+ * doesn't name without checking them: z.object() without .strict() or a
+ * catchall. Duck-typed, so an extension built with its own copy of zod is
+ * checked too.
+ */
+function hasLooseObject(schema: unknown, seen = new Set<unknown>()): boolean {
+  if (!isZodSchema(schema) || seen.has(schema)) return false;
+  seen.add(schema);
+  const def = schema._def as Record<string, unknown>;
+  let children: unknown[];
+  if (def.typeName === 'ZodObject') {
+    const catchall = def.catchall as { _def?: { typeName?: unknown } } | undefined;
+    if (catchall?._def?.typeName === 'ZodNever' && def.unknownKeys !== 'strict') return true;
+    children = [...Object.values((def.shape as () => Record<string, unknown>)()), catchall];
+  } else if (def.typeName === 'ZodLazy') {
+    children = [(def.getter as () => unknown)()];
+  } else {
+    // Every other schema keeps the schemas inside it in its definition.
+    children = Object.values(def).flatMap((value) => (Array.isArray(value) ? value : [value]));
+  }
+  return children.some((child) => hasLooseObject(child, seen));
+}
+
+function isZodSchema(value: unknown): value is { readonly _def: unknown } {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    '_def' in value &&
+    typeof (value as { safeParse?: unknown }).safeParse === 'function'
+  );
 }
 
 export type ContentExtension = ReturnType<typeof defineContentExtension>;
@@ -147,11 +197,7 @@ export function makeExtensionsSchema(registry: ExtensionRegistry): ExtensionsSch
       }
       const result = extension.fields.safeParse(entry);
       if (result.success) parsed[namespace] = result.data;
-      else {
-        for (const issue of result.error.issues) {
-          ctx.addIssue({ ...issue, path: [namespace, ...issue.path] });
-        }
-      }
+      else for (const issue of result.error.issues) addNestedIssue(ctx, issue, [namespace]);
     }
     if (jsonByteLength(entries) > EXTENSION_MAX_BYTES) {
       ctx.addIssue({ code: 'custom', message: TOO_LARGE });
