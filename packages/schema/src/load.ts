@@ -10,6 +10,7 @@ import { parseExtensionKind } from './ids';
 import { isPlainObject } from './json';
 import type { Portfolio } from './portfolio';
 import { SCHEMA_VERSION } from './portfolio';
+import { redactSecrets } from './secrets';
 import type { Site } from './site';
 import { parseSource, toPointer, type DocumentFormat, type Locate } from './source';
 
@@ -67,8 +68,8 @@ export function parsePortfolio(
   format: DocumentFormat,
   options: ParseOptions = {},
 ): DocumentResult<Portfolio> {
-  const schemas = schemasFor(options.extensions);
-  return parseWith(schemas.PortfolioSchema, schemas.registry, source, format, repeatedSectionIds);
+  const read = readPortfolio(source, format, options);
+  return finish(read, read.duplicates);
 }
 
 /** Parses and validates a site document. */
@@ -77,8 +78,57 @@ export function parseSite(
   format: DocumentFormat,
   options: ParseOptions = {},
 ): DocumentResult<Site> {
+  return finish(readSite(source, format, options), []);
+}
+
+/**
+ * One document read as far as it goes: the data as written once the text
+ * parses, the model once it also matches the schema, and every problem
+ * found on the way. validatePublicationUnit() builds its diagnostics from
+ * this, so it can rank repeated ids below problems that stop rendering.
+ */
+export interface DocumentRead<T> {
+  /** Syntax, version, and schema problems. Empty when `value` is set. */
+  readonly problems: readonly DocumentProblem[];
+  readonly value?: T;
+  /** The parsed text, before the schema. Absent when the text didn't parse. */
+  readonly data?: unknown;
+  readonly locate?: Locate;
+  readonly warnings: readonly DocumentWarning[];
+}
+
+/** A portfolio read as far as it goes, with its repeated section ids kept apart. */
+export function readPortfolio(
+  source: string,
+  format: DocumentFormat,
+  options: ParseOptions = {},
+): DocumentRead<Portfolio> & { readonly duplicates: readonly DocumentProblem[] } {
   const schemas = schemasFor(options.extensions);
-  return parseWith(schemas.SiteSchema, schemas.registry, source, format);
+  const read = readWith(schemas.PortfolioSchema, schemas.registry, source, format);
+  const checked = read.problems.every(({ kind }) => kind === 'schema');
+  return {
+    ...read,
+    duplicates:
+      checked && read.locate ? redactProblems(repeatedSectionIds(read.data, read.locate)) : [],
+  };
+}
+
+/** A site document read as far as it goes. */
+export function readSite(
+  source: string,
+  format: DocumentFormat,
+  options: ParseOptions = {},
+): DocumentRead<Site> {
+  const schemas = schemasFor(options.extensions);
+  return readWith(schemas.SiteSchema, schemas.registry, source, format);
+}
+
+function finish<T>(read: DocumentRead<T>, more: readonly DocumentProblem[]): DocumentResult<T> {
+  const problems = [...read.problems, ...more];
+  if (problems.length > 0 || read.value === undefined || !read.locate) {
+    return { ok: false, problems };
+  }
+  return { ok: true, value: read.value, locate: read.locate, warnings: read.warnings };
 }
 
 /** Every section whose id an earlier section already has, with that earlier index. */
@@ -126,18 +176,17 @@ function schemasFor(extensions: readonly ContentExtension[] | undefined): Compos
   return schemas;
 }
 
-function parseWith<T>(
+function readWith<T>(
   schema: z.ZodType<T, z.ZodTypeDef, unknown>,
   registry: ExtensionRegistry,
   source: string,
   format: DocumentFormat,
-  check: (data: unknown, locate: Locate) => DocumentProblem[] = () => [],
-): DocumentResult<T> {
+): DocumentRead<T> {
   const parsed = parseSource(source, format);
   if (!parsed.ok) {
     return {
-      ok: false,
-      problems: parsed.problems.map((problem) => ({ kind: 'syntax', ...problem })),
+      problems: redactProblems(parsed.problems.map((problem) => ({ kind: 'syntax', ...problem }))),
+      warnings: [],
     };
   }
   const { data, locate } = parsed;
@@ -146,7 +195,6 @@ function parseWith<T>(
   if (isPlainObject(data) && data.schemaVersion !== SCHEMA_VERSION) {
     const missing = data.schemaVersion === undefined;
     return {
-      ok: false,
       problems: [
         {
           kind: 'version',
@@ -156,25 +204,25 @@ function parseWith<T>(
           ...locate(['schemaVersion']),
         },
       ],
+      data,
+      locate,
+      warnings: [],
     };
   }
 
   const result = schema.safeParse(data);
-  const checked = check(data, locate);
-  if (!result.success || checked.length > 0) {
-    const invalid: DocumentProblem[] = result.success
-      ? []
-      : result.error.issues.flatMap((issue) =>
-          issueProblems(issue, schema, data).map(({ path, at, ...problem }) => ({
-            ...problem,
-            ...locate(path, at),
-          })),
-        );
-    return { ok: false, problems: [...invalid, ...checked] };
+  if (!result.success) {
+    const problems = result.error.issues.flatMap((issue) =>
+      issueProblems(issue, schema, data).map(({ path, at, ...problem }): DocumentProblem => ({
+        ...problem,
+        ...locate(path, at),
+      })),
+    );
+    return { problems: redactProblems(problems), data, locate, warnings: [] };
   }
   const warnings = findUnregisteredExtensions(result.data, registry).map(
     ({ path, use }): DocumentWarning => {
-      const pointer = toPointer(path);
+      const pointer = redactSecrets(toPointer(path));
       const what = use === 'section' ? 'is a section from' : 'belongs to';
       return {
         code: 'extension_unregistered',
@@ -185,7 +233,20 @@ function parseWith<T>(
       };
     },
   );
-  return { ok: true, value: result.data, locate, warnings };
+  return { problems: [], value: result.data, data, locate, warnings };
+}
+
+/**
+ * A pointer names keys, and a key could be a pasted secret. Messages quote
+ * pointers but never values, so redacting both keeps a secret out of every
+ * log line and diagnostic.
+ */
+function redactProblems(problems: readonly DocumentProblem[]): DocumentProblem[] {
+  return problems.map((problem) => ({
+    ...problem,
+    message: redactSecrets(problem.message),
+    ...(problem.pointer !== undefined ? { pointer: redactSecrets(problem.pointer) } : {}),
+  }));
 }
 
 type IssueProblem = Omit<DocumentProblem, 'line' | 'column'> & {
