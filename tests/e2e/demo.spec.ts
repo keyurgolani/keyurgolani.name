@@ -107,3 +107,17 @@ test(
     expect(await context.cookies()).toEqual([]);
   },
 );
+
+test(
+  'rendering the sample in every variant reaches no host outside the app',
+  { annotation: [{ type: 'route', description: '/sample' }, DEMO] },
+  async ({ page, app }) => {
+    for (const url of ['/', '/sample?variant=editorial', '/sample?variant=kinetic-cosmos']) {
+      const response = await page.goto(url, { waitUntil: 'networkidle' });
+      expect(response?.status(), url).toBe(200);
+      // The sample's github section, which fetches a live account, is gone.
+      await expect(page.locator('#on-github'), url).toHaveCount(0);
+    }
+    expect(app.egress()).toEqual([]);
+  },
+);

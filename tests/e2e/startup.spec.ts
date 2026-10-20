@@ -67,6 +67,7 @@ async function expectRefusal(
   const run = await runAppToExit({ env, timeoutMs: 15_000, readDelayMs });
   expect(run.exited, `the server kept running:\n${run.output}`).toBe(true);
   expect(run.code, run.output).toBe(1);
+  expect(run.egress, 'requests the server tried to send out').toEqual([]);
   for (const value of never) expect(run.output).not.toContain(value);
   const fatal = run.output
     .split('\n')

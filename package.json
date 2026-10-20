@@ -17,7 +17,7 @@
     "lint": "eslint --max-warnings=0 .",
     "typecheck": "pnpm -r typecheck && tsc -p tests --noEmit",
     "test": "pnpm -r test && pnpm test:scripts",
-    "test:scripts": "node --test 'ci/**/*.test.mjs' 'skills/**/*.test.mjs'",
+    "test:scripts": "node --test 'ci/**/*.test.mjs' 'skills/**/*.test.mjs' 'tests/harness/**/*.test.mjs'",
     "check:skills": "node skills/scripts/sync-checks.mjs",
     "check:registry": "node ci/check-registry.mjs",
     "check:deps": "depcruise apps packages --config .dependency-cruiser.cjs",

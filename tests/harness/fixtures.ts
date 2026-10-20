@@ -6,7 +6,9 @@
 // `app` is worker-scoped: every distinct `appOptions` gets its own server,
 // source directory, and port. Every request the browser makes outside the app's
 // origin fails, and the blocked URLs are attached to the test. A blocked
-// request to a host outside EXPECTED_BLOCKED_HOSTS fails the test.
+// request to a host outside EXPECTED_BLOCKED_HOSTS fails the test. The server
+// itself reaches no host outside the app: any attempt it makes while a test
+// runs fails that test.
 import path from 'node:path';
 import { test as base } from '@playwright/test';
 import { startApp } from './app-server.mjs';
@@ -39,6 +41,8 @@ export interface App {
   sourceDir: string;
   log: string;
   env: Record<string, string>;
+  /** Every outside host the server tried to reach, in order (`host:port`). None got out. */
+  egress: () => string[];
 }
 
 interface TestFixtures {
@@ -46,6 +50,8 @@ interface TestFixtures {
   blockedHosts: readonly string[];
   /** URLs the browser tried to fetch outside the app; all were aborted. */
   blockedRequests: string[];
+  /** Fails the test when the server tried to reach a host outside the app during it. */
+  serverEgress: void;
 }
 
 interface WorkerFixtures {
@@ -108,6 +114,29 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
             '',
             "Expected: only the app, third-party fonts, .test fixture hosts, and the spec's blockedHosts",
             `Received: ${unexpected.join(', ')}`,
+          ].join('\n'),
+        );
+      }
+    },
+    { auto: true },
+  ],
+
+  serverEgress: [
+    async ({ app }, provide, testInfo) => {
+      const before = app.egress().length;
+      await provide();
+      const attempts = app.egress().slice(before);
+      if (attempts.length > 0) {
+        await testInfo.attach('server-egress.txt', {
+          body: `${attempts.join('\n')}\n`,
+          contentType: 'text/plain',
+        });
+        throw new Error(
+          [
+            `The server tried to reach ${attempts.length} host(s) outside the app: ${[...new Set(attempts)].join(', ')}`,
+            '',
+            'Expected: no outbound request from the server under test',
+            `Received: ${attempts.join(', ')}`,
           ].join('\n'),
         );
       }
