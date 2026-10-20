@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse as parseYaml } from 'yaml';
-import { assessRoutes, PROBE_SNIPPET, SCAN_SNIPPET } from './lib/container.mjs';
+import { assessRoutes, PROBE_SNIPPET, REQUESTS_SNIPPET, SCAN_SNIPPET } from './lib/container.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -50,8 +50,15 @@ function runNode(args, env) {
 
 async function withServer(host, fn) {
   const server = http.createServer((req, res) => {
-    res.setHeader('content-type', 'application/json');
-    res.end(JSON.stringify({ ok: true, path: req.url }));
+    let body = '';
+    req.setEncoding('utf8');
+    req.on('data', (chunk) => (body += chunk));
+    req.on('end', () => {
+      res.setHeader('content-type', 'application/json');
+      res.setHeader('x-seen-type', req.headers['content-type'] ?? 'none');
+      res.statusCode = req.url === '/missing' ? 404 : 200;
+      res.end(JSON.stringify({ ok: true, path: req.url, method: req.method, body }));
+    });
   });
   await new Promise((resolve, reject) => {
     server.once('error', reject);
@@ -157,7 +164,12 @@ test('the in-container probe returns status and body', async () => {
   assert.equal(output.status, 0);
   const response = JSON.parse(output.stdout);
   assert.equal(response.status, 200);
-  assert.deepEqual(JSON.parse(response.body), { ok: true, path: '/api/health' });
+  assert.deepEqual(JSON.parse(response.body), {
+    ok: true,
+    path: '/api/health',
+    method: 'GET',
+    body: '',
+  });
 });
 
 test(
@@ -176,6 +188,43 @@ test('the in-container probe reports a connection error', async () => {
   const output = await runNode(['-e', PROBE_SNIPPET, '/'], { PORT: String(port) });
   assert.equal(output.status, 1);
   assert.match(JSON.parse(output.stdout).error, /ECONNREFUSED/);
+});
+
+test('the in-container requests send each method and body, in order', async () => {
+  const requests = [
+    { method: 'GET', path: '/api/ready' },
+    { method: 'POST', path: '/missing', body: {} },
+    { method: 'DELETE', path: '/x', body: { a: 1 } },
+  ];
+  const output = await withServer('127.0.0.1', async (port) =>
+    runNode(['-e', REQUESTS_SNIPPET, JSON.stringify(requests)], {
+      HOSTNAME: '0.0.0.0',
+      PORT: String(port),
+    }),
+  );
+  const results = JSON.parse(output.stdout);
+  assert.deepEqual(
+    results.map((result) => [
+      result.status,
+      result.headers['x-seen-type'],
+      JSON.parse(result.body),
+    ]),
+    [
+      [200, 'none', { ok: true, path: '/api/ready', method: 'GET', body: '' }],
+      [404, 'application/json', { ok: true, path: '/missing', method: 'POST', body: '{}' }],
+      [200, 'application/json', { ok: true, path: '/x', method: 'DELETE', body: '{"a":1}' }],
+    ],
+  );
+});
+
+test('the in-container requests report a connection error per request', async () => {
+  const port = await withServer('127.0.0.1', async (p) => p);
+  const output = await runNode(
+    ['-e', REQUESTS_SNIPPET, JSON.stringify([{ method: 'GET', path: '/' }])],
+    { PORT: String(port) },
+  );
+  const [result] = JSON.parse(output.stdout);
+  assert.match(result.error, /ECONNREFUSED/);
 });
 
 test('the image scan flags personal data, env files, git, and test trees', async () => {
