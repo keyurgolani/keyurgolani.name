@@ -1,12 +1,18 @@
-# Authoring portfolio.yml
+# Authoring your portfolio
 
-A practical guide to writing a portfolio that reads well and renders cleanly.
+A practical guide to writing a portfolio that reads well and renders cleanly. [configuration.md](configuration.md) is the reference for every field and rule.
 
 For an AI-assisted authoring flow, point an agent at [skills/portfolio-author/SKILL.md](../skills/portfolio-author/SKILL.md).
 
-## Top-level shape
+## The two documents
+
+`config/portfolio.yml` holds the content:
 
 ```yaml
+schemaVersion: 2
+locale: en
+direction: ltr
+
 identity:
   name: Anamika Devi
   tagline: Distributed systems engineer.
@@ -15,12 +21,6 @@ identity:
   email: anamika@example.com
   avatar: { src: '/me.jpg', alt: 'Author headshot' }
 
-variant: editorial # which packages/variant-* renders the page
-theme: system # light | dark | bright | black | system
-motionPreference: respect-os # respect-os | reduce | full
-colorScheme: warm # variant-defined ids
-typography: classic # variant-defined ids
-
 links:
   - { url: 'https://github.com/anamika', platform: github }
   - { url: 'https://linkedin.com/in/anamika', platform: linkedin }
@@ -28,27 +28,55 @@ links:
 
 sections:
   - kind: hero
+    id: top
     tagline: Building systems that matter at scale.
   - kind: lede
+    id: about
+    title: About
     body: |
       Multi-line prose about who you are and what you do. Markdown is honored.
-  # … more sections
+  # more sections
 ```
 
-Every field on `identity`, every section `kind`, every enum is defined in `packages/schema/src/`. That's the source of truth. The fast-reference catalog is at [`skills/portfolio-author/references/schema.md`](../skills/portfolio-author/references/schema.md).
+`config/site.yml` holds how it looks and which sections show:
+
+```yaml
+schemaVersion: 2
+appearance:
+  variant: editorial # which packages/variant-* lays out the page
+  designLanguage: platform-neutral
+  colorScheme: warm # an id the variant declares
+  typography: classic # an id the variant declares
+  displayMode: system # system | light | dark
+visitorControls:
+  variant: locked
+  designLanguage: locked
+  colorScheme: selectable
+  typography: locked
+  displayMode: selectable
+motionPolicy: respect-os # respect-os | reduce
+features:
+  feed: true
+# Hide a section without deleting it, by its id in portfolio.yml:
+# sections:
+#   about:
+#     hidden: true
+```
+
+Every section needs an `id`: lowercase words joined by hyphens, unique in the portfolio. It's the section's anchor, so keep it stable once links point at it. Every field and kind is defined in `packages/schema/src/`, the source of truth. The quick reference is [`skills/portfolio-author/references/schema.md`](../skills/portfolio-author/references/schema.md).
 
 ## Picking sections
 
-The schema offers ~28 section kinds. Strong portfolios use 6–10. More than that and the page becomes a list-of-lists.
+The schema has 28 core section kinds. Strong portfolios use 6 to 10. More than that and the page becomes a list of lists.
 
 ### By career stage
 
-| Stage           | Lead with                                         | Often skip                          |
-| --------------- | ------------------------------------------------- | ----------------------------------- |
-| Early (0–3 yrs) | hero, lede, projects, skills, education, contact  | tenure, stats, awards, press        |
-| Mid (3–8 yrs)   | + experience, tenure, github, external-portfolios | discography, patents                |
-| Senior (8+ yrs) | + stats, awards, talks/publications, focus        | education (drop unless prestigious) |
-| Career-changer  | hero, lede, projects (new domain), skills         | tenure, experience tail             |
+| Stage                | Lead with                                         | Often skip                          |
+| -------------------- | ------------------------------------------------- | ----------------------------------- |
+| Early (0 to 3 years) | hero, lede, projects, skills, education, contact  | tenure, stats, awards, press        |
+| Mid (3 to 8 years)   | + experience, tenure, github, external-portfolios | discography, patents                |
+| Senior (8+ years)    | + stats, awards, talks/publications, focus        | education (drop unless prestigious) |
+| Career-changer       | hero, lede, projects (new domain), skills         | tenure, experience tail             |
 
 ### By intent
 
@@ -61,68 +89,68 @@ The schema offers ~28 section kinds. Strong portfolios use 6–10. More than tha
 | Open-source / maker   | github, projects, focus, fun-facts                      | services, testimonials          |
 | Photographer / artist | gallery, external-portfolios                            | skills, stack                   |
 
-The full matrix lives at [`skills/portfolio-author/references/curation.md`](../skills/portfolio-author/references/curation.md).
+The full matrix lives at [`skills/portfolio-author/references/curation.md`](../skills/portfolio-author/references/curation.md). A practice the core kinds don't cover can add its own through a content extension: see [configuration.md](configuration.md#extensions).
 
 ## Section ordering
 
-Rules of thumb, roughly in order of importance:
+The order of `sections` is the page order. Rules of thumb, roughly in order of importance:
 
 1. **`hero` first.** Always.
-2. **`lede` second.** Or merge into hero if it fits in one paragraph.
-3. **Signal-dense before list-dense.** `tenure`/`stats`/`focus` give visitors context before they scroll into `experience`/`projects`.
-4. **Body of work — pick a lead:**
-   - **Showcase-first** (default): `projects` → `skills` → `experience` → `education` → `publications` → `writings` → `talks` → `awards`. Lead with strongest work; experience is supporting context.
-   - **Resume-first** (recruiter audience): `experience` → `education` → `projects` → `skills` → ... Recruiters skim experience first.
-5. **Voice sections (`testimonials`, `press`, `quote`) go LATE.** They're proof points, not opening arguments.
-6. **`external-portfolios` and `github` cluster near `contact`.** They're "where else to find me."
-7. **`contact`/`cta` are always last.**
+2. **`lede` second.** Or merge it into the hero if it fits in one paragraph.
+3. **Signal-dense before list-dense.** `tenure`, `stats`, and `focus` give visitors context before they scroll into `experience` and `projects`.
+4. **Body of work: pick a lead.**
+   - **Showcase-first** (default): `projects`, `skills`, `experience`, `education`, `publications`, `writings`, `talks`, `awards`. Lead with the strongest work; experience is supporting context.
+   - **Resume-first** (recruiter audience): `experience`, `education`, `projects`, `skills`, and so on. Recruiters skim experience first.
+5. **Voice sections (`testimonials`, `press`, `quote`) go late.** They're proof points, not opening arguments.
+6. **`external-portfolios` and `github` cluster near `contact`.** They're where else to find you.
+7. **`contact` and `cta` are always last.**
 
-The first three sections appear in OG image previews, so treat them like the front cover.
+The first sections are what a visitor sees before scrolling, so treat them like the front cover. To take a section off the page without deleting it, hide it in `site.yml`.
 
 ## Section kind quick reference
 
-| Kind                  | Purpose                                                  | Use when                                    |
-| --------------------- | -------------------------------------------------------- | ------------------------------------------- |
-| `hero`                | Identity + tagline at the top of the page                | Always                                      |
-| `lede`                | One-paragraph "what I do and why you should care"        | Almost always                               |
-| `now`                 | Current focus — what you're working on this week         | High-leverage when fresh, costly when stale |
-| `experience`          | Chronological work history with role highlights          | When jobs matter as proof                   |
-| `education`           | Schools, degrees, dates                                  | When recent or prestigious                  |
-| `projects`            | Curated body of work, often the resume itself for makers | When projects are stronger than employers   |
-| `writings`            | Blog posts, essays                                       | When you write publicly                     |
-| `publications`        | Academic / formal publications                           | Academia, research                          |
-| `talks`               | Conference / podcast appearances                         | When you speak publicly                     |
-| `awards`              | Recognitions                                             | Sparingly                                   |
-| `episodes`            | Podcast appearances as a guest                           | When you guest-podcast often                |
-| `patents`             | Filed or granted patents                                 | Industrial / hardware                       |
-| `gallery`             | Image grid                                               | Photographers, artists                      |
-| `discography`         | Tracks / releases                                        | Musicians                                   |
-| `testimonials`        | Quoted endorsements                                      | Freelancers, consultants                    |
-| `press`               | Articles written about you                               | Public-facing folks                         |
-| `quote`               | Single quote about your work                             | Like testimonials but tighter               |
-| `skills`              | Grouped skills lists                                     | Engineers (with restraint)                  |
-| `stack`               | Curated tools you use                                    | Makers, indies                              |
-| `services`            | What you offer for hire                                  | Freelancers                                 |
-| `contact`             | Email + form / message                                   | Always                                      |
-| `cta`                 | Call-to-action banner before contact                     | Job hunt, open-to-work                      |
-| `stats`               | "By the numbers" headline figures                        | When numbers tell a story                   |
-| `focus`               | What you're optimizing for                               | Senior IC / leadership                      |
-| `fun-facts`           | Off-the-page personal                                    | Personal brand                              |
-| `tenure`              | "X years in" headline                                    | Senior, with strong narrative               |
-| `external-portfolios` | Links to other sites where work lives                    | Cross-discipline                            |
-| `github`              | Live GitHub data                                         | Engineers                                   |
+| Kind                  | Purpose                                                    | Use when                                    |
+| --------------------- | ---------------------------------------------------------- | ------------------------------------------- |
+| `hero`                | Identity and tagline at the top of the page                | Always                                      |
+| `lede`                | One paragraph on what you do and why a visitor should care | Almost always                               |
+| `now`                 | Current focus: what you're working on this week            | High-leverage when fresh, costly when stale |
+| `experience`          | Chronological work history with role highlights            | When jobs matter as proof                   |
+| `education`           | Schools, degrees, dates                                    | When recent or prestigious                  |
+| `projects`            | Curated body of work, often the resume itself for makers   | When projects are stronger than employers   |
+| `writings`            | Blog posts, essays                                         | When you write publicly                     |
+| `publications`        | Academic or formal publications                            | Academia, research                          |
+| `talks`               | Conference talks, panels, interviews                       | When you speak publicly                     |
+| `awards`              | Recognitions                                               | Sparingly                                   |
+| `episodes`            | Episodes of a podcast or video series                      | When you host a show                        |
+| `patents`             | Filed or granted patents                                   | Industrial, hardware                        |
+| `gallery`             | Image grid                                                 | Photographers, artists                      |
+| `discography`         | Tracks and releases                                        | Musicians                                   |
+| `testimonials`        | Quoted endorsements                                        | Freelancers, consultants                    |
+| `press`               | Articles written about you                                 | Public-facing work                          |
+| `quote`               | A single quote about your work                             | Like testimonials, but tighter              |
+| `skills`              | Grouped skills lists                                       | Engineers (with restraint)                  |
+| `stack`               | Curated tools you use                                      | Makers, indies                              |
+| `services`            | What you offer for hire                                    | Freelancers                                 |
+| `contact`             | Email and links                                            | Always                                      |
+| `cta`                 | Call-to-action banner before contact                       | Job hunt, open to work                      |
+| `stats`               | Headline figures                                           | When numbers tell a story                   |
+| `focus`               | What you're putting energy into now                        | Senior IC, leadership                       |
+| `fun-facts`           | Off-the-page personal notes                                | Personal brand                              |
+| `tenure`              | A years-in headline                                        | Senior, with a strong narrative             |
+| `external-portfolios` | Links to other sites where your work lives                 | Cross-discipline                            |
+| `github`              | Live GitHub data                                           | Engineers                                   |
 
 Full per-kind schema with field-by-field docs: [`skills/portfolio-author/references/section-kinds.md`](../skills/portfolio-author/references/section-kinds.md).
 
 ## Quality rules
 
-Concrete length numbers and tone guidance for user-facing copy live at [`skills/portfolio-author/references/quality-rules.md`](../skills/portfolio-author/references/quality-rules.md). The short version:
+Concrete length numbers and tone guidance for visitor-facing copy live at [`skills/portfolio-author/references/quality-rules.md`](../skills/portfolio-author/references/quality-rules.md). The short version:
 
-- **Hero `tagline`:** 4–10 words. One claim, no commas-as-conjunctions.
-- **`subtagline`:** 1 sentence, ≤ 120 chars. Adds context to the tagline.
-- **`lede.body`:** 60–180 words. One paragraph. Concrete detail, no buzzwords.
-- **`experience.items[].highlights[]`:** ≤ 25 words each. Lead with the verb.
-- **`projects.items[].description`:** 1–2 sentences. What it does, not how.
+- **Hero `tagline`:** 4 to 10 words. One claim, no commas used as conjunctions.
+- **`subtagline`:** 1 sentence, at most 120 characters. It adds context to the tagline.
+- **`lede.body`:** 60 to 180 words. One paragraph. Concrete detail, no buzzwords.
+- **`experience.items[].highlights[]`:** at most 25 words each. Lead with the verb.
+- **`projects.items[].description`:** 1 or 2 sentences. What it does, not how.
 - **No emojis** anywhere. Use plain prose.
 - **No "passionate about" anything.** It reads as filler.
 
@@ -132,10 +160,10 @@ Concrete length numbers and tone guidance for user-facing copy live at [`skills/
 node skills/portfolio-author/scripts/validate.mjs config
 ```
 
-It checks `config/portfolio.yml` and `config/site.yml` together. Exit 0 = valid, warnings aside. Exit 1 = a problem blocks the pair, each printed with its file, line, column, JSON pointer, code, and how to fix it.
+It checks `config/portfolio.yml` and `config/site.yml` together. Exit 0 means valid, warnings aside. Exit 1 means a problem blocks the pair, and each one is printed with its file, line, column, JSON pointer, code, and how to fix it. `pnpm config:validate` prints the same records, and [configuration.md](configuration.md#validation) explains each code.
 
-`portfolio.example.yml` is the canonical reference — if your file diverges from its shape and the schema rejects it, look at the example for the right shape.
+`portfolio.example.yml` and `site.example.yml` are the canonical references. If a document diverges from their shape and the schema rejects it, look at the examples for the right shape.
 
 ## When you're stuck
 
-If you're not sure which sections fit your situation, hand the [`skills/portfolio-author/`](../skills/portfolio-author/) skill to an AI agent (Claude Code, Copilot CLI, Cursor) along with your raw materials (resume, LinkedIn export, GitHub username). The skill is designed to interview you and produce a valid `portfolio.yml`.
+If you're not sure which sections fit your situation, hand the [`skills/portfolio-author/`](../skills/portfolio-author/) skill to an AI agent (Claude Code, Copilot CLI, Cursor) along with your raw materials (resume, LinkedIn export, GitHub username). The skill interviews you and produces a valid pair.

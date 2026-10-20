@@ -63,7 +63,7 @@ It checks both documents. Each problem names the file, the line and column, and 
 
 ### 3. Variants and themes
 
-`appearance.variant` in `config/site.yml` selects the active variant. The example's is `editorial`. Change the line and reload to switch. The rest of the appearance sits beside it:
+`appearance.variant` in `config/site.yml` selects the active variant. The example's is `editorial`. Change the line and reload to switch. Each variant has its own color scheme and typography ids, so pick those from the new variant too: `kinetic-cosmos` offers the schemes `nebula`, `aurora`, and `solar`, and the presets `geometric` and `humanist`. The rest of the appearance sits beside it:
 
 ```yaml
 appearance:
@@ -75,7 +75,7 @@ appearance:
 motionPolicy: reduce # respect-os | reduce
 ```
 
-`displayMode` is the theme a visit starts in, and the toggle in the corner of the page lets visitors override it. The schemes/typography are baked into the YAML for now (per-visitor schemas/typography pickers are a future feature).
+`displayMode` is the theme a visit starts in, and the toggle in the corner of the page lets visitors override it. Visitors can't pick a color scheme or typography preset yet. `visitorControls` in `site.yml` already records which appearance fields they may change, for the release that adds those pickers. [configuration.md](configuration.md#the-site-document) covers every field.
 
 To see the bundled sample in any registered variant, run the dev server under the `demo` profile:
 
@@ -114,6 +114,7 @@ Production doesn't read `apps/web/.env.development`, so it needs the settings in
 
 ## What to read next
 
+- Every field and rule in both documents: [configuration.md](configuration.md)
 - Authoring deeper portfolios: [authoring.md](authoring.md)
 - Building a custom variant: [variants.md](variants.md)
 - Understanding internals: [architecture.md](architecture.md)

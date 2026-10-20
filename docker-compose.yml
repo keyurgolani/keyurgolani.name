@@ -23,8 +23,8 @@ services:
     tmpfs:
       - /app/apps/web/.next/cache
     volumes:
-      # config/ holds your portfolio.yml. The server reads it once at startup;
-      # restart the container after you edit it.
+      # config/ holds your portfolio.yml and site.yml. The server reads them once
+      # at startup; restart the container after you edit either.
       - ./config:/config:ro
       # Optional: bind-mount user assets into the public dir.
       - ./assets:/app/apps/web/public/assets:ro
