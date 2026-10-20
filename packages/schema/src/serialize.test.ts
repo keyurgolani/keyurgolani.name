@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { parse as parseYaml } from 'yaml';
 import { canonicalize, serialize } from './serialize';
 import { parseSource, type DocumentFormat } from './source';
 
@@ -59,7 +60,8 @@ test('serialize writes schema order, extension data sorted at every level, and a
       '        d:',
       '          - e: 2',
       '            f: 1',
-      '      y: 1',
+      // A YAML 1.1 reader would take a bare y for true.
+      '      "y": 1',
       'sections:',
       '  - kind: "@acme/portfolio-photography/exhibitions"',
       '    id: exhibitions',
@@ -183,7 +185,22 @@ test('only plain JSON data can be written', () => {
   assert.throws(() => canonicalize(new Map()), /plain JSON data only/);
   // One object used twice is written twice, never as an anchor and alias.
   const shared = { a: 1 };
-  assert.equal(serialize({ x: shared, y: shared }, 'yaml'), lines('x:', '  a: 1', 'y:', '  a: 1'));
+  assert.equal(serialize({ x: shared, z: shared }, 'yaml'), lines('x:', '  a: 1', 'z:', '  a: 1'));
+});
+
+test('words a YAML 1.1 reader takes for a boolean or null are quoted, keys and values', () => {
+  const words = ['y', 'Y', 'yes', 'No', 'n', 'ON', 'off', 'True', 'null', 'NULL', '~'];
+  const data = Object.fromEntries(words.map((word) => [word, word]));
+  const yaml = serialize(data, 'yaml');
+  assert.equal(yaml, lines(...words.map((word) => `"${word}": "${word}"`)));
+  // A YAML 1.2 reader gets the same strings back, and so would a 1.1 one.
+  assert.deepEqual(parseYaml(yaml), data);
+  assert.deepEqual(parseYaml(yaml, { version: '1.1' }), data);
+  // Longer words, and these inside longer text, stay plain.
+  assert.equal(
+    serialize({ tagline: 'yes and no', title: 'Online', note: 'nope' }, 'yaml'),
+    lines('tagline: yes and no', 'title: Online', 'note: nope'),
+  );
 });
 
 test('a << key from JSON data is quoted in YAML, so it reads back as a key and not a merge', () => {
