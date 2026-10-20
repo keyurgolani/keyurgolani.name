@@ -183,15 +183,15 @@ Note these down for the report, and append the named values to `vars.sh`.
 11. The portfolio file: the host path of the mount whose destination is `/data/portfolio.yml` (append `PORTFOLIO_FILE`), its size and mtime (`command stat`), and its SHA-256 (`command sha256sum`; append `PORTFOLIO_SHA`). Don't print its content. Compare with what the container reads: `command docker exec "$CONTAINER" sha256sum /data/portfolio.yml`. A different hash means the container serves an older copy, which a rename-based save on the host causes; record it.
 12. Existing backups of the portfolio file or the deployment, such as `portfolio.yml.bak*`, from `command ls -lA`. Note them and leave them alone.
 
-The Compose helper from item 2 passes the project name, the working directory, one `--env-file` per entry of `ENV_FILES` (none when it's empty, so Compose reads `.env` in the working directory as it did when it started the stack), and one `-f` per entry of `COMPOSE_FILES`, in order:
+The Compose helper from item 2 passes the project name, the working directory, and one `-f` per entry of `COMPOSE_FILES`, in order. When `ENV_FILES` is empty, which is the usual case, it passes no `--env-file` at all, so Compose reads `.env` in the working directory as it did when it started the stack:
 
 ```sh
 command cat >> "${BACKUP:?}/vars.sh" <<'EOF'
-kgn21_compose() { command docker compose -p '<project>' --project-directory '<working dir>' --env-file '<env file>' -f '<first file>' -f '<next file>' "$@"; }
+kgn21_compose() { command docker compose -p '<project>' --project-directory '<working dir>' -f '<first file>' -f '<next file>' "$@"; }
 EOF
 ```
 
-If a value contains a single quote, stop and ask the owner. Then run `kgn21_config_check kgn21_compose`. It must report exit 0 and 0 lines. If it doesn't, stop: Compose can't read the files the stack runs from, or it warns about them.
+When `ENV_FILES` lists files, add `--env-file '<file>'` right after `--project-directory '<working dir>'`, once for each entry, in the label's order. Leave no placeholder in the helper. If a value contains a single quote, stop and ask the owner. Then run `kgn21_config_check kgn21_compose`. It must report exit 0 and 0 lines. If it doesn't, stop: Compose can't read the files the stack runs from, or it warns about them.
 
 ## 4. Prior exposure
 
@@ -318,14 +318,16 @@ The rule must show right after each site block's opening line. Check the `.new` 
 
 If an error is inside the rule's lines (the `proxy-lines` output of the `.new` file numbers them), fix the rule file and rebuild the `.new` file. If an error is elsewhere or has no location (a missing certificate, an import, an upstream that doesn't resolve), stop and ask the owner.
 
-Copy it into place with `command cp`, never `cat >`, `sed -i`, or an editor. GNU `cp` writes into the existing file and keeps its inode, so a single-file bind mount sees the change. BusyBox `cp` (Alpine and some NAS systems) replaces the file instead, so a single-file mount keeps the old copy, and the next check catches that. Then check that the proxy sees the rule (for a host service, run `command grep -c` on the file itself):
+Copy it into place with `command cp`, never `cat >`, `sed -i`, or an editor. GNU `cp` writes into the existing file and keeps its inode, so a single-file bind mount sees the change. BusyBox `cp` (Alpine and some NAS systems) replaces the file instead, and a single-file mount then keeps reading the old copy. So note the file's inode, copy, compare the inode, and check that the proxy sees the rule (for a host service, run `command grep -c` on the file itself):
 
 ```sh
+command stat -c %i "${PROXY_CONFIG:?}"
 command cp "${BACKUP:?}/<config name>.new" "${PROXY_CONFIG:?}"
+command stat -c %i "${PROXY_CONFIG:?}"
 command docker exec "${PROXY_CONTAINER:?}" grep -c 'kgn-21 containment' "${PROXY_CONFIG_IN:?}"
 ```
 
-The count must equal the number of site blocks. If it's lower, the proxy doesn't see the new file. Restore it (below) and stop, and tell the owner whether this host's `cp` is BusyBox (`command cp --version` fails or doesn't say GNU).
+On BSD, `stat -f %i` prints the inode. The inode comparison decides whether `cp` wrote into the file. `command cp --version` is only a hint for the report: GNU `cp` prints a version line, BusyBox and BSD `cp` don't, and BSD `cp` writes in place too. The count must equal the number of site blocks. If the inode changed and the proxy mounts this file on its own (not its directory), or the count is lower, the proxy doesn't see the new file. Restore it (below), stop, and tell the owner.
 
 Reload rather than restart: `command docker exec "${PROXY_CONTAINER:?}" caddy reload --config "${PROXY_MAIN_IN:?}" --adapter caddyfile`, `command docker exec "${PROXY_CONTAINER:?}" nginx -s reload`, or `command systemctl reload <unit>` for a host service. If the proxy can't reload without a restart, restore, stop, and ask the owner.
 
@@ -373,11 +375,11 @@ command diff -U0 "${EDIT_FILE:?}" "${BACKUP:?}/<compose name>.new" | kgn21_tools
 
 `compose-edit` sets the service's `image:` (adding it if missing), makes the `/data/portfolio.yml` mount read-only, and names the lines it changed. It stops with a message when the service carries a YAML anchor, merges settings with `<<`, uses `extends`, or lists its volumes inline or through an anchor; stop and ask the owner then. `compose-diff` shows only the changed image and mount lines, drops trailing comments, and must exit 0.
 
-Validate the new file before it goes live. Add a second Compose helper, the same as `kgn21_compose` but with the `.new` file in place of `EDIT_FILE`:
+Validate the new file before it goes live. Add a second Compose helper, the same as `kgn21_compose` but with the `.new` file in place of `EDIT_FILE`. It gets exactly the `--env-file` flags `kgn21_compose` has: one per entry of `ENV_FILES`, right after `--project-directory`, and none when `ENV_FILES` is empty, as here:
 
 ```sh
 command cat >> "${BACKUP:?}/vars.sh" <<'EOF'
-kgn21_compose_new() { command docker compose -p '<project>' --project-directory '<working dir>' --env-file '<env file>' -f '<first file>' -f '<the .new file in place of EDIT_FILE>' "$@"; }
+kgn21_compose_new() { command docker compose -p '<project>' --project-directory '<working dir>' -f '<first file>' -f '<the .new file in place of EDIT_FILE>' "$@"; }
 EOF
 ```
 
@@ -445,7 +447,7 @@ kgn21_compose up -d --no-build --no-deps "${SERVICE:?}"
 command docker inspect --format '{{.Image}}' "${CONTAINER:?}"
 ```
 
-If the config check fails, stop and report; don't run `up`. The last command must print `PREV_IMAGE_ID`. If it doesn't, the old tag now points at another image. Stop and report, and give the owner the exact commands with the values filled in: `docker tag <PREV_IMAGE_ID> <PREV_IMAGE_REF>`, then `docker compose -p <PROJECT> --project-directory <PROJECT_DIR> <one --env-file per ENV_FILES entry> -f <each config file> up -d --no-build --no-deps <SERVICE>`.
+If the config check fails, stop and report; don't run `up`. The last command must print `PREV_IMAGE_ID`. If it doesn't, the old tag now points at another image. Stop and report, and give the owner the exact commands with the values filled in: `docker tag <PREV_IMAGE_ID> <PREV_IMAGE_REF>`, then `docker compose -p <PROJECT> --project-directory <PROJECT_DIR> -f <each config file> up -d --no-build --no-deps <SERVICE>`, with the same `--env-file` flags as `kgn21_compose` after `--project-directory` (none when `ENV_FILES` is empty).
 
 Wait for health with the step 9 loop, then re-run the check through the proxy with the step 7 flags for `SITE` and each address in `OTHER_SITES`, saved as `check-rollback.txt`, `check-rollback-2.txt`, and so on, and judge each like the step 7 runs. Keep the proxy rule, unless the rule itself broke a public route. The report says "rolled back at step 9" or "rolled back at step 10", whichever step's check failed.
 
@@ -550,7 +552,7 @@ Until #18 (homelab migration) moves the live site onto #8 (Owner Studio), the ow
 
 When the run is complete:
 
-> To change the site, edit `<PORTFOLIO_FILE>` on the host in place, for example `cp new.yml <PORTFOLIO_FILE>`. GNU `cp` writes into the existing file. The container has a single-file mount, so a tool that saves by renaming (`sed -i`, some editors, BusyBox `cp`) leaves it on the old copy. If a change doesn't show, run `docker compose -p <PROJECT> --project-directory <PROJECT_DIR> <one --env-file per ENV_FILES entry> -f <each config file> restart <SERVICE>`. Never run `docker compose build` or `up --build` for this project while the Compose file still has a `build:` key: it points at the old checkout. Validate the file first in a full checkout (`pnpm install`, then `node skills/portfolio-author/scripts/validate.mjs <file>`); a file that fails validation turns `/` into an error page and `/feed.xml` into a 500 until you fix it.
+> To change the site, edit `<PORTFOLIO_FILE>` on the host in place, for example `cp new.yml <PORTFOLIO_FILE>`. GNU `cp` writes into the existing file. The container has a single-file mount, so a tool that saves by renaming (`sed -i`, some editors, BusyBox `cp`) leaves it on the old copy. If a change doesn't show, run `docker compose -p <PROJECT> --project-directory <PROJECT_DIR> <the --env-file flags, if any> -f <each config file> restart <SERVICE>`. Never run `docker compose build` or `up --build` for this project while the Compose file still has a `build:` key: it points at the old checkout. Validate the file first in a full checkout (`pnpm install`, then `node skills/portfolio-author/scripts/validate.mjs <file>`); a file that fails validation turns `/` into an error page and `/feed.xml` into a 500 until you fix it.
 
 When the run rolled back or stopped:
 
