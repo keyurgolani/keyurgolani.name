@@ -6,7 +6,8 @@
 #       Starts a mockup-mode HTTP server (server.cjs).
 #
 #   start.sh --mode preview --variant <slug> [--matrix]
-#       Starts the apps/web dev server. Visit /preview/<slug>.
+#       Starts the apps/web dev server, which renders the variant that
+#       config/portfolio.yml selects at /. Set `variant: <slug>` there.
 #       With --matrix, also runs preview-matrix.mjs (requires Playwright).
 set -euo pipefail
 
@@ -53,14 +54,15 @@ case "$MODE" in
       echo "error: --variant <slug> required for preview mode" >&2
       exit 2
     fi
-    echo "Starting dev server. Once it's up, visit:"
-    echo "  http://localhost:3000/preview/$VARIANT"
+    echo "Starting dev server. Set 'variant: $VARIANT' in config/portfolio.yml"
+    echo "(copy portfolio.example.yml there first if config/ is empty). Then visit:"
+    echo "  http://localhost:3000/"
     if [ "$MATRIX" = "1" ]; then
       # Best-effort matrix capture; runs in background once server is up.
       (
-        # Wait until /preview/<slug> responds
+        # Wait until the dev server responds
         for i in $(seq 1 60); do
-          if curl -sf "http://localhost:3000/preview/$VARIANT" >/dev/null 2>&1; then
+          if curl -sf "http://localhost:3000/" >/dev/null 2>&1; then
             break
           fi
           sleep 1
