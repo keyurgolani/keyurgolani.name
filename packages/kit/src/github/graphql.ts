@@ -135,9 +135,11 @@ function clampLimit(n: number): number {
 export async function fetchViaGraphQL(
   input: FetchGitHubDataInput,
   token: string,
+  signal?: AbortSignal,
 ): Promise<GitHubData | null> {
   const response = await revalidatedFetch(GRAPHQL_URL, {
     method: 'POST',
+    signal,
     headers: {
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',

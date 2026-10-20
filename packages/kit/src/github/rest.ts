@@ -38,7 +38,10 @@ interface RESTUser {
  * calendar (GitHub doesn't expose it via REST), no `starsGiven`. Pinned
  * repos are approximated by top-N starred owned repos.
  */
-export async function fetchViaREST(input: FetchGitHubDataInput): Promise<GitHubData | null> {
+export async function fetchViaREST(
+  input: FetchGitHubDataInput,
+  signal?: AbortSignal,
+): Promise<GitHubData | null> {
   const headers: HeadersInit = {
     Accept: 'application/vnd.github+json',
     'X-GitHub-Api-Version': '2022-11-28',
@@ -46,6 +49,7 @@ export async function fetchViaREST(input: FetchGitHubDataInput): Promise<GitHubD
 
   const userRes = await revalidatedFetch(`${REST_URL}/users/${input.username}`, {
     headers,
+    signal,
     next: { revalidate: 3600 },
   });
   if (!userRes.ok) return null;
@@ -53,7 +57,7 @@ export async function fetchViaREST(input: FetchGitHubDataInput): Promise<GitHubD
 
   const reposRes = await revalidatedFetch(
     `${REST_URL}/users/${input.username}/repos?per_page=100&sort=updated`,
-    { headers, next: { revalidate: 3600 } },
+    { headers, signal, next: { revalidate: 3600 } },
   );
   if (!reposRes.ok) return null;
 
@@ -68,7 +72,7 @@ export async function fetchViaREST(input: FetchGitHubDataInput): Promise<GitHubD
   if (input.showRecentlyActive !== false) {
     const recentRes = await revalidatedFetch(
       `${REST_URL}/users/${input.username}/repos?type=owner&sort=pushed&direction=desc&per_page=${recentLimit}`,
-      { headers, next: { revalidate: 3600 } },
+      { headers, signal, next: { revalidate: 3600 } },
     );
     if (recentRes.ok) {
       const recentJson = (await recentRes.json()) as RESTRepo[];

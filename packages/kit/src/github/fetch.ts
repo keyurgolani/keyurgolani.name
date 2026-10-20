@@ -14,13 +14,24 @@ type RevalidatedInit = RequestInit & {
  */
 export const GITHUB_FETCH_TIMEOUT_MS = 3000;
 
+/**
+ * How long one render waits on GitHub in all. fetchGitHubData makes its
+ * requests one after another, so each would otherwise get its own timeout.
+ */
+export const GITHUB_RENDER_BUDGET_MS = 5000;
+
+/**
+ * fetch with the timeout. A signal the caller passes, such as a render's
+ * budget, joins the timeout: whichever aborts first ends the request.
+ */
 export function revalidatedFetch(
   input: RequestInfo | URL,
   init: RevalidatedInit = {},
   timeoutMs = GITHUB_FETCH_TIMEOUT_MS,
 ): Promise<Response> {
+  const timeout = AbortSignal.timeout(timeoutMs);
   return fetch(input, {
     ...init,
-    signal: init.signal ?? AbortSignal.timeout(timeoutMs),
+    signal: init.signal ? AbortSignal.any([init.signal, timeout]) : timeout,
   } as RequestInit);
 }
