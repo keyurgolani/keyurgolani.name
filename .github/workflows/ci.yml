@@ -1,0 +1,299 @@
+# The one CI workflow. `gate` is the only required check: it fails unless every
+# job it needs succeeded, so new jobs join by being added to its `needs`.
+# Every check step runs one `pnpm ci:<job>` script, which is also its local
+# command. On a push to main, `publish` pushes the multi-arch image, tagged only
+# sha-<short>, after `gate` passes. Nothing publishes from a PR or another branch.
+name: ci
+
+on:
+  pull_request:
+    branches: [main, next]
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  # A PR cancels its superseded runs. A push gets one group per commit, so no
+  # push run is ever cancelled.
+  group: ${{ github.event_name == 'pull_request' && format('ci-pr-{0}', github.event.pull_request.number) || format('ci-{0}', github.sha) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # The Node release in the Dockerfile's node:22-alpine digest.
+  NODE_VERSION: 22.23.3
+  TZ: UTC
+  NEXT_TELEMETRY_DISABLED: '1'
+  REPORT_RETENTION_DAYS: ${{ github.event_name == 'pull_request' && 14 || 90 }}
+
+jobs:
+  static:
+    name: static
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - name: Enable pnpm
+        run: corepack enable
+      - name: Install
+        id: install
+        run: pnpm install --frozen-lockfile
+      - name: Install workflow linters
+        id: linters
+        run: |
+          node ci/install-workflow-linters.mjs "$RUNNER_TEMP/workflow-linters"
+          echo "$RUNNER_TEMP/workflow-linters" >> "$GITHUB_PATH"
+      # Each check runs even when an earlier one failed, so one run reports all.
+      - name: pnpm ci:format
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: pnpm ci:format
+      - name: pnpm ci:lint
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: pnpm ci:lint
+      - name: pnpm ci:typecheck
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: pnpm ci:typecheck
+      - name: pnpm ci:skills
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: pnpm ci:skills
+      - name: pnpm ci:registry
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: pnpm ci:registry
+      - name: pnpm ci:deps
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: pnpm ci:deps
+      - name: pnpm ci:pins
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: pnpm ci:pins
+      - name: pnpm ci:workflows
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && steps.linters.outcome == 'success' }}
+        run: pnpm ci:workflows
+      - name: Failure summary
+        if: ${{ always() }}
+        run: node ci/summarize.mjs
+      - name: Upload reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-static
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: ${{ env.REPORT_RETENTION_DAYS }}
+
+  unit:
+    name: unit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - name: Enable pnpm
+        run: corepack enable
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: pnpm ci:unit
+        run: pnpm ci:unit
+      - name: Failure summary
+        if: ${{ always() }}
+        run: node ci/summarize.mjs
+      - name: Upload reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-unit
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: ${{ env.REPORT_RETENTION_DAYS }}
+
+  build:
+    name: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - name: Enable pnpm
+        run: corepack enable
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: pnpm ci:build
+        run: pnpm ci:build
+      - name: Failure summary
+        if: ${{ always() }}
+        run: node ci/summarize.mjs
+      - name: Upload reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-build
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: ${{ env.REPORT_RETENTION_DAYS }}
+
+  browser:
+    name: browser
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    # Browsers come baked into the image, at the version @playwright/test pins.
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+      options: --user 1001
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The image ships Node 24; the app under test runs on the image's Node 22.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - name: Enable pnpm
+        run: corepack enable
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: pnpm ci:build
+        run: pnpm ci:build
+      - name: pnpm ci:browser
+        run: pnpm ci:browser
+      - name: Failure summary
+        if: ${{ always() }}
+        run: node ci/summarize.mjs
+      - name: Upload reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-browser
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: ${{ env.REPORT_RETENTION_DAYS }}
+
+  image:
+    name: image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      IMAGE_TAG: portfolio:ci
+      IMAGE_PLATFORM: linux/amd64
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - name: Enable pnpm
+        run: corepack enable
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      # Builds amd64 without pushing, starts the container, and checks health.
+      - name: pnpm ci:image
+        id: image
+        run: pnpm ci:image
+      - name: pnpm ci:proxy
+        if: ${{ !cancelled() && steps.image.outcome == 'success' }}
+        run: pnpm ci:proxy
+        env:
+          PORTFOLIO_IMAGE: ${{ env.IMAGE_TAG }}
+      - name: Failure summary
+        if: ${{ always() }}
+        run: node ci/summarize.mjs
+      - name: Upload reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-image
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: ${{ env.REPORT_RETENTION_DAYS }}
+
+  gate:
+    name: gate
+    if: ${{ always() }}
+    needs: [static, unit, build, browser, image]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: ci/gate.mjs
+          sparse-checkout-cone-mode: false
+      - name: Require every needed job to succeed
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: node ci/gate.mjs
+
+  publish:
+    name: publish
+    needs: [gate]
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read # check out the commit
+      packages: write # push the image to GHCR
+    env:
+      # Empty when the secret isn't set, which skips the Docker Hub steps.
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # arm64 builds under QEMU until native arm64 runners replace it.
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Log in to Docker Hub
+        if: ${{ env.DOCKERHUB_USERNAME != '' }}
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      # sha-<short> only. The main tag is retired, and latest moves only with
+      # final release tags.
+      - name: Compute image tags
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: |
+            ghcr.io/${{ github.repository }}
+            ${{ env.DOCKERHUB_USERNAME && format('{0}/{1}', env.DOCKERHUB_USERNAME, github.event.repository.name) || '' }}
+          tags: |
+            type=sha,format=short
+          flavor: |
+            latest=false
+      # One build pushed to both registries, so both get the same digest.
+      - name: Build and push
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          provenance: false

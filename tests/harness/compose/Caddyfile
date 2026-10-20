@@ -1,0 +1,12 @@
+{
+	# No ACME and no outbound requests: certificates come from the local CA.
+	local_certs
+	skip_install_trust
+	auto_https disable_redirects
+	admin off
+}
+
+https://portfolio.test {
+	tls internal
+	reverse_proxy app:3000
+}
