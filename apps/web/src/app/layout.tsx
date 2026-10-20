@@ -4,6 +4,7 @@ import type { Portfolio, ThemePreference } from '@portfolio/schema';
 import { THEME_INIT_SCRIPT, ThemeProvider } from '@portfolio/kit';
 import { buildStructuredData } from '@portfolio/kit/seo';
 import { manifest as editorialManifest } from '@portfolio/variant-editorial';
+import { jsonLdScript } from '~/lib/json-ld';
 import { getLive } from '~/server/catalog';
 import { requireDeploymentConfig } from '~/server/config-store';
 import './globals.css';
@@ -63,7 +64,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   const portfolio = await livePortfolio();
   const defaultPreference: ThemePreference = portfolio?.theme ?? 'system';
   const jsonLdBlocks = portfolio
-    ? buildStructuredData(portfolio, { siteUrl: origin }).map((block) => JSON.stringify(block))
+    ? buildStructuredData(portfolio, { siteUrl: origin }).map(jsonLdScript)
     : [];
 
   return (
