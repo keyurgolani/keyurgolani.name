@@ -31,11 +31,11 @@ Run frequently during Wave 2/3, and once final at Phase 3 entry.
 - [ ] `themes` contains both `'light'` and `'dark'`.
 - [ ] DESIGN.md justifies the count of color schemes and typography presets.
 - [ ] Each declared color scheme has both a light and dark CSS block in styles.css. If you declare `'bright'` or `'black'`, those blocks exist too.
-- [ ] Each typography preset renders on `/` when `config/portfolio.yml` sets `variant: <slug>` and `typography: <id>`.
+- [ ] Each typography preset renders at `/sample?variant=<slug>&typography=<id>`.
 
 ## Visual gates (see `references/quality-gates.md`)
 
-- [ ] **Gate A — Visual sanity.** `/` renders, with `variant: <slug>` in `config/portfolio.yml`, with your variant's tokens applied (paper color, font family, theme toggle visible). NOT plain user-agent default.
+- [ ] **Gate A — Visual sanity.** `/sample?variant=<slug>` renders (`scripts/visual-companion/start.sh --mode preview --variant <slug>`), with your variant's tokens applied (paper color, font family, theme toggle visible). NOT plain user-agent default.
 - [ ] **Gate B — Theme × scheme × typography matrix.** ≥ 9 screenshots captured across the meaningful combinations. No contrast bugs surface.
 - [ ] **Gate C — Reduced-motion programmatic verification.**
   - [ ] Canvas pixel-sample stable across 300ms with reduce-motion ON.
@@ -67,7 +67,7 @@ Once all gates pass:
   - Matrix sweep screenshot folder reference.
   - Fidelity targets table from DESIGN.md (port-only) with each box's status.
   - Reduced-motion verification snippets and their results.
-- [ ] Tag the user's `portfolio.yml` `variant: <slug>` to demonstrate live rendering during review.
+- [ ] Demonstrate live rendering during review with `scripts/visual-companion/start.sh --mode preview --variant <slug>`, at `/sample?variant=<slug>`.
 
 ## Warnings
 

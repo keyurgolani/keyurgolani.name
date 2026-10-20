@@ -21,7 +21,7 @@ This builds a production image, mounts `config/` into the container read-only, a
 - Multi-stage build: deps → build → run.
 - Installs only production dependencies in the runtime stage.
 - Runs `pnpm build` to produce a Next.js standalone output. The build needs no deployment settings, and the image sets no `PORTFOLIO_*` defaults.
-- Reads the portfolio from `PORTFOLIO_SOURCE_DIR`, the mounted `config/`. It never renders the bundled example in production.
+- Under `read-only` and `owner`, reads the portfolio from `PORTFOLIO_SOURCE_DIR`, the mounted `config/`, and never renders the bundled example in production.
 
 ### Startup checks
 
@@ -33,7 +33,7 @@ Before it takes a request, the server validates its settings and the portfolio. 
 - a source directory that is missing or unreadable, that is a file rather than the directory holding it, that holds zero or several portfolio documents, or that holds a `portfolio.toml` (TOML is no longer read);
 - a portfolio that isn't one plain YAML or JSON document (anchors, aliases, merge keys, tags, directives, and a second document are refused), that repeats a key in a mapping, that is over 1 MiB, nests more than 64 levels deep, or holds more than 10,000 entries in one mapping or list, that doesn't declare `schemaVersion: 2`, that fails the schema, or that gives two sections the same `id`;
 - a key the schema doesn't define, anywhere but inside `extensions` (the message suggests the closest allowed key), or a `url`, `src`, or `*Url` value that isn't an `https`, `http`, `mailto`, or `tel` URL, a relative path, or a `#fragment` (image sources may also be raster `data:image` URLs);
-- in production, an origin on a reserved example domain, or the bundled sample's `identity.name`.
+- in production under `read-only` and `owner`, an origin on a reserved example domain, or the bundled sample's `identity.name`.
 
 Data under an `extensions` key, or a section whose `kind` is `<npm package name>/<name>`, belongs to a content extension. This release registers none, so the server keeps that data as written, logs a `config.warning` with code `extension_unregistered` for each use, and never renders it.
 
