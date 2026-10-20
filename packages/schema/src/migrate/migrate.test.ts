@@ -90,7 +90,7 @@ test('content keeps its pointers in the portfolio document', () => {
   assert.deepEqual(migration.diagnostics, []);
 });
 
-test('meta.url is removed and printed as the proposed PORTFOLIO_ORIGIN', () => {
+test('meta.url is removed and printed, on its own line, as a starting point for PORTFOLIO_ORIGIN', () => {
   const migration = plan(run('meta-url.yml', { set: BASELINE }));
   assert.equal(migration.origin, 'https://rowan-old.test');
   assert.deepEqual(changes(migration, 'removed'), [
@@ -104,9 +104,54 @@ test('meta.url is removed and printed as the proposed PORTFOLIO_ORIGIN', () => {
   // meta held only the url, so the portfolio has no meta at all.
   assert.equal('meta' in (migration.portfolio.data as object), false);
   const report = formatMigration(migration, { file: 'meta-url.yml' });
-  assert.ok(report.includes('Proposed PORTFOLIO_ORIGIN: https://rowan-old.test.'));
+  // No period after the origin, so it copies cleanly.
+  assert.ok(
+    report.includes(
+      '\n    https://rowan-old.test (from meta.url; set PORTFOLIO_ORIGIN to the real public origin)\n',
+    ),
+    report,
+  );
   assert.ok(
     !formatMigration(migration, { file: 'meta-url.yml', summary: true }).includes('rowan-old'),
+  );
+});
+
+test('the pair is checked against --origin, never the old meta.url, which may name another domain', () => {
+  // The old file's meta.url is a stale .com, and its links the real .name.
+  const text = [
+    'identity:',
+    '  name: Rowan Origin',
+    'links:',
+    '  - url: https://rowan.name/',
+    'meta:',
+    '  url: https://rowan.com',
+    'sections:',
+    '  - kind: lede',
+    '    title: About',
+    '    body: Hi.',
+    '',
+  ].join('\n');
+  const options = { catalog: CATALOG, set: BASELINE };
+  const unchecked = plan(migrate({ text, format: 'yaml' }, options));
+  assert.equal(unchecked.status, 'ready');
+  assert.deepEqual(unchecked.diagnostics, []);
+  assert.ok(unchecked.notChecked.includes('origin.stale'), unchecked.notChecked.join(', '));
+  assert.match(
+    formatMigration(unchecked, { file: 'old.yml' }),
+    /\nNot checked: [^\n]*origin\.stale[^\n]* Pass --origin <url> with the site's real public origin/,
+  );
+  const checked = plan(
+    migrate({ text, format: 'yaml' }, { ...options, origin: 'https://rowan.name' }),
+  );
+  assert.deepEqual(checked.diagnostics, []);
+  assert.ok(!checked.notChecked.some((entry) => entry.startsWith('origin.')));
+  // Against a stale origin the real links would warn, which is why it's never the old meta.url.
+  const stale = plan(
+    migrate({ text, format: 'yaml' }, { ...options, origin: 'https://rowan.com' }),
+  );
+  assert.deepEqual(
+    stale.diagnostics.map(({ code }) => code),
+    ['origin.stale'],
   );
 });
 
@@ -237,8 +282,9 @@ test('section ids follow the old anchors: top, the slugified title, else the kin
       ['main-2', 'reserved'],
       // Cut at a hyphen to fit 64 characters.
       ['a-very-long-title-that-keeps-going-well-past-the-sixty-four', 'title'],
-      ['contact', 'kept'],
+      // The navigation linked the titled one, so it keeps the id first.
       ['contact-2', 'repeated'],
+      ['contact', 'kept'],
     ],
   );
   assert.ok(migration.ids.every(({ id }) => id.length <= 64));
@@ -323,7 +369,6 @@ test('a key the old schema dropped is listed, and stops the write unless dropped
     '/customFooter',
     '/links/0/rel',
     '/meta/keywords',
-    '/sections/0/lang',
     '/sections/1/items/0/metric',
     '/sections/2/items/0/period/note',
   ];
@@ -331,7 +376,10 @@ test('a key the old schema dropped is listed, and stops the write unless dropped
     kept.unknown.map(({ pointer }) => pointer),
     pointers,
   );
-  assert.deepEqual([kept.unknown[0]!.line, kept.unknown[0]!.column], [6, 3]);
+  assert.deepEqual([kept.unknown[0]!.line, kept.unknown[0]!.column], [7, 3]);
+  // A section's lang that's a language tag carries over as it is.
+  const sections = (kept.portfolio.data as { sections: Record<string, unknown>[] }).sections;
+  assert.equal(sections[0]!.lang, 'en');
   assert.equal(kept.status, 'blocked');
   const dropped = plan(run('unknown-keys.yml', { set: BASELINE, dropUnknown: true }));
   assert.equal(dropped.status, 'ready');
@@ -544,4 +592,302 @@ test('--set takes <portfolio|site>.<path>=<value>, and never reaches Object.prot
       reasons: [`--set ${argument!.slice(0, argument!.indexOf('='))}: ${reason}`],
     });
   }
+});
+
+// Review of PR #32. Secret-shaped strings are built here from parts, so no
+// committed line looks like one.
+const TOKEN = ['gh', 'p_', 'A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8'].join('');
+const KEY_BODY = ['MIIEowIBAAKCAQEA', 'canaryKeyBodyLineOne', 'x'.repeat(24)].join('');
+const KEY_TAIL = ['canaryKeyBodyLineTwo', 'z'.repeat(36)].join('');
+const PEM = [
+  ['-----BEGIN', 'RSA', 'PRIVATE', 'KEY-----'].join(' '),
+  KEY_BODY,
+  KEY_TAIL,
+  ['-----END', 'RSA', 'PRIVATE', 'KEY-----'].join(' '),
+].join('\n');
+const AWS = ['AK', 'IA', 'ABCDEFGHIJKLMNOP'].join('');
+
+const legacy = (...more: string[]) =>
+  [
+    'identity:',
+    '  name: Rowan Secret',
+    'sections:',
+    '  - kind: hero',
+    '    tagline: Calm.',
+    '  - kind: lede',
+    '    title: About',
+    '    body: Hello.',
+    ...more,
+    '',
+  ].join('\n');
+const indent = (text: string, by: string) => text.split('\n').join(`\n${by}`);
+
+test('secret-shaped text in the old file withholds every value, the diff, and both documents', () => {
+  const cases: Array<{ name: string; text: string; format?: 'yaml' | 'json'; drop?: boolean }> = [
+    {
+      name: 'a key in a block scalar of a known field',
+      text: legacy(
+        '  - kind: lede',
+        '    title: Keys',
+        `    body: |\n      ${indent(PEM, '      ')}`,
+      ),
+    },
+    {
+      name: 'a key in a key the old schema dropped, dropped',
+      text: `${legacy()}deployKey: |\n  ${indent(PEM, '  ')}\n`,
+      drop: true,
+    },
+    {
+      name: 'a token folded across two lines',
+      text: `${legacy()}notes: "${TOKEN.slice(0, 20)}\\\n  ${TOKEN.slice(20)}"\n`,
+      drop: true,
+    },
+    { name: 'an access key in a comment', text: `# ${AWS}\n${legacy()}` },
+    {
+      name: 'a key in a JSON line',
+      format: 'json',
+      text: JSON.stringify(
+        {
+          identity: { name: 'Rowan Secret' },
+          sections: [{ kind: 'lede', title: 'About', body: PEM }],
+        },
+        null,
+        2,
+      ),
+    },
+  ];
+  for (const { name, text, format = 'yaml', drop = false } of cases) {
+    const migration = plan(
+      migrate({ text, format }, { catalog: CATALOG, set: BASELINE, dropUnknown: drop }),
+    );
+    assert.ok(migration.secrets.length > 0, name);
+    for (const summary of [false, true]) {
+      const report = formatMigration(migration, { file: 'old.yml', summary });
+      for (const part of [KEY_BODY, KEY_TAIL, TOKEN, TOKEN.slice(4), TOKEN.slice(20), AWS]) {
+        assert.ok(!report.includes(part), `${name}: ${part.slice(0, 12)}`);
+      }
+      assert.match(report, /\nSecret-shaped text, which no document may hold\./, name);
+      assert.ok(!report.includes('as a diff from'), name);
+      assert.ok(!report.includes('\nsite.yml:\n') && !report.includes('\nsite.json:\n'), name);
+      // Nor any other value: the summary's rules hold.
+      assert.ok(!report.includes('Rowan Secret'), name);
+    }
+  }
+  const located = plan(
+    migrate(
+      {
+        text: `# ${AWS}\n${legacy('  - kind: lede', '    title: T', `    body: "${TOKEN}"`)}`,
+        format: 'yaml',
+      },
+      { catalog: CATALOG, set: BASELINE },
+    ),
+  );
+  assert.deepEqual(
+    located.secrets.map(({ in: at, pointer, line }) => [at, pointer, line]),
+    [
+      ['value', '/sections/2/body', 12],
+      ['comment', undefined, 1],
+    ],
+  );
+  const report = formatMigration(located, { file: 'old.yml' });
+  assert.ok(report.includes('  /sections/2/body (line 12, column 11): a GitHub token.'), report);
+  assert.ok(report.includes('  The comment on line 1: an AWS access key ID.'));
+  // A secret-shaped --set value is one too.
+  const given = plan(
+    run('minimal.yml', { set: [...BASELINE, parseSet(`portfolio.identity.tagline=${TOKEN}`)] }),
+  );
+  assert.deepEqual(
+    given.secrets.map(({ in: at, path }) => [at, path]),
+    [['set', 'portfolio.identity.tagline']],
+  );
+  assert.ok(!formatMigration(given, { file: 'old.yml' }).includes(TOKEN.slice(4)));
+});
+
+test('the sections the old navigation linked keep their anchors, and a changed one is reported', () => {
+  const text = [
+    'identity:',
+    '  name: Rowan Ids',
+    'sections:',
+    '  - kind: hero',
+    '    ctas:',
+    "      - { url: '#projects', label: Work }",
+    '  - kind: projects',
+    '    title: Projects',
+    '    hidden: true',
+    '    items: []',
+    '  - kind: projects',
+    '    title: Projects',
+    '    items: [{ name: Shipyard }]',
+    '',
+  ].join('\n');
+  const migration = plan(migrate({ text, format: 'yaml' }, { catalog: CATALOG, set: BASELINE }));
+  assert.deepEqual(
+    migration.ids.map(({ id, anchor }) => [id, anchor]),
+    [
+      ['top', 'top'],
+      ['projects-2', 'projects'],
+      ['projects', 'projects'],
+    ],
+  );
+  // The hero's link still lands, so nothing blocks.
+  assert.equal(migration.status, 'ready');
+  assert.deepEqual(migration.diagnostics, []);
+  const report = formatMigration(migration, { file: 'old.yml' });
+  assert.ok(
+    report.includes(
+      "  /sections/1 is projects-2, from its title. The old page's anchor for it was #projects.",
+    ),
+    report,
+  );
+  assert.ok(report.includes('  /sections/2 is projects, from its title.\n'));
+  assert.ok(
+    formatMigration(migration, { file: 'old.yml', summary: true }).includes(
+      '  /sections/1 gets an id, from its title. Its anchor on the old page differs.',
+    ),
+  );
+  // So does an id the hidden one gives itself.
+  const explicit = plan(
+    migrate(
+      {
+        text: text.replace('    title: Projects\n    hidden', '    id: projects\n    hidden'),
+        format: 'yaml',
+      },
+      { catalog: CATALOG, set: BASELINE },
+    ),
+  );
+  assert.deepEqual(
+    explicit.ids.map(({ id, source }) => [id, source]),
+    [
+      ['top', 'hero'],
+      ['projects-2', 'repeated'],
+      ['projects', 'title'],
+    ],
+  );
+  assert.equal(explicit.status, 'ready');
+});
+
+test('a title with no letter or digit an id can use is not called untitled', () => {
+  const text = legacy('  - kind: now', "    title: '日本語'", '    body: Now.');
+  const migration = plan(migrate({ text, format: 'yaml' }, { catalog: CATALOG, set: BASELINE }));
+  assert.deepEqual(
+    migration.ids.slice(2).map(({ id, source }) => [id, source]),
+    [['now', 'unusable']],
+  );
+  const report = formatMigration(migration, { file: 'old.yml' });
+  assert.ok(
+    report.includes(
+      "  /sections/2 is now, from its kind: its title has no letter or digit an id can use. The old page's anchor for it was #日本語.",
+    ),
+    report,
+  );
+  // That anchor isn't an id this release takes, so there's no --set to keep it.
+  assert.ok(!report.includes('--set portfolio.sections.2.id'));
+});
+
+test('the first dry run checks the pair, with placeholders for the values it needs', () => {
+  const text = legacy(
+    '  - kind: cta',
+    '    title: Next',
+    "    primaryAction: { url: '#nowhere', label: Go }",
+  );
+  const migration = plan(migrate({ text, format: 'yaml' }, { catalog: CATALOG }));
+  assert.equal(migration.status, 'blocked');
+  assert.deepEqual(
+    migration.needs.map(({ path }) => path),
+    ['site.appearance.colorScheme', 'site.appearance.typography'],
+  );
+  // The content problem shows now, and nothing about the placeholders does.
+  assert.deepEqual(
+    migration.diagnostics.map(({ code, document, pointer }) => [code, document, pointer]),
+    [['anchor.broken', 'portfolio', '/sections/2/primaryAction/url']],
+  );
+  assert.match(
+    formatMigration(migration, { file: 'old.yml' }),
+    /\nDiagnostics in the new documents, checked with placeholders for the values still needed:\n {2}blocks-publish anchor\.broken /,
+  );
+  // Without a variant there's nothing to check the color scheme and typography against.
+  const unregistered = plan(run('variant-unregistered.yml'));
+  assert.ok(
+    unregistered.diagnostics.every(({ pointer }) => !pointer.startsWith('/appearance/')),
+    JSON.stringify(unregistered.diagnostics),
+  );
+});
+
+test('a summary masks the ids in --set paths, and a failure shows no schemaVersion value', () => {
+  const migration = plan(
+    run('owner.yml', {
+      set: [...BASELINE, parseSet('site.sections.talks.hidden=true')],
+      dropUnknown: true,
+    }),
+  );
+  const summary = formatMigration(migration, { file: 'owner.yml', summary: true });
+  assert.ok(!summary.includes('talks'), summary);
+  assert.ok(summary.includes(' --set site.sections.<its id>.hidden=<value> '), summary);
+  for (const [text, shown] of [
+    ['schemaVersion: 3\nidentity: {}\n', 'schemaVersion 3'],
+    [`schemaVersion: "${KEY_BODY}"\nidentity: {}\n`, "a schemaVersion that isn't a number"],
+  ] as const) {
+    const failed = migrate({ text, format: 'yaml' });
+    assert.ok(formatMigration(failed, { file: 'p.yml' }).includes(`declares ${shown},`), text);
+    const logged = formatMigration(failed, { file: 'p.yml', summary: true });
+    assert.ok(logged.includes('declares a schemaVersion, which'), logged);
+    assert.ok(!logged.includes('3') && !logged.includes('canaryKeyBody'), logged);
+  }
+});
+
+test('the command it suggests quotes each word for the shell', () => {
+  const migration = plan(
+    run('content.yml', {
+      set: [...BASELINE, parseSet("portfolio.identity.tagline=Rowan's calm $(software)")],
+    }),
+  );
+  assert.equal(migration.status, 'ready');
+  const report = formatMigration(migration, { file: 'my old file.yml' });
+  assert.ok(
+    report.includes(
+      "pnpm config:migrate 'my old file.yml' --set site.appearance.colorScheme=warm --set site.appearance.typography=classic --set 'portfolio.identity.tagline=Rowan'\\''s calm $(software)' --write --out <dir>",
+    ),
+    report,
+  );
+});
+
+test('a locale, direction, or section lang the old file has carries over', () => {
+  const text = [
+    'locale: pt-BR',
+    'direction: rtl',
+    'identity:',
+    '  name: Rowan Locale',
+    'sections:',
+    '  - kind: lede',
+    '    title: About',
+    '    lang: en',
+    '    body: Hi.',
+    '  - kind: now',
+    '    title: Now',
+    '    lang: not a tag',
+    '    body: Now.',
+    '',
+  ].join('\n');
+  const migration = plan(migrate({ text, format: 'yaml' }, { catalog: CATALOG, set: BASELINE }));
+  const portfolio = migration.portfolio.data as {
+    locale: string;
+    direction: string;
+    sections: { lang?: string }[];
+  };
+  assert.deepEqual([portfolio.locale, portfolio.direction], ['pt-BR', 'rtl']);
+  assert.equal(portfolio.sections[0]!.lang, 'en');
+  assert.deepEqual(changes(migration, 'moved').slice(0, 2), [
+    ['/locale', 'portfolio:/locale', undefined, ''],
+    ['/direction', 'portfolio:/direction', undefined, ''],
+  ]);
+  assert.ok(
+    !changes(migration, 'default').some(
+      ([, to]) => to === 'portfolio:/locale' || to === 'portfolio:/direction',
+    ),
+  );
+  // A lang that isn't a language tag is an unknown key, as before.
+  assert.deepEqual(
+    migration.unknown.map(({ pointer }) => pointer),
+    ['/sections/1/lang'],
+  );
 });

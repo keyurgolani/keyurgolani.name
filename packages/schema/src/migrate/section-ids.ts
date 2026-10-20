@@ -3,7 +3,7 @@ import { isPlainObject } from '../json';
 
 // Section ids for an old file, which may leave them out or write them in any
 // shape (#4, item 20). The generated ids are the anchors the old navigation
-// linked to: the old kit's slugify() of the title, or of the kind.
+// linked to: the old kit's slugify() of the id, the title, or the kind.
 
 /** The old kit's slugify, so a generated id is the anchor visitors had. */
 export function slugify(text: string): string {
@@ -14,50 +14,86 @@ export function slugify(text: string): string {
     .replace(/^-+|-+$/g, '');
 }
 
-/** Why a section got the id it did. */
+/**
+ * Why a section got the id it did. `kind`: it has no title. `unusable`: its
+ * title has no letter or digit an id can use, so the id comes from its kind.
+ */
 export type IdSource =
-  'kept' | 'set' | 'hero' | 'title' | 'kind' | 'slugified' | 'repeated' | 'reserved';
+  'kept' | 'set' | 'hero' | 'title' | 'kind' | 'unusable' | 'slugified' | 'repeated' | 'reserved';
 
 export interface AssignedId {
   readonly index: number;
   readonly id: string;
   readonly source: IdSource;
+  /**
+   * The id the old page gave the section, which its navigation and links
+   * pointed at: the old kit's ensureSectionId() of the id, else the title,
+   * else the kind, and `top` for a hero. Hidden sections had none on the
+   * page; this is the one they'd have had.
+   */
+  readonly anchor: string;
+}
+
+/** The old kit's ensureSectionId(), as the navigation and the hero called it. */
+function oldAnchor(section: Record<string, unknown>): string {
+  const text = (value: unknown) => (typeof value === 'string' && value !== '' ? value : undefined);
+  const id = text(section.id);
+  if (id !== undefined && slugify(id) !== '') return slugify(id);
+  const kind = text(section.kind) ?? 'section';
+  const fallback = kind === 'hero' ? 'top' : (text(section.title) ?? kind);
+  return slugify(fallback) || fallback;
+}
+
+/** Whether the old navigation linked the section: shown, titled, and not a hero or call to action. */
+function navLinked(section: Record<string, unknown>): boolean {
+  return (
+    section.hidden !== true &&
+    section.kind !== 'hero' &&
+    section.kind !== 'cta' &&
+    typeof section.title === 'string' &&
+    section.title !== ''
+  );
 }
 
 /**
- * One id per section. Ids the file (or `--set`) gives in the right shape are
- * kept, first come first served. Every other section gets `top` for a hero,
- * else its slugified title, else its kind; an id in the wrong shape is
- * slugified the same way. Each is cut at a hyphen to fit 64 characters, and
- * takes the next free `-2`, `-3` when it's taken or reserved (`main`), in
- * document order.
+ * One id per section. An id the file (or `--set`) gives in the right shape is
+ * kept while it's free. Every other section gets `top` for a hero, else its
+ * slugified title, else its kind; an id in the wrong shape is slugified the
+ * same way. Each is cut at a hyphen to fit 64 characters, and takes the next
+ * free `-2`, `-3` when it's taken or reserved (`main`). The `--set` ids go
+ * first, as the owner chose them. Then the sections the old navigation linked
+ * claim theirs, in document order, so the links visitors followed keep
+ * working, and then the rest, in document order.
  */
 export function assignSectionIds(
   sections: readonly unknown[],
   preset: ReadonlyMap<number, string> = new Map(),
 ): AssignedId[] {
+  const fieldsOf = (section: unknown): Record<string, unknown> =>
+    isPlainObject(section) ? section : {};
   const given = sections.map((section, index) => {
-    const id = preset.get(index) ?? (isPlainObject(section) ? section.id : undefined);
+    const id = preset.get(index) ?? fieldsOf(section).id;
     return typeof id === 'string' ? id : undefined;
   });
   const taken = new Set<string>();
   const assigned = new Map<number, AssignedId>();
-  // Well-shaped ids first, `--set` ones before the file's, so a generated id
-  // never takes one the owner chose.
-  const order = [...given.keys()].sort((a, b) => Number(!preset.has(a)) - Number(!preset.has(b)));
-  for (const index of order) {
+  const record = (index: number, id: string, source: IdSource) =>
+    assigned.set(index, { index, id, source, anchor: oldAnchor(fieldsOf(sections[index])) });
+  const claim = (index: number) => {
     const id = given[index];
     if (id !== undefined && isSectionId(id) && !taken.has(id)) {
       taken.add(id);
-      assigned.set(index, { index, id, source: preset.has(index) ? 'set' : 'kept' });
+      record(index, id, preset.has(index) ? 'set' : 'kept');
+    } else {
+      generate(index);
     }
-  }
-  sections.forEach((section, index) => {
-    if (assigned.has(index)) return;
+  };
+  const generate = (index: number) => {
     const id = given[index];
-    const fields = isPlainObject(section) ? section : {};
+    const fields = fieldsOf(sections[index]);
     const kind = typeof fields.kind === 'string' ? fields.kind : 'section';
-    const title = typeof fields.title === 'string' ? slugify(fields.title) : '';
+    const titled = typeof fields.title === 'string' && fields.title !== '';
+    const title = titled ? slugify(fields.title as string) : '';
     let base: string;
     let source: IdSource;
     if (id !== undefined && slugify(id) !== '') {
@@ -76,12 +112,18 @@ export function assignSectionIds(
       source = 'title';
     } else {
       base = slugify(kind) || 'section';
-      source = 'kind';
+      source = titled ? 'unusable' : 'kind';
     }
     const free = nextFree(base, taken);
     taken.add(free);
-    assigned.set(index, { index, id: free, source });
-  });
+    record(index, free, source);
+  };
+  for (const index of [...preset.keys()].sort((a, b) => a - b)) {
+    if (index < sections.length) claim(index);
+  }
+  const rest = [...sections.keys()].filter((index) => !assigned.has(index));
+  for (const index of rest) if (navLinked(fieldsOf(sections[index]))) claim(index);
+  for (const index of rest) if (!assigned.has(index)) claim(index);
   return sections.map((_, index) => assigned.get(index)!);
 }
 

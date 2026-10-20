@@ -1,3 +1,4 @@
+import type { SecretKind } from '../secrets';
 import type { DocumentFormat } from '../source';
 import type { Diagnostic } from '../validate';
 import type { AssignedId } from './section-ids';
@@ -54,6 +55,19 @@ export interface SetValue {
   readonly value: string;
 }
 
+/** Where the old file, or a `--set` value, holds secret-shaped text. Never the text. */
+export interface SecretSpot {
+  readonly kind: SecretKind;
+  /** A value or a key at `pointer`, a YAML comment, or the `--set` value for `path`. */
+  readonly in: 'value' | 'key' | 'comment' | 'set';
+  /** For a value, the pointer to it; for a key, to the object that has it. Redacted. */
+  readonly pointer?: string;
+  /** For a `--set` value, its path. */
+  readonly path?: string;
+  readonly line?: number;
+  readonly column?: number;
+}
+
 /** The documents the migration would write, and everything it found doing it. */
 export interface MigrationPlan {
   /** `ready`: nothing stops writing. `blocked`: see needs, unknown, and diagnostics. */
@@ -71,17 +85,35 @@ export interface MigrationPlan {
   readonly unknown: readonly UnknownKey[];
   /** Whether `unknown` keys are dropped from the new documents, as with `--drop-unknown`. */
   readonly dropUnknown: boolean;
-  /** The new pair's own diagnostics, once nothing is needed. */
+  /**
+   * The new pair's own diagnostics. Values still needed are filled with
+   * placeholders for the check, and the records at their pointers left out.
+   */
   readonly diagnostics: readonly Diagnostic[];
+  /** The checks the pair didn't get, such as the link checks without an origin. */
+  readonly notChecked: readonly string[];
   /** Lines of the old file's comments, which the new documents don't keep. */
   readonly comments: readonly number[];
-  /** The origin `meta.url` named, for PORTFOLIO_ORIGIN. */
+  /**
+   * Secret-shaped text in the old file, dropped keys and comments included,
+   * or in a `--set` value. While there's any, the report shows no value, no
+   * diff, and neither document.
+   */
+  readonly secrets: readonly SecretSpot[];
+  /** The origin `meta.url` named, a starting point for PORTFOLIO_ORIGIN. */
   readonly origin?: string;
 }
 
 export type Migration =
   /** The file is already a schemaVersion 2 document. */
   | { readonly status: 'current'; readonly document: 'portfolio' | 'site' }
-  /** The file can't be migrated: it doesn't parse, or it isn't the old format. */
-  | { readonly status: 'failed'; readonly reasons: readonly string[] }
+  /**
+   * The file can't be migrated: it doesn't parse, or it isn't the old format.
+   * `summary` has the reasons without any value from the file, for a log.
+   */
+  | {
+      readonly status: 'failed';
+      readonly reasons: readonly string[];
+      readonly summary?: readonly string[];
+    }
   | MigrationPlan;

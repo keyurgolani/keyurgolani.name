@@ -1,8 +1,9 @@
 import { DEFAULT_SCHEMAS } from '../compose';
 import { allowedKeysAt } from '../hints';
 import { isPlainObject } from '../json';
+import { LanguageTagSchema } from '../kinds/common';
 import { PORTFOLIO_DEFAULTS, SITE_DEFAULTS } from '../legacy';
-import { SCHEMA_VERSION } from '../portfolio';
+import { DirectionSchema, SCHEMA_VERSION } from '../portfolio';
 import { redactedPointer } from '../secrets';
 import { toPointer, type Locate } from '../source';
 import { assignSectionIds, type AssignedId } from './section-ids';
@@ -53,7 +54,22 @@ function oldKeysAt(legacy: Record<string, unknown>, path: Path): ReadonlySet<str
   return keys;
 }
 
-/** Every key the old schema would have dropped, in document order. */
+/**
+ * Whether a key the old schema dropped is one version 2 reads, with a value
+ * it accepts: `locale`, `direction`, and a section's `lang`, which a file may
+ * already have. Those carry over instead.
+ */
+function carriesOver(path: Path, value: unknown): boolean {
+  const [top, , field] = path;
+  if (path.length === 1 && top === 'locale') return LanguageTagSchema.safeParse(value).success;
+  if (path.length === 1 && top === 'direction') return DirectionSchema.safeParse(value).success;
+  if (path.length === 3 && top === 'sections' && field === 'lang') {
+    return LanguageTagSchema.safeParse(value).success;
+  }
+  return false;
+}
+
+/** Every key the old schema would have dropped, in document order, but those that carry over. */
 function droppedByOldSchema(legacy: Record<string, unknown>): Path[] {
   const found: Path[] = [];
   const walk = (node: unknown, path: Path): void => {
@@ -64,8 +80,9 @@ function droppedByOldSchema(legacy: Record<string, unknown>): Path[] {
     if (!isPlainObject(node)) return;
     const keys = oldKeysAt(legacy, path);
     for (const [key, child] of Object.entries(node)) {
-      if (keys && !keys.has(key)) found.push([...path, key]);
-      else walk(child, [...path, key]);
+      const at = [...path, key];
+      if (keys && !keys.has(key) && !carriesOver(at, child)) found.push(at);
+      else walk(child, at);
     }
   };
   walk(legacy, []);
@@ -130,19 +147,21 @@ export function legacyStep(
       note: note ?? '',
     });
 
-  // The portfolio: content keeps its pointers.
-  const portfolio: Record<string, unknown> = {
-    schemaVersion: SCHEMA_VERSION,
-    locale: PORTFOLIO_DEFAULTS.locale,
-    direction: PORTFOLIO_DEFAULTS.direction,
-  };
-  added('portfolio', '/locale', PORTFOLIO_DEFAULTS.locale, 'Pages were always marked en.');
-  added(
-    'portfolio',
-    '/direction',
-    PORTFOLIO_DEFAULTS.direction,
-    'Pages were always left to right.',
-  );
+  // The portfolio: content keeps its pointers. A locale or direction the file
+  // already has carries over; the old pages had en and left to right.
+  const portfolio: Record<string, unknown> = { schemaVersion: SCHEMA_VERSION };
+  for (const [key, note] of [
+    ['locale', 'Pages were always marked en.'],
+    ['direction', 'Pages were always left to right.'],
+  ] as const) {
+    if (Object.hasOwn(data, key)) {
+      portfolio[key] = data[key];
+      moved(`/${key}`, 'portfolio', `/${key}`);
+    } else {
+      portfolio[key] = PORTFOLIO_DEFAULTS[key];
+      added('portfolio', `/${key}`, PORTFOLIO_DEFAULTS[key], note);
+    }
+  }
   for (const key of ['identity', 'links'] as const) if (key in data) portfolio[key] = data[key];
 
   let origin: string | undefined;

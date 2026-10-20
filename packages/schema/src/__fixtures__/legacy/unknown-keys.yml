@@ -1,6 +1,7 @@
 # Mapping row: keys the old schema dropped when it read the file, including
-# ones only version 2 reads (extensions, a section's lang, and a stat's
-# metric). Each is listed, and stops --write unless --drop-unknown.
+# ones only version 2 reads (extensions and a stat's metric). Each is listed,
+# and stops --write unless --drop-unknown. A section's lang that's a language
+# tag is the exception: version 2 reads it as it is, so it carries over.
 identity:
   name: Rowan Unknown
   nickname: Ro

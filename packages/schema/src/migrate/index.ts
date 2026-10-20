@@ -2,6 +2,7 @@ import type { ContentExtension } from '../extensions';
 import { isPlainObject } from '../json';
 import { detectDocument } from '../legacy';
 import { SCHEMA_VERSION } from '../portfolio';
+import { findSecrets, redactedPointer, redactSecrets, secretKind } from '../secrets';
 import { serialize } from '../serialize';
 import { DisplayModeSchema, type AppearanceSelection } from '../site';
 import {
@@ -14,7 +15,7 @@ import {
 } from '../source';
 import { validatePublicationUnit, type AppearanceCatalog } from '../validate';
 import { legacyStep, type LegacyStepResult } from './legacy-step';
-import type { Change, Migration, Need, NeedReason, SetValue } from './types';
+import type { Change, Migration, Need, NeedReason, SecretSpot, SetValue } from './types';
 
 // `@portfolio/schema/migrate`: converts old documents to this release's
 // (#4, item 19). Pure: text in, documents and a report out. `pnpm
@@ -34,6 +35,12 @@ export interface MigrateOptions {
   readonly catalog?: AppearanceCatalog;
   /** The content extensions the new documents are checked against. */
   readonly extensions?: readonly ContentExtension[];
+  /**
+   * The site's origin, which the new pair's links are checked against. Never
+   * the old meta.url, which often names another domain. Without it, those
+   * checks go in `notChecked`.
+   */
+  readonly origin?: string;
 }
 
 /** What a step passes on: the documents so far, and what each step found. */
@@ -101,9 +108,18 @@ export function migrate(
   if (type === 'portfolio' || type === 'site') {
     const version = (parsed.data as Record<string, unknown>).schemaVersion;
     if (version === SCHEMA_VERSION) return { status: 'current', document: type };
-    return failed(
-      `The file declares schemaVersion ${JSON.stringify(version)}, which no migration step reads. This release writes ${SCHEMA_VERSION}.`,
-    );
+    // Only a number is shown: any other value could be text pasted there.
+    const declared =
+      typeof version === 'number' && Number.isFinite(version)
+        ? `schemaVersion ${version}`
+        : "a schemaVersion that isn't a number";
+    const why = (what: string) =>
+      `The file declares ${what}, which no migration step reads. This release writes ${SCHEMA_VERSION}.`;
+    return {
+      status: 'failed',
+      reasons: [why(declared)],
+      summary: [why('a schemaVersion')],
+    };
   }
   if (type !== 'legacy') {
     return failed('The file is neither the old one-file format nor a schemaVersion 2 document.');
@@ -159,20 +175,37 @@ export function migrate(
     return failed(`The new documents can't be written: ${(error as Error).message}`);
   }
   const extension = format === 'json' ? 'json' : 'yml';
-  const diagnostics =
-    needs.length > 0
-      ? []
-      : validatePublicationUnit(
-          {
-            portfolio: { text: portfolioText, format, name: `portfolio.${extension}` },
-            site: { text: siteText, format, name: `site.${extension}` },
-          },
-          {
-            catalog: options.catalog,
-            extensions: options.extensions,
-            ...(step.origin ? { canonicalOrigin: step.origin } : {}),
-          },
-        ).diagnostics;
+  // The pair is checked even while values are needed, so content problems
+  // show on the first run: placeholders stand in for those values, and the
+  // records at their pointers are left out. Without a variant, the color
+  // scheme and typography can't be checked either.
+  const skipped = new Set(needs.map(({ path }) => `/${path.split('.').slice(1).join('/')}`));
+  if (skipped.has('/appearance/variant')) {
+    skipped.add('/appearance/colorScheme').add('/appearance/typography');
+  }
+  let checkedSite = siteText;
+  if (needs.length > 0) {
+    const stand = structuredClone(site);
+    for (const need of needs) {
+      const value = need.accepts?.[0] ?? PLACEHOLDERS[need.path] ?? 'placeholder';
+      setAt(stand, need.path.split('.').slice(1), value);
+    }
+    checkedSite = serialize(stand, format);
+  }
+  const checked = validatePublicationUnit(
+    {
+      portfolio: { text: portfolioText, format, name: `portfolio.${extension}` },
+      site: { text: checkedSite, format, name: `site.${extension}` },
+    },
+    {
+      catalog: options.catalog,
+      extensions: options.extensions,
+      ...(options.origin ? { canonicalOrigin: options.origin } : {}),
+    },
+  );
+  const diagnostics = checked.diagnostics.filter(
+    ({ document, pointer }) => !(document === 'site' && skipped.has(pointer)),
+  );
 
   const dropUnknown = options.dropUnknown ?? false;
   if (dropUnknown) {
@@ -202,9 +235,51 @@ export function migrate(
     unknown: step.unknown,
     dropUnknown,
     diagnostics,
+    notChecked: checked.notChecked,
     comments: format === 'yaml' ? commentLines(source.text) : [],
+    secrets: secretsIn(parsed.data, parsed.locate, source, sets),
     ...(step.origin ? { origin: step.origin } : {}),
   };
+}
+
+/** What stands in for a value still needed, where the catalog lists none, while the pair is checked. */
+const PLACEHOLDERS: Readonly<Record<string, string>> = {
+  'site.appearance.variant': 'placeholder',
+  'site.appearance.displayMode': 'system',
+  'site.motionPolicy': 'respect-os',
+};
+
+/**
+ * Every place the old file holds secret-shaped text, keys the old schema
+ * dropped and YAML comments included, and every `--set` value that's
+ * secret-shaped. A PEM key spans lines, so redacting a line at a time would
+ * still print its body: while there's any, the report withholds values.
+ */
+function secretsIn(
+  data: unknown,
+  locate: Locate,
+  source: { readonly text: string; readonly format: DocumentFormat },
+  sets: readonly SetValue[],
+): SecretSpot[] {
+  const spots: SecretSpot[] = findSecrets(data, locate).map(
+    ({ path, kind, in: at, line, column }) => ({
+      kind,
+      in: at,
+      pointer: redactedPointer(path),
+      ...(line !== undefined ? { line, column } : {}),
+    }),
+  );
+  if (source.format === 'yaml') {
+    for (const { text, line, column } of yamlComments(source.text)) {
+      const kind = secretKind(text);
+      if (kind) spots.push({ kind, in: 'comment', line, column });
+    }
+  }
+  for (const { path, value } of sets) {
+    const kind = secretKind(value);
+    if (kind) spots.push({ kind, in: 'set', path: redactSecrets(path) });
+  }
+  return spots;
 }
 
 function coerce(value: string): string | boolean {
