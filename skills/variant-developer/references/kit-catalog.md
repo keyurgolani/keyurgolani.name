@@ -40,13 +40,14 @@ If they disagree, the source wins.
 
 ## Motion (`@portfolio/kit`)
 
-| Export                  | Signature                                       | Use when                                                |
-| ----------------------- | ----------------------------------------------- | ------------------------------------------------------- |
-| `useMotionPreference`   | `(policy?: MotionPolicy) => 'reduce' \| 'full'` | Reading the resolved motion mode in a client component. |
-| `shouldReduceMotion`    | `(policy: MotionPolicy, osReduce) => boolean`   | Synchronous server-side check or non-hook contexts.     |
-| `ResolvedMotion` (type) | `'reduce' \| 'full'`                            | Annotating motion-aware props.                          |
+| Export                  | Signature                                       | Use when                                                                  |
+| ----------------------- | ----------------------------------------------- | ------------------------------------------------------------------------- |
+| `MotionPolicyProvider`  | component `{ policy?: MotionPolicy, children }` | Wrapping the variant's page, with the `motionPolicy` from `VariantProps`. |
+| `useMotionPreference`   | `(policy?: MotionPolicy) => 'reduce' \| 'full'` | Reading the resolved motion mode in a client component.                   |
+| `shouldReduceMotion`    | `(policy: MotionPolicy, osReduce) => boolean`   | Synchronous server-side check or non-hook contexts.                       |
+| `ResolvedMotion` (type) | `'reduce' \| 'full'`                            | Annotating motion-aware props.                                            |
 
-`MotionPolicy` is `respect-os` (the default: follow `prefers-reduced-motion`) or `reduce`. No policy animates past an OS reduce preference.
+`MotionPolicy` is `respect-os` (the default: follow `prefers-reduced-motion`) or `reduce`. No policy animates past an OS reduce preference. The host passes the site's policy as `VariantProps.motionPolicy`. A variant wraps its page in `MotionPolicyProvider` with it, so every `useMotionPreference()` below reads it, and puts `data-motion-policy` on its root so its stylesheet can reduce CSS motion under `reduce` as it does under `prefers-reduced-motion`. A `policy` given to the hook, or a component's `motionPreference` prop, can only add a `reduce`: neither undoes the site's.
 
 ## Theme system (`@portfolio/kit`)
 
@@ -54,7 +55,8 @@ If they disagree, the source wins.
 | ---------------------- | -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `ThemeProvider`        | React component `{ children, defaultPreference?, supportedThemes? }` | Wrapping the app root so `useTheme` works.                                                                                                                           |
 | `useTheme`             | `() => { preference, resolved, setPreference }`                      | Reading or changing the active theme inside a variant.                                                                                                               |
-| `THEME_INIT_SCRIPT`    | string                                                               | Inline `<script>` in `app/layout.tsx` to avoid theme flash on first paint.                                                                                           |
+| `themeInitScript`      | `(defaultPreference?: ThemePreference) => string`                    | Inline `<script>` in `app/layout.tsx` to avoid theme flash on first paint: the stored choice, else the page's starting theme (the site's display mode).              |
+| `THEME_INIT_SCRIPT`    | string                                                               | `themeInitScript()` for a page that starts from `system`.                                                                                                            |
 | `resolveTheme`         | `(preference, supported, systemMatch) => ResolvedTheme`              | Resolving the active theme given a preference, a supported-themes list, and a system-preference callback; falls back to light/dark when bright/black are not listed. |
 | `ResolvedTheme` (type) | `'light' \| 'dark' \| 'bright' \| 'black'`                           | Annotating resolved theme props.                                                                                                                                     |
 

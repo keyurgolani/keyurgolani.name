@@ -1811,6 +1811,11 @@
   }
 }
 
+/* The site's motionPolicy: reduce does the same, whatever the OS says. */
+.editorial-root[data-motion-policy='reduce'] .editorial-toc {
+  transition: none;
+}
+
 /* ===========================================================================
  * Print stylesheet — capabilities.print: true means we render well on paper.
  * Hide chrome, force light scheme, control page breaks, expand link URLs.

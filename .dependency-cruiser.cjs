@@ -67,6 +67,17 @@ module.exports = {
       to: { path: '^packages/schema/src/migrate/' },
     },
     {
+      name: 'pair-loader-only-on-the-server',
+      severity: 'error',
+      comment:
+        '@portfolio/schema/node reads the pair from disk (#4, item 5), so only server code, ' +
+        'the config command, and tests import it. The validator it wraps stays browser-safe.',
+      from: {
+        pathNot: ['^apps/web/src/server/', '^apps/web/scripts/', '\\.test\\.(?:tsx?|mjs)$'],
+      },
+      to: { path: '^packages/schema/src/node\\.ts$' },
+    },
+    {
       name: 'operation-registry-imports-no-handlers',
       severity: 'error',
       comment:

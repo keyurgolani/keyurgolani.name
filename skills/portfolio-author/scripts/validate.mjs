@@ -1,26 +1,31 @@
 #!/usr/bin/env node
 /**
- * validate.mjs — validate a portfolio document against @portfolio/schema.
+ * validate.mjs: validate a portfolio's two documents against @portfolio/schema.
  *
- * Usage:   node validate.mjs <path/to/portfolio.yml | portfolio.json>
- * Output:  prints "<file>:<line>:<col>  <message>" for each problem, and
- *          "<file>:<line>:<col>  warning: <message>" for each warning, such
- *          as data from a content extension it doesn't register. Exit 1 on
- *          any problem, 0 otherwise.
+ * Usage:   node validate.mjs <dir>
  *
- * It reads the document the way the server does: @portfolio/schema's
- * parsePortfolio, so the same YAML and JSON rules, schema, and unique section
- * ids apply, and every problem carries its JSON pointer and position.
+ * <dir> holds the pair: portfolio.yml and site.yml, or their .yaml or .json
+ * forms. It prints each record the way `pnpm config:validate` does (where it
+ * is, its code and severity, what's wrong, and how to fix it), then one line
+ * on the pair. Exit 1 when a record blocks the pair or the directory can't be
+ * read, 0 otherwise (warnings may remain), and 2 on a usage error.
  *
- * Loads the schema's TypeScript source via the `tsx` loader because
- * @portfolio/schema has no build step (it exports src/index.ts directly).
+ * It reads the pair the way the server does, through @portfolio/schema/node's
+ * loadPair, against the appearance ids and content extensions this build
+ * registers. Links aren't checked against the site's origin: run `pnpm
+ * config:validate <dir> --origin <url>` for that.
+ *
+ * Loads the TypeScript sources through the `tsx` loader, since the packages
+ * have no build step.
  */
 import { readFileSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import path from 'node:path';
 
-// Try to register tsx so that we can `import` packages/schema/src/index.ts
+// Both loaders: the web app's modules are CommonJS-scoped TypeScript, and the
+// schema package's are ES modules.
 try {
+  await import('tsx/cjs/api').then((m) => m.register());
   await import('tsx/esm/api').then((m) => m.register());
 } catch (e) {
   console.error('error: validate.mjs requires `tsx` to load @portfolio/schema.');
@@ -43,37 +48,63 @@ function findRepoRoot(start) {
   throw new Error('could not find repo root from ' + start);
 }
 
-const __filename = fileURLToPath(import.meta.url);
-const REPO_ROOT = findRepoRoot(__filename);
+const REPO_ROOT = findRepoRoot(fileURLToPath(import.meta.url));
+/**
+ * A module's exports by name. A CommonJS one arrives as `module.exports`
+ * from Node 23 on, and as its default export on Node 22.
+ */
+const load = (file) =>
+  import(pathToFileURL(path.join(REPO_ROOT, file)).href).then(
+    (module) => module['module.exports'] ?? { ...module.default, ...module },
+  );
 
-// Dynamic import after tsx is registered.
-const schemaIndex = path.join(REPO_ROOT, 'packages/schema/src/index.ts');
-const { detectFormat, parsePortfolio } = await import(pathToFileURL(schemaIndex).href);
-if (!parsePortfolio) {
-  console.error('error: @portfolio/schema does not export parsePortfolio');
+const dir = process.argv[2];
+if (!dir || process.argv.length > 3) {
+  console.error(
+    'usage: node validate.mjs <dir>, the directory that holds portfolio.yml and site.yml',
+  );
   process.exit(2);
 }
 
-const file = process.argv[2];
-if (!file) {
-  console.error('usage: node validate.mjs <portfolio.yml | portfolio.json>');
-  process.exit(2);
-}
-
-let format;
+// What this build registers, as `pnpm config:validate` reads it. The variant
+// registry is generated on install (pnpm build:registry).
+let ctx;
 try {
-  format = detectFormat(file);
-} catch (error) {
-  console.error(`error: ${error.message}`);
+  const [{ listManifests }, { createAppearanceCatalog }, { CONTENT_EXTENSIONS }] =
+    await Promise.all([
+      load('apps/web/src/lib/registry.ts'),
+      load('apps/web/src/server/appearance-catalog.ts'),
+      load('apps/web/src/server/content-extensions.ts'),
+    ]);
+  ctx = { catalog: createAppearanceCatalog(listManifests()), extensions: CONTENT_EXTENSIONS };
+} catch (e) {
+  console.error("error: can't load this build's variant registry. Run pnpm install first.");
+  console.error(e?.message ?? e);
   process.exit(2);
 }
 
-const result = parsePortfolio(readFileSync(file, 'utf8'), format);
-const where = ({ line, column }) => (line !== undefined ? `${file}:${line}:${column}` : file);
+const { formatRecords, loadPair, pairFileNames } = await load('packages/schema/src/node.ts');
+const result = loadPair(dir, ctx);
+if (!result.ok && result.directory) {
+  const why = {
+    missing: "doesn't exist",
+    'not-directory': 'is a file',
+    unreadable: "can't be read",
+  };
+  console.log(`${dir} ${why[result.directory]}. Give the directory that holds the pair.`);
+  process.exit(1);
+}
+process.stdout.write(formatRecords(result));
 if (result.ok) {
-  for (const warning of result.warnings)
-    console.log(`${where(warning)}  warning: ${warning.message}`);
+  const { portfolio, site } = pairFileNames(result);
+  const warnings = result.diagnostics.length;
+  console.log(
+    `${portfolio} and ${site} are valid${warnings ? `, with ${warnings} warning${warnings === 1 ? '' : 's'}` : ''}.`,
+  );
   process.exit(0);
 }
-for (const problem of result.problems) console.log(`${where(problem)}  ${problem.message}`);
+const blocking = result.diagnostics.filter(({ severity }) => severity !== 'warning').length;
+console.log(
+  `${dir} can't go live: ${blocking} record${blocking === 1 ? ' blocks' : 's block'} it.`,
+);
 process.exit(1);

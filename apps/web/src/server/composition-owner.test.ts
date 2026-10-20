@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -23,7 +23,10 @@ import { listRoutes, resolveRoute, RETIRED_PATTERNS, routeAccess } from './route
 // minted, and a command passes the origin check when it comes from
 // PORTFOLIO_ORIGIN.
 
-const EXAMPLE = fileURLToPath(new URL('../../../../portfolio.example.yml', import.meta.url));
+const EXAMPLES = {
+  portfolio: fileURLToPath(new URL('../../../../portfolio.example.yml', import.meta.url)),
+  site: fileURLToPath(new URL('../../../../site.example.yml', import.meta.url)),
+};
 const ORIGIN = 'https://rowan.test';
 
 const PROVIDER: AuthProviderFactory = {
@@ -47,7 +50,7 @@ let sourceDir: string;
 function input(overrides: Partial<CompositionInput> = {}): CompositionInput {
   return {
     config,
-    examplePath: EXAMPLE,
+    examples: EXAMPLES,
     report: () => {},
     authProviders: [PROVIDER],
     ...overrides,
@@ -58,8 +61,9 @@ test.before(async () => {
   sourceDir = mkdtempSync(path.join(tmpdir(), 'composition-owner-'));
   writeFileSync(
     path.join(sourceDir, 'portfolio.yml'),
-    'schemaVersion: 2\nlocale: en\ndirection: ltr\nidentity:\n  name: Rowan Test\n',
+    'schemaVersion: 2\nlocale: en\ndirection: ltr\nidentity:\n  name: Rowan Test\nsections:\n  - kind: lede\n    id: about\n    body: Hi.\n',
   );
+  copyFileSync(EXAMPLES.site, path.join(sourceDir, 'site.yml'));
   const read = readDeploymentConfig(
     {
       NODE_ENV: 'production',

@@ -1,0 +1,19 @@
+# origin.stale (a warning, with https://rowan.name as the origin): a link to rowan.com.
+schemaVersion: 2
+locale: en
+direction: ltr
+identity:
+  name: Rowan Fixture
+links:
+  - url: https://rowan.name
+    label: Site
+  - url: https://rowan.com/blog
+    label: Blog
+sections:
+  - kind: lede
+    id: about
+    title: About
+    body: Builds calm software.
+  - kind: contact
+    id: contact
+    title: Contact

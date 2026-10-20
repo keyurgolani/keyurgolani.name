@@ -1,0 +1,111 @@
+{
+  "schemaVersion": 2,
+  "locale": "sv",
+  "direction": "ltr",
+  "identity": {
+    "name": "Mateo Lindqvist",
+    "tagline": "Documentary photographer",
+    "location": "Gothenburg, Sweden",
+    "avatar": {
+      "src": "/images/mateo.jpg",
+      "alt": "Mateo with a medium-format camera"
+    }
+  },
+  "links": [
+    {
+      "platform": "instagram",
+      "url": "https://instagram.test/mateo",
+      "label": "Instagram"
+    }
+  ],
+  "sections": [
+    {
+      "kind": "hero",
+      "id": "top",
+      "tagline": "Harbors, ferries, and the people who keep them running."
+    },
+    {
+      "kind": "gallery",
+      "id": "harbors",
+      "title": "Harbors",
+      "subtitle": "Ten years on the west coast.",
+      "items": [
+        {
+          "image": {
+            "src": "/images/harbor-1.jpg",
+            "alt": "A ferry leaving the harbor at dawn"
+          },
+          "caption": "The 6:10 to Vinga",
+          "takenAt": "2025-03",
+          "location": "Gothenburg"
+        },
+        {
+          "image": {
+            "src": "/images/harbor-2.jpg",
+            "alt": "Nets drying on a quay"
+          },
+          "caption": "Nets, Fiskebäckskil",
+          "takenAt": "2024-08"
+        }
+      ]
+    },
+    {
+      "kind": "external-portfolios",
+      "id": "elsewhere",
+      "title": "Elsewhere",
+      "items": [
+        {
+          "url": "https://prints.lindqvist.test",
+          "brandName": "Lindqvist Prints",
+          "description": "Limited editions of the harbor series.",
+          "categories": [
+            "Prints"
+          ],
+          "buttonText": "Visit the shop"
+        }
+      ]
+    },
+    {
+      "kind": "press",
+      "id": "press",
+      "title": "Press",
+      "items": [
+        {
+          "title": "The quiet coast",
+          "publication": "Fotografisk Tidskrift",
+          "publishedAt": "2025-06-01",
+          "url": "https://tidskrift.test/quiet-coast"
+        }
+      ]
+    },
+    {
+      "kind": "awards",
+      "id": "awards",
+      "title": "Awards",
+      "items": [
+        {
+          "name": "Nordic Documentary Prize",
+          "organization": "Nordic Photo Foundation",
+          "receivedAt": "2024"
+        }
+      ]
+    },
+    {
+      "kind": "services",
+      "id": "commissions",
+      "title": "Commissions",
+      "items": [
+        {
+          "name": "Editorial assignments",
+          "description": "Two-day shoots for magazines and newspapers.",
+          "url": "mailto:mateo@lindqvist.test"
+        }
+      ]
+    },
+    {
+      "kind": "contact",
+      "id": "contact",
+      "title": "Kontakt"
+    }
+  ]
+}

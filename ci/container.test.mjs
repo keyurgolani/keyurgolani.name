@@ -235,8 +235,12 @@ test('the image scan flags personal data, env files, git, and test trees', async
     }
     for (const file of [
       'portfolio.example.yml',
+      'site.example.yml',
       'portfolio.yml',
+      'site.yml',
       'apps/web/portfolio.json',
+      'apps/web/site.json',
+      'apps/web/site.webmanifest',
       '.env',
       'apps/web/.env.local',
       'node_modules/pkg/portfolio.yml',
@@ -251,9 +255,11 @@ test('the image scan flags personal data, env files, git, and test trees', async
       '.git',
       'apps/web/.env.local',
       'apps/web/portfolio.json',
+      'apps/web/site.json',
       'ci',
       'portfolio.yml',
       'reports',
+      'site.yml',
       'tests',
     ]);
   } finally {
@@ -266,8 +272,13 @@ test('the image scan passes a clean tree and reports a missing example', async (
   try {
     mkdirSync(path.join(root, 'apps/web'), { recursive: true });
     writeFileSync(path.join(root, 'apps/web/server.js'), 'x');
-    const scan = JSON.parse((await runNode(['-e', SCAN_SNIPPET, root], {})).stdout);
-    assert.deepEqual(scan, { problems: [], example: false });
+    const scan = async () => JSON.parse((await runNode(['-e', SCAN_SNIPPET, root], {})).stdout);
+    assert.deepEqual(await scan(), { problems: [], example: false });
+    // Both examples, or the demo profile has no sample pair to read.
+    writeFileSync(path.join(root, 'portfolio.example.yml'), 'x');
+    assert.deepEqual(await scan(), { problems: [], example: false });
+    writeFileSync(path.join(root, 'site.example.yml'), 'x');
+    assert.deepEqual(await scan(), { problems: [], example: true });
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

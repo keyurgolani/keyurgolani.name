@@ -45,11 +45,12 @@ const ENV_FILES: AppOptions['envFiles'] = {
 /** The read-only profile on the harness fixture, seeded for the canary scan. */
 export const READ_ONLY_APP: AppOptions = { sourceName: CANARY_SOURCE, envFiles: ENV_FILES };
 
-/** The demo profile on the bundled sample, with no source directory: demo reads none. */
+/** The demo profile on the bundled sample pair, with no source directory: demo reads none. */
 export const DEMO_APP: AppOptions = {
   env: { PORTFOLIO_PROFILE: 'demo', PORTFOLIO_SOURCE_DIR: '' },
   envFiles: ENV_FILES,
   portfolio: null,
+  site: null,
 };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;

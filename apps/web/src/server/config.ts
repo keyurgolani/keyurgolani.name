@@ -56,21 +56,28 @@ export interface DeploymentConfig {
 /**
  * One startup finding. It names the key and, for a document, where in the
  * file the problem is. It never carries a configured value or document text.
+ * A finding in the document pair is one of the schema's diagnostic records
+ * (#4, item 14), as `pnpm config:validate` prints it: its code, document,
+ * pointer, position, message, and remediation.
  */
 export interface ConfigIssue {
   readonly severity: 'fatal' | 'warning';
-  /** Stable reason, such as `required` or `document_invalid`. */
+  /** Stable reason, such as `required`, or a diagnostic code such as `schema.invalid`. */
   readonly code: string;
   readonly key: string;
   readonly message: string;
   /** Document name, relative to the source directory. */
   readonly file?: string;
+  /** For a finding in the document pair, which document it's in. */
+  readonly document?: 'portfolio' | 'site';
   /** JSON pointer into the document. */
   readonly path?: string;
   readonly line?: number;
   readonly column?: number;
-  /** The parser's or the schema's own code for the problem. */
-  readonly issueCode?: string;
+  /** The id of the section the finding is about, when there is one. */
+  readonly stableId?: string;
+  /** How to fix it. Fixed text, which never quotes the document either. */
+  readonly remediation?: string;
 }
 
 /** One JSON line for the startup log, without its newline: `config.fatal` or `config.warning`. */
@@ -83,11 +90,13 @@ export function issueLogLine(issue: ConfigIssue, profile?: Profile, now = new Da
     key: issue.key,
     code: issue.code,
     file: issue.file,
+    document: issue.document,
     path: issue.path,
     line: issue.line,
     column: issue.column,
-    issueCode: issue.issueCode,
+    stableId: issue.stableId,
     message: issue.message,
+    remediation: issue.remediation,
   } as const;
   return logLine(entry, now).slice(0, -1);
 }

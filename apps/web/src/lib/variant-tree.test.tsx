@@ -27,16 +27,34 @@ function variant(themes: readonly string[]): VariantModule {
   };
 }
 
+const SETTINGS = { displayMode: 'black', motionPolicy: 'reduce' } as const;
+
 function provider(themes: readonly string[]) {
-  const tree = variantTree(variant(themes), {} as PublicPortfolio, {}, 'black');
+  const tree = variantTree(variant(themes), {} as PublicPortfolio, {}, SETTINGS);
   assert.equal(tree.type, ThemeProvider);
   return tree.props as { supportedThemes: readonly string[]; defaultPreference: string };
 }
 
-test("the provider takes the selected variant's themes and the host's display mode", () => {
+test("the provider takes the selected variant's themes and the site's display mode", () => {
   const props = provider(['light', 'dark']);
   assert.deepEqual(props.supportedThemes, ['light', 'dark']);
   assert.equal(props.defaultPreference, 'black');
+});
+
+test("the variant gets the selection and the site's motion policy", () => {
+  const tree = variantTree(
+    variant(['light']),
+    { identity: { name: 'Rowan' } } as PublicPortfolio,
+    { colorScheme: 'noir', typography: 'modernist' },
+    SETTINGS,
+  );
+  const page = (tree.props as { children: { props: Record<string, unknown> } }).children;
+  assert.deepEqual(page.props, {
+    portfolio: { identity: { name: 'Rowan' } },
+    colorScheme: 'noir',
+    typography: 'modernist',
+    motionPolicy: 'reduce',
+  });
 });
 
 test('a variant declaring fewer themes resolves bright and black within its own', () => {

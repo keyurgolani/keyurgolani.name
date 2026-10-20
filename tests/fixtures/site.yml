@@ -1,0 +1,18 @@
+# Harness fixture: the site document beside every portfolio fixture. The
+# baseline appearance, Editorial in warm and classic, with the feed on.
+schemaVersion: 2
+appearance:
+  variant: editorial
+  designLanguage: platform-neutral
+  colorScheme: warm
+  typography: classic
+  displayMode: system
+visitorControls:
+  variant: locked
+  designLanguage: locked
+  colorScheme: selectable
+  typography: locked
+  displayMode: selectable
+motionPolicy: respect-os
+features:
+  feed: true

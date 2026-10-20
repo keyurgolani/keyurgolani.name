@@ -27,7 +27,7 @@ function warnings(log: string): Array<[string | undefined, number | undefined]> 
     .split('\n')
     .filter((line) => line.startsWith('{'))
     .map((line) => JSON.parse(line) as Warning)
-    .filter((entry) => entry.event === 'config.warning' && entry.code === 'extension_unregistered')
+    .filter((entry) => entry.event === 'config.warning' && entry.code === 'extension.unregistered')
     .map((entry) => [entry.path, entry.line]);
 }
 

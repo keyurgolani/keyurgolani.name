@@ -115,6 +115,9 @@ export const DIAGNOSTIC_SEVERITIES = {
   'parse.syntax': 'blocks-preview',
   'schema.invalid': 'blocks-preview',
   'schema.version': 'blocks-preview',
+  'source.missing': 'blocks-preview',
+  'source.duplicate': 'blocks-preview',
+  'source.unreadable': 'blocks-preview',
   'legacy.document': 'blocks-preview',
   'site.deployment-setting': 'blocks-preview',
   'appearance.unknown': 'blocks-preview',
@@ -133,12 +136,18 @@ export const DIAGNOSTIC_SEVERITIES = {
 
 export type DiagnosticCode = keyof typeof DIAGNOSTIC_SEVERITIES;
 
-const REMEDIATIONS: Record<DiagnosticCode, string> = {
+/** What to do about each code. `@portfolio/schema/node` raises the `source.*` ones. */
+export const DIAGNOSTIC_REMEDIATIONS: Readonly<Record<DiagnosticCode, string>> = {
   'parse.syntax':
     'Fix the text at this position. A document is one plain YAML or JSON document, with no anchors, aliases, merge keys, tags, or directives.',
   'schema.invalid':
     "Change the value at this pointer to what the schema expects. Data the schema doesn't define goes under extensions, keyed by an npm package name.",
   'schema.version': 'Set schemaVersion: 2. This release reads only version 2 documents.',
+  'source.missing':
+    'Add the document: portfolio.yml and site.yml, or their .yaml or .json forms. portfolio.example.yml and site.example.yml are ones to start from.',
+  'source.duplicate': 'Keep one of them, in the format you edit, and remove the others.',
+  'source.unreadable':
+    "Make the document a file the server's user can read: check its permissions, and that it isn't a directory.",
   'legacy.document': legacyRemediation('<file>'),
   'site.deployment-setting':
     "Remove it. Deployment settings come from the server's environment; docs/deployment.md lists them.",
@@ -219,12 +228,39 @@ export function validatePublicationUnit(
           line: 1,
           column: 1,
           message: 'The validator failed before it could check this pair.',
-          remediation: REMEDIATIONS['validator.failed'],
+          remediation: DIAGNOSTIC_REMEDIATIONS['validator.failed'],
         },
       ],
       notChecked: [],
     };
   }
+}
+
+/**
+ * The legacy.document record the pair check reports for a portfolio document
+ * in the old one-file format, or undefined when it isn't one. For a directory
+ * that holds the old file and no site document yet, as an upgrade finds it.
+ */
+export function legacyDocumentRecord(
+  source: SourceDocument,
+  ctx: Context = {},
+): Diagnostic | undefined {
+  const read = readPortfolio(source.text, source.format, {
+    extensions: ctx.extensions,
+    name: source.name,
+  });
+  const [problem] = read.problems;
+  if (problem?.kind !== 'legacy') return undefined;
+  const found = located(problem);
+  return {
+    code: 'legacy.document',
+    severity: DIAGNOSTIC_SEVERITIES['legacy.document'],
+    document: 'portfolio',
+    pointer: found.pointer,
+    ...(found.line !== undefined ? { line: found.line, column: found.column } : {}),
+    message: found.message,
+    remediation: legacyRemediation(source.name, read.data, ctx.catalog),
+  };
 }
 
 function check(
@@ -244,7 +280,7 @@ function check(
     document: Diagnostic['document'],
     code: DiagnosticCode,
     found: { pointer: string; message: string; line?: number; column?: number },
-    remediation = REMEDIATIONS[code],
+    remediation = DIAGNOSTIC_REMEDIATIONS[code],
   ) => {
     diagnostics.push({
       code,

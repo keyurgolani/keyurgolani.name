@@ -28,9 +28,7 @@ export function served<Rest extends unknown[]>(
         ? Response.json(STARTING, { status: 503, headers: STARTING_HEADERS })
         : plain(503, 'Service unavailable.');
     }
-    return serves(deployment.profile, pattern)
-      ? handler(request, ...rest)
-      : plain(404, 'Not found.');
+    return serves(deployment.profile, pattern) ? handler(request, ...rest) : notFoundResponse();
   };
   return Object.assign(guarded, { [SERVED]: pattern });
 }
@@ -39,6 +37,11 @@ export function served<Rest extends unknown[]>(
 export function servedPattern(value: unknown): string | undefined {
   if (typeof value !== 'function') return undefined;
   return (value as { [SERVED]?: string })[SERVED];
+}
+
+/** The 404 a route that isn't served answers, for a handler that turns a request away itself. */
+export function notFoundResponse(): Response {
+  return plain(404, 'Not found.');
 }
 
 function plain(status: number, text: string): Response {

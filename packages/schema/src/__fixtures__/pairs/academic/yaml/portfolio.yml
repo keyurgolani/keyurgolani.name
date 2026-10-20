@@ -1,0 +1,90 @@
+# Academic work: a researcher with papers, talks, a patent, and teaching.
+schemaVersion: 2
+locale: de
+direction: ltr
+
+identity:
+  name: Dr. Lukas Brenner
+  tagline: Computational ecologist
+  pronouns: he/him
+  location: Leipzig, Germany
+
+links:
+  - platform: orcid
+    url: https://orcid.test/0000-0002-1825-0097
+    label: ORCID
+  - platform: scholar
+    url: https://scholar.test/lukas-brenner
+    label: Scholar
+
+sections:
+  - kind: lede
+    id: research
+    title: Research
+    body: |
+      I model how forests answer drought, one sensor and one hectare at a time.
+
+  - kind: publications
+    id: papers
+    title: Papers
+    items:
+      - title: Drought memory in temperate canopies
+        authors: [Lukas Brenner, Ada Fischer]
+        venue: Global Change Biology
+        publishedAt: 2025-02
+        doi: 10.1111/gcb.17000
+        url: https://doi.test/10.1111/gcb.17000
+        pdfUrl: /papers/drought-memory.pdf
+      - title: Sensor networks for under-canopy climate
+        authors: [Lukas Brenner]
+        venue: Methods in Ecology and Evolution
+        publishedAt: 2022-07
+
+  - kind: talks
+    id: talks
+    title: Talks
+    items:
+      - title: What trees remember
+        venue: Ecological Society of Germany
+        location: Freiburg
+        presentedAt: 2025-09-10
+        type: keynote
+
+  - kind: education
+    id: education
+    title: Education
+    items:
+      - degree: Ph.D.
+        field: Ecology
+        institution: Universität Leipzig
+        period: { start: '2014', end: '2018' }
+
+  - kind: experience
+    id: positions
+    title: Positions
+    items:
+      - role: Group Leader
+        organization: Helmholtz Centre for Environmental Research
+        period: { start: 2021-10 }
+
+  - kind: awards
+    id: grants
+    title: Grants
+    items:
+      - name: ERC Starting Grant
+        organization: European Research Council
+        receivedAt: '2023'
+
+  - kind: patents
+    id: patents
+    title: Patents
+    items:
+      - title: Low-power canopy humidity sensor
+        number: DE-10-2022-000-123
+        status: pending
+        filedAt: 2022-03-01
+        inventors: [Lukas Brenner]
+
+  - kind: contact
+    id: contact
+    title: Kontakt

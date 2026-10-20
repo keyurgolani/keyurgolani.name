@@ -1,0 +1,9 @@
+# legacy.document: the old one-file format, with no schemaVersion.
+identity:
+  name: Rowan Fixture
+variant: editorial
+theme: dark
+sections:
+  - kind: lede
+    title: About
+    body: Builds calm software.

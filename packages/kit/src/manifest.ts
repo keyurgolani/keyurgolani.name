@@ -1,5 +1,5 @@
 import type { ComponentType } from 'react';
-import type { PublicPortfolio, SectionKind } from '@portfolio/schema';
+import type { MotionPolicy, PublicPortfolio, SectionKind } from '@portfolio/schema';
 import type { ThemePreference } from './theme';
 
 /**
@@ -117,6 +117,13 @@ export interface VariantProps {
   /** The selected color scheme and typography preset. Omitted, the variant uses its defaults. */
   colorScheme?: string;
   typography?: string;
+  /**
+   * The site's motion policy. A variant gives it to MotionPolicyProvider
+   * around its page and reduces its own CSS motion under `reduce`, so nothing
+   * animates past what the site and the visitor's OS allow. Omitted, it's
+   * `respect-os`.
+   */
+  motionPolicy?: MotionPolicy;
 }
 
 export interface VariantModule {

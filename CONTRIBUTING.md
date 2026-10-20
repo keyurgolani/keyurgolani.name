@@ -34,10 +34,10 @@ All packages are workspace-linked via `workspace:*` in their dependencies.
 
 ### Edit a portfolio (no code)
 
-Copy `portfolio.example.yml` to `config/portfolio.yml` and edit it. `pnpm dev` picks up each save on the next page load. Validate with:
+Copy `portfolio.example.yml` to `config/portfolio.yml` and `site.example.yml` to `config/site.yml`, and edit them. `pnpm dev` picks up each save on the next page load. Validate the pair with:
 
 ```sh
-node skills/portfolio-author/scripts/validate.mjs config/portfolio.yml
+node skills/portfolio-author/scripts/validate.mjs config
 ```
 
 ### Add a new variant

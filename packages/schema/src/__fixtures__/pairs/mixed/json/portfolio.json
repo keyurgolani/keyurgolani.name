@@ -1,0 +1,86 @@
+{
+  "schemaVersion": 2,
+  "locale": "ar",
+  "direction": "rtl",
+  "identity": {
+    "name": "ليلى حداد",
+    "tagline": "كاتبة ومصممة ومقدّمة بودكاست",
+    "location": "عمّان",
+    "email": "layla@haddad.test"
+  },
+  "links": [
+    {
+      "platform": "website",
+      "url": "https://haddad.test",
+      "label": "haddad.test"
+    }
+  ],
+  "sections": [
+    {
+      "kind": "lede",
+      "id": "about",
+      "title": "نبذة",
+      "body": "أكتب عن المدن، وأصمم الخرائط، وأتحدث مع من يبنونها."
+    },
+    {
+      "kind": "writings",
+      "id": "essays",
+      "title": "مقالات",
+      "items": [
+        {
+          "title": "مدينة على سبعة جبال",
+          "publication": "مجلة الطريق",
+          "publishedAt": "2025-04-12",
+          "url": "https://haddad.test/essays/seven-hills",
+          "readingTimeMinutes": 9
+        }
+      ]
+    },
+    {
+      "kind": "episodes",
+      "id": "podcast",
+      "title": "حلقات",
+      "showName": "خرائط",
+      "items": [
+        {
+          "number": 12,
+          "title": "الدرج القديم",
+          "publishedAt": "2026-02-01",
+          "durationMinutes": 48,
+          "guests": [
+            "سامي يوسف"
+          ],
+          "audioUrl": "https://haddad.test/audio/12.mp3"
+        }
+      ]
+    },
+    {
+      "kind": "talks",
+      "id": "talks",
+      "title": "محاضرات",
+      "items": [
+        {
+          "title": "Maps people draw by hand",
+          "venue": "Amman Design Week",
+          "presentedAt": "2025-09-20",
+          "type": "panel"
+        }
+      ]
+    },
+    {
+      "kind": "cta",
+      "id": "newsletter",
+      "title": "النشرة",
+      "description": "رسالة واحدة في الشهر.",
+      "primaryAction": {
+        "url": "https://haddad.test/newsletter",
+        "label": "اشترك"
+      }
+    },
+    {
+      "kind": "contact",
+      "id": "contact",
+      "title": "تواصل"
+    }
+  ]
+}

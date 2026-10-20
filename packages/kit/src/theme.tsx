@@ -10,12 +10,9 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from 'react';
+import { isThemePreference, THEME_STORAGE_KEY, type ThemePreference } from './theme-init';
 
-/**
- * The visitor's theme choice, stored in localStorage. The kit keeps this type
- * until the appearance axes (#19) replace it with the site's `displayMode`.
- */
-export type ThemePreference = 'light' | 'dark' | 'bright' | 'black' | 'system';
+export type { ThemePreference } from './theme-init';
 
 export type ResolvedTheme = 'light' | 'dark' | 'bright' | 'black';
 
@@ -45,20 +42,11 @@ interface ThemeContextValue {
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
-const STORAGE_KEY = 'portfolio:theme';
-
 function readStoredPreference(): ThemePreference | null {
   if (typeof window === 'undefined') return null;
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (
-      raw === 'light' ||
-      raw === 'dark' ||
-      raw === 'bright' ||
-      raw === 'black' ||
-      raw === 'system'
-    )
-      return raw;
+    const raw = window.localStorage.getItem(THEME_STORAGE_KEY);
+    if (isThemePreference(raw)) return raw;
   } catch {
     // ignore
   }
@@ -129,7 +117,7 @@ export function ThemeProvider({
   const setPreference = useCallback((next: ThemePreference) => {
     setChosen(next);
     try {
-      window.localStorage.setItem(STORAGE_KEY, next);
+      window.localStorage.setItem(THEME_STORAGE_KEY, next);
     } catch {
       // ignore
     }
@@ -150,28 +138,3 @@ export function useTheme(): ThemeContextValue {
   }
   return ctx;
 }
-
-/**
- * Inline script that runs before React hydration to set the data-theme attr,
- * preventing a flash of wrong theme on first paint.
- */
-export const THEME_INIT_SCRIPT = `
-(function () {
-  try {
-    var stored = localStorage.getItem('${STORAGE_KEY}');
-    var pref = stored || 'system';
-    var resolved;
-    if (pref === 'system') {
-      resolved = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-    } else if (pref === 'bright') {
-      resolved = 'light';
-    } else if (pref === 'black') {
-      resolved = 'dark';
-    } else {
-      resolved = pref;
-    }
-    document.documentElement.dataset.theme = resolved;
-    document.documentElement.style.colorScheme = resolved === 'bright' ? 'light' : resolved === 'black' ? 'dark' : resolved;
-  } catch (e) {}
-})();
-`.trim();

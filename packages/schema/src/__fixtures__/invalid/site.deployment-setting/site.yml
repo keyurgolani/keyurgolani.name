@@ -1,0 +1,18 @@
+# site.deployment-setting: the canonical origin, which only the environment sets.
+schemaVersion: 2
+appearance:
+  variant: editorial
+  designLanguage: platform-neutral
+  colorScheme: warm
+  typography: classic
+  displayMode: system
+visitorControls:
+  variant: locked
+  designLanguage: locked
+  colorScheme: selectable
+  typography: locked
+  displayMode: selectable
+motionPolicy: respect-os
+features:
+  feed: true
+origin: https://rowan.name

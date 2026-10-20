@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { NavItem } from '@portfolio/kit';
-import { cn } from '@portfolio/kit';
+import { cn, useMotionPreference } from '@portfolio/kit';
 
 interface TableOfContentsProps {
   items: NavItem[];
@@ -26,6 +26,8 @@ export function TableOfContents({ items, brand, brandHref = '#top' }: TableOfCon
   const [activeId, setActiveId] = useState<string | null>(items[0]?.href.replace(/^#/, '') ?? null);
   const [hidden, setHidden] = useState(false);
   const lastScrollY = useRef(0);
+  // Under reduce a link jumps to its section rather than scrolling there.
+  const behavior: ScrollBehavior = useMotionPreference() === 'reduce' ? 'auto' : 'smooth';
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -93,7 +95,7 @@ export function TableOfContents({ items, brand, brandHref = '#top' }: TableOfCon
     const target = document.getElementById(id);
     if (!target) return;
     event.preventDefault();
-    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    target.scrollIntoView({ behavior, block: 'start' });
     setActiveId(id);
     history.replaceState(null, '', href);
   }

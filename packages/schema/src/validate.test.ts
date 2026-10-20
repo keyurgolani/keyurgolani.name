@@ -894,7 +894,12 @@ test('every diagnostic code comes with a line and column, in YAML and JSON', () 
         );
       }
     }
-    assert.deepEqual([...seen].sort(), Object.keys(DIAGNOSTIC_SEVERITIES).sort(), format);
+    // The source.* codes are about the directory and its files, which only
+    // loadPair() reads (node.test.ts).
+    const unitCodes = Object.keys(DIAGNOSTIC_SEVERITIES).filter(
+      (code) => !code.startsWith('source.'),
+    );
+    assert.deepEqual([...seen].sort(), unitCodes.sort(), format);
   }
 });
 

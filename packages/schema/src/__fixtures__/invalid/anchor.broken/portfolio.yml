@@ -1,0 +1,19 @@
+# anchor.broken: a link to a section the portfolio does not have.
+schemaVersion: 2
+locale: en
+direction: ltr
+identity:
+  name: Rowan Fixture
+links:
+  - url: https://rowan.name
+    label: Site
+  - url: "#projects"
+    label: Projects
+sections:
+  - kind: lede
+    id: about
+    title: About
+    body: Builds calm software.
+  - kind: contact
+    id: contact
+    title: Contact

@@ -1,26 +1,22 @@
 import 'server-only';
-import { createHash } from 'node:crypto';
-import fs from 'node:fs';
 import path from 'node:path';
-import {
-  detectFormat,
-  parsePortfolio,
-  type ContentExtension,
-  type DocumentWarning,
-  type Portfolio,
-} from '@portfolio/schema';
+import type { AppearanceCatalog, ContentExtension, Portfolio } from '@portfolio/schema';
+import { readPair, type PairFiles } from '@portfolio/schema/node';
 import type { CatalogReader, LiveRevision } from './catalog-port';
 import type { ConfigIssue } from './config';
-import { deepFreeze } from './freeze';
+import { frozenUnit, pairDigest, recordIssue } from './pair-records';
 
 // The sample adapter (#1, item 16): the CatalogReader for `demo`. It reads
-// the bundled portfolio.example.yml once at startup, which the standalone
-// output ships through outputFileTracingIncludes, and freezes it. It never
-// reads PORTFOLIO_SOURCE_DIR.
+// the bundled pair, portfolio.example.yml and site.example.yml, once at
+// startup, validates them as a pair, and freezes them. The standalone output
+// ships both through outputFileTracingIncludes. It never reads
+// PORTFOLIO_SOURCE_DIR.
 
 export interface SampleCatalogOptions {
-  /** The bundled example document. */
-  readonly examplePath: string;
+  /** The bundled examples. */
+  readonly examples: PairFiles;
+  /** The appearance ids this build registers, which the sample is checked against. */
+  readonly catalog?: AppearanceCatalog;
   /** The content extensions the sample is checked against, as documents are. Others warn. */
   readonly extensions?: readonly ContentExtension[];
 }
@@ -33,46 +29,55 @@ export type OpenSampleResult =
 // names the profile that needs it.
 const KEY = 'PORTFOLIO_PROFILE';
 
+/** The issue for an example the build lacks, or ships in a form the server can't read. */
+const UNREAD = {
+  'source.missing': [
+    'sample_missing',
+    'The demo profile renders the bundled sample, and this build has none.',
+  ],
+  'source.unreadable': [
+    'sample_unreadable',
+    "The demo profile renders the bundled sample, and the server can't read it.",
+  ],
+} as const;
+
 export function openSampleCatalog({
-  examplePath,
+  examples,
+  catalog,
   extensions,
 }: SampleCatalogOptions): OpenSampleResult {
-  const file = path.basename(examplePath);
-  let bytes: Buffer;
-  try {
-    bytes = fs.readFileSync(/*turbopackIgnore: true*/ examplePath);
-  } catch {
-    return {
-      ok: false,
-      issues: [
-        fatal(
-          'sample_missing',
-          'The demo profile renders the bundled sample, and this build has none.',
-          file,
-        ),
-      ],
-    };
-  }
-  const parsed = parsePortfolio(bytes.toString('utf8'), detectFormat(file), { extensions });
-  if (!parsed.ok) {
+  const result = readPair(examples, { catalog, extensions });
+  if (!result.ok) {
+    const unread = result.diagnostics.find(({ code }) => code in UNREAD);
+    if (unread) {
+      const [code, message] = UNREAD[unread.code as keyof typeof UNREAD];
+      return {
+        ok: false,
+        issues: [fatal(code, message, path.basename(examples[unread.document]))],
+      };
+    }
+    // Which file is enough: the sample's own records would only describe the build.
+    const [first] = result.diagnostics;
     return {
       ok: false,
       issues: [
         fatal(
           'sample_invalid',
           "The bundled sample doesn't validate, so this build is broken.",
-          file,
+          path.basename(examples[first?.document ?? 'portfolio']),
         ),
       ],
     };
   }
+  const { pair, sources } = result;
   const live: LiveRevision = Object.freeze({
-    revisionId: `sample-${createHash('sha256').update(bytes).digest('hex').slice(0, 12)}`,
-    unit: Object.freeze({ portfolio: deepFreeze(withoutLiveData(parsed.value)) }),
+    revisionId: `sample-${pairDigest(sources)}`,
+    unit: frozenUnit(withoutLiveData(pair.portfolio), pair.site),
   });
+  const names = { portfolio: sources.portfolio.name, site: sources.site.name };
   return {
     ok: true,
-    issues: parsed.warnings.map((warning) => warningIssue(warning, file)),
+    issues: result.diagnostics.map((record) => recordIssue(record, KEY, names)),
     reader: Object.freeze({ getLive: async () => live }),
   };
 }
@@ -90,17 +95,4 @@ function withoutLiveData(portfolio: Portfolio): Portfolio {
 
 function fatal(code: string, message: string, file: string): ConfigIssue {
   return { severity: 'fatal', key: KEY, code, message, file };
-}
-
-/** A warning the sample's parse raised, logged as the documents adapter logs one. */
-function warningIssue(warning: DocumentWarning, file: string): ConfigIssue {
-  return {
-    severity: 'warning',
-    key: KEY,
-    code: warning.code,
-    message: warning.message,
-    file,
-    path: warning.pointer,
-    ...(warning.line !== undefined ? { line: warning.line, column: warning.column } : {}),
-  };
 }

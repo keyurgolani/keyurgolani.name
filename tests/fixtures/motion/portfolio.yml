@@ -1,0 +1,51 @@
+# Harness fixture: what Kinetic Cosmos animates. A hero that enters and
+# types, profile links for the floating cards and their shimmer, and an
+# ongoing role for the timeline's pulse, with a contact section far enough
+# down to scroll to. .test hosts only.
+schemaVersion: 2
+locale: en
+direction: ltr
+
+identity:
+  name: Rowan Motion
+  tagline: Builds calm software.
+
+links:
+  - platform: github
+    url: https://code.rowan.test/rowan
+    label: Code
+  - platform: linkedin
+    url: https://people.rowan.test/rowan
+    label: People
+
+sections:
+  - kind: hero
+    id: top
+    greeting: Hello, I'm
+    subtagline: Engineer / Writer
+    tagline: I build calm software.
+
+  - kind: experience
+    id: work
+    title: Work
+    items:
+      - role: Staff engineer
+        organization: Calm Co
+        period: { start: '2023-04' }
+      - role: Engineer
+        organization: Quiet Ltd
+        period: { start: '2018-01', end: '2023-03' }
+
+  - kind: education
+    id: study
+    title: Study
+    items:
+      - degree: BSc
+        field: Computer science
+        institution: Rowan University
+        period: { start: '2014-09', end: '2017-06' }
+
+  - kind: contact
+    id: contact
+    title: Contact
+    message: Write to rowan@rowan.test.

@@ -4,14 +4,15 @@ How the pieces fit together.
 
 ## One-paragraph overview
 
-A single `portfolio.yml` in the deployment's source directory (`config/` in a checkout) drives everything. At startup the Next.js host in `apps/web` checks its deployment settings, reads that file once, validates it against the Zod schema in `@portfolio/schema`, and renders it through the active variant from `packages/variant-*`. Variants are independent React packages that consume `@portfolio/kit` for shared utilities (theming, GitHub fetcher, formatters) and decide everything visual on their own.
+Two documents in the deployment's source directory (`config/` in a checkout) drive everything: `portfolio.yml` holds the content, and `site.yml` how it looks and which sections show. At startup the Next.js host in `apps/web` checks its deployment settings, reads both once, validates them as a pair against `@portfolio/schema`, and renders the portfolio's public view through the site's variant from `packages/variant-*`. Variants are independent React packages that consume `@portfolio/kit` for shared utilities (theming, GitHub fetcher, formatters) and decide everything visual on their own.
 
 ## Data flow
 
 ```
 ┌───────────────────┐
 │  config/          │  Author's content
-│   portfolio.yml   │
+│   portfolio.yml   │  and its site
+│   site.yml        │
 └─────────┬─────────┘
           │ read once at startup (CatalogReader)
           ▼
@@ -91,7 +92,7 @@ The Next.js host. Responsibilities:
 - **Headers** — `next.config.ts` sets `X-Content-Type-Options`, `Referrer-Policy`, and `Content-Security-Policy: frame-ancestors 'none'` on every route.
 - **Variant registry** — `scripts/build-registry.mjs` scans `packages/variant-*` at build time and generates `src/lib/registry.generated.ts` mapping slug → component.
 - **Routing** — `app/page.tsx` renders the active variant. Under `demo`, `app/sample/page.tsx` renders the sample in any registered variant, color scheme, and typography preset from its query, and `src/proxy.ts` marks every response `noindex`. `app/not-found.tsx`, `app/error.tsx`, and `app/global-error.tsx` show generic pages that never print error details.
-- **`layout.tsx`** — wraps everything in `<ThemeProvider supportedThemes={editorialManifest.themes}>` and injects the pre-hydration theme init script.
+- **`layout.tsx`** — sets `<html lang dir>` from the portfolio's `locale` and `direction`, and injects the pre-hydration theme init script with the site's display mode. Each page wraps its variant in a `ThemeProvider` fed that variant's themes (`lib/variant-tree.tsx`).
 - **SEO** — generates metadata, JSON-LD, OG image, robots.txt, sitemap.xml, and the feed from the portfolio per request, with every absolute URL on `PORTFOLIO_ORIGIN`.
 
 ## Theme resolution
@@ -108,14 +109,14 @@ The Next.js host. Responsibilities:
 | `black`    | no                   | `dark` (fallback)                            |
 | `system`   | n/a                  | `light` or `dark` per `prefers-color-scheme` |
 
-The `THEME_INIT_SCRIPT` runs before React hydration to set `data-theme` on `<html>`. Bright/black are conservatively painted as light/dark pre-hydration, then swapped in if the variant supports them.
+The layout's `themeInitScript()` runs before React hydration to set `data-theme` on `<html>`: the visitor's stored choice, else the site's `displayMode`. Bright/black are conservatively painted as light/dark pre-hydration, then swapped in if the variant supports them.
 
 ## Drift gates
 
 Three scripts under `skills/scripts/` and `skills/<skill>/scripts/` enforce parity:
 
 - **`skills/scripts/sync-checks.mjs`** — checks `section-kinds.md` matches `ALL_SECTION_KINDS`, `kit-catalog.md` mentions every kit export, `schema.md` mentions every section kind, both SKILL.md frontmatters parse and stay under length caps.
-- **`skills/portfolio-author/scripts/validate.mjs`** — Zod-parses any `portfolio.yml` and reports YAML line/col on failure.
+- **`skills/portfolio-author/scripts/validate.mjs`** — validates a directory's `portfolio.yml` and `site.yml` the way the server does at startup, and prints each problem with its file, line, column, code, and how to fix it.
 - **`skills/variant-developer/scripts/audit.mjs`** — checks variant manifests against the schema (every required kind handled), warns on suspicious patterns (only one color scheme, themes claimed without CSS).
 
 Run them with `pnpm check:skills` and the per-script test suites listed in [CONTRIBUTING.md](../CONTRIBUTING.md#drift-gates).

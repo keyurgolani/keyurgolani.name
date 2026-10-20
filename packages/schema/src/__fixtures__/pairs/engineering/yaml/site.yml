@@ -1,0 +1,17 @@
+# Editorial in its noir scheme and modernist typeset.
+schemaVersion: 2
+appearance:
+  variant: editorial
+  designLanguage: platform-neutral
+  colorScheme: noir
+  typography: modernist
+  displayMode: dark
+visitorControls:
+  variant: locked
+  designLanguage: locked
+  colorScheme: selectable
+  typography: locked
+  displayMode: selectable
+motionPolicy: respect-os
+features:
+  feed: true

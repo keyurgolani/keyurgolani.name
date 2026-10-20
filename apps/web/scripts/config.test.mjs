@@ -16,15 +16,16 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// `pnpm config:migrate`, run the way the root script runs it: config.mjs
-// through tsx. Each run gets a scratch directory as INIT_CWD, the directory
-// pnpm would have run in.
+// `pnpm config:migrate` and `pnpm config:validate`, run the way the root
+// scripts run them: config.mjs through tsx. Each run gets a scratch directory
+// as INIT_CWD, the directory pnpm would have run in.
 
 const CONFIG = fileURLToPath(new URL('./config.mjs', import.meta.url));
 const TSX = fileURLToPath(import.meta.resolve('tsx/cli'));
-const FIXTURES = fileURLToPath(
-  new URL('../../../packages/schema/src/__fixtures__/legacy/', import.meta.url),
+const ALL_FIXTURES = fileURLToPath(
+  new URL('../../../packages/schema/src/__fixtures__/', import.meta.url),
 );
+const FIXTURES = path.join(ALL_FIXTURES, 'legacy');
 const BASELINE = [
   '--set',
   'site.appearance.colorScheme=warm',
@@ -190,4 +191,94 @@ test('the report names the file as given, and its command quotes it for the shel
     run.stdout,
     /\nNothing stops the migration\. pnpm config:migrate 'old files\/owner\.yml' --set site\.appearance\.colorScheme=warm --set site\.appearance\.typography=classic --drop-unknown --write --out <dir> /,
   );
+});
+
+function validate(cwd, ...args) {
+  const result = spawnSync(process.execPath, [TSX, CONFIG, 'validate', ...args], {
+    cwd,
+    env: { ...process.env, INIT_CWD: cwd },
+    encoding: 'utf8',
+    timeout: 120_000,
+  });
+  return { code: result.status, stdout: result.stdout, stderr: result.stderr };
+}
+
+/** The invalid pairs link to https://rowan.name, their own origin. */
+const ORIGIN = ['--origin', 'https://rowan.name'];
+
+test('validate prints each record where it is, with how to fix it, and exits 1', () => {
+  const run = validate(ALL_FIXTURES, 'invalid/appearance.unknown', ...ORIGIN);
+  assert.equal(run.code, 1, run.stderr);
+  assert.equal(
+    run.stdout,
+    [
+      'site.yml:6:16: appearance.unknown (blocks-preview) at /appearance/colorScheme',
+      '  /appearance/colorScheme names no color scheme this build registers.',
+      '  Use one of: warm, noir, ink-and-paper.',
+      '',
+      "invalid/appearance.unknown can't go live: 1 record blocks it.",
+      'Not checked: site.appearance.designLanguage.',
+      '',
+    ].join('\n'),
+  );
+});
+
+test('validate exits 0 on a valid pair, warnings or not, and lists what it could not check', () => {
+  const clean = validate(ALL_FIXTURES, 'pairs/mixed/json');
+  assert.equal(clean.code, 0, clean.stderr);
+  assert.match(clean.stdout, /^portfolio\.json and site\.json are valid\.\n/);
+  assert.match(clean.stdout, /\nNot checked: origin\.sample, origin\.stale, /);
+  assert.match(clean.stdout, /\nPass --origin with the site's origin/);
+
+  const warned = validate(ALL_FIXTURES, 'invalid/origin.stale', ...ORIGIN);
+  assert.equal(warned.code, 0, warned.stderr);
+  assert.match(
+    warned.stdout,
+    /^portfolio\.yml:10:10: origin\.stale \(warning\) at \/links\/1\/url\n/,
+  );
+  assert.match(warned.stdout, /\nportfolio\.yml and site\.yml are valid, with 1 warning\.\n/);
+});
+
+test('validate refuses every blocking invalid pair and loads every warning one, as JSON', () => {
+  for (const code of readdirSync(path.join(ALL_FIXTURES, 'invalid'))) {
+    const run = validate(ALL_FIXTURES, `invalid/${code}`, ...ORIGIN, '--json');
+    const report = JSON.parse(run.stdout);
+    const warning = report.diagnostics.every(({ severity }) => severity === 'warning');
+    assert.equal(run.code, warning ? 0 : 1, code);
+    assert.equal(report.ok, warning, code);
+    assert.deepEqual([...new Set(report.diagnostics.map((record) => record.code))], [code]);
+    for (const record of report.diagnostics) {
+      assert.deepEqual(
+        Object.keys(record).filter((key) => !['line', 'column', 'stableId'].includes(key)),
+        ['code', 'severity', 'document', 'pointer', 'message', 'remediation'],
+        code,
+      );
+    }
+  }
+});
+
+test('validate names the files, the directory, and a bad argument', (t) => {
+  const dir = scratch(t);
+  const json = JSON.parse(validate(ALL_FIXTURES, 'pairs/writing/yaml', '--json').stdout);
+  assert.deepEqual(json.files, { portfolio: 'portfolio.yml', site: 'site.yml' });
+  assert.equal(json.ok, true);
+
+  const missing = validate(dir, 'nowhere');
+  assert.equal(missing.code, 1);
+  assert.equal(missing.stdout, "nowhere doesn't exist.\n");
+  const file = validate(dir, 'owner.yml');
+  assert.equal(file.code, 1);
+  assert.match(file.stdout, /^owner\.yml is a file\. Give the directory that holds the pair/);
+
+  for (const [args, message] of [
+    [['a', 'b'], /Give one directory to validate\./],
+    [['.', '--origin', 'https://rowan.name/blog'], /--origin takes an origin alone/],
+    [['.', '--origin', 'rowan.name'], /--origin takes an origin alone/],
+    [['.', '--strict'], /Unknown option '--strict'/],
+  ]) {
+    const run = validate(dir, ...args);
+    assert.equal(run.code, 1, args.join(' '));
+    assert.match(run.stderr, message, args.join(' '));
+    assert.match(run.stderr, /Usage: pnpm config:validate \[dir\]/, args.join(' '));
+  }
 });

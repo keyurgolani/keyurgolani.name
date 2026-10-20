@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 2,
+  "appearance": {
+    "variant": "kinetic-cosmos",
+    "designLanguage": "platform-neutral",
+    "colorScheme": "aurora",
+    "typography": "geometric",
+    "displayMode": "light"
+  },
+  "visitorControls": {
+    "variant": "locked",
+    "designLanguage": "locked",
+    "colorScheme": "locked",
+    "typography": "locked",
+    "displayMode": "locked"
+  },
+  "motionPolicy": "reduce",
+  "features": {
+    "feed": false
+  }
+}

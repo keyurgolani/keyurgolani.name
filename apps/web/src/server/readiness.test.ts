@@ -11,14 +11,18 @@ import { readiness, type ReadinessProbes } from './readiness';
 
 function state(
   profile: Profile,
-  { live = true, degraded = [] as string[] }: { live?: boolean; degraded?: string[] } = {},
+  {
+    live = true,
+    degraded = [] as string[],
+    variant = 'editorial',
+  }: { live?: boolean; degraded?: string[]; variant?: string } = {},
 ): DeploymentState {
   return {
     config: { profile } as DeploymentConfig,
     catalog: {
       getLive: async () => {
         if (!live) throw new Error('canary: /srv/canary/portfolio.yml');
-        return {} as LiveRevision;
+        return { unit: { site: { appearance: { variant } } } } as LiveRevision;
       },
     },
     dispatch: () => assert.fail('readiness runs no operation'),
@@ -70,8 +74,9 @@ test('owner has no owner-modules check: its trace holds owner code by design', a
 
 test('a failed check is 503, unavailable, and names only the check', async () => {
   const cases: Array<[string, DeploymentState, ReadinessProbes]> = [
-    ['catalog', state('read-only', { live: false }), PROBES],
     ['packs', state('read-only'), { ...PROBES, variantLoads: async () => false }],
+    // The live site's variant, not some default.
+    ['packs', state('read-only', { variant: 'kinetic-cosmos' }), PROBES],
     [
       'packs',
       state('read-only'),
@@ -96,4 +101,15 @@ test('a degraded startup requirement is 200, degraded', async () => {
   assert.equal(result.httpStatus, 200);
   assert.equal(result.body.status, 'degraded');
   assert.ok(!JSON.stringify(result.body).includes('revision.integrity'));
+});
+
+test('with no live revision, there is no variant to load, so packs fails with catalog', async () => {
+  const result = await readiness(state('read-only', { live: false }), PROBES);
+  assert.equal(result.httpStatus, 503);
+  assert.ok(result.body.status === 'unavailable');
+  assert.deepEqual(
+    result.body.checks.filter((check) => check.status === 'fail').map((check) => check.id),
+    ['catalog', 'packs'],
+  );
+  assert.ok(!JSON.stringify(result.body).includes('canary'));
 });

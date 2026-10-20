@@ -1,0 +1,122 @@
+{
+  "schemaVersion": 2,
+  "locale": "ja",
+  "direction": "ltr",
+  "identity": {
+    "name": "Aiko Tanabe",
+    "tagline": "Product designer",
+    "location": "Osaka, Japan",
+    "email": "aiko@tanabe.test"
+  },
+  "links": [
+    {
+      "platform": "dribbble",
+      "url": "https://dribbble.test/aiko",
+      "label": "Dribbble"
+    }
+  ],
+  "meta": {
+    "title": "Aiko Tanabe, product designer",
+    "description": "Interfaces for people who read the manual."
+  },
+  "sections": [
+    {
+      "kind": "hero",
+      "id": "top",
+      "name": "Aiko Tanabe",
+      "tagline": "Interfaces for people who read the manual."
+    },
+    {
+      "kind": "projects",
+      "id": "case-studies",
+      "title": "Case studies",
+      "items": [
+        {
+          "name": "Ledger redesign",
+          "summary": "A bookkeeping app that small shops finish setting up.",
+          "period": {
+            "start": "2024-01",
+            "end": "2025-03"
+          },
+          "role": "Lead designer",
+          "organization": "Kurashi",
+          "images": [
+            {
+              "src": "/images/ledger.png",
+              "alt": "The ledger app's month view"
+            }
+          ],
+          "highlights": [
+            "Setup completion went from 38 to 71 percent"
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "gallery",
+      "id": "sketches",
+      "title": "Sketches",
+      "layout": "grid",
+      "items": [
+        {
+          "image": {
+            "src": "/images/sketch-1.png",
+            "alt": "Pencil wireframes for a checkout screen"
+          },
+          "tags": [
+            "wireframes"
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "testimonials",
+      "id": "clients",
+      "title": "Clients",
+      "items": [
+        {
+          "quote": "Aiko made our hardest screen the one people compliment.",
+          "author": "Kenji Mori",
+          "authorRole": "Head of Product",
+          "authorOrganization": "Kurashi"
+        }
+      ]
+    },
+    {
+      "kind": "skills",
+      "id": "skills",
+      "title": "Skills",
+      "groups": [
+        {
+          "name": "Practice",
+          "items": [
+            "Interaction design",
+            "Research",
+            "Prototyping"
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "focus",
+      "id": "focus",
+      "title": "Focus",
+      "items": [
+        "Accessible data tables",
+        "Type for small screens"
+      ]
+    },
+    {
+      "kind": "tenure",
+      "id": "tenure",
+      "title": "Years designing",
+      "years": 9,
+      "summary": "Agencies first, then products."
+    },
+    {
+      "kind": "contact",
+      "id": "contact",
+      "title": "Contact"
+    }
+  ]
+}

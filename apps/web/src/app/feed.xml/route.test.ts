@@ -1,5 +1,7 @@
 import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { parsePortfolio, parseSite } from '@portfolio/schema';
 import type { CatalogReader } from '~/server/catalog-port';
 import { readDeploymentConfig } from '~/server/config';
 import { setDeploymentState } from '~/server/config-store';
@@ -63,7 +65,8 @@ test('a feed that fails to render logs render_failed', async (t) => {
   const logged = t.mock.method(console, 'log', () => {});
   // A revision the public view passes along whole, whose identity the feed reads.
   const portfolio = { schemaVersion: 2, sections: [], identity: null };
-  deploy(t, () => Promise.resolve({ unit: { portfolio } } as never));
+  const { site } = revision('en', true).unit;
+  deploy(t, () => Promise.resolve({ unit: { portfolio, site } } as never));
   const response = await GET(request());
   assert.equal(response.status, 500);
   assert.equal(await response.text(), 'Feed unavailable. Request ID: req-0001');
@@ -76,4 +79,39 @@ test('a server with no deployment state serves no feed', async () => {
   const response = await GET(request());
   assert.equal(response.status, 503);
   assert.equal(response.headers.get('cache-control'), 'no-store');
+});
+
+/** A live revision of a portfolio in `locale`, on a site whose feed is `feed`. */
+function revision(locale: string, feed: boolean): Awaited<ReturnType<CatalogReader['getLive']>> {
+  const portfolio = parsePortfolio(
+    `schemaVersion: 2\nlocale: ${locale}\ndirection: ltr\nidentity:\n  name: Rowan Test\nsections:\n  - kind: writings\n    id: essays\n    items:\n      - { title: First essay, url: 'https://rowan.test/first', publishedAt: '2026-01-02' }\n`,
+    'yaml',
+  );
+  const site = parseSite(
+    readFileSync(new URL('../../../../../site.example.yml', import.meta.url), 'utf8').replace(
+      'feed: true',
+      `feed: ${feed}`,
+    ),
+    'yaml',
+  );
+  assert.ok(portfolio.ok && site.ok);
+  return { revisionId: 'doc-test', unit: { portfolio: portfolio.value, site: site.value } };
+}
+
+test("the channel's language is the portfolio's locale", async (t) => {
+  const live = revision('pt-BR', true);
+  deploy(t, async () => live);
+  const response = await GET(request());
+  assert.equal(response.status, 200);
+  const xml = await response.text();
+  assert.match(xml, /<language>pt-BR<\/language>/);
+  assert.match(xml, /<title>First essay<\/title>/);
+});
+
+test('a site with features.feed: false serves no feed', async (t) => {
+  const live = revision('en', false);
+  deploy(t, async () => live);
+  const response = await GET(request());
+  assert.equal(response.status, 404);
+  assert.equal(await response.text(), 'Not found.');
 });

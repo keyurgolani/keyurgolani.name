@@ -204,12 +204,13 @@ Both `color` and `-webkit-text-fill-color` are required — Chrome respects whic
 
 ### What it looks like
 
-- `prefers-reduced-motion: reduce` is set, but a canvas continues to animate, particles still fall, parallax still parallaxes.
+- `prefers-reduced-motion: reduce` is set, or the site's `motionPolicy` is `reduce`, but a canvas continues to animate, particles still fall, parallax still parallaxes.
 - Dispatched scroll events show motion values still updating.
+- `document.getAnimations()` lists framer-motion animations still running after load, or a link still scrolls smoothly to its section.
 
 ### Why
 
-The CSS `@media (prefers-reduced-motion)` block can zero animation/transition durations, but it can't stop `requestAnimationFrame` loops or framer-motion `useTransform` outputs. Those need JS-level gating.
+The CSS `@media (prefers-reduced-motion)` block can zero animation/transition durations, but it can't stop `requestAnimationFrame` loops or framer-motion `useTransform` outputs. Nor does it reach framer-motion's Web Animations API animations, or `scrollIntoView({ behavior: 'smooth' })`. Those need JS-level gating.
 
 ### Fix
 
@@ -228,6 +229,8 @@ useEffect(() => {
 ```
 
 For framer-motion hooks like `useScroll` + `useTransform`, pass an `enabled: !reduceMotion` flag to your wrapper hook (the kit's `useScrollDispersal` does this). Spring-smoothed motion values that have already mounted will have stale momentum — accept that, or remount the element when the flag flips.
+
+A variant built on framer-motion wraps its root in `MotionConfig`, with `reducedMotion: 'always'` under the site's `reduce` policy and `'user'` otherwise (Kinetic Cosmos's `primitives/motion-config.tsx`). That skips transform and layout animations only: opacity still animates. So an entrance takes `initial={reduce ? false : 'hidden'}`, and an animation that repeats forever isn't rendered under reduce. Scrolling takes `behavior: reduce ? 'auto' : 'smooth'`.
 
 **Validate programmatically.** Don't trust "I checked the toggle once". Sample `getComputedStyle(canvas).backgroundColor` at the canvas center 300ms apart — pixel-stable means the rAF loop is stopped. Sample a floater's `transform` before/after a synthetic scroll — string-equal means dispersal is disabled. The skill's audit checklist now includes both checks.
 

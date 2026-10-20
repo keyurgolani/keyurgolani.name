@@ -13,10 +13,10 @@ interface SamplePageProps {
 
 // The bundled sample in any registered variant (#1, item 17), under `demo`:
 // `?variant=<slug>&scheme=<id>&typography=<id>`. An unknown variant is a 404,
-// and without one it's the site's variant.
+// and each axis the query doesn't name is the sample site's own.
 export default servedPage('/sample', async function SamplePage({ searchParams }: SamplePageProps) {
-  const { site } = await getPublicView();
-  const selection = sampleSelection(await searchParams, findManifest, site.appearance.variant);
+  const { appearance } = (await getPublicView()).site;
+  const selection = sampleSelection(await searchParams, findManifest, appearance);
   if (!selection) notFound();
   return renderVariant(selection);
 });

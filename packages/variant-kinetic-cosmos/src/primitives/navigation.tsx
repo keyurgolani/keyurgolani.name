@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { NavItem } from '@portfolio/kit';
-import { cn } from '@portfolio/kit';
+import { cn, useMotionPreference } from '@portfolio/kit';
 
 interface NavigationProps {
   items: NavItem[];
@@ -23,6 +23,8 @@ export function Navigation({ items, brand }: NavigationProps) {
   const [hidden, setHidden] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const lastScrollY = useRef(0);
+  // Under reduce a link jumps to its section rather than scrolling there.
+  const behavior: ScrollBehavior = useMotionPreference() === 'reduce' ? 'auto' : 'smooth';
 
   useEffect(() => {
     if (typeof window === 'undefined' || items.length === 0) return;
@@ -92,7 +94,7 @@ export function Navigation({ items, brand }: NavigationProps) {
     const el = document.getElementById(id);
     if (!el) return;
     e.preventDefault();
-    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    el.scrollIntoView({ behavior, block: 'start' });
     setActiveId(id);
     setMenuOpen(false);
     history.replaceState(null, '', href);
@@ -100,7 +102,7 @@ export function Navigation({ items, brand }: NavigationProps) {
 
   function onBrandClick(e: React.MouseEvent<HTMLAnchorElement>) {
     e.preventDefault();
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo({ top: 0, behavior });
     setMenuOpen(false);
     history.replaceState(null, '', '#');
   }

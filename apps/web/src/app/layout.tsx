@@ -1,9 +1,10 @@
 import type { ReactNode } from 'react';
 import type { Metadata } from 'next';
-import type { PublicPortfolio } from '@portfolio/schema';
-import { THEME_INIT_SCRIPT } from '@portfolio/kit';
+import type { PublicView } from '@portfolio/schema';
+import { themeInitScript } from '@portfolio/kit';
 import { buildStructuredData } from '@portfolio/kit/seo';
 import { jsonLdScript } from '~/lib/json-ld';
+import { startingTheme } from '~/lib/starting-theme';
 import { requireDeploymentConfig } from '~/server/config-store';
 import { getPublicView } from '~/server/public-view';
 import './globals.css';
@@ -18,13 +19,13 @@ import '~/lib/registry.styles.generated';
 export const dynamic = 'force-dynamic';
 
 /**
- * The public view of the live portfolio, or null when the catalog can't
- * produce one. Under `next dev` an invalid edit lands here; the layout renders
+ * The public view of the live pair, or null when the catalog can't produce
+ * one. Under `next dev` an invalid edit lands here; the layout renders
  * neutral defaults and the page's own failure reaches app/error.tsx.
  */
-async function livePortfolio(): Promise<PublicPortfolio | null> {
+async function liveView(): Promise<PublicView | null> {
   try {
-    return (await getPublicView()).portfolio;
+    return await getPublicView();
   } catch {
     return null;
   }
@@ -32,7 +33,7 @@ async function livePortfolio(): Promise<PublicPortfolio | null> {
 
 export async function generateMetadata(): Promise<Metadata> {
   const { origin } = requireDeploymentConfig();
-  const portfolio = await livePortfolio();
+  const portfolio = (await liveView())?.portfolio;
   if (!portfolio) return { title: 'Portfolio', metadataBase: new URL(origin) };
 
   const title = portfolio.meta?.title ?? `${portfolio.identity.name} — Portfolio`;
@@ -60,15 +61,27 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function RootLayout({ children }: { children: ReactNode }) {
   const { origin } = requireDeploymentConfig();
-  const portfolio = await livePortfolio();
+  const view = await liveView();
+  const portfolio = view?.portfolio;
   const jsonLdBlocks = portfolio
     ? buildStructuredData(portfolio, { siteUrl: origin }).map(jsonLdScript)
     : [];
+  // The first paint's theme, until the visitor picks one: the site's display mode.
+  const initScript = themeInitScript(
+    view ? startingTheme(view.site.appearance.displayMode) : 'system',
+  );
 
+  // The portfolio's language and writing direction, from its locale and
+  // direction. The neutral defaults stand in only while an invalid edit
+  // under next dev leaves no pair to read.
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html
+      lang={portfolio?.locale ?? 'en'}
+      dir={portfolio?.direction ?? 'ltr'}
+      suppressHydrationWarning
+    >
       <head>
-        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+        <script dangerouslySetInnerHTML={{ __html: initScript }} />
         {jsonLdBlocks.map((json, i) => (
           <script key={i} type="application/ld+json" dangerouslySetInnerHTML={{ __html: json }} />
         ))}

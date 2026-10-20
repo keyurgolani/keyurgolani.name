@@ -2,7 +2,7 @@ import { renderRssFeed } from '@portfolio/kit/seo';
 import { requireDeploymentConfig } from '~/server/config-store';
 import { log } from '~/server/log';
 import { getPublicView } from '~/server/public-view';
-import { served } from '~/server/route-guard';
+import { notFoundResponse, served } from '~/server/route-guard';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,7 +12,9 @@ async function feed(request: Request): Promise<Response> {
   let step: 'catalog_unavailable' | 'render_failed' = 'catalog_unavailable';
   try {
     const { origin } = requireDeploymentConfig();
-    const { portfolio } = await getPublicView();
+    const { portfolio, site } = await getPublicView();
+    // The site document turns the feed off with features.feed: false.
+    if (!site.features.feed) return notFoundResponse();
     step = 'render_failed';
     const xml = renderRssFeed(portfolio, { siteUrl: origin });
     return new Response(xml, {

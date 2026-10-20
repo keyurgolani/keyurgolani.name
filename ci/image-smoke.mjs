@@ -194,12 +194,13 @@ async function smoke() {
       `the image ships files it must not (found: ${found}; example: ${scan.example})`,
       {
         test: 'image contents',
-        expected: 'only portfolio.example.yml; no tests, ci, reports, .env*, or .git',
+        expected:
+          'only portfolio.example.yml and site.example.yml; no tests, ci, reports, .env*, or .git',
         actual: found,
       },
     );
   }
-  console.log('[image] image contents: only the example portfolio, no test or CI files');
+  console.log('[image] image contents: only the example pair, no test or CI files');
 
   const routes = assessRoutes(container(['exec', name, 'ip', 'route']), cli === 'docker');
   if (!routes.ok) {

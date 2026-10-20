@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
-import { DEFAULT_PORTFOLIO } from '../harness/app-server.mjs';
+import { DEFAULT_PORTFOLIO, DEFAULT_SITE } from '../harness/app-server.mjs';
 import { expect, test } from '../harness/fixtures';
 
 // The read-only profile from a mounted source directory. The canonical origin
@@ -51,7 +51,10 @@ test(
           sha256(readFileSync(path.join(app.sourceDir, name))),
         ]),
       );
-    const mounted = { 'portfolio.yml': sha256(readFileSync(DEFAULT_PORTFOLIO)) };
+    const mounted = {
+      'portfolio.yml': sha256(readFileSync(DEFAULT_PORTFOLIO)),
+      'site.yml': sha256(readFileSync(DEFAULT_SITE)),
+    };
     expect(files()).toEqual(mounted);
     for (const [method, route, body] of DELETED.filter(([verb]) => verb === 'PUT')) {
       const response = await request.fetch(route, { method, data: body, maxRedirects: 0 });

@@ -1,0 +1,17 @@
+# Editorial in ink and paper, with the feed off: there's nothing to syndicate.
+schemaVersion: 2
+appearance:
+  variant: editorial
+  designLanguage: platform-neutral
+  colorScheme: ink-and-paper
+  typography: classic
+  displayMode: light
+visitorControls:
+  variant: locked
+  designLanguage: locked
+  colorScheme: locked
+  typography: locked
+  displayMode: selectable
+motionPolicy: reduce
+features:
+  feed: false

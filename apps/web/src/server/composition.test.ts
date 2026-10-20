@@ -1,6 +1,6 @@
 import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -14,15 +14,25 @@ import { listOperations } from './operations';
 // The composition root for profiles that never load owner code. Owner with a
 // provider, which does, has its own file: the load trace is per process.
 
-const EXAMPLE = fileURLToPath(new URL('../../../../portfolio.example.yml', import.meta.url));
+const EXAMPLES = {
+  portfolio: fileURLToPath(new URL('../../../../portfolio.example.yml', import.meta.url)),
+  site: fileURLToPath(new URL('../../../../site.example.yml', import.meta.url)),
+};
+const PORTFOLIO =
+  'schemaVersion: 2\nlocale: en\ndirection: ltr\nidentity:\n  name: Rowan Test\nsections:\n  - kind: lede\n    id: about\n    body: Hi.\n';
 
-function deployment(t: TestContext, env: Env) {
+/** A deployment whose source directory holds `documents`, a valid pair unless a test says. */
+function deployment(
+  t: TestContext,
+  env: Env,
+  documents: Record<string, string> = {
+    'portfolio.yml': PORTFOLIO,
+    'site.yml': readFileSync(EXAMPLES.site, 'utf8'),
+  },
+) {
   const dir = mkdtempSync(path.join(tmpdir(), 'composition-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
-  writeFileSync(
-    path.join(dir, 'portfolio.yml'),
-    'schemaVersion: 2\nlocale: en\ndirection: ltr\nidentity:\n  name: Rowan Test\n',
-  );
+  for (const [name, text] of Object.entries(documents)) writeFileSync(path.join(dir, name), text);
   const read = readDeploymentConfig(
     {
       NODE_ENV: 'production',
@@ -37,7 +47,7 @@ function deployment(t: TestContext, env: Env) {
 }
 
 function inputs(config: ReturnType<typeof deployment>) {
-  return { config, examplePath: EXAMPLE, report: () => {} };
+  return { config, examples: EXAMPLES, report: () => {} };
 }
 
 test('read-only builds its catalog adapter and loads no owner module', async (t) => {
@@ -118,9 +128,46 @@ test('the tagged startup rows are named requirements for #2, #3, and #4', () => 
       ['auth.provider', '#1', 'owner', 'fatal', 'check'],
       ['auth.secret', '#2', 'owner', 'fatal', 'pending'],
       ['data.directory', '#2, #3', 'owner', 'fatal', 'pending'],
+      ['documents.pair', '#4', 'owner read-only', 'fatal', 'check'],
       ['documents.shape', '#3', 'owner', 'fatal', 'pending'],
       ['revision.integrity', '#3', 'owner', 'degraded', 'pending'],
     ],
+  );
+});
+
+test('documents.pair stops read-only on a blocking record, reported once, and passes warnings', async (t) => {
+  const missing = deployment(t, { PORTFOLIO_PROFILE: 'read-only' }, { 'portfolio.yml': PORTFOLIO });
+  const stopped = await compose(inputs(missing));
+  assert.equal(stopped.ok, false);
+  assert.deepEqual(
+    stopped.issues.map((issue) => `${issue.severity} ${issue.key}:${issue.code} ${issue.document}`),
+    ['fatal PORTFOLIO_SOURCE_DIR:source.missing site'],
+  );
+
+  // A warning starts the server, and is logged once.
+  const extended = deployment(
+    t,
+    { PORTFOLIO_PROFILE: 'read-only' },
+    {
+      'portfolio.yml': PORTFOLIO.replace(
+        '  name: Rowan Test',
+        "  name: Rowan Test\n  extensions:\n    '@other/x': { a: 1 }",
+      ),
+      'site.yml': readFileSync(EXAMPLES.site, 'utf8'),
+    },
+  );
+  const started = await compose(inputs(extended));
+  assert.ok(started.ok, JSON.stringify(started.issues));
+  assert.deepEqual(
+    started.issues.map((issue) => `${issue.severity} ${issue.code} ${issue.path}`),
+    ['warning extension.unregistered /identity/extensions/@other~1x'],
+  );
+
+  // Without the row, the branch still refuses the pair, and says why.
+  const bare = await compose({ ...inputs(missing), requirements: [] });
+  assert.deepEqual(
+    bare.issues.map((issue) => issue.code),
+    ['source.missing'],
   );
 });
 

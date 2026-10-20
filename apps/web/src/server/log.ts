@@ -21,8 +21,21 @@ const BASE = [
   'digest',
 ] as const;
 
-/** A finding at startup: where in the source it is, and its fixed text, which never quotes a value. */
-const FINDING = ['file', 'path', 'line', 'column', 'issueCode', 'message'] as const;
+/**
+ * A finding at startup: where in the source it is (for one in the document
+ * pair, its diagnostic record's document, pointer, position, and section id),
+ * and its fixed text and remediation, which never quote a value.
+ */
+const FINDING = [
+  'file',
+  'document',
+  'path',
+  'line',
+  'column',
+  'stableId',
+  'message',
+  'remediation',
+] as const;
 
 /** What particular events add. */
 const EXTRA: Readonly<Record<string, readonly string[]>> = {

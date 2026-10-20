@@ -6,16 +6,25 @@
 //
 // A runner gives each row its own directory and passes the row its paths:
 // `source`, the source directory, holding `documents` (by default the harness
-// fixture as portfolio.yml), and `beside(name)`, a path next to it, where
-// `files` are written. In the image they are /config and /files/<name>.
+// fixture pair, portfolio.yml and site.yml), and `beside(name)`, a path next
+// to it, where `files` are written. In the image they are /config and
+// /files/<name>. A finding in the pair (#4) is its diagnostic record: code,
+// document, pointer, line, column, message, and remediation.
 import { readFileSync } from 'node:fs';
-import { DEFAULT_PORTFOLIO } from './app-server.mjs';
+import { DEFAULT_PORTFOLIO, DEFAULT_SITE } from './app-server.mjs';
 
 export const ORIGIN = 'https://rowan.test';
 export const DEMO_ORIGIN = 'https://demo.rowan.test';
 /** The lines every version 2 portfolio document starts with. */
 export const HEAD = 'schemaVersion: 2\nlocale: en\ndirection: ltr\n';
 const FIXTURE = readFileSync(DEFAULT_PORTFOLIO, 'utf8');
+const SITE = readFileSync(DEFAULT_SITE, 'utf8');
+/** A section, so a portfolio has something to publish. */
+const ABOUT = 'sections:\n  - kind: lede\n    id: about\n    body: Hi.\n';
+/** A source directory's files: these, beside the harness site document. */
+const withSite = (documents) => ({ ...documents, 'site.yml': SITE });
+/** An old one-file portfolio, which no site document can sit beside yet. */
+const LEGACY = 'identity:\n  name: Rowan Fixture\nvariant: canary-variant\n';
 
 /**
  * @typedef {{ source: string, beside: (name: string) => string }} RowPaths
@@ -31,6 +40,7 @@ const FIXTURE = readFileSync(DEFAULT_PORTFOLIO, 'utf8');
  *   the fields it must have
  * @property {string | string[]} [mentions] text the first line's message names, such as a
  *   replacement
+ * @property {string | string[]} [remediates] text the first line's remediation names
  * @property {string[] | ((paths: RowPaths) => string[])} [never] values the output must
  *   never contain
  */
@@ -54,6 +64,7 @@ const named = (key, code) => ({ key, code });
 const EVERY_MODE = 'in every mode';
 const PRODUCTION = 'in production';
 const SOURCE = 'the source directory';
+const PAIR = 'the pair';
 const DOCUMENT = 'the document';
 const PROFILES = 'profiles this build cannot start';
 
@@ -192,7 +203,7 @@ export const STARTUP_ROWS = [
   {
     group: PRODUCTION,
     name: 'the bundled sample identity',
-    documents: { 'portfolio.yml': `${HEAD}identity:\n  name: Anamika Devi\n` },
+    documents: withSite({ 'portfolio.yml': `${HEAD}identity:\n  name: Anamika Devi\n${ABOUT}` }),
     env: (paths) => readOnly(paths),
     fatal: [{ code: 'sample_identity', file: 'portfolio.yml', path: '/identity/name', line: 5 }],
   },
@@ -209,7 +220,7 @@ export const STARTUP_ROWS = [
     env: (paths) => readOnly(paths, { PORTFOLIO_SOURCE_DIR: `${paths.source}/portfolio.yml` }),
     never: (paths) => [`${paths.source}/portfolio.yml`],
     fatal: [named('PORTFOLIO_SOURCE_DIR', 'source_not_directory')],
-    mentions: 'directory that holds portfolio.yml',
+    mentions: 'directory that holds portfolio.yml and site.yml',
   },
   {
     group: SOURCE,
@@ -220,33 +231,91 @@ export const STARTUP_ROWS = [
   },
   {
     group: SOURCE,
-    name: 'holding no portfolio document',
+    name: 'holding neither document',
     documents: { 'notes.md': 'not a portfolio' },
     env: (paths) => readOnly(paths),
-    fatal: [named('PORTFOLIO_SOURCE_DIR', 'source_empty')],
+    fatal: [
+      { key: 'PORTFOLIO_SOURCE_DIR', code: 'source.missing', document: 'portfolio' },
+      { key: 'PORTFOLIO_SOURCE_DIR', code: 'source.missing', document: 'site' },
+    ],
+    remediates: 'portfolio.example.yml is one to start from',
   },
   {
     group: SOURCE,
-    name: 'holding several portfolio documents',
-    documents: {
+    name: 'holding the portfolio document without the site document',
+    documents: { 'portfolio.yml': FIXTURE },
+    env: (paths) => readOnly(paths),
+    fatal: [{ code: 'source.missing', document: 'site' }],
+  },
+  {
+    group: SOURCE,
+    name: 'holding the site document without the portfolio document',
+    documents: { 'site.yml': SITE },
+    env: (paths) => readOnly(paths),
+    fatal: [{ code: 'source.missing', document: 'portfolio' }],
+  },
+  {
+    group: SOURCE,
+    name: 'holding a document in two formats',
+    documents: withSite({
       'portfolio.yml': FIXTURE,
       'portfolio.json': '{"identity":{"name":"Rowan Fixture"}}',
+    }),
+    env: (paths) => readOnly(paths),
+    fatal: [
+      {
+        key: 'PORTFOLIO_SOURCE_DIR',
+        code: 'source.duplicate',
+        document: 'portfolio',
+        message:
+          'The directory holds portfolio.json and portfolio.yml, one portfolio document in 2 formats.',
+      },
+    ],
+  },
+  {
+    group: PAIR,
+    name: 'a variant this build does not register, refused rather than replaced',
+    documents: {
+      'portfolio.yml': FIXTURE,
+      'site.yml': SITE.replace('variant: editorial', 'variant: canary-variant'),
     },
     env: (paths) => readOnly(paths),
-    fatal: [named('PORTFOLIO_SOURCE_DIR', 'source_several')],
+    never: ['canary-variant'],
+    fatal: [
+      {
+        code: 'appearance.unknown',
+        file: 'site.yml',
+        document: 'site',
+        path: '/appearance/variant',
+        line: 5,
+        column: 12,
+        remediation: 'Use one of: editorial, kinetic-cosmos.',
+      },
+    ],
+  },
+  {
+    group: PAIR,
+    name: 'a record that only blocks publishing stops the live server too',
+    documents: {
+      'portfolio.yml': FIXTURE,
+      'site.yml': `${SITE}sections:\n  retired:\n    hidden: true\n`,
+    },
+    env: (paths) => readOnly(paths),
+    fatal: [{ code: 'ref.missing', document: 'site', path: '/sections/retired' }],
   },
   {
     group: DOCUMENT,
     name: 'invalid YAML, located by line and column',
-    documents: {
+    documents: withSite({
       'portfolio.yml': `${HEAD}identity:\n  name: Rowan Fixture\nsections:\n  - kind: canary-kind\n    id: x\n`,
-    },
+    }),
     env: (paths) => readOnly(paths),
     never: ['canary-kind'],
     fatal: [
       {
-        code: 'document_invalid',
+        code: 'schema.invalid',
         file: 'portfolio.yml',
+        document: 'portfolio',
         path: '/sections/0/kind',
         line: 7,
         column: 11,
@@ -256,7 +325,7 @@ export const STARTUP_ROWS = [
   {
     group: DOCUMENT,
     name: 'invalid JSON, located by line and column',
-    documents: {
+    documents: withSite({
       'portfolio.json': [
         '{',
         '  "schemaVersion": 2,',
@@ -268,11 +337,11 @@ export const STARTUP_ROWS = [
         '}',
         '',
       ].join('\n'),
-    },
+    }),
     env: (paths) => readOnly(paths),
     fatal: [
       {
-        code: 'document_invalid',
+        code: 'schema.invalid',
         file: 'portfolio.json',
         path: '/identity/name',
         line: 6,
@@ -283,22 +352,28 @@ export const STARTUP_ROWS = [
   {
     group: DOCUMENT,
     name: 'a JSON syntax error V8 gives no position for, located anyway',
-    documents: { 'portfolio.json': '{\n  "schemaVersion": 2,\n  "locale": NaN\n}\n' },
+    documents: withSite({ 'portfolio.json': '{\n  "schemaVersion": 2,\n  "locale": NaN\n}\n' }),
     env: (paths) => readOnly(paths),
-    fatal: [{ code: 'document_syntax', issueCode: 'JSON_SYNTAX', line: 3, column: 13 }],
+    fatal: [
+      {
+        code: 'parse.syntax',
+        line: 3,
+        column: 13,
+        message: "The file isn't valid JSON at this position.",
+      },
+    ],
   },
   {
     group: DOCUMENT,
     name: 'an unknown key, refused at the key with a did-you-mean hint',
-    documents: {
-      'portfolio.yml': `${HEAD}identity:\n  name: Rowan Fixture\n  tagine: canary-tagline\n`,
-    },
+    documents: withSite({
+      'portfolio.yml': `${HEAD}identity:\n  name: Rowan Fixture\n  tagine: canary-tagline\n${ABOUT}`,
+    }),
     env: (paths) => readOnly(paths),
     never: ['canary-tagline'],
     fatal: [
       {
-        code: 'document_invalid',
-        issueCode: 'unrecognized_keys',
+        code: 'schema.invalid',
         path: '/identity/tagine',
         line: 6,
         column: 3,
@@ -309,79 +384,96 @@ export const STARTUP_ROWS = [
   {
     group: DOCUMENT,
     name: 'a javascript: URL, refused without quoting it',
-    documents: {
-      'portfolio.yml': `${HEAD}identity:\n  name: Rowan Fixture\nlinks:\n  - url: 'JavaScript:canary_script()'\n`,
-    },
+    documents: withSite({
+      'portfolio.yml': `${HEAD}identity:\n  name: Rowan Fixture\nlinks:\n  - url: 'JavaScript:canary_script()'\n${ABOUT}`,
+    }),
     env: (paths) => readOnly(paths),
     never: ['canary_script'],
-    fatal: [{ code: 'document_invalid', path: '/links/0/url', line: 7 }],
+    fatal: [{ code: 'schema.invalid', path: '/links/0/url', line: 7 }],
   },
   {
     group: DOCUMENT,
     name: 'nesting past 64 levels, refused before any parser reads it',
-    documents: { 'portfolio.json': `${'['.repeat(100_000)}${']'.repeat(100_000)}` },
+    documents: withSite({ 'portfolio.json': `${'['.repeat(100_000)}${']'.repeat(100_000)}` }),
     env: (paths) => readOnly(paths),
-    fatal: [{ code: 'document_syntax', issueCode: 'TOO_DEEP', line: 1, column: 65 }],
+    fatal: [{ code: 'parse.syntax', line: 1, column: 65 }],
+    mentions: 'more than 64 levels deep',
   },
   {
     group: DOCUMENT,
     name: 'a mapping past 10,000 entries, refused before any parser composes it',
-    documents: {
+    documents: withSite({
       'portfolio.yml': `${HEAD}identity:\n  name: Rowan Fixture\nmeta:\n${Array.from(
         { length: 10_001 },
         (_, i) => `  k${i}: 1`,
       ).join('\n')}\n`,
-    },
+    }),
     env: (paths) => readOnly(paths),
-    fatal: [{ code: 'document_syntax', issueCode: 'TOO_MANY', line: 7 + 10_000, column: 3 }],
+    fatal: [{ code: 'parse.syntax', line: 7 + 10_000, column: 3 }],
+    mentions: 'passes 10,000 entries',
   },
   {
     group: DOCUMENT,
     name: 'a document over 1 MiB, refused where it passes the limit',
-    documents: {
+    documents: withSite({
       'portfolio.yml': `${HEAD}identity:\n  name: Rowan Fixture\n# ${'x'.repeat(1024 * 1024)}\n`,
-    },
+    }),
     env: (paths) => readOnly(paths),
-    fatal: [{ code: 'document_syntax', issueCode: 'TOO_LARGE', line: 6 }],
+    fatal: [{ code: 'parse.syntax', line: 6 }],
+    mentions: 'passes the 1 MiB limit',
   },
   {
     group: DOCUMENT,
     name: 'a YAML alias, refused where it appears',
-    documents: {
+    documents: withSite({
       'portfolio.yml': `${HEAD}identity:\n  name: &canary-anchor Rowan Fixture\nmeta:\n  title: *canary-anchor\n`,
-    },
+    }),
     env: (paths) => readOnly(paths),
     never: ['canary-anchor'],
     fatal: [
-      { code: 'document_syntax', path: '/identity/name', line: 5 },
-      { code: 'document_syntax', path: '/meta/title', line: 7 },
+      { code: 'parse.syntax', path: '/identity/name', line: 5 },
+      { code: 'parse.syntax', path: '/meta/title', line: 7 },
     ],
   },
   {
     group: DOCUMENT,
-    name: 'a portfolio.toml, refused by name as the old format',
-    documents: { 'portfolio.toml': '[identity]\nname = "Rowan Fixture"\n' },
+    name: 'a portfolio.toml, refused by name as the old format, and nothing else',
+    documents: withSite({ 'portfolio.toml': '[identity]\nname = "Rowan Fixture"\n' }),
     env: (paths) => readOnly(paths),
-    fatal: [{ code: 'document_legacy', file: 'portfolio.toml' }],
-    mentions: 'Convert it to YAML or JSON first',
+    fatal: [{ code: 'legacy.document', document: 'portfolio' }],
+    mentions: 'portfolio.toml is in the old one-file format',
+    remediates: 'Convert it to YAML or JSON first',
   },
   {
     group: DOCUMENT,
     name: 'an old-format document, refused with one issue naming its old fields',
-    documents: { 'portfolio.yml': 'identity:\n  name: Rowan Fixture\nvariant: canary-variant\n' },
+    documents: withSite({ 'portfolio.yml': LEGACY }),
     env: (paths) => readOnly(paths),
     never: ['canary-variant'],
-    fatal: [{ code: 'document_legacy', path: '', line: 3 }],
+    fatal: [{ code: 'legacy.document', path: '', line: 3 }],
     mentions: ['/variant to appearance.variant in site.yml', 'pnpm config:migrate portfolio.yml'],
+    remediates: '--write --out <dir>',
+  },
+  {
+    group: DOCUMENT,
+    name: 'an old-format document with no site document, as an upgrade finds it',
+    documents: { 'portfolio.yml': LEGACY },
+    env: (paths) => readOnly(paths),
+    never: ['canary-variant'],
+    fatal: [
+      { code: 'legacy.document', file: 'portfolio.yml', document: 'portfolio', path: '', line: 3 },
+    ],
+    mentions: ['/variant to appearance.variant in site.yml', 'pnpm config:migrate portfolio.yml'],
+    remediates: '--write --out <dir>',
   },
   {
     group: DOCUMENT,
     name: 'two sections sharing an id',
-    documents: {
+    documents: withSite({
       'portfolio.yml': `${HEAD}identity:\n  name: Rowan Fixture\nsections:\n  - kind: lede\n    id: about\n    body: A\n  - kind: now\n    id: about\n    body: B\n`,
-    },
+    }),
     env: (paths) => readOnly(paths),
-    fatal: [{ code: 'document_invalid', path: '/sections/1/id', line: 11 }],
+    fatal: [{ code: 'id.duplicate', path: '/sections/1/id', line: 11 }],
   },
   {
     group: PROFILES,
@@ -398,7 +490,7 @@ export const STARTUP_ROWS = [
  * @returns {Record<string, string>}
  */
 export function rowDocuments(row) {
-  return row.documents ?? { 'portfolio.yml': FIXTURE };
+  return row.documents ?? withSite({ 'portfolio.yml': FIXTURE });
 }
 
 /**
@@ -438,6 +530,11 @@ export function checkRefusal(row, paths, output) {
       problems.push(`the first config.fatal message doesn't name ${text}`);
     }
   }
+  for (const text of remediates(row)) {
+    if (!fatal[0]?.remediation?.includes(text)) {
+      problems.push(`the first config.fatal remediation doesn't name ${text}`);
+    }
+  }
   return problems;
 }
 
@@ -449,6 +546,16 @@ export function checkRefusal(row, paths, output) {
  */
 export function mentions(row) {
   return row.mentions === undefined ? [] : [row.mentions].flat();
+}
+
+/**
+ * The texts a row's first config.fatal remediation must name.
+ *
+ * @param {StartupRow} row
+ * @returns {string[]}
+ */
+export function remediates(row) {
+  return row.remediates === undefined ? [] : [row.remediates].flat();
 }
 
 /**

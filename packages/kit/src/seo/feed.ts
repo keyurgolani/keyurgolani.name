@@ -128,7 +128,8 @@ export interface RenderRssOptions {
  * Produce an RSS 2.0 feed (with the Atom self-link extension) from the
  * portfolio's writings/publications/episodes. Returns the XML as a string;
  * callers wrap it in a `Response` with `application/rss+xml`. It takes the
- * public view's portfolio only, so no hidden section reaches the feed.
+ * public view's portfolio only, so no hidden section reaches the feed, and
+ * the channel's `<language>` is the portfolio's locale.
  */
 export function renderRssFeed(portfolio: PublicPortfolio, options: RenderRssOptions = {}): string {
   const site = options.siteUrl ?? '';
@@ -151,7 +152,7 @@ export function renderRssFeed(portfolio: PublicPortfolio, options: RenderRssOpti
     <title>${escapeXml(title)}</title>
     <link>${escapeXml(site)}</link>
     <description>${escapeXml(description)}</description>
-    <language>${escapeXml(portfolio.meta?.title ? 'en' : 'en')}</language>
+    <language>${escapeXml(portfolio.locale)}</language>
     <lastBuildDate>${lastBuildDate}</lastBuildDate>
     ${feed ? `<atom:link href="${escapeXml(feed)}" rel="self" type="application/rss+xml" />` : ''}
 ${items}

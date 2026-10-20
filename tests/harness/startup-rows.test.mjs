@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { checkRefusal, fatalLines, mentions, STARTUP_ROWS } from './startup-rows.mjs';
+import { checkRefusal, fatalLines, mentions, remediates, STARTUP_ROWS } from './startup-rows.mjs';
 
 // The startup rows' own helpers, which startup.spec.ts and `pnpm
 // smoke:profiles` both read a refusal with.
@@ -29,9 +29,25 @@ test('a row checks every text it mentions in the first message', () => {
   const texts = mentions(row);
   assert.ok(texts.length > 1);
   const paths = { source: '/config', beside: (name) => `/files/${name}` };
-  const line = (message) => fatal({ ...row.fatal[0], message });
+  const remediation = remediates(row).join(' ');
+  const line = (message) => fatal({ ...row.fatal[0], message, remediation });
   assert.deepEqual(checkRefusal(row, paths, line(texts.join(' '))), []);
   assert.deepEqual(checkRefusal(row, paths, line(texts[0])), [
     `the first config.fatal message doesn't name ${texts[1]}`,
+  ]);
+});
+
+test('a row checks the text its remediation names', () => {
+  const row = STARTUP_ROWS.find(
+    (entry) => remediates(entry).length > 0 && entry.fatal.length === 1,
+  );
+  assert.ok(row, 'a row with a remediation to check');
+  const [text] = remediates(row);
+  const paths = { source: '/config', beside: (name) => `/files/${name}` };
+  const message = mentions(row).join(' ');
+  const line = (remediation) => fatal({ ...row.fatal[0], message, remediation });
+  assert.deepEqual(checkRefusal(row, paths, line(`So: ${text}.`)), []);
+  assert.deepEqual(checkRefusal(row, paths, line('Something else.')), [
+    `the first config.fatal remediation doesn't name ${text}`,
   ]);
 });

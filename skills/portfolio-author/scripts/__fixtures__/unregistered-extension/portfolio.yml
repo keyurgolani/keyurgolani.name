@@ -17,3 +17,7 @@ sections:
         - title: Low Tide
           venue: Harbor Gallery
           year: 2024
+  - kind: lede
+    id: about
+    title: About
+    body: Photographs harbors at low tide.
