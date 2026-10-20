@@ -1,14 +1,16 @@
 #!/usr/bin/env node
 // Rejects mutable references: every workflow `uses:` must name a full commit
-// SHA, and every image in a workflow, Dockerfile, or Compose file must carry an
-// @sha256 digest (the multi-arch index digest, so every platform resolves to
-// the same image). Also keeps the Playwright container on the same version as
-// @playwright/test.
+// SHA, and every image must carry an @sha256 digest (the multi-arch index
+// digest, so every platform resolves to the same image). That covers images
+// in workflows (containers, services, and action inputs such as setup-qemu's
+// `image` and setup-buildx's `driver-opts: image=`), Dockerfiles, and Compose
+// files. Also keeps the Playwright container on the @playwright/test release
+// and CI's NODE_VERSION on the Dockerfile's Node release.
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parse as parseYaml } from 'yaml';
+import { LineCounter, parseDocument } from 'yaml';
 import { currentGate, REPO_ROOT, reportError, writeFailureRecord } from './lib/reports.mjs';
 
 const COMMIT_SHA = /^[0-9a-f]{40}$/;
@@ -33,33 +35,73 @@ export function imageProblem(value) {
   return DIGEST.test(value) ? null : 'has no @sha256 digest';
 }
 
-function lineOf(text, needle) {
-  const index = text.indexOf(needle);
-  return index < 0 ? undefined : text.slice(0, index).split('\n').length;
+/** The `image=` values in a list input such as setup-buildx's driver-opts. */
+export function driverOptImages(value) {
+  return String(value)
+    .split(/[\n,]/)
+    .map((part) => part.trim())
+    .filter((part) => part.startsWith('image='))
+    .map((part) => part.slice('image='.length));
+}
+
+/** Parses YAML and returns the plain data plus the line of any node path. */
+function yamlDoc(text) {
+  const lineCounter = new LineCounter();
+  const doc = parseDocument(text, { lineCounter });
+  const lineAt = (nodePath) => {
+    const offset = doc.getIn(nodePath, true)?.range?.[0];
+    return offset === undefined ? undefined : lineCounter.linePos(offset).line;
+  };
+  return { data: doc.toJS() ?? {}, lineAt };
 }
 
 /** Workflow files and composite actions. */
 export function checkWorkflow(text, file) {
-  const doc = parseYaml(text) ?? {};
+  const { data, lineAt } = yamlDoc(text);
   const problems = [];
-  const check = (value, label, problemOf) => {
+  const check = (value, nodePath, label, problemOf) => {
     const problem = problemOf(value);
     if (problem)
-      problems.push({
-        file,
-        line: lineOf(text, String(value)),
-        message: `${label} ${value} ${problem}`,
-      });
+      problems.push({ file, line: lineAt(nodePath), message: `${label} ${value} ${problem}` });
   };
-  for (const step of doc.runs?.steps ?? []) if (step?.uses) check(step.uses, 'uses:', usesProblem);
-  for (const [id, job] of Object.entries(doc.jobs ?? {})) {
-    if (job?.uses) check(job.uses, `jobs.${id}.uses:`, usesProblem);
-    const container = typeof job?.container === 'string' ? job.container : job?.container?.image;
-    if (container) check(container, `jobs.${id}.container`, imageProblem);
-    for (const [name, service] of Object.entries(job?.services ?? {})) {
-      if (service?.image) check(service.image, `jobs.${id}.services.${name}`, imageProblem);
+  const checkStep = (step, at) => {
+    if (step?.uses) check(step.uses, [...at, 'uses'], 'uses:', usesProblem);
+    const inputs = step?.with ?? {};
+    const action = step?.uses?.split('@')[0] ?? 'step';
+    if (inputs.image !== undefined) {
+      check(String(inputs.image), [...at, 'with', 'image'], `${action} with.image`, imageProblem);
     }
-    for (const step of job?.steps ?? []) if (step?.uses) check(step.uses, 'uses:', usesProblem);
+    if (inputs['driver-opts'] !== undefined) {
+      for (const image of driverOptImages(inputs['driver-opts'])) {
+        check(image, [...at, 'with', 'driver-opts'], `${action} driver-opts image=`, imageProblem);
+      }
+    }
+  };
+
+  (data.runs?.steps ?? []).forEach((step, i) => checkStep(step, ['runs', 'steps', i]));
+  for (const [id, job] of Object.entries(data.jobs ?? {})) {
+    if (job?.uses) check(job.uses, ['jobs', id, 'uses'], `jobs.${id}.uses:`, usesProblem);
+    if (typeof job?.container === 'string') {
+      check(job.container, ['jobs', id, 'container'], `jobs.${id}.container`, imageProblem);
+    } else if (job?.container?.image) {
+      check(
+        job.container.image,
+        ['jobs', id, 'container', 'image'],
+        `jobs.${id}.container`,
+        imageProblem,
+      );
+    }
+    for (const [name, service] of Object.entries(job?.services ?? {})) {
+      if (service?.image) {
+        check(
+          service.image,
+          ['jobs', id, 'services', name, 'image'],
+          `jobs.${id}.services.${name}`,
+          imageProblem,
+        );
+      }
+    }
+    (job?.steps ?? []).forEach((step, i) => checkStep(step, ['jobs', id, 'steps', i]));
   }
   return problems;
 }
@@ -107,9 +149,9 @@ export function checkDockerfile(text, file) {
 const IMAGE_UNDER_TEST = /^\$\{[A-Z_][A-Z0-9_]*(?::?\?[^}]*)?\}$/;
 
 export function checkCompose(text, file) {
-  const doc = parseYaml(text) ?? {};
+  const { data, lineAt } = yamlDoc(text);
   const problems = [];
-  for (const [name, service] of Object.entries(doc.services ?? {})) {
+  for (const [name, service] of Object.entries(data.services ?? {})) {
     const image = service?.image;
     // A service with `build:` names its own build output with `image:`.
     if (!image || service.build || IMAGE_UNDER_TEST.test(image)) continue;
@@ -117,7 +159,7 @@ export function checkCompose(text, file) {
     if (problem) {
       problems.push({
         file,
-        line: lineOf(text, image),
+        line: lineAt(['services', name, 'image']),
         message: `services.${name}.image ${image} ${problem}`,
       });
     }
@@ -132,9 +174,67 @@ export function checkPlaywrightImage(text, file, version) {
     if (match[1] !== version) {
       problems.push({
         file,
-        line: lineOf(text, match[0]),
+        line: text.slice(0, match.index).split('\n').length,
         message: `Playwright image v${match[1]} does not match @playwright/test ${version}`,
       });
+    }
+  }
+  return problems;
+}
+
+/**
+ * CI tests on the Node release the image ships: every NODE_VERSION in a
+ * workflow must equal the release in the Dockerfiles' node:X.Y.Z-* tags.
+ *
+ * @param {{ file: string, text: string }[]} workflows
+ * @param {{ file: string, text: string }[]} dockerfiles
+ */
+export function checkNodeVersions(workflows, dockerfiles) {
+  const problems = [];
+  const releases = [];
+  for (const { file, text } of dockerfiles) {
+    text.split('\n').forEach((line, index) => {
+      const from =
+        /^\s*FROM\s+(?:--platform=\S+\s+)?(?:docker\.io\/)?(?:library\/)?node:([^\s@]+)/i.exec(
+          line,
+        );
+      if (!from) return;
+      const release = /^(\d+\.\d+\.\d+)(?:-|$)/.exec(from[1])?.[1];
+      if (release) releases.push({ file, line: index + 1, release });
+      else {
+        problems.push({
+          file,
+          line: index + 1,
+          message: `node:${from[1]} does not name a full Node release (node:X.Y.Z-...), so NODE_VERSION can't be checked against it`,
+        });
+      }
+    });
+  }
+  const distinct = [...new Set(releases.map((r) => r.release))];
+  if (distinct.length > 1) {
+    problems.push({
+      file: releases[0].file,
+      line: releases[0].line,
+      message: `Dockerfiles use more than one Node release: ${distinct.join(', ')}`,
+    });
+  }
+  if (distinct.length !== 1) return problems;
+
+  for (const { file, text } of workflows) {
+    const { data, lineAt } = yamlDoc(text);
+    const scopes = [
+      [['env'], data.env],
+      ...Object.entries(data.jobs ?? {}).map(([id, job]) => [['jobs', id, 'env'], job?.env]),
+    ];
+    for (const [at, env] of scopes) {
+      if (env?.NODE_VERSION === undefined) continue;
+      if (String(env.NODE_VERSION) !== distinct[0]) {
+        problems.push({
+          file,
+          line: lineAt([...at, 'NODE_VERSION']),
+          message: `NODE_VERSION ${env.NODE_VERSION} does not match the Dockerfile's node:${distinct[0]}`,
+        });
+      }
     }
   }
   return problems;
@@ -150,10 +250,7 @@ function repoFiles() {
   const out = execFileSync(
     'git',
     ['ls-files', '--cached', '--others', '--exclude-standard', '-z'],
-    {
-      cwd: REPO_ROOT,
-      encoding: 'utf8',
-    },
+    { cwd: REPO_ROOT, encoding: 'utf8' },
   );
   return [...new Set(out.split('\0'))]
     .filter((f) => f && !f.includes('__fixtures__/') && existsSync(path.join(REPO_ROOT, f)))
@@ -170,22 +267,26 @@ function main() {
       message: `@playwright/test is "${playwright}"; pin it exactly so it matches the Playwright container`,
     });
   }
-  const counts = { workflows: 0, dockerfiles: 0, compose: 0 };
+  const workflows = [];
+  const dockerfiles = [];
+  let composeFiles = 0;
   for (const file of repoFiles()) {
-    const read = () => readFileSync(path.join(REPO_ROOT, file), 'utf8');
+    const text = () => readFileSync(path.join(REPO_ROOT, file), 'utf8');
     if (isWorkflow(file)) {
-      counts.workflows += 1;
-      const text = read();
-      problems.push(...checkWorkflow(text, file));
-      if (playwright) problems.push(...checkPlaywrightImage(text, file, playwright));
+      workflows.push({ file, text: text() });
     } else if (isDockerfile(file)) {
-      counts.dockerfiles += 1;
-      problems.push(...checkDockerfile(read(), file));
+      dockerfiles.push({ file, text: text() });
     } else if (isCompose(file)) {
-      counts.compose += 1;
-      problems.push(...checkCompose(read(), file));
+      composeFiles += 1;
+      problems.push(...checkCompose(text(), file));
     }
   }
+  for (const { file, text } of workflows) {
+    problems.push(...checkWorkflow(text, file));
+    if (playwright) problems.push(...checkPlaywrightImage(text, file, playwright));
+  }
+  for (const { file, text } of dockerfiles) problems.push(...checkDockerfile(text, file));
+  problems.push(...checkNodeVersions(workflows, dockerfiles));
 
   const gate = currentGate();
   for (const { file, line, message } of problems) {
@@ -193,12 +294,12 @@ function main() {
     if (gate)
       writeFailureRecord({ ...gate, test: message, asset: line ? `${file}:${line}` : file });
   }
-  const scanned = `${counts.workflows} workflow files, ${counts.dockerfiles} Dockerfiles, ${counts.compose} Compose files`;
+  const scanned = `${workflows.length} workflow files, ${dockerfiles.length} Dockerfiles, ${composeFiles} Compose files`;
   if (problems.length > 0) {
-    console.error(`[pins] ${problems.length} unpinned reference(s) in ${scanned}`);
+    console.error(`[pins] ${problems.length} problem(s) in ${scanned}`);
     return 1;
   }
-  console.log(`[pins] every reference is pinned (${scanned})`);
+  console.log(`[pins] every reference is pinned and Node matches the image (${scanned})`);
   return 0;
 }
 

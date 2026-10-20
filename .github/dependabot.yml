@@ -42,6 +42,11 @@ updates:
     groups:
       docker:
         patterns: ['*']
+    ignore:
+      # Node majors are a deliberate move. A minor or patch bump also needs
+      # NODE_VERSION in ci.yml bumped to match (pnpm check:pins).
+      - dependency-name: node
+        update-types: ['version-update:semver-major']
 
   - package-ecosystem: docker-compose
     directory: /tests/harness/compose

@@ -3,8 +3,10 @@ import assert from 'node:assert/strict';
 import {
   checkCompose,
   checkDockerfile,
+  checkNodeVersions,
   checkPlaywrightImage,
   checkWorkflow,
+  driverOptImages,
   imageProblem,
   usesProblem,
 } from './check-pins.mjs';
@@ -61,7 +63,95 @@ jobs:
     'uses: actions/setup-node@v6 is pinned to "v6", not a full commit SHA',
     'jobs.reuse.uses: org/repo/.github/workflows/x.yml@main is pinned to "main", not a full commit SHA',
   ]);
-  assert.equal(problems[0].line, 11);
+  assert.deepEqual(
+    problems.map((p) => p.line),
+    [11, 14, 16, 18],
+  );
+});
+
+test('workflows: each unpinned reference reports its own line', () => {
+  const workflow = [
+    'jobs:',
+    '  a:',
+    '    steps:',
+    `      - uses: actions/checkout@${SHA}`,
+    '      - uses: actions/cache@v4',
+    '  b:',
+    '    steps:',
+    '      - uses: actions/cache@v4',
+  ].join('\n');
+  assert.deepEqual(
+    checkWorkflow(workflow, 'ci.yml').map((p) => p.line),
+    [5, 8],
+  );
+});
+
+test('workflows: action image inputs and buildx driver-opts need digests', () => {
+  const workflow = `
+jobs:
+  publish:
+    steps:
+      - uses: docker/setup-qemu-action@${SHA}
+        with:
+          image: docker.io/tonistiigi/binfmt:qemu-v10.2.3
+      - uses: docker/setup-qemu-action@${SHA}
+        with:
+          image: docker.io/tonistiigi/binfmt:qemu-v10.2.3@${DIGEST}
+      - uses: docker/setup-buildx-action@${SHA}
+        with:
+          driver-opts: |
+            network=host
+            image=moby/buildkit:v0.34.0
+      - uses: docker/setup-buildx-action@${SHA}
+        with:
+          driver-opts: image=moby/buildkit:v0.34.0@${DIGEST}
+`;
+  const problems = checkWorkflow(workflow, 'ci.yml');
+  assert.deepEqual(messages(problems), [
+    'docker/setup-qemu-action with.image docker.io/tonistiigi/binfmt:qemu-v10.2.3 has no @sha256 digest',
+    'docker/setup-buildx-action driver-opts image= moby/buildkit:v0.34.0 has no @sha256 digest',
+  ]);
+  assert.deepEqual(
+    problems.map((p) => p.line),
+    [7, 13],
+  );
+});
+
+test('driverOptImages reads image= from newline and comma lists', () => {
+  assert.deepEqual(driverOptImages('network=host\nimage=a@x'), ['a@x']);
+  assert.deepEqual(driverOptImages('network=host,image=b'), ['b']);
+  assert.deepEqual(driverOptImages('network=host'), []);
+});
+
+test('NODE_VERSION must match the Dockerfile Node release', () => {
+  const dockerfile = (tag) => ({
+    file: 'Dockerfile',
+    text: `FROM node:${tag}@${DIGEST} AS deps\nFROM deps AS app\n`,
+  });
+  const workflow = (version) => ({
+    file: 'ci.yml',
+    text: `env:\n  NODE_VERSION: ${version}\njobs:\n  a:\n    env:\n      NODE_VERSION: ${version}\n`,
+  });
+  assert.deepEqual(checkNodeVersions([workflow('22.23.3')], [dockerfile('22.23.3-alpine')]), []);
+  assert.deepEqual(
+    checkNodeVersions([workflow('22.23.2')], [dockerfile('22.23.3-alpine')]).map((p) => [
+      p.line,
+      p.message,
+    ]),
+    [
+      [2, "NODE_VERSION 22.23.2 does not match the Dockerfile's node:22.23.3"],
+      [6, "NODE_VERSION 22.23.2 does not match the Dockerfile's node:22.23.3"],
+    ],
+  );
+  assert.match(
+    checkNodeVersions([workflow('22.23.3')], [dockerfile('22-alpine')])[0].message,
+    /does not name a full Node release/,
+  );
+  const mixed = {
+    file: 'Dockerfile',
+    text: `FROM node:22.23.3-alpine@${DIGEST}\nFROM node:22.24.0-alpine@${DIGEST}\n`,
+  };
+  assert.match(checkNodeVersions([], [mixed])[0].message, /more than one Node release/);
 });
 
 test('composite actions: checks their steps', () => {

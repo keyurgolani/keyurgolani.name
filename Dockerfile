@@ -1,10 +1,10 @@
 # syntax=docker/dockerfile:1@sha256:4edf897a3ffa55b89f906fc8cc78afdb3f1834cc9c7083565e611a8a7d5fe99e
 
-# Base images are pinned to the multi-arch index digest. Dependabot moves the
-# digest when the tag moves.
+# Base images are pinned to the multi-arch index digest, and the tag names the
+# Node release, which CI's NODE_VERSION must match (pnpm check:pins).
 
 # ─── deps ──────────────────────────────────────────────────────────────────
-FROM node:22-alpine@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402 AS deps
+FROM node:22.23.3-alpine@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402 AS deps
 # corepack fetches the pnpm version in package.json and checks its sha512.
 RUN corepack enable
 WORKDIR /repo
@@ -21,7 +21,7 @@ COPY packages packages
 RUN pnpm install --frozen-lockfile
 
 # ─── builder ───────────────────────────────────────────────────────────────
-FROM node:22-alpine@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402 AS builder
+FROM node:22.23.3-alpine@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402 AS builder
 RUN corepack enable
 WORKDIR /repo
 
@@ -37,7 +37,7 @@ ENV NODE_ENV=production
 RUN pnpm --filter @portfolio/web build
 
 # ─── runner ────────────────────────────────────────────────────────────────
-FROM node:22-alpine@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402 AS runner
+FROM node:22.23.3-alpine@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402 AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
