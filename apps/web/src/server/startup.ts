@@ -1,5 +1,5 @@
 import 'server-only';
-import { openDocumentsCatalog } from './catalog-documents';
+import { compose, type AuthProviderFactory } from './composition';
 import { readDeploymentConfig, type ConfigIssue, type Env, type Profile } from './config';
 import type { DeploymentState } from './config-store';
 
@@ -16,6 +16,8 @@ export interface StartupInput {
   readonly report: (issue: ConfigIssue) => void;
   /** Reads <KEY>_FILE values; tests replace it. */
   readonly readFile?: (file: string) => string;
+  /** Defaults to the providers the build registers; tests pass doubles. */
+  readonly authProviders?: readonly AuthProviderFactory[];
 }
 
 export type StartupResult =
@@ -27,47 +29,18 @@ export type StartupResult =
     }
   | { readonly ok: false; readonly profile?: Profile; readonly issues: ConfigIssue[] };
 
-export function runStartup(input: StartupInput): StartupResult {
+export async function runStartup(input: StartupInput): Promise<StartupResult> {
   const read = readDeploymentConfig(input.env, { cwd: input.cwd, readFile: input.readFile });
   if (!read.ok) return read;
   const { config } = read;
-  const issues = [...read.issues];
-  const refuse = (code: string, message: string): StartupResult => ({
-    ok: false,
-    profile: config.profile,
-    issues: [...issues, { severity: 'fatal', key: 'PORTFOLIO_PROFILE', code, message }],
+  const composed = await compose({
+    config,
+    examplePath: input.examplePath,
+    report: input.report,
+    authProviders: input.authProviders,
   });
-
-  switch (config.profile) {
-    case 'owner':
-      // No build registers an authentication provider yet, so owner never starts.
-      return refuse(
-        'auth_provider_missing',
-        'The owner profile needs an authentication provider, and this build registers none. ' +
-          'Configure authentication, or set PORTFOLIO_PROFILE=read-only.',
-      );
-    case 'demo':
-      return refuse(
-        'profile_unavailable',
-        'The demo profile is not available in this build yet. Set PORTFOLIO_PROFILE=read-only.',
-      );
-    case 'read-only': {
-      const opened = openDocumentsCatalog({
-        // readDeploymentConfig requires it for read-only.
-        sourceDir: config.sourceDir ?? '',
-        mode: config.mode,
-        examplePath: input.examplePath,
-        report: input.report,
-      });
-      if (!opened.ok) {
-        return { ok: false, profile: config.profile, issues: [...issues, ...opened.issues] };
-      }
-      return {
-        ok: true,
-        profile: config.profile,
-        state: Object.freeze({ config, catalog: opened.reader }),
-        issues: [...issues, ...opened.issues],
-      };
-    }
-  }
+  const issues = [...read.issues, ...composed.issues];
+  return composed.ok
+    ? { ok: true, profile: config.profile, state: composed.state, issues }
+    : { ok: false, profile: config.profile, issues };
 }

@@ -1,15 +1,20 @@
 import type { CatalogReader } from './catalog-port';
 import type { DeploymentConfig } from './config';
+import type { Dispatch } from './studio-port';
 
 // Holds what instrumentation register() validated and built, frozen, on a
 // globalThis symbol, so every bundle in the server process reads the same
-// object. Importing this module does nothing: it reads no environment
-// variables and touches no files.
+// object, proxy.ts included. Importing this module does nothing: it reads
+// no environment variables and touches no files.
 
-/** The validated deployment: its configuration and its catalog adapter. */
+/** The validated deployment: its configuration and what the composition root built for it. */
 export interface DeploymentState {
   readonly config: DeploymentConfig;
   readonly catalog: CatalogReader;
+  /** The Studio transport's dispatcher, bound to this profile's operations. */
+  readonly dispatch: Dispatch;
+  /** Startup requirements that failed with `failure: 'degraded'`; empty when none did. */
+  readonly degraded: readonly string[];
 }
 
 export const NOT_LOADED =

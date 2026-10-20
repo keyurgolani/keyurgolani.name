@@ -1,0 +1,179 @@
+import test, { type TestContext } from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { compose, STARTUP_REQUIREMENTS, type StartupRequirement } from './composition';
+import { readDeploymentConfig, type ConfigIssue, type Env } from './config';
+import { setDeploymentState } from './config-store';
+import { loadedOwnerModules } from './load-trace';
+
+// The composition root for profiles that never load owner code. Owner with a
+// provider, which does, has its own file: the load trace is per process.
+
+const EXAMPLE = fileURLToPath(new URL('../../../../portfolio.example.yml', import.meta.url));
+
+function deployment(t: TestContext, env: Env) {
+  const dir = mkdtempSync(path.join(tmpdir(), 'composition-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  writeFileSync(
+    path.join(dir, 'portfolio.yml'),
+    'schemaVersion: 2\nlocale: en\ndirection: ltr\nidentity:\n  name: Rowan Test\n',
+  );
+  const read = readDeploymentConfig(
+    {
+      NODE_ENV: 'production',
+      PORTFOLIO_ORIGIN: 'https://rowan.test',
+      PORTFOLIO_SOURCE_DIR: dir,
+      ...env,
+    },
+    { cwd: '/' },
+  );
+  assert.ok(read.ok, JSON.stringify(read.issues));
+  return read.config;
+}
+
+function inputs(config: ReturnType<typeof deployment>) {
+  return { config, examplePath: EXAMPLE, report: () => {} };
+}
+
+test('read-only builds its catalog adapter and loads no owner module', async (t) => {
+  const composed = await compose(inputs(deployment(t, { PORTFOLIO_PROFILE: 'read-only' })));
+  assert.equal(composed.ok, true);
+  if (!composed.ok) return;
+  assert.ok(Object.isFrozen(composed.state));
+  assert.equal((await composed.state.catalog.getLive()).unit.portfolio.identity.name, 'Rowan Test');
+  assert.deepEqual(loadedOwnerModules(), []);
+  assert.deepEqual(composed.state.degraded, []);
+
+  // Its transport serves no operation.
+  setDeploymentState(composed.state);
+  t.after(() => setDeploymentState(undefined));
+  const response = await composed.state.dispatch(
+    new Request('https://rowan.test/api/studio/config.status'),
+    'config.status',
+  );
+  assert.equal(response.status, 404);
+});
+
+test('owner refuses to start with no provider, before it loads owner code', async (t) => {
+  const config = deployment(t, { PORTFOLIO_PROFILE: 'owner' });
+  const composed = await compose(inputs(config));
+  assert.equal(composed.ok, false);
+  assert.deepEqual(
+    composed.issues.map((issue) => `${issue.key}:${issue.code}`),
+    ['PORTFOLIO_PROFILE:auth_provider_missing'],
+  );
+  assert.deepEqual(loadedOwnerModules(), []);
+});
+
+test('demo refuses to start until its sample catalog ships', async () => {
+  const read = readDeploymentConfig(
+    {
+      NODE_ENV: 'production',
+      PORTFOLIO_PROFILE: 'demo',
+      PORTFOLIO_ORIGIN: 'https://demo.rowan.test',
+    },
+    { cwd: '/' },
+  );
+  assert.ok(read.ok);
+  const composed = await compose(inputs(read.config));
+  assert.equal(composed.ok, false);
+  assert.deepEqual(
+    composed.issues.map((issue) => issue.code),
+    ['profile_unavailable'],
+  );
+  assert.deepEqual(loadedOwnerModules(), []);
+});
+
+test('the tagged startup rows are named requirements for #2, #3, and #4', () => {
+  assert.deepEqual(
+    STARTUP_REQUIREMENTS.map((requirement) => [
+      requirement.id,
+      requirement.issue,
+      requirement.profiles.join(' '),
+      requirement.failure,
+      requirement.check ? 'check' : requirement.load ? 'owner check' : 'pending',
+    ]),
+    [
+      ['auth.provider', '#1', 'owner', 'fatal', 'check'],
+      ['auth.secret', '#2', 'owner', 'fatal', 'pending'],
+      ['data.directory', '#2, #3', 'owner', 'fatal', 'pending'],
+      ['documents.shape', '#3', 'owner', 'fatal', 'pending'],
+      ['revision.integrity', '#3', 'owner', 'degraded', 'pending'],
+    ],
+  );
+});
+
+test('only an owner-only requirement loads its check from owner code', () => {
+  for (const requirement of STARTUP_REQUIREMENTS) {
+    if (requirement.load) assert.deepEqual(requirement.profiles, ['owner'], requirement.id);
+  }
+});
+
+/** A requirement for read-only whose check finds `issues`. */
+function finding(
+  failure: StartupRequirement['failure'],
+  issues: ConfigIssue[],
+): StartupRequirement {
+  return {
+    id: `test.${failure}`,
+    issue: '#1',
+    profiles: ['read-only'],
+    failure,
+    check: async () => issues,
+  };
+}
+
+const BROKEN: ConfigIssue = {
+  severity: 'fatal',
+  key: 'PORTFOLIO_SOURCE_DIR',
+  code: 'revision_unreadable',
+  message: 'test',
+};
+
+test('a degraded requirement that fails starts anyway, as a warning, and is listed', async (t) => {
+  const config = deployment(t, { PORTFOLIO_PROFILE: 'read-only' });
+  const composed = await compose({
+    ...inputs(config),
+    requirements: [finding('degraded', [BROKEN])],
+  });
+  assert.ok(composed.ok, JSON.stringify(composed.issues));
+  assert.deepEqual(
+    composed.issues.map((issue) => `${issue.severity} ${issue.code}`),
+    ['warning revision_unreadable'],
+  );
+  assert.deepEqual(composed.state.degraded, ['test.degraded']);
+  assert.ok(Object.isFrozen(composed.state.degraded));
+});
+
+test('a fatal requirement that fails stops startup, and its warnings pass', async (t) => {
+  const config = deployment(t, { PORTFOLIO_PROFILE: 'read-only' });
+  const stopped = await compose({ ...inputs(config), requirements: [finding('fatal', [BROKEN])] });
+  assert.equal(stopped.ok, false);
+  assert.deepEqual(
+    stopped.issues.map((issue) => `${issue.severity} ${issue.code}`),
+    ['fatal revision_unreadable'],
+  );
+
+  const warned = await compose({
+    ...inputs(config),
+    requirements: [finding('fatal', [{ ...BROKEN, severity: 'warning' }])],
+  });
+  assert.ok(warned.ok);
+  assert.deepEqual(warned.state.degraded, []);
+  assert.deepEqual(
+    warned.issues.map((issue) => `${issue.severity} ${issue.code}`),
+    ['warning revision_unreadable'],
+  );
+});
+
+test('a requirement for another profile never runs', async (t) => {
+  const config = deployment(t, { PORTFOLIO_PROFILE: 'read-only' });
+  const composed = await compose({
+    ...inputs(config),
+    requirements: [{ ...finding('fatal', [BROKEN]), profiles: ['owner'] }],
+  });
+  assert.equal(composed.ok, true);
+});

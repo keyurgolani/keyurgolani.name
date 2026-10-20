@@ -1,10 +1,11 @@
 import { renderRssFeed } from '@portfolio/kit/seo';
 import { getLive } from '~/server/catalog';
 import { requireDeploymentConfig } from '~/server/config-store';
+import { served } from '~/server/route-guard';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+async function feed(request: Request): Promise<Response> {
   try {
     const { origin } = requireDeploymentConfig();
     const { portfolio } = (await getLive()).unit;
@@ -18,9 +19,13 @@ export async function GET() {
   } catch (error) {
     // The public body stays fixed; the cause goes to the server log only.
     console.error('[feed] Could not build the feed:', error);
-    return new Response('Feed unavailable.', {
+    // proxy.ts sets a fresh request ID on every request.
+    const requestId = request.headers.get('x-request-id') ?? 'none';
+    return new Response(`Feed unavailable. Request ID: ${requestId}`, {
       status: 500,
       headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' },
     });
   }
 }
+
+export const GET = served('/feed.xml', feed);

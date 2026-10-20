@@ -11,9 +11,9 @@ import { runStartup, type StartupResult } from './startup';
  * startOrExit writes before it exits. Runs from instrumentation register()
  * on the Node.js runtime, before the server handles a request.
  */
-export function registerDeployment(): Registration {
+export async function registerDeployment(): Promise<Registration> {
   const cwd = process.cwd();
-  const result: StartupResult = runStartup({
+  const result: StartupResult = await runStartup({
     env: process.env,
     cwd,
     // The image and `next dev` both keep it two levels above apps/web.
