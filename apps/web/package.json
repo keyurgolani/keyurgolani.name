@@ -11,7 +11,7 @@
     "start": "next start",
     "typecheck": "pnpm build:registry && tsc --noEmit",
     "lint": "next lint",
-    "test": "echo \"(no tests yet)\""
+    "test": "node --test scripts/check-containment.test.mjs"
   },
   "dependencies": {
     "@portfolio/kit": "workspace:*",
