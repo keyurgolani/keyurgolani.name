@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import type * as Capabilities from '../../apps/web/src/server/capabilities';
 import type * as Operations from '../../apps/web/src/server/operations';
@@ -19,12 +20,31 @@ type Operation = Operations.Operation;
 // page, route, and operation the profile doesn't serve fails closed, and
 // each one it serves answers. Owner runs the same matrix in process until #2
 // ships a provider (server/composition-owner.test.ts); demo joins with its
-// catalog.
+// catalog. The build's route manifests must list exactly the table's routes,
+// so a route Next serves from outside src/app, or at a URL the table doesn't
+// expect, fails here too.
 
 const PROFILE: Profile = 'read-only';
 const READ_ONLY = { type: 'profile', description: PROFILE };
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const METHODS = ['GET', 'POST', 'PUT', 'DELETE'] as const;
+
+// The build's own entries in its route manifests, which no route file declares.
+const NEXT_ENTRIES = new Set([
+  '/_not-found',
+  '/_global-error',
+  '/_app',
+  '/_document',
+  '/_error',
+  '/404',
+  '/500',
+]);
+
+/** A JSON manifest from the build under test, in apps/web/.next. */
+function manifest(file: string): Record<string, string> {
+  const url = new URL(`../../apps/web/.next/${file}`, import.meta.url);
+  return JSON.parse(readFileSync(url, 'utf8')) as Record<string, string>;
+}
 
 /** A concrete path for a pattern, filling each dynamic segment. */
 const concrete = (pattern: string) => pattern.replace(/\[\[?\.{0,3}[^\]]+\]\]?/g, 'sample') || '/';
@@ -39,6 +59,20 @@ function expected(operation: Operation, method: string): [status: number, code: 
   if (operation.kind === 'command') return [403, 'request_origin_rejected'];
   return [200, null];
 }
+
+test(
+  'the build serves the routes in the table and no others',
+  { annotation: [{ type: 'route', description: 'every route' }, READ_ONLY] },
+  () => {
+    // App Router routes map to their URLs; Pages Router URLs are the keys.
+    const built = [
+      ...Object.values(manifest('app-path-routes-manifest.json')),
+      ...Object.keys(manifest('server/pages-manifest.json')),
+    ].filter((url) => !NEXT_ENTRIES.has(url));
+    const table = new Set(listRoutes().map((entry) => entry.pattern));
+    expect([...new Set(built)].sort()).toEqual([...table].sort());
+  },
+);
 
 for (const entry of listRoutes().filter((route) => route.capability !== 'operations')) {
   const served = routeAccess(PROFILE, entry) !== 'absent';

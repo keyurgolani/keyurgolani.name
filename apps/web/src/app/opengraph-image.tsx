@@ -3,7 +3,7 @@ import { findManifest } from '~/lib/registry';
 import { getLive } from '~/server/catalog';
 import { requireDeploymentConfig } from '~/server/config-store';
 import { HOST_APPEARANCE } from '~/server/host-defaults';
-import { requireServed } from '~/server/page-guard';
+import { servedPage } from '~/server/page-guard';
 
 export const runtime = 'nodejs';
 // Per request, from the revision register() loaded, so a build never bakes
@@ -13,8 +13,7 @@ export const alt = 'Portfolio';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
 
-export default async function OpengraphImage() {
-  requireServed('/opengraph-image');
+export default servedPage('/opengraph-image', async function OpengraphImage() {
   const host = new URL(requireDeploymentConfig().origin).hostname.replace(/^www\./, '');
   const { portfolio } = (await getLive()).unit;
   const name = portfolio.identity.name;
@@ -103,4 +102,4 @@ export default async function OpengraphImage() {
     </div>,
     { ...size },
   );
-}
+});

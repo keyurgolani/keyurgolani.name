@@ -1,9 +1,19 @@
-import test from 'node:test';
+import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { CAPABILITIES, PROFILES } from './capabilities';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import {
+  normalizeMetadataPageToRoute,
+  normalizeMetadataRoute,
+} from 'next/dist/lib/metadata/get-metadata-route';
+import { isMetadataRouteFile } from 'next/dist/lib/metadata/is-metadata-route';
+import { normalizeAppPath } from 'next/dist/shared/lib/router/utils/app-paths';
+import ts from 'typescript';
+import { CAPABILITIES, PROFILES, type Profile } from './capabilities';
+import type { DeploymentConfig } from './config';
+import { setDeploymentState } from './config-store';
+import { servedPattern } from './route-guard';
 import {
   listRoutes,
   resolveRoute,
@@ -12,57 +22,99 @@ import {
   routeResolver,
   serves,
   type RouteEntry,
+  type RouteKind,
   type RoutePattern,
 } from './routes';
 
 // The route table against the app directory (#1, item 13), and how the
-// table decides a request.
+// table decides a request. Route files map to URLs through Next's own
+// helpers, so route groups, slots, and numbered metadata images land where
+// the build puts them.
 
-const SRC = fileURLToPath(new URL('..', import.meta.url));
+const WEB = fileURLToPath(new URL('../..', import.meta.url));
+const SRC = path.join(WEB, 'src');
 const APP = path.join(SRC, 'app');
-const PACKAGES = fileURLToPath(new URL('../../../../packages', import.meta.url));
+const PACKAGES = path.join(WEB, '..', '..', 'packages');
 
-/** The URL Next serves a metadata file at, or null when `name` is no metadata file. */
-function metadataRoute(name: string, dir: string): string | null {
-  if (/^robots\.(ts|js|txt)$/.test(name)) return '/robots.txt';
-  if (/^sitemap\.(ts|js|xml)$/.test(name)) return `${dir}/sitemap.xml`;
-  if (/^manifest\.(ts|js|json|webmanifest)$/.test(name)) return '/manifest.webmanifest';
-  if (name === 'favicon.ico') return '/favicon.ico';
-  const image =
-    /^(icon|apple-icon|opengraph-image|twitter-image)\d*\.(ico|jpe?g|png|svg|gif|[jt]sx?)$/.exec(
-      name,
-    );
-  return image ? `${dir}/${image[1]}` : null;
-}
+// Next's default page extensions. The first test checks next.config.ts keeps them.
+const PAGE_EXTENSIONS = ['tsx', 'ts', 'jsx', 'js'];
+const PAGE_FILE = /\.(tsx|ts|jsx|js)$/;
+const METHODS = ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'];
 
 interface RouteFile {
   readonly pattern: string;
+  readonly kind: RouteKind;
   readonly file: string;
 }
 
+/**
+ * The URL Next serves an app file at, as `next build` maps it, or null when
+ * the file is no route. `relative` starts with a slash, from the app
+ * directory. `dynamic` is a metadata file that exports generateImageMetadata
+ * or generateSitemaps.
+ */
+function nextRoute(relative: string, dynamic = false): Omit<RouteFile, 'file'> | null {
+  const name = path.posix.basename(relative);
+  const page = relative.replace(PAGE_FILE, '');
+  if (/^page\.(tsx|ts|jsx|js)$/.test(name)) {
+    return { kind: 'page', pattern: normalizeAppPath(page) };
+  }
+  if (/^route\.(tsx|ts|jsx|js)$/.test(name)) {
+    return { kind: 'handler', pattern: normalizeAppPath(page) };
+  }
+  if (!isMetadataRouteFile(relative, PAGE_EXTENSIONS, true)) return null;
+  const route = normalizeMetadataPageToRoute(normalizeMetadataRoute(page), dynamic);
+  return { kind: 'metadata', pattern: normalizeAppPath(route) };
+}
+
+function parse(file: string, text = readFileSync(file, 'utf8')): ts.SourceFile {
+  return ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true);
+}
+
+function isExported(node: ts.Node): boolean {
+  return (
+    ts.canHaveModifiers(node) &&
+    (ts.getModifiers(node) ?? []).some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword)
+  );
+}
+
+/** The names a module exports through declarations. */
+function exportedNames(source: ts.SourceFile): string[] {
+  return source.statements.flatMap((statement) => {
+    if (!isExported(statement)) return [];
+    if (ts.isVariableStatement(statement)) {
+      return statement.declarationList.declarations.flatMap((declaration) =>
+        ts.isIdentifier(declaration.name) ? [declaration.name.text] : [],
+      );
+    }
+    const name = (statement as ts.DeclarationStatement).name;
+    return name && ts.isIdentifier(name) ? [name.text] : [];
+  });
+}
+
 /** Every file in the app directory that Next serves at a URL. */
-function routeFiles(dir = APP, urlDir = ''): RouteFile[] {
+function routeFiles(dir = APP): RouteFile[] {
   const found: RouteFile[] = [];
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const file = path.join(dir, entry.name);
     if (entry.isDirectory()) {
-      // Private folders never route; groups and slots add no URL segment.
+      // Private folders never route.
       if (entry.name.startsWith('_')) continue;
       assert.ok(
         !/^\(\.{1,3}\)/.test(entry.name),
         `intercepting routes need table support: ${file}`,
       );
-      const silent = /^\(.*\)$/.test(entry.name) || entry.name.startsWith('@');
-      found.push(...routeFiles(file, silent ? urlDir : `${urlDir}/${entry.name}`));
+      found.push(...routeFiles(file));
       continue;
     }
-    if (/\.test\.[jt]sx?$/.test(entry.name)) continue;
-    if (/^(page|route)\.(tsx|ts|jsx|js|mdx)$/.test(entry.name)) {
-      found.push({ pattern: urlDir || '/', file });
-      continue;
-    }
-    const metadata = metadataRoute(entry.name, urlDir);
-    if (metadata) found.push({ pattern: metadata, file });
+    const relative = `/${path.relative(APP, file).split(path.sep).join('/')}`;
+    const dynamic =
+      PAGE_FILE.test(entry.name) &&
+      exportedNames(parse(file)).some((name) =>
+        ['generateImageMetadata', 'generateSitemaps'].includes(name),
+      );
+    const route = nextRoute(relative, dynamic);
+    if (route) found.push({ ...route, file });
   }
   return found;
 }
@@ -86,13 +138,58 @@ function instantiate(pattern: string): string {
 
 const PATTERNS = [...new Set(listRoutes().map((entry) => entry.pattern))].sort();
 
-test('every route file has an entry, and every entry has a route file', () => {
+test('Next finds routes only in apps/web/src/app', async () => {
+  // Next prefers apps/web/app to src/app, and serves a Pages Router
+  // directory beside either, so a file there would skip the table.
+  for (const dir of ['app', 'pages', 'src/pages']) {
+    assert.ok(!existsSync(path.join(WEB, dir)), `apps/web/${dir} would route around the table`);
+  }
+  assert.ok(existsSync(APP));
+  const { default: config } = await import('../../next.config');
+  assert.equal(config.pageExtensions, undefined, "the mapping assumes Next's page extensions");
+});
+
+test("route files map to URLs as next build maps them, with Next's own helpers", () => {
+  const cases: Array<[string, string | null]> = [
+    ['/page.tsx', '/'],
+    ['/(site)/work/[slug]/page.tsx', '/work/[slug]'],
+    ['/@modal/page.tsx', '/'],
+    ['/api/health/route.ts', '/api/health'],
+    ['/robots.ts', '/robots.txt'],
+    ['/(site)/sitemap.ts', '/sitemap.xml'],
+    ['/opengraph-image.tsx', '/opengraph-image'],
+    // Under a group or a slot, a metadata route gets a hash of the parent path.
+    ['/(site)/opengraph-image.tsx', '/opengraph-image-12o0cb'],
+    ['/@slot/icon.png', '/icon-xxgbpy.png'],
+    // Numbered images keep their number, and static ones their extension.
+    ['/icon2.tsx', '/icon2'],
+    ['/icon2.png', '/icon2.png'],
+    ['/(site)/twitter-image2.jpg', '/twitter-image2-12o0cb.jpg'],
+    ['/icon12.png', null],
+    ['/layout.tsx', null],
+    ['/feed.xml/route.test.ts', null],
+  ];
+  for (const [relative, url] of cases) {
+    assert.equal(nextRoute(relative)?.pattern ?? null, url, relative);
+  }
+  assert.equal(
+    nextRoute('/opengraph-image.tsx', true)?.pattern,
+    '/opengraph-image/[__metadata_id__]',
+  );
+});
+
+test('every route file has an entry of its kind, and every entry has a route file', () => {
   const files = routeFiles();
   assert.deepEqual(
     [...new Set(files.map((route) => route.pattern))].sort(),
     PATTERNS,
     'apps/web/src/app and server/routes.ts list different routes',
   );
+  for (const route of files) {
+    for (const entry of listRoutes().filter((candidate) => candidate.pattern === route.pattern)) {
+      assert.equal(entry.kind, route.kind, `${path.relative(SRC, route.file)} is a ${route.kind}`);
+    }
+  }
 });
 
 test('no route file sits where a retired route was', () => {
@@ -106,30 +203,213 @@ test('no route file sits where a retired route was', () => {
   }
 });
 
-test('every route file checks its own pattern against the profile', () => {
-  for (const route of routeFiles()) {
-    const source = readFileSync(route.file, 'utf8');
-    // Handlers return notServed()'s 404; pages and metadata routes call requireServed().
-    const guard = /\/route\.[jt]s$/.test(route.file) ? 'notServed' : 'requireServed';
-    assert.ok(
-      source.includes(`${guard}('${route.pattern}')`),
-      `${path.relative(SRC, route.file)} must call ${guard}('${route.pattern}')`,
+/** Exports Next reads as configuration, and an image route's metadata. */
+const CONFIG_EXPORTS = new Set([
+  'dynamic',
+  'dynamicParams',
+  'revalidate',
+  'fetchCache',
+  'runtime',
+  'preferredRegion',
+  'maxDuration',
+  'alt',
+  'size',
+  'contentType',
+]);
+
+/** Static metadata a page may export, as an object literal. */
+const STATIC_EXPORTS = new Set(['metadata', 'viewport']);
+
+/** Whether `node` is `guard('<pattern>', handler)`. */
+function isGuard(node: ts.Expression | undefined, guard: string, pattern: string): boolean {
+  if (!node || !ts.isCallExpression(node)) return false;
+  const [first] = node.arguments;
+  return (
+    ts.isIdentifier(node.expression) &&
+    node.expression.text === guard &&
+    node.arguments.length === 2 &&
+    first !== undefined &&
+    ts.isStringLiteral(first) &&
+    first.text === pattern
+  );
+}
+
+/** What is wrong with how `route` exports what Next serves; nothing when every export is guarded. */
+function guardProblems(route: RouteFile, text?: string): string[] {
+  const source = parse(route.file, text);
+  const handlers = route.kind === 'handler';
+  const [guard, from] = handlers
+    ? ['served', '~/server/route-guard']
+    : ['servedPage', '~/server/page-guard'];
+  const wrapped = handlers
+    ? `export const <METHOD> = served('${route.pattern}', handler)`
+    : `export default servedPage('${route.pattern}', render)`;
+  const problems: string[] = [];
+
+  const imported = source.statements.some((statement) => {
+    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) {
+      return false;
+    }
+    const bindings = statement.importClause?.namedBindings;
+    return (
+      statement.moduleSpecifier.text === from &&
+      bindings !== undefined &&
+      ts.isNamedImports(bindings) &&
+      bindings.elements.some((item) => item.name.text === guard && !item.propertyName)
     );
+  });
+  if (!imported) problems.push(`import { ${guard} } from '${from}'`);
+
+  let guarded = 0;
+  for (const statement of source.statements) {
+    if (ts.isExportAssignment(statement)) {
+      if (!handlers && isGuard(statement.expression, guard, route.pattern)) guarded++;
+      else problems.push(`the default export must be ${wrapped}`);
+      continue;
+    }
+    if (ts.isExportDeclaration(statement)) {
+      if (!statement.isTypeOnly) problems.push(`no export lists: ${wrapped}`);
+      continue;
+    }
+    if (!isExported(statement)) continue;
+    if (ts.isTypeAliasDeclaration(statement) || ts.isInterfaceDeclaration(statement)) continue;
+    if (!ts.isVariableStatement(statement)) {
+      const name = (statement as ts.DeclarationStatement).name;
+      problems.push(`${name && ts.isIdentifier(name) ? name.text : 'default'}: ${wrapped}`);
+      continue;
+    }
+    const constant = (statement.declarationList.flags & ts.NodeFlags.Const) !== 0;
+    for (const declaration of statement.declarationList.declarations) {
+      const name = ts.isIdentifier(declaration.name) ? declaration.name.text : '(pattern)';
+      if (handlers && METHODS.includes(name)) {
+        if (constant && isGuard(declaration.initializer, guard, route.pattern)) guarded++;
+        else problems.push(`${name}: ${wrapped}`);
+      } else if (STATIC_EXPORTS.has(name)) {
+        const value = declaration.initializer;
+        if (!value || !ts.isObjectLiteralExpression(value)) {
+          problems.push(`${name} must be an object literal`);
+        }
+      } else if (!CONFIG_EXPORTS.has(name)) {
+        problems.push(`unexpected export ${name}: Next serves only what ${guard}() wraps`);
+      }
+    }
+  }
+  if (guarded === 0) problems.push(wrapped);
+  return problems;
+}
+
+test('every route file exports only what its guard wraps, with its own pattern', () => {
+  for (const route of routeFiles()) {
+    assert.deepEqual(guardProblems(route), [], path.relative(SRC, route.file));
   }
 });
 
-test("no module in apps/web/src or packages/*/src is a 'use server' module", () => {
+test('the guard check refuses a skipped guard, a bare method, and a second unguarded one', () => {
+  const check = (text: string, kind: RouteKind = 'handler') =>
+    guardProblems({ kind, pattern: '/feed.xml', file: 'probe.ts' }, text);
+  const handler = "import { served } from '~/server/route-guard';\n";
+  assert.deepEqual(check(`${handler}export const GET = served('/feed.xml', feed);\n`), []);
+  const refused = [
+    `${handler}// served('/feed.xml')\nexport async function GET() { return feed(); }\n`,
+    `${handler}export const GET = served('/feed.xml', feed);\nexport async function POST() {}\n`,
+    `${handler}export const GET = served('/api/health', feed);\n`,
+    `${handler}export let GET = served('/feed.xml', feed);\n`,
+    `${handler}const GET = served('/feed.xml', feed);\nexport { GET };\n`,
+    `${handler}export const GET = feed;\n`,
+    "import { served as guard } from '~/server/route-guard';\nexport const GET = guard('/feed.xml', feed);\n",
+  ];
+  for (const text of refused) assert.notDeepEqual(check(text), [], text);
+
+  const page = "import { servedPage } from '~/server/page-guard';\n";
+  assert.deepEqual(check(`${page}export default servedPage('/feed.xml', render);\n`, 'page'), []);
+  assert.deepEqual(
+    check(
+      `${page}export const metadata = { title: 'x' };\nexport default servedPage('/feed.xml', render);\n`,
+      'page',
+    ),
+    [],
+  );
+  for (const text of [
+    `${page}export default async function Page() {}\n`,
+    `${page}export default servedPage('/feed.xml', render);\nexport async function generateMetadata() {}\n`,
+    `${page}export default servedPage('/feed.xml', render);\nexport const metadata = load();\n`,
+    `${page}export default render;\n`,
+  ]) {
+    assert.notDeepEqual(check(text, 'page'), [], text);
+  }
+});
+
+/** Stores a deployment of `profile` for the test, as register() would. */
+function deploy(t: TestContext, profile: Profile) {
+  setDeploymentState({
+    config: { profile } as DeploymentConfig,
+    catalog: { getLive: () => assert.fail('an unserved route reads no catalog') },
+    dispatch: () => assert.fail('an unserved route runs no operation'),
+    degraded: [],
+  });
+  t.after(() => setDeploymentState(undefined));
+}
+
+test("every method a route handler exports is 404 in each profile that doesn't serve it", async (t) => {
+  let checked = 0;
+  for (const route of routeFiles().filter((file) => file.kind === 'handler')) {
+    const exports = (await import(pathToFileURL(route.file).href)) as Record<string, unknown>;
+    const methods = METHODS.filter((method) => method in exports);
+    assert.ok(methods.length > 0, route.file);
+    for (const method of methods) {
+      assert.equal(servedPattern(exports[method]), route.pattern, `${route.pattern} ${method}`);
+    }
+    for (const profile of PROFILES.filter((name) => !serves(name, route.pattern as RoutePattern))) {
+      await t.test(`${profile} ${route.pattern}`, async (t) => {
+        deploy(t, profile);
+        for (const method of methods) {
+          const run = exports[method] as (request: Request, context: unknown) => Promise<Response>;
+          const url = `https://rowan.test${instantiate(route.pattern)}`;
+          const response = await run(new Request(url, { method }), { params: Promise.resolve({}) });
+          assert.equal(response.status, 404, method);
+          assert.equal(response.headers.get('cache-control'), 'no-store');
+          checked++;
+        }
+      });
+    }
+  }
+  // The feed, which demo doesn't serve, at least.
+  assert.ok(checked > 0);
+});
+
+/** Whether `statements` open with the 'use server' directive. */
+function opensWithUseServer(statements: readonly ts.Statement[]): boolean {
+  for (const statement of statements) {
+    if (!ts.isExpressionStatement(statement) || !ts.isStringLiteral(statement.expression)) {
+      return false;
+    }
+    if (statement.expression.text === 'use server') return true;
+  }
+  return false;
+}
+
+/** Whether the file, or any function in it, is a Server Function by directive. */
+function usesServer(file: string, text?: string): boolean {
+  const source = parse(file, text);
+  let found = opensWithUseServer(source.statements);
+  const visit = (node: ts.Node): void => {
+    if (found) return;
+    const body = ts.isFunctionLike(node) ? (node as ts.FunctionLikeDeclaration).body : undefined;
+    if (body && ts.isBlock(body) && opensWithUseServer(body.statements)) {
+      found = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return found;
+}
+
+test('no module in apps/web/src or packages/*/src declares a Server Function', () => {
   const roots = [SRC, ...readdirSync(PACKAGES).map((name) => path.join(PACKAGES, name, 'src'))];
-  const directive = /^\s*(['"])use server\1/m;
   const offenders = roots
-    .flatMap((root) => {
-      try {
-        return sources(root);
-      } catch {
-        return [];
-      }
-    })
-    .filter((file) => directive.test(readFileSync(file, 'utf8')));
+    .flatMap((root) => (existsSync(root) ? sources(root) : []))
+    .filter((file) => usesServer(file));
   assert.deepEqual(
     offenders,
     [],
@@ -137,7 +417,26 @@ test("no module in apps/web/src or packages/*/src is a 'use server' module", () 
   );
 });
 
-test('every entry names a known capability, profiles, and kind', () => {
+test("the 'use server' check finds the directive however it is written", () => {
+  const found = [
+    "'use server';\nexport async function save() {}\n",
+    '"use server"\nexport async function save() {}\n',
+    "/* why */ 'use server';\nexport async function save() {}\n",
+    "'use strict';\n'use server';\n",
+    "export async function save() {\n  // a note\n  'use server';\n}\n",
+    "export const save = async () => { /* x */ 'use server'; };\n",
+    "class Store { async save() { 'use server'; } }\n",
+  ];
+  for (const text of found) assert.equal(usesServer('probe.ts', text), true, text);
+  const not = [
+    "const label = 'use server';\n",
+    "export function f() { return 1; 'use server'; }\n",
+    '// use server\n',
+  ];
+  for (const text of not) assert.equal(usesServer('probe.ts', text), false, text);
+});
+
+test('every entry names a known capability, profiles, and kind, and serves some profile', () => {
   for (const entry of listRoutes()) {
     assert.ok(
       entry.capability === 'operations' || CAPABILITIES.includes(entry.capability),
@@ -150,6 +449,21 @@ test('every entry names a known capability, profiles, and kind', () => {
       assert.equal(entry.kind, 'page', `${entry.pattern}: only pages are navigation`);
       assert.ok(!entry.pattern.includes('['), `${entry.pattern}: navigation needs a static path`);
     }
+    assert.ok(
+      PROFILES.some((profile) => routeAccess(profile, entry) !== 'absent'),
+      `${entry.pattern}: an entry no profile serves`,
+    );
+  }
+});
+
+test('at most one entry serves each pattern in each profile', () => {
+  for (const profile of PROFILES) {
+    const seen = new Set<string>();
+    for (const entry of listRoutes()) {
+      if (routeAccess(profile, entry) === 'absent') continue;
+      assert.ok(!seen.has(entry.pattern), `${profile} has two entries for ${entry.pattern}`);
+      seen.add(entry.pattern);
+    }
   }
 });
 
@@ -158,7 +472,7 @@ test('the Studio transport is served in every profile', () => {
 });
 
 test('what every profile serves at the close of slice 2', () => {
-  const served = (profile: (typeof PROFILES)[number]) =>
+  const served = (profile: Profile) =>
     PATTERNS.filter((pattern) => serves(profile, pattern as RoutePattern));
   const everywhere = [
     '/',
