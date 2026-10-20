@@ -1,6 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { accessIn, CAPABILITIES, PROFILES, type Access, type Capability } from './capabilities';
+import {
+  accessIn,
+  CAPABILITIES,
+  INDEXABLE,
+  PROFILES,
+  type Access,
+  type Capability,
+} from './capabilities';
 
 // Every capability in every profile, against the #1 item 9 table written out
 // here by hand. Changing the matrix means changing this table on purpose.
@@ -62,4 +69,8 @@ test('only owner grants a capability by session', () => {
     assert.notEqual(accessIn('demo', capability), 'session', capability);
     assert.notEqual(accessIn('read-only', capability), 'session', capability);
   }
+});
+
+test('crawlers may index owner and read-only, and nothing under demo until #9 and #22', () => {
+  assert.deepEqual(INDEXABLE, { owner: true, demo: false, 'read-only': true });
 });

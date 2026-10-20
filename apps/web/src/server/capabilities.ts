@@ -45,3 +45,15 @@ export function accessIn(profile: Profile, capability: Capability): Access | 'ab
   const grants: Partial<Record<Profile, Access>> = CAPABILITY_MATRIX[capability];
   return grants[profile] ?? 'absent';
 }
+
+/**
+ * Whether crawlers may index a profile's pages. Until #9 and #22 decide what
+ * a demo deployment shows them, `demo` asks for nothing to be indexed:
+ * proxy.ts sends `X-Robots-Tag: noindex` on every response, robots.txt
+ * disallows `/`, and the sitemap is empty.
+ */
+export const INDEXABLE: Readonly<Record<Profile, boolean>> = {
+  owner: true,
+  demo: false,
+  'read-only': true,
+};
