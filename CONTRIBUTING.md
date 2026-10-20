@@ -65,33 +65,28 @@ If you add or change a section kind in `packages/schema/src/kinds/`, you must al
 
 The drift gates below catch most of these.
 
-## Drift gates
+## Checks
 
-Run before every commit:
+CI runs these on every pull request. Each CI step runs the matching `pnpm ci:<job>` script, so a failure prints the command that reproduces it.
 
 ```sh
-pnpm typecheck         # tsc --noEmit across all packages
+pnpm format:check      # Prettier; pnpm format fixes it
+pnpm lint              # ESLint; warnings fail too
+pnpm typecheck         # tsc across the workspace and the test harness
+pnpm test              # package suites plus the ci/ and skills/ script tests
 pnpm check:skills      # parity between schema, kit, skill refs, frontmatter
+pnpm build             # production build of apps/web
+pnpm ci:browser        # Playwright smoke against that build
 ```
 
-Per-script tests:
+Run `pnpm exec playwright install chromium` once before the browser smoke. `pnpm ci:image` builds and checks the container image with Docker (`CONTAINER_CLI=finch` for Finch).
 
-```sh
-pnpm exec node --test skills/portfolio-author/scripts/validate.test.mjs
-pnpm exec node --test skills/variant-developer/scripts/audit.test.mjs
-pnpm exec node --test skills/variant-developer/scripts/kit-dedup.test.mjs
-pnpm exec tsx --test packages/kit/src/format.test.ts
-pnpm exec tsx --test packages/kit/src/theme.test.ts
-pnpm exec tsx --test packages/schema/src/portfolio.test.ts
-pnpm exec tsx --test packages/schema/src/kinds/github.test.ts
-```
-
-A new test runner is not configured at the workspace level — Node's built-in `node:test` is the convention via `tsx` for TypeScript files.
+Tests use Node's built-in `node:test`, through `tsx` for TypeScript. A single file runs directly, for example `pnpm exec tsx --test packages/kit/src/format.test.ts`.
 
 ## Conventions
 
-- **Commit messages** follow Conventional Commits (`feat`, `fix`, `docs`, `chore`, `refactor`, `test`).
-- **Branches** are short-lived. PRs land on `main` after CI passes.
+- **Commit messages** follow Conventional Commits (`feat`, `fix`, `docs`, `chore`, `ci`, `refactor`, `test`).
+- **Branches** are short-lived. PRs land after the `gate` check passes.
 - **TDD** for kit helpers, schema validators, and audit scripts: write the test first, watch it fail, implement, watch it pass.
 - **No emojis in code or files** unless explicitly authored by the user. Use Lucide icons in UI.
 - **Stay focused.** Don't restructure unrelated code as part of a feature change.
