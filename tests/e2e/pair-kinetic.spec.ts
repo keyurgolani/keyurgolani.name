@@ -3,7 +3,7 @@ import { DEFAULT_PORTFOLIO } from '../harness/app-server.mjs';
 import { expect, test } from '../harness/fixtures';
 import { visitorOutput } from '../harness/visitor-output';
 
-// pair.spec.ts's hidden section under Kinetic Cosmos (#4), whose client
+// pair.spec.ts's hidden sections under Kinetic Cosmos (#4), whose client
 // components take more of the portfolio as props than they render. The RSC
 // payload carries those props, so it is where a marker would surface.
 
@@ -26,8 +26,9 @@ test(
     expect(payload).toContain('Notes on visible things');
     // The hero, a client component, gets identity whole: the identity's own
     // tagline is here, and so would its unregistered extension data be if the
-    // public view kept it.
+    // public view kept it. The same goes for the visible experience item.
     expect(payload).toContain('Builds calm software.');
+    expect(payload).toContain('Calm Co');
     for (const [name, text] of Object.entries({ html, payload, feed })) {
       expect(text, name).not.toContain(MARKER);
     }
@@ -44,7 +45,9 @@ test(
     await expect(root).toHaveAttribute('data-color-scheme', 'aurora');
     await expect(root).toHaveAttribute('data-typography', 'humanist');
     await expect(root).toHaveAttribute('data-motion-policy', 'respect-os');
-    await expect(page.locator('[id="drafts"]')).toHaveCount(0);
-    await expect(page.locator('a[href="#drafts"]')).toHaveCount(0);
+    for (const id of ['drafts', 'roles-draft', 'skills-draft', 'gallery']) {
+      await expect(page.locator(`[id="${id}"]`), id).toHaveCount(0);
+      await expect(page.locator(`a[href="#${id}"]`), id).toHaveCount(0);
+    }
   },
 );

@@ -1,7 +1,10 @@
-# Harness fixture: a section the site document hides, and data from a content
-# extension the host doesn't register. Each holds a canary-hidden- marker that
-# must never reach a visitor: not the page, its RSC payload, its JSON-LD, or
-# the feed. .test hosts only.
+# Harness fixture: sections the site document hides, and data from a content
+# extension the host doesn't register: a section of its own, and entries on
+# the identity, a link, a section, and an item. Each holds a canary-hidden-
+# marker that must never reach a visitor: not the page, its RSC payload, its
+# JSON-LD, or the feed. The hidden experience and skills sections come before
+# the visible ones the JSON-LD reads, so one that leaked would change what it
+# says. .test hosts only.
 schemaVersion: 2
 locale: en-GB
 direction: ltr
@@ -17,15 +20,50 @@ links:
   - platform: website
     url: https://rowan.test
     label: Website
+    extensions:
+      '@other/portfolio-x':
+        note: canary-hidden-link
 
 sections:
   - kind: hero
     id: top
     tagline: I build calm software.
 
+  - kind: experience
+    id: roles-draft
+    title: canary-hidden-roles
+    items:
+      - role: canary-hidden-role
+        organization: canary-hidden-organization
+        period: { start: '2025-01' }
+
+  - kind: experience
+    id: work
+    title: Work
+    items:
+      - role: Staff engineer
+        organization: Calm Co
+        period: { start: '2023-04' }
+        extensions:
+          '@other/portfolio-x':
+            note: canary-hidden-item
+
+  - kind: skills
+    id: skills-draft
+    title: canary-hidden-skills
+    items: [canary-hidden-skill]
+
+  - kind: skills
+    id: skills
+    title: Skills
+    items: [Accessibility, TypeScript]
+
   - kind: writings
     id: essays
     title: Essays
+    extensions:
+      '@other/portfolio-x':
+        note: canary-hidden-section
     items:
       - title: Notes on visible things
         url: https://rowan.test/visible
@@ -40,6 +78,13 @@ sections:
         url: https://rowan.test/canary-hidden-url
         publishedAt: '2026-02-03'
         summary: canary-hidden-summary
+
+  - kind: '@other/portfolio-x/gallery'
+    id: gallery
+    title: canary-hidden-gallery
+    data:
+      items:
+        - caption: canary-hidden-gallery-item
 
   - kind: contact
     id: contact

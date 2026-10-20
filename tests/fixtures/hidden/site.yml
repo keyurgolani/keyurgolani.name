@@ -1,5 +1,6 @@
 # Harness fixture: Editorial in a scheme and preset that aren't its defaults,
-# motion always reduced, and the drafts section hidden.
+# motion always reduced, and the roles-draft, skills-draft, and drafts
+# sections hidden.
 schemaVersion: 2
 appearance:
   variant: editorial
@@ -17,5 +18,9 @@ motionPolicy: reduce
 features:
   feed: true
 sections:
+  roles-draft:
+    hidden: true
+  skills-draft:
+    hidden: true
   drafts:
     hidden: true

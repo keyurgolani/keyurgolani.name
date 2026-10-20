@@ -4,11 +4,11 @@ import { expect, test } from '../harness/fixtures';
 import { visitorOutput } from '../harness/visitor-output';
 
 // The mounted pair (#4) under Editorial: the site document picks the
-// appearance, the motion policy, and the starting theme, and hides a
-// section; the portfolio's locale and direction set <html lang dir>. No
-// marker from the hidden section or from unregistered extension data
-// reaches a visitor. pair-kinetic.spec.ts checks the same under Kinetic
-// Cosmos, and pair-rtl.spec.ts a right-to-left portfolio.
+// appearance, the motion policy, and the starting theme, and hides
+// sections; the portfolio's locale and direction set <html lang dir>. No
+// marker from a hidden section or from unregistered extension data reaches
+// a visitor. pair-kinetic.spec.ts checks the same under Kinetic Cosmos, and
+// pair-rtl.spec.ts a right-to-left portfolio.
 
 const HIDDEN = path.join(path.dirname(DEFAULT_PORTFOLIO), 'hidden');
 const MARKER = 'canary-hidden-';
@@ -27,10 +27,9 @@ test(
   'a hidden section never reaches /, its RSC payload, its JSON-LD, or the feed',
   { annotation: [{ type: 'route', description: '/' }, READ_ONLY] },
   async ({ request }) => {
-    const { html, payload, feed } = await visitorOutput(request);
+    const { html, jsonLd, payload, feed } = await visitorOutput(request);
     // Each did render the portfolio.
     expect(html).toContain('Notes on visible things');
-    expect(html).toContain('application/ld+json');
     expect(payload).toContain('Notes on visible things');
     expect(feed).toContain('<title>Notes on visible things</title>');
     for (const [name, text] of Object.entries({ html, payload, feed })) {
@@ -38,6 +37,19 @@ test(
     }
     // The channel's language is the portfolio's locale.
     expect(feed).toContain('<language>en-GB</language>');
+
+    // The JSON-LD reads the first experience and every skills section. The
+    // hidden ones come first, so it names them only if they leak.
+    const person = jsonLd.find((block) => block['@type'] === 'Person');
+    expect(person).toMatchObject({
+      name: 'Rowan Hidden',
+      jobTitle: 'Staff engineer',
+      worksFor: { '@type': 'Organization', name: 'Calm Co' },
+      knowsAbout: ['Accessibility', 'TypeScript'],
+      sameAs: ['https://rowan.test'],
+    });
+    expect(jsonLd.map((block) => block['@type'])).toEqual(['Person', 'ProfilePage', 'WebSite']);
+    expect(JSON.stringify(jsonLd)).not.toContain(MARKER);
   },
 );
 
@@ -54,10 +66,14 @@ test(
     await expect(page.locator('html')).toHaveAttribute('lang', 'en-GB');
     await expect(page.locator('html')).toHaveAttribute('dir', 'ltr');
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
-    // The hidden section isn't on the page, and nothing links to it.
-    await expect(page.locator('[id="drafts"]')).toHaveCount(0);
-    await expect(page.locator('a[href="#drafts"]')).toHaveCount(0);
-    await expect(page.locator('[id="essays"]')).toHaveCount(1);
+    // No hidden or unregistered section is on the page, and nothing links to one.
+    for (const id of ['drafts', 'roles-draft', 'skills-draft', 'gallery']) {
+      await expect(page.locator(`[id="${id}"]`), id).toHaveCount(0);
+      await expect(page.locator(`a[href="#${id}"]`), id).toHaveCount(0);
+    }
+    for (const id of ['essays', 'work', 'skills']) {
+      await expect(page.locator(`[id="${id}"]`), id).toHaveCount(1);
+    }
   },
 );
 
