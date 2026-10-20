@@ -1,8 +1,24 @@
 #!/usr/bin/env node
 /**
- * config.mjs: commands for the portfolio's documents (#4, item 19). Run it
- * through `pnpm config:migrate`, which builds the variant registry first and
- * runs this file with tsx.
+ * config.mjs: commands for the portfolio's documents (#4, items 19 and 22).
+ * Run it through `pnpm config:validate` or `pnpm config:migrate`, which build
+ * the variant registry first and run this file with tsx.
+ *
+ *   pnpm config:validate [dir] [--origin <url>] [--json]
+ *
+ * validate reads the pair in a directory, portfolio.{yml,yaml,json} and
+ * site.{yml,yaml,json}, the way startup does, and prints every record it
+ * finds: where, its code and severity, what's wrong, and how to fix it.
+ *
+ *   dir             The directory that holds the pair. Defaults to the
+ *                   repository's config directory, which `pnpm dev` reads.
+ *   --origin <url>  The site's origin, such as https://example.com, to check
+ *                   links against. Without it, those checks are listed as not
+ *                   checked.
+ *   --json          Print the records as JSON instead.
+ *
+ * Exit status: 0 when nothing blocks the pair (warnings may remain); 1 when
+ * something does, the directory can't be read, or an argument is wrong.
  *
  *   pnpm config:migrate <old-file> [--set <portfolio|site>.<path>=<value>]...
  *     [--drop-unknown] [--origin <url>] [--summary] [--write --out <dir>]
@@ -42,9 +58,11 @@
 import { randomBytes } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { detectFormat, DOCUMENT_MAX_BYTES, redactSecrets } from '@portfolio/schema';
 import { formatMigration, migrate, parseSet } from '@portfolio/schema/migrate';
+import { formatRecords, loadPair, pairFileNames } from '@portfolio/schema/node';
 
 /**
  * What this build registers: the appearance catalog the host builds from its
@@ -62,10 +80,14 @@ async function hostCatalog() {
   return { catalog: createAppearanceCatalog(listManifests()), extensions: CONTENT_EXTENSIONS };
 }
 
-const USAGE = [
+const VALIDATE_USAGE = 'Usage: pnpm config:validate [dir] [--origin <url>] [--json]';
+const MIGRATE_USAGE = [
   'Usage: pnpm config:migrate <old-file> [--set <portfolio|site>.<path>=<value>]...',
   '         [--drop-unknown] [--origin <url>] [--summary] [--write --out <dir>]',
 ].join('\n');
+
+/** Where `pnpm dev` reads the pair: the repository's config directory. */
+const CONFIG_DIR = fileURLToPath(new URL('../../../config', import.meta.url));
 
 class UsageError extends Error {}
 
@@ -149,7 +171,7 @@ async function migrateCommand(args) {
     },
   });
   if (values.help) {
-    process.stdout.write(`${USAGE}\n`);
+    process.stdout.write(`${MIGRATE_USAGE}\n`);
     return 0;
   }
   if (positionals.length !== 1) throw new UsageError('Give one old file to migrate.');
@@ -267,14 +289,112 @@ function isSymlink(file) {
   }
 }
 
+async function validateCommand(args) {
+  const { values, positionals } = parseArgs({
+    args,
+    allowPositionals: true,
+    options: {
+      origin: { type: 'string' },
+      json: { type: 'boolean', default: false },
+      help: { type: 'boolean', short: 'h', default: false },
+    },
+  });
+  if (values.help) {
+    process.stdout.write(`${VALIDATE_USAGE}\n`);
+    return 0;
+  }
+  if (positionals.length > 1) throw new UsageError('Give one directory to validate.');
+  const origin = values.origin === undefined ? undefined : bareOrigin(values.origin);
+  if (values.origin !== undefined && origin === undefined) {
+    throw new UsageError('--origin takes an origin alone, such as https://example.com.');
+  }
+
+  const base = process.env.INIT_CWD || process.cwd();
+  const dir = positionals[0] === undefined ? CONFIG_DIR : path.resolve(base, positionals[0]);
+  const result = loadPair(dir, {
+    ...(await hostCatalog()),
+    ...(origin ? { canonicalOrigin: origin } : {}),
+  });
+  const report = values.json
+    ? `${JSON.stringify(jsonReport(result), null, 2)}\n`
+    : textReport(result, shownPath(base, dir), origin !== undefined);
+  // Records never quote a value, and this keeps it that way for the terminal.
+  process.stdout.write(redactSecrets(report));
+  return result.ok ? 0 : 1;
+}
+
+/** The records as startup logs them and Studio shows them, with the file names. */
+function jsonReport(result) {
+  const files = pairFileNames(result);
+  return {
+    ok: result.ok,
+    ...(result.ok || !result.directory ? {} : { directory: result.directory }),
+    ...(files ? { files } : {}),
+    diagnostics: result.diagnostics,
+    notChecked: result.notChecked,
+  };
+}
+
+const DIRECTORY_PROBLEMS = {
+  missing: "doesn't exist.",
+  'not-directory': 'is a file. Give the directory that holds the pair, portfolio.yml and site.yml.',
+  unreadable: "can't be read.",
+};
+
+function textReport(result, shownDir, withOrigin) {
+  if (!result.ok && result.directory)
+    return `${shownDir} ${DIRECTORY_PROBLEMS[result.directory]}\n`;
+  const lines = [];
+  const blocking = result.diagnostics.filter(({ severity }) => severity !== 'warning').length;
+  if (result.ok) {
+    const { portfolio, site } = pairFileNames(result);
+    const warnings = result.diagnostics.length;
+    const also = warnings === 0 ? '' : `, with ${count(warnings, 'warning')}`;
+    lines.push(`${portfolio} and ${site} are valid${also}.`);
+  } else {
+    const verb = blocking === 1 ? 'blocks' : 'block';
+    lines.push(`${shownDir} can't go live: ${count(blocking, 'record')} ${verb} it.`);
+  }
+  if (result.notChecked.length > 0) {
+    lines.push(`Not checked: ${result.notChecked.join(', ')}.`);
+    if (!withOrigin && result.notChecked.some((entry) => entry.startsWith('origin.'))) {
+      lines.push("Pass --origin with the site's origin to check its links against it.");
+    }
+  }
+  return `${formatRecords(result)}${lines.join('\n')}\n`;
+}
+
+function count(n, noun) {
+  return `${n} ${noun}${n === 1 ? '' : 's'}`;
+}
+
+/** A path under the directory pnpm ran in reads best relative to it. */
+function shownPath(base, file) {
+  const relative = path.relative(base, file);
+  if (relative === '') return '.';
+  return !relative.startsWith('..') && !path.isAbsolute(relative) ? relative : file;
+}
+
+const COMMANDS = {
+  validate: { run: validateCommand, usage: VALIDATE_USAGE },
+  migrate: { run: migrateCommand, usage: MIGRATE_USAGE },
+};
+
 async function main(argv) {
   const [command, ...args] = argv;
+  const entry =
+    command !== undefined && Object.hasOwn(COMMANDS, command) ? COMMANDS[command] : null;
   try {
-    if (command === 'migrate') return await migrateCommand(args);
-    throw new UsageError(command ? `There's no ${command} command.` : 'Name a command: migrate.');
+    if (!entry) {
+      throw new UsageError(
+        command ? `There's no ${command} command.` : 'Name a command: validate or migrate.',
+      );
+    }
+    return await entry.run(args);
   } catch (error) {
     if (error instanceof UsageError || error?.code?.startsWith?.('ERR_PARSE_ARGS')) {
-      process.stderr.write(`${error.message}\n${USAGE}\n`);
+      const usage = entry ? entry.usage : `${VALIDATE_USAGE}\n${MIGRATE_USAGE}`;
+      process.stderr.write(`${error.message}\n${usage}\n`);
       return 1;
     }
     throw error;
