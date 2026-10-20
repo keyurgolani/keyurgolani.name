@@ -21,3 +21,22 @@ test('navigation links to each section by its content id', () => {
     { label: 'About', href: '#lately' },
   ]);
 });
+
+test('navigation never links a section from a content extension', () => {
+  const portfolio = PortfolioSchema.parse({
+    schemaVersion: 2,
+    locale: 'en',
+    direction: 'ltr',
+    identity: { name: 'Rowan Test' },
+    sections: [
+      { kind: 'lede', id: 'about', title: 'About', body: 'x' },
+      {
+        kind: '@acme/portfolio-photography/exhibitions',
+        id: 'exhibitions',
+        title: 'Exhibitions',
+        data: {},
+      },
+    ],
+  });
+  assert.deepEqual(deriveNavItems(portfolio), [{ label: 'About', href: '#about' }]);
+});

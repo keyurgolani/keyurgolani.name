@@ -33,10 +33,14 @@ export interface SourcePosition {
 }
 
 /**
- * Where a path into the data starts in the source. For a key the document
- * lacks, the position of the nearest ancestor it has.
+ * Where a path into the data starts in the source: its value, or with `key`,
+ * the key naming it in its mapping. For a path the document lacks, the
+ * position of the nearest ancestor it has.
  */
-export type Locate = (path: readonly PropertyKey[]) => SourcePosition | undefined;
+export type Locate = (
+  path: readonly PropertyKey[],
+  at?: 'value' | 'key',
+) => SourcePosition | undefined;
 
 /** Why the text isn't one plain YAML or JSON document. Never quotes the text. */
 export interface SourceProblem {
@@ -141,7 +145,15 @@ export function parseSource(source: string, format: DocumentFormat): ParsedSourc
     }
   }
 
-  const locate: Locate = (path) => {
+  const locate: Locate = (path, at = 'value') => {
+    if (at === 'key' && path.length > 0) {
+      const parent = path.length === 1 ? doc.contents : doc.getIn(path.slice(0, -1), true);
+      const name = String(path.at(-1));
+      const pair = isMap(parent)
+        ? parent.items.find((item) => isScalar(item.key) && String(item.key.value) === name)
+        : undefined;
+      if (pair && isNode(pair.key) && pair.key.range) return position(pair.key.range[0]);
+    }
     for (let depth = path.length; depth >= 0; depth--) {
       const node = depth === 0 ? doc.contents : doc.getIn(path.slice(0, depth), true);
       if (isNode(node) && node.range) return position(node.range[0]);

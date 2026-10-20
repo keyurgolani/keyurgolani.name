@@ -1,20 +1,22 @@
 import { z } from 'zod';
-import { LinkSchema, SectionBase } from './common';
+import type { SchemaParts } from './common';
 
-export const ContactSchema = z.object({
-  kind: z.literal('contact'),
-  ...SectionBase,
-  message: z.string().optional(),
-  links: z.array(LinkSchema).optional(),
-  showAvailability: z.boolean().optional(),
-});
-export type Contact = z.infer<typeof ContactSchema>;
+export function connectionSchemas({ section, Link }: SchemaParts) {
+  const ContactSchema = section('contact', {
+    message: z.string().optional(),
+    links: z.array(Link).optional(),
+    showAvailability: z.boolean().optional(),
+  });
 
-export const CtaSchema = z.object({
-  kind: z.literal('cta'),
-  ...SectionBase,
-  description: z.string().optional(),
-  primaryAction: LinkSchema.optional(),
-  secondaryAction: LinkSchema.optional(),
-});
-export type Cta = z.infer<typeof CtaSchema>;
+  const CtaSchema = section('cta', {
+    description: z.string().optional(),
+    primaryAction: Link.optional(),
+    secondaryAction: Link.optional(),
+  });
+
+  return { ContactSchema, CtaSchema };
+}
+
+type Schemas = ReturnType<typeof connectionSchemas>;
+export type Contact = z.infer<Schemas['ContactSchema']>;
+export type Cta = z.infer<Schemas['CtaSchema']>;

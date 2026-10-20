@@ -2,7 +2,13 @@ import 'server-only';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { detectFormat, parsePortfolio, type DocumentProblem } from '@portfolio/schema';
+import {
+  detectFormat,
+  parsePortfolio,
+  type ContentExtension,
+  type DocumentProblem,
+  type DocumentWarning,
+} from '@portfolio/schema';
 import type { CatalogReader, LiveRevision } from './catalog-port';
 import type { ConfigIssue, RuntimeMode } from './config';
 
@@ -27,6 +33,8 @@ export interface DocumentsCatalogOptions {
   readonly mode: RuntimeMode;
   /** The bundled example, rendered under `next dev` when the directory holds no document. */
   readonly examplePath: string;
+  /** The content extensions documents are checked against. Others warn. */
+  readonly extensions?: readonly ContentExtension[];
   /** Receives the findings of every re-validation under `next dev`. */
   readonly report: (issue: ConfigIssue) => void;
 }
@@ -147,9 +155,12 @@ function loadRevision(options: DocumentsCatalogOptions): Loaded {
     });
   }
 
-  const parsed = parsePortfolio(bytes.toString('utf8'), detectFormat(name));
+  const parsed = parsePortfolio(bytes.toString('utf8'), detectFormat(name), {
+    extensions: options.extensions,
+  });
   if (!parsed.ok) return fail(...parsed.problems.map((problem) => documentIssue(problem, name)));
   const { value: portfolio, locate } = parsed;
+  issues.push(...parsed.warnings.map((warning) => warningIssue(warning, name)));
 
   if (!usingExample && isSampleIdentity(portfolio.identity.name)) {
     const sample: ConfigIssue = {
@@ -214,6 +225,19 @@ function documentIssue(problem: DocumentProblem, file: string): ConfigIssue {
     ...(problem.pointer !== undefined ? { path: problem.pointer } : {}),
     ...(problem.line !== undefined ? { line: problem.line, column: problem.column } : {}),
     issueCode: problem.code,
+  };
+}
+
+/** Something a valid document holds that the owner should know about, as a startup warning. */
+function warningIssue(warning: DocumentWarning, file: string): ConfigIssue {
+  return {
+    severity: 'warning',
+    key: KEY,
+    code: warning.code,
+    message: warning.message,
+    file,
+    path: warning.pointer,
+    ...(warning.line !== undefined ? { line: warning.line, column: warning.column } : {}),
   };
 }
 

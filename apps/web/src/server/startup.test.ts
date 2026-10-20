@@ -4,6 +4,8 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+// The schema package's test extension, shared with its own tests.
+import { acmePortfolioPhotography } from '../../../../packages/schema/src/__fixtures__/acme-portfolio-photography';
 import { getLive } from './catalog';
 import type { Env } from './config';
 import { getDeploymentConfig, requireDeploymentConfig, setDeploymentState } from './config-store';
@@ -111,6 +113,31 @@ test('warnings from the configuration reach the startup result', async (t) => {
     result.issues.map((issue) => `${issue.severity}:${issue.code}`),
     ['warning:unknown_key'],
   );
+});
+
+test('the content extensions reach the document check', async (t) => {
+  const dir = sourceDir(
+    t,
+    `${VALID}  extensions:\n    '@acme/portfolio-photography': { camra: Leica }\n`,
+  );
+  const env = { ...PRODUCTION, PORTFOLIO_PROFILE: 'read-only', PORTFOLIO_SOURCE_DIR: dir };
+  // Unregistered, the entry is kept and warns.
+  const unregistered = await start(env);
+  assert.equal(unregistered.ok, true);
+  assert.deepEqual(
+    unregistered.issues.map((issue) => `${issue.severity}:${issue.code}`),
+    ['warning:extension_unregistered'],
+  );
+  // Registered, its fields are checked.
+  const registered = await runStartup({
+    env,
+    cwd: '/srv/app',
+    examplePath: EXAMPLE,
+    extensions: [acmePortfolioPhotography],
+    report: () => {},
+  });
+  assert.deepEqual(fatalCodes(registered), ['PORTFOLIO_SOURCE_DIR:document_invalid']);
+  assert.match(registered.issues[0]?.message ?? '', /Did you mean camera\?/);
 });
 
 test('the store hands the frozen state to getLive() and the config readers', async (t) => {

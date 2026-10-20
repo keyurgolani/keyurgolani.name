@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { GithubSchema } from './github';
+import { DEFAULT_SCHEMAS } from '../compose';
+import { githubSchemas } from './github';
+
+const { GithubSchema } = githubSchemas(DEFAULT_SCHEMAS.parts);
 
 const BASE = { kind: 'github' as const, id: 'github', username: 'octocat' };
 

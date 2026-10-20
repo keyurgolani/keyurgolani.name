@@ -289,6 +289,31 @@ test.describe('the document', () => {
     ]);
   });
 
+  test('an unknown key, refused at the key with a did-you-mean hint', async () => {
+    const dir = sourceDir({
+      'portfolio.yml': `${HEAD}identity:\n  name: Rowan Fixture\n  tagine: canary-tagline\n`,
+    });
+    const fatal = await expectRefusal(readOnly({ PORTFOLIO_SOURCE_DIR: dir }), {
+      never: ['canary-tagline'],
+    });
+    expect(fatal.map((e) => [e.code, e.issueCode, e.path, e.line, e.column])).toEqual([
+      ['document_invalid', 'unrecognized_keys', '/identity/tagine', 6, 3],
+    ]);
+    expect(fatal[0]!.message).toContain('Did you mean tagline?');
+  });
+
+  test('a javascript: URL, refused without quoting it', async () => {
+    const dir = sourceDir({
+      'portfolio.yml': `${HEAD}identity:\n  name: Rowan Fixture\nlinks:\n  - url: 'JavaScript:canary_script()'\n`,
+    });
+    const fatal = await expectRefusal(readOnly({ PORTFOLIO_SOURCE_DIR: dir }), {
+      never: ['canary_script'],
+    });
+    expect(fatal.map((e) => [e.code, e.path, e.line])).toEqual([
+      ['document_invalid', '/links/0/url', 7],
+    ]);
+  });
+
   test('a YAML alias, refused where it appears', async () => {
     const dir = sourceDir({
       'portfolio.yml': `${HEAD}identity:\n  name: &canary-anchor Rowan Fixture\nmeta:\n  title: *canary-anchor\n`,

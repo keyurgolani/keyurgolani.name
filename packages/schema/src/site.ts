@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { SectionIdSchema } from './kinds/common';
+import { SectionIdSchema, type SchemaParts } from './kinds/common';
 import { SCHEMA_VERSION } from './portfolio';
 
 /**
@@ -31,80 +31,96 @@ export const RegistryIdSchema = z.string().regex(REGISTRY_ID_PATTERN, {
     'must start with a lowercase letter, then 1 to 47 lowercase letters, digits, or hyphens, such as editorial.',
 });
 
-/**
- * The published appearance: four independent axes plus the display mode.
- * Registries for each axis check the ids, so a selection that parses here
- * can still name something this build doesn't register.
- */
-export const AppearanceSelectionSchema = z.object({
-  variant: RegistryIdSchema,
-  designLanguage: RegistryIdSchema,
-  colorScheme: RegistryIdSchema,
-  typography: RegistryIdSchema,
-  displayMode: DisplayModeSchema,
-});
-export type AppearanceSelection = z.infer<typeof AppearanceSelectionSchema>;
-export type AppearanceAxis = keyof AppearanceSelection;
+/** The site document's schemas for one set of parts. */
+export function siteSchemas({ object }: SchemaParts) {
+  /**
+   * The published appearance: four independent axes plus the display mode.
+   * Registries for each axis check the ids, so a selection that parses here
+   * can still name something this build doesn't register.
+   */
+  const AppearanceSelectionSchema = object({
+    variant: RegistryIdSchema,
+    designLanguage: RegistryIdSchema,
+    colorScheme: RegistryIdSchema,
+    typography: RegistryIdSchema,
+    displayMode: DisplayModeSchema,
+  });
 
-/** One policy per appearance field; all five are required. */
-export const VisitorControlsSchema = z.object({
-  variant: VisitorControlSchema,
-  designLanguage: VisitorControlSchema,
-  colorScheme: VisitorControlSchema,
-  typography: VisitorControlSchema,
-  displayMode: VisitorControlSchema,
-});
-export type VisitorControls = z.infer<typeof VisitorControlsSchema>;
+  /** One policy per appearance field; all five are required. */
+  const VisitorControlsSchema = object({
+    variant: VisitorControlSchema,
+    designLanguage: VisitorControlSchema,
+    colorScheme: VisitorControlSchema,
+    typography: VisitorControlSchema,
+    displayMode: VisitorControlSchema,
+  });
 
-/**
- * Input for a generator-backed color scheme: a seed color, or a media asset
- * whose colors seed the scheme. Asset ids follow the section-id rule.
- */
-export const AppearanceInputSchema = z.union([
-  z.object({
-    seedColor: z.string().regex(/^#[0-9a-fA-F]{6}$/, {
-      message: 'must be a six-digit hex color, such as #3366ff.',
-    }),
-  }),
-  z.object({ sourceAsset: SectionIdSchema }),
-]);
-export type AppearanceInput = z.infer<typeof AppearanceInputSchema>;
-
-export const SiteFeaturesSchema = z.object({
-  /** Serve /feed.xml. */
-  feed: z.boolean(),
-  /** Credit the platform in the page footer. Nothing renders it yet. */
-  productAttribution: z.boolean().default(false),
-});
-export type SiteFeatures = z.infer<typeof SiteFeaturesSchema>;
-
-/**
- * The site document: how the portfolio is presented and which product
- * behavior is on. It carries no deployment authority and no secrets; the
- * profile, canonical origin, Studio, preview origin, and proxy trust come
- * from the environment.
- */
-export const SiteSchema = z.object({
-  schemaVersion: z.literal(SCHEMA_VERSION),
-  appearance: AppearanceSelectionSchema,
-  visitorControls: VisitorControlsSchema,
-  /** Keyed by generator-backed color scheme id. */
-  appearanceInputs: z.record(RegistryIdSchema, AppearanceInputSchema).optional(),
-  motionPolicy: MotionPolicySchema,
-  features: SiteFeaturesSchema,
-  /** Keyed by #5 route id. */
-  routes: z.record(RegistryIdSchema, z.object({ enabled: z.boolean() })).optional(),
-  /** Keyed by variant id. #5's validators check the values against each manifest. */
-  variantControls: z
-    .record(
-      RegistryIdSchema,
-      z.object({
-        version: z.number().int().positive(),
-        values: z.record(z.string(), z.unknown()),
+  /**
+   * Input for a generator-backed color scheme: a seed color, or a media asset
+   * whose colors seed the scheme. Asset ids follow the section-id rule.
+   */
+  const AppearanceInputSchema = z.union([
+    object({
+      seedColor: z.string().regex(/^#[0-9a-fA-F]{6}$/, {
+        message: 'must be a six-digit hex color, such as #3366ff.',
       }),
-    )
-    .optional(),
-  /** Keyed by section id. */
-  sections: z.record(SectionIdSchema, z.object({ hidden: z.boolean().optional() })).optional(),
-});
-export type Site = z.infer<typeof SiteSchema>;
+    }),
+    object({ sourceAsset: SectionIdSchema }),
+  ]);
+
+  const SiteFeaturesSchema = object({
+    /** Serve /feed.xml. */
+    feed: z.boolean(),
+    /** Credit the platform in the page footer. Nothing renders it yet. */
+    productAttribution: z.boolean().default(false),
+  });
+
+  /**
+   * The site document: how the portfolio is presented and which product
+   * behavior is on. It carries no deployment authority and no secrets; the
+   * profile, canonical origin, Studio, preview origin, and proxy trust come
+   * from the environment.
+   */
+  const SiteSchema = object({
+    schemaVersion: z.literal(SCHEMA_VERSION),
+    appearance: AppearanceSelectionSchema,
+    visitorControls: VisitorControlsSchema,
+    /** Keyed by generator-backed color scheme id. */
+    appearanceInputs: z.record(RegistryIdSchema, AppearanceInputSchema).optional(),
+    motionPolicy: MotionPolicySchema,
+    features: SiteFeaturesSchema,
+    /** Keyed by #5 route id. */
+    routes: z.record(RegistryIdSchema, object({ enabled: z.boolean() })).optional(),
+    /**
+     * Keyed by variant id. #5's validators check the values against each
+     * manifest, so `values` takes any keys.
+     */
+    variantControls: z
+      .record(
+        RegistryIdSchema,
+        object({
+          version: z.number().int().positive(),
+          values: z.record(z.string(), z.unknown()),
+        }),
+      )
+      .optional(),
+    /** Keyed by section id. */
+    sections: z.record(SectionIdSchema, object({ hidden: z.boolean().optional() })).optional(),
+  });
+
+  return {
+    AppearanceSelectionSchema,
+    VisitorControlsSchema,
+    AppearanceInputSchema,
+    SiteFeaturesSchema,
+    SiteSchema,
+  };
+}
+
+type Schemas = ReturnType<typeof siteSchemas>;
+export type AppearanceSelection = z.infer<Schemas['AppearanceSelectionSchema']>;
+export type AppearanceAxis = Exclude<keyof AppearanceSelection, 'extensions'>;
+export type VisitorControls = z.infer<Schemas['VisitorControlsSchema']>;
+export type AppearanceInput = z.infer<Schemas['AppearanceInputSchema']>;
+export type SiteFeatures = z.infer<Schemas['SiteFeaturesSchema']>;
+export type Site = z.infer<Schemas['SiteSchema']>;

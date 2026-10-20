@@ -1,10 +1,13 @@
-import type { Portfolio, Section } from '@portfolio/schema';
+import type { CoreSection, Portfolio, Section } from '@portfolio/schema';
+import { isExtensionSection } from '@portfolio/schema/ids';
 import { ensureSectionId, formatPeriod, formatDate, formatList, formatStatValue } from './format';
 import { renderInlineMarkdown, renderMarkdown } from './markdown';
 
 /**
- * Generic typographic renderer for any section kind. Variants that declare
+ * Generic typographic renderer for any core section kind. Variants that declare
  * partial `supportedKinds` can dispatch unsupported kinds to this component.
+ * A section from a content extension renders nothing: no variant renders
+ * extension kinds yet.
  *
  * Intentionally simple: title, body, list. Inherits the variant's CSS tokens
  * so it looks like part of the variant rather than foreign chrome.
@@ -16,7 +19,7 @@ export function FallbackSection({
   section: Section;
   portfolio: Portfolio;
 }) {
-  if (section.hidden) return null;
+  if (section.hidden || isExtensionSection(section)) return null;
   const id = ensureSectionId(section.id, section.title ?? section.kind);
 
   const heading = section.title ?? defaultHeading(section.kind);
@@ -30,11 +33,11 @@ export function FallbackSection({
   );
 }
 
-function defaultHeading(kind: Section['kind']): string {
+function defaultHeading(kind: CoreSection['kind']): string {
   return kind.charAt(0).toUpperCase() + kind.slice(1);
 }
 
-function FallbackBody({ section, portfolio }: { section: Section; portfolio: Portfolio }) {
+function FallbackBody({ section, portfolio }: { section: CoreSection; portfolio: Portfolio }) {
   switch (section.kind) {
     case 'hero': {
       const name = section.name ?? portfolio.identity.name;

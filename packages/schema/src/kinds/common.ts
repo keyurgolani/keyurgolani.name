@@ -1,27 +1,30 @@
 import { z } from 'zod';
+import { makeExtensionsSchema, type ExtensionRegistry, type Extensions } from '../extensions';
 import {
   isLanguageTag,
   RESERVED_SECTION_IDS,
   SECTION_ID_MAX_LENGTH,
   SECTION_ID_PATTERN,
 } from '../ids';
+import { isAllowedUrl } from '../url';
 
-export const LinkSchema = z.object({
-  platform: z.string().optional(),
-  url: z.string(),
-  label: z.string().optional(),
-});
-export type Link = z.infer<typeof LinkSchema>;
+// The building blocks every schema shares. Leaf schemas (dates, ids, URLs)
+// are fixed. Objects come from makeParts(), once per set of registered
+// extensions: every object is strict, rejecting unknown keys, and accepts an
+// `extensions` field checked against those extensions.
 
-export const ImageSchema = z.object({
-  src: z.string(),
-  alt: z.string().optional(),
-  width: z.number().int().positive().optional(),
-  height: z.number().int().positive().optional(),
-  credit: z.string().optional(),
-  focalPoint: z.object({ x: z.number().min(0).max(1), y: z.number().min(0).max(1) }).optional(),
+/** Every url and *Url field. See ../url.ts. */
+export const UrlSchema = z.string().refine((value) => isAllowedUrl(value), {
+  message: 'must be an https, http, mailto, or tel URL, a relative path, or a #fragment.',
 });
-export type Image = z.infer<typeof ImageSchema>;
+
+/** An image `src`: what UrlSchema allows, plus data:image URLs in raster formats. */
+export const ImageSourceSchema = z
+  .string()
+  .refine((value) => isAllowedUrl(value, { dataImages: true }), {
+    message:
+      'must be an https, http, mailto, or tel URL, a relative path, a #fragment, or a data:image URL (png, jpeg, gif, webp, or avif).',
+  });
 
 const MONTH_NAMES = new Set([
   'jan',
@@ -77,22 +80,14 @@ export const LooseDateSchema = z.string().refine(isLooseDate, {
   message: `isn't a date. Use YYYY, YYYY-MM, YYYY-MM-DD, "Month YYYY", or "present".`,
 });
 
-export const PeriodSchema = z
-  .object({
-    start: LooseDateSchema,
-    end: LooseDateSchema.optional(),
-  })
-  .refine(
-    ({ start, end }) => {
-      if (!end) return true;
-      const startN = looseDateOrder(start);
-      const endN = looseDateOrder(end);
-      if (startN == null || endN == null) return true;
-      return endN >= startN;
-    },
-    { message: 'ends before it starts: end must not precede start.' },
-  );
-export type Period = z.infer<typeof PeriodSchema>;
+/** Whether a period ends no earlier than it starts, as far as its loose dates tell. */
+function inOrder({ start, end }: { start: string; end?: string }): boolean {
+  if (!end) return true;
+  const startN = looseDateOrder(start);
+  const endN = looseDateOrder(end);
+  if (startN == null || endN == null) return true;
+  return endN >= startN;
+}
 
 /** Coarse comparator for date strings — used only for ordering in PeriodSchema. */
 function looseDateOrder(raw: string): number | null {
@@ -145,7 +140,8 @@ export const LanguageTagSchema = z.string().refine(isLanguageTag, {
   message: "isn't a BCP 47 language tag, such as en or pt-BR.",
 });
 
-const SectionBase = {
+/** The fields every section has, core or extension. */
+export const sectionBase = {
   /** Required and unique within the portfolio. See SECTION_ID_PATTERN. */
   id: SectionIdSchema,
   title: z.string().optional(),
@@ -156,4 +152,49 @@ const SectionBase = {
   hidden: z.boolean().optional(),
 };
 
-export { SectionBase };
+type ExtensionsField = {
+  extensions: z.ZodOptional<z.ZodType<Extensions, z.ZodTypeDef, unknown>>;
+};
+
+/** A strict object schema that may also carry `extensions`. */
+export type ContentObject<T extends z.ZodRawShape> = z.ZodObject<T & ExtensionsField, 'strict'>;
+
+/** The object schemas for one set of registered content extensions. */
+export function makeParts(registry: ExtensionRegistry) {
+  const extensions = makeExtensionsSchema(registry);
+
+  function object<T extends z.ZodRawShape>(shape: T): ContentObject<T> {
+    return z.object({ ...shape, extensions: extensions.optional() }).strict() as ContentObject<T>;
+  }
+
+  function section<K extends string, T extends z.ZodRawShape>(kind: K, shape: T) {
+    return object({ kind: z.literal(kind), ...sectionBase, ...shape });
+  }
+
+  const Link = object({
+    platform: z.string().optional(),
+    url: UrlSchema,
+    label: z.string().optional(),
+  });
+
+  const Image = object({
+    src: ImageSourceSchema,
+    alt: z.string().optional(),
+    width: z.number().int().positive().optional(),
+    height: z.number().int().positive().optional(),
+    credit: z.string().optional(),
+    focalPoint: object({ x: z.number().min(0).max(1), y: z.number().min(0).max(1) }).optional(),
+  });
+
+  const Period = object({ start: LooseDateSchema, end: LooseDateSchema.optional() }).refine(
+    inOrder,
+    { message: 'ends before it starts: end must not precede start.' },
+  );
+
+  return { registry, extensions, object, section, Link, Image, Period };
+}
+
+export type SchemaParts = ReturnType<typeof makeParts>;
+export type Link = z.infer<SchemaParts['Link']>;
+export type Image = z.infer<SchemaParts['Image']>;
+export type Period = z.infer<SchemaParts['Period']>;

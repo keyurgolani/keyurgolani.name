@@ -1,6 +1,11 @@
 export * from './ids';
+export * from './url';
+export * from './json';
+export * from './extensions';
 export * from './kinds';
 export * from './portfolio';
 export * from './site';
+export * from './compose';
 export * from './source';
 export * from './load';
+export { allowedKeysAt, closestWord } from './hints';

@@ -32,7 +32,10 @@ Before it takes a request, the server validates its settings and the portfolio. 
 - `PORTFOLIO_PATH` or `NEXT_PUBLIC_BASE_URL`, which `PORTFOLIO_SOURCE_DIR` and `PORTFOLIO_ORIGIN` replaced;
 - a source directory that is missing or unreadable, that is a file rather than the directory holding it, that holds zero or several portfolio documents, or that holds a `portfolio.toml` (TOML is no longer read);
 - a portfolio that isn't one plain YAML or JSON document (anchors, aliases, merge keys, tags, directives, and a second document are refused), that doesn't declare `schemaVersion: 2`, that fails the schema, or that gives two sections the same `id`;
+- a key the schema doesn't define, anywhere but inside `extensions` (the message suggests the closest allowed key), or a `url`, `src`, or `*Url` value that isn't an `https`, `http`, `mailto`, or `tel` URL, a relative path, or a `#fragment` (image sources may also be raster `data:image` URLs);
 - in production, an origin on a reserved example domain, or the bundled sample's `identity.name`.
+
+Data under an `extensions` key, or a section whose `kind` is `<npm package name>/<name>`, belongs to a content extension. This release registers none, so the server keeps that data as written, logs a `config.warning` with code `extension_unregistered` for each use, and never renders it.
 
 `owner` and `demo` don't start yet. `owner` needs an authentication provider, and none ships; `demo` waits on its bundled-sample catalog.
 
