@@ -1,7 +1,9 @@
 # The owner profile: your portfolio from ../config, with Studio, drafts, and
-# revisions in a data volume. It refuses to start until #2 ships an
-# authentication provider. Run it from deploy/, with PORTFOLIO_ORIGIN in
-# deploy/.env:
+# revisions in a data volume, and the owner password's hash in a secret file,
+# deploy/secrets/owner_password_hash, which hash-password writes
+# (docs/deployment.md, Owner authentication). It refuses to start until #2
+# ships an authentication provider. Run it from deploy/, with PORTFOLIO_ORIGIN
+# in deploy/.env:
 #
 #   docker compose -f compose.owner.yml up --build
 name: portfolio-owner
@@ -23,12 +25,22 @@ services:
       PORTFOLIO_ORIGIN: ${PORTFOLIO_ORIGIN:?set PORTFOLIO_ORIGIN in .env to the origin visitors use}
       PORTFOLIO_SOURCE_DIR: /config
       PORTFOLIO_DATA_DIR: /var/lib/portfolio
+      # A file, never the hash itself: Compose reads $ in environment values
+      # and .env as a variable, which breaks a PHC string.
+      PORTFOLIO_AUTH_PASSWORD_HASH_FILE: /run/secrets/owner_password_hash
       NODE_ENV: production
+    # Nothing in the container is writable but Next's cache and the data
+    # volume.
+    read_only: true
+    tmpfs:
+      - /app/apps/web/.next/cache
     volumes:
       - ../config:/config:ro
       - ../assets:/app/apps/web/public/assets:ro
       # Drafts and revisions (#2, #3). Back this volume up.
       - portfolio-data:/var/lib/portfolio
+    secrets:
+      - owner_password_hash
     healthcheck:
       test:
         - CMD
@@ -43,3 +55,7 @@ services:
 
 volumes:
   portfolio-data: {}
+
+secrets:
+  owner_password_hash:
+    file: ./secrets/owner_password_hash

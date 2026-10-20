@@ -3,8 +3,9 @@
 // container on an internal network under the read-only profile, with the
 // harness fixture mounted read-only as its source directory, and checks from
 // inside the container: /api/health, the home page, the image's own
-// HEALTHCHECK command, what the image contains, and that the container has
-// no route out. Always removes the container and network;
+// HEALTHCHECK command, what the image contains, that the server's user can
+// change nothing in the app tree, the owner CLI's hash-password, and that the
+// container has no route out. Always removes the container and network;
 // keeps the image so later steps (the proxy smoke) can run it.
 //
 // Environment:
@@ -17,8 +18,9 @@
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { parseHash, verifyPassword } from '../packages/core/src/auth/phc.mjs';
 import { waitFor } from '../tests/harness/net.mjs';
-import { assessRoutes, PROBE_SNIPPET, SCAN_SNIPPET } from './lib/container.mjs';
+import { assessRoutes, PROBE_SNIPPET, SCAN_SNIPPET, WRITABLE_SNIPPET } from './lib/container.mjs';
 import {
   currentGate,
   REPO_ROOT,
@@ -45,6 +47,13 @@ const LOG = path.join(
 const container = (args, options = {}) =>
   spawnSync(cli, args, { cwd: REPO_ROOT, encoding: 'utf8', ...options });
 
+/**
+ * The exit code of a command run with `exec`. Docker passes it through;
+ * Finch exits 1 and names the command's code on stderr.
+ */
+const execStatus = (result) =>
+  Number(/exec failed with exit code (\d+)/.exec(result.stderr ?? '')?.[1] ?? result.status);
+
 class SmokeFailure extends Error {
   constructor(message, fields) {
     super(message);
@@ -68,6 +77,50 @@ function saveLogs() {
   writeFileSync(LOG, `${logs.stdout ?? ''}${logs.stderr ?? ''}`);
   console.log(`--- container logs (${path.relative(REPO_ROOT, LOG)}) ---`);
   console.log(`${logs.stdout ?? ''}${logs.stderr ?? ''}`);
+}
+
+/**
+ * The owner CLI runs from the image (#2): given a password twice on --stdin,
+ * it prints one PHC string at the floor, and the hash verifies. It refuses a
+ * password in its arguments, and input that isn't a terminal without
+ * --stdin, and neither refusal repeats the password.
+ */
+async function checkHashPassword() {
+  const typed = 'image smoke passphrase';
+  const cliArgs = ['node', 'apps/web/bin/owner.mjs', 'hash-password'];
+  const fail = (message, actual) => {
+    throw new SmokeFailure(`hash-password in the image: ${message}`, {
+      test: 'hash-password runs from the image',
+      actual,
+    });
+  };
+  const echoes = (result) => `${result.stdout ?? ''}${result.stderr ?? ''}`.includes(typed);
+
+  const hashed = container(['exec', '-i', name, ...cliArgs, '--stdin'], {
+    input: `${typed}\n${typed}\n`,
+  });
+  const phc = (hashed.stdout ?? '').replace(/\n$/, '');
+  const parsed = parseHash(phc);
+  if (hashed.status !== 0) fail('--stdin did not exit 0', `exit ${hashed.status}`);
+  if (!parsed.ok || !phc.startsWith('$scrypt$ln=17,r=8,p=1$')) {
+    fail('stdout is not one PHC string at the floor', `${phc.length} characters`);
+  }
+  if (!(await verifyPassword(typed, parsed.hash))) fail('the hash does not verify', 'mismatch');
+  if (echoes(hashed)) fail('the output repeats the password', 'password in the output');
+
+  const inArgs = container(['exec', name, ...cliArgs, typed]);
+  if (execStatus(inArgs) !== 2) {
+    fail('a password in the arguments was not a usage error', `exit ${execStatus(inArgs)}`);
+  }
+  if (echoes(inArgs)) fail('a password in the arguments was repeated', 'password in the output');
+
+  const piped = container(['exec', '-i', name, ...cliArgs], { input: `${typed}\n${typed}\n` });
+  if (execStatus(piped) !== 2 || piped.stdout !== '') {
+    fail('input that is not a terminal was read without --stdin', `exit ${execStatus(piped)}`);
+  }
+  console.log(
+    '[image] hash-password: --stdin prints a hash that verifies; argv and piped input are refused',
+  );
 }
 
 async function smoke() {
@@ -201,6 +254,25 @@ async function smoke() {
     );
   }
   console.log('[image] image contents: only the example pair, no test or CI files');
+
+  // The server runs as uid 1001 in group 1001, and the app tree is root's.
+  const owned = JSON.parse(
+    container(['exec', name, 'node', '-e', WRITABLE_SNIPPET, '/app', '1001', '1001']).stdout ||
+      '{}',
+  );
+  if (owned.count !== 0) {
+    throw new SmokeFailure(
+      `the server's user can change ${owned.count ?? 'unknown'} paths in /app (${owned.writable?.join(', ') ?? 'none listed'})`,
+      {
+        test: 'app tree owned by root',
+        expected: 'nothing under /app writable by uid 1001',
+        actual: owned.count,
+      },
+    );
+  }
+  console.log("[image] /app: nothing the server's user can change");
+
+  await checkHashPassword();
 
   const routes = assessRoutes(container(['exec', name, 'ip', 'route']), cli === 'docker');
   if (!routes.ok) {

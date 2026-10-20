@@ -62,9 +62,9 @@ function requestsFromInside(requests) {
 
 /**
  * Lists files under `root` (outside node_modules) that must not ship: any
- * portfolio.* except the example, a site document, .env*, .git, and the
- * tests, ci, and reports trees. Prints JSON: { problems, example }, where
- * `example` says both bundled examples are there.
+ * portfolio.* except the example, a site document, .env*, .git, a secrets
+ * directory, and the tests, ci, and reports trees. Prints JSON:
+ * { problems, example }, where `example` says both bundled examples are there.
  */
 function scanFromInside(root) {
   const fs = process.getBuiltinModule('node:fs');
@@ -80,7 +80,7 @@ function scanFromInside(root) {
         /^site\.(?:yml|yaml|json)$/.test(name) ||
         name.startsWith('.env') ||
         name === '.git' ||
-        (entry.isDirectory() && ['tests', 'ci', 'reports'].includes(name));
+        (entry.isDirectory() && ['tests', 'ci', 'reports', 'secrets'].includes(name));
       if (banned) problems.push(path.relative(root, full));
       else if (entry.isDirectory()) walk(full);
     }
@@ -92,7 +92,38 @@ function scanFromInside(root) {
   process.stdout.write(JSON.stringify({ problems, example }));
 }
 
+/**
+ * Lists what under `root` the user `uid`, in group `gid`, could change: a
+ * path it owns, one its group can write, or one anyone can write. Links are
+ * skipped, since what they point to is checked where it lives. Prints JSON:
+ * { writable, count }, with the first 20 paths.
+ */
+function writableFromInside(root, uid, gid) {
+  const fs = process.getBuiltinModule('node:fs');
+  const path = process.getBuiltinModule('node:path');
+  const writable = [];
+  let count = 0;
+  const check = (full) => {
+    const stat = fs.lstatSync(full);
+    if (stat.isSymbolicLink()) return;
+    if (
+      stat.uid === uid ||
+      (stat.gid === gid && (stat.mode & 0o020) !== 0) ||
+      (stat.mode & 0o002) !== 0
+    ) {
+      count += 1;
+      if (writable.length < 20) writable.push(path.relative(root, full) || '.');
+    }
+    if (stat.isDirectory()) {
+      for (const name of fs.readdirSync(full)) check(path.join(full, name));
+    }
+  };
+  check(root);
+  process.stdout.write(JSON.stringify({ writable, count }));
+}
+
 export const PROBE_SNIPPET = `(${probeFromInside.toString()})(process.argv[1])`;
+export const WRITABLE_SNIPPET = `(${writableFromInside.toString()})(process.argv[1], Number(process.argv[2]), Number(process.argv[3]))`;
 export const REQUESTS_SNIPPET = `(${requestsFromInside.toString()})(process.argv[1])`;
 export const SCAN_SNIPPET = `(${scanFromInside.toString()})(process.argv[1])`;
 

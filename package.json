@@ -14,6 +14,7 @@
     "start": "pnpm --filter @portfolio/web start",
     "config:validate": "node apps/web/scripts/build-registry.mjs >&2 && tsx apps/web/scripts/config.mjs validate",
     "config:migrate": "node apps/web/scripts/build-registry.mjs >&2 && tsx apps/web/scripts/config.mjs migrate",
+    "owner:hash-password": "node apps/web/bin/owner.mjs hash-password",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint --max-warnings=0 .",

@@ -23,11 +23,13 @@ module.exports = {
       comment:
         'Owner code loads only through the composition root, so demo and read-only never ' +
         'evaluate it (#1, item 14). All of @portfolio/core is owner code (#2), and its modules ' +
-        'import each other. Tests may import it.',
+        'import each other. The owner CLI, apps/web/bin/owner.mjs, runs on its own and imports ' +
+        'the PHC module by path. Tests may import it.',
       from: {
         pathNot: [
           '^apps/web/src/server/(owner/|composition\\.ts$)',
           '^packages/core/',
+          '^apps/web/bin/owner\\.mjs$',
           '\\.test\\.(?:tsx?|mjs)$',
         ],
       },
