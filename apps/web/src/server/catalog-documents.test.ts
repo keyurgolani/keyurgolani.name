@@ -69,10 +69,14 @@ test('a missing source directory is fatal', (t) => {
   assert.deepEqual([issue.key, issue.code], ['PORTFOLIO_SOURCE_DIR', 'source_missing']);
 });
 
-test('a source path that is a file is fatal', (t) => {
+test('a source path that names a file is fatal, and says to name its directory', (t) => {
   const file = path.join(tempDir(t), 'portfolio.yml');
   writeFileSync(file, VALID_YAML);
-  assert.equal(only(open(file, 'production')).code, 'source_missing');
+  const issue = only(open(file, 'production'));
+  assert.deepEqual([issue.key, issue.code], ['PORTFOLIO_SOURCE_DIR', 'source_not_directory']);
+  assert.match(issue.message, /names a file, not a directory/);
+  assert.match(issue.message, /directory that holds portfolio\.yml/);
+  assert.ok(!issue.message.includes(file), 'the message never repeats the configured path');
 });
 
 test('an unreadable source directory is fatal', { skip: !canRestrict }, (t) => {

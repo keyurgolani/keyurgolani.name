@@ -209,6 +209,13 @@ test.describe('the source directory', () => {
     expect(keysAndCodes(fatal)).toEqual(['PORTFOLIO_SOURCE_DIR:source_missing']);
   });
 
+  test('naming the document instead, as PORTFOLIO_PATH did', async () => {
+    const file = path.join(fixtureDir(), 'portfolio.yml');
+    const fatal = await expectRefusal(readOnly({ PORTFOLIO_SOURCE_DIR: file }), { never: [file] });
+    expect(keysAndCodes(fatal)).toEqual(['PORTFOLIO_SOURCE_DIR:source_not_directory']);
+    expect(fatal[0]!.message).toContain('directory that holds portfolio.yml');
+  });
+
   test('unreadable', async () => {
     test.skip(process.getuid?.() === 0, 'root reads any directory');
     const dir = fixtureDir();

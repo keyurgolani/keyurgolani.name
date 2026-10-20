@@ -80,9 +80,19 @@ function loadRevision(options: DocumentsCatalogOptions): Loaded {
     names = fs.readdirSync(/*turbopackIgnore: true*/ sourceDir);
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
-    return code === 'ENOENT' || code === 'ENOTDIR'
-      ? fail(fatal('source_missing', `${KEY} names a directory that doesn't exist.`))
-      : fail(fatal('source_unreadable', `The server can't read the ${KEY} directory.`));
+    if (code === 'ENOENT') {
+      return fail(fatal('source_missing', `${KEY} names a directory that doesn't exist.`));
+    }
+    // The likely mistake when moving from PORTFOLIO_PATH, which named the file.
+    if (code === 'ENOTDIR') {
+      return fail(
+        fatal(
+          'source_not_directory',
+          `${KEY} names a file, not a directory. Set it to the directory that holds portfolio.yml.`,
+        ),
+      );
+    }
+    return fail(fatal('source_unreadable', `The server can't read the ${KEY} directory.`));
   }
   const documents = names.filter((name) => DOCUMENT.test(name)).sort();
   if (documents.length > 1) {
