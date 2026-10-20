@@ -10,6 +10,7 @@ export function TestimonialsRenderer({ section }: { section: Testimonials }) {
             <p className="editorial-quoted__text">{item.quote}</p>
             <cite className="editorial-quoted__attribution">
               {item.authorAvatar ? (
+                // eslint-disable-next-line @next/next/no-img-element -- owner-supplied URL; next/image would proxy it through /_next/image
                 <img
                   src={item.authorAvatar.src}
                   alt={item.authorAvatar.alt ?? item.author}

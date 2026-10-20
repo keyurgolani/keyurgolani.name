@@ -13,6 +13,7 @@ export function GalleryRenderer({ section }: { section: Gallery }) {
           return (
             <figure key={i} className="kc-gallery__item">
               <div className="kc-gallery__frame">
+                {/* eslint-disable-next-line @next/next/no-img-element -- owner-supplied URL; next/image would proxy it through /_next/image */}
                 <img
                   src={item.image.src}
                   alt={item.image.alt ?? ''}

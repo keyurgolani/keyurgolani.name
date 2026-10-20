@@ -5,7 +5,7 @@
  * otherwise prints install command and exits with code 0 (informational,
  * not a hard failure).
  */
-import { mkdirSync, existsSync, readFileSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 

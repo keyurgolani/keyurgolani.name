@@ -10,6 +10,7 @@ export function DiscographyRenderer({ section }: { section: Discography }) {
           <article key={i} className="kc-card kc-card--hoverable kc-record">
             {item.cover ? (
               <div className="kc-record__cover">
+                {/* eslint-disable-next-line @next/next/no-img-element -- owner-supplied URL; next/image would proxy it through /_next/image */}
                 <img
                   src={item.cover.src}
                   alt={item.cover.alt ?? `${item.title} cover`}

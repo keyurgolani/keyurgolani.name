@@ -18,7 +18,7 @@ export function PressRenderer({ section }: { section: Press }) {
                 item.title
               )}
             </h3>
-            {item.excerpt ? <p className="kc-press__excerpt">"{item.excerpt}"</p> : null}
+            {item.excerpt ? <p className="kc-press__excerpt">&quot;{item.excerpt}&quot;</p> : null}
             <p className="kc-press__meta">
               {item.author ? <span>{item.author}</span> : null}
               {item.publishedAt ? <span>{formatDate(item.publishedAt)}</span> : null}

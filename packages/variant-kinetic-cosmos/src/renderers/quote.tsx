@@ -7,11 +7,11 @@ export function QuoteRenderer({ section }: { section: Quote }) {
       <figure className="kc-quote">
         <blockquote className="kc-quote__text">
           <span className="kc-quote__mark" aria-hidden="true">
-            "
+            &quot;
           </span>
           {section.text}
           <span className="kc-quote__mark" aria-hidden="true">
-            "
+            &quot;
           </span>
         </blockquote>
         {section.attribution ? (

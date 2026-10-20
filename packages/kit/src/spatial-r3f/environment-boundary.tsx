@@ -27,7 +27,6 @@ export class EnvironmentBoundary extends Component<EnvironmentBoundaryProps, Sta
 
   override componentDidCatch(error: unknown) {
     if (typeof console !== 'undefined') {
-      // eslint-disable-next-line no-console
       console.warn('[EnvironmentBoundary] HDR environment failed to load', error);
     }
   }

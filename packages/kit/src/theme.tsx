@@ -7,6 +7,7 @@ import {
   useEffect,
   useMemo,
   useState,
+  useSyncExternalStore,
   type ReactNode,
 } from 'react';
 import type { ThemePreference } from '@portfolio/schema';
@@ -59,9 +60,30 @@ function readStoredPreference(): ThemePreference | null {
   return null;
 }
 
-function systemTheme(): ResolvedTheme {
-  if (typeof window === 'undefined') return 'light';
-  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+// Only setPreference writes the stored value, and it re-renders through its
+// own state, so there is nothing to subscribe to.
+function subscribeToNothing(): () => void {
+  return () => {};
+}
+
+function serverStoredPreference(): ThemePreference | null {
+  return null;
+}
+
+const DARK_SCHEME_QUERY = '(prefers-color-scheme: dark)';
+
+function subscribeSystemTheme(onChange: () => void): () => void {
+  const mq = window.matchMedia(DARK_SCHEME_QUERY);
+  mq.addEventListener('change', onChange);
+  return () => mq.removeEventListener('change', onChange);
+}
+
+function systemTheme(): 'light' | 'dark' {
+  return window.matchMedia(DARK_SCHEME_QUERY).matches ? 'dark' : 'light';
+}
+
+function serverSystemTheme(): 'light' | 'dark' {
+  return 'light';
 }
 
 function applyTheme(resolved: ResolvedTheme) {
@@ -83,33 +105,24 @@ export function ThemeProvider({
   defaultPreference = 'system',
   supportedThemes = ['light', 'dark'],
 }: ThemeProviderProps) {
-  const [preference, setPreferenceState] = useState<ThemePreference>(defaultPreference);
-  const [resolved, setResolved] = useState<ResolvedTheme>('light');
+  // The server and hydration see neither storage nor the OS scheme; the stored
+  // and system values take over right after hydration.
+  const [chosen, setChosen] = useState<ThemePreference | null>(null);
+  const stored = useSyncExternalStore(
+    subscribeToNothing,
+    readStoredPreference,
+    serverStoredPreference,
+  );
+  const system = useSyncExternalStore(subscribeSystemTheme, systemTheme, serverSystemTheme);
+  const preference = chosen ?? stored ?? defaultPreference;
+  const resolved = resolveTheme(preference, supportedThemes, () => system);
 
   useEffect(() => {
-    const stored = readStoredPreference();
-    if (stored) setPreferenceState(stored);
-  }, []);
-
-  useEffect(() => {
-    const mq = window.matchMedia('(prefers-color-scheme: dark)');
-    const compute = () => {
-      const next = resolveTheme(preference, supportedThemes, () =>
-        window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light',
-      );
-      setResolved(next);
-      applyTheme(next);
-    };
-    compute();
-    if (preference === 'system') {
-      mq.addEventListener('change', compute);
-      return () => mq.removeEventListener('change', compute);
-    }
-    return undefined;
-  }, [preference]);
+    applyTheme(resolved);
+  }, [resolved]);
 
   const setPreference = useCallback((next: ThemePreference) => {
-    setPreferenceState(next);
+    setChosen(next);
     try {
       window.localStorage.setItem(STORAGE_KEY, next);
     } catch {

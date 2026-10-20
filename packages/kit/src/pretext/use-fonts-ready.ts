@@ -10,13 +10,10 @@ import { useEffect, useState } from 'react';
 export function useFontsReady(): boolean {
   const [ready, setReady] = useState(false);
   useEffect(() => {
-    if (typeof document === 'undefined') return;
-    if (!document.fonts?.ready) {
-      setReady(true);
-      return;
-    }
     let cancelled = false;
-    document.fonts.ready.then(() => {
+    // Without the Font Loading API there is nothing to wait for.
+    const fontsReady: Promise<unknown> = document.fonts?.ready ?? Promise.resolve();
+    fontsReady.then(() => {
       if (!cancelled) setReady(true);
     });
     return () => {

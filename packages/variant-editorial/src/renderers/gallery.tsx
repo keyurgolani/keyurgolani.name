@@ -8,6 +8,7 @@ export function GalleryRenderer({ section }: { section: Gallery }) {
         {section.items.map((item, i) => (
           <figure key={`${item.image.src}-${i}`}>
             <div className="editorial-plate__media">
+              {/* eslint-disable-next-line @next/next/no-img-element -- owner-supplied URL; next/image would proxy it through /_next/image */}
               <img
                 src={item.image.src}
                 alt={item.image.alt ?? item.caption ?? ''}

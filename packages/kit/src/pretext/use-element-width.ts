@@ -19,7 +19,8 @@ export function useElementWidth<T extends HTMLElement>(): readonly [
 
   useEffect(() => {
     if (!el) return;
-    setWidth(el.getBoundingClientRect().width);
+    // observe() delivers an initial entry for a rendered element, so the
+    // first width arrives through the same callback as later resizes.
     const ro = new ResizeObserver((entries) => {
       const entry = entries[0];
       if (entry) setWidth(entry.contentRect.width);
