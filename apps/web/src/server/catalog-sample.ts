@@ -2,7 +2,7 @@ import 'server-only';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { detectFormat, parsePortfolio } from '@portfolio/schema';
+import { detectFormat, parsePortfolio, type Portfolio } from '@portfolio/schema';
 import type { CatalogReader, LiveRevision } from './catalog-port';
 import type { ConfigIssue } from './config';
 import { deepFreeze } from './freeze';
@@ -57,9 +57,20 @@ export function openSampleCatalog({ examplePath }: SampleCatalogOptions): OpenSa
   }
   const live: LiveRevision = Object.freeze({
     revisionId: `sample-${createHash('sha256').update(bytes).digest('hex').slice(0, 12)}`,
-    unit: Object.freeze({ portfolio: deepFreeze(parsed.value) }),
+    unit: Object.freeze({ portfolio: deepFreeze(withoutLiveData(parsed.value)) }),
   });
   return { ok: true, issues: [], reader: Object.freeze({ getLive: async () => live }) };
+}
+
+/**
+ * The sample without its `github` sections. Until #10 gives renderers
+ * snapshot data, a github section fetches a live account from
+ * api.github.com on every render, so the public demo would show someone's
+ * real repositories and depend on an outside host. demo serves only the
+ * bundled sample, so it drops them.
+ */
+function withoutLiveData(portfolio: Portfolio): Portfolio {
+  return { ...portfolio, sections: portfolio.sections.filter(({ kind }) => kind !== 'github') };
 }
 
 function fatal(code: string, message: string, file: string): ConfigIssue {

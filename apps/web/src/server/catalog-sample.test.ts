@@ -1,14 +1,15 @@
 import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parse as parseYaml } from 'yaml';
 import { BUNDLED_SAMPLE_NAMES } from './catalog-documents';
 import { openSampleCatalog } from './catalog-sample';
 
 // The sample adapter for `demo` (#1, item 16): the bundled example, read
-// once and frozen.
+// once and frozen, without the sections that fetch live data.
 
 const EXAMPLE = fileURLToPath(new URL('../../../../portfolio.example.yml', import.meta.url));
 
@@ -28,6 +29,22 @@ test('it serves the bundled sample, frozen', async () => {
   assert.ok(Object.isFrozen(live));
   assert.ok(Object.isFrozen(live.unit.portfolio.identity));
   assert.equal(await opened.reader.getLive(), live);
+});
+
+test('it drops the github sections, which fetch a live account, and keeps the rest', async () => {
+  const written = (parseYaml(readFileSync(EXAMPLE, 'utf8')) as { sections: { kind: string }[] })
+    .sections;
+  assert.ok(
+    written.some(({ kind }) => kind === 'github'),
+    'the sample has a github section to drop',
+  );
+  const opened = openSampleCatalog({ examplePath: EXAMPLE });
+  assert.ok(opened.ok);
+  const { sections } = (await opened.reader.getLive()).unit.portfolio;
+  assert.deepEqual(
+    sections.map(({ kind }) => kind),
+    written.map(({ kind }) => kind).filter((kind) => kind !== 'github'),
+  );
 });
 
 test('a build without its sample refuses to start demo', (t) => {
