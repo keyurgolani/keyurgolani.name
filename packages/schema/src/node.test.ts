@@ -314,22 +314,51 @@ test('the directory itself: missing, a file, or unreadable', () => {
   }
 });
 
-test("a document that can't be read is source.missing, and loadPair never throws", () => {
-  const site = text('invalid', 'source.duplicate', 'site.yml');
-  const dir = tempDir({ 'site.yml': site });
-  // A directory named like a document lists as one, then fails to read.
-  fs.mkdirSync(path.join(dir, 'portfolio.yml'));
+test("a document that can't be read is source.unreadable, and loadPair never throws", () => {
+  // The fixture's portfolio.yml is a directory, which lists like a document
+  // and then fails to read.
+  const dir = fixture('invalid', 'source.unreadable');
+  assert.ok(fs.statSync(path.join(dir, 'portfolio.yml')).isDirectory());
   const result = loadPair(dir);
   assert.equal(result.ok, false);
   assert.deepEqual(
-    result.diagnostics.map(({ code, document, message }) => [code, document, message]),
-    [['source.missing', 'portfolio', "portfolio.yml can't be read."]],
+    result.diagnostics.map(({ code, document, message, remediation }) => [
+      code,
+      document,
+      message,
+      remediation,
+    ]),
+    [
+      [
+        'source.unreadable',
+        'portfolio',
+        "portfolio.yml can't be read.",
+        "Make portfolio.yml a file the server's user can read.",
+      ],
+    ],
   );
+
+  if (process.getuid?.() !== 0) {
+    const locked = tempDir({
+      'portfolio.yml': text('invalid', 'source.missing', 'portfolio.yml'),
+      'site.yml': text('invalid', 'source.unreadable', 'site.yml'),
+    });
+    fs.chmodSync(path.join(locked, 'site.yml'), 0o000);
+    assert.deepEqual(
+      loadPair(locked).diagnostics.map(({ code, document }) => [code, document]),
+      [['source.unreadable', 'site']],
+    );
+  }
+
+  // A file that's gone between listing and reading, or never was, is missing.
   const absent = readPair({
     portfolio: path.join(dir, 'gone.yml'),
     site: path.join(dir, 'site.yml'),
   });
-  assert.deepEqual(codes(absent), ['source.missing']);
+  assert.deepEqual(
+    absent.diagnostics.map(({ code, document, message }) => [code, document, message]),
+    [['source.missing', 'portfolio', "gone.yml doesn't exist."]],
+  );
 });
 
 test('a document over the size limit is refused where it passes it', () => {

@@ -29,6 +29,18 @@ export type OpenSampleResult =
 // names the profile that needs it.
 const KEY = 'PORTFOLIO_PROFILE';
 
+/** The issue for an example the build lacks, or ships in a form the server can't read. */
+const UNREAD = {
+  'source.missing': [
+    'sample_missing',
+    'The demo profile renders the bundled sample, and this build has none.',
+  ],
+  'source.unreadable': [
+    'sample_unreadable',
+    "The demo profile renders the bundled sample, and the server can't read it.",
+  ],
+} as const;
+
 export function openSampleCatalog({
   examples,
   catalog,
@@ -36,17 +48,12 @@ export function openSampleCatalog({
 }: SampleCatalogOptions): OpenSampleResult {
   const result = readPair(examples, { catalog, extensions });
   if (!result.ok) {
-    const unread = result.diagnostics.find(({ code }) => code === 'source.missing');
+    const unread = result.diagnostics.find(({ code }) => code in UNREAD);
     if (unread) {
+      const [code, message] = UNREAD[unread.code as keyof typeof UNREAD];
       return {
         ok: false,
-        issues: [
-          fatal(
-            'sample_missing',
-            'The demo profile renders the bundled sample, and this build has none.',
-            path.basename(examples[unread.document]),
-          ),
-        ],
+        issues: [fatal(code, message, path.basename(examples[unread.document]))],
       };
     }
     // Which file is enough: the sample's own records would only describe the build.

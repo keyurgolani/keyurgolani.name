@@ -174,7 +174,8 @@ export function loadPair(dir: string, ctx: Context = {}): LoadPairResult {
 
 /**
  * Reads the pair from two files, such as the bundled portfolio.example.yml
- * and site.example.yml, and validates it like loadPair().
+ * and site.example.yml, and validates it like loadPair(). A file that doesn't
+ * exist is `source.missing`, and one that can't be read `source.unreadable`.
  */
 export function readPair(files: PairFiles, ctx: Context = {}): LoadPairResult {
   const sources: Partial<Record<PairDocument, PairSource>> = {};
@@ -184,14 +185,16 @@ export function readPair(files: PairFiles, ctx: Context = {}): LoadPairResult {
     const name = path.basename(file);
     try {
       sources[document] = { name, path: file, format: detectFormat(name), text: readBounded(file) };
-    } catch {
+    } catch (error) {
       diagnostics.push(
-        record(
-          'source.missing',
-          document,
-          `${name} can't be read.`,
-          `Make ${name} a file the server's user can read.`,
-        ),
+        (error as NodeJS.ErrnoException).code === 'ENOENT'
+          ? record('source.missing', document, `${name} doesn't exist.`)
+          : record(
+              'source.unreadable',
+              document,
+              `${name} can't be read.`,
+              `Make ${name} a file the server's user can read.`,
+            ),
       );
     }
   }

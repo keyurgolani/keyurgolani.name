@@ -117,6 +117,7 @@ export const DIAGNOSTIC_SEVERITIES = {
   'schema.version': 'blocks-preview',
   'source.missing': 'blocks-preview',
   'source.duplicate': 'blocks-preview',
+  'source.unreadable': 'blocks-preview',
   'legacy.document': 'blocks-preview',
   'site.deployment-setting': 'blocks-preview',
   'appearance.unknown': 'blocks-preview',
@@ -145,6 +146,8 @@ export const DIAGNOSTIC_REMEDIATIONS: Readonly<Record<DiagnosticCode, string>> =
   'source.missing':
     'Add the document: portfolio.yml and site.yml, or their .yaml or .json forms. portfolio.example.yml and site.example.yml are ones to start from.',
   'source.duplicate': 'Keep one of them, in the format you edit, and remove the others.',
+  'source.unreadable':
+    "Make the document a file the server's user can read: check its permissions, and that it isn't a directory.",
   'legacy.document': legacyRemediation('<file>'),
   'site.deployment-setting':
     "Remove it. Deployment settings come from the server's environment; docs/deployment.md lists them.",

@@ -199,15 +199,19 @@ test('an old-format portfolio with no site document is the old format, not a mis
   }
 });
 
-test('an unreadable document is source.missing, naming the file', { skip: !canRestrict }, (t) => {
-  const dir = tempDir(t, pair());
-  chmodSync(path.join(dir, 'site.yml'), 0o000);
-  const issues = fatal(open(dir, 'production'));
-  assert.deepEqual(
-    issues.map((issue) => [issue.code, issue.document, issue.message]),
-    [['source.missing', 'site', "site.yml can't be read."]],
-  );
-});
+test(
+  'an unreadable document is source.unreadable, naming the file',
+  { skip: !canRestrict },
+  (t) => {
+    const dir = tempDir(t, pair());
+    chmodSync(path.join(dir, 'site.yml'), 0o000);
+    const issues = fatal(open(dir, 'production'));
+    assert.deepEqual(
+      issues.map((issue) => [issue.code, issue.file, issue.document, issue.message]),
+      [['source.unreadable', 'site.yml', 'site', "site.yml can't be read."]],
+    );
+  },
+);
 
 test('each record becomes an issue: located, with its remediation, never quoting a value', (t) => {
   const located = (issues: ConfigIssue[]) =>

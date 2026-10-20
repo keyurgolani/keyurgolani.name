@@ -149,6 +149,18 @@ test('a build without either example refuses to start demo', (t) => {
   }
 });
 
+test('a build whose example the server cannot read refuses to start demo', (t) => {
+  // A directory where the file belongs lists like the file and can't be read.
+  const dir = scratch(t);
+  const opened = openSampleCatalog({ examples: { ...EXAMPLES, site: dir } });
+  assert.equal(opened.ok, false);
+  assert.deepEqual(
+    opened.issues.map((issue) => `${issue.severity} ${issue.key}:${issue.code} ${issue.file}`),
+    [`fatal PORTFOLIO_PROFILE:sample_unreadable ${path.basename(dir)}`],
+  );
+  assert.match(opened.issues[0]!.message, /can't read it/);
+});
+
 test('a sample that fails the schema, or a site the build cannot render, refuses demo', (t) => {
   const broken = openSampleCatalog({
     examples: withPortfolio(

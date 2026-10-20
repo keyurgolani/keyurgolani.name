@@ -1,0 +1,12 @@
+# source.unreadable: portfolio.yml here is a directory, which lists like a
+# document and can't be read as one. This site document is valid.
+schemaVersion: 2
+appearance:
+  variant: editorial
+  designLanguage: platform-neutral
+  colorScheme: warm
+  typography: classic
+  displayMode: system
+motionPolicy: respect-os
+features:
+  feed: true
