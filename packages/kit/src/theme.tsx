@@ -10,7 +10,7 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from 'react';
-import { THEME_STORAGE_KEY, type ThemePreference } from './theme-init';
+import { isThemePreference, THEME_STORAGE_KEY, type ThemePreference } from './theme-init';
 
 export type { ThemePreference } from './theme-init';
 
@@ -46,14 +46,7 @@ function readStoredPreference(): ThemePreference | null {
   if (typeof window === 'undefined') return null;
   try {
     const raw = window.localStorage.getItem(THEME_STORAGE_KEY);
-    if (
-      raw === 'light' ||
-      raw === 'dark' ||
-      raw === 'bright' ||
-      raw === 'black' ||
-      raw === 'system'
-    )
-      return raw;
+    if (isThemePreference(raw)) return raw;
   } catch {
     // ignore
   }

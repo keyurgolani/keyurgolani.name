@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { runInNewContext } from 'node:vm';
 import { resolveTheme, type ThemePreference } from './theme';
-import { THEME_INIT_SCRIPT, themeInitScript } from './theme-init';
+import { isThemePreference, THEME_INIT_SCRIPT, themeInitScript } from './theme-init';
 
 const ALL = ['light', 'dark', 'bright', 'black'] as const;
 const BASIC = ['light', 'dark'] as const;
@@ -108,4 +108,15 @@ test("the init script paints the page's default until the visitor picks a theme"
 test('only a known preference reaches the init script', () => {
   const injected = "dark'; alert(1); '" as ThemePreference;
   assert.equal(themeInitScript(injected), THEME_INIT_SCRIPT);
+});
+
+test('a stored value the kit does not know paints the default, as the provider reads it', () => {
+  for (const stored of ['purple', '', 'Dark', 'dark ', 'constructor', "light'; x='"]) {
+    assert.equal(paint(themeInitScript('dark'), stored), 'dark', JSON.stringify(stored));
+    assert.equal(isThemePreference(stored), false, JSON.stringify(stored));
+  }
+  for (const stored of ['light', 'dark', 'bright', 'black', 'system']) {
+    assert.equal(isThemePreference(stored), true, stored);
+  }
+  assert.equal(paint(themeInitScript('dark'), 'bright'), 'light');
 });
