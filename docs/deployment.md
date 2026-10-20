@@ -187,6 +187,30 @@ The server reads the hash from the file `PORTFOLIO_AUTH_PASSWORD_HASH_FILE` name
 
 `--out` never writes over a file, so write the new hash under another name in `secrets/`, move it over `owner_password_hash` (`sudo mv`), and restart the container.
 
+### The data directory
+
+`owner` keeps its sessions and its audit log in `PORTFOLIO_DATA_DIR`, the `portfolio-data` volume at `/var/lib/portfolio` in `compose.owner.yml`. At startup it creates `ephemeral/auth/sessions/` and `audit/` there with mode `0700`, and checks that it can write, sync, and rename a file, the way it writes session records. It refuses to start when the variable is unset, names no directory, or names one the server's user (uid 1001) can't reach or write. Run one server per data directory.
+
+`ephemeral/` holds sessions and auth state only, and never belongs in a backup. A restore that brings it back also brings back sessions revoked since the backup was taken, so run [`revoke-sessions`](#revoking-sessions) after any restore of the volume.
+
+### Session settings
+
+`PORTFOLIO_AUTH_SESSION_IDLE_MINUTES` (5 to 120, default 60) and `PORTFOLIO_AUTH_SESSION_MAX_HOURS` (1 to 24, default 12) set how long an owner session lasts without use and in all. Any other value stops the server. No sign-in uses them yet.
+
+### Revoking sessions
+
+To sign every session out without changing the password, run `revoke-sessions` in the server's container, from `deploy/`:
+
+```sh
+docker compose -f compose.owner.yml exec web node apps/web/bin/owner.mjs revoke-sessions
+```
+
+It runs as the server's user, which owns the data directory, and refuses to run as anyone else. It deletes every session record, and the server refuses any session created before the run, even one a request in flight writes back. If `ephemeral/auth/revoked-before` is ever damaged, no session counts until `revoke-sessions` writes it again.
+
+### Audit log
+
+The server appends one JSON line per event to `audit/<yyyy-mm>.jsonl` in the data directory (UTC months, files `0600`). Each line is `{"at", "type", "actor", "outcome", "refs"}`. `actor` is `owner`, `anonymous`, or `operator`, and `refs` may name the session by the first 8 characters of its digest, the source by its IPv4 /24 or IPv6 /48 prefix, the command, the capability, a reason code, the request ID, and a `count`. No line holds a password, hash, cookie, CSRF token, full IP address, user agent, or request body. A failed write is logged and changes no decision. Today `revoke-sessions` is the one writer: it appends `sessions_revoked_all`, by the operator, with the count it revoked.
+
 ## Startup checks
 
 Before it takes a request, the server validates its settings and the two documents. A problem stops it with exit code 1 and one `config.fatal` JSON line per problem on stdout. Each line names the setting, never its value, and for a document adds the diagnostic code, the file, the JSON pointer, the line and column, and what to do about it. [configuration.md](configuration.md#validation) explains every code.
@@ -213,6 +237,8 @@ Before it takes a request, the server validates its settings and the two documen
 | No authentication provider                                                                                                                                                                                  | owner            | refuses to start: configure sign-in or choose `read-only`                                           |
 | A password hash file that group or others can write                                                                                                                                                         | owner            | refuses to start                                                                                    |
 | A password hash that is missing, not a scrypt PHC string, or outside `ln=17, r=8, p=1` to `ln=18, r=16, p=4`                                                                                                | owner            | refuses to start, once a provider is registered                                                     |
+| `PORTFOLIO_DATA_DIR` unset, naming no directory, or naming one the server can't reach or write                                                                                                              | owner            | refuses to start, once a provider is registered                                                     |
+| `PORTFOLIO_AUTH_SESSION_IDLE_MINUTES` outside 5 to 120, or `PORTFOLIO_AUTH_SESSION_MAX_HOURS` outside 1 to 24                                                                                               | owner            | refuses to start                                                                                    |
 | A bundled sample pair that is missing, can't be read, or doesn't validate, so the build is broken                                                                                                           | demo             | refuses to start                                                                                    |
 
 The old one-file format has no `schemaVersion` and has `identity`, `sections`, `variant`, `theme`, `motionPreference`, `colorScheme`, or `typography` at the top. Its one `legacy.document` line names each old field and where it goes now, and nothing else is reported; a `portfolio.toml` can only be that format. A plain YAML document has no anchors, aliases, merge keys, tags, directives, repeated keys, or second document. The reserved example domains are `example.com`, `.net`, and `.org` with their subdomains, `.example`, and `.invalid`. Image sources may also be raster `data:image` URLs.
@@ -288,19 +314,21 @@ PORTFOLIO_PROFILE=demo PORTFOLIO_ORIGIN=https://demo.jane.name pnpm start
 
 The server reads these from its environment only. Every key also accepts `<KEY>_FILE`, the path of a file holding the value (such as a Docker secret); set one or the other. An empty value counts as unset. `.env.example` lists them all, the password hash by its `_FILE` only.
 
-| Variable                       | Profiles         | Purpose                                                                                                                               |
-| ------------------------------ | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `PORTFOLIO_PROFILE`            | all              | Required. Exactly `owner`, `demo`, or `read-only`.                                                                                    |
-| `PORTFOLIO_ORIGIN`             | all              | Required. The origin visitors use, such as `https://jane.name`: no path or slash.                                                     |
-| `PORTFOLIO_SOURCE_DIR`         | owner, read-only | Directory holding one `portfolio.{yml,yaml,json}` and one `site.{yml,yaml,json}`.                                                     |
-| `PORTFOLIO_TRUSTED_PROXY_HOPS` | all              | How many trusted proxies append to `X-Forwarded-For`. Whole number, default `0`.                                                      |
-| `PORTFOLIO_PREVIEW_ORIGIN`     | owner, demo      | Optional preview origin, different from `PORTFOLIO_ORIGIN`.                                                                           |
-| `PORTFOLIO_DATA_DIR`           | owner            | The writable data directory: `/var/lib/portfolio` in the owner example.                                                               |
-| `PORTFOLIO_AUTH_PASSWORD_HASH` | owner            | The owner password's scrypt hash. Set it through `PORTFOLIO_AUTH_PASSWORD_HASH_FILE` ([Owner authentication](#owner-authentication)). |
-| `GITHUB_TOKEN`                 | owner            | Reserved. Public GitHub sections use unauthenticated REST and never send a token.                                                     |
-| `PORT`                         | all              | Port the host binds to. Default `3000`.                                                                                               |
-| `PORTFOLIO_PATH`               | none: refused    | Replaced by `PORTFOLIO_SOURCE_DIR`. Setting it stops the server.                                                                      |
-| `NEXT_PUBLIC_BASE_URL`         | none: refused    | Replaced by `PORTFOLIO_ORIGIN`. Setting it stops the server.                                                                          |
+| Variable                              | Profiles         | Purpose                                                                                                                                                      |
+| ------------------------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `PORTFOLIO_PROFILE`                   | all              | Required. Exactly `owner`, `demo`, or `read-only`.                                                                                                           |
+| `PORTFOLIO_ORIGIN`                    | all              | Required. The origin visitors use, such as `https://jane.name`: no path or slash.                                                                            |
+| `PORTFOLIO_SOURCE_DIR`                | owner, read-only | Directory holding one `portfolio.{yml,yaml,json}` and one `site.{yml,yaml,json}`.                                                                            |
+| `PORTFOLIO_TRUSTED_PROXY_HOPS`        | all              | How many trusted proxies append to `X-Forwarded-For`. Whole number, default `0`.                                                                             |
+| `PORTFOLIO_PREVIEW_ORIGIN`            | owner, demo      | Optional preview origin, different from `PORTFOLIO_ORIGIN`.                                                                                                  |
+| `PORTFOLIO_DATA_DIR`                  | owner            | Required. The writable data directory for sessions and the audit log: `/var/lib/portfolio` in the owner example ([The data directory](#the-data-directory)). |
+| `PORTFOLIO_AUTH_PASSWORD_HASH`        | owner            | The owner password's scrypt hash. Set it through `PORTFOLIO_AUTH_PASSWORD_HASH_FILE` ([Owner authentication](#owner-authentication)).                        |
+| `PORTFOLIO_AUTH_SESSION_IDLE_MINUTES` | owner            | Minutes a session lasts idle: 5 to 120, default `60` ([Session settings](#session-settings)).                                                                |
+| `PORTFOLIO_AUTH_SESSION_MAX_HOURS`    | owner            | Hours a session lasts at most: 1 to 24, default `12`.                                                                                                        |
+| `GITHUB_TOKEN`                        | owner            | Reserved. Public GitHub sections use unauthenticated REST and never send a token.                                                                            |
+| `PORT`                                | all              | Port the host binds to. Default `3000`.                                                                                                                      |
+| `PORTFOLIO_PATH`                      | none: refused    | Replaced by `PORTFOLIO_SOURCE_DIR`. Setting it stops the server.                                                                                             |
+| `NEXT_PUBLIC_BASE_URL`                | none: refused    | Replaced by `PORTFOLIO_ORIGIN`. Setting it stops the server.                                                                                                 |
 
 A key outside its profile's list stops a production server; `pnpm dev` warns and ignores it. `.env` files are gitignored. `pnpm dev` reads `apps/web/.env.development`, which runs `read-only` from `config/`.
 
