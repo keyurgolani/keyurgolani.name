@@ -57,7 +57,7 @@ test(
 test(
   'the page takes its appearance and motion from site.yml, and <html lang dir> from the portfolio',
   { annotation: [{ type: 'route', description: '/' }, READ_ONLY] },
-  async ({ page }) => {
+  async ({ page }, testInfo) => {
     await page.goto('/');
     const root = page.locator('[data-variant]').first();
     await expect(root).toHaveAttribute('data-variant', 'editorial');
@@ -75,6 +75,11 @@ test(
     for (const id of ['essays', 'work', 'skills']) {
       await expect(page.locator(`[id="${id}"]`), id).toHaveCount(1);
     }
+    // The render, for the report: the closing evidence for the pair (#4).
+    await testInfo.attach('editorial-noir-modernist-dark', {
+      body: await page.screenshot(),
+      contentType: 'image/png',
+    });
   },
 );
 
