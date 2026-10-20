@@ -50,13 +50,20 @@ function baseEnv(home, port) {
  * @param {Record<string, string>} [options.env] extra server environment
  * @param {string | null} [options.portfolio] document copied into the source directory
  *   (as portfolio.<its extension>), or null for none
+ * @param {string} [options.sourceName] the source directory's name (default config), so
+ *   a test can seed a canary in its path
  * @param {string} [options.logFile] where the server's stdout and stderr go
  */
-export async function startApp({ env = {}, portfolio = DEFAULT_PORTFOLIO, logFile } = {}) {
+export async function startApp({
+  env = {},
+  portfolio = DEFAULT_PORTFOLIO,
+  sourceName = 'config',
+  logFile,
+} = {}) {
   requireBuild();
   const root = mkdtempSync(path.join(tmpdir(), 'portfolio-app-'));
   const appDir = path.join(root, 'app');
-  const sourceDir = path.join(root, 'config');
+  const sourceDir = path.join(root, sourceName);
   // The image's layout: the standalone tree plus static assets and public/.
   cpSync(STANDALONE, appDir, { recursive: true, verbatimSymlinks: true });
   cpSync(path.join(WEB, '.next', 'static'), path.join(appDir, 'apps', 'web', '.next', 'static'), {
@@ -123,7 +130,7 @@ export async function startApp({ env = {}, portfolio = DEFAULT_PORTFOLIO, logFil
     throw error;
   }
 
-  return { origin, port, sourceDir, log, env: serverEnv, egress: trap.attempts, stop };
+  return { origin, port, root, sourceDir, log, env: serverEnv, egress: trap.attempts, stop };
 }
 
 /**

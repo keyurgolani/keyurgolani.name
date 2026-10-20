@@ -32,11 +32,15 @@ export interface AppOptions {
   env?: Record<string, string>;
   /** Portfolio document copied into `sourceDir`; null for none. */
   portfolio?: string | null;
+  /** The source directory's name (default `config`). */
+  sourceName?: string;
 }
 
 export interface App {
   origin: string;
   port: number;
+  /** The directory the server runs from, holding its build copy and `sourceDir`. */
+  root: string;
   /** The server's PORTFOLIO_SOURCE_DIR unless `env` names another. */
   sourceDir: string;
   log: string;

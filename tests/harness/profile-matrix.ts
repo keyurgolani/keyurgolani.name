@@ -3,9 +3,11 @@
 // page, route, and operation the profile doesn't serve fails closed, and
 // each one it serves answers. Every response carries the baseline headers
 // and no cookie, and under a profile crawlers may not index (demo), says so.
-// Health and readiness answer their documented shapes. A spec runs it for
-// the profile its app options start.
+// Health and readiness answer their documented shapes, and the canary scan
+// (#1, Verification item 2) finds no path or secret in any response. A spec
+// runs it for the profile its app options start.
 import { createRequire } from 'node:module';
+import path from 'node:path';
 import type { APIResponse } from '@playwright/test';
 import type * as Capabilities from '../../apps/web/src/server/capabilities';
 import type * as Operations from '../../apps/web/src/server/operations';
@@ -23,9 +25,19 @@ const { listRoutes, RETIRED_PATTERNS, routeAccess } =
 type Profile = Capabilities.Profile;
 type Operation = Operations.Operation;
 
+/** A secret in every server's environment, which no response may carry. */
+const CANARY_SECRET = 'canary-secret-5d81c2e7';
+/** The read-only source directory's name, so its path holds a canary. */
+const CANARY_SOURCE = 'canary-source-0f3b9a64';
+/** Sent in every POST body, which no response may echo. */
+const CANARY_BODY = 'canary-draft-7c1e04aa';
+
+/** The read-only profile on the harness fixture, seeded for the canary scan. */
+export const READ_ONLY_APP: AppOptions = { sourceName: CANARY_SOURCE, env: { CANARY_SECRET } };
+
 /** The demo profile on the bundled sample, with no source directory: demo reads none. */
 export const DEMO_APP: AppOptions = {
-  env: { PORTFOLIO_PROFILE: 'demo', PORTFOLIO_SOURCE_DIR: '' },
+  env: { PORTFOLIO_PROFILE: 'demo', PORTFOLIO_SOURCE_DIR: '', CANARY_SECRET },
   portfolio: null,
 };
 
@@ -184,6 +196,48 @@ export function profileMatrix(profile: Profile): void {
       expect(ready.status()).toBe(200);
       expect(ready.headers()['cache-control']).toBe('no-store');
       expect(await ready.json()).toEqual(readyBody(profile));
+    },
+  );
+
+  test(
+    'no response to GET or POST carries a path or a secret, and no owner module loads',
+    { annotation: [{ type: 'route', description: 'every route' }, annotation] },
+    async ({ app, request }) => {
+      // Every path the server could leak sits under its own directory: the
+      // build, the bundled example, and the source directory.
+      const canaries = [CANARY_SECRET, CANARY_SOURCE, CANARY_BODY, path.basename(app.root)];
+      expect(app.env.CANARY_SECRET).toBe(CANARY_SECRET);
+      const targets = [
+        ...listRoutes()
+          .filter((route) => route.capability !== 'operations')
+          .map((route) => concrete(route.pattern)),
+        ...RETIRED_PATTERNS.map(concrete),
+        ...listOperations().map((operation) => `/api/studio/${operation.name}`),
+        '/api/studio/no.such.operation',
+        '/no-such-page',
+        '/api/no-such-route',
+      ];
+      for (const target of targets) {
+        for (const method of ['GET', 'POST'] as const) {
+          const response = await request.fetch(target, {
+            method,
+            maxRedirects: 0,
+            data: method === 'POST' ? { draft: CANARY_BODY } : undefined,
+          });
+          const body = (await response.body()).toString('latin1');
+          const headers = response
+            .headersArray()
+            .map(({ name, value }) => `${name}: ${value}`)
+            .join('\n');
+          for (const canary of canaries) {
+            expect(body, `${method} ${target}: body`).not.toContain(canary);
+            expect(headers, `${method} ${target}: headers`).not.toContain(canary);
+          }
+        }
+      }
+      // After every route and operation, still no owner module.
+      const ready = (await (await request.get('/api/ready')).json()) as { checks: unknown[] };
+      expect(ready.checks).toContainEqual({ id: 'owner-modules', status: 'ok' });
     },
   );
 

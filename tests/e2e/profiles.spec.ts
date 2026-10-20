@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import type * as Routes from '../../apps/web/src/server/routes';
 import { expect, test } from '../harness/fixtures';
-import { profileMatrix } from '../harness/profile-matrix';
+import { profileMatrix, READ_ONLY_APP } from '../harness/profile-matrix';
 
 // The route-level matrix (#1, AC4) for read-only, against the built server;
 // demo.spec.ts runs it for demo. Owner runs the same matrix in process until
@@ -45,5 +45,7 @@ test(
     expect([...new Set(built)].sort()).toEqual([...table].sort());
   },
 );
+
+test.use({ appOptions: READ_ONLY_APP });
 
 profileMatrix('read-only');
