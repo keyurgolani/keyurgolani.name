@@ -5,6 +5,7 @@ import path from 'node:path';
 import {
   detectFormat,
   DOCUMENT_MAX_BYTES,
+  MIGRATE_COMMAND,
   parsePortfolio,
   type ContentExtension,
   type DocumentProblem,
@@ -22,7 +23,7 @@ import type { ConfigIssue, RuntimeMode } from './config';
 export const BUNDLED_SAMPLE_NAMES: readonly string[] = ['Anamika Devi'];
 
 const DOCUMENT = /^portfolio\.(yml|yaml|json)$/;
-/** A format this release no longer reads. Refused by name, never skipped. */
+/** The old one-file format in TOML, which this release no longer reads. Refused by name, never skipped. */
 const UNSUPPORTED = /^portfolio\.toml$/;
 const KEY = 'PORTFOLIO_SOURCE_DIR';
 const INVALID_SOURCE =
@@ -100,13 +101,15 @@ function loadRevision(options: DocumentsCatalogOptions): Loaded {
     }
     return fail(fatal('source_unreadable', `The server can't read the ${KEY} directory.`));
   }
+  // A TOML document can only be the old format: it's legacy, like an old
+  // YAML or JSON one, and nothing else is reported (#4, item 18).
   const unsupported = names.filter((name) => UNSUPPORTED.test(name));
   if (unsupported.length > 0) {
     return fail(
       ...unsupported.map((name) => ({
         ...fatal(
-          'document_unsupported',
-          'TOML portfolio documents are no longer read. Convert portfolio.toml to portfolio.yml or portfolio.json, then remove it.',
+          'document_legacy',
+          `${name} is in the old one-file format, in TOML, which this release doesn't read. Convert it to YAML or JSON first, then run ${MIGRATE_COMMAND} on that to split it into portfolio.yml and site.yml, and remove ${name}.`,
         ),
         file: name,
       })),
@@ -158,6 +161,7 @@ function loadRevision(options: DocumentsCatalogOptions): Loaded {
 
   const parsed = parsePortfolio(bytes.toString('utf8'), detectFormat(name), {
     extensions: options.extensions,
+    name,
   });
   if (!parsed.ok) return fail(...parsed.problems.map((problem) => documentIssue(problem, name)));
   const { value: portfolio, locate } = parsed;
@@ -246,14 +250,23 @@ function fatal(code: string, message: string): ConfigIssue {
   return { severity: 'fatal', key: KEY, code, message };
 }
 
+const ISSUE_CODES: Readonly<Record<DocumentProblem['kind'], string>> = {
+  syntax: 'document_syntax',
+  legacy: 'document_legacy',
+  version: 'document_invalid',
+  schema: 'document_invalid',
+  'duplicate-id': 'document_invalid',
+};
+
 /**
  * A problem the schema package found, as a startup issue: `document_syntax`
- * when the text isn't one plain YAML or JSON document, else `document_invalid`.
- * The message never quotes the document.
+ * when the text isn't one plain YAML or JSON document, `document_legacy` for
+ * the old one-file format, else `document_invalid`. The message never quotes
+ * the document.
  */
 function documentIssue(problem: DocumentProblem, file: string): ConfigIssue {
   return {
-    ...fatal(problem.kind === 'syntax' ? 'document_syntax' : 'document_invalid', problem.message),
+    ...fatal(ISSUE_CODES[problem.kind], problem.message),
     file,
     ...(problem.pointer !== undefined ? { path: problem.pointer } : {}),
     ...(problem.line !== undefined ? { line: problem.line, column: problem.column } : {}),

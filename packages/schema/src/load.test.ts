@@ -46,10 +46,31 @@ test('YAML and its JSON twin parse to the same model', () => {
   if (yaml.ok && json.ok) assert.deepEqual(json.value, yaml.value);
 });
 
-test('a document without schemaVersion 2 reports only that', () => {
-  // The baseline shape: unversioned, with presentation fields and no ids.
+test('an old-format document, or one without schemaVersion 2, reports only that', () => {
+  // The baseline shape: unversioned, with presentation fields and no ids. Its
+  // one problem sits at the first old field.
   const legacy = 'identity:\n  name: Rowan Test\nvariant: editorial\nsections:\n  - kind: hero\n';
-  assert.deepEqual(problems(parsePortfolio(legacy, 'yaml')), [
+  const old = parsePortfolio(legacy, 'yaml', { name: 'portfolio.yml' });
+  assert.deepEqual(problems(old), [
+    { kind: 'legacy', code: 'legacy_document', pointer: '', line: 3, column: 1 },
+  ]);
+  assert.ok(!old.ok);
+  assert.equal(
+    old.problems[0]!.message,
+    "portfolio.yml is in the old one-file format, which this release doesn't read. Its old fields move: /variant to appearance.variant in site.yml. Run pnpm config:migrate portfolio.yml to split it into portfolio.yml and site.yml.",
+  );
+  // Without a file name, and with no old field to point at.
+  const plain = parsePortfolio('identity:\n  name: Rowan Test\n', 'yaml');
+  assert.deepEqual(problems(plain), [
+    { kind: 'legacy', code: 'legacy_document', pointer: '', line: 1, column: 1 },
+  ]);
+  assert.ok(!plain.ok);
+  assert.match(
+    plain.problems[0]!.message,
+    /^The document is in the old one-file format.*Run pnpm config:migrate on it/,
+  );
+  // A document that isn't the old format, with schemaVersion missing or wrong.
+  assert.deepEqual(problems(parsePortfolio('locale: en\n', 'yaml')), [
     { kind: 'version', code: 'invalid_type', pointer: '/schemaVersion', line: 1, column: 1 },
   ]);
   const wrong = parsePortfolio('schemaVersion: 1\nidentity:\n  name: Rowan Test\n', 'yaml');

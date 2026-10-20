@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 import { parse as parseYaml } from 'yaml';
 import { defineContentExtension } from './extensions';
+import { SITE_SKELETON } from './legacy';
 import type { AppearanceSelection } from './site';
 import {
   DIAGNOSTIC_SEVERITIES,
@@ -721,6 +722,71 @@ test('route ids and variant control values wait for their validator', () => {
   ]);
 });
 
+/** An old one-file document: every kind of old field, and a key the old schema dropped. */
+const OLD = lines(
+  'identity:',
+  '  name: Rowan Test',
+  'variant: editorial',
+  'theme: dark',
+  'meta:',
+  '  url: https://canary-old-origin.test',
+  'sections:',
+  '  - kind: lede',
+  '    hidden: true',
+  '    body: Hi',
+  'subtitel: canary-unknown',
+);
+
+test('an old-format document gets one legacy.document, and nothing else is reported', () => {
+  // The site document is broken too, and stays unreported.
+  const result = validate(OLD, 'schemaVersion: 2\n');
+  assert.equal(result.pair, null);
+  assert.deepEqual(found(result.diagnostics), [
+    ['portfolio', 'legacy.document', 'blocks-preview', '', 3, 1],
+  ]);
+  const [legacy] = result.diagnostics;
+  assert.equal(
+    legacy!.message,
+    "portfolio.yml is in the old one-file format, which this release doesn't read. Its old fields move: /variant to appearance.variant in site.yml, /theme to appearance.displayMode in site.yml, /meta/url to the PORTFOLIO_ORIGIN setting, and /sections/0/hidden to sections.<id>.hidden in site.yml. Run pnpm config:migrate portfolio.yml to split it into portfolio.yml and site.yml.",
+  );
+  assert.match(
+    legacy!.remediation,
+    /^Run pnpm config:migrate portfolio\.yml to see every change it makes, then again with --write --out <dir>/,
+  );
+  assert.ok(legacy!.remediation.endsWith(SITE_SKELETON));
+  assert.deepEqual(result.notChecked, []);
+  for (const canary of ['canary-old-origin', 'canary-unknown']) {
+    assert.ok(!JSON.stringify(result.diagnostics).includes(canary), canary);
+  }
+  // In either slot, each old document gets its own.
+  assert.deepEqual(codes(validate(OLD, OLD.replace('variant:', 'colorScheme:')).diagnostics), [
+    'portfolio:legacy.document:',
+    'site:legacy.document:',
+  ]);
+});
+
+test('a document in the other one slot gets one schema.invalid at its marker', () => {
+  const result = validatePublicationUnit(unit(SITE, PORTFOLIO), CONTEXT);
+  assert.equal(result.pair, null);
+  assert.deepEqual(found(result.diagnostics), [
+    ['portfolio', 'schema.invalid', 'blocks-preview', '', 2, 1],
+    ['site', 'schema.invalid', 'blocks-preview', '', 4, 1],
+  ]);
+  assert.deepEqual(
+    result.diagnostics.map(({ message, remediation }) => [message, remediation]),
+    [
+      [
+        'portfolio.yml holds a site document (it has appearance), not a portfolio document.',
+        'Put the portfolio document in portfolio.yml, or rename this file to site.yml.',
+      ],
+      [
+        'site.yml holds a portfolio document (it has identity), not a site document.',
+        'Put the site document in site.yml, or rename this file to portfolio.yml.',
+      ],
+    ],
+  );
+});
+
 test('it never throws, even when the build itself is wrong', () => {
   const twins = [
     defineContentExtension({ namespace: 'twin' }),
@@ -781,6 +847,7 @@ test('every diagnostic code comes with a line and column, in YAML and JSON', () 
     { portfolio: PORTFOLIO.replace('  - url: https://rowan.name', links) },
     { site: `${SITE}sections:\n  about: { hidden: true }\n  contact: { hidden: true }\n` },
     { ctx: twins },
+    { portfolio: OLD },
   ];
   const twin = (yaml: string) => `${JSON.stringify(parseYaml(yaml), null, 2)}\n`;
   for (const format of ['yaml', 'json'] as const) {
