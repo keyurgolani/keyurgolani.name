@@ -159,7 +159,7 @@ Run this even if `capabilities.print = false`. A bad print can be confidently di
 
 ### Recipe (Chrome — most reliable)
 
-In the running app on `/`, with your variant selected in `config/portfolio.yml`:
+In the running app on `/`, with your variant selected in `config/site.yml`:
 
 ```
 Chrome menu → Print  (or Ctrl/Cmd + P)
@@ -250,7 +250,7 @@ This gate is the difference between "the variant compiles" and "the variant feel
 
 ## Gate H — Real-data testing
 
-`portfolio.example.yml` is a curated, well-formed dataset. Real users have weird data. Verify against the user's actual `portfolio.yml`:
+`portfolio.example.yml` is a curated, well-formed dataset. Real users have weird data. Verify against the user's actual `portfolio.yml` and `site.yml`:
 
 - [ ] Long organization names don't overflow timeline cards.
 - [ ] Long URLs in print don't break layout.

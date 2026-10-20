@@ -108,7 +108,7 @@ A common idiom is a top-of-page anchor for a "scroll to top" brand link:
 }
 ```
 
-Meanwhile, `ensureSectionId(section.id, 'top')` on a hero section _without an explicit id_ returns `'top'` — and the hero `<section id="top">` matches the rule. Collision.
+Meanwhile, every section's DOM id is its portfolio `id`, and a hero is often `top` (the migration gives it that id), so the hero `<section id="top">` matches the rule. Collision.
 
 ### Fix
 
@@ -117,7 +117,7 @@ Don't use single-word reserved IDs (`top`, `main`, `home`) for anchor tricks. Ei
 - Use a class: `<a className="kc-nav__brand">` + JS `window.scrollTo(0, 0)` on click. No ID needed.
 - Pick a namespaced ID: `id="kc-page-top"` and target only that.
 
-The skill's `ensureSectionId` fallbacks are deliberately short — `'top'`, `'main'`, etc. — assume they may collide.
+Portfolio ids are short words chosen by authors, such as `top` or `about`. Assume any single-word id may collide. `main` is reserved for your `<main id="main">`, so no section can take it.
 
 ## 5. Theme tokens leaking into print
 
@@ -283,4 +283,4 @@ A code reviewer can spot most of these without running the app:
 - Any new section that isn't covered by the `scroll-margin-top` rule.
 - Any new `@media print` block that doesn't reset card/paper tokens.
 - Any new `requestAnimationFrame` callsite that doesn't check the motion preference.
-- Any `ensureSectionId(..., 'top'|'main'|'home')` call where the fallback is a reserved CSS hook.
+- Any CSS hook on a single-word id (`top`, `main`, `home`) that a portfolio section could also have.

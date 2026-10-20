@@ -35,17 +35,17 @@ Run frequently during Wave 2/3, and once final at Phase 3 entry.
 
 ## Visual gates (see `references/quality-gates.md`)
 
-- [ ] **Gate A — Visual sanity.** `/sample?variant=<slug>` renders (`scripts/visual-companion/start.sh --mode preview --variant <slug>`), with your variant's tokens applied (paper color, font family, theme toggle visible). NOT plain user-agent default.
-- [ ] **Gate B — Theme × scheme × typography matrix.** ≥ 9 screenshots captured across the meaningful combinations. No contrast bugs surface.
-- [ ] **Gate C — Reduced-motion programmatic verification.**
+- [ ] **Gate A: Visual sanity.** `/sample?variant=<slug>` renders (`scripts/visual-companion/start.sh --mode preview --variant <slug>`), with your variant's tokens applied (paper color, font family, theme toggle visible). NOT plain user-agent default.
+- [ ] **Gate B: Theme × scheme × typography matrix.** ≥ 9 screenshots captured across the meaningful combinations. No contrast bugs surface.
+- [ ] **Gate C: Reduced-motion programmatic verification.**
   - [ ] Canvas pixel-sample stable across 300ms with reduce-motion ON.
   - [ ] Floater transform string-equal across 400px scroll.
   - [ ] Typing animation textContent stable across 500ms.
-- [ ] **Gate D — Print preview.** Backgrounds white, ink black, decorative chrome hidden, gradient text solid, no theme bleed. Or `capabilities.print = false` and DESIGN.md says so.
-- [ ] **Gate F — Screenshots.** PNGs exist on disk at every path declared in `manifest.screenshots`.
-- [ ] **Gate G — Fidelity comparison vs reference** (port-only). Every box in DESIGN.md's `## Fidelity targets` is checked or has a documented intentional drop.
-- [ ] **Gate H — Real-data testing.** Tested against the user's actual `portfolio.yml`, not just `portfolio.example.yml`. Long names, missing optional fields, non-ASCII characters all render correctly.
-- [ ] **Gate I — Mobile breakpoint sweep.** 375×667 and 430×932 viewports — no horizontal overflow, decorative floaters hidden, nav collapsed, hit targets ≥ 44×44px.
+- [ ] **Gate D: Print preview.** Backgrounds white, ink black, decorative chrome hidden, gradient text solid, no theme bleed. Or `capabilities.print = false` and DESIGN.md says so.
+- [ ] **Gate F: Screenshots.** PNGs exist on disk at every path declared in `manifest.screenshots`.
+- [ ] **Gate G: Fidelity comparison vs reference** (port-only). Every box in DESIGN.md's `## Fidelity targets` is checked or has a documented intentional drop.
+- [ ] **Gate H: Real-data testing.** Tested against the user's actual pair, not just `portfolio.example.yml`. Long names, missing optional fields, non-ASCII characters all render correctly.
+- [ ] **Gate I: Mobile breakpoint sweep.** 375×667 and 430×932 viewports: no horizontal overflow, decorative floaters hidden, nav collapsed, hit targets ≥ 44×44px.
 
 ## Accessibility
 
@@ -75,13 +75,13 @@ Once all gates pass:
 
 ## Common failure modes
 
-- **Audit fails on missing kind** — the schema added a new kind since you started. Update `supportedKinds` (and add a renderer or FallbackSection route).
-- **Typecheck fails on missing renderer** — section.tsx has a `case 'X':` but no imported renderer. Add the import or route through FallbackSection.
-- **Build fails on registry** — variant didn't land in `apps/web/node_modules/@portfolio/`. Run `pnpm install` to symlink the workspace.
-- **Variant renders as plain HTML** — the `registry.styles.generated.ts` file doesn't include your variant. Run `pnpm --filter @portfolio/web build:registry` and verify the new import landed.
-- **Buttons render with wrong text color** — the global anchor rule is overriding component classes. Restrict it with `:not([class])` (see `references/common-bugs.md` §2).
-- **Hero squeezed to 80px wide** — a CSS rule is targeting `[id='top']` and matching the hero `<section id="top">` (because `ensureSectionId` falls back to `'top'`). Don't use single-word reserved IDs (`references/common-bugs.md` §4).
-- **SVG branches/gradients invisible** — gradient IDs contain spaces. Slugify (`references/common-bugs.md` §3).
-- **Reduced-motion still animating** — the rAF loop or framer-motion hook isn't gated. CSS alone isn't enough (`references/common-bugs.md` §8).
-- **Print preview renders dark cards** — theme tokens leaking into print. Reset every `--kc-*` variable inside `@media print` (`references/common-bugs.md` §5).
-- **Visual regression** — your variant's CSS leaked into another variant (every variant's stylesheet loads on every page). Verify every selector starts with `[data-variant='your-slug']`.
+- **Audit fails on missing kind**: the schema added a new kind since you started. Update `supportedKinds` (and add a renderer or FallbackSection route).
+- **Typecheck fails on missing renderer**: section.tsx has a `case 'X':` but no imported renderer. Add the import or route through FallbackSection.
+- **Build fails on registry**: variant didn't land in `apps/web/node_modules/@portfolio/`. Run `pnpm install` to symlink the workspace.
+- **Variant renders as plain HTML**: the `registry.styles.generated.ts` file doesn't include your variant. Run `pnpm --filter @portfolio/web build:registry` and verify the new import landed.
+- **Buttons render with wrong text color**: the global anchor rule is overriding component classes. Restrict it with `:not([class])` (see `references/common-bugs.md` §2).
+- **Hero squeezed to 80px wide**: a CSS rule is targeting `[id='top']` and matching the hero `<section id="top">` (a hero's id is often `top`). Don't use single-word reserved IDs (`references/common-bugs.md` §4).
+- **SVG branches/gradients invisible**: gradient IDs contain spaces. Slugify (`references/common-bugs.md` §3).
+- **Reduced-motion still animating**: the rAF loop or framer-motion hook isn't gated. CSS alone isn't enough (`references/common-bugs.md` §8).
+- **Print preview renders dark cards**: theme tokens leaking into print. Reset every `--kc-*` variable inside `@media print` (`references/common-bugs.md` §5).
+- **Visual regression**: your variant's CSS leaked into another variant (every variant's stylesheet loads on every page). Verify every selector starts with `[data-variant='your-slug']`.

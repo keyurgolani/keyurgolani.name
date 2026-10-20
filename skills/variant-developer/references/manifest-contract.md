@@ -161,23 +161,24 @@ The concrete `data-theme` values your variant renders correctly via CSS. Valid v
 - `resolveTypographyPreset(manifest, requested)` — same chain for typography.
 - `resolveTheme(preference, supported, systemMatch)` — pure function the kit's `ThemeProvider` uses to map a `ThemePreference` to a concrete `data-theme` value, applying the `bright→light` / `black→dark` fallback per the resolution table above.
 
-Use these in your variant's render path so portfolio.yaml's `colorScheme` and `typography` fields work consistently across variants.
+Use these in your variant's render path so the site document's `colorScheme` and `typography`, which reach you as `VariantProps`, resolve the same way in every variant.
 
 ## Host integration
 
-Declaring `'bright'` or `'black'` in `themes` is necessary but not sufficient — the host app also has to pass the variant's `manifest.themes` into `<ThemeProvider supportedThemes={...}>`. Otherwise the resolver defaults to `['light','dark']` and bright/black always fall back.
-
-In this repo the integration point is `apps/web/src/app/layout.tsx`:
+Declaring `'bright'` or `'black'` in `themes` is all a variant does. The host wraps every page in `<ThemeProvider>` with the selected variant's `manifest.themes` and the site's display mode as the starting preference (`apps/web/src/lib/variant-tree.tsx`), so your bright and black CSS blocks render with no wiring of your own:
 
 ```tsx
-import { manifest as editorialManifest } from '@portfolio/variant-editorial';
-// ...
-<ThemeProvider defaultPreference={defaultPreference} supportedThemes={editorialManifest.themes}>
-  {children}
-</ThemeProvider>;
+<ThemeProvider defaultPreference={displayMode} supportedThemes={mod.manifest.themes}>
+  <Component
+    portfolio={portfolio}
+    colorScheme={selection.colorScheme}
+    typography={selection.typography}
+    motionPolicy={motionPolicy}
+  />
+</ThemeProvider>
 ```
 
-When you register a new variant that supports bright/black, that file needs to look up the active variant's manifest (today it's hardcoded to editorial; multi-variant hosting will need a registry). Without the wiring, your bright/black CSS blocks never render.
+At startup the host also checks the site document's `appearance` against the selected variant's manifest. A `colorScheme` or `typography` id your manifest doesn't declare is refused as `appearance.unknown`, so the ids you ship are the ones authors can pick.
 
 ## Editorial vs. template — side-by-side example
 
