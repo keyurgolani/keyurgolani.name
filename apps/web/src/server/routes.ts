@@ -28,6 +28,7 @@ export interface RouteEntry {
 // profile that serves it (such as a Studio page under owner and demo).
 const ROUTES = [
   { pattern: '/', kind: 'page', capability: 'catalog.read', nav: 'Home' },
+  { pattern: '/sample', kind: 'page', capability: 'sample.read' },
   { pattern: '/robots.txt', kind: 'metadata', capability: 'catalog.read' },
   { pattern: '/sitemap.xml', kind: 'metadata', capability: 'catalog.read' },
   { pattern: '/opengraph-image', kind: 'metadata', capability: 'catalog.read' },
