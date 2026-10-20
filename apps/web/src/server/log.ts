@@ -1,0 +1,62 @@
+// The server's log (#1, item 21): one JSON object per line on stdout, with
+// allowlisted fields only. logLine() drops every field its event doesn't
+// allow, so no caller can log a body, a cookie, an Authorization header, a
+// raw URL, or a secret by passing it along. It imports nothing, so it loads
+// wherever the server does.
+
+export type LogLevel = 'info' | 'warn' | 'error' | 'fatal';
+
+/** Fields any event may carry. `route` is a route pattern, never a raw URL. */
+const BASE = [
+  'level',
+  'event',
+  'requestId',
+  'profile',
+  'route',
+  'operation',
+  'capability',
+  'status',
+  'code',
+  'key',
+  'digest',
+] as const;
+
+/** A finding at startup: where in the source it is, and its fixed text, which never quotes a value. */
+const FINDING = ['file', 'path', 'line', 'column', 'issueCode', 'message'] as const;
+
+/** What particular events add. */
+const EXTRA: Readonly<Record<string, readonly string[]>> = {
+  'config.fatal': FINDING,
+  'config.warning': FINDING,
+  'deployment.config': [
+    'origin',
+    'previewOrigin',
+    'proxyHops',
+    'capabilities',
+    'adapters',
+    'secrets',
+  ],
+};
+
+export interface LogEntry {
+  readonly level: LogLevel;
+  readonly event: string;
+  readonly [field: string]: unknown;
+}
+
+/** The JSON line for `entry`: a timestamp, then each field its event allows that has a value. */
+export function logLine(entry: LogEntry, now = new Date()): string {
+  const allowed = new Set<string>([...BASE, ...(EXTRA[entry.event] ?? [])]);
+  const line: Record<string, unknown> = { ts: now.toISOString() };
+  for (const [field, value] of Object.entries(entry)) {
+    if (allowed.has(field) && value !== undefined) line[field] = value;
+  }
+  return `${JSON.stringify(line)}\n`;
+}
+
+/** Writes `entry` to stdout as one JSON line. */
+export function log(entry: LogEntry): void {
+  // console.log is stdout, and tests can replace it without touching the
+  // stream the test runner reports through.
+  console.log(logLine(entry).slice(0, -1));
+}

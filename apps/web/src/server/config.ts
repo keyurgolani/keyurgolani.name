@@ -2,6 +2,7 @@ import 'server-only';
 import fs from 'node:fs';
 import path from 'node:path';
 import { PROFILES, type Profile } from './capabilities';
+import { logLine } from './log';
 
 // The deployment configuration. This is the only module that reads
 // deployment environment variables; everything else gets the frozen result
@@ -72,11 +73,10 @@ export interface ConfigIssue {
   readonly issueCode?: string;
 }
 
-/** One JSON line for the startup log: `config.fatal` or `config.warning`. */
+/** One JSON line for the startup log, without its newline: `config.fatal` or `config.warning`. */
 export function issueLogLine(issue: ConfigIssue, profile?: Profile, now = new Date()): string {
   const fatal = issue.severity === 'fatal';
-  return JSON.stringify({
-    ts: now.toISOString(),
+  const entry = {
     level: fatal ? 'fatal' : 'warn',
     event: fatal ? 'config.fatal' : 'config.warning',
     profile,
@@ -88,7 +88,8 @@ export function issueLogLine(issue: ConfigIssue, profile?: Profile, now = new Da
     column: issue.column,
     issueCode: issue.issueCode,
     message: issue.message,
-  });
+  } as const;
+  return logLine(entry, now).slice(0, -1);
 }
 
 export type Env = Readonly<Record<string, string | undefined>>;

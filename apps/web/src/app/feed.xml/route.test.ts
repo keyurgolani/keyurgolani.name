@@ -6,8 +6,8 @@ import { setDeploymentState } from '~/server/config-store';
 import { GET } from './route';
 
 // When the feed can't be built, the response body stays fixed, plus the
-// request ID proxy.ts set. The cause goes to the server log, never to the
-// visitor.
+// request ID proxy.ts set. The log names the failure and the request, and
+// never the cause, which can carry a path.
 
 function deploy(t: TestContext, getLive: CatalogReader['getLive']): void {
   const read = readDeploymentConfig(
@@ -32,8 +32,8 @@ function deploy(t: TestContext, getLive: CatalogReader['getLive']): void {
 const request = () =>
   new Request('https://rowan.test/feed.xml', { headers: { 'x-request-id': 'req-0001' } });
 
-test('a catalog that fails gives a fixed 500 and logs the cause', async (t) => {
-  const logged = t.mock.method(console, 'error', () => {});
+test('a catalog that fails gives a fixed 500 and logs the request, not the cause', async (t) => {
+  const logged = t.mock.method(console, 'log', () => {});
   deploy(t, () =>
     Promise.reject(
       new Error('canary: /srv/canary-config/portfolio.yml: /identity/name is required'),
@@ -45,6 +45,17 @@ test('a catalog that fails gives a fixed 500 and logs the cause', async (t) => {
   assert.equal(response.headers.get('content-type'), 'text/plain; charset=utf-8');
   assert.equal(response.headers.get('cache-control'), 'no-store');
   assert.equal(logged.mock.callCount(), 1);
+  const line = String(logged.mock.calls[0]!.arguments[0]);
+  assert.ok(!line.includes('canary'), line);
+  assert.deepEqual(
+    Object.entries(JSON.parse(line)).filter(([field]) => field !== 'ts'),
+    [
+      ['level', 'error'],
+      ['event', 'feed.failed'],
+      ['route', '/feed.xml'],
+      ['requestId', 'req-0001'],
+    ],
+  );
 });
 
 test('a server with no deployment state serves no feed', async () => {

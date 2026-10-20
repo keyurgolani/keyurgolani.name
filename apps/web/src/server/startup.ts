@@ -3,6 +3,7 @@ import type { ContentExtension } from '@portfolio/schema';
 import { compose, type AuthProviderFactory } from './composition';
 import { readDeploymentConfig, type ConfigIssue, type Env, type Profile } from './config';
 import type { DeploymentState } from './config-store';
+import type { ConfigSummary } from './operations';
 
 // Startup validation. instrumentation register() runs it once before the
 // server handles a request; any fatal finding stops the process there.
@@ -29,6 +30,8 @@ export type StartupResult =
       readonly profile: Profile;
       readonly state: DeploymentState;
       readonly issues: ConfigIssue[];
+      /** The redacted summary to log once as `deployment.config`. */
+      readonly summary: ConfigSummary;
     }
   | { readonly ok: false; readonly profile?: Profile; readonly issues: ConfigIssue[] };
 
@@ -45,6 +48,12 @@ export async function runStartup(input: StartupInput): Promise<StartupResult> {
   });
   const issues = [...read.issues, ...composed.issues];
   return composed.ok
-    ? { ok: true, profile: config.profile, state: composed.state, issues }
+    ? {
+        ok: true,
+        profile: config.profile,
+        state: composed.state,
+        issues,
+        summary: composed.summary,
+      }
     : { ok: false, profile: config.profile, issues };
 }
