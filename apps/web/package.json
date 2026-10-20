@@ -1,6 +1,6 @@
 {
   "name": "@portfolio/web",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "scripts": {
     "build:registry": "node scripts/build-registry.mjs",
@@ -11,7 +11,7 @@
     "start": "next start",
     "typecheck": "pnpm build:registry && tsc --noEmit",
     "lint": "next lint",
-    "test": "echo \"(no tests yet)\""
+    "test": "node --test scripts/check-containment.test.mjs scripts/containment-tools.test.mjs"
   },
   "dependencies": {
     "@portfolio/kit": "workspace:*",

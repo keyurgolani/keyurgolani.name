@@ -11,11 +11,6 @@ const config: NextConfig = {
     '@portfolio/kit',
     '@portfolio/variant-editorial',
   ],
-  images: {
-    remotePatterns: [
-      { protocol: 'https', hostname: '**' },
-    ],
-  },
 };
 
 export default config;

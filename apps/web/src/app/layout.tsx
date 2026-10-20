@@ -11,6 +11,12 @@ import './globals.css';
 // doesn't have to hard-code per-variant CSS imports.
 import '~/lib/registry.styles.generated';
 
+// Every page reads the mounted portfolio file at request time, including the
+// 404 page for unknown paths, which would otherwise be prerendered with the
+// title and structured data of whatever file the build saw (the bundled
+// example persona, for a CI image).
+export const dynamic = 'force-dynamic';
+
 export async function generateMetadata(): Promise<Metadata> {
   try {
     const { portfolio } = await loadPortfolio();

@@ -10,18 +10,30 @@ The repo ships a `Dockerfile` and `docker-compose.yml`.
 docker compose up --build
 ```
 
-By default this builds a production image, mounts your local `portfolio.yml` into the container, and serves on port 3000. Edit `docker-compose.yml` to change the port or add a reverse proxy.
+By default this builds a production image, mounts your local `portfolio.yml` into the container read-only, and serves on port 3000. Edit `docker-compose.yml` to change the port or add a reverse proxy.
 
 ### What the image does
 
 - Multi-stage build: deps → build → run.
 - Installs only production dependencies in the runtime stage.
 - Runs `pnpm build` to produce a Next.js standalone output.
-- Bind-mounts `portfolio.yml` so you can edit it on the host without rebuilding.
+- Bind-mounts `portfolio.yml` read-only so you can edit it on the host without rebuilding.
+
+### Production builds are read-only
+
+A production build (`next build`, which the image runs) returns 404 for `/admin`, `/variants`, `/preview/*`, `GET` and `PUT /api/portfolio`, `PUT /api/variant`, and `PUT /api/customize`. The browser editor and the variant gallery have no access control, so they only run under `pnpm dev`, for local editing. There is no setting that turns them back on in production. `pnpm dev` listens on every network interface; on a network you don't trust, run `pnpm dev --hostname 127.0.0.1`.
+
+On a deployed site, edit `portfolio.yml` on the host and mount it `:ro`, as `docker-compose.yml` does.
 
 ### Updating the portfolio without rebuilding
 
-Because `portfolio.yml` is bind-mounted, edits on the host are picked up by the container on next request — no rebuild needed.
+Every page, the 404 page, the feed, `robots.txt`, `sitemap.xml`, and the Open Graph image render from `portfolio.yml` when they're requested. Nothing is prerendered from it at build time, so an image built without your file (the CI image, for example) still serves your content, and a host edit shows up on the next request as long as the edit rewrites the file in place.
+
+A single-file bind mount follows the file's inode, not its path. A tool that saves by writing a new file and renaming it over the old one gives the path a new inode, and the container keeps reading the old copy. `sed -i` works this way, and so do some editors. BusyBox `cp` (the `cp` on Alpine) has the same effect, because it replaces the file instead of writing into it. On a Linux Docker host (Docker Engine 29.9), the container kept serving the old content after `sed -i` and after a BusyBox `cp` until `docker restart`, while a GNU `cp` (for example `cp new.yml portfolio.yml`), which writes into the existing file, showed up on the next request without a restart. If a change doesn't show, restart the container:
+
+```sh
+docker compose restart web
+```
 
 To swap variants or schema versions, you do need to rebuild:
 
@@ -107,6 +119,7 @@ The Next.js app ships static assets under `_next/static/...`. Any CDN that respe
 - `pnpm build` exits 0
 - The dev server renders correctly in light, dark, bright, black, and system themes
 - `/feed.xml`, `/robots.txt`, `/sitemap.xml` all 200 if your variant declares those capabilities
+- With the production build running, `node apps/web/scripts/check-containment.mjs http://127.0.0.1:3000 --direct --expect-name "<your identity.name>" --expect-origin "<your meta.url origin>"` exits 0. Drop `--direct` when the URL goes through your reverse proxy.
 
 ## Updating
 

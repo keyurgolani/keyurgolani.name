@@ -14,7 +14,10 @@ export async function GET() {
       },
     });
   } catch (error) {
-    return new Response(`Could not build feed: ${error instanceof Error ? error.message : String(error)}`, {
+    // The message can quote the portfolio file or carry its path, so it goes
+    // to the server log and the public body stays fixed.
+    console.error('[feed] Could not build feed:', error);
+    return new Response('Feed unavailable', {
       status: 500,
       headers: { 'Content-Type': 'text/plain; charset=utf-8' },
     });

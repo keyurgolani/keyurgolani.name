@@ -1,4 +1,6 @@
 import Link from 'next/link';
+import { notFound } from 'next/navigation';
+import { authoringRoutesEnabled } from '~/lib/authoring';
 import { loadPortfolio } from '~/lib/portfolio';
 import { listManifests, isExperimental } from '~/lib/registry';
 import { ThemeToggle } from '~/components/theme-toggle';
@@ -7,6 +9,7 @@ import { VariantPicker, type VariantSummary } from './variant-picker';
 export const dynamic = 'force-dynamic';
 
 export default async function VariantsPage() {
+  if (!authoringRoutesEnabled()) notFound();
   let activeSlug = 'editorial';
   let activeColorScheme: string | null = null;
   let activeTypography: string | null = null;

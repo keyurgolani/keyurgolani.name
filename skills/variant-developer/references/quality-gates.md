@@ -14,10 +14,10 @@
 Smoke test, ~30 seconds. Catches "the page renders as plain HTML".
 
 ```bash
-pnpm dev   # or: docker compose up -d --build
+pnpm dev
 ```
 
-Open `http://localhost:3000/preview/<slug>` (or `:3050` on Docker setups).
+Open `http://localhost:3000/preview/<slug>`. The preview and `/variants` routes only exist under `pnpm dev`; production builds, the Docker image included, answer 404 for them.
 
 **You must see:**
 - Background / paper color matching your scheme (not white-on-white default).
@@ -32,7 +32,7 @@ The contrast gate. Run before Phase 3 sign-off.
 
 ### Recipe
 
-For each combination, capture a hero screenshot and skim the page top-to-bottom. The combinations:
+With `pnpm dev` running, open `/preview/<slug>` for each combination, capture a hero screenshot, and skim the page top-to-bottom. The combinations:
 
 | # | Theme | Scheme | Typography | What to verify |
 |---|---|---|---|---|
@@ -156,7 +156,7 @@ Run this even if `capabilities.print = false`. A bad print can be confidently di
 
 ### Recipe (Chrome — most reliable)
 
-In the running app on `/preview/<slug>`:
+With `pnpm dev` running, open `/preview/<slug>`, then:
 
 ```
 Chrome menu → Print  (or Ctrl/Cmd + P)
@@ -195,7 +195,7 @@ Don't ship a broken print stylesheet. Set `capabilities.print = false` in the ma
 
 ## Gate E — `/variants` listing entry
 
-Verify your variant appears correctly on the gallery page. Open `http://localhost:3000/variants` and confirm:
+Verify your variant appears correctly on the gallery page. With `pnpm dev` running, open `http://localhost:3000/variants` and confirm:
 
 - [ ] Your variant card is present alongside others.
 - [ ] Name, version, description match `manifest`.
@@ -213,7 +213,7 @@ If the screenshot thumbnail is broken, run the screenshot capture recipe (Gate F
 
 ### Recipe (manual)
 
-For each manifest entry, navigate to the right config and capture:
+With `pnpm dev` running, navigate to the right config for each manifest entry and capture:
 
 ```
 http://localhost:3000/preview/<slug>?scheme=<id>&typography=<id>

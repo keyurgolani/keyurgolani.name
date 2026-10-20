@@ -9,6 +9,7 @@ export default async function HomePage() {
   try {
     loaded = await loadPortfolio();
   } catch (error) {
+    console.error('[home] Portfolio could not be loaded:', error);
     return (
       <ErrorPage
         title="Portfolio could not be loaded"
@@ -22,6 +23,7 @@ export default async function HomePage() {
   const mod = await loadVariantModule(manifest.slug);
 
   if (!mod) {
+    console.error(`[home] Variant "${manifest.slug}" failed to load.`);
     return (
       <ErrorPage
         title={`Variant "${manifest.slug}" failed to load`}

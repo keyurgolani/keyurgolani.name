@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation';
+import { authoringRoutesEnabled } from '~/lib/authoring';
 import { loadPortfolio } from '~/lib/portfolio';
 import { findManifest, loadVariantModule } from '~/lib/registry';
 import { ErrorPage } from '~/components/error-page';
@@ -12,12 +13,14 @@ interface PreviewPageProps {
 }
 
 export async function generateMetadata({ params }: PreviewPageProps) {
+  if (!authoringRoutesEnabled()) notFound();
   const { slug } = await params;
   const m = findManifest(slug);
   return m ? { title: `Preview · ${m.name}` } : { title: 'Preview · not found' };
 }
 
 export default async function PreviewPage({ params, searchParams }: PreviewPageProps) {
+  if (!authoringRoutesEnabled()) notFound();
   const { slug } = await params;
   const { scheme, typography } = await searchParams;
 

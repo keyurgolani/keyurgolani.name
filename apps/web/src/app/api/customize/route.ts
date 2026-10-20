@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { parseDocument } from 'yaml';
 import { detectFormat } from '@portfolio/schema';
+import { authoringRoutesEnabled } from '~/lib/authoring';
 import { loadPortfolioRaw, savePortfolioRaw } from '~/lib/portfolio';
 import { findManifest } from '~/lib/registry';
 
@@ -11,6 +12,7 @@ export const dynamic = 'force-dynamic';
  * Each field is optional. Pass `null` to clear.
  */
 export async function PUT(request: Request) {
+  if (!authoringRoutesEnabled()) return new Response(null, { status: 404 });
   const body = await request.json().catch(() => ({}));
   const colorScheme: string | null | undefined =
     'colorScheme' in body ? body.colorScheme : undefined;

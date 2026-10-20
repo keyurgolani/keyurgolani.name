@@ -12,8 +12,9 @@ services:
       PORTFOLIO_PATH: /data/portfolio.yml
       NODE_ENV: production
     volumes:
-      # Bind-mount the user's portfolio file. Read-write so /admin can save.
-      - ./portfolio.yml:/data/portfolio.yml:rw
+      # Bind-mount the user's portfolio file read-only. Production edits happen
+      # on the host file; see docs/deployment.md.
+      - ./portfolio.yml:/data/portfolio.yml:ro
       # Optional: bind-mount user assets into the public dir.
       - ./assets:/app/apps/web/public/assets:ro
     healthcheck:
