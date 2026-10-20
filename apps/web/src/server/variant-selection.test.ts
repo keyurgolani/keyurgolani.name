@@ -1,11 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import type { VariantManifest } from '@portfolio/kit';
-import { sampleSelection, type VariantSelection } from './variant-selection';
+import type { AppearanceSelection } from '@portfolio/schema';
+import { sampleSelection, siteSelection } from './variant-selection';
 
-// /sample's query (#1, item 17): it starts from the site's appearance and
-// takes only what the query names instead, and only registered values reach
-// the variant.
+// What `/` renders, and /sample's query (#1, item 17): it starts from the
+// site's appearance and takes only what the query names instead, and only
+// registered values reach the variant. The site here picks no variant
+// defaults, so a page that dropped its scheme or preset would fail.
 
 const MANIFESTS: Record<string, VariantManifest> = {
   editorial: {
@@ -20,20 +22,38 @@ const MANIFESTS: Record<string, VariantManifest> = {
 const find = (slug: string): VariantManifest | null =>
   (MANIFESTS as Record<string, VariantManifest | undefined>)[slug] ?? null;
 
-/** The sample site's own appearance: Editorial in noir and modernist. */
-const SITE: VariantSelection = {
+/** The site's appearance: Editorial in noir and modernist, neither its default. */
+const APPEARANCE: AppearanceSelection = {
   variant: 'editorial',
+  designLanguage: 'platform-neutral',
   colorScheme: 'noir',
   typography: 'modernist',
+  displayMode: 'dark',
 };
+const SITE = { variant: 'editorial', colorScheme: 'noir', typography: 'modernist' };
 
-const select = (query: Record<string, string | string[] | undefined>, site = SITE) =>
-  sampleSelection(query, find, site);
+const select = (query: Record<string, string | string[] | undefined>, appearance = APPEARANCE) =>
+  sampleSelection(query, find, appearance);
+
+test("`/` renders the site's variant, color scheme, and typography preset", () => {
+  assert.deepEqual(siteSelection(APPEARANCE), SITE);
+  assert.deepEqual(
+    siteSelection({
+      ...APPEARANCE,
+      variant: 'plain',
+      colorScheme: 'nebula',
+      typography: 'geometric',
+    }),
+    { variant: 'plain', colorScheme: 'nebula', typography: 'geometric' },
+  );
+});
 
 test("without a query it renders the site's appearance", () => {
   assert.deepEqual(select({}), SITE);
-  // An axis the site leaves to the variant stays the variant's default.
-  assert.deepEqual(select({}, { variant: 'editorial' }), { variant: 'editorial' });
+  // An id the variant doesn't declare stays the variant's default.
+  assert.deepEqual(select({}, { ...APPEARANCE, colorScheme: 'nebula', typography: 'geometric' }), {
+    variant: 'editorial',
+  });
 });
 
 test('the query overrides only what it names', () => {

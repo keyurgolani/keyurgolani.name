@@ -69,7 +69,8 @@ test(
   "/sample overrides only what its query names, and keeps the sample site's appearance",
   { annotation: [{ type: 'route', description: '/sample' }, DEMO] },
   async ({ page }) => {
-    // site.example.yml: Editorial in warm and classic.
+    // site.example.yml: Editorial in warm and classic, its defaults, so a
+    // site that picks neither is variant-selection.test.ts's to check.
     await page.goto('/sample');
     const root = page.locator('[data-variant]').first();
     await expect(root).toHaveAttribute('data-variant', 'editorial');

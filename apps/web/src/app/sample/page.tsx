@@ -16,11 +16,7 @@ interface SamplePageProps {
 // and each axis the query doesn't name is the sample site's own.
 export default servedPage('/sample', async function SamplePage({ searchParams }: SamplePageProps) {
   const { appearance } = (await getPublicView()).site;
-  const selection = sampleSelection(await searchParams, findManifest, {
-    variant: appearance.variant,
-    colorScheme: appearance.colorScheme,
-    typography: appearance.typography,
-  });
+  const selection = sampleSelection(await searchParams, findManifest, appearance);
   if (!selection) notFound();
   return renderVariant(selection);
 });
