@@ -16,11 +16,15 @@ export async function register(): Promise<void> {
 
 /**
  * Logs each error Next catches while handling a request (#1, item 21): its
- * digest, the request ID proxy.ts set, and the route pattern. Never the
- * error, the URL, or another header, which can carry a path or a secret.
+ * digest, the request ID proxy.ts set, and the route pattern, from Next's
+ * route path (`/sample/page` is `/sample`). Never the error, the URL, or
+ * another header, which can carry a path or a secret.
  */
 export const onRequestError: Instrumentation.onRequestError = async (error, request, context) => {
-  const { log } = await import('./server/log');
+  const [{ log }, { patternOfRoutePath }] = await Promise.all([
+    import('./server/log'),
+    import('./server/routes'),
+  ]);
   const digest =
     typeof error === 'object' && error !== null && 'digest' in error ? error.digest : undefined;
   const requestId = request.headers['x-request-id'];
@@ -29,6 +33,6 @@ export const onRequestError: Instrumentation.onRequestError = async (error, requ
     event: 'request.error',
     digest: typeof digest === 'string' ? digest : undefined,
     requestId: typeof requestId === 'string' ? requestId : undefined,
-    route: context.routePath,
+    route: patternOfRoutePath(context.routePath),
   });
 };

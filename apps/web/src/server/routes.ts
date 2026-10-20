@@ -41,6 +41,21 @@ const ROUTES = [
 export type RoutePattern = (typeof ROUTES)[number]['pattern'];
 
 /**
+ * The URL pattern for a route path Next reports, such as onRequestError's
+ * `routePath`: `/page`, `/sample/page`, or `/api/ready/route` (route handlers
+ * sometimes report `/api/ready` already). Route groups and parallel-route
+ * slots drop out, as they do from the URL.
+ */
+export function patternOfRoutePath(routePath: string): string {
+  const segments = routePath
+    .split('/')
+    .filter((segment) => segment !== '' && !/^\(.*\)$/.test(segment) && !segment.startsWith('@'));
+  const last = segments.at(-1);
+  if (last === 'page' || last === 'route') segments.pop();
+  return `/${segments.join('/')}`;
+}
+
+/**
  * Routes #1 removed in every profile. proxy.ts answers each with 404. Each
  * matches exactly: `/variants`, never `/variants/*`, where the screenshots
  * in public/variants/ are served.
