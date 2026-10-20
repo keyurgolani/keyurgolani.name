@@ -1,0 +1,47 @@
+# ────────────────────────────────────────────────────────────────────────────
+# Site configuration
+#
+# Copy this file to config/site.yml, next to config/portfolio.yml, and edit it
+# there
+# How the portfolio is presented and which product behavior is on. No
+# deployment setting (profile, origin, Studio, preview origin, proxies) and no
+# secret: those come from the environment (docs/deployment.md)
+# Check both documents with `pnpm config:validate config`
+# ────────────────────────────────────────────────────────────────────────────
+
+schemaVersion: 2
+
+# The published appearance. Each id must be one this build registers: the
+# variants are editorial and kinetic-cosmos, and the color scheme and
+# typography ids are the selected variant's own, from its manifest
+# (packages/variant-*/src/manifest.ts)
+appearance:
+  variant: editorial
+  designLanguage: platform-neutral
+  colorScheme: warm
+  typography: classic
+  # system, light, or dark. This build doesn't render high-contrast yet
+  displayMode: system
+
+# Whether visitors may change each appearance field for themselves:
+# locked or selectable, all five required
+visitorControls:
+  variant: locked
+  designLanguage: locked
+  colorScheme: selectable
+  typography: locked
+  displayMode: selectable
+
+# respect-os follows the visitor's reduced-motion setting, and reduce always
+# reduces motion. Nothing forces motion past a visitor's reduce setting
+motionPolicy: respect-os
+
+features:
+  # Serve /feed.xml
+  feed: true
+  productAttribution: false
+
+# Hide a section without deleting it, by its id in portfolio.yml:
+# sections:
+#   patents:
+#     hidden: true
