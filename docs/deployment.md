@@ -44,7 +44,9 @@ The server reads `config/portfolio.yml` once, at startup. After you edit it, res
 docker compose restart web
 ```
 
-If the edit is invalid, the container stops at startup and its log says where. To add a variant package or pick up a new release, rebuild:
+If the edit is invalid, the server logs its `config.fatal` lines and exits 1. `docker-compose.yml` sets `restart: unless-stopped`, so Docker restarts the container in a loop, and each restart logs the same `config.fatal` block again until you fix the file. `docker compose logs web` shows where the problem is. Once the file is fixed, the next restart serves the site, or run `docker compose restart web` to start it right away.
+
+To add a variant package or pick up a new release, rebuild:
 
 ```sh
 docker compose up --build
