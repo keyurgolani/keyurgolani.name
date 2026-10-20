@@ -1,0 +1,75 @@
+import { spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { expect, test } from '@playwright/test';
+import { startApp } from '../harness/app-server.mjs';
+
+// #4's acceptance: the baseline example, migrated with the baseline's color
+// scheme and typography, renders / with the section ids and root attributes
+// recorded before any renderer changed. The old example is kept as a legacy
+// fixture. The host doesn't read site.yml yet, so its stand-in supplies the
+// appearance, and the written site.yml is checked to name the same one.
+
+const REPO_ROOT = fileURLToPath(new URL('../..', import.meta.url));
+const OLD_EXAMPLE = path.join(REPO_ROOT, 'packages/schema/src/__fixtures__/legacy/example.yml');
+const BASELINE = JSON.parse(
+  readFileSync(new URL('../fixtures/baseline/example-home.json', import.meta.url), 'utf8'),
+) as { root: Record<string, string>; sectionIds: string[] };
+const OFFLINE = pathToFileURL(path.join(REPO_ROOT, 'tests/harness/offline-fetch.mjs')).href;
+
+test('the old example, migrated, renders the baseline section ids and appearance', async () => {
+  const out = test.info().outputPath('migrated');
+  const tsx = fileURLToPath(import.meta.resolve('tsx/cli'));
+  const run = spawnSync(
+    process.execPath,
+    [
+      tsx,
+      path.join(REPO_ROOT, 'apps/web/scripts/config.mjs'),
+      'migrate',
+      OLD_EXAMPLE,
+      '--set',
+      'site.appearance.colorScheme=warm',
+      '--set',
+      'site.appearance.typography=classic',
+      // A production server refuses the bundled sample's name.
+      '--set',
+      'portfolio.identity.name=Rowan Baseline',
+      '--write',
+      '--out',
+      out,
+    ],
+    { cwd: REPO_ROOT, env: { ...process.env, INIT_CWD: REPO_ROOT }, encoding: 'utf8' },
+  );
+  expect(run.status, `${run.stdout}\n${run.stderr}`).toBe(0);
+
+  const site = readFileSync(path.join(out, 'site.yml'), 'utf8');
+  for (const [attribute, value] of [
+    ['variant', BASELINE.root['data-variant']],
+    ['colorScheme', BASELINE.root['data-color-scheme']],
+    ['typography', BASELINE.root['data-typography']],
+  ]) {
+    expect(site).toContain(`\n  ${attribute}: ${value}\n`);
+  }
+
+  // The example's GitHub section would fetch api.github.com; offline, it
+  // renders without the data, as it does when GitHub is down.
+  const app = await startApp({
+    portfolio: path.join(out, 'portfolio.yml'),
+    env: { NODE_OPTIONS: `--import=${OFFLINE}` },
+    logFile: test.info().outputPath('server.log'),
+  });
+  try {
+    const response = await fetch(`${app.origin}/`);
+    expect(response.status).toBe(200);
+    const html = await response.text();
+    const ids = [...html.matchAll(/<section\b[^>]*?\sid="([^"]+)"/g)].map(([, id]) => id);
+    expect(ids).toEqual(BASELINE.sectionIds);
+    const root = /<[a-z]+\b[^>]*\sdata-variant="[^"]*"[^>]*>/.exec(html)?.[0] ?? '';
+    for (const [name, value] of Object.entries(BASELINE.root)) {
+      expect(root).toContain(`${name}="${value}"`);
+    }
+  } finally {
+    await app.stop();
+  }
+});
