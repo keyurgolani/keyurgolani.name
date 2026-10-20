@@ -3,16 +3,20 @@
  * check-containment.mjs: probe a running build and confirm the interim
  * containment holds (issue #21).
  *
- *   node apps/web/scripts/check-containment.mjs <base-url> [--expect-name <name>] [--direct] [--no-put]
+ *   node apps/web/scripts/check-containment.mjs <base-url> [--expect-name <name>]
+ *     [--expect-origin <origin>] [--direct] [--no-put]
  *
- *   <base-url>     Origin to probe, for example http://127.0.0.1:3100.
- *   --expect-name  Require the home page to contain this identity name. This
- *                  catches a wrong mount path that silently serves the bundled
- *                  example persona or the error page.
- *   --direct       The URL is the app itself with no proxy in front, so a
- *                  denial must be the app's own 404 and /_next/image must be
- *                  the app's own 400.
- *   --no-put       Skip the three PUT probes.
+ *   <base-url>       Origin to probe, for example http://127.0.0.1:3100. No path.
+ *   --expect-name    Require the home page to contain this identity name. This
+ *                    catches a wrong mount path that silently serves the bundled
+ *                    example persona or the error page.
+ *   --expect-origin  Require /robots.txt and /sitemap.xml to reference this
+ *                    origin and no reserved example host (example.com, .net,
+ *                    .org, or a subdomain of one).
+ *   --direct         The URL is the app itself with no proxy in front, so a
+ *                    denial must be the app's own 404 and /_next/image must be
+ *                    the app's own 400.
+ *   --no-put         Skip the three PUT probes.
  *
  * Needs Node 22 or newer and nothing else. Each request uses redirect:
  * 'manual' and a 10 second timeout. Prints one line per probe and exits 1 if
@@ -23,35 +27,67 @@
  * neither a variant slug nor a customization field, so the baseline handlers
  * answer 400 before they write anything. Keep any new probe body invalid.
  *
- * Output never includes response bodies or header values, because a build
- * without the gate answers GET /api/portfolio with the raw portfolio source
- * and sets x-portfolio-path to its storage path.
+ * Output never includes response bodies, header values, or error text, only
+ * a classification of each answer. A build without the gate answers GET
+ * /api/portfolio with the raw portfolio source and sets x-portfolio-path to
+ * its storage path, and network errors can name internal addresses.
  */
 
 const TIMEOUT_MS = 10_000;
 const USER_AGENT = 'check-containment (keyurgolani.name #21)';
-const IMAGE_PATH = '/_next/image?url=https%3A%2F%2Fexample.com%2Fa.png&w=64&q=75';
+// .invalid never resolves (RFC 6761), so a build whose optimizer still
+// accepts every https host can't fetch anything real for this probe.
+const IMAGE_PATH = '/_next/image?url=https%3A%2F%2Fexample.invalid%2Fa.png&w=64&q=75';
 const IMAGE_DENIED = '"url" parameter is not allowed';
 // The optimizer's own errors once it has accepted the URL. A 403 or 404 that
 // carries this text came from fetching the upstream image, not from a proxy.
 const IMAGE_ACCEPTED = '"url" parameter is valid';
 const PATH_HEADER = 'x-portfolio-path';
+const EXAMPLE_HOST = /(?<![a-z0-9.-])(?:[a-z0-9-]+\.)*example\.(?:com|net|org)(?![a-z0-9-])/i;
 const USAGE =
-  'Usage: node check-containment.mjs <base-url> [--expect-name <name>] [--direct] [--no-put]';
+  'Usage: node check-containment.mjs <base-url> [--expect-name <name>] [--expect-origin <origin>] [--direct] [--no-put]';
 
 class UsageError extends Error {}
 
+/** Parse a bare http(s) origin: no credentials, path, query, or fragment. */
+function parseOrigin(value, what) {
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new UsageError(`${what} is not a URL: ${value}`);
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    throw new UsageError(`${what} must be http or https: ${value}`);
+  }
+  if (url.username || url.password || url.pathname !== '/' || url.search || url.hash) {
+    throw new UsageError(`${what} must be a bare origin such as https://host, with no path: ${value}`);
+  }
+  return url.origin;
+}
+
 function parseArgs(argv) {
-  const opts = { base: null, expectName: null, direct: false, put: true };
+  const opts = { base: null, expectName: null, expectOrigin: null, direct: false, put: true };
+  const takeValue = (flag, inline, i) => {
+    const value = inline ?? argv[i + 1];
+    if (!value) throw new UsageError(`${flag} needs a value`);
+    if (value.startsWith('--')) throw new UsageError(`${flag} value can't start with --: ${value}`);
+    return value;
+  };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
-    if (arg === '--direct') opts.direct = true;
-    else if (arg === '--no-put') opts.put = false;
-    else if (arg === '--expect-name' || arg.startsWith('--expect-name=')) {
-      const value = arg === '--expect-name' ? argv[++i] : arg.slice('--expect-name='.length);
-      if (!value) throw new UsageError('--expect-name needs a non-empty value');
-      opts.expectName = value;
-    } else if (arg === '-h' || arg === '--help') {
+    const [flag, inline] = arg.startsWith('--') && arg.includes('=')
+      ? [arg.slice(0, arg.indexOf('=')), arg.slice(arg.indexOf('=') + 1)]
+      : [arg, undefined];
+    if (flag === '--direct' && inline === undefined) opts.direct = true;
+    else if (flag === '--no-put' && inline === undefined) opts.put = false;
+    else if (flag === '--expect-name') {
+      opts.expectName = takeValue(flag, inline, i);
+      if (inline === undefined) i++;
+    } else if (flag === '--expect-origin') {
+      opts.expectOrigin = parseOrigin(takeValue(flag, inline, i), '--expect-origin');
+      if (inline === undefined) i++;
+    } else if (flag === '-h' || flag === '--help') {
       console.log(USAGE);
       process.exit(0);
     } else if (arg.startsWith('-')) throw new UsageError(`Unknown option: ${arg}`);
@@ -59,17 +95,31 @@ function parseArgs(argv) {
     else throw new UsageError(`Unexpected argument: ${arg}`);
   }
   if (!opts.base) throw new UsageError('Missing <base-url>');
-  let url;
-  try {
-    url = new URL(opts.base);
-  } catch {
-    throw new UsageError(`Not a URL: ${opts.base}`);
-  }
-  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-    throw new UsageError(`Base URL must be http or https: ${opts.base}`);
-  }
-  opts.origin = url.origin;
+  opts.origin = parseOrigin(opts.base, 'The base URL');
   return opts;
+}
+
+/** Name the kind of network failure without echoing its message. */
+function classifyError(err) {
+  if (err?.name === 'TimeoutError' || err?.name === 'AbortError') {
+    return `no answer in ${TIMEOUT_MS / 1000}s`;
+  }
+  const code = String(err?.cause?.code ?? err?.code ?? '');
+  if (code === 'ECONNREFUSED') return 'connection refused';
+  if (['ENOTFOUND', 'EAI_AGAIN', 'EAI_NONAME', 'EAI_NODATA', 'EAI_FAIL'].includes(code)) {
+    return 'name lookup failed';
+  }
+  if (['ECONNRESET', 'EPIPE', 'UND_ERR_SOCKET', 'UND_ERR_CLOSED'].includes(code)) {
+    return 'connection reset';
+  }
+  if (['ETIMEDOUT', 'UND_ERR_CONNECT_TIMEOUT', 'UND_ERR_HEADERS_TIMEOUT'].includes(code)) {
+    return 'connect timeout';
+  }
+  if (['EHOSTUNREACH', 'ENETUNREACH', 'EHOSTDOWN', 'ENETDOWN'].includes(code)) {
+    return 'host unreachable';
+  }
+  if (/CERT|TLS|SSL|SIGNATURE/i.test(code)) return 'TLS error';
+  return 'request failed';
 }
 
 async function send(origin, method, path, { body, contentType } = {}) {
@@ -85,8 +135,7 @@ async function send(origin, method, path, { body, contentType } = {}) {
     });
     return { status: res.status, headers: res.headers, body: await res.text() };
   } catch (err) {
-    if (err?.name === 'TimeoutError') return { error: `no answer in ${TIMEOUT_MS / 1000}s` };
-    return { error: `request failed (${err?.cause?.code ?? err?.message ?? err})` };
+    return { error: classifyError(err) };
   }
 }
 
@@ -106,14 +155,16 @@ function statusIn(res, allowed) {
 
 function imageVerdict(res, direct) {
   if (res.error) return { actual: res.error, pass: false };
-  if (res.status === 400 && res.body.includes(IMAGE_DENIED)) {
-    return { actual: `400 ${IMAGE_DENIED}`, pass: true };
-  }
-  // Next's optimizer messages are safe to echo. Other bodies are not shown.
-  const message = res.body.startsWith('"url" parameter') ? ` ${res.body.slice(0, 80)}` : '';
-  const proxyDenied =
-    !direct && (res.status === 403 || res.status === 404) && !res.body.includes(IMAGE_ACCEPTED);
-  return { actual: `${res.status}${message}`, pass: proxyDenied };
+  const denied = res.body.includes(IMAGE_DENIED);
+  const accepted = res.body.includes(IMAGE_ACCEPTED);
+  const actual = [
+    String(res.status),
+    denied ? 'marker present' : 'marker absent',
+    ...(accepted ? ['optimizer accepted the URL'] : []),
+  ].join(', ');
+  if (res.status === 400 && denied) return { actual, pass: true };
+  const proxyDenied = !direct && (res.status === 403 || res.status === 404) && !accepted;
+  return { actual, pass: proxyDenied };
 }
 
 async function main() {
@@ -152,7 +203,9 @@ async function main() {
     {
       method: 'GET',
       path: IMAGE_PATH,
-      expected: opts.direct ? `400 ${IMAGE_DENIED}` : `400 ${IMAGE_DENIED}, 403, or 404`,
+      expected: opts.direct
+        ? `400 with ${IMAGE_DENIED}`
+        : `400 with ${IMAGE_DENIED}, 403, or 404`,
       check: (res) => imageVerdict(res, opts.direct),
     },
     ok('/'),
@@ -162,12 +215,18 @@ async function main() {
     ok('/sitemap.xml'),
   ];
   const sitemapRow = { method: 'BODY', path: '/sitemap.xml', expected: 'no /variants or /preview/ URL' };
+  const originText = opts.expectOrigin
+    ? `references ${opts.expectOrigin}, no example.com/.net/.org host`
+    : '';
+  const originRows = opts.expectOrigin
+    ? ['/robots.txt', '/sitemap.xml'].map((path) => ({ method: 'ORIGIN', path, expected: originText }))
+    : [];
   const nameRow = opts.expectName
     ? { method: 'BODY', path: '/', expected: `contains "${opts.expectName}"` }
     : null;
   const headerRow = { method: 'HEADER', path: '(every response)', expected: `no ${PATH_HEADER}` };
 
-  const rows = [...probes, sitemapRow, ...(nameRow ? [nameRow] : []), headerRow];
+  const rows = [...probes, sitemapRow, ...originRows, ...(nameRow ? [nameRow] : []), headerRow];
   const width = (key) => Math.max(...rows.map((r) => r[key].length));
   const widths = { method: width('method'), path: width('path'), expected: width('expected') };
 
@@ -216,6 +275,21 @@ async function main() {
       sitemapRow,
       listed.length ? `lists ${listed.join(' and ')}` : 'none listed',
       listed.length ? 'FAIL' : 'PASS',
+    );
+  }
+
+  for (const row of originRows) {
+    const body = bodies.get(row.path);
+    if (body === undefined) {
+      report(row, 'no 200 body', 'FAIL');
+      continue;
+    }
+    const references = body.toLowerCase().includes(opts.expectOrigin.toLowerCase());
+    const example = EXAMPLE_HOST.test(body);
+    report(
+      row,
+      `${references ? 'references it' : 'no reference to it'}, ${example ? 'lists an example host' : 'no example host'}`,
+      references && !example ? 'PASS' : 'FAIL',
     );
   }
 
