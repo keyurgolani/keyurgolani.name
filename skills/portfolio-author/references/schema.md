@@ -18,7 +18,7 @@
 | `typography`       | string                                       | optional             | Pin a typography preset id.                                                                                                                                                               |
 | `links`            | `Link[]`                                     | default `[]`         | Always — at least the primary contact link.                                                                                                                                               |
 | `sections`         | `Section[]`                                  | default `[]`         | The body. Order matters; see curation.md.                                                                                                                                                 |
-| `meta`             | object                                       | optional             | SEO: `title`, `description`, `url`, `ogImage`.                                                                                                                                            |
+| `meta`             | object                                       | optional             | SEO: `title`, `description`, `url`, `ogImage`. The site ignores `url`: absolute URLs come from the deployment's `PORTFOLIO_ORIGIN`.                                                       |
 
 ## `identity`
 
@@ -338,8 +338,9 @@ Declarative GitHub config; data fetched server-side. Required: `username`.
 Booleans default to: `showContributionGraph: true`, `showPinnedRepos: true`,
 `showTotalStars: true`, `showLanguageBreakdown: false`,
 `showRecentlyActive: true`. Optional:
-`featuredRepos[]`, `excludeRepos[]`. Contribution graph needs `GITHUB_TOKEN`
-(GraphQL); REST fallback otherwise.
+`featuredRepos[]`, `excludeRepos[]`. Public pages fetch through unauthenticated
+REST, so the contribution graph (GraphQL, token) doesn't render and pinned repos
+are the top-starred ones.
 
 - **`showRecentlyActive`** — boolean, default `true`. Shows a list of repositories the user has most recently pushed to. Use when you want to surface live activity below the pinned highlights.
 - **`recentlyActiveLimit`** — integer 1–20, default `10`. How many repositories to include in the recently-active list. Use when the default 10 is too long for your variant's layout.

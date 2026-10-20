@@ -31,18 +31,17 @@ Run frequently during Wave 2/3, and once final at Phase 3 entry.
 - [ ] `themes` contains both `'light'` and `'dark'`.
 - [ ] DESIGN.md justifies the count of color schemes and typography presets.
 - [ ] Each declared color scheme has both a light and dark CSS block in styles.css. If you declare `'bright'` or `'black'`, those blocks exist too.
-- [ ] Each typography preset is testable on the live `/preview/<slug>?typography=<id>` URL.
+- [ ] Each typography preset renders on `/` when `config/portfolio.yml` sets `variant: <slug>` and `typography: <id>`.
 
 ## Visual gates (see `references/quality-gates.md`)
 
-- [ ] **Gate A — Visual sanity.** `/preview/<slug>` renders with your variant's tokens applied (paper color, font family, theme toggle visible). NOT plain user-agent default.
+- [ ] **Gate A — Visual sanity.** `/` renders, with `variant: <slug>` in `config/portfolio.yml`, with your variant's tokens applied (paper color, font family, theme toggle visible). NOT plain user-agent default.
 - [ ] **Gate B — Theme × scheme × typography matrix.** ≥ 9 screenshots captured across the meaningful combinations. No contrast bugs surface.
 - [ ] **Gate C — Reduced-motion programmatic verification.**
   - [ ] Canvas pixel-sample stable across 300ms with reduce-motion ON.
   - [ ] Floater transform string-equal across 400px scroll.
   - [ ] Typing animation textContent stable across 500ms.
 - [ ] **Gate D — Print preview.** Backgrounds white, ink black, decorative chrome hidden, gradient text solid, no theme bleed. Or `capabilities.print = false` and DESIGN.md says so.
-- [ ] **Gate E — `/variants` listing entry.** Card displays correctly with name, version, chips, screenshots, activate/preview buttons.
 - [ ] **Gate F — Screenshots.** PNGs exist on disk at every path declared in `manifest.screenshots`.
 - [ ] **Gate G — Fidelity comparison vs reference** (port-only). Every box in DESIGN.md's `## Fidelity targets` is checked or has a documented intentional drop.
 - [ ] **Gate H — Real-data testing.** Tested against the user's actual `portfolio.yml`, not just `portfolio.example.yml`. Long names, missing optional fields, non-ASCII characters all render correctly.
@@ -85,4 +84,4 @@ Once all gates pass:
 - **SVG branches/gradients invisible** — gradient IDs contain spaces. Slugify (`references/common-bugs.md` §3).
 - **Reduced-motion still animating** — the rAF loop or framer-motion hook isn't gated. CSS alone isn't enough (`references/common-bugs.md` §8).
 - **Print preview renders dark cards** — theme tokens leaking into print. Reset every `--kc-*` variable inside `@media print` (`references/common-bugs.md` §5).
-- **Visual regression** — your variant's CSS leaked into another variant on `/variants`. Verify every selector starts with `[data-variant='your-slug']`.
+- **Visual regression** — your variant's CSS leaked into another variant (every variant's stylesheet loads on every page). Verify every selector starts with `[data-variant='your-slug']`.

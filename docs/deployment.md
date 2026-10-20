@@ -1,41 +1,50 @@
 # Deployment
 
-Three options: Docker (default), Vercel/Netlify (zero-config), or Node anywhere.
+The server runs one deployment profile, chosen by `PORTFOLIO_PROFILE` at startup. This release serves `read-only`: the portfolio in a mounted directory, with no editing surface. Run it in Docker (recommended) or on Node.
+
+The browser editor, the variant gallery, the variant preview pages, and their write APIs are gone in every profile, `pnpm dev` included. Edit `config/portfolio.yml` instead: `pnpm dev` picks up each save, and a production server picks it up when it restarts. `pnpm dev` listens on every network interface; on a network you don't trust, run `pnpm dev --hostname 127.0.0.1`.
 
 ## Docker (recommended for self-hosting)
 
 The repo ships a `Dockerfile` and `docker-compose.yml`.
 
 ```sh
+cp portfolio.example.yml config/portfolio.yml   # then make it yours
+echo 'PORTFOLIO_ORIGIN=https://jane.name' > .env
 docker compose up --build
 ```
 
-By default this builds a production image, mounts your local `portfolio.yml` into the container read-only, and serves on port 3000. Edit `docker-compose.yml` to change the port or add a reverse proxy.
+This builds a production image, mounts `config/` into the container read-only, and serves on port 3000 under the `read-only` profile. Edit `docker-compose.yml` to change the port or add a reverse proxy.
 
 ### What the image does
 
 - Multi-stage build: deps → build → run.
 - Installs only production dependencies in the runtime stage.
-- Runs `pnpm build` to produce a Next.js standalone output.
-- Bind-mounts `portfolio.yml` read-only so you can edit it on the host without rebuilding.
+- Runs `pnpm build` to produce a Next.js standalone output. The build needs no deployment settings, and the image sets no `PORTFOLIO_*` defaults.
+- Reads the portfolio from `PORTFOLIO_SOURCE_DIR`, the mounted `config/`. It never renders the bundled example in production.
 
-### Production builds are read-only
+### Startup checks
 
-A production build (`next build`, which the image runs) returns 404 for `/admin`, `/variants`, `/preview/*`, `GET` and `PUT /api/portfolio`, `PUT /api/variant`, and `PUT /api/customize`. The browser editor and the variant gallery have no access control, so they only run under `pnpm dev`, for local editing. There is no setting that turns them back on in production. `pnpm dev` listens on every network interface; on a network you don't trust, run `pnpm dev --hostname 127.0.0.1`.
+Before it takes a request, the server validates its settings and the portfolio. A problem stops it with exit code 1 and one `config.fatal` JSON line per problem on stdout. Each line names the setting, never its value, and for the portfolio adds the file, the JSON pointer, and the line and column. The server refuses to start on:
 
-On a deployed site, edit `portfolio.yml` on the host and mount it `:ro`, as `docker-compose.yml` does.
+- a required setting that is missing or malformed;
+- in production, a setting that doesn't apply to the profile, such as `GITHUB_TOKEN` under `read-only` (`pnpm dev` warns and ignores it);
+- `PORTFOLIO_PATH` or `NEXT_PUBLIC_BASE_URL`, which `PORTFOLIO_SOURCE_DIR` and `PORTFOLIO_ORIGIN` replaced;
+- a source directory that is missing or unreadable, or that holds zero or several portfolio documents;
+- a portfolio that fails the schema or names an unregistered variant;
+- in production, an origin on a reserved example domain, or the bundled sample's `identity.name`.
 
-### Updating the portfolio without rebuilding
+`owner` and `demo` don't start yet. `owner` needs an authentication provider, and none ships; `demo` waits on its bundled-sample catalog.
 
-Every page, the 404 page, the feed, `robots.txt`, `sitemap.xml`, and the Open Graph image render from `portfolio.yml` when they're requested. Nothing is prerendered from it at build time, so an image built without your file (the CI image, for example) still serves your content, and a host edit shows up on the next request as long as the edit rewrites the file in place.
+### Updating the portfolio
 
-A single-file bind mount follows the file's inode, not its path. A tool that saves by writing a new file and renaming it over the old one gives the path a new inode, and the container keeps reading the old copy. `sed -i` works this way, and so do some editors. BusyBox `cp` (the `cp` on Alpine) has the same effect, because it replaces the file instead of writing into it. On a Linux Docker host (Docker Engine 29.9), the container kept serving the old content after `sed -i` and after a BusyBox `cp` until `docker restart`, while a GNU `cp` (for example `cp new.yml portfolio.yml`), which writes into the existing file, showed up on the next request without a restart. If a change doesn't show, restart the container:
+The server reads `config/portfolio.yml` once, at startup. After you edit it, restart the container:
 
 ```sh
 docker compose restart web
 ```
 
-To swap variants or schema versions, you do need to rebuild:
+If the edit is invalid, the container stops at startup and its log says where. To add a variant package or pick up a new release, rebuild:
 
 ```sh
 docker compose up --build
@@ -43,62 +52,51 @@ docker compose up --build
 
 ### Reverse proxy
 
-For production behind Nginx, Caddy, or Traefik, point your proxy at `http://localhost:3000` (or whatever port you mapped). The Next.js host respects `X-Forwarded-*` headers when behind a proxy.
+For production behind Nginx, Caddy, or Traefik, point your proxy at `http://localhost:3000` (or whatever port you mapped) and terminate TLS there. The app builds every absolute URL from `PORTFOLIO_ORIGIN`; it never reads `Host` or `X-Forwarded-*` for one.
 
-## Vercel
+## Serverless hosts
 
-Zero-config deploy:
-
-```sh
-pnpm dlx vercel
-```
-
-Vercel detects the Next.js app under `apps/web/` because of the workspace setup. You'll need to:
-
-1. Set the root directory to `apps/web/`.
-2. Set the build command to `cd ../.. && pnpm build`.
-3. Set the install command to `cd ../.. && pnpm install`.
-4. Add `GITHUB_TOKEN` as an environment variable (optional but recommended).
-
-Or use the included `vercel.json` if one is added later.
-
-## Netlify
-
-Similar to Vercel:
-
-1. Set the base directory to `apps/web/`.
-2. Build command: `cd ../.. && pnpm build`.
-3. Publish directory: `apps/web/.next/`.
-4. Add `GITHUB_TOKEN` as an environment variable.
+Vercel, Netlify, and similar hosts aren't supported yet. Nothing verifies that the server finds its source directory or stops on a bad setting there. Use Docker or plain Node.
 
 ## Plain Node
 
 ```sh
 pnpm install
 pnpm build
-NODE_ENV=production pnpm start
+PORTFOLIO_PROFILE=read-only PORTFOLIO_ORIGIN=https://jane.name \
+  PORTFOLIO_SOURCE_DIR=../../config pnpm start
 ```
 
-The host listens on `process.env.PORT` (defaults to 3000).
+`pnpm start` runs from `apps/web`, so the relative source directory is the repo's `config/`. The host listens on `process.env.PORT` (defaults to 3000).
 
-For a process manager (PM2, systemd, etc.), wrap `pnpm start`. The Next.js standalone output makes the container surface minimal — you don't need to ship `node_modules` to your runtime if you copy `apps/web/.next/standalone/` and the public assets.
+For a process manager (PM2, systemd, etc.), wrap `pnpm start` with the same environment. The Next.js standalone output makes the container surface minimal — you don't need to ship `node_modules` to your runtime if you copy `apps/web/.next/standalone/` and the public assets.
 
 ## Environment variables
 
-| Variable               | Purpose                                                                                            | Default                            |
-| ---------------------- | -------------------------------------------------------------------------------------------------- | ---------------------------------- |
-| `GITHUB_TOKEN`         | GitHub GraphQL token for richer GitHub data (5000 req/hr, contribution heatmap, full pinned items) | unset (REST fallback at 60 req/hr) |
-| `PORT`                 | Port the host binds to                                                                             | `3000`                             |
-| `NEXT_PUBLIC_BASE_URL` | Canonical URL for OG/SEO                                                                           | inferred from request              |
+The server reads these from its environment only. Every key also accepts `<KEY>_FILE`, the path of a file holding the value (such as a Docker secret); set one or the other. An empty value counts as unset. `.env.example` lists them all.
 
-`.env` files are gitignored. Use `.env.example` as a template.
+| Variable                       | Profiles         | Purpose                                                                           |
+| ------------------------------ | ---------------- | --------------------------------------------------------------------------------- |
+| `PORTFOLIO_PROFILE`            | all              | Required. Exactly `owner`, `demo`, or `read-only`.                                |
+| `PORTFOLIO_ORIGIN`             | all              | Required. The origin visitors use, such as `https://jane.name`: no path or slash. |
+| `PORTFOLIO_SOURCE_DIR`         | owner, read-only | Directory holding exactly one `portfolio.{yml,yaml,json,toml}`.                   |
+| `PORTFOLIO_TRUSTED_PROXY_HOPS` | all              | How many trusted proxies append to `X-Forwarded-For`. Whole number, default `0`.  |
+| `PORTFOLIO_PREVIEW_ORIGIN`     | owner, demo      | Optional preview origin, different from `PORTFOLIO_ORIGIN`.                       |
+| `PORTFOLIO_DATA_DIR`           | owner            | Reserved: the writable data directory.                                            |
+| `PORTFOLIO_AUTH_PASSWORD_HASH` | owner            | Reserved: the Studio password hash.                                               |
+| `GITHUB_TOKEN`                 | owner            | Reserved. Public GitHub sections use unauthenticated REST and never send a token. |
+| `PORT`                         | all              | Port the host binds to. Default `3000`.                                           |
+| `PORTFOLIO_PATH`               | none: refused    | Replaced by `PORTFOLIO_SOURCE_DIR`. Setting it stops the server.                  |
+| `NEXT_PUBLIC_BASE_URL`         | none: refused    | Replaced by `PORTFOLIO_ORIGIN`. Setting it stops the server.                      |
+
+A key outside its profile's list stops a production server; `pnpm dev` warns and ignores it. `.env` files are gitignored. `pnpm dev` reads `apps/web/.env.development`, which runs `read-only` from `config/`.
 
 ## Caching
 
 The host uses Next.js fetch revalidation:
 
 - **GitHub data:** 1 hour (`revalidate: 3600`). The `cache()` wrapper memoizes within a request.
-- **Static metadata:** built at build time.
+- **Metadata:** rendered per request (`robots.txt`, `sitemap.xml`, the Open Graph image, and the feed), from the portfolio loaded at startup and `PORTFOLIO_ORIGIN`.
 - **Variant CSS:** served as static assets.
 
 To force a refresh, redeploy or clear the Next.js cache:
@@ -115,11 +113,11 @@ The Next.js app ships static assets under `_next/static/...`. Any CDN that respe
 
 - `pnpm typecheck` exits 0
 - `pnpm check:skills` exits 0
-- `node skills/portfolio-author/scripts/validate.mjs portfolio.yml` exits 0
+- `node skills/portfolio-author/scripts/validate.mjs config/portfolio.yml` exits 0
 - `pnpm build` exits 0
 - The dev server renders correctly in light, dark, bright, black, and system themes
-- `/feed.xml`, `/robots.txt`, `/sitemap.xml` all 200 if your variant declares those capabilities
-- With the production build running, `node apps/web/scripts/check-containment.mjs http://127.0.0.1:3000 --direct --expect-name "<your identity.name>" --expect-origin "<your meta.url origin>"` exits 0. Drop `--direct` when the URL goes through your reverse proxy.
+- `/feed.xml`, `/robots.txt`, `/sitemap.xml` all 200, with URLs on your `PORTFOLIO_ORIGIN`
+- With the production build running, `node apps/web/scripts/check-containment.mjs http://127.0.0.1:3000 --direct --expect-name "<your identity.name>" --expect-origin "<your PORTFOLIO_ORIGIN>"` exits 0. Drop `--direct` when the URL goes through your reverse proxy.
 
 ## Updating
 

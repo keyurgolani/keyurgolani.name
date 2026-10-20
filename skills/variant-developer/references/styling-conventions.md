@@ -26,7 +26,7 @@ ALL of a variant's CSS lives under `[data-variant='your-slug']`. This is non-neg
 }
 ```
 
-Without the `data-variant` scope, your styles bleed into every other variant on `/variants`.
+Without the `data-variant` scope, your styles bleed into every other variant: every variant's stylesheet loads on every page.
 
 ### Color-scheme overrides
 
@@ -95,7 +95,7 @@ Examples (from editorial):
 }
 ```
 
-Avoid generic class names (`.title`, `.card`) — they collide with other variants on `/variants`.
+Avoid generic class names (`.title`, `.card`) — they collide with other variants' stylesheets, which load on the same page.
 
 ## No Tailwind
 

@@ -12,14 +12,14 @@ description: >
 license: MIT
 compatibility: >
   Designed for the keyurgolani/portfolio platform. Requires read access to packages/schema/
-  and write access to portfolio.yml at the repo root.
+  and write access to config/portfolio.yml.
 metadata:
   version: '1.0.0'
 ---
 
 ## 1. What this platform is
 
-The keyurgolani/portfolio platform is a self-hostable, YAML-driven portfolio site. A single `portfolio.yml` at the repo root drives everything the visitor sees. The Next.js host in `apps/web/` reads that YAML, validates it against a Zod schema, and renders it through one of many pluggable visual variants — packages under `packages/variant-*`.
+The keyurgolani/portfolio platform is a self-hostable, YAML-driven portfolio site. A single `config/portfolio.yml` drives everything the visitor sees. The Next.js host in `apps/web/` reads that YAML, validates it against a Zod schema, and renders it through one of many pluggable visual variants — packages under `packages/variant-*`.
 
 Picking a variant changes the look without touching content; editing the YAML changes content without touching code. The schema is intentionally narrow: roughly two dozen section kinds, each with a fixed shape, all discriminated by a `kind` field. The variant decides how to paint each kind; you decide which kinds to include and what goes in them.
 
@@ -27,8 +27,8 @@ Concrete pointers:
 
 - `packages/schema/src/` — the Zod source of truth. Every field, every section kind, every enum lives here. When the schema and any reference disagree, the schema wins.
 - `portfolio.example.yml` at the repo root — the canonical, fully populated example. Treat it as the master fixture for tone, ordering, and field shape. Open it before composing.
-- `portfolio.yml` at the repo root — the live file. This is what you write.
-- `apps/web/` — the Next.js host that loads `portfolio.yml`, runs validation at build time, and renders the active variant.
+- `config/portfolio.yml` — the live file (gitignored). This is what you write.
+- `apps/web/` — the Next.js host that loads `config/portfolio.yml`, validates it at startup, and renders the active variant.
 
 This skill teaches you about _this_ platform's schema, taxonomy, and quality bar. It does NOT teach you how to read PDFs, scrape LinkedIn, or interview a user — your harness already provides those capabilities. Reach for the references below when you need platform-specific knowledge; reach for your harness's tools for everything else.
 
@@ -63,7 +63,7 @@ Compose end-to-end before writing. Hold the file in scratch memory; don't sprink
 
 ### Validate
 
-After every write, run `node skills/portfolio-author/scripts/validate.mjs portfolio.yml`. Read every error, fix the field at the location it points to, re-run. Iterate until clean. Don't ship a portfolio that doesn't validate. Section 7 has the full loop.
+After every write, run `node skills/portfolio-author/scripts/validate.mjs config/portfolio.yml`. Read every error, fix the field at the location it points to, re-run. Iterate until clean. Don't ship a portfolio that doesn't validate. Section 7 has the full loop.
 
 ## 3. Working with the user's sources
 
@@ -111,8 +111,8 @@ Loading the wrong reference at the wrong time wastes context. Loading none and g
 
 Where the file lands and how:
 
-- **Write to `portfolio.yml` at the repo root.** Not in `apps/web/`, not in a subfolder. The host loads it from the root via `loadPortfolio()`.
-- **Backup before overwrite.** If `portfolio.yml` already exists, FIRST copy it to `portfolio.yml.bak.<unix-timestamp>` (e.g. `portfolio.yml.bak.1714752000`). THEN write the new file. Never silently overwrite. The user's previous draft must always be recoverable.
+- **Write to `config/portfolio.yml`.** Not in `apps/web/`, not at the repo root. `pnpm dev` and the Docker Compose example read it from `config/`, which must hold exactly one of `portfolio.yml`, `.yaml`, `.json`, or `.toml` (a `.bak.<timestamp>` copy doesn't count).
+- **Backup before overwrite.** If `config/portfolio.yml` already exists, FIRST copy it to `config/portfolio.yml.bak.<unix-timestamp>` (e.g. `config/portfolio.yml.bak.1714752000`). THEN write the new file. Never silently overwrite. The user's previous draft must always be recoverable.
 - **Preserve the top-of-file comment block from `portfolio.example.yml`.** That header documents the format for humans who open the file. Keep it intact at the top of every `portfolio.yml` you write. If you've changed format conventions, update the header; don't drop it.
 - **No interview transcript persisted.** The conversation that produced the file is not archived. Only the final `portfolio.yml` lands on disk. The user's words belong to the user.
 - **One file, one write per cycle.** Don't sprinkle partial writes; compose in scratch, then write once, then validate.
@@ -124,13 +124,13 @@ The output is the artifact. Everything else — the gathered notes, the curation
 
 The loop is non-negotiable. Run after every write.
 
-1. After every write to `portfolio.yml`, run `node skills/portfolio-author/scripts/validate.mjs portfolio.yml`.
+1. After every write to `config/portfolio.yml`, run `node skills/portfolio-author/scripts/validate.mjs config/portfolio.yml`.
 2. **Exit 0** — done with validation. Hand off (Section 9).
 3. **Exit 1** — read the errors. Each error has format `<file>:<line>:<col>  <zod-path>  <message>`. The line/col points to the YAML position; the zod-path tells you which schema field failed; the message tells you why. Fix the field at that location.
 4. Re-run validate.mjs.
 5. Repeat until clean.
 
-Don't ship a portfolio that doesn't validate. The validator is fast; running it ten times in a row is fine. Skipping it once produces a broken site at build time.
+Don't ship a portfolio that doesn't validate. The validator is fast; running it ten times in a row is fine. Skipping it once produces a server that refuses to start.
 
 Length-rule warnings from `quality-rules.md` are soft (validate still exits 0). Do not ignore them — they signal copy that's about to look bad in the variant. Address every warning before declaring done, or document why it's acceptable in your final report to the user.
 
@@ -138,7 +138,7 @@ Length-rule warnings from `quality-rules.md` are soft (validate still exits 0). 
 
 Environment-specific facts that bite agents who skip the references:
 
-- The schema's `kind` field is a Zod **discriminant** — misspelling it (`expereince`, `Project`) silently drops the section from rendering. Always validate. Spelling matters.
+- The schema's `kind` field is a Zod **discriminant** — misspelling it (`expereince`, `Project`) invalidates the whole file: the server won't start on it, and under `pnpm dev` the page shows an error until it's fixed. Always validate. Spelling matters.
 - `period.start` and `period.end` accept loose strings (`"Jan 2024"`, `"2024-01"`, `"present"`). Prefer human-readable (`"Jan 2024"`) over ISO when source is ambiguous — readers see this output, not parsers.
 - Avatar paths are relative to `apps/web/public/`. `avatar: { src: '/me.jpg' }` ⇒ a real file at `apps/web/public/me.jpg`. Resume PDFs follow the same rule (`/resume.pdf` ⇒ `apps/web/public/resume.pdf`). The platform doesn't fetch arbitrary URLs.
 - `links[].platform` is an enum with rendering implications (icon, label, ordering). Use values listed in `references/schema.md`; for unknown platforms, omit `platform` and use `label` only — the variant will fall back to a generic link presentation.
@@ -151,8 +151,8 @@ Environment-specific facts that bite agents who skip the references:
 When the file validates and the user is happy with the draft:
 
 - Tell them to run `pnpm dev` from the repo root and visit `http://localhost:3000` to see it rendered.
-- Mention `/variants` — they can preview their content in every available variant and pick a different look without touching the YAML.
+- Mention the `variant:` line — changing it switches the whole look without touching the content, and `pnpm dev` shows the change on the next page load.
 - **Don't run `pnpm dev` for them unless they ask.** Their dev environment is theirs to control. Suggest, don't auto-launch.
-- Point them at `portfolio.yml.bak.<timestamp>` if you wrote a backup, so they know how to roll back.
+- Point them at `config/portfolio.yml.bak.<timestamp>` if you wrote a backup, so they know how to roll back.
 
 That's the skill. Validate, hand off, stop.

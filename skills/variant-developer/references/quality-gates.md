@@ -14,10 +14,12 @@
 Smoke test, ~30 seconds. Catches "the page renders as plain HTML".
 
 ```bash
+cp portfolio.example.yml config/portfolio.yml   # if config/ is empty
+# set `variant: <slug>` in config/portfolio.yml
 pnpm dev
 ```
 
-Open `http://localhost:3000/preview/<slug>`. The preview and `/variants` routes only exist under `pnpm dev`; production builds, the Docker image included, answer 404 for them.
+Open `http://localhost:3000/`. `pnpm dev` picks up each save to `config/portfolio.yml` on the next page load.
 
 **You must see:**
 
@@ -33,7 +35,7 @@ The contrast gate. Run before Phase 3 sign-off.
 
 ### Recipe
 
-With `pnpm dev` running, open `/preview/<slug>` for each combination, capture a hero screenshot, and skim the page top-to-bottom. The combinations:
+For each combination, capture a hero screenshot and skim the page top-to-bottom. The combinations:
 
 | #   | Theme  | Scheme         | Typography         | What to verify                            |
 | --- | ------ | -------------- | ------------------ | ----------------------------------------- |
@@ -57,11 +59,16 @@ localStorage.setItem('portfolio:theme', 'bright');
 location.reload();
 ```
 
-### Switch scheme/typography via URL
+### Switch scheme/typography in the file
 
+```yaml
+# config/portfolio.yml
+variant: <slug>
+colorScheme: <id>
+typography: <id>
 ```
-/preview/<slug>?scheme=<id>&typography=<id>
-```
+
+Save and reload.
 
 ### What "looks correct" means
 
@@ -157,7 +164,7 @@ Run this even if `capabilities.print = false`. A bad print can be confidently di
 
 ### Recipe (Chrome — most reliable)
 
-With `pnpm dev` running, open `/preview/<slug>`, then:
+In the running app on `/`, with your variant selected in `config/portfolio.yml`:
 
 ```
 Chrome menu → Print  (or Ctrl/Cmd + P)
@@ -197,19 +204,9 @@ Then scroll through the page. You see exactly what print preview would render. R
 
 Don't ship a broken print stylesheet. Set `capabilities.print = false` in the manifest and write `## Print` in DESIGN.md as `Not supported.` Print is opt-in. Ship without it cleanly is fine; ship with broken print is not.
 
-## Gate E — `/variants` listing entry
+## Gate E — retired
 
-Verify your variant appears correctly on the gallery page. With `pnpm dev` running, open `http://localhost:3000/variants` and confirm:
-
-- [ ] Your variant card is present alongside others.
-- [ ] Name, version, description match `manifest`.
-- [ ] Aesthetic / motion / typography / density chips render.
-- [ ] "N schemes, N typesets" count is correct.
-- [ ] Best-for tags display if you set them.
-- [ ] Activate / Preview buttons link correctly.
-- [ ] Screenshot thumbnail renders (requires `manifest.screenshots` populated AND PNGs present at the declared paths).
-
-If the screenshot thumbnail is broken, run the screenshot capture recipe (Gate F).
+Gate E checked the variant's card in the variant gallery, which the platform no longer serves. The letters that follow keep their names.
 
 ## Gate F — Screenshot capture
 
@@ -217,10 +214,10 @@ If the screenshot thumbnail is broken, run the screenshot capture recipe (Gate F
 
 ### Recipe (manual)
 
-With `pnpm dev` running, navigate to the right config for each manifest entry and capture:
+For each manifest entry, set `variant: <slug>`, `colorScheme: <id>`, and `typography: <id>` in `config/portfolio.yml`, then capture:
 
 ```
-http://localhost:3000/preview/<slug>?scheme=<id>&typography=<id>
+http://localhost:3000/
 ```
 
 with the desired theme set via `localStorage.setItem('portfolio:theme', '...')` before reload.
@@ -229,7 +226,7 @@ Wait for first paint + 1.2s for animations to settle (typing cursor, dispersal e
 
 ### Recipe (automated, optional)
 
-The visual companion's `--matrix` mode runs `preview-matrix.mjs` which captures across `theme × scheme × typography`. Requires Playwright. See `references/visual-companion.md`.
+The visual companion's `--matrix` mode runs `preview-matrix.mjs`, which captures every theme for the scheme and typography `config/portfolio.yml` selects. Requires Playwright. See `references/visual-companion.md`.
 
 ### Image quality
 
@@ -285,7 +282,7 @@ Resize to 375×667 (iPhone SE) and 430×932 (iPhone Pro Max) and confirm:
 You've passed Phase 3 when:
 
 - All scripted gates exit clean (`audit.mjs`, `kit-dedup.mjs`, `pnpm typecheck`, `pnpm lint`, `pnpm build`).
-- Gates A–I all pass with screenshots/notes captured for the PR description.
+- Gates A–I (no E) all pass with screenshots/notes captured for the PR description.
 - DESIGN.md and the variant package are on the same branch.
 - The user has visually approved at least one combination.
 

@@ -13,7 +13,7 @@
 
 ### What it looks like
 
-- Variant compiles, registry lists it, `/preview/<slug>` returns 200.
+- Variant compiles, registry lists it, `/` returns 200 with `variant: <slug>` selected.
 - Page renders as black-and-white user-agent default — no colors, no glassmorphism, no fonts.
 - The `data-variant='<slug>'` attribute is on the root, but no CSS rule matches it.
 

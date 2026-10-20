@@ -22,7 +22,7 @@ paraphrases it; if you find drift, packages/kit is authoritative.
 
 #### `name` (required, string)
 
-- Human-readable. Shown in the `/variants` picker.
+- Human-readable. Shown wherever the platform lists variants, and in startup errors.
 - Example: `'Editorial'`, `'Obsidian Luxury'`.
 
 #### `tagline` (optional, string)
@@ -47,7 +47,7 @@ paraphrases it; if you find drift, packages/kit is authoritative.
 
 #### `homepage` (optional, string)
 
-- Marketing/preview URL. Used by tooling and the picker's "View" link.
+- Marketing/preview URL. Used by tooling.
 
 ### Discovery / filtering fields
 

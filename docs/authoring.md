@@ -129,7 +129,7 @@ Concrete length numbers and tone guidance for user-facing copy live at [`skills/
 ## Validation
 
 ```sh
-node skills/portfolio-author/scripts/validate.mjs portfolio.yml
+node skills/portfolio-author/scripts/validate.mjs config/portfolio.yml
 ```
 
 Exit 0 = valid. Exit 1 = errors with `<file>:<line>:<col>  <zod-path>  <message>` per error.

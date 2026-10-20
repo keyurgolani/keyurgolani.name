@@ -194,7 +194,7 @@ skills/variant-developer/scripts/visual-companion/start.sh \
   --mode preview --variant <slug>
 ```
 
-This runs `pnpm --filter @portfolio/web dev`. Once the dev server is up, tell the user to visit `http://localhost:3000/preview/<slug>`.
+This runs `pnpm --filter @portfolio/web dev`. The page shows whatever `config/portfolio.yml` selects, so first copy `portfolio.example.yml` there if `config/` is empty and set `variant: <slug>`. Once the dev server is up, tell the user to visit `http://localhost:3000/`.
 
 ### Matrix screenshots (optional)
 
@@ -203,7 +203,7 @@ skills/variant-developer/scripts/visual-companion/start.sh \
   --mode preview --variant <slug> --matrix
 ```
 
-This launches the dev server and, after it responds, runs `preview-matrix.mjs` to capture screenshots across `(theme × scheme × typography)` into `<repo-root>/.variant-preview/<slug>/`.
+This launches the dev server and, after it responds, runs `preview-matrix.mjs` to capture every theme for the scheme and typography `config/portfolio.yml` selects, into `<repo-root>/.variant-preview/<slug>/`. It stops if the page isn't rendering `<slug>`. Change `colorScheme:` or `typography:` in the file and run it again for other combinations.
 
 **Requires Playwright.** If Playwright isn't installed, the script prints the install commands and exits gracefully — the rest of preview-mode still works.
 

@@ -1,7 +1,7 @@
 # ────────────────────────────────────────────────────────────────────────────
 # Portfolio configuration
 #
-# Edit this file directly, or at http://localhost:3000/admin while `pnpm dev` runs
+# Copy this file to config/portfolio.yml and edit it there
 # All section kinds documented at packages/schema/src/kinds/index.ts
 # ────────────────────────────────────────────────────────────────────────────
 
