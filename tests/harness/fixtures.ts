@@ -32,6 +32,8 @@ export interface AppOptions {
   env?: Record<string, string>;
   /** Portfolio document copied into `sourceDir`; null for none. */
   portfolio?: string | null;
+  /** Site document copied beside it; null for none. Defaults to tests/fixtures/site.yml. */
+  site?: string | null;
   /** The source directory's name (default `config`). */
   sourceName?: string;
   /**

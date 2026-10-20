@@ -66,6 +66,26 @@ test(
 );
 
 test(
+  "/sample overrides only what its query names, and keeps the sample site's appearance",
+  { annotation: [{ type: 'route', description: '/sample' }, DEMO] },
+  async ({ page }) => {
+    // site.example.yml: Editorial in warm and classic.
+    await page.goto('/sample');
+    const root = page.locator('[data-variant]').first();
+    await expect(root).toHaveAttribute('data-variant', 'editorial');
+    await expect(root).toHaveAttribute('data-color-scheme', 'warm');
+    await expect(root).toHaveAttribute('data-typography', 'classic');
+    await page.goto('/sample?scheme=noir');
+    await expect(root).toHaveAttribute('data-variant', 'editorial');
+    await expect(root).toHaveAttribute('data-color-scheme', 'noir');
+    await expect(root).toHaveAttribute('data-typography', 'classic');
+    await page.goto('/sample?typography=modernist');
+    await expect(root).toHaveAttribute('data-color-scheme', 'warm');
+    await expect(root).toHaveAttribute('data-typography', 'modernist');
+  },
+);
+
+test(
   'an unknown variant is a 404',
   { annotation: [{ type: 'route', description: '/sample' }, DEMO] },
   async ({ request }) => {

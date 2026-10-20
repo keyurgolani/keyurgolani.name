@@ -54,11 +54,13 @@ test('a line starts with the time and keeps only the fields every event may carr
 test('config.fatal adds where the finding is and its fixed text', () => {
   const fields = {
     file: 'portfolio.yml',
-    path: '/identity/name',
+    document: 'portfolio',
+    path: '/sections/2/title',
     line: 3,
     column: 9,
-    issueCode: 'invalid_type',
-    message: '/identity/name is required.',
+    stableId: 'essays',
+    message: '/sections/2/title should be string, not number.',
+    remediation: 'Change the value at this pointer to what the schema expects.',
   };
   const fatal = parse(logLine({ level: 'fatal', event: 'config.fatal', key: 'K', ...fields }, NOW));
   assert.deepEqual(fatal, {

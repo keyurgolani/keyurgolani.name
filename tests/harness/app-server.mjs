@@ -31,6 +31,7 @@ const WEB = path.join(REPO_ROOT, 'apps', 'web');
 const STANDALONE = path.join(WEB, '.next', 'standalone');
 const SERVER_JS = path.join(STANDALONE, 'apps', 'web', 'server.js');
 export const DEFAULT_PORTFOLIO = path.join(REPO_ROOT, 'tests', 'fixtures', 'portfolio.yml');
+export const DEFAULT_SITE = path.join(REPO_ROOT, 'tests', 'fixtures', 'site.yml');
 
 function requireBuild() {
   if (!existsSync(SERVER_JS)) {
@@ -58,6 +59,8 @@ function baseEnv(home, port) {
  * @param {Record<string, string>} [options.env] extra server environment
  * @param {string | null} [options.portfolio] document copied into the source directory
  *   (as portfolio.<its extension>), or null for none
+ * @param {string | null} [options.site] site document copied beside it (as
+ *   site.<its extension>), or null for none
  * @param {string} [options.sourceName] the source directory's name (default config), so
  *   a test can seed a canary in its path
  * @param {Record<string, { path: string, text: string }>} [options.envFiles] files to
@@ -68,6 +71,7 @@ function baseEnv(home, port) {
 export async function startApp({
   env = {},
   portfolio = DEFAULT_PORTFOLIO,
+  site = DEFAULT_SITE,
   sourceName = 'config',
   envFiles = {},
   logFile,
@@ -84,6 +88,7 @@ export async function startApp({
   cpSync(path.join(WEB, 'public'), path.join(appDir, 'apps', 'web', 'public'), { recursive: true });
   mkdirSync(sourceDir);
   if (portfolio) cpSync(portfolio, path.join(sourceDir, `portfolio${path.extname(portfolio)}`));
+  if (site) cpSync(site, path.join(sourceDir, `site${path.extname(site)}`));
   const fileEnv = {};
   for (const [key, file] of Object.entries(envFiles)) {
     const target = path.join(root, file.path);

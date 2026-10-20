@@ -1,31 +1,25 @@
 import 'server-only';
-import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import {
-  detectFormat,
-  DOCUMENT_MAX_BYTES,
-  MIGRATE_COMMAND,
-  parsePortfolio,
-  type ContentExtension,
-  type DocumentProblem,
-  type DocumentWarning,
-} from '@portfolio/schema';
+import { parseSource, type AppearanceCatalog, type ContentExtension } from '@portfolio/schema';
+import { findPair, pairFileNames, readPair, type PairFiles } from '@portfolio/schema/node';
 import type { CatalogReader, LiveRevision } from './catalog-port';
 import type { ConfigIssue, RuntimeMode } from './config';
-import { deepFreeze } from './freeze';
+import { frozenUnit, pairDigest, recordIssue } from './pair-records';
 
-// The documents adapter: the CatalogReader for a mounted PORTFOLIO_SOURCE_DIR.
-// It reads the one portfolio document once at startup, validates it, and
-// freezes the result. Under `next dev` only, it re-validates whenever a
-// document changes on disk.
+// The documents adapter: the CatalogReader for a mounted PORTFOLIO_SOURCE_DIR
+// (#4, items 4 and 5). It reads the pair, one portfolio.{yml,yaml,json} and
+// one site.{yml,yaml,json}, once at startup through loadPair's steps, and
+// freezes the validated pair. Each record the check finds is an issue:
+// blocking ones stop startup, and warnings are logged. Under `next dev` only,
+// it re-validates whenever a document changes on disk, and renders the
+// bundled examples when the directory holds neither document.
 
 /** identity.name of each sample the image ships. A real deployment can't use one. */
 export const BUNDLED_SAMPLE_NAMES: readonly string[] = ['Anamika Devi'];
 
-const DOCUMENT = /^portfolio\.(yml|yaml|json)$/;
-/** The old one-file format in TOML, which this release no longer reads. Refused by name, never skipped. */
-const UNSUPPORTED = /^portfolio\.toml$/;
+/** Every name the adapter reads or refuses, so an edit to any of them is seen. */
+const WATCHED = /^(?:(?:portfolio|site)\.(?:yml|yaml|json)|portfolio\.toml)$/;
 const KEY = 'PORTFOLIO_SOURCE_DIR';
 const INVALID_SOURCE =
   'The portfolio source failed validation. The config.fatal lines in the server log say where.';
@@ -34,10 +28,14 @@ export interface DocumentsCatalogOptions {
   /** Absolute path of PORTFOLIO_SOURCE_DIR. */
   readonly sourceDir: string;
   readonly mode: RuntimeMode;
-  /** The bundled example, rendered under `next dev` when the directory holds no document. */
-  readonly examplePath: string;
+  /** The bundled examples, rendered under `next dev` when the directory holds neither document. */
+  readonly examples: PairFiles;
+  /** The appearance ids this build registers. Without one, they go unchecked. */
+  readonly catalog?: AppearanceCatalog;
   /** The content extensions documents are checked against. Others warn. */
   readonly extensions?: readonly ContentExtension[];
+  /** The deployment's canonical origin, which links are checked against. */
+  readonly origin?: string;
   /** Receives the findings of every re-validation under `next dev`. */
   readonly report: (issue: ConfigIssue) => void;
 }
@@ -73,6 +71,16 @@ type Loaded =
   | { ok: true; revision: LiveRevision; issues: ConfigIssue[]; fingerprint: string }
   | { ok: false; issues: ConfigIssue[]; fingerprint: string };
 
+const DIRECTORY_ISSUES = {
+  missing: ['source_missing', `${KEY} names a directory that doesn't exist.`],
+  // The likely mistake when moving from PORTFOLIO_PATH, which named the file.
+  'not-directory': [
+    'source_not_directory',
+    `${KEY} names a file, not a directory. Set it to the directory that holds portfolio.yml and site.yml.`,
+  ],
+  unreadable: ['source_unreadable', `The server can't read the ${KEY} directory.`],
+} as const;
+
 function loadRevision(options: DocumentsCatalogOptions): Loaded {
   const { sourceDir, mode } = options;
   const stamp = fingerprint(options);
@@ -83,92 +91,43 @@ function loadRevision(options: DocumentsCatalogOptions): Loaded {
     fingerprint: stamp,
   });
 
-  let names: string[];
-  try {
-    names = fs.readdirSync(/*turbopackIgnore: true*/ sourceDir);
-  } catch (error) {
-    const code = (error as NodeJS.ErrnoException).code;
-    if (code === 'ENOENT') {
-      return fail(fatal('source_missing', `${KEY} names a directory that doesn't exist.`));
-    }
-    // The likely mistake when moving from PORTFOLIO_PATH, which named the file.
-    if (code === 'ENOTDIR') {
-      return fail(
-        fatal(
-          'source_not_directory',
-          `${KEY} names a file, not a directory. Set it to the directory that holds portfolio.yml.`,
-        ),
-      );
-    }
-    return fail(fatal('source_unreadable', `The server can't read the ${KEY} directory.`));
-  }
-  // A TOML document can only be the old format: it's legacy, like an old
-  // YAML or JSON one, and nothing else is reported (#4, item 18).
-  const unsupported = names.filter((name) => UNSUPPORTED.test(name));
-  if (unsupported.length > 0) {
-    return fail(
-      ...unsupported.map((name) => ({
-        ...fatal(
-          'document_legacy',
-          `${name} is in the old one-file format, in TOML, which this release doesn't read. Convert it to YAML or JSON first, then run ${MIGRATE_COMMAND} on that to split it into portfolio.yml and site.yml, and remove ${name}.`,
-        ),
-        file: name,
-      })),
-    );
-  }
-  const documents = names.filter((name) => DOCUMENT.test(name)).sort();
-  if (documents.length > 1) {
-    return fail(
-      fatal(
-        'source_several',
-        `${KEY} holds ${documents.length} portfolio documents (${documents.join(', ')}). Keep exactly one.`,
-      ),
-    );
-  }
-
-  let name = documents[0];
-  let file: string;
-  if (name !== undefined) {
-    file = path.join(/*turbopackIgnore: true*/ sourceDir, name);
-  } else if (mode === 'production') {
-    return fail(
-      fatal(
-        'source_empty',
-        `${KEY} holds no portfolio document. Add portfolio.yml, portfolio.yaml, or portfolio.json.`,
-      ),
-    );
-  } else {
+  const found = findPair(sourceDir);
+  let files: PairFiles;
+  let usingExamples = false;
+  if (found.ok) {
+    files = found.files;
+  } else if (found.directory) {
+    const [code, message] = DIRECTORY_ISSUES[found.directory];
+    return fail(fatal(code, message));
+  } else if (mode !== 'production' && found.missing?.length === 2) {
+    // A fresh clone has neither, and `pnpm dev` shows the examples. Only both.
     issues.push({
       ...fatal(
         'source_empty',
-        `${KEY} holds no portfolio document, so next dev renders the bundled example. Production refuses to start without one.`,
+        `${KEY} holds neither document, so next dev renders the bundled examples. Production refuses to start without both.`,
       ),
       severity: 'warning',
     });
-    file = options.examplePath;
-    name = path.basename(file);
-  }
-  const usingExample = documents.length === 0;
-
-  let bytes: Buffer;
-  try {
-    bytes = readDocument(file);
-  } catch {
-    return fail({
-      ...fatal('document_unreadable', "The server can't read the portfolio document."),
-      file: name,
-    });
+    files = options.examples;
+    usingExamples = true;
+  } else {
+    // A missing or doubled document, or the old TOML file.
+    return fail(...found.diagnostics.map((record) => recordIssue(record, KEY)));
   }
 
-  const parsed = parsePortfolio(bytes.toString('utf8'), detectFormat(name), {
+  const result = readPair(files, {
+    catalog: options.catalog,
     extensions: options.extensions,
-    name,
+    ...(options.origin ? { canonicalOrigin: options.origin } : {}),
   });
-  if (!parsed.ok) return fail(...parsed.problems.map((problem) => documentIssue(problem, name)));
-  const { value: portfolio, locate } = parsed;
-  issues.push(...parsed.warnings.map((warning) => warningIssue(warning, name)));
+  const names = pairFileNames(result);
+  const records = result.diagnostics.map((record) => recordIssue(record, KEY, names));
+  if (!result.ok) return fail(...records);
+  issues.push(...records);
+  const { pair, sources } = result;
 
-  if (!usingExample && isSampleIdentity(portfolio.identity.name)) {
+  if (!usingExamples && isSampleIdentity(pair.portfolio.identity.name)) {
+    const parsed = parseSource(sources.portfolio.text, sources.portfolio.format);
     const sample: ConfigIssue = {
       ...fatal(
         'sample_identity',
@@ -176,65 +135,34 @@ function loadRevision(options: DocumentsCatalogOptions): Loaded {
           ? '/identity/name is the bundled sample. Replace the sample with your own portfolio.'
           : '/identity/name is the bundled sample. Production refuses to start with it.',
       ),
-      file: name,
+      file: sources.portfolio.name,
+      document: 'portfolio',
       path: '/identity/name',
-      ...locate(['identity', 'name']),
+      ...(parsed.ok ? parsed.locate(['identity', 'name']) : {}),
     };
     if (mode === 'production') return fail(sample);
     issues.push({ ...sample, severity: 'warning' });
   }
 
   const revision: LiveRevision = Object.freeze({
-    revisionId: `doc-${createHash('sha256').update(bytes).digest('hex').slice(0, 12)}`,
-    unit: Object.freeze({ portfolio: deepFreeze(portfolio) }),
+    revisionId: `doc-${pairDigest(sources)}`,
+    unit: frozenUnit(pair.portfolio, pair.site),
   });
   return { ok: true, revision, issues, fingerprint: stamp };
 }
 
-/**
- * A byte order mark takes three bytes and isn't counted, so this many bytes
- * always hold more text than a document may: the parser refuses them where
- * they pass the limit.
- */
-const READ_LIMIT = DOCUMENT_MAX_BYTES + 4;
-
-/**
- * The document's bytes, or its first READ_LIMIT when it's larger, so an
- * oversized file is never read or decoded whole. The size on disk sets the
- * first read, and no read passes the limit, even if the file grows meanwhile.
- */
-function readDocument(file: string): Buffer {
-  const fd = fs.openSync(/*turbopackIgnore: true*/ file, 'r');
-  try {
-    const chunks: Buffer[] = [];
-    let length = 0;
-    let want = Math.max(fs.fstatSync(fd).size, 1);
-    while (length < READ_LIMIT) {
-      const chunk = Buffer.alloc(Math.min(want, READ_LIMIT - length));
-      const read = fs.readSync(fd, chunk, 0, chunk.length, length);
-      if (read === 0) break;
-      chunks.push(chunk.subarray(0, read));
-      length += read;
-      want = 64 * 1024;
-    }
-    return Buffer.concat(chunks, length);
-  } finally {
-    fs.closeSync(fd);
-  }
-}
-
-/** Changes whenever a document is added, removed, or rewritten. */
-function fingerprint({ sourceDir, examplePath }: DocumentsCatalogOptions): string {
+/** Changes whenever a document is added, removed, or rewritten, or the examples change while they render. */
+function fingerprint({ sourceDir, examples }: DocumentsCatalogOptions): string {
   let names: string[];
   try {
     names = fs.readdirSync(/*turbopackIgnore: true*/ sourceDir);
   } catch (error) {
     return `unreadable:${(error as NodeJS.ErrnoException).code}`;
   }
-  const documents = names.filter((name) => DOCUMENT.test(name) || UNSUPPORTED.test(name)).sort();
-  const files = documents.length
-    ? documents.map((name) => path.join(/*turbopackIgnore: true*/ sourceDir, name))
-    : [examplePath];
+  const watched = names.filter((name) => WATCHED.test(name)).sort();
+  const files = watched.length
+    ? watched.map((name) => path.join(/*turbopackIgnore: true*/ sourceDir, name))
+    : [examples.portfolio, examples.site];
   return files
     .map((file) => {
       try {
@@ -249,43 +177,6 @@ function fingerprint({ sourceDir, examplePath }: DocumentsCatalogOptions): strin
 
 function fatal(code: string, message: string): ConfigIssue {
   return { severity: 'fatal', key: KEY, code, message };
-}
-
-const ISSUE_CODES: Readonly<Record<DocumentProblem['kind'], string>> = {
-  syntax: 'document_syntax',
-  legacy: 'document_legacy',
-  version: 'document_invalid',
-  schema: 'document_invalid',
-  'duplicate-id': 'document_invalid',
-};
-
-/**
- * A problem the schema package found, as a startup issue: `document_syntax`
- * when the text isn't one plain YAML or JSON document, `document_legacy` for
- * the old one-file format, else `document_invalid`. The message never quotes
- * the document.
- */
-function documentIssue(problem: DocumentProblem, file: string): ConfigIssue {
-  return {
-    ...fatal(ISSUE_CODES[problem.kind], problem.message),
-    file,
-    ...(problem.pointer !== undefined ? { path: problem.pointer } : {}),
-    ...(problem.line !== undefined ? { line: problem.line, column: problem.column } : {}),
-    issueCode: problem.code,
-  };
-}
-
-/** Something a valid document holds that the owner should know about, as a startup warning. */
-function warningIssue(warning: DocumentWarning, file: string): ConfigIssue {
-  return {
-    severity: 'warning',
-    key: KEY,
-    code: warning.code,
-    message: warning.message,
-    file,
-    path: warning.pointer,
-    ...(warning.line !== undefined ? { line: warning.line, column: warning.column } : {}),
-  };
 }
 
 function isSampleIdentity(name: string): boolean {

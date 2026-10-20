@@ -1,7 +1,8 @@
 import 'server-only';
-import type { ContentExtension } from '@portfolio/schema';
+import type { AppearanceCatalog, ContentExtension } from '@portfolio/schema';
+import type { PairFiles } from '@portfolio/schema/node';
 import type { Profile } from './capabilities';
-import { openDocumentsCatalog } from './catalog-documents';
+import { openDocumentsCatalog, type OpenDocumentsResult } from './catalog-documents';
 import type { CatalogReader } from './catalog-port';
 import { openSampleCatalog } from './catalog-sample';
 import type { ConfigIssue, DeploymentConfig } from './config';
@@ -52,6 +53,13 @@ export const AUTH_PROVIDERS: readonly AuthProviderFactory[] = [];
 export interface RequirementContext {
   readonly config: DeploymentConfig;
   readonly authProviders: readonly AuthProviderFactory[];
+  /**
+   * The mounted document pair, opened once for the profiles that serve it
+   * (owner and read-only), before any requirement runs. The documents.pair
+   * requirement reports its findings, and the profile's branch serves it, so
+   * the pair is checked once.
+   */
+  readonly documents?: OpenDocumentsResult;
 }
 
 export type RequirementCheck = (context: RequirementContext) => Promise<readonly ConfigIssue[]>;
@@ -102,9 +110,20 @@ export const STARTUP_REQUIREMENTS: readonly StartupRequirement[] = [
   },
   { id: 'auth.secret', issue: '#2', profiles: ['owner'], failure: 'fatal' },
   { id: 'data.directory', issue: '#2, #3', profiles: ['owner'], failure: 'fatal' },
-  // Old-shape documents with no valid revision to fall back on. #4's half
-  // already stops startup in the documents adapter, which refuses a document
-  // without schemaVersion 2; #3 adds the revision check for owner.
+  // The mounted pair (#4, item 6): a missing or doubled document, an
+  // old-format one, and every record validatePublicationUnit finds. Startup
+  // treats the pair as live, so a blocks-preview or blocks-publish record
+  // stops it, and warnings are logged. It covers the matrix's invalid-document
+  // and old-shape rows for both profiles; there's no second check.
+  {
+    id: 'documents.pair',
+    issue: '#4',
+    profiles: ['owner', 'read-only'],
+    failure: 'fatal',
+    check: async ({ documents }) => documents?.issues ?? [],
+  },
+  // Old-shape documents with no valid revision to fall back on: #3 adds the
+  // revision check for owner, on top of documents.pair.
   { id: 'documents.shape', issue: '#3', profiles: ['owner'], failure: 'fatal' },
   { id: 'revision.integrity', issue: '#3', profiles: ['owner'], failure: 'degraded' },
 ];
@@ -146,8 +165,10 @@ const failed = (issues: readonly ConfigIssue[]) =>
 
 export interface CompositionInput {
   readonly config: DeploymentConfig;
-  /** The bundled example document. */
-  readonly examplePath: string;
+  /** The bundled example pair: demo's sample, and what next dev renders with no documents. */
+  readonly examples: PairFiles;
+  /** The appearance ids this build registers, which the pair is checked against. */
+  readonly catalog?: AppearanceCatalog;
   /** The content extensions documents are checked against. */
   readonly extensions?: readonly ContentExtension[];
   /** Receives findings made after startup (re-validation under next dev). */
@@ -172,14 +193,18 @@ export async function compose(input: CompositionInput): Promise<Composition> {
   const { config } = input;
   const authProviders = input.authProviders ?? AUTH_PROVIDERS;
   const requirements = input.requirements ?? STARTUP_REQUIREMENTS;
-  const context: RequirementContext = { config, authProviders };
+  // Until #3, owner serves the mounted documents too.
+  const documents =
+    config.profile === 'owner' || config.profile === 'read-only' ? openDocuments(input) : undefined;
+  const context: RequirementContext = { config, authProviders, documents };
   const early = await runRequirements(requirements, context, async (row) => row.check);
   if (failed(early.issues)) return { ok: false, issues: early.issues };
 
   switch (config.profile) {
     case 'demo': {
       const sample = openSampleCatalog({
-        examplePath: input.examplePath,
+        examples: input.examples,
+        catalog: input.catalog,
         extensions: input.extensions,
       });
       const issues = [...early.issues, ...sample.issues];
@@ -193,22 +218,19 @@ export async function compose(input: CompositionInput): Promise<Composition> {
       });
     }
     case 'read-only': {
-      const documents = openDocuments(input);
-      const issues = [...early.issues, ...documents.issues];
-      if (!documents.ok) return { ok: false, issues };
+      // documents.pair reported its findings, and stopped startup on a fatal one.
+      if (!documents?.ok) return refusedDocuments(early.issues, documents);
       return built(config, {
         reader: documents.reader,
         adapter: 'documents',
         bindings: NO_BINDINGS,
-        issues,
+        issues: early.issues,
         degraded: early.degraded,
       });
     }
     case 'owner': {
-      // Until #3, owner serves the mounted documents too.
-      const documents = openDocuments(input);
-      let issues = [...early.issues, ...documents.issues];
-      if (!documents.ok) return { ok: false, issues };
+      if (!documents?.ok) return refusedDocuments(early.issues, documents);
+      let issues = early.issues;
       // The one place owner code loads.
       const owner = await import('./owner/index');
       const late = await runRequirements(requirements, context, async (row) => row.load?.());
@@ -239,15 +261,28 @@ export async function compose(input: CompositionInput): Promise<Composition> {
   }
 }
 
-function openDocuments(input: CompositionInput) {
+function openDocuments(input: CompositionInput): OpenDocumentsResult {
   return openDocumentsCatalog({
     // readDeploymentConfig requires it for owner and read-only.
     sourceDir: input.config.sourceDir ?? '',
     mode: input.config.mode,
-    examplePath: input.examplePath,
+    examples: input.examples,
+    catalog: input.catalog,
     extensions: input.extensions,
+    origin: input.config.origin,
     report: input.report,
   });
+}
+
+/**
+ * A pair that can't be served. documents.pair has already reported why;
+ * without that row (a test's own table), the findings come along here.
+ */
+function refusedDocuments(
+  issues: ConfigIssue[],
+  documents: OpenDocumentsResult | undefined,
+): Composition {
+  return { ok: false, issues: [...issues, ...(documents?.issues ?? [])] };
 }
 
 interface Built {

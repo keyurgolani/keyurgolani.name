@@ -1,36 +1,49 @@
-import { chmodSync, mkdirSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  copyFileSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+} from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { expect, test } from '@playwright/test';
-import { runAppToExit } from '../harness/app-server.mjs';
+import { DEFAULT_SITE, runAppToExit, startApp } from '../harness/app-server.mjs';
 import {
   fatalFields,
   HEAD,
   mentions,
   neverValues,
   ORIGIN,
+  remediates,
   rowDocuments,
   STARTUP_ROWS,
   type RowPaths,
   type StartupRow,
 } from '../harness/startup-rows.mjs';
 
-// Every startup-matrix row without an issue tag (#1, item 2), against the
-// built standalone server. The rows live in tests/harness/startup-rows.mjs,
-// which `pnpm smoke:profiles` runs against the image too. Each must stop the
-// process with exit 1 before it serves a request, log a config.fatal line
-// naming the key, and never print the configured value. No browser: these
-// only start and stop the server.
+// Every startup-matrix row without an issue tag (#1, item 2), and the
+// document pair's (#4, items 4 to 6), against the built standalone server.
+// The rows live in tests/harness/startup-rows.mjs, which `pnpm
+// smoke:profiles` runs against the image too. Each must stop the process with
+// exit 1 before it serves a request, log a config.fatal line naming the key,
+// and never print the configured value. Then every shared invalid pair: a
+// blocking one stops the server, and a warning one starts it. No browser:
+// these only start and stop the server.
 
 interface Fatal {
   event: string;
   key: string;
   code: string;
   file?: string;
+  document?: 'portfolio' | 'site';
   path?: string;
   line?: number;
   column?: number;
-  issueCode?: string;
+  stableId?: string;
   message: string;
+  remediation?: string;
 }
 
 type Env = Record<string, string>;
@@ -79,6 +92,7 @@ for (const group of new Set(STARTUP_ROWS.map((row) => row.group))) {
           const fatal = await expectRefusal(row.env(paths), { never: neverValues(row, paths) });
           expect(fatalFields(row, fatal)).toEqual(row.fatal);
           for (const text of mentions(row)) expect(fatal[0]!.message).toContain(text);
+          for (const text of remediates(row)) expect(fatal[0]!.remediation).toContain(text);
         } finally {
           if (row.unreadable) chmodSync(paths.source, 0o700);
         }
@@ -98,6 +112,7 @@ test.describe('the refusal log', () => {
       path.join(source, 'portfolio.yml'),
       `${HEAD}identity:\n  name: Rowan Fixture\nsections:\n${'  - kind: canary-kind\n'.repeat(count)}`,
     );
+    copyFileSync(DEFAULT_SITE, path.join(source, 'site.yml'));
     const fatal = await expectRefusal(
       { PORTFOLIO_PROFILE: 'read-only', PORTFOLIO_ORIGIN: ORIGIN, PORTFOLIO_SOURCE_DIR: source },
       { readDelayMs: 2_000 },
@@ -106,4 +121,73 @@ test.describe('the refusal log', () => {
       Array.from({ length: count }, (_, index) => `/sections/${index}/kind`),
     );
   });
+});
+
+test.describe('the shared fixtures', () => {
+  // @portfolio/schema's pair for each diagnostic code and its startup cases
+  // (#4, item 21). The invalid pairs link to https://rowan.name, their own
+  // origin. A blocking pair stops the server with its code alone; a warning
+  // one starts it and logs its code.
+  const FIXTURES = fileURLToPath(
+    new URL('../../packages/schema/src/__fixtures__/', import.meta.url),
+  );
+  const WARNINGS = ['extension.unregistered', 'metric.duplicate', 'origin.sample', 'origin.stale'];
+  const RECORD_ORIGIN = 'https://rowan.name';
+  const invalid = readdirSync(path.join(FIXTURES, 'invalid')).sort();
+  const readOnly = (source: string, origin = ORIGIN) => ({
+    PORTFOLIO_PROFILE: 'read-only',
+    PORTFOLIO_ORIGIN: origin,
+    PORTFOLIO_SOURCE_DIR: source,
+  });
+
+  for (const code of invalid.filter((name) => !WARNINGS.includes(name))) {
+    test(`invalid/${code} stops the server with that code alone`, async () => {
+      const dir = path.join(FIXTURES, 'invalid', code);
+      const fatal = await expectRefusal(readOnly(dir, RECORD_ORIGIN));
+      expect([...new Set(fatal.map((entry) => entry.code))]).toEqual([code]);
+    });
+  }
+
+  for (const code of WARNINGS) {
+    test(`invalid/${code} only warns, and the server starts`, async () => {
+      expect(invalid).toContain(code);
+      const dir = path.join(FIXTURES, 'invalid', code);
+      const app = await startApp({
+        env: { PORTFOLIO_ORIGIN: RECORD_ORIGIN },
+        portfolio: path.join(dir, 'portfolio.yml'),
+        site: path.join(dir, 'site.yml'),
+      });
+      try {
+        const logged = (event: string) =>
+          readFileSync(app.log, 'utf8')
+            .split('\n')
+            .filter((line) => line.startsWith('{'))
+            .map((line) => JSON.parse(line) as Fatal)
+            .filter((entry) => entry.event === event)
+            .map((entry) => entry.code);
+        await expect.poll(() => [...new Set(logged('config.warning'))]).toEqual([code]);
+        expect(logged('config.fatal')).toEqual([]);
+      } finally {
+        await app.stop();
+      }
+    });
+  }
+
+  for (const [name, records] of [
+    [
+      'empty',
+      [
+        ['source.missing', 'portfolio'],
+        ['source.missing', 'site'],
+      ],
+    ],
+    ['site-only', [['source.missing', 'portfolio']]],
+    ['toml', [['legacy.document', 'portfolio']]],
+  ] as const) {
+    test(`startup/${name} stops the server`, async () => {
+      const dir = path.join(FIXTURES, 'startup', name);
+      const fatal = await expectRefusal(readOnly(dir));
+      expect(fatal.map((entry) => [entry.code, entry.document])).toEqual(records);
+    });
+  }
 });

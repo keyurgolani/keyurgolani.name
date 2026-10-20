@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -11,13 +11,21 @@ import type { Env } from './config';
 import { getDeploymentConfig, requireDeploymentConfig, setDeploymentState } from './config-store';
 import { runStartup, type StartupResult } from './startup';
 
-const EXAMPLE = fileURLToPath(new URL('../../../../portfolio.example.yml', import.meta.url));
-const VALID = 'schemaVersion: 2\nlocale: en\ndirection: ltr\nidentity:\n  name: Rowan Test\n';
+const EXAMPLES = {
+  portfolio: fileURLToPath(new URL('../../../../portfolio.example.yml', import.meta.url)),
+  site: fileURLToPath(new URL('../../../../site.example.yml', import.meta.url)),
+};
+const VALID =
+  'schemaVersion: 2\nlocale: en\ndirection: ltr\nidentity:\n  name: Rowan Test\nsections:\n  - kind: lede\n    id: about\n    body: Hi.\n';
 
+/** A source directory holding `document` as portfolio.yml, beside the example site.yml. */
 function sourceDir(t: { after: (fn: () => void) => void }, document?: string): string {
   const dir = mkdtempSync(path.join(tmpdir(), 'startup-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
-  if (document !== undefined) writeFileSync(path.join(dir, 'portfolio.yml'), document);
+  if (document !== undefined) {
+    writeFileSync(path.join(dir, 'portfolio.yml'), document);
+    copyFileSync(EXAMPLES.site, path.join(dir, 'site.yml'));
+  }
   return dir;
 }
 
@@ -25,7 +33,7 @@ function start(env: Env) {
   return runStartup({
     env,
     cwd: '/srv/app',
-    examplePath: EXAMPLE,
+    examples: EXAMPLES,
     report: () => {},
     readFile: () => {
       throw new Error('no files in this test');
@@ -106,9 +114,10 @@ test('read-only with an old-format document reports the document as legacy', asy
     PORTFOLIO_SOURCE_DIR: dir,
   });
   assert.equal(result.ok, false);
-  assert.deepEqual(fatalCodes(result), ['PORTFOLIO_SOURCE_DIR:document_legacy']);
+  assert.deepEqual(fatalCodes(result), ['PORTFOLIO_SOURCE_DIR:legacy.document']);
   assert.deepEqual([result.issues[0]?.path, result.issues[0]?.line], ['', 3]);
   assert.match(result.issues[0]!.message, /Run pnpm config:migrate portfolio\.yml/);
+  assert.match(result.issues[0]!.remediation ?? '', /--write --out <dir>/);
 });
 
 test('warnings from the configuration reach the startup result', async (t) => {
@@ -129,7 +138,10 @@ test('warnings from the configuration reach the startup result', async (t) => {
 test('the content extensions reach the document check', async (t) => {
   const dir = sourceDir(
     t,
-    `${VALID}  extensions:\n    '@acme/portfolio-photography': { camra: Leica }\n`,
+    VALID.replace(
+      '  name: Rowan Test\n',
+      "  name: Rowan Test\n  extensions:\n    '@acme/portfolio-photography': { camra: Leica }\n",
+    ),
   );
   const env = { ...PRODUCTION, PORTFOLIO_PROFILE: 'read-only', PORTFOLIO_SOURCE_DIR: dir };
   // Unregistered, the entry is kept and warns.
@@ -137,17 +149,17 @@ test('the content extensions reach the document check', async (t) => {
   assert.equal(unregistered.ok, true);
   assert.deepEqual(
     unregistered.issues.map((issue) => `${issue.severity}:${issue.code}`),
-    ['warning:extension_unregistered'],
+    ['warning:extension.unregistered'],
   );
   // Registered, its fields are checked.
   const registered = await runStartup({
     env,
     cwd: '/srv/app',
-    examplePath: EXAMPLE,
+    examples: EXAMPLES,
     extensions: [acmePortfolioPhotography],
     report: () => {},
   });
-  assert.deepEqual(fatalCodes(registered), ['PORTFOLIO_SOURCE_DIR:document_invalid']);
+  assert.deepEqual(fatalCodes(registered), ['PORTFOLIO_SOURCE_DIR:schema.invalid']);
   assert.match(registered.issues[0]?.message ?? '', /Did you mean camera\?/);
 });
 

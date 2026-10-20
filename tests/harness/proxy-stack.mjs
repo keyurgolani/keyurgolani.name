@@ -20,6 +20,7 @@ const COMPOSE_FILE = path.join(HARNESS, 'compose', 'compose.yml');
 const CA_ROOT = '/data/caddy/pki/authorities/local/root.crt';
 export const PROXY_HOST = 'portfolio.test';
 export const DEFAULT_PORTFOLIO = path.join(REPO_ROOT, 'tests', 'fixtures', 'portfolio.yml');
+export const DEFAULT_SITE = path.join(REPO_ROOT, 'tests', 'fixtures', 'site.yml');
 
 /**
  * @param {object} options
@@ -27,12 +28,14 @@ export const DEFAULT_PORTFOLIO = path.join(REPO_ROOT, 'tests', 'fixtures', 'port
  * @param {string} [options.cli] docker or finch (default $CONTAINER_CLI or docker)
  * @param {string} [options.projectPrefix] Compose project name prefix
  * @param {string} [options.portfolio] portfolio file mounted at /config/portfolio.yml
+ * @param {string} [options.site] site file mounted beside it, at /config/site.yml
  */
 export async function startProxyStack({
   image,
   cli = process.env.CONTAINER_CLI || 'docker',
   projectPrefix = process.env.CONTAINER_PREFIX || 'portfolio-ci-',
   portfolio = DEFAULT_PORTFOLIO,
+  site = DEFAULT_SITE,
 } = {}) {
   if (!image) throw new Error('startProxyStack needs the image under test');
   const project = `${projectPrefix}proxy-${randomBytes(4).toString('hex')}`;
@@ -42,6 +45,7 @@ export async function startProxyStack({
   const sourceDir = path.join(stateDir, 'config');
   mkdirSync(sourceDir, { recursive: true });
   cpSync(portfolio, path.join(sourceDir, 'portfolio.yml'));
+  cpSync(site, path.join(sourceDir, 'site.yml'));
   const port = await freePort();
 
   // An env file rather than the process environment: Finch runs Compose inside

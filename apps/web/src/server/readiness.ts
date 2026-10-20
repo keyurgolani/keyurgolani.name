@@ -1,6 +1,5 @@
 import type { Access, Capability, Profile } from './capabilities';
 import type { DeploymentState } from './config-store';
-import { HOST_SITE } from './host-defaults';
 import { capabilityPolicy } from './policy';
 import { STARTING } from './ready-starting';
 
@@ -37,8 +36,9 @@ export interface ReadinessProbes {
 }
 
 /**
- * The checks: `catalog` (the live revision loads), `packs` (the host's
- * variant loads; #19 adds packs), and, under demo and read-only,
+ * The checks: `catalog` (the live revision loads), `packs` (the live site's
+ * variant loads; #19 adds packs; with no live revision there's none to load,
+ * so it fails too), and, under demo and read-only,
  * `owner-modules` (no owner module has loaded). #3 adds `data-directory`
  * for owner. A failed check is a 503; a startup requirement that failed
  * with `failure: 'degraded'` makes it `degraded`, still 200.
@@ -49,9 +49,18 @@ export async function readiness(
 ): Promise<Readiness> {
   if (!state) return { httpStatus: 503, body: STARTING };
   const { profile } = state.config;
+  let variant: string | undefined;
+  const catalog = await settle(async () => {
+    variant = (await state.catalog.getLive()).unit.site.appearance.variant;
+    return true;
+  });
+  const site = variant;
   const checks: ReadinessCheck[] = [
-    { id: 'catalog', status: await settle(async () => Boolean(await state.catalog.getLive())) },
-    { id: 'packs', status: await settle(() => probes.variantLoads(HOST_SITE.appearance.variant)) },
+    { id: 'catalog', status: catalog },
+    {
+      id: 'packs',
+      status: site === undefined ? 'fail' : await settle(() => probes.variantLoads(site)),
+    },
   ];
   if (profile !== 'owner') {
     checks.push({

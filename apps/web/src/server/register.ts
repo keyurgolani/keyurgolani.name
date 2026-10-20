@@ -1,5 +1,6 @@
 import 'server-only';
 import path from 'node:path';
+import { createAppearanceCatalog } from './appearance-catalog';
 import { issueLogLine, type ConfigIssue, type Profile } from './config';
 import { setDeploymentState } from './config-store';
 import { CONTENT_EXTENSIONS } from './content-extensions';
@@ -16,11 +17,15 @@ import { runStartup, type StartupResult } from './startup';
  */
 export async function registerDeployment(): Promise<Registration> {
   const cwd = process.cwd();
+  // The image and `next dev` both keep them two levels above apps/web.
+  const example = (name: string) => path.resolve(/*turbopackIgnore: true*/ cwd, '..', '..', name);
+  // The interim catalog of the variants this build registers (#4, item 14).
+  const { listManifests } = await import('~/lib/registry');
   const result: StartupResult = await runStartup({
     env: process.env,
     cwd,
-    // The image and `next dev` both keep it two levels above apps/web.
-    examplePath: path.resolve(/*turbopackIgnore: true*/ cwd, '..', '..', 'portfolio.example.yml'),
+    examples: { portfolio: example('portfolio.example.yml'), site: example('site.example.yml') },
+    catalog: createAppearanceCatalog(listManifests()),
     extensions: CONTENT_EXTENSIONS,
     // Called only after startup, by re-validation under next dev.
     report: (issue) => {

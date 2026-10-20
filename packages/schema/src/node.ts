@@ -91,7 +91,8 @@ const record = (
 export function findPair(dir: string): FindPairResult {
   let names: string[];
   try {
-    names = fs.readdirSync(dir);
+    // Not a path the build can know: the comment keeps Turbopack from tracing it.
+    names = fs.readdirSync(/*turbopackIgnore: true*/ dir);
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
     const directory =
@@ -147,8 +148,8 @@ export function findPair(dir: string): FindPairResult {
   return {
     ok: true,
     files: {
-      portfolio: path.join(dir, found.portfolio[0]!),
-      site: path.join(dir, found.site[0]!),
+      portfolio: path.join(/*turbopackIgnore: true*/ dir, found.portfolio[0]!),
+      site: path.join(/*turbopackIgnore: true*/ dir, found.site[0]!),
     },
   };
 }
@@ -236,7 +237,7 @@ export function formatRecords(result: LoadPairResult): string {
  * read passes the limit, even if the file grows meanwhile.
  */
 function readBounded(file: string): string {
-  const fd = fs.openSync(file, 'r');
+  const fd = fs.openSync(/*turbopackIgnore: true*/ file, 'r');
   try {
     const chunks: Buffer[] = [];
     let length = 0;

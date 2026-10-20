@@ -8,4 +8,8 @@ identity:
   name: Rowan Fixture
   tagline: 'Ships </script><script>window.__injected = true</script> & <!-- notes --> daily'
 
-sections: []
+# A section, so the pair has one to show (content.empty otherwise).
+sections:
+  - kind: contact
+    id: contact
+    title: Contact

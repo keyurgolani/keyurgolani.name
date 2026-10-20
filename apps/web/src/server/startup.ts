@@ -1,5 +1,6 @@
 import 'server-only';
-import type { ContentExtension } from '@portfolio/schema';
+import type { AppearanceCatalog, ContentExtension } from '@portfolio/schema';
+import type { PairFiles } from '@portfolio/schema/node';
 import { compose, type AuthProviderFactory } from './composition';
 import { readDeploymentConfig, type ConfigIssue, type Env, type Profile } from './config';
 import type { DeploymentState } from './config-store';
@@ -12,8 +13,10 @@ export interface StartupInput {
   readonly env: Env;
   /** The server's working directory (apps/web), for relative paths. */
   readonly cwd: string;
-  /** The bundled example document. */
-  readonly examplePath: string;
+  /** The bundled example pair. */
+  readonly examples: PairFiles;
+  /** The appearance ids this build registers. Without one, they go unchecked. */
+  readonly catalog?: AppearanceCatalog;
   /** The content extensions documents are checked against. */
   readonly extensions?: readonly ContentExtension[];
   /** Receives findings made after startup (re-validation under next dev). */
@@ -41,7 +44,8 @@ export async function runStartup(input: StartupInput): Promise<StartupResult> {
   const { config } = read;
   const composed = await compose({
     config,
-    examplePath: input.examplePath,
+    examples: input.examples,
+    catalog: input.catalog,
     extensions: input.extensions,
     report: input.report,
     authProviders: input.authProviders,

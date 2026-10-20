@@ -8,8 +8,8 @@ import { startApp } from '../harness/app-server.mjs';
 // #4's acceptance: the baseline example, migrated with the baseline's color
 // scheme and typography, renders / with the section ids and root attributes
 // recorded before any renderer changed. The old example is kept as a legacy
-// fixture. The host doesn't read site.yml yet, so its stand-in supplies the
-// appearance, and the written site.yml is checked to name the same one.
+// fixture. The server reads both documents the migration wrote, so the
+// appearance on the page comes from the written site.yml.
 
 const REPO_ROOT = fileURLToPath(new URL('../..', import.meta.url));
 const OLD_EXAMPLE = path.join(REPO_ROOT, 'packages/schema/src/__fixtures__/legacy/example.yml');
@@ -56,6 +56,7 @@ test('the old example, migrated, renders the baseline section ids and appearance
   // renders without the data, as it does when GitHub is down.
   const app = await startApp({
     portfolio: path.join(out, 'portfolio.yml'),
+    site: path.join(out, 'site.yml'),
     env: { NODE_OPTIONS: `--import=${OFFLINE}` },
     logFile: test.info().outputPath('server.log'),
   });
