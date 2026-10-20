@@ -22,8 +22,15 @@ experiments
 !.env.example
 apps/web/.env.development
 
-# Personal portfolio data stays out of the image. Only the example ships.
+# Personal portfolio data stays out of the image: the six document names, and
+# any other portfolio.* such as an old portfolio.toml. Only the examples ship.
 config
+portfolio.yml
+portfolio.yaml
+portfolio.json
+site.yml
+site.yaml
+site.json
 portfolio.*
 !portfolio.example.yml
 
