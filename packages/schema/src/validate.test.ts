@@ -11,6 +11,7 @@ import {
   type Context,
   type Diagnostic,
   type SourceDocument,
+  type UnitValidator,
 } from './validate';
 
 const lines = (...text: string[]) => `${text.join('\n')}\n`;
@@ -291,6 +292,36 @@ test('a metric with two values blocks publishing, and one shown twice warns', ()
   );
 });
 
+test('a hidden first statement of a metric hides no visible duplicate', () => {
+  const stats = (id: string, value: string) =>
+    lines(
+      '  - kind: stats',
+      `    id: ${id}`,
+      '    items:',
+      `      - { metric: talks, value: "${value}", label: Talks }`,
+    );
+  const portfolio = PORTFOLIO.concat(stats('one', '12'), stats('two', '12'), stats('three', '12'));
+  const site = `${SITE}sections:\n  one: { hidden: true }\n`;
+  assert.deepEqual(codes(validate(portfolio, site).diagnostics), [
+    'portfolio:metric.duplicate:/sections/4/items/0/value',
+  ]);
+  assert.equal(
+    validate(portfolio, site).diagnostics[0]!.message,
+    '/sections/4/items/0/value and /sections/3/items/0/value show one metric with the same value.',
+  );
+  // A hidden first statement with another value still contradicts the visible ones.
+  const contradicted = PORTFOLIO.concat(
+    stats('one', '9'),
+    stats('two', '12'),
+    stats('three', '12'),
+  );
+  assert.deepEqual(codes(validate(contradicted, site).diagnostics), [
+    'portfolio:metric.conflict:/sections/3/items/0/value',
+    'portfolio:metric.conflict:/sections/4/items/0/value',
+    'portfolio:metric.duplicate:/sections/4/items/0/value',
+  ]);
+});
+
 test('secret-shaped text anywhere blocks publishing, and no record repeats it', () => {
   // Built at run time, so no secret-shaped literal sits in the repository.
   const token = `ghp_${'x'.repeat(36)}`;
@@ -350,6 +381,103 @@ test('secret-shaped text anywhere blocks publishing, and no record repeats it', 
   // The pair holds the data as written; the records never repeat it.
   const everything = JSON.stringify([result.diagnostics, result.notChecked]);
   for (const secret of [token, key, bcrypt, phc, aws]) assert.ok(!everything.includes(secret));
+  // A secret-shaped key is located at the key itself, not at the object holding it.
+  const atKey = result.diagnostics.find(({ message }) => message.startsWith('A key in'));
+  const siteLines = site.split('\n');
+  const keyLine = siteLines.findIndex((line) => line.includes(JSON.stringify(token)));
+  assert.deepEqual(
+    [atKey?.line, atKey?.column],
+    [keyLine + 1, siteLines[keyLine]!.indexOf(JSON.stringify(token)) + 1],
+  );
+});
+
+test('a hash with a slash never reaches a pointer or a message, escaped or not', () => {
+  // `/` is `~1` in a pointer, which the secret patterns wouldn't match.
+  const bcrypt = `$2b$10$${'a/'.repeat(26)}a`;
+  const phc = `$argon2id$v=19$m=65536,t=3,p=4$c2F/sdA$aGF/zaA`;
+  for (const secret of [bcrypt, phc]) {
+    // An unknown key, an anchor under it, and an unregistered extension's key.
+    for (const portfolio of [
+      PORTFOLIO.replace('identity:', `${JSON.stringify(secret)}: 1\nidentity:`),
+      PORTFOLIO.replace('identity:', `${JSON.stringify(secret)}: &a 1\nidentity:`),
+      PORTFOLIO.replace(
+        '  name: Rowan Test',
+        `  name: Rowan Test\n  extensions: { ${JSON.stringify(`@other/x`)}: { ${JSON.stringify(secret)}: 1 } }`,
+      ),
+    ]) {
+      const result = validate(portfolio);
+      const records = JSON.stringify([result.diagnostics, result.notChecked]);
+      assert.ok(result.diagnostics.length > 0);
+      for (const form of [secret, secret.replace(/\//g, '~1')]) {
+        assert.ok(!records.includes(form), records);
+      }
+    }
+  }
+});
+
+test("a section id that isn't one never rides along as a stable id", () => {
+  const token = `ghp_${'v'.repeat(36)}`;
+  const bcrypt = `$2b$10$${'b'.repeat(53)}`;
+  for (const id of [token, bcrypt, 'Not An Id']) {
+    const result = validate(
+      PORTFOLIO.replace('    id: about', `    id: ${JSON.stringify(id)}`).replace(
+        '    body: Hi',
+        '    body: 7',
+      ),
+    );
+    const inSection = result.diagnostics.filter(({ pointer }) => pointer.startsWith('/sections/0'));
+    assert.ok(inSection.length > 0, id);
+    assert.deepEqual(
+      inSection.map(({ stableId }) => stableId),
+      inSection.map(() => undefined),
+      id,
+    );
+    assert.ok(!JSON.stringify(result.diagnostics).includes(id), id);
+  }
+  // A real id still comes along.
+  const valid = validate(PORTFOLIO.replace('    body: Hi', '    body: 7'));
+  assert.equal(valid.diagnostics[0]?.stableId, 'about');
+});
+
+test('a comment holding a secret blocks publishing, located at the comment', () => {
+  const token = `ghp_${'u'.repeat(36)}`;
+  const result = validate(PORTFOLIO.replace('identity:', `identity: # ${token}`));
+  assert.deepEqual(found(result.diagnostics), [
+    ['portfolio', 'secret.detected', 'blocks-publish', '', 4, 11],
+  ]);
+  assert.equal(
+    result.diagnostics[0]!.message,
+    "A comment looks like a GitHub token. A document can't hold secrets.",
+  );
+  assert.ok(!JSON.stringify(result.diagnostics).includes(token));
+  // Comments anywhere: own lines, after values, in flow collections, after the document.
+  const everywhere = lines(
+    `# ${token}`,
+    PORTFOLIO.trimEnd().replace(
+      '  - url: https://rowan.name',
+      `  - { url: https://rowan.name } # ${token}`,
+    ),
+    `    # ${token}`,
+    `# ${token}`,
+  );
+  assert.deepEqual(
+    validate(everywhere).diagnostics.map(({ code, line }) => `${code}:${line}`),
+    ['secret.detected:1', 'secret.detected:8', 'secret.detected:17', 'secret.detected:18'],
+  );
+});
+
+test('names on Object.prototype are not deployment settings', () => {
+  const result = validate(
+    undefined,
+    `${SITE}constructor: 1\ntoString: 1\n__proto__: { polluted: true }\nhasOwnProperty: 1\n`,
+  );
+  assert.deepEqual(codes(result.diagnostics), [
+    'site:schema.invalid:/__proto__',
+    'site:schema.invalid:/constructor',
+    'site:schema.invalid:/hasOwnProperty',
+    'site:schema.invalid:/toString',
+  ]);
+  assert.equal(({} as { polluted?: boolean }).polluted, undefined);
 });
 
 test('a secret-shaped key never reaches a message, even in a schema problem', () => {
@@ -389,7 +517,20 @@ test('links to sample hosts, and to a stale copy of the origin, warn', () => {
     'portfolio:origin.stale:/links/3/url',
     'portfolio:origin.stale:/links/4/url',
     'portfolio:origin.sample:/links/5/url',
+    // A mail address on a sample domain is a sample address too.
+    'portfolio:origin.sample:/links/7/url',
   ]);
+  const mail = (url: string) =>
+    codes(
+      validate(PORTFOLIO.replace('  - url: https://rowan.name', `  - url: "${url}"`)).diagnostics,
+    );
+  assert.deepEqual(mail('mailto:Rowan@Mail.Example.org?subject=Hi'), [
+    'portfolio:origin.sample:/links/0/url',
+  ]);
+  assert.deepEqual(mail('mailto:rowan@rowan.name,jane%40demo.test'), [
+    'portfolio:origin.sample:/links/0/url',
+  ]);
+  assert.deepEqual(mail('mailto:rowan@rowan.name'), []);
   // On a sample origin, sample links are expected.
   const onSample = validate(portfolio, SITE, { ...CONTEXT, canonicalOrigin: 'https://jane.test' });
   assert.deepEqual(codes(onSample.diagnostics), []);
@@ -465,6 +606,110 @@ test('plugged-in validators add records and unchecked items; one that throws is 
   ]);
 });
 
+test("a plugged-in validator's records are located, redacted, and checked whole", () => {
+  const token = `ghp_${'t'.repeat(36)}`;
+  const record = (fields: Record<string, unknown> = {}) => ({
+    code: 'route.unknown',
+    severity: 'blocks-publish',
+    document: 'portfolio',
+    pointer: '/sections/1/title',
+    message: 'The title names no route.',
+    remediation: `Remove it, or ${token}.`,
+    ...fields,
+  });
+  const run = (...records: unknown[]) =>
+    validate(undefined, undefined, {
+      ...CONTEXT,
+      validators: [
+        {
+          id: 'routes',
+          validate: () => ({
+            diagnostics: records as Diagnostic[],
+            notChecked: [`site.x.${token}`],
+          }),
+        },
+      ],
+    });
+  const good = run(record(), record({ pointer: `/${token}`, document: 'site' }));
+  // Located from the pointer, the section's id attached, and every string redacted.
+  assert.deepEqual(found(good.diagnostics), [
+    ['portfolio', 'route.unknown', 'blocks-publish', '/sections/1/title', 15, 12],
+    ['site', 'route.unknown', 'blocks-publish', '/[secret]', 1, 1],
+  ]);
+  assert.equal(good.diagnostics[0]!.stableId, 'contact');
+  assert.equal(good.diagnostics[0]!.remediation, 'Remove it, or [secret].');
+  assert.ok(!JSON.stringify(good).includes(token));
+  assert.ok(good.notChecked.includes('site.x.[secret]'));
+
+  // One malformed record, wherever it sits, drops every record the validator returned.
+  for (const bad of [
+    record({ code: 'Route Unknown' }),
+    record({ code: 7 }),
+    record({ severity: 'fatal' }),
+    record({ document: 'deployment' }),
+    record({ pointer: 'sections/1' }),
+    record({ pointer: '/a~2b' }),
+    record({ message: undefined }),
+    record({ remediation: null }),
+    // A core code keeps its core severity.
+    record({ code: 'anchor.broken', severity: 'warning' }),
+    'route.unknown',
+  ]) {
+    const result = run(record(), bad, record());
+    assert.deepEqual(codes(result.diagnostics), [], JSON.stringify(bad));
+    assert.ok(result.notChecked.includes('validator:routes'), JSON.stringify(bad));
+  }
+  for (const result of [{ diagnostics: 'none' }, { diagnostics: [], notChecked: [1] }, null]) {
+    const malformed = validate(undefined, undefined, {
+      ...CONTEXT,
+      validators: [{ id: 'odd', validate: () => result as never }],
+    });
+    assert.deepEqual(malformed.notChecked, ['site.appearance.designLanguage', 'validator:odd']);
+  }
+});
+
+test('a validator that covers unchecked entries clears them once it runs', () => {
+  const site = `${SITE}routes: { work: { enabled: true } }\nvariantControls: { editorial: { version: 1, values: {} } }\n`;
+  const contract = (validate: UnitValidator['validate']): Context => ({
+    ...CONTEXT,
+    validators: [
+      { id: 'variant-contract', covers: ['site.routes.*', 'site.variantControls.*'], validate },
+    ],
+  });
+  assert.deepEqual(
+    validate(
+      undefined,
+      site,
+      contract(() => ({ diagnostics: [] })),
+    ).notChecked,
+    ['site.appearance.designLanguage'],
+  );
+  // What it says it couldn't check stays listed, and one that fails covers nothing.
+  assert.deepEqual(
+    validate(
+      undefined,
+      site,
+      contract(() => ({ diagnostics: [], notChecked: ['site.routes.work'] })),
+    ).notChecked,
+    ['site.appearance.designLanguage', 'site.routes.work'],
+  );
+  assert.deepEqual(
+    validate(
+      undefined,
+      site,
+      contract(() => {
+        throw new Error('boom');
+      }),
+    ).notChecked,
+    [
+      'site.appearance.designLanguage',
+      'site.routes.work',
+      'site.variantControls.editorial',
+      'validator:variant-contract',
+    ],
+  );
+});
+
 test('route ids and variant control values wait for their validator', () => {
   const site = `${SITE}routes: { work: { enabled: true } }\nvariantControls: { editorial: { version: 1, values: {} } }\n`;
   assert.deepEqual(validate(undefined, site).notChecked, [
@@ -513,8 +758,16 @@ test('every diagnostic code comes with a line and column, in YAML and JSON', () 
     `  - url: https://rowan.name\n    label: ${JSON.stringify(token)}`,
     "    extensions: { '@other/x': { a: 1 } }",
   ].join('\n');
+  // Two content extensions with one namespace: a broken build, not a broken document.
+  const twins: Context = {
+    ...CONTEXT,
+    extensions: [
+      defineContentExtension({ namespace: 'twin' }),
+      defineContentExtension({ namespace: 'twin' }),
+    ],
+  };
   // Each YAML unit but the first has a JSON twin; JSON's syntax error is its own.
-  const units: Array<{ portfolio?: string; site?: string; json?: string }> = [
+  const units: Array<{ portfolio?: string; site?: string; json?: string; ctx?: Context }> = [
     { portfolio: PORTFOLIO.replace('identity:', 'identity: &a'), json: '{ "schemaVersion": 2, }' },
     { portfolio: PORTFOLIO.replace('  name: Rowan Test', '  name: 7') },
     { site: SITE.replace('schemaVersion: 2', 'schemaVersion: 1') },
@@ -525,11 +778,12 @@ test('every diagnostic code comes with a line and column, in YAML and JSON', () 
     { portfolio: PORTFOLIO.concat(stats('one', '1'), stats('two', '1'), stats('three', '2')) },
     { portfolio: PORTFOLIO.replace('  - url: https://rowan.name', links) },
     { site: `${SITE}sections:\n  about: { hidden: true }\n  contact: { hidden: true }\n` },
+    { ctx: twins },
   ];
   const twin = (yaml: string) => `${JSON.stringify(parseYaml(yaml), null, 2)}\n`;
   for (const format of ['yaml', 'json'] as const) {
     const seen = new Set<string>();
-    for (const { portfolio = PORTFOLIO, site = SITE, json } of units) {
+    for (const { portfolio = PORTFOLIO, site = SITE, json, ctx = CONTEXT } of units) {
       const document = (text: string, name: string): SourceDocument =>
         format === 'yaml' ? { text, format, name } : { text: twin(text), format, name };
       const unit = {
@@ -539,7 +793,7 @@ test('every diagnostic code comes with a line and column, in YAML and JSON', () 
             : document(portfolio, `portfolio.${format}`),
         site: document(site, `site.${format}`),
       };
-      for (const diagnostic of validatePublicationUnit(unit, CONTEXT).diagnostics) {
+      for (const diagnostic of validatePublicationUnit(unit, ctx).diagnostics) {
         seen.add(diagnostic.code);
         assert.ok(
           Number.isInteger(diagnostic.line) && Number.isInteger(diagnostic.column),

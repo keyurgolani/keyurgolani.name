@@ -1,5 +1,5 @@
 import type { ContentExtension } from './extensions';
-import { parseExtensionKind, RESERVED_SECTION_IDS } from './ids';
+import { isSectionId, parseExtensionKind, RESERVED_SECTION_IDS } from './ids';
 import { isPlainObject } from './json';
 import {
   readPortfolio,
@@ -10,9 +10,9 @@ import {
 } from './load';
 import type { Portfolio } from './portfolio';
 import type { ParsedPair } from './public-view';
-import { findSecrets, redactSecrets, SECRET_LABELS } from './secrets';
+import { findSecrets, redactedPointer, redactSecrets, SECRET_LABELS, secretKind } from './secrets';
 import type { AppearanceAxis, AppearanceSelection, Site } from './site';
-import { toPointer, type DocumentFormat } from './source';
+import { parsePointer, yamlComments, type DocumentFormat, type Locate } from './source';
 
 // The publication-unit validator (#4, items 13 to 15): both documents as one
 // pair, checked alone and against each other. Pure and browser-safe, it never
@@ -61,9 +61,20 @@ export interface AppearanceCatalog {
   generatorInput(schemeId: string): 'seed-color' | 'asset' | null | undefined;
 }
 
-/** A check from another package, such as #5's variant contract or #19's packs. */
+/**
+ * A check from another package, such as #5's variant contract or #19's packs.
+ * Its records are located and redacted like the core ones. One that throws,
+ * or returns anything malformed, adds no record and leaves
+ * `validator:<id>` in `notChecked`.
+ */
 export interface UnitValidator {
   readonly id: string;
+  /**
+   * The `notChecked` entries this validator checks, cleared once it returns,
+   * such as `site.routes.*` for #5's route registry. A trailing `*` matches
+   * any rest.
+   */
+  readonly covers?: readonly string[];
   validate(pair: ParsedPair, ctx: Context): { diagnostics: Diagnostic[]; notChecked?: string[] };
 }
 
@@ -102,6 +113,7 @@ export const DIAGNOSTIC_SEVERITIES = {
   'origin.sample': 'warning',
   'origin.stale': 'warning',
   'extension.unregistered': 'warning',
+  'validator.failed': 'blocks-preview',
 } as const satisfies Record<string, DiagnosticSeverity>;
 
 export type DiagnosticCode = keyof typeof DIAGNOSTIC_SEVERITIES;
@@ -128,24 +140,27 @@ const REMEDIATIONS: Record<DiagnosticCode, string> = {
   'origin.stale': "If that's an old domain, point the link at the configured origin's host.",
   'extension.unregistered':
     "Register the extension's package with the host, or remove the data. Until then it's kept as written and never shown.",
+  'validator.failed':
+    'This is a bug in the build, such as two content extensions with one namespace, not in the documents.',
 };
 
 /**
  * Keys that belong to the deployment (#1), not the site document, at the top
- * level or under `features`, with the environment variable that sets each.
+ * level or under `features`, with the environment variable that sets each. A
+ * Map, so `constructor` and the other Object.prototype names aren't in it.
  */
-const DEPLOYMENT_SETTINGS: Readonly<Record<string, string>> = {
-  deploymentProfile: 'PORTFOLIO_PROFILE',
-  profile: 'PORTFOLIO_PROFILE',
-  origin: 'PORTFOLIO_ORIGIN',
-  canonicalOrigin: 'PORTFOLIO_ORIGIN',
-  url: 'PORTFOLIO_ORIGIN',
-  baseUrl: 'PORTFOLIO_ORIGIN',
-  studio: 'PORTFOLIO_PROFILE',
-  previewOrigin: 'PORTFOLIO_PREVIEW_ORIGIN',
-  trustedProxies: 'PORTFOLIO_TRUSTED_PROXY_HOPS',
-  proxy: 'PORTFOLIO_TRUSTED_PROXY_HOPS',
-};
+const DEPLOYMENT_SETTINGS: ReadonlyMap<string, string> = new Map([
+  ['deploymentProfile', 'PORTFOLIO_PROFILE'],
+  ['profile', 'PORTFOLIO_PROFILE'],
+  ['origin', 'PORTFOLIO_ORIGIN'],
+  ['canonicalOrigin', 'PORTFOLIO_ORIGIN'],
+  ['url', 'PORTFOLIO_ORIGIN'],
+  ['baseUrl', 'PORTFOLIO_ORIGIN'],
+  ['studio', 'PORTFOLIO_PROFILE'],
+  ['previewOrigin', 'PORTFOLIO_PREVIEW_ORIGIN'],
+  ['trustedProxies', 'PORTFOLIO_TRUSTED_PROXY_HOPS'],
+  ['proxy', 'PORTFOLIO_TRUSTED_PROXY_HOPS'],
+]);
 
 const AXES: readonly AppearanceAxis[] = [
   'variant',
@@ -181,12 +196,14 @@ export function validatePublicationUnit(
       diagnostics: [
         {
           code: 'validator.failed',
-          severity: 'blocks-preview',
+          severity: DIAGNOSTIC_SEVERITIES['validator.failed'],
           document: 'portfolio',
           pointer: '',
+          // The failure is the build's, so it's placed at the document's start.
+          line: 1,
+          column: 1,
           message: 'The validator failed before it could check this pair.',
-          remediation:
-            'This is a bug in the build, such as two content extensions with one namespace, not in the documents.',
+          remediation: REMEDIATIONS['validator.failed'],
         },
       ],
       notChecked: [],
@@ -203,6 +220,7 @@ function check(
   const site = readSite(unit.site.text, unit.site.format, options);
   const diagnostics: Diagnostic[] = [];
   const notChecked: string[] = [];
+  const data = { portfolio: portfolio.data, site: site.data };
   const add = (
     document: Diagnostic['document'],
     code: DiagnosticCode,
@@ -214,7 +232,7 @@ function check(
       severity: DIAGNOSTIC_SEVERITIES[code],
       document,
       pointer: found.pointer,
-      ...stableId(document, found.pointer, document === 'portfolio' ? portfolio.data : site.data),
+      ...stableId(document, found.pointer, data[document]),
       ...(found.line !== undefined ? { line: found.line, column: found.column } : {}),
       message: found.message,
       remediation,
@@ -240,11 +258,25 @@ function check(
       add('site', problemCode(problem), located(problem));
     }
   }
-  for (const [document, read] of [
-    ['portfolio', portfolio],
-    ['site', site],
+  for (const [document, read, source] of [
+    ['portfolio', portfolio, unit.portfolio],
+    ['site', site, unit.site],
   ] as const) {
     secrets(read, (found) => add(document, 'secret.detected', found));
+    // Comments aren't data, but the text is stored and shown (#3), so a
+    // secret pasted into one leaks as surely.
+    if (source.format === 'yaml' && read.data !== undefined) {
+      for (const { text, line, column } of yamlComments(source.text)) {
+        const kind = secretKind(text);
+        if (!kind) continue;
+        add(document, 'secret.detected', {
+          pointer: '',
+          message: `A comment looks like ${SECRET_LABELS[kind]}. A document can't hold secrets.`,
+          line,
+          column,
+        });
+      }
+    }
     for (const warning of read.warnings) {
       add(document, 'extension.unregistered', locatedWarning(warning));
     }
@@ -255,7 +287,7 @@ function check(
     pair = { portfolio: portfolio.value, site: site.value };
     const locateIn = { portfolio: portfolio.locate, site: site.locate };
     const at = (document: Diagnostic['document'], path: readonly (string | number)[]) => ({
-      pointer: toPointer(path),
+      pointer: redactedPointer(path),
       ...locateIn[document](path),
     });
     checkAppearance(pair.site, ctx, notChecked, (path, message, remediation) =>
@@ -269,19 +301,14 @@ function check(
       add(document, code, { ...at(document, path), message }),
     );
     for (const validator of ctx.validators ?? []) {
-      try {
-        const result = validator.validate(pair, ctx);
-        for (const diagnostic of result.diagnostics) {
-          diagnostics.push({
-            ...diagnostic,
-            pointer: redactSecrets(diagnostic.pointer),
-            message: redactSecrets(diagnostic.message),
-          });
-        }
-        notChecked.push(...(result.notChecked ?? []));
-      } catch {
+      const result = runValidator(validator, pair, ctx, locateIn, data);
+      if (!result) {
         notChecked.push(`validator:${validator.id}`);
+        continue;
       }
+      diagnostics.push(...result.diagnostics);
+      const remaining = notChecked.filter((entry) => !covers(validator, entry));
+      notChecked.splice(0, notChecked.length, ...remaining, ...result.notChecked);
     }
   }
 
@@ -292,6 +319,77 @@ function check(
     diagnostics,
     notChecked: [...new Set(notChecked)].sort(),
   };
+}
+
+/** Whether a validator declares that it checks a `notChecked` entry. */
+function covers(validator: UnitValidator, entry: string): boolean {
+  const patterns: readonly unknown[] = Array.isArray(validator.covers) ? validator.covers : [];
+  return patterns.some(
+    (pattern) =>
+      typeof pattern === 'string' &&
+      (pattern.endsWith('*') ? entry.startsWith(pattern.slice(0, -1)) : entry === pattern),
+  );
+}
+
+const SEVERITIES: ReadonlySet<unknown> = new Set(['blocks-preview', 'blocks-publish', 'warning']);
+/** A record's code: dotted lowercase words, such as `route.unknown`. */
+const RECORD_CODE = /^[a-z][a-z0-9-]*(?:\.[a-z0-9-]+)+$/;
+
+/**
+ * A plugged-in validator's records, each located from its pointer and
+ * redacted like the core's, or null when it threw or returned anything
+ * malformed. A malformed result counts whole, so none of its records stay.
+ */
+function runValidator(
+  validator: UnitValidator,
+  pair: ParsedPair,
+  ctx: Context,
+  locateIn: Readonly<Record<Diagnostic['document'], Locate>>,
+  data: Readonly<Record<Diagnostic['document'], unknown>>,
+): { diagnostics: Diagnostic[]; notChecked: string[] } | null {
+  let result: unknown;
+  try {
+    result = validator.validate(pair, ctx);
+  } catch {
+    return null;
+  }
+  if (!isPlainObject(result) || !Array.isArray(result.diagnostics)) return null;
+  const notChecked = result.notChecked ?? [];
+  if (!Array.isArray(notChecked) || !notChecked.every((entry) => typeof entry === 'string')) {
+    return null;
+  }
+  const records: Diagnostic[] = [];
+  for (const record of result.diagnostics as unknown[]) {
+    if (!isPlainObject(record)) return null;
+    const { code, severity, document, pointer, message, remediation } = record;
+    const path = typeof pointer === 'string' ? parsePointer(pointer) : null;
+    const core = typeof code === 'string' && Object.hasOwn(DIAGNOSTIC_SEVERITIES, code);
+    if (
+      typeof code !== 'string' ||
+      !RECORD_CODE.test(code) ||
+      !SEVERITIES.has(severity) ||
+      // A core code keeps its core severity.
+      (core && DIAGNOSTIC_SEVERITIES[code as DiagnosticCode] !== severity) ||
+      (document !== 'portfolio' && document !== 'site') ||
+      path === null ||
+      typeof message !== 'string' ||
+      typeof remediation !== 'string'
+    ) {
+      return null;
+    }
+    const redacted = redactedPointer(path);
+    records.push({
+      code,
+      severity: severity as DiagnosticSeverity,
+      document,
+      pointer: redacted,
+      ...stableId(document, redacted, data[document]),
+      ...locateIn[document](path),
+      message: redactSecrets(message),
+      remediation: redactSecrets(remediation),
+    });
+  }
+  return { diagnostics: records, notChecked: notChecked.map((entry) => redactSecrets(entry)) };
 }
 
 function problemCode(problem: DocumentProblem): DiagnosticCode {
@@ -327,17 +425,24 @@ function locatedWarning(warning: DocumentWarning) {
 function deploymentSetting(problem: DocumentProblem): string | undefined {
   if (problem.code !== 'unrecognized_keys' || problem.pointer === undefined) return undefined;
   const match = /^(?:\/features)?\/([^/]+)$/.exec(problem.pointer);
-  return match ? DEPLOYMENT_SETTINGS[match[1]!] : undefined;
+  return match ? DEPLOYMENT_SETTINGS.get(match[1]!) : undefined;
 }
 
-/** The section a pointer is about: its id in the portfolio, its key in the site document. */
+/**
+ * The section a pointer is about: its id in the portfolio, its key in the
+ * site document. Only an id in the section-id shape counts, so a value
+ * that's no id, such as a pasted token, never rides along in the records.
+ */
 function stableId(document: Diagnostic['document'], pointer: string, data: unknown) {
   const [first, second] = pointer.split('/').slice(1);
   if (first !== 'sections' || second === undefined) return {};
-  if (document === 'site') return { stableId: second };
-  const sections = isPlainObject(data) ? data.sections : undefined;
-  const section = Array.isArray(sections) ? sections[Number(second)] : undefined;
-  return isPlainObject(section) && typeof section.id === 'string' ? { stableId: section.id } : {};
+  let id: unknown = second;
+  if (document === 'portfolio') {
+    const sections = isPlainObject(data) ? data.sections : undefined;
+    const section = Array.isArray(sections) ? sections[Number(second)] : undefined;
+    id = isPlainObject(section) ? section.id : undefined;
+  }
+  return typeof id === 'string' && isSectionId(id) ? { stableId: id } : {};
 }
 
 function secrets(
@@ -345,13 +450,14 @@ function secrets(
   report: (found: { pointer: string; message: string; line?: number; column?: number }) => void,
 ) {
   if (read.data === undefined || !read.locate) return;
-  for (const finding of findSecrets(read.data)) {
-    const pointer = toPointer(finding.path);
-    const where = finding.in === 'key' ? `A key in ${pointer || 'the document'}` : pointer;
+  // A secret-shaped key is located at the key; its pointer names the object holding it.
+  for (const { path, kind, in: where, line, column } of findSecrets(read.data, read.locate)) {
+    const pointer = redactedPointer(path);
+    const subject = where === 'key' ? `A key in ${pointer || 'the document'}` : pointer;
     report({
       pointer,
-      message: `${where} looks like ${SECRET_LABELS[finding.kind]}. A document can't hold secrets.`,
-      ...read.locate(finding.path),
+      message: `${subject} looks like ${SECRET_LABELS[kind]}. A document can't hold secrets.`,
+      ...(line !== undefined ? { line, column } : {}),
     });
   }
 }
@@ -384,7 +490,7 @@ function checkAppearance(
     } catch {
       takes = undefined;
     }
-    const pointer = toPointer(['appearanceInputs', schemeId]);
+    const pointer = redactedPointer(['appearanceInputs', schemeId]);
     if (takes === undefined) {
       notChecked.push(`site.appearanceInputs.${schemeId}`);
     } else if (takes === null) {
@@ -435,7 +541,7 @@ function checkPair(pair: ParsedPair, ctx: Context, notChecked: string[], report:
         'site',
         'ref.missing',
         ['sections', id],
-        `${toPointer(['sections', id])} names no section in the portfolio.`,
+        `${redactedPointer(['sections', id])} names no section in the portfolio.`,
       );
     }
   }
@@ -458,7 +564,12 @@ function checkPair(pair: ParsedPair, ctx: Context, notChecked: string[], report:
   for (const { path, url } of links) {
     const fragment = /^\/?#(.+)$/.exec(url)?.[1];
     if (fragment !== undefined && !targets.has(fragment)) {
-      report('portfolio', 'anchor.broken', path, `${toPointer(path)} links to no visible section.`);
+      report(
+        'portfolio',
+        'anchor.broken',
+        path,
+        `${redactedPointer(path)} links to no visible section.`,
+      );
     }
   }
 
@@ -471,15 +582,20 @@ function checkPair(pair: ParsedPair, ctx: Context, notChecked: string[], report:
   }
   for (const { path, url } of links) {
     const host = httpHost(url);
-    if (host === undefined) continue;
-    if (!isSampleHost(origin) && isSampleHost(host)) {
-      report('portfolio', 'origin.sample', path, `${toPointer(path)} links to a sample address.`);
-    } else if (isStaleHost(host, origin)) {
+    const sample = host !== undefined ? isSampleHost(host) : mailDomains(url).some(isSampleHost);
+    if (!isSampleHost(origin) && sample) {
+      report(
+        'portfolio',
+        'origin.sample',
+        path,
+        `${redactedPointer(path)} links to a sample address.`,
+      );
+    } else if (host !== undefined && isStaleHost(host, origin)) {
       report(
         'portfolio',
         'origin.stale',
         path,
-        `${toPointer(path)} links to a host that differs from the configured origin's only in its last label.`,
+        `${redactedPointer(path)} links to a host that differs from the configured origin's only in its last label.`,
       );
     }
   }
@@ -540,43 +656,52 @@ function checkMetrics(portfolio: Portfolio, visible: readonly boolean[], report:
       });
     }
   });
+  const between = (a: Stated, b: Stated) =>
+    `${redactedPointer(a.path)} and ${redactedPointer(b.path)}`;
   for (const stated of byKey.values()) {
-    const [first, ...rest] = stated;
-    for (const later of rest) {
-      const where = `${toPointer(later.path)} and ${toPointer(first!.path)}`;
-      if (!sameValue(later.value, first!.value)) {
-        report(
-          'portfolio',
-          'metric.conflict',
-          later.path,
-          `${where} give one metric different values.`,
-        );
-      } else if (
-        later.section !== first!.section &&
-        visible[later.section] &&
-        visible[first!.section]
-      ) {
+    // One group per value, in the order each value is first stated.
+    const groups = new Map<string, Stated[]>();
+    for (const one of stated) {
+      const value = normalizedValue(one.value);
+      groups.set(value, [...(groups.get(value) ?? []), one]);
+    }
+    const [first] = stated;
+    for (const [value, group] of groups) {
+      // Every statement of a value other than the first statement's contradicts it.
+      if (value !== normalizedValue(first!.value)) {
+        for (const later of group) {
+          report(
+            'portfolio',
+            'metric.conflict',
+            later.path,
+            `${between(later, first!)} give one metric different values.`,
+          );
+        }
+      }
+      // A value visitors see in two sections, hidden statements aside.
+      const shown = group.filter(({ section }) => visible[section]);
+      const [earliest] = shown;
+      for (const later of shown.slice(1)) {
+        if (later.section === earliest!.section) continue;
         report(
           'portfolio',
           'metric.duplicate',
           later.path,
-          `${where} show one metric with the same value.`,
+          `${between(later, earliest!)} show one metric with the same value.`,
         );
       }
     }
   }
 }
 
-/** Numbers compare as numbers when both sides read as finite numbers, else as trimmed, case-insensitive text. */
-function sameValue(a: string | number, b: string | number): boolean {
-  const number = (value: string | number) => {
-    const text = String(value).trim();
-    const parsed = text === '' ? Number.NaN : Number(text);
-    return Number.isFinite(parsed) ? parsed : undefined;
-  };
-  const [x, y] = [number(a), number(b)];
-  if (x !== undefined && y !== undefined) return x === y;
-  return String(a).trim().toLowerCase() === String(b).trim().toLowerCase();
+/**
+ * A metric value as it compares: a number when it reads as a finite number,
+ * else its text trimmed and lowercased.
+ */
+function normalizedValue(value: string | number): string {
+  const text = String(value).trim();
+  const number = text === '' ? Number.NaN : Number(text);
+  return Number.isFinite(number) ? `number:${number}` : `text:${text.toLowerCase()}`;
 }
 
 function canonicalHost(origin: string | undefined): string | undefined {
@@ -595,6 +720,26 @@ function httpHost(url: string): string | undefined {
   } catch {
     return undefined;
   }
+}
+
+/** The domain of each address a mailto: URL names, lowercased. */
+function mailDomains(url: string): string[] {
+  if (!/^mailto:/i.test(url)) return [];
+  let to = url.slice('mailto:'.length).split('?')[0]!;
+  try {
+    to = decodeURIComponent(to);
+  } catch {
+    // Kept as written: a stray % only makes the address unreadable.
+  }
+  return to
+    .split(',')
+    .map((address) =>
+      address
+        .slice(address.lastIndexOf('@') + 1)
+        .trim()
+        .toLowerCase(),
+    )
+    .filter((domain) => domain !== '');
 }
 
 /** The reserved names sample content uses: example.com, .net, .org, *.example, *.test, *.invalid, and localhost. */
