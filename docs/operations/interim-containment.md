@@ -113,7 +113,18 @@ zcat -f /var/log/nginx/access.log* | awk '{
 }' | sort | uniq -c
 ```
 
-For JSON logs (Caddy, Traefik), extract only the timestamp, method, and path with `jq` or `python3`, then count the same way. Don't judge the portfolio file's content. Report its mtime from step 3; the owner compares the content with what he expects.
+For Caddy's JSON access log, for example:
+
+```sh
+jq -r 'select(.request) | [(.ts | floor | todate | .[0:10]), .request.method, (.request.uri | split("?")[0])] | @tsv' <access log> |
+  awk -F'\t' '$3 == "/admin" || index($3, "/admin/") == 1 || ($2 == "GET" && $3 == "/api/portfolio") ||
+    ($2 == "PUT" && ($3 == "/api/portfolio" || $3 == "/api/variant" || $3 == "/api/customize")) { print $1, $2, $3 }' |
+  sort | uniq -c
+```
+
+For any other format, extract only the date, method, and path the same way. To learn a JSON log's shape, print its field names, not a line: `head -1 <access log> | jq -c '[paths(scalars) | map(tostring) | join(".")]'`.
+
+Don't judge the portfolio file's content. Report its mtime from step 3; the owner compares the content with what he expects.
 
 ## 5. Backup
 
@@ -261,7 +272,7 @@ Write `$BACKUP/posture.md` in the format below, then print the public summary. I
 - Prompt: docs/operations/interim-containment.md at <clone commit> (v0.1.1)
 - Result: complete | incomplete, stopped at step <n> (<failing probe or reason>) | rolled back at step <n>
 
-## Inventory (redacted)
+## Inventory (no secret values; paths and names are fine)
 - Compose files, project, project directory, service, container:
 - Image before: reference, image ID, revision label:
 - Builds from a checkout: no | yes, HEAD <commit>, <n> modified tracked paths, <n> untracked paths (list them)
