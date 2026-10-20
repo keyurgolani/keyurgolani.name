@@ -170,7 +170,7 @@ The full audit checklist is at [`skills/variant-developer/references/audit-check
 The variant-developer skill ships a visual companion at `skills/variant-developer/scripts/visual-companion/`:
 
 - **Mockup mode** (HTTP server + file watcher) for prototyping CSS without spinning up Next.js.
-- **Preview mode** (Playwright matrix screenshots) for capturing every theme × scheme × typography combo.
+- **Preview mode** (Playwright matrix screenshots) for capturing every theme of the variant, scheme, and typography that `config/portfolio.yml` selects, with `pnpm dev` running.
 
 Start mockup mode:
 

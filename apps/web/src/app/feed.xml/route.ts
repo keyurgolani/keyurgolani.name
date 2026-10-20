@@ -1,12 +1,14 @@
 import { renderRssFeed } from '@portfolio/kit/seo';
-import { loadPortfolio } from '~/lib/portfolio';
+import { getLive } from '~/server/catalog';
+import { requireDeploymentConfig } from '~/server/config-store';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
-    const { portfolio } = await loadPortfolio();
-    const xml = renderRssFeed(portfolio);
+    const { origin } = requireDeploymentConfig();
+    const { portfolio } = (await getLive()).unit;
+    const xml = renderRssFeed(portfolio, { siteUrl: origin });
     return new Response(xml, {
       headers: {
         'Content-Type': 'application/rss+xml; charset=utf-8',
@@ -14,12 +16,11 @@ export async function GET() {
       },
     });
   } catch (error) {
-    // The message can quote the portfolio file or carry its path, so it goes
-    // to the server log and the public body stays fixed.
-    console.error('[feed] Could not build feed:', error);
-    return new Response('Feed unavailable', {
+    // The public body stays fixed; the cause goes to the server log only.
+    console.error('[feed] Could not build the feed:', error);
+    return new Response('Feed unavailable.', {
       status: 500,
-      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+      headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' },
     });
   }
 }

@@ -8,8 +8,12 @@ services:
     image: ${PORTFOLIO_IMAGE:?set PORTFOLIO_IMAGE to the image under test}
     environment:
       TZ: UTC
+      PORTFOLIO_PROFILE: read-only
+      # The address visitors use: the proxy's.
+      PORTFOLIO_ORIGIN: https://portfolio.test:${PROXY_PORT:?set PROXY_PORT to a free port}
+      PORTFOLIO_SOURCE_DIR: /config
     volumes:
-      - ${PORTFOLIO_DATA_DIR:?set PORTFOLIO_DATA_DIR to the fixture data directory}:/data:ro
+      - ${FIXTURE_SOURCE_DIR:?set FIXTURE_SOURCE_DIR to the fixture source directory}:/config:ro
     networks:
       - internal
 

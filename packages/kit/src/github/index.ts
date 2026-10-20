@@ -1,11 +1,14 @@
 /**
- * GitHub data fetcher — server-side. Importing this module from a client
- * component will fail at runtime (no `process.env.GITHUB_TOKEN` access in
- * the browser, and no token would be a leak anyway).
+ * GitHub data fetcher — server-side.
  *
- * Entry point: `fetchGitHubData(config)` — returns `GitHubData | null`.
+ * Entry point: `fetchGitHubData(config, token?)` — returns `GitHubData | null`.
  * Returns `null` on transport failure rather than throwing, so renderers
  * can fall back to a graceful "stats unavailable" state.
+ *
+ * Without a token it uses unauthenticated REST, which is what every public
+ * renderer gets: the kit reads no environment variables, and no render path
+ * passes a token. A token switches to GraphQL (contribution calendar, real
+ * pinned items) for owner-side callers that hold one.
  *
  * Memoized per-request via React's `cache()`, then layered on top of
  * Next.js `fetch` revalidation (1h) for cross-request reuse.
@@ -41,8 +44,10 @@ export function contributionLevelFor(count: number): 0 | 1 | 2 | 3 | 4 {
   return 4;
 }
 
-async function uncachedFetch(input: FetchGitHubDataInput): Promise<GitHubData | null> {
-  const token = process.env.GITHUB_TOKEN;
+async function uncachedFetch(
+  input: FetchGitHubDataInput,
+  token?: string,
+): Promise<GitHubData | null> {
   if (token) {
     const result = await fetchViaGraphQL(input, token).catch(() => null);
     if (result) return result;

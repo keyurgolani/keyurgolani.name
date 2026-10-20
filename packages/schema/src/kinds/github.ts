@@ -6,9 +6,9 @@ import { SectionBase } from './common';
  * fetched server-side at render time by `@portfolio/kit/github`.
  *
  * Variants opt in via `supportedKinds` and dispatch to a renderer that
- * awaits the fetch. With a `GITHUB_TOKEN` env var, the GraphQL API is
- * used (5000 req/hr, full contribution calendar). Without one, the REST
- * API fallback runs (60 req/hr, public data only).
+ * awaits the fetch. Public renders use the unauthenticated REST API
+ * (60 req/hr, public data only, no contribution calendar); only a caller
+ * that passes a token gets GraphQL.
  */
 export const GithubSchema = z.object({
   kind: z.literal('github'),

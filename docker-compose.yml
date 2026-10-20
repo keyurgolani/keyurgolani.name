@@ -9,12 +9,15 @@ services:
     ports:
       - '${PORT:-3000}:3000'
     environment:
-      PORTFOLIO_PATH: /data/portfolio.yml
+      PORTFOLIO_PROFILE: read-only
+      # The origin visitors use, such as https://jane.name. Set it in .env.
+      PORTFOLIO_ORIGIN: ${PORTFOLIO_ORIGIN:?set PORTFOLIO_ORIGIN in .env to the origin visitors use}
+      PORTFOLIO_SOURCE_DIR: /config
       NODE_ENV: production
     volumes:
-      # Bind-mount the user's portfolio file read-only. Production edits happen
-      # on the host file; see docs/deployment.md.
-      - ./portfolio.yml:/data/portfolio.yml:ro
+      # config/ holds your portfolio.yml. The server reads it once at startup;
+      # restart the container after you edit it.
+      - ./config:/config:ro
       # Optional: bind-mount user assets into the public dir.
       - ./assets:/app/apps/web/public/assets:ro
     healthcheck:

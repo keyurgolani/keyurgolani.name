@@ -4,9 +4,9 @@ What the platform can do today.
 
 ## Content model
 
-- **YAML-driven content.** Edit `portfolio.yml` at the repo root; never touch code to change content.
+- **YAML-driven content.** Edit `config/portfolio.yml`; never touch code to change content.
 - **28 section kinds** spanning narrative, dated entries, lists, visual, voice, accent, personal, external, and connection categories. See [authoring.md](authoring.md#section-kind-quick-reference).
-- **Schema validation.** Zod-typed source of truth. Typos in `kind` discriminants fail loudly via the `validate.mjs` script.
+- **Schema validation.** Zod-typed source of truth. Typos in `kind` discriminants fail loudly via the `validate.mjs` script, and the server refuses to start on an invalid file, naming its line and column.
 - **Loose date strings.** `period: { start: "Jan 2024", end: "present" }` is fine — humans read this output, not parsers. ISO dates work too.
 - **Markdown in prose fields.** `lede.body`, `experience.items[].highlights[]`, etc. honor a curated subset of Markdown.
 - **External assets via `apps/web/public/`.** Resume PDFs, avatar images, gallery photos all reference `/path` and resolve to `apps/web/public/path`.
@@ -30,10 +30,10 @@ What the platform can do today.
 ## GitHub integration
 
 - **Live data fetched server-side.** No client-side API calls.
-- **GraphQL primary, REST fallback.** Token in `GITHUB_TOKEN` env var unlocks 5000 req/hr + the contribution calendar. Without a token, REST fallback runs at 60 req/hr.
-- **Pinned repositories.** Up to 6, with descriptions, stars, forks, primary language.
+- **Unauthenticated REST.** Public pages never send a token, so requests count against GitHub's 60 an hour per server address.
+- **Pinned repositories.** Up to 6 of your top-starred repos (REST has no pinned list), with descriptions, stars, forks, primary language.
 - **Recently-active repositories.** Configurable list (1–20, default 10) sorted by last push, excluding forks. Renders below pinned with relative timestamps ("3d ago").
-- **Contribution heatmap.** 53-week calendar with per-day contribution counts. Requires GraphQL (token).
+- **Contribution heatmap.** 53-week calendar with per-day contribution counts. Needs GraphQL and a token, so public pages don't show it.
 - **Language breakdown.** Optional bar + legend showing language share across repos.
 - **Featured repos.** Pin specific repos by name even if they're not GitHub-pinned.
 - **Excluded repos.** Suppress specific repos from all GitHub-section views.
@@ -55,8 +55,8 @@ What the platform can do today.
 
 - **Metadata** generated from `identity` + `meta` fields (title, description, OG, Twitter Card).
 - **Open Graph image** generated dynamically from the first three sections.
-- **`/robots.txt` and `/sitemap.xml`** generated server-side.
-- **Canonical URLs** when `meta.url` is set.
+- **`/robots.txt` and `/sitemap.xml`** generated server-side, per request.
+- **Absolute URLs** (Open Graph, sitemap, robots.txt, feed, JSON-LD) on `PORTFOLIO_ORIGIN`, the deployment's canonical origin.
 - **`<html lang="en">`** by default (override via your variant if needed).
 
 ## Skills (AI-assisted authoring + development)

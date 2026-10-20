@@ -52,8 +52,9 @@ COPY --from=builder --chown=nextjs:nodejs /repo/apps/web/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /repo/apps/web/.next/static ./apps/web/.next/static
 COPY --from=builder --chown=nextjs:nodejs /repo/apps/web/public ./apps/web/public
 
-# Default portfolio path inside container; overridable.
-ENV PORTFOLIO_PATH=/data/portfolio.yml
+# No PORTFOLIO_* defaults: the deployment sets its profile, origin, and source
+# directory at run time (docs/deployment.md), and the server refuses to start
+# without them.
 
 USER nextjs
 EXPOSE 3000

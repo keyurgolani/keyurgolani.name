@@ -4,15 +4,16 @@ How the pieces fit together.
 
 ## One-paragraph overview
 
-A single `portfolio.yml` at the repo root drives everything. The Next.js host in `apps/web` reads that file at request time, validates it against the Zod schema in `@portfolio/schema`, and renders it through the active variant from `packages/variant-*`. Variants are independent React packages that consume `@portfolio/kit` for shared utilities (theming, GitHub fetcher, formatters) and decide everything visual on their own.
+A single `portfolio.yml` in the deployment's source directory (`config/` in a checkout) drives everything. At startup the Next.js host in `apps/web` checks its deployment settings, reads that file once, validates it against the Zod schema in `@portfolio/schema`, and renders it through the active variant from `packages/variant-*`. Variants are independent React packages that consume `@portfolio/kit` for shared utilities (theming, GitHub fetcher, formatters) and decide everything visual on their own.
 
 ## Data flow
 
 ```
 ┌───────────────────┐
-│  portfolio.yml    │  Author's content
+│  config/          │  Author's content
+│   portfolio.yml   │
 └─────────┬─────────┘
-          │ loadPortfolio()
+          │ read once at startup (CatalogReader)
           ▼
 ┌───────────────────┐
 │  @portfolio/      │  Zod parse + validate
@@ -56,7 +57,7 @@ The schema is the only source of truth. If a doc disagrees, the schema wins.
 Things every variant needs but shouldn't reimplement:
 
 - **`ThemeProvider`** + **`useTheme`** — hydration-safe theme provider with `resolveTheme(preference, supported, systemMatch)` for variant-aware fallback (`bright→light`, `black→dark` when not supported).
-- **`fetchGitHubData`** — server-side GitHub fetcher with GraphQL primary + REST fallback. Returns pinned repos, recently-active repos, contribution calendar, language breakdown, total stars.
+- **`fetchGitHubData`** — server-side GitHub fetcher. Unauthenticated REST by default, which is what public pages get; GraphQL (with the contribution calendar) only for a caller that passes a token. Returns pinned repos, recently-active repos, language breakdown, total stars.
 - **`format.ts`** — `formatDate`, `formatPeriod`, `formatDuration`, `formatRelativeTime`, `formatCompactNumber`, `formatList`, `slugify`, etc.
 - **`SectionFrame`** + **`FallbackSection`** — primitives variants compose to render unfamiliar sections.
 - **`buildStructuredData`** — JSON-LD generation for SEO from the portfolio.
@@ -79,11 +80,12 @@ Variants must NOT reach into other variants. They communicate with the host only
 
 The Next.js host. Responsibilities:
 
-- **`loadPortfolio()`** — reads `portfolio.yml`, validates, returns the typed `Portfolio`.
+- **Startup** — `src/instrumentation.ts` validates the deployment settings (`src/server/config.ts`, the only code that reads them) and builds the catalog reader before the server takes a request. Any fatal finding logs a `config.fatal` line and stops the process.
+- **`getLive()`** — `src/server/catalog.ts`, the one way pages and metadata routes read the portfolio: the frozen revision the documents adapter loaded from `PORTFOLIO_SOURCE_DIR` at startup.
 - **Variant registry** — `scripts/build-registry.mjs` scans `packages/variant-*` at build time and generates `src/lib/registry.generated.ts` mapping slug → component.
-- **Routing** — `app/page.tsx` renders the active variant, `app/[variant]/page.tsx` is the variant picker preview.
+- **Routing** — `app/page.tsx` renders the active variant. `app/not-found.tsx`, `app/error.tsx`, and `app/global-error.tsx` show generic pages that never print error details.
 - **`layout.tsx`** — wraps everything in `<ThemeProvider supportedThemes={editorialManifest.themes}>` and injects the pre-hydration theme init script.
-- **SEO** — generates metadata, JSON-LD, OG image, robots.txt, sitemap.xml from the portfolio.
+- **SEO** — generates metadata, JSON-LD, OG image, robots.txt, sitemap.xml, and the feed from the portfolio per request, with every absolute URL on `PORTFOLIO_ORIGIN`.
 
 ## Theme resolution
 

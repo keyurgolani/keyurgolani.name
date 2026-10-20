@@ -1,0 +1,10 @@
+# Harness fixture whose text looks like markup. The tagline reaches the
+# page's JSON-LD; it must stay text there and never close the script element.
+identity:
+  name: Rowan Fixture
+  tagline: 'Ships </script><script>window.__injected = true</script> & <!-- notes --> daily'
+
+variant: editorial
+theme: system
+
+sections: []

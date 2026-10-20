@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 /**
- * preview-matrix.mjs — capture screenshots of /preview/<slug> across
- * (theme × colorScheme × typography). Lazily uses Playwright if installed;
- * otherwise prints install command and exits with code 0 (informational,
- * not a hard failure).
+ * preview-matrix.mjs — capture screenshots of the running dev server's home
+ * page in every theme. The page renders the variant, color scheme, and
+ * typography that config/portfolio.yml selects; set `variant: <slug>` there
+ * first. Lazily uses Playwright if installed; otherwise prints install
+ * command and exits with code 0 (informational, not a hard failure).
  */
 import { mkdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -45,30 +46,39 @@ const REPO_ROOT = findRepoRoot(fileURLToPath(import.meta.url));
 const outDir = path.join(REPO_ROOT || process.cwd(), '.variant-preview', slug);
 mkdirSync(outDir, { recursive: true });
 
-// MVP: capture every theme + 'default' scheme/typography.
-// A future enhancement can read the variant's manifest.ts to enumerate
-// real scheme + preset ids and capture every combination.
+// Every theme; scheme and typography come from config/portfolio.yml. Change
+// them there and run again for other combinations.
 const themes = ['light', 'dark', 'bright', 'black'];
-const schemes = ['default'];
-const presets = ['default'];
 
 const browser = await chromium.launch();
 try {
-  const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
-  const page = await context.newPage();
   for (const theme of themes) {
-    for (const scheme of schemes) {
-      for (const preset of presets) {
-        const url = `http://localhost:3000/preview/${slug}?theme=${theme}&scheme=${scheme}&typography=${preset}`;
-        const filename = `${theme}-${scheme}-${preset}.png`;
-        try {
-          await page.goto(url, { waitUntil: 'networkidle', timeout: 15_000 });
-          await page.screenshot({ path: path.join(outDir, filename), fullPage: true });
-          console.log(`captured ${filename}`);
-        } catch (err) {
-          console.error(`failed ${filename}: ${err.message}`);
-        }
+    const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    // The theme provider reads its preference from localStorage.
+    await context.addInitScript((value) => {
+      window.localStorage.setItem('portfolio:theme', value);
+    }, theme);
+    const page = await context.newPage();
+    try {
+      await page.goto('http://localhost:3000/', { waitUntil: 'networkidle', timeout: 15_000 });
+      const root = page.locator('[data-variant]').first();
+      const rendered = await root.getAttribute('data-variant');
+      if (rendered !== slug) {
+        console.error(
+          `the page renders ${rendered ?? 'no variant'}, not ${slug}. Set variant: ${slug} in config/portfolio.yml.`,
+        );
+        process.exitCode = 1;
+        break;
       }
+      const scheme = (await root.getAttribute('data-color-scheme')) ?? 'default';
+      const typography = (await root.getAttribute('data-typography')) ?? 'default';
+      const filename = `${theme}-${scheme}-${typography}.png`;
+      await page.screenshot({ path: path.join(outDir, filename), fullPage: true });
+      console.log(`captured ${filename}`);
+    } catch (err) {
+      console.error(`failed ${theme}: ${err.message}`);
+    } finally {
+      await context.close();
     }
   }
 } finally {

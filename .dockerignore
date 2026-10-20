@@ -20,8 +20,10 @@ experiments
 .env
 .env.*
 !.env.example
+apps/web/.env.development
 
 # Personal portfolio data stays out of the image. Only the example ships.
+config
 portfolio.*
 !portfolio.example.yml
 

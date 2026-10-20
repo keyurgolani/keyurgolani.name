@@ -21,7 +21,7 @@ metadata:
 
 ## 1. What this platform is + the variant model
 
-The keyurgolani/portfolio platform is a self-hostable, YAML-driven portfolio site. A single `portfolio.yml` at the repo root is rendered by one of many pluggable visual variants. Variants are the look; the YAML is the content. Picking a different variant changes everything visual without touching the data.
+The keyurgolani/portfolio platform is a self-hostable, YAML-driven portfolio site. A single `config/portfolio.yml` is rendered by one of many pluggable visual variants. Variants are the look; the YAML is the content. Picking a different variant changes everything visual without touching the data.
 
 A variant is a React component package living under `packages/variant-<slug>`. The contract is small:
 
@@ -42,7 +42,7 @@ Every variant goes through these phases in order. Skipping or reordering produce
 - **Phase 0 — Reference inventory** (when porting from an archive variant, another platform, a Figma, or "make it look like X"). Read the reference end-to-end, list every component and signature interaction, diff the data shape against the schema, decide what's portable vs not. Output drives DESIGN.md. **Skip only when greenfield** (no existing reference).
 - **Phase 1 — Design contract.** Pick a metaphor. Write `packages/variant-<slug>/DESIGN.md`. Get the user to approve it. No code yet.
 - **Phase 2 — Implementation in waves.** Wave 1 is foundation (scaffold + manifest + tokens + base styles, every section rendering via `FallbackSection`). Wave 1.5 is kit hoists (extract reusable patterns identified in Phase 0 _before_ Wave 2 consumes them). Wave 2 is bespoke renderers, one cluster at a time. Wave 3 is polish (navigation, screenshots, print stylesheet, performance tier honesty check).
-- **Phase 3 — Pre-merge audit.** Run scripted gates (`audit.mjs`, typecheck, lint, build, kit-dedup) AND visual gates (matrix sweep, contrast, reduced-motion, print, /variants listing, fidelity vs reference, real-data, mobile). See `references/audit-checklist.md` and `references/quality-gates.md`.
+- **Phase 3 — Pre-merge audit.** Run scripted gates (`audit.mjs`, typecheck, lint, build, kit-dedup) AND visual gates (matrix sweep, contrast, reduced-motion, print, fidelity vs reference, real-data, mobile). See `references/audit-checklist.md` and `references/quality-gates.md`.
 
 **Do not skip Phase 1.** The whole point of a variant is committing to a single visual metaphor and translating it consistently into tokens, typography, layout, motion, and copy. You cannot do that by writing CSS first and explaining it later. Coherence comes from the contract.
 
@@ -111,7 +111,7 @@ Scaffold and stand up a renderable variant that uses `FallbackSection` for every
   - Load `references/common-bugs.md` while writing this — distilled list of bugs that escape compile/audit and only show up at visual-validation time.
 - Wire theme toggle: import `useTheme` from `@portfolio/kit` and build your own toggle component in `src/primitives/theme-toggle.tsx`. Filter the rendered buttons against your `manifest.themes` so users only see modes your variant supports; always render the `system` button (it resolves to mandatory light/dark). Editorial's toggle in `packages/variant-editorial/src/primitives/theme-toggle.tsx` is the reference implementation.
 - Run `pnpm --filter @portfolio/web build:registry` to regenerate the registry **and** the per-variant CSS imports (`registry.styles.generated.ts`). The host's `apps/web/src/app/layout.tsx` imports the styles entry; without regenerating it, your variant's CSS is orphaned and the page renders as user-agent default. **This is the most common reason a freshly-scaffolded variant looks like plain HTML.**
-- Verify (Gate A from `quality-gates.md`): `pnpm dev`, visit `/preview/<slug>`. Every section should render via `FallbackSection` _with your variant's tokens applied_ (paper color, font family, theme toggle visible). If you see plain black-on-white text, the styles entry didn't pick up — check `registry.styles.generated.ts`.
+- Verify (Gate A from `quality-gates.md`): copy `portfolio.example.yml` to `config/portfolio.yml`, set `variant: <slug>` there, run `pnpm dev`, and open `http://localhost:3000/`. Every section should render via `FallbackSection` _with your variant's tokens applied_ (paper color, font family, theme toggle visible). If you see plain black-on-white text, the styles entry didn't pick up — check `registry.styles.generated.ts`.
 
 ### Wave 1.5 — Kit hoists (when porting from a reference)
 
@@ -149,7 +149,7 @@ For each cluster:
 3. Implement renderers in `src/renderers/<kind>.tsx` (or whatever file structure your variant uses; consistency matters more than the path).
 4. Update `src/section.tsx` (the section dispatch) to route the new renderers; remove the cluster's kinds from the `FallbackSection` fallback path.
 5. Before closing the cluster, run `node skills/variant-developer/scripts/kit-dedup.mjs packages/variant-<slug>`. Resolve every candidate either by **hoisting** the helper to `packages/kit/src/<topic>.ts` and importing it back, or by leaving a `// LOCAL: <reason>` comment justifying the local copy.
-6. **Visual checkpoint at end of cluster.** Run `/preview/<slug>` against `portfolio.example.yml` AND the user's actual `portfolio.yml` (real-data testing surfaces bugs that example data hides — long org names, missing optional fields, non-ASCII characters). Verify each cluster's renderers display correctly. _Don't trust HTTP 200 as proof the cluster is done._
+6. **Visual checkpoint at end of cluster.** Render your variant at `/` against `portfolio.example.yml` AND the user's actual `portfolio.yml`, each placed in `config/portfolio.yml` with `variant: <slug>` (real-data testing surfaces bugs that example data hides — long org names, missing optional fields, non-ASCII characters). Verify each cluster's renderers display correctly. _Don't trust HTTP 200 as proof the cluster is done._
 
 Renderer quality reminders (from real-session bugs):
 
@@ -172,7 +172,7 @@ The clusters:
 - **Navigation.** Pick the affordance that matches the metaphor. Examples: TOC for editorial, hamburger overlay for single-page kinetic, sidebar for dense bento, marginalia for long-form. Use `deriveNavItems` from `@portfolio/kit` to build the nav model from the rendered sections — do not hand-author it.
   - Add `scroll-margin-top` to every section if the nav is fixed (Wave 1 should already have this, but verify after wiring nav).
   - Brand-link "scroll to top" — use `window.scrollTo(0, 0)` via JS, not an `href="#top"` anchor. Single-word IDs collide with `ensureSectionId` fallbacks.
-- **Screenshots.** Add `manifest.screenshots` entries. Capture static PNGs and place them under `apps/web/public/variants/<slug>/`. Cover at least one screenshot per scheme + preset combination so the gallery thumbnails reflect the variant's range. See `references/quality-gates.md` Gate F for the capture recipe (manual + automated).
+- **Screenshots.** Add `manifest.screenshots` entries. Capture static PNGs and place them under `apps/web/public/variants/<slug>/`. Cover at least one screenshot per scheme + preset combination so the screenshots reflect the variant's range. See `references/quality-gates.md` Gate F for the capture recipe (manual + automated).
 - **Print.** If `capabilities.print = true`, write the print stylesheet inside `styles.css` (`@media print { [data-variant='your-slug'] { … } }`) and verify in Chrome's print preview using `references/quality-gates.md` Gate D. The print rule MUST reset every theme-dependent token (`--kc-paper`, `--kc-card-bg`, `--kc-primary`, etc.) inside the print block — otherwise the active theme bleeds through and cards render unreadable. Gradient text needs both `color` and `-webkit-text-fill-color` reset to black. (See `references/common-bugs.md` §5 and §7.) If you cannot make print look reasonable, set `capabilities.print = false` instead of shipping a broken stylesheet.
 - **Performance tier honesty.** If you claimed `medium` or `heavy`, mobile-test it on a real device or throttled emulator. The audit does not catch a lying tier; the user does, on launch.
 - **Reduced-motion verification.** Don't trust "I checked the toggle once". Run the programmatic checks in `references/quality-gates.md` Gate C — pixel-sample the canvas, transform-diff a floater across scroll, text-diff the typing animation. Each must come back stable.
@@ -196,11 +196,10 @@ Run `references/audit-checklist.md` for the scripted gates and `references/quali
 
 These are the gates that _catch what compiles fine but looks broken_. Each one corresponds to a real bug class that escaped a previous build:
 
-- **Gate A — Visual sanity.** `pnpm dev`, open `/preview/<slug>`, confirm CSS reaches the page. Catches "host CSS injection" failures.
+- **Gate A — Visual sanity.** `pnpm dev` with `variant: <slug>` in `config/portfolio.yml`, open `/`, confirm CSS reaches the page. Catches "host CSS injection" failures.
 - **Gate B — Theme × scheme × typography matrix.** ≥ 9 screenshots across the meaningful combinations. Catches contrast bugs that only surface in non-default schemes/themes.
 - **Gate C — Reduced-motion programmatic verification.** Pixel-sample, transform-diff, text-diff. Catches motion that wasn't actually disabled.
 - **Gate D — Print preview.** Verify the print stylesheet against the new sections. Catches theme-token leaks into print.
-- **Gate E — `/variants` listing entry.** Verify the variant card displays correctly.
 - **Gate F — Screenshot capture.** PNGs exist on disk where the manifest claims.
 - **Gate G — Fidelity comparison vs reference** (port-only). Every box in DESIGN.md's `## Fidelity targets` is checked or has an inline justification for being intentionally dropped.
 - **Gate H — Real-data testing.** Test against the user's actual `portfolio.yml`, not just `portfolio.example.yml`. Long names, missing optional fields, non-ASCII characters.
@@ -232,7 +231,7 @@ Even after the user opts in, decide each question separately. The test: **would 
 ### Modes
 
 - **Mockup-mode** (Phase 1, before code exists). Server: `scripts/visual-companion/server.cjs`, launcher: `scripts/visual-companion/start.sh --mode mockup --project-dir <repo-root>`. Agent writes HTML fragments to the watched dir; user clicks options; clicks land in `state_dir/events`.
-- **Preview-mode** (Phases 2–3, code exists). Launcher: `scripts/visual-companion/start.sh --mode preview --variant <slug>`. Starts `pnpm --filter @portfolio/web dev`. The user watches HMR live in `/preview/<slug>`. With `--matrix`, also runs `preview-matrix.mjs` to capture screenshots across `theme × scheme × typography` (requires Playwright; fails gracefully otherwise).
+- **Preview-mode** (Phases 2–3, code exists). Launcher: `scripts/visual-companion/start.sh --mode preview --variant <slug>`. Starts `pnpm --filter @portfolio/web dev`. The user watches HMR live at `/`, with `variant: <slug>` set in `config/portfolio.yml`. With `--matrix`, also runs `preview-matrix.mjs` to capture screenshots across themes for the scheme and typography that file selects (requires Playwright; fails gracefully otherwise).
 
 See `references/visual-companion.md` for the full guide — class hooks, file naming, events file format, session lifecycle.
 
@@ -242,7 +241,7 @@ Environment-specific facts that bite agents who skip the references. For the ful
 
 ### Build / registry
 
-- The variant registry is **auto-generated**. If `/variants` doesn't show your variant after install, run `pnpm --filter @portfolio/web build:registry` — the registry isn't re-run on every dev reload.
+- The variant registry is **auto-generated**. If the dev server says your `variant:` names no registered variant, run `pnpm --filter @portfolio/web build:registry` — the registry isn't re-run on every dev reload.
 - The build script also generates `apps/web/src/lib/registry.styles.generated.ts` — a side-effect import file that pulls every variant's `styles.css`. The host layout imports the generated file. **If your variant's styles don't render, regenerate this file first.**
 
 ### Manifest
@@ -252,8 +251,8 @@ Environment-specific facts that bite agents who skip the references. For the ful
 
 ### CSS scoping
 
-- The `data-variant` attribute scopes ALL your CSS. Forget it on a selector and styles bleed into every other variant on the `/variants` gallery page. Every selector in `src/styles.css` must start with `[data-variant='your-slug']`.
-- Color-scheme overrides go on `[data-variant='X'][data-color-scheme='id'] { ... }`. Without the variant scope, schemes leak globally — every variant on `/variants` flips when the user changes one variant's scheme.
+- The `data-variant` attribute scopes ALL your CSS. Every variant's stylesheet loads on every page, so a selector without it restyles whichever variant is active. Every selector in `src/styles.css` must start with `[data-variant='your-slug']`.
+- Color-scheme overrides go on `[data-variant='X'][data-color-scheme='id'] { ... }`. Without the variant scope, schemes leak globally — one variant's scheme recolors the others.
 - The global anchor rule must be scoped with `:not([class])` so component-classed buttons can override the color via class-only selectors. Without this guard, every primary button inherits the global accent color and renders unreadable on gradient backgrounds. (`common-bugs.md` §2)
 - Variants use **plain CSS with BEM-style class names** (e.g. `editorial-project__title`), not Tailwind. Convention: `<variant-slug>-<block>__<element>`. Tailwind is reserved for `apps/web` chrome; the variant package owns its own stylesheet.
 
@@ -289,8 +288,7 @@ Environment-specific facts that bite agents who skip the references. For the ful
 When all gates pass:
 
 - Push `DESIGN.md` and the variant package on the same branch as the PR. The contract and the implementation must travel together.
-- Tell the user how to set their `portfolio.yml`'s `variant: <slug>` field to test the variant against their real data, not just `portfolio.example.yml`.
-- Ask whether they want the variant added to the `/variants` gallery (workspace listing). Some variants are personal-use only; don't assume gallery inclusion.
+- Tell the user how to set `variant: <slug>` in their `config/portfolio.yml` to test the variant against their real data, not just `portfolio.example.yml`.
 - Don't run `pnpm dev` for them unless they ask. Their dev environment is theirs to control.
 
 That's the skill. Design, implement in waves, audit, hand off, stop.
@@ -333,8 +331,6 @@ Distilled from real builds. Each item exists because skipping it cost an iterati
 
 7. **Print preview at Wave 3 gate, not as polish.** Theme-token leaks into print are invisible until you actually preview. The recipe (CSSMediaRule rewrite trick) lets you skim print layout from the browser viewport in seconds.
 
-8. **`/variants` listing entry as an explicit gate.** Easy to miss; user-facing. Verify card metadata, screenshot thumbnails, activate/preview links.
+8. **Defensive renderer destructuring is mandatory, not optional.** Every renderer handles `items: []`, optional fields = `undefined`, missing nested objects. The host doesn't filter empty sections.
 
-9. **Defensive renderer destructuring is mandatory, not optional.** Every renderer handles `items: []`, optional fields = `undefined`, missing nested objects. The host doesn't filter empty sections.
-
-10. **Sign off the variant against the user's `portfolio.yml`, not the example.** This is what the user sees on launch. Every other dataset is a dress rehearsal.
+9. **Sign off the variant against the user's `portfolio.yml`, not the example.** This is what the user sees on launch. Every other dataset is a dress rehearsal.

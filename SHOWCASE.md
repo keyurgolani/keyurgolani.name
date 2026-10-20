@@ -46,22 +46,6 @@ The **same content**, a completely different aesthetic — gradient nebula, fall
 
 ---
 
-## 🧬 Variant gallery
-
-Under `pnpm dev`, `/variants` lists the registered variants and filters them by aesthetic, motion, typography, and density. Each variant ships its own color schemes and typography presets. Production builds don't serve the gallery.
-
-![Variants gallery](docs/screenshots/08-variants-gallery.png)
-
----
-
-## ⚙️ Admin editor
-
-Under `pnpm dev`, edit `portfolio.yml` from the browser at `/admin`. Changes validate against the schema and save back to disk. Motion preference and per-variant scheme/typography are configurable here. Production builds don't serve the editor; on a deployed site you edit the file on the host.
-
-![Admin editor](docs/screenshots/07-admin-editor.png)
-
----
-
 ## ✨ At a Glance
 
 | Capability        | Detail                                                                                                        |
@@ -71,9 +55,9 @@ Under `pnpm dev`, edit `portfolio.yml` from the browser at `/admin`. Changes val
 | **Variants**      | Pluggable styled React trees; swap the entire look without touching content                                   |
 | **Themes**        | `light`, `dark`, `bright` (paper-white), `black` (AMOLED), `system`                                           |
 | **Per-variant**   | Color schemes + typography presets (editorial ships 3 schemes, 2 type pairings)                               |
-| **GitHub**        | Pinned repos, recent activity, contribution heatmap, language breakdown                                       |
+| **GitHub**        | Top repos, recent activity, language breakdown, from GitHub's public REST API                                 |
 | **Extras**        | Print stylesheet, RSS feed, structured data, OG image generation                                              |
-| **Editing**       | Browser `/admin` editor with schema validation under `pnpm dev`, or edit YAML directly                        |
+| **Editing**       | Edit the YAML in `config/`; the server validates it at startup                                                |
 | **Stack**         | Next.js, TypeScript, pnpm workspace, Docker                                                                   |
 
 ---

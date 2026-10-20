@@ -34,10 +34,10 @@ All packages are workspace-linked via `workspace:*` in their dependencies.
 
 ### Edit a portfolio (no code)
 
-Just edit `portfolio.yml` at the repo root. `pnpm dev` hot-reloads on change. Validate with:
+Copy `portfolio.example.yml` to `config/portfolio.yml` and edit it. `pnpm dev` picks up each save on the next page load. Validate with:
 
 ```sh
-node skills/portfolio-author/scripts/validate.mjs portfolio.yml
+node skills/portfolio-author/scripts/validate.mjs config/portfolio.yml
 ```
 
 ### Add a new variant
@@ -81,7 +81,7 @@ pnpm ci:browser        # Playwright smoke against that build
 
 Run `pnpm exec playwright install chromium` once before the browser smoke. `pnpm ci:image` builds and checks the container image with Docker (`CONTAINER_CLI=finch` for Finch).
 
-Tests use Node's built-in `node:test`, through `tsx` for TypeScript. A single file runs directly, for example `pnpm exec tsx --test packages/kit/src/format.test.ts`.
+Tests use Node's built-in `node:test`, through `tsx` for TypeScript. A single file runs directly, for example `pnpm exec tsx --test packages/kit/src/format.test.ts`. In `apps/web`, `*.test.ts` files cover server modules and run with `--conditions=react-server`; `*.test.tsx` files render pages with `react-dom/server`, which needs the default conditions, so they run without it.
 
 ## Conventions
 

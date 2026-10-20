@@ -1,10 +1,10 @@
 // Playwright fixtures for browser tests against the app under test.
 //
 //   import { test, expect } from '../harness/fixtures';
-//   test.use({ appOptions: { env: { SOME_SETTING: 'value' } } });
+//   test.use({ appOptions: { env: { PORTFOLIO_ORIGIN: 'https://jane.test' } } });
 //
-// `app` is worker-scoped: every distinct `appOptions` gets its own server, data
-// directory, and port. Every request the browser makes outside the app's
+// `app` is worker-scoped: every distinct `appOptions` gets its own server,
+// source directory, and port. Every request the browser makes outside the app's
 // origin fails, and the blocked URLs are attached to the test. A blocked
 // request to a host outside EXPECTED_BLOCKED_HOSTS fails the test.
 import path from 'node:path';
@@ -23,16 +23,17 @@ function expectedBlock(url: string): boolean {
 }
 
 export interface AppOptions {
-  /** Extra server environment, such as a deployment profile. */
+  /** Extra server environment. The default is read-only from `sourceDir`. */
   env?: Record<string, string>;
-  /** Portfolio file mounted as <dataDir>/portfolio.yml; null for none. */
+  /** Portfolio document copied into `sourceDir`; null for none. */
   portfolio?: string | null;
 }
 
 export interface App {
   origin: string;
   port: number;
-  dataDir: string;
+  /** The server's PORTFOLIO_SOURCE_DIR unless `env` names another. */
+  sourceDir: string;
   log: string;
   env: Record<string, string>;
 }

@@ -28,9 +28,9 @@ pnpm install
 pnpm dev
 ```
 
-Visit `http://localhost:3000`. Edit `portfolio.yml` at the repo root and the page hot-reloads.
+Visit `http://localhost:3000`. With no portfolio in `config/` yet, it renders the bundled example. Copy `portfolio.example.yml` to `config/portfolio.yml` and edit it; the page picks up each save.
 
-To run in Docker (production):
+To run in Docker (production), with your `config/portfolio.yml` in place and `PORTFOLIO_ORIGIN` set in `.env`:
 
 ```sh
 docker compose up --build
@@ -43,7 +43,7 @@ See [docs/getting-started.md](docs/getting-started.md) for the full walkthrough.
 - **28 section kinds** — hero, lede, experience, projects, skills, GitHub, gallery, testimonials, publications, talks, awards, and more. See [docs/features.md](docs/features.md).
 - **5 theme modes** — `light`, `dark`, `bright` (paper-white), `black` (AMOLED), and `system` (follows OS).
 - **Per-variant color schemes and typography presets** — editorial ships 3 schemes and 2 type pairings.
-- **GitHub integration** — pinned repos, recently-active list, contribution heatmap, language breakdown. Uses GraphQL with a token, REST without.
+- **GitHub integration** — top repos, recently-active list, and language breakdown, from GitHub's public REST API. Public pages never send a token.
 - **Print stylesheet, RSS feed, structured data, OG image generation** — opt-in per variant via the `capabilities` flag.
 - **Drift gates** keep the schema, kit catalog, and skill references in sync (`pnpm check:skills`).
 - **AI-assisted authoring + variant development** via two skills under [skills/](skills/).
@@ -72,7 +72,7 @@ docs/
 skills/                         AI agent skills
                                 (portfolio-author, variant-developer)
 
-portfolio.yml                   Your portfolio
+config/portfolio.yml            Your portfolio (gitignored)
 portfolio.example.yml           Fully-populated example
 ```
 
