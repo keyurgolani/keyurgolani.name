@@ -9,6 +9,8 @@
 **/.cache
 
 archive
+experiments
+.variant-preview
 .git
 .github
 .husky
@@ -18,6 +20,10 @@ archive
 .env
 .env.*
 !.env.example
+
+# Personal portfolio data stays out of the image. Only the example ships.
+portfolio.*
+!portfolio.example.yml
 
 *.log
 .DS_Store
