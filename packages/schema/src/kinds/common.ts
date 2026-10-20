@@ -148,8 +148,6 @@ export const sectionBase = {
   subtitle: z.string().optional(),
   /** The section's language when it differs from the portfolio's `locale`. */
   lang: LanguageTagSchema.optional(),
-  /** Until hiding moves to the site document's `sections.<id>.hidden`. */
-  hidden: z.boolean().optional(),
 };
 
 type ExtensionsField = {

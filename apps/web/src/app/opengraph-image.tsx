@@ -1,13 +1,12 @@
 import { ImageResponse } from 'next/og';
 import { findManifest } from '~/lib/registry';
-import { getLive } from '~/server/catalog';
 import { requireDeploymentConfig } from '~/server/config-store';
-import { HOST_APPEARANCE } from '~/server/host-defaults';
 import { servedPage } from '~/server/page-guard';
+import { getPublicView } from '~/server/public-view';
 
 export const runtime = 'nodejs';
-// Per request, from the revision register() loaded, so a build never bakes
-// in a portfolio or an origin.
+// Per request, from the public view of the revision register() loaded, so a
+// build never bakes in a portfolio or an origin.
 export const dynamic = 'force-dynamic';
 export const alt = 'Portfolio';
 export const size = { width: 1200, height: 630 };
@@ -15,10 +14,10 @@ export const contentType = 'image/png';
 
 export default servedPage('/opengraph-image', async function OpengraphImage() {
   const host = new URL(requireDeploymentConfig().origin).hostname.replace(/^www\./, '');
-  const { portfolio } = (await getLive()).unit;
+  const { portfolio, site } = await getPublicView();
   const name = portfolio.identity.name;
   const tagline = portfolio.identity.tagline ?? portfolio.meta?.description;
-  const variant = findManifest(HOST_APPEARANCE.variant)?.name;
+  const variant = findManifest(site.appearance.variant)?.name;
 
   return new ImageResponse(
     <div

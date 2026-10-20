@@ -20,10 +20,10 @@ const DEFAULT_EXCLUDE: ReadonlyArray<SectionKind> = ['hero', 'cta'];
 
 /**
  * Walk the portfolio's sections in declaration order and produce the
- * same `{ label, href }` pairs a manual nav config would. Skips hidden
- * sections, sections from content extensions (no variant renders them yet),
- * sections without a derivable label (no title, no fallback in `labelFor`),
- * and kinds in `excludeKinds`.
+ * same `{ label, href }` pairs a manual nav config would. Skips sections
+ * from content extensions (no variant renders them yet), sections without a
+ * derivable label (no title, no fallback in `labelFor`), and kinds in
+ * `excludeKinds`. Hidden sections never get here: the public view drops them.
  *
  * Variants render the result however they want — top bar, side rail,
  * sticky pill — but all draw from this single source of truth so the
@@ -37,7 +37,7 @@ export function deriveNavItems(
   const items: NavItem[] = [];
 
   for (const section of portfolio.sections) {
-    if (section.hidden || isExtensionSection(section)) continue;
+    if (isExtensionSection(section)) continue;
     if (exclude.has(section.kind)) continue;
 
     const override = options.labelFor?.(section);

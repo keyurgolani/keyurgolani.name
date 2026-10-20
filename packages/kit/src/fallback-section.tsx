@@ -19,7 +19,7 @@ export function FallbackSection({
   section: Section;
   portfolio: Portfolio;
 }) {
-  if (section.hidden || isExtensionSection(section)) return null;
+  if (isExtensionSection(section)) return null;
   const id = ensureSectionId(section.id, section.title ?? section.kind);
 
   const heading = section.title ?? defaultHeading(section.kind);

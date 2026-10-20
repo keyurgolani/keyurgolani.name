@@ -35,7 +35,7 @@ interface DispatchProps {
 
 export function SectionDispatch({ section, portfolio }: DispatchProps) {
   // No variant renders a content extension's section kinds yet.
-  if (section.hidden || isExtensionSection(section)) return null;
+  if (isExtensionSection(section)) return null;
   switch (section.kind) {
     case 'hero':
       return (

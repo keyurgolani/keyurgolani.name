@@ -95,7 +95,6 @@ export interface ExtensionSection {
   title?: string;
   subtitle?: string;
   lang?: string;
-  hidden?: boolean;
   extensions?: Extensions;
   data: unknown;
 }

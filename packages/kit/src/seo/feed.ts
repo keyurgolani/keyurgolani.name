@@ -30,10 +30,7 @@ export function collectFeedEntries(
 ): FeedEntry[] {
   const entries: FeedEntry[] = [];
 
-  for (const section of portfolio.sections) {
-    if (section.hidden) continue;
-    pushFromSection(section, entries);
-  }
+  for (const section of portfolio.sections) pushFromSection(section, entries);
 
   entries.sort((a, b) => {
     const ax = a.isoDate ? Date.parse(a.isoDate) : Number.NEGATIVE_INFINITY;

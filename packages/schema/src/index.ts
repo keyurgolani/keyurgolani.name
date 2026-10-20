@@ -8,4 +8,5 @@ export * from './site';
 export * from './compose';
 export * from './source';
 export * from './load';
+export * from './public-view';
 export { allowedKeysAt, closestWord } from './hints';
