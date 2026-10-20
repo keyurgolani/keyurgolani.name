@@ -25,5 +25,18 @@ experiments
 portfolio.*
 !portfolio.example.yml
 
+# Tests, CI, and dev tooling: not part of the build or the runtime.
+tests
+ci
+reports
+playwright.config.ts
+.dependency-cruiser.cjs
+eslint.config.mjs
+.prettierrc.json
+.prettierignore
+.git-blame-ignore-revs
+docs
+skills
+
 *.log
 .DS_Store
