@@ -56,15 +56,17 @@ case "$MODE" in
       exit 2
     fi
     # next dev listens on $PORT when it is set.
-    URL="http://localhost:${PORT:-3000}/sample?variant=$VARIANT"
+    BASE="http://localhost:${PORT:-3000}"
+    URL="$BASE/sample?variant=$VARIANT"
     echo "Starting the dev server under the demo profile, on the bundled sample. Visit:"
     echo "  $URL"
     if [ "$MATRIX" = "1" ]; then
       # Best-effort matrix capture; runs in background once server is up.
       (
-        # Wait until the dev server responds
+        # Wait until the dev server answers its health check. The page itself
+        # is a 404 for an unregistered slug, which preview-matrix.mjs reports.
         for i in $(seq 1 60); do
-          if curl -sf "$URL" >/dev/null 2>&1; then
+          if curl -sf "$BASE/api/health" >/dev/null 2>&1; then
             break
           fi
           sleep 1

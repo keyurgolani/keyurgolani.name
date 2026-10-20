@@ -203,7 +203,7 @@ skills/variant-developer/scripts/visual-companion/start.sh \
   --mode preview --variant <slug> --matrix
 ```
 
-This launches the dev server and, after it responds, runs `preview-matrix.mjs` to capture `/sample?variant=<slug>` in every theme, in the variant's default scheme and typography, into `<repo-root>/.variant-preview/<slug>/`. It stops if the page isn't rendering `<slug>`. For other combinations, run it again against the running server with `node skills/variant-developer/scripts/visual-companion/preview-matrix.mjs <slug> --scheme <id> --typography <id>`.
+This launches the dev server and, once `/api/health` answers, runs `preview-matrix.mjs` to capture `/sample?variant=<slug>` in every theme, in the variant's default scheme and typography, into `<repo-root>/.variant-preview/<slug>/`. An unregistered slug is a 404: the script says so and exits 1, as it does when the page renders another variant or a capture fails. For other combinations, run it again against the running server with `node skills/variant-developer/scripts/visual-companion/preview-matrix.mjs <slug> --scheme <id> --typography <id>`. A scheme or preset the variant doesn't declare renders its default, and the script warns.
 
 **Requires Playwright.** If Playwright isn't installed, the script prints the install commands and exits gracefully — the rest of preview-mode still works.
 

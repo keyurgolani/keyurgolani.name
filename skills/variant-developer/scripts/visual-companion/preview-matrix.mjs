@@ -4,7 +4,8 @@
  * variant, in every theme, from the dev server start.sh runs under the demo
  * profile: /sample?variant=<slug>, with --scheme and --typography for a
  * color scheme and typography preset the variant declares (else its
- * defaults). Lazily uses Playwright if installed; otherwise prints install
+ * defaults, with a warning). An unregistered slug is a 404: it prints a hint
+ * and exits 1. Lazily uses Playwright if installed; otherwise prints install
  * command and exits with code 0 (informational, not a hard failure).
  *
  *   node preview-matrix.mjs <slug> [--scheme <id>] [--typography <id>]
@@ -34,6 +35,8 @@ if (!slug || slug.startsWith('--')) {
   process.exit(2);
 }
 const query = new URLSearchParams({ variant: slug });
+/** The --scheme and --typography values, by the root attribute that reports each. */
+const requested = {};
 for (let index = 0; index < flags.length; index += 2) {
   const name = { '--scheme': 'scheme', '--typography': 'typography' }[flags[index]];
   const value = flags[index + 1];
@@ -42,6 +45,7 @@ for (let index = 0; index < flags.length; index += 2) {
     process.exit(2);
   }
   query.set(name, value);
+  requested[name === 'scheme' ? 'data-color-scheme' : 'data-typography'] = value;
 }
 // The dev server start.sh runs, on $PORT when it is set.
 const url = `http://localhost:${process.env.PORT || 3000}/sample?${query}`;
@@ -60,11 +64,13 @@ try {
 
 const REPO_ROOT = findRepoRoot(fileURLToPath(import.meta.url));
 const outDir = path.join(REPO_ROOT || process.cwd(), '.variant-preview', slug);
-mkdirSync(outDir, { recursive: true });
 
 // Every theme, in the scheme and typography the flags pick. Run it again
 // with other flags for other combinations.
 const themes = ['light', 'dark', 'bright', 'black'];
+// The page is server-rendered, so its root is there on load; a missing one
+// shouldn't take Playwright's 30 s default to report.
+const ATTRIBUTE_TIMEOUT_MS = 5_000;
 
 const browser = await chromium.launch();
 try {
@@ -76,23 +82,50 @@ try {
     }, theme);
     const page = await context.newPage();
     try {
-      await page.goto(url, { waitUntil: 'networkidle', timeout: 15_000 });
-      const root = page.locator('[data-variant]').first();
-      const rendered = await root.getAttribute('data-variant');
-      if (rendered !== slug) {
+      const response = await page.goto(url, { waitUntil: 'networkidle', timeout: 15_000 });
+      if (response?.status() === 404) {
         console.error(
-          `${url} renders ${rendered ?? 'no variant'}, not ${slug}. Is ${slug} registered, and is start.sh running the dev server?`,
+          `${url} is a 404: ${slug} isn't a registered variant. Check the slug, or run pnpm --filter @portfolio/web build:registry and restart start.sh.`,
         );
         process.exitCode = 1;
         break;
       }
-      const scheme = (await root.getAttribute('data-color-scheme')) ?? 'default';
-      const typography = (await root.getAttribute('data-typography')) ?? 'default';
+      if (!response?.ok()) {
+        console.error(
+          `${url} answered ${response?.status() ?? 'nothing'}. Is start.sh running the dev server?`,
+        );
+        process.exitCode = 1;
+        break;
+      }
+      const root = page.locator('[data-variant]').first();
+      const read = (name) => root.getAttribute(name, { timeout: ATTRIBUTE_TIMEOUT_MS });
+      const rendered = await read('data-variant');
+      if (rendered !== slug) {
+        console.error(`${url} renders ${rendered ?? 'no variant'}, not ${slug}.`);
+        process.exitCode = 1;
+        break;
+      }
+      const scheme = (await read('data-color-scheme')) ?? 'default';
+      const typography = (await read('data-typography')) ?? 'default';
+      if (theme === themes[0]) {
+        for (const [name, value] of Object.entries({
+          'data-color-scheme': scheme,
+          'data-typography': typography,
+        })) {
+          if (requested[name] && requested[name] !== value) {
+            console.warn(
+              `warning: ${slug} doesn't declare ${requested[name]}, so it renders ${value}, its default (${name}).`,
+            );
+          }
+        }
+      }
       const filename = `${theme}-${scheme}-${typography}.png`;
+      mkdirSync(outDir, { recursive: true });
       await page.screenshot({ path: path.join(outDir, filename), fullPage: true });
       console.log(`captured ${filename}`);
     } catch (err) {
       console.error(`failed ${theme}: ${err.message}`);
+      process.exitCode = 1;
     } finally {
       await context.close();
     }
@@ -100,4 +133,4 @@ try {
 } finally {
   await browser.close();
 }
-console.log('done. screenshots in ' + outDir);
+if (!process.exitCode) console.log('done. screenshots in ' + outDir);
