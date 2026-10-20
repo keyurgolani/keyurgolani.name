@@ -1,0 +1,46 @@
+# Harness fixture: a section the site document hides, and data from a content
+# extension the host doesn't register. Each holds a canary-hidden- marker that
+# must never reach a visitor: not the page, its RSC payload, its JSON-LD, or
+# the feed. .test hosts only.
+schemaVersion: 2
+locale: en-GB
+direction: ltr
+
+identity:
+  name: Rowan Hidden
+  tagline: Builds calm software.
+  extensions:
+    '@other/portfolio-x':
+      note: canary-hidden-extension
+
+links:
+  - platform: website
+    url: https://rowan.test
+    label: Website
+
+sections:
+  - kind: hero
+    id: top
+    tagline: I build calm software.
+
+  - kind: writings
+    id: essays
+    title: Essays
+    items:
+      - title: Notes on visible things
+        url: https://rowan.test/visible
+        publishedAt: '2026-01-02'
+        summary: An essay every visitor sees.
+
+  - kind: writings
+    id: drafts
+    title: canary-hidden-title
+    items:
+      - title: canary-hidden-essay
+        url: https://rowan.test/canary-hidden-url
+        publishedAt: '2026-02-03'
+        summary: canary-hidden-summary
+
+  - kind: contact
+    id: contact
+    title: Contact

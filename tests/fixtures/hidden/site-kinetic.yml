@@ -1,0 +1,21 @@
+# Harness fixture: the same hidden section, under Kinetic Cosmos, whose client
+# components take more of the portfolio as props than they render.
+schemaVersion: 2
+appearance:
+  variant: kinetic-cosmos
+  designLanguage: platform-neutral
+  colorScheme: aurora
+  typography: humanist
+  displayMode: system
+visitorControls:
+  variant: locked
+  designLanguage: locked
+  colorScheme: selectable
+  typography: locked
+  displayMode: selectable
+motionPolicy: respect-os
+features:
+  feed: true
+sections:
+  drafts:
+    hidden: true
