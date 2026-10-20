@@ -29,20 +29,7 @@ export type DocumentResult<T> =
 
 /** Parses and validates a portfolio document, section ids included. */
 export function parsePortfolio(source: string, format: DocumentFormat): DocumentResult<Portfolio> {
-  const result = parseWith(PortfolioSchema, source, format);
-  if (!result.ok) return result;
-  const repeats = duplicateSectionIds(result.value.sections);
-  if (repeats.length === 0) return result;
-  return {
-    ok: false,
-    problems: repeats.map(({ index, firstIndex }) => ({
-      kind: 'duplicate-id',
-      code: 'duplicate_id',
-      pointer: `/sections/${index}/id`,
-      message: `/sections/${index}/id repeats the id of /sections/${firstIndex}. Section ids must be unique.`,
-      ...result.locate(['sections', index, 'id']),
-    })),
-  };
+  return parseWith(PortfolioSchema, source, format, repeatedSectionIds);
 }
 
 /** Parses and validates a site document. */
@@ -52,11 +39,12 @@ export function parseSite(source: string, format: DocumentFormat): DocumentResul
 
 /** Every section whose id an earlier section already has, with that earlier index. */
 export function duplicateSectionIds(
-  sections: readonly { readonly id: string }[],
+  sections: readonly { readonly id?: unknown }[],
 ): { index: number; firstIndex: number }[] {
   const first = new Map<string, number>();
   const repeats: { index: number; firstIndex: number }[] = [];
   sections.forEach(({ id }, index) => {
+    if (typeof id !== 'string') return;
     const seen = first.get(id);
     if (seen === undefined) first.set(id, index);
     else repeats.push({ index, firstIndex: seen });
@@ -64,10 +52,29 @@ export function duplicateSectionIds(
   return repeats;
 }
 
+/**
+ * Two sections with one id, found in the data as written, so a schema
+ * problem anywhere else in the document doesn't hide them.
+ */
+function repeatedSectionIds(data: unknown, locate: Locate): DocumentProblem[] {
+  const sections = isRecord(data) && Array.isArray(data.sections) ? data.sections : [];
+  const ids = sections.map((section: unknown) => ({
+    id: isRecord(section) ? section.id : undefined,
+  }));
+  return duplicateSectionIds(ids).map(({ index, firstIndex }) => ({
+    kind: 'duplicate-id',
+    code: 'duplicate_id',
+    pointer: `/sections/${index}/id`,
+    message: `/sections/${index}/id repeats the id of /sections/${firstIndex}. Section ids must be unique.`,
+    ...locate(['sections', index, 'id']),
+  }));
+}
+
 function parseWith<T>(
   schema: z.ZodType<T, z.ZodTypeDef, unknown>,
   source: string,
   format: DocumentFormat,
+  check: (data: unknown, locate: Locate) => DocumentProblem[] = () => [],
 ): DocumentResult<T> {
   const parsed = parseSource(source, format);
   if (!parsed.ok) {
@@ -96,17 +103,18 @@ function parseWith<T>(
   }
 
   const result = schema.safeParse(data);
-  if (result.success) return { ok: true, value: result.data, locate };
-  return {
-    ok: false,
-    problems: result.error.issues.map((issue) => ({
-      kind: 'schema',
-      code: issue.code,
-      pointer: toPointer(issue.path),
-      message: describeIssue(issue),
-      ...locate(issue.path),
-    })),
-  };
+  const checked = check(data, locate);
+  if (result.success && checked.length === 0) return { ok: true, value: result.data, locate };
+  const invalid: DocumentProblem[] = result.success
+    ? []
+    : result.error.issues.map((issue) => ({
+        kind: 'schema',
+        code: issue.code,
+        pointer: toPointer(issue.path),
+        message: describeIssue(issue),
+        ...locate(issue.path),
+      }));
+  return { ok: false, problems: [...invalid, ...checked] };
 }
 
 /** What a schema issue says is wrong, without quoting any value from the document. */

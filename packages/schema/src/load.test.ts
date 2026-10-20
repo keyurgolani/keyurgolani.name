@@ -87,6 +87,22 @@ test('two sections with one id are refused, pointing at the second', () => {
   if (!result.ok) assert.match(result.problems[0]!.message, /repeats the id of \/sections\/0/);
 });
 
+test('a repeated id is reported alongside schema problems elsewhere in the document', () => {
+  const source = `${HEAD}sections:\n  - kind: lede\n    id: about\n    body: A\n  - kind: now\n    id: about\n  - kind: nope\n    id: about\n`;
+  assert.deepEqual(problems(parsePortfolio(source, 'yaml')), [
+    { kind: 'schema', code: 'invalid_type', pointer: '/sections/1/body', line: 10, column: 5 },
+    {
+      kind: 'schema',
+      code: 'invalid_union_discriminator',
+      pointer: '/sections/2/kind',
+      line: 12,
+      column: 11,
+    },
+    { kind: 'duplicate-id', code: 'duplicate_id', pointer: '/sections/1/id', line: 11, column: 9 },
+    { kind: 'duplicate-id', code: 'duplicate_id', pointer: '/sections/2/id', line: 13, column: 9 },
+  ]);
+});
+
 test('duplicateSectionIds names every repeat and its first use', () => {
   assert.deepEqual(duplicateSectionIds([{ id: 'a' }, { id: 'b' }, { id: 'a' }, { id: 'a' }]), [
     { index: 2, firstIndex: 0 },
