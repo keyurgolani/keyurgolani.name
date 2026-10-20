@@ -28,6 +28,18 @@ module.exports = {
       to: { path: ['^apps/web/src/server/owner/', '^packages/core/src/owner([./]|$)'] },
     },
     {
+      name: 'composition-loads-owner-code-only-through-import',
+      severity: 'error',
+      comment:
+        'startup.ts imports the composition root in every profile, so the root reaches owner ' +
+        'code only through import() in its owner branch, never a static or type import (#1, item 14).',
+      from: { path: '^apps/web/src/server/composition\\.ts$' },
+      to: {
+        path: ['^apps/web/src/server/owner/', '^packages/core/src/owner([./]|$)'],
+        dependencyTypesNot: ['dynamic-import'],
+      },
+    },
+    {
       name: 'proxy-reads-only-the-route-table-and-config',
       severity: 'error',
       comment:
