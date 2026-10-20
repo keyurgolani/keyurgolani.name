@@ -26,7 +26,7 @@ export const DEFAULT_PORTFOLIO = path.join(REPO_ROOT, 'tests', 'fixtures', 'port
  * @param {string} options.image the image under test
  * @param {string} [options.cli] docker or finch (default $CONTAINER_CLI or docker)
  * @param {string} [options.projectPrefix] Compose project name prefix
- * @param {string} [options.portfolio] portfolio file mounted at /data/portfolio.yml
+ * @param {string} [options.portfolio] portfolio file mounted at /config/portfolio.yml
  */
 export async function startProxyStack({
   image,
@@ -39,9 +39,9 @@ export async function startProxyStack({
   // Under the repo (gitignored) rather than os.tmpdir(): Finch's VM shares the
   // home directory but not macOS's per-user temp directory.
   const stateDir = path.join(REPO_ROOT, 'test-results', 'harness', project);
-  const dataDir = path.join(stateDir, 'data');
-  mkdirSync(dataDir, { recursive: true });
-  cpSync(portfolio, path.join(dataDir, 'portfolio.yml'));
+  const sourceDir = path.join(stateDir, 'config');
+  mkdirSync(sourceDir, { recursive: true });
+  cpSync(portfolio, path.join(sourceDir, 'portfolio.yml'));
   const port = await freePort();
 
   // An env file rather than the process environment: Finch runs Compose inside
@@ -50,7 +50,7 @@ export async function startProxyStack({
   const envFile = path.join(stateDir, 'stack.env');
   writeFileSync(
     envFile,
-    `PORTFOLIO_IMAGE=${image}\nPORTFOLIO_DATA_DIR=${dataDir}\nPROXY_PORT=${port}\n`,
+    `PORTFOLIO_IMAGE=${image}\nFIXTURE_SOURCE_DIR=${sourceDir}\nPROXY_PORT=${port}\n`,
   );
   const compose = (args, options = {}) =>
     spawnSync(cli, ['compose', '-p', project, '-f', COMPOSE_FILE, '--env-file', envFile, ...args], {

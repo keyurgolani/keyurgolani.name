@@ -1,10 +1,11 @@
 // Boots the built standalone server as the app under test.
 //
 // Each call gets its own copy of the build (a running Next server writes to
-// .next/cache), its own temporary data directory, and a free loopback port.
+// .next/cache), its own temporary source directory, and a free loopback port.
 // The server sees only a fixed base environment plus what the caller passes;
 // nothing else is inherited, so GITHUB_TOKEN and other secrets never reach it.
-// Profiles (#1) and data-directory layouts (#3) arrive through `env`.
+// By default it runs the read-only profile from the source directory, with
+// its own address as PORTFOLIO_ORIGIN; `env` overrides any of that.
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { cpSync, createWriteStream, existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
@@ -16,52 +17,65 @@ import { freePort, getText, waitFor } from './net.mjs';
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const WEB = path.join(REPO_ROOT, 'apps', 'web');
 const STANDALONE = path.join(WEB, '.next', 'standalone');
+const SERVER_JS = path.join(STANDALONE, 'apps', 'web', 'server.js');
 export const DEFAULT_PORTFOLIO = path.join(REPO_ROOT, 'tests', 'fixtures', 'portfolio.yml');
+
+function requireBuild() {
+  if (!existsSync(SERVER_JS)) {
+    throw new Error(
+      `no standalone build at ${path.relative(REPO_ROOT, SERVER_JS)}; run pnpm build first`,
+    );
+  }
+}
+
+/** The environment every run starts from. */
+function baseEnv(home, port) {
+  return {
+    PATH: process.env.PATH ?? '',
+    HOME: home,
+    TZ: 'UTC',
+    NODE_ENV: 'production',
+    NEXT_TELEMETRY_DISABLED: '1',
+    HOSTNAME: '127.0.0.1',
+    PORT: String(port),
+  };
+}
 
 /**
  * @param {object} [options]
  * @param {Record<string, string>} [options.env] extra server environment
- * @param {string | null} [options.portfolio] file copied to <dataDir>/portfolio.yml, or null for none
+ * @param {string | null} [options.portfolio] document copied into the source directory
+ *   (as portfolio.<its extension>), or null for none
  * @param {string} [options.logFile] where the server's stdout and stderr go
  */
 export async function startApp({ env = {}, portfolio = DEFAULT_PORTFOLIO, logFile } = {}) {
-  const serverJs = path.join(STANDALONE, 'apps', 'web', 'server.js');
-  if (!existsSync(serverJs)) {
-    throw new Error(
-      `no standalone build at ${path.relative(REPO_ROOT, serverJs)}; run pnpm build first`,
-    );
-  }
-
+  requireBuild();
   const root = mkdtempSync(path.join(tmpdir(), 'portfolio-app-'));
   const appDir = path.join(root, 'app');
-  const dataDir = path.join(root, 'data');
+  const sourceDir = path.join(root, 'config');
   // The image's layout: the standalone tree plus static assets and public/.
   cpSync(STANDALONE, appDir, { recursive: true, verbatimSymlinks: true });
   cpSync(path.join(WEB, '.next', 'static'), path.join(appDir, 'apps', 'web', '.next', 'static'), {
     recursive: true,
   });
   cpSync(path.join(WEB, 'public'), path.join(appDir, 'apps', 'web', 'public'), { recursive: true });
-  mkdirSync(dataDir);
-  if (portfolio) cpSync(portfolio, path.join(dataDir, 'portfolio.yml'));
+  mkdirSync(sourceDir);
+  if (portfolio) cpSync(portfolio, path.join(sourceDir, `portfolio${path.extname(portfolio)}`));
 
   const port = await freePort();
   const origin = `http://127.0.0.1:${port}`;
   const serverEnv = {
-    PATH: process.env.PATH ?? '',
-    HOME: root,
-    TZ: 'UTC',
-    NODE_ENV: 'production',
-    NEXT_TELEMETRY_DISABLED: '1',
-    HOSTNAME: '127.0.0.1',
-    PORT: String(port),
-    PORTFOLIO_PATH: path.join(dataDir, 'portfolio.yml'),
+    ...baseEnv(root, port),
+    PORTFOLIO_PROFILE: 'read-only',
+    PORTFOLIO_ORIGIN: origin,
+    PORTFOLIO_SOURCE_DIR: sourceDir,
     ...env,
   };
 
   const log = logFile ?? path.join(root, 'server.log');
   mkdirSync(path.dirname(log), { recursive: true });
   const out = createWriteStream(log);
-  const child = spawn(process.execPath, [serverJs.replace(STANDALONE, appDir)], {
+  const child = spawn(process.execPath, [SERVER_JS.replace(STANDALONE, appDir)], {
     cwd: path.join(appDir, 'apps', 'web'),
     env: serverEnv,
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -98,5 +112,35 @@ export async function startApp({ env = {}, portfolio = DEFAULT_PORTFOLIO, logFil
     throw error;
   }
 
-  return { origin, port, dataDir, log, env: serverEnv, stop };
+  return { origin, port, sourceDir, log, env: serverEnv, stop };
+}
+
+/**
+ * Starts the built server with exactly the base environment plus `env`, for
+ * a configuration that must stop it at startup, and waits for it to exit. A
+ * server still running after `timeoutMs` is killed and reported as
+ * `exited: false`. It runs from the build output in place: nothing is
+ * requested, so it writes nothing there.
+ *
+ * @param {object} options
+ * @param {Record<string, string>} options.env deployment environment
+ * @param {number} [options.timeoutMs]
+ * @returns {Promise<{ exited: boolean, code: number | null, output: string }>}
+ */
+export async function runAppToExit({ env, timeoutMs = 30_000 }) {
+  requireBuild();
+  const home = mkdtempSync(path.join(tmpdir(), 'portfolio-run-'));
+  const child = spawn(process.execPath, [SERVER_JS], {
+    cwd: path.dirname(SERVER_JS),
+    env: { ...baseEnv(home, await freePort()), ...env },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  let output = '';
+  child.stdout.on('data', (chunk) => (output += chunk));
+  child.stderr.on('data', (chunk) => (output += chunk));
+  const timer = setTimeout(() => child.kill('SIGKILL'), timeoutMs);
+  const [code, signal] = await once(child, 'exit');
+  clearTimeout(timer);
+  rmSync(home, { recursive: true, force: true });
+  return { exited: signal === null, code, output };
 }

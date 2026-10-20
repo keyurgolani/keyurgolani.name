@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 // Builds the image without pushing it (or pulls SMOKE_IMAGE), starts one
-// container on an internal network with the harness fixture mounted
-// read-only, and checks from inside the container: /api/health, the home
-// page, the image's own HEALTHCHECK command, what the image contains, and that
-// the container has no route out. Always removes the container and network;
+// container on an internal network under the read-only profile, with the
+// harness fixture mounted read-only as its source directory, and checks from
+// inside the container: /api/health, the home page, the image's own
+// HEALTHCHECK command, what the image contains, and that the container has
+// no route out. Always removes the container and network;
 // keeps the image so later steps (the proxy smoke) can run it.
 //
 // Environment:
@@ -106,9 +107,15 @@ async function smoke() {
     network,
     ...platformArgs,
     '-v',
-    `${path.join(REPO_ROOT, 'tests', 'fixtures')}:/data:ro`,
+    `${path.join(REPO_ROOT, 'tests', 'fixtures')}:/config:ro`,
     '-e',
     'TZ=UTC',
+    '-e',
+    'PORTFOLIO_PROFILE=read-only',
+    '-e',
+    'PORTFOLIO_ORIGIN=https://rowan.test',
+    '-e',
+    'PORTFOLIO_SOURCE_DIR=/config',
     image,
   ]);
   if (run.status !== 0) {

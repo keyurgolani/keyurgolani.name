@@ -27,9 +27,13 @@ playwright-report
 .env
 .env.*
 !.env.example
+# `pnpm dev`'s defaults: read-only from config/. No secrets.
+!apps/web/.env.development
 
 # personal portfolio data — like .env, never commit your own values. Use
-# portfolio.example.yml as the starting point and copy it locally.
+# portfolio.example.yml as the starting point and copy it into config/.
+/config/*
+!/config/.gitkeep
 /portfolio.yml
 /portfolio.yaml
 

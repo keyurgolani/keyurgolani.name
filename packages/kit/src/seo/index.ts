@@ -26,16 +26,25 @@ export interface JsonLd {
   [key: string]: unknown;
 }
 
-export function buildStructuredData(portfolio: Portfolio): JsonLd[] {
+export interface StructuredDataOptions {
+  /** The site's canonical URL. Defaults to portfolio.meta.url. */
+  siteUrl?: string;
+}
+
+export function buildStructuredData(
+  portfolio: Portfolio,
+  options: StructuredDataOptions = {},
+): JsonLd[] {
+  const url = options.siteUrl ?? portfolio.meta?.url;
   const out: JsonLd[] = [];
-  out.push(buildPersonSchema(portfolio));
-  out.push(buildProfilePageSchema(portfolio));
-  const website = buildWebsiteSchema(portfolio);
+  out.push(buildPersonSchema(portfolio, url));
+  out.push(buildProfilePageSchema(portfolio, url));
+  const website = buildWebsiteSchema(portfolio, url);
   if (website) out.push(website);
   return out;
 }
 
-function buildPersonSchema(portfolio: Portfolio): JsonLd {
+function buildPersonSchema(portfolio: Portfolio, url: string | undefined): JsonLd {
   const { identity, links, sections, meta } = portfolio;
 
   const person: JsonLd = {
@@ -47,7 +56,7 @@ function buildPersonSchema(portfolio: Portfolio): JsonLd {
   const tagline = identity.tagline ?? meta?.description;
   if (tagline) person.description = tagline;
 
-  if (meta?.url) person.url = meta.url;
+  if (url) person.url = url;
   if (identity.avatar?.src) person.image = identity.avatar.src;
   if (identity.email) person.email = identity.email;
 
@@ -81,7 +90,7 @@ function buildPersonSchema(portfolio: Portfolio): JsonLd {
   return person;
 }
 
-function buildProfilePageSchema(portfolio: Portfolio): JsonLd {
+function buildProfilePageSchema(portfolio: Portfolio, url: string | undefined): JsonLd {
   const { identity, meta } = portfolio;
   const profile: JsonLd = {
     '@context': 'https://schema.org',
@@ -90,27 +99,27 @@ function buildProfilePageSchema(portfolio: Portfolio): JsonLd {
     mainEntity: {
       '@type': 'Person',
       name: identity.name,
-      ...(meta?.url ? { url: meta.url } : {}),
+      ...(url ? { url } : {}),
     },
   };
   if (meta?.description) profile.description = meta.description;
-  if (meta?.url) profile.url = meta.url;
+  if (url) profile.url = url;
   return profile;
 }
 
-function buildWebsiteSchema(portfolio: Portfolio): JsonLd | null {
-  if (!portfolio.meta?.url) return null;
+function buildWebsiteSchema(portfolio: Portfolio, url: string | undefined): JsonLd | null {
+  if (!url) return null;
   const site: JsonLd = {
     '@context': 'https://schema.org',
     '@type': 'WebSite',
-    name: portfolio.meta.title ?? `${portfolio.identity.name} — Portfolio`,
-    url: portfolio.meta.url,
+    name: portfolio.meta?.title ?? `${portfolio.identity.name} — Portfolio`,
+    url,
     author: {
       '@type': 'Person',
       name: portfolio.identity.name,
     },
   };
-  if (portfolio.meta.description) site.description = portfolio.meta.description;
+  if (portfolio.meta?.description) site.description = portfolio.meta.description;
   return site;
 }
 

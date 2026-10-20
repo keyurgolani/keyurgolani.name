@@ -1,34 +1,20 @@
 import { ImageResponse } from 'next/og';
-import { loadPortfolio } from '~/lib/portfolio';
+import { getLive } from '~/server/catalog';
+import { requireDeploymentConfig } from '~/server/config-store';
 
 export const runtime = 'nodejs';
-// Render from the mounted portfolio file on each request. A build-time
-// prerender would bake in whatever file the build saw, which for a CI image
-// is the bundled example persona.
+// Per request, from the revision register() loaded, so a build never bakes
+// in a portfolio or an origin.
 export const dynamic = 'force-dynamic';
 export const alt = 'Portfolio';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
 
 export default async function OpengraphImage() {
-  let name = 'Portfolio';
-  let tagline: string | undefined;
-  let host: string | undefined;
-
-  try {
-    const { portfolio } = await loadPortfolio();
-    name = portfolio.identity.name;
-    tagline = portfolio.identity.tagline ?? portfolio.meta?.description;
-    if (portfolio.meta?.url) {
-      try {
-        host = new URL(portfolio.meta.url).hostname.replace(/^www\./, '');
-      } catch {
-        host = portfolio.meta.url;
-      }
-    }
-  } catch {
-    // fall through to defaults
-  }
+  const host = new URL(requireDeploymentConfig().origin).hostname.replace(/^www\./, '');
+  const { portfolio } = (await getLive()).unit;
+  const name = portfolio.identity.name;
+  const tagline = portfolio.identity.tagline ?? portfolio.meta?.description;
 
   return new ImageResponse(
     <div
@@ -97,7 +83,7 @@ export default async function OpengraphImage() {
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <span style={{ width: 12, height: 12, background: '#b54a32', borderRadius: 999 }} />
-          {host ?? ''}
+          {host}
         </div>
         <div
           style={{

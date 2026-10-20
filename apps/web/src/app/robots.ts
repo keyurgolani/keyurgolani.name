@@ -1,30 +1,17 @@
 import type { MetadataRoute } from 'next';
-import { loadPortfolio } from '~/lib/portfolio';
+import { requireDeploymentConfig } from '~/server/config-store';
 
-// Render from the mounted portfolio file on each request. A build-time
-// prerender would bake in whatever file the build saw, which for a CI image
-// is the bundled example persona.
+// Per request, so the origin is the deployment's, not the build's.
 export const dynamic = 'force-dynamic';
 
-export default async function robots(): Promise<MetadataRoute.Robots> {
-  let baseUrl: string | null = null;
-  try {
-    const { portfolio } = await loadPortfolio();
-    if (portfolio.meta?.url) baseUrl = portfolio.meta.url.replace(/\/$/, '');
-  } catch {
-    // ignore
+export default function robots(): MetadataRoute.Robots {
+  const { origin, profile } = requireDeploymentConfig();
+  if (profile !== 'owner' && profile !== 'read-only') {
+    return { rules: [{ userAgent: '*', disallow: '/' }] };
   }
-
   return {
-    rules: [
-      {
-        userAgent: '*',
-        allow: '/',
-        // /admin and the customize/portfolio APIs are author-only — keep them out
-        // of search indexes even if the deployment exposes them publicly.
-        disallow: ['/admin', '/api/'],
-      },
-    ],
-    ...(baseUrl ? { sitemap: `${baseUrl}/sitemap.xml`, host: baseUrl } : {}),
+    rules: [{ userAgent: '*', allow: '/', disallow: ['/studio', '/api/'] }],
+    sitemap: `${origin}/sitemap.xml`,
+    host: origin,
   };
 }
