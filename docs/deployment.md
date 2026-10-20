@@ -1,6 +1,6 @@
 # Deployment
 
-The server runs one deployment profile, chosen by `PORTFOLIO_PROFILE` at startup. This release serves `read-only`: the portfolio in a mounted directory, with no editing surface. Run it in Docker (recommended) or on Node.
+The server runs one deployment profile, chosen by `PORTFOLIO_PROFILE` at startup. This release serves `read-only`, the portfolio in a mounted directory with no editing surface, and `demo`, the bundled sample for a product demo. Run it in Docker (recommended) or on Node.
 
 The browser editor, the variant gallery, the variant preview pages, and their write APIs are gone in every profile, `pnpm dev` included. Edit `config/portfolio.yml` instead: `pnpm dev` picks up each save, and a production server picks it up when it restarts. `pnpm dev` listens on every network interface; on a network you don't trust, run `pnpm dev --hostname 127.0.0.1`.
 
@@ -37,7 +37,7 @@ Before it takes a request, the server validates its settings and the portfolio. 
 
 Data under an `extensions` key, or a section whose `kind` is `<npm package name>/<name>`, belongs to a content extension. This release registers none, so the server keeps that data as written, logs a `config.warning` with code `extension_unregistered` for each use, and never renders it.
 
-`owner` and `demo` don't start yet. `owner` needs an authentication provider, and none ships; `demo` waits on its bundled-sample catalog.
+`owner` doesn't start yet: it needs an authentication provider, and none ships.
 
 ### Updating the portfolio
 
@@ -73,6 +73,16 @@ PORTFOLIO_PROFILE=read-only PORTFOLIO_ORIGIN=https://jane.name \
 ```
 
 `pnpm start` runs from `apps/web`, so the relative source directory is the repo's `config/`. The host listens on `process.env.PORT` (defaults to 3000).
+
+### Demo
+
+`demo` renders the bundled sample, `portfolio.example.yml`, and reads no source directory; setting `PORTFOLIO_SOURCE_DIR` stops a production server. Its origin is the demo hostname:
+
+```sh
+PORTFOLIO_PROFILE=demo PORTFOLIO_ORIGIN=https://demo.jane.name pnpm start
+```
+
+`/` shows the sample in the default variant, and `/sample?variant=<slug>&scheme=<id>&typography=<id>` in any registered variant, color scheme, and typography preset. An unknown variant is a 404, and an unknown scheme or preset falls back to the variant's default. Until the demo's indexing rules are settled, every response sends `X-Robots-Tag: noindex`, `robots.txt` disallows everything, the sitemap is empty, and there is no feed. Every Studio operation answers with the 404 envelope.
 
 For a process manager (PM2, systemd, etc.), wrap `pnpm start` with the same environment. The Next.js standalone output makes the container surface minimal — you don't need to ship `node_modules` to your runtime if you copy `apps/web/.next/standalone/` and the public assets.
 
