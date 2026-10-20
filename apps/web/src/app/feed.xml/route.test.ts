@@ -60,5 +60,7 @@ test('a catalog that fails gives a fixed 500 and logs the request, not the cause
 
 test('a server with no deployment state serves no feed', async () => {
   setDeploymentState(undefined);
-  await assert.rejects(GET(request()), /not loaded/);
+  const response = await GET(request());
+  assert.equal(response.status, 503);
+  assert.equal(response.headers.get('cache-control'), 'no-store');
 });

@@ -139,11 +139,11 @@ async function smoke() {
       expected: 200,
     });
   });
-  if (JSON.parse(health.body).ok !== true) {
-    throw new SmokeFailure('/api/health answered without ok: true', {
+  if (JSON.parse(health.body).status !== 'ok') {
+    throw new SmokeFailure('/api/health answered without status: ok', {
       test: 'GET /api/health',
       route: '/api/health',
-      expected: 'ok: true',
+      expected: 'status: ok',
       actual: health.body.slice(0, 200),
     });
   }

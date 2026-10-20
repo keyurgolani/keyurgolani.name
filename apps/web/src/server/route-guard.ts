@@ -1,5 +1,5 @@
 import 'server-only';
-import { requireDeploymentConfig } from './config-store';
+import { getDeploymentConfig } from './config-store';
 import { serves, type RoutePattern } from './routes';
 
 // The guard every route handler method goes through (#1, item 13). This,
@@ -10,7 +10,8 @@ const SERVED = Symbol.for('keyurgolani.portfolio.served-route');
 
 /**
  * A route handler method that answers 404 unless the deployment's profile
- * serves `pattern`. Every method a route file exports is
+ * serves `pattern`, and 503 before register() has stored the deployment, as
+ * proxy.ts does. Every method a route file exports is
  * `export const GET = served('<its pattern>', handler)`, and routes.test.ts
  * fails on any other form.
  */
@@ -18,8 +19,13 @@ export function served<Rest extends unknown[]>(
   pattern: RoutePattern,
   handler: (request: Request, ...rest: Rest) => Response | Promise<Response>,
 ): (request: Request, ...rest: Rest) => Promise<Response> {
-  const guarded = async (request: Request, ...rest: Rest): Promise<Response> =>
-    serves(requireDeploymentConfig().profile, pattern) ? handler(request, ...rest) : notFound();
+  const guarded = async (request: Request, ...rest: Rest): Promise<Response> => {
+    const deployment = getDeploymentConfig();
+    if (!deployment) return plain(503, 'Service unavailable.');
+    return serves(deployment.profile, pattern)
+      ? handler(request, ...rest)
+      : plain(404, 'Not found.');
+  };
   return Object.assign(guarded, { [SERVED]: pattern });
 }
 
@@ -29,9 +35,9 @@ export function servedPattern(value: unknown): string | undefined {
   return (value as { [SERVED]?: string })[SERVED];
 }
 
-function notFound(): Response {
-  return new Response('Not found.', {
-    status: 404,
+function plain(status: number, text: string): Response {
+  return new Response(text, {
+    status,
     headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' },
   });
 }

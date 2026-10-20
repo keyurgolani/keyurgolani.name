@@ -34,6 +34,7 @@ const ROUTES = [
   { pattern: '/opengraph-image', kind: 'metadata', capability: 'catalog.read' },
   { pattern: '/feed.xml', kind: 'handler', capability: 'feed.read' },
   { pattern: '/api/health', kind: 'handler', capability: 'health.read' },
+  { pattern: '/api/ready', kind: 'handler', capability: 'ready.read' },
   { pattern: '/api/studio/[name]', kind: 'handler', capability: 'operations' },
 ] as const satisfies readonly RouteEntry[];
 

@@ -54,7 +54,7 @@ test(
   async ({ request }) => {
     const response = await request.get('/api/health');
     expect(response.status()).toBe(200);
-    expect(await response.json()).toMatchObject({ ok: true });
+    expect(await response.json()).toEqual({ status: 'ok', profile: 'read-only' });
   },
 );
 

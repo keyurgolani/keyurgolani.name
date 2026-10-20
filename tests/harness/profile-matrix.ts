@@ -2,8 +2,9 @@
 // table and the operation registry and run against the built server: every
 // page, route, and operation the profile doesn't serve fails closed, and
 // each one it serves answers. No response sets a cookie, and under a profile
-// crawlers may not index (demo), every response says so. A spec runs it for
-// the profile its app options start.
+// crawlers may not index (demo), every response says so. Health and
+// readiness answer their documented shapes. A spec runs it for the profile
+// its app options start.
 import { createRequire } from 'node:module';
 import type { APIResponse } from '@playwright/test';
 import type * as Capabilities from '../../apps/web/src/server/capabilities';
@@ -14,7 +15,7 @@ import { expect, test, type AppOptions } from './fixtures';
 // apps/web has no "type": "module", so its modules are CommonJS to Node and
 // load through require().
 const require = createRequire(import.meta.url);
-const { accessIn, INDEXABLE } =
+const { accessIn, CAPABILITIES, INDEXABLE } =
   require('../../apps/web/src/server/capabilities.ts') as typeof Capabilities;
 const { listOperations } = require('../../apps/web/src/server/operations.ts') as typeof Operations;
 const { listRoutes, RETIRED_PATTERNS, routeAccess } =
@@ -48,6 +49,23 @@ function expected(
   // No provider: the origin check refuses every command.
   if (operation.kind === 'command') return [403, 'request_origin_rejected'];
   return [200, null];
+}
+
+/** What /api/ready answers for a profile whose checks all pass. */
+function readyBody(profile: Profile) {
+  return {
+    status: 'ready',
+    profile,
+    capabilities: CAPABILITIES.flatMap((id) => {
+      const access = accessIn(profile, id);
+      return access === 'absent' ? [] : [{ id, access }];
+    }),
+    checks: [
+      { id: 'catalog', status: 'ok' },
+      { id: 'packs', status: 'ok' },
+      ...(profile === 'owner' ? [] : [{ id: 'owner-modules', status: 'ok' }]),
+    ],
+  };
 }
 
 /** No cookie, and noindex exactly where the profile can't be indexed. */
@@ -133,6 +151,28 @@ export function profileMatrix(profile: Profile): void {
       },
     );
   }
+
+  test(
+    '/api/health is liveness and /api/ready reports every check ok',
+    {
+      annotation: [
+        { type: 'route', description: '/api/health' },
+        { type: 'route', description: '/api/ready' },
+        annotation,
+      ],
+    },
+    async ({ request }) => {
+      const health = await request.get('/api/health');
+      expect(health.status()).toBe(200);
+      expect(health.headers()['cache-control']).toBe('no-store');
+      expect(await health.json()).toEqual({ status: 'ok', profile });
+
+      const ready = await request.get('/api/ready');
+      expect(ready.status()).toBe(200);
+      expect(ready.headers()['cache-control']).toBe('no-store');
+      expect(await ready.json()).toEqual(readyBody(profile));
+    },
+  );
 
   test(
     'an unknown operation gets the same 404 envelope',
