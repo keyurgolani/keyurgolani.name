@@ -2,6 +2,7 @@ import type { Access, Capability, Profile } from './capabilities';
 import type { DeploymentState } from './config-store';
 import { HOST_SITE } from './host-defaults';
 import { capabilityPolicy } from './policy';
+import { STARTING } from './ready-starting';
 
 // Readiness (#1, item 19): whether this process can serve its profile, from
 // checks that read no paths, values, or content and say only ok or fail.
@@ -46,7 +47,7 @@ export async function readiness(
   state: DeploymentState | undefined,
   probes: ReadinessProbes,
 ): Promise<Readiness> {
-  if (!state) return { httpStatus: 503, body: { status: 'starting' } };
+  if (!state) return { httpStatus: 503, body: STARTING };
   const { profile } = state.config;
   const checks: ReadinessCheck[] = [
     { id: 'catalog', status: await settle(async () => Boolean(await state.catalog.getLive())) },

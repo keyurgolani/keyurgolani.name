@@ -186,7 +186,7 @@ Data under an `extensions` key, or a section whose `kind` is `<npm package name>
 
 `GET /api/health` is liveness. It does no I/O and answers 200 with `{"status":"ok","profile":"read-only"}` while the server runs. The image `HEALTHCHECK` uses it.
 
-`GET /api/ready` is readiness, for a load balancer or an orchestrator. It answers 503 with `{"status":"starting"}` until startup finishes, then:
+`GET /api/ready` is readiness, for a load balancer or an orchestrator. Next holds requests until startup finishes, so a client usually just waits; one that reaches the app before then gets 503 with `{"status":"starting"}`. After startup it answers:
 
 ```json
 {

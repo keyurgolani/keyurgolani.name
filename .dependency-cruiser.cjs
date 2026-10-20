@@ -44,11 +44,12 @@ module.exports = {
       severity: 'error',
       comment:
         'proxy.ts runs before every request; it imports only the route table, the capability ' +
-        'matrix behind it, and the frozen config (#1, item 15).',
+        'matrix behind it, the frozen config (#1, item 15), and the body /api/ready answers ' +
+        'before startup (item 19).',
       from: { path: '^apps/web/src/proxy\\.ts$' },
       to: {
         pathNot: [
-          '^apps/web/src/server/(capabilities|routes|config-store)\\.ts$',
+          '^apps/web/src/server/(capabilities|routes|config-store|ready-starting)\\.ts$',
           '^node_modules/(\\.pnpm/next@|next/)',
         ],
       },

@@ -1,5 +1,6 @@
 import 'server-only';
 import { getDeploymentConfig } from './config-store';
+import { READY_PATH, STARTING, STARTING_HEADERS } from './ready-starting';
 import { serves, type RoutePattern } from './routes';
 
 // The guard every route handler method goes through (#1, item 13). This,
@@ -11,7 +12,8 @@ const SERVED = Symbol.for('keyurgolani.portfolio.served-route');
 /**
  * A route handler method that answers 404 unless the deployment's profile
  * serves `pattern`, and 503 before register() has stored the deployment, as
- * proxy.ts does. Every method a route file exports is
+ * proxy.ts does: readiness's own `starting` body for /api/ready, plain text
+ * for everything else. Every method a route file exports is
  * `export const GET = served('<its pattern>', handler)`, and routes.test.ts
  * fails on any other form.
  */
@@ -21,7 +23,11 @@ export function served<Rest extends unknown[]>(
 ): (request: Request, ...rest: Rest) => Promise<Response> {
   const guarded = async (request: Request, ...rest: Rest): Promise<Response> => {
     const deployment = getDeploymentConfig();
-    if (!deployment) return plain(503, 'Service unavailable.');
+    if (!deployment) {
+      return pattern === READY_PATH
+        ? Response.json(STARTING, { status: 503, headers: STARTING_HEADERS })
+        : plain(503, 'Service unavailable.');
+    }
     return serves(deployment.profile, pattern)
       ? handler(request, ...rest)
       : plain(404, 'Not found.');

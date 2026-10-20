@@ -5,10 +5,12 @@ import { proxy } from './proxy';
 import type { Profile } from './server/capabilities';
 import { readDeploymentConfig } from './server/config';
 import { setDeploymentState } from './server/config-store';
+import { readiness } from './server/readiness';
 
 // proxy.ts: 404 early for what the profile doesn't serve, a fresh request ID
 // on everything else, noindex on every demo response, and 503 before
-// register() has stored the deployment.
+// register() has stored the deployment, with readiness's own body for
+// /api/ready.
 
 function deploy(t: TestContext, profile: Profile): void {
   const read = readDeploymentConfig(
@@ -44,6 +46,19 @@ test('before register() stores the deployment, every request is 503', async () =
   assert.equal(response.status, 503);
   assert.equal(response.headers.get('cache-control'), 'no-store');
   assert.match(response.headers.get('x-request-id') ?? '', UUID);
+});
+
+test('before startup, /api/ready answers with the starting body readiness documents', async () => {
+  setDeploymentState(undefined);
+  const response = proxy(request('/api/ready'));
+  assert.equal(response.status, 503);
+  assert.equal(response.headers.get('cache-control'), 'no-store');
+  assert.match(response.headers.get('x-request-id') ?? '', UUID);
+  const starting = await readiness(undefined, {
+    variantLoads: () => assert.fail('nothing loads before startup'),
+    loadedOwnerModules: () => [],
+  });
+  assert.deepEqual(await response.json(), starting.body);
 });
 
 test('a served path passes through with a fresh request ID, whatever the client sent', (t) => {
