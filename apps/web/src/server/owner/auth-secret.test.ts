@@ -58,6 +58,9 @@ function workspace(t: TestContext) {
   mkdirSync(source);
   writeFileSync(path.join(source, 'portfolio.yml'), VALID);
   copyFileSync(EXAMPLES.site, path.join(source, 'site.yml'));
+  // The data.directory requirement runs beside this one, and needs one.
+  const data = path.join(root, 'data');
+  mkdirSync(data);
   /** Writes `text` to a file beside the source, with `mode`, and returns its path. */
   const file = (name: string, text: string, mode = 0o400) => {
     const target = path.join(root, name);
@@ -70,6 +73,7 @@ function workspace(t: TestContext) {
     PORTFOLIO_PROFILE: 'owner',
     PORTFOLIO_ORIGIN: 'https://rowan.test',
     PORTFOLIO_SOURCE_DIR: source,
+    PORTFOLIO_DATA_DIR: data,
   };
   return { root, env, file };
 }

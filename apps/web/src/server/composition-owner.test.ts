@@ -65,6 +65,7 @@ const PROVIDER: AuthProviderFactory = {
 let config: DeploymentConfig;
 let state: DeploymentState;
 let sourceDir: string;
+let dataDir: string;
 
 function input(overrides: Partial<CompositionInput> = {}): CompositionInput {
   return {
@@ -78,6 +79,7 @@ function input(overrides: Partial<CompositionInput> = {}): CompositionInput {
 
 test.before(async () => {
   sourceDir = mkdtempSync(path.join(tmpdir(), 'composition-owner-'));
+  dataDir = mkdtempSync(path.join(tmpdir(), 'composition-owner-data-'));
   writeFileSync(
     path.join(sourceDir, 'portfolio.yml'),
     'schemaVersion: 2\nlocale: en\ndirection: ltr\nidentity:\n  name: Rowan Test\nsections:\n  - kind: lede\n    id: about\n    body: Hi.\n',
@@ -89,6 +91,7 @@ test.before(async () => {
       PORTFOLIO_PROFILE: 'owner',
       PORTFOLIO_ORIGIN: ORIGIN,
       PORTFOLIO_SOURCE_DIR: sourceDir,
+      PORTFOLIO_DATA_DIR: dataDir,
       PORTFOLIO_AUTH_PASSWORD_HASH: HASH,
       GITHUB_TOKEN: 'canary-github-token',
     },
@@ -107,6 +110,7 @@ test.before(async () => {
 test.after(() => {
   setDeploymentState(undefined);
   rmSync(sourceDir, { recursive: true, force: true });
+  rmSync(dataDir, { recursive: true, force: true });
 });
 
 function studio(method: string, name: string, headers: Record<string, string> = {}) {
@@ -116,8 +120,8 @@ function studio(method: string, name: string, headers: Record<string, string> = 
 }
 
 test('owner loads its modules only through the composition root', () => {
-  // Owner code, then the auth.secret check, which loads all of
-  // @portfolio/core through its one entry (#2).
+  // Owner code, then the auth.secret and data.directory checks, which load
+  // all of @portfolio/core through its one entry (#2).
   assert.deepEqual([...loadedOwnerModules()].sort(), [
     'core/audit/record',
     'core/audit/sink',
@@ -133,6 +137,7 @@ test('owner loads its modules only through the composition root', () => {
     'core/owner',
     'server/owner/auth-secret',
     'server/owner/config-status',
+    'server/owner/data-directory',
     'server/owner/index',
     'server/owner/session-mint',
   ]);

@@ -27,9 +27,33 @@ export const DEPLOYMENT_KEYS = {
   PORTFOLIO_PREVIEW_ORIGIN: ['owner', 'demo'],
   PORTFOLIO_DATA_DIR: ['owner'],
   PORTFOLIO_AUTH_PASSWORD_HASH: ['owner'],
+  PORTFOLIO_AUTH_SESSION_IDLE_MINUTES: ['owner'],
+  PORTFOLIO_AUTH_SESSION_MAX_HOURS: ['owner'],
   GITHUB_TOKEN: ['owner'],
 } as const satisfies Record<string, readonly Profile[]>;
 export type DeploymentKey = keyof typeof DEPLOYMENT_KEYS;
+
+/**
+ * The owner session lifetimes (#2): each setting's default and the whole
+ * numbers it may be set to. @portfolio/core's SESSION_LIFETIME and
+ * SESSION_LIFETIME_RANGE hold the same numbers, which a test checks.
+ */
+export const SESSION_LIFETIME_KEYS = {
+  PORTFOLIO_AUTH_SESSION_IDLE_MINUTES: {
+    field: 'idleMinutes',
+    unit: 'minutes',
+    default: 60,
+    min: 5,
+    max: 120,
+  },
+  PORTFOLIO_AUTH_SESSION_MAX_HOURS: {
+    field: 'maxHours',
+    unit: 'hours',
+    default: 12,
+    min: 1,
+    max: 24,
+  },
+} as const;
 
 /** Removed settings, each with the key that replaced it. Setting one is fatal. */
 export const REPLACED_KEYS = {
@@ -48,8 +72,10 @@ export interface DeploymentConfig {
   readonly trustedProxyHops: number;
   /** Origin for isolated previews (`owner`, `demo`). */
   readonly previewOrigin?: string;
-  /** Writable data directory (`owner`), for draft and revision storage. */
+  /** Writable data directory (`owner`), for auth state, the audit log, and revisions. */
   readonly dataDir?: string;
+  /** How long an owner session lasts (`owner`): idle, and at most. */
+  readonly sessionLifetime?: Readonly<{ idleMinutes: number; maxHours: number }>;
   readonly secrets: Readonly<{ authPasswordHash?: string; githubToken?: string }>;
   /** The variable each set secret came from, for a diagnostic that names it. */
   readonly secretKeys?: Readonly<{ authPasswordHash?: string }>;
@@ -332,6 +358,22 @@ export function readDeploymentConfig(env: Env, options: ReadConfigOptions): Read
   }
 
   const dataDir = valueOf(resolveFor('PORTFOLIO_DATA_DIR'));
+  const lifetime = {
+    idleMinutes: SESSION_LIFETIME_KEYS.PORTFOLIO_AUTH_SESSION_IDLE_MINUTES.default as number,
+    maxHours: SESSION_LIFETIME_KEYS.PORTFOLIO_AUTH_SESSION_MAX_HOURS.default as number,
+  };
+  for (const [key, setting] of Object.entries(SESSION_LIFETIME_KEYS)) {
+    const resolved = resolveFor(key as keyof typeof SESSION_LIFETIME_KEYS);
+    if (resolved.state !== 'set') continue;
+    const range = `${setting.min} to ${setting.max} ${setting.unit}`;
+    if (!/^\d+$/.test(resolved.value)) {
+      fatal(key, 'invalid', `${key} must be a whole number of ${setting.unit}: ${range}.`);
+    } else if (Number(resolved.value) < setting.min || Number(resolved.value) > setting.max) {
+      fatal(key, 'out_of_range', `${key} must be ${range}.`);
+    } else {
+      lifetime[setting.field] = Number(resolved.value);
+    }
+  }
   const hashValue = resolveFor('PORTFOLIO_AUTH_PASSWORD_HASH');
   const authPasswordHash = valueOf(hashValue);
   const githubToken = valueOf(resolveFor('GITHUB_TOKEN'));
@@ -359,6 +401,7 @@ export function readDeploymentConfig(env: Env, options: ReadConfigOptions): Read
     ...(dataDir !== undefined
       ? { dataDir: path.resolve(/*turbopackIgnore: true*/ options.cwd, dataDir) }
       : {}),
+    ...(profile === 'owner' ? { sessionLifetime: Object.freeze(lifetime) } : {}),
     secrets: Object.freeze({
       ...(authPasswordHash !== undefined ? { authPasswordHash } : {}),
       ...(githubToken !== undefined ? { githubToken } : {}),

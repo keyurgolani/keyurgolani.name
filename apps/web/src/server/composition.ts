@@ -115,7 +115,13 @@ export const STARTUP_REQUIREMENTS: readonly StartupRequirement[] = [
     failure: 'fatal',
     load: () => import('./owner/auth-secret').then((module) => module.check),
   },
-  { id: 'data.directory', issue: '#2, #3', profiles: ['owner'], failure: 'fatal' },
+  {
+    id: 'data.directory',
+    issue: '#2, #3',
+    profiles: ['owner'],
+    failure: 'fatal',
+    load: () => import('./owner/data-directory').then((module) => module.check),
+  },
   // The mounted pair (#4, item 6): a missing or doubled document, an
   // old-format one, and every record validatePublicationUnit finds. Startup
   // treats the pair as live, so a blocks-preview or blocks-publish record
