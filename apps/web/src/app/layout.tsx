@@ -3,8 +3,8 @@ import type { Metadata } from 'next';
 import type { Portfolio } from '@portfolio/schema';
 import { THEME_INIT_SCRIPT, ThemeProvider } from '@portfolio/kit';
 import { buildStructuredData } from '@portfolio/kit/seo';
-import { manifest as editorialManifest } from '@portfolio/variant-editorial';
 import { jsonLdScript } from '~/lib/json-ld';
+import { findManifest } from '~/lib/registry';
 import { getLive } from '~/server/catalog';
 import { requireDeploymentConfig } from '~/server/config-store';
 import { HOST_APPEARANCE } from '~/server/host-defaults';
@@ -78,7 +78,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
       <body>
         <ThemeProvider
           defaultPreference={HOST_APPEARANCE.displayMode}
-          supportedThemes={editorialManifest.themes}
+          supportedThemes={findManifest(HOST_APPEARANCE.variant)?.themes}
         >
           {children}
         </ThemeProvider>

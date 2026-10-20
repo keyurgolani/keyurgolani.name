@@ -1,6 +1,8 @@
 import { ImageResponse } from 'next/og';
+import { findManifest } from '~/lib/registry';
 import { getLive } from '~/server/catalog';
 import { requireDeploymentConfig } from '~/server/config-store';
+import { HOST_APPEARANCE } from '~/server/host-defaults';
 
 export const runtime = 'nodejs';
 // Per request, from the revision register() loaded, so a build never bakes
@@ -15,6 +17,7 @@ export default async function OpengraphImage() {
   const { portfolio } = (await getLive()).unit;
   const name = portfolio.identity.name;
   const tagline = portfolio.identity.tagline ?? portfolio.meta?.description;
+  const variant = findManifest(HOST_APPEARANCE.variant)?.name;
 
   return new ImageResponse(
     <div
@@ -92,7 +95,7 @@ export default async function OpengraphImage() {
             textTransform: 'uppercase',
           }}
         >
-          Editorial
+          {variant}
         </div>
       </div>
     </div>,
