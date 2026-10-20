@@ -2,7 +2,13 @@ import 'server-only';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { detectFormat, parsePortfolio, type Portfolio } from '@portfolio/schema';
+import {
+  detectFormat,
+  parsePortfolio,
+  type ContentExtension,
+  type DocumentWarning,
+  type Portfolio,
+} from '@portfolio/schema';
 import type { CatalogReader, LiveRevision } from './catalog-port';
 import type { ConfigIssue } from './config';
 import { deepFreeze } from './freeze';
@@ -15,6 +21,8 @@ import { deepFreeze } from './freeze';
 export interface SampleCatalogOptions {
   /** The bundled example document. */
   readonly examplePath: string;
+  /** The content extensions the sample is checked against, as documents are. Others warn. */
+  readonly extensions?: readonly ContentExtension[];
 }
 
 export type OpenSampleResult =
@@ -25,7 +33,10 @@ export type OpenSampleResult =
 // names the profile that needs it.
 const KEY = 'PORTFOLIO_PROFILE';
 
-export function openSampleCatalog({ examplePath }: SampleCatalogOptions): OpenSampleResult {
+export function openSampleCatalog({
+  examplePath,
+  extensions,
+}: SampleCatalogOptions): OpenSampleResult {
   const file = path.basename(examplePath);
   let bytes: Buffer;
   try {
@@ -42,7 +53,7 @@ export function openSampleCatalog({ examplePath }: SampleCatalogOptions): OpenSa
       ],
     };
   }
-  const parsed = parsePortfolio(bytes.toString('utf8'), detectFormat(file));
+  const parsed = parsePortfolio(bytes.toString('utf8'), detectFormat(file), { extensions });
   if (!parsed.ok) {
     return {
       ok: false,
@@ -59,7 +70,11 @@ export function openSampleCatalog({ examplePath }: SampleCatalogOptions): OpenSa
     revisionId: `sample-${createHash('sha256').update(bytes).digest('hex').slice(0, 12)}`,
     unit: Object.freeze({ portfolio: deepFreeze(withoutLiveData(parsed.value)) }),
   });
-  return { ok: true, issues: [], reader: Object.freeze({ getLive: async () => live }) };
+  return {
+    ok: true,
+    issues: parsed.warnings.map((warning) => warningIssue(warning, file)),
+    reader: Object.freeze({ getLive: async () => live }),
+  };
 }
 
 /**
@@ -75,4 +90,17 @@ function withoutLiveData(portfolio: Portfolio): Portfolio {
 
 function fatal(code: string, message: string, file: string): ConfigIssue {
   return { severity: 'fatal', key: KEY, code, message, file };
+}
+
+/** A warning the sample's parse raised, logged as the documents adapter logs one. */
+function warningIssue(warning: DocumentWarning, file: string): ConfigIssue {
+  return {
+    severity: 'warning',
+    key: KEY,
+    code: warning.code,
+    message: warning.message,
+    file,
+    path: warning.pointer,
+    ...(warning.line !== undefined ? { line: warning.line, column: warning.column } : {}),
+  };
 }

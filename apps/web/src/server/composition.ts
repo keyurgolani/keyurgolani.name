@@ -172,7 +172,10 @@ export async function compose(input: CompositionInput): Promise<Composition> {
 
   switch (config.profile) {
     case 'demo': {
-      const sample = openSampleCatalog({ examplePath: input.examplePath });
+      const sample = openSampleCatalog({
+        examplePath: input.examplePath,
+        extensions: input.extensions,
+      });
       const issues = [...early.issues, ...sample.issues];
       if (!sample.ok) return { ok: false, issues };
       return built(config, sample.reader, NO_BINDINGS, issues, early.degraded);
