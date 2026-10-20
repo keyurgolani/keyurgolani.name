@@ -365,6 +365,7 @@ function valueAt(data: unknown, path: readonly (string | number)[]): unknown {
   let value = data;
   for (const segment of path) {
     if (!isPlainObject(value) && !Array.isArray(value)) return undefined;
+    if (!Object.hasOwn(value, segment)) return undefined;
     value = (value as Record<string | number, unknown>)[segment];
   }
   return value;

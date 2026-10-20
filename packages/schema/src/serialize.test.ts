@@ -213,4 +213,13 @@ test('an own __proto__ key is written as a key in both formats', () => {
     assert.deepEqual(Object.keys(extension), ['__proto__'], format);
     assert.equal(Object.getPrototypeOf(extension), Object.prototype, format);
   }
+  // Where the schema names the fields, it names no __proto__: the key goes after the ones it does.
+  const top = JSON.parse(
+    '{ "__proto__": { "a": 1 }, "identity": { "__proto__": 2, "name": "Rowan" }, "schemaVersion": 2 }',
+  );
+  for (const format of ['yaml', 'json'] as const) {
+    const written = data(serialize(top, format), format) as Record<string, Record<string, unknown>>;
+    assert.deepEqual(Object.keys(written), ['schemaVersion', 'identity', '__proto__'], format);
+    assert.deepEqual(Object.keys(written.identity!), ['name', '__proto__'], format);
+  }
 });
