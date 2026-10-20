@@ -1,0 +1,5 @@
+# The old one-file format, in TOML, which this release doesn't read.
+variant = "editorial"
+
+[identity]
+name = "Rowan Fixture"

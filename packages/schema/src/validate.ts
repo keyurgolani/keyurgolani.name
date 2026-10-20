@@ -115,6 +115,8 @@ export const DIAGNOSTIC_SEVERITIES = {
   'parse.syntax': 'blocks-preview',
   'schema.invalid': 'blocks-preview',
   'schema.version': 'blocks-preview',
+  'source.missing': 'blocks-preview',
+  'source.duplicate': 'blocks-preview',
   'legacy.document': 'blocks-preview',
   'site.deployment-setting': 'blocks-preview',
   'appearance.unknown': 'blocks-preview',
@@ -133,12 +135,16 @@ export const DIAGNOSTIC_SEVERITIES = {
 
 export type DiagnosticCode = keyof typeof DIAGNOSTIC_SEVERITIES;
 
-const REMEDIATIONS: Record<DiagnosticCode, string> = {
+/** What to do about each code. `@portfolio/schema/node` raises the `source.*` ones. */
+export const DIAGNOSTIC_REMEDIATIONS: Readonly<Record<DiagnosticCode, string>> = {
   'parse.syntax':
     'Fix the text at this position. A document is one plain YAML or JSON document, with no anchors, aliases, merge keys, tags, or directives.',
   'schema.invalid':
     "Change the value at this pointer to what the schema expects. Data the schema doesn't define goes under extensions, keyed by an npm package name.",
   'schema.version': 'Set schemaVersion: 2. This release reads only version 2 documents.',
+  'source.missing':
+    'Add the document: portfolio.yml and site.yml, or their .yaml or .json forms. portfolio.example.yml and site.example.yml are ones to start from.',
+  'source.duplicate': 'Keep one of them, in the format you edit, and remove the others.',
   'legacy.document': legacyRemediation('<file>'),
   'site.deployment-setting':
     "Remove it. Deployment settings come from the server's environment; docs/deployment.md lists them.",
@@ -219,7 +225,7 @@ export function validatePublicationUnit(
           line: 1,
           column: 1,
           message: 'The validator failed before it could check this pair.',
-          remediation: REMEDIATIONS['validator.failed'],
+          remediation: DIAGNOSTIC_REMEDIATIONS['validator.failed'],
         },
       ],
       notChecked: [],
@@ -244,7 +250,7 @@ function check(
     document: Diagnostic['document'],
     code: DiagnosticCode,
     found: { pointer: string; message: string; line?: number; column?: number },
-    remediation = REMEDIATIONS[code],
+    remediation = DIAGNOSTIC_REMEDIATIONS[code],
   ) => {
     diagnostics.push({
       code,

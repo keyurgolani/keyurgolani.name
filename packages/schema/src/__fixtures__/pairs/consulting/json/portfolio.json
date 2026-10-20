@@ -1,0 +1,114 @@
+{
+  "schemaVersion": 2,
+  "locale": "en-US",
+  "direction": "ltr",
+  "identity": {
+    "name": "Marcus Bell",
+    "tagline": "Fractional CTO for seed-stage teams",
+    "location": "Austin, Texas",
+    "email": "marcus@bell.test"
+  },
+  "links": [
+    {
+      "platform": "linkedin",
+      "url": "https://linkedin.test/in/marcusbell",
+      "label": "LinkedIn"
+    }
+  ],
+  "sections": [
+    {
+      "kind": "hero",
+      "id": "top",
+      "tagline": "I help small teams ship their second system without rewriting their first.",
+      "ctas": [
+        {
+          "url": "#services",
+          "label": "How I work"
+        }
+      ]
+    },
+    {
+      "kind": "services",
+      "id": "services",
+      "title": "Services",
+      "subtitle": "Two clients at a time.",
+      "items": [
+        {
+          "name": "Architecture review",
+          "description": "A two-week review of your system and your roadmap, ending in a written plan.",
+          "pricing": "Fixed fee",
+          "url": "mailto:marcus@bell.test?subject=Review",
+          "highlights": [
+            "Written plan",
+            "Two working sessions"
+          ]
+        },
+        {
+          "name": "Fractional CTO",
+          "description": "One day a week, for a quarter, until you hire your first engineering lead.",
+          "pricing": "Monthly retainer"
+        }
+      ]
+    },
+    {
+      "kind": "stats",
+      "id": "results",
+      "title": "Results",
+      "items": [
+        {
+          "value": "31",
+          "label": "Clients served",
+          "metric": "clients-served"
+        },
+        {
+          "value": "4",
+          "label": "Exits"
+        }
+      ]
+    },
+    {
+      "kind": "testimonials",
+      "id": "clients",
+      "title": "Clients",
+      "items": [
+        {
+          "quote": "Marcus turned a six-month rewrite into a three-week migration.",
+          "author": "Priya Nair",
+          "authorRole": "CEO",
+          "authorOrganization": "Lumen Health"
+        }
+      ]
+    },
+    {
+      "kind": "experience",
+      "id": "background",
+      "title": "Background",
+      "items": [
+        {
+          "role": "VP Engineering",
+          "organization": "Fieldnote",
+          "period": {
+            "start": "2015-01",
+            "end": "2020-06"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "cta",
+      "id": "work-together",
+      "title": "Work together",
+      "description": "Start with a thirty-minute call.",
+      "primaryAction": {
+        "url": "mailto:marcus@bell.test",
+        "label": "Email me"
+      }
+    },
+    {
+      "kind": "contact",
+      "id": "contact",
+      "title": "Contact",
+      "showAvailability": true
+    }
+  ]
+}

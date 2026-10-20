@@ -1,0 +1,17 @@
+# schema.version: a site document at schemaVersion 1.
+schemaVersion: 1
+appearance:
+  variant: editorial
+  designLanguage: platform-neutral
+  colorScheme: warm
+  typography: classic
+  displayMode: system
+visitorControls:
+  variant: locked
+  designLanguage: locked
+  colorScheme: selectable
+  typography: locked
+  displayMode: selectable
+motionPolicy: respect-os
+features:
+  feed: true

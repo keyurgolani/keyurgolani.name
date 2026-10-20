@@ -9,7 +9,8 @@
     ".": "./src/index.ts",
     "./ids": "./src/ids.ts",
     "./kinds": "./src/kinds/index.ts",
-    "./migrate": "./src/migrate/index.ts"
+    "./migrate": "./src/migrate/index.ts",
+    "./node": "./src/node.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

@@ -1,0 +1,17 @@
+# Kinetic Cosmos in nebula and humanist, with every axis visitors can change.
+schemaVersion: 2
+appearance:
+  variant: kinetic-cosmos
+  designLanguage: platform-neutral
+  colorScheme: nebula
+  typography: humanist
+  displayMode: system
+visitorControls:
+  variant: selectable
+  designLanguage: locked
+  colorScheme: selectable
+  typography: selectable
+  displayMode: selectable
+motionPolicy: respect-os
+features:
+  feed: false

@@ -1,0 +1,17 @@
+# appearance.unknown: a color scheme Editorial does not register.
+schemaVersion: 2
+appearance:
+  variant: editorial
+  designLanguage: platform-neutral
+  colorScheme: neon
+  typography: classic
+  displayMode: system
+visitorControls:
+  variant: locked
+  designLanguage: locked
+  colorScheme: selectable
+  typography: locked
+  displayMode: selectable
+motionPolicy: respect-os
+features:
+  feed: true
