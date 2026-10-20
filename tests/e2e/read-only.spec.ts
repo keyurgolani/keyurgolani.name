@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { expect, test } from '../harness/fixtures';
 
 // The read-only profile from a mounted source directory. The canonical origin
@@ -9,7 +10,7 @@ const READ_ONLY = { type: 'profile', description: 'read-only' };
 test.use({ appOptions: { env: { PORTFOLIO_ORIGIN: ORIGIN } } });
 
 // The baseline authoring surface, removed in every profile.
-const DELETED: Array<[method: 'GET' | 'PUT', path: string, body?: string]> = [
+const DELETED: Array<[method: 'GET' | 'PUT', route: string, body?: string]> = [
   ['GET', '/admin'],
   ['GET', '/variants'],
   ['GET', '/preview/editorial'],
@@ -20,12 +21,12 @@ const DELETED: Array<[method: 'GET' | 'PUT', path: string, body?: string]> = [
   ['PUT', '/api/customize', '{"colorScheme":"warm"}'],
 ];
 
-for (const [method, path, body] of DELETED) {
+for (const [method, route, body] of DELETED) {
   test(
-    `${method} ${path} answers 404 without x-portfolio-path`,
-    { annotation: [{ type: 'route', description: path }, READ_ONLY] },
+    `${method} ${route} answers 404 without x-portfolio-path`,
+    { annotation: [{ type: 'route', description: route }, READ_ONLY] },
     async ({ request }) => {
-      const response = await request.fetch(path, { method, data: body, maxRedirects: 0 });
+      const response = await request.fetch(route, { method, data: body, maxRedirects: 0 });
       expect(response.status()).toBe(404);
       expect(response.headers()['x-portfolio-path']).toBeUndefined();
     },
@@ -39,6 +40,24 @@ test(
     await request.put('/api/portfolio', { data: 'identity:\n  name: Overwritten\n' });
     const home = await request.get('/');
     expect(await home.text()).toContain('Rowan Fixture');
+  },
+);
+
+test(
+  'no response names a server path',
+  { annotation: [{ type: 'route', description: '(every route)' }, READ_ONLY] },
+  async ({ request, app }) => {
+    // The harness keeps the build and the source directory under one temporary root.
+    const root = path.dirname(app.sourceDir);
+    const paths = ['/', '/robots.txt', '/sitemap.xml', '/feed.xml', '/api/health', '/nope'];
+    for (const [method, route, body] of [
+      ...paths.map((route) => ['GET', route] as const),
+      ...DELETED,
+    ]) {
+      const response = await request.fetch(route, { method, data: body, maxRedirects: 0 });
+      const text = `${JSON.stringify(response.headers())}\n${await response.text()}`;
+      expect(text, `${method} ${route}`).not.toContain(root);
+    }
   },
 );
 
