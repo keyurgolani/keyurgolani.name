@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { resolveTheme } from './theme';
+import { runInNewContext } from 'node:vm';
+import { resolveTheme, type ThemePreference } from './theme';
+import { THEME_INIT_SCRIPT, themeInitScript } from './theme-init';
 
 const ALL = ['light', 'dark', 'bright', 'black'] as const;
 const BASIC = ['light', 'dark'] as const;
@@ -79,4 +81,31 @@ test('system never resolves to bright or black', () => {
     resolveTheme('system', ALL, () => 'light'),
     'light',
   );
+});
+
+/** The data-theme themeInitScript() paints, given storage and the OS scheme. */
+function paint(script: string, stored: string | null, osDark = false): string | undefined {
+  const root = { dataset: {} as Record<string, string>, style: {} as Record<string, string> };
+  runInNewContext(script, {
+    localStorage: { getItem: () => stored },
+    window: { matchMedia: () => ({ matches: osDark }) },
+    document: { documentElement: root },
+  });
+  return root.dataset.theme;
+}
+
+test("the init script paints the page's default until the visitor picks a theme", () => {
+  assert.equal(paint(themeInitScript('dark'), null), 'dark');
+  assert.equal(paint(themeInitScript('light'), null, true), 'light');
+  assert.equal(paint(themeInitScript('system'), null, true), 'dark');
+  // The visitor's stored choice wins over the default.
+  assert.equal(paint(themeInitScript('dark'), 'light'), 'light');
+  // Bright and black paint as light and dark before the provider runs.
+  assert.equal(paint(themeInitScript('black'), null), 'dark');
+  assert.equal(paint(THEME_INIT_SCRIPT, null), 'light');
+});
+
+test('only a known preference reaches the init script', () => {
+  const injected = "dark'; alert(1); '" as ThemePreference;
+  assert.equal(themeInitScript(injected), THEME_INIT_SCRIPT);
 });
