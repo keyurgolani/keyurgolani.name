@@ -220,7 +220,7 @@ The server writes one JSON object per line on stdout, with `ts`, `level`, and `e
 
 ## Response headers
 
-Every response carries `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, and `Content-Security-Policy: frame-ancestors 'none'`, so no other site can frame the pages, and a fresh `X-Request-Id`. Under `demo`, every response adds `X-Robots-Tag: noindex`. `Strict-Transport-Security` belongs at the TLS proxy (see [Reverse proxy and HTTPS](#reverse-proxy-and-https)).
+Every response the app sends carries `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, and `Content-Security-Policy: frame-ancestors 'none'`, so no other site can frame the pages, and a fresh `X-Request-Id`. Under `demo`, each adds `X-Robots-Tag: noindex`. Next's redirect for a trailing slash has none of them: Next answers `/sample/` with a 308 to `/sample`, whose body is only that path, before the app sees the request. `Strict-Transport-Security` belongs at the TLS proxy (see [Reverse proxy and HTTPS](#reverse-proxy-and-https)).
 
 ## Plain Node
 
@@ -243,7 +243,7 @@ For a process manager (PM2, systemd, etc.), wrap `pnpm start` with the same envi
 PORTFOLIO_PROFILE=demo PORTFOLIO_ORIGIN=https://demo.jane.name pnpm start
 ```
 
-`/` shows the sample in the default variant, and `/sample?variant=<slug>&scheme=<id>&typography=<id>` in any registered variant, color scheme, and typography preset. An unknown variant is a 404, and an unknown scheme or preset falls back to the variant's default. The sample's `github` section doesn't render, since it would fetch a live account. Until the demo's indexing rules are settled, every response sends `X-Robots-Tag: noindex`, `robots.txt` disallows everything, the sitemap is empty, and there is no feed. Every Studio operation answers with the 404 envelope.
+`/` shows the sample in the default variant, and `/sample?variant=<slug>&scheme=<id>&typography=<id>` in any registered variant, color scheme, and typography preset. An unknown variant is a 404, and an unknown scheme or preset falls back to the variant's default. The sample's `github` section doesn't render, since it would fetch a live account. Until the demo's indexing rules are settled, every response the app sends has `X-Robots-Tag: noindex`, `robots.txt` disallows everything, the sitemap is empty, and there is no feed. Every Studio operation answers with the 404 envelope.
 
 ## Environment variables
 

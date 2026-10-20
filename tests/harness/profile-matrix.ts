@@ -1,11 +1,13 @@
 // The route-level matrix (#1, AC4) for one profile, generated from the route
 // table and the operation registry and run against the built server: every
 // page, route, and operation the profile doesn't serve fails closed, and
-// each one it serves answers. Every response carries the baseline headers
-// and no cookie, and under a profile crawlers may not index (demo), says so.
-// Health and readiness answer their documented shapes, and the canary scan
-// (#1, Verification item 2) finds no path, secret, or config summary in any
-// response. A spec runs it for the profile its app options start.
+// each one it serves answers. Every response the app sends carries the
+// baseline headers and no cookie, and under a profile crawlers may not index
+// (demo), says so; Next's trailing-slash 308s, which come before the app,
+// point at the canonical path. Health and readiness answer their documented
+// shapes, and the canary scan (#1, Verification item 2) finds no path,
+// secret, or config summary in any response. A spec runs it for the profile
+// its app options start.
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
@@ -286,6 +288,27 @@ export function profileMatrix(profile: Profile): void {
       for (const [method, response] of responses) {
         expect(response.status(), method).toBe(404);
         expectProfileHeaders(profile, response, method);
+      }
+    },
+  );
+
+  test(
+    'a trailing slash is a 308 to the path without it, whose body is only that path',
+    { annotation: [{ type: 'route', description: 'every route' }, annotation] },
+    async ({ request }) => {
+      // Next answers these itself, before proxy.ts and the next.config.ts
+      // headers, so they carry none of the baseline headers. The target is
+      // the canonical path, and the body holds it and nothing else
+      // (docs/deployment.md).
+      const targets = listRoutes()
+        .filter((route) => route.pattern !== '/' && routeAccess(profile, route) !== 'absent')
+        .map((route) => concrete(route.pattern));
+      expect(targets.length).toBeGreaterThan(0);
+      for (const target of targets) {
+        const response = await request.get(`${target}/`, { maxRedirects: 0 });
+        expect(response.status(), target).toBe(308);
+        expect(response.headers()['location'], target).toBe(target);
+        expect(await response.text(), target).toBe(target);
       }
     },
   );
