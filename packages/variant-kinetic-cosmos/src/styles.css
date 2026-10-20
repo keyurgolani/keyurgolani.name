@@ -473,6 +473,16 @@
   }
 }
 
+/* The site's motionPolicy: reduce does the same, whatever the OS says. */
+[data-variant='kinetic-cosmos'][data-motion-policy='reduce'] *,
+[data-variant='kinetic-cosmos'][data-motion-policy='reduce'] *::before,
+[data-variant='kinetic-cosmos'][data-motion-policy='reduce'] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
 /* === Print ===============================================================
  * Goal: paginate-friendly black-on-white. Hide all kinetic chrome
  * (canvas, floaters, nav, theme toggle, skip link). Strip backdrop blur
