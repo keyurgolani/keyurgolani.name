@@ -2,16 +2,31 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { EventEmitter } from 'node:events';
-import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { HASH_FLOOR, parseHash, verifyPassword } from '../../../packages/core/src/auth/phc.mjs';
+import {
+  listSessionDigests,
+  readRevokedBefore,
+  writeSessionFile,
+} from '../../../packages/core/src/auth/session-files.mjs';
+import { prepareAuthDirectories } from '../../../packages/core/src/data/layout.mjs';
 import { main, readHidden } from './owner.mjs';
 
-// apps/web/bin/owner.mjs hash-password (#2): the password comes from a
+// apps/web/bin/owner.mjs (#2). hash-password: the password comes from a
 // terminal with echo off, or from two lines of stdin with --stdin, never
 // from the arguments, and the output is the PHC string and nothing else.
+// revoke-sessions: every session in the data directory ends.
 
 const SCRIPT = fileURLToPath(new URL('./owner.mjs', import.meta.url));
 const PASSWORD = 'canary-passphrase-4e1f0b9d';
@@ -21,11 +36,16 @@ const PASSWORD = 'canary-passphrase-4e1f0b9d';
  *
  * @param {string[]} args
  * @param {string | null} input
+ * @param {Record<string, string | undefined>} [env] added to this process's, without PORTFOLIO_*
  */
-function run(args, input) {
+function run(args, input, env = {}) {
+  const base = Object.fromEntries(
+    Object.entries(process.env).filter(([key]) => !key.startsWith('PORTFOLIO_')),
+  );
   return new Promise((resolve) => {
     const child = spawn(process.execPath, [SCRIPT, ...args], {
       stdio: [input === null ? 'ignore' : 'pipe', 'pipe', 'pipe'],
+      env: { ...base, ...env },
     });
     let stdout = '';
     let stderr = '';
@@ -249,4 +269,83 @@ test('--out refuses a file that exists before it asks for anything, and keeps no
   cancel.input.emit('data', '\u0003');
   assert.equal(await running, 130);
   assert.equal(existsSync(out), false, 'a cancelled entry left its file');
+});
+
+/** A data directory, prepared as owner startup leaves it, holding `count` session records. */
+async function dataDirWith(t, count) {
+  const dir = tempDir(t);
+  assert.equal(await prepareAuthDirectories(dir), null);
+  const at = Date.UTC(2026, 9, 20, 9, 0, 0);
+  for (let index = 0; index < count; index += 1) {
+    await writeSessionFile(dir, {
+      digest: index.toString(16).padStart(64, 'a'),
+      createdAt: at,
+      lastSeenAt: at,
+      absoluteExpiresAt: at + 12 * 3_600_000,
+      credentialFingerprint: 'MKhpw6F1Y5AkDvbeT_fgmw',
+      uaFamily: 'firefox',
+    });
+  }
+  return dir;
+}
+
+test('revoke-sessions writes revoked-before, deletes every session record, and audits sessions_revoked_all by the operator', async (t) => {
+  const dir = await dataDirWith(t, 3);
+  const before = Date.now();
+  const { code, stdout, stderr } = await run(['revoke-sessions'], '', { PORTFOLIO_DATA_DIR: dir });
+  assert.equal(code, 0, stderr);
+  assert.equal(stdout, '');
+  assert.match(stderr, /^Revoked 3 sessions\./);
+  assert.deepEqual(await listSessionDigests(dir), []);
+  const revokedBefore = await readRevokedBefore(dir);
+  assert.ok(revokedBefore !== null && revokedBefore >= before && revokedBefore <= Date.now());
+  const auditDir = path.join(dir, 'audit');
+  const [month] = readdirSync(auditDir);
+  assert.ok(month);
+  assert.equal(statSync(path.join(auditDir, month)).mode & 0o777, 0o600);
+  const records = readFileSync(path.join(auditDir, month), 'utf8')
+    .trim()
+    .split('\n')
+    .map((line) => JSON.parse(line));
+  assert.deepEqual(
+    records.map(({ type, actor, outcome, refs }) => ({ type, actor, outcome, refs })),
+    [{ type: 'sessions_revoked_all', actor: 'operator', outcome: 'success', refs: { count: 3 } }],
+  );
+  assert.equal(new Date(records[0].at).getTime(), revokedBefore);
+
+  // Through PORTFOLIO_DATA_DIR_FILE, and with the directories not made yet.
+  const fresh = tempDir(t);
+  const pointer = path.join(tempDir(t), 'data-dir');
+  writeFileSync(pointer, `${fresh}\n`);
+  const again = await run(['revoke-sessions'], '', { PORTFOLIO_DATA_DIR_FILE: pointer });
+  assert.equal(again.code, 0, again.stderr);
+  assert.match(again.stderr, /^Revoked 0 sessions\./);
+  for (const sub of ['ephemeral', 'ephemeral/auth', 'ephemeral/auth/sessions', 'audit']) {
+    assert.equal(statSync(path.join(fresh, sub)).mode & 0o777, 0o700, sub);
+  }
+});
+
+test('revoke-sessions with no usable data directory revokes nothing', async (t) => {
+  const dir = await dataDirWith(t, 1);
+  const file = path.join(tempDir(t), 'a-file');
+  writeFileSync(file, '');
+  const cases = [
+    [{}, /needs PORTFOLIO_DATA_DIR/],
+    [{ PORTFOLIO_DATA_DIR: dir, PORTFOLIO_DATA_DIR_FILE: file }, /not both/],
+    [{ PORTFOLIO_DATA_DIR_FILE: path.join(dir, 'no-such-file') }, /can't be read/],
+    [{ PORTFOLIO_DATA_DIR: path.join(dir, 'absent') }, /names no directory/],
+    [{ PORTFOLIO_DATA_DIR: file }, /names no directory/],
+  ];
+  for (const [env, message] of cases) {
+    const { code, stdout, stderr } = await run(['revoke-sessions'], '', env);
+    assert.equal(code, 1, JSON.stringify(env));
+    assert.equal(stdout, '');
+    assert.match(stderr, message);
+    assert.match(stderr, /Nothing was revoked\./);
+  }
+  assert.equal((await listSessionDigests(dir)).length, 1);
+  assert.equal(await readRevokedBefore(dir), null);
+  const extra = await run(['revoke-sessions', '--all'], '', { PORTFOLIO_DATA_DIR: dir });
+  assert.equal(extra.code, 2);
+  assert.match(extra.stderr, /takes no arguments/);
 });

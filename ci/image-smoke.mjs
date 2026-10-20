@@ -4,9 +4,10 @@
 // harness fixture mounted read-only as its source directory, and checks from
 // inside the container: /api/health, the home page, the image's own
 // HEALTHCHECK command, what the image contains, that the server's user can
-// change nothing in the app tree, the owner CLI's hash-password, and that the
-// container has no route out. Always removes the container and network;
-// keeps the image so later steps (the proxy smoke) can run it.
+// change nothing in the app tree, the owner CLI's hash-password and
+// revoke-sessions, and that the container has no route out. Always removes
+// the container and network; keeps the image so later steps (the proxy
+// smoke) can run it.
 //
 // Environment:
 //   CONTAINER_CLI     docker (default) or finch
@@ -80,17 +81,18 @@ function saveLogs() {
 }
 
 /**
- * The owner CLI runs from the image (#2): given a password twice on --stdin,
- * it prints one PHC string at the floor, and the hash verifies. It refuses a
- * password in its arguments, and input that isn't a terminal without
- * --stdin, and neither refusal repeats the password.
+ * The owner CLI runs from the image (#2). Given a password twice on --stdin,
+ * hash-password prints one PHC string at the floor, and the hash verifies.
+ * It refuses a password in its arguments, and input that isn't a terminal
+ * without --stdin, and neither refusal repeats the password. revoke-sessions
+ * runs as the server's user against the image's data directory.
  */
-async function checkHashPassword() {
+async function checkOwnerCli() {
   const typed = 'image smoke passphrase';
   const cliArgs = ['node', 'apps/web/bin/owner.mjs', 'hash-password'];
   const fail = (message, actual) => {
-    throw new SmokeFailure(`hash-password in the image: ${message}`, {
-      test: 'hash-password runs from the image',
+    throw new SmokeFailure(`the owner CLI in the image: ${message}`, {
+      test: 'the owner CLI runs from the image',
       actual,
     });
   };
@@ -121,6 +123,20 @@ async function checkHashPassword() {
   console.log(
     '[image] hash-password: --stdin prints a hash that verifies; argv and piped input are refused',
   );
+
+  const revoked = container([
+    'exec',
+    '-e',
+    'PORTFOLIO_DATA_DIR=/var/lib/portfolio',
+    name,
+    'node',
+    'apps/web/bin/owner.mjs',
+    'revoke-sessions',
+  ]);
+  if (execStatus(revoked) !== 0 || !/^Revoked 0 sessions\./.test(revoked.stderr ?? '')) {
+    fail('revoke-sessions did not run against /var/lib/portfolio', `exit ${execStatus(revoked)}`);
+  }
+  console.log('[image] revoke-sessions: runs as the server user against /var/lib/portfolio');
 }
 
 async function smoke() {
@@ -272,7 +288,7 @@ async function smoke() {
   }
   console.log("[image] /app: nothing the server's user can change");
 
-  await checkHashPassword();
+  await checkOwnerCli();
 
   const routes = assessRoutes(container(['exec', name, 'ip', 'route']), cli === 'docker');
   if (!routes.ok) {

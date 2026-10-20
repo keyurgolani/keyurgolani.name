@@ -4,6 +4,7 @@
  * so it runs from the image as well as the repo.
  *
  *   node apps/web/bin/owner.mjs hash-password [--out <path>] [--stdin]
+ *   node apps/web/bin/owner.mjs revoke-sessions
  *
  * hash-password asks for the password twice on the terminal, with echo off,
  * and prints the scrypt PHC string PORTFOLIO_AUTH_PASSWORD_HASH_FILE holds.
@@ -16,39 +17,79 @@
  * again unless the string was written. Nothing but the string goes to stdout;
  * prompts and messages go to stderr.
  *
- * Exits 0 when done, 1 when the entries are refused or the file can't be
- * made or written, 2 on a usage error, input of the wrong kind included (no
- * terminal without --stdin, a terminal with it), and 130 on Ctrl-C.
+ * revoke-sessions ends every owner session in PORTFOLIO_DATA_DIR (or its
+ * _FILE). It runs in the server's container, as the server's user, which
+ * owns the data directory:
+ *
+ *   docker compose -f compose.owner.yml exec web node apps/web/bin/owner.mjs revoke-sessions
+ *
+ * It writes ephemeral/auth/revoked-before first, so the server refuses every
+ * session created before it even if one is written back, then deletes each
+ * session record and appends sessions_revoked_all, by the operator, to the
+ * audit log. Each session's next request signs it out.
+ *
+ * Exits 0 when done; 1 when it refuses or fails, such as entries that are
+ * refused or a file that can't be made or written; 2 on a usage error, input
+ * of the wrong kind included (no terminal without --stdin, a terminal with
+ * it); and 130 on Ctrl-C.
  */
-import { closeSync, openSync, realpathSync, unlinkSync, writeSync } from 'node:fs';
-import { pathToFileURL } from 'node:url';
-// The repo and the image hold this module at the same path relative to this
-// file: the Dockerfile copies both.
+import {
+  closeSync,
+  openSync,
+  readFileSync,
+  realpathSync,
+  statSync,
+  unlinkSync,
+  writeSync,
+} from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+// The repo and the image hold these modules at the same paths relative to
+// this file: the Dockerfile copies each one.
+import { appendAuditRecord, auditRecord } from '../../../packages/core/src/audit/record.mjs';
 import {
   hashPassword,
   PASSWORD_MAX,
   PASSWORD_MIN,
   passwordProblem,
 } from '../../../packages/core/src/auth/phc.mjs';
+import { revokeAllSessionFiles } from '../../../packages/core/src/auth/session-files.mjs';
+import { ensureAuthDirectories } from '../../../packages/core/src/data/layout.mjs';
 
-const USAGE = 'Usage: node apps/web/bin/owner.mjs hash-password [--out <path>] [--stdin]';
+const USAGE = [
+  'Usage: node apps/web/bin/owner.mjs hash-password [--out <path>] [--stdin]',
+  '       node apps/web/bin/owner.mjs revoke-sessions',
+].join('\n');
+/** apps/web, which a relative PORTFOLIO_DATA_DIR resolves against, as the server's does. */
+const WEB_DIR = fileURLToPath(new URL('..', import.meta.url));
+const IN_CONTAINER =
+  'docker compose -f compose.owner.yml exec web node apps/web/bin/owner.mjs revoke-sessions';
 
 class UsageError extends Error {}
 class Cancelled extends Error {}
+
+/**
+ * @typedef {{ command: 'hash-password', out?: string, stdin: boolean }} HashOptions
+ * @typedef {HashOptions | { command: 'revoke-sessions' }} Options
+ */
 
 /**
  * The command line, checked. The messages are fixed text: an argument can be
  * a password typed in the wrong place, so none is ever repeated.
  *
  * @param {readonly string[]} argv
- * @returns {{ out?: string, stdin: boolean }}
+ * @returns {Options}
  */
 export function parseArgs(argv) {
   const [command, ...rest] = argv;
   if (command === undefined) throw new UsageError('Name a command.');
+  if (command === 'revoke-sessions') {
+    if (rest.length > 0) throw new UsageError('revoke-sessions takes no arguments.');
+    return { command };
+  }
   if (command !== 'hash-password') throw new UsageError('That is not a command this takes.');
-  /** @type {{ out?: string, stdin: boolean }} */
-  const options = { stdin: false };
+  /** @type {HashOptions} */
+  const options = { command, stdin: false };
   for (let index = 0; index < rest.length; index += 1) {
     const arg = rest[index];
     if (arg === '--stdin') {
@@ -163,7 +204,7 @@ async function readAll(input) {
  */
 
 /**
- * @param {{ out?: string, stdin: boolean }} options
+ * @param {HashOptions} options
  * @param {Io} io
  * @returns {Promise<number>}
  */
@@ -263,15 +304,108 @@ async function hashInto(options, io, fd, say) {
 }
 
 /**
+ * The data directory from PORTFOLIO_DATA_DIR or its _FILE, resolved as the
+ * server resolves it, or the message for why there is none.
+ *
+ * @param {Readonly<Record<string, string | undefined>>} env
+ * @returns {{ dir: string } | { problem: string }}
+ */
+function dataDirFrom(env) {
+  const direct = env['PORTFOLIO_DATA_DIR'] || undefined;
+  const file = env['PORTFOLIO_DATA_DIR_FILE'] || undefined;
+  if (direct && file)
+    return { problem: 'Set PORTFOLIO_DATA_DIR or PORTFOLIO_DATA_DIR_FILE, not both.' };
+  let value = direct;
+  if (file) {
+    try {
+      value = readFileSync(file, 'utf8').replace(/\r?\n$/, '');
+    } catch {
+      return { problem: "PORTFOLIO_DATA_DIR_FILE names a file that can't be read." };
+    }
+  }
+  if (!value) {
+    return {
+      problem:
+        "revoke-sessions needs PORTFOLIO_DATA_DIR, the owner server's data directory. " +
+        `The server's container sets it: ${IN_CONTAINER}`,
+    };
+  }
+  return { dir: path.resolve(WEB_DIR, value) };
+}
+
+/**
+ * @param {Readonly<Record<string, string | undefined>>} env
+ * @param {Io} io
+ * @param {() => number} now
+ * @returns {Promise<number>}
+ */
+async function revokeSessionsCommand(env, io, now) {
+  const say = (/** @type {string} */ line) => io.stderr.write(`${line}\n`);
+  const found = dataDirFrom(env);
+  if ('problem' in found) {
+    say(`${found.problem} Nothing was revoked.`);
+    return 1;
+  }
+  const { dir } = found;
+  let owner;
+  try {
+    const stats = statSync(dir);
+    if (!stats.isDirectory()) throw new Error('not a directory');
+    owner = stats.uid;
+  } catch {
+    say('PORTFOLIO_DATA_DIR names no directory. Nothing was revoked.');
+    return 1;
+  }
+  // Files it creates belong to whoever runs it, and the server has to read
+  // them, so it runs as the user that owns the data directory: the server's.
+  if (typeof process.getuid === 'function' && process.getuid() !== owner) {
+    say(
+      "Run revoke-sessions as the user that owns PORTFOLIO_DATA_DIR, the server's own: " +
+        `${IN_CONTAINER}. Nothing was revoked.`,
+    );
+    return 1;
+  }
+  const at = now();
+  let count;
+  try {
+    await ensureAuthDirectories(dir);
+    count = (await revokeAllSessionFiles(dir, at)).length;
+  } catch {
+    say("The data directory can't be written. Run revoke-sessions again once it can.");
+    return 1;
+  }
+  try {
+    await appendAuditRecord(
+      dir,
+      auditRecord({
+        at,
+        type: 'sessions_revoked_all',
+        actor: 'operator',
+        outcome: 'success',
+        refs: { count },
+      }),
+    );
+  } catch {
+    say("The sessions are revoked, but the audit log couldn't be written.");
+  }
+  say(`Revoked ${count} session${count === 1 ? '' : 's'}. Each one signs out at its next request.`);
+  return 0;
+}
+
+/**
  * Runs the command line and returns the exit code.
  *
  * @param {readonly string[]} argv
  * @param {Io} [io]
+ * @param {Readonly<Record<string, string | undefined>>} [env]
+ * @param {() => number} [now]
  * @returns {Promise<number>}
  */
 export async function main(
   argv,
   io = { stdin: process.stdin, stdout: process.stdout, stderr: process.stderr },
+  env = process.env,
+  now = Date.now,
 ) {
   let options;
   try {
@@ -281,6 +415,7 @@ export async function main(
     io.stderr.write(`${error.message}\n${USAGE}\n`);
     return 2;
   }
+  if (options.command === 'revoke-sessions') return revokeSessionsCommand(env, io, now);
   try {
     return await hashPasswordCommand(options, io);
   } catch (error) {

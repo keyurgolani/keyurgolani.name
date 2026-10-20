@@ -185,19 +185,35 @@ test('the ownership check lists what a user could change in a tree', async () =>
   }
 });
 
-test('the image ships the owner CLI with its PHC module where the CLI imports it, owned by root', () => {
-  const text = readFileSync(path.join(ROOT, 'Dockerfile'), 'utf8');
-  const cli = readFileSync(path.join(ROOT, 'apps/web/bin/owner.mjs'), 'utf8');
-  const imported = /from '(\.\.\/\.\.\/\.\.\/packages\/core\/src\/auth\/phc\.mjs)'/.exec(cli)?.[1];
-  assert.ok(imported, 'owner.mjs imports the PHC module by relative path');
-  // Relative to /app/apps/web/bin, the CLI's place in the image.
-  assert.equal(
-    path.posix.join('/app/apps/web/bin', imported),
-    '/app/packages/core/src/auth/phc.mjs',
-  );
-  for (const file of ['apps/web/bin/owner.mjs', 'packages/core/src/auth/phc.mjs']) {
+test('the image ships the owner CLI and every module it imports, at their repo paths, owned by root', () => {
+  const dockerfile = readFileSync(path.join(ROOT, 'Dockerfile'), 'utf8').split('\n');
+  // The CLI and what it imports, by relative path, all the way down. In the
+  // image the CLI sits at /app/apps/web/bin, so repo paths under /app resolve
+  // the same.
+  const shipped = new Set();
+  const pending = ['apps/web/bin/owner.mjs'];
+  while (pending.length > 0) {
+    const file = pending.pop();
+    if (shipped.has(file)) continue;
+    shipped.add(file);
+    const source = readFileSync(path.join(ROOT, file), 'utf8');
+    for (const [, specifier] of source.matchAll(
+      /^\s*(?:import|export)\s[^'"]*?from\s+'([^']+)'/gm,
+    )) {
+      if (specifier.startsWith('.'))
+        pending.push(path.posix.join(path.posix.dirname(file), specifier));
+      else
+        assert.ok(
+          specifier.startsWith('node:'),
+          `${file} imports ${specifier}, which the image lacks`,
+        );
+    }
+  }
+  assert.ok(shipped.has('packages/core/src/auth/phc.mjs'), 'the CLI imports the PHC module');
+  assert.ok(shipped.size > 2, [...shipped].join(', '));
+  for (const file of shipped) {
     assert.ok(
-      text.split('\n').includes(`COPY --from=builder /repo/${file} ./${file}`),
+      dockerfile.includes(`COPY --from=builder /repo/${file} ./${file}`),
       `the runner stage copies ${file}, without --chown`,
     );
   }

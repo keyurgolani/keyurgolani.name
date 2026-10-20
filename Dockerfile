@@ -60,11 +60,14 @@ COPY --from=builder /repo/apps/web/.next/standalone ./
 COPY --from=builder /repo/apps/web/.next/static ./apps/web/.next/static
 COPY --from=builder /repo/apps/web/public ./apps/web/public
 
-# The owner CLI (#2), `node apps/web/bin/owner.mjs hash-password`, and the
-# PHC module it imports by relative path, at the same paths as in the repo.
-# Owned by root, so the server can't change them.
+# The owner CLI (#2), `node apps/web/bin/owner.mjs hash-password` and
+# `revoke-sessions`, and the modules it imports by relative path, at the same
+# paths as in the repo. Owned by root, so the server can't change them.
 COPY --from=builder /repo/apps/web/bin/owner.mjs ./apps/web/bin/owner.mjs
+COPY --from=builder /repo/packages/core/src/audit/record.mjs ./packages/core/src/audit/record.mjs
 COPY --from=builder /repo/packages/core/src/auth/phc.mjs ./packages/core/src/auth/phc.mjs
+COPY --from=builder /repo/packages/core/src/auth/session-files.mjs ./packages/core/src/auth/session-files.mjs
+COPY --from=builder /repo/packages/core/src/data/layout.mjs ./packages/core/src/data/layout.mjs
 
 # No PORTFOLIO_* defaults: the deployment sets its profile, origin, and source
 # directory at run time (docs/deployment.md), and the server refuses to start
