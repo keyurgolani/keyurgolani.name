@@ -233,11 +233,14 @@ test('extension values and variant control values take any keys', () => {
   assert.equal(parseSite(site, 'yaml').ok, true);
 });
 
-/** What `run` returns, and the milliseconds it takes. */
-function timed<T>(run: () => T): [T, number] {
-  const start = performance.now();
-  const value = run();
-  return [value, performance.now() - start];
+/** The fewer milliseconds of two runs, so one slow moment on a busy machine doesn't count. */
+function best(run: () => unknown): number {
+  const once = () => {
+    const start = performance.now();
+    run();
+    return performance.now() - start;
+  };
+  return Math.min(once(), once());
 }
 
 test('a word longer than any key or kind gets no hint, and costs no time', () => {
@@ -248,45 +251,57 @@ test('a word longer than any key or kind gets no hint, and costs no time', () =>
   assert.equal(closestWord(`${long.slice(1)}y`, [long]), long);
   assert.equal(closestWord(`${long}y`, [`${long}z`]), undefined);
   // Comparing a million-character kind or key with each allowed one took
-  // seconds and most of a gigabyte. (YAML keys stop at 1,024 characters, so
-  // the long key is JSON's.)
+  // seconds and most of a gigabyte. Each is timed against a valid document
+  // with as much text, so a busy machine can't fail the test. (YAML keys
+  // stop at 1,024 characters, so the long key is JSON's.)
   const million = (char: string) => char.repeat(1_000_000);
-  const json = JSON.stringify({
-    schemaVersion: 2,
-    locale: 'en',
-    direction: 'ltr',
-    identity: { name: 'Rowan Test', [million('t')]: 1 },
-  });
-  for (const [document, format, message, line, column] of [
+  const json = (identity: object) =>
+    JSON.stringify({ schemaVersion: 2, locale: 'en', direction: 'ltr', identity });
+  const yaml = (section: string) =>
+    `${HEAD}identity:\n  name: Rowan Test\nsections:\n  - ${section}\n    id: x\n`;
+  const longKey = json({ name: 'Rowan Test', [million('t')]: 1 });
+  for (const [document, baseline, format, message, line, column] of [
     [
-      `${HEAD}identity:\n  name: Rowan Test\nsections:\n  - kind: ${million('q')}\n    id: x\n`,
+      yaml(`kind: ${million('q')}`),
+      yaml(`kind: lede\n    body: ${million('q')}`),
       'yaml',
       '/sections/0/kind is not a known section kind. A section kind from an extension is <npm package name>/<name>.',
       7,
       11,
     ],
     [
-      json,
+      longKey,
+      json({ name: 'Rowan Test', tagline: million('t') }),
       'json',
       `/identity/${million('t')} isn't a field here. Custom data goes under extensions, keyed by an npm package name.`,
       1,
-      json.indexOf('"tttt') + 1,
+      longKey.indexOf('"tttt') + 1,
     ],
   ] as const) {
-    const [result, ms] = timed(() => parsePortfolio(document, format));
+    assert.equal(parsePortfolio(baseline, format).ok, true);
     assert.deepEqual(
-      unknownKeys(result).map(([, text, at, from]) => [text, at, from]),
+      unknownKeys(parsePortfolio(document, format)).map(([, text, at, from]) => [text, at, from]),
       [[message, line, column]],
     );
-    assert.ok(ms < 1000, `${ms} ms`);
+    const [ms, baselineMs] = [
+      best(() => parsePortfolio(document, format)),
+      best(() => parsePortfolio(baseline, format)),
+    ];
+    assert.ok(ms < baselineMs * 3 + 250, `${ms} ms against ${baselineMs} ms`);
   }
 });
 
 test('thousands of unknown keys are each located at the key, in time linear in their number', () => {
-  const keys = Array.from({ length: 9_990 }, (_, i) => `  zz${i}: 1`);
-  const document = `${HEAD}identity:\n  name: Rowan Test\n${keys.join('\n')}\n`;
-  const [result, ms] = timed(() => parsePortfolio(document, 'yaml'));
-  const found = unknownKeys(result);
+  // All in one object, or a tenth as many in each of ten: a step that scans
+  // the object for each key costs ten times as much in the first.
+  const unknown = (count: number, indent: string) =>
+    Array.from({ length: count }, (_, i) => `${indent}zz${i}: 1`).join('\n');
+  const wide = `${HEAD}identity:\n  name: Rowan Test\n${unknown(9_990, '  ')}\n`;
+  const narrow = `${HEAD}identity:\n  name: Rowan Test\nsections:\n${Array.from(
+    { length: 10 },
+    (_, s) => `  - kind: lede\n    id: s${s}\n    body: Hi\n${unknown(999, '    ')}`,
+  ).join('\n')}\n`;
+  const found = unknownKeys(parsePortfolio(wide, 'yaml'));
   assert.equal(found.length, 9_990);
   assert.deepEqual(found.at(-1), [
     'unrecognized_keys',
@@ -294,5 +309,10 @@ test('thousands of unknown keys are each located at the key, in time linear in t
     6 + 9_989,
     3,
   ]);
-  assert.ok(ms < 3000, `${ms} ms`);
+  assert.equal(unknownKeys(parsePortfolio(narrow, 'yaml')).length, 9_990);
+  const [wideMs, narrowMs] = [
+    best(() => parsePortfolio(wide, 'yaml')),
+    best(() => parsePortfolio(narrow, 'yaml')),
+  ];
+  assert.ok(wideMs < narrowMs * 2 + 250, `${wideMs} ms against ${narrowMs} ms`);
 });

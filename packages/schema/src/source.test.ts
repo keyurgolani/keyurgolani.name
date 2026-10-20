@@ -293,9 +293,13 @@ test('a mapping or sequence past 10,000 entries is refused before the composer r
 });
 
 test('large mappings parse in time linear in their size', () => {
-  // The budgets are far above the linear times and far below the quadratic
-  // ones these replaced: comparing each key with every earlier one took
-  // seconds per 10,000-key mapping.
+  // Comparing each key with every earlier one took seconds per 10,000-key
+  // mapping. Absolute budgets would fail on a busy machine, so the checks
+  // below compare like with like: the same entries in wide mappings and in
+  // narrow ones, where a quadratic step costs ten times as much in the wide
+  // (with yaml's own check back on, the wide took over five times as long).
+  const best = (run: () => void) => Math.min(timed(run), timed(run));
+
   // 100,000 keys, under the size limit, are refused at the entry limit.
   const lines = Array.from({ length: 100_000 }, (_, i) => `k${i}: 1`);
   const name = (i: number) => `"${i.toString(36)}"`;
@@ -304,47 +308,51 @@ test('large mappings parse in time linear in their size', () => {
     [lines.join('\n'), 'yaml', 10_001, 1],
     [json, 'json', 1, json.indexOf(name(10_000)) + 1],
   ] as const) {
-    let result: ParsedSource | undefined;
-    const ms = timed(() => {
-      result = parseSource(source, format);
-    });
-    assert.deepEqual(problems(result!), [{ code: 'TOO_MANY', pointer: undefined, line, column }]);
-    assert.ok(ms < 3000, `${format}: ${ms} ms`);
+    assert.deepEqual(problems(parseSource(source, format)), [
+      { code: 'TOO_MANY', pointer: undefined, line, column },
+    ]);
   }
 
-  // Six mappings at the limit, each ending with its first key again.
-  const mapping = (m: number, repeat: boolean) =>
-    [
-      `m${m}:`,
-      ...lines.slice(0, repeat ? 9_999 : 10_000).map((line) => `  ${line}`),
-      ...(repeat ? ['  k0: 2'] : []),
-    ].join('\n');
-  const document = (repeat: boolean) =>
-    `${Array.from({ length: 6 }, (_, m) => mapping(m, repeat)).join('\n')}\n`;
-  let repeated: ParsedSource | undefined;
-  const ms = timed(() => {
-    repeated = parseSource(document(true), 'yaml');
-  });
+  // 30,000 keys in mappings of `size`, each ending with its first key again.
+  const KEYS = 30_000;
+  const document = (size: number, repeat: boolean) =>
+    `${Array.from({ length: KEYS / size }, (_, m) =>
+      [
+        `m${m}:`,
+        ...lines.slice(0, repeat ? size - 1 : size).map((line) => `  ${line}`),
+        ...(repeat ? ['  k0: 2'] : []),
+      ].join('\n'),
+    ).join('\n')}\n`;
+  const [wide, narrow] = [document(10_000, true), document(1_000, true)];
   assert.deepEqual(
-    problems(repeated!),
-    Array.from({ length: 6 }, (_, m) => ({
+    problems(parseSource(wide, 'yaml')),
+    Array.from({ length: 3 }, (_, m) => ({
       code: 'DUPLICATE_KEY',
       pointer: undefined,
       line: (m + 1) * 10_001,
       column: 3,
     })),
   );
-  assert.ok(ms < 4000, `${ms} ms`);
+  const [wideMs, narrowMs] = [
+    best(() => parseSource(wide, 'yaml')),
+    best(() => parseSource(narrow, 'yaml')),
+  ];
+  assert.ok(wideMs < narrowMs * 2 + 250, `${wideMs} ms against ${narrowMs} ms`);
 
   // locate() indexes each mapping's keys once, rather than scanning for each key.
-  const valid = parseSource(document(false), 'yaml');
-  assert.ok(valid.ok);
-  const located = timed(() => {
-    for (let m = 0; m < 6; m++)
-      for (let i = 0; i < 10_000; i++) valid.locate([`m${m}`, `k${i}`], 'key');
-  });
-  assert.deepEqual(valid.locate(['m5', 'k9999'], 'key'), { line: 60_006, column: 3 });
-  assert.ok(located < 1000, `${located} ms`);
+  const locateAll = (size: number) => {
+    const valid = parseSource(document(size, false), 'yaml');
+    assert.ok(valid.ok);
+    if (size === 10_000) {
+      assert.deepEqual(valid.locate(['m2', 'k9999'], 'key'), { line: 30_003, column: 3 });
+    }
+    return best(() => {
+      for (let m = 0; m < KEYS / size; m++)
+        for (let i = 0; i < size; i++) valid.locate([`m${m}`, `k${i}`], 'key');
+    });
+  };
+  const [wideLocate, narrowLocate] = [locateAll(10_000), locateAll(1_000)];
+  assert.ok(wideLocate < narrowLocate * 3 + 100, `${wideLocate} ms against ${narrowLocate} ms`);
 });
 
 test('every repeated key is refused, in text order, with keys read as strings', () => {
