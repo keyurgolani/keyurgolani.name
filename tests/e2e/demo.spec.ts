@@ -109,6 +109,18 @@ test(
 );
 
 test(
+  "the visitor's theme applies through the selected variant's own provider",
+  { annotation: [{ type: 'route', description: '/sample' }, DEMO] },
+  async ({ page }) => {
+    await page.addInitScript(() => window.localStorage.setItem('portfolio:theme', 'black'));
+    await page.goto('/sample?variant=kinetic-cosmos');
+    // The inline script maps black to dark before hydration. The provider,
+    // fed kinetic-cosmos's themes, which include black, then sets black.
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'black');
+  },
+);
+
+test(
   'rendering the sample in every variant reaches no host outside the app',
   { annotation: [{ type: 'route', description: '/sample' }, DEMO] },
   async ({ page, app }) => {
