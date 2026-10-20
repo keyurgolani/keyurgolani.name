@@ -2,10 +2,10 @@
 
 import { useEffect, useRef, type CSSProperties } from 'react';
 import { useMotionPreference } from '../motion';
-import type { MotionPreference } from '@portfolio/schema';
+import type { MotionPolicy } from '@portfolio/schema';
 
 interface ParticleField2DProps {
-  motionPreference?: MotionPreference;
+  motionPreference?: MotionPolicy;
   /** Density factor — multiplied by area to get particle count. */
   density?: number;
   /** Hard upper cap on particles (mobile safety). */

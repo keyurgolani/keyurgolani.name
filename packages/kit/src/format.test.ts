@@ -1,8 +1,20 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { formatRelativeTime } from './format';
+import { ensureSectionId, formatRelativeTime } from './format';
 
 const NOW = new Date('2026-05-04T12:00:00Z');
+
+test('ensureSectionId returns a schema-valid section id unchanged', () => {
+  for (const id of ['top', 'get-in-touch', 'quote', '2024', 'a'.repeat(64)]) {
+    assert.equal(ensureSectionId(id, 'fallback'), id);
+  }
+});
+
+test('ensureSectionId slugifies anything else, then falls back', () => {
+  assert.equal(ensureSectionId('Get in touch', 'x'), 'get-in-touch');
+  assert.equal(ensureSectionId(undefined, 'Work Showcase'), 'work-showcase');
+  assert.equal(ensureSectionId('!!!', 'quote'), 'quote');
+});
 
 test('returns "just now" within 60 seconds', () => {
   assert.equal(formatRelativeTime('2026-05-04T11:59:30Z', NOW), 'just now');

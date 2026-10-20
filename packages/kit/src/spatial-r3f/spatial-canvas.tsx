@@ -4,10 +4,10 @@ import { Canvas, type CanvasProps } from '@react-three/fiber';
 import { PerformanceMonitor } from '@react-three/drei';
 import { useState, type ReactNode } from 'react';
 import { useMotionPreference } from '../motion';
-import type { MotionPreference } from '@portfolio/schema';
+import type { MotionPolicy } from '@portfolio/schema';
 
 interface SpatialCanvasProps extends Omit<CanvasProps, 'children'> {
-  motionPreference?: MotionPreference;
+  motionPreference?: MotionPolicy;
   children: ReactNode;
   /** Maximum DPR. Lower = better mobile perf. */
   maxDpr?: number;

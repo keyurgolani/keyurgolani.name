@@ -1,12 +1,13 @@
 import { z } from 'zod';
-import { ImageSchema, LinkSchema } from './kinds/common';
+import { ImageSchema, LanguageTagSchema, LinkSchema } from './kinds/common';
 import { SectionSchema } from './kinds';
 
-export const ThemePreferenceSchema = z.enum(['light', 'dark', 'bright', 'black', 'system']);
-export type ThemePreference = z.infer<typeof ThemePreferenceSchema>;
+/** The version both documents declare. The unversioned legacy file counts as version 1. */
+export const SCHEMA_VERSION = 2;
 
-export const MotionPreferenceSchema = z.enum(['respect-os', 'reduce', 'full']);
-export type MotionPreference = z.infer<typeof MotionPreferenceSchema>;
+/** Writing direction of the portfolio's text. */
+export const DirectionSchema = z.enum(['ltr', 'rtl']);
+export type Direction = z.infer<typeof DirectionSchema>;
 
 export const IdentitySchema = z.object({
   name: z.string(),
@@ -18,29 +19,25 @@ export const IdentitySchema = z.object({
 });
 export type Identity = z.infer<typeof IdentitySchema>;
 
+/**
+ * The portfolio document: portable, authored content only. Presentation and
+ * product behavior live in the site document (SiteSchema), and deployment
+ * settings, the canonical origin included, come from the environment.
+ */
 export const PortfolioSchema = z.object({
+  schemaVersion: z.literal(SCHEMA_VERSION),
+  /** BCP 47 language tag of the content, such as `en` or `pt-BR`. */
+  locale: LanguageTagSchema,
+  direction: DirectionSchema,
   identity: IdentitySchema,
-  variant: z.string().default('editorial'),
-  theme: ThemePreferenceSchema.default('system'),
-  /**
-   * How motion behaves: `respect-os` follows the visitor's
-   * prefers-reduced-motion; `reduce` forces reduced motion always;
-   * `full` overrides OS pref and animates regardless.
-   */
-  motionPreference: MotionPreferenceSchema.default('respect-os'),
-  /** Active color scheme id (must match one declared by the active variant). */
-  colorScheme: z.string().optional(),
-  /** Active typography preset id (must match one declared by the active variant). */
-  typography: z.string().optional(),
   links: z.array(LinkSchema).default([]),
-  sections: z.array(SectionSchema).default([]),
   meta: z
     .object({
       title: z.string().optional(),
       description: z.string().optional(),
-      url: z.string().optional(),
       ogImage: ImageSchema.optional(),
     })
     .optional(),
+  sections: z.array(SectionSchema).default([]),
 });
 export type Portfolio = z.infer<typeof PortfolioSchema>;

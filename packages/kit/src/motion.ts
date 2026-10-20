@@ -1,7 +1,7 @@
 'use client';
 
 import { useSyncExternalStore } from 'react';
-import type { MotionPreference } from '@portfolio/schema';
+import type { MotionPolicy } from '@portfolio/schema';
 
 export type ResolvedMotion = 'reduce' | 'full';
 
@@ -24,28 +24,24 @@ function serverPrefersReducedMotion(): boolean {
 /**
  * Resolve the effective motion mode for a session.
  *
- *   portfolio pref       OS prefers-reduced-motion         result
- *   ──────────────       ──────────────────────────        ──────
+ *   motion policy        OS prefers-reduced-motion         result
+ *   ─────────────        ──────────────────────────        ──────
  *   reduce               (any)                             reduce
- *   full                 (any)                             full
  *   respect-os           true                              reduce
  *   respect-os           false                             full
  *
- * Defaults to `full` during SSR and hydration to avoid layout-shift; the OS
- * value takes over right after hydration and follows later changes.
+ * No policy turns motion on past an OS reduce preference. Defaults to `full`
+ * during SSR and hydration to avoid layout-shift; the OS value takes over
+ * right after hydration and follows later changes.
  */
-export function useMotionPreference(
-  portfolioPref: MotionPreference = 'respect-os',
-): ResolvedMotion {
+export function useMotionPreference(policy: MotionPolicy = 'respect-os'): ResolvedMotion {
   const osReduce = useSyncExternalStore(
     subscribeReducedMotion,
     osPrefersReducedMotion,
     serverPrefersReducedMotion,
   );
 
-  if (portfolioPref === 'reduce') return 'reduce';
-  if (portfolioPref === 'full') return 'full';
-  return osReduce ? 'reduce' : 'full';
+  return shouldReduceMotion(policy, osReduce) ? 'reduce' : 'full';
 }
 
 /**
@@ -53,8 +49,6 @@ export function useMotionPreference(
  * for components that need the resolved value as a boolean prop without
  * ceremony.
  */
-export function shouldReduceMotion(portfolioPref: MotionPreference, osReduce: boolean): boolean {
-  if (portfolioPref === 'reduce') return true;
-  if (portfolioPref === 'full') return false;
-  return osReduce;
+export function shouldReduceMotion(policy: MotionPolicy, osReduce: boolean): boolean {
+  return policy === 'reduce' || osReduce;
 }

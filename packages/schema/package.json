@@ -7,6 +7,7 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
+    "./ids": "./src/ids.ts",
     "./kinds": "./src/kinds/index.ts"
   },
   "scripts": {
@@ -15,8 +16,7 @@
   },
   "dependencies": {
     "zod": "^3.24.1",
-    "yaml": "^2.6.1",
-    "smol-toml": "^1.3.1"
+    "yaml": "^2.6.1"
   },
   "devDependencies": {
     "typescript": "^5.7.2"

@@ -4,7 +4,7 @@ import { ensureSectionId } from '@portfolio/kit';
 export function QuoteRenderer({ section }: { section: Quote }) {
   const id = ensureSectionId(section.id, 'quote');
   return (
-    <section id={id} className="editorial-section editorial-section--tight">
+    <section id={id} lang={section.lang} className="editorial-section editorial-section--tight">
       <blockquote className="editorial-quote-standalone">
         <p className="editorial-quote-standalone__text">{section.text}</p>
         {(section.attribution || section.source) && (

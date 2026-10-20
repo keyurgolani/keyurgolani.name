@@ -2,10 +2,10 @@
 
 import { useEffect, useRef } from 'react';
 import { useMotionPreference } from '../motion';
-import type { MotionPreference } from '@portfolio/schema';
+import type { MotionPolicy } from '@portfolio/schema';
 
 interface SpotlightMaskProps {
-  motionPreference?: MotionPreference;
+  motionPreference?: MotionPolicy;
   /** Spotlight radius in px. */
   radius?: number;
   /** 0-1 — opacity of the dark-out region. Higher = more dramatic reveal. */

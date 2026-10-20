@@ -2,10 +2,10 @@
 
 import type { CSSProperties } from 'react';
 import { useMotionPreference } from '../motion';
-import type { MotionPreference } from '@portfolio/schema';
+import type { MotionPolicy } from '@portfolio/schema';
 
 interface AuroraGradientProps {
-  motionPreference?: MotionPreference;
+  motionPreference?: MotionPolicy;
   /** 2-5 colors for the gradient stops. */
   colors?: string[];
   /** Animation duration (seconds). */

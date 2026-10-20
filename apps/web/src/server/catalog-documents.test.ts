@@ -26,7 +26,9 @@ import type { ConfigIssue, RuntimeMode } from './config';
 // adapter's re-validation under next dev.
 
 const EXAMPLE = fileURLToPath(new URL('../../../../portfolio.example.yml', import.meta.url));
-const VALID_YAML = 'identity:\n  name: Rowan Test\nvariant: editorial\nsections: []\n';
+/** The lines every version 2 portfolio starts with, before identity. */
+const HEAD = 'schemaVersion: 2\nlocale: en\ndirection: ltr\n';
+const VALID_YAML = `${HEAD}identity:\n  name: Rowan Test\nsections: []\n`;
 
 function tempDir(t: { after: (fn: () => void) => void }): string {
   const dir = mkdtempSync(path.join(tmpdir(), 'catalog-documents-'));
@@ -43,7 +45,6 @@ function open(
     sourceDir,
     mode,
     examplePath: EXAMPLE,
-    variantSlugs: ['editorial', 'kinetic-cosmos'],
     report: () => assert.fail('nothing re-validates at startup'),
     ...overrides,
   });
@@ -93,7 +94,9 @@ test('zero portfolio documents is fatal in production', (t) => {
   const dir = tempDir(t);
   writeFileSync(path.join(dir, 'notes.md'), 'not a portfolio');
   writeFileSync(path.join(dir, 'portfolio.example.yml'), VALID_YAML);
-  assert.equal(only(open(dir, 'production')).code, 'source_empty');
+  const issue = only(open(dir, 'production'));
+  assert.equal(issue.code, 'source_empty');
+  assert.match(issue.message, /portfolio\.yml, portfolio\.yaml, or portfolio\.json\.$/);
 });
 
 test('zero portfolio documents renders the bundled example under next dev, with a warning', async (t) => {
@@ -119,6 +122,18 @@ test('several portfolio documents are fatal, even under next dev', (t) => {
   }
 });
 
+test('a portfolio.toml is refused by name in every mode, even beside a valid document', (t) => {
+  const dir = tempDir(t);
+  writeFileSync(path.join(dir, 'portfolio.toml'), '[identity]\nname = "Rowan Test"\n');
+  for (const mode of ['production', 'development'] as const) {
+    const issue = only(open(dir, mode));
+    assert.deepEqual([issue.code, issue.file], ['document_unsupported', 'portfolio.toml']);
+    assert.match(issue.message, /portfolio\.yml or portfolio\.json/);
+  }
+  writeFileSync(path.join(dir, 'portfolio.yml'), VALID_YAML);
+  assert.equal(only(open(dir, 'production')).code, 'document_unsupported');
+});
+
 test('an unreadable document is fatal', { skip: !canRestrict }, (t) => {
   const dir = tempDir(t);
   const file = path.join(dir, 'portfolio.yml');
@@ -133,11 +148,16 @@ test('a schema error in YAML names the file, the pointer, and the line and colum
   writeFileSync(
     path.join(dir, 'portfolio.yaml'),
     [
+      'schemaVersion: 2',
+      'locale: en',
+      'direction: ltr',
       'identity:',
       '  name: Rowan Test',
       'sections:',
       '  - kind: hero',
+      '    id: top',
       '  - kind: canary-kind-31',
+      '    id: other',
       '',
     ].join('\n'),
   );
@@ -155,7 +175,7 @@ test('a schema error in YAML names the file, the pointer, and the line and colum
       code: 'document_invalid',
       file: 'portfolio.yaml',
       path: '/sections/1/kind',
-      line: 5,
+      line: 9,
       column: 11,
       issueCode: 'invalid_union_discriminator',
     },
@@ -165,9 +185,9 @@ test('a schema error in YAML names the file, the pointer, and the line and colum
 
 test('a missing field points at its parent', (t) => {
   const dir = tempDir(t);
-  writeFileSync(path.join(dir, 'portfolio.yml'), 'variant: editorial\nidentity:\n  tagline: x\n');
+  writeFileSync(path.join(dir, 'portfolio.yml'), `${HEAD}identity:\n  tagline: x\n`);
   const issue = only(open(dir, 'production'));
-  assert.deepEqual([issue.path, issue.line, issue.column], ['/identity/name', 3, 3]);
+  assert.deepEqual([issue.path, issue.line, issue.column], ['/identity/name', 5, 3]);
   assert.match(issue.message, /is required/);
 });
 
@@ -175,27 +195,76 @@ test('every schema problem in a document is reported', (t) => {
   const dir = tempDir(t);
   writeFileSync(
     path.join(dir, 'portfolio.yml'),
-    'identity:\n  name: 7\ntheme: canary-theme-55\nsections: []\n',
+    'schemaVersion: 2\nlocale: en\ndirection: canary-direction-55\nidentity:\n  name: 7\n',
   );
   const result = open(dir, 'production');
   assert.equal(result.ok, false);
   assert.deepEqual(
     result.issues.map((issue) => [issue.path, issue.issueCode, issue.line]),
     [
-      ['/identity/name', 'invalid_type', 2],
-      ['/theme', 'invalid_enum_value', 3],
+      ['/direction', 'invalid_enum_value', 3],
+      ['/identity/name', 'invalid_type', 5],
     ],
   );
-  assert.ok(!JSON.stringify(result.issues).includes('canary-theme-55'));
+  assert.ok(!JSON.stringify(result.issues).includes('canary-direction-55'));
+});
+
+test('an old-shape document is refused for its missing schemaVersion alone', (t) => {
+  const dir = tempDir(t);
+  writeFileSync(
+    path.join(dir, 'portfolio.yml'),
+    'identity:\n  name: Rowan Test\nvariant: canary-variant-8\ntheme: dark\nsections:\n  - kind: hero\n',
+  );
+  const issue = only(open(dir, 'production'));
+  assert.deepEqual(
+    [issue.code, issue.path, issue.issueCode, issue.line],
+    ['document_invalid', '/schemaVersion', 'invalid_type', 1],
+  );
+  assert.match(issue.message, /schemaVersion 2/);
+  assert.ok(!issue.message.includes('canary-variant-8'));
 });
 
 test('a YAML syntax error carries the parser code and position', (t) => {
   const dir = tempDir(t);
-  writeFileSync(path.join(dir, 'portfolio.yml'), 'identity:\n  name: A\nidentity:\n  name: B\n');
+  writeFileSync(
+    path.join(dir, 'portfolio.yml'),
+    `${HEAD}identity:\n  name: A\nidentity:\n  name: B\n`,
+  );
   const issue = only(open(dir, 'production'));
   assert.deepEqual(
     [issue.code, issue.issueCode, issue.line, issue.column],
-    ['document_syntax', 'DUPLICATE_KEY', 3, 1],
+    ['document_syntax', 'DUPLICATE_KEY', 6, 1],
+  );
+});
+
+test('YAML anchors and aliases are refused where they appear', (t) => {
+  const dir = tempDir(t);
+  writeFileSync(
+    path.join(dir, 'portfolio.yml'),
+    `${HEAD}identity: &canary-anchor-4\n  name: Rowan Test\nmeta:\n  title: *canary-anchor-4\n`,
+  );
+  const result = open(dir, 'production');
+  assert.equal(result.ok, false);
+  assert.deepEqual(
+    result.issues.map((issue) => [issue.code, issue.issueCode, issue.path, issue.line]),
+    [
+      ['document_syntax', 'ANCHOR', '/identity', 5],
+      ['document_syntax', 'ALIAS', '/meta/title', 7],
+    ],
+  );
+  assert.ok(!JSON.stringify(result.issues).includes('canary-anchor-4'));
+});
+
+test('two sections with one id are fatal, pointing at the second', (t) => {
+  const dir = tempDir(t);
+  writeFileSync(
+    path.join(dir, 'portfolio.yml'),
+    `${HEAD}identity:\n  name: Rowan Test\nsections:\n  - kind: lede\n    id: about\n    body: A\n  - kind: now\n    id: about\n    body: B\n`,
+  );
+  const issue = only(open(dir, 'production'));
+  assert.deepEqual(
+    [issue.code, issue.issueCode, issue.path, issue.line, issue.column],
+    ['document_invalid', 'duplicate_id', '/sections/1/id', 11, 9],
   );
 });
 
@@ -203,20 +272,29 @@ test('a schema error in JSON carries the line and column too', (t) => {
   const dir = tempDir(t);
   writeFileSync(
     path.join(dir, 'portfolio.json'),
-    '{\n  "identity": { "name": "Rowan Test" },\n  "links": [{ "platform": "web" }]\n}\n',
+    [
+      '{',
+      '  "schemaVersion": 2,',
+      '  "locale": "en",',
+      '  "direction": "ltr",',
+      '  "identity": { "name": "Rowan Test" },',
+      '  "links": [{ "platform": "web" }]',
+      '}',
+      '',
+    ].join('\n'),
   );
   const issue = only(open(dir, 'production'));
   assert.deepEqual(
     [issue.code, issue.file, issue.path, issue.line, issue.column],
-    ['document_invalid', 'portfolio.json', '/links/0/url', 3, 13],
+    ['document_invalid', 'portfolio.json', '/links/0/url', 6, 13],
   );
 });
 
 test('a JSON file must be JSON, not YAML', (t) => {
   const dir = tempDir(t);
-  writeFileSync(path.join(dir, 'portfolio.json'), '# a comment\nidentity:\n  name: Rowan Test\n');
+  writeFileSync(path.join(dir, 'portfolio.json'), `# a comment\n${VALID_YAML}`);
   const issue = only(open(dir, 'production'));
-  assert.deepEqual([issue.code, issue.issueCode], ['document_syntax', 'json_syntax']);
+  assert.deepEqual([issue.code, issue.issueCode], ['document_syntax', 'JSON_SYNTAX']);
 });
 
 test('a JSON syntax error is located, even where YAML would accept it', (t) => {
@@ -224,53 +302,18 @@ test('a JSON syntax error is located, even where YAML would accept it', (t) => {
   // A trailing comma: valid YAML flow syntax, invalid JSON.
   writeFileSync(path.join(dir, 'portfolio.json'), '{\n  "identity": { "name": "A" },\n}\n');
   const issue = only(open(dir, 'production'));
-  assert.deepEqual([issue.issueCode, issue.line, issue.column], ['json_syntax', 3, 1]);
+  assert.deepEqual([issue.issueCode, issue.line, issue.column], ['JSON_SYNTAX', 3, 1]);
   assert.ok(!issue.message.includes('identity'));
-});
-
-test('a schema error in TOML carries the key path only', (t) => {
-  const dir = tempDir(t);
-  writeFileSync(path.join(dir, 'portfolio.toml'), '[identity]\nname = 7\n');
-  const issue = only(open(dir, 'production'));
-  assert.deepEqual(
-    [issue.code, issue.file, issue.path, issue.line, issue.column],
-    ['document_invalid', 'portfolio.toml', '/identity/name', undefined, undefined],
-  );
-});
-
-test('a TOML syntax error carries its position', (t) => {
-  const dir = tempDir(t);
-  writeFileSync(path.join(dir, 'portfolio.toml'), '[identity]\nname = \n');
-  const issue = only(open(dir, 'production'));
-  assert.deepEqual(
-    [issue.code, issue.issueCode, issue.line],
-    ['document_syntax', 'toml_syntax', 2],
-  );
-});
-
-test('an unresolved variant is fatal, located, and lists the registered variants', (t) => {
-  const dir = tempDir(t);
-  writeFileSync(
-    path.join(dir, 'portfolio.yml'),
-    'identity:\n  name: Rowan Test\nvariant: canary-variant-8\n',
-  );
-  const issue = only(open(dir, 'production'));
-  assert.deepEqual(
-    [issue.code, issue.path, issue.line, issue.column],
-    ['variant_unresolved', '/variant', 3, 10],
-  );
-  assert.match(issue.message, /editorial, kinetic-cosmos/);
-  assert.ok(!issue.message.includes('canary-variant-8'));
 });
 
 test('a bundled sample identity is fatal in production and a warning under next dev', (t) => {
   const dir = tempDir(t);
   writeFileSync(
     path.join(dir, 'portfolio.yml'),
-    `identity:\n  name: "  ${BUNDLED_SAMPLE_NAMES[0]!.toUpperCase()} "\n`,
+    `${HEAD}identity:\n  name: "  ${BUNDLED_SAMPLE_NAMES[0]!.toUpperCase()} "\n`,
   );
   const issue = only(open(dir, 'production'));
-  assert.deepEqual([issue.code, issue.path, issue.line], ['sample_identity', '/identity/name', 2]);
+  assert.deepEqual([issue.code, issue.path, issue.line], ['sample_identity', '/identity/name', 5]);
 
   const dev = open(dir, 'development');
   assert.equal(dev.ok, true);
@@ -332,14 +375,18 @@ test('under next dev an edit re-validates, and an invalid edit throws without a 
   assert.equal(edited.unit.portfolio.identity.name, 'Rowan Edited');
   assert.notEqual(edited.revisionId, first.revisionId);
 
-  rewrite(file, 'identity:\n  name: Rowan Test\nsections:\n  - kind: nope\n', 3_000);
+  rewrite(
+    file,
+    `${HEAD}identity:\n  name: Rowan Test\nsections:\n  - kind: nope\n    id: nope\n`,
+    3_000,
+  );
   await assert.rejects(result.reader.getLive(), (error: Error) => {
     assert.ok(!error.message.includes(dir));
     return true;
   });
   assert.deepEqual(
     reported.map((issue) => [issue.severity, issue.code, issue.path, issue.line]),
-    [['fatal', 'document_invalid', '/sections/0/kind', 4]],
+    [['fatal', 'document_invalid', '/sections/0/kind', 7]],
   );
   // Still broken, but already reported.
   await assert.rejects(result.reader.getLive());
@@ -369,5 +416,21 @@ test('under next dev a second document is reported and throws', async (t) => {
   assert.deepEqual(
     reported.map((issue) => issue.code),
     ['source_several'],
+  );
+});
+
+test('under next dev adding a portfolio.toml is reported and throws', async (t) => {
+  const dir = tempDir(t);
+  writeFileSync(path.join(dir, 'portfolio.yml'), VALID_YAML);
+  const reported: ConfigIssue[] = [];
+  const result = open(dir, 'development', { report: (issue) => reported.push(issue) });
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  await result.reader.getLive();
+  writeFileSync(path.join(dir, 'portfolio.toml'), '[identity]\n');
+  await assert.rejects(result.reader.getLive());
+  assert.deepEqual(
+    reported.map((issue) => issue.code),
+    ['document_unsupported'],
   );
 });

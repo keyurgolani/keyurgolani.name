@@ -2,10 +2,10 @@
 
 import { EffectComposer, Bloom, Noise, Vignette } from '@react-three/postprocessing';
 import { useMotionPreference } from '../motion';
-import type { MotionPreference } from '@portfolio/schema';
+import type { MotionPolicy } from '@portfolio/schema';
 
 interface PostprocessChainProps {
-  motionPreference?: MotionPreference;
+  motionPreference?: MotionPolicy;
   /** Bloom intensity. */
   bloomIntensity?: number;
   /** Bloom luminance threshold. Higher = only brightest highlights bloom. */

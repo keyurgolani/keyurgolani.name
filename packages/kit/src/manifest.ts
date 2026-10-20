@@ -1,5 +1,6 @@
 import type { ComponentType } from 'react';
-import type { Portfolio, SectionKind, ThemePreference } from '@portfolio/schema';
+import type { Portfolio, SectionKind } from '@portfolio/schema';
+import type { ThemePreference } from './theme';
 
 /**
  * Aesthetic identity — the variant's primary "lane." Used for filtering on
@@ -112,7 +113,7 @@ export interface VariantManifest {
 
 export interface VariantProps {
   portfolio: Portfolio;
-  /** Optional preview-time overrides (e.g. /preview/[slug]?scheme=noir) */
+  /** The selected color scheme and typography preset. Omitted, the variant uses its defaults. */
   colorScheme?: string;
   typography?: string;
 }
@@ -123,20 +124,14 @@ export interface VariantModule {
 }
 
 /**
- * Resolve the active color-scheme id for a variant: explicit override → portfolio
- * choice (if it matches a declared scheme) → variant's default scheme → null.
+ * Resolve the active color-scheme id for a variant: the requested id when the
+ * variant declares it, else the variant's default scheme, else its first, else
+ * null when it declares none.
  */
-export function resolveColorScheme(
-  manifest: VariantManifest,
-  override: string | undefined,
-  portfolioChoice: string | undefined,
-): string | null {
+export function resolveColorScheme(manifest: VariantManifest, requested?: string): string | null {
   const schemes = manifest.colorSchemes ?? [];
-  if (schemes.length === 0) return null;
-  const match = (id: string | undefined) => (id ? schemes.find((s) => s.id === id) : undefined);
   return (
-    match(override)?.id ??
-    match(portfolioChoice)?.id ??
+    schemes.find((s) => s.id === requested)?.id ??
     schemes.find((s) => s.default)?.id ??
     schemes[0]?.id ??
     null
@@ -146,15 +141,11 @@ export function resolveColorScheme(
 /** Same as resolveColorScheme but for typography presets. */
 export function resolveTypographyPreset(
   manifest: VariantManifest,
-  override: string | undefined,
-  portfolioChoice: string | undefined,
+  requested?: string,
 ): string | null {
   const presets = manifest.typographyPresets ?? [];
-  if (presets.length === 0) return null;
-  const match = (id: string | undefined) => (id ? presets.find((p) => p.id === id) : undefined);
   return (
-    match(override)?.id ??
-    match(portfolioChoice)?.id ??
+    presets.find((p) => p.id === requested)?.id ??
     presets.find((p) => p.default)?.id ??
     presets[0]?.id ??
     null

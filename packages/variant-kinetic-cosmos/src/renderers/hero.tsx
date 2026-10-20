@@ -50,7 +50,7 @@ export function HeroRenderer({ section, identity, links = [] }: HeroProps) {
   const hasTyping = subtaglineRoles.length > 1;
 
   return (
-    <section id={id} className="kc-hero" aria-label="Hero section">
+    <section id={id} lang={section.lang} className="kc-hero" aria-label="Hero section">
       <FloatingProfileCluster links={links} />
       <motion.div
         className="kc-hero__inner"

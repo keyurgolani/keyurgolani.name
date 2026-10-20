@@ -30,8 +30,8 @@ Before it takes a request, the server validates its settings and the portfolio. 
 - a required setting that is missing or malformed;
 - in production, a setting that doesn't apply to the profile, such as `GITHUB_TOKEN` under `read-only` (`pnpm dev` warns and ignores it);
 - `PORTFOLIO_PATH` or `NEXT_PUBLIC_BASE_URL`, which `PORTFOLIO_SOURCE_DIR` and `PORTFOLIO_ORIGIN` replaced;
-- a source directory that is missing or unreadable, that is a file rather than the directory holding it, or that holds zero or several portfolio documents;
-- a portfolio that fails the schema or names an unregistered variant;
+- a source directory that is missing or unreadable, that is a file rather than the directory holding it, that holds zero or several portfolio documents, or that holds a `portfolio.toml` (TOML is no longer read);
+- a portfolio that isn't one plain YAML or JSON document (anchors, aliases, merge keys, tags, and a second document are refused), that doesn't declare `schemaVersion: 2`, that fails the schema, or that gives two sections the same `id`;
 - in production, an origin on a reserved example domain, or the bundled sample's `identity.name`.
 
 `owner` and `demo` don't start yet. `owner` needs an authentication provider, and none ships; `demo` waits on its bundled-sample catalog.
@@ -81,7 +81,7 @@ The server reads these from its environment only. Every key also accepts `<KEY>_
 | ------------------------------ | ---------------- | --------------------------------------------------------------------------------- |
 | `PORTFOLIO_PROFILE`            | all              | Required. Exactly `owner`, `demo`, or `read-only`.                                |
 | `PORTFOLIO_ORIGIN`             | all              | Required. The origin visitors use, such as `https://jane.name`: no path or slash. |
-| `PORTFOLIO_SOURCE_DIR`         | owner, read-only | Directory holding exactly one `portfolio.{yml,yaml,json,toml}`, not the file.     |
+| `PORTFOLIO_SOURCE_DIR`         | owner, read-only | Directory holding exactly one `portfolio.{yml,yaml,json}`, not the file.          |
 | `PORTFOLIO_TRUSTED_PROXY_HOPS` | all              | How many trusted proxies append to `X-Forwarded-For`. Whole number, default `0`.  |
 | `PORTFOLIO_PREVIEW_ORIGIN`     | owner, demo      | Optional preview origin, different from `PORTFOLIO_ORIGIN`.                       |
 | `PORTFOLIO_DATA_DIR`           | owner            | Reserved: the writable data directory.                                            |

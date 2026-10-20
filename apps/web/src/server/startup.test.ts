@@ -10,6 +10,7 @@ import { getDeploymentConfig, requireDeploymentConfig, setDeploymentState } from
 import { runStartup } from './startup';
 
 const EXAMPLE = fileURLToPath(new URL('../../../../portfolio.example.yml', import.meta.url));
+const VALID = 'schemaVersion: 2\nlocale: en\ndirection: ltr\nidentity:\n  name: Rowan Test\n';
 
 function sourceDir(t: { after: (fn: () => void) => void }, document?: string): string {
   const dir = mkdtempSync(path.join(tmpdir(), 'startup-'));
@@ -23,7 +24,6 @@ function start(env: Env) {
     env,
     cwd: '/srv/app',
     examplePath: EXAMPLE,
-    variantSlugs: ['editorial'],
     report: () => {},
     readFile: () => {
       throw new Error('no files in this test');
@@ -40,7 +40,7 @@ function fatalCodes(result: ReturnType<typeof start>): string[] {
 const PRODUCTION = { NODE_ENV: 'production', PORTFOLIO_ORIGIN: 'https://jane.test' } as const;
 
 test('read-only starts from a valid source directory', async (t) => {
-  const dir = sourceDir(t, 'identity:\n  name: Rowan Test\n');
+  const dir = sourceDir(t, VALID);
   const result = start({
     ...PRODUCTION,
     PORTFOLIO_PROFILE: 'read-only',
@@ -56,7 +56,7 @@ test('read-only starts from a valid source directory', async (t) => {
 });
 
 test('owner refuses to start: no authentication provider is registered', (t) => {
-  const dir = sourceDir(t, 'identity:\n  name: Rowan Test\n');
+  const dir = sourceDir(t, VALID);
   const result = start({ ...PRODUCTION, PORTFOLIO_PROFILE: 'owner', PORTFOLIO_SOURCE_DIR: dir });
   assert.equal(result.ok, false);
   assert.equal(result.profile, 'owner');
@@ -82,7 +82,7 @@ test('demo refuses to start in this build', () => {
   assert.deepEqual(fatalCodes(result), ['PORTFOLIO_PROFILE:profile_unavailable']);
 });
 
-test('read-only with a bad document reports the document', (t) => {
+test('read-only with an old-shape document reports the document', (t) => {
   const dir = sourceDir(t, 'identity:\n  name: Rowan Test\nvariant: kinetic-cosmos\n');
   const result = start({
     ...PRODUCTION,
@@ -90,11 +90,12 @@ test('read-only with a bad document reports the document', (t) => {
     PORTFOLIO_SOURCE_DIR: dir,
   });
   assert.equal(result.ok, false);
-  assert.deepEqual(fatalCodes(result), ['PORTFOLIO_SOURCE_DIR:variant_unresolved']);
+  assert.deepEqual(fatalCodes(result), ['PORTFOLIO_SOURCE_DIR:document_invalid']);
+  assert.equal(result.issues[0]?.path, '/schemaVersion');
 });
 
 test('warnings from the configuration reach the startup result', (t) => {
-  const dir = sourceDir(t, 'identity:\n  name: Rowan Test\n');
+  const dir = sourceDir(t, VALID);
   const result = start({
     ...PRODUCTION,
     PORTFOLIO_PROFILE: 'read-only',
@@ -115,7 +116,7 @@ test('the store hands the frozen state to getLive() and the config readers', asy
   assert.throws(() => requireDeploymentConfig(), /not loaded/);
   await assert.rejects(getLive(), /not loaded/);
 
-  const dir = sourceDir(t, 'identity:\n  name: Rowan Test\n');
+  const dir = sourceDir(t, VALID);
   const result = start({
     ...PRODUCTION,
     PORTFOLIO_PROFILE: 'read-only',

@@ -4,10 +4,10 @@ import { useEffect, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useMotionPreference } from '../motion';
-import type { MotionPreference } from '@portfolio/schema';
+import type { MotionPolicy } from '@portfolio/schema';
 
 interface ScrollCameraRigProps {
-  motionPreference?: MotionPreference;
+  motionPreference?: MotionPolicy;
   /** Waypoints for the camera path — interpolated with Catmull-Rom. */
   positions: ReadonlyArray<[number, number, number]>;
   /** Look-at target waypoints (same length as positions). */

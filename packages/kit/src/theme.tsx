@@ -10,7 +10,12 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from 'react';
-import type { ThemePreference } from '@portfolio/schema';
+
+/**
+ * The visitor's theme choice, stored in localStorage. The kit keeps this type
+ * until the appearance axes (#19) replace it with the site's `displayMode`.
+ */
+export type ThemePreference = 'light' | 'dark' | 'bright' | 'black' | 'system';
 
 export type ResolvedTheme = 'light' | 'dark' | 'bright' | 'black';
 
@@ -21,7 +26,7 @@ export type ResolvedTheme = 'light' | 'dark' | 'bright' | 'black';
  * variant doesn't list them in its themes manifest.
  */
 export function resolveTheme(
-  preference: 'light' | 'dark' | 'bright' | 'black' | 'system',
+  preference: ThemePreference,
   supported: readonly string[],
   systemMatch: () => 'light' | 'dark',
 ): ResolvedTheme {

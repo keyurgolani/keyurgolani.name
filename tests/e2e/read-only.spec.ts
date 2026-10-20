@@ -5,8 +5,8 @@ import { DEFAULT_PORTFOLIO } from '../harness/app-server.mjs';
 import { expect, test } from '../harness/fixtures';
 
 // The read-only profile from a mounted source directory. The canonical origin
-// differs from the fixture's meta.url (https://rowan.test), so every absolute
-// URL below has to come from PORTFOLIO_ORIGIN.
+// differs from the fixture's own website link (https://rowan.test), so every
+// absolute URL below has to come from PORTFOLIO_ORIGIN.
 const ORIGIN = 'https://canonical.test';
 const READ_ONLY = { type: 'profile', description: 'read-only' };
 
