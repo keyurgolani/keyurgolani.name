@@ -30,7 +30,7 @@ const SCRAMBLED = {
     },
   ],
   identity: {
-    extensions: { '@z/b': { y: 1, x: 2 }, '@a/b': { q: 1 } },
+    extensions: { '@z/b': { y: 1, x: { d: [{ f: 1, e: 2 }], c: 2 } }, '@a/b': { q: 1 } },
     tagline: LONG,
     name: 'Rowan',
   },
@@ -39,7 +39,7 @@ const SCRAMBLED = {
   schemaVersion: 2,
 };
 
-test('serialize writes schema order, sorted extension namespaces, and authored order for the rest', () => {
+test('serialize writes schema order, extension data sorted at every level, and authored order for the rest', () => {
   assert.equal(
     serialize(SCRAMBLED, 'yaml'),
     lines(
@@ -54,15 +54,19 @@ test('serialize writes schema order, sorted extension namespaces, and authored o
       '    "@a/b":',
       '      q: 1',
       '    "@z/b":',
+      '      x:',
+      '        c: 2',
+      '        d:',
+      '          - e: 2',
+      '            f: 1',
       '      y: 1',
-      '      x: 2',
       'sections:',
       '  - kind: "@acme/portfolio-photography/exhibitions"',
       '    id: exhibitions',
       '    title: Exhibitions',
       '    data:',
-      '      z: 1',
       '      a: 2',
+      '      z: 1',
       '  - kind: gallery',
       '    id: plates',
       '    title: Plates',
@@ -180,4 +184,33 @@ test('only plain JSON data can be written', () => {
   // One object used twice is written twice, never as an anchor and alias.
   const shared = { a: 1 };
   assert.equal(serialize({ x: shared, y: shared }, 'yaml'), lines('x:', '  a: 1', 'y:', '  a: 1'));
+});
+
+test('a << key from JSON data is quoted in YAML, so it reads back as a key and not a merge', () => {
+  const json =
+    '{ "schemaVersion": 2, "identity": { "name": "Rowan", "extensions": { "@other/x": { "<<": 1 } } } }';
+  const written = serialize(data(json, 'json'), 'yaml');
+  assert.match(written, /^ {6}"<<": 1$/m);
+  assert.deepEqual(data(written, 'yaml'), JSON.parse(json));
+  // A plain << is still a merge key, and refused.
+  const merged = parseSource('a:\n  <<: { b: 1 }\n', 'yaml');
+  assert.ok(!merged.ok);
+  assert.deepEqual(
+    merged.problems.map(({ code }) => code),
+    ['MERGE_KEY'],
+  );
+});
+
+test('an own __proto__ key is written as a key in both formats', () => {
+  const value = JSON.parse(
+    '{ "schemaVersion": 2, "identity": { "name": "Rowan", "extensions": { "@other/x": { "__proto__": { "a": 1 } } } } }',
+  );
+  for (const format of ['yaml', 'json'] as const) {
+    const text = serialize(value, format);
+    assert.match(text, /__proto__/, format);
+    const extension = (data(text, format) as { identity: { extensions: Record<string, object> } })
+      .identity.extensions['@other/x']!;
+    assert.deepEqual(Object.keys(extension), ['__proto__'], format);
+    assert.equal(Object.getPrototypeOf(extension), Object.prototype, format);
+  }
 });

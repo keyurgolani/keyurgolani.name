@@ -1,6 +1,7 @@
-import { stringify } from 'yaml';
+import { Document, isScalar, Scalar, visit } from 'yaml';
 import { DEFAULT_SCHEMAS } from './compose';
 import { allowedKeysAt } from './hints';
+import { parseExtensionKind } from './ids';
 import { isPlainObject } from './json';
 import type { DocumentFormat } from './source';
 
@@ -10,17 +11,25 @@ import type { DocumentFormat } from './source';
 // document and its JSON twin.
 
 /**
- * Authored data as a document: keys in schema order, the namespaces in every
- * `extensions` object sorted, two-space indent, LF line ends, and a trailing
- * newline. YAML never folds a line. Keys the schema doesn't name, such as
- * extension data's, keep their authored order after the ones it does.
+ * Authored data as a document: keys in schema order, every key inside
+ * extension data (each `extensions` object, and an extension section's
+ * `data`) sorted at every level, two-space indent, LF line ends, and a
+ * trailing newline. YAML never folds a line, and quotes a `<<` key, which a
+ * YAML 1.1 reader would merge. Other keys the schema doesn't name keep their
+ * authored order after the ones it does.
  */
 export function serialize(value: unknown, format: DocumentFormat): string {
   // Both formats take the same data, so a YAML document always has a JSON twin.
   assertPlainJson(value);
   const ordered = inSchemaOrder(value);
   if (format === 'json') return `${JSON.stringify(ordered, null, 2)}\n`;
-  return stringify(ordered, { lineWidth: 0, indent: 2, aliasDuplicateObjects: false });
+  const doc = new Document(ordered, { aliasDuplicateObjects: false });
+  visit(doc, {
+    Pair(_, pair) {
+      if (isScalar(pair.key) && pair.key.value === '<<') pair.key.type = Scalar.QUOTE_DOUBLE;
+    },
+  });
+  return doc.toString({ lineWidth: 0, indent: 2 });
 }
 
 /** RFC 8785 JSON: keys sorted by UTF-16 code units, no whitespace, ECMAScript number and string forms. */
@@ -55,12 +64,19 @@ function inSchemaOrder(value: unknown): unknown {
   const isExtensionsField = (path: readonly (string | number)[]) =>
     path.at(-1) === 'extensions' &&
     (!schema || (allowedKeysAt(schema, value, path.slice(0, -1))?.includes('extensions') ?? false));
-  const walk = (node: unknown, path: readonly (string | number)[]): unknown => {
-    if (Array.isArray(node)) return node.map((child, index) => walk(child, [...path, index]));
+  // `sorted`: inside extension data, where every key is sorted.
+  const walk = (node: unknown, path: readonly (string | number)[], sorted: boolean): unknown => {
+    if (Array.isArray(node)) {
+      return node.map((child, index) => walk(child, [...path, index], sorted));
+    }
     if (!isPlainObject(node)) return node;
     const keys = Object.keys(node);
+    const extensionData = (key: string) =>
+      sorted ||
+      isExtensionsField([...path, key]) ||
+      (key === 'data' && typeof node.kind === 'string' && parseExtensionKind(node.kind) !== null);
     let order: string[];
-    if (isExtensionsField(path)) {
+    if (sorted) {
       order = [...keys].sort();
     } else {
       const allowed = schema ? (allowedKeysAt(schema, value, path) ?? []) : [];
@@ -69,11 +85,12 @@ function inSchemaOrder(value: unknown): unknown {
         ...keys.filter((key) => !allowed.includes(key)),
       ];
     }
-    const copy: Record<string, unknown> = {};
-    for (const key of order) copy[key] = walk(node[key], [...path, key]);
-    return copy;
+    // fromEntries, so an own __proto__ key stays a key.
+    return Object.fromEntries(
+      order.map((key) => [key, walk(node[key], [...path, key], extensionData(key))]),
+    );
   };
-  return walk(value, []);
+  return walk(value, [], false);
 }
 
 /** Throws unless the value is plain JSON data. A key whose value is undefined is left out. */
