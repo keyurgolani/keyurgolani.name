@@ -243,6 +243,8 @@ test('the image scan flags personal data, env files, git, and test trees', async
       'apps/web/site.webmanifest',
       '.env',
       'apps/web/.env.local',
+      'apps/web/.env',
+      'apps/web/.env.production',
       'node_modules/pkg/portfolio.yml',
     ]) {
       writeFileSync(path.join(root, file), 'x');
@@ -253,7 +255,9 @@ test('the image scan flags personal data, env files, git, and test trees', async
     assert.deepEqual(scan.problems.sort(), [
       '.env',
       '.git',
+      'apps/web/.env',
       'apps/web/.env.local',
+      'apps/web/.env.production',
       'apps/web/portfolio.json',
       'apps/web/site.json',
       'ci',

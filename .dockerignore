@@ -17,10 +17,11 @@ experiments
 .vscode
 .idea
 
-.env
-.env.*
-!.env.example
-apps/web/.env.development
+# Env files at any depth: Next's standalone output copies apps/web/.env and
+# apps/web/.env.production into the image.
+**/.env
+**/.env.*
+!**/.env.example
 
 # Personal portfolio data stays out of the image: the six document names, and
 # any other portfolio.* such as an old portfolio.toml. Only the examples ship.
