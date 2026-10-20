@@ -1,7 +1,9 @@
 import path from 'node:path';
 import fs from 'node:fs/promises';
 
-const WORKSPACE_ROOT = path.resolve(process.cwd(), '..', '..');
+// turbopackIgnore keeps the build from tracing the whole repo into the
+// standalone output. next.config.ts traces the one root file read at runtime.
+const WORKSPACE_ROOT = path.resolve(/*turbopackIgnore: true*/ process.cwd(), '..', '..');
 const DEFAULT_FILENAMES = ['portfolio.yml', 'portfolio.yaml', 'portfolio.toml', 'portfolio.json'];
 
 /**
@@ -15,20 +17,22 @@ const DEFAULT_FILENAMES = ['portfolio.yml', 'portfolio.yaml', 'portfolio.toml', 
 export async function resolvePortfolioPath(): Promise<string> {
   const fromEnv = process.env.PORTFOLIO_PATH;
   if (fromEnv) {
-    return path.isAbsolute(fromEnv) ? fromEnv : path.resolve(process.cwd(), fromEnv);
+    return path.isAbsolute(fromEnv)
+      ? fromEnv
+      : path.resolve(/*turbopackIgnore: true*/ process.cwd(), fromEnv);
   }
 
   for (const name of DEFAULT_FILENAMES) {
-    const candidate = path.join(WORKSPACE_ROOT, name);
+    const candidate = path.join(/*turbopackIgnore: true*/ WORKSPACE_ROOT, name);
     try {
-      await fs.access(candidate);
+      await fs.access(/*turbopackIgnore: true*/ candidate);
       return candidate;
     } catch {
       // try next
     }
   }
 
-  return path.join(WORKSPACE_ROOT, 'portfolio.yml');
+  return path.join(/*turbopackIgnore: true*/ WORKSPACE_ROOT, 'portfolio.yml');
 }
 
 export function workspaceRoot(): string {
@@ -36,9 +40,9 @@ export function workspaceRoot(): string {
 }
 
 export async function resolveExamplePortfolioPath(): Promise<string | null> {
-  const candidate = path.join(WORKSPACE_ROOT, 'portfolio.example.yml');
+  const candidate = path.join(/*turbopackIgnore: true*/ WORKSPACE_ROOT, 'portfolio.example.yml');
   try {
-    await fs.access(candidate);
+    await fs.access(/*turbopackIgnore: true*/ candidate);
     return candidate;
   } catch {
     return null;

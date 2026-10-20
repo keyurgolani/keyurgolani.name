@@ -46,10 +46,8 @@ export function AnimatedCounter({
   const reduce = useMotionPreference(motionPreference) === 'reduce';
 
   useEffect(() => {
-    if (reduce) {
-      setValue(end);
-      return;
-    }
+    // Reduced motion renders `end` directly (see `shown` below); nothing to animate.
+    if (reduce) return;
     const el = ref.current;
     if (!el) return;
 
@@ -89,7 +87,10 @@ export function AnimatedCounter({
     };
   }, [end, durationMs, decimals, startOnView, reduce]);
 
-  const formatted = decimals > 0 ? value.toFixed(decimals) : value.toLocaleString();
+  const shown = reduce ? end : value;
+  // A fixed locale, so the server's number matches the browser's during
+  // hydration. #4 adds the portfolio's own locale.
+  const formatted = decimals > 0 ? shown.toFixed(decimals) : shown.toLocaleString('en-US');
   return (
     <span ref={ref} className={className} aria-label={`${prefix ?? ''}${end}${suffix ?? ''}`}>
       {prefix}

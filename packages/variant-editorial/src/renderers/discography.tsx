@@ -11,6 +11,7 @@ export function DiscographyRenderer({ section }: { section: Discography }) {
           <article key={`${item.title}-${i}`}>
             {item.cover ? (
               <div className="editorial-plate__media">
+                {/* eslint-disable-next-line @next/next/no-img-element -- owner-supplied URL; next/image would proxy it through /_next/image */}
                 <img
                   src={item.cover.src}
                   alt={item.cover.alt ?? item.title}

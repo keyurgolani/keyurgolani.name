@@ -10,6 +10,7 @@ export function TestimonialsRenderer({ section }: { section: Testimonials }) {
             <p className="kc-testimonial__quote">{item.quote}</p>
             <footer className="kc-testimonial__attribution">
               {item.authorAvatar ? (
+                // eslint-disable-next-line @next/next/no-img-element -- owner-supplied URL; next/image would proxy it through /_next/image
                 <img
                   className="kc-testimonial__avatar"
                   src={item.authorAvatar.src}

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { LinkSchema, LooseDateSchema, SectionBase } from './common';
+import { LinkSchema, SectionBase } from './common';
 
 export const ContactSchema = z.object({
   kind: z.literal('contact'),

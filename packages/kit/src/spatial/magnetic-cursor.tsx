@@ -1,8 +1,25 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useSyncExternalStore } from 'react';
 import { useMotionPreference } from '../motion';
 import type { MotionPreference } from '@portfolio/schema';
+
+const COARSE_POINTER_QUERY = '(pointer: coarse)';
+
+function subscribeCoarsePointer(onChange: () => void): () => void {
+  const mq = window.matchMedia(COARSE_POINTER_QUERY);
+  mq.addEventListener('change', onChange);
+  return () => mq.removeEventListener('change', onChange);
+}
+
+function hasCoarsePointer(): boolean {
+  return window.matchMedia(COARSE_POINTER_QUERY).matches;
+}
+
+// The server can't see the pointer, so it renders no cursor.
+function serverHasCoarsePointer(): boolean {
+  return true;
+}
 
 interface MagneticCursorProps {
   motionPreference?: MotionPreference;
@@ -34,16 +51,17 @@ export function MagneticCursor({
   hideSystemCursor = false,
 }: MagneticCursorProps) {
   const motion = useMotionPreference(motionPreference);
-  const [enabled, setEnabled] = useState(false);
+  const coarsePointer = useSyncExternalStore(
+    subscribeCoarsePointer,
+    hasCoarsePointer,
+    serverHasCoarsePointer,
+  );
+  const enabled = motion !== 'reduce' && !coarsePointer;
   const dotRef = useRef<HTMLDivElement>(null);
   const haloRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (motion === 'reduce') return;
-    if (typeof window === 'undefined') return;
-    const isTouch = window.matchMedia('(pointer: coarse)').matches;
-    if (isTouch) return;
-    setEnabled(true);
+    if (!enabled) return;
 
     let dotX = window.innerWidth / 2;
     let dotY = window.innerHeight / 2;
@@ -83,7 +101,7 @@ export function MagneticCursor({
       cancelAnimationFrame(raf);
       if (hideSystemCursor) document.documentElement.style.cursor = '';
     };
-  }, [motion, haloDamping, hideSystemCursor]);
+  }, [enabled, haloDamping, hideSystemCursor]);
 
   if (!enabled) return null;
 

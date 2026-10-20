@@ -1,0 +1,59 @@
+# Weekly grouped dependency updates. Dependabot reads this file only from the
+# default branch, so it takes effect once it reaches main. Updates wait a week
+# after a release before Dependabot proposes them.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      npm:
+        patterns: ['*']
+    ignore:
+      # The Playwright container in ci.yml runs the same release; pnpm
+      # check:pins fails when they differ. Update the package and the image
+      # digest together by hand.
+      - dependency-name: '@playwright/test'
+      - dependency-name: playwright
+      # eslint-plugin-react, -import, and -jsx-a11y (via eslint-config-next)
+      # don't support ESLint 10 yet.
+      - dependency-name: eslint
+        update-types: ['version-update:semver-major']
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      github-actions:
+        patterns: ['*']
+
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      docker:
+        patterns: ['*']
+    ignore:
+      # Node majors are a deliberate move. A minor or patch bump also needs
+      # NODE_VERSION in ci.yml bumped to match (pnpm check:pins).
+      - dependency-name: node
+        update-types: ['version-update:semver-major']
+
+  - package-ecosystem: docker-compose
+    directory: /tests/harness/compose
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      docker-compose:
+        patterns: ['*']

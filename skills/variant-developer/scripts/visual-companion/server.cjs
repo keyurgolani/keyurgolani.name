@@ -60,7 +60,7 @@ const args = parseArgs(process.argv.slice(2));
 const REPO_ROOT = findRepoRoot(__filename);
 const ASSETS_DIR = path.join(
   REPO_ROOT || path.resolve(__dirname, '..', '..', '..', '..'),
-  'docs/skills/variant-developer/assets/visual-companion',
+  'skills/variant-developer/assets/visual-companion',
 );
 
 const FRAME_TEMPLATE = fs.readFileSync(path.join(ASSETS_DIR, 'frame-template.html'), 'utf8');

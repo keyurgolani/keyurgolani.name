@@ -20,6 +20,8 @@ next-env.d.ts
 coverage
 test-results
 playwright-report
+# CI reports and failure records (uploaded as workflow artifacts)
+/reports/
 
 # env
 .env

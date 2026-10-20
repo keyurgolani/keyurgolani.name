@@ -1,9 +1,25 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useSyncExternalStore } from 'react';
 import type { MotionPreference } from '@portfolio/schema';
 
 export type ResolvedMotion = 'reduce' | 'full';
+
+const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)';
+
+function subscribeReducedMotion(onChange: () => void): () => void {
+  const mq = window.matchMedia(REDUCED_MOTION_QUERY);
+  mq.addEventListener('change', onChange);
+  return () => mq.removeEventListener('change', onChange);
+}
+
+function osPrefersReducedMotion(): boolean {
+  return window.matchMedia(REDUCED_MOTION_QUERY).matches;
+}
+
+function serverPrefersReducedMotion(): boolean {
+  return false;
+}
 
 /**
  * Resolve the effective motion mode for a session.
@@ -15,22 +31,17 @@ export type ResolvedMotion = 'reduce' | 'full';
  *   respect-os           true                              reduce
  *   respect-os           false                             full
  *
- * Defaults to `full` during SSR to avoid layout-shift on hydration; the OS
- * value is read once on mount.
+ * Defaults to `full` during SSR and hydration to avoid layout-shift; the OS
+ * value takes over right after hydration and follows later changes.
  */
 export function useMotionPreference(
   portfolioPref: MotionPreference = 'respect-os',
 ): ResolvedMotion {
-  const [osReduce, setOsReduce] = useState(false);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
-    setOsReduce(mq.matches);
-    const handler = () => setOsReduce(mq.matches);
-    mq.addEventListener('change', handler);
-    return () => mq.removeEventListener('change', handler);
-  }, []);
+  const osReduce = useSyncExternalStore(
+    subscribeReducedMotion,
+    osPrefersReducedMotion,
+    serverPrefersReducedMotion,
+  );
 
   if (portfolioPref === 'reduce') return 'reduce';
   if (portfolioPref === 'full') return 'full';

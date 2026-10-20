@@ -24,7 +24,7 @@ export async function loadPortfolio(): Promise<LoadedPortfolio> {
   let activePath = await resolvePortfolioPath();
   let raw: string;
   try {
-    raw = await fs.readFile(activePath, 'utf8');
+    raw = await fs.readFile(/*turbopackIgnore: true*/ activePath, 'utf8');
   } catch {
     const examplePath = await resolveExamplePortfolioPath();
     if (!examplePath) {
@@ -34,7 +34,7 @@ export async function loadPortfolio(): Promise<LoadedPortfolio> {
       );
     }
     activePath = examplePath;
-    raw = await fs.readFile(activePath, 'utf8');
+    raw = await fs.readFile(/*turbopackIgnore: true*/ activePath, 'utf8');
   }
   const format = detectFormat(activePath);
   const portfolio = parsePortfolio(raw, format);
@@ -47,7 +47,7 @@ export async function loadPortfolioRaw(): Promise<{
   format: PortfolioFormat;
 }> {
   const path = await resolvePortfolioPath();
-  const source = await fs.readFile(path, 'utf8');
+  const source = await fs.readFile(/*turbopackIgnore: true*/ path, 'utf8');
   const format = detectFormat(path);
   return { source, path, format };
 }
@@ -65,6 +65,6 @@ export async function savePortfolioRaw(
       issues: 'issues' in result ? result.issues : undefined,
     };
   }
-  await fs.writeFile(path, source, 'utf8');
+  await fs.writeFile(/*turbopackIgnore: true*/ path, source, 'utf8');
   return { ok: true };
 }

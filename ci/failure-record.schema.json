@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/keyurgolani/keyurgolani.name/ci/failure-record.schema.json",
+  "title": "CI failure record",
+  "description": "One JSON object per CI failure, written to reports/failures/. A minor schema version only adds optional fields. Unknown fields fail validation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "gate", "reproCommand"],
+  "properties": {
+    "schemaVersion": {
+      "description": "Schema version the record was written against.",
+      "enum": ["1.0"]
+    },
+    "gate": {
+      "description": "The check that failed: the <job> in `pnpm ci:<job>`.",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$"
+    },
+    "test": { "$ref": "#/$defs/label", "description": "Test title or check step." },
+    "package": { "$ref": "#/$defs/label", "description": "Workspace package." },
+    "variant": { "$ref": "#/$defs/label", "description": "Variant slug." },
+    "pack": { "$ref": "#/$defs/label", "description": "Appearance pack id." },
+    "axis": { "$ref": "#/$defs/label", "description": "Appearance axis." },
+    "profile": { "$ref": "#/$defs/label", "description": "Deployment profile." },
+    "route": { "$ref": "#/$defs/label", "description": "Route path." },
+    "viewport": { "$ref": "#/$defs/label", "description": "Viewport, as WIDTHxHEIGHT." },
+    "inputMode": {
+      "$ref": "#/$defs/label",
+      "description": "Input mode, such as pointer, touch, or keyboard."
+    },
+    "displayMode": {
+      "$ref": "#/$defs/label",
+      "description": "Display mode, such as light, dark, or forced-colors."
+    },
+    "semanticRole": { "$ref": "#/$defs/label", "description": "Semantic role under test." },
+    "asset": { "$ref": "#/$defs/label", "description": "File or asset path." },
+    "expected": { "$ref": "#/$defs/measure" },
+    "actual": { "$ref": "#/$defs/measure" },
+    "threshold": { "$ref": "#/$defs/measure" },
+    "artifacts": {
+      "description": "Paths inside the uploaded reports artifact.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/label" }
+    },
+    "reproCommand": {
+      "description": "Local command that reproduces the failure. It starts with pnpm, optionally after VAR=value pairs, and needs no secrets: no $ expansion, no secrets. reference, and no variable named like a token, secret, or password.",
+      "type": "string",
+      "pattern": "^(?![^\\n]*\\$)(?![^\\n]*secrets\\.)(?:(?![A-Z0-9_]*(?:TOKEN|SECRET|PASSWORD))[A-Z][A-Z0-9_]*=[^\\s]+ )*pnpm [^\\s][^\\n]*$"
+    }
+  },
+  "$defs": {
+    "label": { "type": "string", "minLength": 1 },
+    "measure": { "type": ["string", "number", "boolean"] }
+  }
+}

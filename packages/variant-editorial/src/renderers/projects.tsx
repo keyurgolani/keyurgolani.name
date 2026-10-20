@@ -19,6 +19,7 @@ export function ProjectsRenderer({ section }: { section: Projects }) {
             <div className="editorial-project__body">
               {image ? (
                 <figure className="editorial-project__image">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- owner-supplied URL; next/image would proxy it through /_next/image */}
                   <img
                     src={image.src}
                     alt={image.alt ?? item.name}

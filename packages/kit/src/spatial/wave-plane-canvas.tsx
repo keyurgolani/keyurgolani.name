@@ -124,7 +124,6 @@ export function WavePlaneCanvas({
       gl!.shaderSource(sh, src);
       gl!.compileShader(sh);
       if (!gl!.getShaderParameter(sh, gl!.COMPILE_STATUS)) {
-        // eslint-disable-next-line no-console
         console.error('WavePlaneCanvas shader error:', gl!.getShaderInfoLog(sh));
         gl!.deleteShader(sh);
         return null;
@@ -141,7 +140,6 @@ export function WavePlaneCanvas({
     gl.attachShader(program, fs);
     gl.linkProgram(program);
     if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-      // eslint-disable-next-line no-console
       console.error('WavePlaneCanvas link error:', gl.getProgramInfoLog(program));
       return;
     }

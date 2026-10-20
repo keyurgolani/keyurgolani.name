@@ -261,8 +261,17 @@ function EventCard({
   onHoverEnd,
 }: EventCardProps) {
   const { ref: viewportRef, isActive: inCenter } = useViewportCenterActive();
-  const tilt = useMouseTilt({ maxDegrees: 5, enabled: expanded });
-  const hoverGlow = useMotionTemplate`radial-gradient(360px circle at ${tilt.mouseX}px ${tilt.mouseY}px, hsla(${p.hue}, ${p.saturation}%, ${p.lightness}%, 0.18), transparent 80%)`;
+  // Destructured so the ref stays separate from the values read during render.
+  const {
+    ref: tiltRef,
+    rotateX,
+    rotateY,
+    mouseX,
+    mouseY,
+    onMouseMove,
+    onMouseLeave,
+  } = useMouseTilt({ maxDegrees: 5, enabled: expanded });
+  const hoverGlow = useMotionTemplate`radial-gradient(360px circle at ${mouseX}px ${mouseY}px, hsla(${p.hue}, ${p.saturation}%, ${p.lightness}%, 0.18), transparent 80%)`;
   const event = p.event;
   const visuals = KIND_HUE[event.kind];
   const isRight = p.side === 'right';
@@ -296,15 +305,15 @@ function EventCard({
         onMouseLeave={onHoverEnd}
       >
         <motion.button
-          ref={tilt.ref as React.Ref<HTMLButtonElement>}
+          ref={tiltRef as React.Ref<HTMLButtonElement>}
           type="button"
           layout
           onClick={(e) => {
             e.stopPropagation();
             onToggle();
           }}
-          onMouseMove={tilt.onMouseMove}
-          onMouseLeave={tilt.onMouseLeave}
+          onMouseMove={onMouseMove}
+          onMouseLeave={onMouseLeave}
           className="kc-timeline-card"
           data-expanded={expanded || undefined}
           data-active={showActive || undefined}
@@ -314,8 +323,8 @@ function EventCard({
             height: h,
             perspective: 1000,
             transformStyle: 'preserve-3d',
-            rotateX: expanded ? tilt.rotateX : 0,
-            rotateY: expanded ? tilt.rotateY : 0,
+            rotateX: expanded ? rotateX : 0,
+            rotateY: expanded ? rotateY : 0,
             borderColor: `hsla(${visuals.h}, ${visuals.s}%, ${visuals.l}%, 0.35)`,
             boxShadow: showActive
               ? `0 8px 32px hsla(${visuals.h}, ${visuals.s}%, ${visuals.l}%, 0.25)`

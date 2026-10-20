@@ -1,0 +1,45 @@
+# Harness fixture. Made-up person, .test domains only, and no section that
+# fetches from a third party at render time (no `github` kind). The project
+# image lives on a .test host so browser tests exercise request blocking.
+identity:
+  name: Rowan Fixture
+  tagline: Builds calm software for testing harnesses.
+  location: Nowhere, Test
+  email: rowan@rowan.test
+
+variant: editorial
+theme: system
+
+links:
+  - platform: website
+    url: https://rowan.test
+    label: Website
+
+meta:
+  title: Rowan Fixture
+  description: Fixture portfolio for the browser harness.
+  url: https://rowan.test
+
+sections:
+  - kind: hero
+    greeting: Hello, I'm
+    tagline: I build calm software for testing harnesses.
+    ctas:
+      - url: '#contact'
+        label: Get in touch
+
+  - kind: projects
+    title: Selected work
+    items:
+      - name: Fixture Garden
+        summary: A garden of deterministic fixtures.
+        image:
+          src: https://media.rowan.test/fixture-garden.png
+          alt: Rows of identical seedlings
+          width: 640
+          height: 420
+
+  - kind: contact
+    title: Get in touch
+    id: contact
+    message: Write to rowan@rowan.test.

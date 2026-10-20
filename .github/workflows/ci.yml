@@ -1,0 +1,360 @@
+# The one CI workflow. `gate` is the only required check: it fails unless every
+# job it needs succeeded, so new jobs join by being added to its `needs`.
+# Every check step runs one `pnpm ci:<job>` script, which is also its local
+# command. On a push to main, after `gate` passes, `publish` pushes the
+# multi-arch image by digest, smoke-tests both platforms from that digest, and
+# tags it sha-<short>. Nothing publishes from a PR or another branch.
+name: ci
+
+on:
+  pull_request:
+    branches: [main, next]
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  # A PR cancels its superseded runs. A push gets one group per commit, so no
+  # push run is ever cancelled.
+  group: ${{ github.event_name == 'pull_request' && format('ci-pr-{0}', github.event.pull_request.number) || format('ci-{0}', github.sha) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # The Node release the image ships: the Dockerfile's node:X.Y.Z tag.
+  # pnpm check:pins fails when the two differ.
+  NODE_VERSION: 22.23.3
+  TZ: UTC
+  NEXT_TELEMETRY_DISABLED: '1'
+  REPORT_RETENTION_DAYS: ${{ github.event_name == 'pull_request' && 14 || 90 }}
+
+jobs:
+  static:
+    name: static
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - name: Enable pnpm
+        run: corepack enable
+      - name: Install
+        id: install
+        run: pnpm install --frozen-lockfile
+      - name: Install workflow linters
+        id: linters
+        run: |
+          node ci/install-workflow-linters.mjs "$RUNNER_TEMP/workflow-linters"
+          echo "$RUNNER_TEMP/workflow-linters" >> "$GITHUB_PATH"
+      # Each check runs even when an earlier one failed, so one run reports all.
+      - name: pnpm ci:format
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: pnpm ci:format
+      - name: pnpm ci:lint
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: pnpm ci:lint
+      - name: pnpm ci:typecheck
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: pnpm ci:typecheck
+      - name: pnpm ci:skills
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: pnpm ci:skills
+      - name: pnpm ci:registry
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: pnpm ci:registry
+      - name: pnpm ci:deps
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: pnpm ci:deps
+      - name: pnpm ci:pins
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: pnpm ci:pins
+      - name: pnpm ci:workflows
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && steps.linters.outcome == 'success' }}
+        run: pnpm ci:workflows
+      - name: Failure summary
+        if: ${{ always() }}
+        run: node ci/summarize.mjs
+      - name: Upload reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-static
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: ${{ env.REPORT_RETENTION_DAYS }}
+
+  unit:
+    name: unit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - name: Enable pnpm
+        run: corepack enable
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: pnpm ci:unit
+        run: pnpm ci:unit
+      - name: Failure summary
+        if: ${{ always() }}
+        run: node ci/summarize.mjs
+      - name: Upload reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-unit
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: ${{ env.REPORT_RETENTION_DAYS }}
+
+  build:
+    name: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - name: Enable pnpm
+        run: corepack enable
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: pnpm ci:build
+        run: pnpm ci:build
+      - name: Failure summary
+        if: ${{ always() }}
+        run: node ci/summarize.mjs
+      - name: Upload reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-build
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: ${{ env.REPORT_RETENTION_DAYS }}
+
+  browser:
+    name: browser
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    # Browsers come baked into the image, at the version @playwright/test pins.
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+      # Playwright's container guidance: the host IPC namespace so Chromium
+      # has enough shared memory, and an init process to reap children.
+      options: --user 1001 --ipc=host --init
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The image ships Node 24; the app under test runs on the image's Node 22.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - name: Enable pnpm
+        run: corepack enable
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: pnpm ci:build
+        run: pnpm ci:build
+      - name: pnpm ci:browser
+        run: pnpm ci:browser
+      - name: Failure summary
+        if: ${{ always() }}
+        run: node ci/summarize.mjs
+      - name: Upload reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-browser
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: ${{ env.REPORT_RETENTION_DAYS }}
+
+  image:
+    name: image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      IMAGE_TAG: portfolio:ci
+      IMAGE_PLATFORM: linux/amd64
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - name: Enable pnpm
+        run: corepack enable
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      # Builds amd64 without pushing, starts the container, and checks health.
+      - name: pnpm ci:image
+        id: image
+        run: pnpm ci:image
+      - name: pnpm ci:proxy
+        if: ${{ !cancelled() && steps.image.outcome == 'success' }}
+        run: pnpm ci:proxy
+        env:
+          PORTFOLIO_IMAGE: ${{ env.IMAGE_TAG }}
+      - name: Failure summary
+        if: ${{ always() }}
+        run: node ci/summarize.mjs
+      - name: Upload reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-image
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: ${{ env.REPORT_RETENTION_DAYS }}
+
+  gate:
+    name: gate
+    if: ${{ always() }}
+    needs: [static, unit, build, browser, image]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: ci/gate.mjs
+          sparse-checkout-cone-mode: false
+      - name: Require every needed job to succeed
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: node ci/gate.mjs
+
+  # Builds amd64 and arm64 once, pushes the result by digest with no tag,
+  # smoke-tests each platform pulled from that digest, and only then tags the
+  # same digest sha-<short>. The main tag is retired, and latest moves only
+  # with final release tags.
+  publish:
+    name: publish
+    needs: [gate]
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: read # check out the commit
+      packages: write # push the image to GHCR
+    env:
+      IMAGE_NAME: ghcr.io/${{ github.repository }}
+      # Empty when the secret isn't set, which skips the Docker Hub steps.
+      # The Docker Hub secrets move into a `publish` environment once the owner
+      # creates it; until then they stay repository secrets.
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }} # zizmor: ignore[secrets-outside-env]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - name: Enable pnpm
+        run: corepack enable
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      # arm64 builds and runs under QEMU until native arm64 runners replace it.
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+        with:
+          image: docker.io/tonistiigi/binfmt:qemu-v10.2.3@sha256:400a4873b838d1b89194d982c45e5fb3cda4593fbfd7e08a02e76b03b21166f0
+          platforms: arm64
+          cache-image: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        with:
+          driver-opts: image=moby/buildkit:v0.34.0@sha256:b059f8d7226d0b326bc871af489a5dddf65e36af4d20d14251b072974d9ee87c
+          cache-binary: false
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Log in to Docker Hub
+        if: ${{ env.DOCKERHUB_USERNAME != '' }}
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }} # zizmor: ignore[secrets-outside-env]
+          password: ${{ secrets.DOCKERHUB_TOKEN }} # zizmor: ignore[secrets-outside-env]
+      - name: Compute labels and the sha tag
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,format=short
+          flavor: |
+            latest=false
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64,linux/arm64
+          labels: ${{ steps.meta.outputs.labels }}
+          outputs: type=image,name=${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
+          provenance: false
+      - name: pnpm ci:image (linux/amd64, pushed digest)
+        env:
+          SMOKE_IMAGE: ${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
+          IMAGE_PLATFORM: linux/amd64
+        run: pnpm ci:image
+      - name: pnpm ci:image (linux/arm64, pushed digest)
+        env:
+          SMOKE_IMAGE: ${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
+          IMAGE_PLATFORM: linux/arm64
+          SMOKE_TIMEOUT_MS: '300000'
+        run: pnpm ci:image
+      # Docker Hub, if configured, gets the same digest.
+      - name: Tag the tested digest sha-<short>
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+          TAG: ${{ steps.meta.outputs.version }}
+          DOCKERHUB_IMAGE: ${{ env.DOCKERHUB_USERNAME && format('docker.io/{0}/{1}', env.DOCKERHUB_USERNAME, github.event.repository.name) || '' }}
+        run: |
+          targets=("$IMAGE_NAME:$TAG")
+          if [ -n "$DOCKERHUB_IMAGE" ]; then targets+=("$DOCKERHUB_IMAGE:$TAG"); fi
+          for target in "${targets[@]}"; do
+            docker buildx imagetools create --tag "$target" "$IMAGE_NAME@$DIGEST"
+            pushed=$(docker buildx imagetools inspect "$target" --format '{{json .Manifest}}' | jq -r .digest)
+            if [ "$pushed" != "$DIGEST" ]; then
+              echo "::error title=publish::$target resolves to $pushed, not the tested $DIGEST"
+              exit 1
+            fi
+            echo "$target -> $DIGEST"
+          done
+      - name: Failure summary
+        if: ${{ always() }}
+        run: node ci/summarize.mjs
+      - name: Upload reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-publish
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: ${{ env.REPORT_RETENTION_DAYS }}
