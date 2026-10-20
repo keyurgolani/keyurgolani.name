@@ -6,8 +6,8 @@ import { setDeploymentState } from '~/server/config-store';
 import { GET } from './route';
 
 // When the feed can't be built, the response body stays fixed, plus the
-// request ID proxy.ts set. The log names the failure and the request, and
-// never the cause, which can carry a path.
+// request ID proxy.ts set. The log names the request and the step that
+// failed, with a fixed code, and never the cause, which can carry a path.
 
 function deploy(t: TestContext, getLive: CatalogReader['getLive']): void {
   const read = readDeploymentConfig(
@@ -52,10 +52,23 @@ test('a catalog that fails gives a fixed 500 and logs the request, not the cause
     [
       ['level', 'error'],
       ['event', 'feed.failed'],
+      ['code', 'catalog_unavailable'],
       ['route', '/feed.xml'],
       ['requestId', 'req-0001'],
     ],
   );
+});
+
+test('a feed that fails to render logs render_failed', async (t) => {
+  const logged = t.mock.method(console, 'log', () => {});
+  // A revision the public view passes along whole, whose identity the feed reads.
+  const portfolio = { schemaVersion: 2, sections: [], identity: null };
+  deploy(t, () => Promise.resolve({ unit: { portfolio } } as never));
+  const response = await GET(request());
+  assert.equal(response.status, 500);
+  assert.equal(await response.text(), 'Feed unavailable. Request ID: req-0001');
+  const line = JSON.parse(String(logged.mock.calls[0]!.arguments[0])) as Record<string, unknown>;
+  assert.equal(line.code, 'render_failed');
 });
 
 test('a server with no deployment state serves no feed', async () => {

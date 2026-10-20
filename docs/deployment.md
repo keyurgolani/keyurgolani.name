@@ -207,14 +207,14 @@ Data under an `extensions` key, or a section whose `kind` is `<npm package name>
 
 The server writes one JSON object per line on stdout, with `ts`, `level`, and `event`, and only these other fields: `requestId`, `profile`, `route` (the route pattern, never the URL), `operation`, `capability`, `status`, `code`, `key`, and `digest`. `config.fatal` and `config.warning` add `file` (relative to the source directory), `path`, `line`, `column`, `issueCode`, and `message`. Request bodies, cookies, `Authorization`, raw URLs, and secret values never appear.
 
-| Event               | When                                                                                     |
-| ------------------- | ---------------------------------------------------------------------------------------- |
-| `config.fatal`      | A startup check failed. The server exits 1 after the last one.                           |
-| `config.warning`    | A startup check found something to fix that doesn't stop the server.                     |
-| `deployment.config` | Once, at startup: the redacted settings summary.                                         |
-| `request.error`     | A page or route failed. `digest` is the reference code the error page shows the visitor. |
-| `operation.failed`  | A Studio operation failed. Its response carries the same `requestId`.                    |
-| `feed.failed`       | `/feed.xml` couldn't be built. Its response carries the same `requestId`.                |
+| Event               | When                                                                                                                          |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `config.fatal`      | A startup check failed. The server exits 1 after the last one.                                                                |
+| `config.warning`    | A startup check found something to fix that doesn't stop the server.                                                          |
+| `deployment.config` | Once, at startup: the redacted settings summary.                                                                              |
+| `request.error`     | A page or route failed. `digest` is the reference code the error page shows the visitor.                                      |
+| `operation.failed`  | A Studio operation failed. Its response carries the same `requestId`.                                                         |
+| `feed.failed`       | `/feed.xml` couldn't be built: `code` is `catalog_unavailable` or `render_failed`. Its response carries the same `requestId`. |
 
 `deployment.config` adds `origin`, `previewOrigin`, `proxyHops`, `capabilities`, `adapters` (which catalog the profile reads), and `secrets`, each secret only as `set` or `unset`. The owner-session `config.status` operation returns the same summary; no anonymous route does.
 
