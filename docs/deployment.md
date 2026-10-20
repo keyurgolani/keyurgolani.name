@@ -145,6 +145,8 @@ Add the `--set`, `--drop-unknown`, and `--write --out /config/new` arguments to 
 
 Put Nginx, Caddy, or Traefik in front, pointed at `http://127.0.0.1:3000` (or the port you set), and terminate TLS there. The app builds every absolute URL from `PORTFOLIO_ORIGIN`; it never reads `Host` or `X-Forwarded-*` for one. Set `PORTFOLIO_TRUSTED_PROXY_HOPS` to the number of proxies that append to `X-Forwarded-For`.
 
+That address is for a proxy on the host. A proxy in another container can't reach a port published on the host's `127.0.0.1`: put the proxy and the app on one Docker network, point the proxy at the app's service name (`http://web:3000` in these examples), and drop the `ports:` entry if nothing on the host needs it.
+
 The proxy knows the site is on HTTPS, so it sends `Strict-Transport-Security`. In a Caddy site block, for example:
 
 ```
@@ -205,7 +207,9 @@ Data under an `extensions` key, or a section whose `kind` is `<npm package name>
 
 ## Logs
 
-The server writes one JSON object per line on stdout, with `ts`, `level`, and `event`, and only these other fields: `requestId`, `profile`, `route` (the route pattern, never the URL), `operation`, `capability`, `status`, `code`, `key`, and `digest`. `config.fatal` and `config.warning` add `file` (relative to the source directory), `path`, `line`, `column`, `issueCode`, and `message`. Request bodies, cookies, `Authorization`, raw URLs, and secret values never appear.
+The app writes its log as one JSON object per line on stdout, with `ts`, `level`, and `event`, and only these other fields: `requestId`, `profile`, `route` (the route pattern, never the URL), `operation`, `capability`, `status`, `code`, `key`, and `digest`. `config.fatal` and `config.warning` add `file` (relative to the source directory), `path`, `line`, `column`, `issueCode`, and `message`. No line of the app's carries a request body, a cookie, `Authorization`, a raw URL, or a secret value.
+
+Next writes its own lines to the same streams, as plain text: its startup banner on stdout (`▲ Next.js`, the address, `✓ Ready`), and on stderr, the message and stack of each error it catches, next to the app's `request.error` line, and a line naming the request URL when a request handler crashes. Those can name server paths and request URLs. None of them is JSON, so a log pipeline keeps the app's lines by parsing each line as a JSON object.
 
 | Event               | When                                                                                                                          |
 | ------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
