@@ -59,8 +59,9 @@ USER nextjs
 EXPOSE 3000
 
 # server.js binds HOSTNAME. Some runtimes (nerdctl, Kubernetes) replace it with
-# the container's hostname, so probe whatever address the server is bound to.
+# the container's hostname, so probe whatever address the server is bound to:
+# loopback for a wildcard, brackets for an IPv6 literal.
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
-  CMD ["node", "-e", "const h=process.env.HOSTNAME;fetch('http://'+(!h||h==='0.0.0.0'||h==='::'?'127.0.0.1':h)+':'+(process.env.PORT||3000)+'/api/health',{signal:AbortSignal.timeout(4000)}).then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
+  CMD ["node", "-e", "const h=process.env.HOSTNAME;const a=!h||h==='0.0.0.0'||h==='::'?'127.0.0.1':h.includes(':')?'['+h+']':h;fetch('http://'+a+':'+(process.env.PORT||3000)+'/api/health',{signal:AbortSignal.timeout(4000)}).then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
 
 CMD ["node", "apps/web/server.js"]

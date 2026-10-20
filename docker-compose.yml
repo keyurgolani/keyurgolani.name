@@ -23,7 +23,7 @@ services:
         - node
         - -e
         # Same probe as the image HEALTHCHECK (see the Dockerfile).
-        - "const h=process.env.HOSTNAME;fetch('http://'+(!h||h==='0.0.0.0'||h==='::'?'127.0.0.1':h)+':'+(process.env.PORT||3000)+'/api/health',{signal:AbortSignal.timeout(4000)}).then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"
+        - "const h=process.env.HOSTNAME;const a=!h||h==='0.0.0.0'||h==='::'?'127.0.0.1':h.includes(':')?'['+h+']':h;fetch('http://'+a+':'+(process.env.PORT||3000)+'/api/health',{signal:AbortSignal.timeout(4000)}).then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"
       interval: 30s
       timeout: 5s
       retries: 3

@@ -10,6 +10,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { startProxyStack } from '../tests/harness/proxy-stack.mjs';
+import { assessRoutes } from './lib/container.mjs';
 import {
   currentGate,
   REPO_ROOT,
@@ -80,25 +81,22 @@ async function main() {
       );
     }
     // The app's network is `internal: true`, so the app has no route out.
-    // Docker enforces that; nerdctl (Finch) ignores the flag, so there it is
-    // only reported.
-    const routes = stack.exec('app', ['ip', 'route']);
-    const egress = /^default /m.test(routes.stdout ?? '');
-    if (egress && stack.cli === 'docker') {
+    // Docker enforces that; nerdctl Compose (Finch) ignores the flag, so there
+    // it is only reported.
+    const routes = assessRoutes(stack.exec('app', ['ip', 'route']), stack.cli === 'docker');
+    if (!routes.ok) {
       return fail(
-        'the app container has a default route out of the internal network',
+        `the app container: ${routes.message}`,
         {
           test: 'app runs on an internal network',
           expected: 'no default route',
-          actual: (routes.stdout ?? '').split('\n')[0],
+          actual: routes.message,
         },
         stack.logs(),
       );
     }
     console.log(
-      egress
-        ? `[proxy] warning: ${stack.cli} ignores internal networks, so the app has a route out`
-        : '[proxy] the app has no route out of the internal network',
+      `[proxy] app: ${routes.warning ? `warning: ${stack.cli}: ${routes.warning}` : routes.message}`,
     );
     console.log(`[proxy] passed`);
     return 0;
