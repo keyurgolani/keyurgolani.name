@@ -30,7 +30,8 @@ Before it takes a request, the server validates its settings and the portfolio. 
 - a required setting that is missing or malformed;
 - in production, a setting that doesn't apply to the profile, such as `GITHUB_TOKEN` under `read-only` (`pnpm dev` warns and ignores it);
 - `PORTFOLIO_PATH` or `NEXT_PUBLIC_BASE_URL`, which `PORTFOLIO_SOURCE_DIR` and `PORTFOLIO_ORIGIN` replaced;
-- a source directory that is missing or unreadable, that is a file rather than the directory holding it, that holds zero or several portfolio documents, or that holds a `portfolio.toml` (TOML is no longer read);
+- a source directory that is missing or unreadable, that is a file rather than the directory holding it, that holds zero or several portfolio documents, or that holds a `portfolio.toml`, which can only be the old format;
+- a portfolio in the old one-file format: no `schemaVersion`, and `identity`, `sections`, `variant`, `theme`, `motionPreference`, `colorScheme`, or `typography` at the top. It gets one `document_legacy` line, naming each old field and where it goes now, and nothing else is reported. [Migrating from the one-file format](#migrating-from-the-one-file-format) converts it;
 - a portfolio that isn't one plain YAML or JSON document (anchors, aliases, merge keys, tags, directives, and a second document are refused), that repeats a key in a mapping, that is over 1 MiB, nests more than 64 levels deep, or holds more than 10,000 entries in one mapping or list, that doesn't declare `schemaVersion: 2`, that fails the schema, or that gives two sections the same `id`;
 - a key the schema doesn't define, anywhere but inside `extensions` (the message suggests the closest allowed key), or a `url`, `src`, or `*Url` value that isn't an `https`, `http`, `mailto`, or `tel` URL, a relative path, or a `#fragment` (image sources may also be raster `data:image` URLs);
 - in production, an origin on a reserved example domain, or the bundled sample's `identity.name`.
@@ -54,6 +55,36 @@ To add a variant package or pick up a new release, rebuild:
 ```sh
 docker compose up --build
 ```
+
+### Migrating from the one-file format
+
+Earlier releases read one unversioned `portfolio.yml` that held the content and the appearance together. This release splits it into a portfolio document and a site document, both at `schemaVersion: 2`, and refuses the old file. `pnpm config:migrate` converts it, and changes nothing until you ask it to:
+
+```sh
+pnpm config:migrate config/portfolio.yml
+```
+
+It prints each field it moves and each value it fills in, the values it needs from you with the ids this build accepts, the section ids it gives, the old file's comments it can't keep, a diff of the new portfolio document, and the whole site document. The color scheme and typography always need a value: no old id carries over. Give each with `--set`, drop the keys the old schema ignored with `--drop-unknown` (or remove them from the file), then write both documents into a directory:
+
+```sh
+pnpm config:migrate config/portfolio.yml \
+  --set site.appearance.colorScheme=warm --set site.appearance.typography=classic \
+  --drop-unknown --write --out config/new
+```
+
+It never writes over a file and never changes the old one, so move the new `portfolio.yml` and `site.yml` into `config/` yourself. A JSON file becomes `portfolio.json` and `site.json`. The old `meta.url` has no place in either document; the migration prints its origin to use as `PORTFOLIO_ORIGIN`. Section ids come from the anchors the old navigation linked to, and `--set portfolio.sections.<n>.id=<id>` keeps any other. A `portfolio.toml` has to become YAML or JSON first.
+
+It exits 0 when the file is already current or nothing stopped the migration, 2 when it needs a value, a decision on unknown keys, or a fix for a problem the new documents would have, and 1 for anything else. `--summary` leaves every value from the documents out of the report, so it can go to a log.
+
+On a host without Node, run it in the image's build stage, with the old file's directory mounted. It needs no network:
+
+```sh
+docker build --target builder -t portfolio-builder .
+docker run --rm --network none -v "$PWD/config:/config" portfolio-builder \
+  pnpm config:migrate /config/portfolio.yml
+```
+
+Add the `--set`, `--drop-unknown`, and `--write --out /config/new` arguments to the second command to write the documents. They're written as root; `chown` them afterwards if the host needs another owner.
 
 ### Reverse proxy
 
