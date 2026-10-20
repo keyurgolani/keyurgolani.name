@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { randomBytes, scryptSync } from 'node:crypto';
 import { copyFileSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -28,6 +29,24 @@ const EXAMPLES = {
   site: fileURLToPath(new URL('../../../../site.example.yml', import.meta.url)),
 };
 const ORIGIN = 'https://rowan.test';
+
+/**
+ * A scrypt PHC string at the floor, made here rather than with
+ * @portfolio/core, which would load owner modules before the composition
+ * root does.
+ */
+function passwordHash(password: string): string {
+  const salt = randomBytes(16);
+  const key = scryptSync(password, salt, 32, {
+    N: 2 ** 17,
+    r: 8,
+    p: 1,
+    maxmem: 2 * 128 * 2 ** 17 * 8,
+  });
+  const base64 = (bytes: Buffer) => bytes.toString('base64').replace(/=+$/, '');
+  return `$scrypt$ln=17,r=8,p=1$${base64(salt)}$${base64(key)}`;
+}
+const HASH = passwordHash('composition owner passphrase');
 
 const PROVIDER: AuthProviderFactory = {
   name: 'test-double',
@@ -70,7 +89,7 @@ test.before(async () => {
       PORTFOLIO_PROFILE: 'owner',
       PORTFOLIO_ORIGIN: ORIGIN,
       PORTFOLIO_SOURCE_DIR: sourceDir,
-      PORTFOLIO_AUTH_PASSWORD_HASH: 'canary-password-hash',
+      PORTFOLIO_AUTH_PASSWORD_HASH: HASH,
       GITHUB_TOKEN: 'canary-github-token',
     },
     { cwd: '/' },
@@ -97,10 +116,16 @@ function studio(method: string, name: string, headers: Record<string, string> = 
 }
 
 test('owner loads its modules only through the composition root', () => {
-  assert.deepEqual(loadedOwnerModules(), [
+  // Owner code, then the auth.secret check, which reads the hash through
+  // @portfolio/core (#2).
+  assert.deepEqual([...loadedOwnerModules()].sort(), [
+    'core/auth/phc',
+    'core/auth/provider',
+    'core/owner',
+    'server/owner/auth-secret',
     'server/owner/config-status',
-    'server/owner/session-mint',
     'server/owner/index',
+    'server/owner/session-mint',
   ]);
   assert.deepEqual(state.degraded, []);
 });
@@ -136,6 +161,7 @@ test('config.status shows each secret as set and never a value or a path', async
   const response = await studio('GET', 'config.status', { 'x-test-session': 'owner' });
   const text = await response.text();
   assert.ok(!text.includes('canary'), text);
+  assert.ok(!text.includes(HASH) && !text.includes('$scrypt$'), text);
   assert.ok(!text.includes(sourceDir), text);
   const { data } = JSON.parse(text) as { data: Record<string, unknown> };
   assert.deepEqual(data.secrets, { PORTFOLIO_AUTH_PASSWORD_HASH: 'set', GITHUB_TOKEN: 'set' });

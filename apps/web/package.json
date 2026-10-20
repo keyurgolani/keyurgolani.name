@@ -14,6 +14,7 @@
     "test:profiles": "node ../../ci/test-profiles.mjs"
   },
   "dependencies": {
+    "@portfolio/core": "workspace:*",
     "@portfolio/kit": "workspace:*",
     "@portfolio/schema": "workspace:*",
     "@portfolio/variant-editorial": "workspace:*",

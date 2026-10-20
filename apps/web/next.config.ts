@@ -10,7 +10,12 @@ const config: NextConfig = {
   // with the standalone output. Nothing imports them, so the tracer can't
   // find them on its own.
   outputFileTracingIncludes: { '/**': ['../../portfolio.example.yml', '../../site.example.yml'] },
-  transpilePackages: ['@portfolio/schema', '@portfolio/kit', '@portfolio/variant-editorial'],
+  transpilePackages: [
+    '@portfolio/schema',
+    '@portfolio/kit',
+    '@portfolio/variant-editorial',
+    '@portfolio/core',
+  ],
   // No image optimizer: images render as plain <img>. Left on, /_next/image
   // sends its own CSP in place of the baseline one below and writes the
   // decoded url parameter to stderr as it came, so a visitor could forge log

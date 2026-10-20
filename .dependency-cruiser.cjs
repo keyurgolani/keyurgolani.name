@@ -22,10 +22,16 @@ module.exports = {
       severity: 'error',
       comment:
         'Owner code loads only through the composition root, so demo and read-only never ' +
-        'evaluate it (#1, item 14). That includes the owner modules @portfolio/core exports. ' +
-        'Tests may import it.',
-      from: { pathNot: ['^apps/web/src/server/(owner/|composition\\.ts$)', '\\.test\\.tsx?$'] },
-      to: { path: ['^apps/web/src/server/owner/', '^packages/core/src/owner([./]|$)'] },
+        'evaluate it (#1, item 14). All of @portfolio/core is owner code (#2), and its modules ' +
+        'import each other. Tests may import it.',
+      from: {
+        pathNot: [
+          '^apps/web/src/server/(owner/|composition\\.ts$)',
+          '^packages/core/',
+          '\\.test\\.(?:tsx?|mjs)$',
+        ],
+      },
+      to: { path: ['^apps/web/src/server/owner/', '^packages/core/'] },
     },
     {
       name: 'composition-loads-owner-code-only-through-import',
@@ -35,7 +41,7 @@ module.exports = {
         'code only through import() in its owner branch, never a static or type import (#1, item 14).',
       from: { path: '^apps/web/src/server/composition\\.ts$' },
       to: {
-        path: ['^apps/web/src/server/owner/', '^packages/core/src/owner([./]|$)'],
+        path: ['^apps/web/src/server/owner/', '^packages/core/'],
         dependencyTypesNot: ['dynamic-import'],
       },
     },

@@ -1,5 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import {
   DEPLOYMENT_KEYS,
   issueLogLine,
@@ -24,10 +28,25 @@ const noFiles = (file: string): string => {
   throw new Error(`no such file: ${file}`);
 };
 
-function read(env: Env, files: Record<string, string> = {}): ReadConfigResult {
+/** What the stat double says of a file: a regular one, mode 0400, unless a test says otherwise. */
+interface FakeStat {
+  readonly regular?: boolean;
+  readonly mode?: number;
+}
+
+function read(
+  env: Env,
+  files: Record<string, string> = {},
+  stats: Record<string, FakeStat> = {},
+): ReadConfigResult {
   return readDeploymentConfig(env, {
     cwd: '/srv/app',
     readFile: (file) => (file in files ? files[file]! : noFiles(file)),
+    statFile: (file) => {
+      if (!(file in files) && !(file in stats)) noFiles(file);
+      const { regular = true, mode = 0o400 } = stats[file] ?? {};
+      return { isFile: () => regular, mode: (regular ? 0o100000 : 0o040000) | mode };
+    },
   });
 }
 
@@ -184,6 +203,105 @@ test('an unreadable _FILE is fatal and named by its _FILE key', () => {
   assert.equal(result.ok, false);
   assert.deepEqual(findings(result), ['PORTFOLIO_AUTH_PASSWORD_HASH_FILE:file_unreadable']);
   assertSilentAbout(result, 'canary-missing-hash');
+});
+
+test('a password hash file that is not a regular file, or that group or others can write, is fatal and never read', () => {
+  const owner = {
+    ...BASE,
+    PORTFOLIO_PROFILE: 'owner',
+    PORTFOLIO_AUTH_PASSWORD_HASH_FILE: '/run/secrets/canary-hash',
+  };
+  const cases: [FakeStat, string][] = [
+    [{ regular: false, mode: 0o700 }, 'file_not_regular'],
+    [{ mode: 0o620 }, 'file_writable'],
+    [{ mode: 0o602 }, 'file_writable'],
+    [{ mode: 0o666 }, 'file_writable'],
+  ];
+  for (const [stat, code] of cases) {
+    const result = readDeploymentConfig(owner, {
+      cwd: '/srv/app',
+      readFile: () => assert.fail('a refused hash file is never read'),
+      statFile: () => ({
+        isFile: () => stat.regular ?? true,
+        mode: (stat.regular === false ? 0o040000 : 0o100000) | (stat.mode ?? 0o400),
+      }),
+    });
+    assert.equal(result.ok, false);
+    assert.deepEqual(findings(result), [`PORTFOLIO_AUTH_PASSWORD_HASH_FILE:${code}`]);
+    assertSilentAbout(result, 'canary-hash');
+  }
+  // Owner read and owner read-write are fine, and so is a group that only reads.
+  for (const mode of [0o400, 0o600, 0o440, 0o444]) {
+    const result = read(
+      owner,
+      { '/run/secrets/canary-hash': 'h\n' },
+      { '/run/secrets/canary-hash': { mode } },
+    );
+    assert.equal(result.ok, true, mode.toString(8));
+  }
+  // Other keys' files take any mode.
+  const hops = read(
+    { ...BASE, PORTFOLIO_TRUSTED_PROXY_HOPS_FILE: '/run/hops' },
+    { '/run/hops': '1' },
+    { '/run/hops': { mode: 0o666 } },
+  );
+  assert.equal(hops.ok, true);
+});
+
+test('the config records which variable supplied the password hash', () => {
+  const owner = { ...BASE, PORTFOLIO_PROFILE: 'owner' };
+  const direct = read({ ...owner, PORTFOLIO_AUTH_PASSWORD_HASH: 'h' });
+  assert.ok(direct.ok);
+  assert.deepEqual(direct.config.secretKeys, { authPasswordHash: 'PORTFOLIO_AUTH_PASSWORD_HASH' });
+  const file = read(
+    { ...owner, PORTFOLIO_AUTH_PASSWORD_HASH_FILE: '/run/secrets/hash' },
+    { '/run/secrets/hash': 'h\n' },
+  );
+  assert.ok(file.ok);
+  assert.equal(file.config.secrets.authPasswordHash, 'h');
+  assert.deepEqual(file.config.secretKeys, {
+    authPasswordHash: 'PORTFOLIO_AUTH_PASSWORD_HASH_FILE',
+  });
+  const none = read(owner);
+  assert.ok(none.ok);
+  assert.equal(none.config.secretKeys, undefined);
+});
+
+test('a _FILE that is not a regular file is fatal for any key, and never read', () => {
+  const cases = [
+    'PORTFOLIO_ORIGIN_FILE',
+    'PORTFOLIO_TRUSTED_PROXY_HOPS_FILE',
+    'PORTFOLIO_SOURCE_DIR_FILE',
+  ];
+  for (const fileKey of cases) {
+    const result = readDeploymentConfig(
+      { ...BASE, [fileKey.replace(/_FILE$/, '')]: undefined, [fileKey]: '/run/canary-dir' },
+      {
+        cwd: '/srv/app',
+        readFile: () => assert.fail('a file that is not regular is never read'),
+        statFile: () => ({ isFile: () => false, mode: 0o040755 }),
+      },
+    );
+    assert.equal(result.ok, false, fileKey);
+    assert.ok(findings(result).includes(`${fileKey}:file_not_regular`), fileKey);
+    assertSilentAbout(result, 'canary-dir');
+  }
+});
+
+test('a FIFO named by a _FILE stops startup rather than hanging it', (t) => {
+  if (process.platform === 'win32') return t.skip('no mkfifo');
+  const dir = mkdtempSync(path.join(tmpdir(), 'config-fifo-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const fifo = path.join(dir, 'hops');
+  assert.equal(spawnSync('mkfifo', [fifo]).status, 0, 'mkfifo');
+  // A read of the FIFO would block until a writer came, which none does.
+  const result = readDeploymentConfig(
+    { ...BASE, PORTFOLIO_TRUSTED_PROXY_HOPS_FILE: fifo },
+    {
+      cwd: '/srv/app',
+    },
+  );
+  assert.deepEqual(findings(result), ['PORTFOLIO_TRUSTED_PROXY_HOPS_FILE:file_not_regular']);
 });
 
 test('a _FILE supplies the value with one trailing newline trimmed', () => {
