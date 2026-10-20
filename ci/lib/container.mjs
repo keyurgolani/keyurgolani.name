@@ -62,8 +62,9 @@ function requestsFromInside(requests) {
 
 /**
  * Lists files under `root` (outside node_modules) that must not ship: any
- * portfolio.* except the example, .env*, .git, and the tests, ci, and reports
- * trees. Prints JSON: { problems, example }.
+ * portfolio.* except the example, a site document, .env*, .git, and the
+ * tests, ci, and reports trees. Prints JSON: { problems, example }, where
+ * `example` says both bundled examples are there.
  */
 function scanFromInside(root) {
   const fs = process.getBuiltinModule('node:fs');
@@ -76,6 +77,7 @@ function scanFromInside(root) {
       const name = entry.name;
       const banned =
         (name.startsWith('portfolio.') && name !== 'portfolio.example.yml') ||
+        /^site\.(?:yml|yaml|json)$/.test(name) ||
         name.startsWith('.env') ||
         name === '.git' ||
         (entry.isDirectory() && ['tests', 'ci', 'reports'].includes(name));
@@ -84,7 +86,9 @@ function scanFromInside(root) {
     }
   };
   walk(root);
-  const example = fs.existsSync(path.join(root, 'portfolio.example.yml'));
+  const example = ['portfolio.example.yml', 'site.example.yml'].every((file) =>
+    fs.existsSync(path.join(root, file)),
+  );
   process.stdout.write(JSON.stringify({ problems, example }));
 }
 
