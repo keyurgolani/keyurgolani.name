@@ -24,3 +24,7 @@ sections:
     ctas:
       - url: '#contact'
         label: Get in touch
+
+  - kind: contact
+    id: contact
+    title: Contact
