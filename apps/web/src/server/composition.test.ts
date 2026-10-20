@@ -4,10 +4,12 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { BUNDLED_SAMPLE_NAMES } from './catalog-documents';
 import { compose, STARTUP_REQUIREMENTS, type StartupRequirement } from './composition';
 import { readDeploymentConfig, type ConfigIssue, type Env } from './config';
 import { setDeploymentState } from './config-store';
 import { loadedOwnerModules } from './load-trace';
+import { listOperations } from './operations';
 
 // The composition root for profiles that never load owner code. Owner with a
 // provider, which does, has its own file: the load trace is per process.
@@ -68,7 +70,7 @@ test('owner refuses to start with no provider, before it loads owner code', asyn
   assert.deepEqual(loadedOwnerModules(), []);
 });
 
-test('demo refuses to start until its sample catalog ships', async () => {
+test('demo builds the bundled sample and loads no owner module', async (t) => {
   const read = readDeploymentConfig(
     {
       NODE_ENV: 'production',
@@ -77,14 +79,30 @@ test('demo refuses to start until its sample catalog ships', async () => {
     },
     { cwd: '/' },
   );
-  assert.ok(read.ok);
+  assert.ok(read.ok, JSON.stringify(read.issues));
   const composed = await compose(inputs(read.config));
-  assert.equal(composed.ok, false);
-  assert.deepEqual(
-    composed.issues.map((issue) => issue.code),
-    ['profile_unavailable'],
-  );
+  assert.ok(composed.ok, JSON.stringify(composed.issues));
+  assert.ok(Object.isFrozen(composed.state));
+  const live = await composed.state.catalog.getLive();
+  assert.ok(BUNDLED_SAMPLE_NAMES.includes(live.unit.portfolio.identity.name));
+  assert.match(live.revisionId, /^sample-/);
   assert.deepEqual(loadedOwnerModules(), []);
+
+  // Its transport answers every registered operation with the 404 envelope.
+  setDeploymentState(composed.state);
+  t.after(() => setDeploymentState(undefined));
+  for (const operation of listOperations()) {
+    for (const method of ['GET', 'POST']) {
+      const response = await composed.state.dispatch(
+        new Request(`https://demo.rowan.test/api/studio/${operation.name}`, { method }),
+        operation.name,
+      );
+      assert.equal(response.status, 404, `${method} ${operation.name}`);
+      const { error } = (await response.json()) as { error: { code: string } };
+      assert.equal(error.code, 'not_available_in_profile');
+      assert.equal(response.headers.get('set-cookie'), null);
+    }
+  }
 });
 
 test('the tagged startup rows are named requirements for #2, #3, and #4', () => {

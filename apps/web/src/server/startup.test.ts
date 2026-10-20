@@ -82,10 +82,20 @@ test('owner reports configuration problems before the missing provider', async (
   ]);
 });
 
-test('demo refuses to start in this build', async () => {
+test('demo starts on the bundled sample, and never reads a source directory', async (t) => {
   const result = await start({ ...PRODUCTION, PORTFOLIO_PROFILE: 'demo' });
-  assert.equal(result.ok, false);
-  assert.deepEqual(fatalCodes(result), ['PORTFOLIO_PROFILE:profile_unavailable']);
+  assert.equal(result.ok, true, JSON.stringify(result.issues));
+  if (!result.ok) return;
+  assert.equal(result.profile, 'demo');
+  const live = await result.state.catalog.getLive();
+  assert.equal(live.unit.portfolio.identity.name, 'Anamika Devi');
+
+  const withSource = await start({
+    ...PRODUCTION,
+    PORTFOLIO_PROFILE: 'demo',
+    PORTFOLIO_SOURCE_DIR: sourceDir(t, VALID),
+  });
+  assert.deepEqual(fatalCodes(withSource), ['PORTFOLIO_SOURCE_DIR:not_in_profile']);
 });
 
 test('read-only with an old-shape document reports the document', async (t) => {

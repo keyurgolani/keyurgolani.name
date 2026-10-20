@@ -18,7 +18,8 @@ export interface LiveRevision {
 
 /**
  * Where the published catalog comes from. register() builds one adapter per
- * deployment: the mounted documents for `read-only`, today.
+ * deployment: the mounted documents for `read-only` and, until #3, `owner`,
+ * and the bundled sample for `demo`.
  */
 export interface CatalogReader {
   getLive(): Promise<LiveRevision>;

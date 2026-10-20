@@ -12,6 +12,7 @@ import {
 } from '@portfolio/schema';
 import type { CatalogReader, LiveRevision } from './catalog-port';
 import type { ConfigIssue, RuntimeMode } from './config';
+import { deepFreeze } from './freeze';
 
 // The documents adapter: the CatalogReader for a mounted PORTFOLIO_SOURCE_DIR.
 // It reads the one portfolio document once at startup, validates it, and
@@ -278,12 +279,4 @@ function isSampleIdentity(name: string): boolean {
   const normalize = (value: string) =>
     value.normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase();
   return BUNDLED_SAMPLE_NAMES.some((sample) => normalize(sample) === normalize(name));
-}
-
-function deepFreeze<T>(value: T): T {
-  if (value !== null && typeof value === 'object' && !Object.isFrozen(value)) {
-    Object.freeze(value);
-    for (const child of Object.values(value)) deepFreeze(child);
-  }
-  return value;
 }
