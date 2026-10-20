@@ -158,7 +158,7 @@ Add `includeSubDomains` only when every subdomain serves HTTPS.
 
 ## Startup checks
 
-Before it takes a request, the server validates its settings and the two documents. A problem stops it with exit code 1 and one `config.fatal` JSON line per problem on stdout. Each line names the setting, never its value, and for a document adds the diagnostic code, the file, the JSON pointer, the line and column, and what to do about it.
+Before it takes a request, the server validates its settings and the two documents. A problem stops it with exit code 1 and one `config.fatal` JSON line per problem on stdout. Each line names the setting, never its value, and for a document adds the diagnostic code, the file, the JSON pointer, the line and column, and what to do about it. [configuration.md](configuration.md#validation) explains every code.
 
 | The server finds                                                                                                                                                                                            | Profiles         | It                                                                                                  |
 | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- | --------------------------------------------------------------------------------------------------- |

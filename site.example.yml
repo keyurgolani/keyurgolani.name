@@ -6,7 +6,8 @@
 # How the portfolio is presented and which product behavior is on. No
 # deployment setting (profile, origin, Studio, preview origin, proxies) and no
 # secret: those come from the environment (docs/deployment.md)
-# Check both documents with `pnpm config:validate config`
+# Check both documents with `pnpm config:validate config`, and see
+# docs/configuration.md for every field
 # ────────────────────────────────────────────────────────────────────────────
 
 schemaVersion: 2
