@@ -5,19 +5,25 @@
  * runs this file with tsx.
  *
  *   pnpm config:migrate <old-file> [--set <portfolio|site>.<path>=<value>]...
- *     [--drop-unknown] [--summary] [--write --out <dir>]
+ *     [--drop-unknown] [--origin <url>] [--summary] [--write --out <dir>]
  *
  * migrate reads a file in the old one-file format and prints what this
  * release's portfolio and site documents would be: each field it moves, the
  * values it needs with the ids this build accepts, the section ids it gives,
- * the comments it can't keep, a diff of the portfolio document, and the
- * whole site document. It writes nothing without --write, never over a file
- * that exists, and never to the old file.
+ * the comments it can't keep, the new pair's diagnostics, a diff of the
+ * portfolio document, and the whole site document. It writes nothing without
+ * --write, never over a file that exists, and never to the old file. While
+ * the old file holds secret-shaped text, it shows where, and no value, diff,
+ * or document.
  *
  *   --set <path>=<value>  A value the migration needs, such as
  *                         site.appearance.colorScheme=warm. One per value.
  *   --drop-unknown        Drop the keys the old schema dropped when it read
  *                         the file, instead of stopping on them.
+ *   --origin <url>        The site's real public origin, such as
+ *                         https://example.com, to check the new pair's links
+ *                         against. Without it, those checks are listed as not
+ *                         checked; the old meta.url is never used for them.
  *   --summary             Leave every value the documents hold out of the
  *                         report, so it can go to a log.
  *   --write               Write portfolio.yml and site.yml (portfolio.json
@@ -28,7 +34,8 @@
  * migration (with --write, once both documents are written); 2 when it needs
  * a value, a decision on unknown keys, or a fix for a problem the new
  * documents would have; 1 for anything else, such as a bad argument, a file
- * it can't read or migrate, or a document already at --out.
+ * it can't read or migrate, a document already at --out, or an --out it
+ * can't write into.
  *
  * Relative paths are taken from the directory pnpm ran in (INIT_CWD).
  */
@@ -57,13 +64,24 @@ async function hostCatalog() {
 
 const USAGE = [
   'Usage: pnpm config:migrate <old-file> [--set <portfolio|site>.<path>=<value>]...',
-  '         [--drop-unknown] [--summary] [--write --out <dir>]',
+  '         [--drop-unknown] [--origin <url>] [--summary] [--write --out <dir>]',
 ].join('\n');
 
 class UsageError extends Error {}
 
 /** A file the migration won't write, because something holds its name. */
 class InTheWay extends Error {}
+
+/** A bare http or https origin, as startup takes PORTFOLIO_ORIGIN, or undefined. */
+function bareOrigin(value) {
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    return undefined;
+  }
+  return /^https?:$/.test(url.protocol) && url.origin === value ? url.origin : undefined;
+}
 
 /** Reads at most `limit` bytes: the parser refuses a longer document anyway. */
 function readBounded(file, limit) {
@@ -84,16 +102,25 @@ function readBounded(file, limit) {
 
 /**
  * Creates `file` with `text`, never over anything: the text goes to a temp
- * file beside it, then a hard link gives it the name, which fails when the
- * name is taken. Where the file system has no hard links, a rename does,
- * after checking the name is still free.
+ * file beside it, synced to disk, then a hard link gives it the name, which
+ * fails when the name is taken. Where the file system has no hard links, a
+ * rename does, after checking the name is still free.
  */
 function writeNew(file, text) {
   const temp = path.join(
     path.dirname(file),
     `.${path.basename(file)}.${process.pid}.${randomBytes(6).toString('hex')}.tmp`,
   );
-  fs.writeFileSync(temp, text, { flag: 'wx' });
+  const fd = fs.openSync(temp, 'wx');
+  try {
+    fs.writeFileSync(fd, text);
+    fs.fsyncSync(fd);
+  } catch (error) {
+    fs.closeSync(fd);
+    fs.rmSync(temp, { force: true });
+    throw error;
+  }
+  fs.closeSync(fd);
   try {
     try {
       fs.linkSync(temp, file);
@@ -114,6 +141,7 @@ async function migrateCommand(args) {
     options: {
       set: { type: 'string', multiple: true, default: [] },
       'drop-unknown': { type: 'boolean', default: false },
+      origin: { type: 'string' },
       summary: { type: 'boolean', default: false },
       write: { type: 'boolean', default: false },
       out: { type: 'string' },
@@ -132,6 +160,10 @@ async function migrateCommand(args) {
     set = values.set.map(parseSet);
   } catch (error) {
     throw new UsageError(error.message);
+  }
+  const origin = values.origin === undefined ? undefined : bareOrigin(values.origin);
+  if (values.origin !== undefined && origin === undefined) {
+    throw new UsageError('--origin takes an origin alone, such as https://example.com.');
   }
 
   const base = process.env.INIT_CWD || process.cwd();
@@ -159,7 +191,12 @@ async function migrateCommand(args) {
 
   const migration = migrate(
     { text, format },
-    { set, dropUnknown: values['drop-unknown'], ...(await hostCatalog()) },
+    {
+      set,
+      dropUnknown: values['drop-unknown'],
+      ...(origin ? { origin } : {}),
+      ...(await hostCatalog()),
+    },
   );
   // Secret-shaped text never reaches the terminal or a log, even from the
   // owner's own file: the report flags it instead.
@@ -201,11 +238,22 @@ async function migrateCommand(args) {
       throw error;
     }
   } catch (error) {
-    if (!(error instanceof InTheWay)) throw error;
-    process.stderr.write(
-      `${shown(error.message)} already exists. The migration never replaces a file: pick another --out, or move that file away first. Nothing was written.\n`,
-    );
-    return 1;
+    if (error instanceof InTheWay) {
+      process.stderr.write(
+        `${shown(error.message)} already exists. The migration never replaces a file: pick another --out, or move that file away first. Nothing was written.\n`,
+      );
+      return 1;
+    }
+    // A file in the way of the directory, no permission, a full disk: one
+    // line, never a stack trace.
+    if (typeof error?.code === 'string') {
+      const why = ['EEXIST', 'ENOTDIR'].includes(error.code)
+        ? `${shown(out)} isn't a directory`
+        : `Can't write into ${shown(out)} (${error.code})`;
+      process.stderr.write(`${why}. Nothing was written.\n`);
+      return 1;
+    }
+    throw error;
   }
   process.stdout.write(`\nWrote ${targets.map(([target]) => shown(target)).join(' and ')}.\n`);
   return 0;

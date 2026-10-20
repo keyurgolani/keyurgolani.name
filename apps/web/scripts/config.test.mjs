@@ -2,10 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import {
+  chmodSync,
   copyFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -148,9 +150,44 @@ test('bad arguments, a TOML file, and a file it cannot read exit 1', (t) => {
       /is TOML, which this release doesn't read\. Convert it to YAML or JSON first/,
     ],
     [['missing.yml'], /Can't read missing\.yml \(ENOENT\)\./],
+    [['owner.yml', '--origin', 'https://rowan.test/blog'], /--origin takes an origin alone/],
   ]) {
     const run = migrate(dir, ...args);
     assert.equal(run.code, 1, `${args.join(' ')}: ${run.stdout}${run.stderr}`);
     assert.match(run.stderr, message, args.join(' '));
   }
+});
+
+test('an --out it cannot write into is one line and exit 1, never a stack trace', (t) => {
+  const dir = scratch(t);
+  const write = ['owner.yml', ...BASELINE, '--drop-unknown', '--write', '--out'];
+  writeFileSync(path.join(dir, 'a-file'), '');
+  const file = migrate(dir, ...write, 'a-file');
+  assert.equal(file.code, 1, file.stderr);
+  assert.equal(file.stderr, "a-file isn't a directory. Nothing was written.\n");
+  if (process.getuid?.() !== 0) {
+    const locked = path.join(dir, 'locked');
+    mkdirSync(locked, { mode: 0o500 });
+    try {
+      const denied = migrate(dir, ...write, 'locked');
+      assert.equal(denied.code, 1, denied.stderr);
+      assert.equal(denied.stderr, "Can't write into locked (EACCES). Nothing was written.\n");
+      assert.deepEqual(readdirSync(locked), []);
+    } finally {
+      chmodSync(locked, 0o700);
+    }
+  }
+});
+
+test('the report names the file as given, and its command quotes it for the shell', (t) => {
+  const dir = scratch(t);
+  mkdirSync(path.join(dir, 'old files'));
+  copyFileSync(path.join(dir, 'owner.yml'), path.join(dir, 'old files', 'owner.yml'));
+  const run = migrate(dir, 'old files/owner.yml', ...BASELINE, '--drop-unknown');
+  assert.equal(run.code, 0, run.stderr);
+  assert.match(run.stdout, /^old files\/owner\.yml is in the old one-file format/);
+  assert.match(
+    run.stdout,
+    /\nNothing stops the migration\. pnpm config:migrate 'old files\/owner\.yml' --set site\.appearance\.colorScheme=warm --set site\.appearance\.typography=classic --drop-unknown --write --out <dir> /,
+  );
 });
