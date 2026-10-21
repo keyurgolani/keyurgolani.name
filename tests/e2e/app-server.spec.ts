@@ -5,7 +5,8 @@ import { expect, test } from '@playwright/test';
 import { startApp } from '../harness/app-server.mjs';
 
 test('a start on a taken port moves to a free one, and the log holds only the start that answered', async () => {
-  const holder = net.createServer();
+  // It drops every connection, so the server's health checks fail fast.
+  const holder = net.createServer((socket) => socket.destroy());
   await new Promise<void>((resolve) => holder.listen(0, '127.0.0.1', resolve));
   const taken = (holder.address() as net.AddressInfo).port;
   try {

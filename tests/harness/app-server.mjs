@@ -180,6 +180,8 @@ export async function startApp({
           what: 'the app to answer GET /api/health',
         },
       );
+      // A server that lost its port can exit while another process answers.
+      if (server.exited) throw new Error('the app exited while another process answered its port');
       break;
     } catch (error) {
       await halt(server);
