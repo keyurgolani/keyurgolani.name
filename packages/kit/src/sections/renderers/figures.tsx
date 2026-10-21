@@ -1,10 +1,10 @@
 import type { ExternalPortfolios, FunFacts, Focus, Github, Stats, Tenure } from '@portfolio/schema';
-import { formatStatValue } from '../../format';
 import {
-  deeper,
-  Heading,
+  formatFigure,
   hrefFor,
+  ItemTitle,
   Meta,
+  present,
   renderContext,
   SectionHeader,
   TagList,
@@ -20,12 +20,12 @@ export function StatsSection({ section, input, level }: SectionRendererProps<Sta
   return (
     <>
       <SectionHeader section={section} ctx={ctx} />
-      <ul className="pf-stats">
+      <ul className="pf-stats" role="list">
         {section.items.map((item, index) => (
           <li key={index} className="pf-stat" data-metric={item.metric}>
-            <p className="pf-stat__value">{formatStatValue(item.value, ctx.locale)}</p>
-            <p className="pf-stat__label">{item.label}</p>
-            {item.description !== undefined ? (
+            <p className="pf-stat__value">{formatFigure(item.value, ctx)}</p>
+            {present(item.label) ? <p className="pf-stat__label">{item.label}</p> : null}
+            {present(item.description) ? (
               <p className="pf-stat__description">{item.description}</p>
             ) : null}
           </li>
@@ -63,11 +63,11 @@ export function TenureSection({ section, input, level }: SectionRendererProps<Te
       <SectionHeader section={section} ctx={ctx} />
       {section.years !== undefined ? (
         <p className="pf-tenure">
-          <span className="pf-tenure__years">{formatStatValue(section.years, ctx.locale)}+</span>{' '}
+          <span className="pf-tenure__years">{formatFigure(section.years, ctx)}+</span>{' '}
           <Ui ctx={ctx}>years</Ui>
         </p>
       ) : null}
-      {section.summary !== undefined ? <p className="pf-message">{section.summary}</p> : null}
+      {present(section.summary) ? <p className="pf-message">{section.summary}</p> : null}
     </>
   );
 }
@@ -86,14 +86,12 @@ export function ExternalPortfoliosSection({
   return (
     <>
       <SectionHeader section={section} ctx={ctx} fallback="Elsewhere" />
-      <ul className="pf-list">
+      <ul className="pf-list" role="list">
         {section.items.map((item, index) => (
           <li key={index} className="pf-item" data-icon={item.iconName}>
-            <Heading level={deeper(level)} className="pf-item__title">
-              {item.brandName}
-            </Heading>
+            <ItemTitle text={item.brandName} ctx={ctx} />
             <Meta parts={[item.locationLabel]} />
-            {item.description !== undefined ? <p>{item.description}</p> : null}
+            {present(item.description) ? <p>{item.description}</p> : null}
             <TagList items={item.categories} />
             {item.highlights?.length ? (
               <dl className="pf-facts">
@@ -107,9 +105,9 @@ export function ExternalPortfoliosSection({
             ) : null}
             <p className="pf-external-link">
               <a className="pf-action" href={hrefFor(item.url, input)}>
-                {item.buttonText ?? item.urlLabel ?? item.brandName}
+                {[item.buttonText, item.urlLabel, item.brandName].find(present) ?? item.url}
               </a>
-              {item.buttonText !== undefined && item.urlLabel !== undefined ? (
+              {present(item.buttonText) && present(item.urlLabel) ? (
                 <>
                   {' '}
                   <span className="pf-url">{item.urlLabel}</span>

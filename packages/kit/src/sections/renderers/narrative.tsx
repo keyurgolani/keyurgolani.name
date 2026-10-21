@@ -1,34 +1,49 @@
 import type { Hero, Lede, Now } from '@portfolio/schema';
-import { Heading, LabeledDate, LinkText, Meta, renderContext, SectionHeader } from '../primitives';
+import {
+  ContentImage,
+  Heading,
+  LabeledDate,
+  LinkText,
+  Meta,
+  present,
+  renderContext,
+  SectionHeader,
+} from '../primitives';
 import { RichText } from '../rich-text';
 import type { SectionRendererProps } from '../types';
 
 /**
  * The opening. Its heading is the name, at the level the caller gives, which
- * is 1 when the hero carries the page's h1. A title is a label above it.
+ * is 1 when the hero carries the page's h1. A title is a label above it. The
+ * identity's name and tagline show unless the hero has its own, and its
+ * avatar, pronouns, and location always do.
  */
 export function HeroSection({ section, input, level }: SectionRendererProps<Hero>) {
   const ctx = renderContext(input, section, level);
   const { identity } = input.portfolio;
-  const tagline = section.tagline ?? identity.tagline;
+  const name = present(section.name) ? section.name : identity.name;
+  const tagline = present(section.tagline) ? section.tagline : identity.tagline;
   return (
     <div className="pf-hero">
-      {section.title !== undefined ? <p className="pf-hero__label">{section.title}</p> : null}
-      {section.greeting !== undefined ? (
-        <p className="pf-hero__greeting">{section.greeting}</p>
+      {present(section.title) ? <p className="pf-hero__label">{section.title}</p> : null}
+      {present(section.greeting) ? <p className="pf-hero__greeting">{section.greeting}</p> : null}
+      {identity.avatar ? (
+        // The name beside it says who it shows.
+        <ContentImage image={identity.avatar} ctx={ctx} className="pf-avatar" inline decorative />
       ) : null}
       <Heading level={level} className="pf-hero__name">
-        {section.name ?? identity.name}
+        {name}
       </Heading>
-      {section.subtitle !== undefined ? (
+      {present(section.subtitle) ? (
         <p className="pf-section__subtitle">{section.subtitle}</p>
       ) : null}
-      {tagline !== undefined ? <p className="pf-hero__tagline">{tagline}</p> : null}
-      {section.subtagline !== undefined ? (
+      {present(tagline) ? <p className="pf-hero__tagline">{tagline}</p> : null}
+      {present(section.subtagline) ? (
         <p className="pf-hero__subtagline">{section.subtagline}</p>
       ) : null}
+      <Meta parts={[identity.pronouns, identity.location]} className="pf-hero__details" />
       {section.ctas?.length ? (
-        <ul className="pf-actions">
+        <ul className="pf-actions" role="list">
           {section.ctas.map((link, index) => (
             <li key={index}>
               <LinkText link={link} ctx={ctx} className="pf-action" />
@@ -46,7 +61,7 @@ export function LedeSection({ section, input, level }: SectionRendererProps<Lede
   return (
     <>
       <SectionHeader section={section} ctx={ctx} />
-      <RichText source={section.body} className="pf-prose" />
+      <RichText source={section.body} className="pf-prose" input={input} />
     </>
   );
 }
@@ -63,7 +78,7 @@ export function NowSection({ section, input, level }: SectionRendererProps<Now>)
           ),
         ]}
       />
-      <RichText source={section.body} className="pf-prose" />
+      <RichText source={section.body} className="pf-prose" input={input} />
     </>
   );
 }

@@ -1,11 +1,21 @@
-import type { Contact, Cta } from '@portfolio/schema';
-import { LinkList, LinkText, renderContext, SectionHeader, Ui } from '../primitives';
+import type { Contact, Cta, Link } from '@portfolio/schema';
+import { LinkList, LinkText, present, renderContext, SectionHeader, Ui } from '../primitives';
 import type { SectionRendererProps } from '../types';
 
-/** A contact section without links of its own lists the portfolio's. */
+/**
+ * Ways to get in touch: the identity's email first, unless a link already
+ * points at it, then the section's own links, else the portfolio's.
+ */
 export function ContactSection({ section, input, level }: SectionRendererProps<Contact>) {
   const ctx = renderContext(input, section, level);
-  const links = section.links?.length ? section.links : input.portfolio.links;
+  const { identity, links: portfolioLinks } = input.portfolio;
+  const links = section.links?.length ? section.links : portfolioLinks;
+  const email = present(identity.email) ? identity.email.trim() : undefined;
+  const mailto = email !== undefined ? `mailto:${email}` : undefined;
+  const listed: readonly Link[] =
+    mailto !== undefined && !links.some((link) => link.url.toLowerCase() === mailto.toLowerCase())
+      ? [{ platform: 'email', url: mailto, label: email }, ...links]
+      : links;
   return (
     <>
       <SectionHeader section={section} ctx={ctx} fallback="Contact" />
@@ -14,8 +24,8 @@ export function ContactSection({ section, input, level }: SectionRendererProps<C
           <Ui ctx={ctx}>Available for new work</Ui>
         </p>
       ) : null}
-      {section.message !== undefined ? <p className="pf-message">{section.message}</p> : null}
-      <LinkList links={links} ctx={ctx} />
+      {present(section.message) ? <p className="pf-message">{section.message}</p> : null}
+      <LinkList links={listed} ctx={ctx} />
     </>
   );
 }
@@ -38,10 +48,12 @@ export function CtaSection({ section, input, level }: SectionRendererProps<Cta>)
   return (
     <>
       <SectionHeader section={section} ctx={ctx} />
-      {section.description !== undefined ? (
-        <p className="pf-message">{section.description}</p>
+      {present(section.description) ? <p className="pf-message">{section.description}</p> : null}
+      {actions.length ? (
+        <ul className="pf-actions" role="list">
+          {actions}
+        </ul>
       ) : null}
-      {actions.length ? <ul className="pf-actions">{actions}</ul> : null}
     </>
   );
 }

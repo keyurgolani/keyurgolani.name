@@ -2,12 +2,12 @@ import type { Press, Quote, Testimonials } from '@portfolio/schema';
 import {
   ContentImage,
   DateText,
-  deeper,
-  Heading,
   hrefFor,
+  ItemTitle,
   MaybeLink,
   Meta,
   NamedLinks,
+  present,
   renderContext,
   SectionHeader,
   Ui,
@@ -19,7 +19,7 @@ export function TestimonialsSection({ section, input, level }: SectionRendererPr
   return (
     <>
       <SectionHeader section={section} ctx={ctx} fallback="Testimonials" />
-      <ul className="pf-list">
+      <ul className="pf-list" role="list">
         {section.items.map((item, index) => (
           <li key={index} className="pf-item">
             <figure className="pf-quote">
@@ -30,7 +30,14 @@ export function TestimonialsSection({ section, input, level }: SectionRendererPr
               </blockquote>
               <figcaption>
                 {item.authorAvatar ? (
-                  <ContentImage image={item.authorAvatar} className="pf-avatar" inline />
+                  // The author's name beside it says who it shows.
+                  <ContentImage
+                    image={item.authorAvatar}
+                    ctx={ctx}
+                    className="pf-avatar"
+                    inline
+                    decorative
+                  />
                 ) : null}
                 <Meta
                   parts={[
@@ -56,18 +63,14 @@ export function PressSection({ section, input, level }: SectionRendererProps<Pre
   return (
     <>
       <SectionHeader section={section} ctx={ctx} fallback="Press" />
-      <ul className="pf-list">
+      <ul className="pf-list" role="list">
         {section.items.map((item, index) => (
           <li key={index} className="pf-item">
-            <Heading level={deeper(level)} className="pf-item__title">
-              <MaybeLink url={item.url} ctx={ctx}>
-                {item.title}
-              </MaybeLink>
-            </Heading>
+            <ItemTitle text={item.title} url={item.url} ctx={ctx} />
             <Meta
               parts={[
                 item.publication,
-                item.author !== undefined && (
+                present(item.author) && (
                   <span key="author">
                     <Ui ctx={ctx}>By</Ui> {item.author}
                   </span>
@@ -77,7 +80,7 @@ export function PressSection({ section, input, level }: SectionRendererProps<Pre
                 ),
               ]}
             />
-            {item.excerpt !== undefined ? (
+            {present(item.excerpt) ? (
               <blockquote className="pf-excerpt">
                 <p>{item.excerpt}</p>
               </blockquote>
@@ -93,7 +96,7 @@ export function PressSection({ section, input, level }: SectionRendererProps<Pre
 export function QuoteSection({ section, input, level }: SectionRendererProps<Quote>) {
   const ctx = renderContext(input, section, level);
   const cite = section.sourceUrl !== undefined ? hrefFor(section.sourceUrl, input) : undefined;
-  const hasCaption = section.attribution !== undefined || section.source !== undefined;
+  const hasCaption = present(section.attribution) || present(section.source);
   return (
     <>
       <SectionHeader section={section} ctx={ctx} />
@@ -106,7 +109,7 @@ export function QuoteSection({ section, input, level }: SectionRendererProps<Quo
             <Meta
               parts={[
                 section.attribution,
-                section.source !== undefined && (
+                present(section.source) && (
                   <cite key="source">
                     <MaybeLink url={section.sourceUrl} ctx={ctx}>
                       {section.source}
@@ -115,7 +118,7 @@ export function QuoteSection({ section, input, level }: SectionRendererProps<Quo
                 ),
               ]}
             />
-            {section.source === undefined ? (
+            {!present(section.source) ? (
               <NamedLinks links={[['Source', section.sourceUrl]]} ctx={ctx} />
             ) : null}
           </figcaption>

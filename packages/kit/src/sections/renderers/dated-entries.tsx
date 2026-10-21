@@ -13,15 +13,15 @@ import { formatEpisodeDuration } from '../../format';
 import {
   ContentImage,
   DateText,
-  deeper,
   formatNames,
-  Heading,
+  ItemTitle,
   LabeledDate,
   LinkList,
   MaybeLink,
   Meta,
   NamedLinks,
   PeriodText,
+  present,
   renderContext,
   SectionHeader,
   TagList,
@@ -45,6 +45,17 @@ const TALK_TYPES = {
 
 const PATENT_STATUSES = { granted: 'Granted', pending: 'Pending', expired: 'Expired' } as const;
 
+/**
+ * A DOI as written, without a `doi:` or resolver prefix, and the doi.org link
+ * to it, each `/`-separated part encoded, so a `#` or `?` in the DOI stays in
+ * its path. Nothing to link once the prefix is gone.
+ */
+export function doiLink(raw: string): { text: string; url: string } | undefined {
+  const text = raw.trim().replace(/^(?:doi:\s*|https?:\/\/(?:dx\.)?doi\.org\/)/i, '');
+  if (!present(text)) return undefined;
+  return { text, url: `https://doi.org/${text.split('/').map(encodeURIComponent).join('/')}` };
+}
+
 /** Labeled facts, such as a patent's inventors. Absent ones are left out. */
 function Facts({
   facts,
@@ -53,7 +64,7 @@ function Facts({
   facts: ReadonlyArray<readonly [label: string, value: string | undefined]>;
   ctx: RenderContext;
 }) {
-  const shown = facts.filter((fact): fact is readonly [string, string] => fact[1] !== undefined);
+  const shown = facts.filter((fact): fact is readonly [string, string] => present(fact[1]));
   if (shown.length === 0) return null;
   return (
     <dl className="pf-facts">
@@ -74,13 +85,14 @@ export function ExperienceSection({ section, input, level }: SectionRendererProp
   return (
     <>
       <SectionHeader section={section} ctx={ctx} fallback="Experience" />
-      <ul className="pf-list">
+      <ul className="pf-list" role="list">
         {section.items.map((item, index) => (
           <li key={index} className="pf-item">
-            {item.logo ? <ContentImage image={item.logo} className="pf-logo" inline /> : null}
-            <Heading level={deeper(level)} className="pf-item__title">
-              {item.role}
-            </Heading>
+            {item.logo ? (
+              // The organization's name beside it says whose logo it is.
+              <ContentImage image={item.logo} ctx={ctx} className="pf-logo" inline decorative />
+            ) : null}
+            <ItemTitle text={item.role} ctx={ctx} />
             <Meta
               parts={[
                 <MaybeLink key="organization" url={item.organizationUrl} ctx={ctx}>
@@ -90,7 +102,9 @@ export function ExperienceSection({ section, input, level }: SectionRendererProp
                 <PeriodText key="period" period={item.period} ctx={ctx} />,
               ]}
             />
-            {item.description !== undefined ? <RichText source={item.description} /> : null}
+            {present(item.description) ? (
+              <RichText source={item.description} input={input} />
+            ) : null}
             <TagList items={item.highlights} className="pf-highlights" />
             <TagList items={item.skills} />
           </li>
@@ -105,13 +119,14 @@ export function EducationSection({ section, input, level }: SectionRendererProps
   return (
     <>
       <SectionHeader section={section} ctx={ctx} fallback="Education" />
-      <ul className="pf-list">
+      <ul className="pf-list" role="list">
         {section.items.map((item, index) => (
           <li key={index} className="pf-item">
-            {item.logo ? <ContentImage image={item.logo} className="pf-logo" inline /> : null}
-            <Heading level={deeper(level)} className="pf-item__title">
-              {item.degree}
-            </Heading>
+            {item.logo ? (
+              // The institution's name beside it says whose logo it is.
+              <ContentImage image={item.logo} ctx={ctx} className="pf-logo" inline decorative />
+            ) : null}
+            <ItemTitle text={item.degree} ctx={ctx} />
             <Meta
               parts={[
                 item.field,
@@ -122,7 +137,9 @@ export function EducationSection({ section, input, level }: SectionRendererProps
                 <PeriodText key="period" period={item.period} ctx={ctx} />,
               ]}
             />
-            {item.description !== undefined ? <RichText source={item.description} /> : null}
+            {present(item.description) ? (
+              <RichText source={item.description} input={input} />
+            ) : null}
             <TagList items={item.achievements} className="pf-highlights" />
           </li>
         ))}
@@ -136,13 +153,14 @@ export function ProjectsSection({ section, input, level }: SectionRendererProps<
   return (
     <>
       <SectionHeader section={section} ctx={ctx} fallback="Projects" />
-      <ul className="pf-list">
+      <ul className="pf-list" role="list">
         {section.items.map((item, index) => (
           <li key={index} className="pf-item">
-            {item.image ? <ContentImage image={item.image} className="pf-cover" /> : null}
-            <Heading level={deeper(level)} className="pf-item__title">
-              {item.name}
-            </Heading>
+            {item.image ? (
+              // The project's name beside it says what the cover is of.
+              <ContentImage image={item.image} ctx={ctx} className="pf-cover" decorative />
+            ) : null}
+            <ItemTitle text={item.name} ctx={ctx} />
             <Meta
               parts={[
                 item.role,
@@ -150,17 +168,20 @@ export function ProjectsSection({ section, input, level }: SectionRendererProps<
                 item.period && <PeriodText key="period" period={item.period} ctx={ctx} />,
               ]}
             />
-            {item.summary !== undefined ? (
-              <RichText source={item.summary} className="pf-summary" />
+            {present(item.summary) ? (
+              <RichText source={item.summary} className="pf-summary" input={input} />
             ) : null}
-            {item.description !== undefined ? <RichText source={item.description} /> : null}
+            {present(item.description) ? (
+              <RichText source={item.description} input={input} />
+            ) : null}
             <TagList items={item.highlights} className="pf-highlights" />
             <TagList items={item.technologies} />
             {item.images?.length ? (
-              <ul className="pf-gallery">
+              <ul className="pf-gallery" role="list">
                 {item.images.map((image, imageIndex) => (
                   <li key={imageIndex}>
-                    <ContentImage image={image} />
+                    {/* Nothing beside a screenshot says what it shows, so without alt text it has none. */}
+                    <ContentImage image={image} ctx={ctx} />
                   </li>
                 ))}
               </ul>
@@ -178,14 +199,10 @@ export function WritingsSection({ section, input, level }: SectionRendererProps<
   return (
     <>
       <SectionHeader section={section} ctx={ctx} fallback="Writing" />
-      <ul className="pf-list">
+      <ul className="pf-list" role="list">
         {section.items.map((item, index) => (
           <li key={index} className="pf-item">
-            <Heading level={deeper(level)} className="pf-item__title">
-              <MaybeLink url={item.url} ctx={ctx}>
-                {item.title}
-              </MaybeLink>
-            </Heading>
+            <ItemTitle text={item.title} url={item.url} ctx={ctx} />
             <Meta
               parts={[
                 item.publication,
@@ -199,10 +216,10 @@ export function WritingsSection({ section, input, level }: SectionRendererProps<
                 ),
               ]}
             />
-            {item.summary !== undefined ? (
-              <RichText source={item.summary} className="pf-summary" />
+            {present(item.summary) ? (
+              <RichText source={item.summary} className="pf-summary" input={input} />
             ) : null}
-            {item.excerpt !== undefined ? (
+            {present(item.excerpt) ? (
               <blockquote className="pf-excerpt">
                 <p>{item.excerpt}</p>
               </blockquote>
@@ -220,43 +237,38 @@ export function PublicationsSection({ section, input, level }: SectionRendererPr
   return (
     <>
       <SectionHeader section={section} ctx={ctx} fallback="Publications" />
-      <ul className="pf-list">
-        {section.items.map((item, index) => (
-          <li key={index} className="pf-item">
-            <Heading level={deeper(level)} className="pf-item__title">
-              <MaybeLink url={item.url} ctx={ctx}>
-                {item.title}
-              </MaybeLink>
-            </Heading>
-            {item.authors?.length ? (
-              <p className="pf-authors">{formatNames(item.authors, ctx)}</p>
-            ) : null}
-            <Meta
-              parts={[
-                item.venue,
-                item.publishedAt !== undefined && (
-                  <DateText key="published" raw={item.publishedAt} ctx={ctx} />
-                ),
-              ]}
-            />
-            {item.abstract !== undefined ? (
-              <RichText source={item.abstract} className="pf-abstract" />
-            ) : null}
-            {item.citation !== undefined ? <p className="pf-citation">{item.citation}</p> : null}
-            <TagList items={item.awards} className="pf-highlights" />
-            <NamedLinks
-              links={[
-                [
-                  'DOI',
-                  item.doi !== undefined ? `https://doi.org/${encodeURI(item.doi)}` : undefined,
-                  item.doi,
-                ],
-                ['PDF', item.pdfUrl],
-              ]}
-              ctx={ctx}
-            />
-          </li>
-        ))}
+      <ul className="pf-list" role="list">
+        {section.items.map((item, index) => {
+          const doi = item.doi !== undefined ? doiLink(item.doi) : undefined;
+          return (
+            <li key={index} className="pf-item">
+              <ItemTitle text={item.title} url={item.url} ctx={ctx} />
+              {item.authors?.some(present) ? (
+                <p className="pf-authors">{formatNames(item.authors, ctx)}</p>
+              ) : null}
+              <Meta
+                parts={[
+                  item.venue,
+                  item.publishedAt !== undefined && (
+                    <DateText key="published" raw={item.publishedAt} ctx={ctx} />
+                  ),
+                ]}
+              />
+              {present(item.abstract) ? (
+                <RichText source={item.abstract} className="pf-abstract" input={input} />
+              ) : null}
+              {present(item.citation) ? <p className="pf-citation">{item.citation}</p> : null}
+              <TagList items={item.awards} className="pf-highlights" />
+              <NamedLinks
+                links={[
+                  ['DOI', doi?.url, doi?.text],
+                  ['PDF', item.pdfUrl],
+                ]}
+                ctx={ctx}
+              />
+            </li>
+          );
+        })}
       </ul>
     </>
   );
@@ -267,12 +279,10 @@ export function TalksSection({ section, input, level }: SectionRendererProps<Tal
   return (
     <>
       <SectionHeader section={section} ctx={ctx} fallback="Talks" />
-      <ul className="pf-list">
+      <ul className="pf-list" role="list">
         {section.items.map((item, index) => (
           <li key={index} className="pf-item" data-talk-type={item.type}>
-            <Heading level={deeper(level)} className="pf-item__title">
-              {item.title}
-            </Heading>
+            <ItemTitle text={item.title} ctx={ctx} />
             <Meta
               parts={[
                 item.type !== undefined && (
@@ -287,9 +297,11 @@ export function TalksSection({ section, input, level }: SectionRendererProps<Tal
                 ),
               ]}
             />
-            {item.description !== undefined ? <RichText source={item.description} /> : null}
-            {item.abstract !== undefined ? (
-              <RichText source={item.abstract} className="pf-abstract" />
+            {present(item.description) ? (
+              <RichText source={item.description} input={input} />
+            ) : null}
+            {present(item.abstract) ? (
+              <RichText source={item.abstract} className="pf-abstract" input={input} />
             ) : null}
             <NamedLinks
               links={[
@@ -311,14 +323,10 @@ export function AwardsSection({ section, input, level }: SectionRendererProps<Aw
   return (
     <>
       <SectionHeader section={section} ctx={ctx} fallback="Awards" />
-      <ul className="pf-list">
+      <ul className="pf-list" role="list">
         {section.items.map((item, index) => (
           <li key={index} className="pf-item">
-            <Heading level={deeper(level)} className="pf-item__title">
-              <MaybeLink url={item.url} ctx={ctx}>
-                {item.name}
-              </MaybeLink>
-            </Heading>
+            <ItemTitle text={item.name} url={item.url} ctx={ctx} />
             <Meta
               parts={[
                 item.organization,
@@ -327,7 +335,9 @@ export function AwardsSection({ section, input, level }: SectionRendererProps<Aw
                 ),
               ]}
             />
-            {item.description !== undefined ? <RichText source={item.description} /> : null}
+            {present(item.description) ? (
+              <RichText source={item.description} input={input} />
+            ) : null}
           </li>
         ))}
       </ul>
@@ -338,7 +348,7 @@ export function AwardsSection({ section, input, level }: SectionRendererProps<Aw
 /** Episodes take the show's name as their heading when the section has no title. */
 export function EpisodesSection({ section, input, level }: SectionRendererProps<Episodes>) {
   const ctx = renderContext(input, section, level);
-  const showNameIsHeading = section.title === undefined && section.showName !== undefined;
+  const showNameIsHeading = !present(section.title) && present(section.showName);
   return (
     <>
       <SectionHeader
@@ -346,21 +356,24 @@ export function EpisodesSection({ section, input, level }: SectionRendererProps<
         ctx={ctx}
         fallback="Episodes"
       />
-      {section.showName !== undefined && !showNameIsHeading ? (
+      {present(section.showName) && !showNameIsHeading ? (
         <p className="pf-show-name">{section.showName}</p>
       ) : null}
-      {section.showDescription !== undefined ? (
-        <RichText source={section.showDescription} className="pf-summary" />
+      {present(section.showDescription) ? (
+        <RichText source={section.showDescription} className="pf-summary" input={input} />
       ) : null}
-      <ul className="pf-list">
+      <ul className="pf-list" role="list">
         {section.items.map((item, index) => (
           <li key={index} className="pf-item">
-            <Heading level={deeper(level)} className="pf-item__title">
-              {item.number !== undefined ? (
-                <span className="pf-episode-number">#{item.number} </span>
-              ) : null}
-              {item.title}
-            </Heading>
+            <ItemTitle
+              text={item.title}
+              ctx={ctx}
+              before={
+                item.number !== undefined ? (
+                  <span className="pf-episode-number">#{item.number} </span>
+                ) : null
+              }
+            />
             <Meta
               parts={[
                 item.publishedAt !== undefined && (
@@ -371,16 +384,18 @@ export function EpisodesSection({ section, input, level }: SectionRendererProps<
                     {formatEpisodeDuration(item.durationMinutes)}
                   </Ui>
                 ),
-                item.guests?.length ? (
+                item.guests?.some(present) ? (
                   <span key="guests">
                     <Ui ctx={ctx}>With</Ui> {formatNames(item.guests, ctx)}
                   </span>
                 ) : null,
               ]}
             />
-            {item.description !== undefined ? <RichText source={item.description} /> : null}
-            {item.showNotes !== undefined ? (
-              <RichText source={item.showNotes} className="pf-show-notes" />
+            {present(item.description) ? (
+              <RichText source={item.description} input={input} />
+            ) : null}
+            {present(item.showNotes) ? (
+              <RichText source={item.showNotes} className="pf-show-notes" input={input} />
             ) : null}
             <NamedLinks
               links={[
@@ -402,14 +417,10 @@ export function PatentsSection({ section, input, level }: SectionRendererProps<P
   return (
     <>
       <SectionHeader section={section} ctx={ctx} fallback="Patents" />
-      <ul className="pf-list">
+      <ul className="pf-list" role="list">
         {section.items.map((item, index) => (
           <li key={index} className="pf-item" data-patent-status={item.status}>
-            <Heading level={deeper(level)} className="pf-item__title">
-              <MaybeLink url={item.url} ctx={ctx}>
-                {item.title}
-              </MaybeLink>
-            </Heading>
+            <ItemTitle text={item.title} url={item.url} ctx={ctx} />
             <Meta
               parts={[
                 item.number,
@@ -430,13 +441,15 @@ export function PatentsSection({ section, input, level }: SectionRendererProps<P
               facts={[
                 [
                   'Inventors',
-                  item.inventors?.length ? formatNames(item.inventors, ctx) : undefined,
+                  item.inventors?.some(present) ? formatNames(item.inventors, ctx) : undefined,
                 ],
                 ['Assignee', item.assignee],
               ]}
               ctx={ctx}
             />
-            {item.description !== undefined ? <RichText source={item.description} /> : null}
+            {present(item.description) ? (
+              <RichText source={item.description} input={input} />
+            ) : null}
           </li>
         ))}
       </ul>

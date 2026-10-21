@@ -1,5 +1,12 @@
 import type { Services, Skills, Stack } from '@portfolio/schema';
-import { deeper, Heading, MaybeLink, renderContext, SectionHeader, TagList } from '../primitives';
+import {
+  ItemTitle,
+  MaybeLink,
+  present,
+  renderContext,
+  SectionHeader,
+  TagList,
+} from '../primitives';
 import { RichText } from '../rich-text';
 import type { SectionRendererProps } from '../types';
 
@@ -10,13 +17,11 @@ export function SkillsSection({ section, input, level }: SectionRendererProps<Sk
     <>
       <SectionHeader section={section} ctx={ctx} fallback="Skills" />
       {section.groups?.length ? (
-        <ul className="pf-groups">
+        <ul className="pf-groups" role="list">
           {section.groups.map((group, index) => (
             <li key={index} className="pf-group">
-              <Heading level={deeper(level)} className="pf-group__title">
-                {group.name}
-              </Heading>
-              {group.description !== undefined ? <p>{group.description}</p> : null}
+              <ItemTitle text={group.name} ctx={ctx} className="pf-group__title" />
+              {present(group.description) ? <p>{group.description}</p> : null}
               <TagList items={group.items} />
             </li>
           ))}
@@ -32,19 +37,17 @@ export function StackSection({ section, input, level }: SectionRendererProps<Sta
   return (
     <>
       <SectionHeader section={section} ctx={ctx} fallback="Stack" />
-      <ul className="pf-groups">
+      <ul className="pf-groups" role="list">
         {section.groups.map((group, index) => (
           <li key={index} className="pf-group">
-            <Heading level={deeper(level)} className="pf-group__title">
-              {group.name}
-            </Heading>
-            <ul className="pf-tags">
+            <ItemTitle text={group.name} ctx={ctx} className="pf-group__title" />
+            <ul className="pf-tags" role="list">
               {group.items.map((item, itemIndex) => (
                 <li key={itemIndex}>
                   <MaybeLink url={item.url} ctx={ctx}>
                     {item.name}
                   </MaybeLink>
-                  {item.version !== undefined ? (
+                  {present(item.version) ? (
                     <>
                       {' '}
                       <span className="pf-version">{item.version}</span>
@@ -65,16 +68,14 @@ export function ServicesSection({ section, input, level }: SectionRendererProps<
   return (
     <>
       <SectionHeader section={section} ctx={ctx} fallback="Services" />
-      <ul className="pf-list">
+      <ul className="pf-list" role="list">
         {section.items.map((item, index) => (
           <li key={index} className="pf-item">
-            <Heading level={deeper(level)} className="pf-item__title">
-              <MaybeLink url={item.url} ctx={ctx}>
-                {item.name}
-              </MaybeLink>
-            </Heading>
-            {item.pricing !== undefined ? <p className="pf-pricing">{item.pricing}</p> : null}
-            {item.description !== undefined ? <RichText source={item.description} /> : null}
+            <ItemTitle text={item.name} url={item.url} ctx={ctx} />
+            {present(item.pricing) ? <p className="pf-pricing">{item.pricing}</p> : null}
+            {present(item.description) ? (
+              <RichText source={item.description} input={input} />
+            ) : null}
             <TagList items={item.highlights} className="pf-highlights" />
           </li>
         ))}

@@ -5,6 +5,7 @@ import * as React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
   composeSchemas,
+  IdentitySchema,
   isPlainObject,
   toPublicView,
   type ParsedPair,
@@ -17,6 +18,7 @@ import {
   type VariantRenderInput,
 } from '@portfolio/variant-contract';
 import { formatDate, formatEpisodeDuration, formatStatValue, formatTrackDuration } from '../format';
+import { doiLink } from './renderers/dated-entries';
 import { withoutClock } from '../test-support/clock';
 import { COMPLETE } from './__fixtures__/complete';
 import {
@@ -166,7 +168,11 @@ function missingFields(schema: Schema, value: unknown, path: string): string[] {
   return [];
 }
 
-test('the fixture has every core kind, each with every field its schema defines', () => {
+test('the fixture has every core kind and identity field, each with every field its schema defines', () => {
+  assert.deepEqual(
+    missingFields(IdentitySchema as unknown as Schema, COMPLETE.identity, 'identity'),
+    [],
+  );
   const kinds = COMPLETE.sections.map((section) => section.kind);
   assert.deepEqual([...kinds].sort(), Object.keys(SHARED_RENDERERS).sort());
   for (const schema of coreSections as unknown as Schema[]) {
@@ -241,7 +247,7 @@ function shown(kind: string, key: string, value: unknown): string[] | null {
     case 'showAvailability':
       return ['Available for new work'];
     case 'doi':
-      return [escape(String(value)), `href="https://doi.org/${value}"`];
+      return [escape(String(value)), `href="${escape(doiLink(String(value))!.url)}"`];
     case 'username':
       return [`@${value}`, `href="https://github.com/${value}"`];
     default:
@@ -271,6 +277,51 @@ test('each shared renderer renders every field of its kind', () => {
   }
 });
 
+test('every identity field shows: the hero shows the name, tagline, avatar, pronouns, and location, and contact the email', () => {
+  const input = inputFor({
+    ...COMPLETE,
+    sections: [
+      { kind: 'hero', id: 'top' },
+      { kind: 'contact', id: 'contact', links: [] },
+    ],
+  });
+  const markup = html(input.portfolio.sections.map((section) => renderSection(section, input, {})));
+  for (const [key, value] of leaves(COMPLETE.identity)) {
+    const expected =
+      key === 'email' ? [`href="mailto:${value}"`, String(value)] : shown('identity', key, value);
+    for (const text of expected ?? []) {
+      assert.ok(markup.includes(text), `identity: ${key} shows ${text}\n${markup}`);
+    }
+  }
+  // The avatar sits beside the name, so it loads with the first section, at once.
+  assert.match(
+    markup,
+    /<img class="pf-avatar" src="\/media\/avatar\.png" alt="Alt avatar"[^>]* loading="eager"/,
+  );
+  // With no links anywhere, the email is still a way to get in touch.
+  const bare = inputFor({
+    ...COMPLETE,
+    links: [],
+    sections: [{ kind: 'contact', id: 'contact', links: [] }],
+  });
+  assert.match(
+    render('contact', bare),
+    /<ul class="pf-links" role="list"><li><a href="mailto:rowan@rowan\.test" data-platform="email">rowan@rowan\.test<\/a><\/li><\/ul>/,
+  );
+  // A link to the same address isn't listed twice.
+  const linked = inputFor({
+    ...COMPLETE,
+    sections: [
+      {
+        kind: 'contact',
+        id: 'contact',
+        links: [{ url: 'mailto:Rowan@rowan.test', label: 'Write' }],
+      },
+    ],
+  });
+  assert.equal(render('contact', linked).match(/mailto:/gi)?.length, 1);
+});
+
 test('a section takes its heading level from the caller, and its items go one deeper', () => {
   assert.match(
     render('experience', INPUT, 3),
@@ -286,7 +337,29 @@ test('no shared renderer sets an inline style', () => {
   for (const { kind } of COMPLETE.sections) assert.doesNotMatch(render(kind), /\sstyle=/, kind);
 });
 
-test('the shared stylesheet stays under [data-variant], logical, and free of color, type, and opacity', () => {
+/** The only properties the shared stylesheet may set: layout, never appearance. */
+const LAYOUT_PROPERTIES = new Set([
+  'block-size',
+  'break-inside',
+  'column-gap',
+  'columns',
+  'display',
+  'flex-wrap',
+  'gap',
+  'grid-template-columns',
+  'inline-size',
+  'list-style',
+  'margin-block',
+  'margin-block-end',
+  'margin-block-start',
+  'margin-inline',
+  'max-inline-size',
+  'object-fit',
+  'padding-inline',
+  'padding-inline-start',
+]);
+
+test('the shared stylesheet sets layout alone, under [data-variant], with no weight a variant must beat', () => {
   const css = readFileSync(new URL('./styles.css', import.meta.url), 'utf8').replace(
     /\/\*[\s\S]*?\*\//g,
     '',
@@ -294,20 +367,24 @@ test('the shared stylesheet stays under [data-variant], logical, and free of col
   const rules = [...css.matchAll(/([^{}]+)\{([^}]*)\}/g)];
   assert.ok(rules.length > 0);
   for (const [, selectors, body] of rules) {
-    for (const selector of selectors!.split(/,(?![^(]*\))/)) {
-      assert.match(selector.trim(), /^\[data-variant\] \[data-renderer='shared'\]/, selector);
+    // :where() weighs nothing, so a variant's own rule for the element wins.
+    assert.match(
+      selectors!.replace(/\s+/g, ' ').trim(),
+      /^:where\( ?\[data-variant\] \[data-renderer='shared'\][^{]*\)$/,
+      selectors,
+    );
+    for (const declaration of body!
+      .split(';')
+      .map((part) => part.trim())
+      .filter(Boolean)) {
+      const [property, value = ''] = declaration.split(':').map((part) => part.trim());
+      assert.ok(LAYOUT_PROPERTIES.has(property!), `${property} isn't a layout property`);
+      assert.doesNotMatch(
+        value,
+        /#[0-9a-f]{3,8}\b|\b(?:rgb|hsl|oklch)a?\(|!important/i,
+        declaration,
+      );
     }
-    assert.doesNotMatch(
-      body!,
-      /\b(?:opacity|color|background|font|left|right|top|bottom)\s*:/,
-      body,
-    );
-    assert.doesNotMatch(
-      body!,
-      /(?:margin|padding|border)-(?:left|right)\b|text-align\s*:\s*(?:left|right)/,
-      body,
-    );
-    assert.doesNotMatch(body!, /#[0-9a-f]{3,8}\b|\b(?:rgb|hsl|oklch)a?\(|!important/i, body);
   }
 });
 
@@ -318,10 +395,38 @@ test('renderSection stamps the section element and dispatches by kind', () => {
     markup,
     /^<section id="pv-about" data-section-id="about" data-kind="lede" data-renderer="shared">/,
   );
-  // The hero's own language rides on its section.
+  // The hero's own language rides on its section, and it runs the portfolio's way.
+  // (React preloads the first section's eager images ahead of it.)
   assert.match(
     html(renderSection(sectionOf(input, 'hero'), input, {})),
-    /^<section[^>]* lang="en-GB">/,
+    /^(?:<link rel="preload"[^>]*>)*<section[^>]* lang="en-GB">/,
+  );
+});
+
+test('a section in a language that runs the other way says so with dir', () => {
+  const page = (direction: 'ltr' | 'rtl', lang: string) => {
+    const input = inputFor({
+      ...COMPLETE,
+      locale: direction === 'rtl' ? 'ar' : 'en',
+      direction,
+      sections: [{ kind: 'lede', id: 'about', lang, body: 'Hi.' }],
+    });
+    return /^<section[^>]*>/.exec(render('lede', input))![0];
+  };
+  assert.match(page('ltr', 'ar'), / lang="ar" dir="rtl">$/);
+  assert.match(page('ltr', 'he-IL'), / dir="rtl">$/);
+  assert.match(page('rtl', 'en'), / lang="en" dir="ltr">$/);
+  // The script subtag decides when there is one, and the same direction needs no dir.
+  assert.match(page('ltr', 'sd-Deva'), / lang="sd-Deva">$/);
+  assert.match(page('ltr', 'az-Arab'), / dir="rtl">$/);
+  assert.match(page('rtl', 'fa'), / lang="fa">$/);
+});
+
+test('a bespoke renderer for a kind the variant skips is still the mistake it is', () => {
+  const skipped = inputFor(COMPLETE, { manifest: { unsupportedKinds: ['github'] } });
+  assert.throws(
+    () => renderSection(sectionOf(skipped, 'github'), skipped, { github: () => <p>own</p> }),
+    /kit-shared passes a renderer for github, which its renderedKinds doesn't list/,
   );
 });
 
@@ -427,12 +532,217 @@ test("a #fragment link takes the render's id prefix, so it still lands on its se
   assert.match(render('hero', input), /href="#pv-contact"/);
   assert.match(render('cta', input), /href="#pv-services"/);
   assert.match(render('cta', input), /href="mailto:hire@rowan\.test"/);
+  // /#id is the home page's section, where the routes are mounted.
+  const home = inputFor(
+    {
+      ...COMPLETE,
+      sections: [
+        { kind: 'cta', id: 'cta', primaryAction: { url: '/#contact', label: 'Contact' } },
+        { kind: 'contact', id: 'contact' },
+      ],
+    },
+    { idPrefix: 'pv-' },
+  );
+  assert.match(render('cta', home), /href="\/#pv-contact"/);
+  // Markdown links take it too.
+  const prose = inputFor(
+    {
+      ...COMPLETE,
+      sections: [
+        {
+          kind: 'lede',
+          id: 'about',
+          body: 'See [contact](#contact), [home](/#contact), or [docs](https://rowan.test/#a).',
+        },
+        { kind: 'contact', id: 'contact' },
+      ],
+    },
+    { idPrefix: 'pv-' },
+  );
+  const lede = render('lede', prose);
+  assert.match(lede, /<a href="#pv-contact">contact<\/a>/);
+  assert.match(lede, /<a href="\/#pv-contact">home<\/a>/);
+  assert.match(lede, /<a href="https:\/\/rowan\.test\/#a">docs<\/a>/);
+});
+
+test("words and dates the renderers add are marked English in other content, and numbers use the content's locale", () => {
+  const french = inputFor({
+    ...COMPLETE,
+    locale: 'fr',
+    sections: [
+      {
+        kind: 'experience',
+        id: 'work',
+        items: [{ role: 'Ingénieure', organization: 'Acme', period: { start: '2019-06' } }],
+      },
+      { kind: 'stats', id: 'figures', items: [{ value: 1200, label: 'Lecteurs' }] },
+    ],
+  });
+  const work = render('experience', french);
+  assert.match(work, /<time class="pf-date" dateTime="2019-06" lang="en">June 2019<\/time>/);
+  assert.match(work, /<span lang="en">Present<\/span>/);
+  assert.match(render('stats', french), /1\u202f200/);
+  // A tag the runtime has no data for formats in English, not the runtime's default.
+  const klingon = inputFor({
+    ...COMPLETE,
+    locale: 'tlh',
+    sections: [
+      { kind: 'stats', id: 'figures', items: [{ value: 1200, label: 'Readers' }] },
+      { kind: 'publications', id: 'papers', items: [{ title: 'Tide', authors: ['A', 'B', 'C'] }] },
+    ],
+  });
+  assert.match(render('stats', klingon), /1,200/);
+  assert.match(render('publications', klingon), /A, B, and C/);
+});
+
+test('blank text is absent: no empty heading, label, or separator', () => {
+  const input = inputFor({
+    ...COMPLETE,
+    sections: [
+      {
+        kind: 'experience',
+        id: 'work',
+        items: [
+          {
+            role: ' ',
+            organization: 'Acme',
+            location: '',
+            period: { start: '2020' },
+            highlights: ['', 'Shipped'],
+          },
+        ],
+      },
+      {
+        kind: 'external-portfolios',
+        id: 'elsewhere',
+        items: [{ url: 'https://shop.rowan.test', brandName: 'Shop', buttonText: ' ' }],
+      },
+    ],
+  });
+  const work = render('experience', input);
+  assert.doesNotMatch(work, /<h3/);
+  assert.doesNotMatch(work, /<li><\/li>/);
+  assert.equal(work.match(/pf-sep/g)?.length, 1);
+  assert.match(
+    render('external-portfolios', input),
+    /<a class="pf-action" href="https:\/\/shop\.rowan\.test">Shop<\/a>/,
+  );
+});
+
+test('an image without alt text is decorative only beside text that names it', () => {
+  const noAlt = (name: string) => ({ src: `/media/${name}.png` });
+  const input = inputFor({
+    ...COMPLETE,
+    sections: [
+      { kind: 'lede', id: 'about', body: 'Hi.' },
+      {
+        kind: 'gallery',
+        id: 'plates',
+        items: [
+          { image: noAlt('captioned'), caption: 'The harbor at dawn' },
+          { image: noAlt('bare') },
+          { image: { src: '/media/ornament.png', alt: '' }, caption: 'An ornament' },
+        ],
+      },
+      {
+        kind: 'projects',
+        id: 'work',
+        items: [{ name: 'Tide', image: noAlt('cover'), images: [noAlt('shot')] }],
+      },
+      {
+        kind: 'experience',
+        id: 'jobs',
+        items: [
+          {
+            role: 'Engineer',
+            organization: 'Acme',
+            logo: noAlt('logo'),
+            period: { start: '2020' },
+          },
+        ],
+      },
+    ],
+  });
+  const gallery = render('gallery', input);
+  assert.match(gallery, /src="\/media\/captioned\.png" alt="The harbor at dawn"/);
+  // Nothing says what this one shows, so it has no alt, and an audit finds it.
+  assert.match(gallery, /<img src="\/media\/bare\.png" loading="lazy"/);
+  assert.match(gallery, /src="\/media\/ornament\.png" alt=""/);
+  const projects = render('projects', input);
+  assert.match(projects, /src="\/media\/cover\.png" alt=""/);
+  assert.match(projects, /<img src="\/media\/shot\.png" loading="lazy"/);
+  assert.match(render('experience', input), /src="\/media\/logo\.png" alt=""/);
+});
+
+test('lists the stylesheet strips of bullets still say they are lists', () => {
+  for (const { kind } of COMPLETE.sections) {
+    const markup = render(kind);
+    for (const [list] of markup.matchAll(/<ul[^>]*>/g)) {
+      if (/pf-highlights|pf-short-list/.test(list)) assert.doesNotMatch(list, /role=/, kind);
+      else assert.match(list, /role="list"/, `${kind}: ${list}`);
+    }
+  }
+});
+
+test("the first section's images load at once, and the rest lazily", () => {
+  const input = inputFor({
+    ...COMPLETE,
+    sections: [
+      { kind: 'gallery', id: 'first', items: [{ image: { src: '/a.png', alt: 'A' } }] },
+      { kind: 'gallery', id: 'second', items: [{ image: { src: '/b.png', alt: 'B' } }] },
+    ],
+  });
+  const [first, second] = input.portfolio.sections.map((section) =>
+    html(renderSection(section, input, {})),
+  );
+  assert.match(first!, /loading="eager"/);
+  assert.match(second!, /loading="lazy"/);
+});
+
+test('a DOI links to doi.org whatever prefix it was written with, each part encoded', () => {
+  assert.deepEqual(doiLink('10.1000/tide.42'), {
+    text: '10.1000/tide.42',
+    url: 'https://doi.org/10.1000/tide.42',
+  });
+  assert.deepEqual(doiLink('doi:10.1234/abc'), {
+    text: '10.1234/abc',
+    url: 'https://doi.org/10.1234/abc',
+  });
+  assert.deepEqual(doiLink('https://doi.org/10.1234/abc'), {
+    text: '10.1234/abc',
+    url: 'https://doi.org/10.1234/abc',
+  });
+  assert.equal(doiLink('http://dx.doi.org/10.1234/a?b')!.url, 'https://doi.org/10.1234/a%3Fb');
+  assert.equal(
+    doiLink('10.1002/(SICI)1097-4636(199706)35:4<417::AID-JBM1>3.0.CO;2-#')!.url,
+    'https://doi.org/10.1002/(SICI)1097-4636(199706)35%3A4%3C417%3A%3AAID-JBM1%3E3.0.CO%3B2-%23',
+  );
+  assert.equal(doiLink(' doi: '), undefined);
 });
 
 test('nothing reads the clock or Math.random(), so every render of the same input is the same', () => {
   const first = COMPLETE.sections.map(({ kind }) => render(kind));
   const again = withoutClock(() => COMPLETE.sections.map(({ kind }) => render(kind)));
   assert.deepEqual(again, first);
+});
+
+test('withoutClock stops the clock, keeps dates from values and parts, and refuses async code', () => {
+  assert.throws(() => withoutClock(() => new Date()), /read the clock: new Date\(\)/);
+  assert.throws(() => withoutClock(() => Date.now()), /read the clock: Date\.now\(\)/);
+  assert.throws(() => withoutClock(() => Math.random()), /read Math\.random\(\)/);
+  const parts = withoutClock(() => new Date(Date.UTC(2024, 0, 15, 8)).toISOString());
+  assert.equal(parts, '2024-01-15T08:00:00.000Z');
+  assert.equal(
+    withoutClock(() => new Date(2024, 0, 15, 8).getHours()),
+    8,
+  );
+  assert.equal(
+    withoutClock(() => new Date('2024-01-15T08:00:00Z').getTime()),
+    1705305600000,
+  );
+  assert.throws(() => withoutClock(async () => 1), /runs synchronous code/);
+  // The clock is back afterwards.
+  assert.ok(Date.now() > 0);
 });
 
 test('RichText renders markdown, and inline renders a phrase', () => {

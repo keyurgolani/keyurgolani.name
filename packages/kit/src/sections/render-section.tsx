@@ -2,6 +2,7 @@ import type { ReactElement } from 'react';
 import type { Section, SectionKind } from '@portfolio/schema';
 import { isExtensionSection } from '@portfolio/schema/ids';
 import type { VariantRenderInput } from '@portfolio/variant-contract';
+import { textDirection } from './direction';
 import { hostModules } from './host-modules';
 import { SHARED_RENDERERS } from './renderers';
 import type { BespokeRenderers, HeadingLevel, SectionRenderer } from './types';
@@ -15,7 +16,8 @@ export interface RenderSectionOptions {
  * Renders one section inside its section element, which carries the DOM id
  * (the render's id prefix, then the section id), `data-section-id`,
  * `data-kind`, `data-renderer` (`bespoke` for the variant's own renderer,
- * `shared` otherwise), and the section's `lang`.
+ * `shared` otherwise), the section's `lang`, and a `dir` when that language
+ * runs the other way from the portfolio.
  *
  * A kind in the manifest's `unsupportedKinds` renders nothing. One in its
  * `renderedKinds` uses the variant's renderer from `renderers`. An extension
@@ -32,7 +34,7 @@ export function renderSection(
   options: RenderSectionOptions = {},
 ): ReactElement | null {
   const { renderedKinds, unsupportedKinds } = input.capabilities;
-  if (unsupportedKinds.includes(section.kind)) return null;
+  // The map is checked first, so a mistake shows even for a kind that's skipped.
   const declared = renderedKinds.includes(section.kind);
   const own = renderers[section.kind as SectionKind] as SectionRenderer<Section> | undefined;
   if (declared && !own) {
@@ -45,12 +47,14 @@ export function renderSection(
       `${input.variant} passes a renderer for ${section.kind}, which its renderedKinds doesn't list.`,
     );
   }
+  if (unsupportedKinds.includes(section.kind)) return null;
   const Renderer =
     own ??
     (isExtensionSection(section)
       ? (hostModules().extensionRenderers?.[section.kind] as SectionRenderer<Section> | undefined)
       : (SHARED_RENDERERS[section.kind] as SectionRenderer<Section>));
   if (!Renderer) return null;
+  const direction = section.lang === undefined ? undefined : textDirection(section.lang);
   return (
     <section
       key={section.id}
@@ -59,6 +63,9 @@ export function renderSection(
       data-kind={section.kind}
       data-renderer={own ? 'bespoke' : 'shared'}
       lang={section.lang}
+      dir={
+        direction !== undefined && direction !== input.portfolio.direction ? direction : undefined
+      }
     >
       <Renderer section={section} input={input} level={options.level ?? 2} />
     </section>

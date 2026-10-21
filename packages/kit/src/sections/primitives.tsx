@@ -15,24 +15,85 @@ export interface RenderContext {
   readonly level: HeadingLevel;
   /** The content's language: the section's, else the portfolio's. */
   readonly locale: string;
-  /** `en` when the content isn't English, for the few words the renderers add, such as Present. */
+  /** The locale numbers and lists are formatted in: the content's when the runtime has it, else English. */
+  readonly formatLocale: string;
+  /** `en` when the content isn't English, for the words and dates the renderers add, such as Present. */
   readonly uiLang: 'en' | undefined;
+  /** Whether this is the first section, whose images load at once rather than lazily. */
+  readonly eager: boolean;
+}
+
+/** Whether `text` has something to show: a string that isn't empty or only spaces. */
+export function present(text: string | undefined | null): text is string {
+  return typeof text === 'string' && text.trim() !== '';
+}
+
+const resolvedLocales = new Map<string, string>();
+
+/**
+ * The locale to format in for `locale`. A tag the runtime has no data for,
+ * such as `tlh`, would otherwise format in the runtime's own default, which
+ * changes from machine to machine.
+ */
+function formatLocaleFor(locale: string): string {
+  let resolved = resolvedLocales.get(locale);
+  if (resolved === undefined) {
+    try {
+      resolved = Intl.NumberFormat.supportedLocalesOf([locale])[0] ?? 'en';
+    } catch {
+      resolved = 'en';
+    }
+    resolvedLocales.set(locale, resolved);
+  }
+  return resolved;
 }
 
 export function renderContext(
   input: VariantRenderInput,
-  section: Pick<Section, 'lang'>,
+  section: Pick<Section, 'id' | 'lang'>,
   level: HeadingLevel,
 ): RenderContext {
   const locale = section.lang ?? input.portfolio.locale;
   const language = locale.toLowerCase();
   const english = language === 'en' || language.startsWith('en-');
-  return { input, level, locale, uiLang: english ? undefined : 'en' };
+  return {
+    input,
+    level,
+    locale,
+    formatLocale: formatLocaleFor(locale),
+    uiLang: english ? undefined : 'en',
+    eager: input.portfolio.sections[0]?.id === section.id,
+  };
 }
+
+const listFormats = new Map<string, Intl.ListFormat>();
+const numberFormats = new Map<string, Intl.NumberFormat>();
 
 /** Names joined the way the content's language joins them, such as "A, B, and C". */
 export function formatNames(names: readonly string[], ctx: RenderContext): string {
-  return new Intl.ListFormat(ctx.locale, { style: 'long', type: 'conjunction' }).format(names);
+  let format = listFormats.get(ctx.formatLocale);
+  if (!format) {
+    format = new Intl.ListFormat(ctx.formatLocale, { style: 'long', type: 'conjunction' });
+    listFormats.set(ctx.formatLocale, format);
+  }
+  return format.format(names.filter(present));
+}
+
+/** A figure as the content's language writes it, such as 1,200. Text stays as written. */
+export function formatFigure(value: string | number, ctx: RenderContext): string {
+  if (typeof value !== 'number') return value;
+  let format = numberFormats.get(ctx.formatLocale);
+  if (!format) {
+    format = new Intl.NumberFormat(ctx.formatLocale);
+    numberFormats.set(ctx.formatLocale, format);
+  }
+  return format.format(value);
+}
+
+/** Whether a part of a line has something to show: blank text and false don't. */
+function shows(part: ReactNode): boolean {
+  if (part === null || part === undefined || part === false || part === true) return false;
+  return typeof part !== 'string' || present(part);
 }
 
 /**
@@ -46,7 +107,7 @@ export function Meta({
   parts: readonly ReactNode[];
   className?: string;
 }) {
-  const shown = parts.filter((part) => part !== null && part !== undefined && part !== false);
+  const shown = parts.filter(shows);
   if (shown.length === 0) return null;
   return (
     <p className={className}>
@@ -91,6 +152,32 @@ export function Heading({
   );
 }
 
+/** An item's heading, a link when it has a URL, or nothing when its text is blank. */
+export function ItemTitle({
+  text,
+  url,
+  ctx,
+  className = 'pf-item__title',
+  before,
+}: {
+  text: string | undefined;
+  url?: string;
+  ctx: RenderContext;
+  className?: string;
+  /** Shown ahead of the text, inside the heading, such as an episode number. */
+  before?: ReactNode;
+}) {
+  if (!present(text)) return null;
+  return (
+    <Heading level={deeper(ctx.level)} className={className}>
+      {before}
+      <MaybeLink url={url} ctx={ctx}>
+        {text}
+      </MaybeLink>
+    </Heading>
+  );
+}
+
 /** Words the renderers add, marked English inside content that isn't. */
 export function Ui({ ctx, children }: { ctx: RenderContext; children: string }) {
   return ctx.uiLang ? <span lang={ctx.uiLang}>{children}</span> : <>{children}</>;
@@ -109,32 +196,37 @@ export function SectionHeader({
   ctx: RenderContext;
   fallback?: string;
 }) {
-  const title = section.title ?? fallback;
-  if (title === undefined && section.subtitle === undefined) return null;
+  const own = present(section.title);
+  const title = own ? section.title : fallback;
+  const subtitle = present(section.subtitle) ? section.subtitle : undefined;
+  if (title === undefined && subtitle === undefined) return null;
   return (
     <header className="pf-section__header">
       {title !== undefined ? (
         <Heading
           level={ctx.level}
           className="pf-section__title"
-          lang={section.title === undefined ? ctx.uiLang : undefined}
+          lang={own ? undefined : ctx.uiLang}
         >
           {title}
         </Heading>
       ) : null}
-      {section.subtitle !== undefined ? (
-        <p className="pf-section__subtitle">{section.subtitle}</p>
-      ) : null}
+      {subtitle !== undefined ? <p className="pf-section__subtitle">{subtitle}</p> : null}
     </header>
   );
 }
 
 /**
- * A URL as an href. A `#fragment` names a section, whose DOM id carries the
- * render's id prefix.
+ * A URL as an href. A `#fragment` names a section on this page, and `/#id`
+ * one on the home page, where the routes are mounted; either way the DOM id
+ * carries the render's id prefix.
  */
 export function hrefFor(url: string, input: VariantRenderInput): string {
-  return url.startsWith('#') && url.length > 1 ? `#${input.ids.prefix}${url.slice(1)}` : url;
+  if (url.startsWith('#') && url.length > 1) return `#${input.ids.prefix}${url.slice(1)}`;
+  if (url.startsWith('/#') && url.length > 2) {
+    return `${input.basePath || '/'}#${input.ids.prefix}${url.slice(2)}`;
+  }
+  return url;
 }
 
 /** A link whose text is its label, else its platform, else its URL. */
@@ -147,9 +239,10 @@ export function LinkText({
   ctx: RenderContext;
   className?: string;
 }) {
+  const text = [link.label, link.platform].find(present) ?? link.url;
   return (
     <a className={className} href={hrefFor(link.url, ctx.input)} data-platform={link.platform}>
-      {link.label ?? link.platform ?? link.url}
+      {text}
     </a>
   );
 }
@@ -163,7 +256,7 @@ export function LinkList({
 }) {
   if (!links?.length) return null;
   return (
-    <ul className="pf-links">
+    <ul className="pf-links" role="list">
       {links.map((link, index) => (
         <li key={index}>
           <LinkText link={link} ctx={ctx} />
@@ -189,12 +282,12 @@ export function NamedLinks({
   );
   if (shown.length === 0) return null;
   return (
-    <ul className="pf-named-links">
+    <ul className="pf-named-links" role="list">
       {shown.map(([label, url, detail]) => (
         <li key={label}>
           <a className="pf-named-link" href={hrefFor(url, ctx.input)}>
             <Ui ctx={ctx}>{label}</Ui>
-            {detail !== undefined ? <> {detail}</> : null}
+            {present(detail) ? <> {detail}</> : null}
           </a>
         </li>
       ))}
@@ -215,7 +308,10 @@ export function MaybeLink({
   return url === undefined ? <>{children}</> : <a href={hrefFor(url, ctx.input)}>{children}</a>;
 }
 
-/** Short labels, such as tags or technologies. */
+/** The lists styles.css keeps bullets on. Every other list drops them, so it says it's a list. */
+const BULLETED = new Set(['pf-highlights', 'pf-short-list']);
+
+/** Short labels, such as tags or technologies. Blank ones are left out. */
 export function TagList({
   items,
   className = 'pf-tags',
@@ -223,10 +319,11 @@ export function TagList({
   items: readonly string[] | undefined;
   className?: string;
 }) {
-  if (!items?.length) return null;
+  const shown = items?.filter(present) ?? [];
+  if (shown.length === 0) return null;
   return (
-    <ul className={className}>
-      {items.map((item, index) => (
+    <ul className={className} role={BULLETED.has(className) ? undefined : 'list'}>
+      {shown.map((item, index) => (
         <li key={index}>{item}</li>
       ))}
     </ul>
@@ -243,7 +340,11 @@ function dateTimeOf(raw: string, ctx: RenderContext): string | undefined {
   return `${parsed.year}-${pad(parsed.month + 1)}-${pad(parsed.day)}`;
 }
 
-/** A loose date: `<time>` when it names a day, month, or year, else Present. */
+/**
+ * A loose date: `<time>` when it names a day, month, or year, else Present.
+ * Month names are English, so the date is marked English inside content that
+ * isn't.
+ */
 export function DateText({ raw, ctx }: { raw: string; ctx: RenderContext }) {
   const dateTime = dateTimeOf(raw, ctx);
   if (dateTime === undefined && parseLooseDate(raw, ctx.input.env.now)?.isPresent) {
@@ -254,7 +355,7 @@ export function DateText({ raw, ctx }: { raw: string; ctx: RenderContext }) {
     );
   }
   return (
-    <time className="pf-date" dateTime={dateTime}>
+    <time className="pf-date" dateTime={dateTime} lang={ctx.uiLang}>
       {formatDate(raw)}
     </time>
   );
@@ -292,38 +393,58 @@ export function PeriodText({ period, ctx }: { period: Period | undefined; ctx: R
 }
 
 /**
- * A content image. Without alt text it's decorative, since the text beside it
- * names what it shows. The focal point goes on data attributes for CSS that
- * crops, because an inline object-position would be an inline style.
+ * A content image. Its alt text is its own, and `alt: ''` marks decoration.
+ * Without alt text, it's decorative only when the text beside it names what
+ * it shows, such as a logo beside the organization's name; otherwise it takes
+ * `fallbackAlt`, such as its caption, and with neither it has no alt at all,
+ * so an accessibility audit finds it (#4's image.alt-missing warns too). The focal point goes on data attributes
+ * for CSS that crops, because an inline object-position would be an inline
+ * style. The first section's images load at once, and the rest lazily.
  */
 export function ContentImage({
   image,
+  ctx,
   className,
   caption,
   inline = false,
+  decorative = false,
+  fallbackAlt,
 }: {
   image: Image;
+  ctx: RenderContext;
   className?: string;
   caption?: ReactNode;
   /** A logo or avatar beside text: its credit follows it, with no figure. */
   inline?: boolean;
+  /** The text beside it names what it shows. */
+  decorative?: boolean;
+  /** What it shows, in words, when it has no alt text of its own. */
+  fallbackAlt?: string;
 }) {
+  // alt: '' is the owner saying it's decoration, so only a missing alt falls back.
+  const alt =
+    image.alt !== undefined
+      ? image.alt.trim()
+      : decorative
+        ? ''
+        : present(fallbackAlt)
+          ? fallbackAlt.trim()
+          : undefined;
   const img = (
     // eslint-disable-next-line @next/next/no-img-element -- owner-supplied URL; next/image would proxy it through /_next/image
     <img
       className={className}
       src={image.src}
-      alt={image.alt ?? ''}
+      alt={alt}
       width={image.width}
       height={image.height}
-      loading="lazy"
+      loading={ctx.eager ? 'eager' : 'lazy'}
       decoding="async"
       data-focal-x={image.focalPoint?.x}
       data-focal-y={image.focalPoint?.y}
     />
   );
-  const credit =
-    image.credit !== undefined ? <small className="pf-credit">{image.credit}</small> : null;
+  const credit = present(image.credit) ? <small className="pf-credit">{image.credit}</small> : null;
   if (inline) {
     return (
       <>
