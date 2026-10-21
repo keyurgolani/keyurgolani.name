@@ -200,16 +200,81 @@ test('the reserved first segments include every host route and metadata file', (
 
 test('idFor uses the stable id, else kind and index, and suffixes repeats', () => {
   const taken = new Set<string>();
-  assert.equal(idFor({ id: 'essays', kind: 'writings' }, 0, taken), 'essays');
-  assert.equal(idFor({ id: 'essays', kind: 'writings' }, 1, taken), 'essays-2');
-  assert.equal(idFor({ id: 'essays', kind: 'writings' }, 2, taken), 'essays-3');
-  assert.equal(idFor({ kind: 'gallery' }, 3, taken), 'gallery-3');
-  assert.equal(idFor({ kind: '@acme/photo/shows' }, 4, taken), 'acme-photo-shows-4');
+  const id = (item: { id?: string; kind: string }, index: number) => idFor(item, index, { taken });
+  assert.equal(id({ id: 'essays', kind: 'writings' }, 0), 'essays');
+  assert.equal(id({ id: 'essays', kind: 'writings' }, 1), 'essays--2');
+  assert.equal(id({ id: 'essays', kind: 'writings' }, 2), 'essays--3');
+  assert.equal(id({ kind: 'gallery' }, 3), 'gallery--3');
+  assert.equal(id({ kind: '@acme/photo/shows' }, 4), 'acme-photo-shows--4');
   // `main` is the variant's <main>, so a section never takes it.
-  assert.equal(idFor({ id: 'main', kind: 'lede' }, 5, taken), 'lede-5');
+  assert.equal(id({ id: 'main', kind: 'lede' }, 5), 'lede--5');
   // Never the title.
+  assert.equal(id({ id: 'Not An Id', kind: 'quote', title: 'My Quote' } as never, 6), 'quote--6');
+});
+
+test("idFor's ids don't depend on the order they're asked for", () => {
+  // A fallback or a repeat has two hyphens in a row, which no content id has.
+  const items = [
+    { kind: 'gallery' },
+    { id: 'gallery-0', kind: 'gallery' },
+    { id: 'gallery--0', kind: 'gallery' },
+  ];
+  const forward = new Set<string>();
+  const backward = new Set<string>();
+  const ids = items.map((item, index) => idFor(item, index, { taken: forward }));
+  const reversed = items
+    .map((item, index) => [item, index] as const)
+    .reverse()
+    .map(([item, index]) => idFor(item, index, { taken: backward }))
+    .reverse();
+  assert.deepEqual(ids, ['gallery--0', 'gallery-0', 'gallery--2']);
+  assert.deepEqual(reversed, ids);
+});
+
+test("idFor and fragment hrefs carry the render's id prefix, so compositions can share a document", () => {
+  const taken = new Set<string>();
+  assert.equal(idFor({ id: 'essays', kind: 'writings' }, 0, { taken, prefix: 'pv-' }), 'pv-essays');
+  assert.equal(idFor({ id: 'essays', kind: 'writings' }, 0, { taken, prefix: 'st-' }), 'st-essays');
   assert.equal(
-    idFor({ id: 'Not An Id', kind: 'quote', title: 'My Quote' } as never, 6, taken),
-    'quote-6',
+    idFor({ id: 'essays', kind: 'writings' }, 1, { taken, prefix: 'pv-' }),
+    'pv-essays--2',
   );
+  assert.equal(
+    href({ route: 'view', view: ANCHOR, params: { chapter: 'two' } }, { idPrefix: 'pv-' }),
+    '/#pv-chapter-two',
+  );
+  assert.equal(
+    href({ route: 'view', view: CHAPTERS, params: { chapter: 'two' } }, { idPrefix: 'pv-' }),
+    '/chapters/two',
+  );
+});
+
+test('a literal segment beats a placeholder, whatever order the manifest lists them in', () => {
+  const NOTE: ViewDeclaration = {
+    id: 'note',
+    under: 'home',
+    type: 'path',
+    segment: 'notes/{note}',
+  };
+  const ARCHIVE: ViewDeclaration = {
+    id: 'archive',
+    under: 'home',
+    type: 'path',
+    segment: 'notes/archive',
+  };
+  for (const views of [
+    [NOTE, ARCHIVE],
+    [ARCHIVE, NOTE],
+  ]) {
+    const manifest = load('acme-notes', views);
+    const at = (segments: string[]) => dispatch({ segments, manifest });
+    assert.deepEqual(at(['notes', 'archive']), {
+      kind: 'render',
+      target: { route: 'view', view: ARCHIVE, params: {} },
+    });
+    assert.deepEqual(at(['notes', 'tuesday']), {
+      kind: 'render',
+      target: { route: 'view', view: NOTE, params: { note: 'tuesday' } },
+    });
+  }
 });

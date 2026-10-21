@@ -63,6 +63,7 @@ export {
   type DispatchOptions,
   type DispatchResult,
   type HrefOptions,
+  type IdOptions,
   type RouteTarget,
 } from './routes';
 export {

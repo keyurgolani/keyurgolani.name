@@ -76,11 +76,18 @@ export function dispatch(options: DispatchOptions): DispatchResult {
   return { kind: 'not-found' };
 }
 
+/**
+ * The view a path is, if any. When several match, the one with a literal
+ * where another has a placeholder wins, at the first segment they differ,
+ * whatever order the manifest lists them in: `notes/archive` beats
+ * `notes/{note}`, as in Next's routing.
+ */
 function matchView(
   manifest: VariantManifest,
   under: 'home' | 'work',
   segments: readonly string[],
 ): { view: ViewDeclaration; params: Record<string, string> } | null {
+  let best: { view: ViewDeclaration; params: Record<string, string>; shape: string } | null = null;
   for (const view of manifest.routes.views) {
     if (view.type !== 'path' || view.under !== under) continue;
     const pattern = parsePathPattern(view.segment);
@@ -93,15 +100,20 @@ function matchView(
       params[part.param] = segment;
       return true;
     });
-    if (matches) return { view, params };
+    if (!matches) continue;
+    // L for a literal and P for a placeholder sort a literal first, segment by segment.
+    const shape = pattern.parts.map((part) => ('literal' in part ? 'L' : 'P')).join('');
+    if (!best || shape < best.shape) best = { view, params, shape };
   }
-  return null;
+  return best && { view: best.view, params: best.params };
 }
 
 export interface HrefOptions {
   /** Where the routes are mounted: '' for the site root, `/sample`, or #7's preview prefix. */
   readonly basePath?: string;
   readonly query?: Readonly<Record<string, string>>;
+  /** The render input's `ids.prefix`, which a fragment view's element id starts with. */
+  readonly idPrefix?: string;
 }
 
 const BASE_PATH = /^(?:\/[A-Za-z0-9_-]+)*$/;
@@ -134,7 +146,7 @@ export function href(target: RouteTarget, options: HrefOptions = {}): string {
       if (view.type === 'fragment') {
         const pattern = parseFragmentPattern(view.segment);
         if ('problem' in pattern) throw new TypeError(`The view's segment ${pattern.problem}`);
-        return `${parent || '/'}${query}#${fill(pattern.parts, params, '')}`;
+        return `${parent || '/'}${query}#${options.idPrefix ?? ''}${fill(pattern.parts, params, '')}`;
       }
       const pattern = parsePathPattern(view.segment);
       if ('problem' in pattern) throw new TypeError(`The view's segment ${pattern.problem}`);
@@ -177,24 +189,33 @@ function queryString(query: Readonly<Record<string, string>> | undefined): strin
   return `?${new URLSearchParams(entries).toString()}`;
 }
 
+export interface IdOptions {
+  /** The ids handed out so far. Share one per document. */
+  readonly taken: Set<string>;
+  /** The render input's `ids.prefix`, which every id starts with. */
+  readonly prefix?: string;
+}
+
 /**
- * A DOM id for a section or item: its stable content id (#4, #10), else
- * `<kind>-<index>`, never its title. A repeat gets `-2`, `-3`, and so on.
- * `taken` collects the ids handed out, so share one per document.
+ * A DOM id for a section or item: the id prefix, then its stable content id
+ * (#4, #10), else `<kind>--<index>`, never its title. A repeat gets `--2`,
+ * `--3`, and so on. A content id never has two hyphens in a row, so a
+ * fallback or a repeat can't take the id of something later in the document,
+ * and the ids don't depend on the order they're asked for.
  */
 export function idFor(
   item: { readonly id?: string; readonly kind: string },
   index: number,
-  taken: Set<string>,
+  { taken, prefix = '' }: IdOptions,
 ): string {
   const kind = item.kind
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
   const base =
-    item.id !== undefined && isSectionId(item.id) ? item.id : `${kind || 'section'}-${index}`;
-  let id = base;
-  for (let n = 2; taken.has(id); n += 1) id = `${base}-${n}`;
+    item.id !== undefined && isSectionId(item.id) ? item.id : `${kind || 'section'}--${index}`;
+  let id = `${prefix}${base}`;
+  for (let n = 2; taken.has(id); n += 1) id = `${prefix}${base}--${n}`;
   taken.add(id);
   return id;
 }
