@@ -44,6 +44,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@portfolio/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       '@portfolio/kit':
         specifier: workspace:*
         version: link:../../packages/kit
@@ -87,6 +90,12 @@ importers:
       tsx:
         specifier: ^4.21.0
         version: 4.21.0
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+
+  packages/core:
+    devDependencies:
       typescript:
         specifier: ^5.7.2
         version: 5.9.3

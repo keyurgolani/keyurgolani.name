@@ -51,6 +51,8 @@ export interface DeploymentConfig {
   /** Writable data directory (`owner`), for draft and revision storage. */
   readonly dataDir?: string;
   readonly secrets: Readonly<{ authPasswordHash?: string; githubToken?: string }>;
+  /** The variable each set secret came from, for a diagnostic that names it. */
+  readonly secretKeys?: Readonly<{ authPasswordHash?: string }>;
 }
 
 /**
@@ -108,7 +110,16 @@ export interface ReadConfigOptions {
   readonly cwd: string;
   /** Reads a <KEY>_FILE. Defaults to fs.readFileSync as UTF-8. */
   readonly readFile?: (file: string) => string;
+  /** Stats a _FILE before it's read. Defaults to fs.statSync, which follows links. */
+  readonly statFile?: (file: string) => { isFile(): boolean; readonly mode: number };
 }
+
+/**
+ * Keys whose _FILE neither group nor others may write (#2): a writable file
+ * lets another user replace the secret. Every _FILE must be a regular file,
+ * checked before it's read, since a device or a pipe could hang the read.
+ */
+const SECRET_FILE_KEYS: ReadonlySet<string> = new Set(['PORTFOLIO_AUTH_PASSWORD_HASH']);
 
 export type ReadConfigResult =
   | { readonly ok: true; readonly config: DeploymentConfig; readonly issues: ConfigIssue[] }
@@ -117,7 +128,8 @@ export type ReadConfigResult =
 type Resolved =
   | { readonly state: 'unset' }
   | { readonly state: 'invalid' }
-  | { readonly state: 'set'; readonly value: string };
+  /** `from` is the variable that supplied the value: the key, or its _FILE. */
+  | { readonly state: 'set'; readonly value: string; readonly from: string };
 const UNSET: Resolved = { state: 'unset' };
 const INVALID: Resolved = { state: 'invalid' };
 
@@ -137,6 +149,7 @@ const ORIGIN_SHAPE =
 export function readDeploymentConfig(env: Env, options: ReadConfigOptions): ReadConfigResult {
   const readFile =
     options.readFile ?? ((file) => fs.readFileSync(/*turbopackIgnore: true*/ file, 'utf8'));
+  const statFile = options.statFile ?? ((file) => fs.statSync(/*turbopackIgnore: true*/ file));
   const mode: RuntimeMode = env['NODE_ENV'] === 'production' ? 'production' : 'development';
   const issues: ConfigIssue[] = [];
   const fatal = (key: string, code: string, message: string) => {
@@ -161,8 +174,27 @@ export function readDeploymentConfig(env: Env, options: ReadConfigOptions): Read
       fatal(key, 'value_and_file', `Set ${key} or ${fileKey}, not both.`);
       return INVALID;
     }
-    if (isSet(direct)) return { state: 'set', value: direct };
+    if (isSet(direct)) return { state: 'set', value: direct, from: key };
     if (!isSet(file)) return UNSET;
+    let stat: ReturnType<typeof statFile>;
+    try {
+      stat = statFile(file);
+    } catch {
+      fatal(fileKey, 'file_unreadable', `${fileKey} names a file the server can't read.`);
+      return INVALID;
+    }
+    if (!stat.isFile()) {
+      fatal(fileKey, 'file_not_regular', `${fileKey} must name a regular file.`);
+      return INVALID;
+    }
+    if (SECRET_FILE_KEYS.has(key) && (stat.mode & 0o022) !== 0) {
+      fatal(
+        fileKey,
+        'file_writable',
+        `${fileKey} names a file that group or others can write. Make it mode 0400, or 0440.`,
+      );
+      return INVALID;
+    }
     let text: string;
     try {
       text = readFile(file);
@@ -175,7 +207,7 @@ export function readDeploymentConfig(env: Env, options: ReadConfigOptions): Read
       : text.endsWith('\n')
         ? text.slice(0, -1)
         : text;
-    return value === '' ? UNSET : { state: 'set', value };
+    return value === '' ? UNSET : { state: 'set', value, from: fileKey };
   };
 
   let profile: Profile | undefined;
@@ -300,7 +332,8 @@ export function readDeploymentConfig(env: Env, options: ReadConfigOptions): Read
   }
 
   const dataDir = valueOf(resolveFor('PORTFOLIO_DATA_DIR'));
-  const authPasswordHash = valueOf(resolveFor('PORTFOLIO_AUTH_PASSWORD_HASH'));
+  const hashValue = resolveFor('PORTFOLIO_AUTH_PASSWORD_HASH');
+  const authPasswordHash = valueOf(hashValue);
   const githubToken = valueOf(resolveFor('GITHUB_TOKEN'));
 
   for (const name of Object.keys(env)) {
@@ -330,6 +363,9 @@ export function readDeploymentConfig(env: Env, options: ReadConfigOptions): Read
       ...(authPasswordHash !== undefined ? { authPasswordHash } : {}),
       ...(githubToken !== undefined ? { githubToken } : {}),
     }),
+    ...(hashValue.state === 'set'
+      ? { secretKeys: Object.freeze({ authPasswordHash: hashValue.from }) }
+      : {}),
   });
   return { ok: true, config, issues };
 }

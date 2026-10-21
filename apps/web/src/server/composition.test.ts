@@ -126,7 +126,7 @@ test('the tagged startup rows are named requirements for #2, #3, and #4', () => 
     ]),
     [
       ['auth.provider', '#1', 'owner', 'fatal', 'check'],
-      ['auth.secret', '#2', 'owner', 'fatal', 'pending'],
+      ['auth.secret', '#2', 'owner', 'fatal', 'owner check'],
       ['data.directory', '#2, #3', 'owner', 'fatal', 'pending'],
       ['documents.pair', '#4', 'owner read-only', 'fatal', 'check'],
       ['documents.shape', '#3', 'owner', 'fatal', 'pending'],

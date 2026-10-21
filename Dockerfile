@@ -52,10 +52,19 @@ RUN addgroup -g 1001 -S nodejs && adduser -S nextjs -u 1001 -G nodejs
 # can read it. demo and read-only never use it.
 RUN mkdir -p /var/lib/portfolio && chown nextjs:nodejs /var/lib/portfolio && chmod 0700 /var/lib/portfolio
 
-# Standalone output ships its own minimal node_modules + server.js
-COPY --from=builder --chown=nextjs:nodejs /repo/apps/web/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /repo/apps/web/.next/static ./apps/web/.next/static
-COPY --from=builder --chown=nextjs:nodejs /repo/apps/web/public ./apps/web/public
+# Standalone output ships its own minimal node_modules + server.js. The app
+# tree is owned by root, so the server can't change its own code: the data
+# directory above is the only place it writes for good, and every Compose
+# example gives Next's cache a tmpfs.
+COPY --from=builder /repo/apps/web/.next/standalone ./
+COPY --from=builder /repo/apps/web/.next/static ./apps/web/.next/static
+COPY --from=builder /repo/apps/web/public ./apps/web/public
+
+# The owner CLI (#2), `node apps/web/bin/owner.mjs hash-password`, and the
+# PHC module it imports by relative path, at the same paths as in the repo.
+# Owned by root, so the server can't change them.
+COPY --from=builder /repo/apps/web/bin/owner.mjs ./apps/web/bin/owner.mjs
+COPY --from=builder /repo/packages/core/src/auth/phc.mjs ./packages/core/src/auth/phc.mjs
 
 # No PORTFOLIO_* defaults: the deployment sets its profile, origin, and source
 # directory at run time (docs/deployment.md), and the server refuses to start

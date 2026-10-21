@@ -82,7 +82,7 @@ docker compose -f compose.demo.yml up --build
 
 ### `owner`
 
-`deploy/compose.owner.yml` mounts `../config` and `../assets` as `read-only` does, and keeps drafts and revisions in the `portfolio-data` volume at `/var/lib/portfolio` (`PORTFOLIO_DATA_DIR`). The image creates that directory for the server's user (uid 1001, mode `0700`), so a new volume starts out writable by the server and no one else. Run one server per volume: the fixed container name stops `docker compose up --scale`. Back the volume up.
+`deploy/compose.owner.yml` mounts `../config` and `../assets` as `read-only` does, on the same read-only root and cache tmpfs, and keeps drafts and revisions in the `portfolio-data` volume at `/var/lib/portfolio` (`PORTFOLIO_DATA_DIR`). The image creates that directory for the server's user (uid 1001, mode `0700`), so a new volume starts out writable by the server and no one else. Run one server per volume: the fixed container name stops `docker compose up --scale`. Back the volume up.
 
 It refuses to start until a release ships an authentication provider.
 
@@ -92,6 +92,7 @@ It refuses to start until a release ships an authentication provider.
 - Installs only production dependencies in the runtime stage.
 - Runs `pnpm build` to produce a Next.js standalone output. The build needs no deployment settings, and the image sets no `PORTFOLIO_*` defaults: a setting outside the profile's column stops a production server, so a default would stop `demo`.
 - Under `read-only` and `owner`, reads the portfolio and site documents from `PORTFOLIO_SOURCE_DIR`, the mounted `config/`, and never renders the bundled examples in production.
+- Copies the app owned by root, so the server can't change its own code. The server's user (uid 1001) owns only the data directory, and the Compose examples give Next's cache a tmpfs. A `docker run` without one should add `--tmpfs /app/apps/web/.next/cache`.
 - Its `HEALTHCHECK` asks `/api/health`.
 
 ### Updating the portfolio
@@ -156,6 +157,36 @@ header Strict-Transport-Security "max-age=31536000"
 
 Add `includeSubDomains` only when every subdomain serves HTTPS.
 
+## Owner authentication
+
+`owner` signs one person in, the owner, with a password. The server never holds the password: it reads a scrypt hash of it from a secret file and checks each sign-in against that. Until a release ships the sign-in provider, `owner` refuses to start. It checks the hash's file before it refuses, and the hash itself once the provider is there.
+
+### Writing the hash
+
+`hash-password` asks for the password twice, with echo off, and prints its hash, one line starting `$scrypt$ln=17,r=8,p=1$`. The password takes 15 to 256 characters, and it's compared after Unicode NFKC normalization, so the same password typed on another keyboard still matches. The command never takes the password as an argument, and reads it only from a terminal. Its `--stdin` flag, which reads both entries as two lines of standard input, is for tests.
+
+From `deploy/`, write the hash where `compose.owner.yml` reads it, with the image you run:
+
+```sh
+mkdir -m 0700 secrets && sudo chown 1001:1001 secrets
+docker run --rm -it --user 1001:1001 -v "$PWD/secrets:/out" <image> \
+  node apps/web/bin/owner.mjs hash-password --out /out/owner_password_hash
+```
+
+`--out` creates the file with mode `0400` and no trailing newline, and never writes over one. Don't redirect the output of `docker run -t` to a file instead: the terminal puts a carriage return and the prompts in it. In a clone, `pnpm owner:hash-password` runs the same command, but a file it writes with `--out` belongs to you, and the server's user can't read a `0400` file it doesn't own: `sudo chown 1001:1001` it afterwards, or `sudo chown root:1001` it and `chmod 0440`. The image command above needs neither.
+
+### The secret file
+
+The server reads the hash from the file `PORTFOLIO_AUTH_PASSWORD_HASH_FILE` names, which `compose.owner.yml` sets to `/run/secrets/owner_password_hash`, the `owner_password_hash` secret from `deploy/secrets/owner_password_hash`. It has to be a regular file the server's user (uid 1001) can read and that neither group nor others can write: owned by uid 1001 with mode `0400`, or by `root:1001` with mode `0440`.
+
+`PORTFOLIO_AUTH_PASSWORD_HASH` takes the hash itself, for a host that injects secrets as variables. Never put it in Compose's `environment:` or an `.env` file: Compose reads each `$` there as the start of a variable and corrupts the hash, unless every `$` is written `$$`. The file avoids that. `secrets/` is in `.gitignore` and `.dockerignore`, and no hash belongs in the repository or in either config document.
+
+`owner` refuses to start when the hash is missing, set both ways, unreadable, not a regular file, writable by group or others, not a scrypt PHC string, weaker than `ln=17, r=8, p=1`, or past `ln=18, r=16, p=4`, which costs too much memory at each sign-in. The finding names the variable and the reason, never the hash.
+
+### Changing the password
+
+`--out` never writes over a file, so write the new hash under another name in `secrets/`, move it over `owner_password_hash` (`sudo mv`), and restart the container.
+
 ## Startup checks
 
 Before it takes a request, the server validates its settings and the two documents. A problem stops it with exit code 1 and one `config.fatal` JSON line per problem on stdout. Each line names the setting, never its value, and for a document adds the diagnostic code, the file, the JSON pointer, the line and column, and what to do about it. [configuration.md](configuration.md#validation) explains every code.
@@ -164,7 +195,7 @@ Before it takes a request, the server validates its settings and the two documen
 | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- | --------------------------------------------------------------------------------------------------- |
 | `PORTFOLIO_PROFILE` missing, or not exactly `owner`, `demo`, or `read-only`                                                                                                                                 | all              | refuses to start                                                                                    |
 | `PORTFOLIO_ORIGIN` missing, not a bare origin, or `http` for an `owner` host that isn't loopback                                                                                                            | all              | refuses to start                                                                                    |
-| A key and its `_FILE` both set, or an unreadable `_FILE`                                                                                                                                                    | all              | refuses to start                                                                                    |
+| A key and its `_FILE` both set, or a `_FILE` that can't be read or isn't a regular file                                                                                                                     | all              | refuses to start                                                                                    |
 | Proxy hops that aren't a whole number, or a preview origin that is invalid or `PORTFOLIO_ORIGIN`                                                                                                            | all              | refuses to start                                                                                    |
 | `PORTFOLIO_PATH` or `NEXT_PUBLIC_BASE_URL`                                                                                                                                                                  | all              | refuses to start, naming the setting that replaced it                                               |
 | A setting outside the profile's column, such as `GITHUB_TOKEN` under `read-only`                                                                                                                            | all              | refuses to start in production; `pnpm dev` warns and ignores it                                     |
@@ -180,6 +211,8 @@ Before it takes a request, the server validates its settings and the two documen
 | A pair with no visible section (`content.empty`), a `#fragment` link to no visible section (`anchor.broken`), one metric with two values (`metric.conflict`), or a secret-shaped string (`secret.detected`) | owner, read-only | refuses to start                                                                                    |
 | An origin on a reserved example domain, or the bundled sample's `identity.name`                                                                                                                             | owner, read-only | refuses to start in production; `pnpm dev` warns                                                    |
 | No authentication provider                                                                                                                                                                                  | owner            | refuses to start: configure sign-in or choose `read-only`                                           |
+| A password hash file that group or others can write                                                                                                                                                         | owner            | refuses to start                                                                                    |
+| A password hash that is missing, not a scrypt PHC string, or outside `ln=17, r=8, p=1` to `ln=18, r=16, p=4`                                                                                                | owner            | refuses to start, once a provider is registered                                                     |
 | A bundled sample pair that is missing, can't be read, or doesn't validate, so the build is broken                                                                                                           | demo             | refuses to start                                                                                    |
 
 The old one-file format has no `schemaVersion` and has `identity`, `sections`, `variant`, `theme`, `motionPreference`, `colorScheme`, or `typography` at the top. Its one `legacy.document` line names each old field and where it goes now, and nothing else is reported; a `portfolio.toml` can only be that format. A plain YAML document has no anchors, aliases, merge keys, tags, directives, repeated keys, or second document. The reserved example domains are `example.com`, `.net`, and `.org` with their subdomains, `.example`, and `.invalid`. Image sources may also be raster `data:image` URLs.
@@ -253,21 +286,21 @@ PORTFOLIO_PROFILE=demo PORTFOLIO_ORIGIN=https://demo.jane.name pnpm start
 
 ## Environment variables
 
-The server reads these from its environment only. Every key also accepts `<KEY>_FILE`, the path of a file holding the value (such as a Docker secret); set one or the other. An empty value counts as unset. `.env.example` lists them all.
+The server reads these from its environment only. Every key also accepts `<KEY>_FILE`, the path of a file holding the value (such as a Docker secret); set one or the other. An empty value counts as unset. `.env.example` lists them all, the password hash by its `_FILE` only.
 
-| Variable                       | Profiles         | Purpose                                                                           |
-| ------------------------------ | ---------------- | --------------------------------------------------------------------------------- |
-| `PORTFOLIO_PROFILE`            | all              | Required. Exactly `owner`, `demo`, or `read-only`.                                |
-| `PORTFOLIO_ORIGIN`             | all              | Required. The origin visitors use, such as `https://jane.name`: no path or slash. |
-| `PORTFOLIO_SOURCE_DIR`         | owner, read-only | Directory holding one `portfolio.{yml,yaml,json}` and one `site.{yml,yaml,json}`. |
-| `PORTFOLIO_TRUSTED_PROXY_HOPS` | all              | How many trusted proxies append to `X-Forwarded-For`. Whole number, default `0`.  |
-| `PORTFOLIO_PREVIEW_ORIGIN`     | owner, demo      | Optional preview origin, different from `PORTFOLIO_ORIGIN`.                       |
-| `PORTFOLIO_DATA_DIR`           | owner            | The writable data directory: `/var/lib/portfolio` in the owner example.           |
-| `PORTFOLIO_AUTH_PASSWORD_HASH` | owner            | Reserved: the Studio password hash.                                               |
-| `GITHUB_TOKEN`                 | owner            | Reserved. Public GitHub sections use unauthenticated REST and never send a token. |
-| `PORT`                         | all              | Port the host binds to. Default `3000`.                                           |
-| `PORTFOLIO_PATH`               | none: refused    | Replaced by `PORTFOLIO_SOURCE_DIR`. Setting it stops the server.                  |
-| `NEXT_PUBLIC_BASE_URL`         | none: refused    | Replaced by `PORTFOLIO_ORIGIN`. Setting it stops the server.                      |
+| Variable                       | Profiles         | Purpose                                                                                                                               |
+| ------------------------------ | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `PORTFOLIO_PROFILE`            | all              | Required. Exactly `owner`, `demo`, or `read-only`.                                                                                    |
+| `PORTFOLIO_ORIGIN`             | all              | Required. The origin visitors use, such as `https://jane.name`: no path or slash.                                                     |
+| `PORTFOLIO_SOURCE_DIR`         | owner, read-only | Directory holding one `portfolio.{yml,yaml,json}` and one `site.{yml,yaml,json}`.                                                     |
+| `PORTFOLIO_TRUSTED_PROXY_HOPS` | all              | How many trusted proxies append to `X-Forwarded-For`. Whole number, default `0`.                                                      |
+| `PORTFOLIO_PREVIEW_ORIGIN`     | owner, demo      | Optional preview origin, different from `PORTFOLIO_ORIGIN`.                                                                           |
+| `PORTFOLIO_DATA_DIR`           | owner            | The writable data directory: `/var/lib/portfolio` in the owner example.                                                               |
+| `PORTFOLIO_AUTH_PASSWORD_HASH` | owner            | The owner password's scrypt hash. Set it through `PORTFOLIO_AUTH_PASSWORD_HASH_FILE` ([Owner authentication](#owner-authentication)). |
+| `GITHUB_TOKEN`                 | owner            | Reserved. Public GitHub sections use unauthenticated REST and never send a token.                                                     |
+| `PORT`                         | all              | Port the host binds to. Default `3000`.                                                                                               |
+| `PORTFOLIO_PATH`               | none: refused    | Replaced by `PORTFOLIO_SOURCE_DIR`. Setting it stops the server.                                                                      |
+| `NEXT_PUBLIC_BASE_URL`         | none: refused    | Replaced by `PORTFOLIO_ORIGIN`. Setting it stops the server.                                                                          |
 
 A key outside its profile's list stops a production server; `pnpm dev` warns and ignores it. `.env` files are gitignored. `pnpm dev` reads `apps/web/.env.development`, which runs `read-only` from `config/`.
 

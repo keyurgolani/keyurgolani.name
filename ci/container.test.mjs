@@ -1,13 +1,19 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import http from 'node:http';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse as parseYaml } from 'yaml';
-import { assessRoutes, PROBE_SNIPPET, REQUESTS_SNIPPET, SCAN_SNIPPET } from './lib/container.mjs';
+import {
+  assessRoutes,
+  PROBE_SNIPPET,
+  REQUESTS_SNIPPET,
+  SCAN_SNIPPET,
+  WRITABLE_SNIPPET,
+} from './lib/container.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -92,6 +98,9 @@ test('each Compose example runs its profile from the one image, on loopback', ()
     assert.match(web.environment.PORTFOLIO_ORIGIN, /^\$\{PORTFOLIO_ORIGIN:\?.+\}$/, file);
     for (const port of web.ports) assert.match(port, /^127\.0\.0\.1:/, file);
     assert.equal('profiles' in web, false, `${file}: no Compose profiles`);
+    // A read-only root with a tmpfs for Next's cache, under every profile.
+    assert.equal(web.read_only, true, file);
+    assert.deepEqual(web.tmpfs, ['/app/apps/web/.next/cache'], file);
     const volumes = web.volumes ?? [];
     if (profile === 'demo') {
       assert.equal(web.environment.PORTFOLIO_SOURCE_DIR, undefined, file);
@@ -107,10 +116,22 @@ test('each Compose example runs its profile from the one image, on loopback', ()
       assert.ok(volumes.includes('portfolio-data:/var/lib/portfolio'), file);
       assert.ok('portfolio-data' in top.volumes, file);
       assert.ok(web.container_name, `${file}: a fixed name stops --scale`);
+      // The password hash comes from a secret file, never the environment:
+      // Compose reads $ there, which a PHC string is full of (#2).
+      assert.equal(
+        web.environment.PORTFOLIO_AUTH_PASSWORD_HASH_FILE,
+        '/run/secrets/owner_password_hash',
+        file,
+      );
+      assert.equal(web.environment.PORTFOLIO_AUTH_PASSWORD_HASH, undefined, file);
+      assert.deepEqual(web.secrets, ['owner_password_hash'], file);
+      assert.deepEqual(top.secrets, {
+        owner_password_hash: { file: './secrets/owner_password_hash' },
+      });
     } else {
       assert.equal(web.environment.PORTFOLIO_DATA_DIR, undefined, file);
-      assert.equal(web.read_only, true, file);
-      assert.deepEqual(web.tmpfs, ['/app/apps/web/.next/cache'], file);
+      assert.equal(web.environment.PORTFOLIO_AUTH_PASSWORD_HASH_FILE, undefined, file);
+      assert.equal(web.secrets, undefined, file);
     }
   }
 });
@@ -123,6 +144,63 @@ test('the image sets no PORTFOLIO_* default and creates the data directory for u
     /mkdir -p \/var\/lib\/portfolio && chown nextjs:nodejs \/var\/lib\/portfolio && chmod 0700 \/var\/lib\/portfolio/,
   );
   assert.match(text, /adduser -S nextjs -u 1001/);
+});
+
+test('the runner stage copies the app owned by root, so the server cannot change its own code', () => {
+  const text = readFileSync(path.join(ROOT, 'Dockerfile'), 'utf8');
+  const runner = text.slice(text.search(/^FROM .* AS runner$/m));
+  const copies = runner.split('\n').filter((line) => /^COPY\b/.test(line));
+  assert.ok(copies.length >= 3, copies.join('\n'));
+  for (const line of copies) assert.doesNotMatch(line, /--chown/, line);
+  // The one thing the server's user owns: the data directory.
+  assert.deepEqual(runner.match(/chown [^&\n]+/g), ['chown nextjs:nodejs /var/lib/portfolio ']);
+});
+
+test('the ownership check lists what a user could change in a tree', async () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'image-owner-'));
+  try {
+    mkdirSync(path.join(root, 'apps/web'), { recursive: true });
+    for (const file of ['server.js', 'apps/web/page.js']) writeFileSync(path.join(root, file), 'x');
+    chmodSync(path.join(root, 'server.js'), 0o644);
+    chmodSync(path.join(root, 'apps/web/page.js'), 0o644);
+    for (const dir of ['.', 'apps', 'apps/web']) chmodSync(path.join(root, dir), 0o755);
+    const check = async (uid, gid) =>
+      JSON.parse(
+        (await runNode(['-e', WRITABLE_SNIPPET, root, String(uid), String(gid)], {})).stdout,
+      );
+    // Owned by this user, everything counts.
+    const uid = process.getuid();
+    const gid = process.getgid();
+    assert.equal((await check(uid, gid)).count, 5);
+    // Owned by someone else, at 0644 and 0755, nothing does.
+    const stranger = [4242424, 4242425];
+    assert.deepEqual(await check(...stranger), { writable: [], count: 0 });
+    // Writable by anyone, or by the user's group.
+    chmodSync(path.join(root, 'server.js'), 0o666);
+    assert.deepEqual(await check(...stranger), { writable: ['server.js'], count: 1 });
+    chmodSync(path.join(root, 'apps/web'), 0o775);
+    assert.deepEqual((await check(stranger[0], gid)).writable.sort(), ['apps/web', 'server.js']);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('the image ships the owner CLI with its PHC module where the CLI imports it, owned by root', () => {
+  const text = readFileSync(path.join(ROOT, 'Dockerfile'), 'utf8');
+  const cli = readFileSync(path.join(ROOT, 'apps/web/bin/owner.mjs'), 'utf8');
+  const imported = /from '(\.\.\/\.\.\/\.\.\/packages\/core\/src\/auth\/phc\.mjs)'/.exec(cli)?.[1];
+  assert.ok(imported, 'owner.mjs imports the PHC module by relative path');
+  // Relative to /app/apps/web/bin, the CLI's place in the image.
+  assert.equal(
+    path.posix.join('/app/apps/web/bin', imported),
+    '/app/packages/core/src/auth/phc.mjs',
+  );
+  for (const file of ['apps/web/bin/owner.mjs', 'packages/core/src/auth/phc.mjs']) {
+    assert.ok(
+      text.split('\n').includes(`COPY --from=builder /repo/${file} ./${file}`),
+      `the runner stage copies ${file}, without --chown`,
+    );
+  }
 });
 
 for (const hostname of [undefined, '0.0.0.0', '::', '127.0.0.1']) {
@@ -227,10 +305,18 @@ test('the in-container requests report a connection error per request', async ()
   assert.match(result.error, /ECONNREFUSED/);
 });
 
-test('the image scan flags personal data, env files, git, and test trees', async () => {
+test('the image scan flags personal data, env files, git, secrets, and test trees', async () => {
   const root = mkdtempSync(path.join(tmpdir(), 'image-scan-'));
   try {
-    for (const dir of ['apps/web', 'tests', 'ci', 'reports', '.git', 'node_modules/pkg/tests']) {
+    for (const dir of [
+      'apps/web',
+      'tests',
+      'ci',
+      'reports',
+      '.git',
+      'deploy/secrets',
+      'node_modules/pkg/tests',
+    ]) {
       mkdirSync(path.join(root, dir), { recursive: true });
     }
     for (const file of [
@@ -261,6 +347,7 @@ test('the image scan flags personal data, env files, git, and test trees', async
       'apps/web/portfolio.json',
       'apps/web/site.json',
       'ci',
+      'deploy/secrets',
       'portfolio.yml',
       'reports',
       'site.yml',
