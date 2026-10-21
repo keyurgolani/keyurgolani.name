@@ -8,7 +8,7 @@ import { openSampleCatalog } from './catalog-sample';
 import type { ConfigIssue, DeploymentConfig } from './config';
 import { configSummary, type CatalogAdapter } from './config-summary';
 import type { DeploymentState } from './config-store';
-import { createDispatcher, NO_BINDINGS, type StudioBindings } from './dispatcher';
+import { createDispatcher, NO_BINDINGS, type Handler, type StudioBindings } from './dispatcher';
 import { listOperations, type ConfigSummary } from './operations';
 import type { Session } from './session';
 import { liveVariantHealth } from './variant-health';
@@ -31,6 +31,10 @@ export interface AuthBindings {
   readonly touchSession: StudioBindings['touchSession'];
   /** auth.login's rate limit. Without one, nothing is throttled. */
   readonly throttle?: StudioBindings['throttle'];
+  /** What a malformed input gets instead of 400, such as the sign-in form's 303. */
+  readonly invalidInput?: StudioBindings['invalidInput'];
+  /** Handlers for the provider's own entries, such as auth.login. */
+  readonly handlers?: Readonly<Record<string, Handler>>;
 }
 
 /** What the owner branch hands a provider as it loads it. */
@@ -273,17 +277,24 @@ export async function compose(input: CompositionInput): Promise<Composition> {
       const reader = documents.reader;
       const bindings: StudioBindings = {
         ...NO_BINDINGS,
-        handlers: owner.ownerHandlers({
-          config,
-          catalog,
-          variantHealth: () =>
-            liveVariantHealth(async () => (await reader.getLive()).unit.site.appearance.variant),
-        }),
+        handlers: {
+          ...owner.ownerHandlers({
+            config,
+            catalog,
+            variantHealth: () =>
+              liveVariantHealth(async () => (await reader.getLive()).unit.site.appearance.variant),
+          }),
+          ...provider.handlers,
+        },
         resolveSession: (context) => provider.resolveSession(context),
         checkOrigin: (context) => provider.checkOrigin(context),
         touchSession: (context) => provider.touchSession(context),
         throttle: (context) =>
           provider.throttle ? provider.throttle(context) : NO_BINDINGS.throttle(context),
+        invalidInput: (context) =>
+          provider.invalidInput
+            ? provider.invalidInput(context)
+            : NO_BINDINGS.invalidInput(context),
       };
       return built(config, {
         reader: documents.reader,

@@ -14,10 +14,86 @@ function reachable(operation: Operation): ErrorCode[] {
   return codes;
 }
 
-test('config.status is the one registered operation', () => {
+test("the registry holds config.status and #2's auth entries", () => {
   assert.deepEqual(
     listOperations().map((operation) => operation.name),
-    ['config.status'],
+    [
+      'config.status',
+      'auth.session',
+      'auth.login',
+      'auth.logout',
+      'auth.session.extend',
+      'auth.sessions.list',
+      'auth.sessions.revoke',
+      'auth.sessions.revokeAll',
+    ],
+  );
+});
+
+const entry = (name: string) => listOperations().find((operation) => operation.name === name)!;
+
+test('auth.login needs no session, takes JSON or the sign-in form up to 4 KB, and any password at all', () => {
+  const login = entry('auth.login');
+  assert.equal(login.kind, 'command');
+  assert.equal(login.session, false);
+  assert.equal(login.capability, 'auth.session');
+  assert.deepEqual(login.bodyTypes, ['json', 'form']);
+  assert.equal(login.maxBodyBytes, 4096);
+  for (const code of ['credentials_rejected', 'rate_limited', 'unavailable'] as const) {
+    assert.ok(login.errors.includes(code), code);
+  }
+  // A missing, empty, malformed, or overlong password is a credential
+  // failure for the handler, never invalid_input.
+  for (const body of [{}, { password: '' }, { password: 42 }, { password: 'x'.repeat(900) }]) {
+    assert.equal(login.input.safeParse(body).success, true, JSON.stringify(body));
+  }
+  assert.equal(login.input.safeParse({ password: 'p', returnTo: '/studio' }).success, true);
+});
+
+test('auth.logout needs no session, so it signs out whatever the cookie carries, and still checks the Origin', () => {
+  const logout = entry('auth.logout');
+  assert.equal(logout.kind, 'command');
+  assert.equal(logout.session, false);
+  assert.equal(logout.originCheck, true);
+  assert.equal(logout.capability, 'auth.session');
+  assert.deepEqual(logout.errors, reachable(logout));
+  assert.equal(logout.output.safeParse({ signedOut: true }).success, true);
+  assert.equal(logout.output.safeParse({ signedOut: false }).success, false);
+});
+
+test('the other auth entries need a session, and the session list never shows a token or a digest', () => {
+  for (const name of [
+    'auth.session',
+    'auth.session.extend',
+    'auth.sessions.list',
+    'auth.sessions.revoke',
+    'auth.sessions.revokeAll',
+  ]) {
+    const operation = entry(name);
+    assert.equal(operation.session, true, name);
+    assert.deepEqual(operation.errors, reachable(operation), name);
+    assert.equal(
+      operation.capability,
+      name.startsWith('auth.sessions.') ? 'studio.view' : 'auth.session',
+      name,
+    );
+  }
+  const list = entry('auth.sessions.list');
+  const summary = {
+    ref: '0123abcd',
+    browser: 'firefox',
+    createdAt: '2026-10-20T09:00:00.000Z',
+    lastSeenAt: '2026-10-20T09:00:00.000Z',
+    current: true,
+  };
+  assert.equal(list.output.safeParse({ sessions: [summary] }).success, true);
+  assert.equal(
+    list.output.safeParse({ sessions: [{ ...summary, digest: 'a'.repeat(64) }] }).success,
+    false,
+  );
+  assert.equal(
+    entry('auth.sessions.revoke').input.safeParse({ ref: 'a'.repeat(64) }).success,
+    false,
   );
 });
 
