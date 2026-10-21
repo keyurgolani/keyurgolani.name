@@ -1,10 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { toPublicView, type ParsedPair } from '@portfolio/schema';
+import { exhibitions } from './__fixtures__/extension';
 import {
   checkControlValues,
   contentIndex,
-  hiddenSectionIds,
   materializeControls,
   migrateControls,
   serializeControls,
@@ -38,7 +39,13 @@ const SECTIONS = [
   { id: 'drafts', kind: 'writings' },
   { id: 'contact', kind: 'contact' },
 ];
-const CONTENT = contentIndex({ sections: SECTIONS as never }, new Set(['drafts']));
+/** A pair holding `sections`, with the site hiding `hidden`. */
+const pairOf = (sections: readonly object[], hidden: readonly string[] = []) =>
+  ({
+    portfolio: { sections },
+    site: { sections: Object.fromEntries(hidden.map((id) => [id, { hidden: true }])) },
+  }) as unknown as ParsedPair;
+const CONTENT = contentIndex(toPublicView(pairOf(SECTIONS, ['drafts'])).portfolio);
 
 const DEFAULTS = {
   showIndex: true,
@@ -142,14 +149,20 @@ test('another version is controls.stale alone, and every control renders its def
   }
 });
 
-test('hidden sections come from the site document, and leave the content index', () => {
-  const hidden = hiddenSectionIds({
-    sections: { drafts: { hidden: true }, essays: { hidden: false } },
-  });
-  assert.deepEqual([...hidden], ['drafts']);
+test("the content index is the public view's: no hidden or unregistered extension section", () => {
+  const sections = [
+    ...SECTIONS,
+    { id: 'shows', kind: '@acme/portfolio-photography/exhibitions', data: { items: [] } },
+    { id: 'notes', kind: '@other/x/notes', data: {} },
+  ];
+  const pair = pairOf(sections, ['drafts']);
   assert.deepEqual(
-    [...contentIndex({ sections: SECTIONS as never }, hidden).keys()],
+    [...contentIndex(toPublicView(pair).portfolio).keys()],
     ['top', 'essays', 'work', 'contact'],
+  );
+  assert.deepEqual(
+    [...contentIndex(toPublicView(pair, { extensions: [exhibitions] }).portfolio).keys()],
+    ['top', 'essays', 'work', 'contact', 'shows'],
   );
 });
 

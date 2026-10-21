@@ -3,7 +3,7 @@
 // `variantControls.<id>`. Omitted values take defaults, an invalid or stale
 // one renders its default, and inactive variants keep their entries.
 
-import { canonicalize, isPlainObject, type Portfolio, type Site } from '@portfolio/schema';
+import { canonicalize, isPlainObject, type PublicPortfolio } from '@portfolio/schema';
 import type { ControlDeclaration, MigrationOperation, VariantManifest } from './manifest-schema';
 
 /** A control's value: boolean, enum value, integer, content id or null, or a list of content ids. */
@@ -19,25 +19,13 @@ export interface ControlsEntry {
 /** The content a contentRef may point at: each visible section's id and kind. */
 export type ContentIndex = ReadonlyMap<string, string>;
 
-/** The ids of the sections the site document hides. */
-export function hiddenSectionIds(site: Pick<Site, 'sections'>): ReadonlySet<string> {
-  return new Set(
-    Object.entries(site.sections ?? {})
-      .filter(([, settings]) => settings.hidden === true)
-      .map(([id]) => id),
-  );
-}
-
-/** Each visible section's id and kind. */
-export function contentIndex(
-  portfolio: Pick<Portfolio, 'sections'>,
-  hidden: ReadonlySet<string> = new Set(),
-): ContentIndex {
-  return new Map(
-    portfolio.sections
-      .filter((section) => !hidden.has(section.id))
-      .map((section) => [section.id, section.kind]),
-  );
+/**
+ * Each section's id and kind. Pass a public view's portfolio, which has no
+ * hidden section and no unregistered extension section, so a reference to
+ * either is dangling, as it is when the variant renders.
+ */
+export function contentIndex(portfolio: PublicPortfolio): ContentIndex {
+  return new Map(portfolio.sections.map((section) => [section.id, section.kind]));
 }
 
 export interface ControlProblem {

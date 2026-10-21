@@ -68,7 +68,6 @@ export {
 export {
   checkControlValues,
   contentIndex,
-  hiddenSectionIds,
   materializeControls,
   migrateControls,
   serializeControls,

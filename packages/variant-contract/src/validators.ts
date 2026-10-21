@@ -2,8 +2,14 @@
 // UnitValidators that validatePublicationUnit() runs after its own. Slice 5
 // folds them into evaluateCompatibility.
 
-import type { Diagnostic, ParsedPair, UnitValidator } from '@portfolio/schema';
-import { checkControlValues, contentIndex, hiddenSectionIds } from './controls';
+import {
+  toPublicView,
+  type Context,
+  type Diagnostic,
+  type ParsedPair,
+  type UnitValidator,
+} from '@portfolio/schema';
+import { checkControlValues, contentIndex } from './controls';
 import { toPointer, UNIT_CODES, type UnitCode } from './diagnostics';
 import { FALLBACK_ID } from './ids';
 import { findVariant, type VariantRegistry } from './registry';
@@ -69,13 +75,15 @@ export function validateSelection(registry: VariantRegistry): UnitValidator {
 
 /**
  * The selected variant's stored control values against its manifest and the
- * visible content. Other variants' entries are kept and left unchecked.
+ * content it renders: the public view's, which has no hidden section and no
+ * unregistered extension section. Other variants' entries are kept and left
+ * unchecked.
  */
 export function validateControls(registry: VariantRegistry): UnitValidator {
   return {
     id: 'variant-controls',
     covers: ['site.variantControls.*'],
-    validate(pair: ParsedPair) {
+    validate(pair: ParsedPair, ctx: Context) {
       const active = pair.site.appearance.variant;
       const entries = pair.site.variantControls ?? {};
       const registered = active === FALLBACK_ID ? undefined : findVariant(registry, active);
@@ -83,7 +91,7 @@ export function validateControls(registry: VariantRegistry): UnitValidator {
         .filter((id) => id !== active || !registered)
         .map((id) => `site.variantControls.${id}`);
       if (!registered || !Object.hasOwn(entries, active)) return { diagnostics: [], notChecked };
-      const content = contentIndex(pair.portfolio, hiddenSectionIds(pair.site));
+      const content = contentIndex(toPublicView(pair, { extensions: ctx.extensions }).portfolio);
       const diagnostics = checkControlValues(registered.manifest, entries[active], content).map(
         (problem) =>
           record(

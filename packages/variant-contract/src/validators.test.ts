@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { validatePublicationUnit, type Diagnostic } from '@portfolio/schema';
+import { validatePublicationUnit, type ContentExtension, type Diagnostic } from '@portfolio/schema';
+import { exhibitions } from './__fixtures__/extension';
 import { UNIT_CODES } from './diagnostics';
 import type { VariantRegistry } from './registry';
 import { validateManifest } from './validate-manifest';
@@ -40,13 +41,20 @@ function site(variant: string, extra = ''): string {
   return `${SITE.replace('variant: editorial', `variant: ${variant}`)}${extra}`;
 }
 
-function check(siteText: string, registry: VariantRegistry = REGISTRY) {
+function check(
+  siteText: string,
+  registry: VariantRegistry = REGISTRY,
+  {
+    portfolio = PORTFOLIO,
+    extensions = [],
+  }: { portfolio?: string; extensions?: ContentExtension[] } = {},
+) {
   return validatePublicationUnit(
     {
-      portfolio: { text: PORTFOLIO, format: 'yaml', name: 'portfolio.yml' },
+      portfolio: { text: portfolio, format: 'yaml', name: 'portfolio.yml' },
       site: { text: siteText, format: 'yaml', name: 'site.yml' },
     },
-    { validators: contractValidators(registry) },
+    { validators: contractValidators(registry), extensions },
   );
 }
 
@@ -185,4 +193,33 @@ test('each validator stands alone, with an id #4 lists when it fails', () => {
   });
   const result = check(site('acme-ocean'), broken);
   assert.ok(result.notChecked.includes('validator:variant-selection'));
+});
+
+test("a stored ref to a section the variant won't render dangles: hidden or an unregistered extension's", () => {
+  const portfolio = `${PORTFOLIO}
+  - kind: '@acme/portfolio-photography/exhibitions'
+    id: shows
+    data: { items: [{ title: Tidelines }] }
+`;
+  const stored = `variantControls:
+  acme-ocean:
+    version: 2
+    values:
+      featured: [shows]
+`;
+  const refs = (extensions: ContentExtension[], extra = '') => {
+    const result = check(site('acme-ocean', `${stored}${extra}`), REGISTRY, {
+      portfolio,
+      extensions,
+    });
+    assert.ok(result.pair, JSON.stringify(result.diagnostics));
+    return ours(result.diagnostics).map(({ code, pointer }) => [code, pointer]);
+  };
+  assert.deepEqual(refs([exhibitions]), []);
+  assert.deepEqual(refs([]), [
+    ['controls.dangling-ref', '/variantControls/acme-ocean/values/featured/0'],
+  ]);
+  assert.deepEqual(refs([exhibitions], 'sections:\n  shows: { hidden: true }\n'), [
+    ['controls.dangling-ref', '/variantControls/acme-ocean/values/featured/0'],
+  ]);
 });
