@@ -81,7 +81,7 @@ The five first-party compositions have pinned values: `editorial-evidence` is li
 ## Coverage
 
 - **`renderedKinds`** (required): the kinds your variant renders bespoke. Each needs a renderer in the map you pass `renderSection`, and each renderer needs its kind here: a mismatch throws.
-- **`unsupportedKinds`** (required): the kinds your composition deliberately doesn't show. Their sections render nothing. DESIGN.md says why.
+- **`unsupportedKinds`** (required): the kinds your composition deliberately doesn't show. Their sections render nothing, and the compatibility report warns the owner (`kind.unsupported`). DESIGN.md says why.
 
 A kind in neither list renders through the kit's shared renderer, so the visitor always gets the content. The two lists can't overlap. Each entry is a core kind or an extension kind, `<package>/<name>`.
 
@@ -94,6 +94,8 @@ A kind in neither list renders through the kit's shared renderer, so the visitor
 - `level`: `required`, `recommended`, or `optional`.
 - `min`, `max`: how many items.
 - `whenEmpty`: `{ "mode": "omit" | "keep", "note": "..." }`, what the composition does without it.
+
+The compatibility report counts each slot: the visible sections of its kind, the visible sections its control points at, or the values its field holds, an array counting each item. A required slot below `min` blocks publishing (`slot.required-empty`), an empty recommended one warns (`slot.recommended-empty`), and more than `max` warns, with the extras rendering after the slot (`slot.overflow`). An empty optional slot shows in the report alone. The note goes to the owner word for word, so write it for them.
 
 ## Routes
 
@@ -127,8 +129,8 @@ When you change a control incompatibly, bump `version` and add a migration from 
 ## Presentation
 
 - **`visitorControl`** (required): `{ "placement": "header" | "navigation" | "footer" }`, where your one `<VisitorControlSlot />` sits. #19 fills it.
-- **`textDirection`** (required): `["ltr"]` or `["ltr", "rtl"]`. Declaring `rtl` brings the audit's logical-property rule.
-- **`recommendedAppearance`** (optional): an appearance recipe id from #19's catalog, which Studio suggests with the variant.
+- **`textDirection`** (required): `["ltr"]` or `["ltr", "rtl"]`. Declaring `rtl` brings the audit's logical-property rule. Without it, right-to-left content warns the owner (`direction.unsupported`).
+- **`recommendedAppearance`** (optional): an appearance recipe id from #19's catalog, which Studio suggests with the variant. One the build doesn't list warns (`appearance.unknown-recipe`), once #20 lists recipes.
 
 ## Provenance
 
