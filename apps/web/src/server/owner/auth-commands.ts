@@ -20,7 +20,7 @@ import { dataResult, errorResult, redirectResult, type StudioResult } from '../s
 import { clearedSessionCookie, readCookies, sessionCookie, type CookieMode } from './cookie';
 import { clientAddress } from './guard';
 import type { LoginLimits } from './login-limits';
-import { safeReturnTo, signInLocation } from './return-to';
+import { safeReturnTo, signInLocation } from '../return-to';
 
 // The auth entries' handlers (#2): auth.login and auth.logout, the current
 // session and its extension, and the session list with its revocations.

@@ -1,8 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { DEFAULT_RETURN_TO, safeReturnTo, signInLocation } from './return-to';
+import {
+  DEFAULT_RETURN_TO,
+  safeReturnTo,
+  SIGN_IN_STATES,
+  signInLocation,
+  signInStateOf,
+} from './return-to';
 
-// Where sign-in sends the owner afterwards (#2).
+// Where sign-in sends the owner afterwards (#2), and how the sign-in page
+// learns why it is showing.
 
 test('returnTo accepts only a path under /studio, however it is encoded', () => {
   const kept = [
@@ -81,4 +88,21 @@ test('a form post comes back to sign-in with its state, and keeps where the owne
     '/studio/sign-in?state=rate_limited&retryAfter=60',
   );
   assert.equal(signInLocation('error', '/studio'), '/studio/sign-in?state=error');
+  // A request that never had a session comes with no state.
+  assert.equal(signInLocation(null, '/studio'), '/studio/sign-in');
+  assert.equal(
+    signInLocation(null, '/studio/drafts'),
+    '/studio/sign-in?returnTo=%2Fstudio%2Fdrafts',
+  );
+  assert.equal(
+    signInLocation('session_ended', '/studio/drafts'),
+    '/studio/sign-in?state=session_ended&returnTo=%2Fstudio%2Fdrafts',
+  );
+});
+
+test('the sign-in page reads only the states it knows', () => {
+  for (const state of SIGN_IN_STATES) assert.equal(signInStateOf(state), state);
+  for (const value of [null, undefined, '', 'FAILED', 'failed ', 'signed_in', '<script>']) {
+    assert.equal(signInStateOf(value), null, String(value));
+  }
 });

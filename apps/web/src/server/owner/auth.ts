@@ -21,13 +21,13 @@ import type { Handler, StudioBindings } from '../dispatcher';
 import { recordOwnerModule } from '../load-trace';
 import { log } from '../log';
 import { listOperations, type Operation } from '../operations';
+import { signInLocation } from '../return-to';
 import type { Session } from '../session';
 import { errorResult, redirectResult } from '../studio-result';
 import { authHandlers, isFormPost, returnToOf, throttledAnswer, type Held } from './auth-commands';
 import { clearedSessionCookie, cookieMode, readCookies, type CookieMode } from './cookie';
 import { checkCsrf, checkMutationOrigin, checkRequestOrigin, clientAddress } from './guard';
 import { loginLimits, type LoginLimits } from './login-limits';
-import { signInLocation } from './return-to';
 
 // The owner's auth provider (#2): the dispatcher's session, origin, touch,
 // and throttle bindings, and the auth entries' handlers, over
