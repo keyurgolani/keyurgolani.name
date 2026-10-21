@@ -33,6 +33,19 @@ export const RegistryIdSchema = z.string().regex(REGISTRY_ID_PATTERN, {
 });
 
 /**
+ * The id of #5's fallback composition, which renders in place of a variant
+ * this build doesn't register. The build registers it, but a site can't
+ * select it.
+ */
+export const FALLBACK_VARIANT_ID = 'fallback';
+
+/** A selected variant: a registry id, other than the fallback composition's. */
+const SelectedVariantSchema = RegistryIdSchema.refine((id) => id !== FALLBACK_VARIANT_ID, {
+  message:
+    "names the fallback composition, which renders in place of a variant this build doesn't register and can't be selected. Select a variant.",
+});
+
+/**
  * A variant's stored control values hold any keys, but only plain JSON: the
  * render input and a revision (#3) canonicalize them, which .inf and .nan
  * can't be.
@@ -61,7 +74,7 @@ export function siteSchemas({ object }: SchemaParts) {
    * can still name something this build doesn't register.
    */
   const AppearanceSelectionSchema = object({
-    variant: RegistryIdSchema,
+    variant: SelectedVariantSchema,
     designLanguage: RegistryIdSchema,
     colorScheme: RegistryIdSchema,
     typography: RegistryIdSchema,

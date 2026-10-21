@@ -86,6 +86,7 @@ export {
   validateControls,
   validateRoutes,
   validateSelection,
+  type ValidatorOptions,
 } from './validators';
 export {
   buildRenderInput,

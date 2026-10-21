@@ -6,6 +6,7 @@ import {
   toPublicView,
   type Context,
   type Diagnostic,
+  type DiagnosticSeverity,
   type ParsedPair,
   type UnitValidator,
 } from '@portfolio/schema';
@@ -14,16 +15,27 @@ import { toPointer, UNIT_CODES, type UnitCode } from './diagnostics';
 import { FALLBACK_ID } from './ids';
 import { findVariant, type VariantRegistry } from './registry';
 
+export interface ValidatorOptions {
+  /**
+   * The pair is live: startup and loadPair() check it (Slice 3, item 7). The
+   * fallback composition renders for an unavailable selection, and controls
+   * fall back to their defaults, so those records only warn. #3's publish
+   * leaves it off, and they block.
+   */
+  readonly live?: boolean;
+}
+
 function record(
   code: UnitCode,
   path: readonly (string | number)[],
   message: string,
   remediation: string,
+  severity: DiagnosticSeverity = UNIT_CODES[code],
 ): Diagnostic {
   const pointer = toPointer(path);
   return {
     code,
-    severity: UNIT_CODES[code],
+    severity,
     document: 'site',
     pointer,
     message: `${pointer} ${message}`,
@@ -31,14 +43,23 @@ function record(
   };
 }
 
+/** What a record that falls back when live blocks otherwise. */
+const fallsBack = (code: UnitCode, { live = false }: ValidatorOptions): DiagnosticSeverity =>
+  live ? 'warning' : UNIT_CODES[code];
+
 const INSTALL = 'pnpm --filter @portfolio/web add <package>';
 
 /**
  * `variant.unavailable` when the site selects a variant this build doesn't
  * register, or the fallback composition, which stands in for one and can't
  * be selected. Preview renders the fallback composition; publish is blocked.
+ * Live, an unregistered selection only warns, since the fallback renders;
+ * #4's site schema refuses the fallback itself before this runs.
  */
-export function validateSelection(registry: VariantRegistry): UnitValidator {
+export function validateSelection(
+  registry: VariantRegistry,
+  options: ValidatorOptions = {},
+): UnitValidator {
   return {
     id: 'variant-selection',
     covers: ['site.appearance.variant'],
@@ -49,9 +70,7 @@ export function validateSelection(registry: VariantRegistry): UnitValidator {
         .map((entry) => entry.manifest.id)
         .filter((choice) => choice !== FALLBACK_ID)
         .sort();
-      const pick = choices.length
-        ? `pick one this build registers: ${choices.join(', ')}.`
-        : `install a variant with ${INSTALL}.`;
+      const registered = choices.join(', ');
       return {
         diagnostics: [
           id === FALLBACK_ID
@@ -59,13 +78,18 @@ export function validateSelection(registry: VariantRegistry): UnitValidator {
                 'variant.unavailable',
                 ['appearance', 'variant'],
                 "names the fallback composition, which stands in for an unavailable variant and can't be selected.",
-                `Select a variant: ${pick}`,
+                choices.length
+                  ? `Select a variant this build registers: ${registered}.`
+                  : `Install a variant with ${INSTALL}, rebuild, and select it.`,
               )
             : record(
                 'variant.unavailable',
                 ['appearance', 'variant'],
                 "names a variant this build doesn't register, so the fallback composition renders instead.",
-                `Install its package with ${INSTALL} and rebuild, or ${pick}`,
+                choices.length
+                  ? `Install its package with ${INSTALL} and rebuild, or select one this build registers: ${registered}.`
+                  : `Install its package with ${INSTALL} and rebuild. This build registers no variant yet.`,
+                fallsBack('variant.unavailable', options),
               ),
         ],
       };
@@ -77,9 +101,13 @@ export function validateSelection(registry: VariantRegistry): UnitValidator {
  * The selected variant's stored control values against its manifest and the
  * content it renders: the public view's, which has no hidden section and no
  * unregistered extension section. Other variants' entries are kept and left
- * unchecked.
+ * unchecked. Live, each record only warns, since the control renders its
+ * default.
  */
-export function validateControls(registry: VariantRegistry): UnitValidator {
+export function validateControls(
+  registry: VariantRegistry,
+  options: ValidatorOptions = {},
+): UnitValidator {
   return {
     id: 'variant-controls',
     covers: ['site.variantControls.*'],
@@ -99,6 +127,7 @@ export function validateControls(registry: VariantRegistry): UnitValidator {
             ['variantControls', active, ...problem.path],
             problem.message,
             problem.remediation,
+            fallsBack(problem.code, options),
           ),
       );
       return { diagnostics, notChecked };
@@ -152,7 +181,17 @@ export function validateRoutes(registry: VariantRegistry): UnitValidator {
   };
 }
 
-/** All three, in the order Slice 3 passes them to validatePublicationUnit(). */
-export function contractValidators(registry: VariantRegistry): readonly UnitValidator[] {
-  return [validateSelection(registry), validateControls(registry), validateRoutes(registry)];
+/**
+ * All three, in the order the host passes them to validatePublicationUnit():
+ * live at startup and in loadPair(), and not live for #3's publish.
+ */
+export function contractValidators(
+  registry: VariantRegistry,
+  options: ValidatorOptions = {},
+): readonly UnitValidator[] {
+  return [
+    validateSelection(registry, options),
+    validateControls(registry, options),
+    validateRoutes(registry),
+  ];
 }

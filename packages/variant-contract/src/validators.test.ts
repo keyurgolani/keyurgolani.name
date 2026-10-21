@@ -38,7 +38,8 @@ const REGISTRY: VariantRegistry = [
 
 /** The engineering pair's site, selecting `variant`, with extra YAML appended. */
 function site(variant: string, extra = ''): string {
-  return `${SITE.replace('variant: editorial', `variant: ${variant}`)}${extra}`;
+  // The first `variant:` line is the appearance's; visitorControls has the other.
+  return `${SITE.replace(/^ {2}variant: .+$/m, `  variant: ${variant}`)}${extra}`;
 }
 
 function check(
@@ -47,14 +48,15 @@ function check(
   {
     portfolio = PORTFOLIO,
     extensions = [],
-  }: { portfolio?: string; extensions?: ContentExtension[] } = {},
+    live = false,
+  }: { portfolio?: string; extensions?: ContentExtension[]; live?: boolean } = {},
 ) {
   return validatePublicationUnit(
     {
       portfolio: { text: portfolio, format: 'yaml', name: 'portfolio.yml' },
       site: { text: siteText, format: 'yaml', name: 'site.yml' },
     },
-    { validators: contractValidators(registry), extensions },
+    { validators: contractValidators(registry, { live }), extensions },
   );
 }
 
@@ -70,8 +72,8 @@ test('a registered selection with no stored controls or toggles has nothing to r
   assert.ok(result.notChecked.includes('site.appearance.colorScheme'));
 });
 
-test('an unregistered selection, the fallback, and missing-variant are variant.unavailable', () => {
-  for (const variant of ['editorial', 'fallback', 'missing-variant']) {
+test('an unregistered selection and missing-variant are variant.unavailable', () => {
+  for (const variant of ['editorial', 'missing-variant']) {
     const result = check(site(variant));
     const records = ours(result.diagnostics);
     assert.deepEqual(
@@ -82,18 +84,37 @@ test('an unregistered selection, the fallback, and missing-variant are variant.u
     // Located at the line, and blocking publish only, so preview still has the pair.
     assert.equal(records[0]!.line, 4);
     assert.ok(result.pair, variant);
-    // The message never repeats the document's value, unless it's the reserved id it explains.
-    if (variant !== 'fallback') {
-      assert.ok(!records[0]!.message.includes(variant), records[0]!.message);
-    }
+    // The message never repeats the document's value.
+    assert.ok(!records[0]!.message.includes(variant), records[0]!.message);
     assert.match(records[0]!.remediation, /acme-ocean, acme-reef/);
   }
-  assert.match(ours(check(site('fallback')).diagnostics)[0]!.message, /can't be selected/);
 });
 
-test('with nothing registered, the remediation says how to install a variant', () => {
+test("#4's site schema refuses the fallback composition before the validators run", () => {
+  const result = check(site('fallback'));
+  assert.equal(result.pair, null);
+  assert.deepEqual(
+    result.diagnostics.map(({ code, severity, pointer }) => [code, severity, pointer]),
+    [['schema.invalid', 'blocks-preview', '/appearance/variant']],
+  );
+  assert.match(result.diagnostics[0]!.message, /can't be selected/);
+  // Called on its own, the selection check refuses it too, live or not.
+  const parsed = check(site('acme-ocean')).pair!;
+  const appearance = { ...parsed.site.appearance, variant: 'fallback' };
+  const pair = { ...parsed, site: { ...parsed.site, appearance } };
+  for (const live of [false, true]) {
+    const [record] = validateSelection(REGISTRY, { live }).validate(pair, {}).diagnostics;
+    assert.deepEqual([record!.code, record!.severity], ['variant.unavailable', 'blocks-publish']);
+    assert.match(record!.message, /can't be selected/);
+  }
+});
+
+test('with nothing registered, the remediation says how to install a variant, once', () => {
   const [record] = ours(check(site('editorial'), []).diagnostics);
-  assert.match(record!.remediation, /pnpm --filter @portfolio\/web add <package>/);
+  assert.equal(
+    record!.remediation,
+    'Install its package with pnpm --filter @portfolio/web add <package> and rebuild. This build registers no variant yet.',
+  );
 });
 
 const CONTROLS = `variantControls:
@@ -175,6 +196,36 @@ test("route toggles for routes the variant doesn't have warn, and home can't be 
   // With the selection unavailable, the toggles stay unchecked.
   const unavailable = check(site('editorial', ROUTES));
   assert.ok(unavailable.notChecked.includes('site.routes.reels'));
+});
+
+test('live, the records that fall back only warn, and the rest keep their severity', () => {
+  const unavailable = check(site('editorial', ROUTES), REGISTRY, { live: true });
+  assert.deepEqual(
+    ours(unavailable.diagnostics).map(({ code, severity }) => [code, severity]),
+    [['variant.unavailable', 'warning']],
+  );
+  const controls = check(site('acme-ocean', `${CONTROLS}${ROUTES}`), REGISTRY, { live: true });
+  assert.deepEqual(
+    ours(controls.diagnostics).map(({ code, severity, pointer }) => [code, severity, pointer]),
+    [
+      ['route.required', 'warning', '/routes/home/enabled'],
+      ['route.unknown', 'warning', '/routes/reels'],
+      ['controls.dangling-ref', 'warning', '/variantControls/acme-ocean/values/featured/0'],
+      ['controls.invalid', 'warning', '/variantControls/acme-ocean/values/heroLayout'],
+      ['controls.dangling-ref', 'warning', '/variantControls/acme-ocean/values/leadSection'],
+      ['controls.invalid', 'warning', '/variantControls/acme-ocean/values/sparkle'],
+    ],
+  );
+  const stale = CONTROLS.replace('version: 2', 'version: 1');
+  assert.deepEqual(
+    ours(check(site('acme-ocean', stale), REGISTRY, { live: true }).diagnostics).map(
+      ({ code, severity }) => [code, severity],
+    ),
+    [['controls.stale', 'warning']],
+  );
+  // Not live, as #3's publish checks, every one of them blocks publishing.
+  const published = ours(check(site('acme-ocean', CONTROLS)).diagnostics);
+  assert.deepEqual([...new Set(published.map(({ severity }) => severity))], ['blocks-publish']);
 });
 
 test('each validator stands alone, with an id #4 lists when it fails', () => {
