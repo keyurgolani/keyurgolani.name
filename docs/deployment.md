@@ -84,7 +84,7 @@ docker compose -f compose.demo.yml up --build
 
 `deploy/compose.owner.yml` mounts `../config` and `../assets` as `read-only` does, on the same read-only root and cache tmpfs, and keeps drafts and revisions in the `portfolio-data` volume at `/var/lib/portfolio` (`PORTFOLIO_DATA_DIR`). The image creates that directory for the server's user (uid 1001, mode `0700`), so a new volume starts out writable by the server and no one else. Run one server per volume: the fixed container name stops `docker compose up --scale`. Back the volume up.
 
-It refuses to start until a release ships an authentication provider.
+It needs the owner password's hash before it starts ([Owner authentication](#owner-authentication)). Set `PORTFOLIO_TRUSTED_PROXY_HOPS` in `deploy/.env` to the number of proxies in front that append to `X-Forwarded-For`, usually `1`: `compose.owner.yml` passes it through, and leaves it at `0` when it's unset, which gives sign-in only its global limits ([Signing in](#signing-in)).
 
 ### What the image does
 
@@ -145,7 +145,7 @@ Add the `--set`, `--drop-unknown`, and `--write --out /config/new` arguments to 
 
 ### Reverse proxy and HTTPS
 
-Put Nginx, Caddy, or Traefik in front, pointed at `http://127.0.0.1:3000` (or the port you set), and terminate TLS there. The app builds every absolute URL from `PORTFOLIO_ORIGIN`; it never reads `Host` or `X-Forwarded-*` for one. Set `PORTFOLIO_TRUSTED_PROXY_HOPS` to the number of proxies that append to `X-Forwarded-For`. With `0`, the default, `owner` ignores the header and doesn't know where a request came from. With N, it takes the Nth entry from the right as the client, without a port or the brackets around an IPv6 address, and the audit log records it as a source. Set it to exactly the proxies that append: a higher count takes an entry the client wrote itself.
+Put Nginx, Caddy, or Traefik in front, pointed at `http://127.0.0.1:3000` (or the port you set), and terminate TLS there. The app builds every absolute URL from `PORTFOLIO_ORIGIN`; it never reads `Host` or `X-Forwarded-*` for one. Set `PORTFOLIO_TRUSTED_PROXY_HOPS` to the number of proxies that append to `X-Forwarded-For`. With `0`, the default, `owner` ignores the header and doesn't know where a request came from. With N, it takes the Nth entry from the right as the client, without a port or the brackets around an IPv6 address. That is the source the audit log records and sign-in limits by. Set it to exactly the proxies that append: a higher count takes an entry the client wrote itself.
 
 That address is for a proxy on the host. A proxy in another container can't reach a port published on the host's `127.0.0.1`: put the proxy and the app on one Docker network, point the proxy at the app's service name (`http://web:3000` in these examples), and drop the `ports:` entry if nothing on the host needs it.
 
@@ -159,7 +159,7 @@ Add `includeSubDomains` only when every subdomain serves HTTPS.
 
 ## Owner authentication
 
-`owner` signs one person in, the owner, with a password. The server never holds the password: it reads a scrypt hash of it from a secret file and checks each sign-in against that. Until a release ships the sign-in provider, `owner` refuses to start. It checks the hash's file before it refuses, and the hash itself once the provider is there.
+`owner` signs one person in, the owner, with a password. The server never holds the password: it reads a scrypt hash of it from a secret file and checks each sign-in against that. `owner` starts once the hash, its file, and the data directory pass their checks.
 
 ### Writing the hash
 
@@ -185,7 +185,7 @@ The server reads the hash from the file `PORTFOLIO_AUTH_PASSWORD_HASH_FILE` name
 
 ### Changing the password
 
-`--out` never writes over a file, so write the new hash under another name in `secrets/`, move it over `owner_password_hash` (`sudo mv`), and restart the container.
+`--out` never writes over a file, so write the new hash under another name in `secrets/`, move it over `owner_password_hash` (`sudo mv`), and restart the container. Every session signs out at the restart: a changed hash revokes them all, so changing it back later brings none back. The audit log records `credential_changed`.
 
 ### The data directory
 
@@ -193,9 +193,30 @@ The server reads the hash from the file `PORTFOLIO_AUTH_PASSWORD_HASH_FILE` name
 
 `ephemeral/` holds sessions and auth state only, and never belongs in a backup. A restore that brings it back also brings back sessions revoked since the backup was taken, so run [`revoke-sessions`](#revoking-sessions) after any restore of the volume.
 
-### Session settings
+### Signing in
 
-`PORTFOLIO_AUTH_SESSION_IDLE_MINUTES` (5 to 120, default 60) and `PORTFOLIO_AUTH_SESSION_MAX_HOURS` (1 to 24, default 12) set how long an owner session lasts without use and in all. Any other value stops the server. No sign-in uses them yet.
+A sign-in posts the password to `/api/studio/auth.login`, as JSON or as a form post, from the site's own origin: the request needs an `Origin` exactly equal to `PORTFOLIO_ORIGIN`. A JSON sign-in gets the session in the JSON envelope, and a form post a 303: to where the owner was going, or back to `/studio/sign-in` with a `state` saying why. The sign-in page at that path, which makes the form post, is still to come in #2; until then the path answers 404. Where the owner was going is `returnTo`, a path under `/studio`, from the form's `returnTo` field, or else the `returnTo` in the URL, and `/studio` when it's missing or unsafe. Every wrong, missing, or malformed password costs one verification and gets the same answer.
+
+A form post whose body can't be read, because it isn't UTF-8, gives a field twice, or is over 4 KB, runs no verification and gets a 303 to `/studio/sign-in?state=error`, keeping the URL's `returnTo`. A JSON sign-in whose body isn't UTF-8, doesn't parse, or is over 4 KB gets 400 `invalid_input`.
+
+Sign-in has limits, kept in memory, so a restart clears them, and none locks the owner out for good:
+
+- 5 failures from one source in 15 minutes block it for a minute, and each further failure doubles the block, up to 15 minutes. A success clears the source, and so do 15 quiet minutes after its block. A source is an IPv4 address or an IPv6 /64.
+- A source has one attempt in flight at a time, from before its body is read until it has its answer, and another gets 429 with `Retry-After: 1` at once, so a source's attempts verify one at a time and a burst gets no more verifications than the limit. A form submitted twice gets that 429 for its second post.
+- Once the last hour has seen 50 failures from anywhere, every attempt waits 2 seconds before its verification. It waits before it takes a verification slot, so waiting attempts never hold one, and at most 16 wait at once: another gets 429 with `Retry-After: 1` at once.
+- At most 2 verifications run at once, since each takes 128 MiB at the hash's floor. A third attempt gets 429 with `Retry-After: 1`.
+
+A throttled form post gets a 303 to `/studio/sign-in?state=rate_limited` with `retryAfter`, in seconds, instead of the 429. Being turned away never counts as a failure, so nobody can get your own address blocked by crowding sign-in.
+
+The per-source limits need `PORTFOLIO_TRUSTED_PROXY_HOPS`. With `0`, nothing names a source, so sign-in has only the global limits: one client that keeps both verification slots busy, or all 16 places to wait taken, gets the owner's own sign-in a 429, and `owner` warns at startup. Run it behind a proxy with the hop count set ([Reverse proxy and HTTPS](#reverse-proxy-and-https)). Each source then has its own limit, one of the 16 places, and one of the 2 verification slots at most, but many sources, such as rotating IPv6 /64s, can still keep them all taken: sign-in then answers 429 until a place frees, and trying again gets you in.
+
+### Sessions
+
+A sign-in starts a session, named by a random token that only the browser's cookie holds. The server keeps the token's SHA-256 digest, so the data directory holds no token. A session lasts 60 minutes idle and 12 hours in all, however busy. `PORTFOLIO_AUTH_SESSION_IDLE_MINUTES` (5 to 120) and `PORTFOLIO_AUTH_SESSION_MAX_HOURS` (1 to 24) change those, and any other value stops the server. Only a Studio command, or a Studio page the owner opens from the site or the address bar, counts as use, never a query, a prefetch, or a frame, so a Studio tab left open still signs out, and a page on another subdomain of the same site, whose requests your browser sends the cookie with, can't keep a session alive. #2 brings the sign-in page and a placeholder `/studio`, which #8 replaces with Studio itself. At most 5 sessions exist at once: a sixth sign-in ends the least recently used.
+
+A session ends at sign-out, when it's revoked, when it expires, when the password hash changes, and when `revoke-sessions` runs.
+
+Signing out, `/api/studio/auth.logout`, always answers as signed out. It clears the cookie and sends `Clear-Site-Data: "cache"` whether the session still counted, had ended, or the store couldn't be read, and ends the session if it counted. When the store can't end it, the server logs `logout.store_failed`, and the session ends at its idle limit, with no cookie left to carry it. It needs an `Origin` exactly equal to `PORTFOLIO_ORIGIN`, and with a session that counts, that session's CSRF token.
 
 ### Revoking sessions
 
@@ -209,7 +230,7 @@ It runs as the server's user, which owns the data directory, and refuses to run 
 
 ### Audit log
 
-The server appends one JSON line per event to `audit/<yyyy-mm>.jsonl` in the data directory (UTC months, files `0600`). Each line is `{"at", "type", "actor", "outcome", "refs"}`. `actor` is `owner`, `anonymous`, or `operator`, and `refs` may name the session by the first 8 characters of its digest, the source by its IPv4 /24 or IPv6 /48 prefix, the command, the capability, a reason code, the request ID, and a `count`. No line holds a password, hash, cookie, CSRF token, full IP address, user agent, or request body. A failed write is logged and changes no decision. Today `revoke-sessions` is the one writer: it appends `sessions_revoked_all`, by the operator, with the count it revoked.
+The server appends one JSON line per event to `audit/<yyyy-mm>.jsonl` in the data directory (UTC months, files `0600`). Each line is `{"at", "type", "actor", "outcome", "refs"}`. The events are sign-ins, failed and throttled sign-ins, sign-outs, revocations, evictions, password hash changes, and denied commands. `actor` is `owner`, `anonymous`, or `operator` (`revoke-sessions` and a changed hash), and `refs` may name the session by the first 8 characters of its digest, the source by its IPv4 /24 or IPv6 /48 prefix, the command, the capability, a reason code, the request ID, and a `count`. A denied command is `anonymous`, since a forged one carries the owner's cookie too, and names the session it carried. Anonymous failed and throttled sign-ins and denied commands are written once a minute per kind: the first at once, and the rest as one line with a `count` when the minute ends. No line holds a password, hash, cookie, CSRF token, full IP address, user agent, or request body. A failed write is logged and changes no decision.
 
 ## Startup checks
 
@@ -235,11 +256,11 @@ Before it takes a request, the server validates its settings and the two documen
 | A site document whose variant this build doesn't register (`variant.unavailable`), or a control value it doesn't accept (`controls.*`)                                                                      | owner, read-only | starts and warns; the fallback composition renders, or the control takes its default                |
 | A pair with no visible section (`content.empty`), a `#fragment` link to no visible section (`anchor.broken`), one metric with two values (`metric.conflict`), or a secret-shaped string (`secret.detected`) | owner, read-only | refuses to start                                                                                    |
 | An origin on a reserved example domain, or the bundled sample's `identity.name`                                                                                                                             | owner, read-only | refuses to start in production; `pnpm dev` warns                                                    |
-| No authentication provider                                                                                                                                                                                  | owner            | refuses to start: configure sign-in or choose `read-only`                                           |
 | A password hash file that group or others can write                                                                                                                                                         | owner            | refuses to start                                                                                    |
-| A password hash that is missing, not a scrypt PHC string, or outside `ln=17, r=8, p=1` to `ln=18, r=16, p=4`                                                                                                | owner            | refuses to start, once a provider is registered                                                     |
-| `PORTFOLIO_DATA_DIR` unset, naming no directory, or naming one the server can't reach or write                                                                                                              | owner            | refuses to start, once a provider is registered                                                     |
+| A password hash that is missing, not a scrypt PHC string, or outside `ln=17, r=8, p=1` to `ln=18, r=16, p=4`                                                                                                | owner            | refuses to start                                                                                    |
+| `PORTFOLIO_DATA_DIR` unset, naming no directory, or naming one the server can't reach or write                                                                                                              | owner            | refuses to start                                                                                    |
 | `PORTFOLIO_AUTH_SESSION_IDLE_MINUTES` outside 5 to 120, or `PORTFOLIO_AUTH_SESSION_MAX_HOURS` outside 1 to 24                                                                                               | owner            | refuses to start                                                                                    |
+| `PORTFOLIO_TRUSTED_PROXY_HOPS` of `0`                                                                                                                                                                       | owner            | starts, and warns that sign-in has only its global limits                                           |
 | A bundled sample pair that is missing, can't be read, or doesn't validate, so the build is broken                                                                                                           | demo             | refuses to start                                                                                    |
 
 The old one-file format has no `schemaVersion` and has `identity`, `sections`, `variant`, `theme`, `motionPreference`, `colorScheme`, or `typography` at the top. Its one `legacy.document` line names each old field and where it goes now, and nothing else is reported; a `portfolio.toml` can only be that format. A plain YAML document has no anchors, aliases, merge keys, tags, directives, repeated keys, or second document. The reserved example domains are `example.com`, `.net`, and `.org` with their subdomains, `.example`, and `.invalid`. Image sources may also be raster `data:image` URLs.
@@ -273,14 +294,20 @@ The app writes its log as one JSON object per line on stdout, with `ts`, `level`
 
 Next writes its own lines to the same streams, as plain text: its startup banner on stdout (`▲ Next.js`, the address, `✓ Ready`), and on stderr, the message and stack of each error it catches, next to the app's `request.error` line, and a line naming the request URL when a request handler crashes. Those can name server paths and request URLs. None of them is JSON, so a log pipeline keeps the app's lines by parsing each line as a JSON object.
 
-| Event               | When                                                                                                                          |
-| ------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `config.fatal`      | A startup check failed. The server exits 1 after the last one.                                                                |
-| `config.warning`    | A startup check found something to fix that doesn't stop the server.                                                          |
-| `deployment.config` | Once, at startup: the redacted settings summary.                                                                              |
-| `request.error`     | A page or route failed. `digest` is the reference code the error page shows the visitor.                                      |
-| `operation.failed`  | A Studio operation failed. Its response carries the same `requestId`.                                                         |
-| `feed.failed`       | `/feed.xml` couldn't be built: `code` is `catalog_unavailable` or `render_failed`. Its response carries the same `requestId`. |
+| Event                     | When                                                                                                                          |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `config.fatal`            | A startup check failed. The server exits 1 after the last one.                                                                |
+| `config.warning`          | A startup check found something to fix that doesn't stop the server.                                                          |
+| `deployment.config`       | Once, at startup: the redacted settings summary.                                                                              |
+| `request.error`           | A page or route failed. `digest` is the reference code the error page shows the visitor.                                      |
+| `operation.failed`        | A Studio operation failed. Its response carries the same `requestId`.                                                         |
+| `feed.failed`             | `/feed.xml` couldn't be built: `code` is `catalog_unavailable` or `render_failed`. Its response carries the same `requestId`. |
+| `session.read_failed`     | `owner`: the session store couldn't be read. The request gets no session, and its cookie stays.                               |
+| `session.touch_failed`    | `owner`: a session's last use couldn't be written. The request goes on.                                                       |
+| `session.listener_failed` | `owner`: something told of an ended session failed. The session ended anyway.                                                 |
+| `audit.write_failed`      | `owner`: an audit line couldn't be written. `code` is its type. No decision changes.                                          |
+| `login.store_failed`      | `owner`: a sign-in's session couldn't be stored. It gets 503 `unavailable`, or a form post `state=error`, and no cookie.      |
+| `logout.store_failed`     | `owner`: a sign-out couldn't end its session. The browser is signed out, and the session ends at its idle limit.              |
 
 `deployment.config` adds `origin`, `previewOrigin`, `proxyHops`, `capabilities`, `adapters` (which catalog the profile reads), and `secrets`, each secret only as `set` or `unset`. The owner-session `config.status` operation returns the same summary; no anonymous route does.
 
@@ -324,7 +351,7 @@ The server reads these from its environment only. Every key also accepts `<KEY>_
 | `PORTFOLIO_PREVIEW_ORIGIN`            | owner, demo      | Optional preview origin, different from `PORTFOLIO_ORIGIN`.                                                                                                  |
 | `PORTFOLIO_DATA_DIR`                  | owner            | Required. The writable data directory for sessions and the audit log: `/var/lib/portfolio` in the owner example ([The data directory](#the-data-directory)). |
 | `PORTFOLIO_AUTH_PASSWORD_HASH`        | owner            | The owner password's scrypt hash. Set it through `PORTFOLIO_AUTH_PASSWORD_HASH_FILE` ([Owner authentication](#owner-authentication)).                        |
-| `PORTFOLIO_AUTH_SESSION_IDLE_MINUTES` | owner            | Minutes a session lasts idle: 5 to 120, default `60` ([Session settings](#session-settings)).                                                                |
+| `PORTFOLIO_AUTH_SESSION_IDLE_MINUTES` | owner            | Minutes a session lasts idle: 5 to 120, default `60` ([Sessions](#sessions)).                                                                                |
 | `PORTFOLIO_AUTH_SESSION_MAX_HOURS`    | owner            | Hours a session lasts at most: 1 to 24, default `12`.                                                                                                        |
 | `GITHUB_TOKEN`                        | owner            | Reserved. Public GitHub sections use unauthenticated REST and never send a token.                                                                            |
 | `PORT`                                | all              | Port the host binds to. Default `3000`.                                                                                                                      |
