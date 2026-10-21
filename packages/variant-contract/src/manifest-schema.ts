@@ -195,7 +195,7 @@ const Operation = z.discriminatedUnion('op', [
     .object({
       op: z.literal('mapValue'),
       control: ControlId,
-      map: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])),
+      map: z.record(z.string(), z.union([z.string(), z.number().finite(), z.boolean()])),
     })
     .strict(),
   z

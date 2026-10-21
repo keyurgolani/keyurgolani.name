@@ -161,9 +161,9 @@ const CASES: readonly Case[] = [
     expect: [['manifest.invalid', '/controls/items/2/max']],
   },
   {
-    name: 'a list control whose min passes its max',
-    change: (m) => Object.assign(m.controls.items[4], { min: 4 }),
-    expect: [['manifest.invalid', '/controls/items/4/max']],
+    name: 'a list control that must hold content its empty default lacks',
+    change: (m) => Object.assign(m.controls.items[4], { min: 1 }),
+    expect: [['manifest.invalid', '/controls/items/4/min']],
   },
   {
     name: 'a content ref with a default',
@@ -222,8 +222,8 @@ const CASES: readonly Case[] = [
   },
   {
     name: 'two controls with one id',
-    change: (m) => (m.controls.items[1].id = 'showIndex'),
-    expect: [['manifest.duplicate', '/controls/items/1/id']],
+    change: (m) => (m.controls.items[4].id = 'showIndex'),
+    expect: [['manifest.duplicate', '/controls/items/4/id']],
   },
   {
     name: 'an enum option listed twice',
@@ -254,46 +254,46 @@ const CASES: readonly Case[] = [
   {
     name: 'another contract major, reported alone',
     change: (m) => Object.assign(m, { contract: '3.0', slug: 'ocean' }),
-    expect: [['contract.unsupported', '/contract']],
+    expect: [['manifest.contract-unsupported', '/contract']],
   },
   {
     name: 'a newer contract minor, reported alone',
     change: (m) => Object.assign(m, { contract: '2.1', budget: {} }),
-    expect: [['contract.newer', '/contract']],
+    expect: [['manifest.contract-newer', '/contract']],
   },
   {
     name: "a schema range without this host's version",
     change: (m) => (m.schemas.portfolio = { min: 3, max: 4 }),
-    expect: [['schemas.unsupported', '/schemas/portfolio']],
+    expect: [['manifest.schemas-unsupported', '/schemas/portfolio']],
   },
   {
     name: 'another token contract',
     change: (m) => (m.tokenContract = 1),
-    expect: [['token-contract.mismatch', '/tokenContract']],
+    expect: [['manifest.token-contract-mismatch', '/tokenContract']],
   },
   {
     name: "a composition id under another package's scope",
     change: (m) => (m.id = 'kinetic-cosmos'),
-    expect: [['id.reserved', '/id']],
+    expect: [['manifest.id-reserved', '/id']],
   },
   {
     name: 'the id fixtures use to reach the fallback',
     change: (m) => (m.id = 'missing-variant'),
     context: { packageName: '@portfolio/variant-missing' },
-    expect: [['id.reserved', '/id']],
+    expect: [['manifest.id-reserved', '/id']],
   },
   {
     name: 'an id without its scope prefix',
     change: (m) => (m.id = 'ocean'),
-    expect: [['id.prefix', '/id']],
+    expect: [['manifest.id-prefix', '/id']],
   },
   {
     name: 'a first-party composition off its approved tier and motion',
     change: (m) => Object.assign(m, { id: 'kinetic-cosmos', performanceTier: 'heavy' }),
     context: { packageName: '@portfolio/kinetic-cosmos' },
     expect: [
-      ['first-party.pin', '/performanceTier'],
-      ['first-party.pin', '/motionIntent'],
+      ['manifest.first-party-pin', '/performanceTier'],
+      ['manifest.first-party-pin', '/motionIntent'],
     ],
   },
   {
@@ -307,56 +307,105 @@ const CASES: readonly Case[] = [
       }),
     context: { packageName: '@portfolio/fallback-composition' },
     expect: [
-      ['first-party.pin', '/renderedKinds'],
-      ['first-party.pin', '/contentSlots/0/level'],
-      ['first-party.pin', '/contentSlots/1/level'],
+      ['manifest.first-party-pin', '/renderedKinds'],
+      ['manifest.first-party-pin', '/contentSlots/0/level'],
+      ['manifest.first-party-pin', '/contentSlots/1/level'],
     ],
+  },
+  {
+    name: 'a fallback composition that skips a kind',
+    change: (m) =>
+      Object.assign(m, {
+        id: 'fallback',
+        compositionFamily: 'document',
+        motionIntent: 'still',
+        renderedKinds: [],
+        contentSlots: [],
+        unsupportedKinds: ['github'],
+      }),
+    context: { packageName: '@portfolio/fallback-composition' },
+    expect: [['manifest.first-party-pin', '/unsupportedKinds']],
   },
   {
     name: 'a kind both rendered and skipped',
     change: (m) => m.unsupportedKinds.push('hero'),
-    expect: [['kinds.overlap', '/unsupportedKinds/1']],
+    expect: [['manifest.kinds-overlap', '/unsupportedKinds/1']],
   },
   {
     name: 'a path view under a reserved first segment',
     change: (m) => (m.routes.views[0].segment = 'api/{chapter}'),
-    expect: [['route.reserved-segment', '/routes/views/0/segment']],
+    expect: [['manifest.route-reserved-segment', '/routes/views/0/segment']],
   },
   {
     name: "a view under home starting at work, the work route's own segment",
     change: (m) => (m.routes.views[0].segment = 'work/{chapter}'),
-    expect: [['route.reserved-segment', '/routes/views/0/segment']],
+    expect: [['manifest.route-reserved-segment', '/routes/views/0/segment']],
   },
   {
     name: 'a view that takes the id of a built-in route',
     change: (m) => (m.routes.views[1].id = 'work'),
-    expect: [['route.conflict', '/routes/views/1/id']],
+    expect: [['manifest.route-conflict', '/routes/views/1/id']],
   },
   {
     name: 'two path views that match the same addresses',
     change: (m) =>
       m.routes.views.push({ id: 'parts', under: 'home', type: 'path', segment: 'chapters/{part}' }),
-    expect: [['route.conflict', '/routes/views/3/segment']],
+    expect: [['manifest.route-conflict', '/routes/views/3/segment']],
   },
   {
     name: 'a control that picks a color',
     change: (m) => (m.controls.items[0].id = 'accentColor'),
-    expect: [['controls.appearance', '/controls/items/0/id']],
+    expect: [['manifest.controls-appearance', '/controls/items/0/id']],
   },
   {
     name: 'a control whose label picks a font',
     change: (m) => (m.controls.items[1].label = 'Heading font'),
-    expect: [['controls.appearance', '/controls/items/1/label']],
+    expect: [['manifest.controls-appearance', '/controls/items/1/label']],
+  },
+  {
+    name: 'a control whose description picks a palette',
+    change: (m) => (m.controls.items[0].description = 'Switches the index to the brand palette.'),
+    expect: [['manifest.controls-appearance', '/controls/items/0/description']],
+  },
+  {
+    name: 'an option value that picks a display mode',
+    change: (m) => (m.controls.items[1].options[1].value = 'dark-mode'),
+    expect: [['manifest.controls-appearance', '/controls/items/1/options/1/value']],
+  },
+  {
+    name: 'an option label that picks a typeface',
+    change: (m) => (m.controls.items[1].options[0].label = 'Serif'),
+    expect: [['manifest.controls-appearance', '/controls/items/1/options/0/label']],
+  },
+  {
+    name: 'a slot that selects by a control holding no content',
+    change: (m) => (m.contentSlots[0].select = { control: 'columns' }),
+    expect: [['manifest.invalid', '/contentSlots/0/select/control']],
+  },
+  {
+    name: 'a last migration step that renames to a control the version lacks',
+    change: (m) => (m.controls.migrations[0].operations[0].to = 'heroShape'),
+    expect: [['manifest.unknown-ref', '/controls/migrations/0/operations/0/to']],
+  },
+  {
+    name: 'a last migration step that maps a control the version lacks',
+    change: (m) => (m.controls.migrations[0].operations[1].control = 'heroShape'),
+    expect: [['manifest.unknown-ref', '/controls/migrations/0/operations/1/control']],
+  },
+  {
+    name: 'a last migration step that clamps a control the version lacks',
+    change: (m) => (m.controls.migrations[0].operations[2].control = 'width'),
+    expect: [['manifest.unknown-ref', '/controls/migrations/0/operations/2/control']],
   },
   {
     name: 'a controls version with a missing migration',
     change: (m) => (m.controls.version = 3),
-    expect: [['controls.migration-gap', '/controls/migrations']],
+    expect: [['manifest.controls-migration-gap', '/controls/migrations']],
   },
   {
     name: 'a migration that skips a version',
     change: (m) => Object.assign(m.controls.migrations[0], { from: 1, to: 3 }),
-    expect: [['controls.migration-gap', '/controls/migrations/0']],
+    expect: [['manifest.controls-migration-gap', '/controls/migrations/0']],
   },
   {
     name: 'a migration past the current version',
@@ -366,37 +415,37 @@ const CASES: readonly Case[] = [
         to: 3,
         operations: [{ op: 'drop', control: 'columns' }],
       }),
-    expect: [['controls.migration-gap', '/controls/migrations/1']],
+    expect: [['manifest.controls-migration-gap', '/controls/migrations/1']],
   },
   {
     name: "an enhancement subpath missing from the package's exports",
     context: { exports: { '.': './dist/index.js' } },
-    expect: [['enhancement.missing-export', '/enhancements/0/export']],
+    expect: [['manifest.enhancement-missing-export', '/enhancements/0/export']],
   },
   {
     name: 'a key binding on Tab',
     change: (m) => (m.keyBindings[0].keys = ['Tab']),
-    expect: [['key-binding.reserved', '/keyBindings/0/keys/0']],
+    expect: [['manifest.key-binding-reserved', '/keyBindings/0/keys/0']],
   },
   {
     name: 'a key binding on a browser shortcut',
     change: (m) => (m.keyBindings[0].keys = ['ArrowLeft', 'Control+k']),
-    expect: [['key-binding.reserved', '/keyBindings/0/keys/1']],
+    expect: [['manifest.key-binding-reserved', '/keyBindings/0/keys/1']],
   },
   {
     name: 'a key binding on Escape, which the shared primitives own',
     change: (m) => (m.keyBindings[0].keys = ['Escape']),
-    expect: [['key-binding.reserved', '/keyBindings/0/keys/0']],
+    expect: [['manifest.key-binding-reserved', '/keyBindings/0/keys/0']],
   },
   {
     name: 'a retired source with no note',
     change: (m) => delete m.provenance.sources[1].note,
-    expect: [['provenance.note-required', '/provenance/sources/1']],
+    expect: [['manifest.provenance-note-required', '/provenance/sources/1']],
   },
   {
     name: 'a recipe the catalog does not have, which only warns',
     context: { recipes: ['loud-neon'] },
-    expect: [['appearance.unknown-recipe', '/recommendedAppearance']],
+    expect: [['manifest.recipe-unknown', '/recommendedAppearance']],
   },
 ];
 
@@ -481,7 +530,7 @@ test('first-party packages may take the reserved ids, and unscoped ones any othe
       manifest((m) => (m.id = 'spatial-bento')),
       { ...CONTEXT, packageName: 'bento' },
     ),
-    [['id.reserved', '/id']],
+    [['manifest.id-reserved', '/id']],
   );
 });
 
@@ -503,5 +552,85 @@ test('it never throws, whatever it is given', () => {
     const result = validateManifest(input, CONTEXT);
     assert.equal(result.ok, false);
     assert.ok(result.diagnostics.length > 0);
+  }
+});
+
+/** Each class of word #19's appearance system owns, as a control id, label, or description. */
+const APPEARANCE_CLASSES: Array<[string, string]> = [
+  ['palette', 'Brand palette'],
+  ['color', 'accentColor'],
+  ['colour', 'Card colour'],
+  ['typeface', 'Display typeface'],
+  ['font', 'Body font'],
+  ['serif', 'Serif headings'],
+  ['weight', 'Heading weight'],
+  ['type scale', 'Type scale'],
+  ['radius', 'Corner radius'],
+  ['border', 'Card borders'],
+  ['shadow', 'Drop shadow'],
+  ['elevation', 'Card elevation'],
+  ['glass', 'Glass panels'],
+  ['blur', 'Background blur'],
+  ['material', 'Surface material'],
+  ['dark mode', 'darkMode'],
+  ['light mode', 'Light mode'],
+  ['contrast mode', 'High contrast'],
+  ['color scheme', 'Color scheme'],
+  ['visual theme', 'Dark theme'],
+  ['duration', 'Fade duration'],
+  ['speed', 'Scroll speed'],
+  ['easing', 'Easing curve'],
+];
+
+test('a control choosing any appearance class fails, wherever it says so', () => {
+  for (const [kind, words] of APPEARANCE_CLASSES) {
+    for (const field of ['label', 'description'] as const) {
+      assert.deepEqual(
+        records(manifest((m) => (m.controls.items[0][field] = words))),
+        [['manifest.controls-appearance', `/controls/items/0/${field}`]],
+        `${kind} in ${field}: ${words}`,
+      );
+    }
+  }
+});
+
+test('composition words pass, a theme that is a topic among them', () => {
+  for (const words of [
+    'Group chapters by theme',
+    'Show the index',
+    'Columns in the archive',
+    'Lead with the newest work',
+    'Order by date',
+    'Pin a project',
+    'Highlight one section',
+    'Lightbox for images',
+  ]) {
+    assert.deepEqual(records(manifest((m) => (m.controls.items[0].label = words))), [], words);
+  }
+});
+
+test("a last step's map before its rename names the control by its old name", () => {
+  const reordered = manifest((m) => {
+    m.controls.migrations[0].operations = [
+      { op: 'mapValue', control: 'layout', map: { full: 'wide' } },
+      { op: 'rename', from: 'layout', to: 'heroLayout' },
+      { op: 'clamp', control: 'columns', min: 1, max: 4 },
+    ];
+  });
+  assert.deepEqual(records(reordered), []);
+});
+
+test('a huge controls version is a missing migration, not a crash', () => {
+  for (const version of [2 ** 31, Number.MAX_SAFE_INTEGER, 1e308]) {
+    const result = validateManifest(
+      manifest((m) => (m.controls.version = version)),
+      CONTEXT,
+    );
+    assert.equal(result.ok, false);
+    assert.deepEqual(
+      result.diagnostics.map(({ code, pointer }) => [code, pointer]),
+      [['manifest.controls-migration-gap', '/controls/migrations']],
+      String(version),
+    );
   }
 });

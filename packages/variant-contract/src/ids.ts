@@ -34,7 +34,7 @@ export function packageScope(packageName: string): string | null {
 }
 
 export interface IdProblem {
-  readonly code: 'id.reserved' | 'id.prefix';
+  readonly code: 'manifest.id-reserved' | 'manifest.id-prefix';
   readonly message: string;
   readonly expected: string;
   readonly remedy: string;
@@ -50,7 +50,7 @@ export function idProblem(id: string, packageName: string): IdProblem | null {
   const scope = packageScope(packageName);
   if (id === MISSING_VARIANT_ID) {
     return {
-      code: 'id.reserved',
+      code: 'manifest.id-reserved',
       message: `${MISSING_VARIANT_ID} is the id fixtures select to reach the fallback composition, so no package registers it.`,
       expected: 'any other id',
       remedy: 'Pick another id.',
@@ -59,7 +59,7 @@ export function idProblem(id: string, packageName: string): IdProblem | null {
   if (scope === FIRST_PARTY_SCOPE) return null;
   if (RESERVED_IDS.includes(id)) {
     return {
-      code: 'id.reserved',
+      code: 'manifest.id-reserved',
       message: `${id} is reserved for the platform's own @${FIRST_PARTY_SCOPE}/* packages.`,
       expected: scope ? `an id starting with ${scope}-` : 'an id that is not reserved',
       remedy: scope ? `Use ${scope}-${id} or another ${scope}- id.` : 'Pick another id.',
@@ -67,8 +67,8 @@ export function idProblem(id: string, packageName: string): IdProblem | null {
   }
   if (scope !== null && !id.startsWith(`${scope}-`)) {
     return {
-      code: 'id.prefix',
-      message: `A package under @${scope} starts its variant id with ${scope}-, so ids never collide across scopes.`,
+      code: 'manifest.id-prefix',
+      message: `A package under @${scope} starts its variant id with ${scope}-, which keeps most scopes' ids apart. Prefixes can still collide, such as @acme with @acme-ocean, and registry generation refuses two packages with one id.`,
       expected: `an id starting with ${scope}-`,
       remedy: `Rename the id to ${scope}-${id}, or another ${scope}- id.`,
     };

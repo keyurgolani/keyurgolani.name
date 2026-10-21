@@ -94,7 +94,7 @@ export function validateManifest(input: unknown, context: ManifestContext): Mani
   const contract = typeof input.contract === 'string' ? parseContractVersion(input.contract) : null;
   if (contract && contract.major !== CONTRACT_MAJOR) {
     report(
-      'contract.unsupported',
+      'manifest.contract-unsupported',
       ['contract'],
       `is contract ${input.contract}, and this host reads contract ${CONTRACT_MAJOR}.`,
       `Install a release of the package built for contract ${CONTRACT_MAJOR}, or a host that reads ${input.contract}.`,
@@ -104,7 +104,7 @@ export function validateManifest(input: unknown, context: ManifestContext): Mani
   }
   if (contract && contract.minor > CONTRACT_MINOR) {
     report(
-      'contract.newer',
+      'manifest.contract-newer',
       ['contract'],
       `is contract ${input.contract}, newer than the ${CONTRACT_VERSION} this host reads.`,
       'Upgrade the host, or pin a release of the package built for this contract.',
@@ -182,8 +182,9 @@ function shapeIssue(issue: z.ZodIssue, input: unknown, report: Report) {
     case 'invalid_union': {
       const last = path.at(-1);
       const message =
-        (typeof last === 'string' ? UNION_MESSAGES[last] : undefined) ??
-        "doesn't match any form contract 2.0 allows here.";
+        (typeof last === 'string' && Object.hasOwn(UNION_MESSAGES, last)
+          ? UNION_MESSAGES[last]
+          : undefined) ?? "doesn't match any form contract 2.0 allows here.";
       report('manifest.invalid', path, message, 'Change it to one of the allowed forms.');
       return;
     }
@@ -346,7 +347,7 @@ function checkRules(
       );
     } else if (SCHEMA_VERSION < range.min || SCHEMA_VERSION > range.max) {
       report(
-        'schemas.unsupported',
+        'manifest.schemas-unsupported',
         ['schemas', document],
         `reads ${document} versions ${range.min} to ${range.max}, and this host's ${document} documents are version ${SCHEMA_VERSION}.`,
         `Upgrade the package to a release that reads version ${SCHEMA_VERSION}, or pin a host whose version it reads.`,
@@ -357,7 +358,7 @@ function checkRules(
 
   if (manifest.tokenContract !== TOKEN_CONTRACT_VERSION) {
     report(
-      'token-contract.mismatch',
+      'manifest.token-contract-mismatch',
       ['tokenContract'],
       `is ${manifest.tokenContract}, and this host's appearance tokens are contract ${TOKEN_CONTRACT_VERSION}.`,
       `Build the package against token contract ${TOKEN_CONTRACT_VERSION}, or install a host on token contract ${manifest.tokenContract}.`,
@@ -370,7 +371,7 @@ function checkRules(
   manifest.unsupportedKinds.forEach((kind, index) => {
     if (manifest.renderedKinds.includes(kind)) {
       report(
-        'kinds.overlap',
+        'manifest.kinds-overlap',
         ['unsupportedKinds', index],
         `is also in renderedKinds. A kind is rendered bespoke or skipped, not both.`,
         'Remove it from one of the two lists.',
@@ -402,7 +403,7 @@ function checkRules(
       bound.add(slot);
       if (verdict === 'reserved') {
         report(
-          'key-binding.reserved',
+          'manifest.key-binding-reserved',
           ['keyBindings', index, 'keys', keyIndex],
           'is reserved: Tab, Escape, Enter, Space, function keys, and modifier shortcuts belong to focus, the shared primitives, and the browser.',
           'Bind a letter, a digit, an arrow key, PageUp, PageDown, Home, or End instead.',
@@ -422,7 +423,7 @@ function checkRules(
   manifest.provenance.sources.forEach((source, index) => {
     if (source.disposition === 'retired' && source.note === undefined) {
       report(
-        'provenance.note-required',
+        'manifest.provenance-note-required',
         ['provenance', 'sources', index],
         'is retired with no note. A retired source says why it was dropped.',
         'Add a note saying why.',
@@ -435,7 +436,7 @@ function checkRules(
       notChecked.push('recommendedAppearance');
     } else if (!context.recipes.includes(manifest.recommendedAppearance)) {
       report(
-        'appearance.unknown-recipe',
+        'manifest.recipe-unknown',
         ['recommendedAppearance'],
         "isn't an appearance recipe this build knows, so Studio won't suggest it.",
         'Use a recipe id the appearance catalog lists, or remove the field.',
@@ -447,7 +448,7 @@ function checkRules(
 
 function pinned(report: Report, field: string, expected: string, actual: string) {
   report(
-    'first-party.pin',
+    'manifest.first-party-pin',
     [field],
     `is ${actual}, and this composition's approved ${field} is ${expected}.`,
     `Set it to ${expected}. The first-party values are part of the approved catalog.`,
@@ -455,7 +456,10 @@ function pinned(report: Report, field: string, expected: string, actual: string)
   );
 }
 
-/** The fallback composition renders anything, so it requires nothing and renders nothing bespoke. */
+/**
+ * The fallback composition renders anything: it requires nothing, renders
+ * nothing bespoke, and skips nothing.
+ */
 function checkFallback(manifest: VariantManifest, report: Report) {
   const pins = {
     compositionFamily: 'document',
@@ -467,17 +471,26 @@ function checkFallback(manifest: VariantManifest, report: Report) {
   }
   if (manifest.renderedKinds.length > 0) {
     report(
-      'first-party.pin',
+      'manifest.first-party-pin',
       ['renderedKinds'],
       'must be empty: the fallback composition renders every kind through the shared renderers.',
       'Remove every kind from renderedKinds.',
       { expected: '[]' },
     );
   }
+  if (manifest.unsupportedKinds.length > 0) {
+    report(
+      'manifest.first-party-pin',
+      ['unsupportedKinds'],
+      'must be empty: the fallback composition renders every kind, so no content goes unseen.',
+      'Remove every kind from unsupportedKinds.',
+      { expected: '[]' },
+    );
+  }
   manifest.contentSlots.forEach((slot, index) => {
     if (slot.level !== 'optional') {
       report(
-        'first-party.pin',
+        'manifest.first-party-pin',
         ['contentSlots', index, 'level'],
         'must be optional: the fallback composition requires and recommends no content.',
         'Make the slot optional.',
@@ -512,15 +525,24 @@ function duplicates<T>(
 
 function checkSlots(manifest: VariantManifest, report: Report) {
   duplicates(manifest.contentSlots, ['contentSlots'], (slot) => slot.id, report, 'slot id', ['id']);
-  const controls = new Set(manifest.controls.items.map((control) => control.id));
+  const controls = new Map(manifest.controls.items.map((control) => [control.id, control]));
   manifest.contentSlots.forEach((slot, index) => {
-    if ('control' in slot.select && !controls.has(slot.select.control)) {
+    const named = 'control' in slot.select ? controls.get(slot.select.control) : undefined;
+    if ('control' in slot.select && !named) {
       report(
         'manifest.unknown-ref',
         ['contentSlots', index, 'select', 'control'],
         "names a control the manifest doesn't declare.",
         'Name one of controls.items, or select by kind or field.',
         { actual: slot.select.control },
+      );
+    } else if (named && named.type !== 'contentRef' && named.type !== 'contentRefList') {
+      report(
+        'manifest.invalid',
+        ['contentSlots', index, 'select', 'control'],
+        `names a ${named.type} control. A slot holds content, so it selects by a contentRef or contentRefList control.`,
+        'Name a contentRef or contentRefList control, or select by kind or field.',
+        { expected: 'contentRef | contentRefList', actual: named.type },
       );
     }
     if (slot.max !== undefined && slot.min > slot.max) {
@@ -543,7 +565,7 @@ function checkRoutes(manifest: VariantManifest, report: Report) {
     const at = ['routes', 'views', index] as const;
     if (view.id === 'home' || view.id === 'work') {
       report(
-        'route.conflict',
+        'manifest.route-conflict',
         [...at, 'id'],
         `is the id of the ${view.id} route every variant has.`,
         'Give the view an id of its own.',
@@ -566,7 +588,7 @@ function checkRoutes(manifest: VariantManifest, report: Report) {
       RESERVED_SEGMENTS.includes(first.literal)
     ) {
       report(
-        'route.reserved-segment',
+        'manifest.route-reserved-segment',
         [...at, 'segment'],
         `starts with ${first.literal}, a first segment the host reserves.`,
         `Start the segment with a word not in: ${RESERVED_SEGMENTS.join(', ')}.`,
@@ -581,7 +603,7 @@ function checkRoutes(manifest: VariantManifest, report: Report) {
     ].join('/');
     if (shapes.has(shape)) {
       report(
-        'route.conflict',
+        'manifest.route-conflict',
         [...at, 'segment'],
         `matches the same addresses as /routes/views/${shapes.get(shape)}.`,
         'Change one of the two segments.',
@@ -593,9 +615,53 @@ function checkRoutes(manifest: VariantManifest, report: Report) {
   });
 }
 
-/** Words that would make a control choose appearance, which #19 owns. */
-const APPEARANCE_WORDS =
-  /\b(?:colou?rs?|palettes?|fonts?|typefaces?|typography|type ?scale|themes?|schemes?|design ?languages?|swatch(?:es)?|hues?)\b/i;
+/**
+ * Words that would make a control choose appearance, which #19 owns: palette
+ * and color, type, materials and component geometry, display modes, and
+ * motion timing. A bare "theme" is a topic, as in "Group chapters by theme",
+ * so only a visual one counts.
+ */
+const APPEARANCE_WORDS = new RegExp(
+  '\\b(?:' +
+    [
+      'colou?rs?',
+      'palettes?',
+      'hues?',
+      'swatch(?:es)?',
+      'tints?',
+      'schemes?',
+      'fonts?',
+      'typefaces?',
+      'typography',
+      'type ?scales?',
+      'serifs?',
+      'sans ?serif',
+      'weights?',
+      'design ?languages?',
+      'radius',
+      'radii',
+      'rounded(?:ness)?',
+      'borders?',
+      'shadows?',
+      'elevations?',
+      'glass(?:y|morphism)?',
+      'blurs?',
+      'materials?',
+      'textures?',
+      'dark',
+      'contrast',
+      'light ?modes?',
+      'display ?modes?',
+      'durations?',
+      'speeds?',
+      'easings?',
+      'timings?',
+      '(?:colou?r|dark|light|visual|site) ?themes?',
+      'themes? ?(?:colou?rs?|modes?|toggles?|switch(?:es|er)?)',
+    ].join('|') +
+    ')\\b',
+  'i',
+);
 
 function wordsOf(text: string): string {
   return text.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[-_]/g, ' ');
@@ -606,15 +672,23 @@ function checkControls(manifest: VariantManifest, report: Report) {
   duplicates(items, ['controls', 'items'], (control) => control.id, report, 'control id', ['id']);
   items.forEach((control, index) => {
     const at = ['controls', 'items', index] as const;
-    const appearance = [
-      [control.id, 'id'],
-      [control.label, 'label'],
-    ].find(([text]) => APPEARANCE_WORDS.test(wordsOf(text!)));
+    const texts: Array<[string, Path]> = [
+      [control.id, ['id']],
+      [control.label, ['label']],
+      [control.description, ['description']],
+      ...(control.type === 'enum'
+        ? control.options.flatMap((option, optionIndex): Array<[string, Path]> => [
+            [option.value, ['options', optionIndex, 'value']],
+            [option.label, ['options', optionIndex, 'label']],
+          ])
+        : []),
+    ];
+    const appearance = texts.find(([value]) => APPEARANCE_WORDS.test(wordsOf(value)));
     if (appearance) {
       report(
-        'controls.appearance',
-        [...at, appearance[1]!],
-        'reads as choosing a palette, type, or design language. Controls change composition only; #19 owns appearance.',
+        'manifest.controls-appearance',
+        [...at, ...appearance[1]],
+        'reads as choosing appearance: a palette or color, type, a material or shape, a display mode, or motion timing. Controls change composition only; #19 owns appearance.',
         'Make the control about layout, order, emphasis, or interaction, or drop it.',
         { actual: appearance[0] },
       );
@@ -622,13 +696,14 @@ function checkControls(manifest: VariantManifest, report: Report) {
     checkControlDefault(control, [...at], report);
   });
 
-  // Steps 1 to 2, 2 to 3, and so on to the current version, each once and in order.
-  const expected = Array.from({ length: version - 1 }, (_, i) => i + 1);
+  // Steps 1 to 2, 2 to 3, and so on to the current version, each once and in
+  // order. Counted, not listed, so a huge version can't exhaust memory.
+  const needed = version - 1;
   migrations.forEach((step, index) => {
-    const want = expected[index];
+    const want = index < needed ? index + 1 : undefined;
     if (step.to !== step.from + 1 || step.from !== want) {
       report(
-        'controls.migration-gap',
+        'manifest.controls-migration-gap',
         ['controls', 'migrations', index],
         want === undefined
           ? `steps past the current version (${version}).`
@@ -640,15 +715,50 @@ function checkControls(manifest: VariantManifest, report: Report) {
       );
     }
   });
-  if (migrations.length < expected.length) {
+  if (migrations.length < needed) {
     report(
-      'controls.migration-gap',
+      'manifest.controls-migration-gap',
       ['controls', 'migrations'],
-      `has ${count(migrations.length, 'step')}, and version ${version} needs ${expected.length}, one from each earlier version.`,
+      `has ${count(migrations.length, 'step')}, and version ${version} needs ${needed}, one from each earlier version.`,
       'Add the missing steps, so stored values of any earlier version migrate.',
-      { expected: String(expected.length), actual: String(migrations.length) },
+      { expected: String(needed), actual: String(migrations.length) },
     );
   }
+  checkLastStep(manifest, report);
+}
+
+/**
+ * The step to the current version leaves values under the current controls,
+ * so each control it renames to, maps, or clamps must be one, under the name
+ * the step's later renames give it. Earlier steps name controls of versions
+ * the manifest no longer describes, so they go unchecked.
+ */
+function checkLastStep(manifest: VariantManifest, report: Report) {
+  const { items, migrations, version } = manifest.controls;
+  const stepIndex = migrations.findIndex((step) => step.to === version);
+  const step = migrations[stepIndex];
+  if (!step) return;
+  const current = new Set(items.map((control) => control.id));
+  const finalName = (name: string, after: number) =>
+    step.operations
+      .slice(after + 1)
+      .reduce((value, op) => (op.op === 'rename' && op.from === value ? op.to : value), name);
+  step.operations.forEach((op, opIndex) => {
+    const named: [string, string] | null =
+      op.op === 'rename'
+        ? ['to', op.to]
+        : op.op === 'mapValue' || op.op === 'clamp'
+          ? ['control', op.control]
+          : null;
+    if (!named || current.has(finalName(named[1], opIndex))) return;
+    report(
+      'manifest.unknown-ref',
+      ['controls', 'migrations', stepIndex, 'operations', opIndex, named[0]],
+      `names a control version ${version} doesn't declare, so the value this step leaves is one nothing reads.`,
+      'Name one of controls.items, as the step leaves it.',
+      { actual: named[1] },
+    );
+  });
 }
 
 function checkControlDefault(control: ControlDeclaration, at: (string | number)[], report: Report) {
@@ -696,16 +806,14 @@ function checkControlDefault(control: ControlDeclaration, at: (string | number)[
       }
       return;
     case 'contentRefList':
-      if (control.min > control.max) {
+      // With min at 0 and max at least 1, the bounds can't cross.
+      if (control.min > 0) {
         report(
           'manifest.invalid',
-          [...at, 'max'],
-          `must be at least min (${control.min}).`,
-          'Swap or fix the bounds.',
-          {
-            expected: `>= ${control.min}`,
-            actual: String(control.max),
-          },
+          [...at, 'min'],
+          "must be 0: the list's default is empty, since a manifest can't know content ids.",
+          'Set min to 0. To need content, add a content slot that selects by this control, with its own min.',
+          { expected: '0', actual: String(control.min) },
         );
       }
       return;
@@ -745,7 +853,7 @@ function checkEnhancements(
   enhancements.forEach((item, index) => {
     if (!subpaths.includes(item.export)) {
       report(
-        'enhancement.missing-export',
+        'manifest.enhancement-missing-export',
         ['enhancements', index, 'export'],
         "isn't in the package's exports, so the host can't load it.",
         `Add "${item.export}" to exports in package.json, or fix the subpath.`,
