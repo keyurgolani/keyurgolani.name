@@ -20,8 +20,11 @@ import type { Session } from './session';
 // named startup requirements, the hook #2, #3, and #4 implement their
 // startup checks against.
 
-/** What an auth provider binds into the dispatcher (#2). */
-export interface AuthProvider {
+/**
+ * What an auth provider binds into the dispatcher (#2). @portfolio/core's
+ * AuthProvider is a different thing, which checks a password.
+ */
+export interface AuthBindings {
   readonly resolveSession: StudioBindings['resolveSession'];
   readonly checkOrigin: StudioBindings['checkOrigin'];
   readonly touchSession: StudioBindings['touchSession'];
@@ -44,8 +47,18 @@ export interface ProviderTools {
  */
 export interface AuthProviderFactory {
   readonly name: string;
-  readonly load: (tools: ProviderTools) => Promise<AuthProvider>;
+  readonly load: (tools: ProviderTools) => Promise<AuthBindings>;
 }
+
+/**
+ * The owner's password provider (#2): sessions in the data directory, and
+ * the origin and CSRF checks. The login slice registers it, once a sign-in
+ * exists to use it.
+ */
+export const OWNER_PASSWORD_PROVIDER: AuthProviderFactory = Object.freeze({
+  name: 'owner-password',
+  load: (tools: ProviderTools) => import('./owner/auth').then((module) => module.provider(tools)),
+});
 
 /** The providers this build registers; the first one serves. #2 adds its own. */
 export const AUTH_PROVIDERS: readonly AuthProviderFactory[] = [];

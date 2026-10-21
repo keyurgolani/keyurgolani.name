@@ -7,7 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   compose,
-  type AuthProvider,
+  type AuthBindings,
   type AuthProviderFactory,
   type CompositionInput,
   type StartupRequirement,
@@ -207,7 +207,7 @@ test('the owner route matrix: each route as its capability says, and retired one
 
 test('owner runs loaded requirements after its code, then loads the provider', async () => {
   const order: string[] = [];
-  const bindings: AuthProvider = {
+  const bindings: AuthBindings = {
     resolveSession: async () => ({ session: null }),
     checkOrigin: async () => false,
     touchSession: async () => {},
