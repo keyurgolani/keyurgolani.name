@@ -4,11 +4,10 @@ import { fileURLToPath } from 'node:url';
 import { readPair } from '@portfolio/schema/node';
 // The registry loads the variant packages, which need React's client build,
 // so this test runs without the react-server condition (a .test.tsx file).
-import { listManifests } from '~/lib/registry';
-import { createAppearanceCatalog } from './appearance-catalog';
+import { liveContext } from '~/lib/variants';
 
 // The bundled pair, which demo serves and next dev renders with no documents
-// (#4, item 9), against the variants this build registers.
+// (#4, item 9), against what this build registers (#5).
 
 const EXAMPLES = {
   portfolio: fileURLToPath(new URL('../../../../portfolio.example.yml', import.meta.url)),
@@ -16,27 +15,31 @@ const EXAMPLES = {
 };
 
 test('the bundled examples are a pair with no blocking record, against this build', () => {
-  const result = readPair(EXAMPLES, { catalog: createAppearanceCatalog(listManifests()) });
+  const result = readPair(EXAMPLES, liveContext());
   assert.ok(result.ok, JSON.stringify(result.diagnostics));
+  // The owner default, Editorial Evidence, isn't registered until #13, so
+  // the fallback composition renders it, with a warning.
   assert.deepEqual(
-    result.diagnostics.map(({ code }) => code),
-    [],
+    result.diagnostics.map(({ code, severity, pointer }) => [code, severity, pointer]),
+    [['variant.unavailable', 'warning', '/appearance/variant']],
   );
-  // Every appearance id it names is registered; only the design language,
-  // which has no registry yet, goes unchecked.
+  // The variant is the contract's to check, and display modes the catalog's;
+  // the other appearance axes have no registry until #19.
   assert.deepEqual(result.notChecked, [
     'origin.sample',
     'origin.stale',
+    'site.appearance.colorScheme',
     'site.appearance.designLanguage',
+    'site.appearance.typography',
   ]);
 });
 
-test('the site example renders the baseline appearance, with the approved visitor controls', () => {
+test('the site example selects the owner default, with the approved visitor controls', () => {
   const result = readPair(EXAMPLES);
   assert.ok(result.ok);
   const { appearance, visitorControls, motionPolicy, features } = result.pair.site;
   assert.deepEqual(appearance, {
-    variant: 'editorial',
+    variant: 'editorial-evidence',
     designLanguage: 'platform-neutral',
     colorScheme: 'warm',
     typography: 'classic',

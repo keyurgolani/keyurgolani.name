@@ -2,11 +2,14 @@ import type { Access, Capability, Profile } from './capabilities';
 import type { DeploymentState } from './config-store';
 import { capabilityPolicy } from './policy';
 import { STARTING } from './ready-starting';
+import type { VariantHealth } from './variant-health';
 
 // Readiness (#1, item 19): whether this process can serve its profile, from
-// checks that read no paths, values, or content and say only ok or fail.
+// checks that read no paths, values, or content and say only ok, degraded, or
+// fail.
 
-export type CheckStatus = 'ok' | 'fail';
+/** `degraded` is the packs check's alone: the fallback composition stands in for the site's variant (#5). */
+export type CheckStatus = 'ok' | 'degraded' | 'fail';
 
 export interface ReadinessCheck {
   readonly id: 'catalog' | 'packs' | 'owner-modules';
@@ -30,18 +33,19 @@ export interface Readiness {
 
 /** What the checks read besides the deployment: the variant registry and the owner load trace. */
 export interface ReadinessProbes {
-  /** Whether the variant's module loads. */
-  readonly variantLoads: (variant: string) => Promise<boolean>;
+  /** The health of the site's selection, once the module that renders it has loaded; it throws when that fails. */
+  readonly variantHealth: (variant: string) => Promise<VariantHealth>;
   readonly loadedOwnerModules: () => readonly string[];
 }
 
 /**
- * The checks: `catalog` (the live revision loads), `packs` (the live site's
- * variant loads; #19 adds packs; with no live revision there's none to load,
- * so it fails too), and, under demo and read-only,
- * `owner-modules` (no owner module has loaded). #3 adds `data-directory`
- * for owner. A failed check is a 503; a startup requirement that failed
- * with `failure: 'degraded'` makes it `degraded`, still 200.
+ * The checks: `catalog` (the live revision loads), `packs` (what renders the
+ * live site's variant loads, `degraded` when the fallback composition stands
+ * in for it; #19 adds packs; with no live revision there's none to load, so
+ * it fails too), and, under demo and read-only, `owner-modules` (no owner
+ * module has loaded). #3 adds `data-directory` for owner. A failed check is
+ * a 503. A degraded check, or a startup requirement that failed with
+ * `failure: 'degraded'`, makes it `degraded`, still 200.
  */
 export async function readiness(
   state: DeploymentState | undefined,
@@ -59,7 +63,7 @@ export async function readiness(
     { id: 'catalog', status: catalog },
     {
       id: 'packs',
-      status: site === undefined ? 'fail' : await settle(() => probes.variantLoads(site)),
+      status: site === undefined ? 'fail' : await packs(() => probes.variantHealth(site)),
     },
   ];
   if (profile !== 'owner') {
@@ -69,7 +73,8 @@ export async function readiness(
     });
   }
   const failed = checks.some((check) => check.status === 'fail');
-  const status = failed ? 'unavailable' : state.degraded.length > 0 ? 'degraded' : 'ready';
+  const degraded = state.degraded.length > 0 || checks.some((check) => check.status === 'degraded');
+  const status = failed ? 'unavailable' : degraded ? 'degraded' : 'ready';
   return {
     httpStatus: failed ? 503 : 200,
     body: {
@@ -85,6 +90,15 @@ export async function readiness(
 async function settle(probe: () => Promise<boolean>): Promise<CheckStatus> {
   try {
     return (await probe()) ? 'ok' : 'fail';
+  } catch {
+    return 'fail';
+  }
+}
+
+/** The health's own status; fail when the module that renders doesn't load. */
+async function packs(probe: () => Promise<VariantHealth>): Promise<CheckStatus> {
+  try {
+    return (await probe()).status;
   } catch {
     return 'fail';
   }

@@ -1,8 +1,9 @@
 import { expect, test } from '../harness/fixtures';
 
-// The host starts visitors at the `system` display mode. The pre-hydration
-// script sets data-theme, and ThemeProvider must leave the same value after
-// hydration.
+// The host starts visitors at the site's display mode, `system` here. The
+// pre-hydration script sets data-theme, and nothing may change it after
+// hydration: the fallback composition has no theme toggle, and #19's visitor
+// control replaces each variant's own.
 
 test(
   'a stored theme preference survives hydration',

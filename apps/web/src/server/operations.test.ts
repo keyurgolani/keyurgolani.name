@@ -65,8 +65,19 @@ test('config.status takes no input and returns the redacted summary', () => {
     capabilities: [{ id: 'config.status', access: 'session' }],
     adapters: { catalog: 'documents' },
     secrets: { PORTFOLIO_AUTH_PASSWORD_HASH: 'set', GITHUB_TOKEN: 'unset' },
+    // How the live site's variant renders (#5).
+    variant: { status: 'degraded', requested: 'missing-variant', rendered: 'fallback' },
   };
   assert.equal(status.output.safeParse(summary).success, true);
+  assert.equal(
+    status.output.safeParse({ ...summary, variant: { ...summary.variant, status: 'broken' } })
+      .success,
+    false,
+  );
+  assert.equal(
+    status.output.safeParse({ ...summary, variant: { ...summary.variant, path: '/srv' } }).success,
+    false,
+  );
   // A secret value, or any field the schema doesn't name, never passes.
   const leaking = { ...summary, secrets: { ...summary.secrets, GITHUB_TOKEN: 'canary-token' } };
   assert.equal(status.output.safeParse(leaking).success, false);

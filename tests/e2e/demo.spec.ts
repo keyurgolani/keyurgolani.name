@@ -1,10 +1,13 @@
 import { expect, test } from '../harness/fixtures';
 import { DEMO_APP, profileMatrix } from '../harness/profile-matrix';
+import { FALLBACK_ID, VARIANTS } from '../harness/registry';
 
-// The demo profile (#1, slice 3): the bundled sample at / and /sample, in
-// any registered variant, scheme, and typography preset, with nothing for
-// crawlers to index and no cookie, and the route-level matrix (AC4) for
-// demo.
+// The demo profile (#1, slice 3): the bundled sample at / and /sample, with
+// nothing for crawlers to index and no cookie, and the route-level matrix
+// (AC4) for demo. The sample site selects Editorial Evidence, which this
+// build doesn't register until #13, so both render the fallback composition
+// in its place (#5). /sample?variant= renders a variant this build
+// registers, and anything else it names is a 404.
 const DEMO = { type: 'profile', description: 'demo' };
 // identity.name in portfolio.example.yml.
 const SAMPLE_NAME = 'Anamika Devi';
@@ -14,85 +17,42 @@ test.use({ appOptions: DEMO_APP, blockedHosts: ['picsum.photos'] });
 
 profileMatrix('demo');
 
-test(
-  '/sample?variant=editorial renders the bundled sample in Editorial',
-  { annotation: [{ type: 'route', description: '/sample' }, DEMO] },
-  async ({ page }) => {
-    const response = await page.goto('/sample?variant=editorial');
-    expect(response?.status()).toBe(200);
-    const root = page.locator('[data-variant]').first();
-    await expect(root).toHaveAttribute('data-variant', 'editorial');
-    await expect(root).toHaveAttribute('data-color-scheme', 'warm');
-    await expect(root).toHaveAttribute('data-typography', 'classic');
-    await expect(page.getByText(SAMPLE_NAME).first()).toBeVisible();
-  },
-);
+for (const route of ['/', '/sample']) {
+  test(
+    `${route} renders the bundled sample in the fallback composition, for its unregistered selection`,
+    { annotation: [{ type: 'route', description: route }, DEMO] },
+    async ({ page }) => {
+      const response = await page.goto(route);
+      expect(response?.status()).toBe(200);
+      const root = page.locator('[data-variant]');
+      await expect(root).toHaveAttribute('data-variant', 'fallback');
+      await expect(root).toHaveAttribute('data-requested-variant', 'editorial-evidence');
+      await expect(page.getByRole('heading', { level: 1 })).toHaveText(SAMPLE_NAME);
+    },
+  );
+}
 
 test(
-  '/ renders the bundled sample in the default variant',
-  { annotation: [{ type: 'route', description: '/' }, DEMO] },
-  async ({ page }) => {
-    await page.goto('/');
-    await expect(page.locator('[data-variant]').first()).toHaveAttribute(
-      'data-variant',
-      'editorial',
-    );
-    await expect(page.getByText(SAMPLE_NAME).first()).toBeVisible();
-  },
-);
-
-test(
-  '/sample renders any registered variant, scheme, and typography preset',
+  '/sample?variant= naming the fallback, an unregistered id, nothing, or two ids is a 404 that names none',
   { annotation: [{ type: 'route', description: '/sample' }, DEMO] },
   async ({ page }) => {
-    await page.goto('/sample?variant=kinetic-cosmos&scheme=aurora&typography=humanist');
-    const root = page.locator('[data-variant]').first();
-    await expect(root).toHaveAttribute('data-variant', 'kinetic-cosmos');
-    await expect(root).toHaveAttribute('data-color-scheme', 'aurora');
-    await expect(root).toHaveAttribute('data-typography', 'humanist');
-    await expect(page.getByText(SAMPLE_NAME).first()).toBeAttached();
-  },
-);
-
-test(
-  'a scheme or preset the variant does not declare falls back to its default',
-  { annotation: [{ type: 'route', description: '/sample' }, DEMO] },
-  async ({ page }) => {
-    await page.goto('/sample?variant=editorial&scheme=aurora&typography=canary-type');
-    const root = page.locator('[data-variant]').first();
-    await expect(root).toHaveAttribute('data-color-scheme', 'warm');
-    await expect(root).toHaveAttribute('data-typography', 'classic');
-  },
-);
-
-test(
-  "/sample overrides only what its query names, and keeps the sample site's appearance",
-  { annotation: [{ type: 'route', description: '/sample' }, DEMO] },
-  async ({ page }) => {
-    // site.example.yml: Editorial in warm and classic, its defaults, so a
-    // site that picks neither is variant-selection.test.ts's to check.
-    await page.goto('/sample');
-    const root = page.locator('[data-variant]').first();
-    await expect(root).toHaveAttribute('data-variant', 'editorial');
-    await expect(root).toHaveAttribute('data-color-scheme', 'warm');
-    await expect(root).toHaveAttribute('data-typography', 'classic');
-    await page.goto('/sample?scheme=noir');
-    await expect(root).toHaveAttribute('data-variant', 'editorial');
-    await expect(root).toHaveAttribute('data-color-scheme', 'noir');
-    await expect(root).toHaveAttribute('data-typography', 'classic');
-    await page.goto('/sample?typography=modernist');
-    await expect(root).toHaveAttribute('data-color-scheme', 'warm');
-    await expect(root).toHaveAttribute('data-typography', 'modernist');
-  },
-);
-
-test(
-  'an unknown variant is a 404',
-  { annotation: [{ type: 'route', description: '/sample' }, DEMO] },
-  async ({ request }) => {
-    for (const query of ['variant=canary-variant', 'variant=', 'variant=editorial&variant=noir']) {
-      const response = await request.get(`/sample?${query}`);
-      expect(response.status(), query).toBe(404);
+    for (const query of [
+      'variant=fallback',
+      'variant=canary-variant',
+      'variant=',
+      'variant=fallback&variant=fallback',
+    ]) {
+      const response = await page.goto(`/sample?${query}`);
+      expect(response?.status(), query).toBe(404);
+      await expect(page.getByRole('heading', { level: 1 }), query).toHaveText('Page not found');
+      await expect(page.locator('body'), query).not.toContainText(
+        /canary|fallback|editorial|variant|studio|config/i,
+        { useInnerText: true },
+      );
+      const links = await page
+        .locator('a[href]')
+        .evaluateAll((anchors) => anchors.map((anchor) => anchor.getAttribute('href')));
+      expect(links, query).toEqual(['/']);
     }
   },
 );
@@ -118,7 +78,7 @@ test(
       if (new URL(response.url()).origin !== app.origin) return;
       responses.push({ url: response.url(), robots: response.headers()['x-robots-tag'] });
     });
-    await page.goto('/sample?variant=editorial', { waitUntil: 'networkidle' });
+    await page.goto('/sample', { waitUntil: 'networkidle' });
     await page.goto('/', { waitUntil: 'networkidle' });
     // Build assets included.
     expect(responses.some(({ url }) => new URL(url).pathname.startsWith('/_next/static/'))).toBe(
@@ -130,22 +90,14 @@ test(
 );
 
 test(
-  "the visitor's theme applies through the selected variant's own provider",
-  { annotation: [{ type: 'route', description: '/sample' }, DEMO] },
-  async ({ page }) => {
-    await page.addInitScript(() => window.localStorage.setItem('portfolio:theme', 'black'));
-    await page.goto('/sample?variant=kinetic-cosmos');
-    // The inline script maps black to dark before hydration. The provider,
-    // fed kinetic-cosmos's themes, which include black, then sets black.
-    await expect(page.locator('html')).toHaveAttribute('data-theme', 'black');
-  },
-);
-
-test(
   'rendering the sample in every variant reaches no host outside the app',
   { annotation: [{ type: 'route', description: '/sample' }, DEMO] },
   async ({ page, app }) => {
-    for (const url of ['/', '/sample?variant=editorial', '/sample?variant=kinetic-cosmos']) {
+    // The fallback composition at / and /sample, then each variant this build registers.
+    const selectable = VARIANTS.map(({ manifest }) => manifest.id).filter(
+      (id) => id !== FALLBACK_ID,
+    );
+    for (const url of ['/', '/sample', ...selectable.map((id) => `/sample?variant=${id}`)]) {
       const response = await page.goto(url, { waitUntil: 'networkidle' });
       expect(response?.status(), url).toBe(200);
       // The sample's github section, which fetches a live account, is gone.

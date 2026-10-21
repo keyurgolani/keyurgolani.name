@@ -1,9 +1,9 @@
 import { notFound } from 'next/navigation';
-import { findManifest } from '~/lib/registry';
-import { renderVariant } from '~/lib/render-variant';
+import { renderComposition } from '~/lib/render-composition';
+import { sampleVariant, type SearchParams } from '~/lib/variants';
+import { requireDeploymentConfig } from '~/server/config-store';
 import { servedPage } from '~/server/page-guard';
 import { getPublicView } from '~/server/public-view';
-import { sampleSelection, type SearchParams } from '~/server/variant-selection';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,12 +11,18 @@ interface SamplePageProps {
   readonly searchParams: Promise<SearchParams>;
 }
 
-// The bundled sample in any registered variant (#1, item 17), under `demo`:
-// `?variant=<slug>&scheme=<id>&typography=<id>`. An unknown variant is a 404,
-// and each axis the query doesn't name is the sample site's own.
+// The bundled sample (#1, item 17), under `demo`: the sample site's own
+// selection, or `?variant=<id>` for any variant this build registers. The
+// fallback composition and an unknown id are a 404.
 export default servedPage('/sample', async function SamplePage({ searchParams }: SamplePageProps) {
-  const { appearance } = (await getPublicView()).site;
-  const selection = sampleSelection(await searchParams, findManifest, appearance);
-  if (!selection) notFound();
-  return renderVariant(selection);
+  const view = await getPublicView();
+  const selected = sampleVariant(await searchParams, view.site.appearance.variant);
+  if (selected === null) notFound();
+  return renderComposition({
+    view,
+    selected,
+    route: { route: 'home' },
+    basePath: '/sample',
+    origin: requireDeploymentConfig().origin,
+  });
 });

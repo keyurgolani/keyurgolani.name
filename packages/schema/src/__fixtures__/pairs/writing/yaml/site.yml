@@ -1,7 +1,7 @@
-# Editorial as it ships: warm and classic, the feed on for the essays.
+# Warm and classic, the feed on for the essays.
 schemaVersion: 2
 appearance:
-  variant: editorial
+  variant: missing-variant
   designLanguage: platform-neutral
   colorScheme: warm
   typography: classic

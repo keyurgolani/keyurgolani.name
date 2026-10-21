@@ -12,9 +12,8 @@ out
 *.tsbuildinfo
 next-env.d.ts
 
-# generated
-**/registry.generated.ts
-**/manifests.generated.ts
+# generated: what `pnpm --filter @portfolio/web build:registry` writes (#5)
+apps/web/src/lib/generated/
 
 # coverage / test
 coverage

@@ -14,7 +14,7 @@ function state(
   {
     live = true,
     degraded = [] as string[],
-    variant = 'editorial',
+    variant = 'acme-ocean',
   }: { live?: boolean; degraded?: string[]; variant?: string } = {},
 ): DeploymentState {
   return {
@@ -30,8 +30,12 @@ function state(
   };
 }
 
+/** A build that registers acme-ocean: any other selection falls back. */
 const PROBES: ReadinessProbes = {
-  variantLoads: async (variant) => variant === 'editorial',
+  variantHealth: async (variant) =>
+    variant === 'acme-ocean'
+      ? { status: 'ok', requested: variant, rendered: variant }
+      : { status: 'degraded', requested: variant, rendered: 'fallback' },
   loadedOwnerModules: () => [],
 };
 
@@ -74,13 +78,11 @@ test('owner has no owner-modules check: its trace holds owner code by design', a
 
 test('a failed check is 503, unavailable, and names only the check', async () => {
   const cases: Array<[string, DeploymentState, ReadinessProbes]> = [
-    ['packs', state('read-only'), { ...PROBES, variantLoads: async () => false }],
-    // The live site's variant, not some default.
-    ['packs', state('read-only', { variant: 'kinetic-cosmos' }), PROBES],
+    // The module that renders doesn't load.
     [
       'packs',
       state('read-only'),
-      { ...PROBES, variantLoads: () => Promise.reject(new Error('canary')) },
+      { ...PROBES, variantHealth: () => Promise.reject(new Error('canary')) },
     ],
     ['owner-modules', state('demo'), { ...PROBES, loadedOwnerModules: () => ['server/owner/x'] }],
   ];
@@ -94,6 +96,21 @@ test('a failed check is 503, unavailable, and names only the check', async () =>
     );
     assert.ok(!JSON.stringify(result.body).includes('canary'));
   }
+});
+
+test("the fallback standing in for the site's variant is 200, degraded, with packs degraded", async () => {
+  // The live site's variant, not some default: this build doesn't register it.
+  const result = await readiness(state('read-only', { variant: 'canary-variant' }), PROBES);
+  assert.equal(result.httpStatus, 200);
+  assert.ok(result.body.status === 'degraded');
+  assert.deepEqual(result.body.checks, [
+    { id: 'catalog', status: 'ok' },
+    { id: 'packs', status: 'degraded' },
+    { id: 'owner-modules', status: 'ok' },
+  ]);
+  // It names neither variant.
+  assert.ok(!JSON.stringify(result.body).includes('canary-variant'));
+  assert.ok(!JSON.stringify(result.body).includes('fallback'));
 });
 
 test('a degraded startup requirement is 200, degraded', async () => {

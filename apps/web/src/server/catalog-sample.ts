@@ -1,6 +1,11 @@
 import 'server-only';
 import path from 'node:path';
-import type { AppearanceCatalog, ContentExtension, Portfolio } from '@portfolio/schema';
+import type {
+  AppearanceCatalog,
+  ContentExtension,
+  Portfolio,
+  UnitValidator,
+} from '@portfolio/schema';
 import { readPair, type PairFiles } from '@portfolio/schema/node';
 import type { CatalogReader, LiveRevision } from './catalog-port';
 import type { ConfigIssue } from './config';
@@ -19,6 +24,8 @@ export interface SampleCatalogOptions {
   readonly catalog?: AppearanceCatalog;
   /** The content extensions the sample is checked against, as documents are. Others warn. */
   readonly extensions?: readonly ContentExtension[];
+  /** The contract's checks on the pair, live, as documents get them (#5). */
+  readonly validators?: readonly UnitValidator[];
 }
 
 export type OpenSampleResult =
@@ -45,8 +52,9 @@ export function openSampleCatalog({
   examples,
   catalog,
   extensions,
+  validators,
 }: SampleCatalogOptions): OpenSampleResult {
-  const result = readPair(examples, { catalog, extensions });
+  const result = readPair(examples, { catalog, extensions, validators });
   if (!result.ok) {
     const unread = result.diagnostics.find(({ code }) => code in UNREAD);
     if (unread) {

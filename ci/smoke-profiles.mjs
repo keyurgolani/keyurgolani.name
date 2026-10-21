@@ -17,8 +17,12 @@
 // - owner, with deploy/compose.owner.yml's data directory on a named volume,
 //   refuses to start with no authentication provider (until #2). The volume
 //   starts out owned by uid 1001, mode 0700, as the image's directory is.
-// - every startup row in tests/harness/startup-rows.mjs exits 1 with its
-//   config.fatal lines and none of its canary values.
+// - every startup row in tests/harness/startup-rows.mjs that refuses exits 1
+//   with its config.fatal lines and none of its canary values, and every one
+//   that starts serves with its config.warning lines and none of its values.
+// - readiness says degraded, and the log carries the variant.unavailable
+//   warning, while the fallback composition renders in place of the
+//   profile's selected variant (#5).
 //
 // Removes every container, network, and volume it creates, and the image
 // when it built one.
@@ -30,10 +34,11 @@
 //   CONTAINER_PREFIX  container, network, and volume name prefix (default portfolio-ci-)
 //   SMOKE_TIMEOUT_MS  how long to wait for /api/health (default 90000)
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
-import { DEFAULT_PORTFOLIO } from '../tests/harness/app-server.mjs';
+import { parse as parseYaml } from 'yaml';
+import { DEFAULT_PORTFOLIO, DEFAULT_SITE } from '../tests/harness/app-server.mjs';
 import {
   CANARY_BODY,
   CANARY_SECRET,
@@ -44,7 +49,14 @@ import {
   IMAGE_PROBE,
 } from '../tests/harness/canaries.mjs';
 import { waitFor } from '../tests/harness/net.mjs';
-import { checkRefusal, rowDocuments, STARTUP_ROWS } from '../tests/harness/startup-rows.mjs';
+import {
+  checkRefusal,
+  checkWarnings,
+  rowDocuments,
+  STARTUP_ROWS,
+  WARNING_ROWS,
+  warningLines,
+} from '../tests/harness/startup-rows.mjs';
 import { PROBE_SNIPPET, REQUESTS_SNIPPET } from './lib/container.mjs';
 import {
   currentGate,
@@ -114,10 +126,46 @@ function expectedOperation(profile, operation, method) {
   return [200, null];
 }
 
-/** What /api/ready answers for a profile whose checks all pass. */
+/**
+ * The variant ids this build registers, read from @portfolio/web's
+ * dependencies as the image's prebuild reads them, without writing anything.
+ */
+function registeredVariants() {
+  const script = path.join(REPO_ROOT, 'apps', 'web', 'scripts', 'build-registry.ts');
+  const result = spawnSync(
+    process.execPath,
+    ['--import', 'tsx', script, '--check', '--format', 'json'],
+    {
+      cwd: REPO_ROOT,
+      encoding: 'utf8',
+    },
+  );
+  if (result.status !== 0) {
+    throw new Error(`the registry doesn't build: ${result.stdout}${result.stderr}`.trim());
+  }
+  return JSON.parse(result.stdout).variants.map((variant) => variant.id);
+}
+let registered;
+
+/** The variant each profile's site selects: the harness fixture's, or the bundled sample's. */
+const SELECTED = Object.fromEntries(
+  Object.entries({
+    'read-only': DEFAULT_SITE,
+    demo: path.join(REPO_ROOT, 'site.example.yml'),
+  }).map(([profile, file]) => [profile, parseYaml(readFileSync(file, 'utf8')).appearance.variant]),
+);
+
+/** `degraded` while the fallback composition renders in place of the profile's variant (#5). */
+function packsStatus(profile) {
+  registered ??= registeredVariants();
+  return registered.includes(SELECTED[profile]) ? 'ok' : 'degraded';
+}
+
+/** What /api/ready answers for a profile whose checks pass, or the packs check only degrades. */
 function readyBody(profile) {
+  const packs = packsStatus(profile);
   return {
-    status: 'ready',
+    status: packs === 'ok' ? 'ready' : 'degraded',
     profile,
     capabilities: CAPABILITIES.flatMap((id) => {
       const access = accessIn(profile, id);
@@ -125,7 +173,7 @@ function readyBody(profile) {
     }),
     checks: [
       { id: 'catalog', status: 'ok' },
-      { id: 'packs', status: 'ok' },
+      { id: 'packs', status: packs },
       { id: 'owner-modules', status: 'ok' },
     ],
   };
@@ -341,6 +389,16 @@ async function profileRun(profile, { env, mounts = [] }) {
         fail(profile, `deployment.config secrets are ${JSON.stringify(summary.secrets)}`);
       }
     }
+    // The owner's diagnostic while the fallback composition stands in, which
+    // never names the selected variant.
+    const unavailable = warningLines(text).filter((entry) => entry.code === 'variant.unavailable');
+    const expected = packsStatus(profile) === 'degraded' ? 1 : 0;
+    if (unavailable.length !== expected) {
+      fail(profile, `logged variant.unavailable ${unavailable.length} times, not ${expected}`);
+    } else if (unavailable[0] && unavailable[0].path !== '/appearance/variant') {
+      fail(profile, `variant.unavailable is at ${unavailable[0].path}, not /appearance/variant`);
+    }
+    if (text.includes(SELECTED[profile])) fail(profile, 'the log names the selected variant');
     if (text.includes(FORGED_LINE)) fail(profile, 'a /_next/image url reached the log as a line');
     // A write the read-only root refused shows up as EROFS.
     if (/EROFS|read-only file system/i.test(text)) {
@@ -444,6 +502,62 @@ function rowRuns() {
   console.log(`[profiles] startup rows: ${passed} of ${STARTUP_ROWS.length} passed`);
 }
 
+/** Each startup row that starts: it serves, and logs its warnings without their values. */
+async function warningRowRuns() {
+  let passed = 0;
+  for (const [index, row] of WARNING_ROWS.entries()) {
+    const name = `${run}-warning-${index}`;
+    const test = `startup row: ${row.group}, ${row.name}`;
+    const config = path.join(stateDir, `warning-${index}`, 'config');
+    mkdirSync(config, { recursive: true });
+    for (const [file, text] of Object.entries(row.documents)) {
+      writeFileSync(path.join(config, file), text);
+    }
+    const paths = { source: '/config', beside: (file) => `/files/${file}` };
+    const started = container([
+      'run',
+      '-d',
+      '--name',
+      name,
+      '--network',
+      network,
+      '-v',
+      `${config}:/config:ro`,
+      ...envArgs(row.env(paths)),
+      image,
+    ]);
+    if (started.status !== 0) {
+      fail(test, `the container did not start: ${(started.stderr || '').trim()}`);
+      continue;
+    }
+    const output = () => {
+      const logs = container(['logs', name]);
+      return `${logs.stdout ?? ''}${logs.stderr ?? ''}`;
+    };
+    try {
+      const running = () =>
+        container(['inspect', '--format', '{{.State.Running}}', name]).stdout.trim() === 'true';
+      await waitFor(
+        () => {
+          const result = container(['exec', name, 'node', '-e', PROBE_SNIPPET, '/api/health']);
+          return parse(result.stdout ?? '')?.status === 200 ? true : undefined;
+        },
+        { timeoutMs, alive: running, what: `${test}: GET /api/health to answer 200` },
+      );
+      const problems = checkWarnings(row, output());
+      for (const problem of problems) fail(test, problem);
+      if (problems.length === 0) passed += 1;
+      else saveLogs(name, output());
+    } catch (error) {
+      fail(test, error.message);
+      saveLogs(name, output());
+    } finally {
+      container(['rm', '-f', name]);
+    }
+  }
+  console.log(`[profiles] warning rows: ${passed} of ${WARNING_ROWS.length} passed`);
+}
+
 async function smoke() {
   if (pulled) {
     console.log(`[profiles] pulling ${image} with ${cli}`);
@@ -479,6 +593,7 @@ async function smoke() {
   });
   ownerRun();
   rowRuns();
+  await warningRowRuns();
 }
 
 let exitCode = 0;

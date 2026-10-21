@@ -24,7 +24,15 @@ const read = readDeploymentConfig(
 );
 assert.ok(read.ok, JSON.stringify(read.issues));
 const config = read.config;
-const handlers = ownerHandlers({ config, catalog: 'documents' });
+const handlers = ownerHandlers({
+  config,
+  catalog: 'documents',
+  variantHealth: async () => ({
+    status: 'degraded',
+    requested: 'missing-variant',
+    rendered: 'fallback',
+  }),
+});
 const session = mintSession();
 
 test.before(() => {

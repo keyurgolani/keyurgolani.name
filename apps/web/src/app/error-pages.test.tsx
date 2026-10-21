@@ -54,28 +54,41 @@ test('global-error.tsx brings its own document and shows only the digest', async
   assertGeneric(html);
 });
 
-test('not-found.tsx links only home', () => {
-  const html = renderToStaticMarkup(<NotFound />);
+test('not-found.tsx links only home', async () => {
+  const html = renderToStaticMarkup(await NotFound());
   assert.match(html, /<h1>Page not found<\/h1>/);
   assertGeneric(html);
 });
 
-test("not-found.tsx links the pages the profile's policy lists", (t) => {
+/** A deployment whose catalog serves `site`, or fails, carrying a canary, when there's none. */
+function deploy(profile: (typeof PROFILES)[number], site?: object): void {
+  setDeploymentState({
+    config: {
+      profile,
+      mode: 'production',
+      origin: 'https://rowan.test',
+      trustedProxyHops: 0,
+      secrets: {},
+    },
+    catalog: {
+      getLive: async () => {
+        if (!site) throw failure();
+        return { revisionId: 'canary-revision', unit: { site } } as never;
+      },
+    },
+    dispatch: () => assert.fail('the 404 page runs no operation'),
+    degraded: [],
+  });
+}
+
+test("not-found.tsx links the pages the profile's policy lists", async (t) => {
   t.after(() => setDeploymentState(undefined));
   for (const profile of PROFILES) {
-    setDeploymentState({
-      config: {
-        profile,
-        mode: 'production',
-        origin: 'https://rowan.test',
-        trustedProxyHops: 0,
-        secrets: {},
-      },
-      catalog: { getLive: () => assert.fail('the 404 page reads no catalog') },
-      dispatch: () => assert.fail('the 404 page runs no operation'),
-      degraded: [],
-    });
-    const html = renderToStaticMarkup(<NotFound />);
+    // A catalog that can't serve leaves the page without a boundary, and shows nothing from the error.
+    deploy(profile);
+    const html = renderToStaticMarkup(await NotFound());
+    assert.match(html, /^<main class="host-chrome">/);
+    assertGeneric(html);
     const links = [...html.matchAll(/href="([^"]*)"/g)].map((match) => match[1]);
     assert.deepEqual(
       links,
@@ -85,4 +98,22 @@ test("not-found.tsx links the pages the profile's policy lists", (t) => {
       profile,
     );
   }
+});
+
+test("not-found.tsx renders inside the live site's presentation boundary, naming nothing else", async (t) => {
+  t.after(() => setDeploymentState(undefined));
+  deploy('read-only', {
+    appearance: { variant: 'canary-variant' },
+    motionPolicy: 'reduce',
+    sections: { 'canary-section': { hidden: true } },
+  });
+  const html = renderToStaticMarkup(await NotFound());
+  // The fallback composition stands in for the unregistered variant, which
+  // only the boundary's data attribute names, for the owner and the tests.
+  const marker = 'data-requested-variant="canary-variant"';
+  assert.match(
+    html,
+    /^<div data-variant="fallback" data-requested-variant="canary-variant" data-motion-policy="reduce"><main class="host-chrome">/,
+  );
+  assertGeneric(html.replace(marker, ''));
 });

@@ -8,18 +8,20 @@ import {
   toPublicView,
   type ParsedPair,
   type PublicPortfolio,
+  type PublicView,
 } from '@portfolio/schema';
+import { buildRenderInput } from '@portfolio/variant-contract';
 // The registry loads the variant packages, which need React's client build,
 // so this test runs without the react-server condition (a .test.tsx file).
-import { listManifests, loadVariantModule } from '~/lib/registry';
+import { loadComposition, REGISTRY } from '~/lib/variants';
 
 // Item 16: the public view is the only input to the variants, so neither a
 // hidden section nor unregistered extension data reaches what the server
 // sends a browser. An RSC payload carries what server components render and
 // the props of each client component, including data a client component
-// never renders, such as Kinetic Cosmos's hero getting all of `identity`.
-// The walk below collects every string of both, for each registered variant.
-// (The browser suite fetches the real payload for the host's variant.)
+// never renders. The walk below collects every string of both, for each
+// registered variant, the fallback composition included. (The browser suite
+// fetches the real payload for the host's variant.)
 
 const PORTFOLIO = `schemaVersion: 2
 locale: en
@@ -59,7 +61,7 @@ sections:
 
 const SITE = `schemaVersion: 2
 appearance:
-  variant: editorial
+  variant: missing-variant
   designLanguage: platform-neutral
   colorScheme: warm
   typography: classic
@@ -94,12 +96,13 @@ function pair(): ParsedPair {
   return { portfolio: portfolio.value, site: site.value };
 }
 
-/** Every export of each `'use client'` module in the kit and the variants. */
+/** Every export of each `'use client'` module in the kit and the workspace's variant packages. */
 async function clientComponents(): Promise<Set<unknown>> {
   const packages = new URL('../../../../packages/', import.meta.url);
   const found = new Set<unknown>();
   for (const name of readdirSync(packages)) {
-    if (name !== 'kit' && !name.startsWith('variant-')) continue;
+    const manifest = JSON.parse(readFileSync(new URL(`${name}/package.json`, packages), 'utf8'));
+    if (name !== 'kit' && manifest.portfolio?.kind !== 'variant') continue;
     const src = new URL(`${name}/src/`, packages);
     for (const file of readdirSync(src, { recursive: true, encoding: 'utf8' })) {
       if (!/\.tsx?$/.test(file) || file.includes('.test.')) continue;
@@ -151,31 +154,40 @@ async function payloadStrings(
 const found = (strings: readonly string[]) =>
   MARKERS.filter((marker) => strings.some((text) => text.includes(marker)));
 
+/** A registered variant's element for a view, as the host renders it. */
+async function element(id: string, view: PublicView) {
+  const entry = REGISTRY.find(({ manifest }) => manifest.id === id)!;
+  const input = buildRenderInput({
+    view,
+    manifest: entry.manifest,
+    route: { route: 'home' },
+    basePath: '',
+    origin: 'https://rowan.test',
+    requestTime: '2026-01-01T00:00:00Z',
+  });
+  return createElement(await loadComposition(id), { input });
+}
+
 test('no variant sends a browser a hidden section or unregistered extension data', async () => {
   const clients = await clientComponents();
   const input = pair();
   const view = toPublicView(input);
-  const slugs = listManifests().map(({ slug }) => slug);
-  assert.ok(slugs.includes('editorial') && slugs.includes('kinetic-cosmos'), slugs.join(', '));
-  for (const slug of slugs) {
-    const variant = await loadVariantModule(slug);
-    assert.ok(variant, slug);
-    const render = (portfolio: PublicPortfolio) =>
-      payloadStrings(
-        createElement(variant.default, { portfolio, colorScheme: 'warm', typography: 'classic' }),
-        clients,
-      );
-
-    const strings = await render(view.portfolio);
+  const ids = REGISTRY.map(({ manifest }) => manifest.id);
+  assert.ok(ids.includes('fallback'), ids.join(', '));
+  for (const id of ids) {
+    const strings = await payloadStrings(await element(id, view), clients);
     // The walk reaches the visible content, rendered or passed as props.
-    assert.ok(strings.includes('Rowan Visible') && strings.includes('Visible Engineer'), slug);
-    assert.deepEqual(found(strings), [], slug);
+    assert.ok(strings.includes('Rowan Visible') && strings.includes('Visible Engineer'), id);
+    assert.deepEqual(found(strings), [], id);
 
     // Given the parsed pair instead (forced past the type's brand, which
     // otherwise refuses it), the same walk finds the hidden section, so it
     // would see a leak.
-    const raw = input.portfolio as PublicPortfolio;
-    assert.ok(found(await render(raw)).includes('canary-hidden-role'), slug);
+    const raw = { ...view, portfolio: input.portfolio as PublicPortfolio };
+    assert.ok(
+      found(await payloadStrings(await element(id, raw), clients)).includes('canary-hidden-role'),
+      id,
+    );
   }
 });
 
@@ -185,18 +197,4 @@ test('a variant takes only the public view, by type', () => {
   // @ts-expect-error A parsed portfolio isn't the public view's.
   assert.ok(props(input.portfolio));
   assert.ok(props(toPublicView(input).portfolio));
-});
-
-test("Kinetic Cosmos's client components get identity and links whole", async () => {
-  // Why the view matters even for data no variant renders: the hero's props
-  // carry identity.extensions and each link's extensions into the payload.
-  const clients = await clientComponents();
-  const variant = await loadVariantModule('kinetic-cosmos');
-  assert.ok(variant);
-  const strings = await payloadStrings(
-    createElement(variant.default, { portfolio: pair().portfolio as PublicPortfolio }),
-    clients,
-  );
-  assert.ok(found(strings).includes('canary-unregistered-field'));
-  assert.ok(found(strings).includes('canary-link-extension'));
 });

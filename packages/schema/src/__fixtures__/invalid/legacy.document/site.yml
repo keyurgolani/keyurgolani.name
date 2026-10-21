@@ -1,7 +1,7 @@
 # A valid site document, which nothing reports beside the old one.
 schemaVersion: 2
 appearance:
-  variant: editorial
+  variant: missing-variant
   designLanguage: platform-neutral
   colorScheme: warm
   typography: classic

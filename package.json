@@ -12,8 +12,8 @@
     "dev": "pnpm --filter @portfolio/web dev",
     "build": "pnpm --filter @portfolio/web build",
     "start": "pnpm --filter @portfolio/web start",
-    "config:validate": "node apps/web/scripts/build-registry.mjs >&2 && tsx apps/web/scripts/config.mjs validate",
-    "config:migrate": "node apps/web/scripts/build-registry.mjs >&2 && tsx apps/web/scripts/config.mjs migrate",
+    "config:validate": "tsx apps/web/scripts/build-registry.ts >&2 && tsx apps/web/scripts/config.mjs validate",
+    "config:migrate": "tsx apps/web/scripts/build-registry.ts >&2 && tsx apps/web/scripts/config.mjs migrate",
     "owner:hash-password": "node apps/web/bin/owner.mjs hash-password",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
@@ -23,6 +23,7 @@
     "test:scripts": "node --test 'ci/**/*.test.mjs' 'skills/**/*.test.mjs' 'tests/harness/**/*.test.mjs'",
     "check:skills": "node skills/scripts/sync-checks.mjs",
     "check:registry": "node ci/check-registry.mjs",
+    "check:variants": "pnpm --filter @portfolio/web check:variants",
     "check:deps": "depcruise apps packages --config .dependency-cruiser.cjs",
     "check:pins": "node ci/check-pins.mjs",
     "check:workflows": "node ci/check-workflows.mjs",
@@ -43,8 +44,7 @@
     "smoke:profiles": "node --import tsx ci/smoke-profiles.mjs",
     "clean": "pnpm -r exec rm -rf dist .next node_modules tsconfig.tsbuildinfo && rm -rf node_modules",
     "new-variant": "node skills/variant-developer/scripts/new-variant.mjs",
-    "check-coverage": "node skills/variant-developer/scripts/check-coverage.mjs",
-    "postinstall": "node apps/web/scripts/build-registry.mjs"
+    "check-coverage": "node skills/variant-developer/scripts/check-coverage.mjs"
   },
   "devDependencies": {
     "@playwright/test": "1.58.2",

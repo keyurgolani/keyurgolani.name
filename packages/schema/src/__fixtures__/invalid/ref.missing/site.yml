@@ -1,7 +1,7 @@
 # ref.missing: hides a section the portfolio does not have.
 schemaVersion: 2
 appearance:
-  variant: editorial
+  variant: missing-variant
   designLanguage: platform-neutral
   colorScheme: warm
   typography: classic

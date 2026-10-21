@@ -1,6 +1,6 @@
 schemaVersion: 2
 appearance:
-  variant: editorial
+  variant: missing-variant
   designLanguage: platform-neutral
   colorScheme: warm
   typography: classic

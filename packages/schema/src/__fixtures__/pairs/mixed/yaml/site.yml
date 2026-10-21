@@ -1,7 +1,7 @@
-# Editorial in ink and paper, the feed on, with the talks hidden for now.
+# Ink and paper, the feed on, with the talks hidden for now.
 schemaVersion: 2
 appearance:
-  variant: editorial
+  variant: missing-variant
   designLanguage: platform-neutral
   colorScheme: ink-and-paper
   typography: modernist

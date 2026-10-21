@@ -1,38 +1,19 @@
-import type { VariantManifest } from '@portfolio/kit';
-import type { AppearanceCatalog } from '@portfolio/schema';
+import { DisplayModeSchema, type AppearanceCatalog } from '@portfolio/schema';
 
-// The interim appearance catalog (#4, item 14), built from the registered
-// variants' manifests until #19's appearance registries replace it. Startup
-// passes it to validatePublicationUnit() once the host loads site.yml.
+// The interim appearance catalog (#4, item 14, rewritten by #5, Slice 3,
+// item 8) until #19's appearance registries replace it. Startup passes it to
+// validatePublicationUnit() once the host loads site.yml. It names no
+// variant: whether the selection is registered is the contract's
+// validateSelection to say. Design languages, color schemes, typography
+// presets, and generator-backed schemes have no registry yet.
 
-/** The display modes the baseline variants' theme toggles offer. */
-const DISPLAY_MODES: readonly string[] = ['system', 'light', 'dark'];
+/** Every display mode the site document allows: system, light, dark, and high-contrast. */
+const DISPLAY_MODES: readonly string[] = DisplayModeSchema.options;
 
-/**
- * Variant ids are the registered slugs; color scheme and typography ids are
- * the selected variant's, or unchecked when it declares none. Display modes
- * are system, light, and dark. Design languages and generator-backed color
- * schemes have no registry yet, so neither is checked.
- */
-export function createAppearanceCatalog(manifests: readonly VariantManifest[]): AppearanceCatalog {
-  const bySlug = new Map(manifests.map((manifest) => [manifest.slug, manifest]));
-  const ids = (list: readonly { readonly id: string }[] | undefined) =>
-    list && list.length > 0 ? list.map(({ id }) => id) : null;
+/** Display modes are checked; every other axis, and every appearance input, goes unchecked. */
+export function createAppearanceCatalog(): AppearanceCatalog {
   return {
-    ids(axis, selection) {
-      switch (axis) {
-        case 'variant':
-          return manifests.map(({ slug }) => slug);
-        case 'colorScheme':
-          return ids(bySlug.get(selection.variant)?.colorSchemes);
-        case 'typography':
-          return ids(bySlug.get(selection.variant)?.typographyPresets);
-        case 'displayMode':
-          return DISPLAY_MODES;
-        case 'designLanguage':
-          return null;
-      }
-    },
+    ids: (axis) => (axis === 'displayMode' ? DISPLAY_MODES : null),
     generatorInput: () => undefined,
   };
 }

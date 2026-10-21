@@ -19,30 +19,20 @@ import {
 const FIXTURES = fileURLToPath(new URL('./__fixtures__/', import.meta.url));
 const ROOT = fileURLToPath(new URL('../../../', import.meta.url));
 
-/** What the host's interim catalog registers: both baseline variants' ids. */
-const IDS: Record<string, { colorScheme: string[]; typography: string[] }> = {
-  editorial: {
-    colorScheme: ['warm', 'noir', 'ink-and-paper'],
-    typography: ['classic', 'modernist'],
-  },
-  'kinetic-cosmos': {
-    colorScheme: ['nebula', 'aurora', 'solar'],
-    typography: ['geometric', 'humanist'],
-  },
-};
+/**
+ * A test catalog: the color schemes and typography presets the fixtures name,
+ * and every display mode. Like the host's interim catalog since #5, it names
+ * no variant: the variant contract checks the selection, and every fixture
+ * selects missing-variant, which no package registers.
+ */
+const IDS = {
+  colorScheme: ['warm', 'noir', 'ink-and-paper', 'nebula', 'aurora', 'solar'],
+  typography: ['classic', 'modernist', 'geometric', 'humanist'],
+  displayMode: ['system', 'light', 'dark', 'high-contrast'],
+} as const;
 const CATALOG: AppearanceCatalog = {
-  ids(axis, selection) {
-    switch (axis) {
-      case 'variant':
-        return Object.keys(IDS);
-      case 'colorScheme':
-      case 'typography':
-        return IDS[selection.variant]?.[axis] ?? null;
-      case 'displayMode':
-        return ['system', 'light', 'dark'];
-      default:
-        return null;
-    }
+  ids(axis) {
+    return axis in IDS ? IDS[axis as keyof typeof IDS] : null;
   },
   generatorInput: () => undefined,
 };
@@ -111,7 +101,7 @@ test('each JSON twin is what serialize writes from its YAML, and both round-trip
   }
 });
 
-test('the practices cover both directions, several locales, and every core variant', () => {
+test('the practices cover both directions and several locales, each selecting missing-variant', () => {
   const pairs = PRACTICES.map((practice) => {
     const result = loadPair(fixture('pairs', practice, 'yaml'), { catalog: CATALOG });
     assert.ok(result.ok, practice);
@@ -122,9 +112,10 @@ test('the practices cover both directions, several locales, and every core varia
     'rtl',
   ]);
   assert.ok(new Set(pairs.map(({ portfolio }) => portfolio.locale)).size >= 6);
+  // No package registers it, so every host renders them in the fallback composition.
   assert.deepEqual(
-    [...new Set(pairs.map(({ site }) => site.appearance.variant))].sort(),
-    Object.keys(IDS).sort(),
+    [...new Set(pairs.map(({ site }) => site.appearance.variant))],
+    ['missing-variant'],
   );
   assert.ok(pairs.some(({ site }) => site.sections && Object.keys(site.sections).length > 0));
   assert.ok(pairs.some(({ site }) => site.motionPolicy === 'reduce'));
@@ -399,7 +390,8 @@ test('the bundled examples load as one pair with no blocking diagnostic', () => 
     result.diagnostics.filter(({ severity }) => severity !== 'warning'),
     [],
   );
-  assert.equal(result.pair.site.appearance.variant, 'editorial');
+  // The owner default, which #13 registers.
+  assert.equal(result.pair.site.appearance.variant, 'editorial-evidence');
   // The example omits appearanceInputs, so nothing about them goes unchecked.
   assert.ok(!result.notChecked.some((entry) => entry.includes('appearanceInputs')));
 });

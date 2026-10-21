@@ -1,4 +1,4 @@
-import type { ReactElement } from 'react';
+import type { ComponentType, ReactElement } from 'react';
 import type { CoreSection, ExtensionSection, SectionKind } from '@portfolio/schema';
 import type { VariantRenderInput } from '@portfolio/variant-contract';
 
@@ -29,3 +29,6 @@ export type CoreRenderers = { readonly [K in SectionKind]: SectionRenderer<Secti
 export type BespokeRenderers = Partial<CoreRenderers> & {
   readonly [kind: `${string}/${string}`]: SectionRenderer<ExtensionSection> | undefined;
 };
+
+/** A variant's `.` export: a synchronous component of its render input alone. */
+export type VariantComponent = ComponentType<{ readonly input: VariantRenderInput }>;

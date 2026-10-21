@@ -1,7 +1,7 @@
-# appearance.unknown: a color scheme Editorial does not register.
+# appearance.unknown: a color scheme the schema tests' catalog does not register.
 schemaVersion: 2
 appearance:
-  variant: editorial
+  variant: missing-variant
   designLanguage: platform-neutral
   colorScheme: neon
   typography: classic

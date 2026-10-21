@@ -1,8 +1,10 @@
 // Every startup-matrix row without an issue tag (#1, item 2), as data, so the
 // built server (tests/e2e/startup.spec.ts) and the image (`pnpm
-// smoke:profiles`) run the same rows. Each must stop the process with exit 1
-// before it serves a request, log the config.fatal lines in `fatal`, and
-// never print a value in `never`.
+// smoke:profiles`) run the same rows. Each in STARTUP_ROWS must stop the
+// process with exit 1 before it serves a request, log the config.fatal lines
+// in `fatal`, and never print a value in `never`. Each in WARNING_ROWS must
+// start and serve, log the config.warning lines in `warning` and no
+// config.fatal line, and never print a value in `never`.
 //
 // A runner gives each row its own directory and passes the row its paths:
 // `source`, the source directory, holding `documents` (by default the harness
@@ -25,6 +27,15 @@ const ABOUT = 'sections:\n  - kind: lede\n    id: about\n    body: Hi.\n';
 const withSite = (documents) => ({ ...documents, 'site.yml': SITE });
 /** An old one-file portfolio, which no site document can sit beside yet. */
 const LEGACY = 'identity:\n  name: Rowan Fixture\nvariant: canary-variant\n';
+/** The harness site document's variant line, which selects no registered variant (#5). */
+const SELECTION = '\n  variant: missing-variant\n';
+
+/** The harness site document selecting `variant`. */
+function selecting(variant) {
+  if (!SITE.includes(SELECTION))
+    throw new Error(`${DEFAULT_SITE} no longer selects missing-variant.`);
+  return SITE.replace(SELECTION, `\n  variant: ${variant}\n`);
+}
 
 /**
  * @typedef {{ source: string, beside: (name: string) => string }} RowPaths
@@ -43,6 +54,15 @@ const LEGACY = 'identity:\n  name: Rowan Fixture\nvariant: canary-variant\n';
  * @property {string | string[]} [remediates] text the first line's remediation names
  * @property {string[] | ((paths: RowPaths) => string[])} [never] values the output must
  *   never contain
+ *
+ * @typedef {object} WarningRow
+ * @property {string} group
+ * @property {string} name
+ * @property {(paths: RowPaths) => Record<string, string>} env the deployment's environment
+ * @property {Record<string, string>} documents the source directory's files (name to text)
+ * @property {Record<string, string | number>[]} warning each config.warning line, in order,
+ *   by the fields it must have
+ * @property {string[]} [never] values the output must never contain
  */
 
 /** A read-only deployment that starts, until a row changes it. */
@@ -273,25 +293,31 @@ export const STARTUP_ROWS = [
     ],
   },
   {
+    // An unregistered variant only warns now (WARNING_ROWS); a variant that
+    // is no id at all is an invalid document.
     group: PAIR,
-    name: 'a variant this build does not register, refused rather than replaced',
-    documents: {
-      'portfolio.yml': FIXTURE,
-      'site.yml': SITE.replace('variant: editorial', 'variant: canary-variant'),
-    },
+    name: 'a site document whose variant is no registry id',
+    documents: { 'portfolio.yml': FIXTURE, 'site.yml': selecting('Canary-Variant') },
     env: (paths) => readOnly(paths),
-    never: ['canary-variant'],
+    never: ['Canary-Variant'],
     fatal: [
       {
-        code: 'appearance.unknown',
+        code: 'schema.invalid',
         file: 'site.yml',
         document: 'site',
         path: '/appearance/variant',
-        line: 5,
+        line: 6,
         column: 12,
-        remediation: 'Use one of: editorial, kinetic-cosmos.',
       },
     ],
+  },
+  {
+    group: PAIR,
+    name: 'a site document selecting the fallback composition, which no site can',
+    documents: { 'portfolio.yml': FIXTURE, 'site.yml': selecting('fallback') },
+    env: (paths) => readOnly(paths),
+    fatal: [{ code: 'schema.invalid', document: 'site', path: '/appearance/variant', line: 6 }],
+    mentions: "can't be selected",
   },
   {
     group: PAIR,
@@ -483,6 +509,29 @@ export const STARTUP_ROWS = [
   },
 ];
 
+/** @type {readonly WarningRow[]} */
+export const WARNING_ROWS = [
+  {
+    // #5: the fallback composition renders in its place. The warning is the
+    // owner's diagnostic; a visitor sees no label.
+    group: PAIR,
+    name: 'a variant this build does not register, replaced by the fallback composition',
+    documents: { 'portfolio.yml': FIXTURE, 'site.yml': selecting('canary-variant') },
+    env: (paths) => readOnly(paths),
+    never: ['canary-variant'],
+    warning: [
+      {
+        code: 'variant.unavailable',
+        file: 'site.yml',
+        document: 'site',
+        path: '/appearance/variant',
+        line: 6,
+        column: 12,
+      },
+    ],
+  },
+];
+
 /**
  * The files a row's source directory holds.
  *
@@ -539,6 +588,31 @@ export function checkRefusal(row, paths, output) {
 }
 
 /**
+ * Checks a started server's output against its warning row. Returns the
+ * problems found: empty when the config.warning lines match the row, and
+ * neither a config.fatal line nor a `never` value appears.
+ *
+ * @param {WarningRow} row
+ * @param {string} output everything the process wrote
+ * @returns {string[]}
+ */
+export function checkWarnings(row, output) {
+  const problems = [];
+  for (const value of row.never ?? []) {
+    if (output.includes(value)) problems.push(`the output contains ${value}`);
+  }
+  const fatal = fatalLines(output);
+  if (fatal.length > 0) problems.push(`it logged config.fatal ${JSON.stringify(fatal)}`);
+  const warnings = warningLines(output);
+  if (JSON.stringify(fieldsOf(row.warning, warnings)) !== JSON.stringify(row.warning)) {
+    problems.push(
+      `expected config.warning ${JSON.stringify(row.warning)}, got ${JSON.stringify(warnings)}`,
+    );
+  }
+  return problems;
+}
+
+/**
  * The texts a row's first config.fatal message must name.
  *
  * @param {StartupRow} row
@@ -559,13 +633,14 @@ export function remediates(row) {
 }
 
 /**
- * The config.fatal entries among a process's JSON log lines. A line that
- * only looks like JSON is skipped, so it can't stop the rows after it.
+ * The entries for `event` among a process's JSON log lines. A line that only
+ * looks like JSON is skipped, so it can't stop the rows after it.
  *
  * @param {string} output
+ * @param {string} event
  * @returns {Record<string, unknown>[]}
  */
-export function fatalLines(output) {
+function logEntries(output, event) {
   return output
     .split('\n')
     .filter((line) => line.startsWith('{'))
@@ -576,19 +651,51 @@ export function fatalLines(output) {
         return [];
       }
     })
-    .filter((entry) => entry?.event === 'config.fatal');
+    .filter((entry) => entry?.event === event);
+}
+
+/**
+ * The config.fatal entries among a process's JSON log lines.
+ *
+ * @param {string} output
+ * @returns {Record<string, unknown>[]}
+ */
+export function fatalLines(output) {
+  return logEntries(output, 'config.fatal');
+}
+
+/**
+ * The config.warning entries among a process's JSON log lines.
+ *
+ * @param {string} output
+ * @returns {Record<string, unknown>[]}
+ */
+export function warningLines(output) {
+  return logEntries(output, 'config.warning');
+}
+
+/**
+ * Each entry cut down to the fields `expected` names at its index, to
+ * compare with `expected`. An entry past the last keeps no field.
+ *
+ * @param {readonly Record<string, unknown>[]} expected
+ * @param {readonly object[]} entries
+ * @returns {Record<string, unknown>[]}
+ */
+export function fieldsOf(expected, entries) {
+  return entries.map((entry, index) =>
+    Object.fromEntries(Object.keys(expected[index] ?? {}).map((field) => [field, entry[field]])),
+  );
 }
 
 /**
  * Each config.fatal entry cut down to the fields its row checks, to compare
- * with `row.fatal`. An entry past the row's last keeps no field.
+ * with `row.fatal`.
  *
  * @param {StartupRow} row
  * @param {readonly object[]} fatal
  * @returns {Record<string, unknown>[]}
  */
 export function fatalFields(row, fatal) {
-  return fatal.map((entry, index) =>
-    Object.fromEntries(Object.keys(row.fatal[index] ?? {}).map((field) => [field, entry[field]])),
-  );
+  return fieldsOf(row.fatal, fatal);
 }

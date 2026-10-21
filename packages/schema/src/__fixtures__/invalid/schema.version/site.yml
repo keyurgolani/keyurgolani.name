@@ -1,7 +1,7 @@
 # schema.version: a site document at schemaVersion 1.
 schemaVersion: 1
 appearance:
-  variant: editorial
+  variant: missing-variant
   designLanguage: platform-neutral
   colorScheme: warm
   typography: classic

@@ -1,7 +1,7 @@
-# Editorial in its noir scheme and modernist typeset.
+# The noir scheme and the modernist typeset.
 schemaVersion: 2
 appearance:
-  variant: editorial
+  variant: missing-variant
   designLanguage: platform-neutral
   colorScheme: noir
   typography: modernist

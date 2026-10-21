@@ -34,6 +34,8 @@ export interface AppOptions {
   portfolio?: string | null;
   /** Site document copied beside it; null for none. Defaults to tests/fixtures/site.yml. */
   site?: string | null;
+  /** Site document text, written beside it as site.yml in place of `site`. */
+  siteText?: string;
   /** The source directory's name (default `config`). */
   sourceName?: string;
   /**

@@ -90,13 +90,31 @@ export const ConfigSummarySchema = z
   .strict();
 export type ConfigSummary = z.infer<typeof ConfigSummarySchema>;
 
+/**
+ * Whether the selected variant renders, as #5's variantHealth() reports it:
+ * `degraded`, naming both ids, when the fallback composition stands in.
+ */
+export const VariantHealthSchema = z
+  .object({
+    status: z.enum(['ok', 'degraded']),
+    requested: z.string(),
+    rendered: z.string(),
+  })
+  .strict();
+
+/** What config.status answers: the summary, and how the live site's variant renders. */
+export const ConfigStatusSchema = ConfigSummarySchema.extend({
+  variant: VariantHealthSchema,
+}).strict();
+export type ConfigStatus = z.infer<typeof ConfigStatusSchema>;
+
 const OPERATIONS: readonly Operation[] = [
   {
     name: 'config.status',
     kind: 'query',
     capability: 'config.status',
     input: z.object({}).strict(),
-    output: ConfigSummarySchema,
+    output: ConfigStatusSchema,
     session: true,
     originCheck: false,
     errors: [

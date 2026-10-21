@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { expect, test } from '@playwright/test';
 import { DEFAULT_SITE, runAppToExit, startApp } from '../harness/app-server.mjs';
 import {
+  checkWarnings,
   fatalFields,
   HEAD,
   mentions,
@@ -19,18 +20,22 @@ import {
   remediates,
   rowDocuments,
   STARTUP_ROWS,
+  WARNING_ROWS,
   type RowPaths,
   type StartupRow,
+  type WarningRow,
 } from '../harness/startup-rows.mjs';
 
 // Every startup-matrix row without an issue tag (#1, item 2), and the
 // document pair's (#4, items 4 to 6), against the built standalone server.
 // The rows live in tests/harness/startup-rows.mjs, which `pnpm
-// smoke:profiles` runs against the image too. Each must stop the process with
-// exit 1 before it serves a request, log a config.fatal line naming the key,
-// and never print the configured value. Then every shared invalid pair: a
-// blocking one stops the server, and a warning one starts it. No browser:
-// these only start and stop the server.
+// smoke:profiles` runs against the image too. Each refusal must stop the
+// process with exit 1 before it serves a request, log a config.fatal line
+// naming the key, and never print the configured value. Each warning row
+// starts and serves, and logs its config.warning lines without the value.
+// Then every shared invalid pair: a blocking one stops the server, and a
+// warning one starts it. No browser: these only start the server and read
+// what it answers.
 
 interface Fatal {
   event: string;
@@ -70,14 +75,16 @@ async function expectRefusal(
 }
 
 /** Writes the row's documents and files under the test's output directory. */
-function place(row: StartupRow): RowPaths {
+function place(row: StartupRow | WarningRow): RowPaths {
   const source = test.info().outputPath('config');
   mkdirSync(source, { recursive: true });
-  for (const [name, text] of Object.entries(rowDocuments(row))) {
+  const documents = 'fatal' in row ? rowDocuments(row) : row.documents;
+  for (const [name, text] of Object.entries(documents)) {
     writeFileSync(path.join(source, name), text);
   }
   const beside = (name: string) => test.info().outputPath(name);
-  for (const [name, text] of Object.entries(row.files ?? {})) writeFileSync(beside(name), text);
+  const files = 'fatal' in row ? (row.files ?? {}) : {};
+  for (const [name, text] of Object.entries(files)) writeFileSync(beside(name), text);
   return { source, beside };
 }
 
@@ -100,6 +107,34 @@ for (const group of new Set(STARTUP_ROWS.map((row) => row.group))) {
     }
   });
 }
+
+test.describe('rows that start', () => {
+  for (const row of WARNING_ROWS) {
+    test(`${row.group}: ${row.name}`, async () => {
+      const paths = place(row);
+      // The row's own source directory, so the harness copies no document.
+      const app = await startApp({ env: row.env(paths), portfolio: null, site: null });
+      try {
+        await expect.poll(() => checkWarnings(row, readFileSync(app.log, 'utf8'))).toEqual([]);
+        // The fallback composition serves the page, and the health check says so.
+        const page = await fetch(`${app.origin}/`);
+        expect(page.status).toBe(200);
+        const html = await page.text();
+        expect(html).toContain(
+          '<div data-variant="fallback" data-requested-variant="canary-variant"',
+        );
+        const ready = await fetch(`${app.origin}/api/ready`);
+        expect(ready.status).toBe(200);
+        const body = (await ready.json()) as { status: string; checks: object[] };
+        expect(body.status).toBe('degraded');
+        expect(body.checks).toContainEqual({ id: 'packs', status: 'degraded' });
+        expect(app.egress()).toEqual([]);
+      } finally {
+        await app.stop();
+      }
+    });
+  }
+});
 
 test.describe('the refusal log', () => {
   test('reaches a slow reader in full before the server exits', async () => {
@@ -127,7 +162,9 @@ test.describe('the shared fixtures', () => {
   // @portfolio/schema's pair for each diagnostic code and its startup cases
   // (#4, item 21). The invalid pairs link to https://rowan.name, their own
   // origin. A blocking pair stops the server with its code alone; a warning
-  // one starts it and logs its code.
+  // one starts it and logs its code. Each pair selects missing-variant, so
+  // one that starts also warns that the fallback composition renders in its
+  // place (#5).
   const FIXTURES = fileURLToPath(
     new URL('../../packages/schema/src/__fixtures__/', import.meta.url),
   );
@@ -138,6 +175,10 @@ test.describe('the shared fixtures', () => {
     'origin.sample',
     'origin.stale',
   ];
+  // The host's interim catalog registers no color scheme until #19, so it
+  // can't raise this one: the pair starts, with only the fallback's warning.
+  const UNCHECKED = ['appearance.unknown'];
+  const UNAVAILABLE = 'variant.unavailable';
   const RECORD_ORIGIN = 'https://rowan.name';
   const invalid = readdirSync(path.join(FIXTURES, 'invalid')).sort();
   const readOnly = (source: string, origin = ORIGIN) => ({
@@ -146,7 +187,7 @@ test.describe('the shared fixtures', () => {
     PORTFOLIO_SOURCE_DIR: source,
   });
 
-  for (const code of invalid.filter((name) => !WARNINGS.includes(name))) {
+  for (const code of invalid.filter((name) => ![...WARNINGS, ...UNCHECKED].includes(name))) {
     test(`invalid/${code} stops the server with that code alone`, async () => {
       const dir = path.join(FIXTURES, 'invalid', code);
       const fatal = await expectRefusal(readOnly(dir, RECORD_ORIGIN));
@@ -154,8 +195,9 @@ test.describe('the shared fixtures', () => {
     });
   }
 
-  for (const code of WARNINGS) {
-    test(`invalid/${code} only warns, and the server starts`, async () => {
+  for (const code of [...WARNINGS, ...UNCHECKED]) {
+    const warned = WARNINGS.includes(code) ? [code, UNAVAILABLE] : [UNAVAILABLE];
+    test(`invalid/${code} warns ${warned.join(' and ')}, and the server starts`, async () => {
       expect(invalid).toContain(code);
       const dir = path.join(FIXTURES, 'invalid', code);
       const app = await startApp({
@@ -171,7 +213,9 @@ test.describe('the shared fixtures', () => {
             .map((line) => JSON.parse(line) as Fatal)
             .filter((entry) => entry.event === event)
             .map((entry) => entry.code);
-        await expect.poll(() => [...new Set(logged('config.warning'))]).toEqual([code]);
+        await expect
+          .poll(() => [...new Set(logged('config.warning'))].sort())
+          .toEqual([...warned].sort());
         expect(logged('config.fatal')).toEqual([]);
       } finally {
         await app.stop();

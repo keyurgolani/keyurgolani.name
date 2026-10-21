@@ -1,9 +1,9 @@
-# Harness fixture: Editorial in a scheme and preset that aren't its defaults,
-# motion always reduced, and the roles-draft, skills-draft, and drafts
+# Harness fixture: the fallback composition (missing-variant), motion always
+# reduced, a dark display mode, and the roles-draft, skills-draft, and drafts
 # sections hidden.
 schemaVersion: 2
 appearance:
-  variant: editorial
+  variant: missing-variant
   designLanguage: platform-neutral
   colorScheme: noir
   typography: modernist

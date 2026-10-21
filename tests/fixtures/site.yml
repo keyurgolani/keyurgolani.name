@@ -1,8 +1,9 @@
-# Harness fixture: the site document beside every portfolio fixture. The
-# baseline appearance, Editorial in warm and classic, with the feed on.
+# Harness fixture: the site document beside every portfolio fixture, with
+# the feed on. It selects missing-variant, which no package registers, so the
+# fallback composition renders (#5).
 schemaVersion: 2
 appearance:
-  variant: editorial
+  variant: missing-variant
   designLanguage: platform-neutral
   colorScheme: warm
   typography: classic

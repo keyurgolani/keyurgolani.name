@@ -1,7 +1,7 @@
-# Editorial in ink and paper, with the feed off: there's nothing to syndicate.
+# Ink and paper, with the feed off: there's nothing to syndicate.
 schemaVersion: 2
 appearance:
-  variant: editorial
+  variant: missing-variant
   designLanguage: platform-neutral
   colorScheme: ink-and-paper
   typography: classic

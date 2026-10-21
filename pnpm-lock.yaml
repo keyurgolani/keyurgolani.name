@@ -46,18 +46,18 @@ importers:
       '@portfolio/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@portfolio/fallback-composition':
+        specifier: workspace:*
+        version: link:../../packages/fallback-composition
       '@portfolio/kit':
         specifier: workspace:*
         version: link:../../packages/kit
       '@portfolio/schema':
         specifier: workspace:*
         version: link:../../packages/schema
-      '@portfolio/variant-editorial':
+      '@portfolio/variant-contract':
         specifier: workspace:*
-        version: link:../../packages/variant-editorial
-      '@portfolio/variant-kinetic-cosmos':
-        specifier: workspace:*
-        version: link:../../packages/variant-kinetic-cosmos
+        version: link:../../packages/variant-contract
       next:
         specifier: ^16.0.0
         version: 16.2.4(@babel/core@7.29.7)(@playwright/test@1.58.2)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)

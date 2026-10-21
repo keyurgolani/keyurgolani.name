@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
   "appearance": {
-    "variant": "editorial",
+    "variant": "missing-variant",
     "designLanguage": "platform-neutral",
     "colorScheme": "ink-and-paper",
     "typography": "classic",

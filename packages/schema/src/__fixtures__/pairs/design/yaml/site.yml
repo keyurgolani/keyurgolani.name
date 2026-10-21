@@ -1,7 +1,7 @@
-# Kinetic Cosmos in aurora, light mode pinned, motion always reduced.
+# Aurora, light mode pinned, motion always reduced.
 schemaVersion: 2
 appearance:
-  variant: kinetic-cosmos
+  variant: missing-variant
   designLanguage: platform-neutral
   colorScheme: aurora
   typography: geometric

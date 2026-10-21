@@ -12,22 +12,23 @@
 
 schemaVersion: 2
 
-# The published appearance. Each id must be one this build registers: the
-# variants are editorial and kinetic-cosmos, and the color scheme and
-# typography ids are the selected variant's own, from its manifest
-# (packages/variant-*/src/manifest.ts)
+# The published appearance. variant is an installed variant package's id.
+# Editorial Evidence is the owner default; until #13 installs it, the
+# fallback composition renders in its place and startup warns. The design
+# language, color scheme, and typography are #19's appearance axes, which
+# this build doesn't check yet
 appearance:
-  variant: editorial
+  variant: editorial-evidence
   designLanguage: platform-neutral
   colorScheme: warm
   typography: classic
-  # system, light, or dark. This build doesn't render high-contrast yet
+  # system, light, dark, or high-contrast, which starts at system until #19
   displayMode: system
 
 # Whether visitors may change each appearance field for themselves:
 # locked or selectable, all five required. This build checks them but doesn't
-# apply them yet: they take effect with #19, and until then every variant's
-# theme toggle lets visitors switch light and dark whatever displayMode says
+# apply them yet: they take effect with #19, whose visitor control renders in
+# each variant's visitor control slot
 visitorControls:
   variant: locked
   designLanguage: locked

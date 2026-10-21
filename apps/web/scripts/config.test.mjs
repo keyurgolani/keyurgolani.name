@@ -57,10 +57,8 @@ test('a dry run prints what it needs, exits 2, and writes nothing', (t) => {
   const run = migrate(dir, 'owner.yml');
   assert.equal(run.code, 2, run.stderr);
   assert.match(run.stdout, /^owner\.yml is in the old one-file format/);
-  assert.match(
-    run.stdout,
-    /Pass --set site\.appearance\.colorScheme=<value>, one of: warm, noir, ink-and-paper\./,
-  );
+  // This build registers no color scheme until #19, so it lists none to pick from.
+  assert.match(run.stdout, /It was warm\. Pass --set site\.appearance\.colorScheme=<value>\.\n/);
   assert.match(run.stdout, /\/sections\/4\/subtitel \(line 49, column 5\)/);
   assert.match(run.stdout, /It changed nothing\./);
   assert.equal(readFileSync(path.join(dir, 'owner.yml'), 'utf8'), before);
@@ -206,29 +204,40 @@ function validate(cwd, ...args) {
 /** The invalid pairs link to https://rowan.name, their own origin. */
 const ORIGIN = ['--origin', 'https://rowan.name'];
 
+/** What every pair says while this build registers only the fallback composition (#5). */
+const UNAVAILABLE = (file) => [
+  `${file}: variant.unavailable (warning) at /appearance/variant`,
+  "  /appearance/variant names a variant this build doesn't register, so the fallback composition renders instead.",
+  '  Install its package with pnpm --filter @portfolio/web add <package> and rebuild. This build registers no variant yet.',
+  '',
+];
+
 test('validate prints each record where it is, with how to fix it, and exits 1', () => {
-  const run = validate(ALL_FIXTURES, 'invalid/appearance.unknown', ...ORIGIN);
+  const run = validate(ALL_FIXTURES, 'invalid/anchor.broken', ...ORIGIN);
   assert.equal(run.code, 1, run.stderr);
   assert.equal(
     run.stdout,
     [
-      'site.yml:6:16: appearance.unknown (blocks-preview) at /appearance/colorScheme',
-      '  /appearance/colorScheme names no color scheme this build registers.',
-      '  Use one of: warm, noir, ink-and-paper.',
+      'portfolio.yml:10:10: anchor.broken (blocks-publish) at /links/1/url',
+      '  /links/1/url links to no visible section.',
+      '  Point the link at a visible section id, or drop the #fragment.',
       '',
-      "invalid/appearance.unknown can't go live: 1 record blocks it.",
-      'Not checked: site.appearance.designLanguage.',
+      ...UNAVAILABLE('site.yml:4:12'),
+      "invalid/anchor.broken can't go live: 1 record blocks it.",
+      'Not checked: site.appearance.colorScheme, site.appearance.designLanguage, site.appearance.typography.',
       '',
     ].join('\n'),
   );
 });
 
 test('validate exits 0 on a valid pair, warnings or not, and lists what it could not check', () => {
-  const clean = validate(ALL_FIXTURES, 'pairs/mixed/json');
-  assert.equal(clean.code, 0, clean.stderr);
-  assert.match(clean.stdout, /^portfolio\.json and site\.json are valid\.\n/);
-  assert.match(clean.stdout, /\nNot checked: origin\.sample, origin\.stale, /);
-  assert.match(clean.stdout, /\nPass --origin with the site's origin/);
+  // The fallback composition renders for the pair's variant, which this build doesn't register.
+  const valid = validate(ALL_FIXTURES, 'pairs/mixed/json');
+  assert.equal(valid.code, 0, valid.stderr);
+  assert.ok(valid.stdout.startsWith(UNAVAILABLE('site.json:4:16').join('\n')), valid.stdout);
+  assert.match(valid.stdout, /\nportfolio\.json and site\.json are valid, with 1 warning\.\n/);
+  assert.match(valid.stdout, /\nNot checked: origin\.sample, origin\.stale, /);
+  assert.match(valid.stdout, /\nPass --origin with the site's origin/);
 
   const warned = validate(ALL_FIXTURES, 'invalid/origin.stale', ...ORIGIN);
   assert.equal(warned.code, 0, warned.stderr);
@@ -236,7 +245,7 @@ test('validate exits 0 on a valid pair, warnings or not, and lists what it could
     warned.stdout,
     /^portfolio\.yml:10:10: origin\.stale \(warning\) at \/links\/1\/url\n/,
   );
-  assert.match(warned.stdout, /\nportfolio\.yml and site\.yml are valid, with 1 warning\.\n/);
+  assert.match(warned.stdout, /\nportfolio\.yml and site\.yml are valid, with 2 warnings\.\n/);
 });
 
 test('validate refuses every blocking invalid pair and loads every warning one, as JSON', () => {
@@ -246,7 +255,31 @@ test('validate refuses every blocking invalid pair and loads every warning one, 
     const warning = report.diagnostics.every(({ severity }) => severity === 'warning');
     assert.equal(run.code, warning ? 0 : 1, code);
     assert.equal(report.ok, warning, code);
-    assert.deepEqual([...new Set(report.diagnostics.map((record) => record.code))], [code]);
+    // Each pair selects missing-variant, so once it parses, the fallback composition renders for it.
+    const [unavailable, others] = [
+      report.diagnostics.filter((record) => record.code === 'variant.unavailable'),
+      report.diagnostics.filter((record) => record.code !== 'variant.unavailable'),
+    ];
+    if (unavailable.length > 0) {
+      assert.deepEqual(
+        unavailable.map(({ severity, document, pointer }) => [severity, document, pointer]),
+        [['warning', 'site', '/appearance/variant']],
+        code,
+      );
+    } else {
+      // Only a pair that doesn't parse goes unchecked by the contract.
+      assert.ok(
+        others.some(({ severity }) => severity === 'blocks-preview'),
+        `${code} parses, and has no variant.unavailable`,
+      );
+    }
+    // The host's interim catalog registers no color scheme until #19, so it
+    // can't raise this one, and says it didn't check it.
+    const expected = code === 'appearance.unknown' ? [] : [code];
+    assert.deepEqual([...new Set(others.map((record) => record.code))], expected, code);
+    if (code === 'appearance.unknown') {
+      assert.ok(report.notChecked.includes('site.appearance.colorScheme'), code);
+    }
     for (const record of report.diagnostics) {
       assert.deepEqual(
         Object.keys(record).filter((key) => !['line', 'column', 'stableId'].includes(key)),
@@ -297,7 +330,7 @@ test('validate warns when the portfolio is still the bundled sample, which produ
     /^portfolio\.yml:\d+:\d+: sample\.identity \(warning\) at \/identity\/name\n/m,
   );
   assert.match(text.stdout, /Production refuses to start with it\./);
-  assert.match(text.stdout, /\nportfolio\.yml and site\.yml are valid, with 1 warning\.\n/);
+  assert.match(text.stdout, /\nportfolio\.yml and site\.yml are valid, with 2 warnings\.\n/);
 
   const json = JSON.parse(validate(dir, '.', '--json').stdout);
   assert.equal(json.ok, true);
@@ -308,14 +341,22 @@ test('validate warns when the portfolio is still the bundled sample, which produ
       document,
       pointer,
     ]),
-    [['sample.identity', 'warning', 'portfolio', '/identity/name']],
+    [
+      // The example selects a variant this build doesn't register yet (#13).
+      ['variant.unavailable', 'warning', 'site', '/appearance/variant'],
+      ['sample.identity', 'warning', 'portfolio', '/identity/name'],
+    ],
   );
 
-  // With a name of your own, the warning is gone.
+  // With a name of your own, the sample's warning is gone.
   const own = readFileSync(path.join(dir, 'portfolio.yml'), 'utf8').replace(
     'name: Anamika Devi',
     'name: Rowan Hale',
   );
   writeFileSync(path.join(dir, 'portfolio.yml'), own);
-  assert.match(validate(dir, '.').stdout, /^portfolio\.yml and site\.yml are valid\.\n/);
+  const renamed = validate(dir, '.', '--json');
+  assert.deepEqual(
+    JSON.parse(renamed.stdout).diagnostics.map(({ code }) => code),
+    ['variant.unavailable'],
+  );
 });
