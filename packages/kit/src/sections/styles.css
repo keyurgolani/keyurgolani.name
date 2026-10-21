@@ -1,0 +1,116 @@
+/*
+ * @portfolio/kit/sections (#5, Slice 2): the shared renderers' layout, the
+ * least a section needs to read well with no help from a variant. Every rule
+ * sits under [data-variant] inside a shared section and sets layout alone:
+ * color stays currentColor and type stays inherited until #19's tokens, and
+ * every property is logical, so a right-to-left page reads the same. Each
+ * selector is inside :where(), so it weighs nothing and any variant rule for
+ * the same element wins.
+ */
+
+:where([data-variant] [data-renderer='shared']) {
+  margin-block: 0 3rem;
+}
+
+:where([data-variant] [data-renderer='shared'] .pf-section__header) {
+  margin-block-end: 1.5rem;
+}
+
+:where(
+  [data-variant] [data-renderer='shared'] :is(h1, h2, h3, h4, h5, h6, p, figure, blockquote, dl)
+) {
+  margin-block: 0;
+}
+
+:where(
+  [data-variant] [data-renderer='shared'] * + :is(p, ul, ol, dl, figure, blockquote, .pf-rich-text)
+) {
+  margin-block-start: 0.75rem;
+}
+
+:where([data-variant] [data-renderer='shared'] :is(ul, ol)) {
+  margin-inline: 0;
+  padding-inline: 0;
+  list-style: none;
+}
+
+:where(
+  [data-variant] [data-renderer='shared'] :is(.pf-highlights, .pf-short-list, .pf-rich-text ul)
+) {
+  padding-inline-start: 1.25rem;
+  list-style: disc;
+}
+
+:where([data-variant] [data-renderer='shared'] :is(.pf-tracks, .pf-rich-text ol)) {
+  padding-inline-start: 1.5rem;
+  list-style: decimal;
+}
+
+:where([data-variant] [data-renderer='shared'] :is(.pf-list, .pf-groups) > li + li) {
+  margin-block-start: 2rem;
+}
+
+:where(
+  [data-variant] [data-renderer='shared'] :is(.pf-tags, .pf-links, .pf-named-links, .pf-actions)
+) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+}
+
+:where([data-variant] [data-renderer='shared'] img) {
+  display: block;
+  max-inline-size: 100%;
+  block-size: auto;
+}
+
+:where([data-variant] [data-renderer='shared'] :is(.pf-logo, .pf-avatar)) {
+  inline-size: 3rem;
+  block-size: 3rem;
+  object-fit: contain;
+}
+
+:where([data-variant] [data-renderer='shared'] .pf-gallery) {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fill, minmax(min(16rem, 100%), 1fr));
+}
+
+:where([data-variant] [data-renderer='shared'] .pf-gallery[data-layout='plates']) {
+  grid-template-columns: 1fr;
+}
+
+:where([data-variant] [data-renderer='shared'] .pf-gallery[data-layout='columns']) {
+  display: block;
+  columns: 16rem;
+  column-gap: 1rem;
+}
+
+:where([data-variant] [data-renderer='shared'] .pf-gallery[data-layout='columns'] > li) {
+  break-inside: avoid;
+  margin-block-end: 1rem;
+}
+
+:where([data-variant] [data-renderer='shared'] figcaption) {
+  margin-block-start: 0.5rem;
+}
+
+:where([data-variant] [data-renderer='shared'] blockquote) {
+  padding-inline-start: 1rem;
+}
+
+:where([data-variant] [data-renderer='shared'] .pf-stats) {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(10rem, 100%), 1fr));
+}
+
+:where([data-variant] [data-renderer='shared'] .pf-facts > div) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+:where([data-variant] [data-renderer='shared'] .pf-facts dd) {
+  margin-inline: 0;
+}

@@ -60,7 +60,7 @@ A stats item can name its figure with a `metric` key, such as `years-experience`
 
 ### Optionality
 
-An optional field can be left out. There's no `null`: leave the key out instead. What renders in its place depends on the field:
+An optional field can be left out. There's no `null`: leave the key out instead. A blank `identity.name`, section `title` or `subtitle`, or hero `name` is refused, since it would show as nothing. What renders in place of a field left out depends on the field:
 
 - A section without a `title` gets the heading its variant gives the kind, such as Awards or Get in touch, and some kinds, such as a lede, get none. The navigation lists only sections with a `title`.
 - A hero without `name` or `tagline` shows `identity.name` or `identity.tagline`.
@@ -221,6 +221,7 @@ Startup treats the mounted pair as live, so both blocking severities stop it. Ch
 | `secret.detected`         | blocks-publish | A string looks like a secret.                                                                                                            |
 | `content.empty`           | blocks-publish | No section is visible.                                                                                                                   |
 | `metric.duplicate`        | warning        | Two visible sections show one metric with the same value.                                                                                |
+| `image.alt-missing`       | warning        | A gallery image with no alt text or caption, or a project screenshot with no alt text. `alt: ''` marks decoration.                       |
 | `origin.sample`           | warning        | A link points at a sample address, such as a `.test` or `example.com` host.                                                              |
 | `origin.stale`            | warning        | A link's host differs from the origin's only in its last label, like an old domain.                                                      |
 | `extension.unregistered`  | warning        | Data from an extension this build doesn't register.                                                                                      |

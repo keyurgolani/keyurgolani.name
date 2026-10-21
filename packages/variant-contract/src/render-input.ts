@@ -32,7 +32,7 @@ export interface VariantRenderInput {
     readonly unsupportedKinds: readonly string[];
     /** Its views, for href(). */
     readonly views: readonly ViewDeclaration[];
-    /** Its enhancements, for loadEnhancement(). */
+    /** Its enhancements, for the kit's <Enhancement>. */
     readonly enhancements: NonNullable<VariantManifest['enhancements']>;
   };
   /** Visible content only: no hidden section and no unregistered extension data. */

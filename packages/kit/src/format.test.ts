@@ -1,6 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ensureSectionId, formatRelativeTime } from './format';
+import {
+  ensureSectionId,
+  formatDate,
+  formatDuration,
+  formatPeriod,
+  formatRelativeTime,
+  formatStatValue,
+  formatYear,
+  parseLooseDate,
+} from './format';
+import { withoutClock } from './test-support/clock';
 
 const NOW = new Date('2026-05-04T12:00:00Z');
 
@@ -51,8 +61,45 @@ test('formats years ago', () => {
   assert.equal(formatRelativeTime('2020-01-01T00:00:00Z', NOW), '6y ago');
 });
 
-test('uses real new Date() when now omitted', () => {
-  // Just ensure no throw; result format depends on real time.
-  const out = formatRelativeTime(new Date().toISOString());
-  assert.match(out, /^(just now|\d+[smhdwy](o)? ago)$/);
+test("takes now as a Date, an ISO string such as a render input's env.now, or milliseconds", () => {
+  for (const now of [NOW, NOW.toISOString(), NOW.getTime()]) {
+    assert.equal(formatRelativeTime('2026-05-04T11:55:00Z', now), '5m ago');
+  }
+});
+
+test('present is the day now names, in UTC, and nothing reads the clock', () => {
+  withoutClock(() => {
+    for (const raw of ['present', 'Now', ' current ']) {
+      assert.deepEqual(parseLooseDate(raw, '2026-05-04T23:30:00-02:00'), {
+        year: 2026,
+        month: 4,
+        day: 5,
+        isPresent: true,
+      });
+    }
+    assert.deepEqual(parseLooseDate('2019-06', NOW), { year: 2019, month: 5, day: undefined });
+    assert.equal(parseLooseDate('', NOW), null);
+    assert.equal(formatDate('present'), 'Present');
+    assert.equal(formatYear('present'), 'Present');
+    assert.match(formatPeriod({ start: '2019-06' }), /^June 2019 \S Present$/);
+    assert.equal(formatRelativeTime('2026-05-03T12:00:00Z', NOW), '1d ago');
+  });
+});
+
+test('a period to the present runs to now', () => {
+  withoutClock(() => {
+    assert.equal(formatDuration({ start: '2019-06' }, NOW), '6 yrs 11 mos');
+    assert.equal(formatDuration({ start: '2019-06', end: 'present' }, '2019-09-01'), '3 mos');
+    assert.equal(formatDuration({ start: '2019-06', end: '2021-06' }, NOW), '2 yrs');
+  });
+});
+
+test('an invalid now is an error, not a date', () => {
+  assert.throws(() => parseLooseDate('present', 'soon'), /soon isn't a time/);
+});
+
+test('a stat number takes the content locale', () => {
+  assert.equal(formatStatValue(1200, 'en'), '1,200');
+  assert.equal(formatStatValue(1200, 'de'), '1.200');
+  assert.equal(formatStatValue('10B+', 'de'), '10B+');
 });

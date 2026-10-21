@@ -216,6 +216,49 @@ test('appearance inputs are checked against the generator each names, when there
   ]);
 });
 
+test('an informative image with no words for what it shows warns, at the image', () => {
+  const gallery = (item: string) =>
+    PORTFOLIO.concat(lines('  - kind: gallery', '    id: plates', '    items:', item));
+  const result = validate(gallery('      - image: { src: /a.png }'));
+  assert.ok(result.pair);
+  assert.deepEqual(found(result.diagnostics), [
+    ['portfolio', 'image.alt-missing', 'warning', '/sections/2/items/0/image', 19, 16],
+  ]);
+  assert.equal(
+    result.diagnostics[0]!.message,
+    "/sections/2/items/0/image has no alt text or caption, so a visitor who can't see it can't tell what it shows.",
+  );
+  assert.match(result.diagnostics[0]!.remediation, /alt: '' if it's only decoration/);
+  // A caption says what it shows, and alt: '' marks decoration on purpose.
+  for (const item of [
+    '      - { image: { src: /a.png }, caption: The harbor at dawn }',
+    "      - image: { src: /a.png, alt: '' }",
+  ]) {
+    assert.deepEqual(codes(validate(gallery(item)).diagnostics), [], item);
+  }
+  // A hidden section shows nothing to describe.
+  const hidden = `${SITE}sections:\n  plates: { hidden: true }\n`;
+  assert.deepEqual(
+    codes(validate(gallery('      - image: { src: /a.png }'), hidden).diagnostics),
+    [],
+  );
+
+  const screenshots = PORTFOLIO.concat(
+    lines(
+      '  - kind: projects',
+      '    id: work',
+      '    items:',
+      '      - name: Tide',
+      '        image: { src: /cover.png }',
+      '        images: [{ src: /one.png, alt: The month view }, { src: /two.png }]',
+    ),
+  );
+  // The cover sits beside the project's name, which says what it's of.
+  assert.deepEqual(codes(validate(screenshots).diagnostics), [
+    'portfolio:image.alt-missing:/sections/2/items/0/images/1',
+  ]);
+});
+
 test('repeated ids, missing references, and empty content block publishing, but the pair renders', () => {
   const repeated = validate(PORTFOLIO.replace('    id: contact', '    id: about'));
   assert.ok(repeated.pair);
@@ -868,6 +911,16 @@ test('every diagnostic code comes with a line and column, in YAML and JSON', () 
     { portfolio: PORTFOLIO.replace('    id: contact', '    id: about') },
     { site: `${SITE}sections:\n  gone: { hidden: true }\n` },
     { portfolio: PORTFOLIO.concat(stats('one', '1'), stats('two', '1'), stats('three', '2')) },
+    {
+      portfolio: PORTFOLIO.concat(
+        lines(
+          '  - kind: gallery',
+          '    id: plates',
+          '    items:',
+          '      - image: { src: /a.png }',
+        ),
+      ),
+    },
     { portfolio: PORTFOLIO.replace('  - url: https://rowan.name', links) },
     { site: `${SITE}sections:\n  about: { hidden: true }\n  contact: { hidden: true }\n` },
     { ctx: twins },

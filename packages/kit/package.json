@@ -10,6 +10,9 @@
     "./pretext": "./src/pretext/index.ts",
     "./theme": "./src/theme.tsx",
     "./markdown": "./src/markdown.ts",
+    "./sections": "./src/sections/index.ts",
+    "./sections/styles.css": "./src/sections/styles.css",
+    "./enhancements": "./src/enhancements/index.tsx",
     "./spatial": "./src/spatial/index.ts",
     "./spatial-r3f": "./src/spatial-r3f/index.ts",
     "./github": "./src/github/index.ts",
@@ -20,11 +23,12 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test 'src/**/*.test.ts'"
+    "test": "tsx --test 'src/**/*.test.ts' 'src/**/*.test.tsx'"
   },
   "dependencies": {
     "@chenglou/pretext": "^0.0.6",
     "@portfolio/schema": "workspace:*",
+    "@portfolio/variant-contract": "workspace:*",
     "@react-three/drei": "^10.0.0",
     "@react-three/fiber": "^9.0.0",
     "@react-three/postprocessing": "^3.0.0",
@@ -46,6 +50,7 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@types/three": "^0.170.0",
+    "esbuild": "0.27.7",
     "framer-motion": "^12.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

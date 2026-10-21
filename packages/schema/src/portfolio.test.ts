@@ -107,6 +107,35 @@ test('a section may carry its own language tag', () => {
   assert.deepEqual(codes(section('not a tag')), ['sections/0/lang:custom']);
 });
 
+test('a blank name, title, or subtitle is refused, since it would show as nothing', () => {
+  const issues = (input: unknown) => {
+    const result = PortfolioSchema.safeParse(input);
+    return result.success
+      ? []
+      : result.error.issues.map(({ path, message }) => [path.join('/'), message]);
+  };
+  assert.deepEqual(issues({ ...BASE, identity: { name: '  ' } }), [
+    ['identity/name', 'is blank. It names the portfolio on every page.'],
+  ]);
+  const blank = 'is blank, so nothing would show. Leave it out instead.';
+  assert.deepEqual(
+    issues({
+      ...BASE,
+      sections: [
+        { kind: 'hero', id: 'top', name: '' },
+        { kind: 'lede', id: 'about', title: '', subtitle: ' ', body: 'Hi.' },
+      ],
+    }),
+    [
+      ['sections/0/name', blank],
+      ['sections/1/title', blank],
+      ['sections/1/subtitle', blank],
+    ],
+  );
+  // Left out, each takes its default.
+  assert.deepEqual(codes({ ...BASE, sections: [{ kind: 'lede', id: 'about', body: 'Hi.' }] }), []);
+});
+
 test('ALL_SECTION_KINDS still lists the 28 kinds', () => {
   assert.equal(ALL_SECTION_KINDS.length, 28);
   assert.equal(new Set(ALL_SECTION_KINDS).size, 28);

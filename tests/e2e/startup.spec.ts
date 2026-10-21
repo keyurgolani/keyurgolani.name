@@ -131,7 +131,13 @@ test.describe('the shared fixtures', () => {
   const FIXTURES = fileURLToPath(
     new URL('../../packages/schema/src/__fixtures__/', import.meta.url),
   );
-  const WARNINGS = ['extension.unregistered', 'metric.duplicate', 'origin.sample', 'origin.stale'];
+  const WARNINGS = [
+    'extension.unregistered',
+    'image.alt-missing',
+    'metric.duplicate',
+    'origin.sample',
+    'origin.stale',
+  ];
   const RECORD_ORIGIN = 'https://rowan.name';
   const invalid = readdirSync(path.join(FIXTURES, 'invalid')).sort();
   const readOnly = (source: string, origin = ORIGIN) => ({

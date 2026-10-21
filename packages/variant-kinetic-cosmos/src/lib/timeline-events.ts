@@ -55,7 +55,7 @@ const KIND_RULES = {
 
 function tsFromLooseDate(raw: string | undefined, fallback: Date): number {
   if (!raw) return fallback.getTime();
-  const parsed = parseLooseDate(raw);
+  const parsed = parseLooseDate(raw, fallback);
   if (!parsed) return fallback.getTime();
   if (parsed.isPresent) return Date.now();
   const month = parsed.month ?? 0;
