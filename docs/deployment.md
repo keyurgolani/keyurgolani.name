@@ -145,7 +145,7 @@ Add the `--set`, `--drop-unknown`, and `--write --out /config/new` arguments to 
 
 ### Reverse proxy and HTTPS
 
-Put Nginx, Caddy, or Traefik in front, pointed at `http://127.0.0.1:3000` (or the port you set), and terminate TLS there. The app builds every absolute URL from `PORTFOLIO_ORIGIN`; it never reads `Host` or `X-Forwarded-*` for one. Set `PORTFOLIO_TRUSTED_PROXY_HOPS` to the number of proxies that append to `X-Forwarded-For`.
+Put Nginx, Caddy, or Traefik in front, pointed at `http://127.0.0.1:3000` (or the port you set), and terminate TLS there. The app builds every absolute URL from `PORTFOLIO_ORIGIN`; it never reads `Host` or `X-Forwarded-*` for one. Set `PORTFOLIO_TRUSTED_PROXY_HOPS` to the number of proxies that append to `X-Forwarded-For`. With `0`, the default, `owner` ignores the header and doesn't know where a request came from. With N, it takes the Nth entry from the right as the client, without a port or the brackets around an IPv6 address, and the audit log records it as a source. Set it to exactly the proxies that append: a higher count takes an entry the client wrote itself.
 
 That address is for a proxy on the host. A proxy in another container can't reach a port published on the host's `127.0.0.1`: put the proxy and the app on one Docker network, point the proxy at the app's service name (`http://web:3000` in these examples), and drop the `ports:` entry if nothing on the host needs it.
 
