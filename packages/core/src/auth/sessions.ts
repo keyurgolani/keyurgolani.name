@@ -115,13 +115,13 @@ export interface Issued {
 
 export interface Sessions {
   /**
-   * Starts a session at sign-in. The session the request's cookie carried,
-   * if any, ends first, so every sign-in gets a new token. With 5 sessions
+   * Starts a session at sign-in. The sessions the request's cookies carried,
+   * if any, end first, so every sign-in gets a new token. With 5 sessions
    * already, the least recently seen is evicted. A failed write throws.
    */
   issue(input: {
     readonly uaFamily: UaFamily;
-    readonly replacing?: string | null;
+    readonly replacing?: string | null | readonly string[];
     readonly context?: AuditContext;
   }): Promise<Issued>;
   /** The session a cookie's token carries. One that no longer counts is deleted. */
@@ -249,7 +249,8 @@ export function createSessions({
   return {
     issue({ uaFamily, replacing, context }) {
       return run(ISSUE, async () => {
-        if (isSessionToken(replacing)) await drop(sessionDigest(replacing));
+        const sent = typeof replacing === 'string' ? [replacing] : (replacing ?? []);
+        for (const token of sent) if (isSessionToken(token)) await drop(sessionDigest(token));
         const at = now();
         const others = (await live(at)).sort((a, b) => a.lastSeenAt - b.lastSeenAt);
         while (others.length >= MAX_SESSIONS) {

@@ -74,5 +74,5 @@ export {
   type MemoryAuditSink,
   type OwnerLog,
 } from './audit/sink';
-export { sourcePrefix } from './audit/source';
+export { limitSource, sourcePrefix } from './audit/source';
 export { authPaths, prepareAuthDirectories } from './data/layout.mjs';

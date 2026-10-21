@@ -260,6 +260,13 @@ test("a sign-in gets a new token and ends the session the request's cookie carri
     await sessions.issue({ uaFamily: 'firefox', replacing });
   }
   assert.equal((await store.list()).length, 4);
+  // Two cookies of the name: the sessions of both end.
+  const one = await sessions.issue({ uaFamily: 'firefox' });
+  const two = await sessions.issue({ uaFamily: 'firefox' });
+  await sessions.issue({ uaFamily: 'firefox', replacing: [one.token, two.token, 'forged'] });
+  for (const { token } of [one, two]) {
+    assert.equal(statusOf(await sessions.resolve(token)), 'ended:unknown');
+  }
 });
 
 test('at most 5 sessions exist, and a sixth evicts the least recently seen', async () => {
