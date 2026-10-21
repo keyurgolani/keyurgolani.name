@@ -38,12 +38,28 @@ const READY = 'Ready in';
 // How many of the server's last output lines a failed start reports.
 const LOG_TAIL = 40;
 
+// Every server still running, with its temporary directory. A test that
+// times out while its server starts never gets to stop it, so whatever is
+// left is killed and removed when this process exits.
+const running = new Map();
+process.on('exit', () => {
+  for (const [child, dir] of running) {
+    child.kill('SIGKILL');
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 function requireBuild() {
   if (!existsSync(SERVER_JS)) {
     throw new Error(
       `no standalone build at ${path.relative(REPO_ROOT, SERVER_JS)}; run pnpm build first`,
     );
   }
+}
+
+/** The caller's NODE_OPTIONS, if any, followed by the trap's. */
+function nodeOptions(env, trap) {
+  return [env.NODE_OPTIONS, trap.env.NODE_OPTIONS].filter(Boolean).join(' ');
 }
 
 /** The environment every run starts from. */
@@ -125,6 +141,7 @@ export async function startApp({
       ...env,
       ...fileEnv,
       ...trap.env,
+      NODE_OPTIONS: nodeOptions(env, trap),
     };
     const child = spawn(process.execPath, [SERVER_JS.replace(STANDALONE, appDir)], {
       cwd: path.join(appDir, 'apps', 'web'),
@@ -146,7 +163,10 @@ export async function startApp({
     const ended = () => {
       server.exited = true;
     };
-    server.exit = once(child, 'exit').then(ended, ended);
+    running.set(child, root);
+    server.exit = once(child, 'exit')
+      .then(ended, ended)
+      .finally(() => running.delete(child));
     // Whole lines, so stderr never splits a JSON line from stdout.
     server.drained = Promise.all(
       [child.stdout, child.stderr].map((stream) => {
@@ -256,9 +276,16 @@ export async function runAppToExit({ env, timeoutMs = 30_000, readDelayMs = 0 })
   const trap = await startEgressTrap();
   const child = spawn(process.execPath, [SERVER_JS], {
     cwd: path.dirname(SERVER_JS),
-    env: { ...baseEnv(home, await freePort()), ...env, ...trap.env },
+    env: {
+      ...baseEnv(home, await freePort()),
+      ...env,
+      ...trap.env,
+      NODE_OPTIONS: nodeOptions(env, trap),
+    },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
+  running.set(child, home);
+  child.once('exit', () => running.delete(child));
   // Each stream on its own, so stderr never splits a JSON line from stdout.
   const output = { stdout: '', stderr: '' };
   for (const [name, stream] of /** @type {const} */ ([

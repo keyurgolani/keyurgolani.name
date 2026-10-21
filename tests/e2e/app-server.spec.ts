@@ -5,6 +5,8 @@ import net from 'node:net';
 import { expect, test } from '@playwright/test';
 import { startApp } from '../harness/app-server.mjs';
 
+const OFFLINE = new URL('../harness/offline-fetch.mjs', import.meta.url).href;
+
 test('a start on a taken port moves to a free one, and the log holds only the start that answered', async () => {
   // It drops every connection, so the server's health checks fail fast.
   const holder = net.createServer((socket) => socket.destroy());
@@ -45,5 +47,15 @@ test('a start on a port another server answers on waits for its own server', asy
   } finally {
     impostor.closeAllConnections();
     await new Promise((resolve) => impostor.close(resolve));
+  }
+});
+
+test("a caller's NODE_OPTIONS reach the server beside the egress trap's", async () => {
+  const app = await startApp({ env: { NODE_OPTIONS: `--import=${OFFLINE}` } });
+  try {
+    expect(app.env.NODE_OPTIONS).toBe(`--import=${OFFLINE} --disable-warning=UNDICI-EHPA`);
+    expect((await fetch(`${app.origin}/api/health`)).status).toBe(200);
+  } finally {
+    await app.stop();
   }
 });
