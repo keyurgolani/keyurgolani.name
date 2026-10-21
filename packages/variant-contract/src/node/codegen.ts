@@ -14,6 +14,7 @@ export const GENERATED_FILES = [
   'registry.loaders.ts',
   'registry.styles.ts',
   'registry.extensions.ts',
+  'registry.renderers.ts',
   'registry.enhancements.ts',
   'transpile-packages.json',
 ] as const;
@@ -82,30 +83,30 @@ export {};
 `,
   );
 
-  const withRenderers = extensions.filter((entry) => entry.renderers);
-  const imports = [
-    ...extensions.map(
-      (entry, index) => `import extension${index} from ${text(entry.packageName)};`,
-    ),
-    ...withRenderers.map(
-      (entry) =>
-        `import renderers${extensions.indexOf(entry)} from ${text(`${entry.packageName}/renderers`)};`,
-    ),
-  ];
+  // Definitions and renderers are separate modules: Node tools such as
+  // `pnpm config:validate` load the definitions alone, and only the server,
+  // where renderSection() runs, loads the renderers.
   files.set(
     'registry.extensions.ts',
     `${HEADER}
-import type { HostModules } from '@portfolio/kit/sections';
 import type { ContentExtension } from '@portfolio/schema';
-${imports.map((line) => `${line}\n`).join('')}
+${extensions.map((entry, index) => `import extension${index} from ${text(entry.packageName)};\n`).join('')}
 /** Every registered content extension, which documents are checked against. */
 export const CONTENT_EXTENSIONS: readonly ContentExtension[] = [${extensions
       .map((_entry, index) => `extension${index}`)
       .join(', ')}];
+`,
+  );
 
-/** Their section renderers, keyed \`<namespace>/<name>\`, which renderSection() reaches. */
+  const withRenderers = extensions.filter((entry) => entry.renderers);
+  files.set(
+    'registry.renderers.ts',
+    `${HEADER}
+import type { HostModules } from '@portfolio/kit/sections';
+${withRenderers.map((entry, index) => `import renderers${index} from ${text(`${entry.packageName}/renderers`)};\n`).join('')}
+/** The extensions' section renderers, keyed \`<namespace>/<name>\`, which renderSection() reaches. */
 export const EXTENSION_RENDERERS: NonNullable<HostModules['extensionRenderers']> = ${entries(
-      withRenderers.map((entry) => `...renderers${extensions.indexOf(entry)},`),
+      withRenderers.map((_entry, index) => `...renderers${index},`),
     )};
 `,
   );

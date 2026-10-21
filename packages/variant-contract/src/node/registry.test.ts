@@ -1,5 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { readRegistry, type RegistryDiagnostic } from './registry';
 import {
   extensionPackage,
@@ -413,6 +416,101 @@ test('a content extension that fails to load, or whose definition is wrong, is r
     result.diagnostics.find((record) => record.package === name('sections'))!.message,
     /defineContentExtension\(\) refuses it: .*section names are lowercase words/,
   );
+  // What the import threw says why it didn't load.
+  assert.equal(
+    result.diagnostics.find((record) => record.package === name('throws'))!.actual,
+    'broken',
+  );
+});
+
+test("an extension's ./renderers default-exports a renderer for each section it declares, and nothing else", async () => {
+  const extension = (suffix: string, renderers: string) => {
+    const packageName = `@acme/portfolio-${suffix}`;
+    return extensionPackage(packageName, {
+      entry: `export default { namespace: '${packageName}', sections: { exhibitions: {} } };\n`,
+      packageJson: { exports: { '.': './index.mjs', './renderers': './renderers.mjs' } },
+      files: { 'renderers.mjs': renderers },
+    });
+  };
+  const result = await read([
+    FALLBACK,
+    extension('core', 'export default { hero: () => null };\n'),
+    extension('other', "export default { '@acme/other/exhibitions': () => null };\n"),
+    extension('undeclared', "export default { '@acme/portfolio-undeclared/talks': () => null };\n"),
+    extension('named', 'export const exhibitions = () => null;\n'),
+    extension('value', "export default { '@acme/portfolio-value/exhibitions': 'Exhibitions' };\n"),
+    extension('throws', "throw new Error('the renderers broke');\n"),
+    extension('good', "export default { '@acme/portfolio-good/exhibitions': () => null };\n"),
+  ]);
+  const file = (suffix: string) => `node_modules/@acme/portfolio-${suffix}/renderers.mjs`;
+  assert.deepEqual(
+    result.diagnostics.map((record) => [
+      record.manifestPath,
+      record.pointer,
+      record.code,
+      record.actual,
+    ]),
+    [
+      [file('core'), '/hero', 'registry.extension-invalid', 'hero'],
+      [file('named'), '', 'registry.extension-invalid', undefined],
+      [
+        file('other'),
+        '/@acme~1other~1exhibitions',
+        'registry.extension-invalid',
+        '@acme/other/exhibitions',
+      ],
+      [file('throws'), '', 'registry.extension-invalid', 'the renderers broke'],
+      [
+        file('undeclared'),
+        '/@acme~1portfolio-undeclared~1talks',
+        'registry.extension-invalid',
+        '@acme/portfolio-undeclared/talks',
+      ],
+      [
+        file('value'),
+        '/@acme~1portfolio-value~1exhibitions',
+        'registry.extension-invalid',
+        'string',
+      ],
+    ],
+  );
+  const core = result.diagnostics.find((record) => record.package === '@acme/portfolio-core')!;
+  assert.equal(core.expected, '@acme/portfolio-core/exhibitions');
+  // Only the one that's right registers, renderers and all.
+  assert.deepEqual(
+    result.extensions.map(({ packageName, renderers }) => [packageName, renderers]),
+    [['@acme/portfolio-good', true]],
+  );
+});
+
+test("a dependency installed only above the repository's root isn't the host's", async () => {
+  const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'portfolio-outside-'));
+  try {
+    const write = (file: string, text: string) => {
+      fs.mkdirSync(path.dirname(path.join(outside, file)), { recursive: true });
+      fs.writeFileSync(path.join(outside, file), text);
+    };
+    // A stray install beside the repository, where Node would also look.
+    write('node_modules/@acme/ocean/package.json', JSON.stringify({ name: '@acme/ocean' }));
+    write('repo/pnpm-workspace.yaml', "packages: ['apps/*']\n");
+    write(
+      'repo/apps/web/package.json',
+      JSON.stringify({ dependencies: { '@acme/ocean': '1.0.0', [FALLBACK.name]: '1.0.0' } }),
+    );
+    const fallback = `repo/apps/web/node_modules/${FALLBACK.name}`;
+    write(
+      `${fallback}/package.json`,
+      JSON.stringify({ name: FALLBACK.name, ...FALLBACK.packageJson }),
+    );
+    for (const [name, text] of Object.entries(FALLBACK.files ?? {}))
+      write(`${fallback}/${name}`, text);
+    const result = await readRegistry({ hostDir: path.join(outside, 'repo', 'apps', 'web') });
+    assert.deepEqual(where(result.diagnostics), [
+      ['@acme/ocean', 'package.json', '/dependencies/@acme~1ocean', 'registry.package-missing'],
+    ]);
+  } finally {
+    fs.rmSync(outside, { recursive: true, force: true });
+  }
 });
 
 test('every record says what to do, and each package error how to uninstall it', async () => {

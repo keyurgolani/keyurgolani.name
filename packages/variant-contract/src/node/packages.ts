@@ -16,17 +16,41 @@ export interface PackageJson {
 
 /**
  * The directory `name` is installed in, as Node finds it from `fromDir`:
- * `node_modules/<name>` there or in a directory above. It's the path through
- * node_modules, not the link target, so it reads as the host sees it.
+ * `node_modules/<name>` there or in a directory above, up to the repository
+ * root (lookupRoot()), never past it: a package in ~/node_modules isn't the
+ * host's. It's the path through node_modules, not the link target, so it
+ * reads as the host sees it.
  */
-export function findInstalled(name: string, fromDir: string): string | undefined {
+export function findInstalled(
+  name: string,
+  fromDir: string,
+  root = lookupRoot(fromDir),
+): string | undefined {
   let dir = path.resolve(fromDir);
   for (;;) {
     const candidate = path.join(dir, 'node_modules', ...name.split('/'));
     if (fs.existsSync(path.join(candidate, 'package.json'))) return candidate;
     const parent = path.dirname(dir);
-    if (parent === dir) return undefined;
+    if (dir === root || parent === dir) return undefined;
     dir = parent;
+  }
+}
+
+/**
+ * Where a lookup from `fromDir` stops: the nearest directory at or above it
+ * with a pnpm-workspace.yaml or a .git, the repository's root, else `fromDir`
+ * itself.
+ */
+export function lookupRoot(fromDir: string): string {
+  const start = path.resolve(fromDir);
+  for (let dir = start; ; dir = path.dirname(dir)) {
+    if (
+      fs.existsSync(path.join(dir, 'pnpm-workspace.yaml')) ||
+      fs.existsSync(path.join(dir, '.git'))
+    ) {
+      return dir;
+    }
+    if (path.dirname(dir) === dir) return start;
   }
 }
 

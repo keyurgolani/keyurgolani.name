@@ -70,16 +70,21 @@ test('loaders, styles, extensions, and enhancements name each package once, sort
     generated.get('registry.styles.ts')!,
     /import "@acme\/ocean\/styles\.css";\nimport "@portfolio\/fallback-composition\/styles\.css";\n/,
   );
+  // Definitions and renderers are separate modules, so a Node tool loads no renderer.
   const extensions = generated.get('registry.extensions.ts')!;
   assert.match(
     extensions,
-    /import extension0 from "@acme\/portfolio-notes";\nimport extension1 from "@acme\/portfolio-photography";\nimport renderers1 from "@acme\/portfolio-photography\/renderers";\n/,
+    /import extension0 from "@acme\/portfolio-notes";\nimport extension1 from "@acme\/portfolio-photography";\n/,
   );
   assert.match(
     extensions,
     /CONTENT_EXTENSIONS: readonly ContentExtension\[\] = \[extension0, extension1\];/,
   );
-  assert.match(extensions, /= \{\n {2}\.\.\.renderers1,\n\};/);
+  assert.doesNotMatch(extensions, /renderers/);
+  const renderers = generated.get('registry.renderers.ts')!;
+  assert.match(renderers, /import renderers0 from "@acme\/portfolio-photography\/renderers";\n/);
+  assert.match(renderers, /= \{\n {2}\.\.\.renderers0,\n\};/);
+  assert.doesNotMatch(renderers, /portfolio-notes/);
   assert.match(
     generated.get('registry.enhancements.ts')!,
     /= \{\n {2}"acme-ocean\/tide": \(\) => import\("@acme\/ocean\/enhancements\/tide"\),\n\};/,
@@ -108,7 +113,7 @@ test('a host with only the fallback generates empty maps', async () => {
   const generated = renderRegistry(result);
   assert.match(generated.get('registry.enhancements.ts')!, /ENHANCEMENT_LOADERS: [^=]+= \{\};/);
   assert.match(generated.get('registry.extensions.ts')!, /CONTENT_EXTENSIONS: [^=]+= \[\];/);
-  assert.match(generated.get('registry.extensions.ts')!, /EXTENSION_RENDERERS: [^=]+= \{\};/);
+  assert.match(generated.get('registry.renderers.ts')!, /EXTENSION_RENDERERS: [^=]+= \{\};/);
 });
 
 test('a registry with errors generates nothing', async () => {

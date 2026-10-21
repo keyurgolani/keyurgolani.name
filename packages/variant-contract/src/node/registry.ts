@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { defineContentExtension, type ContentExtensionSpec } from '@portfolio/schema';
+import { parseExtensionKind } from '@portfolio/schema/ids';
 import { toPointer, type ManifestCode, type ManifestDiagnostic } from '../diagnostics';
 import { FALLBACK_ID } from '../ids';
 import type { VariantManifest } from '../manifest-schema';
@@ -451,12 +452,13 @@ async function readExtension(
   let value: unknown;
   try {
     value = ((await import(pathToFileURL(entry).href)) as { default?: unknown }).default;
-  } catch {
+  } catch (error) {
     report(
       'registry.extension-invalid',
       [],
       'Its "." export fails to load.',
       'Upgrade or pin a release that loads.',
+      { actual: errorLine(error) },
     );
     return undefined;
   }
@@ -493,7 +495,88 @@ async function readExtension(
     );
     return undefined;
   }
+  if (renderers) {
+    const declared = Object.keys(isRecord(value.sections) ? value.sections : {});
+    const checked = await readRenderers(name, declared, exportFile(dir, pkg, './renderers')!);
+    if (checked) {
+      const { pointer, message, remedy, ...extra } = checked;
+      reporter(diagnostics, name, version, at(exportFile(dir, pkg, './renderers')!))(
+        'registry.extension-invalid',
+        pointer,
+        message,
+        remedy,
+        extra,
+      );
+      return undefined;
+    }
+  }
   return { kind: 'content-extension', packageName: name, version, dir, namespace: name, renderers };
+}
+
+/** What's wrong with an extension's `./renderers` export, or undefined when it's right. */
+async function readRenderers(
+  name: string,
+  declared: readonly string[],
+  file: string,
+): Promise<
+  | {
+      pointer: string[];
+      message: string;
+      remedy: string;
+      expected?: string;
+      actual?: string;
+    }
+  | undefined
+> {
+  const kinds = declared.map((section) => `${name}/${section}`);
+  let value: unknown;
+  try {
+    value = ((await import(pathToFileURL(file).href)) as { default?: unknown }).default;
+  } catch (error) {
+    return {
+      pointer: [],
+      message: 'Its "./renderers" export fails to load.',
+      remedy: 'Upgrade or pin a release whose renderers load.',
+      actual: errorLine(error),
+    };
+  }
+  if (!isRecord(value)) {
+    return {
+      pointer: [],
+      message:
+        'Its "./renderers" export has no default export: an object of renderers, keyed by section kind.',
+      remedy: 'Upgrade or pin a release that default-exports its renderers.',
+      expected: '{ "<namespace>/<section>": renderer }',
+    };
+  }
+  for (const [kind, renderer] of Object.entries(value)) {
+    const parsed = parseExtensionKind(kind);
+    if (!parsed || parsed.namespace !== name || !declared.includes(parsed.name)) {
+      return {
+        pointer: [kind],
+        message: `is no section kind ${name} declares, so nothing would ever render through it.`,
+        remedy: 'Upgrade or pin a release whose renderers match its declared sections.',
+        expected: kinds.length > 0 ? kinds.join(' | ') : 'no renderers: it declares no sections',
+        actual: kind,
+      };
+    }
+    if (typeof renderer !== 'function') {
+      return {
+        pointer: [kind],
+        message: "isn't a renderer: a component of the section and the render input.",
+        remedy: 'Upgrade or pin a release whose renderers are components.',
+        expected: 'function',
+        actual: renderer === null ? 'null' : typeof renderer,
+      };
+    }
+  }
+  return undefined;
+}
+
+/** An error's first line, for a record's `actual`. */
+function errorLine(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.split('\n')[0]!.slice(0, 300);
 }
 
 /** A manifest record, located in its package. Errors also say how to uninstall it. */
