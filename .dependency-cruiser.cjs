@@ -1,6 +1,30 @@
 // Module boundary rules for `pnpm check:deps`, including the variant contract's
 // (#5): what a variant may import, and what the contract's browser-safe root
 // entry may.
+const { readdirSync, readFileSync } = require('node:fs');
+const path = require('node:path');
+
+/**
+ * The workspace packages that are variants: their package.json says
+ * `portfolio.kind: "variant"`, whatever their folder is called, so a renamed
+ * or new one is covered the moment it's declared.
+ */
+function variantDirs() {
+  const packages = path.join(__dirname, 'packages');
+  return readdirSync(packages).filter((dir) => {
+    try {
+      const manifest = JSON.parse(readFileSync(path.join(packages, dir, 'package.json'), 'utf8'));
+      return manifest.portfolio?.kind === 'variant';
+    } catch {
+      return false;
+    }
+  });
+}
+
+const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+// A pattern that matches nothing when there's no variant.
+const VARIANT_DIRS = variantDirs().map(escapeRegExp).join('|') || '(?!)';
+
 /** @type {import('dependency-cruiser').IConfiguration} */
 module.exports = {
   forbidden: [
@@ -24,8 +48,9 @@ module.exports = {
       comment:
         "A variant imports @portfolio/schema, @portfolio/variant-contract, @portfolio/kit, and #19's " +
         '@portfolio/appearance, never the host, the server-only @portfolio/core, or another variant ' +
-        '(#5). Its own files and third-party libraries are fine.',
-      from: { path: '^packages/(variant-(?!contract/)[^/]+)/' },
+        '(#5). Its own files and third-party libraries are fine. A variant is a package whose ' +
+        'package.json has portfolio.kind "variant".',
+      from: { path: `^packages/(${VARIANT_DIRS})/` },
       to: {
         path: '^(?:packages|apps)/',
         pathNot: ['^packages/$1/', '^packages/(?:schema|kit|variant-contract|appearance)/'],

@@ -17,6 +17,7 @@
     "portfolio-variant-template"
   ],
   "portfolio": {
+    "kind": "variant",
     "template": true,
     "slug": "template"
   },

@@ -17,6 +17,7 @@
     "portfolio-variant"
   ],
   "portfolio": {
+    "kind": "variant",
     "variant": true,
     "slug": "editorial"
   },
