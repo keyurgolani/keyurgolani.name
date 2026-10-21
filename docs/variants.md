@@ -1,6 +1,6 @@
 # Building a variant
 
-A variant is a workspace package that takes a validated `Portfolio` object and renders it. Variants are real packages — not config — so they can pull in heavy dependencies, ship custom CSS, define their own primitives, and stay isolated from each other.
+A variant is a workspace package that renders the portfolio. The host gives it `VariantProps`: the portfolio's public view, which leaves out hidden sections and unregistered extension data, and the site's color scheme, typography preset, and motion policy. Variants are real packages, not config, so they can pull in heavy dependencies, ship custom CSS, define their own primitives, and stay isolated from each other.
 
 For an AI-assisted variant build, point an agent at [skills/variant-developer/SKILL.md](../skills/variant-developer/SKILL.md).
 
@@ -66,7 +66,7 @@ The full per-field reference is at [`skills/variant-developer/references/manifes
 
 ### `themes`
 
-Lists the concrete `data-theme` values your variant renders correctly via CSS. Mandatory minimum is `['light', 'dark']`. Add `'bright'` and `'black'` only if you've authored CSS blocks for those values — the audit script warns otherwise.
+Lists the concrete `data-theme` values your variant renders correctly via CSS. Mandatory minimum is `['light', 'dark']`. Add `'bright'` and `'black'` only if you've authored CSS blocks for those values; the audit script warns otherwise.
 
 `'system'` is never listed in `themes`. It's a user preference / resolver, not a render target. Every variant supports `system` automatically (it picks `light` or `dark` per `prefers-color-scheme`).
 
@@ -91,8 +91,12 @@ If you skip a kind in your dispatch, route it through `FallbackSection` from `@p
 
 ```tsx
 // src/variant.tsx
-import type { Portfolio } from '@portfolio/schema';
-import { resolveColorScheme, resolveTypographyPreset } from '@portfolio/kit';
+import {
+  MotionPolicyProvider,
+  resolveColorScheme,
+  resolveTypographyPreset,
+  type VariantProps,
+} from '@portfolio/kit';
 import { manifest } from './manifest';
 import { SectionDispatch } from './section';
 
@@ -100,37 +104,43 @@ export default function MyVariant({
   portfolio,
   colorScheme,
   typography,
-}: {
-  portfolio: Portfolio;
-  colorScheme?: string;
-  typography?: string;
-}) {
+  motionPolicy = 'respect-os',
+}: VariantProps) {
   const scheme = resolveColorScheme(manifest, colorScheme);
   const type = resolveTypographyPreset(manifest, typography);
 
   return (
-    <div
-      data-variant="my-slug"
-      data-color-scheme={scheme ?? undefined}
-      data-typography={type ?? undefined}
-    >
-      <main>
-        {portfolio.sections.map((section) => (
-          <SectionDispatch key={section.id} section={section} portfolio={portfolio} />
-        ))}
-      </main>
-    </div>
+    <MotionPolicyProvider policy={motionPolicy}>
+      <div
+        data-variant="my-slug"
+        data-color-scheme={scheme ?? undefined}
+        data-typography={type ?? undefined}
+        data-motion-policy={motionPolicy}
+      >
+        <main id="main">
+          {portfolio.sections.map((section) => (
+            <SectionDispatch key={section.id} section={section} portfolio={portfolio} />
+          ))}
+        </main>
+      </div>
+    </MotionPolicyProvider>
   );
 }
 ```
 
+Render each section with its `id` as the DOM id: it's the anchor navigation and links point to. A section whose `kind` comes from a content extension (`isExtensionSection` from `@portfolio/schema/ids`) renders nothing for now.
+
 ## Theme integration
 
-The host wraps your variant in `<ThemeProvider>`. Theme resolution applies `data-theme="..."` to `<html>` based on the visitor's stored preference and your manifest's `themes` array.
-
-For bright/black to actually render, the host must pass your `manifest.themes` into `<ThemeProvider supportedThemes={...}>`. In this repo today that's wired explicitly in `apps/web/src/app/layout.tsx`. When you register a new variant that supports bright/black, that file needs to look up the active variant's manifest (today it's hardcoded to editorial; multi-variant hosting will need a registry lookup).
+The host wraps your variant in `<ThemeProvider>`, fed your manifest's `themes` and the site's display mode as the starting preference (`apps/web/src/lib/variant-tree.tsx`). Theme resolution applies `data-theme="..."` to `<html>` from the visitor's stored preference, else that starting one, within your `themes`. Nothing needs wiring per variant.
 
 Build your toggle UI in `src/primitives/theme-toggle.tsx`. Filter the rendered buttons against your `manifest.themes` so users only see modes you support; always render the `system` button. Editorial's toggle in `packages/variant-editorial/src/primitives/theme-toggle.tsx` is the reference implementation.
+
+## Motion
+
+`VariantProps.motionPolicy` is the site's policy: `respect-os` follows the visitor's `prefers-reduced-motion`, and `reduce` always reduces motion. Wrap the page in `MotionPolicyProvider` with it, as above, so every `useMotionPreference()` below reads it, and reduce your CSS motion under `[data-motion-policy='reduce']` as you do under `prefers-reduced-motion`. A component can add a reduce of its own, but nothing can undo the site's.
+
+CSS rules don't reach motion that scripts run. Gate a canvas loop, an entrance, or an animation that repeats on `useMotionPreference()`, and scroll with `behavior: 'auto'` under reduce. A variant built on framer-motion also wraps its root in `MotionConfig`, `reducedMotion: 'always'` under the site's `reduce` and `'user'` otherwise, as Kinetic Cosmos's `primitives/motion-config.tsx` does. That skips transform and layout animations, but opacity still animates, so the gates stay. [`common-bugs.md`](../skills/variant-developer/references/common-bugs.md) section 8 has the details.
 
 ## Styling conventions
 
@@ -187,3 +197,4 @@ Output lands in `.variant-preview/<slug>/` (gitignored).
 - AI-assisted variant building: [`skills/variant-developer/SKILL.md`](../skills/variant-developer/SKILL.md)
 - System internals: [architecture.md](architecture.md)
 - Available section kinds: [authoring.md](authoring.md)
+- Both documents, field by field: [configuration.md](configuration.md)

@@ -27,7 +27,7 @@ paraphrases it; if you find drift, packages/kit is authoritative.
 
 #### `tagline` (optional, string)
 
-- One-line description shown alongside the variant in the picker.
+- One-line description. No page shows it today; Owner Studio (#8) lists variants with it.
 
 #### `description` (optional, string)
 
@@ -54,7 +54,7 @@ paraphrases it; if you find drift, packages/kit is authoritative.
 #### `aesthetic` (required, enum)
 
 - One of: `editorial | spatial | kinetic | popart | terminal | bento | narrative | custom`.
-- Drives the variant picker's filtering tabs. `custom` is the escape hatch for variants that don't fit a lane.
+- The variant's lane. Nothing filters on it today. `custom` is the escape hatch for variants that don't fit a lane.
 
 #### `motion` (required, enum)
 
@@ -118,12 +118,12 @@ The concrete `data-theme` values your variant renders correctly via CSS. Valid v
 #### `colorSchemes` (optional, readonly ColorScheme[])
 
 - An array of named recolors that share the variant's layout. Each `ColorScheme` has:
-  - `id` (string, required) — stable id used in CSS selectors and YAML.
-  - `name` (string, required) — display label.
-  - `description?` (string) — picker subtitle.
-  - `themes` (readonly `'light'|'dark'|'bright'|'black'`[], required) — which themes the scheme supports. Mandatory minimum is `['light','dark']`. Add `'bright'`/`'black'` only when you've authored CSS blocks for those values (audit warns otherwise).
-  - `default?` (boolean) — mark exactly one as default.
-  - `swatch?` (`{ ink?, paper?, accent? }`) — preview hex codes.
+  - `id` (string, required): stable id used in CSS selectors and YAML.
+  - `name` (string, required): display label.
+  - `description?` (string): a longer label. No page shows it today.
+  - `themes` (readonly `'light'|'dark'|'bright'|'black'`[], required): which themes the scheme supports. Mandatory minimum is `['light','dark']`. Add `'bright'`/`'black'` only when you've authored CSS blocks for those values (audit warns otherwise).
+  - `default?` (boolean): mark exactly one as default.
+  - `swatch?` (`{ ink?, paper?, accent? }`): preview hex codes.
 - Variants implement each scheme via `[data-variant='<slug>'][data-color-scheme='<id>']` CSS overrides.
 - Omit when the variant only ships its single canonical palette.
 
@@ -131,19 +131,19 @@ The concrete `data-theme` values your variant renders correctly via CSS. Valid v
 
 - Named font/size/leading combinations. Each `TypographyPreset` has:
   - `id` (string, required), `name` (string, required), `description?`.
-  - `default?` (boolean) — mark exactly one as default.
-  - `preview?` (`{ display?, body?, ui?, mono? }`) — font names shown in the picker.
+  - `default?` (boolean): mark exactly one as default.
+  - `preview?` (`{ display?, body?, ui?, mono? }`): font names. No page shows them today.
 - Implement via `[data-variant='<slug>'][data-typography='<id>']` CSS overrides.
 
 ### Capabilities
 
 #### `capabilities.print` (optional, boolean)
 
-- The variant ships a print stylesheet (resume-style page). Hosts surface a Print button.
+- The variant ships a print stylesheet (resume-style page). No host reads the flag: there's no Print button, and the stylesheet applies whenever a visitor prints.
 
 #### `capabilities.rss` (optional, boolean)
 
-- The variant has writings/publications/episodes worth feed-publishing. Hosts surface `/feed.xml`.
+- The variant has writings, publications, or episodes worth a feed. No host reads the flag: the site document's `features.feed` turns `/feed.xml` on or off.
 
 #### `capabilities.multiPage` (optional, boolean)
 
@@ -153,7 +153,7 @@ The concrete `data-theme` values your variant renders correctly via CSS. Valid v
 
 #### `screenshots` (optional, ReadonlyArray<{src, alt?, theme?, colorScheme?, typography?}>)
 
-- Static previews for the picker. `src` is required; `theme/colorScheme/typography` let one variant ship multiple shots that map to specific configurations.
+- Static previews. No page shows them today. `src` is required; `theme/colorScheme/typography` let one variant ship multiple shots that map to specific configurations.
 
 ## Helpers exported alongside the type
 
@@ -161,23 +161,24 @@ The concrete `data-theme` values your variant renders correctly via CSS. Valid v
 - `resolveTypographyPreset(manifest, requested)` — same chain for typography.
 - `resolveTheme(preference, supported, systemMatch)` — pure function the kit's `ThemeProvider` uses to map a `ThemePreference` to a concrete `data-theme` value, applying the `bright→light` / `black→dark` fallback per the resolution table above.
 
-Use these in your variant's render path so portfolio.yaml's `colorScheme` and `typography` fields work consistently across variants.
+Use these in your variant's render path so the site document's `colorScheme` and `typography`, which reach you as `VariantProps`, resolve the same way in every variant.
 
 ## Host integration
 
-Declaring `'bright'` or `'black'` in `themes` is necessary but not sufficient — the host app also has to pass the variant's `manifest.themes` into `<ThemeProvider supportedThemes={...}>`. Otherwise the resolver defaults to `['light','dark']` and bright/black always fall back.
-
-In this repo the integration point is `apps/web/src/app/layout.tsx`:
+Declaring `'bright'` or `'black'` in `themes` is all a variant does. The host wraps every page in `<ThemeProvider>` with the selected variant's `manifest.themes` and the site's display mode as the starting preference (`apps/web/src/lib/variant-tree.tsx`), so your bright and black CSS blocks render with no wiring of your own:
 
 ```tsx
-import { manifest as editorialManifest } from '@portfolio/variant-editorial';
-// ...
-<ThemeProvider defaultPreference={defaultPreference} supportedThemes={editorialManifest.themes}>
-  {children}
-</ThemeProvider>;
+<ThemeProvider defaultPreference={displayMode} supportedThemes={mod.manifest.themes}>
+  <Component
+    portfolio={portfolio}
+    colorScheme={selection.colorScheme}
+    typography={selection.typography}
+    motionPolicy={motionPolicy}
+  />
+</ThemeProvider>
 ```
 
-When you register a new variant that supports bright/black, that file needs to look up the active variant's manifest (today it's hardcoded to editorial; multi-variant hosting will need a registry). Without the wiring, your bright/black CSS blocks never render.
+At startup the host also checks the site document's `appearance` against the selected variant's manifest. A `colorScheme` or `typography` id your manifest doesn't declare is refused as `appearance.unknown`, so the ids you ship are the ones authors can pick.
 
 ## Editorial vs. template — side-by-side example
 

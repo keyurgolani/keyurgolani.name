@@ -7,6 +7,7 @@
 # All section kinds documented at packages/schema/src/kinds/index.ts
 # Every section needs an id: lowercase words joined by hyphens, unique in the
 # file. It is the section's anchor, such as #about
+# docs/configuration.md documents every field and check
 # ────────────────────────────────────────────────────────────────────────────
 
 schemaVersion: 2

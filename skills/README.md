@@ -4,8 +4,8 @@ This directory ships [agentskills.io](https://agentskills.io)-format skills bund
 
 ## What's here
 
-- [`portfolio-author/`](./portfolio-author/SKILL.md) — Build the `portfolio.yml` file from any source the user has — resume, LinkedIn, GitHub, or a conversation — with the right sections, ordering, tone, and quality bar.
-- [`variant-developer/`](./variant-developer/SKILL.md) — Build a new visual variant package, design-contract first, with section coverage, kit utility usage, and an optional browser-based visual companion.
+- [`portfolio-author/`](./portfolio-author/SKILL.md): build the `portfolio.yml` and `site.yml` documents from any source the user has (a resume, LinkedIn, GitHub, or a conversation) with the right sections, ordering, tone, and quality bar.
+- [`variant-developer/`](./variant-developer/SKILL.md): build a new visual variant package, design contract first, with section coverage, kit utility usage, and an optional browser-based visual companion.
 
 ## Discovery wiring
 
@@ -19,7 +19,7 @@ Each agent harness expects skills in a different place. Pick the row that matche
 | Cursor                    | (no discovery dir)        | Paste the `SKILL.md` path into the system prompt or project instructions.                  |
 | Codex                     | (no discovery dir)        | Paste the `SKILL.md` path into the system prompt or project instructions.                  |
 | Goose                     | (no discovery dir)        | Paste the `SKILL.md` path into the system prompt or project instructions.                  |
-| Anything else             | —                         | Open `skills/<name>/SKILL.md` and paste its contents into the agent's system instructions. |
+| Anything else             | (none)                    | Open `skills/<name>/SKILL.md` and paste its contents into the agent's system instructions. |
 
 Replace `<name>` with `portfolio-author` or `variant-developer`.
 

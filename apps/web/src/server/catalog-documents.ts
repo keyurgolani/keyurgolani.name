@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { parseSource, type AppearanceCatalog, type ContentExtension } from '@portfolio/schema';
 import { findPair, pairFileNames, readPair, type PairFiles } from '@portfolio/schema/node';
+import { isSampleIdentity } from '../lib/sample-identity';
 import type { CatalogReader, LiveRevision } from './catalog-port';
 import type { ConfigIssue, RuntimeMode } from './config';
 import { frozenUnit, pairDigest, recordIssue } from './pair-records';
@@ -15,8 +16,7 @@ import { frozenUnit, pairDigest, recordIssue } from './pair-records';
 // it re-validates whenever a document changes on disk, and renders the
 // bundled examples when the directory holds neither document.
 
-/** identity.name of each sample the image ships. A real deployment can't use one. */
-export const BUNDLED_SAMPLE_NAMES: readonly string[] = ['Anamika Devi'];
+export { BUNDLED_SAMPLE_NAMES } from '../lib/sample-identity';
 
 /** Every name the adapter reads or refuses, so an edit to any of them is seen. */
 const WATCHED = /^(?:(?:portfolio|site)\.(?:yml|yaml|json)|portfolio\.toml)$/;
@@ -179,10 +179,4 @@ function fingerprint({ sourceDir, examples }: DocumentsCatalogOptions): string {
 
 function fatal(code: string, message: string): ConfigIssue {
   return { severity: 'fatal', key: KEY, code, message };
-}
-
-function isSampleIdentity(name: string): boolean {
-  const normalize = (value: string) =>
-    value.normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase();
-  return BUNDLED_SAMPLE_NAMES.some((sample) => normalize(sample) === normalize(name));
 }

@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for considering a contribution. This document covers development setup, the conventions we follow, and the drift gates that must stay green.
+Thanks for considering a contribution. This document covers development setup, the conventions we follow, and the [checks](#checks) that must stay green.
 
 ## Development setup
 
@@ -18,15 +18,16 @@ Requirements:
 
 ## Repo shape
 
-This is a pnpm workspace monorepo. Two apps and four packages:
+This is a pnpm workspace monorepo. One app and five packages:
 
-| Package                      | What it is                                                                                               |
-| ---------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `apps/web`                   | Next.js 16 host: routes, portfolio loading, SEO, the variant picker                                      |
-| `packages/schema`            | Zod schemas for `portfolio.yml`. Source of truth for section kinds.                                      |
-| `packages/kit`               | Shared variant-author utilities: theme provider, GitHub fetcher, format helpers, SEO, spatial primitives |
-| `packages/variant-editorial` | The first variant — a typographic editorial spread                                                       |
-| `packages/variant-template`  | Scaffold copied by `pnpm new-variant` (`skills/variant-developer/scripts/new-variant.mjs`)               |
+| Package                           | What it is                                                                                                     |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `apps/web`                        | Next.js 16 host: startup checks, the document pair, routes, SEO                                                |
+| `packages/schema`                 | The portfolio and site schemas, validation, extensions, and the migration. Source of truth for both documents. |
+| `packages/kit`                    | Shared variant-author utilities: theme provider, GitHub fetcher, format helpers, SEO, spatial primitives       |
+| `packages/variant-editorial`      | The first variant: a typographic editorial spread                                                              |
+| `packages/variant-kinetic-cosmos` | The second variant: a gradient nebula, particles, and a career timeline                                        |
+| `packages/variant-template`       | Scaffold copied by `pnpm new-variant` (`skills/variant-developer/scripts/new-variant.mjs`)                     |
 
 All packages are workspace-linked via `workspace:*` in their dependencies.
 
@@ -63,7 +64,7 @@ If you add or change a section kind in `packages/schema/src/kinds/`, you must al
 3. Add the kind to every variant's `supportedKinds` (or to `ALL_SECTION_KINDS` filter).
 4. Implement a renderer (or rely on `FallbackSection`).
 
-The drift gates below catch most of these.
+The [checks](#checks) below catch most of these. A change to either document's fields also updates [docs/configuration.md](docs/configuration.md), and a change an existing document wouldn't pass bumps `schemaVersion` with a migration step in `packages/schema/src/migrate/`. A field for one profession belongs in a content extension instead.
 
 ## Checks
 
@@ -98,9 +99,9 @@ Tests use Node's built-in `node:test`, through `tsx` for TypeScript. A single fi
 
 PRs get reviewed against the spec they implement. The review focuses on:
 
-- Spec compliance — does the code do what was asked, nothing more, nothing less?
-- Code quality — naming, file decomposition, test depth, drift surface area.
-- Drift gate health — did this PR keep `pnpm check:skills` green?
+- Spec compliance: does the code do what was asked, nothing more, nothing less?
+- Code quality: naming, file decomposition, test depth, drift surface area.
+- Drift gate health: did this PR keep `pnpm check:skills` green?
 
 For larger changes, write a spec under `docs/superpowers/specs/` and a plan under `docs/superpowers/plans/` first. The two skills (`portfolio-author`, `variant-developer`) and the brainstorming/writing-plans/subagent-driven-development workflows are designed to scaffold this.
 

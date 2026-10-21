@@ -38,7 +38,7 @@ test(
 test(
   "the page renders in the site document's Kinetic Cosmos appearance",
   { annotation: [{ type: 'route', description: '/' }, READ_ONLY] },
-  async ({ page }) => {
+  async ({ page }, testInfo) => {
     await page.goto('/');
     const root = page.locator('[data-variant]').first();
     await expect(root).toHaveAttribute('data-variant', 'kinetic-cosmos');
@@ -49,5 +49,12 @@ test(
       await expect(page.locator(`[id="${id}"]`), id).toHaveCount(0);
       await expect(page.locator(`a[href="#${id}"]`), id).toHaveCount(0);
     }
+    // The render, for the report: the closing evidence for the pair (#4),
+    // once the hero has faded in.
+    await expect(page.locator('.kc-hero__inner')).toHaveCSS('opacity', '1');
+    await testInfo.attach('kinetic-cosmos-aurora-humanist', {
+      body: await page.screenshot(),
+      contentType: 'image/png',
+    });
   },
 );

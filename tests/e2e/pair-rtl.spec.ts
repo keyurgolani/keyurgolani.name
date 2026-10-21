@@ -17,7 +17,7 @@ test.use({
 test(
   '<html lang dir> are the portfolio locale and direction',
   { annotation: [{ type: 'route', description: '/' }, READ_ONLY] },
-  async ({ page }) => {
+  async ({ page }, testInfo) => {
     await page.goto('/');
     await expect(page.locator('html')).toHaveAttribute('lang', 'ar');
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
@@ -27,5 +27,10 @@ test(
     );
     await expect(page.locator('[id="talks"]')).toHaveCount(0);
     await expect(page.locator('[id="podcast"]')).toHaveCount(1);
+    // The render, for the report: the closing evidence for the pair (#4).
+    await testInfo.attach('editorial-arabic-rtl', {
+      body: await page.screenshot(),
+      contentType: 'image/png',
+    });
   },
 );

@@ -21,17 +21,17 @@ metadata:
 
 ## 1. What this platform is + the variant model
 
-The keyurgolani/portfolio platform is a self-hostable, YAML-driven portfolio site. A single `config/portfolio.yml` is rendered by one of many pluggable visual variants. Variants are the look; the YAML is the content. Picking a different variant changes everything visual without touching the data.
+The keyurgolani/portfolio platform is a self-hostable portfolio site configured by two documents: `config/portfolio.yml` holds the content, and `config/site.yml` picks the variant, color scheme, typography preset, display mode, and motion policy. Variants are the look; the portfolio is the content. Picking a different variant in `site.yml` changes everything visual without touching the data.
 
 A variant is a React component package living under `packages/variant-<slug>`. The contract is small:
 
 - The package's entry point exports a `manifest` object (typed `VariantManifest`) — declares slug, themes, color schemes, typography presets, supported section kinds, capabilities, and screenshots.
-- The package's entry point exports a `default` React component (typed `(props: VariantProps) => JSX.Element`) — receives the validated portfolio config and renders it.
+- The package's entry point exports a `default` React component (typed `(props: VariantProps) => JSX.Element`). It receives the portfolio's public view, which leaves out hidden sections and unregistered extension data, and the site's `colorScheme`, `typography`, and `motionPolicy`, and renders them.
 - The host (`apps/web`) auto-discovers variants via the workspace registry. `apps/web/scripts/build-registry.mjs` scans every workspace package whose `package.json` has `portfolio.variant: true` and writes `apps/web/src/lib/registry.generated.ts`. No manual import; the registry is regenerated on install.
 
 Reference packages:
 
-- **`packages/variant-editorial`** — the reference variant. Read it for shape, conventions, and tone before scaffolding your own. Its DESIGN.md is the worked example.
+- **`packages/variant-editorial`**: the reference variant. Read it for shape, conventions, and tone before scaffolding your own.
 - **`packages/variant-template`** — the clone-source. The scaffolder copies this directory; do not edit it as part of building a new variant.
 - **`packages/kit`** — shared utilities (theme provider, navigation derivation, layout primitives, R3F bindings, hooks). Use it. If you find yourself rewriting a helper that could live here, hoist it.
 
@@ -104,7 +104,7 @@ Scaffold and stand up a renderable variant that uses `FallbackSection` for every
   - `[data-variant='your-slug'][data-color-scheme='id'] { … overrides … }` for each non-default scheme.
   - `[data-variant='your-slug'][data-typography='id'] { … overrides … }` for each non-default typography preset.
   - `[data-theme='dark'] [data-variant='your-slug'] { … }` for dark theme overrides. Add `[data-theme='bright']` and `[data-theme='black']` blocks too if your manifest declares those themes (audit warns if you claim them without CSS).
-  - `@media (prefers-reduced-motion: reduce) { [data-variant='your-slug'] * { animation: none !important; transition: none !important; } }` at the bottom.
+  - `@media (prefers-reduced-motion: reduce) { [data-variant='your-slug'] * { animation: none !important; transition: none !important; } }` at the bottom, and the same rule under `[data-variant='your-slug'][data-motion-policy='reduce']` for a site whose `motionPolicy` is `reduce`. Put `data-motion-policy={motionPolicy}` on your root and wrap the page in `MotionPolicyProvider`.
   - **`scroll-margin-top` rule** on every scroll-target section if you have a fixed nav (`scroll-margin-top: 5rem` on `.kc-section, .kc-hero, .kc-timeline`). Without this, anchor-link clicks bury headings under the nav.
   - **Anchor scoping** — write the global anchor-style rule as `[data-variant='your-slug'] a:not([class])` so component-classed buttons can override the color via class-only selectors. Without `:not([class])`, every `.kc-action--primary` and similar inherits the global accent color and renders unreadable on gradient backgrounds. (See `references/common-bugs.md` §2.)
   - Load `references/styling-conventions.md` while writing this — class naming, scope discipline, scheme/preset cascade order, and dark-theme conventions are codified there.
@@ -155,8 +155,8 @@ Renderer quality reminders (from real-session bugs):
 
 - **Defensive destructuring is mandatory.** Every renderer must handle `items: []`, optional fields = `undefined`, and missing nested objects. Crashes in production are usually here.
 - **Slugify any synthesized SVG ID.** Anything you'll reference via `url(#id)` — gradient defs, filters, masks, clip paths — must be slugified. Spaces or special characters break the lookup silently. Use `slugify` from `@portfolio/kit`. (See `references/common-bugs.md` §3.)
-- **Don't reuse short single-word IDs** (`top`, `main`, `home`) for layout tricks like fixed-position scroll anchors. `ensureSectionId(section.id, 'top')` will collide with anything CSS-targets via `[id='top']`. (See `references/common-bugs.md` §4.)
-- **Gate JS-driven motion on `useMotionPreference()`.** CSS `@media (prefers-reduced-motion)` doesn't stop `requestAnimationFrame` loops or framer-motion `useTransform` outputs. Each animation entry point needs an explicit `if (reduceMotion) return;` short-circuit. (See `references/common-bugs.md` §8.)
+- **Don't reuse short single-word IDs** (`top`, `main`, `home`) for layout tricks like fixed-position scroll anchors. Section ids come from the portfolio, `top` is a common hero id, and any of them will collide with anything CSS targets via `[id='top']`. `main` is reserved for your `<main id="main">`. (See `references/common-bugs.md` §4.)
+- **Gate JS-driven motion on `useMotionPreference()`.** It reads the site's policy from `MotionPolicyProvider` and the visitor's OS setting. CSS `@media (prefers-reduced-motion)` doesn't stop `requestAnimationFrame` loops or framer-motion `useTransform` outputs. Each animation entry point needs an explicit `if (reduceMotion) return;` short-circuit. (See `references/common-bugs.md` §8.)
 
 The clusters:
 
@@ -171,7 +171,7 @@ The clusters:
 
 - **Navigation.** Pick the affordance that matches the metaphor. Examples: TOC for editorial, hamburger overlay for single-page kinetic, sidebar for dense bento, marginalia for long-form. Use `deriveNavItems` from `@portfolio/kit` to build the nav model from the rendered sections — do not hand-author it.
   - Add `scroll-margin-top` to every section if the nav is fixed (Wave 1 should already have this, but verify after wiring nav).
-  - Brand-link "scroll to top" — use `window.scrollTo(0, 0)` via JS, not an `href="#top"` anchor. Single-word IDs collide with `ensureSectionId` fallbacks.
+  - Brand-link "scroll to top": use `window.scrollTo(0, 0)` via JS, not an `href="#top"` anchor. A portfolio's own section can be `top`.
 - **Screenshots.** Add `manifest.screenshots` entries. Capture static PNGs and place them under `apps/web/public/variants/<slug>/`. Cover at least one screenshot per scheme + preset combination so the screenshots reflect the variant's range. See `references/quality-gates.md` Gate F for the capture recipe (manual + automated).
 - **Print.** If `capabilities.print = true`, write the print stylesheet inside `styles.css` (`@media print { [data-variant='your-slug'] { … } }`) and verify in Chrome's print preview using `references/quality-gates.md` Gate D. The print rule MUST reset every theme-dependent token (`--kc-paper`, `--kc-card-bg`, `--kc-primary`, etc.) inside the print block — otherwise the active theme bleeds through and cards render unreadable. Gradient text needs both `color` and `-webkit-text-fill-color` reset to black. (See `references/common-bugs.md` §5 and §7.) If you cannot make print look reasonable, set `capabilities.print = false` instead of shipping a broken stylesheet.
 - **Performance tier honesty.** If you claimed `medium` or `heavy`, mobile-test it on a real device or throttled emulator. The audit does not catch a lying tier; the user does, on launch.
@@ -186,7 +186,7 @@ Run `references/audit-checklist.md` for the scripted gates and `references/quali
 
 1. `node skills/variant-developer/scripts/audit.mjs packages/variant-<slug>` — exits 0. Catches manifest schema breaks, missing `light`/`dark` themes, unsupported kinds, missing screenshots referenced by the manifest.
 2. `pnpm typecheck` — passes for the whole workspace, not just your package.
-3. `pnpm lint` — passes for the variant package (`pnpm --filter @portfolio/variant-<slug> lint`).
+3. `pnpm exec eslint packages/variant-<slug>`: passes for the variant package.
 4. `pnpm --filter @portfolio/web build` — succeeds. The host build is the integration test.
 5. `node skills/variant-developer/scripts/kit-dedup.mjs packages/variant-<slug>` — every candidate hoisted or marked `// LOCAL: <reason>`.
 6. `pnpm --filter @portfolio/kit test` — kit tests pass (relevant if you hoisted in Wave 1.5).
@@ -196,14 +196,14 @@ Run `references/audit-checklist.md` for the scripted gates and `references/quali
 
 These are the gates that _catch what compiles fine but looks broken_. Each one corresponds to a real bug class that escaped a previous build:
 
-- **Gate A — Visual sanity.** `scripts/visual-companion/start.sh --mode preview --variant <slug>`, open `/sample?variant=<slug>`, confirm CSS reaches the page. Catches "host CSS injection" failures.
-- **Gate B — Theme × scheme × typography matrix.** ≥ 9 screenshots across the meaningful combinations. Catches contrast bugs that only surface in non-default schemes/themes.
-- **Gate C — Reduced-motion programmatic verification.** Pixel-sample, transform-diff, text-diff. Catches motion that wasn't actually disabled.
-- **Gate D — Print preview.** Verify the print stylesheet against the new sections. Catches theme-token leaks into print.
-- **Gate F — Screenshot capture.** PNGs exist on disk where the manifest claims.
-- **Gate G — Fidelity comparison vs reference** (port-only). Every box in DESIGN.md's `## Fidelity targets` is checked or has an inline justification for being intentionally dropped.
-- **Gate H — Real-data testing.** Test against the user's actual `portfolio.yml`, not just `portfolio.example.yml`. Long names, missing optional fields, non-ASCII characters.
-- **Gate I — Mobile breakpoint sweep.** 375×667 and 430×932 viewports.
+- **Gate A: Visual sanity.** `scripts/visual-companion/start.sh --mode preview --variant <slug>`, open `/sample?variant=<slug>`, confirm CSS reaches the page. Catches "host CSS injection" failures.
+- **Gate B: Theme × scheme × typography matrix.** ≥ 9 screenshots across the meaningful combinations. Catches contrast bugs that only surface in non-default schemes/themes.
+- **Gate C: Reduced-motion programmatic verification.** Pixel-sample, transform-diff, text-diff. Catches motion that wasn't actually disabled.
+- **Gate D: Print preview.** Verify the print stylesheet against the new sections. Catches theme-token leaks into print.
+- **Gate F: Screenshot capture.** PNGs exist on disk where the manifest claims.
+- **Gate G: Fidelity comparison vs reference** (port-only). Every box in DESIGN.md's `## Fidelity targets` is checked or has an inline justification for being intentionally dropped.
+- **Gate H: Real-data testing.** Test against the user's actual pair, not just `portfolio.example.yml`. Long names, missing optional fields, non-ASCII characters, and a right-to-left `direction`.
+- **Gate I: Mobile breakpoint sweep.** 375×667 and 430×932 viewports.
 
 See `references/quality-gates.md` for the full recipes. Each gate has explicit pass/fail criteria and (where applicable) DevTools console snippets.
 
@@ -258,7 +258,7 @@ Environment-specific facts that bite agents who skip the references. For the ful
 
 ### IDs
 
-- **Don't use single-word reserved IDs** (`top`, `main`, `home`) for layout tricks. `ensureSectionId(section.id, 'top')` returns `'top'` when the hero has no explicit id; CSS rules targeting `[id='top']` will then collide with the hero `<section>`. Use class-based selectors or namespaced IDs (`kc-page-top`). (`common-bugs.md` §4)
+- **Don't use single-word reserved IDs** (`top`, `main`, `home`) for layout tricks. Every section's DOM id is its portfolio `id`, and a hero is often `top`, so CSS rules targeting `[id='top']` collide with the hero `<section>`. Use class-based selectors or namespaced IDs (`kc-page-top`). (`common-bugs.md` §4)
 - **Slugify any synthesized SVG ID** referenced via `url(#id)` (gradient defs, filters, masks, clip paths). Spaces or special characters break the lookup silently. Use `slugify` from `@portfolio/kit`. (`common-bugs.md` §3)
 
 ### Print
@@ -288,7 +288,7 @@ Environment-specific facts that bite agents who skip the references. For the ful
 When all gates pass:
 
 - Push `DESIGN.md` and the variant package on the same branch as the PR. The contract and the implementation must travel together.
-- Tell the user how to see the variant: `scripts/visual-companion/start.sh --mode preview --variant <slug>`, then `/sample?variant=<slug>`. It renders the bundled sample; the host renders their own portfolio in the variant once the site document selects one (#4).
+- Tell the user how to see the variant: `scripts/visual-companion/start.sh --mode preview --variant <slug>`, then `/sample?variant=<slug>`. It renders the bundled sample. To render their own portfolio in it, set `appearance.variant` in `config/site.yml`.
 - Don't run `pnpm dev` for them unless they ask. Their dev environment is theirs to control.
 
 That's the skill. Design, implement in waves, audit, hand off, stop.
@@ -333,4 +333,4 @@ Distilled from real builds. Each item exists because skipping it cost an iterati
 
 8. **Defensive renderer destructuring is mandatory, not optional.** Every renderer handles `items: []`, optional fields = `undefined`, missing nested objects. The host doesn't filter empty sections.
 
-9. **Sign off the variant against the user's `portfolio.yml`, not the example.** This is what the user sees on launch. Every other dataset is a dress rehearsal.
+9. **Sign off the variant against the user's own pair, not the examples.** This is what the user sees on launch. Every other dataset is a dress rehearsal.
