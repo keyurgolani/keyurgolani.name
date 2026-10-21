@@ -1,8 +1,8 @@
 // @portfolio/variant-contract (#5): the variant contract, version 2. This
 // root entry imports only zod and @portfolio/schema, reads no environment,
-// and runs in a browser, so the host, #7's preview frame, and #9's in-browser
-// render share it. Discovery, code generation, and the source audit go in a
-// Node-only ./node subpath (Slice 3).
+// needs no Web Crypto, and runs in a browser, so the host, #7's preview
+// frame, and #9's in-browser render share it. Discovery, code generation, and
+// the source audit go in a Node-only ./node subpath (Slice 3).
 
 export {
   CONTRACT_MAJOR,
@@ -89,7 +89,8 @@ export {
 } from './validators';
 export {
   buildRenderInput,
-  pairSeed,
+  viewSeed,
   type RenderInputArgs,
   type VariantRenderInput,
 } from './render-input';
+export { sha256 } from './sha256';

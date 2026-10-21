@@ -2,27 +2,39 @@
 // contract): one JSON-serializable input, built the same way by the host, by
 // #7's preview frame, and by #9's render in the visitor's browser. So the
 // builder is pure and browser-safe: no Node module, no environment, no clock,
-// and no network. The caller passes the time.
+// no network, and no Web Crypto, which plain-HTTP pages lack. The caller
+// passes the time.
 
 import {
   canonicalize,
   type DisplayMode,
   type MotionPolicy,
-  type ParsedPair,
   type PublicPortfolio,
   type PublicView,
   type SiteFeatures,
   type VisitorControls,
 } from '@portfolio/schema';
 import { contentIndex, materializeControls, type ControlValues } from './controls';
-import type { VariantManifest } from './manifest-schema';
+import type { VariantManifest, ViewDeclaration } from './manifest-schema';
 import { normalizeBasePath, type RouteTarget } from './routes';
+import { sha256 } from './sha256';
 import { CONTRACT_VERSION } from './version';
 
 export interface VariantRenderInput {
   readonly contract: typeof CONTRACT_VERSION;
   /** The rendering variant's id. */
   readonly variant: string;
+  /** What the rendering variant's manifest declares that rendering reads, so a variant needn't import its manifest. */
+  readonly capabilities: {
+    /** The kinds the variant renders bespoke. Every other kind it doesn't skip renders shared. */
+    readonly renderedKinds: readonly string[];
+    /** The kinds the variant deliberately doesn't render. */
+    readonly unsupportedKinds: readonly string[];
+    /** Its views, for href(). */
+    readonly views: readonly ViewDeclaration[];
+    /** Its enhancements, for loadEnhancement(). */
+    readonly enhancements: NonNullable<VariantManifest['enhancements']>;
+  };
   /** Visible content only: no hidden section and no unregistered extension data. */
   readonly portfolio: PublicPortfolio;
   /** How the site presents it. The appearance ids are #19's to resolve. */
@@ -48,7 +60,7 @@ export interface VariantRenderInput {
   readonly env: {
     /** The request time, truncated to the UTC day, as an ISO string. */
     readonly now: string;
-    /** A number fixed by the pair, for decoration that must not change between renders. */
+    /** A number fixed by the visible content, for decoration that must not change between renders. */
     readonly seed: number;
   };
   readonly ids: {
@@ -60,7 +72,6 @@ export interface VariantRenderInput {
 }
 
 export interface RenderInputArgs {
-  readonly pair: ParsedPair;
   /** The pair's public view, from toPublicView(). */
   readonly view: PublicView;
   /** The rendering variant's manifest. */
@@ -78,8 +89,8 @@ export interface RenderInputArgs {
 const ID_PREFIX = /^(?:[a-z][a-z0-9-]*-)?$/;
 
 /** Builds a variant's render input. It throws when an argument isn't what the type says. */
-export async function buildRenderInput(args: RenderInputArgs): Promise<VariantRenderInput> {
-  const { pair, view, manifest, route } = args;
+export function buildRenderInput(args: RenderInputArgs): VariantRenderInput {
+  const { view, manifest, route } = args;
   const origin = new URL(args.origin).origin;
   if (origin !== args.origin) {
     throw new TypeError('The origin is a scheme, host, and port alone, such as https://jane.name.');
@@ -101,6 +112,12 @@ export async function buildRenderInput(args: RenderInputArgs): Promise<VariantRe
   return {
     contract: CONTRACT_VERSION,
     variant: manifest.id,
+    capabilities: {
+      renderedKinds: manifest.renderedKinds,
+      unsupportedKinds: manifest.unsupportedKinds,
+      views: manifest.routes.views,
+      enhancements: manifest.enhancements ?? [],
+    },
     portfolio: view.portfolio,
     presentation: {
       displayMode: site.appearance.displayMode,
@@ -115,17 +132,17 @@ export async function buildRenderInput(args: RenderInputArgs): Promise<VariantRe
     derived: {},
     media: {},
     appearance: null,
-    env: { now: day.toISOString(), seed: await pairSeed(pair) },
+    env: { now: day.toISOString(), seed: viewSeed(view) },
     ids: { prefix, main: `${prefix}main` },
   };
 }
 
 /**
- * The first 8 hex digits of the SHA-256 of the pair's canonical JSON, as an
- * integer. The same pair always gives the same seed, in every runtime.
+ * The first 8 hex digits of the SHA-256 of the public view's canonical JSON,
+ * as an integer. The same visible content always gives the same seed, in
+ * every runtime, and an edit to a hidden section changes nothing.
  */
-export async function pairSeed(pair: ParsedPair): Promise<number> {
-  const bytes = new TextEncoder().encode(canonicalize(pair));
-  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
+export function viewSeed(view: PublicView): number {
+  const digest = sha256(new TextEncoder().encode(canonicalize(view)));
   return ((digest[0]! << 24) | (digest[1]! << 16) | (digest[2]! << 8) | digest[3]!) >>> 0;
 }
