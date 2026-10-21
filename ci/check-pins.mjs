@@ -5,7 +5,8 @@
 // in workflows (containers, services, and action inputs such as setup-qemu's
 // `image` and setup-buildx's `driver-opts: image=`), Dockerfiles, and Compose
 // files. Also keeps the Playwright container on the @playwright/test release
-// and CI's NODE_VERSION on the Dockerfile's Node release.
+// and CI's NODE_VERSION on the Dockerfile's Node release, and makes every
+// docker/metadata-action step say whether it moves `latest`.
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -44,6 +45,25 @@ export function driverOptImages(value) {
     .map((part) => part.slice('image='.length));
 }
 
+/**
+ * @returns {string | null} why a docker/metadata-action `flavor` input leaves
+ * the `latest` tag to its default. That default, `latest=auto`, adds `latest`
+ * on every semver tag push, whatever the `tags` rules say, so a workflow
+ * must state `latest=false` or `latest=true`.
+ */
+export function latestFlavorProblem(flavor) {
+  const entries = String(flavor ?? '')
+    .split(/[\n,]/)
+    .map((part) => part.trim())
+    .filter((part) => part.startsWith('latest='));
+  if (entries.length === 0) return 'has no latest= setting, so latest=auto adds latest on tags';
+  const values = entries.map((part) => part.slice('latest='.length));
+  if (values.some((value) => value !== 'true' && value !== 'false')) {
+    return `sets latest=${values.find((value) => value !== 'true' && value !== 'false')}, so latest can move on tags`;
+  }
+  return null;
+}
+
 /** Parses YAML and returns the plain data plus the line of any node path. */
 function yamlDoc(text) {
   const lineCounter = new LineCounter();
@@ -74,6 +94,16 @@ export function checkWorkflow(text, file) {
     if (inputs['driver-opts'] !== undefined) {
       for (const image of driverOptImages(inputs['driver-opts'])) {
         check(image, [...at, 'with', 'driver-opts'], `${action} driver-opts image=`, imageProblem);
+      }
+    }
+    if (action === 'docker/metadata-action') {
+      const problem = latestFlavorProblem(inputs.flavor);
+      if (problem) {
+        problems.push({
+          file,
+          line: lineAt([...at, 'with', 'flavor']) ?? lineAt([...at, 'uses']),
+          message: `docker/metadata-action flavor ${problem}`,
+        });
       }
     }
   };

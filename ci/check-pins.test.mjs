@@ -8,6 +8,7 @@ import {
   checkWorkflow,
   driverOptImages,
   imageProblem,
+  latestFlavorProblem,
   usesProblem,
 } from './check-pins.mjs';
 
@@ -212,4 +213,46 @@ test('the Playwright container must match @playwright/test', () => {
   assert.deepEqual(messages(checkPlaywrightImage(text, 'ci.yml', '1.59.0')), [
     'Playwright image v1.58.2 does not match @playwright/test 1.59.0',
   ]);
+});
+
+test('metadata-action flavor must state latest=false or latest=true', () => {
+  assert.match(latestFlavorProblem(undefined), /no latest= setting/);
+  assert.match(latestFlavorProblem('prefix=v'), /no latest= setting/);
+  assert.match(latestFlavorProblem('latest=auto'), /sets latest=auto/);
+  assert.equal(latestFlavorProblem('latest=false'), null);
+  assert.equal(latestFlavorProblem('prefix=v,onlatest=true\nlatest=true'), null);
+});
+
+test('workflows: a semver-tag metadata-action without a latest flavor is refused', () => {
+  // The shape that moved latest on the v0.1.1 tag push: semver tag rules and
+  // a raw latest rule gated on the default branch, but no flavor, so
+  // latest=auto added latest on the tag anyway.
+  const workflow = `
+on:
+  push:
+    tags: ['v*.*.*']
+jobs:
+  publish:
+    steps:
+      - uses: docker/metadata-action@${SHA}
+        with:
+          images: ghcr.io/owner/repo
+          tags: |
+            type=semver,pattern={{version}}
+            type=raw,value=latest,enable={{is_default_branch}}
+      - uses: docker/metadata-action@${SHA}
+        with:
+          images: ghcr.io/owner/repo
+          tags: type=sha,format=short
+          flavor: |
+            latest=false
+`;
+  const problems = checkWorkflow(workflow, 'publish.yml');
+  assert.deepEqual(messages(problems), [
+    'docker/metadata-action flavor has no latest= setting, so latest=auto adds latest on tags',
+  ]);
+  assert.deepEqual(
+    problems.map((p) => p.line),
+    [8],
+  );
 });
