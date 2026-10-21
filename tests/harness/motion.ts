@@ -102,7 +102,9 @@ export async function scrollTops(page: Page, href: string): Promise<ScrollTops> 
     window.addEventListener('scroll', record, { passive: true });
   }, id);
   await page.locator(`nav a[href="${href}"]`).first().click();
-  let last = await top();
+  // Settled once two samples 150 ms apart agree. The first sample never
+  // counts, since a smooth scroll can take a frame or two to start moving.
+  let last: number | undefined;
   await expect
     .poll(
       async () => {
@@ -119,7 +121,7 @@ export async function scrollTops(page: Page, href: string): Promise<ScrollTops> 
     window.removeEventListener('scroll', page.__scrollTops!.record);
     return page.__scrollTops!.tops;
   });
-  const settled = last;
+  const settled = last!;
   return {
     before,
     first: tops[0] ?? settled,
