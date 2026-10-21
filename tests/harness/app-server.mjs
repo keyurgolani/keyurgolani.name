@@ -43,9 +43,13 @@ const LOG_TAIL = 40;
 // left is killed and removed when this process exits.
 const running = new Map();
 process.on('exit', () => {
-  for (const [child, dir] of running) {
-    child.kill('SIGKILL');
-    rmSync(dir, { recursive: true, force: true });
+  for (const child of running.keys()) child.kill('SIGKILL');
+  for (const dir of running.values()) {
+    try {
+      rmSync(dir, { recursive: true, force: true });
+    } catch {
+      // A directory that can't go now is left for the OS to clear.
+    }
   }
 });
 
