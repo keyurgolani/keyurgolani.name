@@ -60,7 +60,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
-import { detectFormat, DOCUMENT_MAX_BYTES, redactSecrets } from '@portfolio/schema';
+import { detectFormat, DOCUMENT_MAX_BYTES, parseSource, redactSecrets } from '@portfolio/schema';
 import { formatMigration, migrate, parseSet } from '@portfolio/schema/migrate';
 import { formatRecords, loadPair, pairFileNames } from '@portfolio/schema/node';
 
@@ -311,16 +311,39 @@ async function validateCommand(args) {
 
   const base = process.env.INIT_CWD || process.cwd();
   const dir = positionals[0] === undefined ? CONFIG_DIR : path.resolve(base, positionals[0]);
-  const result = loadPair(dir, {
+  const loaded = loadPair(dir, {
     ...(await hostCatalog()),
     ...(origin ? { canonicalOrigin: origin } : {}),
   });
+  const sample = await sampleIdentity(loaded);
+  const result = sample ? { ...loaded, diagnostics: [...loaded.diagnostics, sample] } : loaded;
   const report = values.json
     ? `${JSON.stringify(jsonReport(result), null, 2)}\n`
     : textReport(result, shownPath(base, dir), origin !== undefined);
   // Records never quote a value, and this keeps it that way for the terminal.
   process.stdout.write(redactSecrets(report));
   return result.ok ? 0 : 1;
+}
+
+/**
+ * A warning when the portfolio is still the bundled sample: the pair alone is
+ * valid, and production refuses to start with it (#1), which no record says.
+ */
+async function sampleIdentity(result) {
+  if (!result.ok) return null;
+  const { isSampleIdentity } = await import('../src/lib/sample-identity.ts');
+  if (!isSampleIdentity(result.pair.portfolio.identity.name)) return null;
+  const { text, format } = result.sources.portfolio;
+  const parsed = parseSource(text, format);
+  return {
+    code: 'sample.identity',
+    severity: 'warning',
+    document: 'portfolio',
+    pointer: '/identity/name',
+    ...(parsed.ok ? parsed.locate(['identity', 'name']) : {}),
+    message: "/identity/name is the bundled sample's. Production refuses to start with it.",
+    remediation: 'Replace the sample with your own portfolio, starting with identity.name.',
+  };
 }
 
 /** The records as startup logs them and Studio shows them, with the file names. */

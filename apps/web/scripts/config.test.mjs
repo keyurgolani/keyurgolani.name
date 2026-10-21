@@ -282,3 +282,40 @@ test('validate names the files, the directory, and a bad argument', (t) => {
     assert.match(run.stderr, /Usage: pnpm config:validate \[dir\]/, args.join(' '));
   }
 });
+
+test('validate warns when the portfolio is still the bundled sample, which production refuses', (t) => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'config-validate-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const root = fileURLToPath(new URL('../../../', import.meta.url));
+  copyFileSync(path.join(root, 'portfolio.example.yml'), path.join(dir, 'portfolio.yml'));
+  copyFileSync(path.join(root, 'site.example.yml'), path.join(dir, 'site.yml'));
+
+  const text = validate(dir, '.');
+  assert.equal(text.code, 0, text.stderr);
+  assert.match(
+    text.stdout,
+    /^portfolio\.yml:\d+:\d+: sample\.identity \(warning\) at \/identity\/name\n/m,
+  );
+  assert.match(text.stdout, /Production refuses to start with it\./);
+  assert.match(text.stdout, /\nportfolio\.yml and site\.yml are valid, with 1 warning\.\n/);
+
+  const json = JSON.parse(validate(dir, '.', '--json').stdout);
+  assert.equal(json.ok, true);
+  assert.deepEqual(
+    json.diagnostics.map(({ code, severity, document, pointer }) => [
+      code,
+      severity,
+      document,
+      pointer,
+    ]),
+    [['sample.identity', 'warning', 'portfolio', '/identity/name']],
+  );
+
+  // With a name of your own, the warning is gone.
+  const own = readFileSync(path.join(dir, 'portfolio.yml'), 'utf8').replace(
+    'name: Anamika Devi',
+    'name: Rowan Hale',
+  );
+  writeFileSync(path.join(dir, 'portfolio.yml'), own);
+  assert.match(validate(dir, '.').stdout, /^portfolio\.yml and site\.yml are valid\.\n/);
+});
