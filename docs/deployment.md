@@ -4,13 +4,13 @@ The server runs one deployment profile, chosen by `PORTFOLIO_PROFILE` at startup
 
 - `read-only` serves your portfolio from a mounted directory, with no editing surface.
 - `demo` serves the bundled sample pair, for a product demo, and asks crawlers to index nothing.
-- `owner` adds Studio, drafts, and revisions to your portfolio. It doesn't start yet: it needs an authentication provider, and none ships.
+- `owner` adds Studio, drafts, and revisions to your portfolio, behind a sign-in with your password. It starts once the password's hash and a data directory pass their checks ([Owner authentication](#owner-authentication)).
 
 Run it in a container (recommended) or on Node. The browser editor, the variant gallery, the variant preview pages, and their write APIs are gone in every profile, `pnpm dev` included. Edit `config/portfolio.yml` and `config/site.yml` instead: `pnpm dev` picks up each save, and a production server picks them up when it restarts. While `config/` holds neither, `pnpm dev` renders the bundled examples; a production server refuses to start. `pnpm dev` and `pnpm start` listen on `127.0.0.1` only.
 
 ## Profiles
 
-What each profile grants. `public` is anyone, `session` is a signed-in owner (no release can sign in yet), and `absent` means the profile has no page, route, or operation for it, so a request gets a 404. A unit test keeps this table in step with `apps/web/src/server/capabilities.ts`.
+What each profile grants. `public` is anyone, `session` is a signed-in owner, and `absent` means the profile has no page, route, or operation for it, so a request gets a 404. A unit test keeps this table in step with `apps/web/src/server/capabilities.ts`.
 
 <!-- profile-matrix:start -->
 
@@ -195,7 +195,7 @@ The server reads the hash from the file `PORTFOLIO_AUTH_PASSWORD_HASH_FILE` name
 
 ### Signing in
 
-A sign-in posts the password to `/api/studio/auth.login`, as JSON or as a form post, from the site's own origin: the request needs an `Origin` exactly equal to `PORTFOLIO_ORIGIN`. A JSON sign-in gets the session in the JSON envelope, and a form post a 303: to where the owner was going, or back to `/studio/sign-in` with a `state` saying why. The sign-in page at that path, which makes the form post, is still to come in #2; until then the path answers 404. Where the owner was going is `returnTo`, a path under `/studio`, from the form's `returnTo` field, or else the `returnTo` in the URL, and `/studio` when it's missing or unsafe. Every wrong, missing, or malformed password costs one verification and gets the same answer.
+A sign-in posts the password to `/api/studio/auth.login`, as JSON or as a form post, from the site's own origin: the request needs an `Origin` exactly equal to `PORTFOLIO_ORIGIN`. A JSON sign-in gets the session in the JSON envelope, and a form post a 303: to where the owner was going, or back to `/studio/sign-in` with a `state` saying why. The sign-in page at that path makes the form post, and works without JavaScript; with it, the page posts JSON and shows each state in place, and a toggle can show the password. It asks for the password alone, with the username fixed to `owner` for password managers. Under `demo` and `read-only` the page answers as a path no route matches, with the same 404 page and headers, and every auth route answers the 404 envelope of an operation the profile lacks. Where the owner was going is `returnTo`, a path under `/studio` other than the sign-in page itself, from the form's `returnTo` field, or else the `returnTo` in the URL, and `/studio` when it's missing or unsafe. Every wrong, missing, or malformed password costs one verification and gets the same answer.
 
 A form post whose body can't be read, because it isn't UTF-8, gives a field twice, or is over 4 KB, runs no verification and gets a 303 to `/studio/sign-in?state=error`, keeping the URL's `returnTo`. A JSON sign-in whose body isn't UTF-8, doesn't parse, or is over 4 KB gets 400 `invalid_input`.
 
@@ -206,13 +206,15 @@ Sign-in has limits, kept in memory, so a restart clears them, and none locks the
 - Once the last hour has seen 50 failures from anywhere, every attempt waits 2 seconds before its verification. It waits before it takes a verification slot, so waiting attempts never hold one, and at most 16 wait at once: another gets 429 with `Retry-After: 1` at once.
 - At most 2 verifications run at once, since each takes 128 MiB at the hash's floor. A third attempt gets 429 with `Retry-After: 1`.
 
-A throttled form post gets a 303 to `/studio/sign-in?state=rate_limited` with `retryAfter`, in seconds, instead of the 429. Being turned away never counts as a failure, so nobody can get your own address blocked by crowding sign-in.
+A throttled form post gets a 303 to `/studio/sign-in?state=rate_limited` with `retryAfter`, in seconds, instead of the 429. The sign-in page's form carries `returnTo` in its URL as well as its field, so a post turned away before its body is read still keeps where the owner was going. Being turned away never counts as a failure, so nobody can get your own address blocked by crowding sign-in.
 
 The per-source limits need `PORTFOLIO_TRUSTED_PROXY_HOPS`. With `0`, nothing names a source, so sign-in has only the global limits: one client that keeps both verification slots busy, or all 16 places to wait taken, gets the owner's own sign-in a 429, and `owner` warns at startup. Run it behind a proxy with the hop count set ([Reverse proxy and HTTPS](#reverse-proxy-and-https)). Each source then has its own limit, one of the 16 places, and one of the 2 verification slots at most, but many sources, such as rotating IPv6 /64s, can still keep them all taken: sign-in then answers 429 until a place frees, and trying again gets you in.
 
 ### Sessions
 
-A sign-in starts a session, named by a random token that only the browser's cookie holds. The server keeps the token's SHA-256 digest, so the data directory holds no token. A session lasts 60 minutes idle and 12 hours in all, however busy. `PORTFOLIO_AUTH_SESSION_IDLE_MINUTES` (5 to 120) and `PORTFOLIO_AUTH_SESSION_MAX_HOURS` (1 to 24) change those, and any other value stops the server. Only a Studio command, or a Studio page the owner opens from the site or the address bar, counts as use, never a query, a prefetch, or a frame, so a Studio tab left open still signs out, and a page on another subdomain of the same site, whose requests your browser sends the cookie with, can't keep a session alive. #2 brings the sign-in page and a placeholder `/studio`, which #8 replaces with Studio itself. At most 5 sessions exist at once: a sixth sign-in ends the least recently used.
+A sign-in starts a session, named by a random token that only the browser's cookie holds. The server keeps the token's SHA-256 digest, so the data directory holds no token. A session lasts 60 minutes idle and 12 hours in all, however busy. `PORTFOLIO_AUTH_SESSION_IDLE_MINUTES` (5 to 120) and `PORTFOLIO_AUTH_SESSION_MAX_HOURS` (1 to 24) change those, and any other value stops the server. Only a Studio command, or a Studio page the owner opens from the site or the address bar, counts as use, never a query, a prefetch, or a frame, so a Studio tab left open still signs out, and a page on another subdomain of the same site, whose requests your browser sends the cookie with, can't keep a session alive. At most 5 sessions exist at once: a sixth sign-in ends the least recently used.
+
+Every Studio page but sign-in needs a session. A request for one with no session cookie gets a 303 to `/studio/sign-in`, keeping where it was going in `returnTo`, and one whose cookie no longer counts gets a 307 there with `state=session_ended`. `/studio` is a placeholder that says you're signed in and has a Sign out button; #8 replaces it with Studio itself.
 
 A session ends at sign-out, when it's revoked, when it expires, when the password hash changes, and when `revoke-sessions` runs.
 
@@ -313,7 +315,9 @@ Next writes its own lines to the same streams, as plain text: its startup banner
 
 ## Response headers
 
-Every response the app sends carries `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, and `Content-Security-Policy: frame-ancestors 'none'`, so no other site can frame the pages, and a fresh `X-Request-Id`. Under `demo`, each adds `X-Robots-Tag: noindex`. Next's redirect for a trailing slash has none of them: Next answers `/sample/` with a 308 to `/sample`, whose body is only that path, before the app sees the request. `Strict-Transport-Security` belongs at the TLS proxy (see [Reverse proxy and HTTPS](#reverse-proxy-and-https)).
+Every response the app sends carries `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, and `Content-Security-Policy: frame-ancestors 'none'`, so no other site can frame the pages, and a fresh `X-Request-Id`. Under `demo`, each adds `X-Robots-Tag: noindex`.
+
+Studio is the exception. Under `owner`, every `/studio` response, however the path is cased or percent-encoded (`/Studio` and `/%73tudio` too), gets its own Content-Security-Policy with a nonce made for that response: `default-src 'self'; script-src 'self' 'nonce-<n>' 'strict-dynamic'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; frame-src 'self'; frame-ancestors 'none'; form-action 'self'; base-uri 'none'; object-src 'none'`. Studio's pages have their own layout, with none of the site's inline script or JSON-LD, so the only scripts there are Next's, which carry the nonce. Those responses, and every `/api/studio` response in every profile, send `Referrer-Policy: same-origin` instead of the site's, since `no-referrer` would empty the `Origin` of the sign-in form's post, `Cross-Origin-Resource-Policy: same-origin`, so a page on another origin, the demo's included, can't load one to tell whether the owner is signed in, and `Cache-Control` with `no-store`. Under `demo` and `read-only`, which have no Studio, `/studio` and `/studio/sign-in` answer as a path no route matches: the same 404 page, with the same headers. Next's redirects for a trailing or repeated slash have none of these headers: Next answers `/sample/` and `//sample` with a 308 to `/sample`, whose body is only that path, before the app sees the request. `Strict-Transport-Security` belongs at the TLS proxy (see [Reverse proxy and HTTPS](#reverse-proxy-and-https)).
 
 ## Plain Node
 
