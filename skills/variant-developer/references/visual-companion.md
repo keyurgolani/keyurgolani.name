@@ -1,9 +1,8 @@
 # Visual companion guide
 
-> Browser-based companion for showing palette boards, type pairings, and
-> section sketches during DESIGN.md (mockup-mode), then live screenshots
-> during implementation (preview-mode). Loaded on demand by the agent
-> after the user opts in.
+> Browser-based companion for showing layout boards and section sketches
+> during DESIGN.md (mockup-mode), then live renders during implementation
+> (preview-mode). Loaded on demand by the agent after the user opts in.
 
 ## When to use
 
@@ -11,20 +10,21 @@ Decide per-question, not per-session. The test: **would the user understand this
 
 **Use the browser** when the content itself is visual:
 
-- Palette comparisons (paper / ink / accent on real type sample)
-- Type pairings (display + body candidates rendered with real webfonts)
-- Section sketches (wireframe layouts under the chosen metaphor)
-- Density grids (minimal / balanced / dense visual options)
-- Live preview screenshots in preview-mode
+- Section sketches (wireframe layouts under the chosen idea)
+- Density grids (how much fits on a screen)
+- Navigation and reveal options (a table of contents, a sidebar, an overlay)
+- Live preview renders in preview-mode
 
 **Use the terminal** when the content is text or conceptual:
 
-- Metaphor selection (the answer is words)
+- Choosing the composition idea (the answer is words)
 - A/B/C tradeoff questions
-- Manifest field decisions (typography character, motion intensity, etc. — these are enums)
-- Coverage map decisions (which kinds get bespoke vs. fallback — list-based)
+- Manifest field decisions (composition family, motion intent: they're enums)
+- Coverage map decisions (which kinds render bespoke and which shared: a list)
 
-A question _about_ a UI topic is not automatically a visual question. "Which performance tier should I pick?" is a conceptual question — terminal. "Which of these three palette boards feels closest to the metaphor?" is a visual question — browser.
+A question _about_ a UI topic isn't automatically a visual question. "Which performance tier should I pick?" is conceptual: terminal. "Which of these three layouts fits the idea?" is visual: browser.
+
+Palettes and type pairings aren't a variant's to choose: they're the appearance system's (#19). The frame template still defines `.palette-board` and `.type-pairing` classes for that work; this skill doesn't use them.
 
 ## The disclaimer pattern
 
@@ -34,7 +34,7 @@ The companion is OFF by default. Don't launch it without explicit user consent.
 
 Send this as **its own message**, with no clarifying questions, no context summary, no other content alongside:
 
-> Some of this work might be easier to discuss visually. I can spin up a local browser companion — palette boards and section sketches now (mockup-mode), live screenshots later (preview-mode). The companion is token-intensive, so I won't launch it without your OK. Want to use it?
+> Some of this work might be easier to discuss visually. I can spin up a local browser companion: layout boards and section sketches now (mockup-mode), live renders later (preview-mode). The companion is token-intensive, so I won't launch it without your OK. Want to use it?
 
 Wait for the user's response. If they decline, proceed entirely in the terminal — the skill works fully without the companion.
 
@@ -53,7 +53,7 @@ Tell the user to open the URL.
 
 ### The loop
 
-1. **Write a content file** to `screen_dir`. Use a semantic filename like `palette.html`, `type-pairing.html`, `section-sketch-hero.html`. **Never reuse filenames** — each new screen gets a fresh file. The server serves the newest file by mtime.
+1. **Write a content file** to `screen_dir`. Use a semantic filename like `layout.html`, `navigation.html`, `section-sketch-hero.html`. **Never reuse filenames**: each new screen gets a fresh file. The server serves the newest file by mtime.
 2. **End your turn** with a brief description of what's now on screen, plus a reminder of the URL.
 3. **On your next turn**, read `state_dir/events`. Each line is a JSON click event. The user's terminal text is primary; the events log adds structured detail.
 
@@ -66,52 +66,6 @@ If your file starts with `<!DOCTYPE` or `<html`, the server serves it as-is and 
 ### CSS classes available in fragments
 
 The classes below are defined in `assets/visual-companion/frame-template.html`. Use them in your fragments.
-
-#### Palette board
-
-```html
-<h2>Pick a default color scheme for the metaphor</h2>
-<p class="label">Click one. The others are still good options for additional schemes.</p>
-<div class="palette-board">
-  <div class="palette-card" data-choice="warm" onclick="toggleSelect(this)">
-    <div class="palette-swatch">
-      <div style="background:#fbfaf6; color:#1a1a1a">paper</div>
-      <div style="background:#1a1a1a; color:#fbfaf6">ink</div>
-      <div style="background:#b54a32; color:#fff">accent</div>
-    </div>
-    <div class="palette-name">Warm Sienna</div>
-    <div class="palette-meta">Cream paper · deep ink · sienna accent</div>
-    <div class="palette-sample-heading" style="font-family:Fraunces,serif;color:#1a1a1a">
-      Editorial display
-    </div>
-    <div class="palette-sample-body" style="font-family:'Source Serif 4',serif;color:#1a1a1a">
-      Body sample over paper. Notice contrast.
-    </div>
-  </div>
-  <!-- 1-3 more palette-card elements -->
-</div>
-```
-
-Classes: `.palette-board` (container), `.palette-card` (each option), `.palette-swatch` (3-up color preview), `.palette-meta`, `.palette-name`, `.palette-sample-heading`, `.palette-sample-body`.
-
-#### Type pairing
-
-```html
-<h2>Display + body pairings for this scheme</h2>
-<div class="type-pairing">
-  <div class="type-card" data-choice="classic" onclick="toggleSelect(this)">
-    <div class="type-display" style="font-family:Fraunces,serif">Editorial Classic</div>
-    <div class="type-body" style="font-family:'Source Serif 4',serif">
-      Source Serif 4 reads beautifully at 17px with a 1.55 leading. The Fraunces display has
-      high-contrast curves that pair well with the upright serif body.
-    </div>
-    <div class="type-meta">display: Fraunces · body: Source Serif 4</div>
-  </div>
-  <!-- more type-card elements -->
-</div>
-```
-
-Classes: `.type-pairing` (container), `.type-card` (each option), `.type-display`, `.type-body`, `.type-meta`.
 
 #### Section sketch
 
@@ -191,19 +145,19 @@ Used in Phases 2–3, once the variant has actual code rendering through `apps/w
 
 ```bash
 skills/variant-developer/scripts/visual-companion/start.sh \
-  --mode preview --variant <slug>
+  --mode preview --variant <id>
 ```
 
-This runs `pnpm --filter @portfolio/web dev` with `PORTFOLIO_PROFILE=demo`, which renders the bundled sample in any registered variant. Once the dev server is up, tell the user to visit `http://localhost:3000/sample?variant=<slug>`. Add `&scheme=<id>` or `&typography=<id>` for a color scheme or typography preset the variant declares; an unknown variant is a 404.
+This runs `pnpm --filter @portfolio/web dev` with `PORTFOLIO_PROFILE=demo`, which renders the bundled sample in any registered variant. Once the dev server is up, tell the user to visit `http://localhost:3000/sample?variant=<id>`. An id the build doesn't register, and `fallback`, are a 404; `pnpm check:variants --package @portfolio/variant-<id>` says why it isn't registered.
 
 ### Matrix screenshots (optional)
 
 ```bash
 skills/variant-developer/scripts/visual-companion/start.sh \
-  --mode preview --variant <slug> --matrix
+  --mode preview --variant <id> --matrix
 ```
 
-This launches the dev server and, once `/api/health` answers, runs `preview-matrix.mjs` to capture `/sample?variant=<slug>` in every theme, in the variant's default scheme and typography, into `<repo-root>/.variant-preview/<slug>/`. An unregistered slug is a 404: the script says so and exits 1, as it does when the page renders another variant or a capture fails. For other combinations, run it again against the running server with `node skills/variant-developer/scripts/visual-companion/preview-matrix.mjs <slug> --scheme <id> --typography <id>`. A scheme or preset the variant doesn't declare renders its default, and the script warns.
+This launches the dev server and, once `/api/health` answers, runs `preview-matrix.mjs` to capture `/sample?variant=<id>` in light and dark at a desktop and a phone viewport, into `<repo-root>/.variant-preview/<id>/`. An unregistered id is a 404: the script says so and exits 1, as it does when the page renders another variant or a capture fails. Run it again against the running server with `node skills/variant-developer/scripts/visual-companion/preview-matrix.mjs <id>`.
 
 **Requires Playwright.** If Playwright isn't installed, the script prints the install commands and exits gracefully — the rest of preview-mode still works.
 
@@ -221,7 +175,7 @@ The agent reads the captured PNGs (if its harness supports image input) to inspe
 `state_dir/events` is JSONL — one JSON object per line. Each line is a click event:
 
 ```json
-{ "type": "click", "choice": "warm", "text": "Warm Sienna", "timestamp": 1714752000123 }
+{ "type": "click", "choice": "two-column", "text": "Two column, grid", "timestamp": 1714752000123 }
 ```
 
 The full stream shows the user's exploration path. They may click multiple options before settling. The last `choice` is typically the final answer, but the pattern of clicks can reveal hesitation worth probing.
@@ -232,8 +186,8 @@ The server clears `state_dir/events` whenever a new fragment file appears in `sc
 
 ## File naming
 
-- Use semantic names that describe what's on the screen: `palette.html`, `type-pairing.html`, `section-sketch-hero.html`, `density.html`.
-- For iterations on the same screen, use version suffixes: `palette-v2.html`, `palette-v3.html`.
+- Use semantic names that describe what's on the screen: `layout.html`, `navigation.html`, `section-sketch-hero.html`, `density.html`.
+- For iterations on the same screen, use version suffixes: `layout-v2.html`, `layout-v3.html`.
 - The server serves the newest file by modification time, so just writing a new file with a later timestamp is enough.
 
 ## Cleaning up

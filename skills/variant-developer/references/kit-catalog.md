@@ -40,47 +40,38 @@ If they disagree, the source wins.
 
 ## Motion (`@portfolio/kit`)
 
-| Export                  | Signature                                       | Use when                                                                  |
-| ----------------------- | ----------------------------------------------- | ------------------------------------------------------------------------- |
-| `MotionPolicyProvider`  | component `{ policy?: MotionPolicy, children }` | Wrapping the variant's page, with the `motionPolicy` from `VariantProps`. |
-| `useMotionPreference`   | `(policy?: MotionPolicy) => 'reduce' \| 'full'` | Reading the resolved motion mode in a client component.                   |
-| `shouldReduceMotion`    | `(policy: MotionPolicy, osReduce) => boolean`   | Synchronous server-side check or non-hook contexts.                       |
-| `ResolvedMotion` (type) | `'reduce' \| 'full'`                            | Annotating motion-aware props.                                            |
+| Export                  | Signature                                       | Use when                                                                   |
+| ----------------------- | ----------------------------------------------- | -------------------------------------------------------------------------- |
+| `MotionPolicyProvider`  | component `{ policy?: MotionPolicy, children }` | Wrapping a variant's client parts, with `input.presentation.motionPolicy`. |
+| `useMotionPreference`   | `(policy?: MotionPolicy) => 'reduce' \| 'full'` | Reading the resolved motion mode in a client component.                    |
+| `shouldReduceMotion`    | `(policy: MotionPolicy, osReduce) => boolean`   | Synchronous server-side check or non-hook contexts.                        |
+| `ResolvedMotion` (type) | `'reduce' \| 'full'`                            | Annotating motion-aware props.                                             |
 
-`MotionPolicy` is `respect-os` (the default: follow `prefers-reduced-motion`) or `reduce`. No policy animates past an OS reduce preference. The host passes the site's policy as `VariantProps.motionPolicy`. A variant wraps its page in `MotionPolicyProvider` with it, so every `useMotionPreference()` below reads it, and puts `data-motion-policy` on its root so its stylesheet can reduce CSS motion under `reduce` as it does under `prefers-reduced-motion`. A `policy` given to the hook, or a component's `motionPreference` prop, can only add a `reduce`: neither undoes the site's.
+`MotionPolicy` is `respect-os` (the default: follow `prefers-reduced-motion`) or `reduce`. No policy animates past an OS reduce preference. The site's policy reaches a variant as `input.presentation.motionPolicy`, and the host's presentation boundary carries it as `data-motion-policy`, so a stylesheet can reduce CSS motion under `reduce` as it does under `prefers-reduced-motion`. A variant wraps its client parts in `MotionPolicyProvider` with it, so every `useMotionPreference()` below reads it. A `policy` given to the hook, or a component's `motionPreference` prop, can only add a `reduce`: neither undoes the site's.
 
 ## Theme system (`@portfolio/kit`)
 
+Display modes are the appearance system's (#19). The host's layout paints the starting theme with `themeInitScript`; no page wraps a variant in `ThemeProvider` now, and a variant renders no theme toggle: #19's visitor control, in the `VisitorControlSlot`, replaces each variant's own. The provider stays for that control and for the `legacy/` packages.
+
 | Export                 | Signature                                                            | Use when                                                                                                                                                             |
 | ---------------------- | -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ThemeProvider`        | React component `{ children, defaultPreference?, supportedThemes? }` | The host wraps each page in it, fed the variant's `themes` and the site's display mode; a variant only calls `useTheme`.                                             |
-| `useTheme`             | `() => { preference, resolved, setPreference }`                      | Reading or changing the active theme inside a variant.                                                                                                               |
+| `ThemeProvider`        | React component `{ children, defaultPreference?, supportedThemes? }` | Holding a visitor's theme choice for a toggle: #19's visitor control, not a variant.                                                                                 |
+| `useTheme`             | `() => { preference, resolved, setPreference }`                      | Reading or changing the active theme inside a `ThemeProvider`.                                                                                                       |
 | `themeInitScript`      | `(defaultPreference?: ThemePreference) => string`                    | Inline `<script>` in `app/layout.tsx` to avoid theme flash on first paint: the stored choice, else the page's starting theme (the site's display mode).              |
 | `THEME_INIT_SCRIPT`    | string                                                               | `themeInitScript()` for a page that starts from `system`.                                                                                                            |
 | `resolveTheme`         | `(preference, supported, systemMatch) => ResolvedTheme`              | Resolving the active theme given a preference, a supported-themes list, and a system-preference callback; falls back to light/dark when bright/black are not listed. |
 | `ResolvedTheme` (type) | `'light' \| 'dark' \| 'bright' \| 'black'`                           | Annotating resolved theme props.                                                                                                                                     |
 
-## Manifest helpers (`@portfolio/kit`)
+## The manifest and the render input (`@portfolio/variant-contract`)
 
-| Export                                                                                                                         | Signature                                  | Use when                                                           |
-| ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------ | ------------------------------------------------------------------ |
-| `resolveColorScheme`                                                                                                           | `(manifest, requested?) => string \| null` | Resolving the active color-scheme id at render.                    |
-| `resolveTypographyPreset`                                                                                                      | `(manifest, requested?) => string \| null` | Same for typography presets.                                       |
-| `VariantManifest` / `VariantProps` / `VariantModule` (types)                                                                   | —                                          | Typing the manifest, render props, and module shape.               |
-| `Aesthetic`, `MotionIntensity`, `Density`, `TypographyCharacter`, `PerformanceTier`, `ColorScheme`, `TypographyPreset` (types) | —                                          | Annotating manifest values; see `manifest-contract.md` for fields. |
-
-## Fallback section (`@portfolio/kit`)
-
-| Export            | Signature                                | Use when                                                                                                                                                                |
-| ----------------- | ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `FallbackSection` | React component `{ section, portfolio }` | Routing a section kind through a generic typographic renderer. Use this in section dispatch when you don't have a bespoke renderer for a kind but still claim coverage. |
+The kit has no manifest types any more. `VariantManifest`, `VariantRenderInput`, `validateManifest`, and `buildRenderInput` are `@portfolio/variant-contract`'s; `references/manifest-contract.md` describes every field. A section kind without a bespoke renderer renders through `renderSection`'s shared renderer, below, so there's no fallback component to route to.
 
 ## Markdown (`@portfolio/kit`)
 
-| Export                 | Signature            | Use when                                                        |
-| ---------------------- | -------------------- | --------------------------------------------------------------- |
-| `renderMarkdown`       | `(source) => string` | Rendering block markdown to HTML for `dangerouslySetInnerHTML`. |
-| `renderInlineMarkdown` | `(source) => string` | Inline markdown (e.g. inside a `<p>`), no block wrappers.       |
+| Export                 | Signature            | Use when                                                                                                                           |
+| ---------------------- | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `renderMarkdown`       | `(source) => string` | Kit internals: `RichText` wraps it. A variant renders markdown with `RichText`, since the audit refuses `dangerouslySetInnerHTML`. |
+| `renderInlineMarkdown` | `(source) => string` | The same for inline markdown: `<RichText inline>`.                                                                                 |
 
 ## ClassName helper (`@portfolio/kit`)
 
@@ -91,11 +82,11 @@ If they disagree, the source wins.
 
 ## Tokens (`@portfolio/kit`)
 
-| Export            | Signature                                | Use when                                                                                                  |
-| ----------------- | ---------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| `TOKENS`          | `Readonly<Record<TokenKey, '--<name>'>>` | Looking up the CSS custom-property name for a host token (surface, ink, accent, rule, fontDisplay, etc.). |
-| `tokenVar`        | `(key: TokenKey) => 'var(--<name>)'`     | Inlining a token in a style object.                                                                       |
-| `TokenKey` (type) | union of token keys                      | Restricting helper inputs to known tokens.                                                                |
+| Export            | Signature                                | Use when                                                                                                                                               |
+| ----------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `TOKENS`          | `Readonly<Record<TokenKey, '--<name>'>>` | The v1 host token names (surface, ink, accent, rule, fontDisplay). No page sets them: #19's tokens replace them, under the manifest's `tokenContract`. |
+| `tokenVar`        | `(key: TokenKey) => 'var(--<name>)'`     | Inlining a token in a style object.                                                                                                                    |
+| `TokenKey` (type) | union of token keys                      | Restricting helper inputs to known tokens.                                                                                                             |
 
 ## Re-exported schema types (`@portfolio/kit`)
 
@@ -152,12 +143,12 @@ If they disagree, the source wins.
 
 > Server-side only. Importing from a client component fails at runtime.
 
-| Export                                                                                                                       | Signature                                                                      | Use when                                                                                                                                                                                    |
-| ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `fetchGitHubData`                                                                                                            | `(input: FetchGitHubDataInput, token?: string) => Promise<GitHubData \| null>` | Server-fetching repos and stats. Unauthenticated REST unless a caller passes a token (GraphQL, contribution calendar); public renderers never do. Memoized per request, revalidated hourly. |
-| `contributionLevelFor`                                                                                                       | `(count: number) => 0\|1\|2\|3\|4`                                             | Mapping a contribution count to a heatmap level when the source lacks one.                                                                                                                  |
-| `languageColor`                                                                                                              | `(name) => string \| null`                                                     | Resolving GitHub's brand color for a language label.                                                                                                                                        |
-| `GitHubData`, `PinnedRepo`, `ContributionDay`, `ContributionLevel`, `LanguageBreakdownEntry`, `FetchGitHubDataInput` (types) | —                                                                              | Typing fetch results and renderer props.                                                                                                                                                    |
+| Export                                                                                                                       | Signature                                                                      | Use when                                                                                                                                                                |
+| ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `fetchGitHubData`                                                                                                            | `(input: FetchGitHubDataInput, token?: string) => Promise<GitHubData \| null>` | Host code only: the source audit refuses it in a variant, whose GitHub data arrives through `input.derived` (#10). Unauthenticated REST unless a caller passes a token. |
+| `contributionLevelFor`                                                                                                       | `(count: number) => 0\|1\|2\|3\|4`                                             | Mapping a contribution count to a heatmap level when the source lacks one.                                                                                              |
+| `languageColor`                                                                                                              | `(name) => string \| null`                                                     | Resolving GitHub's brand color for a language label.                                                                                                                    |
+| `GitHubData`, `PinnedRepo`, `ContributionDay`, `ContributionLevel`, `LanguageBreakdownEntry`, `FetchGitHubDataInput` (types) | —                                                                              | Typing fetch results and renderer props.                                                                                                                                |
 
 ## SEO / feed (`@portfolio/kit/seo`)
 

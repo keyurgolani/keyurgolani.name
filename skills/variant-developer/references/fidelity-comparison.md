@@ -22,15 +22,17 @@ ambiguity _before_ you write code.
 ## Step 1 — Read the reference end-to-end
 
 Before opening DESIGN.md, walk through every file in the reference. For
-an archive variant:
+a `legacy/` package or an archive variant:
 
 - Every `sections/*.tsx` — what data each section needs, what visual
   primitives it composes.
 - Every `ui/*.tsx` — the shared component vocabulary (cards, buttons,
   badges, lightbox, progress bar, animated counter, typing animation,
   floating elements, etc.).
-- The shared CSS / token file — what colors, gradients, fonts the
-  reference depends on.
+- The shared CSS and token file: what colors, gradients, and fonts the
+  reference depends on. These aren't the variant's to port: they become
+  the appearance system's packs (#19). Record each in the manifest's
+  `provenance` as `folded-into-pack`, and keep only the structure.
 - Any `lib/` helpers — heuristics that classify, format, or transform.
 
 Note line counts. A reference at 5,000 lines and a target at 1,200
@@ -42,15 +44,15 @@ in disguise). If accidental, you're under-spec'd.
 
 For each visually distinct primitive in the reference, list:
 
-| Primitive                | What it does                                  | Hoist-worthy?                                     | Plan                                                                                             |
-| ------------------------ | --------------------------------------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| `<TypingAnimation>`      | Cycles through role text                      | yes — generalize                                  | Hoist to kit.                                                                                    |
-| `<AnimatedCounter>`      | Stats counter ramp                            | yes                                               | Hoist to kit.                                                                                    |
-| `<FloatingElements>`     | Brand-colored profile cards in parallax orbit | partially — extract motion hooks + brand registry | Compose from `useScrollDispersal` + `getSocialBrandStyle`; component itself stays variant-local. |
-| `<TactileEventCard>`     | 3D-tilt timeline card                         | partially — extract `useMouseTilt`                | Use kit hook; visual chrome stays local.                                                         |
-| `<Lightbox>`             | Gallery image overlay                         | yes                                               | Hoist to kit.                                                                                    |
-| `<ProgressBar>`          | Skill proficiency bar                         | data-shape question first                         | Schema doesn't carry proficiency — drop or invent.                                               |
-| `<Card variant="glass">` | Glassmorphic card                             | partially — class vocabulary only                 | Local CSS + class names.                                                                         |
+| Primitive                | What it does                      | Hoist-worthy?                       | Plan                                                                                         |
+| ------------------------ | --------------------------------- | ----------------------------------- | -------------------------------------------------------------------------------------------- |
+| `<TypingAnimation>`      | Cycles through role text          | yes, generalize                     | Hoist to kit.                                                                                |
+| `<AnimatedCounter>`      | Stats counter ramp                | yes                                 | Hoist to kit.                                                                                |
+| `<FloatingElements>`     | Profile cards in a parallax orbit | partially: extract the motion hooks | Compose from `useScrollDispersal`; the component stays in the variant, its colors go to #19. |
+| `<TactileEventCard>`     | 3D-tilt timeline card             | partially: extract `useMouseTilt`   | Use kit hook; visual chrome stays local.                                                     |
+| `<Lightbox>`             | Gallery image overlay             | yes                                 | Hoist to kit.                                                                                |
+| `<ProgressBar>`          | Skill proficiency bar             | data-shape question first           | Schema doesn't carry proficiency: drop or invent.                                            |
+| `<Card variant="glass">` | Glassmorphic card                 | partially: class vocabulary only    | Local CSS + class names.                                                                     |
 
 Write this table into DESIGN.md's new `## Component inventory` section
 (see `assets/DESIGN.template.md`).
@@ -127,22 +129,26 @@ In DESIGN.md, write a `## Fidelity targets` subsection:
 The variant ports `archive/page0`. Signature elements that must be
 present in the final variant:
 
-- [ ] Falling code-glyph canvas backdrop with theme-aware colors.
-- [ ] 5 brand-colored social profile cards in parallax orbit, draggable.
+- [ ] Falling code-glyph canvas backdrop, as an enhancement.
+- [ ] 5 social profile cards in parallax orbit, draggable.
 - [ ] Multi-text typing animation cycling roles.
 - [ ] Animated counters in stats tiles.
 - [ ] SVG fork/merge timeline with per-kind colored branches.
 - [ ] 3D mouse-tilt on expanded timeline cards with radial-gradient glow.
 - [ ] Project cards expand on click; show technologies as chips.
 - [ ] Project badges auto-derived from text (Hackathon / Published / Open Source).
-- [ ] Glassmorphic card vocabulary (backdrop-blur, border, hover lift).
-- [ ] Brand-colored buttons in contact section (ordered by preferred channel).
+- [ ] Contact buttons ordered by preferred channel.
 
 Signature elements **intentionally dropped**:
 
 - Skill proficiency bars (schema doesn't carry per-skill `proficiency`).
 - Project category filter buttons (schema doesn't model `category`).
 - Per-skill context tooltip on project expansion (no `context` field).
+
+Moved to the appearance system (#19), not dropped:
+
+- Glassmorphic card material (backdrop-blur, border, hover lift).
+- The palette, the fonts, and the theme modes.
 ```
 
 The boxes become the Phase 3 fidelity gate (`references/quality-gates.md`

@@ -43,11 +43,11 @@ sections:
 ```yaml
 schemaVersion: 2
 appearance:
-  variant: editorial # which packages/variant-* lays out the page
+  variant: editorial-evidence # the installed variant that lays out the page
   designLanguage: platform-neutral
-  colorScheme: warm # an id the variant declares
-  typography: classic # an id the variant declares
-  displayMode: system # system | light | dark
+  colorScheme: warm # a color scheme id, for #19
+  typography: classic # a typography id, for #19
+  displayMode: system # system | light | dark | high-contrast
 visitorControls:
   variant: locked
   designLanguage: locked

@@ -105,7 +105,7 @@ docker compose restart web
 
 If the edit is invalid, the server logs its `config.fatal` lines and exits 1. The examples set `restart: unless-stopped`, so Docker restarts the container in a loop, and each restart logs the same `config.fatal` block again until you fix the file. `docker compose logs web` shows where the problem is. Once the file is fixed, the next restart serves the site, or run `docker compose restart web` to start it right away.
 
-To add a variant package or pick up a new release, rebuild:
+A variant is a dependency of `@portfolio/web` (`pnpm --filter @portfolio/web add <package>`), registered when the image builds; a package the build can't register stops the build with a diagnostic naming the package and the fix. To add one or pick up a new release, rebuild:
 
 ```sh
 docker compose up --build
@@ -231,7 +231,8 @@ Before it takes a request, the server validates its settings and the two documen
 | A document without `schemaVersion: 2` or that fails its schema, or a portfolio with two sections on one `id`                                                                                                | owner, read-only | refuses to start                                                                                    |
 | A key the schema doesn't define, outside `extensions`                                                                                                                                                       | owner, read-only | refuses to start, suggesting the closest allowed key                                                |
 | A `url`, `src`, or `*Url` that isn't `https`, `http`, `mailto`, `tel`, relative, or a `#fragment`                                                                                                           | owner, read-only | refuses to start                                                                                    |
-| A site document with an appearance id this build doesn't register (`appearance.unknown`), a section the portfolio doesn't have (`ref.missing`), or a deployment setting (`site.deployment-setting`)         | owner, read-only | refuses to start                                                                                    |
+| A site document that selects `fallback` (`schema.invalid`), names a section the portfolio doesn't have (`ref.missing`), or holds a deployment setting (`site.deployment-setting`)                           | owner, read-only | refuses to start                                                                                    |
+| A site document whose variant this build doesn't register (`variant.unavailable`), or a control value it doesn't accept (`controls.*`)                                                                      | owner, read-only | starts and warns; the fallback composition renders, or the control takes its default                |
 | A pair with no visible section (`content.empty`), a `#fragment` link to no visible section (`anchor.broken`), one metric with two values (`metric.conflict`), or a secret-shaped string (`secret.detected`) | owner, read-only | refuses to start                                                                                    |
 | An origin on a reserved example domain, or the bundled sample's `identity.name`                                                                                                                             | owner, read-only | refuses to start in production; `pnpm dev` warns                                                    |
 | No authentication provider                                                                                                                                                                                  | owner            | refuses to start: configure sign-in or choose `read-only`                                           |
@@ -264,7 +265,7 @@ Data under an `extensions` key, or a section whose `kind` is `<npm package name>
 }
 ```
 
-`capabilities` lists every capability the profile grants. The checks are `catalog` (the document pair loads), `packs` (the site's variant loads), and, under `demo` and `read-only`, `owner-modules` (no Studio, storage, or sign-in code has loaded). A failed check makes it 503 with `"status": "unavailable"`. When a startup requirement fell back to a degraded mode, it's 200 with `"status": "degraded"`. Neither endpoint returns a path, a value, or portfolio content, and both send `Cache-Control: no-store`.
+`capabilities` lists every capability the profile grants. The checks are `catalog` (the document pair loads), `packs` (the site's variant loads, `degraded` while the fallback composition renders in place of a variant this build doesn't register), and, under `demo` and `read-only`, `owner-modules` (no Studio, storage, or sign-in code has loaded). A failed check makes it 503 with `"status": "unavailable"`. When a check is degraded, or a startup requirement fell back to a degraded mode, it's 200 with `"status": "degraded"`. While the site selects a variant this build doesn't register, the bundled sample's `editorial-evidence` included until #13, readiness says `degraded`. Neither endpoint returns a path, a value, or portfolio content, and both send `Cache-Control: no-store`.
 
 ## Logs
 
@@ -308,7 +309,7 @@ For a process manager (PM2, systemd, etc.), wrap `pnpm start` with the same envi
 PORTFOLIO_PROFILE=demo PORTFOLIO_ORIGIN=https://demo.jane.name pnpm start
 ```
 
-`/` shows the sample in the sample site's appearance, and `/sample?variant=<slug>&scheme=<id>&typography=<id>` in any registered variant, color scheme, and typography preset. `/sample` overrides only what its query names and keeps the rest of the sample site's appearance. An unknown variant is a 404, and a scheme or preset the variant doesn't declare falls back to the variant's default. The sample's `github` section doesn't render, since it would fetch a live account. Until the demo's indexing rules are settled, every response the app sends has `X-Robots-Tag: noindex`, `robots.txt` disallows everything, the sitemap is empty, and there is no feed. Every Studio operation answers with the 404 envelope.
+`/` and `/sample` show the sample in the sample site's selection, `editorial-evidence`, which renders as the fallback composition until #13 installs it. `/sample?variant=<id>` shows it in any registered variant; `fallback`, an id this build doesn't register, an empty one, or two are a 404. The sample's `github` section doesn't render, since it would fetch a live account. Until the demo's indexing rules are settled, every response the app sends has `X-Robots-Tag: noindex`, `robots.txt` disallows everything, the sitemap is empty, and there is no feed. Every Studio operation answers with the 404 envelope.
 
 ## Environment variables
 
@@ -338,7 +339,7 @@ The host uses Next.js fetch revalidation:
 
 - **GitHub data:** 1 hour (`revalidate: 3600`), and each request gives up after 3 seconds. The `cache()` wrapper memoizes within a request.
 - **Metadata:** rendered per request (`robots.txt`, `sitemap.xml`, the Open Graph image, and the feed), from the documents loaded at startup and `PORTFOLIO_ORIGIN`. `features.feed: false` in the site document turns the feed off.
-- **Variant CSS:** served as static assets.
+- **Variant CSS:** every registered variant's stylesheet, bundled into the static assets.
 
 To force a refresh, redeploy or clear the Next.js cache:
 
@@ -356,9 +357,9 @@ The Next.js app ships static assets under `_next/static/...`. Any CDN that respe
 - `pnpm check:skills` exits 0
 - `node skills/portfolio-author/scripts/validate.mjs config` exits 0
 - `pnpm build` exits 0
-- The dev server renders correctly in light, dark, bright, black, and system themes
+- The dev server renders correctly in light, dark, and system display modes
 - `/feed.xml`, `/robots.txt`, `/sitemap.xml` all 200, with URLs on your `PORTFOLIO_ORIGIN`
-- `/api/ready` answers 200 with `"status": "ready"`
+- `/api/ready` answers 200 with `"status": "ready"`, or `"degraded"` with `packs` degraded while your site's variant isn't installed
 - With the production build running, `node apps/web/scripts/check-containment.mjs http://127.0.0.1:3000 --direct --expect-name "<your identity.name>" --expect-origin "<your PORTFOLIO_ORIGIN>"` exits 0. Drop `--direct` when the URL goes through your reverse proxy.
 
 ## Updating

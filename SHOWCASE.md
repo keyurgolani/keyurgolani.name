@@ -1,8 +1,10 @@
 # Portfolio Platform: Visual Showcase
 
-A tour of the portfolio platform. You write two documents, `portfolio.yml` for the content and `site.yml` for how it's presented, and the platform validates them as a pair and renders the portfolio through the site's **variant**: a styled React tree that owns layout, color, typography, and motion. Switching variants changes the look without touching content.
+A tour of the portfolio platform. You write two documents, `portfolio.yml` for the content and `site.yml` for how it's presented, and the platform validates them as a pair and renders the portfolio through the site's **variant**: a composition that owns how the sections are arranged, navigated, and revealed, while color, type, and display modes belong to the appearance system (#19). Switching variants changes the presentation without touching content.
 
 > _Screenshots use the bundled `portfolio.example.yml` demo persona ("Anamika Devi"). All content is illustrative._
+
+> _These screenshots show the v1 Editorial and Kinetic Cosmos variants, which #5 retired to `legacy/`. #13 and #14 rebuild them as compositions, with their palettes and type moving to #19's packs; until then this build renders the fallback composition._
 
 ---
 
@@ -52,12 +54,11 @@ The **same content** in a completely different aesthetic: a gradient nebula, fal
 | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | **Content model** | `portfolio.yml` for the content and `site.yml` for the presentation, validated as a pair against `@portfolio/schema`                    |
 | **Section kinds** | 28 profession-neutral kinds, such as hero, experience, projects, gallery, discography, episodes, and publications, plus extension kinds |
-| **Appearance**    | Variant, color scheme, typography, and display mode from the site document; the independent axes and visitor pickers land with #19      |
-| **Variants**      | Pluggable styled React trees; swap the entire look without touching content                                                             |
-| **Themes**        | `light`, `dark`, `bright` (paper-white), `black` (AMOLED), `system`                                                                     |
-| **Per-variant**   | Color schemes and typography presets (Editorial ships 3 schemes, 2 type pairings)                                                       |
-| **GitHub**        | Top repos, recent activity, language breakdown, from GitHub's public REST API                                                           |
-| **Extras**        | Print stylesheet, feed, structured data, Open Graph image generation                                                                    |
+| **Appearance**    | Variant and display mode from the site document; the design language, color scheme, typography, and visitor control land with #19       |
+| **Variants**      | Pluggable compositions, installed as dependencies; the fallback composition renders when the site's variant isn't installed             |
+| **Display modes** | `system`, `light`, `dark`, and `high-contrast` (rendered with #19), painted before hydration                                            |
+| **GitHub**        | A link to the profile; repository data reaches variants with #10                                                                        |
+| **Extras**        | Feed, structured data, Open Graph image generation                                                                                      |
 | **Editing**       | Edit the documents in `config/`; the server validates them at startup                                                                   |
 | **Stack**         | Next.js, TypeScript, pnpm workspace, Docker                                                                                             |
 

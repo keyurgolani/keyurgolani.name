@@ -84,19 +84,19 @@ An optional field can be left out. There's no `null`: leave the key out instead.
 
 ### Appearance
 
-The appearance names four axes and a display mode. They become independent with #19 (appearance axes); until then:
+The appearance names a composition, three appearance axes, and a display mode. The axes are #19's (appearance axes); until it ships:
 
-- **`variant`** is the composition: which `packages/variant-*` package lays out the page. This build registers `editorial` and `kinetic-cosmos`.
-- **`designLanguage`** is the component style. Use `platform-neutral`. This release records it, with no registry to check it against until #19.
-- **`colorScheme`** is the palette, such as `warm`, `noir`, or `ink-and-paper` for Editorial.
-- **`typography`** is the type preset, such as `classic` or `modernist` for Editorial.
-- **`displayMode`** is the theme a visit starts in: `system`, `light`, or `dark`. `system` follows the visitor's `prefers-color-scheme`. `high-contrast` parses, but this build doesn't render it until #19, so it's refused.
+- **`variant`** is the composition: which installed variant package lays out the page, by its manifest's id. This build registers only the fallback composition, which a site can't select (`variant: fallback` is `schema.invalid`). Any other id renders as the fallback composition, with a `variant.unavailable` warning at startup and in `config.status`, until a package with that id is installed. The example's `editorial-evidence` arrives with #13.
+- **`designLanguage`** is the component style. Use `platform-neutral`.
+- **`colorScheme`** is the palette, such as `warm`.
+- **`typography`** is the type preset, such as `classic`.
+- **`displayMode`** is the theme a visit starts in: `system`, `light`, `dark`, or `high-contrast`. `system` follows the visitor's `prefers-color-scheme`, and `high-contrast` starts at `system` until #19 renders it.
 
-Each id must be one this build registers. An unknown one is `appearance.unknown`, and its remediation lists the ids that are. Nothing falls back to a default in its place. In this release, color scheme and typography ids come from the selected variant's manifest, so a different variant can need different ids. When #19 replaces them with a shared catalog, the baseline ids such as `warm` and `classic` need selecting again from it.
+This build records the design language, color scheme, and typography without checking them, and lists them as not checked. #19's catalog checks them, as `appearance.unknown` with the ids it registers, and nothing will fall back to a default in an unknown one's place.
 
 ### Visitor controls
 
-`visitorControls` says which of the five appearance fields a visitor may change for themselves: `locked` keeps the published value, and `selectable` lets them pick another. All five are required. This release checks the values but doesn't apply them yet: they take effect with the visitor pickers (#19). Until then both variants keep their own theme toggle, and visitors can't pick a variant, design language, color scheme, or typography preset.
+`visitorControls` says which of the five appearance fields a visitor may change for themselves: `locked` keeps the published value, and `selectable` lets them pick another. All five are required. This release checks the values but doesn't apply them yet: they take effect with #19's visitor control, which renders in each variant's slot for it. Until then visitors can't pick a variant, design language, color scheme, or typography preset, and no variant renders a theme toggle.
 
 ### Motion
 
@@ -116,7 +116,7 @@ A hidden section stays in the portfolio and out of everything visitors get: the 
 
 Deployment settings come from the environment. `deploymentProfile`, `profile`, `origin`, `canonicalOrigin`, `url`, `baseUrl`, `studio`, `previewOrigin`, `trustedProxies`, and `proxy`, at the top level or under `features`, are `site.deployment-setting`, and the remediation names the environment variable to use.
 
-`appearanceInputs` belongs to #19's color scheme registry, and `routes` and `variantControls` to #5's variant contract. Until those land, this release checks their shape and lists their entries as not checked.
+`appearanceInputs` belongs to #19's color scheme registry: this release checks its shape and lists its entries as not checked. `routes` and `variantControls` are checked against the selected variant's manifest when this build registers it, and listed as not checked when it doesn't. Another variant's control entries are kept as written, unchecked.
 
 ## Deployment settings and secrets
 
@@ -151,7 +151,7 @@ An extension section's `kind` is `<package name>/<name>`. It has the base fields
 - An extension adds keys only under its own namespace, so core fields keep their checks.
 - Data from a package this build registers is checked by that package's schemas.
 - Data from any other package is kept as written and checked only as plain JSON. Each use is an `extension.unregistered` warning, and none of it reaches visitors: not the page, its RSC payload, its JSON-LD, or the feed. Tools that rewrite a document, such as `applyEdits` and `serialize` in `@portfolio/schema`, keep it as it is.
-- No variant renders an extension section yet. A registered package's sections render nothing, and its fields reach the variants in the public view.
+- A registered package's sections render through the renderers its `./renderers` export provides, and render nothing without one. Its fields reach the variants in the public view.
 
 ### Adding a profession package
 
@@ -182,7 +182,7 @@ A profession package adds semantic content without changes to the schemas, the v
    Every object schema in it must call `.strict()`, so a mistyped key is reported instead of dropped. `defineContentExtension` throws otherwise, and when the namespace isn't an npm package name.
 
 2. Use its namespace in the documents. They validate before any build registers the package, with a warning at each use.
-3. Install it as a dependency of `@portfolio/web` (`pnpm --filter @portfolio/web add <package>`), since the workspace doesn't hoist packages (`shamefully-hoist=false`), and register it by adding it to `CONTENT_EXTENSIONS` in `apps/web/src/server/content-extensions.ts`. That list is the host's only part until #5 (variant contract) finds installed packages on its own. Two packages with one namespace stop startup as `validator.failed`.
+3. Install it as a dependency of `@portfolio/web` (`pnpm --filter @portfolio/web add <package>`), since the workspace doesn't hoist packages (`shamefully-hoist=false`). That registers it: its `package.json` declares `"portfolio": { "kind": "content-extension" }`, its `.` export default-exports the `defineContentExtension` result, whose namespace is the package's name, and an optional `./renderers` export maps each `<namespace>/<name>` kind to its renderer. The build checks all of it and refuses a package that doesn't fit, naming the package and the fix.
 
 ## Validation
 
@@ -200,7 +200,7 @@ Each record has a code, a severity, the document, a JSON pointer, a line and col
 - **`blocks-publish`**: a draft preview (#7, #8) could render it, but it can't go live.
 - **`warning`**: reported only.
 
-Startup treats the mounted pair as live, so both blocking severities stop it. Checks that can't run are listed as not checked: the origin checks without an origin, the design language and appearance inputs until #19, and routes and variant controls until #5.
+Startup treats the mounted pair as live, so both blocking severities stop it, with two exceptions: live, `variant.unavailable` and `controls.*` only warn, since the fallback composition renders in place of an unregistered variant and a control falls back to its default. #3's publish still refuses them. Checks that can't run are listed as not checked: the origin checks without an origin, and the design language, color scheme, typography, and appearance inputs until #19.
 
 | Code                      | Severity       | Meaning                                                                                                                                  |
 | ------------------------- | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
@@ -212,7 +212,7 @@ Startup treats the mounted pair as live, so both blocking severities stop it. Ch
 | `source.unreadable`       | blocks-preview | The server can't read a document, such as one without read permission, or a directory with its name.                                     |
 | `legacy.document`         | blocks-preview | The portfolio is in the old one-file format, with or without a `site.yml`, or it's a `portfolio.toml`. Nothing else is reported with it. |
 | `site.deployment-setting` | blocks-preview | The site document holds a deployment setting.                                                                                            |
-| `appearance.unknown`      | blocks-preview | An appearance id this build doesn't register.                                                                                            |
+| `appearance.unknown`      | blocks-preview | An appearance id the catalog doesn't register. This build's interim catalog checks only `displayMode`, which the schema already limits.  |
 | `validator.failed`        | blocks-preview | A bug in the build, such as two extensions with one namespace, not in the documents.                                                     |
 | `id.duplicate`            | blocks-publish | Two sections share an id.                                                                                                                |
 | `ref.missing`             | blocks-publish | The site document names a section the portfolio doesn't have.                                                                            |
@@ -220,11 +220,17 @@ Startup treats the mounted pair as live, so both blocking severities stop it. Ch
 | `anchor.broken`           | blocks-publish | A `#fragment` link points at no visible section.                                                                                         |
 | `secret.detected`         | blocks-publish | A string looks like a secret.                                                                                                            |
 | `content.empty`           | blocks-publish | No section is visible.                                                                                                                   |
+| `variant.unavailable`     | blocks-publish | The site selects a variant this build doesn't register. Live, it only warns, and the fallback composition renders in its place.          |
+| `controls.invalid`        | blocks-publish | A control value the selected variant doesn't declare or accept. Live, it only warns, and the control renders its default.                |
+| `controls.stale`          | blocks-publish | Control values stored at another version of the variant's controls. Live, it only warns, and every control renders its default.          |
+| `controls.dangling-ref`   | blocks-publish | A control points at no visible section. Live, it only warns, and the control renders its default.                                        |
 | `metric.duplicate`        | warning        | Two visible sections show one metric with the same value.                                                                                |
 | `image.alt-missing`       | warning        | A gallery image with no alt text or caption, or a project screenshot with no alt text. `alt: ''` marks decoration.                       |
 | `origin.sample`           | warning        | A link points at a sample address, such as a `.test` or `example.com` host.                                                              |
 | `origin.stale`            | warning        | A link's host differs from the origin's only in its last label, like an old domain.                                                      |
 | `extension.unregistered`  | warning        | Data from an extension this build doesn't register.                                                                                      |
+| `route.unknown`           | warning        | A `routes` entry the selected variant doesn't have, which changes nothing.                                                               |
+| `route.required`          | warning        | A `routes` entry that turns off the front page, which every site serves, so it's ignored.                                                |
 | `sample.identity`         | warning        | From `pnpm config:validate` only: `identity.name` is the bundled sample's, which production refuses to start with.                       |
 
 ## Migrating from the one-file format

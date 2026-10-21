@@ -18,7 +18,7 @@ cd keyurgolani.name
 pnpm install
 ```
 
-`pnpm install` resolves the workspace, installs all dependencies, and runs the postinstall step that builds the variant registry.
+`pnpm install` resolves the workspace and installs all dependencies. The variant registry is built later, by `pnpm dev` and `pnpm build`, from the variants `@portfolio/web` depends on.
 
 ## Run the dev server
 
@@ -26,7 +26,7 @@ pnpm install
 pnpm dev
 ```
 
-Visit `http://localhost:3000`. You'll see the example portfolio rendered through the editorial variant.
+Visit `http://localhost:3000`. You'll see the example portfolio in the fallback composition: every section in content order, in one column. The example site selects Editorial Evidence, which this build doesn't install yet (#13), so the fallback renders in its place and the terminal logs a `variant.unavailable` warning.
 
 `pnpm dev` runs the `read-only` profile from `config/`, with the settings in `apps/web/.env.development`. While `config/` holds neither document, it renders the bundled examples and logs a warning.
 
@@ -34,7 +34,7 @@ The dev server hot-reloads on:
 
 - Changes to `config/portfolio.yml` and `config/site.yml` (on the next page load)
 - Changes to any file under `apps/web/src/`
-- Changes to any file under a variant's `packages/variant-*/src/`
+- Changes to any file under a registered variant's `src/`, such as `packages/fallback-composition/src/`
 - Changes to any file under `packages/kit/src/` or `packages/schema/src/`
 
 ## Make it yours
@@ -61,21 +61,21 @@ node skills/portfolio-author/scripts/validate.mjs config
 
 It checks both documents. Each problem names the file, the line and column, and how to fix it. The schema is strict, and so is the server: a file that fails validation stops `pnpm dev` at startup, and a bad edit while it runs shows an error page (the terminal says where) until you fix it. Validate often.
 
-### 3. Variants and themes
+### 3. Variants and appearance
 
-`appearance.variant` in `config/site.yml` selects the active variant. The example's is `editorial`. Change the line and reload to switch. Each variant has its own color scheme and typography ids, so pick those from the new variant too: `kinetic-cosmos` offers the schemes `nebula`, `aurora`, and `solar`, and the presets `geometric` and `humanist`. The rest of the appearance sits beside it:
+`appearance.variant` in `config/site.yml` selects the variant, the composition that arranges the page. A variant is a package `@portfolio/web` depends on; one this build doesn't install renders as the fallback composition, with a warning. The rest of the appearance sits beside it, for the appearance system (#19) to resolve:
 
 ```yaml
 appearance:
-  variant: editorial
+  variant: editorial-evidence
   designLanguage: platform-neutral
-  colorScheme: noir # editorial offers warm | noir | ink-and-paper
-  typography: modernist # editorial offers classic | modernist
-  displayMode: dark # system | light | dark
+  colorScheme: warm
+  typography: classic
+  displayMode: dark # system | light | dark | high-contrast
 motionPolicy: reduce # respect-os | reduce
 ```
 
-`displayMode` is the theme a visit starts in, and the toggle in the corner of the page lets visitors override it. Visitors can't pick a color scheme or typography preset yet. `visitorControls` in `site.yml` already records which appearance fields they may change, for the pickers #19 (appearance axes) adds. [configuration.md](configuration.md#the-site-document) covers every field.
+`displayMode` is the theme a visit starts in; `high-contrast` starts at `system` until #19 renders it. This build records the design language, color scheme, and typography without checking them. `visitorControls` in `site.yml` already records which appearance fields visitors may change, for #19's visitor control. [configuration.md](configuration.md#the-site-document) covers every field.
 
 To see the bundled sample in any registered variant, run the dev server under the `demo` profile:
 
@@ -83,7 +83,7 @@ To see the bundled sample in any registered variant, run the dev server under th
 PORTFOLIO_PROFILE=demo PORTFOLIO_SOURCE_DIR= pnpm dev
 ```
 
-Then open `http://localhost:3000/sample?variant=<slug>&scheme=<id>&typography=<id>`. `/sample` starts from the sample site's appearance and overrides only what its query names. An unknown variant is a 404; a scheme or preset the variant doesn't declare falls back to its default.
+Then open `http://localhost:3000/sample`, which renders the sample in its own site's selection, or `http://localhost:3000/sample?variant=<id>` for a registered variant. `fallback` or an id this build doesn't register is a 404.
 
 ### 4. Add personal assets
 

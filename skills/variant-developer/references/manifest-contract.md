@@ -1,199 +1,155 @@
-# VariantManifest contract
+# The variant manifest (contract 2.0)
 
-> Every field in the VariantManifest type, with valid values, examples,
-> and an editorial-vs-template comparison. Loaded by the agent during
-> Phase 1 (DESIGN.md) when populating the manifest, and during Phase 2
-> Wave 1 when writing the actual manifest.ts.
+> Every field of `manifest.json`, with valid values and examples. Loaded in
+> Phase 1, when DESIGN.md summarizes the manifest, and in Phase 2 Wave 1,
+> when you write it.
 
 ## Source of truth
 
-The TypeScript type lives at `packages/kit/src/manifest.ts`. This reference
-paraphrases it; if you find drift, packages/kit is authoritative.
+The schema is `ManifestSchema` in `packages/variant-contract/src/manifest-schema.ts`, and `validateManifest()` in `validate-manifest.ts` checks the rules a shape can't. This reference paraphrases them; when the two disagree, the package is right.
 
-## Field reference
+`package.json` names the manifest:
 
-### Identity fields
-
-#### `slug` (required, string)
-
-- Lowercase, hyphen-separated (`/^[a-z][a-z0-9]*(-[a-z0-9]+)*$/`).
-- Must match the package directory name (`packages/variant-<slug>`).
-- Examples: `'editorial'`, `'obsidian-luxury'`, `'crt-terminal'`.
-
-#### `name` (required, string)
-
-- Human-readable. Shown wherever the platform lists variants, and in startup errors.
-- Example: `'Editorial'`, `'Obsidian Luxury'`.
-
-#### `tagline` (optional, string)
-
-- One-line description. No page shows it today; Owner Studio (#8) lists variants with it.
-
-#### `description` (optional, string)
-
-- Longer paragraph for the variant detail view.
-
-#### `author` (optional, string)
-
-- Display name of the variant author.
-
-#### `authorUrl` (optional, string)
-
-- URL linked from the author display.
-
-#### `version` (required, string)
-
-- Semver string (`'1.0.0'`). Bump on substantive renderer changes.
-
-#### `homepage` (optional, string)
-
-- Marketing/preview URL. Used by tooling.
-
-### Discovery / filtering fields
-
-#### `aesthetic` (required, enum)
-
-- One of: `editorial | spatial | kinetic | popart | terminal | bento | narrative | custom`.
-- The variant's lane. Nothing filters on it today. `custom` is the escape hatch for variants that don't fit a lane.
-
-#### `motion` (required, enum)
-
-- One of: `still | subtle | animated | kinetic`.
-- `still` = no animations beyond CSS transitions.
-- `subtle` = small entrance/hover animations only.
-- `animated` = scroll-tied or scripted motion across the page.
-- `kinetic` = continuous rich motion (parallax, particles, etc.).
-
-#### `density` (required, enum)
-
-- One of: `minimal | balanced | dense`.
-- Describes how much content fits per viewport.
-
-#### `typography` (required, enum)
-
-- One of: `serif | sans | mono | mixed`.
-- The variant's _default_ typography character. A variant with multiple presets declares its default character here.
-
-#### `performanceTier` (optional, enum, default `light`)
-
-- One of: `light | medium | heavy`.
-- `light` — flat HTML/CSS, no canvas. Safe everywhere.
-- `medium` — single 2D canvas or one WebGL2 fragment shader. No R3F.
-- `heavy` — R3F / three.js scene with effects. Lazy-mount strongly recommended; mobile fallbacks required.
-
-#### `bestFor` (optional, readonly string[])
-
-- Tags shown alongside the variant. Free-form. Examples: `['long-form','writing','academic']`.
-
-### Coverage fields
-
-#### `supportedKinds` (required, readonly SectionKind[])
-
-- The kinds the variant declares it can render. Audit verifies this contains every kind in `ALL_SECTION_KINDS`.
-- Use `ALL_SECTION_KINDS` for the common case.
-- Or be explicit: `['hero','lede','experience',...]` — but you must keep this in sync as the schema grows. The audit checks this against the live `ALL_SECTION_KINDS`.
-
-#### `themes` (required, readonly Exclude<ThemePreference,'system'>[])
-
-The concrete `data-theme` values your variant renders correctly via CSS. Valid values: `'light'`, `'dark'`, `'bright'`, `'black'`. **Mandatory:** every variant must include `'light'` and `'dark'`.
-
-`'system'` is NEVER listed in `themes` — it is a user preference / resolver, not a concrete render target. Every variant supports `'system'` automatically (it resolves to `'light'` or `'dark'` per the visitor's `prefers-color-scheme`).
-
-`'bright'` and `'black'` are opt-in. Variants that don't declare them get fallback rendering at runtime: a visitor whose stored preference is `'bright'` falls back to `'light'`; `'black'` falls back to `'dark'`.
-
-##### Resolution table
-
-| User preference | Variant has it in `themes` | Resolved `data-theme`                        |
-| --------------- | -------------------------- | -------------------------------------------- |
-| `light`         | always (mandatory)         | `light`                                      |
-| `dark`          | always (mandatory)         | `dark`                                       |
-| `bright`        | yes                        | `bright`                                     |
-| `bright`        | no                         | `light` (fallback)                           |
-| `black`         | yes                        | `black`                                      |
-| `black`         | no                         | `dark` (fallback)                            |
-| `system`        | n/a                        | `light` or `dark` per `prefers-color-scheme` |
-
-### Customization fields
-
-#### `colorSchemes` (optional, readonly ColorScheme[])
-
-- An array of named recolors that share the variant's layout. Each `ColorScheme` has:
-  - `id` (string, required): stable id used in CSS selectors and YAML.
-  - `name` (string, required): display label.
-  - `description?` (string): a longer label. No page shows it today.
-  - `themes` (readonly `'light'|'dark'|'bright'|'black'`[], required): which themes the scheme supports. Mandatory minimum is `['light','dark']`. Add `'bright'`/`'black'` only when you've authored CSS blocks for those values (audit warns otherwise).
-  - `default?` (boolean): mark exactly one as default.
-  - `swatch?` (`{ ink?, paper?, accent? }`): preview hex codes.
-- Variants implement each scheme via `[data-variant='<slug>'][data-color-scheme='<id>']` CSS overrides.
-- Omit when the variant only ships its single canonical palette.
-
-#### `typographyPresets` (optional, readonly TypographyPreset[])
-
-- Named font/size/leading combinations. Each `TypographyPreset` has:
-  - `id` (string, required), `name` (string, required), `description?`.
-  - `default?` (boolean): mark exactly one as default.
-  - `preview?` (`{ display?, body?, ui?, mono? }`): font names. No page shows them today.
-- Implement via `[data-variant='<slug>'][data-typography='<id>']` CSS overrides.
-
-### Capabilities
-
-#### `capabilities.print` (optional, boolean)
-
-- The variant ships a print stylesheet (resume-style page). No host reads the flag: there's no Print button, and the stylesheet applies whenever a visitor prints.
-
-#### `capabilities.rss` (optional, boolean)
-
-- The variant has writings, publications, or episodes worth a feed. No host reads the flag: the site document's `features.feed` turns `/feed.xml` on or off.
-
-#### `capabilities.multiPage` (optional, boolean)
-
-- The variant lays content across multiple routes rather than one scroll. Reserved; most variants are single-page.
-
-### Marketing
-
-#### `screenshots` (optional, ReadonlyArray<{src, alt?, theme?, colorScheme?, typography?}>)
-
-- Static previews. No page shows them today. `src` is required; `theme/colorScheme/typography` let one variant ship multiple shots that map to specific configurations.
-
-## Helpers exported alongside the type
-
-- `resolveColorScheme(manifest, requested)` — picks the active color scheme id with the fallback chain: the requested id when the manifest declares it → default-flagged scheme → first scheme → `null` (when none declared).
-- `resolveTypographyPreset(manifest, requested)` — same chain for typography.
-- `resolveTheme(preference, supported, systemMatch)` — pure function the kit's `ThemeProvider` uses to map a `ThemePreference` to a concrete `data-theme` value, applying the `bright→light` / `black→dark` fallback per the resolution table above.
-
-Use these in your variant's render path so the site document's `colorScheme` and `typography`, which reach you as `VariantProps`, resolve the same way in every variant.
-
-## Host integration
-
-Declaring `'bright'` or `'black'` in `themes` is all a variant does. The host wraps every page in `<ThemeProvider>` with the selected variant's `manifest.themes` and the site's display mode as the starting preference (`apps/web/src/lib/variant-tree.tsx`), so your bright and black CSS blocks render with no wiring of your own:
-
-```tsx
-<ThemeProvider defaultPreference={displayMode} supportedThemes={mod.manifest.themes}>
-  <Component
-    portfolio={portfolio}
-    colorScheme={selection.colorScheme}
-    typography={selection.typography}
-    motionPolicy={motionPolicy}
-  />
-</ThemeProvider>
+```json
+{
+  "name": "@portfolio/variant-<id>",
+  "exports": {
+    ".": "./src/index.tsx",
+    "./manifest": "./manifest.json",
+    "./styles.css": "./src/styles.css",
+    "./package.json": "./package.json"
+  },
+  "portfolio": { "kind": "variant", "manifest": "./manifest.json" }
+}
 ```
 
-At startup the host also checks the site document's `appearance` against the selected variant's manifest. A `colorScheme` or `typography` id your manifest doesn't declare is refused as `appearance.unknown`, so the ids you ship are the ones authors can pick.
+Registry generation requires the `.` and `./styles.css` exports, and an export for each enhancement. Every object in the manifest is strict: a key the contract doesn't define is an error, never dropped.
 
-## Editorial vs. template — side-by-side example
+## The smallest manifest
 
-| Field             | editorial                                    | template                                     |
-| ----------------- | -------------------------------------------- | -------------------------------------------- |
-| slug              | `editorial`                                  | `template`                                   |
-| aesthetic         | `editorial`                                  | `custom`                                     |
-| motion            | `still`                                      | `still`                                      |
-| density           | `balanced`                                   | `balanced`                                   |
-| typography        | `mixed`                                      | `sans`                                       |
-| performanceTier   | `light`                                      | `light`                                      |
-| themes            | `['light','dark','bright','black']`          | `['light','dark']`                           |
-| colorSchemes      | 3 (warm / noir / ink-and-paper)              | none                                         |
-| typographyPresets | 2 (classic / modernist)                      | none                                         |
-| supportedKinds    | every kind (see editorial's actual list)     | every kind via FallbackSection               |
-| capabilities      | `{print: true, rss: true, multiPage: false}` | `{print: true, rss: true, multiPage: false}` |
+The fallback composition's, `packages/fallback-composition/manifest.json`, which `pnpm new-variant` copies:
 
-The editorial declares concrete schemes/presets. The template declares none — it inherits whatever defaults the renderers handle and routes every kind through `FallbackSection`.
+```json
+{
+  "id": "fallback",
+  "name": "Fallback composition",
+  "promise": "Every section in content order, in one readable column.",
+  "description": "The host's stand-in. ...",
+  "contract": "2.0",
+  "schemas": { "portfolio": { "min": 2, "max": 2 }, "site": { "min": 2, "max": 2 } },
+  "tokenContract": 0,
+  "compositionFamily": "document",
+  "motionIntent": "still",
+  "performanceTier": "light",
+  "renderedKinds": [],
+  "unsupportedKinds": [],
+  "contentSlots": [],
+  "routes": { "home": "shared", "work": "shared", "views": [] },
+  "controls": { "version": 1, "items": [], "migrations": [] },
+  "visitorControl": { "placement": "header" },
+  "textDirection": ["ltr", "rtl"],
+  "provenance": { "provisional": true, "sources": [] }
+}
+```
+
+## Identity
+
+- **`id`** (required): `^[a-z][a-z0-9-]{1,47}$`, the id `site.yml`'s `appearance.variant` selects. `fallback`, the five composition ids (`editorial-evidence`, `kinetic-cosmos`, `obsidian-atelier`, `spatial-bento`, `horizontal-cinema`), and `missing-variant` are reserved for `@portfolio/*`. A package under another scope starts its id with the scope: `@acme/ocean` is `acme-ocean`.
+- **`name`** (required): plain text, up to 60 characters. Shown wherever the platform lists variants.
+- **`promise`** (required): one sentence, up to 140 characters. The composition idea from DESIGN.md.
+- **`description`** (required): up to 1000 characters.
+- **`author`** (optional): up to 100 characters.
+- **`homepage`** (optional): an https URL with no credentials.
+- **`bestFor`** (optional): 1 to 8 tags, each up to 60 characters, such as `"long-form writing"`.
+
+Text fields are plain text on one line: no `<` or `>`, no control characters, no padding.
+
+## Versions
+
+- **`contract`** (required): `"2.0"`. A host reads its own major and any minor up to its own; a newer minor or another major is refused, with the upgrade or pin that fixes it.
+- **`schemas`** (required): `{ "portfolio": { "min", "max" }, "site": { "min", "max" } }`, the document versions the variant reads. Each range must include the host's, version 2.
+- **`tokenContract`** (required): the appearance token contract the variant reads. `0` until #19 ships tokens; it must equal the host's.
+
+## Character
+
+- **`compositionFamily`** (required): `monograph`, `kinetic`, `gallery`, `bento`, `sequence`, `document`, or `custom`.
+- **`motionIntent`** (required): how much the composition moves. `still`, `subtle`, `kinetic`, `adaptive`, or `directed`. Under reduced motion, every one of them settles: see `quality-gates.md` Gate C.
+- **`performanceTier`** (required): `light` (HTML and CSS), `medium` (one canvas or shader), or `heavy` (a three.js scene). Stay honest; heavy work belongs in an enhancement.
+
+The five first-party compositions have pinned values: `editorial-evidence` is light and still, `kinetic-cosmos` medium and kinetic, `obsidian-atelier` light and subtle, `spatial-bento` heavy and adaptive, `horizontal-cinema` medium and directed.
+
+## Coverage
+
+- **`renderedKinds`** (required): the kinds your variant renders bespoke. Each needs a renderer in the map you pass `renderSection`, and each renderer needs its kind here: a mismatch throws.
+- **`unsupportedKinds`** (required): the kinds your composition deliberately doesn't show. Their sections render nothing. DESIGN.md says why.
+
+A kind in neither list renders through the kit's shared renderer, so the visitor always gets the content. The two lists can't overlap. Each entry is a core kind or an extension kind, `<package>/<name>`.
+
+## Content slots
+
+**`contentSlots`** (required, up to 32): the places the composition needs content, so Studio can say what's missing.
+
+- `id`, `label`: the slot's name and its plain-text label.
+- `select`: what fills it. `{ "kind": "projects" }`, `{ "control": "featured" }`, or `{ "field": "/identity/avatar" }`, a JSON pointer into the portfolio where `*` matches any array index.
+- `level`: `required`, `recommended`, or `optional`.
+- `min`, `max`: how many items.
+- `whenEmpty`: `{ "mode": "omit" | "keep", "note": "..." }`, what the composition does without it.
+
+## Routes
+
+**`routes`** (required): `{ "home": "bespoke" | "shared", "work": "bespoke" | "shared", "views": [...] }`. The host owns every route; this says which it renders through your component.
+
+Each view (up to 16) is `{ "id", "under": "home" | "work", "type": "path" | "fragment", "segment" }`. A path view's first segment can't be one the host reserves (`studio`, `api`, `_next`, `sample`, `reference`, `preview`, `work`, `robots.txt`, `sitemap.xml`, `feed.xml`, the icon and image routes, `manifest.webmanifest`), and two views can't claim the same address.
+
+## Controls
+
+**`controls`** (required): `{ "version", "items", "migrations" }`. Owner-tunable composition choices, stored in `site.yml` under `variantControls.<id>` and handed to you, defaults filled in, as `input.controls`.
+
+Each item has a camelCase `id`, a `label`, a `description`, and a `default`, by type:
+
+- `boolean`.
+- `enum`: 2 to 24 `options`, each `{ "value", "label" }`.
+- `integer`: `min`, `max`, `step`.
+- `contentRef`: a section id, optionally limited to `kinds`. Default `null`.
+- `contentRefList`: up to `max` section ids, at least `min`. Default `[]`.
+
+**Controls change composition only**: layout, order, emphasis, interaction. A control that reads as choosing a palette, a color, type, a material, a shape, a display mode, or motion timing is refused (`manifest.controls-appearance`); #19 owns those.
+
+When you change a control incompatibly, bump `version` and add a migration from each old version to the next, of `rename`, `mapValue`, `clamp`, and `drop` operations. Values stored at another version aren't read: every control renders its default, with a `controls.stale` warning, until the owner migrates or sets them again.
+
+## Enhancements and key bindings
+
+- **`enhancements`** (optional, up to 8): client islands the page reads without. Each is `{ "id", "export": "./enhancements/<name>", "requires": [...] }`, where `export` is a subpath in `package.json` `exports` and `requires` lists up to 4 of `webgl2`, `fine-pointer`, `motion-allowed`, and `min-width:<px>`. Render one with `<Enhancement input={input} id="<id>" />` from `@portfolio/kit/enhancements`, and reserve its space.
+- **`keyBindings`** (optional, up to 16): `{ "region", "keys", "action" }`. Keys are lowercase letters, digits, arrow keys, `PageUp`, `PageDown`, `Home`, or `End`; Tab, Escape, Enter, Space, function keys, and modifier shortcuts are reserved.
+
+## Presentation
+
+- **`visitorControl`** (required): `{ "placement": "header" | "navigation" | "footer" }`, where your one `<VisitorControlSlot />` sits. #19 fills it.
+- **`textDirection`** (required): `["ltr"]` or `["ltr", "rtl"]`. Declaring `rtl` brings the audit's logical-property rule.
+- **`recommendedAppearance`** (optional): an appearance recipe id from #19's catalog, which Studio suggests with the variant.
+
+## Provenance
+
+**`provenance`** (required): `{ "provisional": true | false, "sources": [...] }`. What the variant came from, and what became of each part: `{ "source", "disposition", "note" }`, where `disposition` is `preserved`, `folded-into-pack` (it moved to an appearance pack), `reused-interaction`, or `retired`. A retired source needs a note.
+
+## What v1 fields became
+
+A manifest that still has a v1 field is refused with where it went:
+
+| v1 field                                                    | Now                                                                              |
+| ----------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `slug`                                                      | `id`                                                                             |
+| `tagline`                                                   | `promise`                                                                        |
+| `aesthetic`                                                 | `compositionFamily`                                                              |
+| `motion`                                                    | `motionIntent`                                                                   |
+| `supportedKinds`                                            | `renderedKinds`, with every other kind shared                                    |
+| `version`                                                   | the package's `package.json` version                                             |
+| `authorUrl`                                                 | `homepage`                                                                       |
+| `density`                                                   | gone: density is the composition itself                                          |
+| `typography`, `themes`, `colorSchemes`, `typographyPresets` | gone: the appearance system (#19)                                                |
+| `capabilities`                                              | gone: `multiPage` is `routes`, `rss` is `features.feed`, print is a fixture mode |
+| `screenshots`                                               | gone: the contract fixtures render them                                          |
+
+## Diagnostics
+
+`pnpm check:variants` and every build report each problem with the package, its version, the manifest path, a JSON pointer, the code, what was expected and found, and the fix. The manifest codes: `manifest.invalid`, `manifest.missing`, `manifest.unknown-key`, `manifest.duplicate`, `manifest.unknown-ref`, `manifest.contract-unsupported`, `manifest.contract-newer`, `manifest.schemas-unsupported`, `manifest.token-contract-mismatch`, `manifest.id-reserved`, `manifest.id-prefix`, `manifest.first-party-pin`, `manifest.kinds-overlap`, `manifest.route-reserved-segment`, `manifest.route-conflict`, `manifest.controls-appearance`, `manifest.controls-migration-gap`, `manifest.enhancement-missing-export`, `manifest.key-binding-reserved`, `manifest.provenance-note-required`, and `manifest.recipe-unknown`, the one warning. Registry generation adds `registry.*` codes for the package around the manifest: a missing export or file, a duplicate id, and the like.

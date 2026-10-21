@@ -1,87 +1,74 @@
 # Pre-merge audit checklist
 
 > Run before declaring a variant complete. Failures are not warnings.
-> Loaded at the start of Phase 3 (audit). Used as the sign-off contract
-> with the user before merging.
+> Loaded at the start of Phase 3, and used as the sign-off contract with
+> the user before merging.
 >
-> The checklist is split into **scripted gates** (cheap, automatable, run
-> frequently) and **visual gates** (more expensive, run at sign-off — see
-> `references/quality-gates.md` for the recipes).
+> The checklist splits into **scripted gates** (cheap, run often) and
+> **visual gates** (run at sign-off; `references/quality-gates.md` has the
+> recipes).
 
 ## Scripted gates
 
-Run frequently during Wave 2/3, and once final at Phase 3 entry.
+Run often in Waves 2 and 3, and once more at Phase 3.
 
-- [ ] `node skills/variant-developer/scripts/audit.mjs packages/variant-<slug>` exits 0.
-- [ ] `pnpm typecheck` passes for the variant package and the rest of the monorepo.
-- [ ] `pnpm exec eslint packages/variant-<slug>` passes. If the full `pnpm lint` fails on something unrelated to your variant, file an issue.
-- [ ] `pnpm --filter @portfolio/web build` succeeds.
-- [ ] `pnpm --filter @portfolio/web build:registry` lists the new variant in `registry.generated.ts` AND adds an import to `registry.styles.generated.ts`.
-- [ ] `node skills/variant-developer/scripts/kit-dedup.mjs packages/variant-<slug>` candidates are all resolved (hoisted or marked `// LOCAL: <reason>`).
-- [ ] If you hoisted to `@portfolio/kit`: `pnpm --filter @portfolio/kit test` passes (≥ 80% branch coverage on pure utilities).
-- [ ] `node skills/scripts/sync-checks.mjs` passes — every kit export appears by name in `references/kit-catalog.md`.
+- [ ] `pnpm check:variants --package @portfolio/variant-<id>` exits 0: the registry registers the package and the source audit finds nothing. Then `pnpm check:variants` with no flag, which also checks every other registered variant and the kit's sections.
+- [ ] `pnpm typecheck` passes for the whole workspace.
+- [ ] `pnpm exec eslint packages/variant-<id>` passes.
+- [ ] `pnpm build` succeeds.
+- [ ] `pnpm exec playwright test tests/e2e/motion-contract.spec.ts` passes for your composition, after `pnpm build`.
+- [ ] `node skills/variant-developer/scripts/kit-dedup.mjs packages/variant-<id>`: every candidate hoisted or marked `// LOCAL: <reason>`.
+- [ ] If you hoisted to `@portfolio/kit`: `pnpm --filter @portfolio/kit test` passes.
+- [ ] `node skills/scripts/sync-checks.mjs` passes: every kit export appears by name in `references/kit-catalog.md`.
 
-## Coverage
+## The manifest
 
-- [ ] `supportedKinds` contains every kind in `ALL_SECTION_KINDS`.
-- [ ] Every kind in `supportedKinds` has either a bespoke renderer or explicit `FallbackSection` routing in section dispatch.
+- [ ] `promise` is DESIGN.md's composition idea, in one sentence.
+- [ ] `renderedKinds` lists exactly the kinds with a bespoke renderer, and the renderer map passed to `renderSection` has exactly those.
+- [ ] Every kind in `unsupportedKinds` has a reason in DESIGN.md. Every other kind renders through the shared renderer.
+- [ ] No control chooses appearance: no palette, color, type, material, shape, display mode, or motion timing.
+- [ ] `textDirection` includes `rtl` only when the styles are logical throughout and an Arabic pair reads correctly.
+- [ ] `provenance` names each source and its disposition, with a note for every retired one.
 
-## Themes & schemes
+## The page
 
-- [ ] `themes` contains both `'light'` and `'dark'`.
-- [ ] DESIGN.md justifies the count of color schemes and typography presets.
-- [ ] Each declared color scheme has both a light and dark CSS block in styles.css. If you declare `'bright'` or `'black'`, those blocks exist too.
-- [ ] Each typography preset renders at `/sample?variant=<slug>&typography=<id>`.
+- [ ] Exactly one `<main id={input.ids.main}>` and exactly one `<VisitorControlSlot />`.
+- [ ] Every id the variant renders starts with `input.ids.prefix`.
+- [ ] Navigation links only sections that render.
+- [ ] The page reads completely with every enhancement missing (`globalThis.__portfolioFailEnhancements = true`), and each enhancement's space is reserved.
 
 ## Visual gates (see `references/quality-gates.md`)
 
-- [ ] **Gate A: Visual sanity.** `/sample?variant=<slug>` renders (`scripts/visual-companion/start.sh --mode preview --variant <slug>`), with your variant's tokens applied (paper color, font family, theme toggle visible). NOT plain user-agent default.
-- [ ] **Gate B: Theme × scheme × typography matrix.** ≥ 9 screenshots captured across the meaningful combinations. No contrast bugs surface.
-- [ ] **Gate C: Reduced-motion programmatic verification.**
-  - [ ] Canvas pixel-sample stable across 300ms with reduce-motion ON.
-  - [ ] Floater transform string-equal across 400px scroll.
-  - [ ] Typing animation textContent stable across 500ms.
-- [ ] **Gate D: Print preview.** Backgrounds white, ink black, decorative chrome hidden, gradient text solid, no theme bleed. Or `capabilities.print = false` and DESIGN.md says so.
-- [ ] **Gate F: Screenshots.** PNGs exist on disk at every path declared in `manifest.screenshots`.
-- [ ] **Gate G: Fidelity comparison vs reference** (port-only). Every box in DESIGN.md's `## Fidelity targets` is checked or has a documented intentional drop.
-- [ ] **Gate H: Real-data testing.** Tested against the user's actual pair, not just `portfolio.example.yml`. Long names, missing optional fields, non-ASCII characters all render correctly.
-- [ ] **Gate I: Mobile breakpoint sweep.** 375×667 and 430×932 viewports: no horizontal overflow, decorative floaters hidden, nav collapsed, hit targets ≥ 44×44px.
+- [ ] **Gate A: Visual sanity.** `/sample?variant=<id>` renders your structure (`scripts/visual-companion/start.sh --mode preview --variant <id>`).
+- [ ] **Gate B: Content matrix.** The sample, a sparse pair, and a dense pair: the structure holds in each.
+- [ ] **Gate C: Reduced motion.** The motion contract passes, and anything it can't see (a canvas, a typing animation) is stable under the programmatic checks.
+- [ ] **Gate D: Print preview.** Navigation and decoration hidden, content in reading order.
+- [ ] **Gate G: Fidelity against the reference** (port-only). Every box in DESIGN.md's `## Fidelity targets` is checked or dropped with a reason.
+- [ ] **Gate H: Real data.** The user's own pair: long names, missing optional fields, non-ASCII text, and a right-to-left pair.
+- [ ] **Gate I: Mobile sweep.** 375×667 and 430×932: no horizontal overflow, decoration hidden, navigation collapsed, hit targets at least 44×44px.
 
 ## Accessibility
 
-- [ ] Focus order matches reading order on the default scheme.
-- [ ] All imagery has `alt` text or `aria-hidden`.
-- [ ] Default scheme passes 4.5:1 contrast on body text and 3:1 on large headings (verified via DevTools color picker or computed styles).
-- [ ] `prefers-reduced-motion` reduces or removes all motion (Gate C above is the rigorous check).
-- [ ] Keyboard navigation reaches every interactive element. Hit-target sizing meets 44×44px minimum.
-- [ ] Skip link is the first focusable element and reaches `<main id="main">`.
+- [ ] Focus order matches reading order.
+- [ ] Every image has alt text, or is marked decorative where adjacent text names it.
+- [ ] Keyboard navigation reaches every interactive element, and focus is visible.
+- [ ] The host's skip link reaches your `<main>`, which takes focus (`tabIndex={-1}`).
+- [ ] Headings descend in order: the page's one `h1`, then `h2` per section.
 
 ## Hand-off
 
-Once all gates pass:
-
-- [ ] Push DESIGN.md and the variant package on the same branch as the PR.
-- [ ] In the PR description, paste:
-  - Audit script output (the "audit clean" line).
-  - Kit-catalog updates (delta from `git diff` on the catalog).
-  - Matrix sweep screenshot folder reference.
-  - Fidelity targets table from DESIGN.md (port-only) with each box's status.
-  - Reduced-motion verification snippets and their results.
-- [ ] Demonstrate live rendering during review with `scripts/visual-companion/start.sh --mode preview --variant <slug>`, at `/sample?variant=<slug>`.
-
-## Warnings
-
-- **WARN: themes declares 'bright'/'black' without [data-theme] CSS block** — your manifest claims a theme the visitor can pick, but the CSS doesn't have a block for it. Add the block (see `references/styling-conventions.md`) or drop the claim from `themes`.
+- [ ] DESIGN.md and the package are on the same branch as the PR.
+- [ ] The PR description has the `check:variants` output, the kit-catalog delta, the motion contract result, the fidelity targets table (port-only), and where the screenshots are.
+- [ ] A live render during review: `scripts/visual-companion/start.sh --mode preview --variant <id>`, at `/sample?variant=<id>`.
 
 ## Common failure modes
 
-- **Audit fails on missing kind**: the schema added a new kind since you started. Update `supportedKinds` (and add a renderer or FallbackSection route).
-- **Typecheck fails on missing renderer**: section.tsx has a `case 'X':` but no imported renderer. Add the import or route through FallbackSection.
-- **Build fails on registry**: variant didn't land in `apps/web/node_modules/@portfolio/`. Run `pnpm install` to symlink the workspace.
-- **Variant renders as plain HTML**: the `registry.styles.generated.ts` file doesn't include your variant. Run `pnpm --filter @portfolio/web build:registry` and verify the new import landed.
-- **Buttons render with wrong text color**: the global anchor rule is overriding component classes. Restrict it with `:not([class])` (see `references/common-bugs.md` §2).
-- **Hero squeezed to 80px wide**: a CSS rule is targeting `[id='top']` and matching the hero `<section id="top">` (a hero's id is often `top`). Don't use single-word reserved IDs (`references/common-bugs.md` §4).
-- **SVG branches/gradients invisible**: gradient IDs contain spaces. Slugify (`references/common-bugs.md` §3).
-- **Reduced-motion still animating**: the rAF loop or framer-motion hook isn't gated. CSS alone isn't enough (`references/common-bugs.md` §8).
-- **Print preview renders dark cards**: theme tokens leaking into print. Reset every `--kc-*` variable inside `@media print` (`references/common-bugs.md` §5).
-- **Visual regression**: your variant's CSS leaked into another variant (every variant's stylesheet loads on every page). Verify every selector starts with `[data-variant='your-slug']`.
+- **`/sample?variant=<id>` is a 404**: the build doesn't register the id. `pnpm check:variants --package @portfolio/variant-<id>` says why: the package isn't a dependency of `@portfolio/web`, an export is missing, or the manifest has an error.
+- **`renderSection` throws about `renderedKinds`**: the manifest and the renderer map disagree. Add the kind to both or neither.
+- **The page renders unstyled structure**: the `./styles.css` export is missing or points at the wrong file, or a selector isn't under `[data-variant='<id>']`.
+- **`audit.client-input`**: a `'use client'` module takes the whole input or portfolio. Pass it only the fields it renders.
+- **`audit.clock` or `audit.random`**: use `input.env.now` and `seededRandom(input.env.seed)`.
+- **Hero squeezed to 80px wide**: a rule targets `[id='top']`, which is often the hero's id. (`references/common-bugs.md` §4)
+- **SVG gradients invisible**: a gradient id has spaces. Slugify it. (`references/common-bugs.md` §3)
+- **Reduced motion still animating**: a script loop or framer-motion hook isn't gated. (`references/common-bugs.md` §8)
+- **Another variant changed**: your CSS leaked. Every selector starts with `[data-variant='<id>']`.

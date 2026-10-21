@@ -51,9 +51,9 @@ Every object is strict: a key not listed here or in the kind's fields is refused
 | `motionPolicy`                                  | `respect-os \| reduce` | yes      | `respect-os` by default; `reduce` when the user wants motion off for everyone.                                   |
 | `features`                                      | object                 | yes      | `feed: true` serves `/feed.xml`; `productAttribution` defaults to `false`.                                       |
 | `sections`                                      | object                 | optional | `{ <section id>: { hidden: true } }` to keep a section in the portfolio and off the page.                        |
-| `appearanceInputs`, `routes`, `variantControls` | object                 | optional | Leave out. #19 uses `appearanceInputs`, and #5 `routes` and `variantControls`.                                   |
+| `appearanceInputs`, `routes`, `variantControls` | object                 | optional | Leave out. #19 uses `appearanceInputs`; `routes` and `variantControls` follow the variant's manifest.            |
 
-`appearance` ids must be ones this build registers. `variant` is `editorial` or `kinetic-cosmos`. `colorScheme` and `typography` are ids the selected variant declares in its manifest: Editorial has `warm`, `noir`, and `ink-and-paper`, and `classic` and `modernist`; Kinetic Cosmos has `nebula`, `aurora`, and `solar`, and `geometric` and `humanist`. `designLanguage` is `platform-neutral`. `displayMode` is `system`, `light`, or `dark`. Neither document may hold a deployment setting (the origin, the profile) or anything shaped like a secret.
+`appearance.variant` names an installed variant by its manifest id. One this build doesn't register renders as the fallback composition, with a `variant.unavailable` warning, and `fallback` itself can't be selected. Use the owner's choice, or `site.example.yml`'s `editorial-evidence`. `designLanguage` is `platform-neutral`. `colorScheme` and `typography` are the appearance system's ids (#19), such as `warm` and `classic`, which this build records without checking. `displayMode` is `system`, `light`, `dark`, or `high-contrast`. Neither document may hold a deployment setting (the origin, the profile) or anything shaped like a secret.
 
 ## Section kinds
 

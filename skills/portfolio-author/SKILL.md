@@ -149,7 +149,7 @@ Environment-specific facts that bite agents who skip the references:
 - `period.start` and `period.end` accept loose strings (`"Jan 2024"`, `"2024-01"`, `"present"`). Prefer human-readable (`"Jan 2024"`) over ISO when the source is ambiguous: readers see this output, not parsers.
 - Avatar paths are relative to `apps/web/public/`. `avatar: { src: '/me.jpg' }` needs a real file at `apps/web/public/me.jpg`. Resume PDFs follow the same rule (`/resume.pdf` is `apps/web/public/resume.pdf`). The platform doesn't fetch arbitrary URLs.
 - `links[].platform` is free-form, but variants pick an icon, a label, and an order from known values, the ones `references/schema.md` lists. For an unknown platform, omit `platform` and use `label` only; the variant falls back to a generic link.
-- The `tagline` and `subtagline` fields each have a recommended maximum; see `references/quality-rules.md`. Hero variants truncate gracefully but the editorial variant doesn't. Stay under the cap.
+- The `tagline` and `subtagline` fields each have a recommended maximum; see `references/quality-rules.md`. Some compositions truncate a long one gracefully and some don't. Stay under the cap.
 - The first sections are what a visitor sees before scrolling. Hero, lede, and one signal-dense section like `tenure` or `stats` is the canonical opening.
 - This platform's photographers, makers, musicians, academics, and writers all use the same schema. Don't assume a default audience; read what the user gives you. A wedding photographer's portfolio looks very different from a backend engineer's, and both are valid uses of the same documents.
 
