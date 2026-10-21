@@ -2,19 +2,29 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { expect, test } from '@playwright/test';
 import { DEFAULT_PORTFOLIO, startApp } from '../harness/app-server.mjs';
-import { loadHome, runningAnimations, scrollTops } from '../harness/motion';
+import {
+  frameLoops,
+  loadHome,
+  runningAnimations,
+  scrollThrough,
+  scrollTops,
+} from '../harness/motion';
 import { FALLBACK_ID, VARIANTS } from '../harness/registry';
 
 // #34's reduced-motion contract, for every composition this build registers
 // (#5). Under motionPolicy reduce, whatever the visitor's setting, and under
-// respect-os when the visitor asks for less motion, nothing runs once the
-// page has settled, and a navigation link jumps to its section. The Web
-// Animations API lists CSS animations, transitions, and script animations,
-// so a reduced-motion rule in a stylesheet can't hide one. Each variant
-// passes this as it registers (#13, #14). The fallback composition renders
-// for a selection no package registers, so its case selects missing-variant.
-// The controls show what each check sees: an animation the test starts, and
-// smooth scrolling it turns on.
+// respect-os when the visitor asks for less motion: nothing runs once the
+// page has settled, or after a jump, or as each part of the page scrolls
+// into view; no script keeps asking for animation frames; and a navigation
+// link jumps to its section, in the window or in a scroll container of the
+// composition's own. The Web Animations API lists CSS animations,
+// transitions, and script animations, so a reduced-motion rule in a
+// stylesheet can't hide one. Each variant passes this as it registers (#13,
+// #14). The fallback composition renders for a selection no package
+// registers, so its case selects missing-variant. The controls show what
+// each check sees: an animation and a frame loop the test starts, and smooth
+// scrolling it turns on; tests/e2e/motion-harness.spec.ts shows the rest on
+// pages of its own.
 //
 // Each case needs its own site document, so each starts its own server
 // rather than the harness's one per file. The browser reaches nothing
@@ -96,19 +106,29 @@ for (const { manifest } of VARIANTS) {
         const endless = (await runningAnimations(page)).filter((animation) => animation.endless);
         expect(endless).toEqual([]);
         await expect.poll(() => runningAnimations(page), { timeout: 5_000 }).toEqual([]);
+        // No script keeps asking for frames.
+        expect(await frameLoops(page)).toBeLessThan(5);
+        // Nothing starts as each part of the page comes into view, and what
+        // a scroll set off has stopped once it's done.
+        expect(await scrollThrough(page)).toEqual([]);
+        await expect.poll(() => runningAnimations(page), { timeout: 5_000 }).toEqual([]);
 
-        // The control: an endless animation the page starts is one the check sees.
+        // The controls: an endless animation and a frame loop the page starts
+        // are ones the checks see.
         await page.evaluate(() => {
           document.querySelector('main')!.animate([{ opacity: 1 }, { opacity: 0.99 }], {
             duration: 1_000,
             iterations: Infinity,
           });
+          const tick = () => requestAnimationFrame(tick);
+          requestAnimationFrame(tick);
         });
         expect(await runningAnimations(page)).toContainEqual({
           kind: 'script opacity',
           target: expect.stringMatching(/^main\b/),
           endless: true,
         });
+        expect(await frameLoops(page)).toBeGreaterThan(20);
       });
 
       test('a navigation link jumps to its section', { annotation }, async ({ page }) => {
@@ -117,6 +137,10 @@ for (const { manifest } of VARIANTS) {
         // It moved the page, and no scroll event saw it anywhere but in place.
         expect(jump.before - jump.settled).toBeGreaterThan(100);
         expect(jump.farthest).toBeLessThan(4);
+        // Arriving starts nothing endless, and whatever it started stops.
+        const arrived = (await runningAnimations(page)).filter((animation) => animation.endless);
+        expect(arrived).toEqual([]);
+        await expect.poll(() => runningAnimations(page), { timeout: 5_000 }).toEqual([]);
 
         // The control: with smooth scrolling on, scroll events see the same click on its way.
         await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
