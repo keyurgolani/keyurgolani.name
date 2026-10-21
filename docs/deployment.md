@@ -6,7 +6,7 @@ The server runs one deployment profile, chosen by `PORTFOLIO_PROFILE` at startup
 - `demo` serves the bundled sample pair, for a product demo, and asks crawlers to index nothing.
 - `owner` adds Studio, drafts, and revisions to your portfolio. It doesn't start yet: it needs an authentication provider, and none ships.
 
-Run it in a container (recommended) or on Node. The browser editor, the variant gallery, the variant preview pages, and their write APIs are gone in every profile, `pnpm dev` included. Edit `config/portfolio.yml` and `config/site.yml` instead: `pnpm dev` picks up each save, and a production server picks them up when it restarts. While `config/` holds neither, `pnpm dev` renders the bundled examples; a production server refuses to start. `pnpm dev` listens on every network interface; on a network you don't trust, run `pnpm dev --hostname 127.0.0.1`.
+Run it in a container (recommended) or on Node. The browser editor, the variant gallery, the variant preview pages, and their write APIs are gone in every profile, `pnpm dev` included. Edit `config/portfolio.yml` and `config/site.yml` instead: `pnpm dev` picks up each save, and a production server picks them up when it restarts. While `config/` holds neither, `pnpm dev` renders the bundled examples; a production server refuses to start. `pnpm dev` and `pnpm start` listen on `127.0.0.1` only.
 
 ## Profiles
 
@@ -324,7 +324,7 @@ PORTFOLIO_PROFILE=read-only PORTFOLIO_ORIGIN=https://jane.name \
   PORTFOLIO_SOURCE_DIR=../../config pnpm start
 ```
 
-`pnpm start` runs from `apps/web`, so the relative source directory is the repo's `config/`. The host listens on `process.env.PORT` (defaults to 3000).
+`pnpm start` runs from `apps/web`, so the relative source directory is the repo's `config/`. The host listens on `127.0.0.1`, on `process.env.PORT` (defaults to 3000), so a reverse proxy on the same host is what visitors reach (see [Reverse proxy and HTTPS](#reverse-proxy-and-https)).
 
 For a process manager (PM2, systemd, etc.), wrap `pnpm start` with the same environment. You don't need to ship `node_modules` to your runtime if you copy `apps/web/.next/standalone/` and the public assets.
 
