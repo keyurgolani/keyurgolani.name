@@ -5,8 +5,9 @@
 // in workflows (containers, services, and action inputs such as setup-qemu's
 // `image` and setup-buildx's `driver-opts: image=`), Dockerfiles, and Compose
 // files. Also keeps the Playwright container on the @playwright/test release
-// and CI's NODE_VERSION on the Dockerfile's Node release, and makes every
-// docker/metadata-action step say whether it moves `latest`.
+// and CI's NODE_VERSION on the Dockerfile's Node release. Every
+// docker/metadata-action step must set `latest=false`, so `latest` moves only
+// through a raw `latest` tag rule with an `enable=` condition.
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -45,23 +46,86 @@ export function driverOptImages(value) {
     .map((part) => part.slice('image='.length));
 }
 
+// docker/metadata-action under its current and former names. GitHub matches
+// the owner and repo in `uses:` without regard to case.
+const METADATA_ACTIONS = new Set(['docker/metadata-action', 'crazy-max/ghaction-docker-meta']);
+const LATEST_FIX =
+  'set latest=false, and add latest only through a type=raw,value=latest rule with an enable= condition';
+
 /**
- * @returns {string | null} why a docker/metadata-action `flavor` input leaves
- * the `latest` tag to its default. That default, `latest=auto`, adds `latest`
- * on every semver tag push, whatever the `tags` rules say, so a workflow
- * must state `latest=false` or `latest=true`.
+ * The entries of a metadata-action list input (`tags`, `flavor`) as the action
+ * reads them: one per line, skipping blank lines and lines that start with `#`.
+ */
+function metadataEntries(value) {
+  return String(value ?? '')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line !== '' && !line.startsWith('#'));
+}
+
+/**
+ * An entry's comma-separated fields as [lowercased key, value]. A bare field
+ * is a `value`. Expressions become `${{ }}` first, so their commas don't split.
+ */
+function metadataFields(entry) {
+  return entry
+    .replace(/\$\{\{.*?\}\}/g, '${{ }}')
+    .split(',')
+    .map((field) => {
+      const at = field.indexOf('=');
+      if (at < 0) return ['value', field.trim()];
+      return [field.slice(0, at).trim().toLowerCase(), field.slice(at + 1).trim()];
+    });
+}
+
+const CSV_QUOTES = 'uses CSV quotes, which this check does not read';
+
+/**
+ * @returns {string | null} why a docker/metadata-action `flavor` input lets the
+ * action add `latest` by itself. The default, `latest=auto`, adds it when the
+ * first tag rule that applies is a final semver or pep440 version, a `match`
+ * rule, or a tag ref (one of the default rules when `tags` is empty), and
+ * `latest=true` adds it on every run. Only `latest=false` leaves `latest` to
+ * the tag rules.
  */
 export function latestFlavorProblem(flavor) {
-  const entries = String(flavor ?? '')
-    .split(/[\n,]/)
-    .map((part) => part.trim())
-    .filter((part) => part.startsWith('latest='));
-  if (entries.length === 0) return 'has no latest= setting, so latest=auto adds latest on tags';
-  const values = entries.map((part) => part.slice('latest='.length));
-  if (values.some((value) => value !== 'true' && value !== 'false')) {
-    return `sets latest=${values.find((value) => value !== 'true' && value !== 'false')}, so latest can move on tags`;
+  const text = String(flavor ?? '');
+  if (text.includes('${{')) return 'comes from an expression, so it cannot be checked';
+  if (text.includes('"')) return CSV_QUOTES;
+  const values = metadataEntries(text)
+    .flatMap(metadataFields)
+    .filter(([key]) => key === 'latest')
+    .map(([, value]) => value);
+  if (values.length === 0) {
+    return 'has no latest= entry, so it runs latest=auto, which adds latest on final versions and tag pushes';
   }
-  return null;
+  if (values.length > 1) return `has ${values.length} latest= entries`;
+  if (values[0] === 'false') return null;
+  if (values[0] === 'auto')
+    return 'sets latest=auto, which adds latest on final versions and tag pushes';
+  if (values[0] === 'true') return 'sets latest=true, which adds latest on every run';
+  return `sets latest=${values[0]}`;
+}
+
+/**
+ * @returns {string[]} why docker/metadata-action `tags` entries push `latest`
+ * on every run: a raw `latest` rule (`type=raw` is the default type) with no
+ * `enable=` condition.
+ */
+export function latestTagProblems(tags) {
+  const problems = [];
+  for (const entry of metadataEntries(tags)) {
+    if (entry.includes('"')) {
+      problems.push(`entry ${entry} ${CSV_QUOTES}`);
+      continue;
+    }
+    const attrs = Object.fromEntries(metadataFields(entry));
+    const raw = (attrs.type ?? 'raw') === 'raw';
+    if (raw && attrs.value === 'latest' && (attrs.enable ?? 'true') === 'true') {
+      problems.push(`entry ${entry} has no enable= condition, so every run moves latest`);
+    }
+  }
+  return problems;
 }
 
 /** Parses YAML and returns the plain data plus the line of any node path. */
@@ -96,15 +160,17 @@ export function checkWorkflow(text, file) {
         check(image, [...at, 'with', 'driver-opts'], `${action} driver-opts image=`, imageProblem);
       }
     }
-    if (action === 'docker/metadata-action') {
-      const problem = latestFlavorProblem(inputs.flavor);
-      if (problem) {
+    if (METADATA_ACTIONS.has(action.toLowerCase())) {
+      const latest = (input, message) =>
         problems.push({
           file,
-          line: lineAt([...at, 'with', 'flavor']) ?? lineAt([...at, 'uses']),
-          message: `docker/metadata-action flavor ${problem}`,
+          line: lineAt([...at, 'with', input]) ?? lineAt([...at, 'uses']),
+          message: `${action} ${input} ${message}`,
+          title: 'latest tag',
         });
-      }
+      const flavor = latestFlavorProblem(inputs.flavor);
+      if (flavor) latest('flavor', `${flavor}; ${LATEST_FIX}`);
+      for (const problem of latestTagProblems(inputs.tags)) latest('tags', problem);
     }
   };
 
@@ -319,8 +385,8 @@ function main() {
   problems.push(...checkNodeVersions(workflows, dockerfiles));
 
   const gate = currentGate();
-  for (const { file, line, message } of problems) {
-    reportError(message, { file, line, title: 'unpinned reference' });
+  for (const { file, line, message, title = 'unpinned reference' } of problems) {
+    reportError(message, { file, line, title });
     if (gate)
       writeFailureRecord({ ...gate, test: message, asset: line ? `${file}:${line}` : file });
   }

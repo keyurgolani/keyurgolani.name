@@ -9,6 +9,7 @@ import {
   driverOptImages,
   imageProblem,
   latestFlavorProblem,
+  latestTagProblems,
   usesProblem,
 } from './check-pins.mjs';
 
@@ -215,12 +216,69 @@ test('the Playwright container must match @playwright/test', () => {
   ]);
 });
 
-test('metadata-action flavor must state latest=false or latest=true', () => {
-  assert.match(latestFlavorProblem(undefined), /no latest= setting/);
-  assert.match(latestFlavorProblem('prefix=v'), /no latest= setting/);
+test('metadata-action flavor must set latest=false', () => {
+  for (const flavor of [
+    'latest=false',
+    'prefix=v,latest=false',
+    'prefix=v, latest=false',
+    'suffix=-x,onlatest=true,latest=false',
+    'latest=false\r\nprefix=v',
+    'LATEST=false',
+    'latest = false',
+    '# latest=auto\nlatest=false',
+  ]) {
+    assert.equal(latestFlavorProblem(flavor), null, flavor);
+  }
+  assert.match(latestFlavorProblem(undefined), /no latest= entry, so it runs latest=auto/);
+  assert.match(latestFlavorProblem('prefix=v'), /no latest= entry/);
+  assert.match(latestFlavorProblem('onlatest=false'), /no latest= entry/);
   assert.match(latestFlavorProblem('latest=auto'), /sets latest=auto/);
-  assert.equal(latestFlavorProblem('latest=false'), null);
-  assert.equal(latestFlavorProblem('prefix=v,onlatest=true\nlatest=true'), null);
+  assert.match(
+    latestFlavorProblem('latest=true'),
+    /sets latest=true, which adds latest on every run/,
+  );
+  assert.match(latestFlavorProblem('latest=False'), /sets latest=False/);
+  assert.match(latestFlavorProblem('latest=false # keep latest off'), /sets latest=false # keep/);
+  // Commented-out lines don't count, and the action takes the last entry.
+  assert.match(latestFlavorProblem('# latest=false'), /no latest= entry/);
+  assert.match(latestFlavorProblem('# prefix=v,latest=false'), /no latest= entry/);
+  assert.match(latestFlavorProblem('latest=false\nLatest=auto'), /has 2 latest= entries/);
+  assert.match(latestFlavorProblem('latest=false,latest = true'), /has 2 latest= entries/);
+  // GitHub substitutes expressions first, and CSV quotes can hide entries.
+  assert.match(
+    latestFlavorProblem("latest=${{ !contains(github.ref_name, '-') }}"),
+    /comes from an expression/,
+  );
+  assert.match(latestFlavorProblem('${{ inputs.flavor }}'), /comes from an expression/);
+  assert.match(latestFlavorProblem('latest=false\n"latest=auto"'), /CSV quotes/);
+  assert.match(latestFlavorProblem('"prefix=v\nlatest=false\n"'), /CSV quotes/);
+});
+
+test('metadata-action tags may add latest only with an enable= condition', () => {
+  assert.deepEqual(
+    latestTagProblems(
+      [
+        'type=sha,format=short',
+        'type=semver,pattern={{version}}',
+        'type=raw,value=latest,enable={{is_default_branch}}',
+        "type=raw,value=latest,enable=${{ !contains(github.ref_name, '-') }}",
+        'type=raw,value=${{ github.ref_name }}',
+        'type=raw,value=latest,enable=false',
+        '# type=raw,value=latest',
+      ].join('\n'),
+    ),
+    [],
+  );
+  assert.deepEqual(latestTagProblems(undefined), []);
+  assert.deepEqual(
+    latestTagProblems('type=raw,value=latest\nlatest\nvalue=latest,enable=true\n"value=latest"'),
+    [
+      'entry type=raw,value=latest has no enable= condition, so every run moves latest',
+      'entry latest has no enable= condition, so every run moves latest',
+      'entry value=latest,enable=true has no enable= condition, so every run moves latest',
+      'entry "value=latest" uses CSV quotes, which this check does not read',
+    ],
+  );
 });
 
 test('workflows: a semver-tag metadata-action without a latest flavor is refused', () => {
@@ -249,10 +307,43 @@ jobs:
 `;
   const problems = checkWorkflow(workflow, 'publish.yml');
   assert.deepEqual(messages(problems), [
-    'docker/metadata-action flavor has no latest= setting, so latest=auto adds latest on tags',
+    'docker/metadata-action flavor has no latest= entry, so it runs latest=auto, which adds latest on final versions and tag pushes; set latest=false, and add latest only through a type=raw,value=latest rule with an enable= condition',
   ]);
   assert.deepEqual(
-    problems.map((p) => p.line),
-    [8],
+    problems.map((p) => [p.line, p.title]),
+    [[8, 'latest tag']],
+  );
+});
+
+test('workflows: metadata-action is matched without regard to case and by its former name', () => {
+  const workflow = `
+jobs:
+  publish:
+    steps:
+      - uses: Docker/Metadata-Action@${SHA}
+      - uses: crazy-max/ghaction-docker-meta@${SHA}
+        with:
+          flavor: latest=true
+      - uses: docker/metadata-action@${SHA}
+        with:
+          tags: |
+            type=sha
+            type=raw,value=latest
+          flavor: latest=false
+`;
+  const problems = checkWorkflow(workflow, 'publish.yml');
+  assert.deepEqual(
+    problems.map((p) => [p.line, p.message.split(';')[0]]),
+    [
+      [
+        5,
+        'Docker/Metadata-Action flavor has no latest= entry, so it runs latest=auto, which adds latest on final versions and tag pushes',
+      ],
+      [8, 'crazy-max/ghaction-docker-meta flavor sets latest=true, which adds latest on every run'],
+      [
+        11,
+        'docker/metadata-action tags entry type=raw,value=latest has no enable= condition, so every run moves latest',
+      ],
+    ],
   );
 });
