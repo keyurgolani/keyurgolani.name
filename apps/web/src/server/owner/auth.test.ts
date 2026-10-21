@@ -57,6 +57,7 @@ const OPERATIONS = [
   op('auth.session.extend', 'auth.session', 'command'),
   op('preview.grant.renew', 'preview.grant', 'command'),
   op('auth.login', 'auth.session', 'command', { session: false, bodyTypes: ['json', 'form'] }),
+  op('auth.logout', 'auth.session', 'command', { session: false }),
   // A command that needs no session, and isn't auth.login.
   op('test.public', 'auth.session', 'command', { session: false }),
   // A query that asks for the origin check, as no registered one does.
@@ -229,8 +230,8 @@ test('a command without an exact Origin, from a cross-site fetch, without a matc
   assert.equal(audit.records.at(-1)?.actor, 'anonymous');
 });
 
-test('every command but auth.login needs the CSRF token, session or not, and a query that asks for the check needs the exact Origin too', async (t) => {
-  const { dispatch, handled, issue, audit } = await setup(t);
+test('every command but auth.login, and auth.logout with no session, needs the CSRF token, and a query that asks for the check needs the exact Origin too', async (t) => {
+  const { dispatch, handled, issue, audit, auth } = await setup(t);
   // A command that needs no session still needs a token, so without one it is refused.
   const bare = await dispatch(request('test.public'), 'test.public');
   assert.equal(await codeOf(bare), 'request_origin_rejected');
@@ -255,7 +256,41 @@ test('every command but auth.login needs the CSRF token, session or not, and a q
     (await dispatch(request('test.guarded', { token, headers: both }), 'test.guarded')).status,
     200,
   );
-  assert.deepEqual(handled, ['test.public', 'test.guarded']);
+
+  // auth.logout with a session needs its token like any command. With no
+  // session, or one that ended, it has none to take one from, and the exact
+  // Origin is all it needs.
+  const noCsrf = { 'x-csrf-token': '' };
+  const withSession = await dispatch(
+    request('auth.logout', { token, headers: noCsrf }),
+    'auth.logout',
+  );
+  assert.equal(await codeOf(withSession), 'request_origin_rejected');
+  assert.equal(audit.records.at(-1)?.refs.reason, 'csrf_missing');
+  const ended = await issue();
+  assert.ok(await auth.sessions.end(sessionDigest(ended), 'logout'));
+  for (const cookie of [undefined, ended, 'not-a-token']) {
+    const response = await dispatch(
+      request('auth.logout', { token: cookie, headers: noCsrf }),
+      'auth.logout',
+    );
+    assert.equal(response.status, 200, String(cookie));
+    // It sets the cookie itself, so step 2 doesn't clear it as well.
+    assert.equal(response.headers.get('set-cookie'), null, String(cookie));
+  }
+  const noOrigin = await dispatch(
+    request('auth.logout', { headers: { origin: '' } }),
+    'auth.logout',
+  );
+  assert.equal(await codeOf(noOrigin), 'request_origin_rejected');
+  assert.equal(audit.records.at(-1)?.refs.reason, 'origin_missing');
+  assert.deepEqual(handled, [
+    'test.public',
+    'test.guarded',
+    'auth.logout',
+    'auth.logout',
+    'auth.logout',
+  ]);
 });
 
 test('two session cookies give no session, and neither is cleared', async (t) => {

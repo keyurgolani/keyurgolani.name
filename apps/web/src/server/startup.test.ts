@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { randomBytes } from 'node:crypto';
 import { copyFileSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -29,7 +30,7 @@ function sourceDir(t: { after: (fn: () => void) => void }, document?: string): s
   return dir;
 }
 
-function start(env: Env) {
+function start(env: Env, options: { authProviders?: [] } = {}) {
   return runStartup({
     env,
     cwd: '/srv/app',
@@ -38,6 +39,7 @@ function start(env: Env) {
     readFile: () => {
       throw new Error('no files in this test');
     },
+    ...options,
   });
 }
 
@@ -67,15 +69,62 @@ test('read-only starts from a valid source directory', async (t) => {
 
 test('owner refuses to start: no authentication provider is registered', async (t) => {
   const dir = sourceDir(t, VALID);
+  // A build that registers none; this one registers the password provider.
+  const result = await start(
+    { ...PRODUCTION, PORTFOLIO_PROFILE: 'owner', PORTFOLIO_SOURCE_DIR: dir },
+    { authProviders: [] },
+  );
+  assert.equal(result.ok, false);
+  assert.equal(result.profile, 'owner');
+  assert.deepEqual(fatalCodes(result), ['PORTFOLIO_PROFILE:auth_provider_missing']);
+  assert.match(result.issues[0]!.message, /read-only/);
+});
+
+test('owner with the password provider refuses to start without a hash and a data directory, and warns at 0 trusted hops', async (t) => {
+  const dir = sourceDir(t, VALID);
   const result = await start({
     ...PRODUCTION,
     PORTFOLIO_PROFILE: 'owner',
     PORTFOLIO_SOURCE_DIR: dir,
   });
   assert.equal(result.ok, false);
-  assert.equal(result.profile, 'owner');
-  assert.deepEqual(fatalCodes(result), ['PORTFOLIO_PROFILE:auth_provider_missing']);
-  assert.match(result.issues[0]!.message, /read-only/);
+  assert.deepEqual(fatalCodes(result), [
+    'PORTFOLIO_AUTH_PASSWORD_HASH_FILE:required',
+    'PORTFOLIO_DATA_DIR:required',
+  ]);
+  assert.deepEqual(
+    result.issues
+      .filter((issue) => issue.severity === 'warning')
+      .map((issue) => `${issue.key}:${issue.code}`),
+    ['PORTFOLIO_TRUSTED_PROXY_HOPS:no_source_limits'],
+  );
+});
+
+test('at 0 trusted hops, startup warns that sign-in has only its global limits', async (t) => {
+  const dir = sourceDir(t, VALID);
+  const data = mkdtempSync(path.join(tmpdir(), 'startup-data-'));
+  t.after(() => rmSync(data, { recursive: true, force: true }));
+  const base64 = (bytes: Buffer) => bytes.toString('base64').replace(/=+$/, '');
+  const env: Env = {
+    ...PRODUCTION,
+    PORTFOLIO_PROFILE: 'owner',
+    PORTFOLIO_SOURCE_DIR: dir,
+    PORTFOLIO_DATA_DIR: data,
+    // auth.secret parses the hash and never derives, so a random key will do.
+    PORTFOLIO_AUTH_PASSWORD_HASH: `$scrypt$ln=17,r=8,p=1$${base64(randomBytes(16))}$${base64(randomBytes(32))}`,
+  };
+  const warnings = (result: StartupResult) =>
+    result.issues.filter((issue) => issue.severity === 'warning');
+  const direct = await start(env);
+  assert.equal(direct.ok, true, JSON.stringify(direct.issues));
+  const [warning, ...others] = warnings(direct);
+  assert.deepEqual(others, []);
+  assert.equal(`${warning?.key}:${warning?.code}`, 'PORTFOLIO_TRUSTED_PROXY_HOPS:no_source_limits');
+  assert.match(warning?.message ?? '', /only its global limits/);
+  // Behind a proxy, each source has its own limit, and there's nothing to warn about.
+  const proxied = await start({ ...env, PORTFOLIO_TRUSTED_PROXY_HOPS: '1' });
+  assert.equal(proxied.ok, true, JSON.stringify(proxied.issues));
+  assert.deepEqual(warnings(proxied), []);
 });
 
 test('owner reports configuration problems before the missing provider', async () => {

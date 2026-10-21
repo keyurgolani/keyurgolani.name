@@ -5,10 +5,10 @@ import { expect, test } from '../harness/fixtures';
 import { profileMatrix, READ_ONLY_APP } from '../harness/profile-matrix';
 
 // The route-level matrix (#1, AC4) for read-only, against the built server;
-// demo.spec.ts runs it for demo. Owner runs the same matrix in process until
-// #2 ships a provider (server/composition-owner.test.ts). The build's route
-// manifests must list exactly the table's routes, so a route Next serves from
-// outside src/app, or at a URL the table doesn't expect, fails here too.
+// demo.spec.ts runs it for demo, and owner.spec.ts for owner with the
+// password provider (#2). The build's route manifests must list exactly the
+// table's routes, so a route Next serves from outside src/app, or at a URL
+// the table doesn't expect, fails here too.
 
 // apps/web has no "type": "module", so its modules are CommonJS to Node and
 // load through require().

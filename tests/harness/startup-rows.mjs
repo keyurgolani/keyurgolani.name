@@ -86,7 +86,7 @@ const PRODUCTION = 'in production';
 const SOURCE = 'the source directory';
 const PAIR = 'the pair';
 const DOCUMENT = 'the document';
-const PROFILES = 'profiles this build cannot start';
+const OWNER = 'what owner needs';
 
 /** @type {readonly StartupRow[]} */
 export const STARTUP_ROWS = [
@@ -502,10 +502,13 @@ export const STARTUP_ROWS = [
     fatal: [{ code: 'id.duplicate', path: '/sections/1/id', line: 11 }],
   },
   {
-    group: PROFILES,
-    name: 'owner, with no authentication provider registered',
+    group: OWNER,
+    name: 'owner, with no password hash or data directory',
     env: (paths) => readOnly(paths, { PORTFOLIO_PROFILE: 'owner' }),
-    fatal: [named('PORTFOLIO_PROFILE', 'auth_provider_missing')],
+    fatal: [
+      named('PORTFOLIO_AUTH_PASSWORD_HASH_FILE', 'required'),
+      named('PORTFOLIO_DATA_DIR', 'required'),
+    ],
   },
 ];
 

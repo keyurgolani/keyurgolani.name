@@ -22,8 +22,10 @@ import type { Dispatch } from './studio-port';
 //   3. commands, and any query that asks: checkOrigin, for origin, fetch
 //      metadata, content type, and CSRF (#2): 403
 //   4. authorize(capability, session): 403. Then touchSession may slide the
-//      session, and throttle may answer instead, such as auth.login's 429 (#2)
-//   5. input schema, on the search parameters or the JSON or form body: 400
+//      session, and throttle may answer instead, such as auth.login's 429,
+//      or hold a place for the request until it has its answer (#2)
+//   5. input schema, on the search parameters or the JSON or form body: 400,
+//      or what invalidInput answers instead, such as a form post's 303 (#2)
 //   6. expected draft version or live revision (#3): 409
 //   7. handler, then output schema; anything unexpected: 500
 //
@@ -68,6 +70,9 @@ export interface SessionResolution {
  */
 export type Handler = (authorized: Authorized, input: unknown, context: HandlerContext) => unknown;
 
+/** What a throttle goes on with when it holds a place for the request: the dispatcher calls it at the end. */
+export type Release = () => void;
+
 /** What the composition root binds for a profile. */
 export interface StudioBindings {
   /** Handlers by operation name. */
@@ -90,9 +95,18 @@ export interface StudioBindings {
   /**
    * After step 4, before the body is read (#2): a result to answer with
    * instead, such as auth.login's `rate_limited` with Retry-After or a 303
-   * for a form post, or null to go on.
+   * for a form post, or null to go on. Or a Release to go on with, when it
+   * holds a place for the request, such as one of a source's sign-in
+   * attempts: the dispatcher calls it once the request has its answer,
+   * however it ends.
    */
-  readonly throttle: (context: SessionContext) => Promise<StudioResult | null>;
+  readonly throttle: (context: SessionContext) => Promise<StudioResult | Release | null>;
+  /**
+   * Step 5, when the input doesn't read or doesn't match (#2): a result to
+   * answer with instead of 400 `invalid_input`, such as a 303 back to the
+   * sign-in page for auth.login's form, or null for the 400.
+   */
+  readonly invalidInput: (context: SessionContext) => Promise<StudioResult | null>;
   /** Step 6 (#3): whether the version the input names is still current. */
   readonly checkVersion: (
     context: SessionContext & { readonly input: unknown },
@@ -110,6 +124,7 @@ export const NO_BINDINGS: StudioBindings = Object.freeze({
   checkOrigin: async () => false,
   touchSession: async () => {},
   throttle: async () => null,
+  invalidInput: async () => null,
   checkVersion: async () => false,
 });
 
@@ -203,26 +218,36 @@ export function createDispatcher(options: DispatcherOptions): Dispatch {
       if (!authorized) return fail('capability_denied');
       if (session) await touch(options, { ...context, session });
       const throttled = await options.throttle(context);
-      if (throttled) {
+      if (throttled !== null && typeof throttled !== 'function') {
         if (throttled.kind === 'data') {
           throw new Error('A throttle answers with an error or a 303.');
         }
         return respond(operation, throttled);
       }
 
-      const read: Input | typeof INVALID =
-        operation.kind === 'query' ? searchInput(request) : await bodyInput(request, operation);
-      const input = read === INVALID ? undefined : operation.input.safeParse(read.value);
-      if (read === INVALID || !input?.success) return fail('invalid_input');
+      try {
+        const read: Input | typeof INVALID =
+          operation.kind === 'query' ? searchInput(request) : await bodyInput(request, operation);
+        const input = read === INVALID ? undefined : operation.input.safeParse(read.value);
+        if (read === INVALID || !input?.success) {
+          const answer = await options.invalidInput(context);
+          if (answer && answer.kind !== 'data') return respond(operation, answer);
+          return fail('invalid_input');
+        }
 
-      if (operation.expects && !(await options.checkVersion({ ...context, input: input.data }))) {
-        return fail('version_conflict');
+        if (operation.expects && !(await options.checkVersion({ ...context, input: input.data }))) {
+          return fail('version_conflict');
+        }
+
+        const handler = handlers[operation.name];
+        if (!handler) throw new Error(`No handler is bound for ${operation.name}.`);
+        const answer = await handler(authorized, input.data, { ...context, inputType: read.type });
+        return respond(operation, answer);
+      } finally {
+        // Whatever happened after the throttle, including a body that broke
+        // off as it was read.
+        throttled?.();
       }
-
-      const handler = handlers[operation.name];
-      if (!handler) throw new Error(`No handler is bound for ${operation.name}.`);
-      const answer = await handler(authorized, input.data, { ...context, inputType: read.type });
-      return respond(operation, answer);
     } catch {
       // The error itself stays out of the log: it can carry draft content.
       // So does a name no entry has, which is only part of a URL.

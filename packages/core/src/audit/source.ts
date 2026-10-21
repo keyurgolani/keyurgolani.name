@@ -1,9 +1,10 @@
 import { isIPv4, isIPv6 } from 'node:net';
 import { recordOwnerModule } from '../load-trace';
 
-// Where a request came from, as the audit log keeps it (#2): never the full
-// address, only its IPv4 /24 or IPv6 /48 prefix, or `unknown` when no
-// trusted proxy named one.
+// Where a request came from (#2). The audit log keeps only its IPv4 /24 or
+// IPv6 /48 prefix, or `unknown` when no trusted proxy named one. Sign-in's
+// per-source limit counts an IPv4 address or an IPv6 /64, the block one
+// client usually holds.
 
 recordOwnerModule('core/audit/source');
 
@@ -25,6 +26,33 @@ function ipv6Groups(address: string): number[] | null {
   const fill = rest === undefined ? 0 : 8 - left.length - right.length;
   const groups = [...left, ...Array<number>(fill).fill(0), ...right];
   return groups.length === 8 ? groups : null;
+}
+
+/** The groups of an address, IPv4 mapped into IPv6 counting as IPv4. */
+function parse(address: string): { v4: number[] } | { v6: number[] } | null {
+  if (isIPv4(address)) return { v4: address.split('.').map(Number) };
+  const groups = ipv6Groups(address);
+  if (!groups) return null;
+  if (groups.slice(0, 5).every((group) => group === 0) && groups[5] === 0xffff) {
+    const [high = 0, low = 0] = groups.slice(6);
+    return { v4: [high >> 8, high & 0xff, low >> 8, low & 0xff] };
+  }
+  return { v6: groups };
+}
+
+/**
+ * What sign-in's per-source limit counts for a client address: the IPv4
+ * address itself, or its IPv6 /64, such as `2001:db8:85a3:42::/64`. Null
+ * for no address, or one that isn't an IP address.
+ */
+export function limitSource(address: string | null | undefined): string | null {
+  const parsed = address ? parse(address) : null;
+  if (!parsed) return null;
+  if ('v4' in parsed) return parsed.v4.join('.');
+  return `${parsed.v6
+    .slice(0, 4)
+    .map((group) => group.toString(16))
+    .join(':')}::/64`;
 }
 
 /**

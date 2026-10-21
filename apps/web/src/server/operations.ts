@@ -22,8 +22,12 @@ export const ERRORS = {
   capability_denied: { status: 403, message: "This session can't use that operation." },
   invalid_input: { status: 400, message: "The input doesn't match the operation." },
   version_conflict: { status: 409, message: 'The content changed since it was read.' },
+  // #2: auth.login. Every credential failure answers this one, whatever was wrong.
+  credentials_rejected: { status: 401, message: "That password didn't work." },
   // #2: auth.login, with Retry-After.
   rate_limited: { status: 429, message: 'Too many attempts. Try again later.' },
+  // #2: auth.login when the session store can't be written. No cookie goes with it.
+  unavailable: { status: 503, message: "That can't be done right now. Try again soon." },
   internal_error: {
     status: 500,
     message: 'The operation failed. Quote the request ID when you report it.',
@@ -113,6 +117,64 @@ export const ConfigStatusSchema = ConfigSummarySchema.extend({
 }).strict();
 export type ConfigStatus = z.infer<typeof ConfigStatusSchema>;
 
+const Instant = z.string().datetime();
+
+/** When a session ends if nothing slides it, and when it ends regardless. */
+export const SessionExpirySchema = z
+  .object({ idleExpiresAt: Instant, absoluteExpiresAt: Instant })
+  .strict();
+
+/** auth.session and a JSON auth.login: who is signed in, the CSRF token, and the expiry times. */
+export const AuthSessionSchema = z
+  .object({
+    principal: z
+      .object({ id: z.literal('owner'), method: z.literal('password'), authTime: Instant })
+      .strict(),
+    csrfToken: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
+    idleExpiresAt: Instant,
+    absoluteExpiresAt: Instant,
+  })
+  .strict();
+export type AuthSessionView = z.infer<typeof AuthSessionSchema>;
+
+/** One owner session, as the session list shows it: never its token or digest. */
+export const SessionSummarySchema = z
+  .object({
+    ref: z.string().regex(/^[0-9a-f]{8}$/),
+    browser: z.enum(['chrome', 'edge', 'firefox', 'safari', 'other']),
+    createdAt: Instant,
+    lastSeenAt: Instant,
+    current: z.boolean(),
+  })
+  .strict();
+
+/**
+ * What auth.login reads. Any password at all, up to the body cap, so a
+ * missing, empty, malformed, or overlong one is a credential failure that
+ * costs one verification, not an invalid_input that costs none. Extra form
+ * fields are ignored.
+ */
+export const LoginInputSchema = z.object({ password: z.unknown().optional() }).passthrough();
+
+/** The codes every entry can get from the dispatcher's own steps. */
+const BASE_ERRORS = ['not_available_in_profile', 'method_not_allowed'] as const;
+const SESSION_QUERY_ERRORS: readonly ErrorCode[] = [
+  ...BASE_ERRORS,
+  'authentication_required',
+  'capability_denied',
+  'invalid_input',
+  'internal_error',
+];
+const SESSION_COMMAND_ERRORS: readonly ErrorCode[] = [
+  ...BASE_ERRORS,
+  'authentication_required',
+  'request_origin_rejected',
+  'capability_denied',
+  'invalid_input',
+  'internal_error',
+];
+const NO_INPUT = z.object({}).strict();
+
 const OPERATIONS: readonly Operation[] = [
   {
     name: 'config.status',
@@ -130,6 +192,98 @@ const OPERATIONS: readonly Operation[] = [
       'invalid_input',
       'internal_error',
     ],
+  },
+  // #2's auth entries. auth.login takes a JSON body or the sign-in form's,
+  // and answers a form with a 303. auth.session never slides the session.
+  {
+    name: 'auth.session',
+    kind: 'query',
+    capability: 'auth.session',
+    input: NO_INPUT,
+    output: AuthSessionSchema,
+    session: true,
+    originCheck: false,
+    errors: SESSION_QUERY_ERRORS,
+  },
+  {
+    name: 'auth.login',
+    kind: 'command',
+    capability: 'auth.session',
+    input: LoginInputSchema,
+    output: AuthSessionSchema,
+    session: false,
+    originCheck: true,
+    bodyTypes: ['json', 'form'],
+    maxBodyBytes: 4096,
+    errors: [
+      ...BASE_ERRORS,
+      'request_origin_rejected',
+      'capability_denied',
+      'invalid_input',
+      'credentials_rejected',
+      'rate_limited',
+      'unavailable',
+      'internal_error',
+    ],
+  },
+  {
+    name: 'auth.logout',
+    kind: 'command',
+    capability: 'auth.session',
+    input: NO_INPUT,
+    output: z.object({ signedOut: z.literal(true) }).strict(),
+    // Signing out answers as signed out with or without a session that
+    // counts, so a cookie the store couldn't check, or one that ended, is
+    // cleared all the same. The Origin check still applies.
+    session: false,
+    originCheck: true,
+    errors: [
+      ...BASE_ERRORS,
+      'request_origin_rejected',
+      'capability_denied',
+      'invalid_input',
+      'internal_error',
+    ],
+  },
+  {
+    name: 'auth.session.extend',
+    kind: 'command',
+    capability: 'auth.session',
+    input: NO_INPUT,
+    output: SessionExpirySchema,
+    session: true,
+    originCheck: true,
+    errors: SESSION_COMMAND_ERRORS,
+  },
+  {
+    name: 'auth.sessions.list',
+    kind: 'query',
+    capability: 'studio.view',
+    input: NO_INPUT,
+    output: z.object({ sessions: z.array(SessionSummarySchema).max(5) }).strict(),
+    session: true,
+    originCheck: false,
+    errors: SESSION_QUERY_ERRORS,
+  },
+  {
+    name: 'auth.sessions.revoke',
+    kind: 'command',
+    capability: 'studio.view',
+    input: z.object({ ref: z.string().regex(/^[0-9a-f]{8}$/) }).strict(),
+    output: z.object({ revoked: z.boolean() }).strict(),
+    session: true,
+    originCheck: true,
+    errors: SESSION_COMMAND_ERRORS,
+  },
+  {
+    name: 'auth.sessions.revokeAll',
+    kind: 'command',
+    capability: 'studio.view',
+    input: NO_INPUT,
+    output: z.object({ revoked: z.number().int().nonnegative() }).strict(),
+    session: true,
+    originCheck: true,
+    errors: SESSION_COMMAND_ERRORS,
   },
 ];
 

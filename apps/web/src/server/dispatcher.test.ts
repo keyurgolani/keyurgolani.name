@@ -14,7 +14,7 @@ import {
 import type { Operation } from './operations';
 import { mintSession } from './owner/session-mint';
 import type { Session } from './session';
-import { dataResult, errorResult, redirectResult } from './studio-result';
+import { dataResult, errorResult, redirectResult, type StudioResult } from './studio-result';
 
 // The dispatcher's steps, in order, against fake registry entries and test
 // doubles for #2's session, origin, touch, and throttle bindings and #3's
@@ -66,6 +66,7 @@ function doubles(handlers: Record<string, Handler>, overrides: Partial<StudioBin
     checkOrigin: async ({ request }) => request.headers.get('x-test-origin') === 'same',
     touchSession: async () => {},
     throttle: async () => null,
+    invalidInput: async () => null,
     checkVersion: async () => true,
     ...overrides,
   } satisfies StudioBindings;
@@ -566,6 +567,86 @@ test("4: a throttle answer the entry doesn't declare is a 500", async (t) => {
   assert.equal((await errorOf(response)).code, 'internal_error');
 });
 
+test('4: a throttle can hold a place for the request, given back once it has its answer, however it ends', async (t) => {
+  t.mock.method(console, 'log', () => {});
+  const login = fake('auth.session', {
+    name: 'fake.login',
+    kind: 'command',
+    session: false,
+    bodyTypes: ['json', 'form'],
+  });
+  const events: string[] = [];
+  let answer: () => unknown = () => ({ ok: true });
+  let redirect: StudioResult | null = null;
+  const dispatch = owner(
+    t,
+    [login],
+    doubles(
+      {
+        'fake.login': () => {
+          events.push('handler');
+          return answer();
+        },
+      },
+      {
+        throttle: async () => {
+          events.push('held');
+          return () => events.push('released');
+        },
+        invalidInput: async () => redirect,
+      },
+    ),
+  );
+  const post = async (request: Request) => {
+    events.length = 0;
+    const response = await dispatch(request, 'fake.login');
+    return { response, events: [...events] };
+  };
+  const json = (body: string) => call('POST', 'fake.login', { origin: true, body }).request;
+
+  // The handler's answer, then the place.
+  const served = await post(json('{}'));
+  assert.equal(served.response.status, 200);
+  assert.deepEqual(served.events, ['held', 'handler', 'released']);
+  // Input outside the schema, as the 400 or as invalidInput's 303.
+  const invalid = await post(json('{"other":1}'));
+  assert.equal((await errorOf(invalid.response)).code, 'invalid_input');
+  assert.deepEqual(invalid.events, ['held', 'released']);
+  redirect = redirectResult('/studio/sign-in?state=error');
+  const redirected = await post(json('{"other":1}'));
+  assert.equal(redirected.response.status, 303);
+  assert.deepEqual(redirected.events, ['held', 'released']);
+  // A handler that throws, and one whose output is outside the schema.
+  answer = () => {
+    throw new Error('disk full');
+  };
+  const thrown = await post(json('{}'));
+  assert.equal((await errorOf(thrown.response)).code, 'internal_error');
+  assert.deepEqual(thrown.events, ['held', 'handler', 'released']);
+  answer = () => ({ ok: 'no' });
+  const outside = await post(json('{}'));
+  assert.equal((await errorOf(outside.response)).code, 'internal_error');
+  assert.deepEqual(outside.events, ['held', 'handler', 'released']);
+  // A body that breaks off as it is read.
+  const broken = new Request('https://rowan.test/api/studio/fake.login', {
+    method: 'POST',
+    headers: {
+      'x-request-id': 'req-test',
+      'x-test-origin': 'same',
+      'content-type': 'application/json',
+    },
+    body: new ReadableStream<Uint8Array>({
+      pull(controller) {
+        controller.error(new Error('connection reset'));
+      },
+    }),
+    duplex: 'half',
+  } as RequestInit);
+  const reset = await post(broken);
+  assert.equal((await errorOf(reset.response)).code, 'internal_error');
+  assert.deepEqual(reset.events, ['held', 'released']);
+});
+
 test('5: input outside the schema is 400, and the body is read only here', async (t) => {
   const { handler, calls } = spy();
   const dispatch = owner(
@@ -661,6 +742,52 @@ test('5: an entry that takes form posts gets form input, each name once, under i
       [{ note: 'q' }, 'search'],
     ],
   );
+});
+
+test('5: invalidInput may answer malformed input with a 303 instead of the 400, never with data', async (t) => {
+  const { handler, calls } = spy();
+  const login = fake('auth.session', {
+    name: 'fake.login',
+    kind: 'command',
+    session: false,
+    bodyTypes: ['json', 'form'],
+    maxBodyBytes: 32,
+  });
+  const seen: string[] = [];
+  let answer: StudioResult | null = redirectResult('/studio/sign-in?state=error');
+  const dispatch = owner(
+    t,
+    [login],
+    doubles(
+      { 'fake.login': handler },
+      {
+        invalidInput: async ({ operation }) => {
+          seen.push(operation.name);
+          return answer;
+        },
+      },
+    ),
+  );
+  const form = 'application/x-www-form-urlencoded';
+  const post = (body: string | Uint8Array, contentType = form) =>
+    dispatch(call('POST', 'fake.login', { origin: true, body, contentType }).request, 'fake.login');
+
+  // A name given twice, a body past the cap, and bytes that aren't UTF-8.
+  const notUtf8 = new Uint8Array([...new TextEncoder().encode('note='), 0xff, 0xfe]);
+  for (const body of ['note=a&note=b', `note=${'x'.repeat(28)}`, notUtf8]) {
+    const response = await post(body);
+    assert.equal(response.status, 303, String(body));
+    assert.equal(response.headers.get('location'), '/studio/sign-in?state=error');
+    assert.equal(response.headers.get('cache-control'), 'no-store');
+  }
+  // Without an answer, it is the 400 as before.
+  answer = null;
+  assert.equal((await errorOf(await post('note=a&note=b'))).code, 'invalid_input');
+  // Data is never an answer to bad input.
+  answer = dataResult({ ok: true });
+  assert.equal((await errorOf(await post('note=a&note=b'))).code, 'invalid_input');
+  assert.deepEqual(calls, [], 'the handler ran on malformed input');
+  assert.equal(seen.length, 5);
 });
 
 test('6: a stale expected version is 409 before the handler runs', async (t) => {

@@ -93,6 +93,8 @@ function baseEnv(home, port) {
  * @param {Record<string, { path: string, text: string }>} [options.envFiles] files to
  *   write before the server starts, by the variable that names each one: `path` is
  *   relative to the app's root, and the variable gets the absolute path
+ * @param {string} [options.dataName] a data directory to make under the app's root,
+ *   mode 0700, as PORTFOLIO_DATA_DIR, which owner needs; none by default
  * @param {string} [options.logFile] where the server's stdout and stderr go
  * @param {number} [options.port] the port to try first, instead of a free one, so a
  *   test can hold it and check that a start on a taken port moves to another
@@ -104,6 +106,7 @@ export async function startApp({
   siteText,
   sourceName = 'config',
   envFiles = {},
+  dataName,
   logFile,
   port: firstPort,
 } = {}) {
@@ -127,6 +130,10 @@ export async function startApp({
     mkdirSync(path.dirname(target), { recursive: true });
     writeFileSync(target, file.text);
     fileEnv[key] = target;
+  }
+  if (dataName) {
+    fileEnv.PORTFOLIO_DATA_DIR = path.join(root, dataName);
+    mkdirSync(fileEnv.PORTFOLIO_DATA_DIR, { mode: 0o700 });
   }
 
   // The trap binds first, so its own port can't be the one picked for the server.

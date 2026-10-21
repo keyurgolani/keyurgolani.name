@@ -44,6 +44,8 @@ export interface AppOptions {
    * absolute path.
    */
   envFiles?: Record<string, { path: string; text: string }>;
+  /** A data directory made under the app's root, mode 0700, as PORTFOLIO_DATA_DIR. */
+  dataName?: string;
 }
 
 export interface App {

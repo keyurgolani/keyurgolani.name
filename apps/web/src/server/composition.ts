@@ -8,7 +8,7 @@ import { openSampleCatalog } from './catalog-sample';
 import type { ConfigIssue, DeploymentConfig } from './config';
 import { configSummary, type CatalogAdapter } from './config-summary';
 import type { DeploymentState } from './config-store';
-import { createDispatcher, NO_BINDINGS, type StudioBindings } from './dispatcher';
+import { createDispatcher, NO_BINDINGS, type Handler, type StudioBindings } from './dispatcher';
 import { listOperations, type ConfigSummary } from './operations';
 import type { Session } from './session';
 import { liveVariantHealth } from './variant-health';
@@ -31,6 +31,10 @@ export interface AuthBindings {
   readonly touchSession: StudioBindings['touchSession'];
   /** auth.login's rate limit. Without one, nothing is throttled. */
   readonly throttle?: StudioBindings['throttle'];
+  /** What a malformed input gets instead of 400, such as the sign-in form's 303. */
+  readonly invalidInput?: StudioBindings['invalidInput'];
+  /** Handlers for the provider's own entries, such as auth.login. */
+  readonly handlers?: Readonly<Record<string, Handler>>;
 }
 
 /** What the owner branch hands a provider as it loads it. */
@@ -52,17 +56,16 @@ export interface AuthProviderFactory {
 }
 
 /**
- * The owner's password provider (#2): sessions in the data directory, and
- * the origin and CSRF checks. The login slice registers it, once a sign-in
- * exists to use it.
+ * The owner's password provider (#2): sign-in, sessions in the data
+ * directory, and the origin and CSRF checks.
  */
 export const OWNER_PASSWORD_PROVIDER: AuthProviderFactory = Object.freeze({
   name: 'owner-password',
   load: (tools: ProviderTools) => import('./owner/auth').then((module) => module.provider(tools)),
 });
 
-/** The providers this build registers; the first one serves. #2 adds its own. */
-export const AUTH_PROVIDERS: readonly AuthProviderFactory[] = [];
+/** The providers this build registers; the first one serves. */
+export const AUTH_PROVIDERS: readonly AuthProviderFactory[] = [OWNER_PASSWORD_PROVIDER];
 
 export interface RequirementContext {
   readonly config: DeploymentConfig;
@@ -128,6 +131,29 @@ export const STARTUP_REQUIREMENTS: readonly StartupRequirement[] = [
     profiles: ['owner'],
     failure: 'fatal',
     load: () => import('./owner/auth-secret').then((module) => module.check),
+  },
+  // Sign-in's limits (#2, Risk 1): with no trusted proxy hop nothing names a
+  // client, so sign-in has only its global limits. A warning: the owner may
+  // run with nothing in front on purpose.
+  {
+    id: 'auth.limits',
+    issue: '#2',
+    profiles: ['owner'],
+    failure: 'fatal',
+    check: async ({ config, authProviders }) =>
+      config.trustedProxyHops > 0 || authProviders.length === 0
+        ? []
+        : [
+            {
+              severity: 'warning',
+              key: 'PORTFOLIO_TRUSTED_PROXY_HOPS',
+              code: 'no_source_limits',
+              message:
+                'With no trusted proxy hop, sign-in has only its global limits, so one client ' +
+                "can hold off the owner's own sign-in. Run owner behind a proxy and set " +
+                'PORTFOLIO_TRUSTED_PROXY_HOPS (docs/deployment.md, Owner authentication).',
+            },
+          ],
   },
   {
     id: 'data.directory',
@@ -273,17 +299,24 @@ export async function compose(input: CompositionInput): Promise<Composition> {
       const reader = documents.reader;
       const bindings: StudioBindings = {
         ...NO_BINDINGS,
-        handlers: owner.ownerHandlers({
-          config,
-          catalog,
-          variantHealth: () =>
-            liveVariantHealth(async () => (await reader.getLive()).unit.site.appearance.variant),
-        }),
+        handlers: {
+          ...owner.ownerHandlers({
+            config,
+            catalog,
+            variantHealth: () =>
+              liveVariantHealth(async () => (await reader.getLive()).unit.site.appearance.variant),
+          }),
+          ...provider.handlers,
+        },
         resolveSession: (context) => provider.resolveSession(context),
         checkOrigin: (context) => provider.checkOrigin(context),
         touchSession: (context) => provider.touchSession(context),
         throttle: (context) =>
           provider.throttle ? provider.throttle(context) : NO_BINDINGS.throttle(context),
+        invalidInput: (context) =>
+          provider.invalidInput
+            ? provider.invalidInput(context)
+            : NO_BINDINGS.invalidInput(context),
       };
       return built(config, {
         reader: documents.reader,

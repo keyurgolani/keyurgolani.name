@@ -1,9 +1,8 @@
 # The owner profile: your portfolio from ../config, with Studio, drafts, and
 # revisions in a data volume, and the owner password's hash in a secret file,
 # deploy/secrets/owner_password_hash, which hash-password writes
-# (docs/deployment.md, Owner authentication). It refuses to start until #2
-# ships an authentication provider. Run it from deploy/, with PORTFOLIO_ORIGIN
-# in deploy/.env:
+# (docs/deployment.md, Owner authentication). It refuses to start without
+# that file. Run it from deploy/, with PORTFOLIO_ORIGIN in deploy/.env:
 #
 #   docker compose -f compose.owner.yml up --build
 name: portfolio-owner
@@ -28,6 +27,11 @@ services:
       # A file, never the hash itself: Compose reads $ in environment values
       # and .env as a variable, which breaks a PHC string.
       PORTFOLIO_AUTH_PASSWORD_HASH_FILE: /run/secrets/owner_password_hash
+      # How many proxies in front append X-Forwarded-For, so sign-in can
+      # limit each client by its address. Set it in .env to the number in
+      # front, usually 1. At 0 sign-in has only its global limits, and
+      # startup warns (docs/deployment.md, Owner authentication).
+      PORTFOLIO_TRUSTED_PROXY_HOPS: ${PORTFOLIO_TRUSTED_PROXY_HOPS:-0}
       NODE_ENV: production
     # Nothing in the container is writable but Next's cache and the data
     # volume.

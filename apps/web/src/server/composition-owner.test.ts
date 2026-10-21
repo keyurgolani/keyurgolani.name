@@ -17,12 +17,15 @@ import { setDeploymentState, type DeploymentState } from './config-store';
 import { loadedOwnerModules } from './load-trace';
 import { listOperations } from './operations';
 import { listRoutes, resolveRoute, RETIRED_PATTERNS, routeAccess } from './routes';
+import { redirectResult } from './studio-result';
 
 // Owner in process, with a test double for #2's provider: the route and
-// operation matrix for owner until #2 ships a real one and reruns it end to
-// end. A request carrying `x-test-session: owner` has a session the double
-// minted, and a command passes the origin check when it comes from
-// PORTFOLIO_ORIGIN.
+// operation matrix for owner, which tests/e2e/owner.spec.ts runs end to end
+// with the password provider. A request carrying `x-test-session: owner` has
+// a session the double minted, and a command passes the origin check when it
+// comes from PORTFOLIO_ORIGIN. The double answers the provider's own auth
+// entries with fixed output, so the matrix covers them too;
+// owner/auth.test.ts runs the real ones.
 
 const EXAMPLES = {
   portfolio: fileURLToPath(new URL('../../../../portfolio.example.yml', import.meta.url)),
@@ -48,6 +51,26 @@ function passwordHash(password: string): string {
 }
 const HASH = passwordHash('composition owner passphrase');
 
+const AT = '2026-10-20T09:00:00.000Z';
+const SESSION_VIEW = {
+  principal: { id: 'owner', method: 'password', authTime: AT },
+  csrfToken: 'A'.repeat(43),
+  idleExpiresAt: AT,
+  absoluteExpiresAt: AT,
+};
+/** Fixed output for each of the provider's own entries. */
+const AUTH_OUTPUT: Record<string, unknown> = {
+  'auth.session': SESSION_VIEW,
+  'auth.login': SESSION_VIEW,
+  'auth.logout': { signedOut: true },
+  'auth.session.extend': { idleExpiresAt: AT, absoluteExpiresAt: AT },
+  'auth.sessions.list': { sessions: [] },
+  'auth.sessions.revoke': { revoked: false },
+  'auth.sessions.revokeAll': { revoked: 0 },
+};
+/** A body each command's input schema takes, where `{}` isn't one. */
+const INPUT: Record<string, unknown> = { 'auth.sessions.revoke': { ref: '0123abcd' } };
+
 const PROVIDER: AuthProviderFactory = {
   name: 'test-double',
   load: async ({ config, mintSession }) => {
@@ -58,6 +81,9 @@ const PROVIDER: AuthProviderFactory = {
       }),
       checkOrigin: async ({ request }) => request.headers.get('origin') === config.origin,
       touchSession: async () => {},
+      handlers: Object.fromEntries(
+        Object.entries(AUTH_OUTPUT).map(([name, output]) => [name, () => output]),
+      ),
     };
   },
 };
@@ -115,7 +141,7 @@ test.after(() => {
 
 function studio(method: string, name: string, headers: Record<string, string> = {}) {
   const init: RequestInit = { method, headers: { 'x-request-id': 'req-owner', ...headers } };
-  if (method === 'POST') init.body = '{}';
+  if (method === 'POST') init.body = JSON.stringify(INPUT[name] ?? {});
   return state.dispatch(new Request(`${ORIGIN}/api/studio/${name}`, init), name);
 }
 
@@ -188,6 +214,51 @@ test('config.status shows each secret as set and never a value or a path', async
     requested: 'editorial-evidence',
     rendered: 'fallback',
   });
+});
+
+test("the owner branch binds the provider's throttle and invalidInput, and goes on without them when it has neither", async () => {
+  const limited = await compose(
+    input({
+      authProviders: [
+        {
+          name: 'limited',
+          load: async (tools) => ({
+            ...(await PROVIDER.load(tools)),
+            throttle: async ({ request }) =>
+              request.headers.has('x-test-throttle')
+                ? redirectResult('/studio/sign-in?state=rate_limited&retryAfter=1')
+                : null,
+            invalidInput: async () => redirectResult('/studio/sign-in?state=error'),
+          }),
+        },
+      ],
+    }),
+  );
+  assert.ok(limited.ok, JSON.stringify(limited.issues));
+  const login = (headers: Record<string, string>, body: string) =>
+    new Request(`${ORIGIN}/api/studio/auth.login`, {
+      method: 'POST',
+      headers: { origin: ORIGIN, 'content-type': 'application/json', ...headers },
+      body,
+    });
+  const throttled = await limited.state.dispatch(
+    login({ 'x-test-throttle': '1' }, '{}'),
+    'auth.login',
+  );
+  assert.equal(throttled.status, 303);
+  assert.equal(
+    throttled.headers.get('location'),
+    '/studio/sign-in?state=rate_limited&retryAfter=1',
+  );
+  const malformed = await limited.state.dispatch(login({}, '{'), 'auth.login');
+  assert.equal(malformed.status, 303);
+  assert.equal(malformed.headers.get('location'), '/studio/sign-in?state=error');
+  // The double has neither: nothing is throttled, and malformed input is the 400.
+  assert.equal(
+    (await state.dispatch(login({ 'x-test-throttle': '1' }, '{}'), 'auth.login')).status,
+    200,
+  );
+  assert.equal((await state.dispatch(login({}, '{'), 'auth.login')).status, 400);
 });
 
 test('an unknown operation is the same 404 with or without a session', async () => {
