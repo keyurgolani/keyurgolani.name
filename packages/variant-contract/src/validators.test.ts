@@ -3,19 +3,15 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { validatePublicationUnit, type ContentExtension, type Diagnostic } from '@portfolio/schema';
 import { exhibitions } from './__fixtures__/extension';
-import { UNIT_CODES } from './diagnostics';
 import type { VariantRegistry } from './registry';
 import { validateManifest } from './validate-manifest';
-import {
-  contractValidators,
-  validateControls,
-  validateRoutes,
-  validateSelection,
-} from './validators';
+import { contractValidators, validateCompatibility } from './validators';
 
-// The contract's publication-unit checks (#5, Slice 1), run inside #4's
-// validatePublicationUnit() as plugged-in validators: located in the site
-// document, with #4's severities, and covering the entries #4 leaves unchecked.
+// The contract's publication-unit checks from Slice 1, the selection, the
+// stored control values, and the route toggles, which Slice 5 folds into the
+// compatibility validator, run inside #4's validatePublicationUnit(): located
+// in the site document, with #4's severities, and covering the entries #4
+// leaves unchecked. compatibility.test.ts covers the rest of the report.
 
 const PAIR = new URL('../../schema/src/__fixtures__/pairs/engineering/yaml/', import.meta.url);
 const PORTFOLIO = readFileSync(new URL('portfolio.yml', PAIR), 'utf8');
@@ -60,8 +56,18 @@ function check(
   );
 }
 
+/** Slice 1's codes, which this file is about. */
+const SLICE_1 = new Set([
+  'variant.unavailable',
+  'controls.invalid',
+  'controls.stale',
+  'controls.dangling-ref',
+  'route.unknown',
+  'route.required',
+]);
+
 const ours = (diagnostics: readonly Diagnostic[]) =>
-  diagnostics.filter(({ code }) => Object.hasOwn(UNIT_CODES, code));
+  diagnostics.filter(({ code }) => SLICE_1.has(code));
 
 test('a registered selection with no stored controls or toggles has nothing to report', () => {
   const result = check(site('acme-ocean'));
@@ -103,7 +109,7 @@ test("#4's site schema refuses the fallback composition before the validators ru
   const appearance = { ...parsed.site.appearance, variant: 'fallback' };
   const pair = { ...parsed, site: { ...parsed.site, appearance } };
   for (const live of [false, true]) {
-    const [record] = validateSelection(REGISTRY, { live }).validate(pair, {}).diagnostics;
+    const [record] = ours(validateCompatibility(REGISTRY, { live }).validate(pair, {}).diagnostics);
     assert.deepEqual([record!.code, record!.severity], ['variant.unavailable', 'blocks-publish']);
     assert.match(record!.message, /can't be selected/);
   }
@@ -228,12 +234,10 @@ test('live, the records that fall back only warn, and the rest keep their severi
   assert.deepEqual([...new Set(published.map(({ severity }) => severity))], ['blocks-publish']);
 });
 
-test('each validator stands alone, with an id #4 lists when it fails', () => {
+test('the compatibility validator is the one the host passes, with an id #4 lists when it fails', () => {
   assert.deepEqual(
-    [validateSelection(REGISTRY), validateControls(REGISTRY), validateRoutes(REGISTRY)].map(
-      ({ id }) => id,
-    ),
-    ['variant-selection', 'variant-controls', 'variant-routes'],
+    contractValidators(REGISTRY).map(({ id }) => id),
+    ['variant-compatibility'],
   );
   // A registry that throws on read leaves validator:<id> unchecked rather than a record.
   const broken = new Proxy([] as never as VariantRegistry, {
@@ -243,7 +247,7 @@ test('each validator stands alone, with an id #4 lists when it fails', () => {
     },
   });
   const result = check(site('acme-ocean'), broken);
-  assert.ok(result.notChecked.includes('validator:variant-selection'));
+  assert.ok(result.notChecked.includes('validator:variant-compatibility'));
 });
 
 test("a stored ref to a section the variant won't render dangles: hidden or an unregistered extension's", () => {

@@ -52,8 +52,9 @@ test('documents are checked live: an unavailable selection warns, so startup ser
   ]);
   assert.equal(catalog.ids('variant', {} as never), null);
   assert.deepEqual(extensions, []);
+  // The compatibility check (#5, Slice 5), which folds in the selection, controls, and toggles.
   assert.deepEqual(
     validators.map(({ id }) => id),
-    ['variant-selection', 'variant-controls', 'variant-routes'],
+    ['variant-compatibility'],
   );
 });

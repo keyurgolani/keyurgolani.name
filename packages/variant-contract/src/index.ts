@@ -82,14 +82,26 @@ export {
   type ControlValues,
   type MigrationResult,
 } from './controls';
+export {
+  planControlsMigration,
+  type ControlsMigrationEntry,
+  type ControlsMigrationPlan,
+  type ControlsMigrationStatus,
+} from './controls-migration';
 export { findVariant, type RegisteredVariant, type VariantRegistry } from './registry';
 export {
-  contractValidators,
-  validateControls,
-  validateRoutes,
-  validateSelection,
-  type ValidatorOptions,
-} from './validators';
+  compatibilityFor,
+  evaluateCompatibility,
+  REPORT_VERSION,
+  type CompatibilityOptions,
+  type CompatibilityReport,
+  type CompatibilityStatus,
+  type KindRenderer,
+  type KindReport,
+  type RouteReport,
+  type SlotReport,
+} from './compatibility';
+export { contractValidators, validateCompatibility, type ValidatorOptions } from './validators';
 export {
   buildRenderInput,
   viewSeed,

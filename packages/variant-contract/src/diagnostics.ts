@@ -47,15 +47,23 @@ export const MANIFEST_CODES = {
 export type ManifestCode = keyof typeof MANIFEST_CODES;
 
 /**
- * Every code the publication-unit validators raise, with its #4 severity.
- * Startup treats `variant.unavailable` and `controls.*` as warnings (Slice 3),
- * and #3's publish rejects them.
+ * Every code the compatibility check raises (Slices 1 and 5), with its #4
+ * severity. None blocks a preview, since each renders something in place of
+ * what it's about. Startup checks the pair as live, so the ones that block
+ * publishing only warn there (Slice 3), and #3's publish rejects them.
  */
 export const UNIT_CODES = {
   'variant.unavailable': 'blocks-publish',
   'controls.invalid': 'blocks-publish',
   'controls.stale': 'blocks-publish',
   'controls.dangling-ref': 'blocks-publish',
+  'slot.required-empty': 'blocks-publish',
+  'kind.no-renderer': 'blocks-publish',
+  'slot.recommended-empty': 'warning',
+  'slot.overflow': 'warning',
+  'kind.unsupported': 'warning',
+  'direction.unsupported': 'warning',
+  'appearance.unknown-recipe': 'warning',
   'route.unknown': 'warning',
   'route.required': 'warning',
 } as const;

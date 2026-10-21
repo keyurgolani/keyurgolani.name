@@ -23,6 +23,7 @@ import {
   parseFragmentPattern,
   parsePathPattern,
   RESERVED_SEGMENTS,
+  viewShape,
 } from './segments';
 import {
   CONTRACT_MAJOR,
@@ -601,11 +602,7 @@ function checkRoutes(manifest: VariantManifest, report: Report) {
       );
     }
     // Placeholders match any segment, so two views of one shape can't both be reached.
-    const shape = [
-      view.under,
-      view.type,
-      ...parsed.parts.map((part) => ('literal' in part ? part.literal : '{}')),
-    ].join('/');
+    const shape = viewShape(view)!;
     if (shapes.has(shape)) {
       report(
         'manifest.route-conflict',
