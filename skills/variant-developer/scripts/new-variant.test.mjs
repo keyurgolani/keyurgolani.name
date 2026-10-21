@@ -76,7 +76,17 @@ test('names and class prefixes come from the id, never colliding with the shared
   assert.equal(titleCase('editorial-evidence'), 'Editorial Evidence');
   assert.equal(classPrefix('editorial-evidence'), 'ee');
   assert.equal(classPrefix('ocean'), 'ocean');
-  // pf- is the kit's shared renderers', and fc- the fallback's.
+  // pf- is the kit's shared renderers', fc- the fallback's, and host- the host's own.
   assert.equal(classPrefix('paper-folio'), 'paper');
   assert.equal(classPrefix('film-cuts'), 'film');
+  // An id whose first part is reserved too takes the whole id.
+  assert.equal(classPrefix('pf-folio'), 'pffolio');
+  assert.equal(classPrefix('fc-cuts'), 'fccuts');
+  // An id that is a reserved prefix takes a v before it.
+  assert.equal(classPrefix('pf'), 'vpf');
+  assert.equal(classPrefix('fc'), 'vfc');
+  assert.equal(classPrefix('host'), 'vhost');
+  for (const id of ['pf', 'fc', 'host', 'pf-folio', 'fc-cuts', 'paper-folio', 'film-cuts', 'h-o']) {
+    assert.ok(!['pf', 'fc', 'host'].includes(classPrefix(id)), id);
+  }
 });

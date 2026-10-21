@@ -39,8 +39,8 @@ const ID = /^[a-z][a-z0-9-]{1,47}$/;
 const TAKEN = new Set(['fallback', 'missing-variant']);
 /** The fallback composition's files a new variant starts from. */
 const FILES = ['package.json', 'tsconfig.json', 'manifest.json', 'src/index.tsx', 'src/styles.css'];
-/** Class prefixes already in use: the fallback's and the kit's shared renderers'. */
-const USED_PREFIXES = new Set(['fc', 'pf']);
+/** Class prefixes already in use: the fallback's, the kit's shared renderers', and the host's own. */
+const RESERVED_PREFIXES = new Set(['fc', 'pf', 'host']);
 
 export class ScaffoldError extends Error {}
 
@@ -53,12 +53,17 @@ export function titleCase(id) {
     .join(' ');
 }
 
-/** A short class prefix for the id: its parts' initials, or its first part when that's taken. */
+/**
+ * A short class prefix for the id: its parts' initials, else its first part,
+ * else the whole id, whichever isn't reserved first, and a `v` before the id
+ * when none is free, as for an id of `pf` itself.
+ */
 export function classPrefix(id) {
   const parts = id.split('-').filter(Boolean);
   const initials = parts.map((part) => part[0]).join('');
-  const prefix = initials.length >= 2 ? initials : parts[0];
-  return USED_PREFIXES.has(prefix) ? parts[0] : prefix;
+  const candidates = [initials.length >= 2 ? initials : undefined, parts[0], parts.join('')];
+  const free = candidates.find((candidate) => candidate && !RESERVED_PREFIXES.has(candidate));
+  return free ?? `v${parts.join('')}`;
 }
 
 function replaced(text, from, to, file) {
@@ -118,6 +123,7 @@ export function scaffold({ root = ROOT, id }) {
     'src/index.tsx',
   );
   component = replaced(component, '"fc-', `"${prefix}-`, 'src/index.tsx');
+  component = component.split('fc--').join(`${prefix}--`);
   // Its opening comment describes the fallback; a new variant's says where it came from.
   component = component.replace(
     /\n(\/\/ The fallback composition \(#5\)[^\n]*\n(?:\/\/[^\n]*\n)*)/,
