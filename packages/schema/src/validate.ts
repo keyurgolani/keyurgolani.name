@@ -128,6 +128,7 @@ export const DIAGNOSTIC_SEVERITIES = {
   'secret.detected': 'blocks-publish',
   'content.empty': 'blocks-publish',
   'metric.duplicate': 'warning',
+  'image.alt-missing': 'warning',
   'origin.sample': 'warning',
   'origin.stale': 'warning',
   'extension.unregistered': 'warning',
@@ -161,6 +162,8 @@ export const DIAGNOSTIC_REMEDIATIONS: Readonly<Record<DiagnosticCode, string>> =
     'Remove it from the document and revoke it. Secrets belong in the environment or a secret file.',
   'content.empty': "Add a section, or unhide one in the site document's sections.",
   'metric.duplicate': 'Keep the metric in one section, unless repeating it is deliberate.',
+  'image.alt-missing':
+    "Give it alt text that says what it shows, or alt: '' if it's only decoration. A gallery image can take a caption instead.",
   'origin.sample': 'Replace the sample address with your own, or remove the link.',
   'origin.stale': "If that's an old domain, point the link at the configured origin's host.",
   'extension.unregistered':
@@ -710,6 +713,7 @@ function checkPair(pair: ParsedPair, ctx: Context, notChecked: string[], report:
   }
 
   checkMetrics(portfolio, visible, report);
+  checkAltText(portfolio, visible, report);
 
   const origin = canonicalHost(ctx.canonicalOrigin);
   if (origin === undefined) {
@@ -766,6 +770,42 @@ function publicUrls(portfolio: Portfolio, visible: readonly boolean[]) {
     if (visible[index]) walk(section, ['sections', index]);
   });
   return found;
+}
+
+/**
+ * Visible images that show something no text beside them names, with no
+ * words for it: a gallery image without alt text or a caption, and a
+ * project's screenshot without alt text. The shared renderers give such an
+ * image no alt at all, so an audit finds it too. Logos, avatars, and covers
+ * sit beside the name they show, so they're decorative without alt text, and
+ * `alt: ''` says an image is decoration on purpose.
+ */
+function checkAltText(portfolio: Portfolio, visible: readonly boolean[], report: PairReport) {
+  const missing = (path: (string | number)[], what: string) =>
+    report('portfolio', 'image.alt-missing', path, `${redactedPointer(path)} ${what}`);
+  portfolio.sections.forEach((section, index) => {
+    if (!visible[index]) return;
+    if (section.kind === 'gallery') {
+      section.items.forEach((item, position) => {
+        if (item.image.alt === undefined && !item.caption?.trim()) {
+          missing(
+            ['sections', index, 'items', position, 'image'],
+            "has no alt text or caption, so a visitor who can't see it can't tell what it shows.",
+          );
+        }
+      });
+    } else if (section.kind === 'projects') {
+      section.items.forEach((item, position) => {
+        item.images?.forEach((image, at) => {
+          if (image.alt !== undefined) return;
+          missing(
+            ['sections', index, 'items', position, 'images', at],
+            "has no alt text, so a visitor who can't see it can't tell what it shows.",
+          );
+        });
+      });
+    }
+  });
 }
 
 function checkMetrics(portfolio: Portfolio, visible: readonly boolean[], report: PairReport) {

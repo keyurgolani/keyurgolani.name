@@ -1,10 +1,10 @@
 import { z } from 'zod';
-import { LooseDateSchema, type SchemaParts } from './common';
+import { LabelSchema, LooseDateSchema, type SchemaParts } from './common';
 
 export function narrativeSchemas({ section, Link }: SchemaParts) {
   const HeroSchema = section('hero', {
     greeting: z.string().optional(),
-    name: z.string().optional(),
+    name: LabelSchema.optional(),
     tagline: z.string().optional(),
     subtagline: z.string().optional(),
     ctas: z.array(Link).optional(),

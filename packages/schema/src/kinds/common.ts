@@ -140,12 +140,21 @@ export const LanguageTagSchema = z.string().refine(isLanguageTag, {
   message: "isn't a BCP 47 language tag, such as en or pt-BR.",
 });
 
+/**
+ * Text shown as a heading or a name, such as a section's title. Blank text
+ * would show as an empty heading, so it's refused: an optional one is left
+ * out instead, and the default shows.
+ */
+export const LabelSchema = z.string().refine((value) => value.trim() !== '', {
+  message: 'is blank, so nothing would show. Leave it out instead.',
+});
+
 /** The fields every section has, core or extension. */
 export const sectionBase = {
   /** Required and unique within the portfolio. See SECTION_ID_PATTERN. */
   id: SectionIdSchema,
-  title: z.string().optional(),
-  subtitle: z.string().optional(),
+  title: LabelSchema.optional(),
+  subtitle: LabelSchema.optional(),
   /** The section's language when it differs from the portfolio's `locale`. */
   lang: LanguageTagSchema.optional(),
 };

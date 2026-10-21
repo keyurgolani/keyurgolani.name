@@ -19,7 +19,10 @@ export function portfolioSchemas(
   sections: z.ZodType<Section, z.ZodTypeDef, unknown>,
 ) {
   const IdentitySchema = object({
-    name: z.string(),
+    /** The name every page shows. */
+    name: z.string().refine((value) => value.trim() !== '', {
+      message: 'is blank. It names the portfolio on every page.',
+    }),
     tagline: z.string().optional(),
     pronouns: z.string().optional(),
     location: z.string().optional(),
