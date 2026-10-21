@@ -56,7 +56,7 @@ case "$MODE" in
       exit 2
     fi
     # next dev listens on $PORT when it is set.
-    BASE="http://localhost:${PORT:-3000}"
+    BASE="http://127.0.0.1:${PORT:-3000}"
     URL="$BASE/sample?variant=$VARIANT"
     echo "Starting the dev server under the demo profile, on the bundled sample. Visit:"
     echo "  $URL"

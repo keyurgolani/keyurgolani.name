@@ -17,7 +17,7 @@ About 30 seconds. Catches "the structure isn't there".
 skills/variant-developer/scripts/visual-companion/start.sh --mode preview --variant <id>
 ```
 
-Open `http://localhost:3000/sample?variant=<id>`. The script runs `pnpm dev` under `PORTFOLIO_PROFILE=demo`, which renders the bundled sample in any registered variant.
+Open `http://127.0.0.1:3000/sample?variant=<id>`. The script runs `pnpm dev` under `PORTFOLIO_PROFILE=demo`, which renders the bundled sample in any registered variant.
 
 **You must see:**
 

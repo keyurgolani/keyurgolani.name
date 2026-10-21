@@ -324,9 +324,9 @@ PORTFOLIO_PROFILE=read-only PORTFOLIO_ORIGIN=https://jane.name \
   PORTFOLIO_SOURCE_DIR=../../config pnpm start
 ```
 
-`pnpm start` runs from `apps/web`, so the relative source directory is the repo's `config/`. The host listens on `127.0.0.1`, on `process.env.PORT` (defaults to 3000), so a reverse proxy on the same host is what visitors reach (see [Reverse proxy and HTTPS](#reverse-proxy-and-https)).
+`pnpm start` runs from `apps/web`, so the relative source directory is the repo's `config/`. The host listens on `127.0.0.1`, on `process.env.PORT` (defaults to 3000), so a reverse proxy on the same host is what visitors reach (see [Reverse proxy and HTTPS](#reverse-proxy-and-https)). `pnpm start -H <address>` listens on another address instead, and anyone who can reach that address reaches the app around the proxy, so use it only for a proxy that can't reach loopback, such as one on a Docker bridge.
 
-For a process manager (PM2, systemd, etc.), wrap `pnpm start` with the same environment. You don't need to ship `node_modules` to your runtime if you copy `apps/web/.next/standalone/` and the public assets.
+For a process manager (PM2, systemd, etc.), wrap `pnpm start` with the same environment. You don't need to ship `node_modules` to your runtime if you copy `apps/web/.next/standalone/` and the public assets. Run its `apps/web/server.js` with `HOSTNAME=127.0.0.1` as well: without it, the standalone server listens on every interface.
 
 ### Demo
 

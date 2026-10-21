@@ -148,7 +148,7 @@ skills/variant-developer/scripts/visual-companion/start.sh \
   --mode preview --variant <id>
 ```
 
-This runs `pnpm --filter @portfolio/web dev` with `PORTFOLIO_PROFILE=demo`, which renders the bundled sample in any registered variant. Once the dev server is up, tell the user to visit `http://localhost:3000/sample?variant=<id>`. An id the build doesn't register, and `fallback`, are a 404; `pnpm check:variants --package @portfolio/variant-<id>` says why it isn't registered.
+This runs `pnpm --filter @portfolio/web dev` with `PORTFOLIO_PROFILE=demo`, which renders the bundled sample in any registered variant. Once the dev server is up, tell the user to visit `http://127.0.0.1:3000/sample?variant=<id>`. An id the build doesn't register, and `fallback`, are a 404; `pnpm check:variants --package @portfolio/variant-<id>` says why it isn't registered.
 
 ### Matrix screenshots (optional)
 

@@ -139,6 +139,13 @@ test('each Compose example runs its profile from the one image, on loopback', ()
   }
 });
 
+test('pnpm dev and pnpm start listen on loopback', () => {
+  const { scripts } = JSON.parse(readFileSync(path.join(ROOT, 'apps/web/package.json'), 'utf8'));
+  for (const name of ['dev', 'start']) {
+    assert.match(scripts[name], /--hostname 127\.0\.0\.1(\s|$)/, name);
+  }
+});
+
 test('the image sets no PORTFOLIO_* default and creates the data directory for uid 1001', () => {
   const text = readFileSync(path.join(ROOT, 'Dockerfile'), 'utf8');
   assert.doesNotMatch(text, /^\s*ENV\s+PORTFOLIO_/m);
