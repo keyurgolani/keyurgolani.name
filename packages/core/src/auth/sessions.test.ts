@@ -18,6 +18,7 @@ import {
   MAX_SESSIONS,
   slides,
   type Activity,
+  type Issued,
   type Resolution,
   type SessionsOptions,
 } from './sessions';
@@ -328,6 +329,105 @@ test('logout, revocation, and revoke-all each end a session in the store, tell o
       ['sessions_revoked_all', { count: 2, requestId: 'req-3' }],
     ],
   );
+});
+
+test('every way a session ends fires onSessionEnded with its digest', async () => {
+  type Run = ReturnType<typeof setup> & { readonly issued: Issued };
+  /**
+   * One session, ended one way, and what the listener heard: once, with
+   * that session's digest. A way that ends it in another Sessions, as a
+   * restart does, returns what that one's listener heard.
+   */
+  const ways: [way: string, end: (run: Run) => Promise<readonly string[] | void>][] = [
+    [
+      'logout',
+      async ({ sessions, issued }) => void (await sessions.end(issued.record.digest, 'logout')),
+    ],
+    [
+      'revoking it',
+      async ({ sessions, issued }) => void (await sessions.end(issued.record.digest, 'revoked')),
+    ],
+    ['revoking every session', async ({ sessions }) => void (await sessions.revokeAll())],
+    [
+      'a sign-in that carried its cookie',
+      async ({ sessions, issued }) =>
+        void (await sessions.issue({ uaFamily: 'firefox', replacing: issued.token })),
+    ],
+    [
+      'a sixth session, which evicts it as the least recently seen',
+      async ({ sessions, time }) => {
+        for (let count = 1; count <= MAX_SESSIONS; count += 1) {
+          time.advance(MINUTE);
+          await sessions.issue({ uaFamily: 'firefox' });
+        }
+      },
+    ],
+    [
+      'the idle limit, at its next request',
+      async ({ sessions, time, issued }) => {
+        time.advance(60 * MINUTE);
+        await sessions.resolve(issued.token);
+      },
+    ],
+    [
+      'the absolute limit, at its next request, however busy',
+      async ({ sessions, time, issued }) => {
+        for (let elapsed = 0; elapsed < 12 * HOUR; elapsed += 30 * MINUTE) {
+          time.advance(30 * MINUTE);
+          const resolved = await sessions.resolve(issued.token);
+          if (resolved.status === 'valid') await sessions.touch(resolved.record, COMMAND);
+        }
+      },
+    ],
+    [
+      'a limit the session list finds passed',
+      async ({ sessions, time }) => {
+        time.advance(60 * MINUTE);
+        await sessions.list();
+      },
+    ],
+    [
+      'a restart under another password hash',
+      async ({ store, time, issued }) => {
+        const heard: string[] = [];
+        const after = createSessions({
+          store,
+          audit: memoryAuditSink(time.now),
+          fingerprint: NEW,
+          now: time.now,
+        });
+        after.onSessionEnded((digest) => heard.push(digest));
+        await after.resolve(issued.token);
+        return heard;
+      },
+    ],
+    [
+      'revoke-sessions from another process, with a racing write putting its record back',
+      async ({ sessions, store, time, issued }) => {
+        await store.revokeAll(time.now());
+        await store.put(issued.record);
+        time.advance(1);
+        await sessions.resolve(issued.token);
+      },
+    ],
+  ];
+  for (const [way, end] of ways) {
+    const run = setup();
+    const issued = await run.sessions.issue({ uaFamily: 'firefox' });
+    const heard = (await end({ ...run, issued })) ?? run.ended;
+    assert.deepEqual(heard, [issued.record.digest], way);
+    assert.equal(statusOf(await run.sessions.resolve(issued.token)), 'ended:unknown', way);
+  }
+
+  // revoke-sessions from another process, with nothing put back, ends no
+  // session this process sees, so there is nothing to tell: the next
+  // request finds no record. #7 checks the session on every preview request
+  // for that reason, and for a limit that passed with nobody looking.
+  const { sessions, store, time, ended } = setup();
+  const { token } = await sessions.issue({ uaFamily: 'firefox' });
+  await store.revokeAll(time.now());
+  assert.equal(statusOf(await sessions.resolve(token)), 'ended:unknown');
+  assert.deepEqual(ended, []);
 });
 
 test('a session signed in under another password hash no longer counts', async (t) => {
