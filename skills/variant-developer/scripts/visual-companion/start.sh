@@ -5,10 +5,10 @@
 #   start.sh --mode mockup --project-dir /path [--port N] [--foreground]
 #       Starts a mockup-mode HTTP server (server.cjs).
 #
-#   start.sh --mode preview --variant <slug> [--matrix]
+#   start.sh --mode preview --variant <id> [--matrix]
 #       Starts the apps/web dev server under the demo profile, which renders
 #       the bundled sample in any registered variant at
-#       /sample?variant=<slug>. With --matrix, also runs preview-matrix.mjs
+#       /sample?variant=<id>. With --matrix, also runs preview-matrix.mjs
 #       (requires Playwright).
 set -euo pipefail
 
@@ -52,7 +52,7 @@ case "$MODE" in
     ;;
   preview)
     if [ -z "$VARIANT" ]; then
-      echo "error: --variant <slug> required for preview mode" >&2
+      echo "error: --variant <id> required for preview mode" >&2
       exit 2
     fi
     # next dev listens on $PORT when it is set.
@@ -64,7 +64,7 @@ case "$MODE" in
       # Best-effort matrix capture; runs in background once server is up.
       (
         # Wait until the dev server answers its health check. The page itself
-        # is a 404 for an unregistered slug, which preview-matrix.mjs reports.
+        # is a 404 for an unregistered id, which preview-matrix.mjs reports.
         for i in $(seq 1 60); do
           if curl -sf "$BASE/api/health" >/dev/null 2>&1; then
             break
