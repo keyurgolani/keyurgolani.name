@@ -14,10 +14,23 @@ function run(...args) {
   return { code: result.status, stdout: result.stdout, stderr: result.stderr };
 }
 
-test('the valid pair exits 0 with no records', () => {
+/** Every pair warns while this build registers only the fallback composition (#5). */
+const UNAVAILABLE = 'site.yml:3:12: variant.unavailable (warning) at /appearance/variant';
+
+test('the valid pair exits 0, with only the warning that the fallback composition renders', () => {
   const r = run('valid');
   assert.equal(r.code, 0, `stdout: ${r.stdout}\nstderr: ${r.stderr}`);
-  assert.equal(r.stdout, 'portfolio.yml and site.yml are valid.\n');
+  assert.equal(
+    r.stdout,
+    [
+      UNAVAILABLE,
+      "  /appearance/variant names a variant this build doesn't register, so the fallback composition renders instead.",
+      '  Install its package with pnpm --filter @portfolio/web add <package> and rebuild. This build registers no variant yet.',
+      '',
+      'portfolio.yml and site.yml are valid, with 1 warning.',
+      '',
+    ].join('\n'),
+  );
 });
 
 test('invalid-kind exits 1 and reports the bad kind where it is', () => {
@@ -56,8 +69,9 @@ test('unregistered-extension exits 0 and warns where each extension is used', ()
   assert.deepEqual(heads, [
     'portfolio.yml:8:5: extension.unregistered (warning) at /identity/extensions/@acme~1portfolio-photography',
     'portfolio.yml:12:5: extension.unregistered (warning) at /sections/0',
+    UNAVAILABLE,
   ]);
-  assert.match(r.stdout, /\nportfolio\.yml and site\.yml are valid, with 2 warnings\.\n$/);
+  assert.match(r.stdout, /\nportfolio\.yml and site\.yml are valid, with 3 warnings\.\n$/);
 });
 
 test('a directory that is missing or a file, and a usage error', () => {

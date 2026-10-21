@@ -22,17 +22,22 @@ export interface RouteEntry {
   readonly profiles?: readonly Profile[];
   /** A page the server-built navigation lists, under this label. */
   readonly nav?: string;
+  /**
+   * A route visitors read the published site through. While the catalog
+   * can't serve (isServable() is false), proxy.ts answers it with a 503.
+   */
+  readonly visitor?: true;
 }
 
 // A pattern may appear more than once, with a different capability for each
 // profile that serves it (such as a Studio page under owner and demo).
 const ROUTES = [
-  { pattern: '/', kind: 'page', capability: 'catalog.read', nav: 'Home' },
-  { pattern: '/sample', kind: 'page', capability: 'sample.read' },
-  { pattern: '/robots.txt', kind: 'metadata', capability: 'catalog.read' },
-  { pattern: '/sitemap.xml', kind: 'metadata', capability: 'catalog.read' },
-  { pattern: '/opengraph-image', kind: 'metadata', capability: 'catalog.read' },
-  { pattern: '/feed.xml', kind: 'handler', capability: 'feed.read' },
+  { pattern: '/', kind: 'page', capability: 'catalog.read', nav: 'Home', visitor: true },
+  { pattern: '/sample', kind: 'page', capability: 'sample.read', visitor: true },
+  { pattern: '/robots.txt', kind: 'metadata', capability: 'catalog.read', visitor: true },
+  { pattern: '/sitemap.xml', kind: 'metadata', capability: 'catalog.read', visitor: true },
+  { pattern: '/opengraph-image', kind: 'metadata', capability: 'catalog.read', visitor: true },
+  { pattern: '/feed.xml', kind: 'handler', capability: 'feed.read', visitor: true },
   { pattern: '/api/health', kind: 'handler', capability: 'health.read' },
   { pattern: '/api/ready', kind: 'handler', capability: 'ready.read' },
   { pattern: '/api/studio/[name]', kind: 'handler', capability: 'operations' },
@@ -57,8 +62,9 @@ export function patternOfRoutePath(routePath: string): string {
 
 /**
  * Routes #1 removed in every profile. proxy.ts answers each with 404. Each
- * matches exactly: `/variants`, never `/variants/*`, where the screenshots
- * in public/variants/ are served.
+ * matches exactly: `/variants`, never `/variants/*`, which stays free for
+ * static assets under public/variants/. The v1 screenshots that lived there
+ * moved to legacy/public/ with their variants (#5).
  */
 export const RETIRED_PATTERNS = [
   '/admin',

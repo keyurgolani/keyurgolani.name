@@ -4,13 +4,13 @@ import { NextRequest } from 'next/server';
 import { proxy } from './proxy';
 import type { Profile } from './server/capabilities';
 import { readDeploymentConfig } from './server/config';
-import { setDeploymentState } from './server/config-store';
+import { setDeploymentState, setServable } from './server/config-store';
 import { readiness } from './server/readiness';
 
 // proxy.ts: 404 early for what the profile doesn't serve, a fresh request ID
-// on everything else, noindex on every demo response, and 503 before
-// register() has stored the deployment, with readiness's own body for
-// /api/ready.
+// on everything else, noindex on every demo response, 503 before register()
+// has stored the deployment, with readiness's own body for /api/ready, and a
+// static 503 page for visitor pages while the catalog can't serve (#5).
 
 function deploy(t: TestContext, profile: Profile): void {
   const read = readDeploymentConfig(
@@ -55,7 +55,7 @@ test('before startup, /api/ready answers with the starting body readiness docume
   assert.equal(response.headers.get('cache-control'), 'no-store');
   assert.match(response.headers.get('x-request-id') ?? '', UUID);
   const starting = await readiness(undefined, {
-    variantLoads: () => assert.fail('nothing loads before startup'),
+    variantHealth: () => assert.fail('nothing loads before startup'),
     loadedOwnerModules: () => [],
   });
   assert.deepEqual(await response.json(), starting.body);
@@ -116,6 +116,46 @@ test('under demo every response asks crawlers not to index it, and elsewhere non
       }
     });
   }
+});
+
+test("while the catalog can't serve, visitor pages are a static 503 page, and the rest pass", async (t) => {
+  deploy(t, 'read-only');
+  setServable(false);
+  t.after(() => setServable(true));
+  for (const path of ['/', '/feed.xml', '/sitemap.xml', '/robots.txt', '/opengraph-image']) {
+    const response = proxy(request(path));
+    assert.equal(response.status, 503, path);
+    assert.equal(response.headers.get('retry-after'), '120', path);
+    assert.equal(response.headers.get('x-robots-tag'), 'noindex', path);
+    assert.equal(response.headers.get('cache-control'), 'no-store', path);
+    assert.match(response.headers.get('content-type') ?? '', /^text\/html/, path);
+    assert.match(response.headers.get('x-request-id') ?? '', UUID, path);
+    const html = await response.text();
+    assert.match(html, /<h1>Temporarily unavailable<\/h1>/);
+    // No validation text, path, or Studio link.
+    assert.doesNotMatch(html, /studio|config|\.yml|href=/i);
+  }
+  // Readiness, health, Studio, build assets, and what the profile doesn't serve answer as before.
+  for (const path of [
+    '/api/ready',
+    '/api/health',
+    '/api/studio/config.status',
+    '/_next/static/a.js',
+  ]) {
+    assert.equal(proxy(request(path)).headers.get('x-middleware-next'), '1', path);
+  }
+  assert.equal(proxy(request('/admin')).status, 404);
+  // Servable again, the page passes through.
+  setServable(true);
+  assert.equal(proxy(request('/')).headers.get('x-middleware-next'), '1');
+});
+
+test('demo serves /sample, a visitor page, under the same rule', (t) => {
+  deploy(t, 'demo');
+  setServable(false);
+  t.after(() => setServable(true));
+  assert.equal(proxy(request('/sample')).status, 503);
+  assert.equal(proxy(request('/sample')).headers.get('x-robots-tag'), 'noindex');
 });
 
 test('build assets and optimized images go through the proxy too', async () => {

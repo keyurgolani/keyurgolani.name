@@ -11,8 +11,8 @@
  * read, 0 otherwise (warnings may remain), and 2 on a usage error.
  *
  * It reads the pair the way the server does, through @portfolio/schema/node's
- * loadPair, against the appearance ids and content extensions this build
- * registers. Links aren't checked against the site's origin: run `pnpm
+ * loadPair, against the variants, appearance ids, and content extensions
+ * this build registers. Links aren't checked against the site's origin: run `pnpm
  * config:validate <dir> --origin <url>` for that.
  *
  * Loads the TypeScript sources through the `tsx` loader, since the packages
@@ -66,19 +66,16 @@ if (!dir || process.argv.length > 3) {
   process.exit(2);
 }
 
-// What this build registers, as `pnpm config:validate` reads it. The variant
-// registry is generated on install (pnpm build:registry).
+// What this build registers, as `pnpm config:validate` reads it: the
+// registry `pnpm --filter @portfolio/web build:registry` generates.
 let ctx;
 try {
-  const [{ listManifests }, { createAppearanceCatalog }, { CONTENT_EXTENSIONS }] =
-    await Promise.all([
-      load('apps/web/src/lib/registry.ts'),
-      load('apps/web/src/server/appearance-catalog.ts'),
-      load('apps/web/src/server/content-extensions.ts'),
-    ]);
-  ctx = { catalog: createAppearanceCatalog(listManifests()), extensions: CONTENT_EXTENSIONS };
+  const { liveContext } = await load('apps/web/src/lib/variants.ts');
+  ctx = liveContext();
 } catch (e) {
-  console.error("error: can't load this build's variant registry. Run pnpm install first.");
+  console.error(
+    "error: can't load this build's variant registry. Run pnpm --filter @portfolio/web build:registry first.",
+  );
   console.error(e?.message ?? e);
   process.exit(2);
 }

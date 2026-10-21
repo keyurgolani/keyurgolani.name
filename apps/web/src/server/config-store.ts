@@ -21,8 +21,9 @@ export const NOT_LOADED =
   'The deployment configuration is not loaded. instrumentation register() validates it at startup.';
 
 const STORE: unique symbol = Symbol.for('keyurgolani.portfolio.deployment');
+const SERVABLE: unique symbol = Symbol.for('keyurgolani.portfolio.servable');
 
-type Holder = typeof globalThis & { [STORE]?: DeploymentState };
+type Holder = typeof globalThis & { [STORE]?: DeploymentState; [SERVABLE]?: boolean };
 
 export function getDeploymentState(): DeploymentState | undefined {
   return (globalThis as Holder)[STORE];
@@ -43,4 +44,20 @@ export function requireDeploymentConfig(): DeploymentConfig {
 /** Called by register() once the deployment validates, and by tests. */
 export function setDeploymentState(state: DeploymentState | undefined): void {
   (globalThis as Holder)[STORE] = state === undefined ? undefined : Object.freeze({ ...state });
+}
+
+/**
+ * Whether visitor pages can render (#5, Slice 3, item 6). It's true until
+ * something says otherwise. #3's CatalogReader sets it at startup and on
+ * every getLive(), false while the catalog is empty or incompatible, and
+ * proxy.ts answers each visitor page with a 503 meanwhile, since a page
+ * can't set its own status.
+ */
+export function isServable(): boolean {
+  return (globalThis as Holder)[SERVABLE] ?? true;
+}
+
+/** Called by #3's CatalogReader, and by tests. */
+export function setServable(servable: boolean): void {
+  (globalThis as Holder)[SERVABLE] = servable;
 }

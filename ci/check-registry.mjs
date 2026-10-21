@@ -1,40 +1,64 @@
 #!/usr/bin/env node
-// Regenerates the variant registry and fails when the committed
-// registry.styles.generated.ts differs from the generator's output. Never
-// cache the generated registries; #5 replaces this with its run-twice
-// determinism check.
+// The variant registry's check (#5, Slice 3): generation succeeds with no
+// diagnostic, two runs write the same bytes, git tracks none of what it
+// writes, and every registered variant passes the source audit
+// (`pnpm check:variants`). Slice 6 gives check:variants a job of its own.
 import { spawnSync } from 'node:child_process';
+import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { currentGate, REPO_ROOT, reportError, writeFailureRecord } from './lib/reports.mjs';
 
-const COMMITTED = 'apps/web/src/lib/registry.styles.generated.ts';
+const GENERATED = 'apps/web/src/lib/generated';
 
 const run = (command, args) =>
   spawnSync(command, args, { cwd: REPO_ROOT, stdio: 'inherit' }).status ?? 1;
 
-if (run(process.execPath, [path.join('apps', 'web', 'scripts', 'build-registry.mjs')]) !== 0) {
-  reportError('the registry generator failed');
-  process.exit(1);
+/** Every generated file's bytes, by name. */
+function snapshot() {
+  const dir = path.join(REPO_ROOT, GENERATED);
+  return Object.fromEntries(
+    readdirSync(dir)
+      .sort()
+      .map((name) => [name, readFileSync(path.join(dir, name), 'utf8')]),
+  );
 }
-if (run('git', ['ls-files', '--error-unmatch', COMMITTED]) !== 0) {
-  reportError(`${COMMITTED} is not committed`, { file: COMMITTED });
-  process.exit(1);
-}
-if (run('git', ['diff', '--exit-code', '--', COMMITTED]) !== 0) {
-  const message =
-    `${COMMITTED} differs from the generator's output. ` +
-    'Run pnpm --filter @portfolio/web build:registry and commit the result.';
-  reportError(message, { file: COMMITTED, title: 'stale registry' });
+
+function fail(message, record = {}) {
+  reportError(message, { file: GENERATED, title: 'variant registry' });
   const gate = currentGate();
-  if (gate) {
-    writeFailureRecord({
-      ...gate,
-      test: 'committed registry matches the generator',
-      asset: COMMITTED,
-      expected: 'generator output',
-      actual: 'committed file differs',
-    });
-  }
+  if (gate) writeFailureRecord({ ...gate, asset: GENERATED, ...record });
   process.exit(1);
 }
-console.log(`[registry] ${COMMITTED} matches the generator`);
+
+const generate = () => run('pnpm', ['--filter', '@portfolio/web', 'build:registry']);
+
+if (generate() !== 0) fail('registry generation failed', { test: 'registry generation succeeds' });
+const first = snapshot();
+if (generate() !== 0) fail('registry generation failed', { test: 'registry generation succeeds' });
+const second = snapshot();
+if (JSON.stringify(first) !== JSON.stringify(second)) {
+  fail('two runs of registry generation wrote different files', {
+    test: 'two runs write the same bytes',
+    expected: 'identical files',
+    actual: 'the second run changed them',
+  });
+}
+
+const tracked = spawnSync('git', ['ls-files', '--', GENERATED], {
+  cwd: REPO_ROOT,
+  encoding: 'utf8',
+});
+if (tracked.status !== 0 || tracked.stdout.trim() !== '') {
+  fail(`git tracks generated files: ${tracked.stdout.trim().split('\n').join(', ')}`, {
+    test: 'generated files are untracked',
+    expected: 'none tracked',
+    actual: tracked.stdout.trim(),
+  });
+}
+
+if (run('pnpm', ['--filter', '@portfolio/web', 'check:variants']) !== 0) {
+  fail('the variant source audit found something', { test: 'pnpm check:variants passes' });
+}
+console.log(
+  `[registry] ${Object.keys(first).length} generated files, the same on two runs, none tracked; the audit passes`,
+);

@@ -181,6 +181,13 @@ test('config.status shows each secret as set and never a value or a path', async
   assert.deepEqual(data.secrets, { PORTFOLIO_AUTH_PASSWORD_HASH: 'set', GITHUB_TOKEN: 'set' });
   assert.deepEqual(data.adapters, { catalog: 'documents' });
   assert.equal(data.origin, ORIGIN);
+  // The owner's diagnostic (#5): the site example selects a variant this
+  // build doesn't register yet, so the fallback composition renders.
+  assert.deepEqual(data.variant, {
+    status: 'degraded',
+    requested: 'editorial-evidence',
+    rendered: 'fallback',
+  });
 });
 
 test('an unknown operation is the same 404 with or without a session', async () => {

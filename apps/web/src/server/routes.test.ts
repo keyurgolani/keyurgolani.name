@@ -504,7 +504,7 @@ test('retired routes are absent everywhere, and only those exact paths', () => {
       assert.equal(resolveRoute(profile, instantiate(pattern)).status, 'absent', pattern);
       assert.equal(resolveRoute(profile, `${instantiate(pattern)}/`).status, 'absent', pattern);
     }
-    // The gallery screenshots in public/variants/ stay served.
+    // Paths under /variants/ stay unlisted, free for static assets in public/variants/.
     assert.equal(
       resolveRoute(profile, '/variants/kinetic-cosmos/aurora-dark-geometric.png').status,
       'unlisted',

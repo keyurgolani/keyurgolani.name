@@ -4,12 +4,12 @@ import { expect, test } from '../harness/fixtures';
 import { loadHome, scrollTops } from '../harness/motion';
 import { visitorOutput } from '../harness/visitor-output';
 
-// The mounted pair (#4) under Editorial: the site document picks the
-// appearance, the motion policy, and the starting theme, and hides
-// sections; the portfolio's locale and direction set <html lang dir>. No
-// marker from a hidden section or from unregistered extension data reaches
-// a visitor. pair-kinetic.spec.ts checks the same under Kinetic Cosmos, and
-// pair-rtl.spec.ts a right-to-left portfolio.
+// The mounted pair (#4) in the fallback composition, which renders for the
+// site's unregistered selection (#5): the site document picks the motion
+// policy and the starting theme, and hides sections; the portfolio's locale
+// and direction set <html lang dir>. No marker from a hidden section or from
+// unregistered extension data reaches a visitor. pair-rtl.spec.ts checks a
+// right-to-left portfolio. The color scheme and typography are #19's.
 
 const HIDDEN = path.join(path.dirname(DEFAULT_PORTFOLIO), 'hidden');
 const MARKER = 'canary-hidden-';
@@ -55,14 +55,14 @@ test(
 );
 
 test(
-  'the page takes its appearance and motion from site.yml, and <html lang dir> from the portfolio',
+  'the page takes its composition, motion, and display mode from site.yml, and <html lang dir> from the portfolio',
   { annotation: [{ type: 'route', description: '/' }, READ_ONLY] },
   async ({ page }, testInfo) => {
     await page.goto('/');
-    const root = page.locator('[data-variant]').first();
-    await expect(root).toHaveAttribute('data-variant', 'editorial');
-    await expect(root).toHaveAttribute('data-color-scheme', 'noir');
-    await expect(root).toHaveAttribute('data-typography', 'modernist');
+    const root = page.locator('[data-variant]');
+    await expect(root).toHaveCount(1);
+    await expect(root).toHaveAttribute('data-variant', 'fallback');
+    await expect(root).toHaveAttribute('data-requested-variant', 'missing-variant');
     await expect(root).toHaveAttribute('data-motion-policy', 'reduce');
     await expect(page.locator('html')).toHaveAttribute('lang', 'en-GB');
     await expect(page.locator('html')).toHaveAttribute('dir', 'ltr');
@@ -76,7 +76,7 @@ test(
       await expect(page.locator(`[id="${id}"]`), id).toHaveCount(1);
     }
     // The render, for the report: the closing evidence for the pair (#4).
-    await testInfo.attach('editorial-noir-modernist-dark', {
+    await testInfo.attach('fallback-dark', {
       body: await page.screenshot(),
       contentType: 'image/png',
     });
@@ -104,7 +104,7 @@ test(
   { annotation: [{ type: 'route', description: '/' }, READ_ONLY] },
   async ({ page }) => {
     await loadHome(page);
-    const { first, settled } = await scrollTops(page, '#contact');
-    expect(Math.abs(first - settled)).toBeLessThan(4);
+    const { farthest } = await scrollTops(page, '#contact');
+    expect(farthest).toBeLessThan(4);
   },
 );

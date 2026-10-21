@@ -1,5 +1,5 @@
 import 'server-only';
-import type { AppearanceCatalog, ContentExtension } from '@portfolio/schema';
+import type { AppearanceCatalog, ContentExtension, UnitValidator } from '@portfolio/schema';
 import type { PairFiles } from '@portfolio/schema/node';
 import type { Profile } from './capabilities';
 import { openDocumentsCatalog, type OpenDocumentsResult } from './catalog-documents';
@@ -11,6 +11,7 @@ import type { DeploymentState } from './config-store';
 import { createDispatcher, NO_BINDINGS, type StudioBindings } from './dispatcher';
 import { listOperations, type ConfigSummary } from './operations';
 import type { Session } from './session';
+import { liveVariantHealth } from './variant-health';
 
 // The composition root (#1, item 14). It builds what one profile needs and
 // nothing else: read-only gets the documents adapter, demo the bundled
@@ -196,6 +197,8 @@ export interface CompositionInput {
   readonly catalog?: AppearanceCatalog;
   /** The content extensions documents are checked against. */
   readonly extensions?: readonly ContentExtension[];
+  /** The contract's checks on the pair, live (#5). */
+  readonly validators?: readonly UnitValidator[];
   /** Receives findings made after startup (re-validation under next dev). */
   readonly report: (issue: ConfigIssue) => void;
   /** Defaults to AUTH_PROVIDERS. In-process owner tests pass a test double. */
@@ -231,6 +234,7 @@ export async function compose(input: CompositionInput): Promise<Composition> {
         examples: input.examples,
         catalog: input.catalog,
         extensions: input.extensions,
+        validators: input.validators,
       });
       const issues = [...early.issues, ...sample.issues];
       if (!sample.ok) return { ok: false, issues };
@@ -266,9 +270,15 @@ export async function compose(input: CompositionInput): Promise<Composition> {
       if (!factory) throw new Error('The owner profile has no authentication provider.');
       const provider = await factory.load({ config, mintSession: owner.mintSession });
       const catalog: CatalogAdapter = 'documents';
+      const reader = documents.reader;
       const bindings: StudioBindings = {
         ...NO_BINDINGS,
-        handlers: owner.ownerHandlers({ config, catalog }),
+        handlers: owner.ownerHandlers({
+          config,
+          catalog,
+          variantHealth: () =>
+            liveVariantHealth(async () => (await reader.getLive()).unit.site.appearance.variant),
+        }),
         resolveSession: (context) => provider.resolveSession(context),
         checkOrigin: (context) => provider.checkOrigin(context),
         touchSession: (context) => provider.touchSession(context),
@@ -294,6 +304,7 @@ function openDocuments(input: CompositionInput): OpenDocumentsResult {
     examples: input.examples,
     catalog: input.catalog,
     extensions: input.extensions,
+    validators: input.validators,
     origin: input.config.origin,
     report: input.report,
   });

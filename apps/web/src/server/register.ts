@@ -1,9 +1,8 @@
 import 'server-only';
 import path from 'node:path';
-import { createAppearanceCatalog } from './appearance-catalog';
+import { liveContext } from '~/lib/variants';
 import { issueLogLine, type ConfigIssue, type Profile } from './config';
 import { setDeploymentState } from './config-store';
-import { CONTENT_EXTENSIONS } from './content-extensions';
 import { log } from './log';
 import type { Registration } from './start-or-exit';
 import { runStartup, type StartupResult } from './startup';
@@ -19,14 +18,18 @@ export async function registerDeployment(): Promise<Registration> {
   const cwd = process.cwd();
   // The image and `next dev` both keep them two levels above apps/web.
   const example = (name: string) => path.resolve(/*turbopackIgnore: true*/ cwd, '..', '..', name);
-  // The interim catalog of the variants this build registers (#4, item 14).
-  const { listManifests } = await import('~/lib/registry');
+  // What this build registers (#5): the interim appearance catalog, the
+  // content extensions, and the contract's live checks, under which a
+  // selection this build doesn't register is a warning and the fallback
+  // composition renders.
+  const { catalog, extensions, validators } = liveContext();
   const result: StartupResult = await runStartup({
     env: process.env,
     cwd,
     examples: { portfolio: example('portfolio.example.yml'), site: example('site.example.yml') },
-    catalog: createAppearanceCatalog(listManifests()),
-    extensions: CONTENT_EXTENSIONS,
+    catalog,
+    extensions,
+    validators,
     // Called only after startup, by re-validation under next dev.
     report: (issue) => {
       console.log(issueLogLine(issue, result.profile));

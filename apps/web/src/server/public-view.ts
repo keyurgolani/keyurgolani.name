@@ -1,8 +1,8 @@
 import 'server-only';
 import { toPublicView, type PublicView } from '@portfolio/schema';
+import { CONTENT_EXTENSIONS } from '~/lib/variants';
 import { getLive } from './catalog';
 import type { PublicationUnit } from './catalog-port';
-import { CONTENT_EXTENSIONS } from './content-extensions';
 
 // What visitors may see of the live revision (#4, item 16): the only input
 // to the page, its metadata and JSON-LD, the feed, and the Open Graph image.

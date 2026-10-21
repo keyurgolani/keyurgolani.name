@@ -43,11 +43,11 @@ sections:
 ```yaml
 schemaVersion: 2
 appearance:
-  variant: editorial # which packages/variant-* lays out the page
+  variant: editorial-evidence # the installed variant that lays out the page
   designLanguage: platform-neutral
-  colorScheme: warm # an id the variant declares
-  typography: classic # an id the variant declares
-  displayMode: system # system | light | dark
+  colorScheme: warm # a color scheme id, for #19
+  typography: classic # a typography id, for #19
+  displayMode: system # system | light | dark | high-contrast
 visitorControls:
   variant: locked
   designLanguage: locked
@@ -138,7 +138,7 @@ The first sections are what a visitor sees before scrolling, so treat them like 
 | `fun-facts`           | Off-the-page personal notes                                | Personal brand                              |
 | `tenure`              | A years-in headline                                        | Senior, with a strong narrative             |
 | `external-portfolios` | Links to other sites where your work lives                 | Cross-discipline                            |
-| `github`              | Live GitHub data                                           | Engineers                                   |
+| `github`              | A GitHub profile link; repository data comes with #10      | Engineers                                   |
 
 Every kind's fields, one by one: [`skills/portfolio-author/references/schema.md`](../skills/portfolio-author/references/schema.md). [`section-kinds.md`](../skills/portfolio-author/references/section-kinds.md) says when to use each.
 

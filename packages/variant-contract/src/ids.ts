@@ -1,13 +1,13 @@
 // Variant ids (#5, Slice 1): one grammar for every registry kind, a reserved
 // set for the platform's own packages, and a scope prefix for everyone else's.
 
-import { REGISTRY_ID_PATTERN } from '@portfolio/schema';
+import { FALLBACK_VARIANT_ID, REGISTRY_ID_PATTERN } from '@portfolio/schema';
 
 /** `^[a-z][a-z0-9-]{1,47}$`, the registry grammar #4's site document uses. */
 export const VARIANT_ID_PATTERN = REGISTRY_ID_PATTERN;
 
 /** The host's stand-in composition. It renders, but a site can't select it. */
-export const FALLBACK_ID = 'fallback';
+export const FALLBACK_ID = FALLBACK_VARIANT_ID;
 
 /** An id no package registers. Fixtures select it to reach the fallback composition. */
 export const MISSING_VARIANT_ID = 'missing-variant';

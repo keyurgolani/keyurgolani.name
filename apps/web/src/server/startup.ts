@@ -1,5 +1,5 @@
 import 'server-only';
-import type { AppearanceCatalog, ContentExtension } from '@portfolio/schema';
+import type { AppearanceCatalog, ContentExtension, UnitValidator } from '@portfolio/schema';
 import type { PairFiles } from '@portfolio/schema/node';
 import { compose, type AuthProviderFactory } from './composition';
 import { readDeploymentConfig, type ConfigIssue, type Env, type Profile } from './config';
@@ -19,6 +19,8 @@ export interface StartupInput {
   readonly catalog?: AppearanceCatalog;
   /** The content extensions documents are checked against. */
   readonly extensions?: readonly ContentExtension[];
+  /** The contract's checks on the pair, live (#5): a selection this build doesn't register only warns. */
+  readonly validators?: readonly UnitValidator[];
   /** Receives findings made after startup (re-validation under next dev). */
   readonly report: (issue: ConfigIssue) => void;
   /** Reads <KEY>_FILE values; tests replace it. */
@@ -47,6 +49,7 @@ export async function runStartup(input: StartupInput): Promise<StartupResult> {
     examples: input.examples,
     catalog: input.catalog,
     extensions: input.extensions,
+    validators: input.validators,
     report: input.report,
     authProviders: input.authProviders,
   });

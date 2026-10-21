@@ -2,8 +2,11 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { MotionPolicy } from '@portfolio/schema';
+import type { VariantManifest } from '@portfolio/variant-contract';
 import { useMotionPreference, type ResolvedMotion } from '../motion';
-import type { PerformanceTier } from '../manifest';
+
+/** The manifest's runtime cost class. */
+type PerformanceTier = VariantManifest['performanceTier'];
 
 export interface SpatialContractValues {
   /** Resolved motion mode — `reduce` should freeze loops/cameras. */

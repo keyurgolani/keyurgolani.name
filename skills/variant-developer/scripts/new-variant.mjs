@@ -1,89 +1,197 @@
 #!/usr/bin/env node
 /**
- * Scaffold a new variant package by cloning packages/variant-template.
+ * Scaffold a variant package from the fallback composition (#5).
  *
- *   node skills/variant-developer/scripts/new-variant.mjs <slug>
- *   pnpm new-variant <slug>
+ *   pnpm new-variant <id> [--no-install]
+ *   node skills/variant-developer/scripts/new-variant.mjs <id> [--no-install]
  *
- * Slug must be lowercase, hyphen-separated, and not collide with an
- * existing variant package. The script:
+ * <id> is the id `site.yml`'s `appearance.variant` selects: a lowercase
+ * letter, then 1 to 47 lowercase letters, digits, or hyphens. `fallback` and
+ * `missing-variant` are taken. The script:
  *
- *   1. Copies packages/variant-template → packages/variant-<slug>
- *   2. Rewrites package name (@portfolio/variant-<slug>)
- *   3. Sets `portfolio.kind: "variant"` and `portfolio.variant: true`, and updates `portfolio.slug`
- *   4. Updates the manifest's `slug` and `name`
- *   5. Reminds you to run `pnpm install`, `pnpm --filter @portfolio/web build:registry`,
- *      and to fill out DESIGN.md before any code.
+ *   1. Copies packages/fallback-composition's package.json, tsconfig.json,
+ *      manifest.json, src/index.tsx, and src/styles.css to
+ *      packages/variant-<id>. Its tests and README stay behind.
+ *   2. Names the package @portfolio/variant-<id>, and gives the manifest the
+ *      id, a name, a promise and a description to replace, and provenance.
+ *   3. Scopes the stylesheet to [data-variant='<id>'], with a class prefix
+ *      of its own, and renames the component.
+ *   4. Adds the package to @portfolio/web, with
+ *      `pnpm --filter @portfolio/web add @portfolio/variant-<id>@workspace:*`,
+ *      and runs `pnpm check:variants --package @portfolio/variant-<id>`.
+ *      --no-install stops after step 3.
+ *
+ * Fill out DESIGN.md (skills/variant-developer/assets/DESIGN.template.md)
+ * and get it approved before changing any code.
  */
 
-import { cpSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-// __dirname is skills/variant-developer/scripts; up 3 levels = repo root.
-const ROOT = path.resolve(__dirname, '..', '..', '..');
-const TEMPLATE_DIR = path.join(ROOT, 'packages', 'variant-template');
+// skills/variant-developer/scripts, three levels below the repository root.
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 
-function fail(message) {
-  console.error(`error: ${message}`);
-  process.exit(1);
-}
+/** The registry grammar (`@portfolio/variant-contract`'s VARIANT_ID_PATTERN). */
+const ID = /^[a-z][a-z0-9-]{1,47}$/;
+/** Ids no scaffolded package may take: the fallback's own, and the one fixtures select to reach it. */
+const TAKEN = new Set(['fallback', 'missing-variant']);
+/** The fallback composition's files a new variant starts from. */
+const FILES = ['package.json', 'tsconfig.json', 'manifest.json', 'src/index.tsx', 'src/styles.css'];
+/** Class prefixes already in use: the fallback's, the kit's shared renderers', and the host's own. */
+const RESERVED_PREFIXES = new Set(['fc', 'pf', 'host']);
 
-function toTitleCase(slug) {
-  return slug
+export class ScaffoldError extends Error {}
+
+/** `acme-ocean` to `Acme Ocean`. */
+export function titleCase(id) {
+  return id
     .split('-')
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(' ');
 }
 
-function main() {
-  const [, , slugArg] = process.argv;
-  if (!slugArg) fail('usage: pnpm new-variant <slug>');
-  const slug = slugArg.trim().toLowerCase();
-  if (!/^[a-z][a-z0-9]*(-[a-z0-9]+)*$/.test(slug)) {
-    fail(`slug must be lowercase + hyphen-separated; got "${slugArg}"`);
-  }
-  if (slug === 'template') fail('"template" is reserved — pick a different slug.');
-
-  const targetDir = path.join(ROOT, 'packages', `variant-${slug}`);
-  if (existsSync(targetDir)) fail(`target already exists: ${targetDir}`);
-  if (!existsSync(TEMPLATE_DIR)) fail(`template missing at ${TEMPLATE_DIR}`);
-
-  cpSync(TEMPLATE_DIR, targetDir, { recursive: true });
-
-  const pkgPath = path.join(targetDir, 'package.json');
-  const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
-  pkg.name = `@portfolio/variant-${slug}`;
-  pkg.keywords = ['portfolio-variant'];
-  pkg.portfolio = { kind: 'variant', variant: true, slug };
-  writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n', 'utf8');
-
-  const manifestPath = path.join(targetDir, 'src', 'manifest.ts');
-  let manifest = readFileSync(manifestPath, 'utf8');
-  const titleCased = toTitleCase(slug);
-  manifest = manifest
-    .replace(/slug:\s*'template'/, `slug: '${slug}'`)
-    .replace(/name:\s*'Template'/, `name: '${titleCased}'`);
-  writeFileSync(manifestPath, manifest, 'utf8');
-
-  const hostPkgPath = path.join(ROOT, 'apps', 'web', 'package.json');
-  if (existsSync(hostPkgPath)) {
-    const hostPkg = JSON.parse(readFileSync(hostPkgPath, 'utf8'));
-    hostPkg.dependencies = hostPkg.dependencies ?? {};
-    hostPkg.dependencies[`@portfolio/variant-${slug}`] = 'workspace:*';
-    writeFileSync(hostPkgPath, JSON.stringify(hostPkg, null, 2) + '\n', 'utf8');
-  }
-
-  console.log(`created packages/variant-${slug}/`);
-  console.log(`added @portfolio/variant-${slug} to apps/web dependencies`);
-  console.log('next steps:');
-  console.log('  1. pnpm install');
-  console.log('  2. pnpm --filter @portfolio/web build:registry');
-  console.log(`  3. copy skills/variant-developer/assets/DESIGN.template.md`);
-  console.log(`     to packages/variant-${slug}/DESIGN.md and fill it out.`);
-  console.log(`     get user approval on DESIGN.md before writing any code.`);
+/**
+ * A short class prefix for the id: its parts' initials, else its first part,
+ * else the whole id, whichever isn't reserved first, and a `v` before the id
+ * when none is free, as for an id of `pf` itself.
+ */
+export function classPrefix(id) {
+  const parts = id.split('-').filter(Boolean);
+  const initials = parts.map((part) => part[0]).join('');
+  const candidates = [initials.length >= 2 ? initials : undefined, parts[0], parts.join('')];
+  const free = candidates.find((candidate) => candidate && !RESERVED_PREFIXES.has(candidate));
+  return free ?? `v${parts.join('')}`;
 }
 
-main();
+function replaced(text, from, to, file) {
+  if (!text.includes(from)) {
+    throw new ScaffoldError(`packages/fallback-composition/${file} no longer has ${from}.`);
+  }
+  return text.split(from).join(to);
+}
+
+/**
+ * Copies the fallback composition to packages/variant-<id> under `root` and
+ * makes it a variant of its own. Returns the package's name and directory.
+ */
+export function scaffold({ root = ROOT, id }) {
+  if (!ID.test(id)) {
+    throw new ScaffoldError(
+      `${JSON.stringify(id)} isn't a variant id: a lowercase letter, then 1 to 47 lowercase letters, digits, or hyphens.`,
+    );
+  }
+  if (TAKEN.has(id)) throw new ScaffoldError(`${id} is taken. Pick another id.`);
+  const source = path.join(root, 'packages', 'fallback-composition');
+  const target = path.join(root, 'packages', `variant-${id}`);
+  if (!existsSync(source)) throw new ScaffoldError(`There's no fallback composition at ${source}.`);
+  if (existsSync(target)) throw new ScaffoldError(`${target} already exists.`);
+
+  const name = titleCase(id);
+  const packageName = `@portfolio/variant-${id}`;
+  const prefix = classPrefix(id);
+  const read = (file) => readFileSync(path.join(source, file), 'utf8');
+  const texts = Object.fromEntries(FILES.map((file) => [file, read(file)]));
+
+  const pkg = JSON.parse(texts['package.json']);
+  pkg.name = packageName;
+  pkg.version = '0.1.0';
+  pkg.description = `${name}: a composition for the portfolio.`;
+  // The fallback's tests stay behind, so there's nothing for a test script to run yet.
+  pkg.scripts = { typecheck: pkg.scripts.typecheck };
+  texts['package.json'] = `${JSON.stringify(pkg, null, 2)}\n`;
+
+  const manifest = JSON.parse(texts['manifest.json']);
+  manifest.id = id;
+  manifest.name = name;
+  manifest.promise = 'Replace this with the composition idea from DESIGN.md, in one sentence.';
+  manifest.description =
+    'Replace this with what the composition does with the portfolio, from DESIGN.md.';
+  manifest.provenance = {
+    provisional: true,
+    sources: [{ source: 'The fallback composition', disposition: 'preserved' }],
+  };
+  texts['manifest.json'] = `${JSON.stringify(manifest, null, 2)}\n`;
+
+  let component = texts['src/index.tsx'];
+  component = replaced(
+    component,
+    'FallbackComposition',
+    `${name.replace(/ /g, '')}Composition`,
+    'src/index.tsx',
+  );
+  component = replaced(component, '"fc-', `"${prefix}-`, 'src/index.tsx');
+  component = component.split('fc--').join(`${prefix}--`);
+  // Its opening comment describes the fallback; a new variant's says where it came from.
+  component = component.replace(
+    /\n(\/\/ The fallback composition \(#5\)[^\n]*\n(?:\/\/[^\n]*\n)*)/,
+    `\n// ${name}, scaffolded from the fallback composition (#5): every section in\n// content order through the kit's shared renderers, until DESIGN.md says\n// otherwise. Composition only: color, type, and motion timing are #19's.\n`,
+  );
+  texts['src/index.tsx'] = component;
+
+  let styles = texts['src/styles.css'];
+  styles = replaced(
+    styles,
+    "[data-variant='fallback']",
+    `[data-variant='${id}']`,
+    'src/styles.css',
+  );
+  styles = replaced(styles, '.fc-', `.${prefix}-`, 'src/styles.css');
+  styles = styles.replace(
+    /^\/\*[\s\S]*?\*\/\n/,
+    `/*\n * ${name}'s layout. Composition only: spacing and arrangement, with color,\n * type, and motion left to #19's appearance axes. Every rule sits under\n * [data-variant='${id}'], and every property is logical.\n */\n`,
+  );
+  texts['src/styles.css'] = styles;
+
+  for (const file of FILES) {
+    mkdirSync(path.dirname(path.join(target, file)), { recursive: true });
+    writeFileSync(path.join(target, file), texts[file]);
+  }
+  return { packageName, dir: target };
+}
+
+/** Runs pnpm in the repository, with its output on this terminal. */
+function pnpm(root, args) {
+  console.log(`$ pnpm ${args.join(' ')}`);
+  return spawnSync('pnpm', args, { cwd: root, stdio: 'inherit' }).status ?? 1;
+}
+
+function main(argv) {
+  const args = argv.filter((arg) => arg !== '--no-install');
+  if (args.length !== 1 || args[0].startsWith('--')) {
+    console.error('usage: pnpm new-variant <id> [--no-install]');
+    return 2;
+  }
+  let created;
+  try {
+    created = scaffold({ id: args[0] });
+  } catch (error) {
+    if (!(error instanceof ScaffoldError)) throw error;
+    console.error(`error: ${error.message}`);
+    return 1;
+  }
+  console.log(`created ${path.relative(ROOT, created.dir)}/`);
+  if (argv.includes('--no-install')) {
+    console.log(`next: pnpm --filter @portfolio/web add ${created.packageName}@workspace:*`);
+  } else {
+    const added = pnpm(ROOT, [
+      '--filter',
+      '@portfolio/web',
+      'add',
+      `${created.packageName}@workspace:*`,
+    ]);
+    if (added !== 0) return added;
+    const checked = pnpm(ROOT, ['check:variants', '--package', created.packageName]);
+    if (checked !== 0) return checked;
+  }
+  console.log('next: copy skills/variant-developer/assets/DESIGN.template.md to');
+  console.log(`  ${path.relative(ROOT, created.dir)}/DESIGN.md, fill it out, and get it approved`);
+  console.log('  before changing any code.');
+  return 0;
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  process.exitCode = main(process.argv.slice(2));
+}

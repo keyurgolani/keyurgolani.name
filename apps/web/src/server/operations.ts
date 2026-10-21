@@ -90,13 +90,36 @@ export const ConfigSummarySchema = z
   .strict();
 export type ConfigSummary = z.infer<typeof ConfigSummarySchema>;
 
+/**
+ * Whether the selected variant renders, as #5's liveVariantHealth() reports
+ * it: `degraded`, naming both ids, when the fallback composition stands in,
+ * and `fail` when the revision or the variant's module doesn't load, with the
+ * selection when the revision said it.
+ */
+export const VariantHealthSchema = z.union([
+  z
+    .object({
+      status: z.enum(['ok', 'degraded']),
+      requested: z.string(),
+      rendered: z.string(),
+    })
+    .strict(),
+  z.object({ status: z.literal('fail'), requested: z.string().nullable() }).strict(),
+]);
+
+/** What config.status answers: the summary, and how the live site's variant renders. */
+export const ConfigStatusSchema = ConfigSummarySchema.extend({
+  variant: VariantHealthSchema,
+}).strict();
+export type ConfigStatus = z.infer<typeof ConfigStatusSchema>;
+
 const OPERATIONS: readonly Operation[] = [
   {
     name: 'config.status',
     kind: 'query',
     capability: 'config.status',
     input: z.object({}).strict(),
-    output: ConfigSummarySchema,
+    output: ConfigStatusSchema,
     session: true,
     originCheck: false,
     errors: [

@@ -5,8 +5,10 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse as parseYaml } from 'yaml';
-import type { AppearanceCatalog } from '@portfolio/schema';
+import { contractValidators } from '@portfolio/variant-contract';
 import { acmePortfolioPhotography } from '../../../../packages/schema/src/__fixtures__/acme-portfolio-photography';
+import { REGISTRY } from '~/lib/variants';
+import { createAppearanceCatalog } from './appearance-catalog';
 import { BUNDLED_SAMPLE_NAMES } from './catalog-documents';
 import { openSampleCatalog } from './catalog-sample';
 
@@ -34,11 +36,10 @@ const WITH_EXTENSIONS = `${HEAD}${[
   '',
 ].join('\n')}`;
 
-/** Editorial only, as a build that registers one variant would say. */
-const EDITORIAL_ONLY: AppearanceCatalog = {
-  ids: (axis) => (axis === 'variant' ? ['editorial'] : null),
-  generatorInput: () => undefined,
-};
+/** The host's interim catalog: display modes only. */
+const HOST = createAppearanceCatalog();
+/** The contract's checks, live, as startup runs them on the sample. */
+const LIVE = contractValidators(REGISTRY, { live: true });
 
 function scratch(t: TestContext): string {
   const dir = mkdtempSync(path.join(tmpdir(), 'catalog-sample-'));
@@ -54,12 +55,12 @@ function withPortfolio(t: TestContext, text: string) {
 }
 
 test('it serves the bundled pair, frozen', async () => {
-  const opened = openSampleCatalog({ examples: EXAMPLES, catalog: EDITORIAL_ONLY });
+  const opened = openSampleCatalog({ examples: EXAMPLES, catalog: HOST });
   assert.ok(opened.ok, JSON.stringify(opened.issues));
   assert.deepEqual(opened.issues, []);
   const live = await opened.reader.getLive();
   assert.ok(BUNDLED_SAMPLE_NAMES.includes(live.unit.portfolio.identity.name));
-  assert.equal(live.unit.site.appearance.variant, 'editorial');
+  assert.equal(live.unit.site.appearance.variant, 'editorial-evidence');
   assert.match(live.revisionId, /^sample-[0-9a-f]{12}$/);
   assert.ok(Object.isFrozen(live));
   assert.ok(Object.isFrozen(live.unit.portfolio.identity));
@@ -174,16 +175,12 @@ test('a sample that fails the schema, or a site the build cannot render, refuses
     ['PORTFOLIO_PROFILE:sample_invalid'],
   );
   assert.ok(!JSON.stringify(broken.issues).includes('canary'));
-  // A build that doesn't register the example's variant can't serve it either.
-  const unregistered = openSampleCatalog({
-    examples: EXAMPLES,
-    catalog: {
-      ids: (axis) => (axis === 'variant' ? ['kinetic-cosmos'] : null),
-      generatorInput: () => undefined,
-    },
-  });
+  // A build that doesn't register the example's variant serves it in the
+  // fallback composition, with the warning startup logs.
+  const unregistered = openSampleCatalog({ examples: EXAMPLES, catalog: HOST, validators: LIVE });
+  assert.ok(unregistered.ok);
   assert.deepEqual(
-    unregistered.issues.map((issue) => `${issue.code} ${issue.file}`),
-    ['sample_invalid site.example.yml'],
+    unregistered.issues.map((issue) => `${issue.severity} ${issue.code} ${issue.file}`),
+    ['warning variant.unavailable site.example.yml'],
   );
 });

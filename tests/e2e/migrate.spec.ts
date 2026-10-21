@@ -6,10 +6,12 @@ import { expect, test } from '@playwright/test';
 import { startApp } from '../harness/app-server.mjs';
 
 // #4's acceptance: the baseline example, migrated with the baseline's color
-// scheme and typography, renders / with the section ids and root attributes
-// recorded before any renderer changed. The old example is kept as a legacy
-// fixture. The server reads both documents the migration wrote, so the
-// appearance on the page comes from the written site.yml.
+// scheme and typography, renders / with the section ids recorded before any
+// renderer changed. The old example is kept as a legacy fixture. The server
+// reads both documents the migration wrote. The written site.yml keeps the
+// baseline's appearance, whose variant, editorial, this build no longer
+// registers (#5), so the fallback composition renders in its place and its
+// boundary names the selection.
 
 const REPO_ROOT = fileURLToPath(new URL('../..', import.meta.url));
 const OLD_EXAMPLE = path.join(REPO_ROOT, 'packages/schema/src/__fixtures__/legacy/example.yml');
@@ -18,7 +20,7 @@ const BASELINE = JSON.parse(
 ) as { root: Record<string, string>; sectionIds: string[] };
 const OFFLINE = pathToFileURL(path.join(REPO_ROOT, 'tests/harness/offline-fetch.mjs')).href;
 
-test('the old example, migrated, renders the baseline section ids and appearance', async () => {
+test('the old example, migrated, renders the baseline section ids, for its selection', async () => {
   const out = test.info().outputPath('migrated');
   const tsx = fileURLToPath(import.meta.resolve('tsx/cli'));
   const run = spawnSync(
@@ -67,9 +69,8 @@ test('the old example, migrated, renders the baseline section ids and appearance
     const ids = [...html.matchAll(/<section\b[^>]*?\sid="([^"]+)"/g)].map(([, id]) => id);
     expect(ids).toEqual(BASELINE.sectionIds);
     const root = /<[a-z]+\b[^>]*\sdata-variant="[^"]*"[^>]*>/.exec(html)?.[0] ?? '';
-    for (const [name, value] of Object.entries(BASELINE.root)) {
-      expect(root).toContain(`${name}="${value}"`);
-    }
+    expect(root).toContain('data-variant="fallback"');
+    expect(root).toContain(`data-requested-variant="${BASELINE.root['data-variant']}"`);
   } finally {
     await app.stop();
   }

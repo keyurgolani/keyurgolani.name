@@ -1,8 +1,9 @@
-# Harness fixture: Kinetic Cosmos with motion always reduced, whatever the
-# visitor's setting.
+# Harness fixture: motion always reduced, whatever the visitor's setting. It
+# selects missing-variant, so the fallback composition renders; the motion
+# contract spec selects each registered composition in turn.
 schemaVersion: 2
 appearance:
-  variant: kinetic-cosmos
+  variant: missing-variant
   designLanguage: platform-neutral
   colorScheme: nebula
   typography: geometric

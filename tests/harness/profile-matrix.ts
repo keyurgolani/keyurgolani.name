@@ -11,7 +11,9 @@
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { APIResponse } from '@playwright/test';
+import { parse } from 'yaml';
 import type * as Capabilities from '../../apps/web/src/server/capabilities';
 import type * as Operations from '../../apps/web/src/server/operations';
 import type * as Routes from '../../apps/web/src/server/routes';
@@ -24,7 +26,9 @@ import {
   HOPS_FILE,
   IMAGE_PROBE,
 } from './canaries.mjs';
+import { DEFAULT_SITE } from './app-server.mjs';
 import { expect, test, type AppOptions } from './fixtures';
+import { VARIANTS } from './registry';
 
 // apps/web has no "type": "module", so its modules are CommonJS to Node and
 // load through require().
@@ -82,10 +86,30 @@ const BASELINE_HEADERS = {
   'content-security-policy': "frame-ancestors 'none'",
 } as const;
 
-/** What /api/ready answers for a profile whose checks all pass. */
+/** The site document each profile's app serves here: the harness fixture, or the bundled sample. */
+const SERVED_SITES: Partial<Record<Profile, string>> = {
+  'read-only': DEFAULT_SITE,
+  demo: fileURLToPath(new URL('../../site.example.yml', import.meta.url)),
+};
+
+/**
+ * The packs check: `ok` when this build registers the variant the profile's
+ * site selects, and `degraded` while the fallback composition renders in its
+ * place (#5), as it does for the harness fixture's missing-variant.
+ */
+function packsStatus(profile: Profile): 'ok' | 'degraded' {
+  const site = SERVED_SITES[profile];
+  if (!site) throw new Error(`No ${profile} app runs the matrix against the built server.`);
+  const selected = (parse(readFileSync(site, 'utf8')) as { appearance: { variant: string } })
+    .appearance.variant;
+  return VARIANTS.some(({ manifest }) => manifest.id === selected) ? 'ok' : 'degraded';
+}
+
+/** What /api/ready answers for a profile whose checks pass, or the packs check only degrades. */
 function readyBody(profile: Profile) {
+  const packs = packsStatus(profile);
   return {
-    status: 'ready',
+    status: packs === 'ok' ? 'ready' : 'degraded',
     profile,
     capabilities: CAPABILITIES.flatMap((id) => {
       const access = accessIn(profile, id);
@@ -93,7 +117,7 @@ function readyBody(profile: Profile) {
     }),
     checks: [
       { id: 'catalog', status: 'ok' },
-      { id: 'packs', status: 'ok' },
+      { id: 'packs', status: packs },
       ...(profile === 'owner' ? [] : [{ id: 'owner-modules', status: 'ok' }]),
     ],
   };

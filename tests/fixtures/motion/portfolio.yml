@@ -1,7 +1,7 @@
-# Harness fixture: what Kinetic Cosmos animates. A hero that enters and
-# types, profile links for the floating cards and their shimmer, and an
-# ongoing role for the timeline's pulse, with a contact section far enough
-# down to scroll to. .test hosts only.
+# Harness fixture: what a composition might animate. A hero, profile links,
+# and an ongoing role, with a contact section far enough down to scroll to.
+# The motion contract spec renders it in every registered composition (#5).
+# .test hosts only.
 schemaVersion: 2
 locale: en
 direction: ltr

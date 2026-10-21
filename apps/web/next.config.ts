@@ -1,5 +1,21 @@
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import type { NextConfig } from 'next';
+
+/**
+ * The registered variant and content extension packages, which
+ * `pnpm build:registry` lists (#5). predev and prebuild run it first.
+ */
+function registeredPackages(): string[] {
+  const file = path.join(process.cwd(), 'src', 'lib', 'generated', 'transpile-packages.json');
+  try {
+    return JSON.parse(readFileSync(file, 'utf8')) as string[];
+  } catch {
+    throw new Error(
+      'src/lib/generated/transpile-packages.json is missing. Run pnpm --filter @portfolio/web build:registry first.',
+    );
+  }
+}
 
 const config: NextConfig = {
   reactStrictMode: true,
@@ -13,8 +29,9 @@ const config: NextConfig = {
   transpilePackages: [
     '@portfolio/schema',
     '@portfolio/kit',
-    '@portfolio/variant-editorial',
+    '@portfolio/variant-contract',
     '@portfolio/core',
+    ...registeredPackages(),
   ],
   // No image optimizer: images render as plain <img>. Left on, /_next/image
   // sends its own CSP in place of the baseline one below and writes the

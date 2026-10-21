@@ -11,12 +11,12 @@ import type { MotionPolicy } from '@portfolio/schema';
 
 export type ResolvedMotion = 'reduce' | 'full';
 
-/** The site's motion policy, which a variant's root provides from VariantProps. */
+/** The site's motion policy, which a variant's root provides from its render input. */
 const MotionPolicyContext = createContext<MotionPolicy>('respect-os');
 
 /**
  * Gives every motion hook below it the site's motion policy. A variant wraps
- * its page in it with the `motionPolicy` it gets in VariantProps, so a
+ * its page in it with `input.presentation.motionPolicy`, so a
  * `reduce` policy reaches each component without threading it through props.
  */
 export function MotionPolicyProvider({

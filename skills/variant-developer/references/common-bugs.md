@@ -1,286 +1,202 @@
 # Common bugs that escape first-iteration variant development
 
-> Distilled from real variant builds where each bug shipped past typecheck,
-> audit, and HTTP-200 because they were _visual_ failures the toolchain
-> can't detect. Load this during Phase 2 Wave 1 (so the layout primitives
-> are written correctly the first time) and again during Phase 3 (so the
-> visual gates know what to look for).
+> Distilled from real variant builds, where each bug shipped past the
+> typecheck, the audit, and an HTTP 200 because it was a visual failure the
+> toolchain can't detect. Load this in Phase 2 Wave 1, so the layout is
+> written correctly the first time, and again in Phase 3, so the visual
+> gates know what to look for.
 >
-> Every bug listed here cost a separate validation iteration in a real session.
-> Avoiding them up front pays back the time tenfold.
+> Every bug here cost a separate validation round in a real session.
 
-## 1. Host CSS injection
-
-### What it looks like
-
-- Variant compiles, registry lists it, `/sample?variant=<slug>` returns 200.
-- Page renders as black-and-white user-agent default — no colors, no glassmorphism, no fonts.
-- The `data-variant='<slug>'` attribute is on the root, but no CSS rule matches it.
-
-### Why
-
-The host's `apps/web/src/app/layout.tsx` has to import each variant's `styles.css` for the rules to land in the bundle. If the host hard-codes one variant's import (the legacy state of the repo before this was generalized), every other variant's stylesheet is orphaned.
-
-### Fix
-
-The repo now generates `apps/web/src/lib/registry.styles.generated.ts` alongside `registry.generated.ts` — a side-effect import file that pulls every registered variant's `styles.css`. The layout imports the generated file, not any specific variant. Run `pnpm --filter @portfolio/web build:registry` to regenerate after scaffolding a new variant. **If your variant's CSS doesn't render, check that file first.**
-
-## 2. CSS specificity trap with global anchor styles
+## 1. The stylesheet never reaches the page
 
 ### What it looks like
 
-- Buttons render with the wrong text color — usually invisible on the active gradient.
-- Theme toggle active pill, primary CTA, contact LinkedIn button all share the same broken color.
-- DevTools shows `color: rgb(...)` resolving to the variant's `--kc-primary` (or whatever your accent variable is) **even though** your `.kc-action--primary` rule says `color: #ffffff`.
+- The variant compiles, `/sample?variant=<id>` answers 200, and `data-variant="<id>"` is on the boundary.
+- The sections are there, stacked in the host's defaults, with none of your arrangement.
 
 ### Why
 
-Every variant defines a default anchor style scoped to the variant root:
-
-```css
-[data-variant='your-slug'] a {
-  color: var(--accent); /* specificity: 0,1,1 */
-  text-decoration: underline;
-}
-```
-
-A class-only rule like `.kc-action--primary { color: #fff }` has specificity `0,1,0` — **lower** than the attribute-scoped descendant selector. The global anchor rule wins on every classed `<a>` button.
+The host imports each registered variant's stylesheet through `apps/web/src/lib/generated/registry.styles.ts`, which registry generation writes from the file your `./styles.css` export names. A missing export, an export pointing at the wrong file, or rules that don't start with `[data-variant='<id>']` all leave your layout off the page.
 
 ### Fix
 
-Two options. Pick one and apply it consistently:
+Run `pnpm check:variants --package @portfolio/variant-<id>`. It names a missing export or file, and every unscoped selector. `pnpm dev` regenerates the registry when it starts; after changing `package.json` mid-session, run `pnpm --filter @portfolio/web build:registry` or restart it.
 
-1. **Restrict the global rule to unclassed anchors** (recommended):
-
-   ```css
-   [data-variant='your-slug'] a:not([class]) {
-     color: var(--accent);
-     ...
-   }
-   ```
-
-   Any anchor with a `kc-*` (or whatever prefix you use) class falls through to its component rule. Inline prose links still inherit the default style.
-
-2. **Bump every component rule's specificity** to `[data-variant='your-slug'] .my-class`. Repetitive but explicit.
-
-This bug single-handedly makes every primary button on the page unreadable until you find it. Add it to your Wave 1 base-styles checklist.
-
-## 3. SVG gradient/filter URLs broken by spaces in IDs
+## 2. A scoped element rule outranks a class
 
 ### What it looks like
 
-- SVG paths render with `stroke="none"` even though the markup says `stroke="url(#grad-Foo)"`.
-- Computed style: `stroke: none`. The gradient lookup silently fails.
+- A component's own rule, such as `.ao-action { display: inline-flex }`, has no effect on the links it's meant for.
+- DevTools shows a `[data-variant='<id>'] a` rule winning.
 
 ### Why
 
-SVG fragment refs (`url(#name)`) treat the ID as a literal CSS-style identifier — spaces, slashes, colons all break it. If you synthesize gradient IDs from data fields like organization names or section titles, you get `url(#grad-Gujarat Technological University-...)` and SVG can't resolve it.
+`[data-variant='<id>'] a` has specificity 0,1,1. A class-only rule, `.ao-action`, has 0,1,0, so the element rule wins on every classed link.
 
 ### Fix
 
-Always slugify any synthesized ID that you'll reference via `url(#...)`:
+Contract 2.0 already requires the scope on every rule, so write component rules as `[data-variant='<id>'] .ao-action` (0,2,0), which outrank the element rule. For page-wide element rules, restrict them to unclassed elements, `[data-variant='<id>'] a:not([class])`, so prose links keep the default and components keep theirs.
+
+## 3. SVG gradient and filter URLs broken by spaces in ids
+
+### What it looks like
+
+- SVG paths render with `stroke="none"` although the markup says `stroke="url(#grad-Foo)"`.
+- The computed style says `stroke: none`. The lookup failed silently.
+
+### Why
+
+A fragment reference, `url(#name)`, treats the id as a literal identifier: spaces, slashes, and colons break it. Ids synthesized from organization names or section titles give `url(#grad-Gujarat Technological University-...)`, which SVG can't resolve.
+
+### Fix
+
+Slugify every synthesized id you reference with `url(#...)`, and start it with `input.ids.prefix`, so a preview frame and the host page can share a document:
 
 ```ts
 import { slugify } from '@portfolio/kit';
-const eventId = slugify(`experience-${item.organization}-${item.role}-${period.startTs}`);
+const gradientId = `${input.ids.prefix}${slugify(`experience-${item.organization}-${item.role}`)}`;
 ```
 
-Apply this to every SVG `<linearGradient id>`, `<filter id>`, `<mask id>`, `<clipPath id>`, and the strings used to reference them. The kit's `slugify` is the canonical source.
+Do it for every `<linearGradient id>`, `<filter id>`, `<mask id>`, and `<clipPath id>`, and the strings that reference them.
 
-## 4. Reserved-id collision with section IDs
+## 4. Reserved-id collision with section ids
 
 ### What it looks like
 
-- The hero section is squeezed to 80px wide, pinned to the left edge of the page.
+- The hero is squeezed to 80px wide, pinned to one edge.
 - Other sections render correctly.
-- Inspecting the hero element shows `position: absolute; width: 1px; height: 1px`.
+- The hero element shows `position: absolute; inline-size: 1px; block-size: 1px`.
 
 ### Why
 
-A common idiom is a top-of-page anchor for a "scroll to top" brand link:
+A common idiom is an anchor at the top of the page for a "scroll to top" link:
 
 ```css
-[data-variant='your-slug'] [id='top'] {
+[data-variant='acme-ocean'] [id='top'] {
   position: absolute;
-  top: 0;
-  height: 1px;
-  width: 1px;
+  inset-block-start: 0;
+  block-size: 1px;
+  inline-size: 1px;
 }
 ```
 
-Meanwhile, every section's DOM id is its portfolio `id`, and a hero is often `top` (the migration gives it that id), so the hero `<section id="top">` matches the rule. Collision.
+Every section's DOM id is `input.ids.prefix` and its portfolio id, and a hero is often `top`, so the hero's `<section id="top">` matches the rule.
 
 ### Fix
 
-Don't use single-word reserved IDs (`top`, `main`, `home`) for anchor tricks. Either:
+Don't use single-word ids (`top`, `main`, `home`) for layout tricks. Either:
 
-- Use a class: `<a className="kc-nav__brand">` + JS `window.scrollTo(0, 0)` on click. No ID needed.
-- Pick a namespaced ID: `id="kc-page-top"` and target only that.
+- Use a class and a script: `<a className="ao-nav__brand">` with `window.scrollTo({ top: 0 })` on click. No id needed.
+- Use a namespaced id, `${input.ids.prefix}ao-page-top`, and target only that.
 
-Portfolio ids are short words chosen by authors, such as `top` or `about`. Assume any single-word id may collide. `main` is reserved for your `<main id="main">`, so no section can take it.
+Portfolio ids are short words authors choose, such as `top` or `about`; assume any single-word id may collide. `input.ids.main` is your `<main>`'s.
 
-## 5. Theme tokens leaking into print
+## 5. Retired: theme tokens leaking into print
+
+A v1 variant defined its own theme tokens and had to reset each one for print. A contract 2.0 variant defines none: #19's tokens and their print values are the appearance system's.
+
+## 6. Missing scroll margin for fixed-header anchors
 
 ### What it looks like
 
-- Print preview shows cards with dark gray (or pure black) backgrounds where you expected white.
-- Body text on those cards is illegible.
-- The `@media print` block sets `background: #ffffff` on the variant root — but cards still render dark.
+- A navigation link scrolls to its section, but the heading is hidden behind the fixed header.
+- `scrollIntoView({ block: 'start' })` puts the section's top at the viewport's top, ignoring the header.
+
+### Fix
+
+Every section that's a scroll target needs a scroll margin matching the header's height:
+
+```css
+[data-variant='acme-ocean'] section {
+  scroll-margin-block-start: 5rem; /* the header's block size */
+}
+```
+
+One rule covers every section. Add it with the navigation in Wave 3, at the section level, not per renderer.
+
+## 7. Retired: text gradients that don't print
+
+Gradient text is a color effect, so it's the appearance system's (#19) now, with its print handling.
+
+## 8. Reduced motion that doesn't reduce motion
+
+### What it looks like
+
+- The site's `motionPolicy` is `reduce`, or the visitor asks for reduced motion under `respect-os`, but a canvas still animates, particles still fall, parallax still moves.
+- `document.getAnimations()` lists animations still running after load, after a jump, or once a section scrolls into view; a `requestAnimationFrame` loop keeps asking for frames; or a link still scrolls smoothly to its section. The motion contract (`tests/e2e/motion-contract.spec.ts`) fails.
 
 ### Why
 
-Each card's background is `var(--kc-card-bg)`. That variable is set in the `[data-theme='dark']` block as a dark rgba. Your print rule resets `background` and `color` on the variant root but doesn't override `--kc-card-bg`. The card rule re-reads the dark-theme value at render time.
+`@media (prefers-reduced-motion)` can stop CSS animations and transitions, but not `requestAnimationFrame` loops, framer-motion's `useTransform` outputs, its Web Animations API animations, or `scrollIntoView({ behavior: 'smooth' })`. Those need gating in the script.
 
 ### Fix
 
-In `@media print`, force every paper/ink/card token back to print-friendly values, not just the surface ones:
-
-```css
-@media print {
-  [data-variant='your-slug'] {
-    --kc-paper: #fff !important;
-    --kc-paper-elevated: #fff !important;
-    --kc-ink: #000 !important;
-    --kc-ink-muted: #444 !important;
-    --kc-card-bg: #fff !important;
-    --kc-card-border: #999 !important;
-    --kc-card-shadow: none !important;
-    --kc-primary: #000 !important;
-    --kc-accent: #000 !important;
-  }
-}
-```
-
-Anywhere you have a `var(--token)` with a theme-dependent default, that token must be reset in print or the dark theme bleeds through.
-
-## 6. Missing `scroll-margin-top` for fixed-nav anchors
-
-### What it looks like
-
-- Clicking a nav link scrolls to the section, but the section's heading is hidden behind the fixed nav bar.
-- Programmatic `scrollIntoView({ block: 'start' })` puts the section's `top` at viewport `0`, ignoring the nav.
-
-### Fix
-
-Every section that's a scroll target needs `scroll-margin-top` matching the nav height:
-
-```css
-.kc-section,
-.kc-timeline,
-.kc-hero {
-  scroll-margin-top: 5rem; /* or whatever your nav height is */
-}
-```
-
-This is a one-line fix that affects every section. Add it during Wave 3 navigation work, but the rule belongs at the section-base level, not per-renderer.
-
-## 7. Text gradients that don't print or paste
-
-### What it looks like
-
-- Names, headings, stat values render with `background-clip: text; color: transparent` and a gradient background.
-- In print preview, they vanish (text becomes invisible because `color: transparent` doesn't get the print-rule's `color: #000` override).
-- Copy-paste preserves the styling, breaking text in other contexts.
-
-### Fix
-
-In `@media print`, explicitly null both background and `color` for every gradient-text class:
-
-```css
-@media print {
-  [data-variant='your-slug'] .my-gradient-title {
-    background: none !important;
-    -webkit-background-clip: initial !important;
-    background-clip: initial !important;
-    color: #000 !important;
-    -webkit-text-fill-color: #000 !important;
-  }
-}
-```
-
-Both `color` and `-webkit-text-fill-color` are required — Chrome respects whichever is more specific, and the WebKit prefix sometimes wins.
-
-## 8. Reduced-motion that doesn't actually reduce motion
-
-### What it looks like
-
-- `prefers-reduced-motion: reduce` is set, or the site's `motionPolicy` is `reduce`, but a canvas continues to animate, particles still fall, parallax still parallaxes.
-- Dispatched scroll events show motion values still updating.
-- `document.getAnimations()` lists framer-motion animations still running after load, or a link still scrolls smoothly to its section.
-
-### Why
-
-The CSS `@media (prefers-reduced-motion)` block can zero animation/transition durations, but it can't stop `requestAnimationFrame` loops or framer-motion `useTransform` outputs. Nor does it reach framer-motion's Web Animations API animations, or `scrollIntoView({ behavior: 'smooth' })`. Those need JS-level gating.
-
-### Fix
-
-At every animation entry point, gate on `useMotionPreference()` returning `'reduce'`:
+Wrap the variant's client parts in `MotionPolicyProvider` with `input.presentation.motionPolicy`, and gate every animation entry point on `useMotionPreference()`:
 
 ```tsx
 const reduceMotion = useMotionPreference() === 'reduce';
 
 useEffect(() => {
   if (reduceMotion) {
-    drawFrame(); // single static frame
+    drawFrame(); // one still frame
     return;
   }
-  // …rAF loop…
+  // the requestAnimationFrame loop
 }, [reduceMotion]);
 ```
 
-For framer-motion hooks like `useScroll` + `useTransform`, pass an `enabled: !reduceMotion` flag to your wrapper hook (the kit's `useScrollDispersal` does this). Spring-smoothed motion values that have already mounted will have stale momentum — accept that, or remount the element when the flag flips.
+For framer-motion's `useScroll` and `useTransform`, pass `enabled: !reduceMotion` to your wrapper hook (the kit's `useScrollDispersal` does). A framer-motion variant also wraps its root in `MotionConfig`, `reducedMotion: 'always'` under the site's `reduce` and `'user'` otherwise; `legacy/variant-kinetic-cosmos/src/primitives/motion-config.tsx` shows how. That skips transform and layout animations only, and opacity still animates, so an entrance takes `initial={reduce ? false : 'hidden'}`, an animation that repeats forever isn't rendered under reduce, and scrolling takes `behavior: reduce ? 'auto' : 'smooth'`.
 
-A variant built on framer-motion wraps its root in `MotionConfig`, with `reducedMotion: 'always'` under the site's `reduce` policy and `'user'` otherwise (Kinetic Cosmos's `primitives/motion-config.tsx`). That skips transform and layout animations only: opacity still animates. So an entrance takes `initial={reduce ? false : 'hidden'}`, and an animation that repeats forever isn't rendered under reduce. Scrolling takes `behavior: reduce ? 'auto' : 'smooth'`.
+**Check it programmatically.** The motion contract covers what `getAnimations()` lists at load, after a jump, and as the page scrolls, every `requestAnimationFrame` loop, and how links scroll. For a canvas drawn on a timer or a typing animation, use the recipes in `quality-gates.md` Gate C.
 
-**Validate programmatically.** Don't trust "I checked the toggle once". Sample `getComputedStyle(canvas).backgroundColor` at the canvas center 300ms apart — pixel-stable means the rAF loop is stopped. Sample a floater's `transform` before/after a synthetic scroll — string-equal means dispersal is disabled. The skill's audit checklist now includes both checks.
-
-## 9. Floating elements drifting off-canvas at small viewports
+## 9. Floating elements drifting off the page at small viewports
 
 ### What it looks like
 
-- Decorative floaters (social profile cards, ambient elements) push the layout wider than the viewport on phones.
-- Horizontal scrollbar appears.
+- Decorative floaters push the layout wider than the viewport on phones.
+- A horizontal scrollbar appears.
 - Cards overlap text.
 
 ### Fix
 
-Decorative floating elements should be `display: none` at mobile breakpoints, not just shrink. They're decoration, not core content:
+Hide decoration at mobile widths rather than shrink it:
 
 ```css
 @media (max-width: 639px) {
-  .kc-floater {
+  [data-variant='acme-ocean'] .ao-floater {
     display: none;
   }
 }
 ```
 
-If you must keep them, change positioning logic to use viewport-relative-but-clamped values, and reduce `position: fixed` to `position: absolute` inside a `overflow: hidden` parent.
+If you must keep it, clamp its position to the viewport, and use `position: absolute` inside an `overflow: hidden` parent rather than `position: fixed`.
 
-## 10. Schema-vs-archive data drift when porting from a reference
+## 10. Data drift when porting from a reference
 
 ### What it looks like
 
-- A reference (page-zero, another variant) had richer data than the current schema carries.
-- The new schema dropped or renamed fields the reference's renderers used (e.g., `experienceTracks[].branch` vs flat `experience.items`).
-- Renderers either crash on missing fields or render less faithfully than the reference.
+- The reference (a `legacy/` package, page-zero) had richer data than the schema carries.
+- The schema dropped or renamed fields the reference's renderers used (such as `experienceTracks[].branch` against flat `experience.items`).
+- Renderers crash on missing fields, or render less than the reference did.
 
 ### Fix
 
-**Before Phase 1**, do a data-shape diff. List every field the reference renderer touches; verify each one's mapping to the current schema. When a field is missing:
+**Before Phase 1**, diff the data shapes. List every field the reference touches, and map each to the schema. When one is missing:
 
-- **Inferable** (e.g., archive's `track.branch` → infer from `inferKindFromText` on role + organization): document the heuristic in DESIGN.md.
-- **Not modeled** (e.g., archive's per-skill `proficiency: 80%`): note explicitly that this is dropped, and adjust the renderer's visual richness accordingly. Don't fake the data.
-- **Multi-section composition** (e.g., archive's "Timeline Odyssey" merged work + study + research + awards into one stream): document that you're pulling from multiple section kinds in the renderer.
+- **Inferable** (the old `track.branch`, from `inferKindFromText` on role and organization): document the heuristic in DESIGN.md.
+- **Not modeled** (an old per-skill `proficiency: 80%`): say it's dropped, and adjust the renderer. Don't fake the data.
+- **Composed from several kinds** (an old timeline that merged work, study, research, and awards): document that the renderer reads several section kinds.
 
-Skipping this step means Wave 2 stalls when the renderer can't reproduce the reference's behavior. Better to know in Phase 1.
+Skip this and Wave 2 stalls when a renderer can't reproduce the reference.
 
-## Watch for these during code review
+## Watch for these in code review
 
-A code reviewer can spot most of these without running the app:
+A reviewer can spot most of these without running the app:
 
-- Any new SVG `id=` attribute that isn't already slugified.
-- Any new `[data-variant='X'] a` rule that doesn't include `:not([class])`.
-- Any new section that isn't covered by the `scroll-margin-top` rule.
-- Any new `@media print` block that doesn't reset card/paper tokens.
-- Any new `requestAnimationFrame` callsite that doesn't check the motion preference.
-- Any CSS hook on a single-word id (`top`, `main`, `home`) that a portfolio section could also have.
+- A new SVG `id=` that isn't slugified and prefixed.
+- A new `[data-variant='<id>'] a` rule without `:not([class])`.
+- A new section the scroll margin rule doesn't cover.
+- A new `requestAnimationFrame` call that doesn't check the motion preference.
+- A CSS hook on a single-word id (`top`, `main`, `home`) a portfolio section could also have.
+- A color, font, or theme rule in a variant's stylesheet.

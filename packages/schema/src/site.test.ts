@@ -106,6 +106,30 @@ test('appearance ids follow the registry grammar', () => {
   }
 });
 
+test("the fallback composition can't be selected, though other axes may use the id", () => {
+  const result = SiteSchema.safeParse({
+    ...MINIMAL,
+    appearance: { ...FULL.appearance, variant: 'fallback' },
+  });
+  assert.ok(!result.success);
+  assert.deepEqual(
+    result.error.issues.map(({ path, code, message }) => [path.join('/'), code, message]),
+    [
+      [
+        'appearance/variant',
+        'custom',
+        "names the fallback composition, which renders in place of a variant this build doesn't register and can't be selected. Select a variant.",
+      ],
+    ],
+  );
+  const scheme = { ...FULL.appearance, colorScheme: 'fallback' };
+  assert.deepEqual(codes({ ...MINIMAL, appearance: scheme }), []);
+  assert.deepEqual(
+    codes({ ...MINIMAL, variantControls: { fallback: { version: 1, values: {} } } }),
+    [],
+  );
+});
+
 test('features.feed is required and productAttribution defaults to false', () => {
   assert.deepEqual(codes({ ...MINIMAL, features: {} }), ['features/feed:invalid_type']);
   const out = SiteSchema.parse({ ...MINIMAL, features: { feed: false } });

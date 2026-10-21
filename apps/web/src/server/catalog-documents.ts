@@ -1,7 +1,12 @@
 import 'server-only';
 import fs from 'node:fs';
 import path from 'node:path';
-import { parseSource, type AppearanceCatalog, type ContentExtension } from '@portfolio/schema';
+import {
+  parseSource,
+  type AppearanceCatalog,
+  type ContentExtension,
+  type UnitValidator,
+} from '@portfolio/schema';
 import { findPair, pairFileNames, readPair, type PairFiles } from '@portfolio/schema/node';
 import { isSampleIdentity } from '../lib/sample-identity';
 import type { CatalogReader, LiveRevision } from './catalog-port';
@@ -34,6 +39,8 @@ export interface DocumentsCatalogOptions {
   readonly catalog?: AppearanceCatalog;
   /** The content extensions documents are checked against. Others warn. */
   readonly extensions?: readonly ContentExtension[];
+  /** The contract's checks on the pair, live (#5): an unregistered selection only warns. */
+  readonly validators?: readonly UnitValidator[];
   /** The deployment's canonical origin, which links are checked against. */
   readonly origin?: string;
   /** Receives the findings of every re-validation under `next dev`. */
@@ -94,6 +101,7 @@ function loadRevision(options: DocumentsCatalogOptions): Loaded {
   const ctx = {
     catalog: options.catalog,
     extensions: options.extensions,
+    validators: options.validators,
     ...(options.origin ? { canonicalOrigin: options.origin } : {}),
   };
   const found = findPair(sourceDir, ctx);

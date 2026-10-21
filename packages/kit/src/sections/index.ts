@@ -19,4 +19,5 @@ export type {
   SectionOf,
   SectionRenderer,
   SectionRendererProps,
+  VariantComponent,
 } from './types';

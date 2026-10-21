@@ -1,12 +1,12 @@
 # Portfolio Platform
 
-An open-source, self-hostable portfolio platform with pluggable visual variants.
+An open-source, self-hostable portfolio platform with pluggable variants.
 
-You write two documents. `portfolio.yml` says who you are and what you've done, and `site.yml` says how the site presents it: the variant, color scheme, typography, display mode, motion, and which sections show. The platform validates them as a pair and renders the portfolio through the site's variant, a styled React tree that decides layout, color, type, and motion. Changing `site.yml` changes the look without touching content, and editing `portfolio.yml` changes content without touching code. Deployment settings and secrets stay in the environment.
+You write two documents. `portfolio.yml` says who you are and what you've done, and `site.yml` says how the site presents it: the variant, color scheme, typography, display mode, motion, and which sections show. The platform validates them as a pair and renders the portfolio through the site's variant, a composition package that decides how the sections are arranged, navigated, and revealed; color, type, and display modes belong to the appearance system (#19). Changing `site.yml` changes the presentation without touching content, and editing `portfolio.yml` changes content without touching code. Deployment settings and secrets stay in the environment.
 
 ```
-portfolio.yml + site.yml ── @portfolio/schema ── apps/web ── @portfolio/variant-* ── browser
-                             (validate)           (host)       (render)
+portfolio.yml + site.yml ── @portfolio/schema ── apps/web ── a variant package ── browser
+                             (validate)           (host)       (compose)
 ```
 
 Designed for engineers, makers, photographers, writers, musicians, designers, consultants, and academics who want to own their portfolio without learning a templating engine. The content model doesn't assume a profession, and a profession package can add its own fields and sections.
@@ -18,7 +18,7 @@ Designed for engineers, makers, photographers, writers, musicians, designers, co
   <img src="docs/screenshots/05-variant-kinetic-cosmos.png" alt="Kinetic Cosmos variant" width="49%" />
 </p>
 
-<p align="center"><em>The same <code>portfolio.yml</code> rendered through two variants, Editorial and Kinetic Cosmos. Switch the look without touching content.</em><br/>
+<p align="center"><em>The same <code>portfolio.yml</code> rendered through the v1 variants, Editorial and Kinetic Cosmos, now retired to <code>legacy/</code> while #13 and #14 rebuild them as compositions.</em><br/>
 <strong><a href="SHOWCASE.md">See the full visual showcase »</a></strong></p>
 
 ## Quick start
@@ -42,12 +42,11 @@ See [docs/getting-started.md](docs/getting-started.md) for the full walkthrough.
 
 - **28 section kinds**: hero, lede, experience, projects, skills, GitHub, gallery, discography, episodes, testimonials, publications, talks, awards, and more. See [docs/features.md](docs/features.md).
 - **Content extensions**: namespaced fields and section kinds from a profession package, checked when the build registers it and kept out of visitors' view when it doesn't.
-- **Appearance in the site document**: the variant, color scheme, typography preset, and the display mode a visit starts in. Independent axes and per-axis visitor controls land with #19 (appearance axes): today `designLanguage` is only recorded, the scheme and typography ids are the variant's own, and `visitorControls` isn't applied.
-- **Theme toggle** with `light`, `dark`, `bright` (paper-white), `black` (AMOLED), and `system` (follows the OS).
-- **Per-variant color schemes and typography presets**: Editorial ships 3 schemes and 2 type pairings.
+- **Variants as compositions**: each is a package, installed as a dependency and registered at build time. A variant arranges the content through the kit's shared section renderers or its own; when the site's variant isn't installed, the fallback composition renders in its place and the owner gets a warning. Building one: [docs/variants.md](docs/variants.md).
+- **Appearance in the site document**: the variant, and the design language, color scheme, typography, and display mode that #19 (appearance axes) resolves. Today the display mode sets the theme a visit starts in, and the other three are recorded; `visitorControls` takes effect with #19's visitor control.
 - **Validation that says where**: every problem in either document comes with its code, file, line and column, and fix, from `pnpm config:validate` or the server at startup. A missing, doubled, or unreadable document is about the file, so its record has no line or column.
-- **GitHub integration**: top repos, a recently active list, and a language breakdown, from GitHub's public REST API. Public pages never send a token.
-- **Print stylesheet, feed, structured data, and Open Graph images.**
+- **GitHub sections** link the profile; repository data reaches variants through the render input with #10. Public pages never send a token.
+- **Feed, structured data, and Open Graph images.**
 - **Drift gates** keep the schema, kit catalog, and skill references in sync (`pnpm check:skills`).
 - **AI-assisted authoring and variant development** via two skills under [skills/](skills/).
 
@@ -60,11 +59,14 @@ apps/
 packages/
   schema/                       The portfolio and site schemas, validation,
                                 extensions, and the one-time migration
-  kit/                          Shared utilities (theme provider, GitHub fetcher,
-                                format helpers, SEO, spatial primitives)
-  variant-editorial/            First variant: typographic editorial spread
-  variant-kinetic-cosmos/       Second variant: gradient nebula, particles, career timeline
-  variant-template/             Scaffold for new variants
+  variant-contract/             The variant contract: manifest, render input,
+                                controls, routes, registry, audit
+  kit/                          Shared utilities (section renderers, enhancements,
+                                motion, format helpers, SEO, spatial primitives)
+  core/                         Server-only owner code
+  fallback-composition/         The stand-in composition, and the scaffold for new ones
+
+legacy/                         The retired v1 variants, outside the workspace
 
 docs/
   architecture.md               How the pieces fit

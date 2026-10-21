@@ -65,19 +65,15 @@ import { formatMigration, migrate, parseSet } from '@portfolio/schema/migrate';
 import { formatRecords, loadPair, pairFileNames } from '@portfolio/schema/node';
 
 /**
- * What this build registers: the appearance catalog the host builds from its
- * variants, and its content extensions. Imported dynamically, since tsx
- * hands an .mjs file the host's TypeScript modules as CommonJS, whose names
- * a static import can't see.
+ * What this build registers (#5): the interim appearance catalog, the content
+ * extensions, and the contract's live checks, as startup checks the pair
+ * against them, from the registry `pnpm build:registry` generates. Imported
+ * dynamically, since tsx hands an .mjs file the host's TypeScript modules as
+ * CommonJS, whose names a static import can't see.
  */
 async function hostCatalog() {
-  const [{ listManifests }, { createAppearanceCatalog }, { CONTENT_EXTENSIONS }] =
-    await Promise.all([
-      import('../src/lib/registry.ts'),
-      import('../src/server/appearance-catalog.ts'),
-      import('../src/server/content-extensions.ts'),
-    ]);
-  return { catalog: createAppearanceCatalog(listManifests()), extensions: CONTENT_EXTENSIONS };
+  const { liveContext } = await import('../src/lib/variants.ts');
+  return liveContext();
 }
 
 const VALIDATE_USAGE = 'Usage: pnpm config:validate [dir] [--origin <url>] [--json]';

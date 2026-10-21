@@ -15,6 +15,8 @@ import { fileURLToPath } from 'node:url';
 import { parse as parseYaml } from 'yaml';
 import type { AppearanceCatalog } from '@portfolio/schema';
 import { readPair } from '@portfolio/schema/node';
+import { contractValidators } from '@portfolio/variant-contract';
+import { REGISTRY } from '~/lib/variants';
 // The schema package's test extension, shared with its own tests.
 import { acmePortfolioPhotography } from '../../../../packages/schema/src/__fixtures__/acme-portfolio-photography';
 import {
@@ -41,20 +43,24 @@ const HEAD = 'schemaVersion: 2\nlocale: en\ndirection: ltr\n';
 const PORTFOLIO = `${HEAD}identity:\n  name: Rowan Test\nsections:\n  - kind: lede\n    id: about\n    body: Hi.\n`;
 const SITE = readFileSync(EXAMPLES.site, 'utf8');
 
-/** What the host's interim catalog says, for both baseline variants. */
+/**
+ * A test catalog that registers color schemes and typography presets, as
+ * #19's will, so an appearance record has something to be about. Like the
+ * host's interim catalog, it names no variant: the contract's validators
+ * check the selection, live at startup, where an unregistered one only warns.
+ */
 const CATALOG: AppearanceCatalog = {
-  ids(axis, selection) {
-    const ids: Record<string, Record<string, string[]>> = {
-      editorial: { colorScheme: ['warm', 'noir'], typography: ['classic', 'modernist'] },
-      'kinetic-cosmos': { colorScheme: ['nebula'], typography: ['geometric'] },
+  ids(axis) {
+    const ids: Record<string, string[]> = {
+      colorScheme: ['warm', 'noir'],
+      typography: ['classic', 'modernist'],
+      displayMode: ['system', 'light', 'dark', 'high-contrast'],
     };
-    if (axis === 'variant') return Object.keys(ids);
-    if (axis === 'displayMode') return ['system', 'light', 'dark'];
-    if (axis === 'designLanguage') return null;
-    return ids[selection.variant]?.[axis] ?? null;
+    return ids[axis] ?? null;
   },
   generatorInput: () => undefined,
 };
+const LIVE = contractValidators(REGISTRY, { live: true });
 
 function tempDir(t: { after: (fn: () => void) => void }, files: Record<string, string> = {}) {
   const dir = mkdtempSync(path.join(tmpdir(), 'catalog-documents-'));
@@ -139,7 +145,7 @@ test('neither document renders the bundled examples under next dev, with a warni
   assert.deepEqual(codes(result.issues), ['warning:source_empty']);
   const live = await result.reader.getLive();
   assert.equal(live.unit.portfolio.identity.name, BUNDLED_SAMPLE_NAMES[0]);
-  assert.equal(live.unit.site.appearance.variant, 'editorial');
+  assert.equal(live.unit.site.appearance.variant, 'editorial-evidence');
 });
 
 test('one document alone is fatal in every mode', (t) => {
@@ -266,12 +272,24 @@ test('each record becomes an issue: located, with its remediation, never quoting
   assert.ok(!JSON.stringify([...portfolio, ...appearance]).includes('canary'));
 });
 
-test('a variant the build does not register is a diagnostic, never a fallback', (t) => {
-  const dir = tempDir(t, pair(PORTFOLIO, SITE.replace('variant: editorial', 'variant: retro')));
-  const issues = fatal(open(dir, 'production'));
+test('a variant the build does not register only warns, and the pair serves, for the fallback composition', async (t) => {
+  const site = SITE.replace('variant: editorial-evidence', 'variant: retro');
+  const dir = tempDir(t, pair(PORTFOLIO, site));
+  const result = open(dir, 'production', { validators: LIVE });
+  assert.ok(result.ok, JSON.stringify(result.issues));
   assert.deepEqual(
-    issues.map((issue) => [issue.code, issue.path]),
-    [['appearance.unknown', '/appearance/variant']],
+    result.issues.map((issue) => [issue.severity, issue.code, issue.file, issue.path, issue.line]),
+    [['warning', 'variant.unavailable', 'site.yml', '/appearance/variant', 21]],
+  );
+  // It names neither the id nor a path, and says how to install one.
+  assert.ok(!result.issues[0]!.message.includes('retro'));
+  assert.match(result.issues[0]!.remediation ?? '', /pnpm --filter @portfolio\/web add/);
+  assert.equal((await result.reader.getLive()).unit.site.appearance.variant, 'retro');
+  // Not live, as #3's publish will check, the same record blocks.
+  const published = open(dir, 'production', { validators: contractValidators(REGISTRY) });
+  assert.deepEqual(
+    fatal(published).map((issue) => [issue.code, issue.path]),
+    [['variant.unavailable', '/appearance/variant']],
   );
 });
 
@@ -399,14 +417,14 @@ test('under next dev an edit to either document re-validates, and an invalid one
   assert.equal(edited.unit.portfolio.identity.name, 'Rowan Edited');
   assert.notEqual(edited.revisionId, first.revisionId);
 
-  rewrite(site, SITE.replace('variant: editorial', 'variant: retro'), 3_000);
+  rewrite(site, SITE.replace('colorScheme: warm', 'colorScheme: retro'), 3_000);
   await assert.rejects(result.reader.getLive(), (error: Error) => {
     assert.ok(!error.message.includes(dir));
     return true;
   });
   assert.deepEqual(
     reported.map((issue) => [issue.severity, issue.code, issue.file, issue.path]),
-    [['fatal', 'appearance.unknown', 'site.yml', '/appearance/variant']],
+    [['fatal', 'appearance.unknown', 'site.yml', '/appearance/colorScheme']],
   );
   // Still broken, but already reported.
   await assert.rejects(result.reader.getLive());

@@ -51,9 +51,9 @@ Every object is strict: a key not listed here or in the kind's fields is refused
 | `motionPolicy`                                  | `respect-os \| reduce` | yes      | `respect-os` by default; `reduce` when the user wants motion off for everyone.                                   |
 | `features`                                      | object                 | yes      | `feed: true` serves `/feed.xml`; `productAttribution` defaults to `false`.                                       |
 | `sections`                                      | object                 | optional | `{ <section id>: { hidden: true } }` to keep a section in the portfolio and off the page.                        |
-| `appearanceInputs`, `routes`, `variantControls` | object                 | optional | Leave out. #19 uses `appearanceInputs`, and #5 `routes` and `variantControls`.                                   |
+| `appearanceInputs`, `routes`, `variantControls` | object                 | optional | Leave out. #19 uses `appearanceInputs`; `routes` and `variantControls` follow the variant's manifest.            |
 
-`appearance` ids must be ones this build registers. `variant` is `editorial` or `kinetic-cosmos`. `colorScheme` and `typography` are ids the selected variant declares in its manifest: Editorial has `warm`, `noir`, and `ink-and-paper`, and `classic` and `modernist`; Kinetic Cosmos has `nebula`, `aurora`, and `solar`, and `geometric` and `humanist`. `designLanguage` is `platform-neutral`. `displayMode` is `system`, `light`, or `dark`. Neither document may hold a deployment setting (the origin, the profile) or anything shaped like a secret.
+`appearance.variant` names an installed variant by its manifest id. One this build doesn't register renders as the fallback composition, with a `variant.unavailable` warning, and `fallback` itself can't be selected. Use the owner's choice, or `site.example.yml`'s `editorial-evidence`. `designLanguage` is `platform-neutral`. `colorScheme` and `typography` are the appearance system's ids (#19), such as `warm` and `classic`, which this build records without checking. `displayMode` is `system`, `light`, `dark`, or `high-contrast`. Neither document may hold a deployment setting (the origin, the profile) or anything shaped like a secret.
 
 ## Section kinds
 
@@ -379,13 +379,11 @@ Cards linking to separate sites the author maintains (photography blog, music si
 
 ### `kind: github`
 
-Declarative GitHub config; data fetched server-side. Required: `username`.
+Declarative GitHub config. Required: `username`. Today the section renders a link to the profile; the settings below take effect when #10 brings repository data.
 Booleans default to: `showContributionGraph: true`, `showPinnedRepos: true`,
 `showTotalStars: true`, `showLanguageBreakdown: false`,
 `showRecentlyActive: true`. Optional:
-`featuredRepos[]`, `excludeRepos[]`. Public pages fetch through unauthenticated
-REST, so the contribution graph (GraphQL, token) doesn't render and pinned repos
-are the top-starred ones.
+`featuredRepos[]`, `excludeRepos[]`.
 
 - **`showRecentlyActive`**: boolean, default `true`. Shows a list of repositories the user has most recently pushed to. Use when you want to surface live activity below the pinned highlights.
 - **`recentlyActiveLimit`**: integer from 1 to 20, default `10`. How many repositories to include in the recently-active list. Use when the default 10 is too long for your variant's layout.

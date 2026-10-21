@@ -1,5 +1,5 @@
 import { ImageResponse } from 'next/og';
-import { findManifest } from '~/lib/registry';
+import { compositionFor } from '~/lib/variants';
 import { requireDeploymentConfig } from '~/server/config-store';
 import { servedPage } from '~/server/page-guard';
 import { getPublicView } from '~/server/public-view';
@@ -17,7 +17,10 @@ export default servedPage('/opengraph-image', async function OpengraphImage() {
   const { portfolio, site } = await getPublicView();
   const name = portfolio.identity.name;
   const tagline = portfolio.identity.tagline ?? portfolio.meta?.description;
-  const variant = findManifest(site.appearance.variant)?.name;
+  // The variant's name, unless the fallback composition stands in, which
+  // visitors are never told about.
+  const composition = compositionFor(site.appearance.variant);
+  const variant = composition.fallback ? undefined : composition.rendered.manifest.name;
 
   return new ImageResponse(
     <div

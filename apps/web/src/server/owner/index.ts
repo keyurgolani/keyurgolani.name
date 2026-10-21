@@ -3,6 +3,7 @@ import type { DeploymentConfig } from '../config';
 import type { CatalogAdapter } from '../config-summary';
 import type { Handler } from '../dispatcher';
 import { recordOwnerModule } from '../load-trace';
+import type { LiveVariantHealth } from '../variant-health';
 import { configStatus } from './config-status';
 
 // Owner code. Only composition.ts loads it, through import() in its owner
@@ -17,9 +18,15 @@ export { mintSession } from './session-mint';
 export interface OwnerInput {
   readonly config: DeploymentConfig;
   readonly catalog: CatalogAdapter;
+  /** How the live site's variant renders, for config.status. */
+  readonly variantHealth: () => Promise<LiveVariantHealth>;
 }
 
 /** The owner operation handlers, by operation name. */
-export function ownerHandlers({ config, catalog }: OwnerInput): Readonly<Record<string, Handler>> {
-  return Object.freeze({ 'config.status': configStatus(config, catalog) });
+export function ownerHandlers({
+  config,
+  catalog,
+  variantHealth,
+}: OwnerInput): Readonly<Record<string, Handler>> {
+  return Object.freeze({ 'config.status': configStatus(config, catalog, variantHealth) });
 }
