@@ -90,6 +90,28 @@ test('owner reports configuration problems before the missing provider', async (
   ]);
 });
 
+test('startup refuses a mounted pair with a secret-shaped value in a field or a comment, and no finding repeats it', async (t) => {
+  // Built here, so no secret-shaped literal sits in the repository.
+  const token = ['ghp', '_', 'Q'.repeat(36)].join('');
+  const documents: [where: string, document: string][] = [
+    ['a field', VALID.replace('body: Hi.', `body: Hi. ${token}`)],
+    ['a comment', `# deploy key ${token}\n${VALID}`],
+  ];
+  for (const [where, document] of documents) {
+    const result = await start({
+      ...PRODUCTION,
+      PORTFOLIO_PROFILE: 'read-only',
+      PORTFOLIO_SOURCE_DIR: sourceDir(t, document),
+    });
+    assert.equal(result.ok, false, where);
+    assert.ok(
+      fatalCodes(result).includes('PORTFOLIO_SOURCE_DIR:secret.detected'),
+      `${where}: ${JSON.stringify(fatalCodes(result))}`,
+    );
+    assert.doesNotMatch(JSON.stringify(result.issues), /Q{20}/, where);
+  }
+});
+
 test('demo starts on the bundled sample, and never reads a source directory', async (t) => {
   const result = await start({ ...PRODUCTION, PORTFOLIO_PROFILE: 'demo' });
   assert.equal(result.ok, true, JSON.stringify(result.issues));

@@ -1,10 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { revalidatedFetch } from './fetch';
+import { GITHUB_FETCH_TIMEOUT_MS, GITHUB_RENDER_BUDGET_MS, revalidatedFetch } from './fetch';
 import { fetchGitHubData } from './index';
+import { fetchViaREST } from './rest';
 
-// A GitHub request that hangs gives up after a short timeout, so it can't
-// stall the render that waits on it.
+// A GitHub request that hangs gives up after a short timeout, and one render's
+// requests share a budget, so GitHub can't stall the render that waits on it.
 
 /**
  * Runs `fn` with a timer holding the event loop open. AbortSignal.timeout's
@@ -38,18 +39,51 @@ test('a request that hangs rejects once the timeout passes', async (t) => {
   assert.ok(Date.now() - started < 2000);
 });
 
-test("a caller's own signal wins over the timeout", async (t) => {
-  const seen: (AbortSignal | null | undefined)[] = [];
-  t.mock.method(globalThis, 'fetch', (_input: RequestInfo | URL, init?: RequestInit) => {
-    seen.push(init?.signal);
-    return Promise.resolve(new Response('{}'));
-  });
+test('one request waits at most 3000 ms on GitHub, and one render 5000 ms in all', () => {
+  assert.equal(GITHUB_FETCH_TIMEOUT_MS, 3000);
+  assert.equal(GITHUB_RENDER_BUDGET_MS, 5000);
+});
+
+test("a caller's own signal joins the timeout, and whichever aborts first ends the request", async (t) => {
+  t.mock.method(globalThis, 'fetch', hangingFetch());
+  // The caller aborts first.
   const controller = new AbortController();
-  await revalidatedFetch('https://api.github.com/users/x', { signal: controller.signal });
-  await revalidatedFetch('https://api.github.com/users/x');
-  assert.equal(seen[0], controller.signal);
-  assert.ok(seen[1] instanceof AbortSignal);
-  assert.notEqual(seen[1], controller.signal);
+  const aborted = revalidatedFetch('https://api.github.com/users/x', { signal: controller.signal });
+  controller.abort(new DOMException('The caller gave up.', 'AbortError'));
+  await assert.rejects(aborted, { name: 'AbortError' });
+  // The timeout passes first, with the caller's signal still live.
+  const live = new AbortController();
+  await whileAlive(() =>
+    assert.rejects(
+      revalidatedFetch('https://api.github.com/users/x', { signal: live.signal }, 50),
+      { name: 'TimeoutError' },
+    ),
+  );
+  assert.equal(live.signal.aborted, false);
+});
+
+test('the requests one render makes in turn share its budget', async (t) => {
+  // Each request answers after 60 ms, unless its signal aborts first.
+  let requests = 0;
+  t.mock.method(globalThis, 'fetch', (_input: RequestInfo | URL, init?: RequestInit) => {
+    requests += 1;
+    return new Promise<Response>((resolve, reject) => {
+      const timer = setTimeout(() => resolve(new Response('[]', { status: 200 })), 60);
+      init?.signal?.addEventListener('abort', () => {
+        clearTimeout(timer);
+        reject(init.signal?.reason);
+      });
+    });
+  });
+  const started = Date.now();
+  await whileAlive(() =>
+    assert.rejects(fetchViaREST({ username: 'x' }, AbortSignal.timeout(100)), {
+      name: 'TimeoutError',
+    }),
+  );
+  // The second request ran out of the 100 ms budget, so the third never started.
+  assert.equal(requests, 2);
+  assert.ok(Date.now() - started < 1000);
 });
 
 test('every request the renderers make carries the timeout', async (t) => {

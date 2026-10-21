@@ -23,14 +23,48 @@ export const HOPS_FILE = {
 };
 
 /**
- * What no response may carry. `root` is the server's own directory, or a
- * part of its path no response has a reason to name.
+ * `value` in each form a response could carry it: as is, inside a JSON
+ * string (an RSC payload, once or nested twice), and escaped for HTML text
+ * or an attribute. A scan for the plain form alone would miss "proxyHops"
+ * written as \"proxyHops\" or &quot;proxyHops&quot;.
+ *
+ * @param {string} value
+ * @returns {string[]}
+ */
+export function encodings(value) {
+  const json = JSON.stringify(value).slice(1, -1);
+  const html = value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;');
+  return [
+    ...new Set([
+      value,
+      json,
+      JSON.stringify(json).slice(1, -1),
+      value.replace(/"/g, '\\u0022'),
+      html,
+      value.replace(/"/g, '&#34;'),
+      value.replace(/"/g, '&#x22;'),
+    ]),
+  ];
+}
+
+/**
+ * What no response may carry, in every encoding. `root` is the server's own
+ * directory, or a part of its path no response has a reason to name.
  *
  * @param {string} root
  * @returns {string[]}
  */
 export function canaries(root) {
-  return [CANARY_SECRET, CANARY_SOURCE, CANARY_BODY, root, ...SUMMARY_FIELDS];
+  return [
+    ...new Set(
+      [CANARY_SECRET, CANARY_SOURCE, CANARY_BODY, root, ...SUMMARY_FIELDS].flatMap(encodings),
+    ),
+  ];
 }
 
 /** A JSON log line no server writes, so a request that gets it into the log forged it. */

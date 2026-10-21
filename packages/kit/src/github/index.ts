@@ -15,6 +15,7 @@
  */
 
 import { cache } from 'react';
+import { GITHUB_RENDER_BUDGET_MS } from './fetch';
 import { fetchViaGraphQL } from './graphql';
 import { fetchViaREST } from './rest';
 import type { FetchGitHubDataInput, GitHubData } from './types';
@@ -48,12 +49,14 @@ async function uncachedFetch(
   input: FetchGitHubDataInput,
   token?: string,
 ): Promise<GitHubData | null> {
+  // Every request below shares one budget, on top of its own timeout.
+  const budget = AbortSignal.timeout(GITHUB_RENDER_BUDGET_MS);
   if (token) {
-    const result = await fetchViaGraphQL(input, token).catch(() => null);
+    const result = await fetchViaGraphQL(input, token, budget).catch(() => null);
     if (result) return result;
     // Fall through to REST if GraphQL unexpectedly failed.
   }
-  return fetchViaREST(input).catch(() => null);
+  return fetchViaREST(input, budget).catch(() => null);
 }
 
 export const fetchGitHubData = cache(uncachedFetch);
