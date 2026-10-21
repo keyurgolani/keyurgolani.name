@@ -16,7 +16,7 @@ Both documents live in one directory: `config/` in a checkout, `PORTFOLIO_SOURCE
 - A document holds at most 1 MiB, nests at most 64 levels, and has at most 10,000 entries in one mapping or list.
 - Every object refuses a key its schema doesn't define, and the message names the closest allowed key. The only open places are values under `extensions` and under `variantControls.<variant>.values`.
 - Key order in a mapping doesn't matter. `pnpm config:migrate` writes keys in the schema's order.
-- Every `url`, `src`, and `*Url` field takes an `https`, `http`, `mailto`, or `tel` URL, a relative path (not `//host`), or a `#fragment`. An image `src` may also be a `data:image` URL in png, jpeg, gif, webp, or avif.
+- Every `url`, `src`, and `*Url` field takes an `https`, `http`, `mailto`, or `tel` URL, a relative reference such as `/resume.pdf`, `resume.pdf`, or `../x` (but not `//host`), or a `#fragment`, with no unencoded space or control character. An image `src` may also be a `data:image` URL in png, jpeg, gif, webp, or avif.
 - No string in either document may look like a GitHub token, a PEM private key, a PHC or bcrypt password hash, or an AWS access key ID (`secret.detected`). Documents never read environment values, so a secret in one was pasted there. Remove it and revoke it.
 
 ## The portfolio document
@@ -44,7 +44,7 @@ None of them assumes a profession. A photographer's `gallery`, a musician's `dis
 ### Ordering
 
 - `sections` is the page order in every variant. The navigation follows it, listing the sections that have a `title` apart from `hero` and `cta`. A variant may cap how many it lists.
-- `links` and the items in a section keep the order you write. A variant may still lay dated items out by date, as a timeline does, and the feed lists writings newest first.
+- `links` and the items in a section keep the order you write. A variant may still lay dated items out by date, as a timeline does, and the feed lists writings, publications, and episodes newest first.
 - The site document can hide a section but can't move one.
 
 ### Stable identity
@@ -59,7 +59,13 @@ A stats item can name its figure with a `metric` key, such as `years-experience`
 
 ### Optionality
 
-An optional field can be left out, and the variant then shows nothing for it. There's no `null`: leave the key out instead. `links` and `sections` default to empty lists.
+An optional field can be left out. There's no `null`: leave the key out instead. What renders in its place depends on the field:
+
+- A section without a `title` gets the heading its variant gives the kind, such as Awards or Get in touch, and some kinds, such as a lede, get none. The navigation lists only sections with a `title`.
+- A hero without `name` or `tagline` shows `identity.name` or `identity.tagline`.
+- Without `meta.title`, the page title is `identity.name` followed by Portfolio. Without `meta.description`, the description is `identity.tagline`.
+- A `github` section shows every part but the language breakdown unless you turn one off: `showContributionGraph`, `showPinnedRepos`, `showTotalStars`, and `showRecentlyActive` default to `true`, and `showLanguageBreakdown` to `false`. The contribution graph needs a token, so public pages never show it. It lists 10 recently active repositories (`recentlyActiveLimit`, 1 to 20), and features or excludes none (`featuredRepos`, `excludeRepos`).
+- `links` and `sections` default to empty lists.
 
 ## The site document
 
@@ -77,15 +83,15 @@ An optional field can be left out, and the variant then shows nothing for it. Th
 
 ### Appearance
 
-The appearance is four independent axes and a display mode:
+The appearance names four axes and a display mode. They become independent with #19 (appearance axes); until then:
 
 - **`variant`** is the composition: which `packages/variant-*` package lays out the page. This build registers `editorial` and `kinetic-cosmos`.
-- **`designLanguage`** is the component style. Use `platform-neutral`. This release records it, with no registry to check it against yet.
+- **`designLanguage`** is the component style. Use `platform-neutral`. This release records it, with no registry to check it against until #19.
 - **`colorScheme`** is the palette, such as `warm`, `noir`, or `ink-and-paper` for Editorial.
 - **`typography`** is the type preset, such as `classic` or `modernist` for Editorial.
-- **`displayMode`** is the theme a visit starts in: `system`, `light`, or `dark`. `system` follows the visitor's `prefers-color-scheme`. `high-contrast` parses, but this build doesn't render it, so it's refused.
+- **`displayMode`** is the theme a visit starts in: `system`, `light`, or `dark`. `system` follows the visitor's `prefers-color-scheme`. `high-contrast` parses, but this build doesn't render it until #19, so it's refused.
 
-Each id must be one this build registers. An unknown one is `appearance.unknown`, and its remediation lists the ids that are. Nothing falls back to a default in its place. In this release, color scheme and typography ids come from the selected variant's manifest, so a different variant can need different ids.
+Each id must be one this build registers. An unknown one is `appearance.unknown`, and its remediation lists the ids that are. Nothing falls back to a default in its place. In this release, color scheme and typography ids come from the selected variant's manifest, so a different variant can need different ids. When #19 replaces them with a shared catalog, the baseline ids such as `warm` and `classic` need selecting again from it.
 
 ### Visitor controls
 
@@ -107,9 +113,9 @@ A hidden section stays in the portfolio and out of everything visitors get: the 
 
 ### What the site document can't hold
 
-Deployment settings come from the environment. `deploymentProfile`, `profile`, `origin`, `canonicalOrigin`, `url`, `baseUrl`, `studio`, `previewOrigin`, `trustedProxies`, and `proxy`, at the top level or under `features`, are `site.deployment-setting`, and the message names the environment variable to use.
+Deployment settings come from the environment. `deploymentProfile`, `profile`, `origin`, `canonicalOrigin`, `url`, `baseUrl`, `studio`, `previewOrigin`, `trustedProxies`, and `proxy`, at the top level or under `features`, are `site.deployment-setting`, and the remediation names the environment variable to use.
 
-`appearanceInputs`, `routes`, and `variantControls` belong to registries later releases add. This release checks their shape and lists their entries as not checked.
+`appearanceInputs` belongs to #19's color scheme registry, and `routes` and `variantControls` to #5's variant contract. Until those land, this release checks their shape and lists their entries as not checked.
 
 ## Deployment settings and secrets
 
@@ -140,7 +146,7 @@ An extension section's `kind` is `<package name>/<name>`. It has the base fields
       - { title: Low Tide, venue: Harbor Gallery, year: 2024 }
 ```
 
-- Extension data is plain JSON, at most 8 levels deep and 32 KiB per `extensions` entry or section `data`.
+- Extension data is plain JSON. Each namespace's entry, and each section's `data`, nests at most 8 levels. One object's whole `extensions` mapping, every namespace together, holds at most 32 KiB as JSON, and so does one section's `data`.
 - An extension adds keys only under its own namespace, so core fields keep their checks.
 - Data from a package this build registers is checked by that package's schemas.
 - Data from any other package is kept as written and checked only as plain JSON. Each use is an `extension.unregistered` warning, and none of it reaches visitors: not the page, its RSC payload, its JSON-LD, or the feed. Tools that rewrite a document, such as `applyEdits` and `serialize` in `@portfolio/schema`, keep it as it is.
@@ -175,7 +181,7 @@ A profession package adds semantic content without changes to the schemas, the v
    Every object schema in it must call `.strict()`, so a mistyped key is reported instead of dropped. `defineContentExtension` throws otherwise, and when the namespace isn't an npm package name.
 
 2. Use its namespace in the documents. They validate before any build registers the package, with a warning at each use.
-3. Register it with the host by adding it to `CONTENT_EXTENSIONS` in `apps/web/src/server/content-extensions.ts`. That one list is the host's only part, and a later release finds installed packages on its own. Two packages with one namespace stop startup as `validator.failed`.
+3. Install it as a dependency of `@portfolio/web` (`pnpm --filter @portfolio/web add <package>`), since the workspace doesn't hoist packages (`shamefully-hoist=false`), and register it by adding it to `CONTENT_EXTENSIONS` in `apps/web/src/server/content-extensions.ts`. That list is the host's only part until #5 (variant contract) finds installed packages on its own. Two packages with one namespace stop startup as `validator.failed`.
 
 ## Validation
 
@@ -185,13 +191,15 @@ One check runs in three places:
 - **`pnpm config:validate [dir] [--origin <url>] [--json]`.** It checks `config/` by default. `--origin` checks links against the site's real origin, and `--json` prints the records themselves. It exits 1 when a record blocks the pair.
 - **`node skills/portfolio-author/scripts/validate.mjs <dir>`** prints the same records for an authoring agent.
 
+Startup also checks the deployment, which the pair alone doesn't show: in production under `owner` and `read-only`, it refuses the bundled sample's `identity.name`, and an origin on a reserved example domain. So a copy of the example passes validation and still won't start in production until its `identity.name` is your own. `pnpm config:validate` warns about the sample's name for that reason.
+
 Each record has a code, a severity, the document, a JSON pointer, a line and column where the text has one, the section's id when it's inside a section, a message, and a remediation.
 
 - **`blocks-preview`**: the pair can't render.
-- **`blocks-publish`**: a draft preview could render it, but it can't go live.
+- **`blocks-publish`**: a draft preview (#7, #8) could render it, but it can't go live.
 - **`warning`**: reported only.
 
-Startup treats the mounted pair as live, so both blocking severities stop it. Checks that can't run are listed as not checked: the origin checks without an origin, and the design language, appearance inputs, routes, and variant controls until their registries exist.
+Startup treats the mounted pair as live, so both blocking severities stop it. Checks that can't run are listed as not checked: the origin checks without an origin, the design language and appearance inputs until #19, and routes and variant controls until #5.
 
 | Code                      | Severity       | Meaning                                                                                                                                  |
 | ------------------------- | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
@@ -215,6 +223,7 @@ Startup treats the mounted pair as live, so both blocking severities stop it. Ch
 | `origin.sample`           | warning        | A link points at a sample address, such as a `.test` or `example.com` host.                                                              |
 | `origin.stale`            | warning        | A link's host differs from the origin's only in its last label, like an old domain.                                                      |
 | `extension.unregistered`  | warning        | Data from an extension this build doesn't register.                                                                                      |
+| `sample.identity`         | warning        | From `pnpm config:validate` only: `identity.name` is the bundled sample's, which production refuses to start with.                       |
 
 ## Migrating from the one-file format
 

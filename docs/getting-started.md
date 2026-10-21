@@ -34,7 +34,7 @@ The dev server hot-reloads on:
 
 - Changes to `config/portfolio.yml` and `config/site.yml` (on the next page load)
 - Changes to any file under `apps/web/src/`
-- Changes to any file under `packages/variant-editorial/src/`
+- Changes to any file under a variant's `packages/variant-*/src/`
 - Changes to any file under `packages/kit/src/` or `packages/schema/src/`
 
 ## Make it yours
@@ -75,7 +75,7 @@ appearance:
 motionPolicy: reduce # respect-os | reduce
 ```
 
-`displayMode` is the theme a visit starts in, and the toggle in the corner of the page lets visitors override it. Visitors can't pick a color scheme or typography preset yet. `visitorControls` in `site.yml` already records which appearance fields they may change, for the release that adds those pickers. [configuration.md](configuration.md#the-site-document) covers every field.
+`displayMode` is the theme a visit starts in, and the toggle in the corner of the page lets visitors override it. Visitors can't pick a color scheme or typography preset yet. `visitorControls` in `site.yml` already records which appearance fields they may change, for the pickers #19 (appearance axes) adds. [configuration.md](configuration.md#the-site-document) covers every field.
 
 To see the bundled sample in any registered variant, run the dev server under the `demo` profile:
 

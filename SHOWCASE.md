@@ -8,7 +8,7 @@ A tour of the portfolio platform. You write two documents, `portfolio.yml` for t
 
 ## Editorial variant
 
-A premium, print-quality typographic variant, accessible and navigable, with a serif voice.
+A print-quality typographic variant, accessible and navigable, with a serif voice.
 
 ### Hero (dark)
 
@@ -52,7 +52,7 @@ The **same content** in a completely different aesthetic: a gradient nebula, fal
 | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | **Content model** | `portfolio.yml` for the content and `site.yml` for the presentation, validated as a pair against `@portfolio/schema`                    |
 | **Section kinds** | 28 profession-neutral kinds, such as hero, experience, projects, gallery, discography, episodes, and publications, plus extension kinds |
-| **Appearance**    | Variant, design language, color scheme, and typography as independent axes, plus the display mode                                       |
+| **Appearance**    | Variant, color scheme, typography, and display mode from the site document; the independent axes and visitor pickers land with #19      |
 | **Variants**      | Pluggable styled React trees; swap the entire look without touching content                                                             |
 | **Themes**        | `light`, `dark`, `bright` (paper-white), `black` (AMOLED), `system`                                                                     |
 | **Per-variant**   | Color schemes and typography presets (Editorial ships 3 schemes, 2 type pairings)                                                       |

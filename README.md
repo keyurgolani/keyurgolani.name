@@ -42,10 +42,10 @@ See [docs/getting-started.md](docs/getting-started.md) for the full walkthrough.
 
 - **28 section kinds**: hero, lede, experience, projects, skills, GitHub, gallery, discography, episodes, testimonials, publications, talks, awards, and more. See [docs/features.md](docs/features.md).
 - **Content extensions**: namespaced fields and section kinds from a profession package, checked when the build registers it and kept out of visitors' view when it doesn't.
-- **Independent appearance axes**: the variant, design language, color scheme, and typography preset, plus the display mode a visit starts in, each with its own visitor policy.
+- **Appearance in the site document**: the variant, color scheme, typography preset, and the display mode a visit starts in. Independent axes and per-axis visitor controls land with #19 (appearance axes): today `designLanguage` is only recorded, the scheme and typography ids are the variant's own, and `visitorControls` isn't applied.
 - **Theme toggle** with `light`, `dark`, `bright` (paper-white), `black` (AMOLED), and `system` (follows the OS).
 - **Per-variant color schemes and typography presets**: Editorial ships 3 schemes and 2 type pairings.
-- **Validation that says where**: every problem in either document comes with its code, file, line, column, and fix, from `pnpm config:validate` or the server at startup.
+- **Validation that says where**: every problem in either document comes with its code, file, line and column, and fix, from `pnpm config:validate` or the server at startup. A missing, doubled, or unreadable document is about the file, so its record has no line or column.
 - **GitHub integration**: top repos, a recently active list, and a language breakdown, from GitHub's public REST API. Public pages never send a token.
 - **Print stylesheet, feed, structured data, and Open Graph images.**
 - **Drift gates** keep the schema, kit catalog, and skill references in sync (`pnpm check:skills`).
@@ -99,7 +99,7 @@ site.example.yml                Example site document
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, coding conventions, and the drift gates that must stay green.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, coding conventions, and the [checks](CONTRIBUTING.md#checks) that must stay green.
 
 ## License
 

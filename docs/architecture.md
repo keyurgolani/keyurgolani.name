@@ -50,7 +50,7 @@ The contract. Its entry points:
 - **`@portfolio/schema`**: the schemas and the pure, browser-safe functions on them.
   - `PortfolioSchema` and `SiteSchema`, both at `schemaVersion: 2`. `composeSchemas(extensions)` builds them for a set of content extensions, and `DEFAULT_SCHEMAS` is the set for none. Every object is strict, and any object may carry namespaced `extensions`.
   - The section union: 28 core kinds discriminated by `kind`, plus `<package name>/<name>` kinds from content extensions. `ALL_SECTION_KINDS` lists the core kinds for the audit script and the skill drift gates.
-  - `parseSource` reads YAML or JSON within the document limits and locates every pointer by line and column. `validatePublicationUnit(unit, ctx)` checks one document or the pair against an appearance catalog, the registered extensions, and the canonical origin, and returns `Diagnostic` records. `toPublicView(pair, ctx)` drops hidden sections and unregistered extension data, so it's the only input visitors' output is built from.
+  - `parseSource` reads YAML or JSON within the document limits and locates every pointer by line and column. `validatePublicationUnit(unit, ctx)` takes both documents, checks each alone and then the pair against an appearance catalog, the registered extensions, and the canonical origin, and returns `Diagnostic` records. `toPublicView(pair, ctx)` drops hidden sections and unregistered extension data, so it's the only input visitors' output is built from.
   - `defineContentExtension`, `applyEdits`, `serialize`, `canonicalize`, `detectDocument`, the URL allowlist, and the secret scan.
 - **`@portfolio/schema/node`**: `findPair`, `readPair`, `loadPair`, and `formatRecords`, which read a directory or two files from disk. It's Node only, and `pnpm check:deps` keeps it to server code, the config command, and tests.
 - **`@portfolio/schema/migrate`**: the one-time migration from the old one-file format, which only `pnpm config:migrate` and its tests import.
@@ -127,7 +127,7 @@ Three scripts under `skills/scripts/` and `skills/<skill>/scripts/` enforce pari
 - **`skills/portfolio-author/scripts/validate.mjs`** validates a directory's `portfolio.yml` and `site.yml` the way the server does at startup, and prints each problem with its file, line, column, code, and how to fix it.
 - **`skills/variant-developer/scripts/audit.mjs`** checks variant manifests against the schema (every required kind handled) and warns on suspicious patterns (only one color scheme, themes claimed without CSS).
 
-Run them with `pnpm check:skills` and the per-script test suites listed in [CONTRIBUTING.md](../CONTRIBUTING.md#drift-gates).
+Run them with `pnpm check:skills` and the per-script test suites listed in [CONTRIBUTING.md](../CONTRIBUTING.md#checks).
 
 ## Skills
 

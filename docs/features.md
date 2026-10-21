@@ -10,7 +10,7 @@ What the platform can do today.
 - **Content extensions.** A profession package adds namespaced fields and section kinds of its own. Data from a package the build doesn't register is kept as written, warned about, and never shown to visitors.
 - **Stable section ids.** Every section has an `id`, its anchor and its key in the site document.
 - **Hidden sections.** The site document hides a section without deleting it from the portfolio.
-- **Strict validation.** Unknown keys fail with a did-you-mean hint, URLs are checked against an allowlist, and secret-shaped strings are refused. Each problem is a record with a code, the file, the line and column, and how to fix it, from `pnpm config:validate`, the `validate.mjs` script, or the server at startup.
+- **Strict validation.** Unknown keys fail with a did-you-mean hint, URLs are checked against an allowlist, and secret-shaped strings are refused. Each problem is a record with a code, the file, the line and column, and how to fix it, from `pnpm config:validate`, the `validate.mjs` script, or the server at startup. A `source.*` record is about the file itself, so it has no line or column.
 - **Cross-document checks.** Broken anchors and references, duplicate ids, contradictory or repeated metrics, links to sample or stale origins, and appearance ids this build doesn't register.
 - **One-time migration.** `pnpm config:migrate` converts the old one-file format into the pair, with a dry run and a diff before it writes anything.
 - **Loose date strings.** `period: { start: "Jan 2024", end: "present" }` is fine, since people read this output, not parsers. ISO dates work too.
@@ -19,8 +19,8 @@ What the platform can do today.
 
 ## Visual system
 
-- **Independent appearance axes.** The site document picks the variant (the composition), the design language, the color scheme, and the typography preset, plus the display mode a visit starts in.
-- **Per-axis visitor controls.** `visitorControls` marks each appearance field `locked` or `selectable`. This release checks the policy; the visitor pickers come later.
+- **Appearance in the site document.** It picks the variant (the composition), the color scheme, the typography preset, and the display mode a visit starts in. The four independent axes land with #19 (appearance axes): today `designLanguage` is only recorded, and the scheme and typography ids are the variant's own.
+- **Per-axis visitor controls.** `visitorControls` marks each appearance field `locked` or `selectable`. This release checks the policy without applying it; the visitor pickers come with #19.
 - **Pluggable variants.** Each variant is a workspace package. Editorial and Kinetic Cosmos ship today.
 - **Variant registry built at install and build time.** New variants are discovered on their own.
 - **Per-variant color schemes.** Editorial ships 3 (warm, noir, ink-and-paper), and Kinetic Cosmos 3 (nebula, aurora, solar).
@@ -94,10 +94,10 @@ Three scripts keep the system honest:
 
 ## Roadmap (deferred, not yet shipped)
 
-- Visitor pickers for each appearance axis, applying `visitorControls`.
-- Shared registries for the design language, color schemes, and typography, so those ids no longer depend on the variant.
-- Variants that render content extension sections.
+- Visitor pickers for each appearance axis, applying `visitorControls` (#19).
+- Shared registries for the design language, color schemes, and typography, so those ids no longer depend on the variant (#19).
+- Variants that render content extension sections (#5).
 - More variants.
 - CI/CD workflow templates.
 
-If you want a feature that isn't shipped, open an issue. Small additions ship fast.
+If you want a feature that isn't shipped, open an issue.

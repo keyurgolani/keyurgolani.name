@@ -140,7 +140,7 @@ The first sections are what a visitor sees before scrolling, so treat them like 
 | `external-portfolios` | Links to other sites where your work lives                 | Cross-discipline                            |
 | `github`              | Live GitHub data                                           | Engineers                                   |
 
-Full per-kind schema with field-by-field docs: [`skills/portfolio-author/references/section-kinds.md`](../skills/portfolio-author/references/section-kinds.md).
+Every kind's fields, one by one: [`skills/portfolio-author/references/schema.md`](../skills/portfolio-author/references/schema.md). [`section-kinds.md`](../skills/portfolio-author/references/section-kinds.md) says when to use each.
 
 ## Quality rules
 

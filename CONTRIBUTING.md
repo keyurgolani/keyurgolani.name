@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for considering a contribution. This document covers development setup, the conventions we follow, and the drift gates that must stay green.
+Thanks for considering a contribution. This document covers development setup, the conventions we follow, and the [checks](#checks) that must stay green.
 
 ## Development setup
 
@@ -64,7 +64,7 @@ If you add or change a section kind in `packages/schema/src/kinds/`, you must al
 3. Add the kind to every variant's `supportedKinds` (or to `ALL_SECTION_KINDS` filter).
 4. Implement a renderer (or rely on `FallbackSection`).
 
-The drift gates below catch most of these. A change to either document's fields also updates [docs/configuration.md](docs/configuration.md), and a change an existing document wouldn't pass bumps `schemaVersion` with a migration step in `packages/schema/src/migrate/`. A field for one profession belongs in a content extension instead.
+The [checks](#checks) below catch most of these. A change to either document's fields also updates [docs/configuration.md](docs/configuration.md), and a change an existing document wouldn't pass bumps `schemaVersion` with a migration step in `packages/schema/src/migrate/`. A field for one profession belongs in a content extension instead.
 
 ## Checks
 
