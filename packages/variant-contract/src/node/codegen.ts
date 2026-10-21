@@ -95,6 +95,11 @@ ${extensions.map((entry, index) => `import extension${index} from ${text(entry.p
 export const CONTENT_EXTENSIONS: readonly ContentExtension[] = [${extensions
       .map((_entry, index) => `extension${index}`)
       .join(', ')}];
+
+/** The extension section kinds a registered renderer covers, which the compatibility check reads. */
+export const EXTENSION_RENDERED_KINDS: readonly string[] = ${JSON.stringify(
+      extensions.flatMap((entry) => entry.renderedKinds).sort(),
+    )};
 `,
   );
 
