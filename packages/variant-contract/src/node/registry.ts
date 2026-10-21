@@ -103,6 +103,8 @@ export interface ExtensionEntry {
   readonly namespace: string;
   /** Whether it exports `./renderers`, the section renderers renderSection() tries. */
   readonly renderers: boolean;
+  /** The section kinds those renderers cover, as `<namespace>/<name>`, sorted (#5, Slice 5). */
+  readonly renderedKinds: readonly string[];
 }
 
 export interface RegistryResult {
@@ -495,11 +497,12 @@ async function readExtension(
     );
     return undefined;
   }
+  let renderedKinds: readonly string[] = [];
   if (renderers) {
     const declared = Object.keys(isRecord(value.sections) ? value.sections : {});
     const checked = await readRenderers(name, declared, exportFile(dir, pkg, './renderers')!);
-    if (checked) {
-      const { pointer, message, remedy, ...extra } = checked;
+    if ('problem' in checked) {
+      const { pointer, message, remedy, ...extra } = checked.problem;
       reporter(diagnostics, name, version, at(exportFile(dir, pkg, './renderers')!))(
         'registry.extension-invalid',
         pointer,
@@ -509,24 +512,35 @@ async function readExtension(
       );
       return undefined;
     }
+    renderedKinds = checked.kinds;
   }
-  return { kind: 'content-extension', packageName: name, version, dir, namespace: name, renderers };
+  return {
+    kind: 'content-extension',
+    packageName: name,
+    version,
+    dir,
+    namespace: name,
+    renderers,
+    renderedKinds,
+  };
 }
 
-/** What's wrong with an extension's `./renderers` export, or undefined when it's right. */
+/** What's wrong with an extension's `./renderers` export, or the kinds it renders when it's right. */
 async function readRenderers(
   name: string,
   declared: readonly string[],
   file: string,
 ): Promise<
   | {
-      pointer: string[];
-      message: string;
-      remedy: string;
-      expected?: string;
-      actual?: string;
+      problem: {
+        pointer: string[];
+        message: string;
+        remedy: string;
+        expected?: string;
+        actual?: string;
+      };
     }
-  | undefined
+  | { kinds: string[] }
 > {
   const kinds = declared.map((section) => `${name}/${section}`);
   let value: unknown;
@@ -534,43 +548,51 @@ async function readRenderers(
     value = ((await import(pathToFileURL(file).href)) as { default?: unknown }).default;
   } catch (error) {
     return {
-      pointer: [],
-      message: 'Its "./renderers" export fails to load.',
-      remedy: 'Upgrade or pin a release whose renderers load.',
-      actual: errorLine(error),
+      problem: {
+        pointer: [],
+        message: 'Its "./renderers" export fails to load.',
+        remedy: 'Upgrade or pin a release whose renderers load.',
+        actual: errorLine(error),
+      },
     };
   }
   if (!isRecord(value)) {
     return {
-      pointer: [],
-      message:
-        'Its "./renderers" export has no default export: an object of renderers, keyed by section kind.',
-      remedy: 'Upgrade or pin a release that default-exports its renderers.',
-      expected: '{ "<namespace>/<section>": renderer }',
+      problem: {
+        pointer: [],
+        message:
+          'Its "./renderers" export has no default export: an object of renderers, keyed by section kind.',
+        remedy: 'Upgrade or pin a release that default-exports its renderers.',
+        expected: '{ "<namespace>/<section>": renderer }',
+      },
     };
   }
   for (const [kind, renderer] of Object.entries(value)) {
     const parsed = parseExtensionKind(kind);
     if (!parsed || parsed.namespace !== name || !declared.includes(parsed.name)) {
       return {
-        pointer: [kind],
-        message: `is no section kind ${name} declares, so nothing would ever render through it.`,
-        remedy: 'Upgrade or pin a release whose renderers match its declared sections.',
-        expected: kinds.length > 0 ? kinds.join(' | ') : 'no renderers: it declares no sections',
-        actual: kind,
+        problem: {
+          pointer: [kind],
+          message: `is no section kind ${name} declares, so nothing would ever render through it.`,
+          remedy: 'Upgrade or pin a release whose renderers match its declared sections.',
+          expected: kinds.length > 0 ? kinds.join(' | ') : 'no renderers: it declares no sections',
+          actual: kind,
+        },
       };
     }
     if (typeof renderer !== 'function') {
       return {
-        pointer: [kind],
-        message: "isn't a renderer: a component of the section and the render input.",
-        remedy: 'Upgrade or pin a release whose renderers are components.',
-        expected: 'function',
-        actual: renderer === null ? 'null' : typeof renderer,
+        problem: {
+          pointer: [kind],
+          message: "isn't a renderer: a component of the section and the render input.",
+          remedy: 'Upgrade or pin a release whose renderers are components.',
+          expected: 'function',
+          actual: renderer === null ? 'null' : typeof renderer,
+        },
       };
     }
   }
-  return undefined;
+  return { kinds: Object.keys(value).sort() };
 }
 
 /** An error's first line, for a record's `actual`. */

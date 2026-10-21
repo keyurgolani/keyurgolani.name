@@ -386,14 +386,15 @@ test('a content extension registers when its default export is a valid definitio
   const result = await read([FALLBACK, photos, notes]);
   assert.deepEqual(result.diagnostics, []);
   assert.deepEqual(
-    result.extensions.map(({ packageName, version, renderers }) => [
+    result.extensions.map(({ packageName, version, renderers, renderedKinds }) => [
       packageName,
       version,
       renderers,
+      renderedKinds,
     ]),
     [
-      ['@acme/portfolio-notes', '2.0.0', false],
-      ['@acme/portfolio-photography', '2.0.0', true],
+      ['@acme/portfolio-notes', '2.0.0', false, []],
+      ['@acme/portfolio-photography', '2.0.0', true, []],
     ],
   );
 });
@@ -515,10 +516,14 @@ test("an extension's ./renderers default-exports a renderer for each section it 
   );
   const core = result.diagnostics.find((record) => record.package === '@acme/portfolio-core')!;
   assert.equal(core.expected, '@acme/portfolio-core/exhibitions');
-  // Only the one that's right registers, renderers and all.
+  // Only the one that's right registers, renderers and all, with the kinds they cover.
   assert.deepEqual(
-    result.extensions.map(({ packageName, renderers }) => [packageName, renderers]),
-    [['@acme/portfolio-good', true]],
+    result.extensions.map(({ packageName, renderers, renderedKinds }) => [
+      packageName,
+      renderers,
+      renderedKinds,
+    ]),
+    [['@acme/portfolio-good', true, ['@acme/portfolio-good/exhibitions']]],
   );
 });
 
