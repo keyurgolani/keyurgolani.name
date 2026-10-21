@@ -24,18 +24,22 @@ interface ParsedDate {
   isPresent?: boolean;
 }
 
+/** A moment, as a Date, an ISO string such as a render input's `env.now`, or epoch milliseconds. */
+export type Instant = Date | string | number;
+
 const MONTH_LOOKUP = new Map<string, number>();
 MONTHS.forEach((m, i) => MONTH_LOOKUP.set(m.toLowerCase(), i));
 SHORT_MONTHS.forEach((m, i) => MONTH_LOOKUP.set(m.toLowerCase(), i));
 
-export function parseLooseDate(raw: string | undefined | null): ParsedDate | null {
+const PRESENT: unique symbol = Symbol('present');
+
+/** A loose date's parts, or PRESENT, which means whatever day it is when asked. */
+function dateParts(raw: string | undefined | null): ParsedDate | typeof PRESENT | null {
   if (!raw) return null;
   const trimmed = raw.trim();
   if (!trimmed) return null;
   const lower = trimmed.toLowerCase();
-  if (lower === 'present' || lower === 'now' || lower === 'current') {
-    return { year: new Date().getFullYear(), isPresent: true };
-  }
+  if (lower === 'present' || lower === 'now' || lower === 'current') return PRESENT;
 
   const iso = /^(\d{4})(?:-(\d{1,2})(?:-(\d{1,2}))?)?$/.exec(trimmed);
   if (iso) {
@@ -67,10 +71,28 @@ export function parseLooseDate(raw: string | undefined | null): ParsedDate | nul
   return null;
 }
 
+/**
+ * Parses a loose date. Present, now, and current are `now`'s day in UTC, so
+ * the caller says when now is, such as a render input's `env.now`, and the
+ * result never depends on the clock.
+ */
+export function parseLooseDate(raw: string | undefined | null, now: Instant): ParsedDate | null {
+  const parts = dateParts(raw);
+  if (parts !== PRESENT) return parts;
+  const at = new Date(now);
+  if (Number.isNaN(at.getTime())) throw new TypeError(`${String(now)} isn't a time.`);
+  return {
+    year: at.getUTCFullYear(),
+    month: at.getUTCMonth(),
+    day: at.getUTCDate(),
+    isPresent: true,
+  };
+}
+
 export function formatDate(raw: string | undefined | null, opts: { short?: boolean } = {}): string {
-  const parsed = parseLooseDate(raw);
+  const parsed = dateParts(raw);
   if (!parsed) return raw ?? '';
-  if (parsed.isPresent) return 'Present';
+  if (parsed === PRESENT) return 'Present';
   const months = opts.short ? SHORT_MONTHS : MONTHS;
   if (parsed.month != null) {
     const month = months[parsed.month] ?? '';
@@ -82,9 +104,9 @@ export function formatDate(raw: string | undefined | null, opts: { short?: boole
 }
 
 export function formatYear(raw: string | undefined | null): string {
-  const parsed = parseLooseDate(raw);
+  const parsed = dateParts(raw);
   if (!parsed) return raw ?? '';
-  return parsed.isPresent ? 'Present' : String(parsed.year);
+  return parsed === PRESENT ? 'Present' : String(parsed.year);
 }
 
 export function formatPeriod(period: Period | undefined, opts: { short?: boolean } = {}): string {
@@ -96,11 +118,12 @@ export function formatPeriod(period: Period | undefined, opts: { short?: boolean
   return `${start} — ${end}`;
 }
 
-export function formatDuration(period: Period | undefined): string {
+/** How long a period ran. One with no end, or ending at present, runs to `now`. */
+export function formatDuration(period: Period | undefined, now: Instant): string {
   if (!period) return '';
-  const start = parseLooseDate(period.start);
+  const start = parseLooseDate(period.start, now);
   const endRaw = period.end ?? 'present';
-  const end = parseLooseDate(endRaw);
+  const end = parseLooseDate(endRaw, now);
   if (!start || !end) return '';
   const sm = start.month ?? 0;
   const em = end.month ?? 0;
@@ -160,10 +183,11 @@ export function ensureSectionId(idOrTitle: string | undefined, fallback: string)
 /**
  * Render a stat value (which may be `string | number`) consistently. Numbers
  * are localized; strings are passed through verbatim so authors can carry
- * their own formatting (e.g. `"10B+"`, `"~3min"`).
+ * their own formatting (e.g. `"10B+"`, `"~3min"`). Pass the content's locale,
+ * such as the portfolio's, so a server and a browser format a number alike.
  */
-export function formatStatValue(value: string | number): string {
-  return typeof value === 'number' ? value.toLocaleString() : value;
+export function formatStatValue(value: string | number, locale?: string): string {
+  return typeof value === 'number' ? value.toLocaleString(locale) : value;
 }
 
 /**
@@ -183,10 +207,12 @@ export function formatCompactNumber(n: number): string {
 /**
  * Terse relative-time string. Buckets: "just now", "Xm/h/d/w/mo/y ago".
  * Variants render this for last-pushed-at on lists where compactness matters.
+ * It's relative to `now`, which the caller passes, such as a render input's
+ * `env.now`.
  */
-export function formatRelativeTime(iso: string, now: Date = new Date()): string {
+export function formatRelativeTime(iso: string, now: Instant): string {
   const then = new Date(iso);
-  const diffMs = now.getTime() - then.getTime();
+  const diffMs = new Date(now).getTime() - then.getTime();
   if (Number.isNaN(diffMs)) return '';
   const seconds = Math.max(0, Math.floor(diffMs / 1000));
   if (seconds < 60) return 'just now';

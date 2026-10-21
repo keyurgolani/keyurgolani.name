@@ -4,6 +4,8 @@ import { SectionFrame } from '../primitives/section-frame';
 import { MarkdownBody } from '../primitives/markdown-body';
 
 export function ExperienceRenderer({ section }: { section: Experience }) {
+  // The kit no longer reads the clock, so this legacy renderer passes it (#5).
+  const now = new Date();
   return (
     <SectionFrame section={section} fallbackTitle="Experience">
       {section.items.map((item, i) => (
@@ -12,7 +14,7 @@ export function ExperienceRenderer({ section }: { section: Experience }) {
             <span className="editorial-entry__marginalia-period">
               {formatPeriod(item.period, { short: true })}
             </span>
-            {formatDuration(item.period) && <span>{formatDuration(item.period)}</span>}
+            {formatDuration(item.period, now) && <span>{formatDuration(item.period, now)}</span>}
             {item.location && <span>{item.location}</span>}
           </aside>
           <div className="editorial-entry__body">

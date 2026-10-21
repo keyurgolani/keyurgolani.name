@@ -166,6 +166,8 @@ function ContributionHeatmap({ days }: { days: ContributionDay[] }) {
 }
 
 function RecentlyActiveList({ repos }: { repos: RecentlyActiveRepo[] }) {
+  // The kit no longer reads the clock, so this legacy renderer passes it (#5).
+  const now = new Date();
   return (
     <ul className="editorial-github__recent">
       {repos.map((repo) => (
@@ -193,7 +195,7 @@ function RecentlyActiveList({ repos }: { repos: RecentlyActiveRepo[] }) {
               </span>
             ) : null}
             <span className="editorial-github__recent-pushed">
-              {formatRelativeTime(repo.pushedAt)}
+              {formatRelativeTime(repo.pushedAt, now)}
             </span>
             {repo.stars > 0 ? (
               <span className="editorial-github__recent-stars">

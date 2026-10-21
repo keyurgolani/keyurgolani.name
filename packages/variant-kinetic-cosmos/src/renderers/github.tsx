@@ -158,6 +158,8 @@ function PinnedReposGrid({ repos }: { repos: PinnedRepo[] }) {
 }
 
 function RecentlyActiveList({ repos }: { repos: RecentlyActiveRepo[] }) {
+  // The kit no longer reads the clock, so this legacy renderer passes it (#5).
+  const now = new Date();
   return (
     <ul className="kc-card kc-github__recent">
       {repos.map((repo) => (
@@ -170,7 +172,7 @@ function RecentlyActiveList({ repos }: { repos: RecentlyActiveRepo[] }) {
           >
             {repo.name}
           </a>
-          <span className="kc-github__recent-pushed">{formatRelativeTime(repo.pushedAt)}</span>
+          <span className="kc-github__recent-pushed">{formatRelativeTime(repo.pushedAt, now)}</span>
         </li>
       ))}
     </ul>
