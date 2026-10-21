@@ -7,6 +7,7 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
+    "./direction": "./src/direction.ts",
     "./ids": "./src/ids.ts",
     "./kinds": "./src/kinds/index.ts",
     "./migrate": "./src/migrate/index.ts",

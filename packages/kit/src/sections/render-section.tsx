@@ -1,8 +1,8 @@
 import type { ReactElement } from 'react';
 import type { Section, SectionKind } from '@portfolio/schema';
+import { languageDirection } from '@portfolio/schema/direction';
 import { isExtensionSection } from '@portfolio/schema/ids';
 import type { VariantRenderInput } from '@portfolio/variant-contract';
-import { textDirection } from './direction';
 import { hostModules } from './host-modules';
 import { SHARED_RENDERERS } from './renderers';
 import type { BespokeRenderers, HeadingLevel, SectionRenderer } from './types';
@@ -54,7 +54,7 @@ export function renderSection(
       ? (hostModules().extensionRenderers?.[section.kind] as SectionRenderer<Section> | undefined)
       : (SHARED_RENDERERS[section.kind] as SectionRenderer<Section>));
   if (!Renderer) return null;
-  const direction = section.lang === undefined ? undefined : textDirection(section.lang);
+  const direction = section.lang === undefined ? undefined : languageDirection(section.lang);
   return (
     <section
       key={section.id}
