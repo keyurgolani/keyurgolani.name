@@ -1,7 +1,8 @@
 // A small CSS reader for the source audit (#5, Slice 3, item 5): rules,
-// at-rules, and declarations with their positions, enough to check scope,
-// remote imports, and physical properties. It reads what a browser would and
-// skips what it can't parse, without failing.
+// at-rules, keyframes, and declarations with their positions, enough to check
+// scope, nesting, imports and URLs, physical properties, and appearance
+// values. It reads what a browser would and skips what it can't parse,
+// without failing.
 
 export interface Position {
   readonly line: number;
@@ -98,9 +99,6 @@ function closing(text: string, open: number, end: number): number {
   return end;
 }
 
-/** Keyframe selectors (from, to, 50%) aren't selectors to scope. */
-const KEYFRAMES = /^@(?:-[a-z]+-)?keyframes$/i;
-
 function parseBlock(
   text: string,
   start: number,
@@ -136,14 +134,19 @@ function parseBlock(
     if (prelude.startsWith('@')) {
       const [name = '', ...rest] = prelude.split(/\s+/);
       const lowered = name.toLowerCase();
+      // A keyframes block parses as rules too: from, to, and percentages, each with declarations.
       nodes.push({
         type: 'at-rule',
         name: lowered,
         prelude: rest.join(' '),
         at,
-        children: KEYFRAMES.test(lowered)
-          ? []
-          : parseBlock(text, stop + 1, close, positionOf, inRule || isDeclarationBlock(lowered)),
+        children: parseBlock(
+          text,
+          stop + 1,
+          close,
+          positionOf,
+          inRule || isDeclarationBlock(lowered),
+        ),
       });
     } else {
       nodes.push({

@@ -1,28 +1,36 @@
 // `pnpm check:variants [--package <name>]` (#5, Slice 3, items 5 and 9). It
 // generates the registry, as build:registry does, then audits each
-// registered variant's code and styles, and @portfolio/kit/sections with
-// every kit module it imports for the clock and randomness rules. Any
-// diagnostic or finding fails it. --package audits that variant alone.
+// registered variant's code and styles, every @portfolio/kit entry the
+// variant imports (and @portfolio/kit/sections, which renderSection() runs
+// for it) with each kit module those import, for the clock and randomness
+// rules, and the kit's shared stylesheet for appearance. Any error or finding
+// fails it. --package audits that variant alone; when generation fails, every
+// error shows, since any one of them stops the build.
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   auditKitSections,
+  auditSharedStylesheet,
   auditVariant,
   exportTarget,
   findInstalled,
   formatAuditFindings,
   formatRegistryDiagnostics,
+  kitImports,
   readRegistry,
   renderRegistry,
   writeRegistry,
   type AuditFinding,
+  type PackageJson,
 } from '@portfolio/variant-contract/node';
 
 const HOST = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = path.join(HOST, 'src', 'lib', 'generated');
 const USAGE = 'Usage: tsx scripts/check-variants.ts [--package <name>]\n';
+const KIT = '@portfolio/kit';
+const SHARED_STYLES = './sections/styles.css';
 
 function parse(args: readonly string[]): { only?: string } | null {
   if (args.length === 0) return {};
@@ -37,9 +45,10 @@ async function main(): Promise<number> {
     return 2;
   }
   const result = await readRegistry({ hostDir: HOST });
-  const diagnostics = options.only
-    ? result.diagnostics.filter((record) => record.package === options.only)
-    : result.diagnostics;
+  const diagnostics =
+    options.only && result.ok
+      ? result.diagnostics.filter((record) => record.package === options.only)
+      : result.diagnostics;
   if (diagnostics.length > 0) process.stderr.write(formatRegistryDiagnostics(diagnostics));
   if (!result.ok) {
     process.stderr.write('[check:variants] Registry generation failed, so nothing was audited.\n');
@@ -56,8 +65,17 @@ async function main(): Promise<number> {
     );
     return 2;
   }
+  const kit = findInstalled(KIT, HOST);
+  if (!kit) {
+    process.stderr.write(`[check:variants] ${KIT} isn't installed.\n`);
+    return 1;
+  }
+  const kitPackage = JSON.parse(
+    fs.readFileSync(path.join(kit, 'package.json'), 'utf8'),
+  ) as PackageJson;
 
   const findings: AuditFinding[] = [];
+  const entries = new Set(['./sections']);
   for (const variant of variants) {
     findings.push(
       ...auditVariant({
@@ -68,21 +86,19 @@ async function main(): Promise<number> {
         enhancementEntries: variant.enhancements.map(({ file }) => file),
       }),
     );
+    for (const entry of kitImports(variant.dir)) entries.add(entry);
   }
-  if (!options.only) {
-    const kit = findInstalled('@portfolio/kit', HOST);
-    const entry = kit
-      ? exportTarget(
-          JSON.parse(fs.readFileSync(path.join(kit, 'package.json'), 'utf8')),
-          './sections',
-        )
-      : undefined;
-    if (!kit || !entry) {
-      process.stderr.write("[check:variants] @portfolio/kit/sections isn't installed.\n");
-      return 1;
-    }
-    findings.push(...auditKitSections(kit, entry));
+  for (const entry of [...entries].sort()) {
+    const target = exportTarget(kitPackage, entry);
+    if (target === undefined || !/\.[cm]?[jt]sx?$/.test(target)) continue;
+    findings.push(...auditKitSections(kit, target));
   }
+  const styles = exportTarget(kitPackage, SHARED_STYLES);
+  if (!styles) {
+    process.stderr.write(`[check:variants] ${KIT}/sections/styles.css isn't installed.\n`);
+    return 1;
+  }
+  findings.push(...auditSharedStylesheet(KIT, kit, styles));
 
   if (findings.length > 0) {
     process.stderr.write(formatAuditFindings(findings));
@@ -92,8 +108,11 @@ async function main(): Promise<number> {
     return 1;
   }
   const audited = variants.map(({ manifest }) => manifest.id).join(', ');
+  const kitEntries = [...entries]
+    .sort()
+    .map((entry) => (entry === '.' ? KIT : `${KIT}${entry.slice(1)}`));
   process.stdout.write(
-    `[check:variants] Audited ${audited}${options.only ? '' : ' and @portfolio/kit/sections'}: no findings.\n`,
+    `[check:variants] Audited ${audited}, ${kitEntries.join(', ')}, and ${KIT}/sections/styles.css: no findings.\n`,
   );
   return 0;
 }

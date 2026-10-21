@@ -27,7 +27,9 @@ export {
 export {
   AUDIT_CODES,
   auditKitSections,
+  auditSharedStylesheet,
   auditVariant,
+  kitImports,
   packageFiles,
   type AuditCode,
   type AuditFinding,
