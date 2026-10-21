@@ -248,6 +248,62 @@ test('a password hash file that is not a regular file, or that group or others c
   assert.equal(hops.ok, true);
 });
 
+test('owner session lifetimes default to 60 idle minutes and 12 hours, and take whole numbers in range', () => {
+  const owner = { ...BASE, PORTFOLIO_PROFILE: 'owner' };
+  const defaults = read(owner);
+  assert.ok(defaults.ok);
+  assert.deepEqual(defaults.config.sessionLifetime, { idleMinutes: 60, maxHours: 12 });
+  const set = read(
+    {
+      ...owner,
+      PORTFOLIO_AUTH_SESSION_IDLE_MINUTES: '5',
+      PORTFOLIO_AUTH_SESSION_MAX_HOURS_FILE: '/run/hours',
+    },
+    { '/run/hours': '24\n' },
+  );
+  assert.ok(set.ok);
+  assert.deepEqual(set.config.sessionLifetime, { idleMinutes: 5, maxHours: 24 });
+  const readOnly = read({ ...BASE });
+  assert.ok(readOnly.ok);
+  assert.equal(readOnly.config.sessionLifetime, undefined);
+
+  const cases: [Env, string[]][] = [
+    [
+      { PORTFOLIO_AUTH_SESSION_IDLE_MINUTES: '4' },
+      ['PORTFOLIO_AUTH_SESSION_IDLE_MINUTES:out_of_range'],
+    ],
+    [
+      { PORTFOLIO_AUTH_SESSION_IDLE_MINUTES: '121' },
+      ['PORTFOLIO_AUTH_SESSION_IDLE_MINUTES:out_of_range'],
+    ],
+    [{ PORTFOLIO_AUTH_SESSION_MAX_HOURS: '0' }, ['PORTFOLIO_AUTH_SESSION_MAX_HOURS:out_of_range']],
+    [{ PORTFOLIO_AUTH_SESSION_MAX_HOURS: '25' }, ['PORTFOLIO_AUTH_SESSION_MAX_HOURS:out_of_range']],
+    [
+      { PORTFOLIO_AUTH_SESSION_IDLE_MINUTES: '30.5' },
+      ['PORTFOLIO_AUTH_SESSION_IDLE_MINUTES:invalid'],
+    ],
+    [{ PORTFOLIO_AUTH_SESSION_MAX_HOURS: ' 12' }, ['PORTFOLIO_AUTH_SESSION_MAX_HOURS:invalid']],
+    [
+      { PORTFOLIO_AUTH_SESSION_IDLE_MINUTES: 'sixty', PORTFOLIO_AUTH_SESSION_MAX_HOURS: '48' },
+      [
+        'PORTFOLIO_AUTH_SESSION_IDLE_MINUTES:invalid',
+        'PORTFOLIO_AUTH_SESSION_MAX_HOURS:out_of_range',
+      ],
+    ],
+  ];
+  for (const [extra, expected] of cases) {
+    const result = read({ ...owner, ...extra });
+    assert.equal(result.ok, false, JSON.stringify(extra));
+    assert.deepEqual(findings(result), expected, JSON.stringify(extra));
+    assertSilentAbout(
+      result,
+      ...Object.values(extra).filter(
+        (value): value is string => value !== undefined && value.trim().length > 1,
+      ),
+    );
+  }
+});
+
 test('the config records which variable supplied the password hash', () => {
   const owner = { ...BASE, PORTFOLIO_PROFILE: 'owner' };
   const direct = read({ ...owner, PORTFOLIO_AUTH_PASSWORD_HASH: 'h' });
