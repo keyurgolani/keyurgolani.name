@@ -158,3 +158,24 @@ test('variant control values hold any plain data', () => {
   });
   assert.deepEqual(out.variantControls?.editorial?.values, values);
 });
+
+test('variant control values are plain JSON: no .inf or .nan, at most 8 levels deep', () => {
+  const entry = (values: Record<string, unknown>) =>
+    codes({ ...MINIMAL, variantControls: { editorial: { version: 1, values } } });
+  assert.deepEqual(entry({ columns: Number.POSITIVE_INFINITY }), [
+    'variantControls/editorial/values/columns:custom',
+  ]);
+  assert.deepEqual(entry({ featured: ['a', Number.NaN] }), [
+    'variantControls/editorial/values/featured:custom',
+  ]);
+  const deep = (depth: number): unknown => (depth === 0 ? 1 : [deep(depth - 1)]);
+  assert.deepEqual(entry({ ok: deep(8) }), []);
+  assert.deepEqual(entry({ nested: deep(9) }), ['variantControls/editorial/values/nested:custom']);
+  assert.deepEqual(
+    codes({ ...MINIMAL, variantControls: { editorial: { version: Infinity, values: {} } } }),
+    [
+      'variantControls/editorial/version:not_finite',
+      'variantControls/editorial/version:invalid_type',
+    ],
+  );
+});

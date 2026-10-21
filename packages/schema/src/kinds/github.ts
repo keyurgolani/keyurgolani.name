@@ -24,7 +24,7 @@ export function githubSchemas({ section }: SchemaParts) {
     /** Show a list of repositories most recently pushed to. */
     showRecentlyActive: z.boolean().default(true),
     /** Number of repositories to show in the recently-active list (1-20). */
-    recentlyActiveLimit: z.number().int().min(1).max(20).default(10),
+    recentlyActiveLimit: z.number().finite().int().min(1).max(20).default(10),
     /**
      * Repository names to feature even if they aren't pinned. Useful when
      * the author has more than 6 important repos.

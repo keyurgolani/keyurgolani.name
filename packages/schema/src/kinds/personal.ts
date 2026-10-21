@@ -24,7 +24,7 @@ export function personalSchemas({ section }: SchemaParts) {
    * a single accent figure ("12+ years") rather than as a list.
    */
   const TenureSchema = section('tenure', {
-    years: z.number().nonnegative().optional(),
+    years: z.number().finite().nonnegative().optional(),
     summary: z.string().optional(),
   });
 

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { isPlainObject } from './json';
+import { EXTENSION_MAX_DEPTH, isPlainObject, plainJsonProblem } from './json';
 import { SectionIdSchema, type SchemaParts } from './kinds/common';
 import { SCHEMA_VERSION } from './portfolio';
 
@@ -31,6 +31,27 @@ export const RegistryIdSchema = z.string().regex(REGISTRY_ID_PATTERN, {
   message:
     'must start with a lowercase letter, then 1 to 47 lowercase letters, digits, or hyphens, such as editorial.',
 });
+
+/**
+ * A variant's stored control values hold any keys, but only plain JSON: the
+ * render input and a revision (#3) canonicalize them, which .inf and .nan
+ * can't be.
+ */
+function plainJsonValues(values: Record<string, unknown>, ctx: z.RefinementCtx) {
+  for (const [key, value] of Object.entries(values)) {
+    const problem = plainJsonProblem(value, EXTENSION_MAX_DEPTH);
+    if (problem) {
+      ctx.addIssue({
+        code: 'custom',
+        path: [key],
+        message:
+          problem === 'too-deep'
+            ? `is nested more than ${EXTENSION_MAX_DEPTH} levels deep.`
+            : "holds a value JSON can't represent, such as .inf or .nan.",
+      });
+    }
+  }
+}
 
 /** The site document's schemas for one set of parts. */
 export function siteSchemas({ object }: SchemaParts) {
@@ -113,8 +134,8 @@ export function siteSchemas({ object }: SchemaParts) {
       .record(
         RegistryIdSchema,
         object({
-          version: z.number().int().positive(),
-          values: z.record(z.string(), z.unknown()),
+          version: z.number().finite().int().positive(),
+          values: z.record(z.string(), z.unknown()).superRefine(plainJsonValues),
         }),
       )
       .optional(),

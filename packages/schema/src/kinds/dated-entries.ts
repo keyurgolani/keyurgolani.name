@@ -61,7 +61,7 @@ export function datedEntrySchemas({ object, section, Image, Link, Period }: Sche
         publication: z.string().optional(),
         publishedAt: LooseDateSchema.optional(),
         url: UrlSchema.optional(),
-        readingTimeMinutes: z.number().int().positive().optional(),
+        readingTimeMinutes: z.number().finite().int().positive().optional(),
         tags: z.array(z.string()).optional(),
       }),
     ),
@@ -120,10 +120,10 @@ export function datedEntrySchemas({ object, section, Image, Link, Period }: Sche
     showDescription: z.string().optional(),
     items: z.array(
       object({
-        number: z.number().int().positive().optional(),
+        number: z.number().finite().int().positive().optional(),
         title: z.string(),
         publishedAt: LooseDateSchema.optional(),
-        durationMinutes: z.number().positive().optional(),
+        durationMinutes: z.number().finite().positive().optional(),
         description: z.string().optional(),
         showNotes: z.string().optional(),
         guests: z.array(z.string()).optional(),

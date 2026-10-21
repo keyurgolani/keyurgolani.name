@@ -29,7 +29,7 @@ export function visualSchemas({ object, section, Image, Link }: SchemaParts) {
           .array(
             object({
               title: z.string(),
-              durationSeconds: z.number().positive().optional(),
+              durationSeconds: z.number().finite().positive().optional(),
               url: UrlSchema.optional(),
             }),
           )
