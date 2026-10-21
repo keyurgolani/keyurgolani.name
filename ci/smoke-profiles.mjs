@@ -14,9 +14,10 @@
 //   canary (tests/harness/canaries.mjs) or the server's own path. After all
 //   of that, readiness still reports no owner module loaded, and the log
 //   holds one deployment.config line with every secret unset.
-// - owner, with deploy/compose.owner.yml's data directory on a named volume,
-//   refuses to start with no authentication provider (until #2). The volume
-//   starts out owned by uid 1001, mode 0700, as the image's directory is.
+// - owner, with deploy/compose.owner.yml's data directory on a named volume
+//   and no password hash, refuses to start for the hash alone: the data
+//   directory passes. The volume starts out owned by uid 1001, mode 0700, as
+//   the image's directory is.
 // - every startup row in tests/harness/startup-rows.mjs that refuses exits 1
 //   with its config.fatal lines and none of its canary values, and every one
 //   that starts serves with its config.warning lines and none of its values.
@@ -462,10 +463,10 @@ function ownerRun() {
   ]);
   const fatal = logEntries(output).filter((entry) => entry.event === 'config.fatal');
   const keys = fatal.map((entry) => `${entry.key}:${entry.code}`);
-  if (code !== 1 || !same(keys, ['PORTFOLIO_PROFILE:auth_provider_missing'])) {
-    fail(test, `exit ${code}, ${JSON.stringify(keys)}: not the no-provider refusal`);
+  if (code !== 1 || !same(keys, ['PORTFOLIO_AUTH_PASSWORD_HASH_FILE:required'])) {
+    fail(test, `exit ${code}, ${JSON.stringify(keys)}: not the missing-hash refusal`);
   } else {
-    console.log('[profiles] owner: refuses to start with no authentication provider');
+    console.log('[profiles] owner: refuses to start without a password hash, on its data volume');
   }
 }
 

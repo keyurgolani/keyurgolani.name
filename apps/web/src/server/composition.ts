@@ -56,17 +56,16 @@ export interface AuthProviderFactory {
 }
 
 /**
- * The owner's password provider (#2): sessions in the data directory, and
- * the origin and CSRF checks. The login slice registers it, once a sign-in
- * exists to use it.
+ * The owner's password provider (#2): sign-in, sessions in the data
+ * directory, and the origin and CSRF checks.
  */
 export const OWNER_PASSWORD_PROVIDER: AuthProviderFactory = Object.freeze({
   name: 'owner-password',
   load: (tools: ProviderTools) => import('./owner/auth').then((module) => module.provider(tools)),
 });
 
-/** The providers this build registers; the first one serves. #2 adds its own. */
-export const AUTH_PROVIDERS: readonly AuthProviderFactory[] = [];
+/** The providers this build registers; the first one serves. */
+export const AUTH_PROVIDERS: readonly AuthProviderFactory[] = [OWNER_PASSWORD_PROVIDER];
 
 export interface RequirementContext {
   readonly config: DeploymentConfig;
@@ -132,6 +131,29 @@ export const STARTUP_REQUIREMENTS: readonly StartupRequirement[] = [
     profiles: ['owner'],
     failure: 'fatal',
     load: () => import('./owner/auth-secret').then((module) => module.check),
+  },
+  // Sign-in's limits (#2, Risk 1): with no trusted proxy hop nothing names a
+  // client, so sign-in has only its global limits. A warning: the owner may
+  // run with nothing in front on purpose.
+  {
+    id: 'auth.limits',
+    issue: '#2',
+    profiles: ['owner'],
+    failure: 'fatal',
+    check: async ({ config, authProviders }) =>
+      config.trustedProxyHops > 0 || authProviders.length === 0
+        ? []
+        : [
+            {
+              severity: 'warning',
+              key: 'PORTFOLIO_TRUSTED_PROXY_HOPS',
+              code: 'no_source_limits',
+              message:
+                'With no trusted proxy hop, sign-in has only its global limits, so one client ' +
+                "can hold off the owner's own sign-in. Run owner behind a proxy and set " +
+                'PORTFOLIO_TRUSTED_PROXY_HOPS (docs/deployment.md, Owner authentication).',
+            },
+          ],
   },
   {
     id: 'data.directory',

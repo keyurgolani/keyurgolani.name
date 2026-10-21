@@ -71,7 +71,8 @@ test('read-only builds its catalog adapter and loads no owner module', async (t)
 
 test('owner refuses to start with no provider, before it loads owner code', async (t) => {
   const config = deployment(t, { PORTFOLIO_PROFILE: 'owner' });
-  const composed = await compose(inputs(config));
+  // A build that registers none; this one registers the password provider.
+  const composed = await compose({ ...inputs(config), authProviders: [] });
   assert.equal(composed.ok, false);
   assert.deepEqual(
     composed.issues.map((issue) => `${issue.key}:${issue.code}`),
@@ -127,6 +128,7 @@ test('the tagged startup rows are named requirements for #2, #3, and #4', () => 
     [
       ['auth.provider', '#1', 'owner', 'fatal', 'check'],
       ['auth.secret', '#2', 'owner', 'fatal', 'owner check'],
+      ['auth.limits', '#2', 'owner', 'fatal', 'check'],
       ['data.directory', '#2, #3', 'owner', 'fatal', 'owner check'],
       ['documents.pair', '#4', 'owner read-only', 'fatal', 'check'],
       ['documents.shape', '#3', 'owner', 'fatal', 'pending'],

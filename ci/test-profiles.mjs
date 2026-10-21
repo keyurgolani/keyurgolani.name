@@ -5,8 +5,8 @@
 // and demo (tests/e2e/demo.spec.ts) for the route matrix and the canary
 // scan: GET and POST to every route and operation, with no seeded path or
 // secret in any response body or header. Under owner it only checks the
-// refusal to start with no authentication provider, a startup row; #2
-// reruns this under owner with its provider.
+// refusal to start without a password hash and a data directory, a startup
+// row; #2 reruns the matrix under owner with its provider.
 //
 // Environment:
 //   TEST_PROFILES_WORKERS  Playwright workers (default 2)
@@ -48,14 +48,14 @@ run(
   REPO_ROOT,
 );
 run(
-  'owner: refuses to start with no authentication provider',
+  'owner: refuses to start without a password hash and a data directory',
   [
     process.execPath,
     PLAYWRIGHT,
     'test',
     'tests/e2e/startup.spec.ts',
     '--grep',
-    'owner, with no authentication provider registered',
+    'owner, with no password hash or data directory',
     '--workers=1',
   ],
   REPO_ROOT,

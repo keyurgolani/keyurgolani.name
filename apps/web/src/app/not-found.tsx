@@ -5,11 +5,11 @@ import { compositionFor } from '~/lib/variants';
 import { getDeploymentState } from '~/server/config-store';
 import { capabilityPolicy, type NavLink } from '~/server/policy';
 
-// Links only to pages the profile serves, from CapabilityPolicy. No session
-// reaches this page until #2, so it lists the public ones. It renders inside
-// the live site's presentation boundary (#5, Slice 3, item 6), so #19's
-// tokens reach it once they ship. It reads only the site's presentation
-// settings, and shows nothing about the request or the documents.
+// Links only to pages the profile serves, from CapabilityPolicy. The page
+// reads no session, so it lists the public ones. It renders inside the live
+// site's presentation boundary (#5, Slice 3, item 6), so #19's tokens reach
+// it once they ship. It reads only the site's presentation settings, and
+// shows nothing about the request or the documents.
 const HOME: readonly NavLink[] = [{ href: '/', label: 'Home' }];
 
 /** The live site document, or null before startup and while the catalog can't serve. */
