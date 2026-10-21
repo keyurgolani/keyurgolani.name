@@ -207,7 +207,7 @@ const ORIGIN = ['--origin', 'https://rowan.name'];
 /** What every pair says while this build registers only the fallback composition (#5). */
 const UNAVAILABLE = (file) => [
   `${file}: variant.unavailable (warning) at /appearance/variant`,
-  "  /appearance/variant names a variant this build doesn't register, so the fallback composition renders instead.",
+  "  /appearance/variant names a variant this build doesn't register, so the fallback composition renders instead. It blocks publishing, not preview.",
   '  Install its package with pnpm --filter @portfolio/web add <package> and rebuild. This build registers no variant yet.',
   '',
 ];
