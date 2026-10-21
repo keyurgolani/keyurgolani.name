@@ -14,7 +14,7 @@ Run frequently during Wave 2/3, and once final at Phase 3 entry.
 
 - [ ] `node skills/variant-developer/scripts/audit.mjs packages/variant-<slug>` exits 0.
 - [ ] `pnpm typecheck` passes for the variant package and the rest of the monorepo.
-- [ ] `pnpm --filter @portfolio/variant-<slug> lint` passes (full `pnpm lint` may fail on host-level scripting bugs unrelated to your variant — file an issue if so).
+- [ ] `pnpm exec eslint packages/variant-<slug>` passes. If the full `pnpm lint` fails on something unrelated to your variant, file an issue.
 - [ ] `pnpm --filter @portfolio/web build` succeeds.
 - [ ] `pnpm --filter @portfolio/web build:registry` lists the new variant in `registry.generated.ts` AND adds an import to `registry.styles.generated.ts`.
 - [ ] `node skills/variant-developer/scripts/kit-dedup.mjs packages/variant-<slug>` candidates are all resolved (hoisted or marked `// LOCAL: <reason>`).

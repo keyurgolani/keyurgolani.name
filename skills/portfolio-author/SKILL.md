@@ -131,7 +131,7 @@ The loop is non-negotiable. Run it after every write.
 
 1. After every write to `config/portfolio.yml` or `config/site.yml`, run `node skills/portfolio-author/scripts/validate.mjs config`.
 2. **Exit 0**: done with validation. Hand off (Section 9).
-3. **Exit 1**: read the errors. Each starts `<file>:<line>:<col>: <code> (<severity>) at <JSON pointer>`, then says what's wrong and how to fix it. The line and column point to the YAML position, and the pointer to the field. Fix the field at that location. `docs/configuration.md` explains every code.
+3. **Exit 1**: read the errors. Each starts `<file>:<line>:<col>: <code> (<severity>) at <JSON pointer>`, then says what's wrong and how to fix it. The line and column point to the YAML position, and the pointer to the field. A `source.*` record is about the file itself, so it starts `<file>: <code> (<severity>)`, with no position or pointer. Fix the field at that location. `docs/configuration.md` explains every code.
 4. Re-run validate.mjs.
 5. Repeat until clean.
 

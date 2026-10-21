@@ -34,7 +34,7 @@ Every object is strict: a key not listed here or in the kind's fields is refused
 
 ## Common types
 
-- **`Link`**: `{ url, label?, platform? }`. `url` is required: an `https`, `http`, `mailto`, or `tel` URL, a rooted path, or a `#fragment` naming a visible section's id. `platform` is free-form (`github`, `linkedin`, `mastodon`, `bluesky`, `website`, `resume`, `email`, and so on); variants use it to pick an icon.
+- **`Link`**: `{ url, label?, platform? }`. `url` is required: an `https`, `http`, `mailto`, or `tel` URL, a relative reference such as `/resume.pdf`, `resume.pdf`, or `../x` (not `//host`), or a `#fragment` naming a visible section's id, with no unencoded space. `platform` is free-form (`github`, `linkedin`, `mastodon`, `bluesky`, `website`, `resume`, `email`, and so on); variants use it to pick an icon.
 - **`Image`**: `{ src, alt?, width?, height?, credit?, focalPoint? }`. `src` takes what `url` does, plus `data:image` URLs in png, jpeg, gif, webp, or avif. Set `alt` when meaningful. `focalPoint` is `{ x, y }`, each from 0 to 1, for off-centre subjects that may be cropped.
 - **`LooseDate`**: a string: `YYYY`, `YYYY-MM`, `YYYY-MM-DD`, `"Month YYYY"`, or `present`/`now`/`current`. Use the coarsest form, and quote a bare year (`'2023'`): unquoted, YAML reads it as a number.
 - **`Period`**: `{ start: LooseDate, end?: LooseDate }`. Omit `end` for ongoing. Validation rejects an `end` before `start`.
@@ -51,7 +51,7 @@ Every object is strict: a key not listed here or in the kind's fields is refused
 | `motionPolicy`                                  | `respect-os \| reduce` | yes      | `respect-os` by default; `reduce` when the user wants motion off for everyone.                                   |
 | `features`                                      | object                 | yes      | `feed: true` serves `/feed.xml`; `productAttribution` defaults to `false`.                                       |
 | `sections`                                      | object                 | optional | `{ <section id>: { hidden: true } }` to keep a section in the portfolio and off the page.                        |
-| `appearanceInputs`, `routes`, `variantControls` | object                 | optional | Leave out. Later releases use them.                                                                              |
+| `appearanceInputs`, `routes`, `variantControls` | object                 | optional | Leave out. #19 uses `appearanceInputs`, and #5 `routes` and `variantControls`.                                   |
 
 `appearance` ids must be ones this build registers. `variant` is `editorial` or `kinetic-cosmos`. `colorScheme` and `typography` are ids the selected variant declares in its manifest: Editorial has `warm`, `noir`, and `ink-and-paper`, and `classic` and `modernist`; Kinetic Cosmos has `nebula`, `aurora`, and `solar`, and `geometric` and `humanist`. `designLanguage` is `platform-neutral`. `displayMode` is `system`, `light`, or `dark`. Neither document may hold a deployment setting (the origin, the profile) or anything shaped like a secret.
 

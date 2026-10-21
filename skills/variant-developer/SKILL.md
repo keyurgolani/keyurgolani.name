@@ -31,7 +31,7 @@ A variant is a React component package living under `packages/variant-<slug>`. T
 
 Reference packages:
 
-- **`packages/variant-editorial`** — the reference variant. Read it for shape, conventions, and tone before scaffolding your own. Its DESIGN.md is the worked example.
+- **`packages/variant-editorial`**: the reference variant. Read it for shape, conventions, and tone before scaffolding your own.
 - **`packages/variant-template`** — the clone-source. The scaffolder copies this directory; do not edit it as part of building a new variant.
 - **`packages/kit`** — shared utilities (theme provider, navigation derivation, layout primitives, R3F bindings, hooks). Use it. If you find yourself rewriting a helper that could live here, hoist it.
 
@@ -186,7 +186,7 @@ Run `references/audit-checklist.md` for the scripted gates and `references/quali
 
 1. `node skills/variant-developer/scripts/audit.mjs packages/variant-<slug>` — exits 0. Catches manifest schema breaks, missing `light`/`dark` themes, unsupported kinds, missing screenshots referenced by the manifest.
 2. `pnpm typecheck` — passes for the whole workspace, not just your package.
-3. `pnpm lint` — passes for the variant package (`pnpm --filter @portfolio/variant-<slug> lint`).
+3. `pnpm exec eslint packages/variant-<slug>`: passes for the variant package.
 4. `pnpm --filter @portfolio/web build` — succeeds. The host build is the integration test.
 5. `node skills/variant-developer/scripts/kit-dedup.mjs packages/variant-<slug>` — every candidate hoisted or marked `// LOCAL: <reason>`.
 6. `pnpm --filter @portfolio/kit test` — kit tests pass (relevant if you hoisted in Wave 1.5).
@@ -196,14 +196,14 @@ Run `references/audit-checklist.md` for the scripted gates and `references/quali
 
 These are the gates that _catch what compiles fine but looks broken_. Each one corresponds to a real bug class that escaped a previous build:
 
-- **Gate A — Visual sanity.** `scripts/visual-companion/start.sh --mode preview --variant <slug>`, open `/sample?variant=<slug>`, confirm CSS reaches the page. Catches "host CSS injection" failures.
-- **Gate B — Theme × scheme × typography matrix.** ≥ 9 screenshots across the meaningful combinations. Catches contrast bugs that only surface in non-default schemes/themes.
-- **Gate C — Reduced-motion programmatic verification.** Pixel-sample, transform-diff, text-diff. Catches motion that wasn't actually disabled.
-- **Gate D — Print preview.** Verify the print stylesheet against the new sections. Catches theme-token leaks into print.
-- **Gate F — Screenshot capture.** PNGs exist on disk where the manifest claims.
-- **Gate G — Fidelity comparison vs reference** (port-only). Every box in DESIGN.md's `## Fidelity targets` is checked or has an inline justification for being intentionally dropped.
+- **Gate A: Visual sanity.** `scripts/visual-companion/start.sh --mode preview --variant <slug>`, open `/sample?variant=<slug>`, confirm CSS reaches the page. Catches "host CSS injection" failures.
+- **Gate B: Theme × scheme × typography matrix.** ≥ 9 screenshots across the meaningful combinations. Catches contrast bugs that only surface in non-default schemes/themes.
+- **Gate C: Reduced-motion programmatic verification.** Pixel-sample, transform-diff, text-diff. Catches motion that wasn't actually disabled.
+- **Gate D: Print preview.** Verify the print stylesheet against the new sections. Catches theme-token leaks into print.
+- **Gate F: Screenshot capture.** PNGs exist on disk where the manifest claims.
+- **Gate G: Fidelity comparison vs reference** (port-only). Every box in DESIGN.md's `## Fidelity targets` is checked or has an inline justification for being intentionally dropped.
 - **Gate H: Real-data testing.** Test against the user's actual pair, not just `portfolio.example.yml`. Long names, missing optional fields, non-ASCII characters, and a right-to-left `direction`.
-- **Gate I — Mobile breakpoint sweep.** 375×667 and 430×932 viewports.
+- **Gate I: Mobile breakpoint sweep.** 375×667 and 430×932 viewports.
 
 See `references/quality-gates.md` for the full recipes. Each gate has explicit pass/fail criteria and (where applicable) DevTools console snippets.
 
@@ -288,7 +288,7 @@ Environment-specific facts that bite agents who skip the references. For the ful
 When all gates pass:
 
 - Push `DESIGN.md` and the variant package on the same branch as the PR. The contract and the implementation must travel together.
-- Tell the user how to see the variant: `scripts/visual-companion/start.sh --mode preview --variant <slug>`, then `/sample?variant=<slug>`. It renders the bundled sample; the host renders their own portfolio in the variant once the site document selects one (#4).
+- Tell the user how to see the variant: `scripts/visual-companion/start.sh --mode preview --variant <slug>`, then `/sample?variant=<slug>`. It renders the bundled sample. To render their own portfolio in it, set `appearance.variant` in `config/site.yml`.
 - Don't run `pnpm dev` for them unless they ask. Their dev environment is theirs to control.
 
 That's the skill. Design, implement in waves, audit, hand off, stop.

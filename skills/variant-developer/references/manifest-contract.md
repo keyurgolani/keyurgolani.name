@@ -27,7 +27,7 @@ paraphrases it; if you find drift, packages/kit is authoritative.
 
 #### `tagline` (optional, string)
 
-- One-line description shown alongside the variant in the picker.
+- One-line description. No page shows it today; Owner Studio (#8) lists variants with it.
 
 #### `description` (optional, string)
 
@@ -54,7 +54,7 @@ paraphrases it; if you find drift, packages/kit is authoritative.
 #### `aesthetic` (required, enum)
 
 - One of: `editorial | spatial | kinetic | popart | terminal | bento | narrative | custom`.
-- Drives the variant picker's filtering tabs. `custom` is the escape hatch for variants that don't fit a lane.
+- The variant's lane. Nothing filters on it today. `custom` is the escape hatch for variants that don't fit a lane.
 
 #### `motion` (required, enum)
 
@@ -118,12 +118,12 @@ The concrete `data-theme` values your variant renders correctly via CSS. Valid v
 #### `colorSchemes` (optional, readonly ColorScheme[])
 
 - An array of named recolors that share the variant's layout. Each `ColorScheme` has:
-  - `id` (string, required) — stable id used in CSS selectors and YAML.
-  - `name` (string, required) — display label.
-  - `description?` (string) — picker subtitle.
-  - `themes` (readonly `'light'|'dark'|'bright'|'black'`[], required) — which themes the scheme supports. Mandatory minimum is `['light','dark']`. Add `'bright'`/`'black'` only when you've authored CSS blocks for those values (audit warns otherwise).
-  - `default?` (boolean) — mark exactly one as default.
-  - `swatch?` (`{ ink?, paper?, accent? }`) — preview hex codes.
+  - `id` (string, required): stable id used in CSS selectors and YAML.
+  - `name` (string, required): display label.
+  - `description?` (string): a longer label. No page shows it today.
+  - `themes` (readonly `'light'|'dark'|'bright'|'black'`[], required): which themes the scheme supports. Mandatory minimum is `['light','dark']`. Add `'bright'`/`'black'` only when you've authored CSS blocks for those values (audit warns otherwise).
+  - `default?` (boolean): mark exactly one as default.
+  - `swatch?` (`{ ink?, paper?, accent? }`): preview hex codes.
 - Variants implement each scheme via `[data-variant='<slug>'][data-color-scheme='<id>']` CSS overrides.
 - Omit when the variant only ships its single canonical palette.
 
@@ -131,19 +131,19 @@ The concrete `data-theme` values your variant renders correctly via CSS. Valid v
 
 - Named font/size/leading combinations. Each `TypographyPreset` has:
   - `id` (string, required), `name` (string, required), `description?`.
-  - `default?` (boolean) — mark exactly one as default.
-  - `preview?` (`{ display?, body?, ui?, mono? }`) — font names shown in the picker.
+  - `default?` (boolean): mark exactly one as default.
+  - `preview?` (`{ display?, body?, ui?, mono? }`): font names. No page shows them today.
 - Implement via `[data-variant='<slug>'][data-typography='<id>']` CSS overrides.
 
 ### Capabilities
 
 #### `capabilities.print` (optional, boolean)
 
-- The variant ships a print stylesheet (resume-style page). Hosts surface a Print button.
+- The variant ships a print stylesheet (resume-style page). No host reads the flag: there's no Print button, and the stylesheet applies whenever a visitor prints.
 
 #### `capabilities.rss` (optional, boolean)
 
-- The variant has writings/publications/episodes worth feed-publishing. Hosts surface `/feed.xml`.
+- The variant has writings, publications, or episodes worth a feed. No host reads the flag: the site document's `features.feed` turns `/feed.xml` on or off.
 
 #### `capabilities.multiPage` (optional, boolean)
 
@@ -153,7 +153,7 @@ The concrete `data-theme` values your variant renders correctly via CSS. Valid v
 
 #### `screenshots` (optional, ReadonlyArray<{src, alt?, theme?, colorScheme?, typography?}>)
 
-- Static previews for the picker. `src` is required; `theme/colorScheme/typography` let one variant ship multiple shots that map to specific configurations.
+- Static previews. No page shows them today. `src` is required; `theme/colorScheme/typography` let one variant ship multiple shots that map to specific configurations.
 
 ## Helpers exported alongside the type
 
