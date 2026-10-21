@@ -33,6 +33,8 @@ const SERVER_JS = path.join(STANDALONE, 'apps', 'web', 'server.js');
 export const DEFAULT_PORTFOLIO = path.join(REPO_ROOT, 'tests', 'fixtures', 'portfolio.yml');
 export const DEFAULT_SITE = path.join(REPO_ROOT, 'tests', 'fixtures', 'site.yml');
 const START_ATTEMPTS = 3;
+// What Next prints once its server is listening.
+const READY = 'Ready in';
 // How many of the server's last output lines a failed start reports.
 const LOG_TAIL = 40;
 
@@ -124,13 +126,22 @@ export async function startApp({
       ...fileEnv,
       ...trap.env,
     };
-    const out = createWriteStream(log);
     const child = spawn(process.execPath, [SERVER_JS.replace(STANDALONE, appDir)], {
       cwd: path.join(appDir, 'apps', 'web'),
       env: serverEnv,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
-    const server = { port, origin, env: serverEnv, child, out, exited: false, lines: [] };
+    const out = createWriteStream(log);
+    const server = {
+      port,
+      origin,
+      env: serverEnv,
+      child,
+      out,
+      exited: false,
+      listening: false,
+      lines: [],
+    };
     // A spawn error ends the server as surely as an exit does.
     const ended = () => {
       server.exited = true;
@@ -142,6 +153,8 @@ export async function startApp({
         const reader = readline.createInterface({ input: stream, crlfDelay: Infinity });
         reader.on('line', (line) => {
           out.write(`${line}\n`);
+          // Next prints this once the server holds its port.
+          if (!line.startsWith('{') && line.includes(READY)) server.listening = true;
           server.lines.push(line);
           if (server.lines.length > LOG_TAIL) server.lines.shift();
         });
@@ -163,35 +176,42 @@ export async function startApp({
   }
 
   // freePort() lets its port go before the server binds it, so another
-  // process can take it first. A start that fails that way gets a new port.
+  // process can take it first. A start that fails that way gets a new port,
+  // and no health check goes out until the server holds its own port, so
+  // another process's answer is never taken for this server's.
   let server;
-  for (let attempt = 1; ; attempt += 1) {
-    server = launch(attempt === 1 && firstPort !== undefined ? firstPort : await freePort());
-    const { origin } = server;
-    try {
-      await waitFor(
-        async () => {
-          const response = await getText(`${origin}/api/health`);
-          return response.status === 200 ? response : undefined;
-        },
-        {
-          timeoutMs: 60_000,
-          alive: () => !server.exited,
-          what: 'the app to answer GET /api/health',
-        },
-      );
-      // A server that lost its port can exit while another process answers.
-      if (server.exited) throw new Error('the app exited while another process answered its port');
-      break;
-    } catch (error) {
-      await halt(server);
-      const taken = server.lines.some((line) => line.includes('EADDRINUSE'));
-      if (taken && attempt < START_ATTEMPTS) continue;
-      await trap.close();
-      rmSync(root, { recursive: true, force: true });
-      error.message += ` (server log: ${log}, which ends:\n${server.lines.join('\n')})`;
-      throw error;
+  try {
+    for (let attempt = 1; ; attempt += 1) {
+      server = launch(attempt === 1 && firstPort !== undefined ? firstPort : await freePort());
+      const current = server;
+      try {
+        await waitFor(
+          async () => {
+            if (!current.listening) return undefined;
+            const response = await getText(`${current.origin}/api/health`);
+            return response.status === 200 ? response : undefined;
+          },
+          {
+            timeoutMs: 60_000,
+            alive: () => !current.exited,
+            what: 'the app to take its port and answer GET /api/health',
+          },
+        );
+        break;
+      } catch (error) {
+        await halt(current);
+        const taken = current.lines.some((line) => line.includes('EADDRINUSE'));
+        if (taken && attempt < START_ATTEMPTS) continue;
+        if (taken) error.message += `, on each of the ${START_ATTEMPTS} ports it tried`;
+        if (logFile) error.message += ` (server log: ${logFile})`;
+        error.message += `\nThe server's last output:\n${current.lines.join('\n')}`;
+        throw error;
+      }
     }
+  } catch (error) {
+    await trap.close();
+    rmSync(root, { recursive: true, force: true });
+    throw error;
   }
 
   async function stop() {
