@@ -423,6 +423,8 @@ export function describeIssue(issue: z.ZodIssue): string {
     case 'custom':
       // Every regex and refinement in the schemas carries its own value-free message.
       return `${where} ${issue.message}`;
+    case 'not_finite':
+      return `${where} must be a finite number, not .inf or .nan.`;
     default:
       return `${where} doesn't match the schema (${issue.code}).`;
   }

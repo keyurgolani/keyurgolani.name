@@ -10,7 +10,7 @@
  *
  *   1. Copies packages/variant-template → packages/variant-<slug>
  *   2. Rewrites package name (@portfolio/variant-<slug>)
- *   3. Sets `portfolio.variant: true` and updates `portfolio.slug`
+ *   3. Sets `portfolio.kind: "variant"` and `portfolio.variant: true`, and updates `portfolio.slug`
  *   4. Updates the manifest's `slug` and `name`
  *   5. Reminds you to run `pnpm install`, `pnpm --filter @portfolio/web build:registry`,
  *      and to fill out DESIGN.md before any code.
@@ -57,7 +57,7 @@ function main() {
   const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
   pkg.name = `@portfolio/variant-${slug}`;
   pkg.keywords = ['portfolio-variant'];
-  pkg.portfolio = { variant: true, slug };
+  pkg.portfolio = { kind: 'variant', variant: true, slug };
   writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n', 'utf8');
 
   const manifestPath = path.join(targetDir, 'src', 'manifest.ts');

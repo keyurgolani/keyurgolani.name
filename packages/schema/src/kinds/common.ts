@@ -178,10 +178,13 @@ export function makeParts(registry: ExtensionRegistry) {
   const Image = object({
     src: ImageSourceSchema,
     alt: z.string().optional(),
-    width: z.number().int().positive().optional(),
-    height: z.number().int().positive().optional(),
+    width: z.number().finite().int().positive().optional(),
+    height: z.number().finite().int().positive().optional(),
     credit: z.string().optional(),
-    focalPoint: object({ x: z.number().min(0).max(1), y: z.number().min(0).max(1) }).optional(),
+    focalPoint: object({
+      x: z.number().finite().min(0).max(1),
+      y: z.number().finite().min(0).max(1),
+    }).optional(),
   });
 
   const Period = object({ start: LooseDateSchema, end: LooseDateSchema.optional() }).refine(

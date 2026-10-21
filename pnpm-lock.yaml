@@ -156,6 +156,22 @@ importers:
         specifier: ^5.7.2
         version: 5.9.3
 
+  packages/variant-contract:
+    dependencies:
+      '@portfolio/schema':
+        specifier: workspace:*
+        version: link:../schema
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
+    devDependencies:
+      esbuild:
+        specifier: 0.27.7
+        version: 0.27.7
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+
   packages/variant-editorial:
     dependencies:
       '@portfolio/kit':

@@ -177,6 +177,10 @@ test('messages say what is wrong for the common schema problems', () => {
     message(`${HEAD}sections:\n  - kind: nope\n    id: x\n`),
     '/sections/0/kind is not a known section kind. A section kind from an extension is <npm package name>/<name>.',
   );
+  assert.equal(
+    message(`${HEAD}sections:\n  - kind: tenure\n    id: tenure\n    years: .inf\n`),
+    '/sections/0/years must be a finite number, not .inf or .nan.',
+  );
 });
 
 test('a site document parses, and its problems are located the same way', () => {

@@ -14,7 +14,7 @@ export function accentSchemas({ object, section }: SchemaParts) {
   const StatsSchema = section('stats', {
     items: z.array(
       object({
-        value: z.union([z.string(), z.number()]),
+        value: z.union([z.string(), z.number().finite()]),
         label: z.string(),
         description: z.string().optional(),
         metric: MetricKeySchema.optional(),

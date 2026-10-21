@@ -14,7 +14,8 @@ Both documents live in one directory: `config/` in a checkout, `PORTFOLIO_SOURCE
 - Both declare `schemaVersion: 2`.
 - A document is one plain YAML or JSON document. Anchors, aliases, merge keys, tags, directives, a second document, and a key repeated in one mapping are refused. A `.json` file must also be valid JSON.
 - A document holds at most 1 MiB, nests at most 64 levels, and has at most 10,000 entries in one mapping or list.
-- Every object refuses a key its schema doesn't define, and the message names the closest allowed key. The only open places are values under `extensions` and under `variantControls.<variant>.values`.
+- Every object refuses a key its schema doesn't define, and the message names the closest allowed key. The only open places are values under `extensions` and under `variantControls.<variant>.values`, which hold plain JSON nested at most 8 levels.
+- Every number is finite: YAML's `.inf` and `.nan` are refused wherever a number goes.
 - Key order in a mapping doesn't matter. `pnpm config:migrate` writes keys in the schema's order.
 - Every `url`, `src`, and `*Url` field takes an `https`, `http`, `mailto`, or `tel` URL, a relative reference such as `/resume.pdf`, `resume.pdf`, or `../x` (but not `//host`), or a `#fragment`, with no unencoded space or control character. An image `src` may also be a `data:image` URL in png, jpeg, gif, webp, or avif.
 - No string in either document may look like a GitHub token, a PEM private key, a PHC or bcrypt password hash, or an AWS access key ID (`secret.detected`). Documents never read environment values, so a secret in one was pasted there. Remove it and revoke it.

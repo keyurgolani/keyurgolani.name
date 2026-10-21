@@ -111,3 +111,37 @@ test('ALL_SECTION_KINDS still lists the 28 kinds', () => {
   assert.equal(ALL_SECTION_KINDS.length, 28);
   assert.equal(new Set(ALL_SECTION_KINDS).size, 28);
 });
+
+test('every number is finite, so YAML .inf and .nan never reach a renderer', () => {
+  const section = (value: Record<string, unknown>) =>
+    codes({ ...BASE, sections: [{ id: 'probe', ...value }] });
+  const image = (extra: Record<string, unknown>) => ({ src: '/a.png', ...extra });
+  const cases: Array<[Record<string, unknown>, string]> = [
+    [{ kind: 'tenure', years: Infinity }, 'sections/0/years:not_finite'],
+    [{ kind: 'stats', items: [{ value: -Infinity, label: 'x' }] }, 'sections/0/items/0/value:'],
+    [
+      { kind: 'episodes', items: [{ title: 'x', durationMinutes: Infinity }] },
+      'sections/0/items/0/durationMinutes:not_finite',
+    ],
+    [
+      {
+        kind: 'discography',
+        items: [{ title: 'x', tracks: [{ title: 't', durationSeconds: Infinity }] }],
+      },
+      'sections/0/items/0/tracks/0/durationSeconds:not_finite',
+    ],
+    [
+      { kind: 'gallery', items: [{ image: image({ width: Infinity }) }] },
+      'sections/0/items/0/image/width:',
+    ],
+  ];
+  for (const [value, expected] of cases) {
+    const found = section(value);
+    assert.ok(
+      found.some((code) => code.startsWith(expected)),
+      `${JSON.stringify(value)}: ${found.join(', ')}`,
+    );
+  }
+  assert.deepEqual(section({ kind: 'tenure', years: 12.5 }), []);
+  assert.deepEqual(section({ kind: 'stats', items: [{ value: 1.5, label: 'x' }] }), []);
+});
