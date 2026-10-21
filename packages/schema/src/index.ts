@@ -1,4 +1,5 @@
 export * from './ids';
+export * from './direction';
 export * from './url';
 export * from './json';
 export * from './extensions';

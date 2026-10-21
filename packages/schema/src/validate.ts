@@ -937,7 +937,7 @@ function isStaleHost(host: string, origin: string): boolean {
 }
 
 /** By document, then pointer (array indexes in number order), then code. */
-function compareDiagnostics(a: Diagnostic, b: Diagnostic): number {
+export function compareDiagnostics(a: Diagnostic, b: Diagnostic): number {
   if (a.document !== b.document) return a.document < b.document ? -1 : 1;
   const pointer = comparePointers(a.pointer, b.pointer);
   if (pointer !== 0) return pointer;
