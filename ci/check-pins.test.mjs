@@ -270,6 +270,15 @@ test('metadata-action tags may add latest only with an enable= condition', () =>
     [],
   );
   assert.deepEqual(latestTagProblems(undefined), []);
+  // The action only skips a line whose first character is #, so an indented
+  // commented-out rule is live.
+  assert.deepEqual(
+    latestTagProblems('type=semver,pattern={{version}}\n  # type=raw,value=latest'),
+    ['entry # type=raw,value=latest has no enable= condition, so every run moves latest'],
+  );
+  assert.deepEqual(latestTagProblems('${{ inputs.tags }}'), [
+    'entry ${{ inputs.tags }} comes from an expression, so it cannot be checked',
+  ]);
   assert.deepEqual(
     latestTagProblems('type=raw,value=latest\nlatest\nvalue=latest,enable=true\n"value=latest"'),
     [

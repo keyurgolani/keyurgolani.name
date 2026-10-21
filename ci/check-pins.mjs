@@ -54,13 +54,16 @@ const LATEST_FIX =
 
 /**
  * The entries of a metadata-action list input (`tags`, `flavor`) as the action
- * reads them: one per line, skipping blank lines and lines that start with `#`.
+ * reads them: one per line, skipping blank lines and comments. A comment is a
+ * line whose first character is `#`, so an indented `# ...` line is an entry.
  */
 function metadataEntries(value) {
   return String(value ?? '')
+    .trim()
     .split(/\r?\n/)
+    .filter((line) => !line.startsWith('#'))
     .map((line) => line.trim())
-    .filter((line) => line !== '' && !line.startsWith('#'));
+    .filter((line) => line !== '');
 }
 
 /**
@@ -110,11 +113,16 @@ export function latestFlavorProblem(flavor) {
 /**
  * @returns {string[]} why docker/metadata-action `tags` entries push `latest`
  * on every run: a raw `latest` rule (`type=raw` is the default type) with no
- * `enable=` condition.
+ * `enable=` condition. An entry that is wholly an expression could hold such
+ * a rule, so it is refused too.
  */
 export function latestTagProblems(tags) {
   const problems = [];
   for (const entry of metadataEntries(tags)) {
+    if (/^\$\{\{.*\}\}$/.test(entry)) {
+      problems.push(`entry ${entry} comes from an expression, so it cannot be checked`);
+      continue;
+    }
     if (entry.includes('"')) {
       problems.push(`entry ${entry} ${CSV_QUOTES}`);
       continue;
