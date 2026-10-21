@@ -358,7 +358,7 @@ The server reads these from its environment only. Every key also accepts `<KEY>_
 | `PORTFOLIO_PATH`                      | none: refused    | Replaced by `PORTFOLIO_SOURCE_DIR`. Setting it stops the server.                                                                                             |
 | `NEXT_PUBLIC_BASE_URL`                | none: refused    | Replaced by `PORTFOLIO_ORIGIN`. Setting it stops the server.                                                                                                 |
 
-A key outside its profile's list stops a production server; `pnpm dev` warns and ignores it. `.env` files are gitignored. `pnpm dev` reads `apps/web/.env.development`, which runs `read-only` from `config/`.
+A key outside its profile's list stops a production server; `pnpm dev` warns and ignores it. `.env` files are gitignored. `pnpm dev` reads `apps/web/.env.development`, which runs `read-only` from `config/` with the origin `http://127.0.0.1:3000`. On another port (`pnpm dev --port <n>`, or when Next moves off a busy 3000), set `PORTFOLIO_ORIGIN` to the address it prints, since owner sign-in checks the origin exactly.
 
 ## Caching
 
