@@ -1,4 +1,4 @@
-// The pieces of loadEnhancement(), apart so tests can reach them.
+// The pieces of <Enhancement>, apart so tests can reach them.
 
 import { Component, Suspense, use, useSyncExternalStore, type ReactNode } from 'react';
 import type { VariantRenderInput } from '@portfolio/variant-contract';
@@ -29,14 +29,34 @@ export async function loadModule(key: string): Promise<{ default: EnhancementCom
   return load();
 }
 
-const loads = new Map<string, Promise<{ default: EnhancementComponent }>>();
+type Loads = Map<string, Promise<{ default: EnhancementComponent }>>;
 
-/** One load per enhancement, kept, so a re-render never loads it twice. */
+/**
+ * The loads for each set of modules the host registered. A new
+ * registerHostModules() call starts a new set, so nothing loaded under the
+ * old one is reused.
+ */
+const loadsByModules = new WeakMap<object, Loads>();
+
+/**
+ * One load per enhancement, kept, so a re-render never loads it twice. A load
+ * that fails is dropped, so the next mount tries again.
+ */
 export function moduleFor(key: string): Promise<{ default: EnhancementComponent }> {
+  const modules = hostModules();
+  let loads = loadsByModules.get(modules);
+  if (!loads) {
+    loads = new Map();
+    loadsByModules.set(modules, loads);
+  }
   let load = loads.get(key);
   if (!load) {
-    load = loadModule(key);
-    loads.set(key, load);
+    const started = loadModule(key);
+    load = started;
+    loads.set(key, started);
+    started.catch(() => {
+      if (loads.get(key) === started) loads.delete(key);
+    });
   }
   return load;
 }
@@ -63,7 +83,7 @@ function useMounted(): boolean {
  * for the boundary to catch, when the variant doesn't declare `id` or when
  * globalThis.__portfolioFailEnhancements is set.
  */
-export function Enhancement({ input, id }: { input: VariantRenderInput; id: string }) {
+export function MountedEnhancement({ input, id }: { input: VariantRenderInput; id: string }) {
   const mounted = useMounted();
   if (!mounted) return null;
   if (!input.capabilities.enhancements.some((declared) => declared.id === id)) {

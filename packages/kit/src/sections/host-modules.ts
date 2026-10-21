@@ -27,7 +27,7 @@ const ENHANCEMENT_KEY = /^[a-z][a-z0-9-]*\/[a-z][a-z0-9-]*$/;
 
 let registered: HostModules = {};
 
-/** Hands the kit the package code renderSection() and loadEnhancement() reach. */
+/** Hands the kit the package code renderSection() and <Enhancement> reach. */
 export function registerHostModules(modules: HostModules): void {
   for (const kind of Object.keys(modules.extensionRenderers ?? {})) {
     if (!parseExtensionKind(kind)) {
