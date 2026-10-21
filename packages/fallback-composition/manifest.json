@@ -1,0 +1,30 @@
+{
+  "id": "fallback",
+  "name": "Fallback composition",
+  "promise": "Every section in content order, in one readable column.",
+  "description": "The host's stand-in. It renders when the selected variant isn't installed, and it renders the contract fixtures and the appearance matrices, every section through the kit's shared renderers. A site can't select it.",
+  "contract": "2.0",
+  "schemas": { "portfolio": { "min": 2, "max": 2 }, "site": { "min": 2, "max": 2 } },
+  "tokenContract": 0,
+  "compositionFamily": "document",
+  "motionIntent": "still",
+  "performanceTier": "light",
+  "renderedKinds": [],
+  "unsupportedKinds": [],
+  "contentSlots": [],
+  "routes": { "home": "shared", "work": "shared", "views": [] },
+  "controls": { "version": 1, "items": [], "migrations": [] },
+  "visitorControl": { "placement": "header" },
+  "textDirection": ["ltr", "rtl"],
+  "provenance": {
+    "provisional": true,
+    "sources": [
+      { "source": "The variant template's single column", "disposition": "preserved" },
+      {
+        "source": "The variant template's colors, fonts, and theme toggle",
+        "disposition": "retired",
+        "note": "Color, type, and display mode belong to the appearance axes (#19), not to a composition."
+      }
+    ]
+  }
+}

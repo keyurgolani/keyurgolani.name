@@ -1,0 +1,37 @@
+/*
+ * The fallback composition (#5): one readable column. Composition only:
+ * spacing and arrangement, with color, type, and motion left to #19's
+ * appearance axes. Every rule sits under [data-variant='fallback'], and every
+ * property is logical, so a right-to-left page reads the same.
+ */
+
+[data-variant='fallback'] {
+  display: block;
+  box-sizing: border-box;
+  max-inline-size: 46rem;
+  margin-inline: auto;
+  padding-block: 1.5rem 4rem;
+  padding-inline: 1.25rem;
+}
+
+[data-variant='fallback'] .fc-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-block-end: 3rem;
+}
+
+[data-variant='fallback'] .fc-nav ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+[data-variant='fallback'] .fc-name {
+  margin-block: 0 2rem;
+}
