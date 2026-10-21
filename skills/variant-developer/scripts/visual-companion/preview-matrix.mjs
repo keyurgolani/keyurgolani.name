@@ -35,7 +35,7 @@ if (!id || id.startsWith('--') || extra.length > 0) {
   process.exit(2);
 }
 // The dev server start.sh runs, on $PORT when it is set.
-const url = `http://localhost:${process.env.PORT || 3000}/sample?${new URLSearchParams({ variant: id })}`;
+const url = `http://127.0.0.1:${process.env.PORT || 3000}/sample?${new URLSearchParams({ variant: id })}`;
 
 let chromium;
 try {

@@ -6,10 +6,10 @@
     "build:registry": "tsx scripts/build-registry.ts",
     "check:variants": "tsx scripts/check-variants.ts",
     "predev": "pnpm build:registry",
-    "dev": "next dev",
+    "dev": "next dev --hostname 127.0.0.1",
     "prebuild": "pnpm build:registry",
     "build": "next build",
-    "start": "next start",
+    "start": "next start --hostname 127.0.0.1",
     "typecheck": "pnpm build:registry && tsc --noEmit",
     "test": "pnpm build:registry && tsx --conditions=react-server --test 'src/**/*.test.ts' && tsx --test 'src/**/*.test.tsx' && node --test 'scripts/**/*.test.mjs' 'bin/**/*.test.mjs'",
     "test:profiles": "node ../../ci/test-profiles.mjs"

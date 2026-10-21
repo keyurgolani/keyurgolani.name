@@ -157,7 +157,7 @@ Environment-specific facts that bite agents who skip the references:
 
 When the pair validates and the user is happy with the draft:
 
-- Tell them to run `pnpm dev` from the repo root and visit `http://localhost:3000` to see it rendered.
+- Tell them to run `pnpm dev` from the repo root and visit `http://127.0.0.1:3000` to see it rendered.
 - Mention `appearance.variant` in `site.yml`: changing it switches the whole look without touching the content, and `pnpm dev` shows the change on the next page load. Each variant has its own color scheme and typography ids, listed in its manifest, so those change with it.
 - **Don't run `pnpm dev` for them unless they ask.** Their dev environment is theirs to control. Suggest, don't auto-launch.
 - Point them at the `.bak.<timestamp>` copies if you wrote backups, so they know how to roll back.

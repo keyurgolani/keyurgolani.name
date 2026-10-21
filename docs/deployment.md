@@ -6,7 +6,7 @@ The server runs one deployment profile, chosen by `PORTFOLIO_PROFILE` at startup
 - `demo` serves the bundled sample pair, for a product demo, and asks crawlers to index nothing.
 - `owner` adds Studio, drafts, and revisions to your portfolio. It doesn't start yet: it needs an authentication provider, and none ships.
 
-Run it in a container (recommended) or on Node. The browser editor, the variant gallery, the variant preview pages, and their write APIs are gone in every profile, `pnpm dev` included. Edit `config/portfolio.yml` and `config/site.yml` instead: `pnpm dev` picks up each save, and a production server picks them up when it restarts. While `config/` holds neither, `pnpm dev` renders the bundled examples; a production server refuses to start. `pnpm dev` listens on every network interface; on a network you don't trust, run `pnpm dev --hostname 127.0.0.1`.
+Run it in a container (recommended) or on Node. The browser editor, the variant gallery, the variant preview pages, and their write APIs are gone in every profile, `pnpm dev` included. Edit `config/portfolio.yml` and `config/site.yml` instead: `pnpm dev` picks up each save, and a production server picks them up when it restarts. While `config/` holds neither, `pnpm dev` renders the bundled examples; a production server refuses to start. `pnpm dev` and `pnpm start` listen on `127.0.0.1` only.
 
 ## Profiles
 
@@ -324,9 +324,9 @@ PORTFOLIO_PROFILE=read-only PORTFOLIO_ORIGIN=https://jane.name \
   PORTFOLIO_SOURCE_DIR=../../config pnpm start
 ```
 
-`pnpm start` runs from `apps/web`, so the relative source directory is the repo's `config/`. The host listens on `process.env.PORT` (defaults to 3000).
+`pnpm start` runs from `apps/web`, so the relative source directory is the repo's `config/`. The host listens on `127.0.0.1`, on `process.env.PORT` (defaults to 3000), so a reverse proxy on the same host is what visitors reach (see [Reverse proxy and HTTPS](#reverse-proxy-and-https)). `pnpm start -H <address>` listens on another address instead, and anyone who can reach that address reaches the app around the proxy, so use it only for a proxy that can't reach loopback, such as one on a Docker bridge.
 
-For a process manager (PM2, systemd, etc.), wrap `pnpm start` with the same environment. You don't need to ship `node_modules` to your runtime if you copy `apps/web/.next/standalone/` and the public assets.
+For a process manager (PM2, systemd, etc.), wrap `pnpm start` with the same environment. You don't need to ship `node_modules` to your runtime if you copy `apps/web/.next/standalone/` and the public assets. Run its `apps/web/server.js` with `HOSTNAME=127.0.0.1` as well: without it, the standalone server listens on every interface.
 
 ### Demo
 
@@ -358,7 +358,7 @@ The server reads these from its environment only. Every key also accepts `<KEY>_
 | `PORTFOLIO_PATH`                      | none: refused    | Replaced by `PORTFOLIO_SOURCE_DIR`. Setting it stops the server.                                                                                             |
 | `NEXT_PUBLIC_BASE_URL`                | none: refused    | Replaced by `PORTFOLIO_ORIGIN`. Setting it stops the server.                                                                                                 |
 
-A key outside its profile's list stops a production server; `pnpm dev` warns and ignores it. `.env` files are gitignored. `pnpm dev` reads `apps/web/.env.development`, which runs `read-only` from `config/`.
+A key outside its profile's list stops a production server; `pnpm dev` warns and ignores it. `.env` files are gitignored. `pnpm dev` reads `apps/web/.env.development`, which runs `read-only` from `config/` with the origin `http://127.0.0.1:3000`. On another port (`pnpm dev --port <n>`, or when Next moves off a busy 3000), set `PORTFOLIO_ORIGIN` to the address it prints, since owner sign-in checks the origin exactly.
 
 ## Caching
 

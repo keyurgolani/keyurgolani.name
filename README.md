@@ -28,7 +28,7 @@ pnpm install
 pnpm dev
 ```
 
-Visit `http://localhost:3000`. With neither document in `config/` yet, it renders the bundled examples. Copy `portfolio.example.yml` to `config/portfolio.yml` and `site.example.yml` to `config/site.yml`, and edit them; the page picks up each save.
+Visit `http://127.0.0.1:3000`. With neither document in `config/` yet, it renders the bundled examples. Copy `portfolio.example.yml` to `config/portfolio.yml` and `site.example.yml` to `config/site.yml`, and edit them; the page picks up each save.
 
 To run in Docker (production), with both documents in `config/` and `PORTFOLIO_ORIGIN` set in `.env`:
 

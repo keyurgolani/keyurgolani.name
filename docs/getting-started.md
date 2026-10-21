@@ -26,7 +26,7 @@ pnpm install
 pnpm dev
 ```
 
-Visit `http://localhost:3000`. You'll see the example portfolio in the fallback composition: every section in content order, in one column. The example site selects Editorial Evidence, which this build doesn't install yet (#13), so the fallback renders in its place and the terminal logs a `variant.unavailable` warning.
+Visit `http://127.0.0.1:3000`. You'll see the example portfolio in the fallback composition: every section in content order, in one column. The example site selects Editorial Evidence, which this build doesn't install yet (#13), so the fallback renders in its place and the terminal logs a `variant.unavailable` warning.
 
 `pnpm dev` runs the `read-only` profile from `config/`, with the settings in `apps/web/.env.development`. While `config/` holds neither document, it renders the bundled examples and logs a warning.
 
@@ -83,7 +83,7 @@ To see the bundled sample in any registered variant, run the dev server under th
 PORTFOLIO_PROFILE=demo PORTFOLIO_SOURCE_DIR= pnpm dev
 ```
 
-Then open `http://localhost:3000/sample`, which renders the sample in its own site's selection, or `http://localhost:3000/sample?variant=<id>` for a registered variant. `fallback` or an id this build doesn't register is a 404.
+Then open `http://127.0.0.1:3000/sample`, which renders the sample in its own site's selection, or `http://127.0.0.1:3000/sample?variant=<id>` for a registered variant. `fallback` or an id this build doesn't register is a 404.
 
 ### 4. Add personal assets
 
