@@ -63,6 +63,7 @@ import {
 } from '../tests/harness/canaries.mjs';
 import { waitFor } from '../tests/harness/net.mjs';
 import { ownerSecret } from '../tests/harness/owner-secret.mjs';
+import { headerProblems, isStudioPath } from '../tests/harness/route-headers.mjs';
 import {
   checkRefusal,
   checkWarnings,
@@ -115,11 +116,6 @@ const HASH_FILE = 'owner_password_hash';
 const DATA_DIR = '/var/lib/portfolio';
 const SESSION_COOKIE =
   /^__Host-studio_session=([A-Za-z0-9_-]{43}); Path=\/; Max-Age=\d+; HttpOnly; SameSite=Strict; Secure$/;
-const BASELINE_HEADERS = {
-  'x-content-type-options': 'nosniff',
-  'referrer-policy': 'strict-origin-when-cross-origin',
-  'content-security-policy': "frame-ancestors 'none'",
-};
 
 const container = (args, options = {}) =>
   spawnSync(cli, args, { cwd: REPO_ROOT, encoding: 'utf8', ...options });
@@ -241,6 +237,15 @@ function parse(body) {
   }
 }
 
+/** Whether `profile` serves a Studio page, as owner does: under another, /studio is as unknown as any path (#2). */
+const hasStudio = (profile) =>
+  listRoutes().some(
+    (entry) =>
+      entry.kind === 'page' &&
+      isStudioPath(entry.pattern) &&
+      routeAccess(profile, entry) !== 'absent',
+  );
+
 /**
  * The requests a profile's container gets, each with the problems its
  * response shows: the route matrix, health, and readiness. `leaks` are the
@@ -275,7 +280,20 @@ function plan(profile, leaks) {
       : [`body ${response.body.slice(0, 300)}`]),
   ]);
   for (const entry of listRoutes().filter((route) => route.capability !== 'operations')) {
-    if (routeAccess(profile, entry) !== 'absent') {
+    const access = routeAccess(profile, entry);
+    if (access === 'session' && entry.kind === 'page') {
+      // No session cookie: proxy.ts sends it to sign-in on the canonical origin (#2).
+      add('GET', concrete(entry.pattern), (response) => {
+        const location = new URL(response.headers.location ?? '', 'http://unset.invalid');
+        return [
+          ...status(303)(response),
+          ...(location.origin === ORIGIN && location.pathname === '/studio/sign-in'
+            ? []
+            : [`goes to ${response.headers.location}, not sign-in`]),
+          ...(UUID.test(response.headers['x-request-id'] ?? '') ? [] : ['no x-request-id']),
+        ];
+      });
+    } else if (access !== 'absent') {
       add('GET', concrete(entry.pattern), (response) => [
         ...status(200)(response),
         ...(UUID.test(response.headers['x-request-id'] ?? '') ? [] : ['no x-request-id']),
@@ -306,16 +324,24 @@ function plan(profile, leaks) {
       });
     }
   }
-  // Every response: the baseline headers, no cookie, noindex exactly where
-  // the profile can't be indexed, and no canary in a header or the body.
+  // Every response: the headers its path gets (route-headers.mjs), no
+  // cookie, noindex exactly where the profile can't be indexed, and no
+  // canary in a header or the body.
   for (const request of requests) {
     const own = request.check;
     request.check = (response) => {
       if (response.error) return [`no answer (${response.error})`];
-      const problems = [...own(response), ...leaksIn(response, leaks)];
-      for (const [name, value] of Object.entries(BASELINE_HEADERS)) {
-        if (response.headers[name] !== value) problems.push(`${name} is ${response.headers[name]}`);
-      }
+      const problems = [
+        ...own(response),
+        ...leaksIn(response, leaks),
+        ...headerProblems(
+          new URL(request.path, 'http://unset.invalid').pathname,
+          response.headers,
+          {
+            studio: hasStudio(profile),
+          },
+        ),
+      ];
       if (response.headers['set-cookie'] !== undefined) problems.push('sets a cookie');
       const robots = INDEXABLE[profile] ? undefined : 'noindex';
       if (response.headers['x-robots-tag'] !== robots) {

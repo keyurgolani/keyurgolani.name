@@ -34,6 +34,10 @@ export interface RouteEntry {
 const ROUTES = [
   { pattern: '/', kind: 'page', capability: 'catalog.read', nav: 'Home', visitor: true },
   { pattern: '/sample', kind: 'page', capability: 'sample.read', visitor: true },
+  // Studio (#2): the owner's placeholder, which #8 replaces, and sign-in.
+  // Neither reads the published site, so neither is a visitor route.
+  { pattern: '/studio', kind: 'page', capability: 'studio.view' },
+  { pattern: '/studio/sign-in', kind: 'page', capability: 'auth.session' },
   { pattern: '/robots.txt', kind: 'metadata', capability: 'catalog.read', visitor: true },
   { pattern: '/sitemap.xml', kind: 'metadata', capability: 'catalog.read', visitor: true },
   // The site's share image, app/(site)/opengraph-image.tsx: Next gives a

@@ -216,6 +216,24 @@ test('config.status shows each secret as set and never a value or a path', async
   });
 });
 
+test("the owner branch puts the provider's Studio page sessions in the deployment state, and none without them", async () => {
+  const pages = { resolve: async () => ({ status: 'none' }) as const };
+  const withPages = await compose(
+    input({
+      authProviders: [
+        {
+          name: 'pages',
+          load: async (tools) => ({ ...(await PROVIDER.load(tools)), pages }),
+        },
+      ],
+    }),
+  );
+  assert.ok(withPages.ok, JSON.stringify(withPages.issues));
+  assert.equal(withPages.state.pages, pages);
+  // The double binds none, so requireOwnerPage refuses every Studio page.
+  assert.equal(state.pages, undefined);
+});
+
 test("the owner branch binds the provider's throttle and invalidInput, and goes on without them when it has neither", async () => {
   const limited = await compose(
     input({

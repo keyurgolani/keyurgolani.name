@@ -1,5 +1,8 @@
 import { readdirSync, readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
+import type * as Operations from '../../apps/web/src/server/operations';
+import type * as Routes from '../../apps/web/src/server/routes';
 import { canaries, hashCanaries } from '../harness/canaries.mjs';
 import { expect, test } from '../harness/fixtures';
 import { ownerSecret } from '../harness/owner-secret.mjs';
@@ -13,6 +16,12 @@ import { expectNoLeaks, ownerApp, profileMatrix } from '../harness/profile-matri
 // to a signed-in request carries them, or a path, either.
 const OWNER = { type: 'profile', description: 'owner' };
 
+// apps/web has no "type": "module", so its modules are CommonJS to Node and
+// load through require().
+const require = createRequire(import.meta.url);
+const { listOperations } = require('../../apps/web/src/server/operations.ts') as typeof Operations;
+const { listRoutes, routeAccess } = require('../../apps/web/src/server/routes.ts') as typeof Routes;
+
 // Each process that loads this file makes its own, and a worker starts its
 // server with it.
 const secret = ownerSecret();
@@ -21,6 +30,51 @@ const secrets = [secret.password, ...hashCanaries(secret.hash)];
 test.use({ appOptions: ownerApp(secret.hash) });
 
 profileMatrix('owner', { secrets });
+
+test(
+  'before sign-in every owner query is 401 and every Studio page redirects to sign-in, with no draft, configuration, path, password, or session state',
+  { annotation: [{ type: 'route', description: 'every route' }, OWNER] },
+  async ({ app, request }) => {
+    const scan = canaries(path.basename(app.root), { secrets });
+    const clean = (text: string, what: string) => {
+      for (const canary of scan) expect(text, what).not.toContain(canary);
+      // Nothing a session would show: its state, or the token a page carries.
+      expect(text, what).not.toContain('Signed in');
+      expect(text, what).not.toContain('csrfToken');
+    };
+    for (const operation of listOperations().filter((entry) => entry.session)) {
+      const command = operation.kind === 'command';
+      const response = await request.fetch(`/api/studio/${operation.name}`, {
+        method: command ? 'POST' : 'GET',
+        headers: command ? { origin: app.origin } : {},
+        data: command ? {} : undefined,
+      });
+      expect(response.status(), operation.name).toBe(401);
+      const body = (await response.json()) as { error: Record<string, string> };
+      expect(Object.keys(body), operation.name).toEqual(['error']);
+      expect(body.error.code).toBe('authentication_required');
+      clean(JSON.stringify(body), operation.name);
+    }
+    const pages = listRoutes().filter(
+      (entry) => entry.kind === 'page' && routeAccess('owner', entry) === 'session',
+    );
+    expect(pages.length).toBeGreaterThan(0);
+    for (const entry of pages) {
+      // No cookie at all, and a cookie that names no session.
+      for (const cookie of [undefined, `studio_session=${'x'.repeat(43)}`]) {
+        const response = await request.get(entry.pattern, {
+          maxRedirects: 0,
+          headers: cookie ? { cookie } : {},
+        });
+        const what = `${entry.pattern} ${cookie ? 'with' : 'without'} a cookie`;
+        expect([303, 307], what).toContain(response.status());
+        const location = new URL(response.headers()['location'] ?? '', app.origin);
+        expect(location.pathname, what).toBe('/studio/sign-in');
+        clean(await response.text(), what);
+      }
+    }
+  },
+);
 
 /** Every file under `dir`, recursively. */
 function files(dir: string): string[] {

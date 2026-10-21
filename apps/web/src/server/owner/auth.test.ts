@@ -18,6 +18,7 @@ import type { DeploymentConfig } from '../config';
 import { setDeploymentState } from '../config-store';
 import { createDispatcher, NO_BINDINGS, type Handler } from '../dispatcher';
 import { listOperations, type BodyType, type Operation } from '../operations';
+import { isMintedSession } from '../session';
 import { provider, type OwnerAuth } from './auth';
 import { mintSession } from './session-mint';
 
@@ -547,4 +548,87 @@ test("forged commands with the owner's cookie go to the provider's own audit log
   const context = { request: crossSite, requestId: 'req-auth', operation: status, session: null };
   assert.equal(await auth.checkOrigin(context), false);
   assert.equal(lines().at(-1)?.refs.command, 'config.status');
+});
+
+test("a Studio page's session counts as a command's does, and slides only for a page the owner opened", async (t) => {
+  const { auth, issue, advance } = await setup(t);
+  const token = await issue();
+  const cookie = `__Host-studio_session=${token}`;
+  const page = (headers: Record<string, string> = {}) =>
+    new Request(`${ORIGIN}/studio`, { headers: { cookie, ...headers } });
+  const seen = async () => (await auth.sessions.list())[0]!.lastSeenAt;
+  const opened = {
+    'sec-fetch-site': 'none',
+    'sec-fetch-mode': 'navigate',
+    'sec-fetch-dest': 'document',
+  };
+
+  advance(2 * MINUTE);
+  const before = await seen();
+  const resolution = await auth.pages.resolve(page(opened));
+  assert.equal(resolution.status, 'valid');
+  if (resolution.status !== 'valid') return;
+  assert.equal(resolution.csrfToken, csrfToken(token));
+  assert.ok(isMintedSession(resolution.session));
+  const slid = await seen();
+  assert.ok(slid > before, 'opening the page from the address bar slid the session');
+
+  // A page another origin loads, a prefetch, and a request without Fetch
+  // Metadata find the session and leave it as it was.
+  advance(2 * MINUTE);
+  for (const headers of [
+    { ...opened, 'sec-fetch-site': 'same-site' },
+    { ...opened, 'sec-fetch-site': 'same-origin', 'sec-purpose': 'prefetch' },
+    {},
+  ]) {
+    assert.equal(
+      (await auth.pages.resolve(page(headers))).status,
+      'valid',
+      JSON.stringify(headers),
+    );
+    assert.equal(await seen(), slid, JSON.stringify(headers));
+  }
+});
+
+test('a Studio page with no cookie has no session, and one whose cookie counts for nothing is told so', async (t) => {
+  const { auth, issue, advance } = await setup(t);
+  const request = (cookie?: string) =>
+    new Request(`${ORIGIN}/studio`, { headers: cookie ? { cookie } : {} });
+  assert.deepEqual(await auth.pages.resolve(request()), { status: 'none' });
+  const token = await issue();
+  const other = await issue();
+  for (const cookie of [
+    '__Host-studio_session=not-a-token',
+    `__Host-studio_session=${randomBytes(32).toString('base64url')}`,
+    `__Host-studio_session=${token}; __Host-studio_session=${other}`,
+  ]) {
+    assert.deepEqual(await auth.pages.resolve(request(cookie)), { status: 'ended' }, cookie);
+  }
+  // Over https a studio_session cookie is no cookie at all.
+  assert.deepEqual(await auth.pages.resolve(request(`studio_session=${token}`)), {
+    status: 'none',
+  });
+  // Ended since it was issued: expired, and ended during the lookup.
+  advance(61 * MINUTE);
+  assert.deepEqual(await auth.pages.resolve(request(`__Host-studio_session=${token}`)), {
+    status: 'ended',
+  });
+  const fresh = await issue();
+  const touch = auth.sessions.touch;
+  (auth.sessions as { touch: typeof touch }).touch = async () => null;
+  t.after(() => {
+    (auth.sessions as { touch: typeof touch }).touch = touch;
+  });
+  assert.deepEqual(await auth.pages.resolve(request(`__Host-studio_session=${fresh}`)), {
+    status: 'ended',
+  });
+  // A store that can't be read says so.
+  const resolve = auth.sessions.resolve;
+  (auth.sessions as { resolve: typeof resolve }).resolve = async () => ({ status: 'unavailable' });
+  t.after(() => {
+    (auth.sessions as { resolve: typeof resolve }).resolve = resolve;
+  });
+  assert.deepEqual(await auth.pages.resolve(request(`__Host-studio_session=${fresh}`)), {
+    status: 'unavailable',
+  });
 });

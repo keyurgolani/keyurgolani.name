@@ -1,6 +1,6 @@
 import type { CatalogReader } from './catalog-port';
 import type { DeploymentConfig } from './config';
-import type { Dispatch } from './studio-port';
+import type { Dispatch, StudioPages } from './studio-port';
 
 // Holds what instrumentation register() validated and built, frozen, on a
 // globalThis symbol, so every bundle in the server process reads the same
@@ -15,6 +15,8 @@ export interface DeploymentState {
   readonly dispatch: Dispatch;
   /** Startup requirements that failed with `failure: 'degraded'`; empty when none did. */
   readonly degraded: readonly string[];
+  /** How Studio pages find their session (#2). Only owner's composition binds it. */
+  readonly pages?: StudioPages;
 }
 
 export const NOT_LOADED =

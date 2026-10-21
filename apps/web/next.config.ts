@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import type { NextConfig } from 'next';
+import { listRoutes } from './src/server/routes';
 
 /**
  * The registered variant and content extension packages, which
@@ -15,6 +16,17 @@ function registeredPackages(): string[] {
       'src/lib/generated/transpile-packages.json is missing. Run pnpm --filter @portfolio/web build:registry first.',
     );
   }
+}
+
+/**
+ * Every Studio page the route table lists (#2). Each is a fixed path, which
+ * headers.test.ts holds them to, so a rewrite from one has no parameter for
+ * Next to add to the query.
+ */
+function studioPages(): string[] {
+  return listRoutes()
+    .filter((entry) => entry.kind === 'page' && /^\/studio(?:\/|$)/.test(entry.pattern))
+    .map((entry) => entry.pattern);
 }
 
 const config: NextConfig = {
@@ -43,20 +55,59 @@ const config: NextConfig = {
   // app/global-not-found.tsx, which brings its own document. Without the
   // flag, next build exits.
   experimental: { globalNotFound: true },
-  // Baseline headers on every route (#1, item 22). A route that sends its own
-  // Content-Security-Policy sets frame-ancestors there and leaves this entry's
-  // source, so each response carries one CSP: Studio and login (#2), public
-  // pages (#6), preview (#7), and /sample (#9). None does yet. HSTS belongs at
-  // the TLS-terminating proxy (docs/deployment.md).
+  // A Studio page under a profile with none (#2): proxy.ts marks the request
+  // with x-portfolio-not-found (NOT_FOUND_HEADER in server/studio-headers.ts),
+  // and this sends it to Next's own 404 page before Next finds the page, so it
+  // answers as a path no route matches does, with the request's own URL and
+  // query.
+  async rewrites() {
+    return {
+      beforeFiles: studioPages().map((source) => ({
+        source,
+        has: [{ type: 'header' as const, key: 'x-portfolio-not-found', value: '1' }],
+        destination: '/_not-found',
+      })),
+      afterFiles: [],
+      fallback: [],
+    };
+  },
+  // Baseline headers on every route (#1, item 22), matched in any case, as
+  // Next matches header sources. A route that sends its own
+  // Content-Security-Policy, Studio and login (#2), public pages (#6),
+  // preview (#7), and /sample (#9), sends it from proxy.ts, which takes the
+  // place of this one, so each response carries one. So does Studio's
+  // Referrer-Policy: same-origin, which proxy.ts sends with its CSP and
+  // Cross-Origin-Resource-Policy: same-origin under a profile with a Studio
+  // page, so under another one /studio gets what any unknown path gets.
+  // Studio's transport, in every profile, sends same-origin from here, since
+  // no-referrer would null the Origin of the sign-in form's post. Studio and
+  // its transport ask for no-store here too, for what Next answers itself,
+  // such as an error page. headers.test.ts holds every path to these. HSTS
+  // belongs at the TLS-terminating proxy (docs/deployment.md).
   async headers() {
     return [
       {
         source: '/:path*',
+        headers: [{ key: 'X-Content-Type-Options', value: 'nosniff' }],
+      },
+      {
+        source: '/:path((?!api/studio(?:/|$)).*)',
         headers: [
-          { key: 'X-Content-Type-Options', value: 'nosniff' },
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
           { key: 'Content-Security-Policy', value: "frame-ancestors 'none'" },
         ],
+      },
+      {
+        source: '/:path(api/studio(?:/.*)?)',
+        headers: [
+          { key: 'Referrer-Policy', value: 'same-origin' },
+          { key: 'Content-Security-Policy', value: "frame-ancestors 'none'" },
+          { key: 'Cross-Origin-Resource-Policy', value: 'same-origin' },
+        ],
+      },
+      {
+        source: '/:path((?:api/)?studio(?:/.*)?)',
+        headers: [{ key: 'Cache-Control', value: 'no-store' }],
       },
     ];
   },
