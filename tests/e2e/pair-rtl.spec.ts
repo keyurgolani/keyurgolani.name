@@ -32,7 +32,12 @@ test(
     // The composition's column reads right to left, and its navigation starts at the right.
     const main = page.locator('main');
     expect(await main.evaluate((element) => getComputedStyle(element).direction)).toBe('rtl');
-    const edges = await page.locator('nav[aria-label="Sections"] ul').evaluate((list) => ({
+    const nav = page.getByRole('navigation', { name: 'Sections', exact: true });
+    // The label is the host's own word, marked English on an Arabic page.
+    await expect(
+      page.locator(`[id="${await nav.getAttribute('aria-labelledby')}"]`),
+    ).toHaveAttribute('lang', 'en');
+    const edges = await nav.locator('ul').evaluate((list) => ({
       links: list.querySelectorAll('a').length,
       list: list.getBoundingClientRect().right,
       first: list.querySelector('a')!.getBoundingClientRect().right,

@@ -15,22 +15,33 @@ const NAMED = (section: Section) =>
 
 export default function FallbackComposition({ input }: { readonly input: VariantRenderInput }) {
   const { portfolio, ids } = input;
-  // The first hero carries the page's one h1: its heading is the name.
-  const hero = portfolio.sections.find((section) => section.kind === 'hero');
-  const rendered = portfolio.sections
-    .map((section) => ({
-      section,
-      element: renderSection(section, input, {}, { level: section === hero ? 1 : 2 }),
-    }))
-    .filter(
-      (entry): entry is { section: Section; element: ReactElement } => entry.element !== null,
-    );
-  const named = rendered.filter(({ section }) => NAMED(section));
+  // The page's one h1 comes before any section's h2: a hero that renders
+  // first carries it, and otherwise the identity's name does, above the
+  // sections, every hero among them at h2.
+  let heroLeads = false;
+  let rendered = false;
+  const sections: { section: Section; element: ReactElement }[] = [];
+  for (const section of portfolio.sections) {
+    const leads = !rendered && section.kind === 'hero';
+    const element = renderSection(section, input, {}, { level: leads ? 1 : 2 });
+    if (element === null) continue;
+    heroLeads ||= leads;
+    rendered = true;
+    sections.push({ section, element });
+  }
+  const named = sections.filter(({ section }) => NAMED(section));
+  // The host's own words are English, marked so in a portfolio in another language.
+  const uiLang = /^en(?:-|$)/i.test(portfolio.locale) ? undefined : 'en';
+  // Two hyphens: no content id has them, so none can take this one.
+  const label = `${ids.prefix}fc--sections`;
   return (
     <>
       <header className="fc-header">
         {named.length > 0 ? (
-          <nav className="fc-nav" aria-label="Sections">
+          <nav className="fc-nav" aria-labelledby={label}>
+            <span id={label} lang={uiLang} hidden>
+              Sections
+            </span>
             <ul role="list">
               {named.map(({ section }) => (
                 <li key={section.id}>
@@ -46,10 +57,8 @@ export default function FallbackComposition({ input }: { readonly input: Variant
       </header>
       {/* Focusable, so the host's skip link moves focus here, not only the view. */}
       <main id={ids.main} className="fc-main" tabIndex={-1}>
-        {hero && rendered.some(({ section }) => section === hero) ? null : (
-          <h1 className="fc-name">{portfolio.identity.name}</h1>
-        )}
-        {rendered.map(({ element }) => element)}
+        {heroLeads ? null : <h1 className="fc-name">{portfolio.identity.name}</h1>}
+        {sections.map(({ element }) => element)}
       </main>
     </>
   );

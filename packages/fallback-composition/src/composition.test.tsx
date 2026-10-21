@@ -125,7 +125,8 @@ test('one main, one h1 from the hero, one visitor control slot, and every sectio
 
 test('the navigation links each titled section but the hero and calls to action', () => {
   const html = render(PORTFOLIO);
-  const nav = /<nav class="fc-nav" aria-label="Sections">([\s\S]*?)<\/nav>/.exec(html)?.[1] ?? '';
+  const nav =
+    /<nav class="fc-nav" aria-labelledby="fc--sections">([\s\S]*?)<\/nav>/.exec(html)?.[1] ?? '';
   assert.deepEqual(
     [...nav.matchAll(/<a href="([^"]+)"[^>]*>([^<]+)<\/a>/g)].map(([, href, text]) => [href, text]),
     [
@@ -138,6 +139,29 @@ test('the navigation links each titled section but the hero and calls to action'
   assert.match(prefixed, /<main id="pv-main"/);
   assert.match(prefixed, /<a href="#pv-contact"[^>]*>Contact<\/a>/);
   assert.match(prefixed, /<section id="pv-contact"/);
+});
+
+test("the navigation's English label is marked so in a portfolio in another language", () => {
+  // The label is the host's word, so its language is English, whatever the content's.
+  assert.match(render(PORTFOLIO), /<span id="fc--sections" hidden="">Sections<\/span>/);
+  assert.match(
+    render({ ...PORTFOLIO, locale: 'fr' }),
+    /<span id="fc--sections" lang="en" hidden="">Sections<\/span>/,
+  );
+  assert.match(render(PORTFOLIO, 'pv-'), /aria-labelledby="pv-fc--sections"/);
+});
+
+test('the one h1 comes before any h2, whatever order the content puts the hero in', () => {
+  const [hero, about, ...rest] = PORTFOLIO.sections;
+  const html = render({ ...PORTFOLIO, sections: [about, hero, ...rest] });
+  assert.equal(count(html, /<h1\b/g), 1);
+  assert.match(
+    html,
+    /<main id="main" class="fc-main" tabindex="-1"><h1 class="fc-name">Rowan Fallback<\/h1>/,
+  );
+  // The hero, no longer first, takes h2 like every other section.
+  assert.match(html, /<h2 class="pf-hero__name">Rowan Fallback<\/h2>/);
+  assert.ok(html.indexOf('<h1') < html.indexOf('<h2'));
 });
 
 test("without a hero, the identity's name is the page's one h1", () => {
