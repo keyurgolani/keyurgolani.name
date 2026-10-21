@@ -379,13 +379,11 @@ Cards linking to separate sites the author maintains (photography blog, music si
 
 ### `kind: github`
 
-Declarative GitHub config; data fetched server-side. Required: `username`.
+Declarative GitHub config. Required: `username`. Today the section renders a link to the profile; the settings below take effect when #10 brings repository data.
 Booleans default to: `showContributionGraph: true`, `showPinnedRepos: true`,
 `showTotalStars: true`, `showLanguageBreakdown: false`,
 `showRecentlyActive: true`. Optional:
-`featuredRepos[]`, `excludeRepos[]`. Public pages fetch through unauthenticated
-REST, so the contribution graph (GraphQL, token) doesn't render and pinned repos
-are the top-starred ones.
+`featuredRepos[]`, `excludeRepos[]`.
 
 - **`showRecentlyActive`**: boolean, default `true`. Shows a list of repositories the user has most recently pushed to. Use when you want to surface live activity below the pinned highlights.
 - **`recentlyActiveLimit`**: integer from 1 to 20, default `10`. How many repositories to include in the recently-active list. Use when the default 10 is too long for your variant's layout.

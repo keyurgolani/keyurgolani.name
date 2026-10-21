@@ -12,7 +12,7 @@
 
 Run often in Waves 2 and 3, and once more at Phase 3.
 
-- [ ] `pnpm check:variants --package @portfolio/variant-<id>` exits 0: the registry registers the package and the source audit finds nothing. Then `pnpm check:variants` with no flag, which also checks every other registered variant and the kit's sections.
+- [ ] `pnpm check:variants --package @portfolio/variant-<id>` exits 0: the registry registers the package and the source audit finds nothing. Then `pnpm check:variants` with no flag, which also checks every other registered variant. Both check the kit modules the variants reach and the kit's shared stylesheet.
 - [ ] `pnpm typecheck` passes for the whole workspace.
 - [ ] `pnpm exec eslint packages/variant-<id>` passes.
 - [ ] `pnpm build` succeeds.
@@ -68,6 +68,8 @@ Run often in Waves 2 and 3, and once more at Phase 3.
 - **The page renders unstyled structure**: the `./styles.css` export is missing or points at the wrong file, or a selector isn't under `[data-variant='<id>']`.
 - **`audit.client-input`**: a `'use client'` module takes the whole input or portfolio. Pass it only the fields it renders.
 - **`audit.clock` or `audit.random`**: use `input.env.now` and `seededRandom(input.env.seed)`.
+- **`audit.global-access`**: the audit can't follow how the code reaches a global, through a computed key or the global object passed around. Reach it by name.
+- **`audit.css-appearance`**: a raw color, font, radius, or shadow. Leave it to #19's tokens, or read one with `var(--...)`.
 - **Hero squeezed to 80px wide**: a rule targets `[id='top']`, which is often the hero's id. (`references/common-bugs.md` §4)
 - **SVG gradients invisible**: a gradient id has spaces. Slugify it. (`references/common-bugs.md` §3)
 - **Reduced motion still animating**: a script loop or framer-motion hook isn't gated. (`references/common-bugs.md` §8)

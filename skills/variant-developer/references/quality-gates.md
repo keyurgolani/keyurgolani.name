@@ -56,11 +56,11 @@ pnpm build
 pnpm exec playwright test tests/e2e/motion-contract.spec.ts
 ```
 
-For every registered composition, under `motionPolicy: reduce` and under `respect-os` with the visitor's reduced-motion setting: nothing runs once the page settles (the Web Animations API lists CSS animations, transitions, and script animations), and a navigation link to `#contact` jumps rather than scrolls. Its controls show the checks see an animation and a smooth scroll when there is one. It must pass before a variant registers.
+For every registered composition, under `motionPolicy: reduce` and under `respect-os` with the visitor's reduced-motion setting: no animation runs once the page settles, after the jump, or at any step of scrolling each scroll container from top to bottom (the Web Animations API lists CSS animations, transitions, and script animations); no script keeps a `requestAnimationFrame` loop going; and a navigation link to `#contact` jumps rather than scrolls, in the window or in a scroll container of the composition's own. Its controls show the checks see an animation, a frame loop, and a smooth scroll when there is one, and `tests/e2e/motion-harness.spec.ts` plants each case the checks are for. It must pass before a variant registers.
 
 ### What the contract can't see
 
-A canvas loop or a text animation doesn't show in `getAnimations()`. Check each one with reduced motion on (DevTools, Rendering, emulate `prefers-reduced-motion: reduce`):
+A canvas drawn on a timer, or a text animation, shows neither in `getAnimations()` nor as a frame loop. Check each one with reduced motion on (DevTools, Rendering, emulate `prefers-reduced-motion: reduce`):
 
 ```js
 // A canvas: sample one pixel 300 ms apart. Under reduced motion the values match.

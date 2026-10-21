@@ -10,9 +10,11 @@ A variant's stylesheet arranges: spacing, grid and flow, sizing, ordering, stack
 
 Until #19 ships, the page shows the host's neutral defaults. That's expected: judge Wave 1 by structure, not by color.
 
+The audit holds you to it (`audit.css-appearance`): a raw color (`#hex`, `rgb()`, `oklch()`, a named color), a `font-family` or `font`, a border radius, or a shadow is refused unless it reads a `var(--...)` token. `currentColor`, `transparent`, a zero radius, `none`, and CSS-wide keywords pass. The kit's shared stylesheet and the fallback pass the same rule.
+
 ## Scope every selector
 
-The host imports every registered variant's stylesheet on every page, so every selector starts with `[data-variant='<id>']`:
+The host imports every registered variant's stylesheet on every page for now (#6 loads each where it renders), so every selector starts with `[data-variant='<id>']`:
 
 ```css
 [data-variant='acme-ocean'] {
@@ -28,9 +30,11 @@ The host imports every registered variant's stylesheet on every page, so every s
 }
 ```
 
-A selector without the scope, or a page-wide at-rule such as `@font-face`, `@page`, or `@property` outside one, restyles someone else's page. `pnpm check:variants` refuses both (`audit.css-unscoped`).
+A selector without the scope, a page-wide at-rule such as `@font-face`, `@page`, or `@property` outside one, or a selector that reaches past the scope to its siblings, such as `[data-variant='<id>'] ~ footer`, restyles someone else's page. `pnpm check:variants` refuses all three (`audit.css-unscoped`), nested rules included.
 
-The one stylesheet is the file your `./styles.css` export names. Don't import CSS from components (`audit.css-import`), and don't `@import` from another host (`audit.css-remote-import`).
+Every variant's keyframes share the page too, so name yours after your id: `@keyframes <id>-drift` (`audit.css-keyframes`).
+
+The one stylesheet is the file your `./styles.css` export names. Don't import CSS from components (`audit.css-import`), or render a `<style>`, `<link>`, or `<script>` (`audit.raw-element`). `@import` only your own files, by relative path: not another host's (`audit.css-remote-import`) or another package's (`audit.css-bare-import`). Ship every `url()` asset in the package (`audit.css-remote-url`).
 
 ## Logical properties
 

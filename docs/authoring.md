@@ -138,7 +138,7 @@ The first sections are what a visitor sees before scrolling, so treat them like 
 | `fun-facts`           | Off-the-page personal notes                                | Personal brand                              |
 | `tenure`              | A years-in headline                                        | Senior, with a strong narrative             |
 | `external-portfolios` | Links to other sites where your work lives                 | Cross-discipline                            |
-| `github`              | Live GitHub data                                           | Engineers                                   |
+| `github`              | A GitHub profile link; repository data comes with #10      | Engineers                                   |
 
 Every kind's fields, one by one: [`skills/portfolio-author/references/schema.md`](../skills/portfolio-author/references/schema.md). [`section-kinds.md`](../skills/portfolio-author/references/section-kinds.md) says when to use each.
 

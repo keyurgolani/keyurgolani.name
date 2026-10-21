@@ -26,7 +26,7 @@ What the platform can do today.
 - **Owner controls.** A variant can declare composition controls, such as a hero layout or a featured project, stored per variant in the site document and checked against its manifest.
 - **Appearance in the site document.** The variant, and the design language, color scheme, typography, and display mode that #19 resolves. Today the display mode sets the theme a visit starts in (`system` follows the visitor's `prefers-color-scheme`; `light` and `dark` pin one), painted before hydration so there's no flash of the wrong theme, and the other three are recorded.
 - **Per-axis visitor controls.** `visitorControls` marks each appearance field `locked` or `selectable`. This release checks the policy without applying it; #19's visitor control, in each variant's slot for it, applies it.
-- **Motion policy.** `respect-os` follows each visitor's `prefers-reduced-motion`, and `reduce` reduces motion for everyone: no entrance animation, nothing that repeats, and section links jump instead of scrolling. A browser test holds every registered composition to it.
+- **Motion policy.** `respect-os` follows each visitor's `prefers-reduced-motion`, and `reduce` reduces motion for everyone: no entrance animation, nothing that repeats, no animation frame loop, and section links jump instead of scrolling. A browser test holds every registered composition to it, at load, after a jump, and as each part of the page scrolls into view.
 - **Right to left.** A portfolio's `direction` sets `<html dir>`, and a variant that declares `rtl` lays out with logical properties only.
 
 ## GitHub sections
@@ -60,7 +60,7 @@ These keep the system honest:
 
 - **`pnpm check:skills`** verifies that `section-kinds.md` matches the schema's `ALL_SECTION_KINDS`, that `kit-catalog.md` mentions every export from `@portfolio/kit`, that `schema.md` mentions every section kind, and that both SKILL.md frontmatters parse and stay under their length caps.
 - **`validate.mjs`** validates a directory's portfolio and site documents together and reports each problem's file, line, and column.
-- **`pnpm check:variants`** generates the registry and audits every registered variant: no network, storage, clock, randomness, or environment; no `async` component or server module; markdown only through `RichText`; and every style scoped to the variant, with logical properties when it declares right to left.
+- **`pnpm check:variants`** generates the registry and lints every registered variant, code the host trusts at build time, so a lint and not a sandbox: no network, storage, clock, randomness, environment, or code from text, reached directly or through an alias, a destructuring, or a string key; no `async` component, server module, or `<style>`, `<link>`, or `<script>`; markdown only through `RichText`; every style scoped to the variant, with keyframes named after it, nothing loaded from another host or package, color, type, radius, and shadow only through #19's tokens, and logical properties when it declares right to left.
 
 ## Developer ergonomics
 

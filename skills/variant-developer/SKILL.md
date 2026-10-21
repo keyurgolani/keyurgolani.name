@@ -96,9 +96,9 @@ Finish each wave before starting the next.
 
 Stand up a renderable variant with every section through the shared renderers. The goal is "every route renders, in the right structure", not "finished".
 
-- Scaffold: `pnpm new-variant <id>`. It copies `packages/fallback-composition` to `packages/variant-<id>`, renames the package to `@portfolio/variant-<id>`, sets the manifest's id and name, adds the package to `@portfolio/web` with `pnpm --filter @portfolio/web add`, and runs `pnpm check:variants --package @portfolio/variant-<id>`.
+- Scaffold: `pnpm new-variant <id>`. It copies `packages/fallback-composition` to `packages/variant-<id>`, renames the package to `@portfolio/variant-<id>`, sets the manifest's id and name, swaps the fallback's `fc-` classes for a prefix of the id's own (never `fc`, `pf`, or `host`), adds the package to `@portfolio/web` with `pnpm --filter @portfolio/web add`, and runs `pnpm check:variants --package @portfolio/variant-<id>`.
 - Edit `manifest.json` to match DESIGN.md: `promise`, `description`, `compositionFamily`, `motionIntent`, `performanceTier`, `routes`, `visitorControl.placement`, `textDirection`, and `provenance`. Leave `renderedKinds` empty until Wave 2.
-- Write `src/styles.css`: layout only. Spacing, arrangement, grid, and structure, every selector under `[data-variant='<id>']`, logical properties throughout. No colors, fonts, or theme blocks: #19's tokens supply them. Load `references/styling-conventions.md` and `references/common-bugs.md` while writing it.
+- Write `src/styles.css`: layout only. Spacing, arrangement, grid, and structure, every selector under `[data-variant='<id>']`, logical properties throughout. No colors, fonts, radii, shadows, or theme blocks: #19's tokens supply them, and the audit refuses a raw one. Load `references/styling-conventions.md` and `references/common-bugs.md` while writing it.
 - Verify (Gate A): `scripts/visual-companion/start.sh --mode preview --variant <id>`, then open `/sample?variant=<id>`. A 404 means the build doesn't register it: run `pnpm check:variants --package @portfolio/variant-<id>` and read the diagnostic.
 
 ### Wave 1.5: Kit hoists (when porting)
@@ -135,7 +135,7 @@ For each cluster:
 Renderer reminders:
 
 - **Render defensively.** Every renderer handles `items: []`, optional fields left out, and blank strings. Return `null` rather than an empty shell.
-- **Render from the input alone, synchronously.** No `async` component, no fetch, no storage, no environment. Use `input.env.now` for the time and `seededRandom(input.env.seed)` for anything random-looking. `pnpm check:variants` refuses the rest.
+- **Render from the input alone, synchronously.** No `async` component, no fetch, no storage, no environment, no code run from a string. Use `input.env.now` for the time and `seededRandom(input.env.seed)` for anything random-looking. `pnpm check:variants` refuses the rest.
 - **Markdown goes through `RichText`.** Never `dangerouslySetInnerHTML`.
 - **Slugify any synthesized SVG id** referenced by `url(#id)`, and start it with `input.ids.prefix`. (`references/common-bugs.md` §3)
 - **A client component gets only what it renders**, never the whole input, so the rest stays out of the page payload. Enhancements are the exception: `<Enhancement input={input} id="..." />` from `@portfolio/kit/enhancements`.
@@ -154,7 +154,7 @@ The clusters:
 - **Navigation.** Pick the affordance that fits the idea: a table of contents, a sidebar, an overlay, marginalia. Link only sections that render. A link to a section is `#${input.ids.prefix}${section.id}`.
 - **Controls and content slots.** Owner-tunable choices (a hero layout, a featured project) are manifest `controls`, read from `input.controls`. Places the composition needs content are `contentSlots`, with what happens when they're empty.
 - **Enhancements.** Optional client islands, declared in the manifest's `enhancements` with their `requires` (such as `webgl2` or `motion-allowed`). The page must read completely without them. Reserve their space in the layout.
-- **Motion.** `motionIntent` says how much the composition moves. Under the site's `reduce` policy, or a visitor's reduced-motion setting under `respect-os`, nothing runs once the page settles and links jump. CSS rules don't reach script motion: gate it on `useMotionPreference()` inside a `MotionPolicyProvider` fed `input.presentation.motionPolicy`. `tests/e2e/motion-contract.spec.ts` checks every registered composition. (`references/common-bugs.md` §8)
+- **Motion.** `motionIntent` says how much the composition moves. Under the site's `reduce` policy, or a visitor's reduced-motion setting under `respect-os`, nothing runs at load, after a jump, or as the page scrolls, no `requestAnimationFrame` loop keeps going, and links jump. CSS rules don't reach script motion: gate it on `useMotionPreference()` inside a `MotionPolicyProvider` fed `input.presentation.motionPolicy`. `tests/e2e/motion-contract.spec.ts` checks every registered composition. (`references/common-bugs.md` §8)
 - **Right to left.** With `"textDirection": ["ltr", "rtl"]`, every property is logical (`margin-inline-start`, `inset-inline-end`, `text-align: start`); the audit refuses the physical ones. Check an Arabic pair, such as the schema's `pairs/mixed` fixture.
 - **Mobile sweep.** 375×667 and 430×932: no horizontal overflow, decoration hidden, navigation collapsed. (`references/quality-gates.md` Gate I)
 
@@ -164,7 +164,7 @@ Run `references/audit-checklist.md` for the scripted gates and `references/quali
 
 ### Scripted gates
 
-1. `pnpm check:variants --package @portfolio/variant-<id>` exits 0: the registry registers it, and the source audit finds nothing. Without `--package` it checks every registered variant and the kit's sections.
+1. `pnpm check:variants --package @portfolio/variant-<id>` exits 0: the registry registers it, and the source audit finds nothing. Either way it checks the kit modules the variant reaches and the kit's shared stylesheet; without `--package` it checks every registered variant.
 2. `pnpm typecheck` passes for the whole workspace.
 3. `pnpm exec eslint packages/variant-<id>` passes.
 4. `pnpm build` succeeds. The host build is the integration test.
@@ -175,22 +175,32 @@ Run `references/audit-checklist.md` for the scripted gates and `references/quali
 
 The source audit's rules, each with its own code:
 
-| Code                      | Refuses                                                                                                                  |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `audit.async-component`   | An `async` component.                                                                                                    |
-| `audit.server-module`     | A Node built-in, `server-only`, `next`, or `@portfolio/core`.                                                            |
-| `audit.environment`       | Reading `process.env`.                                                                                                   |
-| `audit.network`           | `fetch`, `XMLHttpRequest`, `WebSocket`, `EventSource`, and `navigator.sendBeacon`.                                       |
-| `audit.github-fetch`      | The kit's `fetchGitHubData`. GitHub data arrives through `input.derived` (#10).                                          |
-| `audit.storage`           | `document.cookie`, `cookieStore`, `localStorage`, `sessionStorage`, and `indexedDB`.                                     |
-| `audit.clock`             | `Date.now()` and `new Date()` with no argument.                                                                          |
-| `audit.random`            | `Math.random()`.                                                                                                         |
-| `audit.inner-html`        | `dangerouslySetInnerHTML`.                                                                                               |
-| `audit.css-import`        | Importing CSS from a module. The `./styles.css` export is the one stylesheet.                                            |
-| `audit.client-input`      | A `'use client'` module that takes `VariantRenderInput`, `PublicView`, or a whole portfolio, unless it's an enhancement. |
-| `audit.css-unscoped`      | A selector that doesn't start with `[data-variant='<id>']`.                                                              |
-| `audit.css-remote-import` | An `@import` of a remote stylesheet.                                                                                     |
-| `audit.css-physical`      | A physical property, such as `margin-left`, in a variant that declares `rtl`.                                            |
+| Code                      | Refuses                                                                                                                                                                                          |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `audit.async-component`   | An `async` component: by name, as a default export, or wrapped in `memo()`. An async event handler is fine.                                                                                      |
+| `audit.server-module`     | A Node built-in, `server-only`, `next`, `@portfolio/core`, or `process.getBuiltinModule()`.                                                                                                      |
+| `audit.environment`       | `process`, however it's reached.                                                                                                                                                                 |
+| `audit.network`           | `fetch`, `XMLHttpRequest`, `WebSocket`, `EventSource`, `WebTransport`, `navigator.sendBeacon`, and an import from a URL.                                                                         |
+| `audit.github-fetch`      | The kit's `fetchGitHubData`. GitHub data arrives through `input.derived` (#10).                                                                                                                  |
+| `audit.storage`           | `document.cookie`, `cookieStore`, `localStorage`, `sessionStorage`, `indexedDB`, and `caches`.                                                                                                   |
+| `audit.clock`             | `Date.now()`, `Date()`, `new Date()` with no argument, `performance.now()`, and a date format's `format()` with no date.                                                                         |
+| `audit.random`            | `Math.random()`, `crypto.getRandomValues()`, and `crypto.randomUUID()`.                                                                                                                          |
+| `audit.dynamic-code`      | `eval`, `Function`, and a timer given a string.                                                                                                                                                  |
+| `audit.dynamic-import`    | `import()` or `require()` of anything but a literal.                                                                                                                                             |
+| `audit.global-access`     | A global reached in a way the audit can't follow: a computed key, or the global object passed around.                                                                                            |
+| `audit.inner-html`        | `dangerouslySetInnerHTML`, `innerHTML`, `outerHTML`, `insertAdjacentHTML()`, and `document.write()`.                                                                                             |
+| `audit.raw-element`       | A `<style>`, `<link>`, or `<script>`, in JSX or from `createElement()`.                                                                                                                          |
+| `audit.css-import`        | Importing CSS from a module. The `./styles.css` export is the one stylesheet.                                                                                                                    |
+| `audit.client-input`      | A `'use client'` component that takes `VariantRenderInput`, `PublicView`, a whole portfolio, or a prop named `input`, unless it's an enhancement. A `Pick<>` of one, or a single field, is fine. |
+| `audit.css-unscoped`      | A selector that doesn't start with `[data-variant='<id>']`, or reaches its siblings with `+` or `~`, nested rules included.                                                                      |
+| `audit.css-keyframes`     | Keyframes not named `<id>` or `<id>-*`.                                                                                                                                                          |
+| `audit.css-remote-import` | An `@import` of a remote stylesheet.                                                                                                                                                             |
+| `audit.css-bare-import`   | An `@import` of anything but your own files, by relative path.                                                                                                                                   |
+| `audit.css-remote-url`    | A `url()` on another host.                                                                                                                                                                       |
+| `audit.css-appearance`    | A raw color, `font-family`, `font`, radius, or shadow, rather than a `var(--...)` token.                                                                                                         |
+| `audit.css-physical`      | A physical property or shorthand, such as `margin-left`, in a variant that declares `rtl`.                                                                                                       |
+
+It's a lint over code the host already trusts, not a sandbox: a variant installs with full server trust, and a determined package can get past any syntax check. It follows a global through an alias, a destructuring, or a string key, and refuses what it can't follow.
 
 ### Visual gates
 

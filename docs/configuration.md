@@ -65,7 +65,7 @@ An optional field can be left out. There's no `null`: leave the key out instead.
 - A section without a `title` gets the heading its variant gives the kind, such as Awards or Get in touch, and some kinds, such as a lede, get none. The navigation lists only sections with a `title`.
 - A hero without `name` or `tagline` shows `identity.name` or `identity.tagline`.
 - Without `meta.title`, the page title is `identity.name` followed by Portfolio. Without `meta.description`, the description is `identity.tagline`.
-- A `github` section shows every part but the language breakdown unless you turn one off: `showContributionGraph`, `showPinnedRepos`, `showTotalStars`, and `showRecentlyActive` default to `true`, and `showLanguageBreakdown` to `false`. The contribution graph needs a token, so public pages never show it. It lists 10 recently active repositories (`recentlyActiveLimit`, 1 to 20), and features or excludes none (`featuredRepos`, `excludeRepos`).
+- A `github` section renders a link to the profile until #10 brings repository data. Its settings say what to show then: `showContributionGraph`, `showPinnedRepos`, `showTotalStars`, and `showRecentlyActive` default to `true`, `showLanguageBreakdown` to `false`, `recentlyActiveLimit` to 10 (1 to 20), and `featuredRepos` and `excludeRepos` to none.
 - `links` and `sections` default to empty lists.
 
 ## The site document

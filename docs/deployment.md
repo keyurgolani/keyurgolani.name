@@ -337,9 +337,9 @@ A key outside its profile's list stops a production server; `pnpm dev` warns and
 
 The host uses Next.js fetch revalidation:
 
-- **GitHub data:** 1 hour (`revalidate: 3600`), and each request gives up after 3 seconds. The `cache()` wrapper memoizes within a request.
+- **GitHub data:** none yet. The `github` section links the profile until #10 brings repository data.
 - **Metadata:** rendered per request (`robots.txt`, `sitemap.xml`, the Open Graph image, and the feed), from the documents loaded at startup and `PORTFOLIO_ORIGIN`. `features.feed: false` in the site document turns the feed off.
-- **Variant CSS:** every registered variant's stylesheet, bundled into the static assets.
+- **Variant CSS:** every registered variant's stylesheet, bundled into the static assets and loaded on every page, until #6 loads each variant's where it renders.
 
 To force a refresh, redeploy or clear the Next.js cache:
 

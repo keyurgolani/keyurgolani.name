@@ -124,7 +124,7 @@ Gradient text is a color effect, so it's the appearance system's (#19) now, with
 ### What it looks like
 
 - The site's `motionPolicy` is `reduce`, or the visitor asks for reduced motion under `respect-os`, but a canvas still animates, particles still fall, parallax still moves.
-- `document.getAnimations()` lists animations still running after load, or a link still scrolls smoothly to its section. The motion contract (`tests/e2e/motion-contract.spec.ts`) fails.
+- `document.getAnimations()` lists animations still running after load, after a jump, or once a section scrolls into view; a `requestAnimationFrame` loop keeps asking for frames; or a link still scrolls smoothly to its section. The motion contract (`tests/e2e/motion-contract.spec.ts`) fails.
 
 ### Why
 
@@ -148,7 +148,7 @@ useEffect(() => {
 
 For framer-motion's `useScroll` and `useTransform`, pass `enabled: !reduceMotion` to your wrapper hook (the kit's `useScrollDispersal` does). A framer-motion variant also wraps its root in `MotionConfig`, `reducedMotion: 'always'` under the site's `reduce` and `'user'` otherwise; `legacy/variant-kinetic-cosmos/src/primitives/motion-config.tsx` shows how. That skips transform and layout animations only, and opacity still animates, so an entrance takes `initial={reduce ? false : 'hidden'}`, an animation that repeats forever isn't rendered under reduce, and scrolling takes `behavior: reduce ? 'auto' : 'smooth'`.
 
-**Check it programmatically.** The motion contract covers what `getAnimations()` lists and how links scroll. For a canvas or a typing animation, use the recipes in `quality-gates.md` Gate C.
+**Check it programmatically.** The motion contract covers what `getAnimations()` lists at load, after a jump, and as the page scrolls, every `requestAnimationFrame` loop, and how links scroll. For a canvas drawn on a timer or a typing animation, use the recipes in `quality-gates.md` Gate C.
 
 ## 9. Floating elements drifting off the page at small viewports
 

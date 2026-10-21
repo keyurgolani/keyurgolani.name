@@ -100,7 +100,7 @@ links:
 
 ## GitHub data
 
-The `github` section pulls live data from GitHub's REST API without authentication (60 requests an hour per server address, cached for an hour). Public pages never send a token, so the contribution heatmap stays off and the pinned list is your top-starred repos. Don't set `GITHUB_TOKEN` for it: a `read-only` production server refuses to start with one.
+The `github` section renders a link to your GitHub profile. Repositories, languages, and the contribution calendar come with #10, which hands them to the variant in its render input; until then no page fetches GitHub. Don't set `GITHUB_TOKEN` for it: a `read-only` production server refuses to start with one.
 
 ## Build for production
 
