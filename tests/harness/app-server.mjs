@@ -32,6 +32,26 @@ const STANDALONE = path.join(WEB, '.next', 'standalone');
 const SERVER_JS = path.join(STANDALONE, 'apps', 'web', 'server.js');
 export const DEFAULT_PORTFOLIO = path.join(REPO_ROOT, 'tests', 'fixtures', 'portfolio.yml');
 export const DEFAULT_SITE = path.join(REPO_ROOT, 'tests', 'fixtures', 'site.yml');
+const START_ATTEMPTS = 3;
+// What Next prints once its server is listening.
+const READY = 'Ready in';
+// How many of the server's last output lines a failed start reports.
+const LOG_TAIL = 40;
+
+// Every server still running, with its temporary directory. A test that
+// times out while its server starts never gets to stop it, so whatever is
+// left is killed and removed when this process exits.
+const running = new Map();
+process.on('exit', () => {
+  for (const child of running.keys()) child.kill('SIGKILL');
+  for (const dir of running.values()) {
+    try {
+      rmSync(dir, { recursive: true, force: true });
+    } catch {
+      // A directory that can't go now is left for the OS to clear.
+    }
+  }
+});
 
 function requireBuild() {
   if (!existsSync(SERVER_JS)) {
@@ -39,6 +59,11 @@ function requireBuild() {
       `no standalone build at ${path.relative(REPO_ROOT, SERVER_JS)}; run pnpm build first`,
     );
   }
+}
+
+/** The caller's NODE_OPTIONS, if any, followed by the trap's. */
+function nodeOptions(env, trap) {
+  return [env.NODE_OPTIONS, trap.env.NODE_OPTIONS].filter(Boolean).join(' ');
 }
 
 /** The environment every run starts from. */
@@ -69,6 +94,8 @@ function baseEnv(home, port) {
  *   write before the server starts, by the variable that names each one: `path` is
  *   relative to the app's root, and the variable gets the absolute path
  * @param {string} [options.logFile] where the server's stdout and stderr go
+ * @param {number} [options.port] the port to try first, instead of a free one, so a
+ *   test can hold it and check that a start on a taken port moves to another
  */
 export async function startApp({
   env = {},
@@ -78,6 +105,7 @@ export async function startApp({
   sourceName = 'config',
   envFiles = {},
   logFile,
+  port: firstPort,
 } = {}) {
   requireBuild();
   const root = mkdtempSync(path.join(tmpdir(), 'portfolio-app-'));
@@ -101,65 +129,131 @@ export async function startApp({
     fileEnv[key] = target;
   }
 
-  const port = await freePort();
-  const origin = `http://127.0.0.1:${port}`;
+  // The trap binds first, so its own port can't be the one picked for the server.
   const trap = await startEgressTrap();
-  const serverEnv = {
-    ...baseEnv(root, port),
-    PORTFOLIO_PROFILE: 'read-only',
-    PORTFOLIO_ORIGIN: origin,
-    PORTFOLIO_SOURCE_DIR: sourceDir,
-    ...env,
-    ...fileEnv,
-    ...trap.env,
-  };
-
   const log = logFile ?? path.join(root, 'server.log');
   mkdirSync(path.dirname(log), { recursive: true });
-  const out = createWriteStream(log);
-  const child = spawn(process.execPath, [SERVER_JS.replace(STANDALONE, appDir)], {
-    cwd: path.join(appDir, 'apps', 'web'),
-    env: serverEnv,
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
-  // Whole lines, so stderr never splits a JSON line from stdout.
-  for (const stream of [child.stdout, child.stderr]) {
-    readline.createInterface({ input: stream, crlfDelay: Infinity }).on('line', (line) => {
-      out.write(`${line}\n`);
-    });
-  }
-  let exited = false;
-  child.once('exit', () => {
-    exited = true;
-  });
 
-  async function stop() {
-    if (!exited) {
-      child.kill('SIGTERM');
-      const timer = setTimeout(() => child.kill('SIGKILL'), 10_000);
-      await once(child, 'exit').catch(() => {});
+  /** Spawns the server on `port`. Its output replaces whatever `log` held. */
+  function launch(port) {
+    const origin = `http://127.0.0.1:${port}`;
+    const serverEnv = {
+      ...baseEnv(root, port),
+      PORTFOLIO_PROFILE: 'read-only',
+      PORTFOLIO_ORIGIN: origin,
+      PORTFOLIO_SOURCE_DIR: sourceDir,
+      ...env,
+      ...fileEnv,
+      ...trap.env,
+      NODE_OPTIONS: nodeOptions(env, trap),
+    };
+    const child = spawn(process.execPath, [SERVER_JS.replace(STANDALONE, appDir)], {
+      cwd: path.join(appDir, 'apps', 'web'),
+      env: serverEnv,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    const out = createWriteStream(log);
+    const server = {
+      port,
+      origin,
+      env: serverEnv,
+      child,
+      out,
+      exited: false,
+      listening: false,
+      lines: [],
+    };
+    // A spawn error ends the server as surely as an exit does.
+    const ended = () => {
+      server.exited = true;
+    };
+    running.set(child, root);
+    server.exit = once(child, 'exit')
+      .then(ended, ended)
+      .finally(() => running.delete(child));
+    // Whole lines, so stderr never splits a JSON line from stdout.
+    server.drained = Promise.all(
+      [child.stdout, child.stderr].map((stream) => {
+        const reader = readline.createInterface({ input: stream, crlfDelay: Infinity });
+        reader.on('line', (line) => {
+          out.write(`${line}\n`);
+          // Next prints this once the server holds its port.
+          if (!line.startsWith('{') && line.includes(READY)) server.listening = true;
+          server.lines.push(line);
+          if (server.lines.length > LOG_TAIL) server.lines.shift();
+        });
+        return once(reader, 'close');
+      }),
+    );
+    return server;
+  }
+
+  async function halt(server) {
+    if (!server.exited) {
+      server.child.kill('SIGTERM');
+      const timer = setTimeout(() => server.child.kill('SIGKILL'), 10_000);
+      await server.exit;
       clearTimeout(timer);
     }
-    out.end();
+    await server.drained;
+    await new Promise((resolve) => server.out.end(resolve));
+  }
+
+  // freePort() lets its port go before the server binds it, so another
+  // process can take it first. A start that fails that way gets a new port,
+  // and no health check goes out until the server holds its own port, so
+  // another process's answer is never taken for this server's.
+  let server;
+  try {
+    for (let attempt = 1; ; attempt += 1) {
+      server = launch(attempt === 1 && firstPort !== undefined ? firstPort : await freePort());
+      const current = server;
+      try {
+        await waitFor(
+          async () => {
+            if (!current.listening) return undefined;
+            const response = await getText(`${current.origin}/api/health`);
+            return response.status === 200 ? response : undefined;
+          },
+          {
+            timeoutMs: 60_000,
+            alive: () => !current.exited,
+            what: 'the app to take its port and answer GET /api/health',
+          },
+        );
+        break;
+      } catch (error) {
+        await halt(current);
+        const taken = current.lines.some((line) => line.includes('EADDRINUSE'));
+        if (taken && attempt < START_ATTEMPTS) continue;
+        if (taken) error.message += `, on each of the ${START_ATTEMPTS} ports it tried`;
+        if (logFile) error.message += ` (server log: ${logFile})`;
+        error.message += `\nThe server's last output:\n${current.lines.join('\n')}`;
+        throw error;
+      }
+    }
+  } catch (error) {
+    await trap.close();
+    rmSync(root, { recursive: true, force: true });
+    throw error;
+  }
+
+  async function stop() {
+    await halt(server);
     await trap.close();
     rmSync(root, { recursive: true, force: true });
   }
 
-  try {
-    await waitFor(
-      async () => {
-        const response = await getText(`${origin}/api/health`);
-        return response.status === 200 ? response : undefined;
-      },
-      { timeoutMs: 60_000, alive: () => !exited, what: 'the app to answer GET /api/health' },
-    );
-  } catch (error) {
-    await stop();
-    error.message += ` (server log: ${log})`;
-    throw error;
-  }
-
-  return { origin, port, root, sourceDir, log, env: serverEnv, egress: trap.attempts, stop };
+  return {
+    origin: server.origin,
+    port: server.port,
+    root,
+    sourceDir,
+    log,
+    env: server.env,
+    egress: trap.attempts,
+    stop,
+  };
 }
 
 /**
@@ -186,9 +280,16 @@ export async function runAppToExit({ env, timeoutMs = 30_000, readDelayMs = 0 })
   const trap = await startEgressTrap();
   const child = spawn(process.execPath, [SERVER_JS], {
     cwd: path.dirname(SERVER_JS),
-    env: { ...baseEnv(home, await freePort()), ...env, ...trap.env },
+    env: {
+      ...baseEnv(home, await freePort()),
+      ...env,
+      ...trap.env,
+      NODE_OPTIONS: nodeOptions(env, trap),
+    },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
+  running.set(child, home);
+  child.once('exit', () => running.delete(child));
   // Each stream on its own, so stderr never splits a JSON line from stdout.
   const output = { stdout: '', stderr: '' };
   for (const [name, stream] of /** @type {const} */ ([
