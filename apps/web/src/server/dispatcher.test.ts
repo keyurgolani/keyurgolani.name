@@ -68,6 +68,7 @@ function doubles(handlers: Record<string, Handler>, overrides: Partial<StudioBin
     throttle: async () => null,
     invalidInput: async () => null,
     checkVersion: async () => true,
+    recheckSession: async () => null,
     ...overrides,
   } satisfies StudioBindings;
 }
@@ -944,6 +945,55 @@ test("7: a handler's declared error carries its headers; an undeclared one is a 
   assert.equal(declared.headers.get('x-draft'), 'r2');
   assert.equal((await errorOf(declared)).code, 'version_conflict');
   assert.equal((await errorOf(await run('fake.publish'))).code, 'internal_error');
+});
+
+test('7: a handler checks the session again before its commit point, and stops with what that answers', async (t) => {
+  const steps: string[] = [];
+  let ended = false;
+  const cleared = 'studio_session=; Max-Age=0; Path=/';
+  const operation = fake('publish', { kind: 'command', errors: ['authentication_required'] });
+  const dispatch = owner(
+    t,
+    [operation],
+    doubles(
+      {
+        [operation.name]: async (_authorized, _input, context) => {
+          steps.push('prepared');
+          const stop = await context.recheckSession();
+          if (stop) return stop;
+          steps.push('committed');
+          return { ok: true };
+        },
+      },
+      {
+        recheckSession: async ({ session }) =>
+          ended && session
+            ? errorResult('authentication_required', { headers: { 'set-cookie': cleared } })
+            : null,
+      },
+    ),
+  );
+  const send = () =>
+    dispatch(
+      call('POST', operation.name, { session: 'owner', origin: true, body: '{}' }).request,
+      operation.name,
+    );
+  assert.equal((await send()).status, 200);
+  assert.deepEqual(steps, ['prepared', 'committed']);
+  // The session ends while the next one runs: it stops before committing.
+  ended = true;
+  const stopped = await send();
+  assert.equal(stopped.status, 401);
+  assert.deepEqual(stopped.headers.getSetCookie(), [cleared]);
+  assert.equal((await errorOf(stopped)).code, 'authentication_required');
+  assert.deepEqual(steps, ['prepared', 'committed', 'prepared']);
+
+  // With no provider's check, no session counts there, and a request with
+  // none has nothing to end.
+  const context = { request: new Request('https://rowan.test/'), requestId: 'req-test', operation };
+  assert.equal(await NO_BINDINGS.recheckSession({ ...context, session: null }), null);
+  const refused = await NO_BINDINGS.recheckSession({ ...context, session: SESSION });
+  assert.equal(refused?.kind === 'error' ? refused.code : refused, 'authentication_required');
 });
 
 test('7: no binding or result replaces a header the dispatcher sets', async (t) => {

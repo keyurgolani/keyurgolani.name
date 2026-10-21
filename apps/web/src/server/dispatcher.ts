@@ -10,7 +10,7 @@ import {
 } from './operations';
 import { capabilityPolicy } from './policy';
 import { isMintedSession, type Session } from './session';
-import { isStudioResult, type StudioResult } from './studio-result';
+import { errorResult, isStudioResult, type StudioResult } from './studio-result';
 import type { Dispatch } from './studio-port';
 
 // The one dispatcher behind /api/studio/[name] (#1, item 11). It runs its
@@ -27,7 +27,10 @@ import type { Dispatch } from './studio-port';
 //   5. input schema, on the search parameters or the JSON or form body: 400,
 //      or what invalidInput answers instead, such as a form post's 303 (#2)
 //   6. expected draft version or live revision (#3): 409
-//   7. handler, then output schema; anything unexpected: 500
+//   7. handler, then output schema; anything unexpected: 500. A command of
+//      more than one step calls recheckSession() before its commit point,
+//      such as #3's pointer advance, and stops with what it answers once
+//      the session has ended (#2)
 //
 // It decides with the policy of the deployment register() froze, read per
 // request. Every response is `Cache-Control: no-store`. Errors are
@@ -53,6 +56,14 @@ export type InputType = 'search' | BodyType;
 
 export interface HandlerContext extends SessionContext {
   readonly inputType: InputType;
+  /**
+   * The session read again, for a command of more than one step just
+   * before its commit point (#2): null while the session the request
+   * carried still counts, or the answer to stop with once it has ended,
+   * such as 401 with the cookie cleared. A request that carried no session
+   * has none to end, and gets null.
+   */
+  readonly recheckSession: () => Promise<StudioResult | null>;
 }
 
 /** Step 2's answer. */
@@ -111,12 +122,20 @@ export interface StudioBindings {
   readonly checkVersion: (
     context: SessionContext & { readonly input: unknown },
   ) => Promise<boolean>;
+  /**
+   * Step 7, when a handler asks before its commit point (#2): null while
+   * the request's session still counts, or the answer to stop with once it
+   * has ended, whether by logout, revocation, revoke-sessions, or a limit
+   * passing while the command ran.
+   */
+  readonly recheckSession: (context: SessionContext) => Promise<StudioResult | null>;
 }
 
 /**
- * No handlers, no session, every origin and version refused, and nothing to
- * slide or throttle: read-only and demo, and the parts of owner that #2 and
- * #3 haven't supplied yet.
+ * No handlers, no session, every origin and version refused, nothing to
+ * slide or throttle, and no session that still counts when a handler checks
+ * again: read-only and demo, and the parts of owner that #2 and #3 haven't
+ * supplied yet.
  */
 export const NO_BINDINGS: StudioBindings = Object.freeze({
   handlers: Object.freeze({}),
@@ -126,6 +145,8 @@ export const NO_BINDINGS: StudioBindings = Object.freeze({
   throttle: async () => null,
   invalidInput: async () => null,
   checkVersion: async () => false,
+  recheckSession: async ({ session }: SessionContext) =>
+    session === null ? null : errorResult('authentication_required'),
 });
 
 export interface DispatcherOptions extends StudioBindings {
@@ -241,7 +262,11 @@ export function createDispatcher(options: DispatcherOptions): Dispatch {
 
         const handler = handlers[operation.name];
         if (!handler) throw new Error(`No handler is bound for ${operation.name}.`);
-        const answer = await handler(authorized, input.data, { ...context, inputType: read.type });
+        const answer = await handler(authorized, input.data, {
+          ...context,
+          inputType: read.type,
+          recheckSession: () => options.recheckSession(context),
+        });
         return respond(operation, answer);
       } finally {
         // Whatever happened after the throttle, including a body that broke

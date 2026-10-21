@@ -34,6 +34,11 @@ export interface AuthBindings {
   readonly throttle?: StudioBindings['throttle'];
   /** What a malformed input gets instead of 400, such as the sign-in form's 303. */
   readonly invalidInput?: StudioBindings['invalidInput'];
+  /**
+   * The session read again before a multi-step command's commit point.
+   * Without one, a command that asks is stopped whenever it has a session.
+   */
+  readonly recheckSession?: StudioBindings['recheckSession'];
   /** Handlers for the provider's own entries, such as auth.login. */
   readonly handlers?: Readonly<Record<string, Handler>>;
   /** How Studio pages find their session, for requireOwnerPage. Without it, every one is refused. */
@@ -320,6 +325,10 @@ export async function compose(input: CompositionInput): Promise<Composition> {
           provider.invalidInput
             ? provider.invalidInput(context)
             : NO_BINDINGS.invalidInput(context),
+        recheckSession: (context) =>
+          provider.recheckSession
+            ? provider.recheckSession(context)
+            : NO_BINDINGS.recheckSession(context),
       };
       return built(config, {
         reader: documents.reader,
