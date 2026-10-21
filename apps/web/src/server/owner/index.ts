@@ -3,7 +3,7 @@ import type { DeploymentConfig } from '../config';
 import type { CatalogAdapter } from '../config-summary';
 import type { Handler } from '../dispatcher';
 import { recordOwnerModule } from '../load-trace';
-import type { VariantHealth } from '../variant-health';
+import type { LiveVariantHealth } from '../variant-health';
 import { configStatus } from './config-status';
 
 // Owner code. Only composition.ts loads it, through import() in its owner
@@ -19,7 +19,7 @@ export interface OwnerInput {
   readonly config: DeploymentConfig;
   readonly catalog: CatalogAdapter;
   /** How the live site's variant renders, for config.status. */
-  readonly variantHealth: () => Promise<VariantHealth>;
+  readonly variantHealth: () => Promise<LiveVariantHealth>;
 }
 
 /** The owner operation handlers, by operation name. */

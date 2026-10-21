@@ -11,7 +11,7 @@ import type { DeploymentState } from './config-store';
 import { createDispatcher, NO_BINDINGS, type StudioBindings } from './dispatcher';
 import { listOperations, type ConfigSummary } from './operations';
 import type { Session } from './session';
-import { variantHealth } from './variant-health';
+import { liveVariantHealth } from './variant-health';
 
 // The composition root (#1, item 14). It builds what one profile needs and
 // nothing else: read-only gets the documents adapter, demo the bundled
@@ -276,8 +276,8 @@ export async function compose(input: CompositionInput): Promise<Composition> {
         handlers: owner.ownerHandlers({
           config,
           catalog,
-          variantHealth: async () =>
-            variantHealth((await reader.getLive()).unit.site.appearance.variant),
+          variantHealth: () =>
+            liveVariantHealth(async () => (await reader.getLive()).unit.site.appearance.variant),
         }),
         resolveSession: (context) => provider.resolveSession(context),
         checkOrigin: (context) => provider.checkOrigin(context),

@@ -14,10 +14,33 @@ export interface VariantHealth {
   readonly rendered: string;
 }
 
+/** What config.status reports: the health, or a failure, which names the selection when it's known. */
+export type LiveVariantHealth =
+  VariantHealth | { readonly status: 'fail'; readonly requested: string | null };
+
 /** The health of a selection, once the module that renders it has loaded. It throws when that fails. */
 export async function variantHealth(selected: string): Promise<VariantHealth> {
   const composition = compositionFor(selected);
   const rendered = composition.rendered.manifest.id;
   await loadComposition(rendered);
   return { status: composition.fallback ? 'degraded' : 'ok', requested: selected, rendered };
+}
+
+/**
+ * The live site's variant health, for config.status, which never throws: a
+ * revision that doesn't load, or a variant module that doesn't, is
+ * `{ status: 'fail' }`, with the selection when the revision said it, so the
+ * owner still gets the rest of the summary.
+ */
+export async function liveVariantHealth(
+  selection: () => Promise<string>,
+  health: (selected: string) => Promise<VariantHealth> = variantHealth,
+): Promise<LiveVariantHealth> {
+  let requested: string | null = null;
+  try {
+    requested = await selection();
+    return await health(requested);
+  } catch {
+    return { status: 'fail', requested };
+  }
 }
