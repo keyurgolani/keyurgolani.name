@@ -8,8 +8,10 @@
  * takes, set to 0, the default.
  */
 export const CANARY_SECRET = 'canary-secret-5d81c2e7';
-/** The read-only source directory's name, so its path holds a canary. */
+/** The read-only and owner source directory's name, so its path holds a canary. */
 export const CANARY_SOURCE = 'canary-source-0f3b9a64';
+/** The owner data directory's name, so its path holds a canary. */
+export const CANARY_DATA = 'canary-data-3e9d51b0';
 /** Sent in every request body, which no response may echo. */
 export const CANARY_BODY = 'canary-draft-7c1e04aa';
 /** Fields only the config summary has, which only an owner session gets, through config.status. */
@@ -54,17 +56,41 @@ export function encodings(value) {
 
 /**
  * What no response may carry, in every encoding. `root` is the server's own
- * directory, or a part of its path no response has a reason to name.
+ * directory, or a part of its path no response has a reason to name, and
+ * `secrets` the run's own, such as owner's password and its hash. With
+ * `summary: false` the config summary's fields are left out, for requests
+ * an owner session sends: config.status answers it with the summary.
  *
  * @param {string} root
+ * @param {{ secrets?: readonly string[], summary?: boolean }} [options]
  * @returns {string[]}
  */
-export function canaries(root) {
+export function canaries(root, { secrets = [], summary = true } = {}) {
   return [
     ...new Set(
-      [CANARY_SECRET, CANARY_SOURCE, CANARY_BODY, root, ...SUMMARY_FIELDS].flatMap(encodings),
+      [
+        CANARY_SECRET,
+        CANARY_SOURCE,
+        CANARY_DATA,
+        CANARY_BODY,
+        root,
+        ...(summary ? SUMMARY_FIELDS : []),
+        ...secrets,
+      ].flatMap(encodings),
     ),
   ];
+}
+
+/**
+ * The parts of an owner password hash a leak would show: the whole PHC
+ * string, and its salt and key on their own.
+ *
+ * @param {string} hash
+ * @returns {string[]}
+ */
+export function hashCanaries(hash) {
+  const [, , , salt, key] = hash.split('$');
+  return [hash, salt, key].filter((part) => typeof part === 'string' && part.length >= 16);
 }
 
 /** A JSON log line no server writes, so a request that gets it into the log forged it. */

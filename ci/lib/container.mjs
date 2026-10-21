@@ -26,10 +26,11 @@ function probeFromInside(pathname) {
 }
 
 /**
- * Sends each request in `requests`, a JSON array of { method, path, body? },
- * to the app inside its own container, one after another, at the address the
- * image HEALTHCHECK uses. A body goes as JSON. Prints a JSON array with one
- * { status, headers, body } or { error } per request.
+ * Sends each request in `requests`, a JSON array of { method, path, body?,
+ * headers? }, to the app inside its own container, one after another, at the
+ * address the image HEALTHCHECK uses. A body goes as JSON, with any headers
+ * the request names. Prints a JSON array with one { status, headers, cookies,
+ * body } or { error } per request, `cookies` holding each Set-Cookie.
  */
 function requestsFromInside(requests) {
   const h = process.env.HOSTNAME;
@@ -37,19 +38,23 @@ function requestsFromInside(requests) {
   const base = `http://${host}:${process.env.PORT || 3000}`;
   (async () => {
     const results = [];
-    for (const { method, path, body } of JSON.parse(requests)) {
+    for (const { method, path, body, headers = {} } of JSON.parse(requests)) {
       try {
         const response = await fetch(`${base}${path}`, {
           method,
           redirect: 'manual',
           signal: AbortSignal.timeout(15000),
           ...(body === undefined
-            ? {}
-            : { body: JSON.stringify(body), headers: { 'content-type': 'application/json' } }),
+            ? { headers }
+            : {
+                body: JSON.stringify(body),
+                headers: { 'content-type': 'application/json', ...headers },
+              }),
         });
         results.push({
           status: response.status,
           headers: Object.fromEntries(response.headers),
+          cookies: response.headers.getSetCookie(),
           body: await response.text(),
         });
       } catch (error) {
@@ -58,6 +63,22 @@ function requestsFromInside(requests) {
     }
     process.stdout.write(JSON.stringify(results));
   })();
+}
+
+/**
+ * Reads every regular file under `root` that the container's user can read.
+ * Prints JSON: { files }, each file's text by its path under `root`.
+ */
+function treeFromInside(root) {
+  const fs = process.getBuiltinModule('node:fs');
+  const path = process.getBuiltinModule('node:path');
+  const files = {};
+  for (const entry of fs.readdirSync(root, { withFileTypes: true, recursive: true })) {
+    if (!entry.isFile()) continue;
+    const full = path.join(entry.parentPath, entry.name);
+    files[path.relative(root, full)] = fs.readFileSync(full, 'latin1');
+  }
+  process.stdout.write(JSON.stringify({ files }));
 }
 
 /**
@@ -126,6 +147,7 @@ export const PROBE_SNIPPET = `(${probeFromInside.toString()})(process.argv[1])`;
 export const WRITABLE_SNIPPET = `(${writableFromInside.toString()})(process.argv[1], Number(process.argv[2]), Number(process.argv[3]))`;
 export const REQUESTS_SNIPPET = `(${requestsFromInside.toString()})(process.argv[1])`;
 export const SCAN_SNIPPET = `(${scanFromInside.toString()})(process.argv[1])`;
+export const TREE_SNIPPET = `(${treeFromInside.toString()})(process.argv[1])`;
 
 /**
  * Reads `ip route` output from a container on an internal network. Under

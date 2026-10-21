@@ -7,18 +7,20 @@
 // point at the canonical path. Health and readiness answer their documented
 // shapes, and the canary scan (#1, Verification item 2) finds no path,
 // secret, or config summary in any response. A spec runs it for the profile
-// its app options start.
+// its app options start: read-only and demo, and owner with the password
+// provider (#2), whose password and hash join the canaries.
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { APIResponse } from '@playwright/test';
+import type { APIRequestContext, APIResponse } from '@playwright/test';
 import { parse } from 'yaml';
 import type * as Capabilities from '../../apps/web/src/server/capabilities';
 import type * as Operations from '../../apps/web/src/server/operations';
 import type * as Routes from '../../apps/web/src/server/routes';
 import {
   CANARY_BODY,
+  CANARY_DATA,
   CANARY_SECRET,
   CANARY_SOURCE,
   canaries as leakCanaries,
@@ -27,7 +29,7 @@ import {
   IMAGE_PROBE,
 } from './canaries.mjs';
 import { DEFAULT_SITE } from './app-server.mjs';
-import { expect, test, type AppOptions } from './fixtures';
+import { expect, test, type App, type AppOptions } from './fixtures';
 import { VARIANTS } from './registry';
 
 // apps/web has no "type": "module", so its modules are CommonJS to Node and
@@ -57,6 +59,31 @@ export const DEMO_APP: AppOptions = {
   site: null,
 };
 
+/**
+ * The owner profile on the harness fixture with the password provider (#2):
+ * `hash` in a _FILE beside the hop count, and a data directory made for the
+ * run, each at a canary path.
+ */
+export function ownerApp(hash: string): AppOptions {
+  return {
+    sourceName: CANARY_SOURCE,
+    dataName: CANARY_DATA,
+    env: { PORTFOLIO_PROFILE: 'owner' },
+    envFiles: {
+      ...ENV_FILES,
+      PORTFOLIO_AUTH_PASSWORD_HASH_FILE: {
+        path: `${CANARY_SECRET}/owner_password_hash`,
+        text: `${hash}\n`,
+      },
+    },
+  };
+}
+
+export interface MatrixOptions {
+  /** The run's own secrets, such as owner's password and its hash, which no response may carry. */
+  readonly secrets?: readonly string[];
+}
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const METHODS = ['GET', 'POST', 'PUT', 'DELETE'] as const;
 
@@ -74,7 +101,9 @@ function expected(
   }
   if (method !== (operation.kind === 'query' ? 'GET' : 'POST')) return [405, 'method_not_allowed'];
   if (operation.session) return [401, 'authentication_required'];
-  // No provider: the origin check refuses every command.
+  // These requests send no Origin, so the origin check refuses every
+  // command: owner's provider wants the exact one, and the other profiles
+  // bind no provider, whose check refuses them all.
   if (operation.kind === 'command') return [403, 'request_origin_rejected'];
   return [200, null];
 }
@@ -89,6 +118,7 @@ const BASELINE_HEADERS = {
 /** The site document each profile's app serves here: the harness fixture, or the bundled sample. */
 const SERVED_SITES: Partial<Record<Profile, string>> = {
   'read-only': DEFAULT_SITE,
+  owner: DEFAULT_SITE,
   demo: fileURLToPath(new URL('../../site.example.yml', import.meta.url)),
 };
 
@@ -138,8 +168,53 @@ function expectProfileHeaders(profile: Profile, response: APIResponse, what: str
   );
 }
 
+/** Every target the leak scan requests: each route, retired route, and operation, and some that don't exist. */
+function scanTargets(): string[] {
+  return [
+    ...listRoutes()
+      .filter((route) => route.capability !== 'operations')
+      .map((route) => concrete(route.pattern)),
+    ...RETIRED_PATTERNS.map(concrete),
+    ...listOperations().map((operation) => `/api/studio/${operation.name}`),
+    '/api/studio/no.such.operation',
+    '/no-such-page',
+    '/api/no-such-route',
+    IMAGE_PROBE,
+  ];
+}
+
+/**
+ * Sends GET and POST to every scan target, with `headers` on each, and
+ * expects no canary in any body or header of what comes back.
+ */
+export async function expectNoLeaks(
+  request: APIRequestContext,
+  canaries: readonly string[],
+  headers: Record<string, string> = {},
+): Promise<void> {
+  for (const target of scanTargets()) {
+    for (const method of ['GET', 'POST'] as const) {
+      const response = await request.fetch(target, {
+        method,
+        maxRedirects: 0,
+        headers,
+        data: method === 'POST' ? { draft: CANARY_BODY } : undefined,
+      });
+      const body = (await response.body()).toString('latin1');
+      const sent = response
+        .headersArray()
+        .map(({ name, value }) => `${name}: ${value}`)
+        .join('\n');
+      for (const canary of canaries) {
+        expect(body, `${method} ${target}: body`).not.toContain(canary);
+        expect(sent, `${method} ${target}: headers`).not.toContain(canary);
+      }
+    }
+  }
+}
+
 /** Registers the matrix for `profile`, which the spec's app options must start. */
-export function profileMatrix(profile: Profile): void {
+export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions = {}): void {
   const annotation = { type: 'profile', description: profile };
 
   test(`the app under test runs ${profile}`, async ({ app }) => {
@@ -235,51 +310,44 @@ export function profileMatrix(profile: Profile): void {
     },
   );
 
-  test(
-    'no response to GET or POST carries a path, a secret, or the config summary, and no owner module loads',
-    { annotation: [{ type: 'route', description: 'every route' }, annotation] },
-    async ({ app, request }) => {
-      // Every path the server could leak sits under its own directory: the
-      // build, the bundled example, the source directory, and the _FILE it
-      // read at startup. The summary's own fields go only to an owner
-      // session, through config.status (#1, item 20).
-      const canaries = leakCanaries(path.basename(app.root));
-      expect(app.env[HOPS_FILE.key]).toContain(CANARY_SECRET);
-      if (profile === 'read-only') expect(app.env.PORTFOLIO_SOURCE_DIR).toContain(CANARY_SOURCE);
-      const targets = [
-        ...listRoutes()
-          .filter((route) => route.capability !== 'operations')
-          .map((route) => concrete(route.pattern)),
-        ...RETIRED_PATTERNS.map(concrete),
-        ...listOperations().map((operation) => `/api/studio/${operation.name}`),
-        '/api/studio/no.such.operation',
-        '/no-such-page',
-        '/api/no-such-route',
-        IMAGE_PROBE,
-      ];
-      for (const target of targets) {
-        for (const method of ['GET', 'POST'] as const) {
-          const response = await request.fetch(target, {
-            method,
-            maxRedirects: 0,
-            data: method === 'POST' ? { draft: CANARY_BODY } : undefined,
-          });
-          const body = (await response.body()).toString('latin1');
-          const headers = response
-            .headersArray()
-            .map(({ name, value }) => `${name}: ${value}`)
-            .join('\n');
-          for (const canary of canaries) {
-            expect(body, `${method} ${target}: body`).not.toContain(canary);
-            expect(headers, `${method} ${target}: headers`).not.toContain(canary);
-          }
-        }
-      }
-      // After every route and operation, still no owner module.
-      const ready = (await (await request.get('/api/ready')).json()) as { checks: unknown[] };
-      expect(ready.checks).toContainEqual({ id: 'owner-modules', status: 'ok' });
-    },
-  );
+  /**
+   * The canaries for this run, once the app shows it seeded them. Every path
+   * the server could leak sits under its own directory: the build, the
+   * bundled example, the source directory, the data directory, and the
+   * _FILEs it read at startup. The summary's own fields go only to an owner
+   * session, through config.status (#1, item 20).
+   */
+  const seeded = (app: App) => {
+    expect(app.env[HOPS_FILE.key]).toContain(CANARY_SECRET);
+    if (profile !== 'demo') expect(app.env.PORTFOLIO_SOURCE_DIR).toContain(CANARY_SOURCE);
+    if (profile === 'owner') {
+      expect(app.env.PORTFOLIO_DATA_DIR).toContain(CANARY_DATA);
+      expect(app.env.PORTFOLIO_AUTH_PASSWORD_HASH_FILE).toContain(CANARY_SECRET);
+      expect(secrets.length, 'the password and the hash').toBeGreaterThan(1);
+    }
+    return leakCanaries(path.basename(app.root), { secrets });
+  };
+
+  if (profile === 'owner') {
+    test(
+      'no response to GET or POST carries a path, a secret, the config summary, the password, or its hash',
+      { annotation: [{ type: 'route', description: 'every route' }, annotation] },
+      async ({ app, request }) => {
+        await expectNoLeaks(request, seeded(app));
+      },
+    );
+  } else {
+    test(
+      'no response to GET or POST carries a path, a secret, or the config summary, and no owner module loads',
+      { annotation: [{ type: 'route', description: 'every route' }, annotation] },
+      async ({ app, request }) => {
+        await expectNoLeaks(request, seeded(app));
+        // After every route and operation, still no owner module.
+        const ready = (await (await request.get('/api/ready')).json()) as { checks: unknown[] };
+        expect(ready.checks).toContainEqual({ id: 'owner-modules', status: 'ok' });
+      },
+    );
+  }
 
   test(
     'an unknown operation gets the same 404 envelope',

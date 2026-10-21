@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import http from 'node:http';
 import { tmpdir } from 'node:os';
@@ -12,6 +12,7 @@ import {
   PROBE_SNIPPET,
   REQUESTS_SNIPPET,
   SCAN_SNIPPET,
+  TREE_SNIPPET,
   WRITABLE_SNIPPET,
 } from './lib/container.mjs';
 
@@ -62,6 +63,8 @@ async function withServer(host, fn) {
     req.on('end', () => {
       res.setHeader('content-type', 'application/json');
       res.setHeader('x-seen-type', req.headers['content-type'] ?? 'none');
+      res.setHeader('x-seen-origin', req.headers.origin ?? 'none');
+      if (req.url === '/cookies') res.setHeader('set-cookie', ['a=1; Path=/', 'b=2; Path=/']);
       res.statusCode = req.url === '/missing' ? 404 : 200;
       res.end(JSON.stringify({ ok: true, path: req.url, method: req.method, body }));
     });
@@ -309,6 +312,45 @@ test('the in-container requests send each method and body, in order', async () =
       [200, 'application/json', { ok: true, path: '/x', method: 'DELETE', body: '{"a":1}' }],
     ],
   );
+});
+
+test("the in-container requests send each request's own headers, and report every Set-Cookie", async () => {
+  const requests = [
+    { method: 'GET', path: '/cookies', headers: { origin: 'https://rowan.test' } },
+    { method: 'POST', path: '/x', body: {}, headers: { origin: 'https://rowan.test' } },
+    { method: 'GET', path: '/x' },
+  ];
+  const output = await withServer('127.0.0.1', async (port) =>
+    runNode(['-e', REQUESTS_SNIPPET, JSON.stringify(requests)], { PORT: String(port) }),
+  );
+  const results = JSON.parse(output.stdout);
+  assert.deepEqual(
+    results.map((result) => [
+      result.headers['x-seen-origin'],
+      result.headers['x-seen-type'],
+      result.cookies,
+    ]),
+    [
+      ['https://rowan.test', 'none', ['a=1; Path=/', 'b=2; Path=/']],
+      ['https://rowan.test', 'application/json', []],
+      ['none', 'none', []],
+    ],
+  );
+});
+
+test('the in-container tree read gives the text of every file under the root', () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'image-tree-'));
+  try {
+    mkdirSync(path.join(root, 'audit'));
+    writeFileSync(path.join(root, 'audit', '2026-10.jsonl'), '{"type":"logout"}\n');
+    writeFileSync(path.join(root, 'top'), 'x');
+    const output = spawnSync(process.execPath, ['-e', TREE_SNIPPET, root], { encoding: 'utf8' });
+    assert.deepEqual(JSON.parse(output.stdout), {
+      files: { [path.join('audit', '2026-10.jsonl')]: '{"type":"logout"}\n', top: 'x' },
+    });
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test('the in-container requests report a connection error per request', async () => {

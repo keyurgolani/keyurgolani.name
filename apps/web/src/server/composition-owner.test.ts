@@ -20,11 +20,12 @@ import { listRoutes, resolveRoute, RETIRED_PATTERNS, routeAccess } from './route
 import { redirectResult } from './studio-result';
 
 // Owner in process, with a test double for #2's provider: the route and
-// operation matrix for owner, which #2 reruns end to end with its own. A
-// request carrying `x-test-session: owner` has a session the double minted,
-// and a command passes the origin check when it comes from PORTFOLIO_ORIGIN.
-// The double answers the provider's own auth entries with fixed output, so
-// the matrix covers them too; owner/auth.test.ts runs the real ones.
+// operation matrix for owner, which tests/e2e/owner.spec.ts runs end to end
+// with the password provider. A request carrying `x-test-session: owner` has
+// a session the double minted, and a command passes the origin check when it
+// comes from PORTFOLIO_ORIGIN. The double answers the provider's own auth
+// entries with fixed output, so the matrix covers them too;
+// owner/auth.test.ts runs the real ones.
 
 const EXAMPLES = {
   portfolio: fileURLToPath(new URL('../../../../portfolio.example.yml', import.meta.url)),

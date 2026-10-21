@@ -14,10 +14,21 @@
 //   canary (tests/harness/canaries.mjs) or the server's own path. After all
 //   of that, readiness still reports no owner module loaded, and the log
 //   holds one deployment.config line with every secret unset.
-// - owner, with deploy/compose.owner.yml's data directory on a named volume
-//   and no password hash, refuses to start for the hash alone: the data
-//   directory passes. The volume starts out owned by uid 1001, mode 0700, as
-//   the image's directory is.
+// - owner, with the password provider (#2), on the same read-only root and
+//   cache tmpfs, with the harness fixture at a canary path, its data
+//   directory on a new named volume at /var/lib/portfolio as
+//   deploy/compose.owner.yml mounts it, and a hash the image's own
+//   hash-password --stdin made for a password made for the run, in a _FILE
+//   beside the hop count. The same matrix and canary scan as read-only, with
+//   the password, the hash, and the data directory among the canaries, and
+//   one deployment.config line with only the hash set. Then the owner signs
+//   in: no response to a signed-in request carries a canary, but for the
+//   summary config.status gives an owner session, sign-out ends the
+//   session, and neither the log nor the data directory holds the password
+//   or the hash.
+// - owner with no password hash refuses to start for the hash alone: the
+//   data directory passes. Its volume starts out owned by uid 1001, mode
+//   0700, as the image's directory is.
 // - every startup row in tests/harness/startup-rows.mjs that refuses exits 1
 //   with its config.fatal lines and none of its canary values, and every one
 //   that starts serves with its config.warning lines and none of its values.
@@ -46,10 +57,12 @@ import {
   CANARY_SOURCE,
   canaries,
   FORGED_LINE,
+  hashCanaries,
   HOPS_FILE,
   IMAGE_PROBE,
 } from '../tests/harness/canaries.mjs';
 import { waitFor } from '../tests/harness/net.mjs';
+import { ownerSecret } from '../tests/harness/owner-secret.mjs';
 import {
   checkRefusal,
   checkWarnings,
@@ -58,7 +71,7 @@ import {
   WARNING_ROWS,
   warningLines,
 } from '../tests/harness/startup-rows.mjs';
-import { PROBE_SNIPPET, REQUESTS_SNIPPET } from './lib/container.mjs';
+import { PROBE_SNIPPET, REQUESTS_SNIPPET, TREE_SNIPPET } from './lib/container.mjs';
 import {
   currentGate,
   REPO_ROOT,
@@ -82,6 +95,7 @@ const timeoutMs = Number(process.env.SMOKE_TIMEOUT_MS || 90_000);
 const run = `${prefix}profiles-${process.pid}`;
 const network = `${run}-net`;
 const volume = `${run}-data`;
+const ownerVolume = `${run}-owner-data`;
 // Under the repo (gitignored) rather than os.tmpdir(): Finch's VM shares the
 // home directory but not macOS's per-user temp directory.
 const stateDir = path.join(REPO_ROOT, 'test-results', 'smoke-profiles', run);
@@ -96,6 +110,11 @@ const METHODS = ['GET', 'POST', 'PUT', 'DELETE'];
 const SERVER_DIR = '/app/apps/web';
 // The canary _FILE, mounted read-only in every profile's container.
 const SECRET_DIR = `/run/${CANARY_SECRET}`;
+// Owner's hash, beside it, and its data directory, where compose.owner.yml puts it.
+const HASH_FILE = 'owner_password_hash';
+const DATA_DIR = '/var/lib/portfolio';
+const SESSION_COOKIE =
+  /^__Host-studio_session=([A-Za-z0-9_-]{43}); Path=\/; Max-Age=\d+; HttpOnly; SameSite=Strict; Secure$/;
 const BASELINE_HEADERS = {
   'x-content-type-options': 'nosniff',
   'referrer-policy': 'strict-origin-when-cross-origin',
@@ -122,7 +141,9 @@ function expectedOperation(profile, operation, method) {
   }
   if (method !== (operation.kind === 'query' ? 'GET' : 'POST')) return [405, 'method_not_allowed'];
   if (operation.session) return [401, 'authentication_required'];
-  // No provider: the origin check refuses every command.
+  // These requests send no Origin, so the origin check refuses every
+  // command: owner's provider wants the exact one, and the other profiles
+  // bind no provider, whose check refuses them all.
   if (operation.kind === 'command') return [403, 'request_origin_rejected'];
   return [200, null];
 }
@@ -152,6 +173,7 @@ let registered;
 const SELECTED = Object.fromEntries(
   Object.entries({
     'read-only': DEFAULT_SITE,
+    owner: DEFAULT_SITE,
     demo: path.join(REPO_ROOT, 'site.example.yml'),
   }).map(([profile, file]) => [profile, parseYaml(readFileSync(file, 'utf8')).appearance.variant]),
 );
@@ -175,9 +197,38 @@ function readyBody(profile) {
     checks: [
       { id: 'catalog', status: 'ok' },
       { id: 'packs', status: packs },
-      { id: 'owner-modules', status: 'ok' },
+      // Owner's modules are its own.
+      ...(profile === 'owner' ? [] : [{ id: 'owner-modules', status: 'ok' }]),
     ],
   };
+}
+
+/** Every path the leak scans request: each route, retired route, and operation, and some that don't exist. */
+function scanTargets() {
+  return [
+    ...listRoutes()
+      .filter((route) => route.capability !== 'operations')
+      .map((route) => concrete(route.pattern)),
+    ...RETIRED_PATTERNS.map(concrete),
+    IMAGE_PROBE,
+    ...listOperations().map((operation) => `/api/studio/${operation.name}`),
+    '/api/studio/no.such.operation',
+    '/no-such-page',
+    '/api/no-such-route',
+  ];
+}
+
+/** The canaries a response or a header carries, as problems. */
+function leaksIn(response, leaks) {
+  const problems = [];
+  const headers = Object.entries(response.headers ?? {})
+    .map(([name, value]) => `${name}: ${value}`)
+    .join('\n');
+  for (const canary of leaks) {
+    if (headers.includes(canary)) problems.push(`a header carries ${canary}`);
+    if ((response.body ?? '').includes(canary)) problems.push(`the body carries ${canary}`);
+  }
+  return problems;
 }
 
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
@@ -192,9 +243,10 @@ function parse(body) {
 
 /**
  * The requests a profile's container gets, each with the problems its
- * response shows: the route matrix, health, and readiness.
+ * response shows: the route matrix, health, and readiness. `leaks` are the
+ * canaries no response may carry.
  */
-function plan(profile) {
+function plan(profile, leaks) {
   const requests = [];
   const add = (method, pathname, check) =>
     requests.push({
@@ -256,19 +308,11 @@ function plan(profile) {
   }
   // Every response: the baseline headers, no cookie, noindex exactly where
   // the profile can't be indexed, and no canary in a header or the body.
-  const leaks = canaries(SERVER_DIR);
   for (const request of requests) {
     const own = request.check;
     request.check = (response) => {
       if (response.error) return [`no answer (${response.error})`];
-      const problems = own(response);
-      const headers = Object.entries(response.headers)
-        .map(([name, value]) => `${name}: ${value}`)
-        .join('\n');
-      for (const canary of leaks) {
-        if (headers.includes(canary)) problems.push(`a header carries ${canary}`);
-        if (response.body.includes(canary)) problems.push(`the body carries ${canary}`);
-      }
+      const problems = [...own(response), ...leaksIn(response, leaks)];
       for (const [name, value] of Object.entries(BASELINE_HEADERS)) {
         if (response.headers[name] !== value) problems.push(`${name} is ${response.headers[name]}`);
       }
@@ -312,7 +356,13 @@ function saveLogs(name, text) {
   return path.relative(reportsDir(), file);
 }
 
-async function profileRun(profile, { env, mounts = [] }) {
+/**
+ * Runs `profile`'s container through the matrix and the canary scan, with
+ * `secrets` among the canaries, which the log mustn't hold either, and
+ * `paths`, which no response may name. `then` runs next against the same
+ * container, for owner's signed-in checks, and returns its problems.
+ */
+async function profileRun(profile, { env, mounts = [], secrets = [], paths = [], then }) {
   const name = `${run}-${profile}`;
   const started = container([
     'run',
@@ -346,7 +396,7 @@ async function profileRun(profile, { env, mounts = [] }) {
       { timeoutMs, alive: running, what: `${profile}: GET /api/health to answer 200` },
     );
 
-    const requests = plan(profile);
+    const requests = plan(profile, canaries(SERVER_DIR, { secrets: [...secrets, ...paths] }));
     const responses = send(
       name,
       requests.map(({ method, path: pathname, body }) => ({ method, path: pathname, body })),
@@ -364,16 +414,19 @@ async function profileRun(profile, { env, mounts = [] }) {
     if (!home?.body?.includes(expectedName)) fail(profile, `GET / doesn't show ${expectedName}`);
     console.log(`[profiles] ${profile}: ${requests.length} requests checked`);
 
-    // Every route and operation done, still no owner module.
-    const [ready] = send(name, [{ method: 'GET', path: '/api/ready' }]);
-    const checks = parse(ready.body)?.checks ?? [];
-    if (!checks.some((check) => same(check, { id: 'owner-modules', status: 'ok' }))) {
-      fail(profile, `after every route, owner-modules isn't ok: ${ready.body}`, {
-        route: '/api/ready',
-      });
-    } else {
-      console.log(`[profiles] ${profile}: owner-modules ok after every route`);
+    // Every route and operation done, still no owner module, outside owner.
+    if (profile !== 'owner') {
+      const [ready] = send(name, [{ method: 'GET', path: '/api/ready' }]);
+      const checks = parse(ready.body)?.checks ?? [];
+      if (!checks.some((check) => same(check, { id: 'owner-modules', status: 'ok' }))) {
+        fail(profile, `after every route, owner-modules isn't ok: ${ready.body}`, {
+          route: '/api/ready',
+        });
+      } else {
+        console.log(`[profiles] ${profile}: owner-modules ok after every route`);
+      }
     }
+    for (const problem of then ? then(name) : []) fail(profile, problem);
 
     const logs = container(['logs', name]);
     const text = `${logs.stdout ?? ''}${logs.stderr ?? ''}`;
@@ -382,11 +435,15 @@ async function profileRun(profile, { env, mounts = [] }) {
       fail(profile, `logged deployment.config ${summaries.length} times, not once`);
     } else {
       const [summary] = summaries;
-      const secrets = Object.values(summary.secrets ?? {});
+      // Only owner's hash is set, and only under owner.
+      const expected = {
+        PORTFOLIO_AUTH_PASSWORD_HASH: profile === 'owner' ? 'set' : 'unset',
+        GITHUB_TOKEN: 'unset',
+      };
       if (summary.profile !== profile || summary.origin !== env.PORTFOLIO_ORIGIN) {
         fail(profile, `deployment.config names ${summary.profile} at ${summary.origin}`);
       }
-      if (secrets.length === 0 || secrets.some((state) => state !== 'unset')) {
+      if (!same(summary.secrets, expected)) {
         fail(profile, `deployment.config secrets are ${JSON.stringify(summary.secrets)}`);
       }
     }
@@ -404,6 +461,9 @@ async function profileRun(profile, { env, mounts = [] }) {
     // A write the read-only root refused shows up as EROFS.
     if (/EROFS|read-only file system/i.test(text)) {
       fail(profile, 'a write hit the read-only root filesystem');
+    }
+    for (const secret of secrets) {
+      if (text.includes(secret)) fail(profile, 'the log holds the password or the hash');
     }
     if (failures.length > failed) saveLogs(name, text);
     else console.log(`[profiles] ${profile} passed`);
@@ -428,6 +488,140 @@ function runToExit(name, args) {
   container(['rm', '-f', name]);
   const stdout = result.stdout ?? '';
   return { code: result.status, stdout, output: `${stdout}${result.stderr ?? ''}` };
+}
+
+/**
+ * Owner signed in (#2), with the run's password: no response to a signed-in
+ * request carries a canary, but for the summary config.status gives an owner
+ * session; sign-out ends the session; and the data directory holds neither
+ * the password nor the hash. Returns the problems found.
+ */
+function signedIn(name, { password, secrets }) {
+  const problems = [];
+  const [login] = send(name, [
+    {
+      method: 'POST',
+      path: '/api/studio/auth.login',
+      body: { password },
+      headers: { origin: ORIGIN },
+    },
+  ]);
+  const token = login.cookies?.length === 1 ? SESSION_COOKIE.exec(login.cookies[0])?.[1] : null;
+  const csrf = parse(login.body ?? '')?.data?.csrfToken;
+  if (login.status !== 200 || !token || typeof csrf !== 'string') {
+    return [
+      `sign-in answered ${login.status ?? login.error}, setting ${login.cookies?.length} cookies`,
+    ];
+  }
+  const headers = {
+    origin: ORIGIN,
+    cookie: `__Host-studio_session=${token}`,
+    'x-csrf-token': csrf,
+  };
+  const requests = scanTargets().flatMap((target) =>
+    ['GET', 'POST'].map((method) => ({
+      method,
+      path: target,
+      headers,
+      ...(method === 'GET' ? {} : { body: { draft: CANARY_BODY } }),
+    })),
+  );
+  const session = { method: 'GET', path: '/api/studio/auth.session', headers };
+  const responses = send(name, [
+    ...requests,
+    session,
+    { method: 'POST', path: '/api/studio/auth.logout', headers, body: {} },
+    session,
+  ]);
+  const leaks = canaries(SERVER_DIR, { secrets: [...secrets, DATA_DIR], summary: false });
+  requests.forEach((request, index) => {
+    const response = responses[index];
+    if (response.error) problems.push(`signed in, ${request.method} ${request.path}: no answer`);
+    for (const problem of leaksIn(response, leaks)) {
+      problems.push(`signed in, ${request.method} ${request.path} ${problem}`);
+    }
+  });
+  const [before, out, after] = responses.slice(requests.length);
+  // The scan's bodies fit no auth command, so the session lasts until sign-out.
+  if (before.status !== 200)
+    problems.push(`after the scan, auth.session answered ${before.status}`);
+  if (
+    out.status !== 200 ||
+    out.headers['clear-site-data'] !== '"cache"' ||
+    !/^__Host-studio_session=; Path=\/; Max-Age=0;/.test(out.cookies?.[0] ?? '')
+  ) {
+    problems.push(`sign-out answered ${out.status}, clearing ${JSON.stringify(out.cookies)}`);
+  }
+  if (after.status !== 401) problems.push(`after sign-out, auth.session answered ${after.status}`);
+
+  // What the server wrote: its sessions and the audit log.
+  const tree = container(['exec', name, 'node', '-e', TREE_SNIPPET, DATA_DIR], {
+    maxBuffer: 16 * 1024 * 1024,
+  });
+  const files = parse(tree.stdout ?? '')?.files;
+  if (!files || !Object.keys(files).some((file) => file.startsWith('audit/'))) {
+    problems.push(`the data directory couldn't be read, or has no audit log: ${tree.stderr}`);
+  } else {
+    for (const [file, text] of Object.entries(files)) {
+      if (secrets.some((secret) => text.includes(secret))) {
+        problems.push(`${file} in the data directory holds the password or the hash`);
+      }
+    }
+  }
+  if (problems.length === 0) {
+    console.log(
+      `[profiles] owner: signed in, ${requests.length} requests carry no canary; sign-out ends the session`,
+    );
+  }
+  return problems;
+}
+
+/** Owner with the password provider, on a new data volume and a hash made for this run. */
+async function ownerProfileRun(source) {
+  // The image's own hash-password, given the password on stdin that isn't a terminal.
+  const hasher = `${run}-hash`;
+  let secret;
+  try {
+    secret = ownerSecret([
+      cli,
+      'run',
+      '--rm',
+      '-i',
+      '--name',
+      hasher,
+      '--network',
+      network,
+      image,
+      'node',
+      'apps/web/bin/owner.mjs',
+    ]);
+  } finally {
+    container(['rm', '-f', hasher]);
+  }
+  writeFileSync(path.join(stateDir, CANARY_SECRET, HASH_FILE), `${secret.hash}\n`);
+  if (container(['volume', 'create', ownerVolume]).status !== 0) {
+    throw new Error("could not create owner's data volume");
+  }
+  const secrets = [secret.password, ...hashCanaries(secret.hash)];
+  await profileRun('owner', {
+    env: {
+      PORTFOLIO_PROFILE: 'owner',
+      PORTFOLIO_ORIGIN: ORIGIN,
+      PORTFOLIO_SOURCE_DIR: source,
+      PORTFOLIO_DATA_DIR: DATA_DIR,
+      PORTFOLIO_AUTH_PASSWORD_HASH_FILE: `${SECRET_DIR}/${HASH_FILE}`,
+    },
+    mounts: [
+      '-v',
+      `${path.dirname(DEFAULT_PORTFOLIO)}:${source}:ro`,
+      '-v',
+      `${ownerVolume}:${DATA_DIR}`,
+    ],
+    secrets,
+    // No response names the data directory either.
+    paths: [DATA_DIR],
+    then: (name) => signedIn(name, { password: secret.password, secrets }),
+  });
 }
 
 function ownerRun() {
@@ -592,6 +786,7 @@ async function smoke() {
   await profileRun('demo', {
     env: { PORTFOLIO_PROFILE: 'demo', PORTFOLIO_ORIGIN: DEMO_ORIGIN },
   });
+  await ownerProfileRun(source);
   ownerRun();
   rowRuns();
   await warningRowRuns();
@@ -605,6 +800,7 @@ try {
 } finally {
   container(['network', 'rm', network]);
   container(['volume', 'rm', '-f', volume]);
+  container(['volume', 'rm', '-f', ownerVolume]);
   rmSync(stateDir, { recursive: true, force: true });
   if (!pulled) container(['rmi', image]);
 }

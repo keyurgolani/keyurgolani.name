@@ -1,12 +1,15 @@
 #!/usr/bin/env node
-// `pnpm --filter @portfolio/web test:profiles` (#1, Verification item 2).
-// Builds the app once with no deployment setting in the environment, then
-// boots the standalone server under read-only (tests/e2e/profiles.spec.ts)
-// and demo (tests/e2e/demo.spec.ts) for the route matrix and the canary
-// scan: GET and POST to every route and operation, with no seeded path or
-// secret in any response body or header. Under owner it only checks the
-// refusal to start without a password hash and a data directory, a startup
-// row; #2 reruns the matrix under owner with its provider.
+// `pnpm --filter @portfolio/web test:profiles` (#1, Verification item 2,
+// and #2). Builds the app once with no deployment setting in the
+// environment, then boots the standalone server under read-only
+// (tests/e2e/profiles.spec.ts), demo (tests/e2e/demo.spec.ts), and owner
+// with the password provider (tests/e2e/owner.spec.ts) for the route matrix
+// and the canary scan: GET and POST to every route and operation, with no
+// seeded path or secret in any response body or header. Owner's run gets a
+// password made for it, the hash hash-password --stdin prints for it, and a
+// data directory of its own, and its scan looks for the password and the
+// hash too, signed out and signed in. Owner's refusal to start without a
+// hash and a data directory, a startup row, runs as well.
 //
 // Environment:
 //   TEST_PROFILES_WORKERS  Playwright workers (default 2)
@@ -45,6 +48,11 @@ run(
     'tests/e2e/demo.spec.ts',
     workers,
   ],
+  REPO_ROOT,
+);
+run(
+  'owner, with the password provider: the route matrix and the canary scan',
+  [process.execPath, PLAYWRIGHT, 'test', 'tests/e2e/owner.spec.ts', workers],
   REPO_ROOT,
 );
 run(
