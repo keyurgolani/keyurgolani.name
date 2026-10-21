@@ -4,11 +4,13 @@ import Module from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { themeInitScript } from '@portfolio/kit';
 import { PROFILES } from '~/server/capabilities';
 import { setDeploymentState } from '~/server/config-store';
 import { capabilityPolicy } from '~/server/policy';
-import ErrorPage from './error';
-import NotFound from './not-found';
+import ErrorPage from './(site)/error';
+import NotFound from './(site)/not-found';
+import { NotFoundDocument } from './_chrome/not-found-document';
 
 // What a visitor sees when a page fails or nothing lives at the address. No
 // page shows a path, validation text, or stack from the error, and each
@@ -58,6 +60,65 @@ test('not-found.tsx links only home', async () => {
   const html = renderToStaticMarkup(await NotFound());
   assert.match(html, /<h1>Page not found<\/h1>/);
   assertGeneric(html);
+});
+
+test("the global 404's document is in the portfolio's language and direction, with the site's theme script, the request's nonce, and none of the site's JSON-LD", async (t) => {
+  t.after(() => setDeploymentState(undefined));
+  // Before startup: the neutral language, direction, and theme.
+  setDeploymentState(undefined);
+  const neutral = renderToStaticMarkup(await NotFoundDocument({}));
+  assert.ok(
+    neutral.startsWith(
+      `<html lang="en" dir="ltr"><head><script>${themeInitScript('system')}</script></head><body><main class="host-chrome"><h1>Page not found</h1>`,
+    ),
+    neutral,
+  );
+  assertGeneric(neutral);
+  // A live pair's locale, direction, and display mode, and the nonce of a Studio path's CSP.
+  setDeploymentState({
+    config: {
+      profile: 'read-only',
+      mode: 'production',
+      origin: 'https://rowan.test',
+      trustedProxyHops: 0,
+      secrets: {},
+    },
+    catalog: {
+      getLive: async () =>
+        ({
+          revisionId: 'r1',
+          unit: {
+            portfolio: { locale: 'ar', direction: 'rtl' },
+            site: { appearance: { variant: 'fallback', displayMode: 'dark' }, sections: {} },
+          },
+        }) as never,
+    },
+    dispatch: () => assert.fail('the 404 page runs no operation'),
+    degraded: [],
+  });
+  const html = renderToStaticMarkup(await NotFoundDocument({ nonce: 'MVlEoQyHU2PoMq1Imu8oSA==' }));
+  assert.ok(
+    html.startsWith(
+      `<html lang="ar" dir="rtl"><head><script nonce="MVlEoQyHU2PoMq1Imu8oSA==">${themeInitScript('dark')}</script></head><body>`,
+    ),
+    html,
+  );
+  assert.ok(!html.includes('application/ld+json'), html);
+  assert.match(html, /<h1>Page not found<\/h1>/);
+});
+
+test("the global 404's metadata resolves against the site's origin, and names none before startup", async (t) => {
+  t.after(() => setDeploymentState(undefined));
+  // It imports the site's stylesheets, which Next bundles; Node would read them as JavaScript.
+  (Module as unknown as { _extensions: Record<string, () => void> })._extensions['.css'] = () => {};
+  const { generateMetadata } = await import('./global-not-found');
+  setDeploymentState(undefined);
+  assert.deepEqual(await generateMetadata(), { title: 'Page not found' });
+  deploy('read-only', {});
+  assert.deepEqual(await generateMetadata(), {
+    title: 'Page not found',
+    metadataBase: new URL('https://rowan.test'),
+  });
 });
 
 /** A deployment whose catalog serves `site`, or fails, carrying a canary, when there's none. */

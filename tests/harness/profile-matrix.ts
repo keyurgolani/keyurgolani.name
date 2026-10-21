@@ -405,4 +405,26 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
       }
     },
   );
+
+  test(
+    'no HTML response names localhost, and the server never resolves metadata against it',
+    { annotation: [{ type: 'route', description: 'every route' }, annotation] },
+    async ({ app, request }) => {
+      // The app here is at 127.0.0.1, so localhost could only come from the
+      // origin Next falls back to when a page's metadata has no
+      // metadataBase, which it warns of in the log.
+      let pages = 0;
+      for (const target of scanTargets()) {
+        const response = await request.get(target, { maxRedirects: 0 });
+        if (!(response.headers()['content-type'] ?? '').startsWith('text/html')) continue;
+        pages += 1;
+        expect((await response.text()).includes('localhost'), `${target} names localhost`).toBe(
+          false,
+        );
+      }
+      expect(pages, 'HTML pages to look at').toBeGreaterThan(1);
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      expect(readFileSync(app.log, 'utf8'), 'the server log').not.toContain('metadataBase');
+    },
+  );
 }

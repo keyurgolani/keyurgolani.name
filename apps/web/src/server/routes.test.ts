@@ -479,7 +479,7 @@ test('what every profile serves at the close of #1', () => {
     '/api/health',
     '/api/ready',
     '/api/studio/[name]',
-    '/opengraph-image',
+    '/opengraph-image-12o0cb',
     '/robots.txt',
     '/sitemap.xml',
   ];

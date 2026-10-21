@@ -36,7 +36,14 @@ const ROUTES = [
   { pattern: '/sample', kind: 'page', capability: 'sample.read', visitor: true },
   { pattern: '/robots.txt', kind: 'metadata', capability: 'catalog.read', visitor: true },
   { pattern: '/sitemap.xml', kind: 'metadata', capability: 'catalog.read', visitor: true },
-  { pattern: '/opengraph-image', kind: 'metadata', capability: 'catalog.read', visitor: true },
+  // The site's share image, app/(site)/opengraph-image.tsx: Next gives a
+  // metadata route inside a route group a suffix hashed from the group.
+  {
+    pattern: '/opengraph-image-12o0cb',
+    kind: 'metadata',
+    capability: 'catalog.read',
+    visitor: true,
+  },
   { pattern: '/feed.xml', kind: 'handler', capability: 'feed.read', visitor: true },
   { pattern: '/api/health', kind: 'handler', capability: 'health.read' },
   { pattern: '/api/ready', kind: 'handler', capability: 'ready.read' },

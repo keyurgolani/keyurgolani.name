@@ -151,9 +151,15 @@ test(
 
 test(
   'the Open Graph image renders per request',
-  { annotation: [{ type: 'route', description: '/opengraph-image' }, READ_ONLY] },
-  async ({ request }) => {
-    const response = await request.get('/opengraph-image');
+  { annotation: [{ type: 'route', description: '/opengraph-image-12o0cb' }, READ_ONLY] },
+  async ({ page, request }) => {
+    // Where the home page says it is, with Next's cache-buster.
+    await page.goto('/');
+    const advertised = await page.locator('meta[property="og:image"]').getAttribute('content');
+    const url = new URL(advertised ?? '');
+    expect(url.pathname).toBe('/opengraph-image-12o0cb');
+    expect(url.search).toMatch(/^\?[0-9a-f]{16}$/);
+    const response = await request.get(`${url.pathname}${url.search}`);
     expect(response.status()).toBe(200);
     expect(response.headers()['content-type']).toBe('image/png');
   },

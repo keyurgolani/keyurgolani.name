@@ -8,7 +8,7 @@ import { jsonLdScript } from '~/lib/json-ld';
 import { startingTheme } from '~/lib/starting-theme';
 import { requireDeploymentConfig } from '~/server/config-store';
 import { getPublicView } from '~/server/public-view';
-import './globals.css';
+import '../globals.css';
 // The shared section renderers' layout, then every registered variant's
 // stylesheet, which `pnpm --filter @portfolio/web build:registry` lists.
 import '@portfolio/kit/sections/styles.css';
@@ -22,7 +22,7 @@ export const dynamic = 'force-dynamic';
 /**
  * The public view of the live pair, or null when the catalog can't produce
  * one. Under `next dev` an invalid edit lands here; the layout renders
- * neutral defaults and the page's own failure reaches app/error.tsx.
+ * neutral defaults and the page's own failure reaches (site)/error.tsx.
  */
 async function liveView(): Promise<PublicView | null> {
   try {

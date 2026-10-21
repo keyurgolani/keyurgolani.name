@@ -38,6 +38,11 @@ const config: NextConfig = {
   // decoded url parameter to stderr as it came, so a visitor could forge log
   // lines. Off, Next answers it with the 404 page.
   images: { unoptimized: true },
+  // Each route group in app/ has its own root layout, the site's in
+  // app/(site) and Studio's (#2), so a URL no route matches gets
+  // app/global-not-found.tsx, which brings its own document. Without the
+  // flag, next build exits.
+  experimental: { globalNotFound: true },
   // Baseline headers on every route (#1, item 22). A route that sends its own
   // Content-Security-Policy sets frame-ancestors there and leaves this entry's
   // source, so each response carries one CSP: Studio and login (#2), public

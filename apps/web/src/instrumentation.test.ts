@@ -86,7 +86,7 @@ test('the route is the table pattern, whatever form of route path Next reports',
     ['/sample/page', 'render', '/sample'],
     ['/api/studio/[name]/route', 'route', '/api/studio/[name]'],
     ['/api/ready', 'route', '/api/ready'],
-    ['/opengraph-image/route', 'route', '/opengraph-image'],
+    ['/(site)/opengraph-image-12o0cb/route', 'route', '/opengraph-image-12o0cb'],
     ['/(site)/page', 'render', '/'],
     ['/(studio)/studio/sign-in/page', 'render', '/studio/sign-in'],
   ];

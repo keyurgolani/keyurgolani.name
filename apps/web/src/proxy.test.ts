@@ -122,7 +122,7 @@ test("while the catalog can't serve, visitor pages are a static 503 page, and th
   deploy(t, 'read-only');
   setServable(false);
   t.after(() => setServable(true));
-  for (const path of ['/', '/feed.xml', '/sitemap.xml', '/robots.txt', '/opengraph-image']) {
+  for (const path of ['/', '/feed.xml', '/sitemap.xml', '/robots.txt', '/opengraph-image-12o0cb']) {
     const response = proxy(request(path));
     assert.equal(response.status, 503, path);
     assert.equal(response.headers.get('retry-after'), '120', path);
