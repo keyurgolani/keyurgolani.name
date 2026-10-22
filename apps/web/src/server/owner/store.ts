@@ -1,5 +1,11 @@
 import 'server-only';
-import type { CatalogReader, RenderDrift, Rendering, UnitChecks } from '@portfolio/core';
+import type {
+  CatalogReader,
+  CatalogStatus,
+  RenderDrift,
+  Rendering,
+  UnitChecks,
+} from '@portfolio/core';
 import {
   claimServer,
   filesystemAuditSink,
@@ -8,11 +14,28 @@ import {
   revisionCatalogReader,
   StoreError,
   type AuditSink,
+  type DiscardOutcome,
+  type Draft,
+  type DraftEdit,
+  type DraftId,
+  type DraftOutcome,
+  type ListPage,
   type PreflightCode,
+  type PublicationContext,
+  type PublicationEvent,
+  type PublicationOutcome,
+  type PublishInput,
+  type RecoverInput,
   type RevisionCatalogReader,
+  type RevisionDetail,
+  type RevisionId,
+  type RevisionSummary,
+  type RollbackInput,
   type ServerClaim,
   type Store,
+  type StoreActor,
   type StoreLogEntry,
+  type UnitInput,
 } from '@portfolio/core/owner';
 import type { ConfigIssue, DeploymentConfig } from '../config';
 import { recordOwnerModule } from '../load-trace';
@@ -27,6 +50,13 @@ import { log } from '../log';
 // data.directory's preflight and server claim, then revision.integrity's
 // repair, the live revision's hashes, render drift, and the state. Typed by
 // shape, so this module doesn't import the composition root.
+//
+// Studio's handlers get the store only as a StudioStore, which acts as the
+// owner, whose pointer moves hold the session (#2), and never as the
+// operator, which skips the hold and is the CLI's alone. Each of its writes
+// first finishes a startup repair that didn't: while that still fails,
+// owner writes stop with store.writes.stopped, and visitors are served what
+// the reader can serve.
 
 recordOwnerModule('server/owner/store');
 
@@ -49,9 +79,55 @@ export interface OwnerStoreInput {
   readonly now?: () => number;
 }
 
+/** A pointer move's context: the request, and the owner's session held through the move. */
+export interface OwnerMoveContext {
+  readonly requestId?: string;
+  readonly holdSession: NonNullable<PublicationContext['holdSession']>;
+}
+
+/** The store as Studio's handlers use it: as the owner, and only so. */
+export interface StudioStore {
+  /** What serves, and the pointer behind it, as the reader decided for this pointer. */
+  status(): Promise<CatalogStatus>;
+  history(page: ListPage): Promise<readonly PublicationEvent[]>;
+  revisions(page: ListPage): Promise<readonly RevisionSummary[]>;
+  revision(revisionId: RevisionId): Promise<RevisionDetail | null>;
+  getWorking(): Promise<Draft | null>;
+  getDraft(draftId: DraftId): Promise<Draft | null>;
+  createDraft(input: {
+    readonly expectedVersion?: number;
+    readonly fromRevisionId?: RevisionId;
+  }): Promise<DraftOutcome>;
+  saveDraft(input: {
+    readonly draftId: DraftId;
+    readonly expectedVersion: number;
+    readonly documents: UnitInput;
+  }): Promise<DraftOutcome>;
+  applyEdits(input: {
+    readonly draftId: DraftId;
+    readonly expectedVersion: number;
+    readonly edits: readonly DraftEdit[];
+  }): Promise<DraftOutcome>;
+  rebaseDraft(input: {
+    readonly draftId: DraftId;
+    readonly expectedVersion: number;
+    readonly documents: UnitInput;
+    readonly baseRevisionId: RevisionId | null;
+  }): Promise<DraftOutcome>;
+  discardDraft(input: {
+    readonly draftId: DraftId;
+    readonly expectedVersion?: number;
+  }): Promise<DiscardOutcome>;
+  publish(input: PublishInput, context: OwnerMoveContext): Promise<PublicationOutcome>;
+  rollback(input: RollbackInput, context: OwnerMoveContext): Promise<PublicationOutcome>;
+  recover(input: RecoverInput, context: OwnerMoveContext): Promise<PublicationOutcome>;
+}
+
 export interface OwnerStore {
   readonly store: Store;
   readonly reader: RevisionCatalogReader;
+  /** The store for Studio's handlers. */
+  readonly studio: StudioStore;
   /** data.directory's #3 half: the preflight, then publication/server.json. */
   checkDirectory(): Promise<readonly ConfigIssue[]>;
   /** revision.integrity: startup repair, then the live revision as the reader serves it. */
@@ -97,8 +173,9 @@ const MESSAGES: Readonly<Record<FindingCode, string>> = {
     'Another owner server holds PORTFOLIO_DATA_DIR. Stop it first: one server runs per data ' +
     'directory. A claim its server stopped refreshing is free after 45 seconds.',
   store_repair_failed:
-    "The store's startup repair didn't finish, so what a crash left is still there. The next " +
-    'publish or rollback finishes it.',
+    "The store's startup repair didn't finish, so what a crash left is still there. Visitors " +
+    'are served what can be served, and owner writes stop until the repair finishes, which ' +
+    'each write tries first. The store.writes.stopped line says why.',
   revision_damaged:
     "The live revision can't be served, so the last known good is served in its place. Recover " +
     'or roll back to a revision this build serves. The store.catalog.degraded line says why.',
@@ -124,6 +201,82 @@ export function ownerStoreOf(value: unknown): OwnerStore | undefined {
 
 /** Store log lines through the server's log: IDs, seq, stage, duration, and drift, never content. */
 const storeLog = (entry: StoreLogEntry) => log({ ...entry });
+
+/** Who Studio acts as. The operator, who skips the session hold, is the CLI's alone. */
+const OWNER: StoreActor = 'owner';
+
+/** A pointer move's context, refused without the session hold. */
+function held(context: OwnerMoveContext): PublicationContext {
+  if (typeof context?.holdSession !== 'function') {
+    throw new TypeError("A Studio pointer move holds the owner's session.");
+  }
+  return {
+    holdSession: context.holdSession,
+    ...(context.requestId === undefined ? {} : { requestId: context.requestId }),
+  };
+}
+
+/**
+ * The store as the owner, and only as the owner: no method takes an actor,
+ * and every pointer move needs the session hold. `writable` runs before
+ * each write.
+ */
+export function studioStore(
+  store: Store,
+  reader: RevisionCatalogReader,
+  writable: () => Promise<void>,
+): StudioStore {
+  const { drafts, publication } = store;
+  const write =
+    <I, O>(run: (input: I) => Promise<O>) =>
+    async (input: I): Promise<O> => {
+      await writable();
+      return run(input);
+    };
+  const move =
+    <I>(
+      run: (
+        input: I,
+        actor: StoreActor,
+        context: PublicationContext,
+      ) => Promise<PublicationOutcome>,
+    ) =>
+    async (input: I, context: OwnerMoveContext): Promise<PublicationOutcome> => {
+      const checked = held(context);
+      await writable();
+      return run(input, OWNER, checked);
+    };
+  return Object.freeze({
+    status: () => reader.status(),
+    history: (page: ListPage) => publication.history(page),
+    revisions: (page: ListPage) => publication.revisions(page),
+    revision: (revisionId: RevisionId) => publication.revision(revisionId),
+    getWorking: () => drafts.getWorking(),
+    getDraft: (draftId: DraftId) => drafts.get(draftId),
+    createDraft: write((input: Parameters<StudioStore['createDraft']>[0]) =>
+      drafts.create(input, OWNER),
+    ),
+    saveDraft: write((input: Parameters<StudioStore['saveDraft']>[0]) => drafts.save(input, OWNER)),
+    applyEdits: write((input: Parameters<StudioStore['applyEdits']>[0]) =>
+      drafts.applyEdits(input, OWNER),
+    ),
+    rebaseDraft: write((input: Parameters<StudioStore['rebaseDraft']>[0]) =>
+      drafts.rebase(input, OWNER),
+    ),
+    discardDraft: write((input: Parameters<StudioStore['discardDraft']>[0]) =>
+      drafts.discard(input, OWNER),
+    ),
+    publish: move<PublishInput>((input, actor, context) =>
+      publication.publish(input, actor, context),
+    ),
+    rollback: move<RollbackInput>((input, actor, context) =>
+      publication.rollback(input, actor, context),
+    ),
+    recover: move<RecoverInput>((input, actor, context) =>
+      publication.recover(input, actor, context),
+    ),
+  });
+}
 
 export function ownerStore({
   config,
@@ -157,10 +310,38 @@ export function ownerStore({
   let ready = false;
   let probed: { readonly at: number; readonly result: Promise<boolean> } | undefined;
   const clock = now ?? Date.now;
+  // Set when startup repair fails: each write tries it again first, and
+  // stops while it still fails.
+  let repairPending = false;
+  let repairing: Promise<void> | undefined;
+
+  /** Before a write: the startup repair that didn't finish, finished now, or the write stops. */
+  function writable(): Promise<void> {
+    if (!repairPending) return Promise.resolve();
+    repairing ??= store.publication
+      .repair()
+      .then(
+        () => {
+          repairPending = false;
+          log({ level: 'info', event: 'store.repair.finished' });
+        },
+        (error: unknown) => {
+          // The code alone: a cause can carry a path.
+          const code = error instanceof StoreError ? error.code : 'storage_unavailable';
+          log({ level: 'error', event: 'store.writes.stopped', code });
+          throw new StoreError(code, "Owner writes stop until the store's repair finishes.");
+        },
+      )
+      .finally(() => {
+        repairing = undefined;
+      });
+    return repairing;
+  }
 
   const owner: OwnerStore = Object.freeze({
     store,
     reader,
+    studio: studioStore(store, reader, writable),
     async checkDirectory() {
       const problem = await preflight({ dataDir, sourceDir: config.sourceDir });
       if (problem) return [finding(problem)];
@@ -177,12 +358,16 @@ export function ownerStore({
       try {
         await store.publication.repair();
       } catch (error) {
+        // Visitors are still served what the reader can serve, and owner
+        // starts degraded; owner writes wait for the repair, which each one
+        // tries again first.
+        repairPending = true;
         log({
           level: 'warn',
           event: 'store.repair.failed',
           code: error instanceof StoreError ? error.code : 'storage_unavailable',
         });
-        issues.push(finding('store_repair_failed', 'warning'));
+        issues.push(finding('store_repair_failed'));
       }
       const status = await reader.status();
       if (status.state === 'degraded') issues.push(finding('revision_damaged'));

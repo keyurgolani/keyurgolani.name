@@ -332,8 +332,22 @@ module.exports = {
         'loading the registry never loads owner code (#1, item 10).',
       from: { path: '^apps/web/src/server/operations\\.ts$' },
       to: {
-        pathNot: ['^apps/web/src/server/capabilities\\.ts$', '^node_modules/(\\.pnpm/zod@|zod/)'],
+        pathNot: [
+          '^apps/web/src/server/capabilities\\.ts$',
+          // #3's store entries' schemas, data like the rest.
+          '^apps/web/src/server/store-schemas\\.ts$',
+          '^node_modules/(\\.pnpm/zod@|zod/)',
+        ],
       },
+    },
+    {
+      name: 'store-schemas-are-data',
+      severity: 'error',
+      comment:
+        "The store entries' schemas load with the registry in every profile, so they import " +
+        'zod and nothing else (#3, item 22).',
+      from: { path: '^apps/web/src/server/store-schemas\\.ts$' },
+      to: { pathNot: ['^node_modules/(\\.pnpm/zod@|zod/)'] },
     },
   ],
   options: {

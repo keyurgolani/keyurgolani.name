@@ -224,6 +224,7 @@ export { type AssetStat, type AssetStore } from './store/assets';
 export {
   IDEMPOTENCY_WINDOW,
   type HeldMove,
+  type ListPage,
   type LiveStatus,
   type PublicationContext,
   type PublicationOutcome,

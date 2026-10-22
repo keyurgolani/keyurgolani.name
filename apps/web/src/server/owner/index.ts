@@ -6,6 +6,7 @@ import { recordOwnerModule } from '../load-trace';
 import type { LiveVariantHealth } from '../variant-health';
 import { configStatus } from './config-status';
 import type { OwnerStore } from './store';
+import { storeHandlers } from './store-handlers';
 
 // Owner code. Only composition.ts loads it, through import() in its owner
 // branch; check:deps fails any other import outside tests, so demo and
@@ -39,5 +40,7 @@ export function ownerHandlers({
 }: OwnerInput): Readonly<Record<string, Handler>> {
   return Object.freeze({
     'config.status': configStatus(config, catalog, variantHealth, () => store.reader.status()),
+    // #3's queries and commands, on the store as the owner.
+    ...storeHandlers(store.studio),
   });
 }

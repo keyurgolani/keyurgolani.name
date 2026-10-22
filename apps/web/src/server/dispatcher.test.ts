@@ -17,8 +17,8 @@ import type { Session } from './session';
 import { dataResult, errorResult, redirectResult, type StudioResult } from './studio-result';
 
 // The dispatcher's steps, in order, against fake registry entries and test
-// doubles for #2's session, origin, touch, and throttle bindings and #3's
-// version check.
+// doubles for #2's session, origin, touch, and throttle bindings, and the
+// error details #3's conflicts carry.
 
 const SESSION = mintSession();
 const FORGED: Session = { kind: 'owner' };
@@ -67,7 +67,6 @@ function doubles(handlers: Record<string, Handler>, overrides: Partial<StudioBin
     touchSession: async () => {},
     throttle: async () => null,
     invalidInput: async () => null,
-    checkVersion: async () => true,
     recheckSession: async () => null,
     commitWithSession: async (_context, commit) => ({
       ok: true,
@@ -795,35 +794,93 @@ test('5: invalidInput may answer malformed input with a 303 instead of the 400, 
   assert.equal(seen.length, 5);
 });
 
-test('6: a stale expected version is 409 before the handler runs', async (t) => {
-  const { handler, calls } = spy();
-  const seen: unknown[] = [];
-  const dispatch = owner(
-    t,
-    [fake('rollback', { kind: 'command', expects: 'live-revision' })],
-    doubles(
-      { 'fake.rollback': handler },
-      {
-        checkVersion: async ({ input, operation }) => {
-          seen.push([operation.name, input]);
-          return false;
-        },
-      },
-    ),
-  );
-  const request = call('POST', 'fake.rollback', {
-    session: 'owner',
-    origin: true,
-    body: '{"note":"r1"}',
+test("6: an owner session's 409 or 422 carries the details its entry declares, once they pass its schema", async (t) => {
+  t.mock.method(console, 'log', () => {});
+  const Conflict = z.object({ liveRevisionId: z.string() }).strict();
+  const errors = [
+    'live_conflict',
+    'validation_failed',
+    'payload_too_large',
+    'storage_unavailable',
+    'not_found',
+  ] as const;
+  // Every code but not_found declares details, so only the status and the
+  // session keep them out.
+  const details = {
+    live_conflict: Conflict,
+    validation_failed: z.object({ diagnostics: z.array(z.string()) }).strict(),
+    payload_too_large: z.object({ documents: z.array(z.string()) }).strict(),
+    storage_unavailable: z.object({ cause: z.string() }).strict(),
+  };
+  const answers: Record<string, StudioResult> = {
+    live: errorResult('live_conflict', { details: { liveRevisionId: 'rev_live' } }),
+    invalid: errorResult('validation_failed', { details: { diagnostics: ['schema.invalid'] } }),
+    large: errorResult('payload_too_large', { details: { documents: ['portfolio'] } }),
+    storage: errorResult('storage_unavailable', { details: { cause: '/srv/canary/data' } }),
+    missing: errorResult('not_found', { details: { cause: '/srv/canary/data' } }),
+    malformed: errorResult('live_conflict', { details: { liveRevisionId: 42 } }),
+    extra: errorResult('live_conflict', { details: { liveRevisionId: 'rev_live', path: '/srv' } }),
+  };
+  const handler: Handler = (_authorized, input) => answers[(input as { note: string }).note];
+  const operations = [
+    fake('publish', { kind: 'command', errors: [...errors], details }),
+    // The same entry, open to a request without a session.
+    fake('auth.session', {
+      name: 'fake.open',
+      kind: 'command',
+      session: false,
+      errors: [...errors],
+      details,
+    }),
+  ];
+  const dispatch = owner(t, operations, doubles({ 'fake.publish': handler, 'fake.open': handler }));
+  const send = (name: string, note: string, session?: 'owner' | 'forged') =>
+    dispatch(
+      call('POST', name, { session, origin: true, body: JSON.stringify({ note }) }).request,
+      name,
+    );
+  const body = async (response: Response) =>
+    (await response.json()) as { error: { code: string; details?: unknown } };
+
+  const live = await send('fake.publish', 'live', 'owner');
+  assert.equal(live.status, 409);
+  assert.deepEqual((await body(live)).error, {
+    code: 'live_conflict',
+    message: 'The live revision changed since it was read.',
+    requestId: 'req-test',
+    details: { liveRevisionId: 'rev_live' },
   });
-  const response = await dispatch(request.request, 'fake.rollback');
-  assert.equal(response.status, 409);
-  assert.equal((await errorOf(response)).code, 'version_conflict');
-  assert.deepEqual(seen, [['fake.rollback', { note: 'r1' }]]);
-  assert.equal(calls.length, 0);
+  const invalid = await send('fake.publish', 'invalid', 'owner');
+  assert.equal(invalid.status, 422);
+  assert.deepEqual((await body(invalid)).error.details, { diagnostics: ['schema.invalid'] });
+
+  // A 413, a 5xx, and a code the entry declares no details for carry none.
+  for (const [note, status] of [
+    ['large', 413],
+    ['storage', 503],
+    ['missing', 404],
+  ] as const) {
+    const response = await send('fake.publish', note, 'owner');
+    assert.equal(response.status, status, note);
+    await errorOf(response);
+  }
+  // Nor does any answer to a request without an owner session, forged or none.
+  for (const session of [undefined, 'forged'] as const) {
+    for (const note of ['live', 'invalid']) {
+      const response = await send('fake.open', note, session);
+      assert.ok(response.status === 409 || response.status === 422, note);
+      await errorOf(response);
+    }
+  }
+  // Details outside their schema are the handler's bug: a 500 that carries nothing.
+  for (const note of ['malformed', 'extra']) {
+    const response = await send('fake.publish', note, 'owner');
+    assert.equal(response.status, 500, note);
+    assert.equal((await errorOf(response)).code, 'internal_error');
+  }
 });
 
-test('7: a failing handler, output outside its schema, or no handler at all is 500', async (t) => {
+test('6: a failing handler, output outside its schema, or no handler at all is 500', async (t) => {
   const logged = t.mock.method(console, 'log', () => {});
   const dispatch = owner(
     t,
@@ -857,7 +914,7 @@ test('7: a failing handler, output outside its schema, or no handler at all is 5
   }
 });
 
-test('7: a handler answers with a status and headers, and every Set-Cookie stays', async (t) => {
+test('6: a handler answers with a status and headers, and every Set-Cookie stays', async (t) => {
   const dispatch = owner(
     t,
     [fake('auth.session', { name: 'fake.login', kind: 'command', session: false })],
@@ -897,7 +954,7 @@ test('7: a handler answers with a status and headers, and every Set-Cookie stays
   assert.deepEqual(await response.json(), { data: { ok: true } });
 });
 
-test('7: a handler redirects a form post within the site, and nowhere else', async (t) => {
+test('6: a handler redirects a form post within the site, and nowhere else', async (t) => {
   let location = '/studio?state=signed_out';
   const dispatch = owner(
     t,
@@ -929,29 +986,29 @@ test('7: a handler redirects a form post within the site, and nowhere else', asy
   }
 });
 
-test("7: a handler's declared error carries its headers; an undeclared one is a 500", async (t) => {
+test("6: a handler's declared error carries its headers; an undeclared one is a 500", async (t) => {
   t.mock.method(console, 'log', () => {});
   const dispatch = owner(
     t,
     [
-      fake('draft.write', { kind: 'command', errors: ['version_conflict'] }),
+      fake('draft.write', { kind: 'command', errors: ['lock_timeout'] }),
       fake('publish', { kind: 'command' }),
     ],
     doubles({
-      'fake.draft.write': () => errorResult('version_conflict', { headers: { 'x-draft': 'r2' } }),
-      'fake.publish': () => errorResult('version_conflict'),
+      'fake.draft.write': () => errorResult('lock_timeout', { headers: { 'retry-after': '2' } }),
+      'fake.publish': () => errorResult('lock_timeout'),
     }),
   );
   const run = (name: string) =>
     dispatch(call('POST', name, { session: 'owner', origin: true, body: '{}' }).request, name);
   const declared = await run('fake.draft.write');
-  assert.equal(declared.status, 409);
-  assert.equal(declared.headers.get('x-draft'), 'r2');
-  assert.equal((await errorOf(declared)).code, 'version_conflict');
+  assert.equal(declared.status, 503);
+  assert.equal(declared.headers.get('retry-after'), '2');
+  assert.equal((await errorOf(declared)).code, 'lock_timeout');
   assert.equal((await errorOf(await run('fake.publish'))).code, 'internal_error');
 });
 
-test('7: a handler checks the session again before its commit point, and stops with what that answers', async (t) => {
+test('6: a handler checks the session again before its commit point, and stops with what that answers', async (t) => {
   const steps: string[] = [];
   let ended = false;
   const cleared = 'studio_session=; Max-Age=0; Path=/';
@@ -1000,7 +1057,7 @@ test('7: a handler checks the session again before its commit point, and stops w
   assert.equal(refused?.kind === 'error' ? refused.code : refused, 'authentication_required');
 });
 
-test("7: a handler commits through the provider's commitWithSession, and stops with what it answers", async (t) => {
+test("6: a handler commits through the provider's commitWithSession, and stops with what it answers", async (t) => {
   const steps: string[] = [];
   let ended = false;
   const cleared = 'studio_session=; Max-Age=0; Path=/';
@@ -1056,7 +1113,7 @@ test("7: a handler commits through the provider's commitWithSession, and stops w
   }
 });
 
-test('7: no binding or result replaces a header the dispatcher sets', async (t) => {
+test('6: no binding or result replaces a header the dispatcher sets', async (t) => {
   t.mock.method(console, 'log', () => {});
   const fromHandler = owner(
     t,

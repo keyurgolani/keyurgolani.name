@@ -10,6 +10,7 @@ import { readDeploymentConfig } from '../config';
 import { setDeploymentState } from '../config-store';
 import type { HandlerContext } from '../dispatcher';
 import { listOperations } from '../operations';
+import { isStudioResult } from '../studio-result';
 import { ownerHandlers, ownerStore } from './index';
 import { mintSession } from './session-mint';
 
@@ -49,6 +50,34 @@ const handlers = ownerHandlers({
   }),
 });
 const session = mintSession();
+
+const REVISION = `rev_${'a'.repeat(32)}`;
+const DRAFT = `drf_${'b'.repeat(32)}`;
+const DOCUMENTS = {
+  portfolio: { format: 'yaml', sourceText: 'schemaVersion: 2\n' },
+  site: { format: 'yaml', sourceText: 'schemaVersion: 2\n' },
+};
+/** Input each entry's schema takes, where `{}` isn't any. */
+const SAMPLE_INPUT: Record<string, unknown> = {
+  'revision.get': { revisionId: REVISION },
+  'draft.get': { draftId: DRAFT },
+  'draft.save': { draftId: DRAFT, expectedVersion: 1, documents: DOCUMENTS },
+  'draft.applyEdits': {
+    draftId: DRAFT,
+    expectedVersion: 1,
+    edits: [{ document: 'portfolio', pointer: '/locale', op: 'set', value: 'en' }],
+  },
+  'draft.rebase': {
+    draftId: DRAFT,
+    expectedVersion: 1,
+    documents: DOCUMENTS,
+    baseRevisionId: null,
+  },
+  'draft.discard': { draftId: DRAFT },
+  publish: { draftId: DRAFT, draftVersion: 1, expectedLiveRevisionId: null },
+  rollback: { targetRevisionId: REVISION, expectedLiveRevisionId: null },
+  recover: { targetRevisionId: REVISION, expectedLiveRevisionId: null },
+};
 
 test.before(() => {
   setDeploymentState({
@@ -106,7 +135,14 @@ for (const [name, handler] of Object.entries(handlers)) {
   test(`${name} runs with its own token`, async () => {
     const token = authorize(operation.capability, session);
     assert.ok(token);
-    const output = await handler(token, {}, context);
-    assert.equal(operation.output.safeParse(output).success, true);
+    // Input as the dispatcher passes it: past the entry's schema.
+    const input = operation.input.parse(SAMPLE_INPUT[name] ?? {});
+    const output = await handler(token, input, context);
+    // Output, or an error the entry declares, such as not_found in this empty store.
+    if (isStudioResult(output)) {
+      assert.ok(output.kind === 'error' && operation.errors.includes(output.code), name);
+    } else {
+      assert.equal(operation.output.safeParse(output).success, true);
+    }
   });
 }
