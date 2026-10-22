@@ -127,12 +127,12 @@ The route table knows from the build's manifests, before any page runs, which pa
 
 ## Compatibility
 
-Every check of a pair against the composition that renders it is one report, `compatibilityFor(pair, { registry })` from `@portfolio/variant-contract`. Startup, `pnpm config:validate`, and #3's publish get its findings as diagnostics, and #9 runs the same code in the browser. The report has:
+Every check of a pair against the composition that renders it is one report, `compatibilityFor(pair, { registry })` from `@portfolio/variant-contract`. Startup and `pnpm config:validate` get its findings as diagnostics, and so will #3's publish. It needs nothing from Node, so #9 can run the same code in the browser. `evaluateCompatibility(manifest, pair, { registry })` reports on a candidate as if the site selected it, so #8 and #9 can explain one before the owner switches. The report has:
 
 - `variant`: what the site selects, what renders (the selection, or the fallback composition in its place), and its package version.
 - `kinds`: each visible kind and how it renders: `bespoke`, `shared`, through its content extension's renderer, `unsupported`, or `none`.
 - `slots`: each content slot's fill count, with its `whenEmpty` note when it has fewer than it asks for.
-- `routes`: the previous variant's path views this one doesn't serve, which now redirect to their parent route.
+- `routes`: the previous variant's path views this one doesn't serve. Each redirects to its parent route while the previous variant stays installed, and is a 404 once it's removed.
 - `inputHash`, of everything the report depends on, and `status`: `ok`, `warning`, or `blocks-publish`.
 
 | Finding                                                            | Code                                                          | Preview                                 | Publish |
@@ -149,7 +149,9 @@ Every check of a pair against the composition that renders it is one report, `co
 
 An empty optional slot shows only in `slots`. A slot counts the visible sections of its kind, the visible sections its control points at, or the values its field holds, an array counting each item. Startup checks the pair as live, so a finding that blocks publishing only warns there: something renders in its place either way.
 
-After a variant raises its controls version, `pnpm variants:migrate-controls --site config/site.yml` steps the stored values through the manifest's migrations. It prints each change and a diff, and writes only with `--write`, so a second run finds nothing to do. Values of another version are never read: until they migrate, every control renders its default.
+After a variant raises its controls version, `pnpm variants:migrate-controls --site config/site.yml` steps the stored values through the manifest's migrations. It prints each change and a diff, and writes only with `--write`, through a symbolic link to the file the link names. Once it has written, a second run finds nothing to do. Values of another version are never read: until they migrate, every control renders its default.
+
+A YAML document keeps every line the migration doesn't change, comments included. A renamed control moves to the end of its `values` mapping, and a key or value the migration writes is plain, or double-quoted when it must be, whatever quotes the document used. A JSON document is written whole, in its own indent with one value per line, so a document already in that layout, as `JSON.stringify` writes it, changes only in the entries that migrate. YAML the edits can't change in place, such as a complex key (`? key`), stops the command with exit status 1 and the file as it was.
 
 ## Motion
 

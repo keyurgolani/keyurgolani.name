@@ -3,8 +3,8 @@
 // of the previous variant this one doesn't serve, and what to fix, as #4
 // Diagnostics that say what renders instead and whether publishing is
 // blocked. It folds in Slice 1's checks on the selection, the stored control
-// values, and the route toggles. Pure and browser-safe: the host's checks,
-// #3's publish, and #9's in-browser render all run it.
+// values, and the route toggles. Pure and browser-safe: the host's checks
+// run it, and #3's publish and #9's in-browser render can.
 
 import {
   canonicalize,
