@@ -1,15 +1,16 @@
 // The six modes every composition passes (#5, Slice 6), and the checks they
-// share. Every mode: one h1 and one main, the skip link moves focus to main,
-// one visitor-control slot, nothing wider than the window, every internal
-// link resolves, each section's data-renderer matches the manifest's
-// renderedKinds, and no console error. Desktop and mobile take a screenshot
-// of the whole page.
-// Without JavaScript, in print, and with its enhancements failing, the page
-// stays readable: the h1, the navigation, and each visible section's heading
-// have a box, opacity, and visibility. Print also has nothing fixed or
-// sticky. Under reduced motion nothing runs once the page settles. A failed
-// enhancement runs twice: with every script chunk blocked, and with the
-// kit's throw switch on.
+// share. Every mode: the composition under test renders, with one h1 and one
+// main, the skip link moves focus to main, one visitor-control slot, nothing
+// wider than the window, every internal link resolves, each section's
+// data-renderer matches the manifest's renderedKinds and no kind it leaves
+// out renders, and no console error. Desktop and mobile take a screenshot of
+// the whole page. Without JavaScript, in print, and with its enhancements
+// failing, the page stays readable: the h1, the navigation, and each visible
+// section's heading have a box, opacity, and visibility. Print also has
+// nothing fixed or sticky. Under reduced motion nothing runs once the page
+// settles. A failed enhancement runs twice: with every script chunk blocked
+// while the stylesheets load, and with the kit's throw switch on, which
+// fails an enhancement of every composition that declares one.
 import {
   expect,
   type APIRequestContext,
@@ -112,6 +113,13 @@ export async function expectEveryMode(
   variant: RegisteredVariant,
   errors: () => string[],
 ): Promise<void> {
+  // The composition under test renders, not one standing in for it: the
+  // sample project has no parity check to notice.
+  await expect(page.locator('[data-variant]'), 'one presentation boundary').toHaveCount(1);
+  await expect(page.locator('[data-variant]'), 'the composition under test').toHaveAttribute(
+    'data-variant',
+    variant.manifest.id,
+  );
   await expect(page.locator('h1'), 'one h1').toHaveCount(1);
   await expect(page.locator('main'), 'one main').toHaveCount(1);
   await expect(page.locator('[data-visitor-control-slot]'), 'one visitor-control slot').toHaveCount(
@@ -141,7 +149,12 @@ export async function expectEveryMode(
     );
   expect(sections.length, 'sections with data-renderer').toBeGreaterThan(0);
   const rendered: readonly string[] = variant.manifest.renderedKinds;
+  const unsupported: readonly string[] = variant.manifest.unsupportedKinds;
   for (const [kind, renderer] of sections) {
+    // A kind the manifest leaves out renders nothing, not the shared renderer.
+    expect(unsupported.includes(kind!), `${kind}, which the manifest leaves out, renders`).toBe(
+      false,
+    );
     expect(renderer, kind).toBe(rendered.includes(kind!) ? 'bespoke' : 'shared');
   }
 
@@ -312,7 +325,15 @@ async function checkPage(check: ModeCheck, page: Page, run?: FailedRun): Promise
       return route.abort('failed');
     });
   }
+  let thrown = 0;
   if (run === 'throw-switch') {
+    // Each enhancement the switch fails reports the kit's error as its boundary catches it.
+    page.on('console', (message) => {
+      if (message.type() === 'error' && message.text().includes(THROW_SWITCH_ERROR)) thrown += 1;
+    });
+    page.on('pageerror', (error) => {
+      if (error.message.includes(THROW_SWITCH_ERROR)) thrown += 1;
+    });
     await page.addInitScript(() => {
       (globalThis as { __portfolioFailEnhancements?: boolean }).__portfolioFailEnhancements = true;
     });
@@ -327,6 +348,13 @@ async function checkPage(check: ModeCheck, page: Page, run?: FailedRun): Promise
     }
     await expectEveryMode(page, check.request, check.variant, errors);
     if (run === 'blocked-chunks') expectScriptsAlone(blocked, sheets());
+    if (run === 'throw-switch' && (check.variant.manifest.enhancements?.length ?? 0) > 0) {
+      // A composition that declares an enhancement renders it here, as the
+      // reference does in its header, so the switch has one to fail.
+      await expect
+        .poll(() => thrown, { message: 'enhancements the throw switch failed' })
+        .toBeGreaterThan(0);
+    }
     if (mode === 'no-javascript' || mode === 'print' || mode === 'failed-enhancement') {
       await expectReadable(page);
     }
