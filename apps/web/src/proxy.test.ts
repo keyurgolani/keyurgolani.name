@@ -708,13 +708,18 @@ test("no response outside /preview and /preview-assets gets the preview's header
   );
 });
 
-test('under the prefixes next.config.ts lets any origin read, only a GET or HEAD of a build asset goes on to Next, and the rest is the plain 404, never a page (#7)', async (t) => {
+test('under the prefixes next.config.ts lets any origin read, only a GET or HEAD of a file Next serves there goes on to Next, and the rest is the plain 404, never a page (#7)', async (t) => {
   for (const profile of ['owner', 'demo', 'read-only'] as const) {
     deploy(t, profile);
     for (const method of ['GET', 'HEAD']) {
       const asset = proxy(request('/_next/static/chunks/app.js', method));
       assert.equal(asset.headers.get('x-middleware-next'), '1', `${profile} ${method}`);
       assert.equal(decision(asset), 'unlisted', `${profile} ${method}`);
+      // #19's compiled packs, which the registry writes into public/_portfolio/pack/.
+      // Marked missing, so one that isn't there gets the 404 page after Next looks in public/.
+      const pack = proxy(request('/_portfolio/pack/0123456789ab.css', method));
+      assert.equal(pack.headers.get('x-middleware-next'), '1', `${profile} ${method}`);
+      assert.equal(decision(pack), 'missing', `${profile} ${method}`);
     }
     for (const [path, method] of [
       ['/_next/static/chunks/app.js', 'POST'],
@@ -726,13 +731,11 @@ test('under the prefixes next.config.ts lets any origin read, only a GET or HEAD
       ['/_next/Static/chunks/app.js', 'GET'],
       ['/%5Fnext/static/chunks/app.js', 'GET'],
       ['/_next/static', 'GET'],
-      // Nothing serves /_portfolio until #6 and #19 add routes there.
       ['/_portfolio', 'GET'],
-      ['/_portfolio/generated/0123456789ab.css', 'GET'],
-      ['/_portfolio/generated/0123456789ab.css', 'HEAD'],
-      ['/_PORTFOLIO/fonts/serif.woff2', 'GET'],
-      ['/%5Fportfolio/fonts/serif.woff2', 'GET'],
-      ['/_portfolio/generated/0123456789ab.css', 'POST'],
+      ['/_PORTFOLIO/pack/0123456789ab.css', 'GET'],
+      ['/%5Fportfolio/pack/0123456789ab.css', 'GET'],
+      ['/_portfolio/pack/0123456789ab.css', 'POST'],
+      ['/_portfolio/pack/0123456789ab.css', 'OPTIONS'],
     ] as const) {
       const response = proxy(request(path, method));
       const what = `${profile} ${method} ${path}`;

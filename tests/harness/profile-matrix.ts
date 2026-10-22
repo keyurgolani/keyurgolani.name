@@ -9,7 +9,7 @@
 // secret, or config summary in any response. A spec runs it for the profile
 // its app options start: read-only and demo, and owner with the password
 // provider (#2), whose password and hash join the canaries.
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -46,6 +46,9 @@ const { listRoutes, RETIRED_PATTERNS, routeAccess } =
   require('../../apps/web/src/server/routes.ts') as typeof Routes;
 type Profile = Capabilities.Profile;
 type Operation = Operations.Operation;
+
+/** Where the registry writes #19's compiled packs, which the app serves under /_portfolio/pack/. */
+const PACKS = fileURLToPath(new URL('../../apps/web/public/_portfolio/pack/', import.meta.url));
 
 /** A _FILE every profile reads, in a canary-named directory. */
 const ENV_FILES: AppOptions['envFiles'] = {
@@ -741,7 +744,7 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
   );
 
   test(
-    'a build asset allows any origin, and every other method, spelling, or /_portfolio path there is the plain 404 (#7)',
+    'a build asset and a compiled pack allow any origin, and every other method or spelling there is the plain 404 (#7)',
     {
       annotation: [
         { type: 'route', description: '/_next/static' },
@@ -761,27 +764,39 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
         ),
       ];
       expect(assets.length, 'build assets on the home page').toBeGreaterThan(1);
-      for (const asset of assets) {
+      // #19's compiled packs, which the registry writes into public/_portfolio/pack/.
+      const packs = readdirSync(PACKS, { withFileTypes: true })
+        .filter((entry) => entry.isFile())
+        .map(({ name }) => `/_portfolio/pack/${name}`);
+      expect(packs.length, 'compiled packs').toBeGreaterThan(0);
+      for (const asset of [...assets, ...packs]) {
         const response = await request.get(asset, { maxRedirects: 0 });
         expect(response.status(), asset).toBe(200);
         expect(response.headers()['access-control-allow-origin'], asset).toBe('*');
         expectProfileHeaders(profile, response, asset);
       }
-      // One that doesn't exist goes on to the views catch-all, whose 404 is
-      // the site's, under the prefix's headers, as before (#5). It holds
-      // only what an anonymous request for any unknown path gets, and no
-      // browser lets a wildcard origin read a credentialed answer.
+      // One that doesn't exist goes on to a 404 page, the site's, under the
+      // prefix's headers: the views catch-all's for a build asset, as before
+      // (#5), and the global 404 for a pack, which the table marks missing.
+      // It holds only what an anonymous request for any unknown path gets,
+      // and no browser lets a wildcard origin read a credentialed answer.
       const gone = await request.get('/_next/static/chunks/no-such-chunk.js', { maxRedirects: 0 });
       expect(gone.status()).toBe(404);
       expectProfileHeaders(profile, gone, 'a missing build asset');
-      // Any other method, a spelling Next doesn't serve from disk, and
-      // /_portfolio, which nothing serves yet, get the proxy's plain 404.
+      const nopack = await request.get('/_portfolio/pack/no-such.css', { maxRedirects: 0 });
+      expect(nopack.status()).toBe(404);
+      expect(await nopack.text()).toMatch(/<h1>Page not found<\/h1>/);
+      expectProfileHeaders(profile, nopack, 'a missing pack');
+      // Any other method, and a spelling Next doesn't serve from disk, get
+      // the proxy's plain 404.
       for (const [target, method] of [
         [assets[0]!, 'POST'],
         [assets[0]!, 'DELETE'],
         [assets[0]!.replace('/_next/static/', '/_NEXT/STATIC/'), 'GET'],
         ['/_next/static', 'GET'],
-        ['/_portfolio/generated/0123456789ab.css', 'GET'],
+        [packs[0]!, 'POST'],
+        [packs[0]!.replace('/_portfolio/', '/_PORTFOLIO/'), 'GET'],
+        [packs[0]!.replace('/_portfolio/', '/%5Fportfolio/'), 'GET'],
         ['/_portfolio', 'GET'],
       ] as const) {
         const response = await request.fetch(target, { method, maxRedirects: 0 });

@@ -131,9 +131,9 @@ const config: NextConfig = {
   // such as an error page. /preview and /preview-assets (#7) get neither the
   // baseline CSP nor its Referrer-Policy: proxy.ts sends the preview's own,
   // and no-referrer, on every response there. The build's assets and
-  // /_portfolio, #6's fonts and variant assets and #19's stylesheets, allow
-  // any origin, since an opaque preview frame loads them cross-origin; none
-  // is a page, and proxy.ts answers every other path under those prefixes.
+  // /_portfolio, #19's compiled packs and #6's fonts and variant assets,
+  // allow any origin, since an opaque preview frame loads them cross-origin;
+  // proxy.ts answers any other method or spelling under those prefixes.
   // headers.test.ts holds every path to these. HSTS belongs at the
   // TLS-terminating proxy (docs/deployment.md).
   async headers() {

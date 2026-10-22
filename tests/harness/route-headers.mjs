@@ -59,8 +59,8 @@ export const isPreviewPath = (pathname) =>
 /**
  * Whether `pathname` is under /_next/static or /_portfolio, in any case, as
  * next.config.ts's header rules match them: the only paths that allow any
- * origin (#7). proxy.ts answers each one Next doesn't serve with its plain
- * 404, never a page.
+ * origin (#7). proxy.ts answers any method or spelling there that Next
+ * doesn't serve a file for with its plain 404.
  *
  * @param {string} pathname
  */

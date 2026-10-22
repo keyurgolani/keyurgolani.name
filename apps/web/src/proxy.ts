@@ -49,9 +49,9 @@ import {
 // this build doesn't serve, such as the dev fixture route outside `next
 // dev`, answers as a path no route matches, in any spelling. Under the
 // prefixes next.config.ts serves with Access-Control-Allow-Origin: *, only
-// a GET or HEAD of a build asset, as Next serves them, and a route the table
-// serves get past here; anything else there is the plain 404, so no page
-// carries the header.
+// a GET or HEAD of a file there, the build's assets and public/_portfolio/'s,
+// spelled as Next serves them, and a route the table serves get past here;
+// anything else there is the plain 404.
 //
 // For Studio (#2), under a profile with a Studio page, it sends the nonce
 // CSP, Referrer-Policy: same-origin, and Cross-Origin-Resource-Policy:
@@ -103,14 +103,14 @@ export function proxy(request: NextRequest): NextResponse {
   const pageLoad = request.method === 'GET' || request.method === 'HEAD';
   const decision = resolveRoute(deployment.profile, pathname, searchParams);
   // Access-Control-Allow-Origin: * goes on everything next.config.ts matches
-  // under these prefixes, so only a GET or HEAD of a build asset, as Next
-  // serves them, and a route the table serves go on to Next. Every other
-  // spelling, method, or path there gets this plain 404. A build asset that
-  // doesn't exist still reaches the views catch-all's 404, the site's,
-  // since nothing here knows which files exist.
+  // under these prefixes, so only a GET or HEAD of a file Next serves there,
+  // spelled as Next serves it, and a route the table serves go on to Next.
+  // Every other spelling, method, or path there gets this plain 404. A file
+  // that doesn't exist still reaches a 404 page, the site's, since nothing
+  // here knows which files exist.
   if (
     SHARED_ASSETS.test(decodedPath(pathname)) &&
-    !(pageLoad && pathname.startsWith('/_next/static/')) &&
+    !(pageLoad && SHARED_FILES.test(pathname)) &&
     decision.status !== 'served'
   ) {
     return plain(404, 'Not found.', requestId, extra);
@@ -203,6 +203,13 @@ const UNKNOWN_PATH_CACHE_CONTROL = 'private, no-cache, no-store, max-age=0, must
  * serve under /_portfolio, which an opaque preview frame loads cross-origin.
  */
 const SHARED_ASSETS = /^\/(?:_next\/static|_portfolio)(?:\/|$)/i;
+
+/**
+ * The files Next serves under those prefixes, as it spells them: the build's
+ * assets, and what the registry writes into public/_portfolio/, such as
+ * #19's compiled packs in public/_portfolio/pack/.
+ */
+const SHARED_FILES = /^\/(?:_next\/static|_portfolio)\//;
 
 /** `pathname` percent-decoded, or as sent when it doesn't decode. */
 function decodedPath(pathname: string): string {
