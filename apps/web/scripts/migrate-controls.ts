@@ -3,17 +3,19 @@
 // to the controls version its manifest declares, by the manifest's own
 // migrations, and prints what changes and a diff of the document. It writes
 // the file only with --write, in place, and through a symbolic link to the
-// file the link names. A YAML document keeps every line it doesn't change,
-// comments included; a JSON document is written whole, in its own indent.
-// Once it has written, a second run finds every entry current and changes
-// nothing. Values for a variant this build doesn't register, or from a newer
-// release of one, stay as they are.
+// file the link names, with that file's mode, owner, and group. A YAML
+// document keeps every line it doesn't change, comments included; a JSON
+// document is written whole, in its own indent. Once it has written, a
+// second run finds every entry current and changes nothing. Values for a
+// variant this build doesn't register, or from a newer release of one, stay
+// as they are.
 //
 // Exit status: 0 once it has printed the plan (with --write, once the file
 // is written); 1 for a wrong argument, a file it can't read or write, a
-// document that isn't a site document this release reads, or one whose text
-// the edits can't be made in, such as YAML with a complex key (`? key`),
-// which it leaves as it is.
+// document that isn't a site document this release reads, a link whose file
+// is named for the other format, a file whose owner and group this user
+// can't give the new one, or text the edits can't be made in, such as YAML
+// with a complex key (`? key`). Each 1 leaves the file as it is.
 //
 // Relative paths are taken from the directory pnpm ran in (INIT_CWD).
 
@@ -97,15 +99,28 @@ function run(args: readonly string[], registry: VariantRegistry, io: CommandIo):
     throw new UsageError(`${given}: ${(error as Error).message}`);
   }
 
+  // The file itself, which a symbolic link names: what's read and replaced.
+  let target: string;
   let text: string;
   try {
-    if (fs.statSync(file).size > DOCUMENT_MAX_BYTES) {
+    target = fs.realpathSync(file);
+    if (fs.statSync(target).size > DOCUMENT_MAX_BYTES) {
       io.err(`${given} is larger than a site document this release reads.\n`);
       return 1;
     }
-    text = fs.readFileSync(file, 'utf8');
+    text = fs.readFileSync(target, 'utf8');
   } catch {
     io.err(`${given} can't be read.\n`);
+    return 1;
+  }
+  // The server reads the document in the format the link's name says, and
+  // other tools read the file in the one its own name says, so when the two
+  // differ, either format could leave one of them unable to read it.
+  const own = namedFormat(target);
+  if (own !== undefined && own !== format) {
+    io.err(
+      `${given} links to ${path.basename(target)}, a file named for the other format, so it's left as it is. Give the link and the file the same extension, then run it again.\n`,
+    );
     return 1;
   }
   const read = readSite(text, format, { name: given });
@@ -145,13 +160,36 @@ function run(args: readonly string[], registry: VariantRegistry, io: CommandIo):
     return 0;
   }
   try {
-    replace(file, after);
-  } catch {
-    io.err(`${given} can't be written.\n`);
+    replace(target, after);
+  } catch (error) {
+    io.err(
+      error instanceof OwnerError
+        ? `${given} belongs to uid ${error.uid} and gid ${error.gid}, which a file this user writes can't keep, so it's left as it is. Run the command as that user, or with sudo.\n`
+        : `${given} can't be written.\n`,
+    );
     return 1;
   }
   io.out(`\nWrote ${given}.\n`);
   return 0;
+}
+
+/** The format a path's own name declares, if it names one. */
+function namedFormat(file: string): DocumentFormat | undefined {
+  try {
+    return detectFormat(file);
+  } catch {
+    return undefined;
+  }
+}
+
+/** The new file can't have the old one's owner and group, so it isn't written. */
+class OwnerError extends Error {
+  constructor(
+    readonly uid: number,
+    readonly gid: number,
+  ) {
+    super(`The file belongs to uid ${uid} and gid ${gid}.`);
+  }
 }
 
 /** One entry's line: what happens to it, and each change a migration makes. */
@@ -189,24 +227,35 @@ function describeChange(change: ControlChange): string {
 }
 
 /**
- * Replaces `file` with `text` in one rename, so a reader sees the old
- * document or the new one. A symbolic link stays a link: the file it names
- * is the one replaced, from a temp file beside it, in its own mode.
+ * Replaces `target`, the file itself and never a link to it, with `text` in
+ * one rename, so a reader sees the old document or the new one. The new file
+ * is made beside it and gets its mode, owner, and group before any text, so
+ * whoever could read the old one, such as the server's user through the
+ * group, reads the new one. When this user can't give it that owner and
+ * group, nothing changes and it throws an OwnerError.
  */
-function replace(file: string, text: string): void {
-  const target = fs.realpathSync(file);
+function replace(target: string, text: string): void {
+  const { mode, uid, gid } = fs.statSync(target);
   const temp = path.join(
     path.dirname(target),
     `.${path.basename(target)}.${process.pid}.${randomBytes(6).toString('hex')}.tmp`,
   );
-  const fd = fs.openSync(temp, 'wx', fs.statSync(target).mode & 0o777);
+  // Only this user can open it until it has the old file's mode.
+  const fd = fs.openSync(temp, 'wx', 0o600);
   try {
-    fs.writeFileSync(fd, text);
-    fs.fsyncSync(fd);
-  } finally {
-    fs.closeSync(fd);
-  }
-  try {
+    try {
+      try {
+        fs.fchownSync(fd, uid, gid);
+      } catch {
+        throw new OwnerError(uid, gid);
+      }
+      // After the owner, which can clear mode bits, and past the umask.
+      fs.fchmodSync(fd, mode & 0o777);
+      fs.writeFileSync(fd, text);
+      fs.fsyncSync(fd);
+    } finally {
+      fs.closeSync(fd);
+    }
     fs.renameSync(temp, target);
   } catch (error) {
     fs.rmSync(temp, { force: true });

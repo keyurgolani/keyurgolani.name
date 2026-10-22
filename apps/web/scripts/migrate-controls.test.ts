@@ -1,8 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import {
+import fs, {
   chmodSync,
+  chownSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
@@ -141,6 +142,124 @@ test('through a symbolic link, --write migrates the file the link names and keep
   assert.deepEqual(readdirSync(dir).sort(), ['real', 'site.yml']);
   assert.deepEqual(readdirSync(real), ['site.yml']);
   assert.match(run(dir, '--site', 'site.yml').out, /Nothing to migrate in site\.yml\.\n$/);
+});
+
+test("--write keeps the file's mode, whatever the umask, through a link too", (t) => {
+  const cases = [
+    { mode: 0o664, umask: 0o022, link: false },
+    { mode: 0o666, umask: 0o022, link: true },
+    { mode: 0o644, umask: 0o077, link: false },
+    { mode: 0o640, umask: 0o077, link: true },
+  ];
+  for (const { mode, umask, link } of cases) {
+    const dir = scratch(t);
+    const file = path.join(dir, 'site.yml');
+    chmodSync(file, mode);
+    if (link) {
+      mkdirSync(path.join(dir, 'links'));
+      symlinkSync(path.join('..', 'site.yml'), path.join(dir, 'links', 'site.yml'));
+    }
+    const previous = process.umask(umask);
+    let written;
+    try {
+      written = run(link ? path.join(dir, 'links') : dir, '--site', 'site.yml', '--write');
+    } finally {
+      process.umask(previous);
+    }
+    const label = `${mode.toString(8)} under umask ${umask.toString(8)}${link ? ', through a link' : ''}`;
+    assert.equal(written.code, 0, `${label}: ${written.err}`);
+    assert.match(readFileSync(file, 'utf8'), /acme-ocean:\n {4}version: 2\n/, label);
+    assert.equal(statSync(file).mode & 0o777, mode, label);
+  }
+});
+
+test("--write keeps the file's owner and group, such as a second group the server reads it through", (t) => {
+  const dir = scratch(t);
+  const file = path.join(dir, 'site.yml');
+  // A file made in this directory gets this group, so the test needs another.
+  const made = statSync(file);
+  const second =
+    process.getuid?.() === 0
+      ? made.gid === 1
+        ? 2
+        : 1
+      : (process.getgroups?.() ?? []).find((gid) => gid !== made.gid);
+  assert.ok(second !== undefined, 'The user running this test needs a second group.');
+  chownSync(file, made.uid, second);
+  chmodSync(file, 0o640);
+  const written = run(dir, '--site', 'site.yml', '--write');
+  assert.equal(written.code, 0, written.err);
+  const after = statSync(file);
+  assert.deepEqual([after.uid, after.gid, after.mode & 0o777], [made.uid, second, 0o640]);
+  assert.match(readFileSync(file, 'utf8'), /acme-ocean:\n {4}version: 2\n/);
+});
+
+test("when the new file can't take the old one's owner and group, it exits 1 and nothing changes", (t) => {
+  const dir = scratch(t);
+  const file = path.join(dir, 'site.yml');
+  const before = readFileSync(file, 'utf8');
+  const { uid, gid } = statSync(file);
+  // What fchown says when the owner is another user, or the group one this user isn't in.
+  t.mock.method(fs, 'fchownSync', () => {
+    throw Object.assign(new Error('EPERM: operation not permitted, fchown'), { code: 'EPERM' });
+  });
+  const result = run(dir, '--site', 'site.yml', '--write');
+  assert.equal(result.code, 1);
+  assert.equal(
+    result.err,
+    `site.yml belongs to uid ${uid} and gid ${gid}, which a file this user writes can't keep, so it's left as it is. Run the command as that user, or with sudo.\n`,
+  );
+  assert.doesNotMatch(result.out, /Wrote/);
+  assert.equal(readFileSync(file, 'utf8'), before);
+  assert.deepEqual(readdirSync(dir), ['site.yml']);
+});
+
+test("--write through a link in a directory this user can't write still replaces the file it names", (t) => {
+  const dir = scratch(t);
+  const links = path.join(dir, 'links');
+  mkdirSync(links);
+  symlinkSync(path.join('..', 'site.yml'), path.join(links, 'site.yml'));
+  // The temp file goes beside the file, so the link's directory is never written.
+  chmodSync(links, 0o555);
+  let written;
+  try {
+    written = run(links, '--site', 'site.yml', '--write');
+  } finally {
+    chmodSync(links, 0o755);
+  }
+  assert.equal(written.code, 0, written.err);
+  assert.match(written.out, /\nWrote site\.yml\.\n$/);
+  assert.ok(lstatSync(path.join(links, 'site.yml')).isSymbolicLink());
+  assert.match(readFileSync(path.join(dir, 'site.yml'), 'utf8'), /acme-ocean:\n {4}version: 2\n/);
+  assert.deepEqual(readdirSync(links), ['site.yml']);
+});
+
+test('a link named for one format to a file named for the other is left as it is', (t) => {
+  const json = `${JSON.stringify(parse(`${SITE}${STORED}`), null, 2)}\n`;
+  const dir = scratch(t, json, 'site.json');
+  symlinkSync('site.json', path.join(dir, 'site.yml'));
+  const result = run(dir, '--site', 'site.yml', '--write');
+  assert.equal(result.code, 1);
+  assert.equal(
+    result.err,
+    "site.yml links to site.json, a file named for the other format, so it's left as it is. Give the link and the file the same extension, then run it again.\n",
+  );
+  assert.equal(readFileSync(path.join(dir, 'site.json'), 'utf8'), json);
+  // The other way round, too.
+  const yaml = scratch(t);
+  symlinkSync('site.yml', path.join(yaml, 'site.json'));
+  assert.equal(run(yaml, '--site', 'site.json', '--write').code, 1);
+  assert.equal(readFileSync(path.join(yaml, 'site.yml'), 'utf8'), `${SITE}${STORED}`);
+  // A file whose name declares no format is read in the link's.
+  const plain = scratch(t);
+  renameSync(path.join(plain, 'site.yml'), path.join(plain, 'site-data'));
+  symlinkSync('site-data', path.join(plain, 'site.yml'));
+  const written = run(plain, '--site', 'site.yml', '--write');
+  assert.equal(written.code, 0, written.err);
+  assert.match(
+    readFileSync(path.join(plain, 'site-data'), 'utf8'),
+    /acme-ocean:\n {4}version: 2\n/,
+  );
 });
 
 test('a JSON document is written in its own indent', (t) => {
