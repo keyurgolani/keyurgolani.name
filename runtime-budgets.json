@@ -368,13 +368,13 @@
       }
     },
     "fallback-route": {
-      "base": "61f03a8390d5af378a9fdbde1d630a0f437089e5",
+      "base": "48e2892af788322d10aa6f2ca07f59bb9b5830a9",
       "trees": {
-        "apps": "6b1b8c900a0668e188594b4e6d2c151351637b74",
-        "packages": "332032d0cb458850080b418f8eabe041c7280343"
+        "apps": "e64d25efb74110b2ebc04b0f0a43a2cef4039ff0",
+        "packages": "2e6be7ca29876c8c23963331b99c1bf2ca6637ca"
       },
       "tracer": {
-        "tests": "d4569dd80826adda43277e8bcbf7f74c56ed3c66"
+        "tests": "839d6ae7ba33a43eaae4d3f5ab19421382cd67cb"
       },
       "date": "2026-10-22",
       "command": "PORTFOLIO_ANALYZE=1 pnpm build && pnpm test:trace",
@@ -400,7 +400,7 @@
               "webgl2": false
             },
             "cpuThrottling": 4,
-            "loadAverage": 17.6,
+            "loadAverage": 28.1,
             "cpus": 18
           },
           "requests": {
@@ -412,35 +412,35 @@
             "byType": {
               "document": {
                 "count": 1,
-                "transferBytes": 21946,
-                "fileBytes": 89525,
+                "transferBytes": 26444,
+                "fileBytes": 118670,
                 "unknownBytes": 0
               },
               "script": {
                 "count": 12,
-                "transferBytes": 247694,
-                "fileBytes": 823413,
+                "transferBytes": 249914,
+                "fileBytes": 829447,
                 "unknownBytes": 0,
-                "gzipBytes": 240066
+                "gzipBytes": 242279
               },
               "stylesheet": {
                 "count": 2,
-                "transferBytes": 2529,
-                "fileBytes": 4003,
+                "transferBytes": 2596,
+                "fileBytes": 4367,
                 "unknownBytes": 0,
-                "gzipBytes": 1399
+                "gzipBytes": 1466
               }
             }
           },
           "js": {
             "files": 12,
-            "bytes": 823413,
-            "gzipBytes": 240066
+            "bytes": 829447,
+            "gzipBytes": 242279
           },
           "css": {
             "files": 2,
-            "bytes": 4003,
-            "gzipBytes": 1399
+            "bytes": 4367,
+            "gzipBytes": 1466
           },
           "fonts": {
             "files": 0,
@@ -462,8 +462,8 @@
           "attribution": {
             "js": {
               "chunks": 12,
-              "bytes": 823413,
-              "mappedShare": 0.994,
+              "bytes": 829447,
+              "mappedShare": 0.995,
               "packages": [
                 {
                   "package": "next",
@@ -478,12 +478,12 @@
                 {
                   "package": "yaml",
                   "bytes": 102929,
-                  "gzipBytes": 29246
+                  "gzipBytes": 29464
                 },
                 {
                   "package": "zod",
                   "bytes": 61179,
-                  "gzipBytes": 17384
+                  "gzipBytes": 17513
                 },
                 {
                   "package": "@chenglou/pretext",
@@ -493,12 +493,12 @@
                 {
                   "package": "marked",
                   "bytes": 37741,
-                  "gzipBytes": 10724
+                  "gzipBytes": 10804
                 },
                 {
                   "package": "@portfolio/schema",
-                  "bytes": 20184,
-                  "gzipBytes": 5734
+                  "bytes": 26201,
+                  "gzipBytes": 7503
                 },
                 {
                   "package": "react",
@@ -507,13 +507,13 @@
                 },
                 {
                   "package": "@portfolio/kit",
-                  "bytes": 7230,
-                  "gzipBytes": 2432
+                  "bytes": 7242,
+                  "gzipBytes": 2437
                 },
                 {
                   "package": "@portfolio/variant-contract",
-                  "bytes": 6163,
-                  "gzipBytes": 1751
+                  "bytes": 6168,
+                  "gzipBytes": 1766
                 },
                 {
                   "package": "(unmapped)",
@@ -534,13 +534,13 @@
             },
             "css": {
               "chunks": 2,
-              "bytes": 4003,
-              "mappedShare": 0.977,
+              "bytes": 4367,
+              "mappedShare": 0.979,
               "packages": [
                 {
                   "package": "@portfolio/kit",
-                  "bytes": 2236,
-                  "gzipBytes": 625
+                  "bytes": 2600,
+                  "gzipBytes": 698
                 },
                 {
                   "package": "apps/web",
@@ -550,12 +550,12 @@
                 {
                   "package": "@portfolio/fallback-composition",
                   "bytes": 486,
-                  "gzipBytes": 136
+                  "gzipBytes": 131
                 },
                 {
                   "package": "(unmapped)",
                   "bytes": 91,
-                  "gzipBytes": 36
+                  "gzipBytes": 35
                 }
               ]
             }
@@ -563,24 +563,24 @@
           "longTasks": {
             "supported": true,
             "cpuThrottling": 4,
-            "loadEventEndMs": 271.4,
+            "loadEventEndMs": 253.6,
             "windowMs": 5000,
             "count": 2,
             "over50ms": 2,
-            "totalMs": 125,
-            "maxMs": 65,
-            "durationsMs": [65, 60]
+            "totalMs": 113,
+            "maxMs": 58,
+            "durationsMs": [58, 55]
           },
           "idle": {
-            "windowS": 2.004526,
-            "taskDurationS": 0.000301,
+            "windowS": 2.001986,
+            "taskDurationS": 0.000145,
             "scriptDurationS": 0,
             "layoutDurationS": 0,
             "recalcStyleDurationS": 0,
             "layoutCount": 0,
             "recalcStyleCount": 0,
-            "jsHeapUsedBytes": 4750208,
-            "nodes": 1115,
+            "jsHeapUsedBytes": 4997096,
+            "nodes": 1417,
             "visibility": "visible",
             "networkIdle": true
           },
@@ -610,7 +610,7 @@
               "webgl2": false
             },
             "cpuThrottling": 4,
-            "loadAverage": 17.1,
+            "loadAverage": 29.7,
             "cpus": 18
           },
           "requests": {
@@ -622,35 +622,35 @@
             "byType": {
               "document": {
                 "count": 1,
-                "transferBytes": 21946,
-                "fileBytes": 89525,
+                "transferBytes": 26444,
+                "fileBytes": 118670,
                 "unknownBytes": 0
               },
               "script": {
                 "count": 12,
-                "transferBytes": 247694,
-                "fileBytes": 823413,
+                "transferBytes": 249914,
+                "fileBytes": 829447,
                 "unknownBytes": 0,
-                "gzipBytes": 240066
+                "gzipBytes": 242279
               },
               "stylesheet": {
                 "count": 2,
-                "transferBytes": 2529,
-                "fileBytes": 4003,
+                "transferBytes": 2596,
+                "fileBytes": 4367,
                 "unknownBytes": 0,
-                "gzipBytes": 1399
+                "gzipBytes": 1466
               }
             }
           },
           "js": {
             "files": 12,
-            "bytes": 823413,
-            "gzipBytes": 240066
+            "bytes": 829447,
+            "gzipBytes": 242279
           },
           "css": {
             "files": 2,
-            "bytes": 4003,
-            "gzipBytes": 1399
+            "bytes": 4367,
+            "gzipBytes": 1466
           },
           "fonts": {
             "files": 0,
@@ -672,8 +672,8 @@
           "attribution": {
             "js": {
               "chunks": 12,
-              "bytes": 823413,
-              "mappedShare": 0.994,
+              "bytes": 829447,
+              "mappedShare": 0.995,
               "packages": [
                 {
                   "package": "next",
@@ -688,12 +688,12 @@
                 {
                   "package": "yaml",
                   "bytes": 102929,
-                  "gzipBytes": 29246
+                  "gzipBytes": 29464
                 },
                 {
                   "package": "zod",
                   "bytes": 61179,
-                  "gzipBytes": 17384
+                  "gzipBytes": 17513
                 },
                 {
                   "package": "@chenglou/pretext",
@@ -703,12 +703,12 @@
                 {
                   "package": "marked",
                   "bytes": 37741,
-                  "gzipBytes": 10724
+                  "gzipBytes": 10804
                 },
                 {
                   "package": "@portfolio/schema",
-                  "bytes": 20184,
-                  "gzipBytes": 5734
+                  "bytes": 26201,
+                  "gzipBytes": 7503
                 },
                 {
                   "package": "react",
@@ -717,13 +717,13 @@
                 },
                 {
                   "package": "@portfolio/kit",
-                  "bytes": 7230,
-                  "gzipBytes": 2432
+                  "bytes": 7242,
+                  "gzipBytes": 2437
                 },
                 {
                   "package": "@portfolio/variant-contract",
-                  "bytes": 6163,
-                  "gzipBytes": 1751
+                  "bytes": 6168,
+                  "gzipBytes": 1766
                 },
                 {
                   "package": "(unmapped)",
@@ -744,13 +744,13 @@
             },
             "css": {
               "chunks": 2,
-              "bytes": 4003,
-              "mappedShare": 0.977,
+              "bytes": 4367,
+              "mappedShare": 0.979,
               "packages": [
                 {
                   "package": "@portfolio/kit",
-                  "bytes": 2236,
-                  "gzipBytes": 625
+                  "bytes": 2600,
+                  "gzipBytes": 698
                 },
                 {
                   "package": "apps/web",
@@ -760,12 +760,12 @@
                 {
                   "package": "@portfolio/fallback-composition",
                   "bytes": 486,
-                  "gzipBytes": 136
+                  "gzipBytes": 131
                 },
                 {
                   "package": "(unmapped)",
                   "bytes": 91,
-                  "gzipBytes": 36
+                  "gzipBytes": 35
                 }
               ]
             }
@@ -773,24 +773,24 @@
           "longTasks": {
             "supported": true,
             "cpuThrottling": 4,
-            "loadEventEndMs": 194.6,
+            "loadEventEndMs": 183.4,
             "windowMs": 5000,
             "count": 2,
             "over50ms": 2,
-            "totalMs": 118,
-            "maxMs": 61,
-            "durationsMs": [61, 57]
+            "totalMs": 111,
+            "maxMs": 60,
+            "durationsMs": [60, 51]
           },
           "idle": {
-            "windowS": 2.003,
-            "taskDurationS": 0.000147,
+            "windowS": 2.000986,
+            "taskDurationS": 0.000135,
             "scriptDurationS": 0,
             "layoutDurationS": 0,
             "recalcStyleDurationS": 0,
             "layoutCount": 0,
             "recalcStyleCount": 0,
-            "jsHeapUsedBytes": 4828172,
-            "nodes": 1115,
+            "jsHeapUsedBytes": 5037192,
+            "nodes": 1417,
             "visibility": "visible",
             "networkIdle": true
           },
