@@ -3,6 +3,7 @@ import {
   chmodSync,
   copyFileSync,
   mkdirSync,
+  readdirSync,
   readFileSync,
   renameSync,
   rmSync,
@@ -16,6 +17,7 @@ import type { LiveRevision, RenderDrift } from '../catalog/port';
 import type { Rendering } from '../catalog/unit';
 import type { StoreLogEntry } from './common';
 import type { ReadFs } from './fs-port';
+import { newRevisionId, type StorePaths } from './layout';
 import { readLive } from './pointer';
 import { nodeReadFs } from './read-fs';
 import { revisionCatalogReader, UNIT_CACHE_SIZE, type RevisionCatalogOptions } from './reader';
@@ -662,5 +664,145 @@ test("of two decisions in flight, only the later pointer's sets the flag, whiche
     const next = await catalog.getLive();
     assert.equal(next.state, later.state, order);
     assert.equal(servable.at(-1), expected, order);
+  }
+});
+
+/** A whenEmpty that answers empty, and counts how often it's asked. */
+function countingEmpty() {
+  const seen = { asked: 0 };
+  const whenEmpty = {
+    getLive: async (): Promise<LiveRevision> => {
+      seen.asked += 1;
+      return { state: 'empty', revisionId: null, unitHash: null, unit: null };
+    },
+  };
+  return { seen, whenEmpty };
+}
+
+test('live.json gone from a store that has published serves the last known good as pointer_damaged, logged at error, and never whenEmpty', async (t) => {
+  const store = await newStore(t);
+  await publishInput(store, pairInput('engineering'));
+  const second = await publishInput(store, contentVariant(pairInput('engineering'), 'two'));
+  const pointer = readFileSync(store.paths.live);
+  rmSync(store.paths.live);
+  let listings = 0;
+  const fs: ReadFs = {
+    ...nodeReadFs,
+    readdir(dir) {
+      listings += 1;
+      return nodeReadFs.readdir(dir);
+    },
+  };
+  const { seen, whenEmpty } = countingEmpty();
+  const { catalog, servable, logs } = reader(store, { fs, whenEmpty });
+
+  const live = served(await catalog.getLive());
+  assert.deepEqual([live.state, live.revisionId], ['degraded', second]);
+  assert.deepEqual(await catalog.status(), {
+    state: 'degraded',
+    liveRevisionId: null,
+    servingRevisionId: second,
+    seq: null,
+    unitHash: null,
+    reason: 'pointer_damaged',
+    renderDrift: null,
+  });
+  assert.equal(seen.asked, 0);
+  assert.deepEqual(flags(servable), [true]);
+  assert.deepEqual(
+    logs.map((entry) => [entry.level, entry.event, entry.code]),
+    [
+      ['error', 'store.pointer.missing', 'pointer_damaged'],
+      ['warn', 'store.catalog.degraded', 'pointer_damaged'],
+    ],
+  );
+  // Decided once: the requests after it list nothing.
+  const listed = listings;
+  for (let request = 0; request < 3; request++) await catalog.getLive();
+  assert.equal(listings, listed);
+
+  // With live.json back, the revision it names is live.
+  writeFileSync(store.paths.live, pointer);
+  assert.equal((await catalog.getLive()).state, 'live');
+  rmSync(store.paths.live);
+  assert.equal((await catalog.status()).reason, 'pointer_damaged');
+
+  // Every trace of a publish gone as well, the store is empty, and whenEmpty answers each request.
+  for (const dir of [store.paths.events, store.paths.revisions]) {
+    for (const name of readdirSync(dir)) rmSync(path.join(dir, name), { recursive: true });
+  }
+  assert.equal((await catalog.getLive()).state, 'empty');
+  await catalog.getLive();
+  assert.equal(seen.asked, 2);
+});
+
+test("without live.json, an event, one moved aside, a revision, or a tombstone says the store has published, and a publish's staging or a temporary file doesn't", async (t) => {
+  const id = newRevisionId();
+  const cases: Array<[string, (paths: StorePaths) => void, boolean]> = [
+    ['an event', (paths) => writeFileSync(paths.event(1), '{}\n'), true],
+    [
+      'an event moved aside',
+      (paths) => writeFileSync(path.join(paths.events, '1.aside-0a1b2c3d4e5f.json'), '{}\n'),
+      true,
+    ],
+    ['a revision', (paths) => mkdirSync(paths.revision(id)), true],
+    ['a tombstone', (paths) => writeFileSync(paths.tombstone(id), '{}\n'), true],
+    ["a publish's staging", (paths) => mkdirSync(paths.staging(id)), false],
+    [
+      'a temporary file',
+      (paths) => writeFileSync(path.join(paths.events, '.1.json.0a1b2c3d4e5f.tmp'), '{}\n'),
+      false,
+    ],
+  ];
+  for (const [what, add, published] of cases) {
+    const store = await newStore(t);
+    add(store.paths);
+    const { seen, whenEmpty } = countingEmpty();
+    const { catalog, logs } = reader(store, { whenEmpty });
+    const status = await catalog.status();
+    if (published) {
+      // Nothing it holds serves, so nothing does.
+      assert.deepEqual(
+        [status.state, status.reason, seen.asked],
+        ['incompatible', 'pointer_damaged', 0],
+        what,
+      );
+      assert.ok(
+        logs.some((entry) => entry.level === 'error' && entry.event === 'store.pointer.missing'),
+        what,
+      );
+    } else {
+      assert.deepEqual([status.state, seen.asked], ['empty', 1], what);
+      assert.deepEqual(logs, [], what);
+    }
+  }
+});
+
+test("a live.json, or with none an events/, that can't be looked at decides all the same, and never throws", async (t) => {
+  for (const target of ['live', 'events'] as const) {
+    const store = await newStore(t);
+    const only = await publishInput(store, pairInput('engineering'));
+    // events/ and revisions/ key the decision only while there's no live.json.
+    if (target === 'events') rmSync(store.paths.live);
+    const fs: ReadFs = {
+      ...nodeReadFs,
+      async stat(file) {
+        if (file === store.paths[target]) {
+          throw Object.assign(new Error(`EACCES: ${file}`), { code: 'EACCES' });
+        }
+        return nodeReadFs.stat(file);
+      },
+    };
+    const { catalog } = reader(store, { fs });
+    const status = await catalog.status();
+    if (target === 'live') {
+      // Nor can the decision read it: nothing serves, and the code says why.
+      assert.deepEqual([status.state, status.reason], ['incompatible', 'storage_unavailable']);
+    } else {
+      assert.deepEqual(
+        [status.state, status.servingRevisionId, status.reason],
+        ['degraded', only, 'pointer_damaged'],
+      );
+    }
   }
 });
