@@ -10,12 +10,13 @@ declare module 'react' {
   }
 }
 
-// Action (#19, Slice 3, item 2): a native button, or a link when it
-// navigates. Its kind is data-emphasis, and its state shows through ARIA
+// Action's markup (#19, Slice 3, item 2): a native button, or a link when
+// it navigates. Its kind is data-emphasis, and its state shows through ARIA
 // and native attributes: aria-pressed for a toggle, the native disabled
 // attribute for a button that isn't available, and aria-busy with
 // aria-disabled while it works, so focus stays on it and it isn't
-// activated. It renders on the server and in client components alike.
+// activated. action.tsx renders it, and action-client.tsx does when it needs
+// a click handler.
 
 export interface ActionProps {
   /** The visible label. */
@@ -30,7 +31,10 @@ export interface ActionProps {
   readonly value?: string;
   /** A toggle's state, as aria-pressed. */
   readonly pressed?: boolean;
-  /** Working: aria-busy, aria-disabled, and the spinner. A click does nothing, and focus stays. */
+  /**
+   * Working: aria-busy, aria-disabled, and the spinner. A click does
+   * nothing, a submit button doesn't submit, and focus stays, a link's too.
+   */
   readonly loading?: boolean;
   /** Not available: a button gets the disabled attribute, and a link loses its href. */
   readonly disabled?: boolean;
@@ -44,6 +48,7 @@ export interface ActionProps {
   /** A hook for the variant's layout. Never for state or appearance. */
   readonly className?: string;
   readonly hidden?: boolean;
+  /** From a client component. In a plate it never goes on. */
   readonly onClick?: (event: MouseEvent<HTMLElement>) => void;
   readonly ref?: Ref<HTMLButtonElement & HTMLAnchorElement>;
   /**
@@ -56,39 +61,36 @@ export interface ActionProps {
   readonly 'aria-controls'?: string;
 }
 
-export function Action({
-  children,
-  emphasis = 'secondary',
-  href,
-  type = 'button',
-  name,
-  value,
-  pressed,
-  loading = false,
-  disabled = false,
-  icon,
-  label,
-  describedBy,
-  id,
-  className,
-  hidden,
-  onClick,
-  ref,
-  command,
-  ...aria
-}: ActionProps) {
+/**
+ * The action's element, with `click` as its one handler. Only
+ * action-client.tsx passes one, so an action a server component renders
+ * carries none.
+ */
+export function actionElement(
+  {
+    children,
+    emphasis = 'secondary',
+    href,
+    type = 'button',
+    name,
+    value,
+    pressed,
+    loading = false,
+    disabled = false,
+    icon,
+    label,
+    describedBy,
+    id,
+    className,
+    hidden,
+    ref,
+    command,
+    'aria-haspopup': hasPopup,
+    'aria-controls': controls,
+  }: ActionProps,
+  click?: (event: MouseEvent<HTMLElement>) => void,
+) {
   const unavailable = loading || disabled;
-  // A server component can't pass a handler, so a handler goes on only when
-  // the caller, a client component, gives one.
-  const click = onClick
-    ? (event: MouseEvent<HTMLElement>) => {
-        if (unavailable) {
-          event.preventDefault();
-          return;
-        }
-        onClick(event);
-      }
-    : undefined;
   const content = (
     <>
       {loading ? <span data-ui-slot="action.spinner" aria-hidden="true" /> : null}
@@ -111,13 +113,16 @@ export function Action({
     'aria-label': label,
     'aria-describedby': describedBy,
     'aria-busy': loading || undefined,
+    'aria-haspopup': hasPopup,
+    'aria-controls': controls,
+    // What runs on a click is `click`, never the caller's onClick as it came.
     onClick: click,
-    ...aria,
   };
   if (href !== undefined) {
-    // A link that isn't available keeps its name and place but goes nowhere.
+    // A link that isn't available keeps its name and place but goes nowhere,
+    // and one that's loading keeps its focus as well.
     return unavailable ? (
-      <a {...shared} role="link" aria-disabled="true">
+      <a {...shared} role="link" aria-disabled="true" tabIndex={loading ? 0 : undefined}>
         {content}
       </a>
     ) : (

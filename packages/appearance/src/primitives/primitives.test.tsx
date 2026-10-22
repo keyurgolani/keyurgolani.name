@@ -201,6 +201,44 @@ test('Action with an href is a link, and an unavailable one goes nowhere but kee
   assert.equal(unavailable.attributes.href, undefined);
   assert.equal(unavailable.attributes.role, 'link');
   assert.equal(unavailable.attributes['aria-disabled'], 'true');
+  assert.equal(
+    unavailable.attributes.tabindex,
+    undefined,
+    'out of the tab order, as a disabled button is',
+  );
+});
+
+test('a loading link goes nowhere but keeps its place in the tab order, as a loading button does', () => {
+  const loading = one(
+    html(
+      <Action href="/work" loading>
+        Fetching the work
+      </Action>,
+    ),
+    'action',
+  );
+  assert.equal(loading.tag, 'a');
+  assert.equal(loading.attributes.href, undefined);
+  assert.equal(loading.attributes.role, 'link');
+  assert.equal(loading.attributes['aria-disabled'], 'true');
+  assert.equal(loading.attributes['aria-busy'], 'true');
+  assert.equal(loading.attributes.tabindex, '0');
+});
+
+test('a loading submit button renders as any submit button does, its click stopped once it hydrates', () => {
+  // The click handler is the client half's (action-client.tsx), which the
+  // server renders the same markup for; tests/appearance clicks it.
+  const markup = html(
+    <form action="/next">
+      <Action type="submit" loading>
+        Saving
+      </Action>
+    </form>,
+  );
+  const submit = one(markup, 'action');
+  assert.equal(submit.attributes.type, 'submit');
+  assert.equal(submit.attributes['aria-disabled'], 'true');
+  assert.equal(submit.attributes.disabled, undefined);
 });
 
 test("Action's states: disabled is native, loading keeps focus with aria-busy and aria-disabled, pressed is aria-pressed", () => {

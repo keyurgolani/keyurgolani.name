@@ -6,6 +6,7 @@ import {
   openFixtures,
   PLATE,
   PLATES,
+  reactHandlers,
   recordGlobalListeners,
   ROUTE,
 } from './fixture-page';
@@ -150,6 +151,19 @@ test(
     await overlays.getByRole('button', { name: 'Show a toast', exact: true }).click();
     await expect(page.locator('#toasts [data-ui-slot="toast"]')).toHaveCount(1);
     expect(extra(await globalListeners(page))).toEqual([]);
+  },
+);
+
+test(
+  'no element in a plate carries a handler, however its primitives were given one',
+  { annotation: [ROUTE] },
+  async ({ page }) => {
+    await openFixtures(page);
+    // The probe sees the document's own: its toast triggers' clicks.
+    expect(await reactHandlers(page, '#overlays')).toContainEqual(
+      expect.stringMatching(/^button#.* onClick$/),
+    );
+    expect(await reactHandlers(page)).toEqual([]);
   },
 );
 

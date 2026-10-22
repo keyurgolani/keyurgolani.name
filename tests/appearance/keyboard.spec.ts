@@ -92,12 +92,32 @@ test(
     const indices = order.map(([, index]) => index);
     expect(indices).toEqual([...indices].sort((a, b) => a - b));
     // Disabled controls take no stop, and neither does a link that goes
-    // nowhere; one that's loading keeps its place.
+    // nowhere; a button or a link that's loading keeps its place.
     expect(names.includes('Unavailable')).toBe(false);
     expect(names.includes('Archived link')).toBe(false);
     expect(stops.find((stop) => stop.text === 'Validating')).toMatchObject({ tag: 'button' });
+    expect(stops.find((stop) => stop.text === 'Fetching the forms')).toMatchObject({ tag: 'a' });
     // A tablist is one stop: only its selected tab.
     expect(stops.filter((stop) => stop.slot === 'tabs.tab')).toHaveLength(1);
+  },
+);
+
+test(
+  "a loading submit button doesn't submit its form, by a click or from the keyboard, and keeps its focus",
+  INTERACTION,
+  async ({ page, app }) => {
+    await openFixtures(page);
+    const saving = page.locator('#actions').getByRole('button', { name: 'Saving the revision' });
+    await expect(saving).toHaveAttribute('type', 'submit');
+    await expect(saving).toHaveAttribute('aria-busy', 'true');
+    await saving.click();
+    await saving.focus();
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('Space');
+    // Long enough for a submission to have gone out and loaded the page again.
+    await page.waitForTimeout(1_000);
+    expect(page.url()).toBe(`${app.origin}/_fixtures/appearance`);
+    await expect(saving).toBeFocused();
   },
 );
 

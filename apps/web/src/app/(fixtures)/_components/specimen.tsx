@@ -129,7 +129,16 @@ export function DocumentSpecimen({
           <Action href={`#${id('forms')}`} disabled>
             Archived link
           </Action>
+          <Action href={`#${id('forms')}`} loading>
+            Fetching the forms
+          </Action>
         </div>
+        <form className="fixtures-row" action="/_fixtures/appearance" method="get">
+          <input type="hidden" name="submitted" value="1" />
+          <Action type="submit" emphasis="primary" loading>
+            Saving the revision
+          </Action>
+        </form>
       </Region>
 
       <Region labelledBy={id('forms-title')} className="fixtures-section" id={id('forms')}>
@@ -448,9 +457,7 @@ export function PlateSpecimen({ ids }: { readonly ids: BoundaryIds }) {
           <p>Three sources agree.</p>
         </Dialog>
       </div>
-      <ToastRegion id="toasts">
-        <ToastHarness />
-      </ToastRegion>
+      <ToastRegion id="toasts" />
       <DataDisplay
         id={id('evidence')}
         caption="Confidence by source"
