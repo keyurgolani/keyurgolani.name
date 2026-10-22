@@ -3,8 +3,10 @@
 // test:trace reads the map of every chunk a page downloaded and splits the
 // chunk's bytes among the modules its mappings point at. A mapping covers
 // the generated text from its column to the next mapping on its line, so
-// bytes no mapping covers, line breaks among them, count as unmapped. Gzip
-// bytes are shared out in proportion to the raw ones, since a chunk is
+// bytes no mapping covers, line breaks among them, count as unmapped. The
+// (unmapped) bucket stays its own: module wrappers, the bundler's glue, and
+// line breaks belong to no package, and slice 3 decides where they count.
+// Gzip bytes are shared out in proportion to the raw ones, since a chunk is
 // compressed whole. The decoder is this file's own: base64 VLQ, plain maps,
 // and index maps with sections, as Turbopack writes.
 import { readdirSync, readFileSync } from 'node:fs';
@@ -152,10 +154,40 @@ function lineTable(code) {
   return { lines, total: bytes };
 }
 
-/** Bytes from the start of `line` to `column` (UTF-16 units, as maps count). */
+/**
+ * UTF-8 bytes of `text` from code unit `from` to `to`, as Buffer.byteLength
+ * counts them: a surrogate pair's 4 bytes count at its first half, and a
+ * lone surrogate is 3.
+ */
+function utf8Bytes(text, from, to) {
+  let bytes = 0;
+  for (let index = from; index < to; index += 1) {
+    const unit = text.charCodeAt(index);
+    if (unit < 0x80) bytes += 1;
+    else if (unit < 0x800) bytes += 2;
+    else if (unit >= 0xd800 && unit <= 0xdbff) {
+      const next = text.charCodeAt(index + 1);
+      bytes += next >= 0xdc00 && next <= 0xdfff ? 4 : 3;
+    } else if (unit >= 0xdc00 && unit <= 0xdfff) {
+      const previous = index > 0 ? text.charCodeAt(index - 1) : 0;
+      bytes += previous >= 0xd800 && previous <= 0xdbff ? 0 : 3;
+    } else bytes += 3;
+  }
+  return bytes;
+}
+
+/**
+ * Bytes from the start of `line` to `column` (UTF-16 units, as maps count).
+ * A non-ASCII line keeps where the last call stopped and reads on from
+ * there, so its segments, which come in column order, cost one pass over it.
+ */
 function columnBytes(line, column) {
   const clamped = Math.min(column, line.text.length);
-  return line.ascii ? clamped : Buffer.byteLength(line.text.slice(0, clamped));
+  if (line.ascii) return clamped;
+  if (!line.cursor || clamped < line.cursor.column) line.cursor = { column: 0, bytes: 0 };
+  line.cursor.bytes += utf8Bytes(line.text, line.cursor.column, clamped);
+  line.cursor.column = clamped;
+  return line.cursor.bytes;
 }
 
 /**
@@ -231,7 +263,8 @@ const VENDORED_BY_NEXT = /^dist\/compiled\/(react|react-dom|scheduler)(?:-experi
  * `node_modules/`, with React, React DOM, and the scheduler as themselves
  * where Next vendors them, `apps/<name>` for an app, the workspace
  * package's name for `packages/<dir>/` (`workspace` maps a directory to its
- * name), and `next` for the bundler runtime Next ships. Anything else is
+ * name), and `next` for Next's own runtime: the bundler runtime it ships
+ * and the @swc/helpers its compiled client imports. Anything else is
  * `(other)`.
  *
  * @param {string} source normalized, as normalizeSource returns it
@@ -247,6 +280,8 @@ export function packageOf(source, workspace = {}) {
       const vendored = VENDORED_BY_NEXT.exec(rest.slice(1).join('/'));
       if (vendored) return vendored[1];
     }
+    // The helpers Next's own compiled client imports: Next's runtime.
+    if (name === '@swc/helpers') return 'next';
     if (name && name !== '.pnpm') return name;
   }
   if (/^\[(turbopack|next)\]\//.test(source)) return 'next';

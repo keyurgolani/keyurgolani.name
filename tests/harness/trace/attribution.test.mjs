@@ -204,7 +204,8 @@ test('a source belongs to the npm package after its last node_modules, a workspa
     // Anything else Next vendors is Next's.
     ['node_modules/next/dist/compiled/react-server-dom-turbopack/client.js', 'next'],
     ['node_modules/next/dist/compiled/process/browser.js', 'next'],
-    ['node_modules/.pnpm/@swc+helpers@0.5/node_modules/@swc/helpers/esm/a.js', '@swc/helpers'],
+    // The helpers Next's compiled client imports are Next's runtime.
+    ['node_modules/.pnpm/@swc+helpers@0.5/node_modules/@swc/helpers/esm/a.js', 'next'],
     ['apps/web/node_modules/react-dom/cjs/react-dom.production.js', 'react-dom'],
     ['node_modules/.pnpm/scheduler@0.27/node_modules/scheduler/index.js', 'scheduler'],
     ['packages/kit/src/sections/hero.tsx', '@portfolio/kit'],
@@ -310,8 +311,64 @@ test('an inline map decodes from base64 or percent-encoding, and any other URL i
   assert.equal(inlineSourceMap('http://127.0.0.1/a.js.map'), null);
 });
 
-test('gzip bytes are level 9', () => {
-  const text = 'abc'.repeat(1000);
-  assert.equal(gzipBytes(text), gzipSync(text, { level: 9 }).length);
-  assert.ok(gzipBytes(text) < gzipSync(text, { level: 1 }).length + 1);
+/** About 47 KB of code-like text, the same every run, that gzip compresses differently at each level. */
+function codeLikeText() {
+  let seed = 7;
+  const random = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+  const words = ['const', 'return', 'function', 'export', 'import', 'await', 'async', 'value'];
+  words.push('props', 'state', 'render', 'children', 'className', 'useEffect', 'window');
+  words.push('document', 'length', 'index', 'null', 'undefined');
+  let text = '';
+  for (let i = 0; i < 5000; i += 1) {
+    const word = words[Math.floor(random() * words.length)];
+    const after =
+      random() < 0.1 ? '\n' : random() < 0.5 ? `(${Math.floor(random() * 1000)});` : ' ';
+    text += word + after;
+  }
+  return text;
+}
+
+test('gzip bytes are level 9, which this text tells apart from the default level 6', () => {
+  const text = codeLikeText();
+  const [level6, level9] = [6, 9].map((level) => gzipSync(text, { level }).length);
+  assert.ok(level9 < level6, `level 9 (${level9}) beats level 6 (${level6}) on this text`);
+  assert.equal(gzipBytes(text), level9);
+  assert.equal(gzipBytes(Buffer.from(text)), level9, 'a Buffer counts the same');
+});
+
+test('a surrogate pair counts its 4 bytes once, and a lone surrogate 3, as UTF-8 has them', () => {
+  // "😀" is two UTF-16 units and four UTF-8 bytes. Mappings land on either half.
+  const code = 'a😀b\ud800c😀';
+  const map = {
+    sources: ['a.js', 'b.js'],
+    mappings: mappings([
+      [
+        [0, 0],
+        [2, 1],
+        [5, 0],
+      ],
+    ]),
+  };
+  const { bytes, unmapped, sources } = attributeCode(code, map);
+  assert.equal(bytes, Buffer.byteLength(code));
+  assert.equal(unmapped, 0);
+  // a.js: "a" and the first half of the pair, which carries its 4 bytes, then "c😀".
+  assert.deepEqual(Object.fromEntries(sources), { 'a.js': 1 + 4 + 1 + 4, 'b.js': 1 + 3 });
+});
+
+test('a long non-ASCII line attributes in one pass, not one pass per mapping', () => {
+  // 600,000 UTF-16 units, 1,194,000 UTF-8 bytes, and a mapping every 100 units.
+  const unit = `${'é'.repeat(99)}x`;
+  const code = unit.repeat(6000);
+  const segments = Array.from({ length: 6000 }, (_, k) => [k * 100, k % 2]);
+  const map = { sources: ['a.js', 'b.js'], mappings: mappings([segments]) };
+  const started = performance.now();
+  const { bytes, unmapped, sources } = attributeCode(code, map);
+  const elapsed = performance.now() - started;
+  assert.equal(bytes, Buffer.byteLength(code));
+  assert.equal(unmapped, 0);
+  assert.equal(sources.get('a.js'), 3000 * Buffer.byteLength(unit));
+  assert.equal(sources.get('b.js'), 3000 * Buffer.byteLength(unit));
+  // Reading each mapping's column from the line start again takes seconds here.
+  assert.ok(elapsed < 500, `took ${Math.round(elapsed)} ms`);
 });
