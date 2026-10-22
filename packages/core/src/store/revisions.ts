@@ -389,18 +389,29 @@ export type RevisionHealth =
 const blocking = (diagnostic: { readonly severity: string }) =>
   diagnostic.severity === 'blocks-preview' || diagnostic.severity === 'blocks-publish';
 
+/**
+ * What a revision is checked for. `serve`: whether it renders as the live
+ * revision, with UnitChecks.validateLive, under which an unregistered
+ * variant only warns; damage, status(), the last-known-good walk, the
+ * reader, and verify ask this. `publish`: whether it may be made live, with
+ * UnitChecks.validate; rollback's and recover's targets and
+ * revision.list's `compatible` ask this.
+ */
+export type HealthPurpose = 'serve' | 'publish';
+
 export async function revisionHealth(
   fs: FsPort,
   paths: StorePaths,
   id: RevisionId,
   checks: UnitChecks,
   hasBlob: (hash: Sha256) => Promise<boolean>,
+  purpose: HealthPurpose,
 ): Promise<RevisionHealth> {
   if (await isTombstoned(fs, paths, id)) return { state: 'removed' };
   const read = await readRevision(fs, paths, id);
   if (!read.ok) return { state: 'damaged', reason: read.damage };
   const { revision } = read;
-  const result = checks.validate({
+  const pair = {
     portfolio: {
       text: revision.unit.portfolio.sourceText,
       format: revision.unit.portfolio.format,
@@ -411,7 +422,9 @@ export async function revisionHealth(
       format: revision.unit.site.format,
       name: revision.manifest.documents.site.file,
     },
-  });
+  };
+  const result =
+    purpose === 'serve' && checks.validateLive ? checks.validateLive(pair) : checks.validate(pair);
   const blockers = result.diagnostics.filter(blocking);
   // An older schema major renders after a migration, not as damage: one no
   // step reads (schema.version), or one the migration does (schema.outdated, #10).
@@ -446,7 +459,8 @@ export interface RevisionStore {
   manifest(revisionId: RevisionId): Promise<Manifest | null>;
   /** Every revision with a directory. */
   list(): Promise<RevisionId[]>;
-  health(revisionId: RevisionId): Promise<RevisionHealth>;
+  /** What the running build makes of a revision, for serving or for publishing it. */
+  health(revisionId: RevisionId, purpose: HealthPurpose): Promise<RevisionHealth>;
 }
 
 export function filesystemRevisionStore({
@@ -467,9 +481,9 @@ export function filesystemRevisionStore({
         : Promise.resolve({ ok: false, damage: 'missing' }),
     manifest: (revisionId: RevisionId) => readManifest(fs, paths, revisionId),
     list: () => revisionIds(fs, paths),
-    health: (revisionId: RevisionId): Promise<RevisionHealth> =>
+    health: (revisionId: RevisionId, purpose: HealthPurpose): Promise<RevisionHealth> =>
       isRevisionId(revisionId)
-        ? revisionHealth(fs, paths, revisionId, checks, hasBlob)
+        ? revisionHealth(fs, paths, revisionId, checks, hasBlob, purpose)
         : Promise.resolve({ state: 'damaged', reason: 'missing' }),
   });
 }

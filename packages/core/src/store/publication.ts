@@ -52,6 +52,7 @@ import {
   revisionHealth,
   revisionIds,
   writeRevision,
+  type HealthPurpose,
   type Manifest,
   type RevisionHealth,
 } from './revisions';
@@ -318,7 +319,8 @@ export function filesystemPublicationService({
 }: PublicationOptions): PublicationService {
   const stamp = () => new Date(now()).toISOString();
   const hasBlob = (hash: Sha256) => assets.has(hash);
-  const health = (id: RevisionId) => revisionHealth(fs, paths, id, checks, hasBlob);
+  const health = (id: RevisionId, purpose: HealthPurpose) =>
+    revisionHealth(fs, paths, id, checks, hasBlob, purpose);
 
   async function readPointer(): Promise<LivePointer | null> {
     try {
@@ -636,7 +638,7 @@ export function filesystemPublicationService({
       const target = input.targetRevisionId ?? (await walkLastKnownGood(pointer));
       if (!target || !(await fs.stat(paths.revision(target)))) return rejected('not_found');
       if (target === pointer?.revisionId) return rejected('nothing_to_publish');
-      const found = await health(target);
+      const found = await health(target, 'publish');
       const problem = targetProblem(target, found);
       if (problem) return problem;
       const unitHash = found.state === 'ok' ? found.revision.unit.unitHash : null;
@@ -670,14 +672,14 @@ export function filesystemPublicationService({
 
   async function walkLastKnownGood(pointer: LivePointer | null): Promise<RevisionId | null> {
     for (const id of await liveOrder(pointer)) {
-      if ((await health(id)).state === 'ok') return id;
+      if ((await health(id, 'serve')).state === 'ok') return id;
     }
     return null;
   }
 
   async function summary(id: RevisionId, seqs: ReadonlyMap<RevisionId, number>) {
     const manifest = await readManifest(fs, paths, id);
-    const found = await health(id);
+    const found = await health(id, 'publish');
     const seq = seqs.get(id);
     const result: RevisionSummary = {
       revisionId: id,
@@ -878,7 +880,7 @@ export function filesystemPublicationService({
             unitHash: null,
           };
         }
-        const found = await health(pointer.revisionId);
+        const found = await health(pointer.revisionId, 'serve');
         const base = {
           liveRevisionId: pointer.revisionId,
           seq: pointer.seq,
