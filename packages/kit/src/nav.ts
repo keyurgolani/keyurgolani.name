@@ -1,6 +1,7 @@
-import type { CoreSection, Portfolio, SectionKind } from '@portfolio/schema';
+import type { CoreSection, SectionKind } from '@portfolio/schema';
 import { isExtensionSection } from '@portfolio/schema/ids';
-import { ensureSectionId } from './format';
+import type { VariantRenderInput } from '@portfolio/variant-contract';
+import { sectionShows } from './sections/view';
 
 export interface NavItem {
   label: string;
@@ -16,29 +17,36 @@ export interface DeriveNavItemsOptions {
   labelFor?: (section: CoreSection) => string | null;
 }
 
+/** What the navigation reads: the public view's portfolio, and the render's ids when there is one. */
+export interface NavSource {
+  readonly portfolio: VariantRenderInput['portfolio'];
+  readonly ids?: { readonly prefix: string };
+}
+
 const DEFAULT_EXCLUDE: ReadonlyArray<SectionKind> = ['hero', 'cta'];
 
 /**
- * Walk the portfolio's sections in declaration order and produce the
- * same `{ label, href }` pairs a manual nav config would. Skips sections
- * from content extensions (no variant renders them yet), sections without a
- * derivable label (no title, no fallback in `labelFor`), and kinds in
- * `excludeKinds`. Hidden sections never get here: the public view drops them.
+ * Walk the public view's sections in their order and produce the `{ label,
+ * href }` pairs a navigation shows: each section's own title, linking to its
+ * content id, with the render's id prefix when given a render input. Skips
+ * sections from content extensions (no variant renders them yet), sections
+ * without a title and no `labelFor` label, kinds in `excludeKinds`, and any
+ * section with nothing public to show, which renderSection() leaves off the
+ * page too. Hidden sections never get here: the public view drops them.
  *
- * Variants render the result however they want — top bar, side rail,
- * sticky pill — but all draw from this single source of truth so the
- * nav stays in sync with what the page actually contains.
+ * Variants render the result however they want (top bar, side rail, sticky
+ * pill), but all draw from this one source, so the navigation stays in step
+ * with what the page contains.
  */
-export function deriveNavItems(
-  portfolio: Portfolio,
-  options: DeriveNavItemsOptions = {},
-): NavItem[] {
+export function deriveNavItems(view: NavSource, options: DeriveNavItemsOptions = {}): NavItem[] {
   const exclude = new Set(options.excludeKinds ?? DEFAULT_EXCLUDE);
+  const prefix = view.ids?.prefix ?? '';
   const items: NavItem[] = [];
 
-  for (const section of portfolio.sections) {
+  for (const section of view.portfolio.sections) {
     if (isExtensionSection(section)) continue;
     if (exclude.has(section.kind)) continue;
+    if (!sectionShows(section, view)) continue;
 
     const override = options.labelFor?.(section);
     if (override === null) continue;
@@ -46,8 +54,7 @@ export function deriveNavItems(
     const label = override ?? section.title ?? null;
     if (!label) continue;
 
-    const id = ensureSectionId(section.id, section.title ?? section.kind);
-    items.push({ label, href: `#${id}` });
+    items.push({ label, href: `#${prefix}${section.id}` });
 
     if (options.limit !== undefined && items.length >= options.limit) break;
   }

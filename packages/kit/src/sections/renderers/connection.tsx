@@ -1,15 +1,20 @@
-import type { Contact, Cta, Link } from '@portfolio/schema';
-import { LinkList, LinkText, present, renderContext, SectionHeader, Ui } from '../primitives';
-import type { SectionRendererProps } from '../types';
+import type { Link } from '@portfolio/schema';
+import { LinkList, LinkText, present, renderContext, SectionHeader } from '../primitives';
+import type { SectionOf, SectionRendererProps } from '../types';
 
 /**
- * Ways to get in touch: the identity's email first, unless a link already
- * points at it, then the section's own links, else the portfolio's.
+ * Ways to get in touch, from the portfolio's contact record, which a contact
+ * section places: its message, then the identity's email, unless a link
+ * already points at it, then the contact's links, else the portfolio's.
  */
-export function ContactSection({ section, input, level }: SectionRendererProps<Contact>) {
+export function ContactSection({
+  section,
+  input,
+  level,
+}: SectionRendererProps<SectionOf<'contact'>>) {
   const ctx = renderContext(input, section, level);
-  const { identity, links: portfolioLinks } = input.portfolio;
-  const links = section.links?.length ? section.links : portfolioLinks;
+  const { identity, links: portfolioLinks, contact } = input.portfolio;
+  const links = contact?.links?.length ? contact.links : portfolioLinks;
   const email = present(identity.email) ? identity.email.trim() : undefined;
   const mailto = email !== undefined ? `mailto:${email}` : undefined;
   const listed: readonly Link[] =
@@ -18,20 +23,15 @@ export function ContactSection({ section, input, level }: SectionRendererProps<C
       : links;
   return (
     <>
-      <SectionHeader section={section} ctx={ctx} fallback="Contact" />
-      {section.showAvailability === true ? (
-        <p className="pf-availability">
-          <Ui ctx={ctx}>Available for new work</Ui>
-        </p>
-      ) : null}
-      {present(section.message) ? <p className="pf-message">{section.message}</p> : null}
+      <SectionHeader section={section} ctx={ctx} />
+      {present(contact?.message) ? <p className="pf-message">{contact.message}</p> : null}
       <LinkList links={listed} ctx={ctx} />
     </>
   );
 }
 
 /** A call to action stands alone, so it has no heading unless it has a title. */
-export function CtaSection({ section, input, level }: SectionRendererProps<Cta>) {
+export function CtaSection({ section, input, level }: SectionRendererProps<SectionOf<'cta'>>) {
   const ctx = renderContext(input, section, level);
   const actions = [
     section.primaryAction && (

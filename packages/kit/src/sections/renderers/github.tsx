@@ -1,13 +1,16 @@
 import type { ReactNode } from 'react';
+import type { Github } from '@portfolio/schema';
 import {
-  deeper,
   formatFigure,
   Heading,
   present,
+  renderContext,
   SectionHeader,
   Ui,
   type RenderContext,
 } from '../primitives';
+import type { SectionRendererProps } from '../types';
+import { githubSnapshot } from '../view';
 
 // The github section (#10, slice 1, item 2): what the section's snapshot
 // froze at publish, with the date it froze it, and the profile link. Nothing
@@ -124,7 +127,7 @@ function Repositories({
         const href = safeHref(repo.url);
         return (
           <li key={repo.name} className="pf-item">
-            <Heading level={deeper(ctx.level)} className="pf-item__title">
+            <Heading level={ctx.itemLevel} className="pf-item__title">
               {href ? <a href={href}>{repo.name}</a> : repo.name}
             </Heading>
             {present(repo.description) ? <p>{repo.description}</p> : null}
@@ -168,4 +171,10 @@ export function GithubBody({
       <ProfileLink username={fields.username} />
     </>
   );
+}
+
+/** A github section: its snapshot's values and their date, else the profile link alone. */
+export function GithubSection({ section, input, level }: SectionRendererProps<Github>) {
+  const ctx = renderContext(input, section, level);
+  return <GithubBody fields={section} snapshot={githubSnapshot(section, input)} ctx={ctx} />;
 }

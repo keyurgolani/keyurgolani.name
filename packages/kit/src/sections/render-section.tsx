@@ -6,6 +6,7 @@ import type { VariantRenderInput } from '@portfolio/variant-contract';
 import { hostModules } from './host-modules';
 import { SHARED_RENDERERS } from './renderers';
 import type { BespokeRenderers, HeadingLevel, SectionRenderer } from './types';
+import { sectionShows } from './view';
 
 export interface RenderSectionOptions {
   /** The section heading's level, 2 unless the caller says otherwise. */
@@ -19,8 +20,10 @@ export interface RenderSectionOptions {
  * `shared` otherwise), the section's `lang`, and a `dir` when that language
  * runs the other way from the portfolio.
  *
- * A kind in the manifest's `unsupportedKinds` renders nothing. One in its
- * `renderedKinds` uses the variant's renderer from `renderers`. An extension
+ * A kind in the manifest's `unsupportedKinds` renders nothing, and so does a
+ * section with nothing public to show (#10), such as works whose every
+ * item is private. One in its `renderedKinds` uses the variant's renderer
+ * from `renderers`. An extension
  * kind uses the renderer its extension registered through
  * registerHostModules(), and renders nothing without one, which Slice 5's
  * compatibility check reports. Every other core kind uses the shared renderer.
@@ -48,6 +51,7 @@ export function renderSection(
     );
   }
   if (unsupportedKinds.includes(section.kind)) return null;
+  if (!isExtensionSection(section) && !sectionShows(section, input)) return null;
   const Renderer =
     own ??
     (isExtensionSection(section)

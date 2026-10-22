@@ -7,6 +7,34 @@
 export { renderSection } from './render-section';
 export type { RenderSectionOptions } from './render-section';
 export { SHARED_RENDERERS } from './renderers';
+export { CaseStudy } from './renderers/case-study';
+export type { CaseStudyDecision, CaseStudyFields, CaseStudyProps } from './renderers/case-study';
+export { EvidenceEntry } from './renderers/evidence';
+export { WorkEntry } from './renderers/works';
+export { MediaFigure, focalStyle } from './media';
+export type {
+  DerivedImage,
+  ImageRendition,
+  ImageState,
+  MediaFigureProps,
+  PlacedImage,
+} from './media';
+export {
+  chronologyOf,
+  evidenceByIds,
+  evidenceOf,
+  githubSnapshot,
+  isArchived,
+  isSignature,
+  placedImage,
+  recordAnchor,
+  sectionShows,
+  worksByIds,
+  worksOf,
+} from './view';
+export type { Placement, ViewSource } from './view';
+export { renderContext } from './primitives';
+export type { RenderContext } from './primitives';
 export { RichText } from './rich-text';
 export { seededRandom } from './seeded-random';
 export { VisitorControlSlot } from './visitor-control-slot';

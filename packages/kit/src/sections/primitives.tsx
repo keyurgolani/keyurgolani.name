@@ -1,12 +1,15 @@
 import { Fragment, type ReactNode } from 'react';
-import type { Image, Link, Period, Section } from '@portfolio/schema';
+import type { Link, Period, Section } from '@portfolio/schema';
 import { routeHref, type VariantRenderInput } from '@portfolio/variant-contract';
 import { formatDate, parseLooseDate } from '../format';
 import type { HeadingLevel } from './types';
 
 // The pieces every shared renderer is built from. Styling is classes alone,
-// under [data-variant] in styles.css: no inline style, and no text made faint
-// with opacity.
+// under [data-variant] in styles.css: no inline style but an image's focal
+// point (media.tsx), and no text made faint with opacity. Every text node is
+// the owner's, formatted from the owner's data, a dated snapshot value, or
+// one of the fixed labels (#10, slice 1, item 7): no default heading, no
+// default link label, and no decoration around a number.
 
 /** What a shared renderer passes its pieces. */
 export interface RenderContext {
@@ -19,8 +22,11 @@ export interface RenderContext {
   readonly formatLocale: string;
   /** `en` when the content isn't English, for the words and dates the renderers add, such as Present. */
   readonly uiLang: 'en' | undefined;
-  /** Whether this is the first section, whose images load at once rather than lazily. */
-  readonly eager: boolean;
+  /**
+   * The level of an item's heading: one below the section's heading, or the
+   * section's own level when it has no title, so no level is skipped.
+   */
+  readonly itemLevel: HeadingLevel;
 }
 
 /** Whether `text` has something to show: a string that isn't empty or only spaces. */
@@ -50,7 +56,7 @@ function formatLocaleFor(locale: string): string {
 
 export function renderContext(
   input: VariantRenderInput,
-  section: Pick<Section, 'id' | 'lang'>,
+  section: Pick<Section, 'id' | 'lang' | 'title'>,
   level: HeadingLevel,
 ): RenderContext {
   const locale = section.lang ?? input.portfolio.locale;
@@ -62,7 +68,7 @@ export function renderContext(
     locale,
     formatLocale: formatLocaleFor(locale),
     uiLang: english ? undefined : 'en',
-    eager: input.portfolio.sections[0]?.id === section.id,
+    itemLevel: present(section.title) ? deeper(level) : level,
   };
 }
 
@@ -158,19 +164,15 @@ export function ItemTitle({
   url,
   ctx,
   className = 'pf-item__title',
-  before,
 }: {
   text: string | undefined;
   url?: string;
   ctx: RenderContext;
   className?: string;
-  /** Shown ahead of the text, inside the heading, such as an episode number. */
-  before?: ReactNode;
 }) {
   if (!present(text)) return null;
   return (
-    <Heading level={deeper(ctx.level)} className={className}>
-      {before}
+    <Heading level={ctx.itemLevel} className={className}>
       <MaybeLink url={url} ctx={ctx}>
         {text}
       </MaybeLink>
@@ -184,30 +186,23 @@ export function Ui({ ctx, children }: { ctx: RenderContext; children: string }) 
 }
 
 /**
- * The section's heading and subtitle. A section without a title gets the
- * kind's default heading, if it has one.
+ * The section's heading and subtitle, as the owner wrote them. A section
+ * without a title has no heading: no kind has a default one.
  */
 export function SectionHeader({
   section,
   ctx,
-  fallback,
 }: {
-  section: Pick<Section, 'title' | 'subtitle'>;
+  section: { readonly title?: string; readonly subtitle?: string };
   ctx: RenderContext;
-  fallback?: string;
 }) {
-  const own = present(section.title);
-  const title = own ? section.title : fallback;
+  const title = present(section.title) ? section.title : undefined;
   const subtitle = present(section.subtitle) ? section.subtitle : undefined;
   if (title === undefined && subtitle === undefined) return null;
   return (
     <header className="pf-section__header">
       {title !== undefined ? (
-        <Heading
-          level={ctx.level}
-          className="pf-section__title"
-          lang={own ? undefined : ctx.uiLang}
-        >
+        <Heading level={ctx.level} className="pf-section__title">
           {title}
         </Heading>
       ) : null}
@@ -263,35 +258,6 @@ export function LinkList({
       {links.map((link, index) => (
         <li key={index}>
           <LinkText link={link} ctx={ctx} />
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-/** A link the renderer names, such as Slides, with an optional detail after the name. */
-export type NamedLinkEntry = readonly [label: string, url: string | undefined, detail?: string];
-
-/** Links the renderer names, such as Slides and Video. Absent ones are left out. */
-export function NamedLinks({
-  links,
-  ctx,
-}: {
-  links: readonly NamedLinkEntry[];
-  ctx: RenderContext;
-}) {
-  const shown = links.filter(
-    (link): link is readonly [string, string, string?] => link[1] !== undefined,
-  );
-  if (shown.length === 0) return null;
-  return (
-    <ul className="pf-named-links" role="list">
-      {shown.map(([label, url, detail]) => (
-        <li key={label}>
-          <a className="pf-named-link" href={hrefFor(url, ctx.input)}>
-            <Ui ctx={ctx}>{label}</Ui>
-            {present(detail) ? <> {detail}</> : null}
-          </a>
         </li>
       ))}
     </ul>
@@ -392,78 +358,5 @@ export function PeriodText({ period, ctx }: { period: Period | undefined; ctx: R
       {'\u2013'}
       <DateText raw={period.end ?? 'present'} ctx={ctx} />
     </span>
-  );
-}
-
-/**
- * A content image. Its alt text is its own, and `alt: ''` marks decoration.
- * Without alt text, it's decorative only when the text beside it names what
- * it shows, such as a logo beside the organization's name; otherwise it takes
- * `fallbackAlt`, such as its caption, and with neither it has no alt at all,
- * so an accessibility audit finds it (#4's image.alt-missing warns too). The focal point goes on data attributes
- * for CSS that crops, because an inline object-position would be an inline
- * style. The first section's images load at once, and the rest lazily.
- */
-export function ContentImage({
-  image,
-  ctx,
-  className,
-  caption,
-  inline = false,
-  decorative = false,
-  fallbackAlt,
-}: {
-  image: Image;
-  ctx: RenderContext;
-  className?: string;
-  caption?: ReactNode;
-  /** A logo or avatar beside text: its credit follows it, with no figure. */
-  inline?: boolean;
-  /** The text beside it names what it shows. */
-  decorative?: boolean;
-  /** What it shows, in words, when it has no alt text of its own. */
-  fallbackAlt?: string;
-}) {
-  // alt: '' is the owner saying it's decoration, so only a missing alt falls back.
-  const alt =
-    image.alt !== undefined
-      ? image.alt.trim()
-      : decorative
-        ? ''
-        : present(fallbackAlt)
-          ? fallbackAlt.trim()
-          : undefined;
-  const img = (
-    // eslint-disable-next-line @next/next/no-img-element -- owner-supplied URL; next/image would proxy it through /_next/image
-    <img
-      className={className}
-      src={image.src}
-      alt={alt}
-      width={image.width}
-      height={image.height}
-      loading={ctx.eager ? 'eager' : 'lazy'}
-      decoding="async"
-      data-focal-x={image.focalPoint?.x}
-      data-focal-y={image.focalPoint?.y}
-    />
-  );
-  const credit = present(image.credit) ? <small className="pf-credit">{image.credit}</small> : null;
-  if (inline) {
-    return (
-      <>
-        {img}
-        {credit}
-      </>
-    );
-  }
-  if (caption === undefined && credit === null) return img;
-  return (
-    <figure className="pf-figure">
-      {img}
-      <figcaption>
-        {caption}
-        {credit}
-      </figcaption>
-    </figure>
   );
 }

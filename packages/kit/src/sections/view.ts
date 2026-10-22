@@ -16,6 +16,8 @@ interface Identified {
 }
 
 type Portfolio = VariantRenderInput['portfolio'];
+/** What the record helpers read: a render input, or the public view it came from. */
+export type ViewSource = Pick<VariantRenderInput, 'portfolio'>;
 type Section = Portfolio['sections'][number];
 type Work = NonNullable<Portfolio['works']>[number];
 type Evidence = NonNullable<Portfolio['evidence']>[number];
@@ -42,13 +44,13 @@ function itemsOf(section: Section): readonly string[] {
 }
 
 /** The works a works section lists, in its order. */
-export function worksOf(section: Section, input: VariantRenderInput): readonly Work[] {
+export function worksOf(section: Section, input: ViewSource): readonly Work[] {
   const works = byId(input.portfolio.works);
   return itemsOf(section).flatMap((id) => works.get(id) ?? []);
 }
 
 /** The evidence an evidence section lists, in its order. */
-export function evidenceOf(section: Section, input: VariantRenderInput): readonly Evidence[] {
+export function evidenceOf(section: Section, input: ViewSource): readonly Evidence[] {
   const evidence = byId(input.portfolio.evidence);
   return itemsOf(section).flatMap((id) => evidence.get(id) ?? []);
 }
@@ -56,7 +58,7 @@ export function evidenceOf(section: Section, input: VariantRenderInput): readonl
 /** Evidence by id, in the order given: a work's own, say. */
 export function evidenceByIds(
   ids: readonly string[] | undefined,
-  input: VariantRenderInput,
+  input: ViewSource,
 ): readonly Evidence[] {
   const evidence = byId(input.portfolio.evidence);
   return (ids ?? []).flatMap((id) => evidence.get(id) ?? []);
@@ -66,7 +68,7 @@ export function evidenceByIds(
  * The chronology a section lists: its items in their order, or with none,
  * every public entry, newest first by its authored dates.
  */
-export function chronologyOf(section: Section, input: VariantRenderInput): readonly Chronology[] {
+export function chronologyOf(section: Section, input: ViewSource): readonly Chronology[] {
   const entries = input.portfolio.chronology ?? [];
   const items = itemsOf(section);
   if ('items' in section && Array.isArray(section.items)) {
@@ -102,13 +104,19 @@ function newestFirst(a: Chronology, b: Chronology): number {
   return end(b) - end(a) || start(b) - start(a);
 }
 
+/** Works by id, in the order given: signature and featured, say. */
+export function worksByIds(ids: readonly string[] | undefined, input: ViewSource): readonly Work[] {
+  const works = byId(input.portfolio.works);
+  return (ids ?? []).flatMap((id) => works.get(id) ?? []);
+}
+
 /** Whether the work is in `archive`. */
-export function isArchived(work: Identified, input: VariantRenderInput): boolean {
+export function isArchived(work: Identified, input: ViewSource): boolean {
   return (input.portfolio.archive ?? []).includes(work.id);
 }
 
 /** Whether the work is the signature work. */
-export function isSignature(work: Identified, input: VariantRenderInput): boolean {
+export function isSignature(work: Identified, input: ViewSource): boolean {
   return input.portfolio.signature === work.id;
 }
 
@@ -177,7 +185,7 @@ export function githubSnapshot(
  * the page and the navigation: renderSection() renders nothing for it, and
  * deriveNavItems() leaves it out.
  */
-export function sectionShows(section: Section, input: VariantRenderInput): boolean {
+export function sectionShows(section: Section, input: ViewSource): boolean {
   switch (section.kind) {
     case 'works':
       return worksOf(section, input).length > 0;
