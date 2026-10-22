@@ -19,7 +19,6 @@ import { legacyStep } from './legacy-step';
 import type {
   Change,
   Migration,
-  MintedId,
   Need,
   NeedReason,
   SecretSpot,
@@ -110,7 +109,8 @@ function withoutDropped(site: Rec, dropped: V3StepResult['dropped'], changes: Ch
       note: "Its section goes, so the site document doesn't hide it.",
     });
   }
-  const { sections: _sections, ...rest } = site;
+  const rest: Rec = { ...site };
+  delete rest.sections;
   return Object.keys(sections).length > 0 ? { ...rest, sections } : rest;
 }
 

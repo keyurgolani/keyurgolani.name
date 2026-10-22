@@ -273,7 +273,7 @@ test('a chronology entry has a kind, a title, and a period; its links and thread
   assert.deepEqual(codes({ ...BASE, chronology: [{ ...entry, kind: 'job' }] }), [
     'chronology/0/kind:invalid_enum_value',
   ]);
-  const { period: _period, ...noPeriod } = entry;
+  const noPeriod = { id: entry.id, kind: entry.kind, title: entry.title };
   assert.deepEqual(codes({ ...BASE, chronology: [noPeriod] }), [
     'chronology/0/period:invalid_type',
   ]);

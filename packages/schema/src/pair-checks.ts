@@ -6,7 +6,7 @@ import type { Section } from './kinds';
 import type { MediaKind } from './kinds/records';
 import type { Portfolio } from './portfolio';
 import { redactedPointer } from './secrets';
-import type { Context, DiagnosticCode } from './validate';
+import type { Context, DiagnosticCode } from './diagnostics';
 import { isPublic, reachRecords, type ParsedPair, type ReachedRecords } from './view';
 
 // The checks across a pair that parsed (#4, items 13 to 15, for version 3,

@@ -38,7 +38,9 @@ const SITE_HEAD = lines(
   '  feed: true',
 );
 const hiding = (...ids: string[]) =>
-  ids.length === 0 ? SITE_HEAD : `${SITE_HEAD}sections:\n${ids.map((id) => `  ${id}: { hidden: true }\n`).join('')}`;
+  ids.length === 0
+    ? SITE_HEAD
+    : `${SITE_HEAD}sections:\n${ids.map((id) => `  ${id}: { hidden: true }\n`).join('')}`;
 
 function parsed(portfolio: string, site = SITE_HEAD, extensions = [acmePortfolioPhotography]) {
   const p = parsePortfolio(portfolio, 'yaml', { extensions });
@@ -343,7 +345,9 @@ const MEDIA_DOCUMENT = {
       height: 900,
       aspectRatio: 1600 / 900,
       dominantColor: '#334455',
-      renditions: [{ name: 'w960-a1', ext: 'webp', mime: 'image/webp', bytes: 900, width: 960, height: 540 }],
+      renditions: [
+        { name: 'w960-a1', ext: 'webp', mime: 'image/webp', bytes: 900, width: 960, height: 540 },
+      ],
       derivedAt: '2026-10-01T12:00:00Z',
       algorithmVersion: 1,
     },
@@ -384,9 +388,17 @@ test('each asset carries its derived record: ready with rendition URLs, or unava
   // The source is never in the view: originals are never served.
   assert.ok(!JSON.stringify(ready).includes('atlas.png'));
   // An asset the document has no record for is still processing.
-  assert.deepEqual(ready.portrait!.derived, { state: 'unavailable', reason: 'processing', since: null });
+  assert.deepEqual(ready.portrait!.derived, {
+    state: 'unavailable',
+    reason: 'processing',
+    since: null,
+  });
   // A preview builds its URLs on its own media base.
-  const preview = view(pair, { media: MEDIA_DOCUMENT }, { ...OPTIONS, mediaBase: '/preview-assets/g1/' });
+  const preview = view(
+    pair,
+    { media: MEDIA_DOCUMENT },
+    { ...OPTIONS, mediaBase: '/preview-assets/g1/' },
+  );
   assert.equal(
     preview.media['atlas-cover']!.derived.state === 'ready' &&
       preview.media['atlas-cover']!.derived.value.renditions[0]!.url,
@@ -417,10 +429,7 @@ const SNAPSHOT = JSON.parse(
 test("a GitHub section's snapshot is ready, never refreshed, or failed, and a hidden one's is gone", () => {
   const pair = parsed(GITHUB, hiding('canary-github'));
   const snapshot = {
-    records: [
-      SNAPSHOT.records[0]!,
-      { ...SNAPSHOT.records[0]!, sectionId: 'canary-github' },
-    ],
+    records: [SNAPSHOT.records[0]!, { ...SNAPSHOT.records[0]!, sectionId: 'canary-github' }],
   };
   const ready = view(pair, { snapshots: { github: snapshot } });
   assert.deepEqual(Object.keys(ready.derived), ['on-github']);
@@ -460,7 +469,9 @@ test('the view is plain JSON: it round-trips, with no undefined left in it', () 
   };
   walk(published, '');
   // Every list a renderer reads is there, empty or not.
-  const empty = view(parsed(lines('schemaVersion: 3', 'locale: en', 'direction: ltr', 'identity: { name: E }')));
+  const empty = view(
+    parsed(lines('schemaVersion: 3', 'locale: en', 'direction: ltr', 'identity: { name: E }')),
+  );
   assert.deepEqual(
     [
       empty.portfolio.links,
@@ -515,7 +526,7 @@ const extensionsPair = (extensions = [acmePortfolioPhotography]) =>
     extensions,
   );
 
-test('hidden sections and unregistered extension data stay out of the view', () => {
+test('hidden sections and unregistered extension data stay out of the public view', () => {
   const published = view(extensionsPair());
   // plates is hidden, so its work and that work's media go too; nothing registers @other/portfolio-music.
   assert.deepEqual(

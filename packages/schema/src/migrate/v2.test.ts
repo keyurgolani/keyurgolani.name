@@ -342,10 +342,7 @@ test('a label for a call to action, and a title for a gallery, are values only t
   assert.deepEqual(ready.diagnostics, []);
   // A version 2 portfolio's migration sets portfolio values only.
   assert.deepEqual(
-    migrate(
-      { text, format: 'yaml' },
-      { set: [parseSet('site.appearance.colorScheme=warm')] },
-    ),
+    migrate({ text, format: 'yaml' }, { set: [parseSet('site.appearance.colorScheme=warm')] }),
     {
       status: 'failed',
       reasons: [
@@ -513,19 +510,31 @@ test('a unit no step reads fails, with a summary that holds no value from it', (
   // Each with what the summary leaves out: the name, or the version declared.
   const cases: Array<[StoredUnit, RegExp, string, string]> = [
     [
-      { ...UNIT, portfolio: { text: `identity:\n  name: ${name}\nsections: []\n`, format: 'yaml' } },
+      {
+        ...UNIT,
+        portfolio: { text: `identity:\n  name: ${name}\nsections: []\n`, format: 'yaml' },
+      },
       /the old one-file format, version 1/,
       'The portfolio document is the old one-file format',
       'Canary',
     ],
     [
-      { ...UNIT, portfolio: { text: `schemaVersion: 9\nidentity: { name: ${name} }\n`, format: 'yaml' } },
+      {
+        ...UNIT,
+        portfolio: { text: `schemaVersion: 9\nidentity: { name: ${name} }\n`, format: 'yaml' },
+      },
       /declares schemaVersion 9, which no migration step reads/,
       'The portfolio document declares a schemaVersion,',
       '9',
     ],
     [
-      { ...UNIT, site: { text: UNIT.site.text.replace('schemaVersion: 2', 'schemaVersion: 1'), format: 'yaml' } },
+      {
+        ...UNIT,
+        site: {
+          text: UNIT.site.text.replace('schemaVersion: 2', 'schemaVersion: 1'),
+          format: 'yaml',
+        },
+      },
       /The site document declares schemaVersion 1/,
       'The site document declares a schemaVersion,',
       '1',

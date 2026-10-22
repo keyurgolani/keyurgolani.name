@@ -293,7 +293,8 @@ test('validate refuses every blocking invalid pair and loads every warning one, 
     // The host's interim catalog registers no color scheme until #19, so it
     // can't raise this one, and says it didn't check it. A publication code's
     // draft is clean on its own.
-    const expected = code === 'appearance.unknown' || PUBLICATION_CODES.includes(code) ? [] : [code];
+    const expected =
+      code === 'appearance.unknown' || PUBLICATION_CODES.includes(code) ? [] : [code];
     assert.deepEqual([...new Set(others.map((record) => record.code))], expected, code);
     if (code === 'appearance.unknown') {
       assert.ok(report.notChecked.includes('site.appearance.colorScheme'), code);

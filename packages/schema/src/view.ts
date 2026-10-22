@@ -329,7 +329,7 @@ export function reachRecords(pair: ParsedPair, registry: ExtensionRegistry): Rea
   const keptMedia = new Set<string>();
   const parts = new Set<PracticePart>();
   let contact = false;
-  const useMedia = (value: Placement | undefined) => {
+  const reachMedia = (value: Placement | undefined) => {
     if (value !== undefined && media.has(value.asset)) keptMedia.add(value.asset);
   };
 
@@ -385,7 +385,7 @@ export function reachRecords(pair: ParsedPair, registry: ExtensionRegistry): Rea
           }),
         );
         for (const item of items ?? []) {
-          item.media?.forEach(useMedia);
+          item.media?.forEach(reachMedia);
           item.evidence?.forEach((id) => keptEvidence.add(id));
         }
         sections.push(compact({ ...section, items: nonEmpty(items) }));
@@ -404,19 +404,19 @@ export function reachRecords(pair: ParsedPair, registry: ExtensionRegistry): Rea
     if (id !== undefined && works.has(id)) keptWorks.add(id);
   }
   for (const id of portfolio.proof ?? []) if (evidence.has(id)) keptEvidence.add(id);
-  useMedia(portfolio.identity.avatar);
-  useMedia(portfolio.meta?.ogImage);
+  reachMedia(portfolio.identity.avatar);
+  reachMedia(portfolio.meta?.ogImage);
 
   // A kept work reaches its evidence and its media; kept evidence and
   // chronology entries reach the media they show.
   for (const id of keptWorks) {
     const work = works.get(id)!;
     for (const ref of work.evidence ?? []) if (evidence.has(ref)) keptEvidence.add(ref);
-    useMedia(work.cover);
-    work.media?.forEach(useMedia);
+    reachMedia(work.cover);
+    work.media?.forEach(reachMedia);
   }
-  for (const id of keptEvidence) useMedia(evidence.get(id)!.source?.avatar);
-  for (const id of keptChronology) useMedia(chronology.get(id)!.logo);
+  for (const id of keptEvidence) reachMedia(evidence.get(id)!.source?.avatar);
+  for (const id of keptChronology) reachMedia(chronology.get(id)!.logo);
 
   return {
     sections,
