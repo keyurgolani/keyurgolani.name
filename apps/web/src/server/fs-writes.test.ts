@@ -142,8 +142,9 @@ function fsWrites(source: string, file = 'source.ts'): string[] {
 
   const visit = (node: ts.Node) => {
     if (ts.isIdentifier(node) && modules.has(node.text) && !declares(node)) used(node);
-    // Both hand out node:fs where no import names it.
-    if (ts.isPropertyAccessExpression(node) && node.name.text === 'getBuiltinModule') {
+    // Both hand out node:fs where no import names it: getBuiltinModule by its
+    // name or a string, as in process['getBuiltinModule']().
+    if ('text' in node && node.text === 'getBuiltinModule') {
       at(node, 'loads a builtin through getBuiltinModule()');
     }
     if (ts.isIdentifier(node) && node.text === 'createRequire') {
@@ -231,6 +232,11 @@ test('the check finds each way a file could write, and passes reads', () => {
     ["import * as fs from 'node:fs';\nconst disk = fs;", 'uses fs other than to call a read'],
     [
       "const fs = process.getBuiltinModule('node:fs');",
+      'loads a builtin through getBuiltinModule()',
+    ],
+    // And its delta check's FW7.
+    [
+      "const fs = process['getBuiltinModule']('node:fs');",
       'loads a builtin through getBuiltinModule()',
     ],
     ["import fs = require('node:fs');", 'loads node:fs with import = require()'],
