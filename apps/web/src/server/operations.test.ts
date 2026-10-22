@@ -40,6 +40,7 @@ test("the registry holds config.status, #2's auth entries, #3's store entries, a
       'draft.save',
       'draft.applyEdits',
       'draft.rebase',
+      'draft.importSource',
       'draft.discard',
       'publish',
       'rollback',
@@ -66,26 +67,29 @@ const STORE_ENTRIES: Record<string, { capability: string; kind: string; codes: E
     codes: ['storage_unavailable', 'not_found'],
   },
   ...Object.fromEntries(
-    ['draft.create', 'draft.save', 'draft.applyEdits', 'draft.rebase'].map((name) => [
-      name,
-      {
-        capability: 'draft.write',
-        kind: 'command',
-        codes: [
-          'draft_conflict',
-          'live_conflict',
-          'payload_too_large',
-          'asset_missing',
-          'validation_failed',
-          'not_found',
-          'lock_timeout',
-          'lock_lost',
-          'storage_unavailable',
-          'storage_full',
-          'data_dir_in_use',
-        ] as ErrorCode[],
-      },
-    ]),
+    ['draft.create', 'draft.save', 'draft.applyEdits', 'draft.rebase', 'draft.importSource'].map(
+      (name) => [
+        name,
+        {
+          // Item 24: importing the mounted pair is config.import's.
+          capability: name === 'draft.importSource' ? 'config.import' : 'draft.write',
+          kind: 'command',
+          codes: [
+            'draft_conflict',
+            'live_conflict',
+            'payload_too_large',
+            'asset_missing',
+            'validation_failed',
+            'not_found',
+            'lock_timeout',
+            'lock_lost',
+            'storage_unavailable',
+            'storage_full',
+            'data_dir_in_use',
+          ] as ErrorCode[],
+        },
+      ],
+    ),
   ),
   'draft.discard': {
     capability: 'draft.write',
@@ -220,6 +224,17 @@ test("the store entries' inputs are strict, so the store never sees a key it doe
   );
   for (const draftId of [`${DRAFT}\n`, `${DRAFT}/../x`, 'drf_x']) {
     assert.equal(accepts('draft.get', { draftId }), false, draftId);
+  }
+  // draft.importSource reads the mounted pair itself: it takes no documents, and no directory.
+  assert.ok(accepts('draft.importSource', {}));
+  assert.ok(accepts('draft.importSource', { expectedVersion: 1 }));
+  for (const input of [
+    { expectedVersion: 0 },
+    { documents },
+    { from: '/srv/other' },
+    { sourceHash: `sha256:${'a'.repeat(64)}` },
+  ]) {
+    assert.equal(accepts('draft.importSource', input), false, JSON.stringify(input));
   }
   assert.ok(accepts('publish', { draftId: DRAFT, draftVersion: 1, expectedLiveRevisionId: null }));
   assert.equal(
@@ -458,6 +473,12 @@ test('config.status takes no input and returns the redacted summary', () => {
     },
     // Whether owner writes go through (#3).
     writes: { state: 'open' },
+    // Whether the mounted pair changed since the last import (#3, item 24).
+    source: {
+      state: 'unchanged',
+      mountedSourceHash: `sha256:${'a'.repeat(64)}`,
+      importedSourceHash: `sha256:${'a'.repeat(64)}`,
+    },
   };
   assert.equal(status.output.safeParse(summary).success, true);
   for (const code of ['data_dir_in_use', 'data_dir_unclaimed', 'store_repair_failed']) {
@@ -473,18 +494,15 @@ test('config.status takes no input and returns the redacted summary', () => {
   ]) {
     assert.equal(status.output.safeParse({ ...summary, writes }).success, false);
   }
-  // The documents serve an empty store, and a path or a reason never passes.
+  // An empty store serves nothing, and never the mounted documents: a
+  // doc- revision, a path, or a reason never passes.
   const empty = {
     ...summary,
-    catalog: {
-      state: 'live',
-      liveRevisionId: null,
-      servingRevisionId: 'doc-0123456789ab',
-      renderDrift: null,
-    },
+    catalog: { state: 'empty', liveRevisionId: null, servingRevisionId: null, renderDrift: null },
   };
   assert.equal(status.output.safeParse(empty).success, true);
   for (const catalog of [
+    { ...empty.catalog, state: 'live', servingRevisionId: 'doc-0123456789ab' },
     { ...summary.catalog, reason: 'damaged:hash_mismatch' },
     { ...summary.catalog, servingRevisionId: '/srv/data/revisions/x' },
     { ...summary.catalog, state: 'broken' },
@@ -500,6 +518,42 @@ test('config.status takes no input and returns the redacted summary', () => {
     status.output.safeParse({ ...summary, variant: { ...summary.variant, path: '/srv' } }).success,
     false,
   );
+  // Drift says the message, with both hashes; nothing to compare says neither.
+  for (const source of [
+    {
+      state: 'changed',
+      message: 'Source files changed since the live revision',
+      mountedSourceHash: `sha256:${'b'.repeat(64)}`,
+      importedSourceHash: `sha256:${'a'.repeat(64)}`,
+    },
+    { state: 'unknown', mountedSourceHash: `sha256:${'b'.repeat(64)}`, importedSourceHash: null },
+    { state: 'unknown', mountedSourceHash: null, importedSourceHash: null },
+  ]) {
+    assert.equal(status.output.safeParse({ ...summary, source }).success, true, source.state);
+  }
+  for (const source of [
+    {
+      state: 'changed',
+      mountedSourceHash: `sha256:${'b'.repeat(64)}`,
+      importedSourceHash: `sha256:${'a'.repeat(64)}`,
+    },
+    {
+      state: 'changed',
+      message: 'Something else',
+      mountedSourceHash: `sha256:${'b'.repeat(64)}`,
+      importedSourceHash: `sha256:${'a'.repeat(64)}`,
+    },
+    { ...summary.source, message: 'Source files changed since the live revision' },
+    { ...summary.source, sourceDir: '/srv/portfolio' },
+    { ...summary.source, mountedSourceHash: '/srv/portfolio/portfolio.yml' },
+  ]) {
+    assert.equal(
+      status.output.safeParse({ ...summary, source }).success,
+      false,
+      JSON.stringify(source),
+    );
+  }
+  assert.equal(status.output.safeParse({ ...summary, source: undefined }).success, false);
   // A secret value, or any field the schema doesn't name, never passes.
   const leaking = { ...summary, secrets: { ...summary.secrets, GITHUB_TOKEN: 'canary-token' } };
   assert.equal(status.output.safeParse(leaking).success, false);

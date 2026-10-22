@@ -62,6 +62,8 @@ const EXTRA: Readonly<Record<string, readonly string[]>> = {
     'adapters',
     'secrets',
   ],
+  // Source drift (#3, item 24): the two sourceHashes, never a file's content or path.
+  'store.source.drift': ['mountedSourceHash', 'importedSourceHash'],
 };
 
 /**

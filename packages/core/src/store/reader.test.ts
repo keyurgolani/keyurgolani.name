@@ -243,20 +243,16 @@ test('with nothing servable the reader is incompatible or empty, and says so to 
   });
   assert.deepEqual(flags(none.servable), [false]);
 
-  // Until the first-start import, an empty store serves what whenEmpty does.
-  const documents: LiveRevision = {
-    state: 'live',
-    revisionId: 'doc-0123456789ab',
-    unitHash: 'sha256:0',
-    unit: served(await reader(await storeWithOne(t)).catalog.getLive()).unit,
-  };
-  const fallback = reader(empty, { whenEmpty: { getLive: async () => documents } });
-  assert.equal(await fallback.catalog.getLive(), documents);
+  // Nothing serves in its place, the mounted documents included, until a
+  // revision goes live, as owner's first-start import makes one; the next
+  // request serves it.
+  assert.equal((await none.catalog.status()).servingRevisionId, null);
+  const first = await publishInput(empty, pairInput('engineering'));
   assert.deepEqual(
-    [(await fallback.catalog.status()).state, (await fallback.catalog.status()).servingRevisionId],
-    ['live', 'doc-0123456789ab'],
+    [(await none.catalog.status()).state, (await none.catalog.getLive()).revisionId],
+    ['live', first],
   );
-  assert.deepEqual(flags(fallback.servable), [true]);
+  assert.deepEqual(flags(none.servable), [false, true]);
 
   // The only revision, damaged: nothing to fall back on.
   const store = await storeWithOne(t);
@@ -751,19 +747,9 @@ test("of two decisions in flight, only the later pointer's sets the flag, whiche
   }
 });
 
-/** A whenEmpty that answers empty, and counts how often it's asked. */
-function countingEmpty() {
-  const seen = { asked: 0 };
-  const whenEmpty = {
-    getLive: async (): Promise<LiveRevision> => {
-      seen.asked += 1;
-      return { state: 'empty', revisionId: null, unitHash: null, unit: null };
-    },
-  };
-  return { seen, whenEmpty };
-}
+const EMPTY_LIVE: LiveRevision = { state: 'empty', revisionId: null, unitHash: null, unit: null };
 
-test('live.json gone from a store that has published serves the last known good as pointer_damaged, logged at error, and never whenEmpty', async (t) => {
+test('live.json gone from a store that has published serves the last known good as pointer_damaged, logged at error, and never as empty', async (t) => {
   const store = await newStore(t);
   await publishInput(store, pairInput('engineering'));
   const second = await publishInput(store, contentVariant(pairInput('engineering'), 'two'));
@@ -777,8 +763,7 @@ test('live.json gone from a store that has published serves the last known good 
       return nodeReadFs.readdir(dir);
     },
   };
-  const { seen, whenEmpty } = countingEmpty();
-  const { catalog, servable, logs } = reader(store, { fs, whenEmpty });
+  const { catalog, servable, logs } = reader(store, { fs });
 
   const live = served(await catalog.getLive());
   assert.deepEqual([live.state, live.revisionId], ['degraded', second]);
@@ -791,7 +776,6 @@ test('live.json gone from a store that has published serves the last known good 
     reason: 'pointer_damaged',
     renderDrift: null,
   });
-  assert.equal(seen.asked, 0);
   assert.deepEqual(flags(servable), [true]);
   assert.deepEqual(
     logs.map((entry) => [entry.level, entry.event, entry.code]),
@@ -811,13 +795,13 @@ test('live.json gone from a store that has published serves the last known good 
   rmSync(store.paths.live);
   assert.equal((await catalog.status()).reason, 'pointer_damaged');
 
-  // Every trace of a publish gone as well, the store is empty, and whenEmpty answers each request.
+  // Every trace of a publish gone as well, the store is empty, and nothing serves.
   for (const dir of [store.paths.events, store.paths.revisions]) {
     for (const name of readdirSync(dir)) rmSync(path.join(dir, name), { recursive: true });
   }
-  assert.equal((await catalog.getLive()).state, 'empty');
-  await catalog.getLive();
-  assert.equal(seen.asked, 2);
+  assert.deepEqual(await catalog.getLive(), EMPTY_LIVE);
+  assert.deepEqual(await catalog.getLive(), EMPTY_LIVE);
+  assert.deepEqual(flags(servable), [true, false]);
 });
 
 test("without live.json, an event, one moved aside, or a tombstone says the store has published, and a revision alone, a publish's staging, or a temporary file doesn't", async (t) => {
@@ -842,22 +826,17 @@ test("without live.json, an event, one moved aside, or a tombstone says the stor
   for (const [what, add, published] of cases) {
     const store = await newStore(t);
     add(store.paths);
-    const { seen, whenEmpty } = countingEmpty();
-    const { catalog, logs } = reader(store, { whenEmpty });
+    const { catalog, logs } = reader(store);
     const status = await catalog.status();
     if (published) {
       // Nothing it holds serves, so nothing does.
-      assert.deepEqual(
-        [status.state, status.reason, seen.asked],
-        ['incompatible', 'pointer_damaged', 0],
-        what,
-      );
+      assert.deepEqual([status.state, status.reason], ['incompatible', 'pointer_damaged'], what);
       assert.ok(
         logs.some((entry) => entry.level === 'error' && entry.event === 'store.pointer.missing'),
         what,
       );
     } else {
-      assert.deepEqual([status.state, seen.asked], ['empty', 1], what);
+      assert.deepEqual([status.state, status.reason], ['empty', undefined], what);
       assert.deepEqual(logs, [], what);
     }
   }
@@ -892,14 +871,7 @@ test("a live.json, or with none an events/, that can't be looked at decides all 
   }
 });
 
-test("a first publish that fails or dies before its pointer leaves the store empty, whenEmpty serving, and so does the moment before a good one's pointer lands", async (t) => {
-  const mounted: LiveRevision = {
-    state: 'live',
-    revisionId: 'doc-0123456789ab',
-    unitHash: 'sha256:0',
-    unit: served(await reader(await storeWithOne(t)).catalog.getLive()).unit,
-  };
-  const whenEmpty = { getLive: async () => mounted };
+test("a first publish that fails or dies before its pointer leaves the store empty, serving nothing, and so does the moment before a good one's pointer lands", async (t) => {
   const failing = (point: string, act: () => Promise<void>): FsPort => ({
     ...nodeFs,
     async writeFile(file, data, at, options) {
@@ -930,17 +902,17 @@ test("a first publish that fails or dies before its pointer leaves the store emp
   for (const store of [full, killed]) {
     assert.equal(readdirSync(store.paths.revisions).length, 1);
     assert.deepEqual(readdirSync(store.paths.events), []);
-    // Served now, and again by a new reader, as after a restart.
+    // Empty now, and again for a new reader, as after a restart: never a damaged pointer.
     for (let start = 0; start < 2; start++) {
-      const { catalog, servable, logs } = reader(store, { whenEmpty });
-      assert.equal(await catalog.getLive(), mounted);
-      assert.equal((await catalog.status()).state, 'live');
-      assert.deepEqual(flags(servable), [true]);
+      const { catalog, servable, logs } = reader(store);
+      assert.deepEqual(await catalog.getLive(), EMPTY_LIVE);
+      assert.equal((await catalog.status()).state, 'empty');
+      assert.deepEqual(flags(servable), [false]);
       assert.deepEqual(logs, []);
     }
   }
 
-  // A good first publish, held just before its pointer's write: meanwhile whenEmpty serves.
+  // A good first publish, held just before its pointer's write: meanwhile the store is empty.
   const fresh = await newStore(t);
   let release!: () => void;
   const gate = new Promise<void>((resolve) => {
@@ -958,15 +930,15 @@ test("a first publish that fails or dies before its pointer leaves the store emp
       await gate;
     }),
   });
-  const { catalog, servable, logs } = reader(fresh, { whenEmpty });
+  const { catalog, servable, logs } = reader(fresh);
   const publishing = publishInput(held, pairInput('engineering'));
   await atPointer;
-  assert.equal(await catalog.getLive(), mounted);
+  assert.deepEqual(await catalog.getLive(), EMPTY_LIVE);
   release();
   const published = await publishing;
   const live = await catalog.getLive();
   assert.deepEqual([live.state, live.revisionId], ['live', published]);
-  assert.deepEqual(flags(servable), [true]);
+  assert.deepEqual(flags(servable), [false, true]);
   assert.deepEqual(logs, []);
 });
 

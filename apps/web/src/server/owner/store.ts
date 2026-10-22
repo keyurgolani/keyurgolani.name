@@ -1,19 +1,18 @@
 import 'server-only';
-import { realpathSync } from 'node:fs';
+import { readFileSync, realpathSync } from 'node:fs';
 import path from 'node:path';
-import type {
-  CatalogReader,
-  CatalogStatus,
-  RenderDrift,
-  Rendering,
-  UnitChecks,
-} from '@portfolio/core';
+import type { CatalogStatus, RenderDrift, Rendering, UnitChecks } from '@portfolio/core';
 import {
   claimServer,
   filesystemAuditSink,
+  importAtFirstStart,
+  importRefusal,
+  mountedSource,
   openStore,
   preflight,
   revisionCatalogReader,
+  SOURCE_DRIFT_MESSAGE,
+  sourceDrift,
   StoreError,
   type AuditSink,
   type DiscardOutcome,
@@ -22,6 +21,7 @@ import {
   type DraftId,
   type DraftOutcome,
   type ListPage,
+  type MountedSource,
   type PreflightCode,
   type PublicationContext,
   type PublicationEvent,
@@ -34,26 +34,31 @@ import {
   type RevisionSummary,
   type RollbackInput,
   type ServerClaim,
+  type SourceDrift,
   type Store,
   type StoreActor,
   type StoreErrorCode,
   type StoreLogEntry,
+  type UnitDiagnostic,
   type UnitInput,
 } from '@portfolio/core/owner';
+import type { Context } from '@portfolio/schema';
+import { readPairBytes, type PairFiles } from '@portfolio/schema/node';
 import type { ConfigIssue, DeploymentConfig } from '../config';
 import type { WriteState } from '../operations';
 import { recordOwnerModule } from '../load-trace';
 import { log } from '../log';
 
-// Owner's revision store (#3, items 19 and 21), over PORTFOLIO_DATA_DIR, and
-// the reader owner's visitors are served through. Until #3's Slice 3 imports
-// the mounted documents at first start, an empty store serves them, so
-// production owner keeps serving what it did; once a revision is published,
-// the data directory is authoritative and the reader serves it, a publish
-// from another process included. The startup requirements run its checks:
-// data.directory's preflight and server claim, then revision.integrity's
-// repair, the live revision's hashes, render drift, and the state. Typed by
-// shape, so this module doesn't import the composition root.
+// Owner's revision store (#3, items 19, 21, and 24), over PORTFOLIO_DATA_DIR,
+// and the reader owner's visitors are served through. The data directory is
+// authoritative: the reader serves what's published, a publish from another
+// process included, and an empty store serves nothing, so visitors get 503
+// until owner's first-start import commits the mounted pair as revision 1.
+// The startup requirements run its checks: data.directory's preflight and
+// server claim, revision.integrity's repair, the live revision's hashes,
+// render drift, and the state, then documents.shape's first-start import or,
+// once a revision exists, the mounted pair's findings as drift warnings.
+// Typed by shape, so this module doesn't import the composition root.
 //
 // Studio's handlers get the store only as a StudioStore, which acts as the
 // owner, whose pointer moves hold the session (#2), and never as the
@@ -66,8 +71,8 @@ import { log } from '../log';
 // Startup never stops over the publication lock. When the CLI holds it, as
 // through a long backup, the claim waits past the lock's 5 s, and the
 // server starts anyway, serving visitors, and claims the directory and
-// finishes the repair in the background, with backoff, once the lock is
-// free. Owner writes wait until then.
+// finishes the repair, and a first-start import, in the background, with
+// backoff, once the lock is free. Owner writes wait until then.
 
 recordOwnerModule('server/owner/store');
 
@@ -83,8 +88,14 @@ export interface OwnerStoreInput {
   readonly config: DeploymentConfig;
   /** The build's checks, on the deployment's origin. */
   readonly checks: UnitChecks;
-  /** What serves while nothing is published: the mounted documents, until Slice 3's first-start import. */
-  readonly documents: CatalogReader;
+  /**
+   * The bundled example pair, which an empty store under next dev imports
+   * while PORTFOLIO_SOURCE_DIR holds neither document: only development
+   * seeds from it.
+   */
+  readonly examples?: PairFiles;
+  /** What the pair loader goes by to name an old-format record's fix. */
+  readonly pairContext?: Context;
   /** Where a live manifest's rendering differs from the build's. */
   readonly renderDrift?: (rendering: Rendering) => readonly RenderDrift[];
   /** The composition root's: whether visitor pages can render. */
@@ -139,6 +150,12 @@ export interface StudioStore {
     readonly draftId: DraftId;
     readonly expectedVersion?: number;
   }): Promise<DiscardOutcome>;
+  /**
+   * draft.importSource (item 24): the mounted pair as the working draft,
+   * keeping its sourceHash for the publish event. It replaces a working
+   * draft only at the version named.
+   */
+  importSourceDraft(input: { readonly expectedVersion?: number }): Promise<DraftOutcome>;
   publish(input: PublishInput, context: OwnerMoveContext): Promise<PublicationOutcome>;
   rollback(input: RollbackInput, context: OwnerMoveContext): Promise<PublicationOutcome>;
   recover(input: RecoverInput, context: OwnerMoveContext): Promise<PublicationOutcome>;
@@ -153,12 +170,26 @@ export interface OwnerStore {
   checkDirectory(): Promise<readonly ConfigIssue[]>;
   /** revision.integrity: startup repair, then the live revision as the reader serves it. */
   checkIntegrity(): Promise<readonly ConfigIssue[]>;
+  /**
+   * documents.shape (item 24): with an empty store, the first-start import,
+   * where a pair that can't go live is fatal; once a revision exists, the
+   * mounted pair's findings as drift warnings, and source drift.
+   */
+  checkSource(documents?: MountedFindings): Promise<readonly ConfigIssue[]>;
+  /** Whether the mounted pair is what was last imported, for config.status. */
+  sourceDrift(): Promise<SourceDrift>;
   /** Readiness's data-directory check: item 3's write, sync, and rename probe, run at most every 30 s. */
   probe(): Promise<boolean>;
   /** Whether owner writes go through now, and why not, for config.status. */
   writes(): WriteState;
   /** Lets publication/server.json go, at once, as the process exits. */
   release(): void;
+}
+
+/** What startup found in the mounted pair: whether it can serve, and every finding. */
+export interface MountedFindings {
+  readonly ok: boolean;
+  readonly issues: readonly ConfigIssue[];
 }
 
 /** What startup can find wrong with the data directory or the store in it. */
@@ -169,7 +200,10 @@ type FindingCode =
   | 'data_dir_claim_failed'
   | 'store_repair_failed'
   | 'revision_damaged'
-  | 'revision_unservable';
+  | 'revision_unservable'
+  | 'store_import_waiting'
+  | 'store_import_failed'
+  | 'source_drift';
 
 const MESSAGES: Readonly<Record<FindingCode, string>> = {
   data_dir_missing: 'PORTFOLIO_DATA_DIR names no directory. Create it, or mount a volume there.',
@@ -218,6 +252,18 @@ const MESSAGES: Readonly<Record<FindingCode, string>> = {
   revision_unservable:
     'No published revision can be served, so visitors get 503. Publish a revision, or restore a ' +
     'backup. The store.catalog.incompatible line says why.',
+  store_import_waiting:
+    'The store is empty, and the publication lock stayed busy, so the mounted pair is not ' +
+    'imported yet. Visitors get 503 until it is: the server imports it as revision 1 once the ' +
+    'lock is free, and the store.import.first_start line says when.',
+  store_import_failed:
+    "The store is empty, and the mounted pair can't go in as revision 1, so nothing can be " +
+    'served. A first start publishes it, as portfolio-store import does, and refuses what a ' +
+    'publish refuses: the records before this one, or the store.import.failed line, say why.',
+  source_drift:
+    `${SOURCE_DRIFT_MESSAGE}: the mounted pair isn't what the last import brought in. The live ` +
+    'revision stays live. Import the files as a draft from Studio, or run portfolio-store ' +
+    'import, to publish them.',
 };
 
 function finding(code: FindingCode, severity: ConfigIssue['severity'] = 'fatal'): ConfigIssue {
@@ -269,6 +315,58 @@ function held(context: OwnerMoveContext): PublicationContext {
   };
 }
 
+/** The mounted pair as an import reads it, or #4's findings when it can't be read. */
+export type MountedRead =
+  | { readonly ok: true; readonly mounted: MountedSource }
+  | { readonly ok: false; readonly diagnostics: readonly UnitDiagnostic[] };
+
+/** A record about the mounted pair as a startup issue under PORTFOLIO_SOURCE_DIR. */
+function sourceIssue(record: UnitDiagnostic): ConfigIssue {
+  return {
+    severity: record.severity === 'warning' ? 'warning' : 'fatal',
+    key: 'PORTFOLIO_SOURCE_DIR',
+    code: record.code,
+    document: record.document,
+    path: record.pointer,
+    ...(record.line === undefined ? {} : { line: record.line, column: record.column }),
+    message: record.message,
+    remediation: record.remediation,
+  };
+}
+
+/** A file of the bundled example pair, as an import reads one. */
+function exampleFile(file: string) {
+  return { name: path.basename(file), bytes: readFileSync(/*turbopackIgnore: true*/ file) };
+}
+
+/**
+ * How a first-start import went: `done` once it committed or something else
+ * went live first, `waiting` while the lock is busy or was taken over, and
+ * `failed`, with the findings, when it can't go at all.
+ */
+type Imported =
+  | { readonly kind: 'done' | 'waiting' }
+  | { readonly kind: 'failed'; readonly records: readonly UnitDiagnostic[] };
+
+/**
+ * Startup's findings for a first start the import refused: its records,
+ * fatal where they block a publish, in place of startup's own on the same
+ * field, which checked the pair as served, then store_import_failed.
+ */
+function refusedImport(
+  found: readonly ConfigIssue[],
+  records: readonly UnitDiagnostic[],
+): ConfigIssue[] {
+  const issues = records.map(sourceIssue);
+  const same = (a: ConfigIssue, b: ConfigIssue) =>
+    a.code === b.code && a.document === b.document && a.path === b.path;
+  return [
+    ...found.filter((issue) => !issues.some((record) => same(issue, record))),
+    ...issues,
+    finding('store_import_failed'),
+  ];
+}
+
 /**
  * The store as the owner, and only as the owner: no method takes an actor,
  * and every pointer move needs the session hold. `writable` runs before
@@ -278,6 +376,7 @@ export function studioStore(
   store: Store,
   reader: RevisionCatalogReader,
   writable: () => Promise<void>,
+  readMounted: () => MountedRead = () => ({ ok: false, diagnostics: [] }),
 ): StudioStore {
   const { drafts, publication } = store;
   const write =
@@ -319,6 +418,24 @@ export function studioStore(
     discardDraft: write((input: Parameters<StudioStore['discardDraft']>[0]) =>
       drafts.discard(input, OWNER),
     ),
+    importSourceDraft: write(
+      async (input: Parameters<StudioStore['importSourceDraft']>[0]): Promise<DraftOutcome> => {
+        const read = readMounted();
+        if (!read.ok) {
+          return { kind: 'rejected', code: 'validation_failed', diagnostics: read.diagnostics };
+        }
+        return drafts.create(
+          {
+            documents: read.mounted.documents,
+            sourceHash: read.mounted.sourceHash,
+            ...(input.expectedVersion === undefined
+              ? {}
+              : { expectedVersion: input.expectedVersion }),
+          },
+          OWNER,
+        );
+      },
+    ),
     publish: move<PublishInput>((input, actor, context) =>
       publication.publish(input, actor, context),
     ),
@@ -334,7 +451,8 @@ export function studioStore(
 export function ownerStore({
   config,
   checks,
-  documents,
+  examples,
+  pairContext = {},
   renderDrift,
   setServable,
   audit,
@@ -356,7 +474,6 @@ export function ownerStore({
   const reader = revisionCatalogReader({
     dataDir,
     checks,
-    whenEmpty: documents,
     ...(renderDrift ? { renderDrift } : {}),
     setServable,
     log: storeLog,
@@ -372,6 +489,94 @@ export function ownerStore({
   // it again first, and stops while it still fails.
   let repairPending = false;
   let repairing: Promise<void> | undefined;
+  // Set when the first-start import waits for the lock: the background claim
+  // runs it once the lock is free.
+  let importPending = false;
+  let importing: Promise<Imported> | undefined;
+
+  /**
+   * The mounted pair as an import reads it: PORTFOLIO_SOURCE_DIR's, or under
+   * next dev, while that holds neither document, the bundled examples, as
+   * next dev renders them.
+   */
+  function readMounted(): MountedRead {
+    const read = readPairBytes(config.sourceDir ?? '', pairContext);
+    if (read.ok) return { ok: true, mounted: mountedSource(read.files) };
+    if (config.mode !== 'production' && examples && read.missing?.length === 2) {
+      try {
+        const portfolio = exampleFile(examples.portfolio);
+        const site = exampleFile(examples.site);
+        return { ok: true, mounted: mountedSource({ portfolio, site }) };
+      } catch {
+        // The build's own files, so only a broken checkout gets here.
+      }
+    }
+    return { ok: false, diagnostics: read.diagnostics };
+  }
+
+  /** Whether the mounted pair is what the newest event carrying a sourceHash recorded. */
+  async function currentDrift(): Promise<SourceDrift> {
+    const read = readMounted();
+    const imported = await store.publication.importedSourceHash().catch(() => null);
+    return sourceDrift(read.ok ? read.mounted.sourceHash : null, imported);
+  }
+
+  /** One first-start import: the mounted pair as revision 1, unless something is live. */
+  async function importOnce(): Promise<Imported> {
+    const read = readMounted();
+    if (!read.ok) {
+      log({ level: 'error', event: 'store.import.failed', code: 'source_unreadable' });
+      return { kind: 'failed', records: read.diagnostics };
+    }
+    let outcome: PublicationOutcome;
+    try {
+      outcome = await importAtFirstStart(store, read.mounted);
+    } catch (error) {
+      const code = codeOf(error);
+      if (code === 'lock_timeout') return { kind: 'waiting' };
+      log({ level: 'error', event: 'store.import.failed', code });
+      return { kind: 'failed', records: [] };
+    }
+    if (outcome.kind === 'rejected') {
+      // The CLI took the lock over in between: import once it's free.
+      if (outcome.code === 'lock_lost') return { kind: 'waiting' };
+      log({ level: 'error', event: 'store.import.failed', code: outcome.code });
+      return { kind: 'failed', records: outcome.diagnostics };
+    }
+    if (outcome.kind === 'committed') {
+      log({
+        level: 'info',
+        event: 'store.import.first_start',
+        revisionId: outcome.revisionId,
+        seq: outcome.seq,
+      });
+    } else {
+      // Something went live first, as through the CLI's own import.
+      log({ level: 'info', event: 'store.import.not_needed', code: outcome.code });
+    }
+    // The reader decides again, so visitors are served from now on.
+    await reader.status().catch(() => {});
+    return { kind: 'done' };
+  }
+
+  /** The first-start import, one run at a time; still pending while it waits for the lock. */
+  function finishImport(): Promise<Imported> {
+    importing ??= importOnce()
+      .then((imported) => {
+        importPending = imported.kind === 'waiting';
+        return imported;
+      })
+      .finally(() => {
+        importing = undefined;
+      });
+    return importing;
+  }
+
+  /** Once the claim is held: the repair startup couldn't finish, then a first-start import. */
+  async function settle(attempt: number): Promise<void> {
+    if (repairPending) await finishRepair().catch(() => {});
+    if (importPending && (await finishImport()).kind === 'waiting') claimInBackground(attempt + 1);
+  }
 
   /**
    * This server's claim on the data directory: the one it holds, or a new
@@ -459,10 +664,11 @@ export function ownerStore({
     retry = setTimeout(
       () => {
         retry = undefined;
+        const claimed = claim?.held === true;
         ensureClaim().then(
           () => {
-            log({ level: 'info', event: 'store.server.claimed' });
-            if (repairPending) finishRepair().catch(() => {});
+            if (!claimed) log({ level: 'info', event: 'store.server.claimed' });
+            void settle(attempt);
           },
           (error: unknown) => {
             const code = codeOf(error);
@@ -483,7 +689,7 @@ export function ownerStore({
   const owner: OwnerStore = Object.freeze({
     store,
     reader,
-    studio: studioStore(store, reader, writable),
+    studio: studioStore(store, reader, writable, readMounted),
     async checkDirectory() {
       const problem = await preflight({ dataDir, sourceDir: config.sourceDir });
       if (problem) return [finding(problem)];
@@ -531,6 +737,65 @@ export function ownerStore({
       if (state === 'incompatible') issues.push(finding('revision_unservable'));
       return issues;
     },
+    async checkSource(documents?: MountedFindings) {
+      // Nothing to import into a directory that failed its own check.
+      if (!preflighted) return [];
+      const found = documents?.issues ?? [];
+      const status = await reader.status();
+      // Empty only with no live.json and no history, an event or a
+      // tombstone (Slice 2's hasHistory()): the reader serves the last known
+      // good of a store that has published and lost its pointer, and nothing
+      // imports over it. A revision alone was never live, and imports.
+      const first = status.state === 'empty' && (await store.publication.isEmpty());
+      if (!first) {
+        // The data directory is authoritative now: what's wrong with the
+        // mounted pair is drift, and only warns.
+        const issues: ConfigIssue[] = found.map((issue) =>
+          issue.severity === 'fatal' ? { ...issue, severity: 'warning' } : issue,
+        );
+        const drift = await currentDrift();
+        if (drift.state === 'changed') {
+          log({
+            level: 'warn',
+            event: 'store.source.drift',
+            mountedSourceHash: drift.mounted,
+            importedSourceHash: drift.imported,
+          });
+          issues.push(finding('source_drift', 'warning'));
+        }
+        return issues;
+      }
+      // First start: the mounted pair is what goes live, so one that can't
+      // serve, an old-format one, or the bundled sample in production, stops
+      // startup, as it always has.
+      if (documents && !documents.ok) return found;
+      // The import is a publish, as portfolio-store import's is: what a
+      // publish refuses, such as a variant this build doesn't register,
+      // stops startup now, before any wait for the lock.
+      const read = readMounted();
+      if (!read.ok) return refusedImport(found, read.diagnostics);
+      const refusal = importRefusal(read.mounted, checks);
+      if (refusal.length > 0) return refusedImport(found, refusal);
+      if (!claim?.held) {
+        // Another server holds the directory, which data.directory reports.
+        if (!retry && !claiming) return found;
+        // The background claim imports it once the lock is free.
+        importPending = true;
+        return [...found, finding('store_import_waiting', 'warning')];
+      }
+      importPending = true;
+      const imported = await finishImport();
+      switch (imported.kind) {
+        case 'done':
+          return found;
+        case 'waiting':
+          claimInBackground(0);
+          return [...found, finding('store_import_waiting', 'warning')];
+        case 'failed':
+          return refusedImport(found, imported.records);
+      }
+    },
+    sourceDrift: () => currentDrift(),
     writes(): WriteState {
       if (claim?.lost) return { state: 'stopped', code: 'data_dir_in_use' };
       if (!claim?.held) return { state: 'stopped', code: 'data_dir_unclaimed' };

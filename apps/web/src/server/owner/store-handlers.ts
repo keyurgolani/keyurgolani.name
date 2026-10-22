@@ -234,6 +234,11 @@ export function storeHandlers(studio: StudioStore): Readonly<Record<string, Hand
       async (input: Parameters<StudioStore['rebaseDraft']>[0]) =>
         draftAnswer(await studio.rebaseDraft(input)),
     ),
+    'draft.importSource': handler(
+      'config.import',
+      async (input: Parameters<StudioStore['importSourceDraft']>[0]) =>
+        draftAnswer(await studio.importSourceDraft(input)),
+    ),
     'draft.discard': handler(
       'draft.write',
       async (input: Parameters<StudioStore['discardDraft']>[0]) => {

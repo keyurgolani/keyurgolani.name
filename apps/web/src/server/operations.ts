@@ -23,8 +23,9 @@ import {
   RevisionDetailSchema,
   RevisionIdSchema,
   RevisionListSchema,
-  ServingRevisionIdSchema,
   ServingStateSchema,
+  Sha256Schema,
+  DraftImportInput,
 } from './store-schemas';
 
 // The operation registry (#1, item 10): every query and command the Studio
@@ -169,14 +170,14 @@ export const VariantHealthSchema = z.union([
 
 /**
  * What serves (#3, item 23): the state, the revision the pointer names, the
- * one served (the mounted documents' `doc-` one while the store is empty),
- * and where the live manifest's rendering differs from the build's.
+ * one served, and where the live manifest's rendering differs from the
+ * build's.
  */
 export const CatalogStatusSchema = z
   .object({
     state: ServingStateSchema,
     liveRevisionId: RevisionIdSchema.nullable(),
-    servingRevisionId: ServingRevisionIdSchema.nullable(),
+    servingRevisionId: RevisionIdSchema.nullable(),
     renderDrift: z
       .array(
         z
@@ -210,13 +211,40 @@ export const WriteStateSchema = z.union([
 export type WriteState = z.infer<typeof WriteStateSchema>;
 
 /**
+ * Whether the mounted pair is what was last imported (#3, item 24):
+ * `changed`, with the message, when its sourceHash isn't the one the newest
+ * event carrying one recorded; `unknown` with no pair to read or nothing
+ * imported. Drift never publishes: Studio offers Import as draft.
+ */
+export const SourceStatusSchema = z.union([
+  z
+    .object({
+      state: z.literal('changed'),
+      message: z.literal('Source files changed since the live revision'),
+      mountedSourceHash: Sha256Schema,
+      importedSourceHash: Sha256Schema,
+    })
+    .strict(),
+  z
+    .object({
+      state: z.enum(['unchanged', 'unknown']),
+      mountedSourceHash: Sha256Schema.nullable(),
+      importedSourceHash: Sha256Schema.nullable(),
+    })
+    .strict(),
+]);
+export type SourceStatus = z.infer<typeof SourceStatusSchema>;
+
+/**
  * What config.status answers: the summary, how the live site's variant
- * renders, what serves, and whether owner writes go through.
+ * renders, what serves, whether owner writes go through, and whether the
+ * mounted pair drifted from the last import.
  */
 export const ConfigStatusSchema = ConfigSummarySchema.extend({
   variant: VariantHealthSchema,
   catalog: CatalogStatusSchema,
   writes: WriteStateSchema,
+  source: SourceStatusSchema,
 }).strict();
 export type ConfigStatus = z.infer<typeof ConfigStatusSchema>;
 
@@ -454,7 +482,7 @@ const STORE_OPERATIONS: readonly Operation[] = [
     DraftOutputSchema,
     ['not_found'],
   ),
-  // draft.write. draft.importSource is Slice 3's.
+  // draft.write
   storeCommand(
     'draft.create',
     'draft.write',
@@ -490,6 +518,16 @@ const STORE_OPERATIONS: readonly Operation[] = [
     DRAFT_DETAILS,
     DRAFT_BODY_BYTES,
   ),
+  // config.import: the mounted pair as the working draft, its sourceHash kept.
+  storeCommand(
+    'draft.importSource',
+    'config.import',
+    DraftImportInput,
+    DraftOutputSchema,
+    DRAFT_OUTCOMES,
+    DRAFT_DETAILS,
+  ),
+  // draft.write
   storeCommand(
     'draft.discard',
     'draft.write',

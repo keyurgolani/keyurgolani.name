@@ -63,6 +63,7 @@ import {
 } from '../tests/harness/canaries.mjs';
 import { waitFor } from '../tests/harness/net.mjs';
 import { ownerSecret } from '../tests/harness/owner-secret.mjs';
+import { COPY_SEED_INTO_VOLUME, seedOwnerStore } from '../tests/harness/owner-store.mjs';
 import { headerProblems, isStudioPath } from '../tests/harness/route-headers.mjs';
 import {
   checkRefusal,
@@ -673,6 +674,28 @@ async function ownerProfileRun(source) {
   writeFileSync(path.join(stateDir, CANARY_SECRET, HASH_FILE), `${secret.hash}\n`);
   if (container(['volume', 'create', ownerVolume]).status !== 0) {
     throw new Error("could not create owner's data volume");
+  }
+  // Owner's first start refuses the fixture's unregistered variant, so the
+  // volume starts with the pair published into it, as root, for uid 1001.
+  const seedDir = path.join(stateDir, 'owner-seed');
+  mkdirSync(seedDir, { recursive: true, mode: 0o700 });
+  seedOwnerStore(seedDir, path.dirname(DEFAULT_PORTFOLIO));
+  const seeded = container([
+    'run',
+    '--rm',
+    '-u',
+    '0',
+    '-v',
+    `${seedDir}:/seed:ro`,
+    '-v',
+    `${ownerVolume}:${DATA_DIR}`,
+    image,
+    'node',
+    '-e',
+    COPY_SEED_INTO_VOLUME,
+  ]);
+  if (seeded.status !== 0) {
+    throw new Error(`could not seed owner's data volume: ${(seeded.stderr || '').trim()}`);
   }
   const secrets = [secret.password, ...hashCanaries(secret.hash)];
   await profileRun('owner', {

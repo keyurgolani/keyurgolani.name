@@ -125,6 +125,24 @@ test("a preview grant's events add its ref, its session's, and a count, and no o
   ]);
 });
 
+test('store.source.drift adds the two sourceHashes, and only it does', () => {
+  const hashes = {
+    mountedSourceHash: `sha256:${'a'.repeat(64)}`,
+    importedSourceHash: `sha256:${'b'.repeat(64)}`,
+  };
+  const line = parse(
+    logLine(
+      { level: 'warn', event: 'store.source.drift', ...hashes, sourceDir: '/srv/portfolio' },
+      NOW,
+    ),
+  );
+  assert.deepEqual(line, { ts: line.ts, level: 'warn', event: 'store.source.drift', ...hashes });
+  assert.deepEqual(
+    Object.keys(parse(logLine({ level: 'info', event: 'store.import.first_start', ...hashes }))),
+    ['ts', 'level', 'event'],
+  );
+});
+
 test('an empty field is left out', () => {
   assert.deepEqual(
     Object.keys(parse(logLine({ level: 'warn', event: 'x', requestId: undefined, code: 'c' }))),

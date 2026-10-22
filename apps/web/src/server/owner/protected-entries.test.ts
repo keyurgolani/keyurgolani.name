@@ -90,25 +90,26 @@ const INPUT: Record<string, Record<string, unknown>> = {
 };
 /**
  * What an entry answers once every guard passes, where that's an error: a
- * sign-in with no password is a credential failure, and in this empty
- * store the draft and the revision these name aren't there. Either way, it ran.
+ * sign-in with no password is a credential failure, and the draft and the
+ * revision these name aren't there. The pointer moves expect no live
+ * revision, though owner's first start imported the mounted pair as one,
+ * and draft.importSource doesn't name the version of the working draft
+ * draft.create made. Either way, it ran.
  */
 const RAN: Record<string, string> = {
   'auth.login': 'credentials_rejected',
+  'draft.importSource': 'draft_conflict',
   ...Object.fromEntries(
     [
       'revision.get',
       'draft.get',
-      'draft.create',
       'draft.save',
       'draft.applyEdits',
       'draft.rebase',
       'draft.discard',
-      'publish',
-      'rollback',
-      'recover',
     ].map((name) => [name, 'not_found']),
   ),
+  ...Object.fromEntries(['publish', 'rollback', 'recover'].map((name) => [name, 'live_conflict'])),
 };
 
 const protectedEntries = () =>
@@ -324,7 +325,6 @@ test('every protected registry entry is denied without a session, the origin, th
       store: ownerStore({
         config,
         checks: { validate: (pair) => validatePublicationUnit(pair), appVersion: 'test' },
-        documents: deployed.get('owner')!.state.catalog,
         setServable: () => {},
       }),
       variantHealth: async () => ({ status: 'ok', requested: 'any', rendered: 'any' }),

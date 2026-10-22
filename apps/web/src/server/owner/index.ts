@@ -45,6 +45,7 @@ export function ownerHandlers({
       variantHealth,
       () => store.reader.status(),
       () => store.writes(),
+      () => store.sourceDrift(),
     ),
     // #3's queries and commands, on the store as the owner.
     ...storeHandlers(store.studio),

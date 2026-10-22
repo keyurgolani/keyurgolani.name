@@ -270,10 +270,12 @@ test('owner loads its modules only through the composition root', () => {
     'core/store/reader',
     'core/store/revisions',
     'core/store/server-claim',
+    'core/store/source',
     'core/store/store',
     'server/owner/auth-secret',
     'server/owner/config-status',
     'server/owner/data-directory',
+    'server/owner/first-start',
     'server/owner/index',
     'server/owner/preview',
     'server/owner/revision-integrity',
@@ -292,16 +294,25 @@ test('config.status shows each secret as set and never a value or a path', async
   assert.ok(!text.includes(sourceDir), text);
   const { data } = JSON.parse(text) as { data: Record<string, unknown> };
   assert.deepEqual(data.secrets, { PORTFOLIO_AUTH_PASSWORD_HASH: 'set', GITHUB_TOKEN: 'set' });
-  // Owner reads through the revision store's reader (#3), which serves the
-  // mounted documents while the store is empty.
+  // Owner reads through the revision store's reader (#3), and its first
+  // start imported the mounted pair into the empty store as revision 1.
   assert.deepEqual(data.adapters, { catalog: 'revisions' });
+  const live = (await state.catalog.getLive()).revisionId;
+  assert.match(String(live), /^rev_/);
   assert.deepEqual(data.catalog, {
     state: 'live',
-    liveRevisionId: null,
-    servingRevisionId: (await state.catalog.getLive()).revisionId,
+    liveRevisionId: live,
+    servingRevisionId: live,
     renderDrift: null,
   });
-  assert.match(String((data.catalog as { servingRevisionId: unknown }).servingRevisionId), /^doc-/);
+  // The mounted pair is what that import brought in.
+  const source = data.source as { state: string; mountedSourceHash: string };
+  assert.deepEqual(data.source, {
+    state: 'unchanged',
+    mountedSourceHash: source.mountedSourceHash,
+    importedSourceHash: source.mountedSourceHash,
+  });
+  assert.match(source.mountedSourceHash, /^sha256:[0-9a-f]{64}$/);
   // This server holds the data directory, so owner writes go through.
   assert.deepEqual(data.writes, { state: 'open' });
   assert.equal(data.origin, ORIGIN);
@@ -373,6 +384,7 @@ test('every registered operation fails closed without a session and runs with on
         baseRevisionId: await live(),
       };
     },
+    'draft.importSource': async () => ({ expectedVersion: (await working()).version }),
     'draft.discard': async () => {
       const draft = await working();
       return { draftId: draft.draftId, expectedVersion: draft.version };
@@ -427,8 +439,9 @@ test('every registered operation fails closed without a session and runs with on
     const body = JSON.parse(text) as { data: unknown };
     assert.equal(operation.output.safeParse(body.data).success, true, operation.name);
   }
-  // The pointer moved three times through Studio: publish, rollback, recover.
-  assert.equal((await side.publication.status()).seq, 5);
+  // After the first-start import and the two from beside the server, the
+  // pointer moved three times through Studio: publish, rollback, recover.
+  assert.equal((await side.publication.status()).seq, 6);
   assert.equal(await live(), revisions[1]);
 });
 
