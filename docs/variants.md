@@ -122,7 +122,7 @@ The host owns every route, and asks `dispatch()` what each path is, against the 
 
 Link to a route with `routeHref(input, target)` from `@portfolio/variant-contract`. It writes the URL below `input.basePath`, keeps `input.query`, and puts `input.ids.prefix` on a fragment view's id, so one render links right at `/`, below `/sample`, and below #7's preview prefix. The kit's shared renderers do the same for a `/#section` link.
 
-A path view can't start with a segment the host owns: `studio`, `api`, `_next`, `sample`, `reference`, `preview`, `work`, `admin`, `variants`, and the metadata files. Generation fails on one, and the root catch-all leaves each to its own route, so a view never shadows an API or metadata route.
+A path view can't start with a segment the host owns: `studio`, `api`, `_next`, `sample`, `reference`, `preview`, `preview-assets`, `work`, `admin`, `variants`, and the metadata files. Generation fails on one, and the root catch-all leaves each to its own route, so a view never shadows an API or metadata route.
 
 The route table knows from the build's manifests, before any page runs, which paths name nothing: one no installed variant declares, a work until #10, a placeholder value over 64 characters, or a `?variant=` that names nothing. Each gets the 404 page from the server, with its 404 status, so it works without JavaScript. One 404 still draws in the browser: a view the live variant declares and the site document's `routes` turns off. Next 16 answers a page's `notFound()` with an error document the browser fills in, so without JavaScript that page is empty; the status is 404 either way.
 
@@ -235,14 +235,15 @@ A content extension package sets `"portfolio": { "kind": "content-extension" }` 
 The variant-developer skill ships a visual companion at `skills/variant-developer/scripts/visual-companion/`:
 
 - **Mockup mode** (an HTTP server and a file watcher) for layout boards and section sketches before code exists.
-- **Preview mode** runs the dev server under `PORTFOLIO_PROFILE=demo` for `/sample?variant=<id>`.
+- **Preview mode** runs the dev server and polls the dev fixture route, `/preview/dev/<id>/<fixture>`, until it answers 200. The route renders one of the contract fixtures (`complete` unless you pass `--fixture <name>`) in the variant, in the preview document and under the preview's headers, the way Studio's preview frame will (#7). `?displayMode=`, `?contrast=more`, `?motion=reduce`, and `?enhancement=off` set its environment, and any other value is a 404. Only `next dev` serves the route: a production build answers it as a path no route matches. The dev server runs under `PORTFOLIO_PROFILE=demo`, so `/sample?variant=<id>` shows the bundled sample too.
 
 ```sh
 bash skills/variant-developer/scripts/visual-companion/start.sh
-bash skills/variant-developer/scripts/visual-companion/start.sh --mode preview --variant <id>
+bash skills/variant-developer/scripts/visual-companion/start.sh --mode preview --variant <id> [--fixture <name>]
+bash skills/variant-developer/scripts/visual-companion/start.sh --mode preview --variant <id> --matrix
 ```
 
-For screenshots, run the variant specs, as in [Testing a variant](#testing-a-variant).
+For screenshots, run the variant specs, as in [Testing a variant](#testing-a-variant); `--matrix` runs them for the one variant.
 
 ## What to read next
 

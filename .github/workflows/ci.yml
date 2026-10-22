@@ -145,6 +145,12 @@ jobs:
       # build pnpm test:trace reads has them (#6, ci/source-maps.test.mjs).
       - name: pnpm ci:source-maps
         run: pnpm ci:source-maps
+      # The standalone output ships no portfolio or site document but the
+      # bundled examples, so none of a contract fixture's, since the image
+      # copies it whole and its file scan refuses any other (#5, #7,
+      # ci/standalone.test.mjs).
+      - name: pnpm ci:standalone
+        run: pnpm ci:standalone
       - name: Failure summary
         if: ${{ always() }}
         run: node ci/summarize.mjs

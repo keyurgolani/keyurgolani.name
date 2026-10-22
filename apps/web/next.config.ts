@@ -36,6 +36,14 @@ const config: NextConfig = {
       '../../example-media/**/*.png',
     ],
   },
+  // #5's contract fixtures stay out of it. Only the preview's dev fixture
+  // route reads them, under next dev alone, but the tracer follows its reads
+  // and would ship every fixture's portfolio and site documents,
+  // hidden-canary's among them, in the standalone output, and so in the
+  // image. pnpm check:standalone fails a build whose output holds one.
+  outputFileTracingExcludes: {
+    '/**': ['../../packages/variant-contract/fixtures/**'],
+  },
   transpilePackages: [
     '@portfolio/schema',
     '@portfolio/kit',
@@ -119,17 +127,23 @@ const config: NextConfig = {
   },
   // Baseline headers on every route (#1, item 22), matched in any case, as
   // Next matches header sources. A route that sends its own
-  // Content-Security-Policy, Studio and login (#2), public pages (#6),
-  // preview (#7), and /sample (#9), sends it from proxy.ts, which takes the
-  // place of this one, so each response carries one. So does Studio's
-  // Referrer-Policy: same-origin, which proxy.ts sends with its CSP and
+  // Content-Security-Policy, Studio and login (#2), public pages (#6), and
+  // /sample (#9), sends it from proxy.ts, which takes the place of this one,
+  // so each response carries one. So does Studio's Referrer-Policy:
+  // same-origin, which proxy.ts sends with its CSP and
   // Cross-Origin-Resource-Policy: same-origin under a profile with a Studio
   // page, so under another one /studio gets what any unknown path gets.
   // Studio's transport, in every profile, sends same-origin from here, since
   // no-referrer would null the Origin of the sign-in form's post. Studio and
   // its transport ask for no-store here too, for what Next answers itself,
-  // such as an error page. headers.test.ts holds every path to these. HSTS
-  // belongs at the TLS-terminating proxy (docs/deployment.md).
+  // such as an error page. /preview and /preview-assets (#7) get neither the
+  // baseline CSP nor its Referrer-Policy: proxy.ts sends the preview's own,
+  // and no-referrer, on every response there. The build's assets and
+  // /_portfolio, #19's compiled packs and #6's fonts and variant assets,
+  // allow any origin, since an opaque preview frame loads them cross-origin;
+  // proxy.ts answers any other method or spelling under those prefixes.
+  // headers.test.ts holds every path to these. HSTS belongs at the
+  // TLS-terminating proxy (docs/deployment.md).
   async headers() {
     return [
       {
@@ -137,11 +151,19 @@ const config: NextConfig = {
         headers: [{ key: 'X-Content-Type-Options', value: 'nosniff' }],
       },
       {
-        source: '/:path((?!api/studio(?:/|$)).*)',
+        source: '/:path((?!api/studio(?:/|$))(?!preview(?:-assets)?(?:/|$)).*)',
         headers: [
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
           { key: 'Content-Security-Policy', value: "frame-ancestors 'none'" },
         ],
+      },
+      {
+        source: '/_next/static/:path*',
+        headers: [{ key: 'Access-Control-Allow-Origin', value: '*' }],
+      },
+      {
+        source: '/_portfolio/:path*',
+        headers: [{ key: 'Access-Control-Allow-Origin', value: '*' }],
       },
       {
         source: '/:path(api/studio(?:/.*)?)',

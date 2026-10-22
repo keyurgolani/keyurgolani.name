@@ -139,16 +139,29 @@ module.exports = {
       comment:
         'proxy.ts runs before every request; it imports only the route table, the capability ' +
         'matrix behind it, the frozen config (#1, item 15), the body /api/ready answers ' +
-        "before startup (item 19), and for Studio (#2) its headers, the session cookie's name, " +
-        'and returnTo, none of which reads a session.',
+        "before startup (item 19), for Studio (#2) its headers, the session cookie's name, " +
+        'and returnTo, and for preview (#7) its headers, none of which reads a session.',
       from: { path: '^apps/web/src/proxy\\.ts$' },
       to: {
         pathNot: [
           '^apps/web/src/server/(capabilities|routes|config-store|ready-starting)\\.ts$',
-          '^apps/web/src/server/(studio-headers|session-cookie|return-to)\\.ts$',
+          '^apps/web/src/server/(studio-headers|session-cookie|return-to|preview-headers)\\.ts$',
           '^node_modules/(\\.pnpm/next@|next/)',
         ],
       },
+    },
+    {
+      name: 'preview-imports-no-studio',
+      severity: 'error',
+      comment:
+        'A preview document (#7) shows what a visitor gets, so nothing in app/(preview) or ' +
+        "src/preview imports Studio's route group or host-chrome.css, whose sentinel and " +
+        'markup would reach the frame (threat preview-9). Tests may.',
+      from: {
+        path: '^apps/web/src/(?:app/\\(preview\\)/|preview/)',
+        pathNot: '\\.test\\.tsx?$',
+      },
+      to: { path: ['^apps/web/src/app/\\(studio\\)/', 'host-chrome\\.css$'] },
     },
     {
       name: 'store-test-support-only-from-tests',

@@ -1,4 +1,5 @@
 import { expect, test } from '../harness/fixtures';
+import { headerProblems } from '../harness/route-headers.mjs';
 import { expectNotFoundPage, PUBLIC_FILE, READ_ONLY, readOnlyApp } from './apps';
 
 // A variant's path views at the site root (#5, Slice 4), with the site
@@ -109,6 +110,25 @@ test.describe('without JavaScript', () => {
         '/api/nope',
       ]) {
         await expectNotFoundPage(page, path);
+      }
+    },
+  );
+
+  test(
+    "a path under /preview or /preview-assets is never a view, even one naming a view's own path: the 404 page, under the preview's headers (#7)",
+    { annotation: [{ type: 'route', description: '/[...view]' }, READ_ONLY] },
+    async ({ page, request }) => {
+      for (const path of [
+        '/preview',
+        '/preview/chapters/selected-work',
+        '/preview-assets/chapters/selected-work',
+        '/PREVIEW/chapters/selected-work',
+      ]) {
+        await expectNotFoundPage(page, path);
+        const response = await request.get(path, { maxRedirects: 0 });
+        expect(headerProblems(new URL(response.url()).pathname, response.headers()), path).toEqual(
+          [],
+        );
       }
     },
   );

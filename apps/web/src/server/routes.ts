@@ -1,11 +1,13 @@
+import { isContractFixtureName } from '@portfolio/variant-contract';
 import {
   isReservedSegment,
   matchPathView,
   type ViewPattern,
 } from '@portfolio/variant-contract/segments';
 import { VARIANTS } from '../lib/generated/registry.meta';
+import { environmentValues } from '../lib/preview-environment';
 import { sampleSelection } from '../lib/sample';
-import { accessIn, type Access, type Capability, type Profile } from './capabilities';
+import { accessIn, PROFILES, type Access, type Capability, type Profile } from './capabilities';
 
 // The route table (#1, item 13): every page, route handler, and metadata
 // route in apps/web/src/app, each mapped to the capability it serves.
@@ -100,6 +102,37 @@ function variantParameter(query: URLSearchParams) {
   return { variant: values.length === 0 ? undefined : values.length === 1 ? values[0] : values };
 }
 
+/**
+ * Whether this build serves the preview's dev fixture route (#7, Slice 1,
+ * item 8): only under `next dev`. Next writes NODE_ENV into the code as it
+ * compiles it, so a production build never serves it, whatever environment
+ * its server starts with. Slice 4 moves the switch to the fixture flags.
+ */
+export const PREVIEW_DEV = process.env.NODE_ENV === 'development';
+
+const NO_PROFILES: readonly Profile[] = [];
+
+/**
+ * The dev fixture route, on or off: one of #5's contract fixtures, in a
+ * registered variant or the fallback composition, in the preview document,
+ * with the environment its query asks for. Off, it is absent in every
+ * profile, and proxy.ts answers it as a path no route matches, as it does a
+ * Studio page under a profile with none. A variant, fixture, or environment
+ * value that names nothing is missing either way.
+ */
+export function devPreviewRoute(on: boolean) {
+  return {
+    pattern: '/preview/dev/[variant]/[fixture]',
+    kind: 'page',
+    capability: 'catalog.read',
+    profiles: on ? PROFILES : NO_PROFILES,
+    names: ({ segments, query }: RoutePath, installed: Installed) =>
+      installed.some(({ manifest }) => manifest.id === segments[2]) &&
+      isContractFixtureName(segments[3] ?? '') &&
+      environmentValues(query) !== null,
+  } as const satisfies RouteEntry;
+}
+
 // A pattern may appear more than once, with a different capability for each
 // profile that serves it (such as a Studio page under owner and demo).
 const ROUTES = [
@@ -143,6 +176,9 @@ const ROUTES = [
   // Neither reads the published site, so neither is a visitor route.
   { pattern: '/studio', kind: 'page', capability: 'studio.view' },
   { pattern: '/studio/sign-in', kind: 'page', capability: 'auth.session' },
+  // The preview's dev fixture route (#7). It renders fixtures, never the
+  // published site, so it isn't a visitor route either.
+  devPreviewRoute(PREVIEW_DEV),
   { pattern: '/robots.txt', kind: 'metadata', capability: 'catalog.read', visitor: true },
   { pattern: '/sitemap.xml', kind: 'metadata', capability: 'catalog.read', visitor: true },
   // The site's share image, app/(site)/opengraph-image.tsx: Next gives a
@@ -182,12 +218,13 @@ export function patternOfRoutePath(routePath: string): string {
  * file in public/variants/ or else the app's 404 page answers it. The v1
  * screenshots that lived there moved to legacy/public/ with their variants
  * (#5), and the contract reserves each first segment, so no view can sit
- * here.
+ * here. The old /preview/[slug] is no longer one: /preview belongs to #7's
+ * preview routes, and a path under it that none of them serves answers as a
+ * path no route matches.
  */
 export const RETIRED_PATTERNS = [
   '/admin',
   '/variants',
-  '/preview/[slug]',
   '/api/portfolio',
   '/api/variant',
   '/api/customize',

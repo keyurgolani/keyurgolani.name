@@ -12,7 +12,7 @@
 
 ### What it looks like
 
-- The variant compiles, `/sample?variant=<id>` answers 200, and `data-variant="<id>"` is on the boundary.
+- The variant compiles, `/preview/dev/<id>/complete` answers 200, and `data-variant="<id>"` is on the boundary.
 - The sections are there, stacked in the host's defaults, with none of your arrangement.
 
 ### Why

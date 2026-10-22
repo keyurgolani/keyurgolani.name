@@ -62,7 +62,7 @@ test('not-found.tsx links only home', async () => {
   assertGeneric(html);
 });
 
-test("the global 404's document is in the portfolio's language and direction, with the site's theme script, the request's nonce, and none of the site's JSON-LD", async (t) => {
+test("the global 404's document is in the portfolio's language and direction, with the site's theme script but on a preview's 404, the request's nonce, and none of the site's JSON-LD", async (t) => {
   t.after(() => setDeploymentState(undefined));
   // Before startup: the neutral language, direction, and theme.
   setDeploymentState(undefined);
@@ -105,6 +105,13 @@ test("the global 404's document is in the portfolio's language and direction, wi
   );
   assert.ok(!html.includes('application/ld+json'), html);
   assert.match(html, /<h1>Page not found<\/h1>/);
+  // A preview's 404 leaves the theme script out, as a preview document does (#7).
+  const preview = renderToStaticMarkup(
+    await NotFoundDocument({ nonce: 'MVlEoQyHU2PoMq1Imu8oSA==', theme: false }),
+  );
+  assert.ok(preview.startsWith('<html lang="ar" dir="rtl"><head></head><body>'), preview);
+  assert.ok(!preview.includes('<script'), preview);
+  assert.match(preview, /<h1>Page not found<\/h1>/);
 });
 
 test("the global 404's metadata resolves against the site's origin, and names none before startup", async (t) => {

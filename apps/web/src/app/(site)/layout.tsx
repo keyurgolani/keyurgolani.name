@@ -2,17 +2,11 @@ import type { ReactNode } from 'react';
 import type { Metadata } from 'next';
 import type { PublicView } from '@portfolio/schema';
 import { themeInitScript } from '@portfolio/kit';
-import { buildStructuredData } from '@portfolio/kit/seo';
-import { ClientHostModules } from '~/lib/host-modules-client';
-import { jsonLdScript } from '~/lib/json-ld';
+import { experienceHead } from '~/lib/experience-head';
 import { startingTheme } from '~/lib/starting-theme';
 import { requireDeploymentConfig } from '~/server/config-store';
 import { getPublicView } from '~/server/public-view';
-import '../globals.css';
-// The shared section renderers' layout, then every registered variant's
-// stylesheet, which `pnpm --filter @portfolio/web build:registry` lists.
-import '@portfolio/kit/sections/styles.css';
-import '~/lib/generated/registry.styles';
+import '~/lib/experience-styles';
 
 // Rendered per request from the revision register() loaded at startup, so a
 // build with no deployment configuration (the image's) never bakes in a
@@ -34,37 +28,16 @@ async function liveView(): Promise<PublicView | null> {
 
 export async function generateMetadata(): Promise<Metadata> {
   const { origin } = requireDeploymentConfig();
-  const portfolio = (await liveView())?.portfolio;
-  if (!portfolio) return { title: 'Portfolio', metadataBase: new URL(origin) };
-
-  const title = portfolio.meta?.title ?? `${portfolio.identity.name} — Portfolio`;
-  const description = portfolio.meta?.description ?? portfolio.identity.tagline;
-  return {
-    title,
-    description,
-    authors: [{ name: portfolio.identity.name }],
-    creator: portfolio.identity.name,
-    metadataBase: new URL(origin),
-    openGraph: {
-      type: 'profile',
-      title,
-      description,
-      siteName: title,
-      url: '/',
-    },
-    twitter: {
-      card: 'summary_large_image',
-      title,
-      description,
-    },
-  };
+  const view = await liveView();
+  if (!view) return { title: 'Portfolio', metadataBase: new URL(origin) };
+  return experienceHead(view, origin).metadata;
 }
 
 export default async function RootLayout({ children }: { children: ReactNode }) {
   const { origin } = requireDeploymentConfig();
   const view = await liveView();
   const portfolio = view?.portfolio;
-  const jsonLdBlocks = view ? buildStructuredData(view, { siteUrl: origin }).map(jsonLdScript) : [];
+  const jsonLdBlocks = view ? experienceHead(view, origin).jsonLd : [];
   // The first paint's theme, until the visitor picks one: the site's display mode.
   const initScript = themeInitScript(
     view ? startingTheme(view.site.appearance.displayMode) : 'system',
@@ -85,10 +58,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
           <script key={i} type="application/ld+json" dangerouslySetInnerHTML={{ __html: json }} />
         ))}
       </head>
-      <body>
-        <ClientHostModules />
-        {children}
-      </body>
+      <body>{children}</body>
     </html>
   );
 }

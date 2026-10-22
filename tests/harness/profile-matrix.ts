@@ -9,7 +9,7 @@
 // secret, or config summary in any response. A spec runs it for the profile
 // its app options start: read-only and demo, and owner with the password
 // provider (#2), whose password and hash join the canaries.
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -18,6 +18,8 @@ import { parse } from 'yaml';
 import type * as Capabilities from '../../apps/web/src/server/capabilities';
 import type * as Operations from '../../apps/web/src/server/operations';
 import type * as Routes from '../../apps/web/src/server/routes';
+// The key the site's theme script reads, which only its text holds.
+import { THEME_STORAGE_KEY as THEME_KEY } from '../../packages/kit/src/theme-init';
 import {
   CANARY_BODY,
   CANARY_DATA,
@@ -31,7 +33,7 @@ import {
 import { DEFAULT_SITE } from './app-server.mjs';
 import { expect, test, type App, type AppOptions } from './fixtures';
 import { VARIANTS } from './registry';
-import { headerProblems, isStudioPath } from './route-headers.mjs';
+import { headerProblems, isPreviewPath, isStudioPath } from './route-headers.mjs';
 import { concrete, scanTargets } from './scan-targets';
 
 // apps/web has no "type": "module", so its modules are CommonJS to Node and
@@ -44,6 +46,9 @@ const { listRoutes, RETIRED_PATTERNS, routeAccess } =
   require('../../apps/web/src/server/routes.ts') as typeof Routes;
 type Profile = Capabilities.Profile;
 type Operation = Operations.Operation;
+
+/** Where the registry writes #19's compiled packs, which the app serves under /_portfolio/pack/. */
+const PACKS = fileURLToPath(new URL('../../apps/web/public/_portfolio/pack/', import.meta.url));
 
 /** A _FILE every profile reads, in a canary-named directory. */
 const ENV_FILES: AppOptions['envFiles'] = {
@@ -111,6 +116,31 @@ const STUDIO_SPELLINGS = [
   '/studio/%73ign-in',
   '/studio%2Fsign-in',
   '/%73tudio%2Fsign-in',
+] as const;
+
+/**
+ * Preview paths in every spelling a request may use (#7): /preview and
+ * /preview-assets and below, with a query, in another case, percent-encoded,
+ * and with the slash encoded. No preview route serves any of them in a
+ * production build, the dev fixture route included, so each answers every
+ * method as /no-such-page does, under the preview's headers in every profile.
+ */
+const PREVIEW_SPELLINGS = [
+  '/preview',
+  '/preview/editorial',
+  '/preview/g_7Hk-2/work/tide-tables?displayMode=dark',
+  // The dev fixture route (#7, item 8), which only `next dev` serves: a
+  // production build answers it as a path no route matches, in any spelling.
+  '/preview/dev/fallback/complete',
+  '/preview/dev/fallback/complete?displayMode=dark&motion=reduce',
+  '/Preview/Dev/fallback/complete',
+  '/preview/%64ev/fallback/complete',
+  '/preview-assets',
+  '/preview-assets/g_7Hk-2/asset/abc/large.webp',
+  '/PREVIEW/x',
+  '/Preview-Assets/x',
+  '/%70review/x',
+  '/preview%2Fx',
 ] as const;
 
 /**
@@ -227,19 +257,21 @@ const hasStudio = (profile: Profile) =>
   );
 
 /**
- * The headers its path gets (route-headers.mjs): the baseline ones, or
- * Studio's (#2) where the profile has Studio. No cookie, and noindex exactly
- * where the profile can't be indexed.
+ * The headers its path gets (route-headers.mjs): the baseline ones, Studio's
+ * (#2) where the profile has Studio, or the preview's (#7). No cookie, and
+ * noindex exactly where the profile can't be indexed, or noindex, nofollow
+ * on every preview path.
  */
 function expectProfileHeaders(profile: Profile, response: APIResponse, what: string) {
   const headers = response.headers();
-  expect(
-    headerProblems(new URL(response.url()).pathname, headers, { studio: hasStudio(profile) }),
-    what,
-  ).toEqual([]);
+  // Every request goes to the app's own address, its PORTFOLIO_ORIGIN.
+  const { pathname, origin } = new URL(response.url());
+  expect(headerProblems(pathname, headers, { studio: hasStudio(profile), origin }), what).toEqual(
+    [],
+  );
   expect(headers['set-cookie'], `${what}: no cookie`).toBeUndefined();
   expect(headers['x-robots-tag'], `${what}: X-Robots-Tag`).toBe(
-    INDEXABLE[profile] ? undefined : 'noindex',
+    isPreviewPath(pathname) ? 'noindex, nofollow' : INDEXABLE[profile] ? undefined : 'noindex',
   );
 }
 
@@ -269,6 +301,22 @@ function withoutOwnPath(body: string, target: string): string {
     if (parts.length === 2) return parts.join('\\"c\\":"<path>"');
   }
   throw new Error(`Next's payload doesn't name ${target} once.`);
+}
+
+/**
+ * A page's body with its response's CSP nonce taken out, as a page with no
+ * CSP has none: the attribute on each script and stylesheet, and what Next's
+ * payload says of it, which is a JS string in a script, its quotes escaped.
+ */
+function withoutNonce(body: string, nonce: string | undefined): string {
+  if (!nonce) return body;
+  return body
+    .split(` nonce="${nonce}"`)
+    .join('')
+    .split(`,{\\"nonce\\":\\"${nonce}\\"}`)
+    .join('')
+    .split(`\\"nonce\\":\\"${nonce}\\"`)
+    .join('\\"nonce\\":\\"$undefined\\"');
 }
 
 /**
@@ -619,6 +667,147 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
   );
 
   test(
+    'every preview path, in any spelling and to any method, answers as a path no route matches, under the preview headers, the same with a session cookie as without (#7)',
+    {
+      annotation: [
+        { type: 'route', description: '/preview' },
+        { type: 'route', description: '/preview-assets' },
+        annotation,
+      ],
+    },
+    async ({ request }) => {
+      // With a session cookie and a preference: proxy.ts drops both before
+      // Next routes the request, so the answer is the same without them.
+      const cookie = `__Host-studio_session=${'x'.repeat(43)}; theme=dark`;
+      // What a preview path no route matches answers, with no cookie: the
+      // app's 404 page from the server, but without the site's theme script,
+      // which the site's own 404 runs (#7).
+      const unmatched = '/preview/no-such-page';
+      const reference = await request.get(unmatched, { maxRedirects: 0 });
+      expect(reference.status()).toBe(404);
+      const referenceText = await reference.text();
+      expect(referenceText).toMatch(/<h1>Page not found<\/h1>/);
+      expect(referenceText, "the preview's 404: the theme script").not.toContain(THEME_KEY);
+      const site = await (await request.get('/no-such-page', { maxRedirects: 0 })).text();
+      expect(site, "the site's 404: the theme script").toContain(THEME_KEY);
+      // As that path: the same status, type, and page, but for the path Next's
+      // payload names, and the nonce the preview's scripts and styles carry.
+      const shape = async (response: APIResponse, target: string) => {
+        const text = await response.text();
+        const type = response.headers()['content-type'] ?? '';
+        const page = /^text\/html/.test(type) && text !== '';
+        const nonce = /'nonce-([A-Za-z0-9+/=]+)'/.exec(
+          response.headers()['content-security-policy'] ?? '',
+        )?.[1];
+        return {
+          status: response.status(),
+          type,
+          body: page ? withoutOwnPath(withoutNonce(text, nonce), target) : text,
+        };
+      };
+      for (const target of PREVIEW_SPELLINGS) {
+        const query = target.includes('?') ? target.slice(target.indexOf('?')) : '';
+        for (const method of EVERY_METHOD) {
+          const what = `${method} ${target}`;
+          const options = { method, maxRedirects: 0, headers: { cookie } };
+          const response = await request.fetch(target, options);
+          const unknown = await request.fetch(`${unmatched}${query}`, { method, maxRedirects: 0 });
+          expect(response.status(), what).toBe(404);
+          expectProfileHeaders(profile, response, what);
+          expect(await shape(response, target), what).toEqual(
+            await shape(unknown, `${unmatched}${query}`),
+          );
+        }
+        // With Next's router prefetch header and no RSC header, next.config.ts
+        // sends the request to the 404 page (#1), and the preview's headers
+        // still go on it.
+        for (const method of ['GET', 'HEAD'] as const) {
+          const what = `${method} ${target}, prefetch without RSC`;
+          const prefetch = { 'next-router-prefetch': '1' };
+          const options = { method, maxRedirects: 0, timeout: 5_000 };
+          const response = await request.fetch(target, {
+            ...options,
+            headers: { cookie, ...prefetch },
+          });
+          const unknown = await request.fetch(`${unmatched}${query}`, {
+            ...options,
+            headers: prefetch,
+          });
+          expect(response.status(), what).toBe(404);
+          expectProfileHeaders(profile, response, what);
+          expect(await shape(response, target), what).toEqual(
+            await shape(unknown, `${unmatched}${query}`),
+          );
+        }
+      }
+    },
+  );
+
+  test(
+    'a build asset and a compiled pack allow any origin, and every other method or spelling there is the plain 404 (#7)',
+    {
+      annotation: [
+        { type: 'route', description: '/_next/static' },
+        { type: 'route', description: '/_portfolio' },
+        annotation,
+      ],
+    },
+    async ({ request }) => {
+      const home = await request.get('/', { maxRedirects: 0 });
+      expect(home.status()).toBe(200);
+      expectProfileHeaders(profile, home, 'GET /');
+      const assets = [
+        ...new Set(
+          [...(await home.text()).matchAll(/(?:src|href)="(\/_next\/static\/[^"?]+)/g)].map(
+            ([, asset]) => asset!,
+          ),
+        ),
+      ];
+      expect(assets.length, 'build assets on the home page').toBeGreaterThan(1);
+      // #19's compiled packs, which the registry writes into public/_portfolio/pack/.
+      const packs = readdirSync(PACKS, { withFileTypes: true })
+        .filter((entry) => entry.isFile())
+        .map(({ name }) => `/_portfolio/pack/${name}`);
+      expect(packs.length, 'compiled packs').toBeGreaterThan(0);
+      for (const asset of [...assets, ...packs]) {
+        const response = await request.get(asset, { maxRedirects: 0 });
+        expect(response.status(), asset).toBe(200);
+        expect(response.headers()['access-control-allow-origin'], asset).toBe('*');
+        expectProfileHeaders(profile, response, asset);
+      }
+      // One that doesn't exist goes on to a 404 page, the site's, under the
+      // prefix's headers: the views catch-all's for a build asset, as before
+      // (#5), and the global 404 for a pack, which the table marks missing.
+      // It holds only what an anonymous request for any unknown path gets,
+      // and no browser lets a wildcard origin read a credentialed answer.
+      const gone = await request.get('/_next/static/chunks/no-such-chunk.js', { maxRedirects: 0 });
+      expect(gone.status()).toBe(404);
+      expectProfileHeaders(profile, gone, 'a missing build asset');
+      const nopack = await request.get('/_portfolio/pack/no-such.css', { maxRedirects: 0 });
+      expect(nopack.status()).toBe(404);
+      expect(await nopack.text()).toMatch(/<h1>Page not found<\/h1>/);
+      expectProfileHeaders(profile, nopack, 'a missing pack');
+      // Any other method, and a spelling Next doesn't serve from disk, get
+      // the proxy's plain 404.
+      for (const [target, method] of [
+        [assets[0]!, 'POST'],
+        [assets[0]!, 'DELETE'],
+        [assets[0]!.replace('/_next/static/', '/_NEXT/STATIC/'), 'GET'],
+        ['/_next/static', 'GET'],
+        [packs[0]!, 'POST'],
+        [packs[0]!.replace('/_portfolio/', '/_PORTFOLIO/'), 'GET'],
+        [packs[0]!.replace('/_portfolio/', '/%5Fportfolio/'), 'GET'],
+        ['/_portfolio', 'GET'],
+      ] as const) {
+        const response = await request.fetch(target, { method, maxRedirects: 0 });
+        expect(response.status(), `${method} ${target}`).toBe(404);
+        expect(await response.text(), `${method} ${target}`).toBe('Not found.');
+        expectProfileHeaders(profile, response, `${method} ${target}`);
+      }
+    },
+  );
+
+  test(
     'the image optimizer is off: /_next/image is the 404 page, and its url never reaches the log',
     { annotation: [{ type: 'route', description: '/_next/image' }, annotation] },
     async ({ app, request }) => {
@@ -645,12 +834,15 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
     { annotation: [{ type: 'route', description: 'every route' }, annotation] },
     async ({ app, request }) => {
       // Next answers these itself, before proxy.ts and the next.config.ts
-      // headers, so they carry none of the baseline headers. The target is
-      // the canonical path, and the body holds it and nothing else
-      // (docs/deployment.md).
-      const targets = listRoutes()
-        .filter((route) => route.pattern !== '/' && routeAccess(profile, route) !== 'absent')
-        .map((route) => concrete(route.pattern));
+      // headers, so they carry none of the baseline headers, and under
+      // /preview none of the preview's (#7). The target is the canonical
+      // path, and the body holds it and nothing else (docs/deployment.md).
+      const targets = [
+        ...listRoutes()
+          .filter((route) => route.pattern !== '/' && routeAccess(profile, route) !== 'absent')
+          .map((route) => concrete(route.pattern)),
+        '/preview/x',
+      ];
       expect(targets.length).toBeGreaterThan(0);
       for (const target of targets) {
         // The repeated slash goes whole, so no one reads it as a host.

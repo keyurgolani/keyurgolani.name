@@ -1,3 +1,12 @@
+/* #19 (appearance axes) owns this layer order; its check requires every layered stylesheet to start with this line. */
+@layer reset, scheme, language, typography, variant-layout, utilities, accessibility;
+
+/* What every portfolio document loads (#7, Slice 1): the site's layout, the
+   preview's, and the 404 page a URL no route matches gets. Studio's layout
+   loads it too, under host-chrome.css, which nothing else loads. Every rule
+   below is unlayered for now, and unlayered rules win over layered ones, so
+   the order above changes nothing until #19 puts rules in its layers. */
+
 *,
 *::before,
 *::after {
@@ -64,52 +73,4 @@ html[data-theme='dark'] ::selection {
 .host-skip-link:focus {
   display: inline-block;
   padding: 0.5rem 1rem;
-}
-
-/* Host chrome (error and not-found pages) */
-
-.host-chrome {
-  font-family:
-    system-ui,
-    -apple-system,
-    'Segoe UI',
-    sans-serif;
-  max-width: none;
-  margin: 0;
-  padding: 3rem clamp(1.5rem, 4vw, 4rem);
-  line-height: 1.6;
-}
-
-.host-chrome h1 {
-  font-size: 2rem;
-  margin: 0 0 0.5rem;
-  letter-spacing: -0.01em;
-}
-
-.host-chrome p {
-  margin: 0 0 1rem;
-}
-
-.host-chrome a {
-  color: inherit;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-
-.host-chrome__links {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem 1.5rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.host-chrome__reference {
-  font-size: 0.875rem;
-  color: #6b6863;
-}
-
-html[data-theme='dark'] .host-chrome__reference {
-  color: #a19c94;
 }

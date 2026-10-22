@@ -9,6 +9,7 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import type * as Registry from '../../apps/web/src/lib/generated/registry.meta';
+import { fixtureSiteSelecting } from '../../packages/variant-contract/src/contract-fixtures';
 import type { AppOptions } from '../harness/fixtures';
 import type {
   ContractFixture,
@@ -61,14 +62,9 @@ export const FIXED_TIME = '2026-01-01T00:00:00.000Z';
 export const selection = (variant: RegisteredVariant) =>
   variant.manifest.id === FALLBACK_ID ? UNREGISTERED : variant.manifest.id;
 
-/** The fixture's site document, selecting `variant`. */
+/** The fixture's site document, selecting `variant`, as #7's dev fixture route selects it. */
 export function siteFor(fixture: ContractFixture, variant: RegisteredVariant): string {
-  const text = readFileSync(fixture.files.site, 'utf8');
-  const selected = `\n  variant: ${UNREGISTERED}\n`;
-  if (!text.includes(selected)) {
-    throw new Error(`${fixture.files.site} no longer selects ${UNREGISTERED}.`);
-  }
-  return text.replace(selected, `\n  variant: ${selection(variant)}\n`);
+  return fixtureSiteSelecting(readFileSync(fixture.files.site, 'utf8'), variant.manifest.id);
 }
 
 /** A small gray PNG, standing in for an owner's image. */

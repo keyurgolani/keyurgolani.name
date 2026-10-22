@@ -3,7 +3,7 @@ import { EXTENSION_RENDERERS } from './generated/registry.renderers';
 
 // The package code the kit reaches on the server (#5, Slice 3): each content
 // extension's section renderers. Importing this module registers them;
-// render-composition.tsx does, before any variant renders, and so does
+// experience-document.tsx does, before any variant renders, and so does
 // render parity's react-dom/server render (Slice 6).
 //
 // The enhancement loaders are host-modules-client.tsx's alone. <Enhancement>

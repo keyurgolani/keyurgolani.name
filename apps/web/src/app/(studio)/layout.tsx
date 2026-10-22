@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react';
 import type { Metadata } from 'next';
-import '../globals.css';
+import '../experience-base.css';
+// Host chrome, for Studio's error and not-found pages: no other layout loads it (#7).
+import '../host-chrome.css';
 import './studio.css';
 
 // Studio's own root layout (#2): /studio and everything under it, sign-in

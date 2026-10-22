@@ -13,6 +13,8 @@ import {
   type ParsedPair,
 } from '@portfolio/schema';
 import { loadPair, readUnitFiles } from '@portfolio/schema/node';
+import { CONTRACT_FIXTURE_NAMES, fixtureSiteSelecting } from '../contract-fixtures';
+import { FALLBACK_ID } from '../ids';
 import { buildRenderInput } from '../render-input';
 import { validateManifest } from '../validate-manifest';
 import { CONTRACT_FIXTURES, contractFixture, FIXTURES_DIR, HIDDEN_CANARY } from './fixtures';
@@ -92,6 +94,24 @@ test('the fixtures directory holds exactly the fixtures the module lists', () =>
     [['hidden-canary', ['snapshots/github.json']]],
   );
   assert.throws(() => contractFixture('no-such-fixture'), /No contract fixture/);
+});
+
+test("the root entry's names are the fixtures', and each site selects a variant through fixtureSiteSelecting, the fallback's id leaving it as it is (#7)", () => {
+  assert.deepEqual(
+    CONTRACT_FIXTURE_NAMES,
+    CONTRACT_FIXTURES.map(({ name }) => name),
+  );
+  for (const fixture of CONTRACT_FIXTURES) {
+    const text = fs.readFileSync(fixture.files.site, 'utf8');
+    const selected = fixtureSiteSelecting(text, 'probe-variant');
+    assert.match(selected, /\n {2}variant: probe-variant\n/, fixture.name);
+    assert.doesNotMatch(selected, /missing-variant/, fixture.name);
+    assert.equal(fixtureSiteSelecting(text, FALLBACK_ID), text, fixture.name);
+  }
+  assert.throws(
+    () => fixtureSiteSelecting('appearance:\n  variant: probe-variant\n', 'other'),
+    /no longer selects missing-variant/,
+  );
 });
 
 test('every fixture loads clean, selects missing-variant, and reaches no host outside .test', () => {

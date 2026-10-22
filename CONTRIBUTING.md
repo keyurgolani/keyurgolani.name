@@ -84,6 +84,7 @@ pnpm check:variants    # the source audit over every registered variant
 pnpm check:appearance  # the contrast gate over every registered appearance combination
 pnpm build             # production build of apps/web
 pnpm check:source-maps # that build shipped no browser source map
+pnpm check:standalone  # that build's standalone output holds no portfolio or site document but the examples
 pnpm ci:browser        # Playwright smoke against that build
 pnpm test:routes       # route specs against a fixture host with test-only variants
 pnpm test:variants     # every registered variant on every contract fixture, in six modes, against that build

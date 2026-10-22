@@ -92,7 +92,7 @@ test('a served path passes through with a fresh request ID, whatever the client 
 test('retired routes are 404 in every profile, and only their exact paths', async (t) => {
   for (const profile of ['owner', 'demo', 'read-only'] as const) {
     deploy(t, profile);
-    for (const path of ['/admin', '/variants', '/preview/editorial', '/api/portfolio']) {
+    for (const path of ['/admin', '/variants', '/api/portfolio']) {
       const response = proxy(request(path));
       assert.equal(response.status, 404, `${profile} ${path}`);
       assert.equal(await response.text(), 'Not found.');
@@ -552,4 +552,199 @@ test('under owner a Studio page for a session, asked for with no session cookie,
   assert.equal(proxy(studio('/studio', { cookie: 'studio_session=anything' })).status, 303);
   // Another method goes on to the page, which answers it.
   assert.equal(proxy(studio('/studio', {}, 'POST')).headers.get('x-middleware-next'), '1');
+});
+
+const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * The preview's policy in production (#7), its one nonce on scripts and
+ * styles alike, with only `ancestors` allowed to frame it.
+ */
+const previewPolicy = (ancestors: string) =>
+  new RegExp(
+    `^default-src 'none'; script-src 'nonce-([A-Za-z0-9+/]{22}==)' 'strict-dynamic'; style-src 'self' 'nonce-\\1'; style-src-attr 'unsafe-inline'; font-src 'self'; img-src 'self' https: data:; media-src 'self' https:; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors ${escape(ancestors)}$`,
+  );
+
+/** Preview paths, in any case and percent-encoded, as next.config.ts and the route table read them. */
+const PREVIEW_PATHS = [
+  '/preview',
+  '/preview/editorial',
+  '/preview/dev/fallback/complete',
+  '/preview/g_7Hk-2/work/tide-tables',
+  '/preview-assets',
+  '/preview-assets/g_7Hk-2/asset/abc/large.webp',
+  '/PREVIEW/x',
+  '/Preview-Assets/x',
+  '/%70review/x',
+  '/preview%2Fx',
+];
+
+/** What is wrong with a preview response's headers but its CSP, which the caller checks. */
+function previewHeaderProblems(response: Response): string[] {
+  const expected = {
+    'x-robots-tag': 'noindex, nofollow',
+    'referrer-policy': 'no-referrer',
+    'cache-control': 'private, no-store',
+    'x-content-type-options': 'nosniff',
+    'cross-origin-resource-policy': null,
+  };
+  return Object.entries(expected).flatMap(([name, value]) =>
+    response.headers.get(name) === value ? [] : [`${name} is ${response.headers.get(name)}`],
+  );
+}
+
+test("every preview response, in any case or percent-encoding, gets the preview's CSP with a nonce of its own, noindex, no-referrer, and private, no-store, 404s included (#7)", async (t) => {
+  for (const profile of ['owner', 'demo', 'read-only'] as const) {
+    deploy(t, profile);
+    const nonces = new Set<string>();
+    for (const path of PREVIEW_PATHS) {
+      // No preview route serves anything in this build, so each is a path no
+      // route matches: on to Next's 404 page for GET and HEAD, under these
+      // headers. The dev fixture route, which the table lists and only `next
+      // dev` serves, goes there through the beforeFiles rewrite.
+      for (const method of ['GET', 'HEAD']) {
+        const response = proxy(request(path, method));
+        const what = `${profile} ${method} ${path}`;
+        if (path === '/preview/dev/fallback/complete') {
+          assert.equal(
+            response.headers.get('x-middleware-request-x-portfolio-not-found'),
+            '1',
+            what,
+          );
+        } else {
+          assert.equal(decision(response), 'missing', what);
+        }
+        const csp = response.headers.get('content-security-policy') ?? '';
+        const nonce = previewPolicy('https://rowan.test').exec(csp)?.[1];
+        assert.ok(nonce, `${what}: ${csp}`);
+        nonces.add(nonce);
+        // On the request too, so Next puts the nonce on the page's scripts and styles.
+        assert.equal(
+          response.headers.get('x-middleware-request-content-security-policy'),
+          csp,
+          what,
+        );
+        assert.deepEqual(previewHeaderProblems(response), [], what);
+        assert.equal(response.headers.get('x-middleware-request-x-studio-path'), null, what);
+      }
+      // Any other method is the plain 404, under the same headers.
+      for (const method of ['POST', 'PUT', 'DELETE', 'OPTIONS']) {
+        const response = proxy(request(path, method));
+        const what = `${profile} ${method} ${path}`;
+        assert.equal(response.status, 404, what);
+        assert.equal(await response.text(), 'Not found.', what);
+        const csp = response.headers.get('content-security-policy') ?? '';
+        const nonce = previewPolicy('https://rowan.test').exec(csp)?.[1];
+        assert.ok(nonce, `${what}: ${csp}`);
+        nonces.add(nonce);
+        assert.deepEqual(previewHeaderProblems(response), [], what);
+      }
+    }
+    assert.equal(nonces.size, PREVIEW_PATHS.length * 6, `${profile}: a nonce came twice`);
+  }
+});
+
+test('a preview request reaches Next without its Cookie header, so no preview route reads a session or a preference (#7)', (t) => {
+  const cookie = '__Host-studio_session=anything; studio_session=anything; theme=dark';
+  for (const profile of ['owner', 'demo', 'read-only'] as const) {
+    deploy(t, profile);
+    for (const path of PREVIEW_PATHS) {
+      const response = proxy(new NextRequest(`https://rowan.test${path}`, { headers: { cookie } }));
+      const what = `${profile} ${path}`;
+      assert.equal(response.headers.get('x-middleware-next'), '1', what);
+      // Next drops every request header the override list leaves out.
+      assert.doesNotMatch(
+        response.headers.get('x-middleware-override-headers') ?? '',
+        /(?:^|,)\s*cookie\s*(?:,|$)/,
+        what,
+      );
+      assert.equal(response.headers.get('x-middleware-request-cookie'), null, what);
+    }
+    // Any other path keeps the cookies it came with.
+    for (const path of ['/', '/previews', '/no-such-page']) {
+      const response = proxy(new NextRequest(`https://rowan.test${path}`, { headers: { cookie } }));
+      assert.equal(
+        response.headers.get('x-middleware-request-cookie'),
+        cookie,
+        `${profile} ${path}`,
+      );
+    }
+  }
+});
+
+test("before startup a preview path's 503 keeps the preview's headers, and nothing may frame it (#7)", () => {
+  setDeploymentState(undefined);
+  for (const path of ['/preview/editorial', '/preview-assets/g/x.png', '/%70review']) {
+    const response = proxy(request(path));
+    assert.equal(response.status, 503, path);
+    assert.match(response.headers.get('content-security-policy') ?? '', previewPolicy("'none'"));
+    assert.deepEqual(previewHeaderProblems(response), [], path);
+  }
+  const other = proxy(request('/'));
+  assert.equal(other.headers.get('content-security-policy'), null);
+  assert.equal(other.headers.get('cache-control'), 'no-store');
+});
+
+test("no response outside /preview and /preview-assets gets the preview's headers, and Studio's stay Studio's (#7)", (t) => {
+  for (const profile of ['owner', 'demo', 'read-only'] as const) {
+    deploy(t, profile);
+    for (const path of ['/', '/sample', '/previews', '/preview-asset', '/api/health', '/nowhere']) {
+      const response = proxy(request(path));
+      const what = `${profile} ${path}`;
+      assert.doesNotMatch(
+        response.headers.get('content-security-policy') ?? '',
+        /default-src 'none'/,
+        what,
+      );
+      assert.notEqual(response.headers.get('referrer-policy'), 'no-referrer', what);
+      assert.notEqual(response.headers.get('x-robots-tag'), 'noindex, nofollow', what);
+      assert.notEqual(response.headers.get('cache-control'), 'private, no-store', what);
+    }
+  }
+  deploy(t, 'owner');
+  assert.match(
+    proxy(studio('/studio/sign-in')).headers.get('content-security-policy') ?? '',
+    STUDIO_CSP,
+  );
+});
+
+test('under the prefixes next.config.ts lets any origin read, only a GET or HEAD of a file Next serves there goes on to Next, and the rest is the plain 404, never a page (#7)', async (t) => {
+  for (const profile of ['owner', 'demo', 'read-only'] as const) {
+    deploy(t, profile);
+    for (const method of ['GET', 'HEAD']) {
+      const asset = proxy(request('/_next/static/chunks/app.js', method));
+      assert.equal(asset.headers.get('x-middleware-next'), '1', `${profile} ${method}`);
+      assert.equal(decision(asset), 'unlisted', `${profile} ${method}`);
+      // #19's compiled packs, which the registry writes into public/_portfolio/pack/.
+      // Marked missing, so one that isn't there gets the 404 page after Next looks in public/.
+      const pack = proxy(request('/_portfolio/pack/0123456789ab.css', method));
+      assert.equal(pack.headers.get('x-middleware-next'), '1', `${profile} ${method}`);
+      assert.equal(decision(pack), 'missing', `${profile} ${method}`);
+    }
+    for (const [path, method] of [
+      ['/_next/static/chunks/app.js', 'POST'],
+      ['/_next/static/chunks/app.js', 'PUT'],
+      ['/_next/static/chunks/app.js', 'DELETE'],
+      ['/_next/static/chunks/app.js', 'OPTIONS'],
+      // Spellings Next doesn't serve from disk, which would reach the 404 page.
+      ['/_NEXT/STATIC/chunks/app.js', 'GET'],
+      ['/_next/Static/chunks/app.js', 'GET'],
+      ['/%5Fnext/static/chunks/app.js', 'GET'],
+      ['/_next/static', 'GET'],
+      ['/_portfolio', 'GET'],
+      ['/_PORTFOLIO/pack/0123456789ab.css', 'GET'],
+      ['/%5Fportfolio/pack/0123456789ab.css', 'GET'],
+      ['/_portfolio/pack/0123456789ab.css', 'POST'],
+      ['/_portfolio/pack/0123456789ab.css', 'OPTIONS'],
+    ] as const) {
+      const response = proxy(request(path, method));
+      const what = `${profile} ${method} ${path}`;
+      assert.equal(response.status, 404, what);
+      assert.equal(response.headers.get('content-type'), 'text/plain; charset=utf-8', what);
+      assert.equal(await response.text(), 'Not found.', what);
+    }
+    // A path that only starts the same is any other path.
+    assert.equal(decision(proxy(request('/_portfolios/x'))), 'missing', profile);
+    assert.equal(decision(proxy(request('/_next/statics/x'))), 'unlisted', profile);
+  }
 });
