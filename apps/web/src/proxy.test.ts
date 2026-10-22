@@ -2,7 +2,8 @@ import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import { NextRequest } from 'next/server';
 import { proxy } from './proxy';
-import { builtWithFixtures, PROFILES, type Profile } from './server/capabilities';
+import { fixtureFlags } from '../scripts/fixture-gate';
+import { PROFILES, type Profile } from './server/capabilities';
 import { readDeploymentConfig } from './server/config';
 import { setDeploymentState, setServable } from './server/config-store';
 import type { PreviewGrantsPort } from './server/preview-port';
@@ -419,7 +420,8 @@ test('a route no profile of this build serves, as the appearance fixtures are wi
   const beside = ['/_FIXTURES/appearance', '/_fixtures/appearance/x', '/_fixtures'];
   for (const profile of PROFILES) {
     deploy(t, profile);
-    if (builtWithFixtures('appearance')) {
+    // What this run's environment asked registry generation for, never the code under test.
+    if (fixtureFlags(process.env).appearance) {
       // A build made with the flag serves the page, to anyone, in every profile.
       assert.equal(decision(proxy(request('/_fixtures/appearance'))), 'served', profile);
       continue;

@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { builtWithFixtures } from './capabilities';
+import { fixtureFlags } from '../../scripts/fixture-gate';
 import {
   DEPLOYMENT_KEYS,
   issueLogLine,
@@ -594,7 +594,10 @@ test('a fixture flag set when the server starts, on a build made without it, war
   const result = read({ ...BASE, APPEARANCE_FIXTURES: '1' });
   assert.equal(result.ok, true);
   // A build made with it has the fixtures already, and nothing to say.
-  const expected = builtWithFixtures('appearance') ? [] : ['APPEARANCE_FIXTURES:build_time_only'];
+  // What this run's environment asked registry generation for, never the code under test.
+  const expected = fixtureFlags(process.env).appearance
+    ? []
+    : ['APPEARANCE_FIXTURES:build_time_only'];
   assert.deepEqual(findings(result, 'warning'), expected);
   assert.deepEqual(findings(read({ ...BASE, APPEARANCE_FIXTURES: '' }), 'warning'), []);
   // The deployment it reads is the one it reads without the flag.

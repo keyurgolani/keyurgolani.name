@@ -15,6 +15,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { APIRequestContext, APIResponse } from '@playwright/test';
 import { parse } from 'yaml';
+import type * as FixtureGate from '../../apps/web/scripts/fixture-gate';
 import type * as PreviewStatus from '../../apps/web/src/preview/status';
 import type * as Capabilities from '../../apps/web/src/server/capabilities';
 import type * as Operations from '../../apps/web/src/server/operations';
@@ -40,8 +41,9 @@ import { concrete, scanTargets } from './scan-targets';
 // apps/web has no "type": "module", so its modules are CommonJS to Node and
 // load through require().
 const require = createRequire(import.meta.url);
-const { accessIn, builtWithFixtures, CAPABILITIES, FIXTURE_CAPABILITIES, INDEXABLE, PROFILES } =
+const { accessIn, CAPABILITIES, INDEXABLE, PROFILES } =
   require('../../apps/web/src/server/capabilities.ts') as typeof Capabilities;
+const { fixtureFlags } = require('../../apps/web/scripts/fixture-gate.ts') as typeof FixtureGate;
 const { listOperations } = require('../../apps/web/src/server/operations.ts') as typeof Operations;
 const { listRoutes, RETIRED_PATTERNS, routeAccess } =
   require('../../apps/web/src/server/routes.ts') as typeof Routes;
@@ -216,6 +218,15 @@ const unbuilt = (entry: Routes.RouteEntry) =>
  */
 const unknownEverywhere = (entry: Routes.RouteEntry) =>
   unbuilt(entry) && !isPreviewPath(entry.pattern);
+
+/**
+ * Whether this run says the build under test was made with the appearance
+ * fixtures: APPEARANCE_FIXTURES=1 here too, as when it was built. Unless it
+ * says so, /_fixtures/appearance must be a route the build serves nowhere.
+ * The answer comes from the run's environment, never from the capability
+ * code, which decides what the server under test serves.
+ */
+const FIXTURES_BUILT = fixtureFlags(process.env).appearance === true;
 
 /**
  * Each table route no profile of this build serves, in every spelling a
@@ -725,12 +736,12 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
     },
     async ({ request }) => {
       const spellings = unbuiltSpellings();
-      // Only a build made with every fixture flag serves each route somewhere.
-      expect(
-        spellings.length > 0 ||
-          Object.values(FIXTURE_CAPABILITIES).every(({ key }) => builtWithFixtures(key)),
-        'a route this build serves nowhere, or every fixture flag set',
-      ).toBe(true);
+      if (!FIXTURES_BUILT) {
+        // A build made without the flag has no fixture page in any profile.
+        expect(spellings, 'the fixture page in no profile of this build').toContain(
+          '/_fixtures/appearance',
+        );
+      }
       await expectUnknown(request, profile, spellings);
     },
   );

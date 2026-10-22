@@ -2,11 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { FIXTURE_ROWS } from '../../scripts/fixture-gate';
+import { FIXTURE_FLAGS } from '../lib/generated/registry.meta';
+import { FIXTURE_ROWS, fixtureFlags } from '../../scripts/fixture-gate';
 import {
   accessIn,
   builtWithFixtures,
   CAPABILITIES,
+  CAPABILITY_MATRIX,
   FIXTURE_ACCESS,
   FIXTURE_CAPABILITIES,
   INDEXABLE,
@@ -21,9 +23,16 @@ import {
 
 type Cell = Access | 'absent';
 
-/** A fixture capability's row: public in every profile in a build with its flag, absent in all without. */
+/**
+ * The fixture flags this run's environment asks for, as registry generation,
+ * which every test run starts with, reads them (#19, Slice 3). Each fixture
+ * expectation comes from here, never from the capability code under test.
+ */
+const ASKED = fixtureFlags(process.env);
+
+/** A fixture capability's row: public in every profile when the run asks for its flag, absent in all otherwise. */
 function fixtureCells(capability: keyof typeof FIXTURE_CAPABILITIES): [Cell, Cell, Cell] {
-  return builtWithFixtures(FIXTURE_CAPABILITIES[capability].key)
+  return ASKED[FIXTURE_CAPABILITIES[capability].key]
     ? ['public', 'public', 'public']
     : ['absent', 'absent', 'absent'];
 }
@@ -93,11 +102,27 @@ test("a fixture capability is anyone's in every profile with its build-time flag
     const cells = PROFILES.map((profile) => accessIn(profile, capability as Capability));
     assert.deepEqual(
       cells,
-      builtWithFixtures(key) ? ['public', 'public', 'public'] : ['absent', 'absent', 'absent'],
+      ASKED[key] ? ['public', 'public', 'public'] : ['absent', 'absent', 'absent'],
       capability,
     );
+    assert.equal(builtWithFixtures(key), ASKED[key] === true, capability);
   }
   assert.equal(builtWithFixtures('no-such-flag'), false);
+});
+
+test('a run without APPEARANCE_FIXTURES generates the flag off, and appearance.fixtures grants nothing', () => {
+  assert.equal(
+    FIXTURE_FLAGS.appearance,
+    ASKED.appearance === true,
+    'the generated module is from another environment: run pnpm build:registry in this one',
+  );
+  assert.deepEqual(
+    CAPABILITY_MATRIX['appearance.fixtures'],
+    ASKED.appearance ? FIXTURE_ACCESS : {},
+  );
+  if (process.env.APPEARANCE_FIXTURES === undefined) {
+    assert.deepEqual(CAPABILITY_MATRIX['appearance.fixtures'], {});
+  }
 });
 
 test("each fixture capability's flag is a fixture gate row, with the key FIXTURE_FLAGS writes", () => {

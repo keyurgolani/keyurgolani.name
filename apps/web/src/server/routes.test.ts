@@ -13,13 +13,8 @@ import ts from 'typescript';
 import { parse as parseYaml } from 'yaml';
 import { isReservedSegment, validateManifest } from '@portfolio/variant-contract';
 import { LITERAL_SEGMENT } from '@portfolio/variant-contract/segments';
-import {
-  builtWithFixtures,
-  CAPABILITIES,
-  FIXTURE_CAPABILITIES,
-  PROFILES,
-  type Profile,
-} from './capabilities';
+import { fixtureFlags } from '../../scripts/fixture-gate';
+import { CAPABILITIES, FIXTURE_CAPABILITIES, PROFILES, type Profile } from './capabilities';
 import type { DeploymentConfig } from './config';
 import { setDeploymentState } from './config-store';
 import { servedPattern } from './route-guard';
@@ -158,6 +153,13 @@ function instantiate(pattern: string): string {
 }
 
 const PATTERNS = [...new Set(listRoutes().map((entry) => entry.pattern))].sort();
+
+/**
+ * The fixture flags this run's environment asks for, as registry generation,
+ * which every test run starts with, reads them (#19, Slice 3). Each fixture
+ * expectation comes from here, never from the capability code under test.
+ */
+const ASKED = fixtureFlags(process.env);
 
 test('Next finds routes only in apps/web/src/app', async () => {
   // Next prefers apps/web/app to src/app, and serves a Pages Router
@@ -999,7 +1001,7 @@ test('every entry names a known capability, profiles, and kind, and serves some 
     const fixture = entry.capability === 'operations' ? undefined : fixtures[entry.capability];
     assert.ok(
       PROFILES.some((profile) => routeAccess(profile, entry) !== 'absent') ||
-        (fixture !== undefined && !builtWithFixtures(fixture.key)),
+        (fixture !== undefined && !ASKED[fixture.key]),
       `${entry.pattern}: an entry no profile serves`,
     );
   }
@@ -1074,7 +1076,7 @@ test("what every profile serves, with #2's Studio pages under owner alone", () =
     '/robots.txt',
     '/sitemap.xml',
     // The appearance fixtures, in a build made with APPEARANCE_FIXTURES=1 (#19, Slice 3).
-    ...(builtWithFixtures('appearance') ? ['/_fixtures/appearance'] : []),
+    ...(ASKED.appearance ? ['/_fixtures/appearance'] : []),
   ];
   // The site's own routes (#5, Slice 4): a variant's path views, and work.
   const site = ['/[...view]', '/feed.xml', '/work/[slug]', '/work/[slug]/[...view]'];
@@ -1122,7 +1124,7 @@ test('a table route no profile of this build serves is absent there and unknown,
   assert.deepEqual(resolve('demo', '/studio'), { status: 'absent' });
   // The appearance fixtures: served everywhere in a build made with
   // APPEARANCE_FIXTURES=1, and unknown everywhere in any other.
-  const built = builtWithFixtures('appearance');
+  const built = ASKED.appearance === true;
   for (const profile of PROFILES) {
     const decision = resolveRoute(profile, '/_fixtures/appearance');
     assert.deepEqual(
