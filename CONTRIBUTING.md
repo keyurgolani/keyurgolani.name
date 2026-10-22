@@ -18,13 +18,14 @@ Requirements:
 
 ## Repo shape
 
-This is a pnpm workspace monorepo. One app and five packages:
+This is a pnpm workspace monorepo. One app and six packages:
 
 | Package                         | What it is                                                                                                     |
 | ------------------------------- | -------------------------------------------------------------------------------------------------------------- |
 | `apps/web`                      | Next.js 16 host: startup checks, the document pair, the variant registry, routes, SEO                          |
 | `packages/schema`               | The portfolio and site schemas, validation, extensions, and the migration. Source of truth for both documents. |
 | `packages/variant-contract`     | The variant contract: the manifest, the render input, controls, routes, the registry reader, and the audit     |
+| `packages/appearance`           | The appearance axes (#19): the token contract, pack manifests, the registry, and the resolver                  |
 | `packages/kit`                  | Shared variant-author utilities: the shared section renderers, enhancements, motion, format helpers, SEO       |
 | `packages/core`                 | Server-only owner code: the auth provider                                                                      |
 | `packages/fallback-composition` | The composition that renders when the site's variant isn't registered, and the one `pnpm new-variant` copies   |
