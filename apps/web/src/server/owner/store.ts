@@ -166,6 +166,7 @@ type FindingCode =
   | PreflightCode
   | 'data_dir_in_use'
   | 'data_dir_unclaimed'
+  | 'data_dir_claim_failed'
   | 'store_repair_failed'
   | 'revision_damaged'
   | 'revision_unservable';
@@ -201,6 +202,12 @@ const MESSAGES: Readonly<Record<FindingCode, string>> = {
     'claimed PORTFOLIO_DATA_DIR yet. It serves visitors, and claims the directory and finishes ' +
     'its repair once the lock is free; owner writes wait until then. The store.server.claimed ' +
     'line says when.',
+  data_dir_claim_failed:
+    "The server couldn't claim PORTFOLIO_DATA_DIR: reading or writing publication/ failed, as " +
+    'when the volume is full or something other than a regular file, such as a link, stands at ' +
+    'publication/lock. Free space, or remove what the store did not write there. It serves ' +
+    'visitors and tries the claim again; owner writes wait until it holds the directory. The ' +
+    'store.server.claim_failed line gives the code.',
   store_repair_failed:
     "The store's startup repair didn't finish, so what a crash left is still there. Visitors " +
     'are served what can be served, and owner writes stop until the repair finishes, which ' +
@@ -369,8 +376,9 @@ export function ownerStore({
   /**
    * This server's claim on the data directory: the one it holds, or a new
    * one taken now. It throws the StoreError that says why not: the lock
-   * still busy (lock_timeout), or another server holding the directory
-   * (data_dir_in_use). One try at a time.
+   * still busy (lock_timeout), another server holding the directory
+   * (data_dir_in_use), or publication/ that can't be read or written
+   * (storage_unavailable, storage_full). One try at a time.
    */
   function ensureClaim(): Promise<ServerClaim> {
     if (claim?.held) return Promise.resolve(claim);
@@ -428,10 +436,23 @@ export function ownerStore({
   }
 
   /**
-   * After startup found the lock busy: claims the directory, then finishes
-   * the repair, trying again with backoff while the lock stays busy. It
-   * stops once another server holds the directory, where each write tries
-   * the claim again, and leaves a repair that fails to the writes too.
+   * Why the claim waits, by its own event: the lock stayed busy
+   * (claim_waiting), or publication/ couldn't be read or written
+   * (claim_failed), as when something other than a regular file stands at
+   * the lock's name.
+   */
+  function logClaimDelay(code: StoreErrorCode): void {
+    const event =
+      code === 'lock_timeout' ? 'store.server.claim_waiting' : 'store.server.claim_failed';
+    log({ level: 'warn', event, code });
+  }
+
+  /**
+   * After startup couldn't claim the directory, with the lock busy or
+   * publication/ failing: claims it, then finishes the repair, trying again
+   * with backoff while that lasts. It stops once another server holds the
+   * directory, where each write tries the claim again, and leaves a repair
+   * that fails to the writes too.
    */
   function claimInBackground(attempt: number): void {
     if (retry) return;
@@ -449,7 +470,7 @@ export function ownerStore({
               log({ level: 'error', event: 'store.server.claim_refused', code });
               return;
             }
-            log({ level: 'warn', event: 'store.server.claim_waiting', code });
+            logClaimDelay(code);
             claimInBackground(attempt + 1);
           },
         );
@@ -473,10 +494,12 @@ export function ownerStore({
       } catch (error) {
         if (!(error instanceof StoreError)) throw error;
         if (error.code === 'data_dir_in_use') return [finding('data_dir_in_use')];
-        // The lock stayed busy: start anyway, and claim it once it's free.
-        log({ level: 'warn', event: 'store.server.claim_waiting', code: error.code });
+        // The lock stayed busy, or publication/ couldn't be read or written:
+        // start anyway, and claim the directory once it can be.
+        logClaimDelay(error.code);
         claimInBackground(0);
-        return [finding('data_dir_unclaimed', 'warning')];
+        const busy = error.code === 'lock_timeout';
+        return [finding(busy ? 'data_dir_unclaimed' : 'data_dir_claim_failed', 'warning')];
       }
     },
     async checkIntegrity() {
