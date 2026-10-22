@@ -12,6 +12,7 @@ import path from 'node:path';
 import { defineConfig, devices } from '@playwright/test';
 import { reportsDir } from '../../ci/lib/reports.mjs';
 import base from '../../playwright.config';
+import { SCREENSHOT_COMPARISON } from '../harness/screenshots.mjs';
 import { CONTRACT_FIXTURES } from '../../packages/variant-contract/src/node/fixtures';
 import { fixtureApp, SAMPLE_APP, UNDER_TEST } from './target';
 
@@ -27,10 +28,9 @@ export default defineConfig({
   // from a local one.
   updateSnapshots: 'missing',
   expect: {
-    // #11 owns the thresholds. Until then a screenshot may differ in a
-    // hundredth of its pixels, enough for antialiasing between the image's
-    // amd64 and arm64 builds, and no more.
-    toHaveScreenshot: { maxDiffPixelRatio: 0.01 },
+    // Every pixel the same as its baseline: the variants job renders on one
+    // platform. #11 owns the thresholds (tests/harness/screenshots.mjs).
+    toHaveScreenshot: { ...SCREENSHOT_COMPARISON },
   },
   reporter: [
     ['list'],
