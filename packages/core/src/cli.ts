@@ -19,7 +19,12 @@ import {
 import { preflight, type PreflightCode } from './store/preflight';
 import type { PublicationOutcome } from './store/publication';
 import { runRetention, type Protection } from './store/retention';
-import { mountedSource, type SourceReader } from './store/source';
+import {
+  mountedSource,
+  SOURCE_DRIFT_MESSAGE,
+  sourceDrift,
+  type SourceReader,
+} from './store/source';
 import { openStore, type Store } from './store/store';
 import type { UnitChecks, UnitDiagnostic } from './catalog/unit';
 import { verifyStore, type VerifyReport } from './store/verify';
@@ -36,7 +41,7 @@ import { verifyStore, type VerifyReport } from './store/verify';
 // document's content. It never runs as root, and works on a data directory
 // only as the user that owns it, the server's own.
 //
-//   status                     the store's state and its live revision; exits 1 unless live
+//   status                     the store's state, its live revision, and source drift; exits 1 unless live
 //   history                    every publication event, in seq order
 //   verify                     every file of the store and every hash
 //   import [--from <dir>] [--expect <revisionId|empty>] [--draft]
@@ -59,7 +64,8 @@ recordOwnerModule('core/cli');
 
 const USAGE = `Usage: portfolio-store <command> [options]
 
-  status                                   The store's state and its live revision. Exits 1 unless live.
+  status                                   The store's state, its live revision, and whether the mounted
+                                           pair changed since the last import. Exits 1 unless live.
   history                                  Every publication event, in seq order.
   verify                                   Every file of the store and every hash.
   import [--from <dir>] [--expect <revisionId|empty>] [--draft]
@@ -522,7 +528,36 @@ class Commands {
     if (last) this.say(`last event: ${eventLine(last)}`);
     const holder = await store.lock.holder();
     if (holder) this.say(`lock: held by ${holder.holder} since ${holder.at}`);
+    const source = await this.sourceLine(store);
+    if (source) this.say(`source: ${source}`);
     return status.state === 'live' ? 0 : 1;
+  }
+
+  /**
+   * Whether the pair in PORTFOLIO_SOURCE_DIR is what was last imported
+   * (item 24), for `status`, or null with no PORTFOLIO_SOURCE_DIR to look in.
+   * Drift is said, never acted on.
+   */
+  private async sourceLine(store: Store): Promise<string | null> {
+    const source = setting(this.options.env, 'PORTFOLIO_SOURCE_DIR');
+    if (!source) return null;
+    const read = await this.options.readSource(path.resolve(this.options.envBase, source));
+    const mounted = read.ok ? mountedSource(read.files).sourceHash : null;
+    const imported = await store.publication.importedSourceHash().catch(() => null);
+    const drift = sourceDrift(mounted, imported);
+    switch (drift.state) {
+      case 'changed':
+        return (
+          `${SOURCE_DRIFT_MESSAGE}. \`import --draft\` saves them as the working draft to ` +
+          'review, and `import` publishes them.'
+        );
+      case 'unchanged':
+        return 'the mounted pair is what the last import brought in.';
+      case 'unknown':
+        return mounted === null
+          ? "the mounted pair can't be read, so it isn't compared."
+          : 'nothing imported yet to compare the mounted pair with.';
+    }
   }
 
   private async history(args: readonly string[]): Promise<number> {
@@ -589,10 +624,19 @@ class Commands {
       from = path.resolve(this.options.envBase, source);
     }
     const store = await this.writable(from);
+    const live = await this.pointer(store);
+    // No pointer in a store with history, an event or a tombstone, is a
+    // damaged pointer, and an import would start the log again over it.
+    if (!live && !(await store.publication.isEmpty())) {
+      throw new Refusal(
+        'pointer_missing: the published pointer is missing, but the store has published ' +
+          'before. `verify` says more, and `recover` makes the last known good revision live. ' +
+          'Nothing was imported.',
+      );
+    }
     // What was live, or the working draft's version, as the import starts:
     // whatever moves either before it commits wins, and the import is refused.
-    const startedLive =
-      expect === undefined ? ((await this.pointer(store))?.revisionId ?? null) : expect;
+    const startedLive = expect === undefined ? (live?.revisionId ?? null) : expect;
     const working = values.draft ? await store.drafts.getWorking() : null;
 
     const read = await this.options.readSource(from);

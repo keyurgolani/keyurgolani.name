@@ -309,6 +309,20 @@ export interface PublicationService {
   revision(revisionId: RevisionId): Promise<RevisionDetail | null>;
   /** The most recently live revision this build can serve, or null. */
   lastKnownGood(): Promise<RevisionId | null>;
+  /**
+   * The sourceHash of the mounted files as last brought in (item 24): on the
+   * newest committed event that carries one, an import's, or the publish of
+   * a draft an import saved. Null when no event does.
+   */
+  importedSourceHash(): Promise<Sha256 | null>;
+  /**
+   * Whether the store is empty: no live.json, and no history, which is an
+   * event, a moved-aside one, or a tombstone (hasHistory()). A revision
+   * alone was never live, as a first publish that crashed leaves one. Only
+   * an empty store takes owner's first-start import, and the reader serves
+   * nothing from it.
+   */
+  isEmpty(): Promise<boolean>;
   /** Startup repair, under the lock: what a crash left behind. */
   repair(): Promise<RepairReport>;
 }
@@ -1146,6 +1160,35 @@ export function filesystemPublicationService({
     async lastKnownGood() {
       try {
         return await walkLastKnownGood(await readPointer());
+      } catch (error) {
+        throw storageError(error);
+      }
+    },
+
+    async importedSourceHash() {
+      try {
+        const pointer = await readPointer();
+        if (!pointer) return null;
+        for (let seq = pointer.seq; seq >= 1; seq--) {
+          const event = seq === pointer.seq ? pointer.event : await readEvent(fs, paths, seq);
+          if (event?.sourceHash) return event.sourceHash;
+        }
+        return null;
+      } catch (error) {
+        throw storageError(error);
+      }
+    },
+
+    async isEmpty() {
+      try {
+        try {
+          if (await readLive(fs, paths)) return false;
+        } catch (error) {
+          // There, and unreadable: a damaged pointer, never an empty store.
+          if (error instanceof DamagedPointerError) return false;
+          throw error;
+        }
+        return !(await hasHistory(fs, paths));
       } catch (error) {
         throw storageError(error);
       }

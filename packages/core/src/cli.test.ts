@@ -290,6 +290,76 @@ test('import --draft replaces the working draft only at the version it read when
   assert.match(replaced!.documents.portfolio.sourceText, /imported/);
 });
 
+test('status says whether the mounted pair changed since the last import, and a Studio publish that leaves the files alone is no drift', async (t) => {
+  const store = await newStore(t);
+  const input = pairInput('engineering');
+  const source = mounted(t, input);
+  const call = { dataDir: store.paths.root, readSource, env: { PORTFOLIO_SOURCE_DIR: source } };
+  const said = async () => line((await cli(['status'], call)).out, 'source');
+
+  assert.equal(await said(), 'nothing imported yet to compare the mounted pair with.');
+  assert.equal((await cli(['import'], call)).code, 0);
+  assert.equal(await said(), 'the mounted pair is what the last import brought in.');
+  // A Studio publish of other documents leaves the mounted files alone.
+  await publishInput(store, contentVariant(input, 'studio'));
+  assert.equal(await said(), 'the mounted pair is what the last import brought in.');
+
+  // Edited files drift, and drift publishes nothing.
+  const before = await readLive(nodeFs, store.paths);
+  writeFileSync(
+    path.join(source, 'portfolio.yml'),
+    contentVariant(input, 'edited').portfolio.sourceText,
+  );
+  assert.equal(
+    await said(),
+    'Source files changed since the live revision. `import --draft` saves them as the working ' +
+      'draft to review, and `import` publishes them.',
+  );
+  assert.deepEqual(await readLive(nodeFs, store.paths), before);
+
+  // Their draft's publish carries their sourceHash: what was last brought in again.
+  assert.equal((await cli(['import', '--draft'], call)).code, 0);
+  const working = await store.drafts.getWorking();
+  assert.ok(working);
+  const published = await owned(store).publish(
+    {
+      draftId: working.draftId,
+      draftVersion: working.version,
+      expectedLiveRevisionId: before!.revisionId,
+    },
+    'owner',
+  );
+  assert.equal(published.kind, 'committed');
+  assert.equal(await said(), 'the mounted pair is what the last import brought in.');
+
+  // A pair that can't be read isn't compared, and with no PORTFOLIO_SOURCE_DIR there's no line.
+  rmSync(path.join(source, 'site.yml'));
+  assert.equal(await said(), "the mounted pair can't be read, so it isn't compared.");
+  const bare = await cli(['status'], { dataDir: store.paths.root, readSource });
+  assert.equal(line(bare.out, 'source'), undefined);
+});
+
+test('import refuses a store that has published but has no live.json, and writes nothing', async (t) => {
+  const store = await newStore(t);
+  const source = mounted(t, pairInput('engineering'));
+  const call = { dataDir: store.paths.root, readSource };
+  assert.equal((await cli(['import', '--from', source], call)).code, 0);
+  rmSync(path.join(store.paths.publication, 'live.json'));
+  const before = filesUnder(store.paths.root);
+  for (const args of [
+    ['import', '--from', source],
+    ['import', '--from', source, '--draft'],
+  ]) {
+    const refused = await cli(args, call);
+    assert.equal(refused.code, 1, args.join(' '));
+    assert.match(
+      refused.err,
+      /^pointer_missing: the published pointer is missing, but the store has published before\. .*Nothing was imported\.$/m,
+    );
+    assert.deepEqual(filesUnder(store.paths.root), before, args.join(' '));
+  }
+});
+
 test('rollback --to and recover move the pointer as the operator, and refuse what they cannot', async (t) => {
   const store = await newStore(t);
   const first = await publishInput(store, pairInput('engineering'));
