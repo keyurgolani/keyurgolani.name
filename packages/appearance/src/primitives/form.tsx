@@ -167,6 +167,11 @@ export interface RadioProps {
   /** The group's id, from boundaryId(input.ids, local). Each radio's id adds its index. */
   readonly id: string;
   readonly legend: ReactNode;
+  /**
+   * The group's name. Outside a form, radios of one name are one group
+   * across the whole document, so give it boundaryId(input.ids, local) too,
+   * and a plate's group stays its own.
+   */
   readonly name: string;
   readonly options: readonly RadioOption[];
   readonly defaultValue?: string;

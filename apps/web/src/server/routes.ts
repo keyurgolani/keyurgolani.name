@@ -220,6 +220,11 @@ const ROUTES = [
   { pattern: '/api/health', kind: 'handler', capability: 'health.read' },
   { pattern: '/api/ready', kind: 'handler', capability: 'ready.read' },
   { pattern: '/api/studio/[name]', kind: 'handler', capability: 'operations' },
+  // #19 Slice 3's fixture page, app/(fixtures)/%5Ffixtures/appearance, which
+  // Next serves at _fixtures: every primitive state, and plates of other
+  // selections, for tests/appearance. Its capability is in every profile of a
+  // build with APPEARANCE_FIXTURES=1 and in none of any other build.
+  { pattern: '/_fixtures/appearance', kind: 'page', capability: 'appearance.fixtures' },
 ] as const satisfies readonly RouteEntry[];
 
 export type RoutePattern = (typeof ROUTES)[number]['pattern'];
@@ -232,6 +237,8 @@ export type RoutePattern = (typeof ROUTES)[number]['pattern'];
  */
 export function patternOfRoutePath(routePath: string): string {
   const segments = routePath
+    // %5F names a folder that serves an underscore, as Next maps it.
+    .replace(/%5F/g, '_')
     .split('/')
     .filter((segment) => segment !== '' && !/^\(.*\)$/.test(segment) && !segment.startsWith('@'));
   const last = segments.at(-1);
@@ -278,8 +285,13 @@ export function serves(profile: Profile, pattern: RoutePattern): boolean {
 
 export type RouteDecision =
   | { readonly status: 'served'; readonly entry: RouteEntry; readonly access: Access }
-  /** The table or the retired list has a route at the path, and the profile doesn't serve it. */
-  | { readonly status: 'absent' }
+  /**
+   * The table or the retired list has a route at the path, and the profile
+   * doesn't serve it. `unknown` marks a table route no profile of this build
+   * serves, such as a test fixture's page in a build without its flag
+   * (#19, Slice 3): proxy.ts answers it as a path no route matches.
+   */
+  | { readonly status: 'absent'; readonly unknown?: true }
   /**
    * A path no route renders in any profile of this build: a file in public/,
    * or else the app's 404 page, answers it.
@@ -330,7 +342,10 @@ export function routeResolver(
       const access = routeAccess(profile, entry);
       if (access !== 'absent') return { status: 'served', entry, access };
     }
-    return { status: 'absent' };
+    const built = best.entries.some((entry) =>
+      PROFILES.some((other) => routeAccess(other, entry) !== 'absent'),
+    );
+    return built ? { status: 'absent' } : { status: 'absent', unknown: true };
   };
 }
 

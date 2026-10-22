@@ -82,7 +82,9 @@ import {
 // page's own requireOwnerPage decides. Under a profile with no Studio page,
 // every Studio path, in any case or spelling and to any method, answers as
 // /no-such-page does: none of Studio's headers, Next's 404 page for GET and
-// HEAD, and the plain 404 for the rest.
+// HEAD, and the plain 404 for the rest. So does a route no profile of this
+// build serves, such as /_fixtures/appearance in a build without
+// APPEARANCE_FIXTURES=1 (#19, Slice 3), in every profile.
 export async function proxy(request: NextRequest): Promise<NextResponse> {
   const requestId = crypto.randomUUID();
   const deployment = getDeploymentConfig();
@@ -145,11 +147,12 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
     if (gated) return gated;
   }
   if (decision.status === 'absent') {
-    // A Studio page under a profile with none, and a preview route this
-    // build doesn't serve, such as the dev fixture route outside `next dev`,
-    // under a profile with no grant route, answer as a path no route
-    // matches. Under one with grant routes, the gate above has answered.
-    if ((preview || (studioPath && !studio)) && pageLoad) {
+    // A Studio page under a profile with none, a route no profile of this
+    // build serves, and a preview route this build doesn't serve, such as
+    // the dev fixture route outside `next dev`, under a profile with no
+    // grant route, answer as a path no route matches. Under one with grant
+    // routes, the gate above has answered.
+    if (pageLoad && (decision.unknown || preview || (studioPath && !studio))) {
       return unknownPath(request, requestId, extra, { csp, preview });
     }
     return plain(404, 'Not found.', requestId, extra);
@@ -394,10 +397,11 @@ function forwarded(
 /**
  * A path the route table lists, answered as a path it doesn't list is:
  * Next's 404 page, through next.config.ts's rewrite, with the headers any
- * path gets. That's a Studio page under a profile with none, a route spelled
- * with a fixed segment percent-encoded, or a missing path that is a route
- * file's own. `csp`, for a Studio path under owner or a preview path, goes on
- * the request too, for the nonce on the page's scripts.
+ * path gets. That's a Studio page under a profile with none, a route no
+ * profile of this build serves, a route spelled with a fixed segment
+ * percent-encoded, or a missing path that is a route file's own. `csp`, for
+ * a Studio path under owner or a preview path, goes on the request too, for
+ * the nonce on the page's scripts.
  */
 function unknownPath(
   request: NextRequest,

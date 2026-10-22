@@ -40,7 +40,7 @@ import { concrete, scanTargets } from './scan-targets';
 // apps/web has no "type": "module", so its modules are CommonJS to Node and
 // load through require().
 const require = createRequire(import.meta.url);
-const { accessIn, CAPABILITIES, INDEXABLE } =
+const { accessIn, builtWithFixtures, CAPABILITIES, FIXTURE_CAPABILITIES, INDEXABLE, PROFILES } =
   require('../../apps/web/src/server/capabilities.ts') as typeof Capabilities;
 const { listOperations } = require('../../apps/web/src/server/operations.ts') as typeof Operations;
 const { listRoutes, RETIRED_PATTERNS, routeAccess } =
@@ -197,6 +197,47 @@ function routeFileSpellings(): string[] {
  */
 const namesNothing = (entry: Routes.RouteEntry) =>
   entry.kind === 'page' && entry.grant === undefined && concrete(entry.pattern).includes('probe');
+
+/**
+ * A table route no profile of this build serves, as the appearance fixtures
+ * are in a build made without APPEARANCE_FIXTURES=1 (#19, Slice 3). The
+ * route table calls it absent and unknown, so in every profile it answers as
+ * a path no route matches does.
+ */
+const unbuilt = (entry: Routes.RouteEntry) =>
+  PROFILES.every((each) => routeAccess(each, entry) === 'absent');
+
+/**
+ * An unbuilt route that answers as a path no route matches in every profile.
+ * A preview route this build doesn't serve, such as the dev fixture route
+ * outside `next dev`, is unbuilt too, but under a profile with grant routes
+ * the preview gate answers it with the status document instead (#7), and
+ * the preview spelling checks below cover it.
+ */
+const unknownEverywhere = (entry: Routes.RouteEntry) =>
+  unbuilt(entry) && !isPreviewPath(entry.pattern);
+
+/**
+ * Each table route no profile of this build serves, in every spelling a
+ * request may use: as listed, with a query, in another case, deeper, with a
+ * fixed segment percent-encoded, and with its slashes encoded. Each one
+ * answers every method as /no-such-page does.
+ */
+function unbuiltSpellings(): string[] {
+  return listRoutes()
+    .filter(unknownEverywhere)
+    .flatMap(({ pattern }) => {
+      const path = concrete(pattern);
+      return [
+        path,
+        `${path}?view=all`,
+        path.toUpperCase(),
+        `${path}/x`,
+        ...encodedSpellings(pattern),
+        ...(path.indexOf('/', 1) > 0 ? [path.replace(/(?!^)\//g, '%2F')] : []),
+      ];
+    });
+}
 
 /** What the transport answers a visitor with no session, by the registry and the matrix. */
 function expected(
@@ -355,6 +396,53 @@ function withoutNonce(body: string, nonce: string | undefined): string {
 }
 
 /**
+ * A response as the checks that compare two paths' answers see it: its
+ * status, its headers but the date and the request ID, and its body, with a
+ * 404 page's own path taken out of Next's payload.
+ */
+async function shape(response: APIResponse, target: string) {
+  const text = await response.text();
+  const page = /^text\/html/.test(response.headers()['content-type'] ?? '') && text !== '';
+  return {
+    status: response.status(),
+    headers: Object.fromEntries(
+      Object.entries(response.headers()).filter(
+        ([name]) => !['date', 'x-request-id'].includes(name),
+      ),
+    ),
+    body: page ? withoutOwnPath(text, target) : text,
+  };
+}
+
+/**
+ * Sends every method to each target, with `headers`, and expects each answer
+ * to be exactly /no-such-page's, with the target's own query: the same
+ * status, headers, and body, but for the path Next's payload names in a page.
+ */
+async function expectUnknown(
+  request: APIRequestContext,
+  profile: Profile,
+  targets: readonly string[],
+  headers: Record<string, string> = {},
+): Promise<void> {
+  for (const target of targets) {
+    const query = target.includes('?') ? target.slice(target.indexOf('?')) : '';
+    for (const method of EVERY_METHOD) {
+      const what = `${method} ${target}`;
+      const options = { method, maxRedirects: 0, headers };
+      const response = await request.fetch(target, options);
+      const unknown = await request.fetch(`/no-such-page${query}`, options);
+      expect(response.status(), what).toBe(404);
+      expect(await response.text(), what).not.toContain('Password');
+      expectProfileHeaders(profile, response, what);
+      expect(await shape(response, target), what).toEqual(
+        await shape(unknown, `/no-such-page${query}`),
+      );
+    }
+  }
+}
+
+/**
  * Sends GET and POST to every scan target, with `headers` on each, and
  * expects no canary in any body or header of what comes back.
  */
@@ -403,13 +491,15 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
     // `next dev` (#7).
     const statusDocument = !served && hasGrantRoutes(profile) && isPreviewPath(entry.pattern);
     const gated = entry.kind === 'page' && access === 'session' && !grant;
-    const missing = namesNothing(entry);
+    const missing = namesNothing(entry) || unbuilt(entry);
     const state = grant
       ? 'served only to an active grant, and the status document to anything else'
       : statusDocument
         ? 'the status document to every method, as every preview path no grant admits'
         : missing
-          ? 'missing there, the 404 page'
+          ? unbuilt(entry)
+            ? 'in no profile of this build, the 404 page'
+            : 'missing there, the 404 page'
           : served
             ? gated
               ? 'served to a session, and sends a visitor to sign-in'
@@ -604,36 +694,8 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
         // With a cookie of either name, holding what looks like a token: no
         // session store reads it, and nothing clears it (#2).
         const cookie = `__Host-studio_session=${'x'.repeat(43)}; studio_session=${'x'.repeat(43)}`;
-        // Each one exactly as a path no route matches: the same status,
-        // headers, and body, but for the path Next's payload names in a page.
-        const shape = async (response: APIResponse, target: string) => {
-          const text = await response.text();
-          const page = /^text\/html/.test(response.headers()['content-type'] ?? '') && text !== '';
-          return {
-            status: response.status(),
-            headers: Object.fromEntries(
-              Object.entries(response.headers()).filter(
-                ([name]) => !['date', 'x-request-id'].includes(name),
-              ),
-            ),
-            body: page ? withoutOwnPath(text, target) : text,
-          };
-        };
-        for (const target of STUDIO_SPELLINGS) {
-          const query = target.includes('?') ? target.slice(target.indexOf('?')) : '';
-          for (const method of EVERY_METHOD) {
-            const what = `${method} ${target}`;
-            const options = { method, maxRedirects: 0, headers: { cookie } };
-            const response = await request.fetch(target, options);
-            const unknown = await request.fetch(`/no-such-page${query}`, options);
-            expect(response.status(), what).toBe(404);
-            expect(await response.text(), what).not.toContain('Password');
-            expectProfileHeaders(profile, response, what);
-            expect(await shape(response, target), what).toEqual(
-              await shape(unknown, `/no-such-page${query}`),
-            );
-          }
-        }
+        // Each one exactly as a path no route matches.
+        await expectUnknown(request, profile, STUDIO_SPELLINGS, { cookie });
         for (const operation of listOperations().filter(({ name }) => name.startsWith('auth.'))) {
           for (const method of ['GET', 'POST'] as const) {
             const response = await request.fetch(`/api/studio/${operation.name}`, {
@@ -650,6 +712,28 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
       },
     );
   }
+
+  test(
+    'a route no profile of this build serves, in any spelling and to any method, answers as /no-such-page does (#19, Slice 3)',
+    {
+      annotation: [
+        ...listRoutes()
+          .filter(unknownEverywhere)
+          .map(({ pattern }) => ({ type: 'route', description: pattern })),
+        annotation,
+      ],
+    },
+    async ({ request }) => {
+      const spellings = unbuiltSpellings();
+      // Only a build made with every fixture flag serves each route somewhere.
+      expect(
+        spellings.length > 0 ||
+          Object.values(FIXTURE_CAPABILITIES).every(({ key }) => builtWithFixtures(key)),
+        'a route this build serves nowhere, or every fixture flag set',
+      ).toBe(true);
+      await expectUnknown(request, profile, spellings);
+    },
+  );
 
   test(
     'an unknown operation gets the same 404 envelope',
@@ -700,6 +784,7 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
           } else if (
             access === 'absent' &&
             !namesNothing(entry) &&
+            !unbuilt(entry) &&
             !isStudioPath(entry.pattern) &&
             !isPreviewPath(entry.pattern)
           ) {

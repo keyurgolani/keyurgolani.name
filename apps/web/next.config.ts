@@ -48,6 +48,7 @@ const config: NextConfig = {
     '@portfolio/schema',
     '@portfolio/kit',
     '@portfolio/variant-contract',
+    '@portfolio/appearance',
     '@portfolio/core',
     ...registeredPackages(),
   ],
@@ -62,9 +63,9 @@ const config: NextConfig = {
   // lines. Off, Next answers it with the 404 page.
   images: { unoptimized: true },
   // Each route group in app/ has its own root layout, the site's in
-  // app/(site) and Studio's (#2), so a URL no route matches gets
-  // app/global-not-found.tsx, which brings its own document. Without the
-  // flag, next build exits.
+  // app/(site), Studio's (#2), and the appearance fixtures' (#19), so a URL
+  // no route matches gets app/global-not-found.tsx, which brings its own
+  // document. Without the flag, next build exits.
   experimental: { globalNotFound: true },
   // Next's own 308 for a trailing slash goes out before proxy.ts and these
   // headers, with none of them, so a preview grant path would get a
@@ -75,9 +76,10 @@ const config: NextConfig = {
   async rewrites() {
     return {
       // A path the route table lists that proxy.ts answers as one it
-      // doesn't: a Studio page under a profile with none (#2), or a route
-      // spelled with a fixed segment percent-encoded (#5, Slice 4). proxy.ts
-      // marks the request with x-portfolio-not-found (NOT_FOUND_HEADER in
+      // doesn't: a Studio page under a profile with none (#2), a route no
+      // profile of this build serves (#19, Slice 3), or a route spelled with
+      // a fixed segment percent-encoded (#5, Slice 4). proxy.ts marks the
+      // request with x-portfolio-not-found (NOT_FOUND_HEADER in
       // server/studio-headers.ts), and this sends it to Next's own 404 page
       // before Next looks anywhere else, so it answers as a path no route
       // matches does, with the request's own URL and query. Its source is an

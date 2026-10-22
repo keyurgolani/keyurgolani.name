@@ -13,7 +13,13 @@ import ts from 'typescript';
 import { parse as parseYaml } from 'yaml';
 import { isReservedSegment, validateManifest } from '@portfolio/variant-contract';
 import { LITERAL_SEGMENT } from '@portfolio/variant-contract/segments';
-import { CAPABILITIES, PROFILES, type Profile } from './capabilities';
+import {
+  builtWithFixtures,
+  CAPABILITIES,
+  FIXTURE_CAPABILITIES,
+  PROFILES,
+  type Profile,
+} from './capabilities';
 import type { DeploymentConfig } from './config';
 import { setDeploymentState } from './config-store';
 import { servedPattern } from './route-guard';
@@ -65,7 +71,9 @@ interface RouteFile {
  */
 function nextRoute(relative: string, dynamic = false): Omit<RouteFile, 'file'> | null {
   const name = path.posix.basename(relative);
-  const page = relative.replace(PAGE_FILE, '');
+  // next build reads %5F in an app path as an underscore (createPagesMapping),
+  // so a %5F folder serves a segment that starts with one.
+  const page = relative.replace(PAGE_FILE, '').replace(/%5F/g, '_');
   if (/^page\.(tsx|ts|jsx|js)$/.test(name)) {
     return { kind: 'page', pattern: normalizeAppPath(page) };
   }
@@ -174,6 +182,8 @@ test("route files map to URLs as next build maps them, with Next's own helpers",
     // Under a group or a slot, a metadata route gets a hash of the parent path.
     ['/(site)/opengraph-image.tsx', '/opengraph-image-12o0cb'],
     ['/@slot/icon.png', '/icon-xxgbpy.png'],
+    // A %5F folder serves an underscore, where a _ folder is private.
+    ['/(fixtures)/%5Ffixtures/appearance/page.tsx', '/_fixtures/appearance'],
     // Numbered images keep their number, and static ones their extension.
     ['/icon2.tsx', '/icon2'],
     ['/icon2.png', '/icon2.png'],
@@ -983,8 +993,13 @@ test('every entry names a known capability, profiles, and kind, and serves some 
       assert.equal(entry.kind, 'page', `${entry.pattern}: only pages are navigation`);
       assert.ok(!entry.pattern.includes('['), `${entry.pattern}: navigation needs a static path`);
     }
+    // A test fixture's route serves no profile of a build made without its
+    // flag, and every profile of one made with it (#19, Slice 3).
+    const fixtures: Readonly<Record<string, { readonly key: string }>> = FIXTURE_CAPABILITIES;
+    const fixture = entry.capability === 'operations' ? undefined : fixtures[entry.capability];
     assert.ok(
-      PROFILES.some((profile) => routeAccess(profile, entry) !== 'absent'),
+      PROFILES.some((profile) => routeAccess(profile, entry) !== 'absent') ||
+        (fixture !== undefined && !builtWithFixtures(fixture.key)),
       `${entry.pattern}: an entry no profile serves`,
     );
   }
@@ -1058,6 +1073,8 @@ test("what every profile serves, with #2's Studio pages under owner alone", () =
     '/opengraph-image-12o0cb',
     '/robots.txt',
     '/sitemap.xml',
+    // The appearance fixtures, in a build made with APPEARANCE_FIXTURES=1 (#19, Slice 3).
+    ...(builtWithFixtures('appearance') ? ['/_fixtures/appearance'] : []),
   ];
   // The site's own routes (#5, Slice 4): a variant's path views, and work.
   const site = ['/[...view]', '/feed.xml', '/work/[slug]', '/work/[slug]/[...view]'];
@@ -1085,6 +1102,34 @@ test('each table route resolves the way its capability says, in every profile', 
             : 'served';
       assert.equal(resolveRoute(profile, pathname).status, expected, `${profile} ${entry.pattern}`);
     }
+  }
+});
+
+test('a table route no profile of this build serves is absent there and unknown, in every profile (#19, Slice 3)', () => {
+  const table: RouteEntry[] = [
+    { pattern: '/unbuilt', kind: 'page', capability: 'catalog.read', profiles: [] },
+    { pattern: '/studio', kind: 'page', capability: 'studio.view' },
+  ];
+  const resolve = routeResolver(table, ['/retired']);
+  for (const profile of PROFILES) {
+    // proxy.ts answers it as a path no route matches.
+    assert.deepEqual(resolve(profile, '/unbuilt'), { status: 'absent', unknown: true }, profile);
+    assert.deepEqual(resolve(profile, '/%75nbuilt'), { status: 'absent', unknown: true }, profile);
+    // A retired route is absent, with the plain 404 it always had.
+    assert.deepEqual(resolve(profile, '/retired'), { status: 'absent' }, profile);
+  }
+  // A route another profile serves is only absent.
+  assert.deepEqual(resolve('demo', '/studio'), { status: 'absent' });
+  // The appearance fixtures: served everywhere in a build made with
+  // APPEARANCE_FIXTURES=1, and unknown everywhere in any other.
+  const built = builtWithFixtures('appearance');
+  for (const profile of PROFILES) {
+    const decision = resolveRoute(profile, '/_fixtures/appearance');
+    assert.deepEqual(
+      decision.status === 'served' ? [decision.entry.pattern, decision.access] : decision,
+      built ? ['/_fixtures/appearance', 'public'] : { status: 'absent', unknown: true },
+      profile,
+    );
   }
 });
 
@@ -1134,6 +1179,8 @@ test('a path that spells a fixed segment percent-encoded is told apart from the 
     ['/studio/sign-in', '/%73tudio/sign-in'],
     ['/sample/[[...path]]', '/%73ample'],
     ['/api/studio/[name]', '/%61pi/studio/config.status'],
+    ['/_fixtures/appearance', '/%5Ffixtures/appearance'],
+    ['/_fixtures/appearance', '/_fixtures/%61ppearance'],
   ] as const) {
     assert.equal(encodesFixedSegment(pattern, pathname), true, pathname);
   }
@@ -1167,6 +1214,8 @@ test("a path that is a route file's own, as sent or decoded whole, names nothing
     '/sample/[[...path]]',
     '/_not-found',
     '/%5Fnot-found',
+    '/_fixtures%2Fappearance',
+    '/%5Ffixtures%2Fappearance',
   ]) {
     assert.equal(spellsRouteFile(pathname), true, pathname);
     for (const profile of PROFILES) {
@@ -1378,13 +1427,19 @@ test('the catch-all shadows no API, metadata, or build path, in any profile (#5,
   }
 });
 
-test('the contract reserves every first segment the table owns, so no view is ever shadowed', () => {
+test('the contract reserves every first segment the table owns that a view could start with, so no view is ever shadowed', () => {
   const owned = [...ownedFirstSegments()].sort();
+  // A view's first segment is a literal segment, lowercase words (#5), so
+  // one outside that grammar, such as the fixtures' _fixtures, never meets a
+  // view, and the catch-all leaves it alone as it does every owned segment.
   assert.deepEqual(
-    owned.filter((segment) => !isReservedSegment(segment)),
+    owned.filter((segment) => LITERAL_SEGMENT.test(segment) && !isReservedSegment(segment)),
     [],
     'a view could start with a segment a route answers first',
   );
+  for (const segment of owned.filter((each) => !LITERAL_SEGMENT.test(each))) {
+    assert.equal(entryFor('owner', `/${segment}/probe`) === '/[...view]', false, segment);
+  }
   // The table's own first segments are all there, the share image's group suffix included.
   for (const segment of [
     '_next',
@@ -1396,6 +1451,7 @@ test('the contract reserves every first segment the table owns, so no view is ev
     'feed.xml',
     'opengraph-image-12o0cb',
     'admin',
+    '_fixtures',
   ]) {
     assert.ok(owned.includes(segment), segment);
   }
