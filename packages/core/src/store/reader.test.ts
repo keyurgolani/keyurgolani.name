@@ -1,5 +1,12 @@
 import assert from 'node:assert/strict';
-import { readFileSync, renameSync, writeFileSync } from 'node:fs';
+import {
+  copyFileSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { validatePublicationUnit } from '@portfolio/schema';
@@ -17,7 +24,9 @@ import {
   owned,
   pairInput,
   publishInput,
+  mediaDocument,
   registryChecks,
+  tempDir,
   testChecks,
 } from './test-support/fixtures';
 import { bareImports, closure } from './test-support/imports';
@@ -403,4 +412,34 @@ test('a reopened store serves the same revision through a new reader', async (t)
   const live = await publishInput(store, pairInput('engineering'));
   const again = openStore({ dataDir: store.paths.root, checks: testChecks() });
   assert.equal(served(await reader(again).catalog.getLive()).revisionId, live);
+});
+
+/** Swaps `file` for a link to a copy of its own bytes, outside the store. */
+function linkInPlace(t: { after(fn: () => void): void }, file: string): void {
+  const copy = path.join(tempDir(t, 'outside-'), path.basename(file));
+  copyFileSync(file, copy);
+  rmSync(file);
+  symlinkSync(copy, file);
+}
+
+test('the reader reads no file through a symbolic link: a linked document or blob of the live revision serves the last known good', async (t) => {
+  for (const linked of ['document', 'blob'] as const) {
+    const store = await newStore(t);
+    const first = await publishInput(store, pairInput('engineering'));
+    const blob = await store.assets.put(Buffer.from('a blob'), 'text/plain');
+    const second = await publishInput(store, {
+      ...contentVariant(pairInput('engineering'), 'two'),
+      media: mediaDocument([blob.sha256]),
+    });
+    // The same bytes, so only the link tells it apart.
+    linkInPlace(
+      t,
+      linked === 'blob'
+        ? store.paths.blob(blob.sha256)
+        : path.join(store.paths.revision(second), 'documents', 'portfolio.yml'),
+    );
+    const live = await reader(store).catalog.getLive();
+    assert.equal(live.state, 'degraded', linked);
+    assert.equal(live.revisionId, first, linked);
+  }
 });
