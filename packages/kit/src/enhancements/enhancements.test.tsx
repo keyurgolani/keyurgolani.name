@@ -134,6 +134,10 @@ test('each boundary that mounts adds one to a count a test has set, and writes n
   assert.equal(globalThis.__portfolioMountedEnhancements, undefined);
   globalThis.__portfolioMountedEnhancements = 0;
   try {
+    // A boundary React builds but never mounts, as in a render it throws away, counts nothing.
+    const built = new EnhancementBoundary({ children: <p>enhanced</p> });
+    built.render();
+    assert.equal(globalThis.__portfolioMountedEnhancements, 0);
     new EnhancementBoundary({ children: <p>enhanced</p> }).componentDidMount();
     const failed = new EnhancementBoundary({ children: <p>enhanced</p> });
     failed.state = { failed: true };
