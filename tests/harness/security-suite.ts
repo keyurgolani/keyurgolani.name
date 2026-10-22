@@ -267,6 +267,98 @@ export function directTarget(
   };
 }
 
+/** What the suite uses of a stack startProxyStack() started with its `owner` option. */
+export interface OwnerProxyStack {
+  readonly origin: string;
+  request(
+    path: string,
+    sent?: { method?: string; headers?: Record<string, string>; body?: string },
+  ): Promise<Answer>;
+  exec(
+    service: string,
+    command: string[],
+    options?: { input?: string },
+  ): { status: number | null; stdout: string; stderr: string };
+  logs(service?: string): string;
+}
+
+/**
+ * Runs `script` with the app container's node, which reads it from stdin, so
+ * nothing in it passes through a shell on the way. Returns what it printed.
+ */
+function inApp(stack: OwnerProxyStack, script: string): string {
+  const result = stack.exec('app', ['node', '-'], { input: script });
+  expect(result.status, `node in the app container: ${result.stderr}`).toBe(0);
+  return result.stdout;
+}
+
+/**
+ * The target for the image under test behind the HTTPS proxy fixture
+ * (proxy-stack.mjs with compose.owner.yml), trusting `hops` proxies: its
+ * data directory, log, and owner CLI in the app container, whose clock the
+ * session times count from.
+ */
+export function proxyTarget(
+  stack: OwnerProxyStack,
+  secret: { password: string; hash: string },
+  { dataDir, hops }: { dataDir: string; hops: number },
+): SecurityTarget {
+  return {
+    origin: stack.origin,
+    cookie: '__Host-studio_session',
+    hops,
+    password: secret.password,
+    hash: secret.hash,
+    request: (pathname, { method, headers = {}, body } = {}) =>
+      stack.request(pathname, { method, headers: withoutNulls(headers), body }),
+    serverOutput: async () => stack.logs('app'),
+    dataFiles: async () => {
+      const listed = inApp(
+        stack,
+        `const fs = require('node:fs');
+const path = require('node:path');
+const root = ${JSON.stringify(dataDir)};
+const files = [];
+for (const entry of fs.readdirSync(root, { withFileTypes: true, recursive: true })) {
+  if (!entry.isFile()) continue;
+  const file = path.join(entry.parentPath, entry.name);
+  files.push({ path: path.relative(root, file), base64: fs.readFileSync(file).toString('base64') });
+}
+process.stdout.write(JSON.stringify(files));
+`,
+      );
+      return (JSON.parse(listed) as { path: string; base64: string }[]).map((file) => ({
+        path: file.path,
+        text: Buffer.from(file.base64, 'base64').toString('latin1'),
+      }));
+    },
+    setSessionTimes: async (digest, times) => {
+      // A whole record at once, as the server writes one, and on its clock.
+      const file = path.posix.join(authPaths(dataDir).sessions, `${digest}.json`);
+      inApp(
+        stack,
+        `const fs = require('node:fs');
+const path = require('node:path');
+const { randomBytes } = require('node:crypto');
+const file = ${JSON.stringify(file)};
+const record = JSON.parse(fs.readFileSync(file, 'utf8'));
+const now = Date.now();
+for (const [field, offset] of Object.entries(${JSON.stringify(times)})) {
+  record[field] = new Date(now + offset).toISOString();
+}
+const temporary = path.join(path.dirname(file), '.' + path.basename(file) + '.' + randomBytes(6).toString('hex') + '.tmp');
+fs.writeFileSync(temporary, JSON.stringify(record) + '\\n', { mode: 0o600 });
+fs.renameSync(temporary, file);
+`,
+      );
+    },
+    revokeSessions: async () => {
+      const result = stack.exec('app', ['node', 'apps/web/bin/owner.mjs', 'revoke-sessions']);
+      expect(result.status, `revoke-sessions: ${result.stdout}${result.stderr}`).toBe(0);
+    },
+  };
+}
+
 /**
  * Registers the suite on `test`, whose `target` fixture is the server
  * under test in one of the two shapes.

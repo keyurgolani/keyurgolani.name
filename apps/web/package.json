@@ -13,7 +13,8 @@
     "typecheck": "pnpm build:registry && tsc --noEmit",
     "test": "pnpm build:registry && tsx --conditions=react-server --test 'src/**/*.test.ts' && tsx --test 'src/**/*.test.tsx' && node --test 'scripts/**/*.test.mjs' 'bin/**/*.test.mjs'",
     "test:profiles": "node ../../ci/test-profiles.mjs",
-    "test:security": "node ../../ci/test-security.mjs"
+    "test:security": "node ../../ci/test-security.mjs",
+    "test:security:proxy": "node ../../ci/test-security-proxy.mjs"
   },
   "dependencies": {
     "@portfolio/core": "workspace:*",

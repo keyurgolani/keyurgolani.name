@@ -4,6 +4,13 @@
 	skip_install_trust
 	auto_https disable_redirects
 	admin off
+	# The test client reaches the proxy from a private address, so Caddy
+	# appends to an X-Forwarded-For the client sent rather than replacing it,
+	# as a proxy behind another proxy does. The app's hop count, not the
+	# proxy, then decides which entry is the source (#2).
+	servers {
+		trusted_proxies static private_ranges
+	}
 }
 
 https://portfolio.test {
