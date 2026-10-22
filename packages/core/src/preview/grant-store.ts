@@ -72,7 +72,10 @@ export interface GrantStore {
   /** Deletes the record. Returns whether there was one. */
   delete(digest: string): Promise<boolean>;
   list(): Promise<GrantRecord[]>;
-  /** The newest version of `draftId` a grant was minted for, or null when none was. */
+  /**
+   * The newest version of `draftId` a grant was minted for, or null when none
+   * was. DAMAGED_MARK when the record of it can't be read.
+   */
   newestDraftVersion(draftId: DraftId): Promise<number | null>;
   /** Records `version` as the newest minted for `draftId`. */
   setNewestDraftVersion(draftId: DraftId, version: number): Promise<void>;
@@ -96,6 +99,13 @@ const MARKER_FILE = /^(drf_[0-9a-f]{32})\.json$/;
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
+
+/**
+ * What newestDraftVersion() answers for a draft whose mark is damaged. It
+ * can't say which versions are behind it, so it says every one is: no grant
+ * of the draft renders until a mint writes the mark again.
+ */
+export const DAMAGED_MARK = Number.MAX_SAFE_INTEGER;
 
 /** Whether `value` is a fixture id, as a fixture grant names one. */
 export const isFixtureId = (value: unknown): value is string =>
@@ -384,9 +394,7 @@ export function filesystemGrantStore(dataDir: string): GrantStore {
       }
       const newest = isObject(value) && value.v === 1 ? value.newest : undefined;
       if (Number.isSafeInteger(newest) && (newest as number) >= 1) return newest as number;
-      // A damaged marker can't say which versions are behind it, so it says
-      // every one is: no grant of the draft renders until Studio mints again.
-      return Number.MAX_SAFE_INTEGER;
+      return DAMAGED_MARK;
     },
     async setNewestDraftVersion(draftId, version) {
       if (!Number.isSafeInteger(version) || version < 1)

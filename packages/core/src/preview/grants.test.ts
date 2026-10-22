@@ -481,6 +481,10 @@ test('events only end grants sooner: the per-request check alone stops a draft g
   assert.equal(await statusOf(grants, fresh.token), 'active');
   writeFileSync(path.join(previewPaths(dataDir).drafts, `${draft.draftId}.json`), '{"v":1}\n');
   assert.equal(await statusOf(grants, fresh.token), 'superseded');
+  // The next mint writes the mark again, and what the damage stopped stays stopped.
+  const again = await mintDraft(grants, session, next);
+  assert.equal(await statusOf(grants, again.token), 'active');
+  assert.equal(await statusOf(grants, fresh.token), 'superseded');
 });
 
 test('a grant that ends keeps its hash, without its documents, until its 2-hour cap, and then reads as unknown', async (t) => {

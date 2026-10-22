@@ -2,7 +2,13 @@ import { recordOwnerModule } from '../load-trace';
 import { sessionRef } from '../auth/token';
 import type { DraftId } from '../store/layout';
 import type { UnitInput } from '../store/unit';
-import type { GrantEnvironment, GrantRecord, GrantStore, GrantSubject } from './grant-store';
+import {
+  DAMAGED_MARK,
+  type GrantEnvironment,
+  type GrantRecord,
+  type GrantStore,
+  type GrantSubject,
+} from './grant-store';
 import {
   grantDigest,
   grantRef,
@@ -344,10 +350,11 @@ export function createPreviewGrants({
       if (subject.kind === 'draft') {
         const { draftId, version } = subject;
         // The newest version goes down first, so a grant of an older one
-        // stops at its next check even if what follows doesn't finish.
+        // stops at its next check even if what follows doesn't finish. A
+        // damaged mark stopped every grant of the draft; this writes it again.
         await run(`draft:${draftId}`, async () => {
           const newest = await store.newestDraftVersion(draftId);
-          if (newest !== null && newest > version) {
+          if (newest !== null && newest !== DAMAGED_MARK && newest > version) {
             throw new TypeError('A newer version of the draft has a grant already.');
           }
           if (newest !== version) await store.setNewestDraftVersion(draftId, version);
