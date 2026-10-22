@@ -26,7 +26,7 @@ function assertGate(set: ColorTokens, label: string, text = 4.5, nonText = 3) {
   for (const role of ['focus', 'border-strong'] as const) {
     assert.ok(worst(set, role) >= nonText, `${label}: ${role}`);
   }
-  for (let index = 1; index <= 6; index += 1) {
+  for (const index of [1, 2, 3, 4, 5, 6] as const) {
     const role = `data-categorical-${index}` as const;
     assert.ok(worst(set, role, ['surface-default']) >= nonText, `${label}: ${role}`);
   }
