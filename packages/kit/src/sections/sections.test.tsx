@@ -180,9 +180,13 @@ function unwrap(schema: Schema): Schema {
   }
 }
 
+/** A placement's own schema: each placement is checked against it as one list, below. */
+const PLACEMENT = unwrap(SCHEMAS.parts.Placement as unknown as Schema);
+
 /** The fields `schema` defines that `value` never sets, anywhere in a list. */
-function missingFields(schema: Schema, value: unknown, path: string): string[] {
+function missingFields(schema: Schema, value: unknown, path: string, placements = false): string[] {
   const unwrapped = unwrap(schema);
+  if (unwrapped === PLACEMENT && !placements) return isPlainObject(value) ? [] : [path];
   const fieldsOf = (object: Schema) =>
     Object.entries(object.shape ?? {}).filter(([key]) => key !== 'extensions');
   if (unwrapped._def.typeName === 'ZodObject') {
@@ -197,6 +201,7 @@ function missingFields(schema: Schema, value: unknown, path: string): string[] {
     if (!Array.isArray(value) || value.length === 0) return [`${path}/0`];
     const element = unwrap(unwrapped._def.type!);
     if (element._def.typeName !== 'ZodObject') return [];
+    if (element === PLACEMENT && !placements) return [];
     // Each field has to appear in some item.
     return fieldsOf(element).flatMap(([key, child]) => {
       const holder = value.find((item) => isPlainObject(item) && Object.hasOwn(item, key));
@@ -257,6 +262,7 @@ test('the fixture has every core kind, and every field each section, record, and
       { _def: { typeName: 'ZodArray', type: schema(item) } },
       values,
       name,
+      name === 'placements',
     );
     assert.deepEqual(missing, [], name);
   }
@@ -433,6 +439,8 @@ test('the shared renderers show every field of every visible record, section, an
   for (const [name, value] of parts) {
     for (const [key, leaf, holder] of leaves(value)) {
       if (GITHUB_CONFIG.has(key)) continue;
+      // The hero has a name and tagline of its own; a bare hero shows the identity's, below.
+      if (name === 'identity' && (key === 'name' || key === 'tagline')) continue;
       // An asset's alt shows where a placement doesn't override it; one is checked there.
       if (name === 'atlas-plate' && key === 'alt') continue;
       for (const text of shown(key, leaf, holder)) {
@@ -672,14 +680,13 @@ test('the github section shows its snapshot’s values with their date, else the
 
 test('a work in the archive says so, with the fixed label Archive, and no other does', () => {
   const works = render('selected-work');
-  const entries = [
-    ...works.matchAll(/<li id="([^"]+)" class="pf-item pf-work"[\s\S]*?(?=<li id="|<\/ul>$)/g),
-  ];
-  const archived = entries.filter(([entry]) => entry.includes('data-label="archive"'));
+  const entries = works.split(/(?=<li id="[^"]*" class="pf-item pf-work")/).slice(1);
+  const archived = entries.filter((entry) => entry.includes('data-label="archive"'));
   assert.deepEqual(
-    archived.map(([, id]) => id),
+    archived.map((entry) => /data-work-id="([^"]+)"/.exec(entry)?.[1]),
     ['early-sketches'],
   );
+  assert.equal(works.match(/data-label="archive"/g)?.length, 1);
   assert.match(works, /<p class="pf-label" data-label="archive">Archive<\/p>/);
 });
 
@@ -810,7 +817,10 @@ test('a custom section shows its title, body, and items with their media, eviden
   assert.match(custom, /alt="Alt atlas-plate"/);
   assert.match(custom, /<p class="pf-caption">Custom caption<\/p>/);
   assert.match(custom, /<h4 class="pf-item__title">[\s\S]*?<\/h4>|1,200/);
-  assert.match(custom, /<a href="https:\/\/custom\.rowan\.test">Custom link<\/a>/);
+  assert.match(
+    custom,
+    /<a href="https:\/\/custom\.rowan\.test" data-platform="site">Custom link<\/a>/,
+  );
 });
 
 test('evidence shows a metric’s value with its unit and nothing around it, and a testimonial as a quote', () => {

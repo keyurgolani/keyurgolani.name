@@ -137,6 +137,8 @@ function Fact({ entry, ctx }: { entry: Evidence; ctx: RenderContext }) {
             </Ui>
           ),
           <SourceName key="source" entry={entry} ctx={ctx} />,
+          entry.source?.role,
+          entry.source?.organization,
           entry.venue,
           entry.publication,
           entry.author,
@@ -202,6 +204,12 @@ function Fact({ entry, ctx }: { entry: Evidence; ctx: RenderContext }) {
           <a className="pf-action" href={hrefFor(entry.url, input)}>
             {action}
           </a>
+          {present(entry.buttonText) && present(entry.urlLabel) ? (
+            <>
+              {' '}
+              <span className="pf-url">{entry.urlLabel}</span>
+            </>
+          ) : null}
         </p>
       ) : null}
       <UrlLinks
