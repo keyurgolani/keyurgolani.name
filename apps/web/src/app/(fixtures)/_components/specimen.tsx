@@ -80,6 +80,15 @@ const MAP_IMAGE = `data:image/svg+xml,${encodeURIComponent(
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 100"><rect width="160" height="100" fill="#d9d4c7"/><path d="M0 70 C40 40 80 90 160 50 L160 100 L0 100 Z" fill="#8a9a7b"/><circle cx="118" cy="28" r="10" fill="#c9a24b"/></svg>',
 )}`;
 
+/** A decorative arrow for the icon slots, drawn in the text's color. */
+function Arrow() {
+  return (
+    <svg viewBox="0 0 16 16" width="16" height="16">
+      <path d="M4 12 12 4M6 4h6v6" fill="none" stroke="currentColor" strokeWidth="1.5" />
+    </svg>
+  );
+}
+
 function sourceRows(): DataRow[] {
   return SOURCES.map(([key, label, confidence, status]) => ({
     key,
@@ -110,6 +119,7 @@ export function DocumentSpecimen({
         <div className="fixtures-row" data-fixture="actions">
           <Action emphasis="primary">Publish revision</Action>
           <Action>Save draft</Action>
+          <Action icon={<Arrow />}>Open the map</Action>
           <Action emphasis="quiet">Dismiss</Action>
           <Action pressed>Selected</Action>
           <Action pressed={false}>Not selected</Action>
@@ -216,6 +226,9 @@ export function DocumentSpecimen({
               {STATUS_WORDS[status]}
             </Badge>
           ))}
+          <Badge status="positive" icon={<Arrow />}>
+            Rising
+          </Badge>
         </div>
         <div className="fixtures-grid">
           {SURFACE_EMPHASES.map((emphasis) => (

@@ -51,7 +51,8 @@ export interface AppOptions {
   dataName?: string;
   /**
    * Run the fixture host's build (fixture-host.mjs), which registers the test
-   * variants, in place of this checkout's. Only the route specs build one.
+   * variants or fixture packs its suite asks for, in place of this checkout's.
+   * The route and appearance specs build one.
    */
   fixtureHost?: boolean;
   /**

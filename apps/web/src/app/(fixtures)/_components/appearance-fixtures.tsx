@@ -14,7 +14,7 @@ import {
   type Profile,
   type SelectionText,
 } from '@portfolio/appearance';
-import { Header } from '@portfolio/appearance/primitives';
+import { Header, Navigation } from '@portfolio/appearance/primitives';
 import {
   AppearanceDiagnostics,
   PresentationBoundary,
@@ -34,6 +34,17 @@ import { DocumentSpecimen, PlateSpecimen } from './specimen';
 
 const DOCUMENT_IDS = { prefix: '', main: 'main' } as const;
 const RETURN_TO = '/_fixtures/appearance';
+
+/** The page's sections, which its navigation lists. */
+const SECTIONS = [
+  ['actions', 'Actions'],
+  ['forms', 'Forms'],
+  ['status', 'Status and surfaces'],
+  ['overlays', 'Tabs, dialog, tooltip, and toasts'],
+  ['media', 'Media and data'],
+  ['type', 'Type roles'],
+  ['plates', 'Plates'],
+] as const;
 
 /** The plates, each another selection, and what its caption says about it. */
 const PLATES: readonly {
@@ -125,6 +136,14 @@ export function AppearanceFixtures({ profile, query }: AppearanceFixturesProps) 
         <p data-type-role="body">
           Every shared primitive in each of its states, then plates that hold other selections.
         </p>
+        <Navigation
+          label="Fixture sections"
+          items={SECTIONS.map(([id, label], index) => ({
+            href: `#${id}`,
+            label,
+            current: index === 0 ? 'location' : undefined,
+          }))}
+        />
         <AppearanceDiagnostics diagnostics={page.diagnostics} id="page-diagnostics" />
         <VisitorAppearance model={model} returnTo={RETURN_TO} />
       </Header>

@@ -15,8 +15,9 @@
 // pnpm keeps a store per disk, and the temporary directory can be on another
 // one, such as a container's /tmp or a tmpfs. Files a spec names go into the
 // copy's apps/web/public, where an owner's assets go. The copy builds with the
-// app's own `pnpm build`. Nothing in the checkout changes, and nothing reaches
-// the network.
+// app's own `pnpm build`, under any build-time flags a suite names, such as
+// the appearance specs' APPEARANCE_FIXTURES=1 (#19, Slice 3). Nothing in the
+// checkout changes, and nothing reaches the network.
 import { spawnSync } from 'node:child_process';
 import {
   appendFileSync,
@@ -41,10 +42,14 @@ export const FIXTURE_VARIANTS = path.join(REPO_ROOT, 'tests', 'fixtures', 'varia
 /** Where the route specs' global setup leaves the fixture host's apps/web for the workers. */
 export const FIXTURE_HOST_ENV = 'PORTFOLIO_FIXTURE_HOST_WEB';
 
-/** The fixture host's apps/web, which tests/routes/fixture-host.setup.ts built. */
+/** The fixture host's apps/web, which a suite's global setup built. */
 export function fixtureHostWeb() {
   const web = process.env[FIXTURE_HOST_ENV];
-  if (!web) throw new Error('No fixture host was built. Run these specs with pnpm test:routes.');
+  if (!web) {
+    throw new Error(
+      'No fixture host was built. Run these specs with pnpm test:routes or pnpm test:appearance.',
+    );
+  }
   return web;
 }
 
@@ -84,14 +89,14 @@ function copyTree(from, to, relative = '') {
 
 /**
  * Runs pnpm in `cwd`, its output appended to `log`, and returns its stdout;
- * throws with the log's path when it fails.
+ * throws with the log's path when it fails. `env` adds to the environment.
  */
-function pnpm(args, cwd, log) {
+function pnpm(args, cwd, log, env = {}) {
   appendFileSync(log, `\n$ pnpm ${args.join(' ')}\n`);
   const [command, ...prefix] = PNPM;
   const result = spawnSync(command, [...prefix, ...args], {
     cwd,
-    env: { ...process.env, NEXT_TELEMETRY_DISABLED: '1' },
+    env: { ...process.env, ...env, NEXT_TELEMETRY_DISABLED: '1' },
     encoding: 'utf8',
     maxBuffer: 64 * 1024 * 1024,
   });
@@ -110,11 +115,13 @@ function pnpm(args, cwd, log) {
  * @param {readonly string[]} options.variants fixture directories, such as `chapters`
  * @param {Record<string, string>} [options.publicFiles] files to add to the copy's
  *   apps/web/public, by name, with their text
+ * @param {Record<string, string>} [options.buildEnv] build-time flags the copy's build
+ *   runs with, such as APPEARANCE_FIXTURES
  * @param {string} options.log where pnpm's output goes
  * @returns {{ root: string, web: string, packages: string[], remove: () => void }}
  *   `web` is the copy's apps/web, for startApp's `web` option
  */
-export function buildFixtureHost({ variants, publicFiles = {}, log }) {
+export function buildFixtureHost({ variants, publicFiles = {}, buildEnv = {}, log }) {
   const root = mkdtempSync(path.join(tmpdir(), 'portfolio-fixture-host-'));
   const remove = () => rmSync(root, { recursive: true, force: true });
   try {
@@ -164,7 +171,7 @@ export function buildFixtureHost({ variants, publicFiles = {}, log }) {
       root,
       log,
     );
-    pnpm(['--filter', '@portfolio/web', 'build'], root, log);
+    pnpm(['--filter', '@portfolio/web', 'build'], root, log, buildEnv);
     return { root, web, packages, remove };
   } catch (error) {
     remove();

@@ -239,6 +239,45 @@ jobs:
           if-no-files-found: ignore
           retention-days: ${{ env.REPORT_RETENTION_DAYS }}
 
+  # The appearance specs (#19, Slice 3) need the fixture packs and the
+  # /_fixtures/appearance page, which only a build made with
+  # APPEARANCE_FIXTURES=1 has, so they build a fixture host of their own, as
+  # the route specs do: a copy of the workspace built with that flag, linked
+  # offline from the store this job's install fills. Nothing in the checkout
+  # is built.
+  appearance-browser:
+    name: appearance-browser
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+      options: --user 1001 --ipc=host --init
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - name: Enable pnpm
+        run: corepack enable
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: pnpm ci:appearance-browser
+        run: pnpm ci:appearance-browser
+      - name: Failure summary
+        if: ${{ always() }}
+        run: node ci/summarize.mjs
+      - name: Upload reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-appearance-browser
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: ${{ env.REPORT_RETENTION_DAYS }}
+
   # The variant source audit (#5, Slice 3): registry generation, then every
   # registered variant's code and styles, and the kit modules they reach.
   check-variants:
@@ -410,7 +449,19 @@ jobs:
   gate:
     name: gate
     if: ${{ always() }}
-    needs: [static, unit, build, browser, routes, check-variants, variants, external-variant, image]
+    needs:
+      [
+        static,
+        unit,
+        build,
+        browser,
+        routes,
+        appearance-browser,
+        check-variants,
+        variants,
+        external-variant,
+        image,
+      ]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:

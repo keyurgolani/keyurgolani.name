@@ -1,0 +1,192 @@
+import type { Locator, Page } from '@playwright/test';
+import { expect, test } from '../harness/fixtures';
+import { DOCUMENT, FIXTURE_APP, openFixtures, ROUTE } from './fixture-page';
+
+// Focus and touch (#19, Slice 3): focus is an outline in the scheme's focus
+// color, forced colors keep it, every control keeps its touch target, a
+// variant's sticky chrome pushes what focus and fragments bring into view
+// below it, and reduced motion stops what moves.
+
+test.use({ appOptions: FIXTURE_APP });
+
+/** The controls, one of each kind, in the document boundary. */
+function controls(page: Page): [string, Locator][] {
+  const boundary = page.locator(DOCUMENT);
+  return [
+    ['action', boundary.getByRole('button', { name: 'Save draft' })],
+    ['link action', boundary.getByRole('link', { name: 'Go to the forms' })],
+    ['navigation link', boundary.getByRole('link', { name: 'Forms', exact: true })],
+    ['field', boundary.getByRole('textbox', { name: 'Revision title' })],
+    ['select', boundary.getByRole('combobox', { name: 'Basin' })],
+    ['checkbox', boundary.getByRole('checkbox', { name: 'Include print' })],
+    ['radio', boundary.getByRole('radio', { name: 'Comfortable' })],
+    ['tab', boundary.getByRole('tab', { name: 'Summary' })],
+    ['summary', boundary.locator('#why > summary')],
+  ];
+}
+
+/** Focuses `control` from the keyboard, as :focus-visible needs: Tab onto it from the control before. */
+async function keyboardFocus(page: Page, control: Locator): Promise<void> {
+  await control.focus();
+  await page.keyboard.press('Shift+Tab');
+  await page.keyboard.press('Tab');
+  await expect(control).toBeFocused();
+}
+
+async function outline(control: Locator) {
+  return control.evaluate((element) => {
+    const style = getComputedStyle(element);
+    const boundary = element.closest('[data-appearance-boundary]')!;
+    const probe = document.createElement('span');
+    probe.style.color = 'var(--color-focus)';
+    boundary.append(probe);
+    const focus = getComputedStyle(probe).color;
+    probe.remove();
+    return {
+      style: style.outlineStyle,
+      width: Number.parseFloat(style.outlineWidth),
+      color: style.outlineColor,
+      focus,
+      shadowOnly: style.outlineStyle === 'none' && style.boxShadow !== 'none',
+    };
+  });
+}
+
+test(
+  "keyboard focus is an outline in the scheme's focus color, on every kind of control",
+  { tag: '@interaction', annotation: [ROUTE] },
+  async ({ page }) => {
+    await openFixtures(page);
+    for (const [kind, control] of controls(page)) {
+      await keyboardFocus(page, control);
+      const drawn = await outline(control);
+      expect(drawn.style, kind).not.toBe('none');
+      expect(drawn.width, kind).toBeGreaterThan(0);
+      expect(drawn.color, kind).toBe(drawn.focus);
+      expect(drawn.shadowOnly, kind).toBe(false);
+    }
+  },
+);
+
+test.describe('with forced colors', () => {
+  test.use({ contextOptions: { forcedColors: 'active' } });
+
+  test(
+    'focus keeps its outline, in the system highlight',
+    { tag: '@interaction', annotation: [ROUTE] },
+    async ({ page }) => {
+      await openFixtures(page);
+      const highlight = await page.evaluate(() => {
+        const probe = document.createElement('span');
+        probe.style.color = 'Highlight';
+        document.body.append(probe);
+        const color = getComputedStyle(probe).color;
+        probe.remove();
+        return color;
+      });
+      for (const [kind, control] of controls(page)) {
+        await keyboardFocus(page, control);
+        const drawn = await outline(control);
+        expect(drawn.style, kind).not.toBe('none');
+        expect(drawn.width, kind).toBeGreaterThan(0);
+        expect(drawn.color, kind).toBe(highlight);
+      }
+    },
+  );
+});
+
+/** Each control's rendered size, the smaller side first. */
+async function sizes(page: Page): Promise<[string, number][]> {
+  const found: [string, number][] = [];
+  for (const [kind, control] of controls(page)) {
+    // A checkbox's and a radio's target is its label, which wraps the input.
+    const target = ['checkbox', 'radio'].includes(kind)
+      ? control.locator('xpath=ancestor::label[1]')
+      : control;
+    const box = await target.boundingBox();
+    found.push([kind, Math.min(box?.width ?? 0, box?.height ?? 0)]);
+  }
+  return found;
+}
+
+test(
+  'every control is at least 24 by 24 pixels, and 32 by 32 at 768 pixels wide or less',
+  { annotation: [ROUTE] },
+  async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await openFixtures(page);
+    for (const [kind, size] of await sizes(page)) expect(size, kind).toBeGreaterThanOrEqual(24);
+    await page.setViewportSize({ width: 390, height: 844 });
+    for (const [kind, size] of await sizes(page)) expect(size, kind).toBeGreaterThanOrEqual(32);
+  },
+);
+
+test(
+  "a variant's sticky offset reaches every id and every focusable control, and a fragment lands below it",
+  { tag: '@interaction', annotation: [ROUTE] },
+  async ({ page }) => {
+    await openFixtures(page);
+    const boundary = page.locator(DOCUMENT);
+    const margins = () =>
+      boundary.evaluate((element) =>
+        [
+          element.querySelector('#forms'),
+          element.querySelector('[data-ui-slot="action"]'),
+          element.querySelector('[data-ui-slot="field.control"]'),
+          element.querySelector('summary'),
+        ].map((target) => getComputedStyle(target!).scrollMarginTop),
+      );
+    expect(await margins()).toEqual(['0px', '0px', '0px', '0px']);
+    // What a variant with sticky chrome sets.
+    await boundary.evaluate((element) =>
+      (element as HTMLElement).style.setProperty('--layout-sticky-offset', '96px'),
+    );
+    expect(await margins()).toEqual(['96px', '96px', '96px', '96px']);
+    await page.evaluate(() => {
+      window.location.hash = 'forms';
+    });
+    await expect
+      .poll(() =>
+        page.evaluate(() => document.querySelector('#forms')!.getBoundingClientRect().top),
+      )
+      .toBeGreaterThanOrEqual(95);
+  },
+);
+
+test.describe('with reduced motion', () => {
+  test.use({ contextOptions: { reducedMotion: 'reduce' } });
+
+  test(
+    'the loading indicator stops, and the motion tokens drop movement',
+    { annotation: [ROUTE] },
+    async ({ page }) => {
+      await openFixtures(page);
+      const boundary = page.locator(DOCUMENT);
+      const motion = await boundary.evaluate((element) => {
+        const style = getComputedStyle(element);
+        return {
+          emphasis: style.getPropertyValue('--ui-motion-emphasis').trim(),
+          enter: style.getPropertyValue('--ui-motion-enter').trim(),
+          hover: style.getPropertyValue('--ui-state-hover-transform').trim(),
+        };
+      });
+      expect(motion).toEqual({ emphasis: 'none', enter: 'fade', hover: 'none' });
+      const spinner = boundary.locator('[data-ui-slot="action.spinner"]').first();
+      expect(await spinner.evaluate((element) => getComputedStyle(element).animationName)).toBe(
+        'none',
+      );
+    },
+  );
+});
+
+test(
+  'without reduced motion, the loading indicator pulses',
+  { annotation: [ROUTE] },
+  async ({ page }) => {
+    await openFixtures(page);
+    const spinner = page.locator(`${DOCUMENT} [data-ui-slot="action.spinner"]`).first();
+    expect(await spinner.evaluate((element) => getComputedStyle(element).animationName)).not.toBe(
+      'none',
+    );
+  },
+);
