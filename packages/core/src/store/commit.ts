@@ -2,7 +2,7 @@ import path from 'node:path';
 import { canonicalize } from '@portfolio/schema';
 import { DOCUMENT_NAMES } from '../catalog/unit';
 import { recordOwnerModule } from '../load-trace';
-import type { CrashPoint, FsPort } from './fs-port';
+import { takePointerPass, type CrashPoint, type FsPort, type PointerPass } from './fs-port';
 import { tempBeside, type StorePaths } from './layout';
 import {
   eventRecord,
@@ -18,9 +18,13 @@ import { modelFile, readRevisionAt, snapshotFile, type Revision } from './revisi
 // directory, the published pointer, an event's own file, and the log made
 // to agree with live.json. Only the PublicationService imports this module,
 // so it alone moves the pointer; pointer.ts and revisions.ts only read, and
-// the reader imports nothing that writes.
+// the reader imports nothing that writes. The store's FsPort refuses any
+// other module's move of the pointer at run time too: a move of live.json,
+// publication/, or the log needs the pass this module takes as it loads.
 
 recordOwnerModule('core/store/commit');
+
+const PASS: PointerPass = takePointerPass();
 
 async function writeSynced(
   fs: FsPort,
@@ -113,7 +117,7 @@ export async function writeLive(
     await fs.fsync(temp, point('fsync'));
     await fence();
     beforeCommit();
-    await fs.rename(temp, paths.live, point('rename'));
+    await fs.rename(temp, paths.live, point('rename'), PASS);
   } catch (error) {
     await fs.remove(temp, point('temp.remove')).catch(() => {});
     throw error;
@@ -147,13 +151,13 @@ export async function writeEvent(
     await fs.writeFile(temp, `${JSON.stringify(eventRecord(event))}\n`, point('write'));
     await fs.fsync(temp, point('fsync'));
     try {
-      await fs.link(temp, file, point('link'));
+      await fs.link(temp, file, point('link'), PASS);
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
       const existing = await readEvent(fs, paths, event.seq);
       if (existing && sameEvent(existing, event)) return;
       if (existing) throw new EventMismatchError(event.seq);
-      await fs.rename(temp, file, point('replace'));
+      await fs.rename(temp, file, point('replace'), PASS);
     }
   } finally {
     await fs.remove(temp, point('temp.remove')).catch(() => {});
@@ -172,7 +176,7 @@ export async function moveEventAside(
   seq: number,
   operation: string,
 ): Promise<void> {
-  await fs.rename(paths.event(seq), paths.eventAside(seq), `${operation}.event.aside`);
+  await fs.rename(paths.event(seq), paths.eventAside(seq), `${operation}.event.aside`, PASS);
   await fs.fsync(paths.events, `${operation}.event.aside.fsync`);
 }
 

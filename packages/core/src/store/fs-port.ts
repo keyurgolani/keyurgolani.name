@@ -11,6 +11,7 @@ import {
   rm,
   stat,
 } from 'node:fs/promises';
+import path from 'node:path';
 import type { Readable } from 'node:stream';
 import { recordOwnerModule } from '../load-trace';
 import { readRegularFile, type FileStats, type ReadFs } from './read-fs';
@@ -27,6 +28,14 @@ import { readRegularFile, type FileStats, type ReadFs } from './read-fs';
 // a directory should be, rather than chmod what it points at. Nor is one
 // read that isn't a regular file: a FIFO, which would wait for a writer,
 // fails at once with EFTYPE.
+//
+// Only commit.ts moves the published pointer (#3, item 20), and this
+// adapter holds every other module to that: a rename from or to the
+// pointer's paths, or a link made at one, needs the pass commit.ts takes as
+// it loads, and fails with EPERM without it. Nothing writes one in place or
+// removes one. Those paths are publication/ itself, live.json, events/, and
+// an event's own file there; the lock's files and the server's claim beside
+// them aren't, nor is a temporary file, whose name starts with a dot.
 
 recordOwnerModule('core/store/fs-port');
 
@@ -34,6 +43,42 @@ recordOwnerModule('core/store/fs-port');
 export type CrashPoint = string;
 
 export type { FileStats, ReadFs };
+
+const POINTER_PASS: unique symbol = Symbol('pointer pass');
+/** What a move of the published pointer or its log takes: commit.ts's alone. */
+export type PointerPass = typeof POINTER_PASS;
+let passTaken = false;
+
+/**
+ * The pointer pass, for commit.ts as it loads. It's handed out once, and a
+ * later call throws, so no other module holds it.
+ */
+export function takePointerPass(): PointerPass {
+  if (passTaken) throw new Error('commit.ts holds the pointer pass, and no other module may.');
+  passTaken = true;
+  return POINTER_PASS;
+}
+
+/**
+ * Whether `target` is one of the published pointer's paths, by the store's
+ * layout: publication/ itself, publication/live.json, publication/events/,
+ * or an event's own file in it, one moved aside included.
+ */
+export function isPointerPath(target: string): boolean {
+  const parts = path.resolve(target).split(path.sep);
+  const [name = '', parent, above] = [parts.at(-1), parts.at(-2), parts.at(-3)];
+  if (name === 'publication') return true;
+  if (parent === 'publication') return name === 'live.json' || name === 'events';
+  return parent === 'events' && above === 'publication' && !name.startsWith('.');
+}
+
+/** An EPERM error, for a move of the pointer's paths without the pass. */
+function pointerRefused(target: string): NodeJS.ErrnoException {
+  return Object.assign(new Error('Only commit.ts moves the published pointer or its log.'), {
+    code: 'EPERM',
+    path: target,
+  });
+}
 
 /** The reads, read-fs.ts's, and the writes. */
 export interface FsPort extends ReadFs {
@@ -47,7 +92,8 @@ export interface FsPort extends ReadFs {
   /**
    * Writes `data` to a new or truncated 0600 file, without syncing it. With
    * `exclusive`, it fails with EEXIST when the file is there. A symbolic
-   * link at `file` fails with ELOOP, and nothing is written through it.
+   * link at `file` fails with ELOOP, and nothing is written through it. One
+   * of the pointer's paths fails with EPERM: it's written beside, and moved.
    */
   writeFile(
     file: string,
@@ -57,11 +103,22 @@ export interface FsPort extends ReadFs {
   ): Promise<void>;
   /** Syncs a file or a directory to disk. */
   fsync(target: string, point: CrashPoint): Promise<void>;
-  /** Renames within one directory tree, replacing what `to` held. */
-  rename(from: string, to: string, point: CrashPoint): Promise<void>;
-  /** Makes `created` a second name for `existing`, failing with EEXIST when it's taken. */
-  link(existing: string, created: string, point: CrashPoint): Promise<void>;
-  /** Removes a file or a directory tree, a link as a link, and nothing when nothing is there. */
+  /**
+   * Renames within one directory tree, replacing what `to` held. From or to
+   * one of the pointer's paths, it needs `pass`, and fails with EPERM
+   * without it.
+   */
+  rename(from: string, to: string, point: CrashPoint, pass?: PointerPass): Promise<void>;
+  /**
+   * Makes `created` a second name for `existing`, failing with EEXIST when
+   * it's taken. At one of the pointer's paths, it needs `pass`, as a rename
+   * does.
+   */
+  link(existing: string, created: string, point: CrashPoint, pass?: PointerPass): Promise<void>;
+  /**
+   * Removes a file or a directory tree, a link as a link, and nothing when
+   * nothing is there. One of the pointer's paths fails with EPERM.
+   */
   remove(target: string, point: CrashPoint): Promise<void>;
   /** Sets the modification time of `file` itself, not what a link points at, to now. */
   touch(file: string, point: CrashPoint): Promise<void>;
@@ -139,6 +196,7 @@ export const nodeFs: FsPort = Object.freeze({
     _point: CrashPoint,
     options: { readonly exclusive?: boolean } = {},
   ) {
+    if (isPointerPath(file)) throw pointerRefused(file);
     const flags = options.exclusive
       ? constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | NO_FOLLOW
       : constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | NO_FOLLOW;
@@ -159,9 +217,20 @@ export const nodeFs: FsPort = Object.freeze({
       await handle.close();
     }
   },
-  rename: (from: string, to: string) => rename(from, to),
-  link: (existing: string, created: string) => link(existing, created),
-  remove: (target: string) => rm(target, { recursive: true, force: true }),
+  async rename(from: string, to: string, _point: CrashPoint, pass?: PointerPass) {
+    for (const target of [from, to]) {
+      if (pass !== POINTER_PASS && isPointerPath(target)) throw pointerRefused(target);
+    }
+    await rename(from, to);
+  },
+  async link(existing: string, created: string, _point: CrashPoint, pass?: PointerPass) {
+    if (pass !== POINTER_PASS && isPointerPath(created)) throw pointerRefused(created);
+    await link(existing, created);
+  },
+  async remove(target: string) {
+    if (isPointerPath(target)) throw pointerRefused(target);
+    await rm(target, { recursive: true, force: true });
+  },
   async touch(file: string) {
     const now = new Date();
     await lutimes(file, now, now);

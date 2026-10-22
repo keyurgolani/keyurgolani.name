@@ -127,9 +127,9 @@ test('a link at publication/lock that leads nowhere stops an acquirer at once wi
   let links = 0;
   const counting: FsPort = {
     ...nodeFs,
-    async link(existing, created, point) {
+    async link(existing, created, point, pass) {
       links += 1;
-      return nodeFs.link(existing, created, point);
+      return nodeFs.link(existing, created, point, pass);
     },
   };
   const lock = publicationLock({ fs: counting, paths, waitMs: 500 });
@@ -306,9 +306,9 @@ test('acquirers in one process take turns in the order they asked, and only the 
   let links = 0;
   const counted: FsPort = {
     ...nodeFs,
-    async link(existing, created, point) {
+    async link(existing, created, point, pass) {
       if (point === 'lock.link') links += 1;
-      return nodeFs.link(existing, created, point);
+      return nodeFs.link(existing, created, point, pass);
     },
   };
   const lock = publicationLock({ fs: counted, paths, waitMs: 5_000 });
@@ -358,12 +358,12 @@ test('a breaker that finds a live lock where the stale one was puts it back, and
   // lets go and another process takes the lock, just before the breaker moves it.
   const meddling: FsPort = {
     ...nodeFs,
-    async rename(from, to, point) {
+    async rename(from, to, point, pass) {
       if (point === 'lock.break.rename' && !taken) {
         rmSync(paths.lock);
         taken = await live.acquire('publish');
       }
-      return nodeFs.rename(from, to, point);
+      return nodeFs.rename(from, to, point, pass);
     },
   };
   const breaker = publicationLock({ fs: meddling, paths: anotherSpelling(t, paths), waitMs: 300 });
@@ -395,8 +395,8 @@ test('a breaker that finds a live lock in place of the stale one once it holds t
       }
       return nodeFs.writeFile(file, data, point, options);
     },
-    async rename(from, to, point) {
-      await nodeFs.rename(from, to, point);
+    async rename(from, to, point, pass) {
+      await nodeFs.rename(from, to, point, pass);
       // Had the breaker moved the live lock aside, a third acquirer would link into the gap.
       if (point === 'lock.break.rename') {
         intruder = await third.acquire('recover').catch(() => undefined);
@@ -422,12 +422,12 @@ test('of two breakers at once, one slow, and a third acquirer, only one holds th
     let slowAside = '';
     const slow: FsPort = {
       ...nodeFs,
-      async rename(from, to, point) {
+      async rename(from, to, point, pass) {
         if (point === 'lock.break.rename' && slowAside === '') {
           await sleep(30);
           slowAside = to;
         }
-        return nodeFs.rename(from, to, point);
+        return nodeFs.rename(from, to, point, pass);
       },
       async stat(target) {
         if (target === slowAside) await sleep(40);

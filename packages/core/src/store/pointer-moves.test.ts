@@ -1,13 +1,15 @@
 import assert from 'node:assert/strict';
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { readdirSync, readFileSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
+import ts from 'typescript';
 import { memoryAuditSink } from '../audit/sink';
 import { revisionCatalogReader } from './reader';
 import { claimServer } from './server-claim';
 import { preflight } from './preflight';
-import { nodeFs } from './fs-port';
+import { nodeFs, takePointerPass, type PointerPass } from './fs-port';
+import { storePaths } from './layout';
 import {
   contentVariant,
   mediaDocument,
@@ -15,6 +17,7 @@ import {
   owned,
   pairInput,
   publishInput,
+  tempDir,
   testChecks,
 } from './test-support/fixtures';
 import { relativeImports } from './test-support/imports';
@@ -24,7 +27,9 @@ import { relativeImports } from './test-support/imports';
 // which only publication.ts imports; besides the module that names the
 // store's paths, only four name the pointer's file, and three of them only
 // read it; and every store operation outside the PublicationService leaves
-// live.json as it was.
+// live.json as it was. That much is a lint, which a module that means to
+// can get past. At run time, the store's FsPort refuses to move the
+// pointer's paths for any module but commit.ts, which alone holds the pass.
 
 const STORE = fileURLToPath(new URL('.', import.meta.url));
 const REPO = path.resolve(STORE, '../../../..');
@@ -73,6 +78,83 @@ function movesNamingThePointer(text: string): string[] {
   return found;
 }
 
+/** `file`'s syntax tree, and where in it a node starts, as `<file>:<line>: <text>`. */
+function treeOf(file: string) {
+  const tree = ts.createSourceFile(file, readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true);
+  const at = (node: ts.Node) =>
+    `${relativeTo(file)}:${tree.getLineAndCharacterOfPosition(node.getStart()).line + 1}: ${node.getText()}`;
+  return { tree, at };
+}
+
+/** The key a destructuring takes, when it's spelled out: a name, a string, or `['live']`. */
+function keyOf(name: ts.PropertyName | ts.BindingName): string | undefined {
+  if (ts.isIdentifier(name) || ts.isStringLiteralLike(name)) return name.text;
+  if (ts.isComputedPropertyName(name) && ts.isStringLiteralLike(name.expression)) {
+    return name.expression.text;
+  }
+  return undefined;
+}
+
+/**
+ * Each place `file` takes `live` or `publication` out of an object by
+ * destructuring, whatever name it binds, as `<file>: <the destructuring>`:
+ * `const { live: target } = paths`, a parameter's pattern, or an
+ * assignment's, `({ publication: dir } = paths)`.
+ */
+function destructuresThePointer(file: string): string[] {
+  const { tree } = treeOf(file);
+  const found: string[] = [];
+  const pointer = (key: string | undefined) => key === 'live' || key === 'publication';
+  const whole = (node: ts.Node) => {
+    let at = node;
+    while (!ts.isVariableDeclaration(at) && !ts.isParameter(at) && !ts.isBinaryExpression(at)) {
+      at = at.parent;
+    }
+    return `${relativeTo(file)}: ${at.getText().replace(/\s+/g, ' ')}`;
+  };
+  const visit = (node: ts.Node) => {
+    if (ts.isBindingElement(node) && ts.isObjectBindingPattern(node.parent)) {
+      if (pointer(keyOf(node.propertyName ?? node.name))) found.push(whole(node));
+    }
+    if (
+      ts.isBinaryExpression(node) &&
+      node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+      ts.isObjectLiteralExpression(node.left)
+    ) {
+      for (const property of node.left.properties) {
+        if (
+          (ts.isPropertyAssignment(property) || ts.isShorthandPropertyAssignment(property)) &&
+          pointer(keyOf(property.name))
+        ) {
+          found.push(whole(node));
+        }
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(tree);
+  return found;
+}
+
+/**
+ * Each import() in `file` whose specifier no scan can read: anything but a
+ * string or a template with nothing in it, so what it loads, commit.ts
+ * among what it could, can't be told from the source.
+ */
+function computedImports(file: string): string[] {
+  const { tree, at } = treeOf(file);
+  const found: string[] = [];
+  const visit = (node: ts.Node) => {
+    if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) {
+      const [specifier] = node.arguments;
+      if (!specifier || !ts.isStringLiteralLike(specifier)) found.push(at(node));
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(tree);
+  return found;
+}
+
 /** The bytes and inode of live.json, which a move over it changes. */
 function pointerFile(file: string) {
   return { bytes: readFileSync(file).toString('utf8'), ino: statSync(file).ino };
@@ -87,6 +169,22 @@ test('no code outside PublicationService moves the published pointer', async (t)
   assert.deepEqual(files.filter((file) => relativeImports(file).includes(commit)).map(relativeTo), [
     'packages/core/src/store/publication.ts',
   ]);
+  // An import() whose specifier can't be read could load it too. The one
+  // there is, in the variant registry, loads each registered variant's
+  // built entry by its resolved path.
+  assert.deepEqual(
+    [...new Set(files.flatMap(computedImports).map((found) => found.split(':')[0]))],
+    ['packages/variant-contract/src/node/registry.ts'],
+  );
+  // The pass a move of the pointer takes at run time: fs-port.ts makes it,
+  // and commit.ts takes it as it loads.
+  assert.deepEqual(
+    files
+      .filter((file) => /\btakePointerPass\b/.test(code(file)))
+      .map(relativeTo)
+      .sort(),
+    ['packages/core/src/store/commit.ts', 'packages/core/src/store/fs-port.ts'],
+  );
   assert.deepEqual(
     files
       .filter((file) => /\bfunction writeLive\b/.test(readFileSync(file, 'utf8')))
@@ -98,18 +196,26 @@ test('no code outside PublicationService moves the published pointer', async (t)
   // when it moved, only read it. No other module names it, or names
   // live.json at all; the service's repair finds a temporary one a crash
   // left by its name pattern.
-  assert.deepEqual(
-    files
-      .filter((file) => /\bpaths\.(?:live|liveTemp)\b/.test(code(file)))
-      .map(relativeTo)
-      .sort(),
-    [
-      'packages/core/src/store/commit.ts',
-      'packages/core/src/store/health-cache.ts',
-      'packages/core/src/store/pointer.ts',
-      'packages/core/src/store/reader.ts',
-    ],
-  );
+  const named = (key: string) => (file: string) =>
+    new RegExp(`(?:\\bpaths|\\bstorePaths\\([^()]*\\))\\.${key}\\b`).test(code(file));
+  assert.deepEqual(files.filter(named('(?:live|liveTemp)')).map(relativeTo).sort(), [
+    'packages/core/src/store/commit.ts',
+    'packages/core/src/store/health-cache.ts',
+    'packages/core/src/store/pointer.ts',
+    'packages/core/src/store/reader.ts',
+  ]);
+  // publication/ itself: preflight makes it, and the service syncs it and
+  // clears what a crash left in it. No other module names it.
+  assert.deepEqual(files.filter(named('publication')).map(relativeTo).sort(), [
+    'packages/core/src/store/preflight.ts',
+    'packages/core/src/store/publication.ts',
+  ]);
+  // Nor does any module take either out of the store's paths, or out of
+  // anything, under another name, but Studio's store, which takes the
+  // PublicationService out of the Store.
+  assert.deepEqual(files.flatMap(destructuresThePointer), [
+    'apps/web/src/server/owner/store.ts: { drafts, publication } = store',
+  ]);
   // The health cache and the reader only read: they import nothing that writes.
   for (const reader of ['health-cache.ts', 'reader.ts']) {
     const imports = relativeImports(path.join(STORE, reader)).map(relativeTo);
@@ -121,13 +227,18 @@ test('no code outside PublicationService moves the published pointer', async (t)
     }
   }
   // live.json anywhere in a string or a template, as in 'publication/live.json':
-  // only the module that names the store's paths, and pointer.ts's error.
+  // only the module that names the store's paths, pointer.ts's error, and
+  // the FsPort, which knows the pointer's paths by their names to guard them.
   assert.deepEqual(
     files
       .filter((file) => /['"`][^'"`\n]*\blive\.json/.test(code(file)))
       .map(relativeTo)
       .sort(),
-    ['packages/core/src/store/layout.ts', 'packages/core/src/store/pointer.ts'],
+    [
+      'packages/core/src/store/fs-port.ts',
+      'packages/core/src/store/layout.ts',
+      'packages/core/src/store/pointer.ts',
+    ],
   );
   // And no write outside commit.ts points at publication/ or live.json, by
   // whatever name it got the path.
@@ -211,4 +322,59 @@ test('no code outside PublicationService moves the published pointer', async (t)
   assert.equal(moved.kind === 'rejected' && moved.code, 'nothing_to_publish');
   await publishInput(store, contentVariant(pairInput('engineering'), 'two'));
   assert.notDeepEqual(pointerFile(store.paths.live), before);
+});
+
+test("the store's FsPort moves the pointer's paths for commit.ts alone: without its pass, a rename, a link, a write in place, or a removal is EPERM", async (t) => {
+  const store = await newStore(t);
+  await publishInput(store, pairInput('engineering'));
+  const { paths } = store;
+  const before = pointerFile(paths.live);
+  const staged = path.join(paths.root, 'staged.json');
+  writeFileSync(staged, '{}\n');
+  const refused = (error: unknown) => (error as NodeJS.ErrnoException).code === 'EPERM';
+  const alias = path.join(tempDir(t, 'store-alias-'), 'data');
+  symlinkSync(paths.root, alias);
+  const moves: Array<[string, () => Promise<void>]> = [
+    ['a rename over live.json', () => nodeFs.rename(staged, paths.live, 'test')],
+    ['a rename of live.json away', () => nodeFs.rename(paths.live, staged, 'test')],
+    ['a rename over publication/', () => nodeFs.rename(staged, paths.publication, 'test')],
+    ['a rename of events/ away', () => nodeFs.rename(paths.events, staged, 'test')],
+    ['a rename over an event', () => nodeFs.rename(staged, paths.event(2), 'test')],
+    ['an event moved aside', () => nodeFs.rename(paths.event(1), paths.eventAside(1), 'test')],
+    ['a link at an event', () => nodeFs.link(staged, paths.event(2), 'test')],
+    ['live.json written in place', () => nodeFs.writeFile(paths.live, '{}\n', 'test')],
+    [
+      'an event written in place',
+      () => nodeFs.writeFile(paths.event(2), '{}\n', 'test', { exclusive: true }),
+    ],
+    ['live.json removed', () => nodeFs.remove(paths.live, 'test')],
+    ['publication/ removed', () => nodeFs.remove(paths.publication, 'test')],
+    // By another spelling of the data directory, too.
+    ['live.json through a link', () => nodeFs.rename(staged, storePaths(alias).live, 'test')],
+    [
+      'live.json spelled with ..',
+      () => nodeFs.rename(staged, [paths.events, '..', 'live.json'].join(path.sep), 'test'),
+    ],
+    // A pass of a module's own is none.
+    [
+      'a pass made up',
+      () => nodeFs.rename(staged, paths.live, 'test', Symbol('pointer pass') as PointerPass),
+    ],
+  ];
+  for (const [what, move] of moves) await assert.rejects(move(), refused, what);
+  assert.deepEqual(pointerFile(paths.live), before);
+  assert.deepEqual(readdirSync(paths.events), ['1.json']);
+  // And commit.ts holds the one there is, taken as it loaded.
+  assert.throws(() => takePointerPass(), /commit\.ts holds the pointer pass/);
+
+  // What isn't the pointer's moves as before: a temporary file beside
+  // live.json, and the lock's and the claim's files, which their own tests
+  // cover.
+  const temp = path.join(paths.publication, '.live.json.0123456789ab.tmp');
+  await nodeFs.writeFile(temp, '{}\n', 'test');
+  await nodeFs.rename(temp, `${temp}.moved`, 'test');
+  await nodeFs.remove(`${temp}.moved`, 'test');
+  // And the PublicationService moves the pointer, through commit.ts.
+  await publishInput(store, contentVariant(pairInput('engineering'), 'two'));
+  assert.notDeepEqual(pointerFile(paths.live), before);
 });
