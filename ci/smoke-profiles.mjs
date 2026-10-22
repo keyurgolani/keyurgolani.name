@@ -73,6 +73,7 @@ import {
   warningLines,
 } from '../tests/harness/startup-rows.mjs';
 import { PROBE_SNIPPET, REQUESTS_SNIPPET, TREE_SNIPPET } from './lib/container.mjs';
+import { buildRegistry } from './lib/registry.mjs';
 import {
   currentGate,
   REPO_ROOT,
@@ -82,7 +83,10 @@ import {
 } from './lib/reports.mjs';
 
 // The route table, the registry, and the capability matrix are TypeScript;
-// the script runs under tsx (`node --import tsx`) to read them.
+// the script runs under tsx (`node --import tsx`) to read them. The route
+// table imports the generated registry, and nothing here builds the app, so
+// the registry is written first (ci/lib/registry.mjs).
+console.log(buildRegistry());
 const require = createRequire(import.meta.url);
 const { accessIn, CAPABILITIES, INDEXABLE } = require('../apps/web/src/server/capabilities.ts');
 const { listOperations } = require('../apps/web/src/server/operations.ts');
