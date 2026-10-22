@@ -1,4 +1,5 @@
-// Boots the built standalone server as the app under test.
+// Boots the built standalone server as the app under test, or `next dev`
+// for what only it serves.
 //
 // Each call gets its own copy of the build (a running Next server writes to
 // .next/cache), its own temporary source directory, and a free loopback port.
@@ -132,6 +133,9 @@ async function onFreePort(attempt, firstPort) {
  * @param {Record<string, string | Uint8Array>} [options.sourceFiles] files to add to the
  *   source directory beside the two documents, by their path there, such as
  *   `snapshots/github.json` (#10)
+ * @param {boolean} [options.dev] run `next dev` in `web` itself instead of a copy of its
+ *   build, for what only `next dev` serves, such as #7's dev fixture route. next dev keeps
+ *   its output in `web`'s .next/dev, so run one at a time, and add no public files.
  */
 export async function startApp({
   env = {},
@@ -146,19 +150,27 @@ export async function startApp({
   web = WEB,
   publicFiles = {},
   sourceFiles = {},
+  dev = false,
 } = {}) {
   const standalone = path.join(web, '.next', 'standalone');
   const serverJs = path.join(standalone, 'apps', 'web', 'server.js');
-  requireBuild(serverJs);
+  if (!dev) requireBuild(serverJs);
   const root = mkdtempSync(path.join(tmpdir(), 'portfolio-app-'));
   const appDir = path.join(root, 'app');
   const sourceDir = path.join(root, sourceName);
+  if (dev && Object.keys(publicFiles).length > 0) {
+    throw new Error("A dev server serves web's own public/: add no public files to it.");
+  }
   // The image's layout: the standalone tree plus static assets and public/.
-  cpSync(standalone, appDir, { recursive: true, verbatimSymlinks: true });
-  cpSync(path.join(web, '.next', 'static'), path.join(appDir, 'apps', 'web', '.next', 'static'), {
-    recursive: true,
-  });
-  cpSync(path.join(web, 'public'), path.join(appDir, 'apps', 'web', 'public'), { recursive: true });
+  if (!dev) {
+    cpSync(standalone, appDir, { recursive: true, verbatimSymlinks: true });
+    cpSync(path.join(web, '.next', 'static'), path.join(appDir, 'apps', 'web', '.next', 'static'), {
+      recursive: true,
+    });
+    cpSync(path.join(web, 'public'), path.join(appDir, 'apps', 'web', 'public'), {
+      recursive: true,
+    });
+  }
   for (const [file, content] of Object.entries(publicFiles)) {
     const target = path.join(appDir, 'apps', 'web', 'public', file);
     if (!target.startsWith(path.join(appDir, 'apps', 'web', 'public') + path.sep)) {
@@ -201,6 +213,8 @@ export async function startApp({
     const origin = `http://127.0.0.1:${port}`;
     const serverEnv = {
       ...baseEnv(root, port),
+      // next dev compiles for development, as `pnpm dev` does.
+      ...(dev ? { NODE_ENV: 'development' } : {}),
       PORTFOLIO_PROFILE: 'read-only',
       PORTFOLIO_ORIGIN: origin,
       PORTFOLIO_SOURCE_DIR: sourceDir,
@@ -209,11 +223,18 @@ export async function startApp({
       ...trap.env,
       NODE_OPTIONS: nodeOptions(env, trap),
     };
-    const child = spawn(process.execPath, [serverJs.replace(standalone, appDir)], {
-      cwd: path.join(appDir, 'apps', 'web'),
-      env: serverEnv,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
+    const nextBin = path.join(web, 'node_modules', 'next', 'dist', 'bin', 'next');
+    const child = dev
+      ? spawn(
+          process.execPath,
+          [nextBin, 'dev', '--hostname', '127.0.0.1', '--port', String(port)],
+          { cwd: web, env: serverEnv, stdio: ['ignore', 'pipe', 'pipe'] },
+        )
+      : spawn(process.execPath, [serverJs.replace(standalone, appDir)], {
+          cwd: path.join(appDir, 'apps', 'web'),
+          env: serverEnv,
+          stdio: ['ignore', 'pipe', 'pipe'],
+        });
     const out = createWriteStream(log);
     const server = {
       port,
@@ -276,7 +297,8 @@ export async function startApp({
             return response.status === 200 ? response : undefined;
           },
           {
-            timeoutMs: 60_000,
+            // next dev compiles each route on its first request.
+            timeoutMs: dev ? 180_000 : 60_000,
             alive: () => !current.exited,
             what: 'the app to take its port and answer GET /api/health',
           },

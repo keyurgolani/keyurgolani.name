@@ -69,6 +69,16 @@ export function previewCsp(nonce: string, { mode, studioOrigin }: PreviewPolicyO
   ].join('; ');
 }
 
+/**
+ * Whether `policy`, a request's Content-Security-Policy, is the preview's,
+ * as proxy.ts sets it on a preview request: no other policy starts with
+ * `default-src 'none'`. The 404 page reads it to leave the site's theme
+ * script out of a preview's 404.
+ */
+export function isPreviewPolicy(policy: string): boolean {
+  return policy.split(';', 1)[0]?.trim() === "default-src 'none'";
+}
+
 /** What every preview response carries besides its CSP. */
 export const PREVIEW_RESPONSE_HEADERS: Readonly<Record<string, string>> = Object.freeze({
   'x-robots-tag': 'noindex, nofollow',

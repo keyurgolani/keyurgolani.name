@@ -40,7 +40,7 @@ Run often in Waves 2 and 3, and once more at Phase 3.
 
 ## Visual gates (see `references/quality-gates.md`)
 
-- [ ] **Gate A: Visual sanity.** `/sample?variant=<id>` renders your structure (`scripts/visual-companion/start.sh --mode preview --variant <id>`).
+- [ ] **Gate A: Visual sanity.** `/preview/dev/<id>/complete` renders your structure (`scripts/visual-companion/start.sh --mode preview --variant <id>`).
 - [ ] **Gate B: Content matrix.** The sample, a sparse pair, and a dense pair: the structure holds in each.
 - [ ] **Gate C: Reduced motion.** The motion contract passes, and anything it can't see (a canvas, a typing animation) is stable under the programmatic checks.
 - [ ] **Gate D: Print preview.** Navigation and decoration hidden, content in reading order.
@@ -60,11 +60,11 @@ Run often in Waves 2 and 3, and once more at Phase 3.
 
 - [ ] DESIGN.md and the package are on the same branch as the PR.
 - [ ] The PR description has the `check:variants` output, the kit-catalog delta, the motion contract result, the fidelity targets table (port-only), and where the screenshots are.
-- [ ] A live render during review: `scripts/visual-companion/start.sh --mode preview --variant <id>`, at `/sample?variant=<id>`.
+- [ ] A live render during review: `scripts/visual-companion/start.sh --mode preview --variant <id>`, at `/preview/dev/<id>/complete`.
 
 ## Common failure modes
 
-- **`/sample?variant=<id>` is a 404**: the build doesn't register the id. `pnpm check:variants --package @portfolio/variant-<id>` says why: the package isn't a dependency of `@portfolio/web`, an export is missing, or the manifest has an error.
+- **`/preview/dev/<id>/complete` or `/sample?variant=<id>` is a 404**: the build doesn't register the id. `pnpm check:variants --package @portfolio/variant-<id>` says why: the package isn't a dependency of `@portfolio/web`, an export is missing, or the manifest has an error.
 - **`renderSection` throws about `renderedKinds`**: the manifest and the renderer map disagree. Add the kind to both or neither.
 - **The page renders unstyled structure**: the `./styles.css` export is missing or points at the wrong file, or a selector isn't under `[data-variant='<id>']`.
 - **`audit.client-input`**: a `'use client'` module takes the whole input or portfolio. Pass it only the fields it renders.

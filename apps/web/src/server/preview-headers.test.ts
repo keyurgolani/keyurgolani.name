@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { isPreviewPath, previewCsp, previewHeaders } from './preview-headers';
+import { isPreviewPath, isPreviewPolicy, previewCsp, previewHeaders } from './preview-headers';
+import { studioCsp } from './studio-headers';
 
 // The preview's headers (#7, Slice 1, item 5): which paths get them, and the
 // policy, whose only difference under next dev is what React's dev build and
@@ -71,4 +72,17 @@ test("every preview response's headers are its CSP, noindex, no-referrer, privat
     'cache-control': 'private, no-store',
     'x-content-type-options': 'nosniff',
   });
+});
+
+test("the preview's policy is told apart from Studio's and the baseline's, so a preview's 404 leaves out the theme script (#7)", () => {
+  const nonce = 'MVlEoQyHU2PoMq1Imu8oSA==';
+  for (const mode of ['production', 'development'] as const) {
+    assert.equal(isPreviewPolicy(previewCsp(nonce, { mode })), true, mode);
+    const framed = previewCsp(nonce, { mode, studioOrigin: 'https://rowan.test' });
+    assert.equal(isPreviewPolicy(framed), true, mode);
+    assert.equal(isPreviewPolicy(studioCsp(nonce, mode)), false, mode);
+  }
+  for (const policy of ["frame-ancestors 'none'", '', "default-src 'self'"]) {
+    assert.equal(isPreviewPolicy(policy), false, policy);
+  }
 });

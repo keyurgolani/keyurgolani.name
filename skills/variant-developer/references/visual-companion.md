@@ -148,7 +148,7 @@ skills/variant-developer/scripts/visual-companion/start.sh \
   --mode preview --variant <id>
 ```
 
-This runs `pnpm --filter @portfolio/web dev` with `PORTFOLIO_PROFILE=demo`, which renders the bundled sample in any registered variant. Once the dev server is up, tell the user to visit `http://127.0.0.1:3000/sample?variant=<id>`. An id the build doesn't register, and `fallback`, are a 404; `pnpm check:variants --package @portfolio/variant-<id>` says why it isn't registered.
+This runs `pnpm --filter @portfolio/web dev` and polls `http://127.0.0.1:3000/preview/dev/<id>/complete` until it answers 200: the `complete` contract fixture in the variant, in the preview document and under the preview's headers. Tell the user to visit it once the script says it answers. `--fixture <name>` picks another of the contract fixtures, and `?displayMode=dark`, `?contrast=more`, `?motion=reduce`, or `?enhancement=off` sets the environment. The dev server runs under `PORTFOLIO_PROFILE=demo`, so `/sample?variant=<id>` shows the bundled sample in the variant too. An id the build doesn't register is a 404 at both; `pnpm check:variants --package @portfolio/variant-<id>` says why it isn't registered.
 
 ### Screenshots in every mode
 
@@ -159,6 +159,8 @@ pnpm exec playwright install chromium   # once
 pnpm build
 PORTFOLIO_VARIANTS_ONLY=<id> pnpm test:variants
 ```
+
+`start.sh --mode preview --variant <id> --matrix` runs the last line for you.
 
 The screenshots are attached to the report in `reports/variants/html/`. The agent reads them (if its harness supports image input) to inspect rendering; otherwise, ask the user to open the report and look. They're compared against baselines only for the platform's own packages, in CI's pinned Playwright image. See [docs/variants.md](../../../docs/variants.md#testing-a-variant).
 

@@ -18,9 +18,11 @@ import type { DeploymentConfig } from './config';
 import { setDeploymentState } from './config-store';
 import { servedPattern } from './route-guard';
 import {
+  devPreviewRoute,
   encodesFixedSegment,
   listRoutes,
   ownedFirstSegments,
+  PREVIEW_DEV,
   resolveRoute,
   RETIRED_PATTERNS,
   routeAccess,
@@ -960,8 +962,16 @@ test("the 'use server' check finds the directive however it is written", () => {
   for (const text of not) assert.equal(usesServer('probe.ts', text), false, text);
 });
 
+/** The table with the dev fixture route as `next dev` has it (#7, Slice 1, item 8). */
+const DEV_ROUTE = devPreviewRoute(true);
+const UNDER_NEXT_DEV: readonly RouteEntry[] = [
+  ...listRoutes().filter(({ pattern }) => pattern !== DEV_ROUTE.pattern),
+  DEV_ROUTE,
+];
+
 test('every entry names a known capability, profiles, and kind, and serves some profile', () => {
-  for (const entry of listRoutes()) {
+  // Off, as outside `next dev`, the dev fixture route serves none on purpose.
+  for (const entry of UNDER_NEXT_DEV) {
     assert.ok(
       entry.capability === 'operations' || CAPABILITIES.includes(entry.capability),
       entry.pattern,
@@ -977,6 +987,48 @@ test('every entry names a known capability, profiles, and kind, and serves some 
       PROFILES.some((profile) => routeAccess(profile, entry) !== 'absent'),
       `${entry.pattern}: an entry no profile serves`,
     );
+  }
+});
+
+test('the dev fixture route serves a registered variant, a contract fixture, and the environment its query names under next dev alone, and is absent in every profile of a production build (#7, Slice 1, item 8)', () => {
+  // Next writes NODE_ENV in as it compiles, and this process isn't next dev.
+  assert.equal(PREVIEW_DEV, process.env.NODE_ENV === 'development');
+  const off = routeResolver(
+    [...UNDER_NEXT_DEV.filter((entry) => entry !== DEV_ROUTE), devPreviewRoute(false)],
+    RETIRED_PATTERNS,
+  );
+  const on = routeResolver(UNDER_NEXT_DEV, RETIRED_PATTERNS);
+  const fixture = '/preview/dev/fallback/complete';
+  const environment = new URLSearchParams('displayMode=dark&contrast=more&motion=reduce');
+  for (const profile of PROFILES) {
+    assert.equal(off(profile, fixture).status, 'absent', profile);
+    assert.equal(off(profile, fixture, environment).status, 'absent', profile);
+    assert.equal(on(profile, fixture).status, 'served', profile);
+    assert.equal(on(profile, fixture, environment).status, 'served', profile);
+    assert.equal(on(profile, '/preview/dev/fallback/hidden-canary').status, 'served', profile);
+    // A variant, fixture, or environment value that names nothing is missing, on or off.
+    for (const [pathname, query] of [
+      ['/preview/dev/no-such-variant/complete', ''],
+      ['/preview/dev/fallback/no-such-fixture', ''],
+      ['/preview/dev/fallback/complete', 'motion=fast'],
+      ['/preview/dev/fallback/complete', 'displayMode=dark&displayMode=light'],
+      ['/preview/dev/fallback', ''],
+      ['/preview/dev/fallback/complete/about', ''],
+    ] as const) {
+      const what = `${profile} ${pathname}?${query}`;
+      assert.equal(on(profile, pathname, new URLSearchParams(query)).status, 'missing', what);
+      assert.equal(off(profile, pathname, new URLSearchParams(query)).status, 'missing', what);
+    }
+  }
+});
+
+test('no visitor route sits under /preview, since the outage 503 carries none of the preview headers (#7)', () => {
+  // proxy.ts answers a visitor route with its static 503 while the catalog
+  // can't serve, and that answer has only the baseline headers.
+  for (const entry of UNDER_NEXT_DEV) {
+    if (/^\/preview(?:-assets)?(?:\/|$)/i.test(entry.pattern)) {
+      assert.ok(!entry.visitor, `${entry.pattern} is a visitor route`);
+    }
   }
 });
 

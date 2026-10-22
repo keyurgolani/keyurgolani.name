@@ -85,14 +85,15 @@ export const isStudioTransport = (/** @type {string} */ pathname) =>
  * What is wrong with the headers of a response to `pathname`, or nothing.
  * `headers` holds lowercase names. `studio` says whether the profile serves
  * a Studio page, as owner does: under one that doesn't, a Studio path is as
- * unknown as any other.
+ * unknown as any other. `origin`, the app's PORTFOLIO_ORIGIN, is the one
+ * origin a preview's frame-ancestors may name.
  *
  * @param {string} pathname
  * @param {Readonly<Record<string, string | undefined>>} headers
- * @param {{ studio?: boolean }} [options]
+ * @param {{ studio?: boolean, origin?: string }} [options]
  * @returns {string[]}
  */
-export function headerProblems(pathname, headers, { studio: served = true } = {}) {
+export function headerProblems(pathname, headers, { studio: served = true, origin } = {}) {
   const problems = [];
   const expect = (/** @type {string} */ name, /** @type {string | undefined} */ value) => {
     if (headers[name] !== value) problems.push(`${name} is ${headers[name]}, not ${value}`);
@@ -105,8 +106,11 @@ export function headerProblems(pathname, headers, { studio: served = true } = {}
     for (const [name, value] of Object.entries(PREVIEW_HEADERS)) expect(name, value);
     expect('cross-origin-resource-policy', undefined);
     const csp = headers['content-security-policy'];
-    if (csp === undefined || !PREVIEW_CSP.test(csp)) {
+    const policy = csp === undefined ? null : PREVIEW_CSP.exec(csp);
+    if (!policy) {
       problems.push(`content-security-policy is ${csp}, not the preview's nonce CSP`);
+    } else if (origin !== undefined && policy[2] !== origin) {
+      problems.push(`frame-ancestors is ${policy[2]}, not ${origin}`);
     }
     return problems;
   }

@@ -17,13 +17,13 @@ About 30 seconds. Catches "the structure isn't there".
 skills/variant-developer/scripts/visual-companion/start.sh --mode preview --variant <id>
 ```
 
-Open `http://127.0.0.1:3000/sample?variant=<id>`. The script runs `pnpm dev` under `PORTFOLIO_PROFILE=demo`, which renders the bundled sample in any registered variant.
+The script runs `pnpm dev` and prints `http://127.0.0.1:3000/preview/dev/<id>/complete` once it answers 200: the `complete` contract fixture, every core section kind with every field, in your variant, in the preview document and under the preview's headers. `--fixture <name>` picks another fixture. `/sample?variant=<id>` renders the bundled sample in it too.
 
 **You must see:**
 
 - `data-variant="<id>"` on the boundary, and no `data-requested-variant` (that marks the fallback standing in).
 - Your arrangement: the grid, the columns, the navigation you wired, the visitor control slot where the manifest places it.
-- Every section the sample has, in the order your composition puts them.
+- Every section the fixture has, in the order your composition puts them.
 
 **A 404** means the build doesn't register the id. Run `pnpm check:variants --package @portfolio/variant-<id>` and read the diagnostic. **Unarranged structure** means the stylesheet isn't reaching the page: check the `./styles.css` export, and that every selector starts with `[data-variant='<id>']`.
 
@@ -34,6 +34,7 @@ The structure gate. The bundled sample is curated; a composition has to hold for
 | Pair                                                              | What to verify                                            |
 | ----------------------------------------------------------------- | --------------------------------------------------------- |
 | The bundled sample, at `/sample?variant=<id>`                     | Every kind renders; navigation names every titled section |
+| The contract fixtures, at `/preview/dev/<id>/<fixture>`           | `sparse`, `large`, `long-text`, and `rtl` hold up         |
 | A sparse pair: a hero and one or two sections                     | No empty frames, no navigation to nothing                 |
 | A dense pair, such as `packages/schema/src/__fixtures__/pairs/*/` | Long lists, many sections, nested items stay readable     |
 | `pairs/mixed`, which is Arabic and right to left                  | The composition mirrors; nothing is pinned to the left    |

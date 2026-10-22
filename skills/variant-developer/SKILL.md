@@ -99,7 +99,7 @@ Stand up a renderable variant with every section through the shared renderers. T
 - Scaffold: `pnpm new-variant <id>`. It copies `packages/fallback-composition` to `packages/variant-<id>`, renames the package to `@portfolio/variant-<id>`, sets the manifest's id and name, swaps the fallback's `fc-` classes for a prefix of the id's own (never `fc`, `pf`, or `host`), adds the package to `@portfolio/web` with `pnpm --filter @portfolio/web add`, and runs `pnpm check:variants --package @portfolio/variant-<id>`.
 - Edit `manifest.json` to match DESIGN.md: `promise`, `description`, `compositionFamily`, `motionIntent`, `performanceTier`, `routes`, `visitorControl.placement`, `textDirection`, and `provenance`. Leave `renderedKinds` empty until Wave 2.
 - Write `src/styles.css`: layout only. Spacing, arrangement, grid, and structure, every selector under `[data-variant='<id>']`, logical properties throughout. No colors, fonts, radii, shadows, or theme blocks: #19's tokens supply them, and the audit refuses a raw one. Load `references/styling-conventions.md` and `references/common-bugs.md` while writing it.
-- Verify (Gate A): `scripts/visual-companion/start.sh --mode preview --variant <id>`, then open `/sample?variant=<id>`. A 404 means the build doesn't register it: run `pnpm check:variants --package @portfolio/variant-<id>` and read the diagnostic.
+- Verify (Gate A): `scripts/visual-companion/start.sh --mode preview --variant <id>`, then open `/preview/dev/<id>/complete`, the `complete` contract fixture in the preview document. A 404 means the build doesn't register it: run `pnpm check:variants --package @portfolio/variant-<id>` and read the diagnostic.
 
 ### Wave 1.5: Kit hoists (when porting)
 
@@ -130,7 +130,7 @@ For each cluster:
 3. Add each kind to the manifest's `renderedKinds` and its renderer to the map you pass `renderSection(section, input, renderers, { level })`. The two must agree: a kind in one and not the other throws.
 4. A kind your composition deliberately doesn't show goes in `unsupportedKinds`, and DESIGN.md says why. Prefer the shared renderer: the visitor still gets the content.
 5. Run `node skills/variant-developer/scripts/kit-dedup.mjs packages/variant-<id>` and resolve each candidate by hoisting it, or by a `// LOCAL: <reason>` comment.
-6. **Visual checkpoint.** Look at `/sample?variant=<id>`. HTTP 200 isn't proof. The sample is curated; Gate H's real data finds what it hides.
+6. **Visual checkpoint.** Look at `/preview/dev/<id>/complete`, then `sparse`, `large`, and `long-text` (`--fixture <name>`). HTTP 200 isn't proof. The fixtures are made up; Gate H's real data finds what they hide.
 
 Renderer reminders:
 
@@ -206,7 +206,7 @@ It's a lint over code the host already trusts, not a sandbox: a variant installs
 
 ### Visual gates
 
-- **Gate A: Visual sanity.** `/sample?variant=<id>` renders your structure.
+- **Gate A: Visual sanity.** `/preview/dev/<id>/complete` renders your structure.
 - **Gate B: Content matrix.** The sample, a sparse pair, and a dense pair. Structure holds at each.
 - **Gate C: Reduced motion.** The motion contract, plus the programmatic checks for anything it can't see, such as a canvas.
 - **Gate D: Print preview.** Navigation and decoration hidden, content in reading order.
@@ -233,7 +233,7 @@ Would the user understand this better by seeing it than reading it? Layout compa
 ### Modes
 
 - **Mockup-mode** (Phase 1, before code). `scripts/visual-companion/start.sh --mode mockup --project-dir <repo-root>`. You write HTML fragments to the watched directory; the user's clicks land in `state_dir/events`.
-- **Preview-mode** (Phases 2 and 3). `scripts/visual-companion/start.sh --mode preview --variant <id>` runs the dev server under `PORTFOLIO_PROFILE=demo`, at `/sample?variant=<id>`. For screenshots in every mode, run `PORTFOLIO_VARIANTS_ONLY=<id> pnpm test:variants`.
+- **Preview-mode** (Phases 2 and 3). `scripts/visual-companion/start.sh --mode preview --variant <id>` runs the dev server and polls `/preview/dev/<id>/complete` until it answers 200: the `complete` contract fixture in the preview document, under the preview's headers. `--fixture <name>` picks another fixture, and `?displayMode=dark`, `?contrast=more`, `?motion=reduce`, or `?enhancement=off` sets the environment. `/sample?variant=<id>` still shows the bundled sample. For screenshots in every mode, `--matrix` runs `PORTFOLIO_VARIANTS_ONLY=<id> pnpm test:variants`.
 
 See `references/visual-companion.md`.
 
@@ -243,7 +243,7 @@ For the full catalog with reproductions and fixes, load `references/common-bugs.
 
 ### Registry
 
-- A `/sample?variant=<id>` 404 means the build doesn't register the id. Run `pnpm check:variants --package @portfolio/variant-<id>`; it says why.
+- A 404 at `/preview/dev/<id>/complete` or `/sample?variant=<id>` means the build doesn't register the id. Run `pnpm check:variants --package @portfolio/variant-<id>`; it says why.
 - The registry is generated, not committed. `pnpm dev` and `pnpm build` regenerate it; after adding or removing a dependency mid-session, run `pnpm --filter @portfolio/web build:registry`.
 - The id `fallback`, the five composition ids (#13 to #17), and `missing-variant` are reserved. A package outside `@portfolio` starts its id with its scope: `@acme/ocean` is `acme-ocean`.
 
@@ -280,7 +280,7 @@ For the full catalog with reproductions and fixes, load `references/common-bugs.
 When every gate passes:
 
 - Push `DESIGN.md` with the package, on the same branch as the PR.
-- Tell the user how to see it: `scripts/visual-companion/start.sh --mode preview --variant <id>`, then `/sample?variant=<id>`. To render their own portfolio in it, they set `appearance.variant` in `config/site.yml`.
+- Tell the user how to see it: `scripts/visual-companion/start.sh --mode preview --variant <id>`, then `/preview/dev/<id>/complete`, or `/sample?variant=<id>` for the bundled sample. To render their own portfolio in it, they set `appearance.variant` in `config/site.yml`.
 - Don't run `pnpm dev` for them unless they ask.
 
 ## 10. Reference docs, in reading order

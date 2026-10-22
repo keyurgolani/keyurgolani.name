@@ -235,14 +235,15 @@ A content extension package sets `"portfolio": { "kind": "content-extension" }` 
 The variant-developer skill ships a visual companion at `skills/variant-developer/scripts/visual-companion/`:
 
 - **Mockup mode** (an HTTP server and a file watcher) for layout boards and section sketches before code exists.
-- **Preview mode** runs the dev server under `PORTFOLIO_PROFILE=demo` for `/sample?variant=<id>`.
+- **Preview mode** runs the dev server and polls the dev fixture route, `/preview/dev/<id>/<fixture>`, until it answers 200. The route renders one of the contract fixtures (`complete` unless you pass `--fixture <name>`) in the variant, in the preview document and under the preview's headers, the way Studio's preview frame will (#7). `?displayMode=`, `?contrast=more`, `?motion=reduce`, and `?enhancement=off` set its environment, and any other value is a 404. Only `next dev` serves the route: a production build answers it as a path no route matches. The dev server runs under `PORTFOLIO_PROFILE=demo`, so `/sample?variant=<id>` shows the bundled sample too.
 
 ```sh
 bash skills/variant-developer/scripts/visual-companion/start.sh
-bash skills/variant-developer/scripts/visual-companion/start.sh --mode preview --variant <id>
+bash skills/variant-developer/scripts/visual-companion/start.sh --mode preview --variant <id> [--fixture <name>]
+bash skills/variant-developer/scripts/visual-companion/start.sh --mode preview --variant <id> --matrix
 ```
 
-For screenshots, run the variant specs, as in [Testing a variant](#testing-a-variant).
+For screenshots, run the variant specs, as in [Testing a variant](#testing-a-variant); `--matrix` runs them for the one variant.
 
 ## What to read next
 

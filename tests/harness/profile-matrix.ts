@@ -116,15 +116,20 @@ const STUDIO_SPELLINGS = [
 /**
  * Preview paths in every spelling a request may use (#7): /preview and
  * /preview-assets and below, with a query, in another case, percent-encoded,
- * and with the slash encoded. No preview route serves any of them yet, so
- * each answers every method as /no-such-page does, under the preview's
- * headers in every profile.
+ * and with the slash encoded. No preview route serves any of them in a
+ * production build, the dev fixture route included, so each answers every
+ * method as /no-such-page does, under the preview's headers in every profile.
  */
 const PREVIEW_SPELLINGS = [
   '/preview',
   '/preview/editorial',
   '/preview/g_7Hk-2/work/tide-tables?displayMode=dark',
+  // The dev fixture route (#7, item 8), which only `next dev` serves: a
+  // production build answers it as a path no route matches, in any spelling.
   '/preview/dev/fallback/complete',
+  '/preview/dev/fallback/complete?displayMode=dark&motion=reduce',
+  '/Preview/Dev/fallback/complete',
+  '/preview/%64ev/fallback/complete',
   '/preview-assets',
   '/preview-assets/g_7Hk-2/asset/abc/large.webp',
   '/PREVIEW/x',
@@ -254,8 +259,11 @@ const hasStudio = (profile: Profile) =>
  */
 function expectProfileHeaders(profile: Profile, response: APIResponse, what: string) {
   const headers = response.headers();
-  const { pathname } = new URL(response.url());
-  expect(headerProblems(pathname, headers, { studio: hasStudio(profile) }), what).toEqual([]);
+  // Every request goes to the app's own address, its PORTFOLIO_ORIGIN.
+  const { pathname, origin } = new URL(response.url());
+  expect(headerProblems(pathname, headers, { studio: hasStudio(profile), origin }), what).toEqual(
+    [],
+  );
   expect(headers['set-cookie'], `${what}: no cookie`).toBeUndefined();
   expect(headers['x-robots-tag'], `${what}: X-Robots-Tag`).toBe(
     isPreviewPath(pathname) ? 'noindex, nofollow' : INDEXABLE[profile] ? undefined : 'noindex',
@@ -654,7 +662,7 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
   );
 
   test(
-    'every preview path, in any spelling and to any method, answers as a path no route matches, under the preview headers and with no cookie read (#7)',
+    'every preview path, in any spelling and to any method, answers as a path no route matches, under the preview headers, the same with a session cookie as without (#7)',
     {
       annotation: [
         { type: 'route', description: '/preview' },
@@ -799,12 +807,15 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
     { annotation: [{ type: 'route', description: 'every route' }, annotation] },
     async ({ app, request }) => {
       // Next answers these itself, before proxy.ts and the next.config.ts
-      // headers, so they carry none of the baseline headers. The target is
-      // the canonical path, and the body holds it and nothing else
-      // (docs/deployment.md).
-      const targets = listRoutes()
-        .filter((route) => route.pattern !== '/' && routeAccess(profile, route) !== 'absent')
-        .map((route) => concrete(route.pattern));
+      // headers, so they carry none of the baseline headers, and under
+      // /preview none of the preview's (#7). The target is the canonical
+      // path, and the body holds it and nothing else (docs/deployment.md).
+      const targets = [
+        ...listRoutes()
+          .filter((route) => route.pattern !== '/' && routeAccess(profile, route) !== 'absent')
+          .map((route) => concrete(route.pattern)),
+        '/preview/x',
+      ];
       expect(targets.length).toBeGreaterThan(0);
       for (const target of targets) {
         // The repeated slash goes whole, so no one reads it as a host.

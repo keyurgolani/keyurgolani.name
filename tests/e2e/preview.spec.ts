@@ -39,8 +39,12 @@ async function load(page: Page, path: string, status: number) {
 const studioSelectors = (found: DocumentInventory) =>
   found.selectors.filter((selector) => /\.(?:host-chrome|studio)\b/.test(selector));
 
+/** The theme the site's theme script painted, or null where none ran. */
+const paintedTheme = (page: Page) =>
+  page.evaluate(() => document.documentElement.dataset.theme ?? null);
+
 test(
-  "a preview path's page loads no Studio stylesheet, script, or markup, carries the nonce on every script, and raises no CSP violation",
+  "a preview path's page loads no Studio stylesheet, script, or markup, and no theme script, carries the nonce on every script, and raises no CSP violation",
   { annotation: [PREVIEW] },
   async ({ page }) => {
     await recordViolations(page);
@@ -52,10 +56,13 @@ test(
     const site = await load(page, '/no-such-page', 404);
     const studioOnly = studio.found.scripts.filter((src) => !site.found.scripts.includes(src));
     expect(studioOnly.length, "scripts only Studio's pages load").toBeGreaterThan(0);
+    // The site's 404 runs the site's theme script, as its pages do.
+    expect(await paintedTheme(page), 'the theme on the site 404').not.toBeNull();
 
     for (const path of ['/preview/editorial', '/preview-assets/g_7Hk-2/asset', '/PREVIEW/x']) {
       const { csp, found } = await load(page, path, 404);
       expect(csp, path).toMatch(PREVIEW_CSP);
+      expect(await paintedTheme(page), `${path}: the theme script`).toBeNull();
       expect(found.sentinel, `${path}: the sentinel`).toBe('');
       expect(studioSelectors(found), `${path}: Studio's selectors`).toEqual([]);
       // The experience's own stylesheets did load.

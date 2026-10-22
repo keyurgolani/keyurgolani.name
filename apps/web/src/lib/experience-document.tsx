@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react';
-import type { DisplayMode, MotionPolicy, PublicView } from '@portfolio/schema';
+import type { MotionPolicy, PublicView } from '@portfolio/schema';
 import { buildRenderInput, type RouteTarget } from '@portfolio/variant-contract';
 import { ClientHostModules } from './host-modules-client';
 import './host-modules';
+import type { EnvironmentAttributes } from './preview-environment';
 import { loadComposition, type Composition } from './variants';
 
 // The portfolio a document shows (#5, Slice 3, item 6, and #7, Slice 1, item
@@ -10,18 +11,6 @@ import { loadComposition, type Composition } from './variants';
 // <div data-variant>, with the variant inside it. Public pages and previews
 // both render it, so a preview shows the same tree a visitor gets. #19's
 // tokens apply at the boundary, so the 404 page renders inside one too.
-
-/**
- * The environment a preview fixes for its document (#7, Slices 1 and 4), as
- * attributes on the presentation boundary, under the names #19 keeps. A public
- * page renders in its visitor's own environment and sets none.
- */
-export interface EnvironmentAttributes {
-  readonly 'data-display-mode'?: DisplayMode;
-  readonly 'data-contrast'?: 'system' | 'more';
-  readonly 'data-motion'?: 'full' | 'reduced';
-  readonly 'data-enhancement'?: 'on' | 'off';
-}
 
 /** Where a document's routes are mounted, which every internal link starts from. */
 export interface LinkBase {

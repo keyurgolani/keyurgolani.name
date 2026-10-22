@@ -132,6 +132,18 @@ test("a preview path needs the preview's nonce CSP, noindex, no-referrer, privat
   assert.notDeepEqual(headerProblems('/previews', PREVIEW_PAGE), []);
 });
 
+test("given the app's origin, a preview's frame-ancestors must be that origin and no other (#7)", () => {
+  const origin = 'https://rowan.test';
+  assert.deepEqual(headerProblems('/preview/x', PREVIEW_PAGE, { origin }), []);
+  for (const other of ['https://evil.test', 'http://rowan.test', 'https://rowan.test:8443']) {
+    assert.deepEqual(
+      headerProblems('/preview/x', PREVIEW_PAGE, { origin: other }),
+      [`frame-ancestors is ${origin}, not ${other}`],
+      other,
+    );
+  }
+});
+
 test('only /_next/static and /_portfolio allow any origin (#7)', () => {
   const shared = { ...BASELINE_HEADERS, 'access-control-allow-origin': '*' };
   for (const path of ['/_next/static/chunks/app.js', '/_portfolio/generated/a.css']) {

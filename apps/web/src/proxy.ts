@@ -45,7 +45,9 @@ import {
 // on the request too, for the scripts and styles Next renders, and its
 // noindex, no-referrer, and private, no-store headers, before startup
 // included. Those requests reach Next without their Cookie header, so no
-// preview route reads a session or a visitor's preference. Under the
+// preview route reads a session or a visitor's preference. A preview route
+// this build doesn't serve, such as the dev fixture route outside `next
+// dev`, answers as a path no route matches, in any spelling. Under the
 // prefixes next.config.ts serves with Access-Control-Allow-Origin: *, only
 // a GET or HEAD of a build asset, as Next serves them, and a route the table
 // serves get past here; anything else there is the plain 404, so no page
@@ -114,7 +116,12 @@ export function proxy(request: NextRequest): NextResponse {
     return plain(404, 'Not found.', requestId, extra);
   }
   if (decision.status === 'absent') {
-    if (studioPath && !studio && pageLoad) return unknownPath(request, requestId, extra, {});
+    // A Studio page under a profile with none, and a preview route this
+    // build doesn't serve, such as the dev fixture route outside `next dev`,
+    // answer as a path no route matches.
+    if ((preview || (studioPath && !studio)) && pageLoad) {
+      return unknownPath(request, requestId, extra, { csp, preview });
+    }
     return plain(404, 'Not found.', requestId, extra);
   }
   if (decision.status === 'missing' && !pageLoad) {

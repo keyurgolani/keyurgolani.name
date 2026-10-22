@@ -151,6 +151,19 @@ module.exports = {
       },
     },
     {
+      name: 'preview-imports-no-studio',
+      severity: 'error',
+      comment:
+        'A preview document (#7) shows what a visitor gets, so nothing in app/(preview) or ' +
+        "src/preview imports Studio's route group or host-chrome.css, whose sentinel and " +
+        'markup would reach the frame (threat preview-9). Tests may.',
+      from: {
+        path: '^apps/web/src/(?:app/\\(preview\\)/|preview/)',
+        pathNot: '\\.test\\.tsx?$',
+      },
+      to: { path: ['^apps/web/src/app/\\(studio\\)/', 'host-chrome\\.css$'] },
+    },
+    {
       name: 'store-test-support-only-from-tests',
       severity: 'error',
       comment:

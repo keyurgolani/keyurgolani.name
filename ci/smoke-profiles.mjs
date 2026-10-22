@@ -276,9 +276,10 @@ const hasStudio = (profile) =>
 /**
  * The requests a profile's container gets, each with the problems its
  * response shows: the route matrix, health, and readiness. `leaks` are the
- * canaries no response may carry.
+ * canaries no response may carry, and `origin`, the container's
+ * PORTFOLIO_ORIGIN, the only origin that may frame a preview.
  */
-function plan(profile, leaks) {
+function plan(profile, leaks, origin) {
   const requests = [];
   const add = (method, pathname, check) =>
     requests.push({
@@ -378,6 +379,7 @@ function plan(profile, leaks) {
           response.headers,
           {
             studio: hasStudio(profile),
+            origin,
           },
         ),
       ];
@@ -462,7 +464,11 @@ async function profileRun(profile, { env, mounts = [], secrets = [], paths = [],
       { timeoutMs, alive: running, what: `${profile}: GET /api/health to answer 200` },
     );
 
-    const requests = plan(profile, canaries(SERVER_DIR, { secrets: [...secrets, ...paths] }));
+    const requests = plan(
+      profile,
+      canaries(SERVER_DIR, { secrets: [...secrets, ...paths] }),
+      env.PORTFOLIO_ORIGIN,
+    );
     const responses = send(
       name,
       requests.map(({ method, path: pathname, body }) => ({ method, path: pathname, body })),

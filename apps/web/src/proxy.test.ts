@@ -598,12 +598,22 @@ test("every preview response, in any case or percent-encoding, gets the preview'
     deploy(t, profile);
     const nonces = new Set<string>();
     for (const path of PREVIEW_PATHS) {
-      // No preview route serves anything yet, so each is a path no route
-      // matches: on to Next's 404 page for GET and HEAD, under these headers.
+      // No preview route serves anything in this build, so each is a path no
+      // route matches: on to Next's 404 page for GET and HEAD, under these
+      // headers. The dev fixture route, which the table lists and only `next
+      // dev` serves, goes there through the beforeFiles rewrite.
       for (const method of ['GET', 'HEAD']) {
         const response = proxy(request(path, method));
         const what = `${profile} ${method} ${path}`;
-        assert.equal(decision(response), 'missing', what);
+        if (path === '/preview/dev/fallback/complete') {
+          assert.equal(
+            response.headers.get('x-middleware-request-x-portfolio-not-found'),
+            '1',
+            what,
+          );
+        } else {
+          assert.equal(decision(response), 'missing', what);
+        }
         const csp = response.headers.get('content-security-policy') ?? '';
         const nonce = previewPolicy('https://rowan.test').exec(csp)?.[1];
         assert.ok(nonce, `${what}: ${csp}`);
