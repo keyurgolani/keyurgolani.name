@@ -665,18 +665,26 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
   );
 
   test(
-    "a page request with Next's router prefetch header and no RSC header gets an answer at once: the 404 page, or what proxy.ts answers first (#1)",
+    "a request with Next's router prefetch header and no RSC header, for a page or a /_next/ path that isn't a build file, gets an answer at once: the 404 page, or what proxy.ts answers first (#1)",
     { annotation: [{ type: 'route', description: 'every route' }, annotation] },
     async ({ request }) => {
       // Next's router sends it only beside RSC: 1. next.config.ts sends a
       // request without one to the 404 page; a redirect proxy.ts answers
-      // itself, such as sign-in for a Studio page, stays as it is.
+      // itself, such as sign-in for a Studio page, stays as it is. A build
+      // file is still served.
       const prefetch = { 'next-router-prefetch': '1', 'next-router-segment-prefetch': '/_tree' };
+      const notFound = await request.get('/no-such-page');
+      const asset = (await notFound.text()).match(/\/_next\/static\/[^"'?\s]+\.js/)?.[0];
+      expect(asset, 'a build file the 404 page loads').toBeDefined();
+      const served = await request.get(asset ?? '', { headers: prefetch, timeout: 5_000 });
+      expect(served.status(), `${asset}, with the prefetch header`).toBe(200);
       const targets = [
         ...listRoutes()
           .filter((entry) => entry.kind === 'page' && routeAccess(profile, entry) !== 'absent')
           .map((entry) => concrete(entry.pattern)),
         '/no-such-page',
+        '/_next/foo',
+        '/_next/static/nonexistent.js',
       ];
       expect(targets.length).toBeGreaterThan(1);
       for (const target of targets) {

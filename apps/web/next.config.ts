@@ -63,12 +63,14 @@ const config: NextConfig = {
         // A request with Next's router prefetch header and no RSC header,
         // which Next's own router never sends, gets the 404 page too (#1).
         // proxy.ts can't drop the header itself, since Next keeps its router
-        // headers out of the proxy's request and puts them back after it. Build
-        // assets are left alone. An empty RSC header counts as none, as Next
-        // reads it here.
+        // headers out of the proxy's request and puts them back after it. A
+        // path under /_next/ waits for the afterFiles rule below, so a build
+        // file is still served. The value pattern keeps the header's value
+        // out of the 404 page's query, where a bare key would put it. An
+        // empty RSC header counts as none, as Next reads it here.
         {
           source: '/((?!_next/).*)',
-          has: [{ type: 'header' as const, key: 'next-router-prefetch' }],
+          has: [{ type: 'header' as const, key: 'next-router-prefetch', value: '.*' }],
           missing: [{ type: 'header' as const, key: 'rsc' }],
           destination: '/_not-found',
         },
@@ -86,6 +88,15 @@ const config: NextConfig = {
         {
           source: '/(.*)',
           has: [{ type: 'header' as const, key: ROUTE_HEADER, value: 'missing' }],
+          destination: '/_not-found',
+        },
+        // The router prefetch rule for /_next/ (#1): Next has served any
+        // build file by now, so a path there that isn't one, asked for with
+        // the prefetch header and no RSC header, gets the 404 page.
+        {
+          source: '/_next/(.*)',
+          has: [{ type: 'header' as const, key: 'next-router-prefetch', value: '.*' }],
+          missing: [{ type: 'header' as const, key: 'rsc' }],
           destination: '/_not-found',
         },
       ],
