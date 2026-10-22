@@ -360,6 +360,16 @@ test("a key on another request's event is idempotency_conflict, and nothing move
         { expectedLiveRevisionId: first, idempotencyKey: 'rollback-1' },
         'owner',
       ),
+    'a publish of the same draft version, from another live revision': () =>
+      owned(store).publish(
+        {
+          draftId: draft.draftId,
+          draftVersion: draft.version,
+          expectedLiveRevisionId: second,
+          idempotencyKey: 'publish-1',
+        },
+        'owner',
+      ),
     "a rollback with a publish's key": () =>
       owned(store).rollback(
         { targetRevisionId: second, expectedLiveRevisionId: first, idempotencyKey: 'publish-1' },
@@ -1182,9 +1192,12 @@ test('a commit whose lock was broken and retaken moves nothing and answers lock_
     draftVersion: draft.version,
     expectedLiveRevisionId: second,
   };
+  const revisions = await nodeFs.readdir(store.paths.revisions);
   const lost = await owned(breakingAt('publish.live.write')).publish(publish, 'owner');
   assert.equal(lost.kind === 'rejected' && lost.code, 'lock_lost');
   assert.equal((await store.lock.holder())?.holder, 'cli:backup');
+  // The revision it wrote stays: nothing is removed without the lock.
+  assert.equal((await nodeFs.readdir(store.paths.revisions)).length, revisions.length + 1);
   assert.ok(await store.lock.forceUnlock());
   const rollback = { targetRevisionId: first, expectedLiveRevisionId: second };
   const lostRollback = await owned(breakingAt('rollback.live.write')).rollback(rollback, 'owner');
@@ -1294,6 +1307,36 @@ test('a publish whose session ended removes its never-live revision only while t
   // The revision it wrote stays, and says so.
   assert.equal((await nodeFs.readdir(store.paths.revisions)).length, 2);
   assert.ok(logs.some((entry) => entry.event === 'store.publish.unpublished_left'));
+});
+
+test('a publish whose rename lands and then reports a failure keeps the revision live.json now names', async (t) => {
+  const store = await newStore(t);
+  const first = await publishInput(store, pairInput('engineering'));
+  const draft = await draftOf(store, contentVariant(pairInput('engineering'), 'two'));
+  // The rename lands, then fails, as a disk can: the move ran, so its
+  // revision may be live, and it stays.
+  const failing = openStore({
+    dataDir: store.paths.root,
+    checks: testChecks(),
+    fs: {
+      ...nodeFs,
+      async rename(from, to, point) {
+        await nodeFs.rename(from, to, point);
+        if (point === 'publish.live.rename') {
+          throw Object.assign(new Error('EIO after the rename'), { code: 'EIO' });
+        }
+      },
+    },
+  });
+  await assert.rejects(
+    owned(failing).publish(
+      { draftId: draft.draftId, draftVersion: draft.version, expectedLiveRevisionId: first },
+      'owner',
+    ),
+  );
+  const pointer = await readLive(nodeFs, store.paths);
+  assert.ok(pointer && pointer.revisionId !== first);
+  assert.equal((await readRevision(nodeFs, store.paths, pointer.revisionId)).ok, true);
 });
 
 /** An event that disagrees with live.json's, as a second holder of the lock writes one. */
