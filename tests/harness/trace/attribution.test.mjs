@@ -357,18 +357,18 @@ test('a surrogate pair counts its 4 bytes once, and a lone surrogate 3, as UTF-8
 });
 
 test('a long non-ASCII line attributes in one pass, not one pass per mapping', () => {
-  // 600,000 UTF-16 units, 1,194,000 UTF-8 bytes, and a mapping every 100 units.
+  // 1,200,000 UTF-16 units, 2,388,000 UTF-8 bytes, and a mapping every 100 units.
   const unit = `${'é'.repeat(99)}x`;
-  const code = unit.repeat(6000);
-  const segments = Array.from({ length: 6000 }, (_, k) => [k * 100, k % 2]);
+  const code = unit.repeat(12000);
+  const segments = Array.from({ length: 12000 }, (_, k) => [k * 100, k % 2]);
   const map = { sources: ['a.js', 'b.js'], mappings: mappings([segments]) };
   const started = performance.now();
   const { bytes, unmapped, sources } = attributeCode(code, map);
   const elapsed = performance.now() - started;
   assert.equal(bytes, Buffer.byteLength(code));
   assert.equal(unmapped, 0);
-  assert.equal(sources.get('a.js'), 3000 * Buffer.byteLength(unit));
-  assert.equal(sources.get('b.js'), 3000 * Buffer.byteLength(unit));
+  assert.equal(sources.get('a.js'), 6000 * Buffer.byteLength(unit));
+  assert.equal(sources.get('b.js'), 6000 * Buffer.byteLength(unit));
   // Reading each mapping's column from the line start again takes seconds here.
   assert.ok(elapsed < 500, `took ${Math.round(elapsed)} ms`);
 });
