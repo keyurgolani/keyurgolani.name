@@ -51,7 +51,7 @@ Run often in Waves 2 and 3, and once more at Phase 3.
 ## Accessibility
 
 - [ ] Focus order matches reading order.
-- [ ] Every image has alt text, or is marked decorative where adjacent text names it.
+- [ ] Every image placement has alt text, its own or its asset's, or is marked decorative where adjacent text names it. No alt text of your own.
 - [ ] Keyboard navigation reaches every interactive element, and focus is visible.
 - [ ] The host's skip link reaches your `<main>`, which takes focus (`tabIndex={-1}`).
 - [ ] Headings descend in order: the page's one `h1`, then `h2` per section.

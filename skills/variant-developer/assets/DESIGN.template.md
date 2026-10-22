@@ -44,38 +44,24 @@
 
 ## Section coverage map
 
-> Every kind in `ALL_SECTION_KINDS`: bespoke (in `renderedKinds`), shared
+> Every kind in `CORE_SECTION_KINDS`: bespoke (in `renderedKinds`), shared
 > (the kit's renderer), or unsupported (in `unsupportedKinds`, with a reason).
 
 | Kind | Treatment | Notes |
 |------|-----------|-------|
+| `works` | bespoke / shared | ... |
+| `evidence` | bespoke / shared | ... |
+| `chronology` | bespoke / shared | ... |
+| `practice` | bespoke / shared | ... |
+| `contact` | bespoke / shared | ... |
+| `custom` | bespoke / shared | ... |
 | `hero` | bespoke / shared | ... |
 | `lede` | bespoke / shared | ... |
 | `now` | bespoke / shared | ... |
-| `experience` | bespoke / shared | ... |
-| `education` | bespoke / shared | ... |
-| `projects` | bespoke / shared | ... |
-| `writings` | bespoke / shared | ... |
-| `publications` | bespoke / shared | ... |
-| `talks` | bespoke / shared | ... |
-| `awards` | bespoke / shared | ... |
-| `episodes` | bespoke / shared | ... |
-| `patents` | bespoke / shared | ... |
-| `gallery` | bespoke / shared | ... |
-| `discography` | bespoke / shared | ... |
-| `testimonials` | bespoke / shared | ... |
-| `press` | bespoke / shared | ... |
 | `quote` | bespoke / shared | ... |
-| `skills` | bespoke / shared | ... |
-| `stack` | bespoke / shared | ... |
-| `services` | bespoke / shared | ... |
-| `contact` | bespoke / shared | ... |
-| `cta` | bespoke / shared | ... |
-| `stats` | bespoke / shared | ... |
 | `focus` | bespoke / shared | ... |
 | `fun-facts` | bespoke / shared | ... |
-| `tenure` | bespoke / shared | ... |
-| `external-portfolios` | bespoke / shared | ... |
+| `cta` | bespoke / shared | ... |
 | `github` | bespoke / shared | ... |
 
 ## Controls and content slots
@@ -140,10 +126,10 @@
 
 | Reference field | Schema equivalent | Plan |
 |---|---|---|
-| `experienceTracks[].entries[].dateRange.from` | `experience.items[].period.start` | Renamed; pass through. |
-| `track.branch` | not modeled | Inferable with `inferKindFromText` on role and organization. Document the rules. |
+| `experienceTracks[].entries[].dateRange.from` | `chronology[].period.start` | Renamed; pass through. |
+| `track.branch` | `chronology[].thread` | Renamed; the owner writes it. Never infer it. |
 | `entry.skills[].proficiency` | not modeled | Not portable. Drop the progress bar. |
-| `experienceTracks` (several tracks) | not modeled | Composed: `experience`, `education`, `awards`, and `publications` in one stream. |
+| `experienceTracks` (several tracks) | `chronology`, with `works` and `evidence` it points at | Composed: roles and studies in one stream, with the awards and publications they cite. |
 | ... | | |
 
 ## Fidelity targets

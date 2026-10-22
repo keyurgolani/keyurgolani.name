@@ -95,21 +95,6 @@
   grid-template-columns: repeat(auto-fill, minmax(min(16rem, 100%), 1fr));
 }
 
-:where([data-variant] [data-renderer='shared'] .pf-gallery[data-layout='plates']) {
-  grid-template-columns: 1fr;
-}
-
-:where([data-variant] [data-renderer='shared'] .pf-gallery[data-layout='columns']) {
-  display: block;
-  columns: 16rem;
-  column-gap: 1rem;
-}
-
-:where([data-variant] [data-renderer='shared'] .pf-gallery[data-layout='columns'] > li) {
-  break-inside: avoid;
-  margin-block-end: 1rem;
-}
-
 :where([data-variant] [data-renderer='shared'] figcaption) {
   margin-block-start: 0.5rem;
 }

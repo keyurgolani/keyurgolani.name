@@ -55,8 +55,10 @@ Slugify every synthesized id you reference with `url(#...)`, and start it with `
 
 ```ts
 import { slugify } from '@portfolio/kit';
-const gradientId = `${input.ids.prefix}${slugify(`experience-${item.organization}-${item.role}`)}`;
+const gradientId = `${input.ids.prefix}${slugify(`chronology-${entry.organization}-${entry.title}`)}`;
 ```
+
+A record's id is safe as it is: `${input.ids.prefix}grad-${entry.id}` needs no slugify.
 
 Do it for every `<linearGradient id>`, `<filter id>`, `<mask id>`, and `<clipPath id>`, and the strings that reference them.
 
@@ -177,16 +179,17 @@ If you must keep it, clamp its position to the viewport, and use `position: abso
 ### What it looks like
 
 - The reference (a `legacy/` package, page-zero) had richer data than the schema carries.
-- The schema dropped or renamed fields the reference's renderers used (such as `experienceTracks[].branch` against flat `experience.items`).
+- The schema dropped or renamed fields the reference's renderers used (such as `experienceTracks[].branch` against a chronology entry's `thread`, which the owner writes and nothing infers).
 - Renderers crash on missing fields, or render less than the reference did.
 
 ### Fix
 
 **Before Phase 1**, diff the data shapes. List every field the reference touches, and map each to the schema. When one is missing:
 
-- **Inferable** (the old `track.branch`, from `inferKindFromText` on role and organization): document the heuristic in DESIGN.md.
+- **Renamed** (the old `track.branch`, which is a chronology entry's `thread` now, written by the owner): read it as it is. Never infer it.
+- **Inferable** (how long a role ran, from its `period`): document the rule in DESIGN.md.
 - **Not modeled** (an old per-skill `proficiency: 80%`): say it's dropped, and adjust the renderer. Don't fake the data.
-- **Composed from several kinds** (an old timeline that merged work, study, research, and awards): document that the renderer reads several section kinds.
+- **Composed from several records** (an old timeline that merged work, study, research, and awards): document that the renderer reads the chronology entries a section lists, and the works and evidence they point at.
 
 Skip this and Wave 2 stalls when a renderer can't reproduce the reference.
 

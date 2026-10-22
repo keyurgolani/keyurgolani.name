@@ -80,22 +80,27 @@ Some are entirely variant-local. Tag each one in the inventory.
 Take the reference's data model (often coupled to its renderers) and
 diff against the current `@portfolio/schema` types. For every field:
 
-- **Same** — reference's `experience.items[].role` and schema's same.
+- **Same** — reference's `experience.items[].organization` and a
+  chronology entry's `organization`.
 - **Renamed** — reference's `experienceTracks[].entries[].dateRange.from`
-  and schema's `experience.items[].period.start`.
-- **Lost** — reference had `track.branch: 'work' | 'study' | 'creative'`,
-  schema has no equivalent.
+  and a chronology entry's `period.start`; its
+  `track.branch: 'work' | 'study' | 'creative'` and the entry's `thread`.
+- **Lost** — reference had `proficiency: 80%` per skill, and the schema
+  has no equivalent.
 - **Added** — schema has new fields the reference didn't model.
 
 For _Lost_ fields, decide per field:
 
-- **Inferable** — `track.branch` can be heuristically inferred from
-  `role + organization` keywords. Use `inferKindFromText` from
-  `@portfolio/kit/timeline`. Document the rule set in the renderer's lib file.
+- **Inferable** — a value the renderer can compute from fields the
+  schema has, such as how long a role ran from its `period`, with
+  `formatDuration`. Document the rule in the renderer's lib file. Never
+  infer what the owner writes, such as a chronology entry's `thread`.
 - **Multi-section composition** — reference composed `experienceTracks`
-  internally; new schema separates `experience`, `education`, `awards`,
-  `publications`. Pull from multiple section kinds in the renderer
-  (e.g. the multi-kind Timeline Odyssey).
+  internally; the schema keeps roles and studies as chronology entries,
+  and awards and publications as evidence. Read the records a section
+  lists, and the ones they point at (a chronology entry's `works`, a
+  work's `evidence`), through the kit's view helpers (e.g. the multi-kind
+  Timeline Odyssey).
 - **Not portable** — `proficiency: 80%` per skill doesn't exist anywhere
   in the new schema. Don't fake it. Drop the visual element (progress
   bar) or replace with one that uses available data. Document in
@@ -132,7 +137,7 @@ present in the final variant:
 - [ ] Falling code-glyph canvas backdrop, as an enhancement.
 - [ ] 5 social profile cards in parallax orbit, draggable.
 - [ ] Multi-text typing animation cycling roles.
-- [ ] Animated counters in stats tiles.
+- [ ] Animated counters in metric tiles.
 - [ ] SVG fork/merge timeline with per-kind colored branches.
 - [ ] 3D mouse-tilt on expanded timeline cards with radial-gradient glow.
 - [ ] Project cards expand on click; show technologies as chips.

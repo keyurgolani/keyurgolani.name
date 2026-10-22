@@ -13,7 +13,7 @@ The 11 required sections, in order:
 3. **Arrangement**: section order, emphasis, grouping, and density: the spacing rhythm, the measure, the grid.
 4. **Navigation and reveal**: how a visitor finds and moves between sections, and what shows at once or waits.
 5. **Motion plan**: what moves and what it conveys, what settles under reduced motion, and any enhancements with their `requires`.
-6. **Section coverage map**: every kind in `ALL_SECTION_KINDS`, each bespoke, shared, or unsupported. Every unsupported kind gets a reason.
+6. **Section coverage map**: every kind in `CORE_SECTION_KINDS`, the fourteen version 3 kinds, each bespoke, shared, or unsupported. Every unsupported kind gets a reason.
 7. **Controls and content slots**: the owner's composition choices, and the content the composition needs, with what happens when it's missing.
 8. **Kit usage map**: the `@portfolio/kit` pieces you'll lean on, and the patterns you expect to hoist.
 9. **Performance tier**: why this tier, what's an enhancement, and the mobile behavior.
