@@ -20,6 +20,7 @@ Run often in Waves 2 and 3, and once more at Phase 3.
 - [ ] `node skills/variant-developer/scripts/kit-dedup.mjs packages/variant-<id>`: every candidate hoisted or marked `// LOCAL: <reason>`.
 - [ ] If you hoisted to `@portfolio/kit`: `pnpm --filter @portfolio/kit test` passes.
 - [ ] `node skills/scripts/sync-checks.mjs` passes: every kit export appears by name in `references/kit-catalog.md`.
+- [ ] `PORTFOLIO_VARIANTS_ONLY=<id> pnpm test:variants` passes, after `pnpm build`: every contract fixture and the bundled sample in six modes, the hidden canary, and render parity.
 
 ## The manifest
 

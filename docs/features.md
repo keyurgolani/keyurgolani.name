@@ -52,7 +52,7 @@ What the platform can do today.
 Two skills under [skills/](../skills/):
 
 - **`portfolio-author`** guides an AI agent to extract details from any source (a resume PDF, a LinkedIn export, a GitHub username, a conversation) and produce a valid portfolio and site document. It includes references for the schema, curation, quality rules, section kinds, and three real-world examples (an engineer, a photographer, a writer).
-- **`variant-developer`** guides an AI agent through the full composition build: design contract, manifest, renderers, layout CSS, and `pnpm check:variants`. It includes a visual companion (an HTTP server and Playwright matrix screenshots), the kit catalog, the manifest contract reference, styling conventions, coherence rules, and an audit checklist.
+- **`variant-developer`** guides an AI agent through the full composition build: design contract, manifest, renderers, layout CSS, and `pnpm check:variants`. It includes a visual companion (an HTTP server for sketches, and the dev server on the bundled sample), the kit catalog, the manifest contract reference, styling conventions, coherence rules, and an audit checklist.
 
 Both skills work in any harness that supports skills (Claude Code, Copilot CLI, Cursor, Codex, and others).
 
@@ -63,13 +63,15 @@ These keep the system honest:
 - **`pnpm check:skills`** verifies that `section-kinds.md` matches the schema's `ALL_SECTION_KINDS`, that `kit-catalog.md` mentions every export from `@portfolio/kit`, that `schema.md` mentions every section kind, and that both SKILL.md frontmatters parse and stay under their length caps.
 - **`validate.mjs`** validates a directory's portfolio and site documents together and reports each problem's file, line, and column.
 - **`pnpm check:variants`** generates the registry and lints every registered variant, code the host trusts at build time, so a lint and not a sandbox: no network, storage, clock, randomness, environment, or code from text, reached directly or through an alias, a destructuring, or a string key; no `async` component, server module, or `<style>`, `<link>`, or `<script>`; markdown only through `RichText`; every style scoped to the variant, with keyframes named after it, nothing loaded from another host or package, color, type, radius, and shadow only through #19's tokens, and logical properties when it declares right to left.
+- **`pnpm test:variants`** renders every registered variant on every contract fixture and on the bundled sample, offline, in six modes (desktop, mobile, no JavaScript, print, failed enhancement, reduced motion), checks that hidden content never reaches a visitor, and that the server, a standalone `react-dom/server` render, and a browser render match. CI compares the platform's own variants' screenshots in a pinned Playwright image.
+- **`pnpm test:external-variant`** installs a reference third-party variant from its tarball in a temporary worktree, runs the same checks plus its view, control, and lazy-loaded enhancement, and removes it, proving neither step edits the host.
 
 ## Developer ergonomics
 
 - **TDD-friendly.** The schema, the variant contract, kit helpers, and check scripts all have `node:test` suites. Run them with `tsx --test`.
 - **Type-safe.** Discriminated unions on `kind` mean adding a section kind is one schema entry plus a shared renderer in the kit, which every variant then renders.
 - **Small kit, focused submodules.** `@portfolio/kit/github`, `@portfolio/kit/seo`, and the rest, so variants only pull in what they need.
-- **Visual companion in two modes.** Mockup mode (no Next.js needed) for fast prototyping, and preview mode (Playwright) for matrix screenshots.
+- **Visual companion in two modes.** Mockup mode (no Next.js needed) for fast prototyping, and preview mode for the bundled sample in a live dev server. `pnpm test:variants` takes the screenshots.
 
 ## Roadmap (deferred, not yet shipped)
 
