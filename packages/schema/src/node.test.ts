@@ -1,4 +1,4 @@
-import test from 'node:test';
+import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -60,10 +60,35 @@ const PRACTICES = [
 
 const codes = (result: LoadPairResult) => result.diagnostics.map(({ code }) => code);
 
-function tempDir(files: Record<string, string> = {}): string {
+/** Every scratch directory this run's tests made, so the last test can check each is gone. */
+const MADE: string[] = [];
+/** Paths a test took a mode away from, with the mode to give back before removal. */
+const LOCKED = new Map<string, number>();
+
+/**
+ * A scratch directory under the system temp directory, holding `files`. It's
+ * removed when the test ends, once any mode the test took away is given back,
+ * so a run leaves nothing behind.
+ */
+function tempDir(t: TestContext, files: Record<string, string> = {}): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pair-'));
+  MADE.push(dir);
+  t.after(() => {
+    for (const [target, mode] of [...LOCKED].reverse()) {
+      if (target !== dir && !target.startsWith(`${dir}${path.sep}`)) continue;
+      fs.chmodSync(target, mode);
+      LOCKED.delete(target);
+    }
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
   for (const [name, text] of Object.entries(files)) fs.writeFileSync(path.join(dir, name), text);
   return dir;
+}
+
+/** chmod, undone by tempDir()'s cleanup before it removes the directory. */
+function lockMode(target: string, mode: number): void {
+  if (!LOCKED.has(target)) LOCKED.set(target, fs.statSync(target).mode & 0o7777);
+  fs.chmodSync(target, mode);
 }
 
 const fixture = (...parts: string[]) => path.join(FIXTURES, ...parts);
@@ -222,11 +247,11 @@ test('each publication code has a draft pair, refused against the live revision 
   }
 });
 
-test('a secret-shaped value refuses the pair without the value in any record', () => {
+test('a secret-shaped value refuses the pair without the value in any record', (t) => {
   // Built here, so no secret-shaped literal is ever committed.
   const token = ['ghp', '_', 'Q'.repeat(36)].join('');
   const pair = (document: string) => text('pairs', 'engineering', 'yaml', document);
-  const dir = tempDir({
+  const dir = tempDir(t, {
     'portfolio.yml': pair('portfolio.yml').replace('label: Code', `label: ${token}`),
     'site.yml': pair('site.yml'),
   });
@@ -249,7 +274,7 @@ test('a broken build is validator.failed, not a problem with the pair', () => {
   assert.deepEqual(codes(result), ['validator.failed']);
 });
 
-test('the startup cases: neither document, one of them, and the old format alone', () => {
+test('the startup cases: neither document, one of them, and the old format alone', (t) => {
   const empty = loadPair(fixture('startup', 'empty'));
   assert.equal(empty.ok, false);
   assert.deepEqual(
@@ -297,17 +322,17 @@ test('the startup cases: neither document, one of them, and the old format alone
   assert.deepEqual(pairFileNames(legacyOnly), { portfolio: 'portfolio.yml' });
   assert.match(legacyOnly.diagnostics[0]!.message, /portfolio\.yml is in the old one-file format/);
   assert.match(legacyOnly.diagnostics[0]!.remediation, /--write --out <dir>/);
-  const beside = tempDir({
+  const beside = tempDir(t, {
     'portfolio.yml': text('startup', 'legacy-only', 'portfolio.yml'),
     'site.yml': text('invalid', 'source.duplicate', 'site.yml'),
   });
   assert.deepEqual(legacyOnly.diagnostics, loadPair(beside, { catalog: CATALOG }).diagnostics);
 });
 
-test('a document in two formats names each file', () => {
+test('a document in two formats names each file', (t) => {
   const site = text('invalid', 'source.duplicate', 'site.yml');
   const portfolio = text('invalid', 'source.duplicate', 'portfolio.yml');
-  const dir = tempDir({
+  const dir = tempDir(t, {
     'portfolio.yml': portfolio,
     'site.yml': site,
     'site.yaml': site,
@@ -331,9 +356,9 @@ test('a document in two formats names each file', () => {
   );
 });
 
-test('only the six document names count', () => {
+test('only the six document names count', (t) => {
   // The examples and other files sit beside the pair, unread.
-  const dir = tempDir({
+  const dir = tempDir(t, {
     'portfolio.example.yml': 'not read',
     'site.example.yml': 'not read',
     'notes.md': 'not read',
@@ -346,14 +371,14 @@ test('only the six document names count', () => {
     files: { portfolio: path.join(dir, 'portfolio.yml'), site: path.join(dir, 'site.json') },
   });
   const examplesOnly = findPair(
-    tempDir({ 'portfolio.example.yml': 'not read', 'site.example.yml': 'not read' }),
+    tempDir(t, { 'portfolio.example.yml': 'not read', 'site.example.yml': 'not read' }),
   );
   assert.equal(examplesOnly.ok, false);
   assert.deepEqual(!examplesOnly.ok && examplesOnly.missing, ['portfolio', 'site']);
 });
 
-test('the directory itself: missing, a file, or unreadable', () => {
-  const parent = tempDir({ 'portfolio.yml': 'x' });
+test('the directory itself: missing, a file, or unreadable', (t) => {
+  const parent = tempDir(t, { 'portfolio.yml': 'x' });
   const missing = loadPair(path.join(parent, 'absent'));
   assert.equal(missing.ok, false);
   assert.equal(!missing.ok && missing.directory, 'missing');
@@ -363,8 +388,8 @@ test('the directory itself: missing, a file, or unreadable', () => {
   assert.equal(!file.ok && file.directory, 'not-directory');
 
   if (process.getuid?.() !== 0) {
-    const locked = tempDir();
-    fs.chmodSync(locked, 0o000);
+    const locked = tempDir(t);
+    lockMode(locked, 0o000);
     try {
       const unreadable = loadPair(locked);
       assert.equal(!unreadable.ok && unreadable.directory, 'unreadable');
@@ -374,7 +399,7 @@ test('the directory itself: missing, a file, or unreadable', () => {
   }
 });
 
-test("a document that can't be read is source.unreadable, and loadPair never throws", () => {
+test("a document that can't be read is source.unreadable, and loadPair never throws", (t) => {
   // The fixture's portfolio.yml is a directory, which lists like a document
   // and then fails to read.
   const dir = fixture('invalid', 'source.unreadable');
@@ -399,11 +424,11 @@ test("a document that can't be read is source.unreadable, and loadPair never thr
   );
 
   if (process.getuid?.() !== 0) {
-    const locked = tempDir({
+    const locked = tempDir(t, {
       'portfolio.yml': text('invalid', 'source.missing', 'portfolio.yml'),
       'site.yml': text('invalid', 'source.unreadable', 'site.yml'),
     });
-    fs.chmodSync(path.join(locked, 'site.yml'), 0o000);
+    lockMode(path.join(locked, 'site.yml'), 0o000);
     assert.deepEqual(
       loadPair(locked).diagnostics.map(({ code, document }) => [code, document]),
       [['source.unreadable', 'site']],
@@ -421,10 +446,10 @@ test("a document that can't be read is source.unreadable, and loadPair never thr
   );
 });
 
-test('a document over the size limit is refused where it passes it', () => {
+test('a document over the size limit is refused where it passes it', (t) => {
   const site = text('invalid', 'source.duplicate', 'site.yml');
   const head = text('invalid', 'source.missing', 'portfolio.yml');
-  const dir = tempDir({ 'site.yml': site });
+  const dir = tempDir(t, { 'site.yml': site });
   fs.writeFileSync(path.join(dir, 'portfolio.yml'), `${head}# ${'x'.repeat(2 * 1024 * 1024)}\n`);
   const result = loadPair(dir);
   assert.equal(result.ok, false);
@@ -463,4 +488,13 @@ test('the bundled examples load as one pair with no blocking diagnostic', () => 
   assert.equal(result.pair.site.appearance.variant, 'editorial-evidence');
   // The example omits appearanceInputs, so nothing about them goes unchecked.
   assert.ok(!result.notChecked.some((entry) => entry.includes('appearanceInputs')));
+});
+
+test('every scratch directory these tests made is gone once its test ends', () => {
+  assert.ok(MADE.length > 0);
+  assert.deepEqual(
+    MADE.filter((dir) => fs.existsSync(dir)),
+    [],
+  );
+  assert.equal(LOCKED.size, 0);
 });
