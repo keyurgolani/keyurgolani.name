@@ -248,7 +248,7 @@ test(
           route.fulfill({
             status: 500,
             contentType: 'application/json',
-            body: envelope('internal'),
+            body: envelope('internal_error'),
           }),
       ],
     ];

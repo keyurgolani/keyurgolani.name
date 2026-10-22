@@ -65,7 +65,11 @@ export async function startProxyStack({
   if (owner) {
     const secretDir = path.join(stateDir, 'owner-secret');
     mkdirSync(secretDir, { recursive: true });
-    writeFileSync(path.join(secretDir, path.basename(OWNER_HASH_FILE)), `${owner.hash}\n`);
+    // 0400, as docs/deployment.md asks of the real one. CI's runner is uid
+    // 1001, the server's user in the image, so the server can read it.
+    writeFileSync(path.join(secretDir, path.basename(OWNER_HASH_FILE)), `${owner.hash}\n`, {
+      mode: 0o400,
+    });
     env.push(`OWNER_SECRET_DIR=${secretDir}`, `TRUSTED_PROXY_HOPS=${owner.hops ?? 1}`);
     files.push('-f', OWNER_FILE);
   }
