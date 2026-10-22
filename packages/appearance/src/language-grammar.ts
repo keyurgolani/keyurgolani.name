@@ -7,6 +7,7 @@
 // shadow, size, or offset is px or rem within 64px or 4rem, and a
 // radius within 999px.
 
+import { GATE_TARGETS } from './gate';
 import { languageValueProblem } from './values';
 import type { LanguageKey } from './tokens';
 
@@ -28,6 +29,8 @@ export const MAX_LENGTH_PX = 64;
 export const MAX_RADIUS_PX = 999;
 /** The least --ui-surface-opacity: a surface stays at least half opaque. */
 const MIN_SURFACE_OPACITY = 0.5;
+/** The thinnest focus ring, in px: the gate's own target, so registry generation refuses what the gate would. */
+const MIN_FOCUS_WIDTH_PX = GATE_TARGETS.focusWidth;
 
 /** Whether every px or rem length in `value` is within `px` either way. */
 const within = (px: number) => (value: string) =>
@@ -204,6 +207,14 @@ const SIZE: Grammar = {
   accepts: capped(pattern(LENGTH)),
   expected: 'a length in px or rem, not negative and at most 64px or 4rem, such as 1rem',
 };
+const FOCUS_WIDTH: Grammar = {
+  accepts: (value) =>
+    SIZE.accepts(value) &&
+    Number.parseFloat(value) >=
+      (value.endsWith('rem') ? MIN_FOCUS_WIDTH_PX / 16 : MIN_FOCUS_WIDTH_PX),
+  expected:
+    'a length in px or rem from 2px or 0.125rem to 64px or 4rem, such as 2px: a focus ring always draws',
+};
 const STATE_OPACITY: Grammar = {
   accepts: (value) => pattern(`${NUMBER}%?`)(value) && between(value, 0.3, 1),
   expected:
@@ -230,11 +241,12 @@ export const LANGUAGE_GRAMMARS: Readonly<Record<LanguageKey, Grammar>> = {
     expected:
       'one or more gradients, such as linear-gradient(var(--color-surface-default), var(--color-surface-default))',
   },
-  // At least half opaque: the prototype's most translucent surface is 66%.
+  // A percentage, since color-mix() reads it, and at least half opaque: the
+  // prototype's most translucent surface is 66%.
   'surface-opacity': {
-    accepts: (value) => pattern(`${NUMBER}%?`)(value) && between(value, MIN_SURFACE_OPACITY, 1),
+    accepts: (value) => pattern(`${NUMBER}%`)(value) && between(value, MIN_SURFACE_OPACITY, 1),
     expected:
-      'a number from 0.5 to 1, or a percentage from 50% to 100%, such as 0.72 or 100%: a surface stays at least half opaque',
+      'a percentage from 50% to 100%, such as 72% or 100%: color-mix() reads it, and a surface stays at least half opaque',
   },
   'radius-control': RADIUS,
   'radius-card': RADIUS,
@@ -254,7 +266,7 @@ export const LANGUAGE_GRAMMARS: Readonly<Record<LanguageKey, Grammar>> = {
   'space-control-block': SIZE,
   'space-surface-inline': SIZE,
   'space-surface-block': SIZE,
-  'focus-width': SIZE,
+  'focus-width': FOCUS_WIDTH,
   'focus-offset': {
     accepts: capped(pattern(SIGNED_LENGTH)),
     expected: 'a length in px or rem, within 64px or 4rem either way, such as 2px',

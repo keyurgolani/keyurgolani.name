@@ -14,7 +14,7 @@
       "problem": "/tokens/shadow-card must be none, or shadows"
     },
     {
-      "problem": "/tokens/focus-width must be a length in px or rem, not negative and at most 64px or 4rem"
+      "problem": "/tokens/focus-width must be a length in px or rem from 2px or 0.125rem to 64px or 4rem"
     },
     {
       "problem": "/tokens/radius-card must be one to four lengths in px or rem"

@@ -207,7 +207,9 @@ test('every hiding and layout vector the review of PR #57 lists has its known-ba
   ]) {
     assert.ok(audits.includes(`audit-${vector}`), vector);
   }
-  assert.ok(knownBadNames().includes('bad-token-length'));
+  for (const name of ['bad-token-length', 'bad-surface-opacity-number', 'bad-focus-width-zero']) {
+    assert.ok(knownBadNames().includes(name), name);
+  }
 });
 
 test('a known-bad input that names no registered base, or an unknown role, is refused', () => {

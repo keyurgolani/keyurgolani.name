@@ -10,7 +10,7 @@
   },
   "expect": [
     {
-      "problem": "/tokens/surface-opacity must be a number from 0.5 to 1"
+      "problem": "/tokens/surface-opacity must be a percentage from 50% to 100%"
     },
     {
       "problem": "opacity: var(--ui-surface-opacity) sets opacity outside the tokens"

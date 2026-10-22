@@ -9,7 +9,7 @@
   },
   "expect": [
     {
-      "problem": "surface-opacity must be a number"
+      "problem": "/tokens/surface-opacity must be a percentage from 50% to 100%"
     }
   ]
 }

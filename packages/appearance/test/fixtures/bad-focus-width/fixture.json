@@ -1,7 +1,7 @@
 {
   "kind": "design-language",
   "base": "platform-neutral",
-  "description": "platform-neutral with a 1px focus ring, under the 2px the gate needs.",
+  "description": "platform-neutral with a 1px focus ring, under the 2px the grammar and the gate need.",
   "patch": {
     "tokens": {
       "focus-width": "1px"
@@ -9,9 +9,7 @@
   },
   "expect": [
     {
-      "pair": {
-        "foreground": "focus-width"
-      }
+      "problem": "/tokens/focus-width must be a length in px or rem from 2px or 0.125rem"
     }
   ]
 }
