@@ -3,7 +3,6 @@ import { cache } from 'react';
 import { notFound, redirect } from 'next/navigation';
 import { ExperienceDocument } from '~/lib/experience-document';
 import { resolveVisitorPath } from '~/lib/visitor-routes';
-import { PREVIEW_STATUS, PREVIEW_STATUS_DOCUMENT, PREVIEW_STATUS_TYPE } from '~/preview/status';
 import { getDeploymentState, requireDeploymentConfig } from './config-store';
 import type { OpenedGrant } from './preview-port';
 
@@ -43,16 +42,5 @@ export async function previewPage(grant: string, route: readonly string[]) {
     linkBase: { basePath },
     route: resolved.target,
     origin: requireDeploymentConfig().origin,
-  });
-}
-
-/**
- * A draft-only asset (Slice 2, item 7). Until #10 adds the rendition lookup
- * behind the same check, every one is the status document.
- */
-export async function previewAsset(): Promise<Response> {
-  return new Response(PREVIEW_STATUS_DOCUMENT, {
-    status: PREVIEW_STATUS,
-    headers: { 'content-type': PREVIEW_STATUS_TYPE, 'cache-control': 'private, no-store' },
   });
 }

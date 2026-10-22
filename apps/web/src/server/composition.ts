@@ -10,7 +10,7 @@ import { configSummary, type CatalogAdapter } from './config-summary';
 import type { DeploymentState } from './config-store';
 import { createDispatcher, NO_BINDINGS, type Handler, type StudioBindings } from './dispatcher';
 import { listOperations, type ConfigSummary } from './operations';
-import type { GrantSessionPort, PreviewGrantsPort } from './preview-port';
+import type { GrantSessionPort, PreviewFixture, PreviewGrantsPort } from './preview-port';
 import type { Session } from './session';
 import type { StudioPages } from './studio-port';
 import { liveVariantHealth } from './variant-health';
@@ -250,6 +250,11 @@ export interface CompositionInput {
   readonly authProviders?: readonly AuthProviderFactory[];
   /** Defaults to STARTUP_REQUIREMENTS. Tests pass their own. */
   readonly requirements?: readonly StartupRequirement[];
+  /**
+   * #5's contract fixtures by id, which owner's fixture grants render (#7).
+   * None until #5's fixtures ship with the build; tests pass their own.
+   */
+  readonly previewFixtures?: (id: string) => PreviewFixture | null;
 }
 
 export type Composition =
@@ -323,6 +328,7 @@ export async function compose(input: CompositionInput): Promise<Composition> {
             ...(input.catalog ? { catalog: input.catalog } : {}),
             ...(input.extensions ? { extensions: input.extensions } : {}),
             ...(input.validators ? { validators: input.validators } : {}),
+            ...(input.previewFixtures ? { fixtures: input.previewFixtures } : {}),
           })
         : undefined;
       const catalog: CatalogAdapter = 'documents';

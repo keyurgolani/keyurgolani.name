@@ -20,6 +20,18 @@ export interface GrantSessionPort {
   onSessionEnded(listener: (digest: string) => void): () => void;
 }
 
+/** One document of a pair a grant can render, as written: its format and its text. */
+export interface PreviewDocumentSource {
+  readonly format: 'yaml' | 'json';
+  readonly sourceText: string;
+}
+
+/** A #5 contract fixture's pair, which a fixture grant renders. */
+export interface PreviewFixture {
+  readonly portfolio: PreviewDocumentSource;
+  readonly site: PreviewDocumentSource;
+}
+
 /** The environment a frame starts in, as its grant holds it (Slice 4's controls). */
 export interface PreviewEnvironment {
   readonly displayMode: 'system' | 'light' | 'dark' | 'high-contrast';

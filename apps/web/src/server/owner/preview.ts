@@ -33,7 +33,12 @@ import type { DeploymentConfig } from '../config';
 import type { Handler, HandlerContext } from '../dispatcher';
 import { recordOwnerModule } from '../load-trace';
 import { log } from '../log';
-import type { OpenedGrant, PreviewGrantsPort, GrantSessionPort } from '../preview-port';
+import type {
+  GrantSessionPort,
+  OpenedGrant,
+  PreviewFixture,
+  PreviewGrantsPort,
+} from '../preview-port';
 import { errorResult } from '../studio-result';
 import { mintSession } from './session-mint';
 
@@ -65,7 +70,7 @@ export interface OwnerPreviewInput {
   /** #3's store; without one, the data directory's, opened for reads. */
   readonly store?: Pick<Store, 'drafts' | 'revisions'>;
   /** #5's contract fixtures by id (#5, Slice 6); none until they ship. */
-  readonly fixtures?: (id: string) => UnitInput | null;
+  readonly fixtures?: (id: string) => PreviewFixture | null;
   /** The clock grants run on. Tests pass their own. */
   readonly now?: () => number;
 }
@@ -185,7 +190,10 @@ export function ownerPreviews({
       const read = await store.revisions.read(subject.revisionId);
       return read.ok ? documentsOf(read.revision.unit) : null;
     }
-    if (subject.kind === 'fixture') return fixtures(subject.fixture);
+    if (subject.kind === 'fixture') {
+      const fixture = fixtures(subject.fixture);
+      return fixture ? documentsOf(fixture) : null;
+    }
     return null;
   }
 

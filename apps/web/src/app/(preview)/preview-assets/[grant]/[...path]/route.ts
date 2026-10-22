@@ -1,5 +1,5 @@
+import { previewAsset } from '~/server/preview-asset';
 import { served } from '~/server/route-guard';
-import { previewAsset } from '~/server/preview-page';
 
 export const dynamic = 'force-dynamic';
 
