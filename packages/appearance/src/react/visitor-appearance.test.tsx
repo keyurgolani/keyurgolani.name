@@ -133,6 +133,32 @@ test('a choice the current selection cannot take is disabled with the reason', (
   assert.equal(mode.note, `${DARK_ONLY} has only a dark mode, so it shows dark.`);
 });
 
+test('a scheme that pins the mode shows the mode that renders as the value, which the form can post', () => {
+  for (const published of [
+    // A mode the scheme lacks, and system, which it locks to its own.
+    { ...PUBLISHED, colorScheme: 'fixture-dark-only', displayMode: 'light' as const },
+    { ...PUBLISHED, colorScheme: 'fixture-dark-only' },
+  ]) {
+    const appearance = resolve({ published });
+    assert.equal(appearance.modeLocked, true);
+    const mode = model({ appearance }).controls[1]!;
+    assert.equal(mode.value, 'dark', published.displayMode);
+    // The checked radio is one the form posts: never a disabled one.
+    const markup = html(<VisitorAppearance model={model({ appearance })} returnTo="/" />);
+    const checked = elements(markup).filter(
+      (element) => element.tag === 'input' && element.attributes.checked !== undefined,
+    );
+    assert.deepEqual(
+      checked.map((element) => [element.attributes.value, element.attributes.disabled]),
+      [['dark', undefined]],
+      published.displayMode,
+    );
+  }
+  // A scheme with both modes keeps the visitor's own value, system included.
+  const system = model({ appearance: resolve() }).controls[1]!;
+  assert.equal(system.value, 'system');
+});
+
 test('what renders shows as the current value even when a visitor could not pick it', () => {
   const fallback = resolve({ published: { ...PUBLISHED, variant: 'missing-variant' } });
   const variant = model({ appearance: fallback, visitorControls: ALL_SELECTABLE }).controls[0]!;

@@ -133,7 +133,9 @@ function control(input: VisitorModelInput, axis: AppearanceAxis): VisitorAxisCon
     const native = scheme?.modes[0];
     return {
       ...base,
-      value: appearance.selection.displayMode,
+      // A scheme that pins the mode shows the mode that renders, a choice it
+      // has, so the form never holds a checked choice it can't post.
+      value: appearance.modeLocked ? appearance.resolvedMode : appearance.selection.displayMode,
       groups: [{ tier: null, label: AXIS_LABELS.displayMode, choices }],
       ...(appearance.modeLocked && native
         ? { note: `${schemeName} has only a ${native} mode, so it shows ${native}.` }
