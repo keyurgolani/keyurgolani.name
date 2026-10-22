@@ -7,6 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse as parseYaml } from 'yaml';
 import { checkSourceMaps, sourceMapFiles } from './check-source-maps.mjs';
+import { MAPS_SNIPPET } from './lib/container.mjs';
 
 // Browser source maps ship only from a build that asks for them (#6, Slice
 // 1): next.config.ts turns productionBrowserSourceMaps on for
@@ -30,41 +31,47 @@ function tracked(...patterns) {
   return run.stdout.split('\0').filter(Boolean);
 }
 
+/** Every file under `dir`, at any depth, relative to the root. */
+function everyFile(dir) {
+  return readdirSync(path.join(ROOT, dir), { recursive: true, withFileTypes: true })
+    .filter((entry) => entry.isFile())
+    .map((entry) => path.relative(ROOT, path.join(entry.parentPath, entry.name)));
+}
+
 /**
  * The files that build, run, or configure the image, and everything CI
- * runs: every workflow, and every script under ci/ but its tests and this
- * check's own script, which names the variable to refuse it.
+ * runs: every committed file in .github/ and deploy/, at any depth (a local
+ * deploy/secrets/ is never committed, so never read), and every script
+ * under ci/ but its tests and this check's own script, which names the
+ * variable to refuse it.
  */
 function imageAndCiFiles() {
-  const workflows = readdirSync(path.join(ROOT, '.github', 'workflows'))
-    .filter((name) => /\.ya?ml$/.test(name))
-    .map((name) => path.join('.github', 'workflows', name));
-  const compose = readdirSync(path.join(ROOT, 'deploy'))
-    .filter((name) => /\.ya?ml$/.test(name))
-    .map((name) => path.join('deploy', name));
-  const scripts = readdirSync(path.join(ROOT, 'ci'), { recursive: true })
-    .map(String)
+  const scripts = everyFile('ci')
     .filter((name) => /\.m?js$/.test(name) && !/\.test\.m?js$/.test(name))
-    .filter((name) => name !== 'check-source-maps.mjs')
-    .map((name) => path.join('ci', name));
+    .filter((name) => name !== path.join('ci', 'check-source-maps.mjs'));
   return [
     'Dockerfile',
     '.dockerignore',
     'docker-compose.yml',
-    ...compose,
-    ...workflows,
+    ...tracked('.github', 'deploy'),
     ...scripts,
   ];
 }
 
 test('nothing that builds the image or runs in CI sets or passes PORTFOLIO_ANALYZE', () => {
   const files = imageAndCiFiles();
-  for (const expected of ['ci.yml', 'image-smoke.mjs', 'container.mjs']) {
-    assert.ok(
-      files.some((file) => path.basename(file) === expected),
-      `${expected} is checked`,
-    );
+  for (const expected of [
+    path.join('.github', 'workflows', 'ci.yml'),
+    path.join('deploy', 'compose.owner.yml'),
+    path.join('ci', 'image-smoke.mjs'),
+    path.join('ci', 'lib', 'container.mjs'),
+  ]) {
+    assert.ok(files.includes(expected), `${expected} is checked`);
   }
+  assert.ok(
+    files.some((file) => file.startsWith(`.github${path.sep}`) && !file.includes('workflows')),
+    'all of .github is checked, not only its workflows',
+  );
   for (const file of files) {
     const text = readFileSync(path.join(ROOT, file), 'utf8');
     assert.doesNotMatch(text, NAME, file);
@@ -135,4 +142,33 @@ test('the check refuses an analyze build and a missing one', (t) => {
   const dir = staticTree(t, ['chunks/a.js']);
   assert.match(checkSourceMaps(dir, { PORTFOLIO_ANALYZE: '1' }), /for the default build/);
   assert.match(checkSourceMaps(path.join(dir, 'none'), {}), /No build at .*Run pnpm build first\./);
+});
+
+/** MAPS_SNIPPET's answer for `dir`, run as the image smoke runs it inside the container. */
+function mapsInside(dir) {
+  const run = spawnSync(process.execPath, ['-e', MAPS_SNIPPET, dir], { encoding: 'utf8' });
+  assert.equal(run.status, 0, run.stderr);
+  return JSON.parse(run.stdout);
+}
+
+test("the image smoke's scan finds every .map under the image's static tree", (t) => {
+  const dir = staticTree(t, ['chunks/a.js', 'chunks/a.js.map', 'css/b.css.map', 'media/f.woff2']);
+  assert.deepEqual(mapsInside(dir), {
+    exists: true,
+    count: 2,
+    maps: ['chunks/a.js.map', 'css/b.css.map'],
+  });
+  const clean = staticTree(t, ['chunks/a.js']);
+  assert.deepEqual(mapsInside(clean), { exists: true, count: 0, maps: [] });
+  assert.deepEqual(mapsInside(path.join(clean, 'none')), { exists: false, count: 0, maps: [] });
+});
+
+test('the image smoke fails an image with a source map or no static tree (CI only: it needs Docker)', () => {
+  const smoke = readFileSync(path.join(ROOT, 'ci', 'image-smoke.mjs'), 'utf8');
+  assert.match(smoke, /const IMAGE_STATIC = '\/app\/apps\/web\/\.next\/static';/);
+  assert.match(smoke, /container\(\['exec', name, 'node', '-e', MAPS_SNIPPET, IMAGE_STATIC\]\)/);
+  assert.match(
+    smoke,
+    /if \(maps\.exists !== true \|\| maps\.count !== 0\) \{\n\s+throw new SmokeFailure\(/,
+  );
 });

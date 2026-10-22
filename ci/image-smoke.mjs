@@ -21,7 +21,13 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { parseHash, verifyPassword } from '../packages/core/src/auth/phc.mjs';
 import { waitFor } from '../tests/harness/net.mjs';
-import { assessRoutes, PROBE_SNIPPET, SCAN_SNIPPET, WRITABLE_SNIPPET } from './lib/container.mjs';
+import {
+  assessRoutes,
+  MAPS_SNIPPET,
+  PROBE_SNIPPET,
+  SCAN_SNIPPET,
+  WRITABLE_SNIPPET,
+} from './lib/container.mjs';
 import {
   currentGate,
   REPO_ROOT,
@@ -29,6 +35,9 @@ import {
   reportsDir,
   writeFailureRecord,
 } from './lib/reports.mjs';
+
+/** Where the image serves /_next/static from. */
+const IMAGE_STATIC = '/app/apps/web/.next/static';
 
 const cli = process.env.CONTAINER_CLI || 'docker';
 const pulled = process.env.SMOKE_IMAGE;
@@ -270,6 +279,25 @@ async function smoke() {
     );
   }
   console.log('[image] image contents: only the example pair, no test or CI files');
+
+  // The image's build is a default one, so it ships no browser source map (#6).
+  const maps = JSON.parse(
+    container(['exec', name, 'node', '-e', MAPS_SNIPPET, IMAGE_STATIC]).stdout || '{}',
+  );
+  if (maps.exists !== true || maps.count !== 0) {
+    throw new SmokeFailure(
+      maps.exists === true
+        ? `the image ships ${maps.count} browser source map(s): ${maps.maps.join(', ')}`
+        : `the image has no ${IMAGE_STATIC} to check for source maps`,
+      {
+        test: 'image ships no source maps',
+        asset: maps.maps?.[0] ? `${IMAGE_STATIC}/${maps.maps[0]}` : IMAGE_STATIC,
+        expected: `no .map file under ${IMAGE_STATIC}`,
+        actual: maps.exists === true ? `${maps.count} .map files` : 'no such directory',
+      },
+    );
+  }
+  console.log(`[image] ${IMAGE_STATIC}: no browser source map`);
 
   // The server runs as uid 1001 in group 1001, and the app tree is root's.
   const owned = JSON.parse(

@@ -27,6 +27,7 @@
     "test:variants": "playwright test --config tests/variants/playwright.config.ts",
     "test:external-variant": "node tests/external-variant/run.mjs",
     "test:trace": "node tests/trace/run.mjs",
+    "test:trace:baseline": "node tests/trace/baseline.mjs",
     "check:skills": "node skills/scripts/sync-checks.mjs",
     "check:registry": "node ci/check-registry.mjs",
     "check:variants": "pnpm --filter @portfolio/web check:variants",

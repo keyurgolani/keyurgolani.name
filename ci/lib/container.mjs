@@ -116,6 +116,29 @@ function scanFromInside(root) {
 }
 
 /**
+ * Lists the browser source maps under `root`, the image's
+ * apps/web/.next/static (#6, Slice 1): only the analyze build pnpm
+ * test:trace reads has any, and the image is never one. Prints JSON:
+ * { exists, count, maps }, with the first 20 paths.
+ */
+function sourceMapsFromInside(root) {
+  const fs = process.getBuiltinModule('node:fs');
+  const path = process.getBuiltinModule('node:path');
+  if (!fs.existsSync(root)) {
+    process.stdout.write(JSON.stringify({ exists: false, count: 0, maps: [] }));
+    return;
+  }
+  const maps = fs
+    .readdirSync(root, { withFileTypes: true, recursive: true })
+    .filter((entry) => entry.isFile() && entry.name.endsWith('.map'))
+    .map((entry) => path.relative(root, path.join(entry.parentPath, entry.name)))
+    .sort();
+  process.stdout.write(
+    JSON.stringify({ exists: true, count: maps.length, maps: maps.slice(0, 20) }),
+  );
+}
+
+/**
  * Lists what under `root` the user `uid`, in group `gid`, could change: a
  * path it owns, one its group can write, or one anyone can write. Links are
  * skipped, since what they point to is checked where it lives. Prints JSON:
@@ -149,6 +172,7 @@ export const PROBE_SNIPPET = `(${probeFromInside.toString()})(process.argv[1])`;
 export const WRITABLE_SNIPPET = `(${writableFromInside.toString()})(process.argv[1], Number(process.argv[2]), Number(process.argv[3]))`;
 export const REQUESTS_SNIPPET = `(${requestsFromInside.toString()})(process.getBuiltinModule('node:fs').readFileSync(0, 'utf8'))`;
 export const SCAN_SNIPPET = `(${scanFromInside.toString()})(process.argv[1])`;
+export const MAPS_SNIPPET = `(${sourceMapsFromInside.toString()})(process.argv[1])`;
 export const TREE_SNIPPET = `(${treeFromInside.toString()})(process.argv[1])`;
 
 /**
