@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { AsyncResource } from 'node:async_hooks';
-import { readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { PORTFOLIO_SCHEMA_VERSION } from '@portfolio/schema';
@@ -392,6 +392,62 @@ test("a key on another request's event is idempotency_conflict, and nothing move
     'owner',
   );
   assert.equal(own.kind, 'committed');
+});
+
+test("an event file that can't be read fails history, the key lookup, and repair with storage_unavailable, and nothing replaces it; the walk for the last known good passes over it", async (t) => {
+  const store = await newStore(t);
+  const first = await publishInput(store, pairInput('engineering'));
+  const draft = await draftOf(store, contentVariant(pairInput('engineering'), 'two'));
+  const input = {
+    draftId: draft.draftId,
+    draftVersion: draft.version,
+    expectedLiveRevisionId: first,
+    idempotencyKey: 'publish-two',
+  };
+  assert.equal((await owned(store).publish(input, 'owner')).kind, 'committed');
+  const third = await publishInput(store, contentVariant(pairInput('engineering'), 'three'));
+  const unavailable = (error: unknown) => (error as StoreError).code === 'storage_unavailable';
+  // seq 2's own file, which EACCES keeps from being read, as a restore can.
+  const kept = store.paths.event(2);
+  chmodSync(kept, 0o000);
+  t.after(() => {
+    try {
+      chmodSync(kept, 0o600);
+    } catch {
+      // Gone with the store.
+    }
+  });
+  await assert.rejects(store.publication.history(), unavailable);
+  await assert.rejects(store.publication.history({ offset: 0, limit: 50 }), unavailable);
+  await assert.rejects(store.publication.revisions(), unavailable);
+  // The retry's key is on seq 2: the lookup fails rather than miss it.
+  await assert.rejects(owned(store).publish(input, 'owner'), unavailable);
+
+  // The walk for the last known good passes over seq 2, to seq 1.
+  writeFileSync(path.join(store.paths.revision(third), 'documents', 'portfolio.yml'), '# no\n');
+  assert.equal(await store.publication.lastKnownGood(), first);
+  assert.equal((await store.publication.status()).servingRevisionId, first);
+
+  // Repair never replaces an event file at the live seq it can't read.
+  chmodSync(kept, 0o600);
+  const live = store.paths.event(3);
+  const before = statSync(live).ino;
+  chmodSync(live, 0o000);
+  t.after(() => {
+    try {
+      chmodSync(live, 0o600);
+    } catch {
+      // Gone with the store.
+    }
+  });
+  await assert.rejects(store.publication.repair(), unavailable);
+  assert.equal(statSync(live).ino, before);
+  chmodSync(live, 0o600);
+  assert.equal((await store.publication.repair()).eventWritten, false);
+  assert.deepEqual(
+    (await store.publication.history()).map((event) => event.seq),
+    [1, 2, 3],
+  );
 });
 
 test('rollback moves the pointer to an existing revision through the same commit point, keeps the replaced one, and leaves every draft unchanged', async (t) => {

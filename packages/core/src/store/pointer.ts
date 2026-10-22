@@ -157,17 +157,34 @@ function safeParse(text: string): unknown {
   }
 }
 
-/** The event in publication/events/<seq>.json, or null when there's none or it isn't one. */
+export interface EventReads {
+  /**
+   * For a walk that may pass over an event file that's there but can't be
+   * read, such as a link (ELOOP) or one EACCES keeps: it's left out, as an
+   * unparseable one is, and this hears why. Without it, the read throws.
+   */
+  readonly unreadable?: (error: unknown) => void;
+}
+
+/**
+ * The event in publication/events/<seq>.json, or null when there's none or
+ * it isn't one. One that's there but can't be read throws, so nothing the
+ * service decides from the log is decided without it, unless `unreadable`
+ * is given.
+ */
 export async function readEvent(
   fs: ReadFs,
   paths: StorePaths,
   seq: number,
+  { unreadable }: EventReads = {},
 ): Promise<PublicationEvent | null> {
   let text: string;
   try {
     text = (await fs.readFile(paths.event(seq))).toString('utf8');
-  } catch {
-    // Not there, or there and unreadable, such as a link (ELOOP): no event, as for an unparseable file.
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') return null;
+    if (!unreadable) throw error;
+    unreadable(error);
     return null;
   }
   const event = asEvent(safeParse(text));
@@ -176,14 +193,19 @@ export async function readEvent(
 
 /**
  * Every event in the log, in seq order. A file that isn't an event is left
- * out, and so is one that can't be read.
+ * out, and one that can't be read throws, or with `unreadable`, is left
+ * out too.
  */
-export async function readEvents(fs: ReadFs, paths: StorePaths): Promise<PublicationEvent[]> {
+export async function readEvents(
+  fs: ReadFs,
+  paths: StorePaths,
+  reads: EventReads = {},
+): Promise<PublicationEvent[]> {
   const events: PublicationEvent[] = [];
   for (const name of await fs.readdir(paths.events)) {
     const match = /^([1-9][0-9]*)\.json$/.exec(name);
     if (!match) continue;
-    const event = await readEvent(fs, paths, Number(match[1]));
+    const event = await readEvent(fs, paths, Number(match[1]), reads);
     if (event) events.push(event);
   }
   return events.sort((a, b) => a.seq - b.seq);

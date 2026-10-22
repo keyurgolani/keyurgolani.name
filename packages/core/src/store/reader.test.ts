@@ -1068,3 +1068,31 @@ test("a read failure that may pass serves the last known good for at most TRANSI
   assert.equal((await catalog.getLive()).state, 'degraded');
   assert.equal(walks, walked);
 });
+
+test('an event file the walk passes over for a failure that may pass is read again after TRANSIENT_MS: the last known good it names serves then', async (t) => {
+  const store = await newStore(t);
+  const first = await publishInput(store, pairInput('engineering'));
+  const second = await publishInput(store, contentVariant(pairInput('engineering'), 'two'));
+  const third = await publishInput(store, contentVariant(pairInput('engineering'), 'three'));
+  writeFileSync(path.join(store.paths.revision(third), 'documents', 'portfolio.yml'), '# no\n');
+  let clock = 1_000_000;
+  const { catalog } = reader(store, { now: () => clock });
+  // seq 2's own file, which EACCES keeps from being read for now.
+  const kept = store.paths.event(2);
+  chmodSync(kept, 0o000);
+  t.after(() => {
+    try {
+      chmodSync(kept, 0o600);
+    } catch {
+      // Gone with the store.
+    }
+  });
+  const during = await catalog.getLive();
+  assert.deepEqual([during.state, during.revisionId], ['degraded', first]);
+  chmodSync(kept, 0o600);
+  clock += TRANSIENT_MS - 1;
+  assert.equal((await catalog.getLive()).revisionId, first);
+  clock += 1;
+  const after = await catalog.getLive();
+  assert.deepEqual([after.state, after.revisionId], ['degraded', second]);
+});

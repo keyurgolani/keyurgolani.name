@@ -9,7 +9,7 @@ import type {
 import type { Rendering, UnitChecks } from '../catalog/unit';
 import { publicationUnitOf } from '../catalog/view';
 import { recordOwnerModule } from '../load-trace';
-import { StoreError, type StoreLog } from './common';
+import { isPermanentReadError, StoreError, type StoreLog } from './common';
 import type { FileStats, ReadFs } from './fs-port';
 import { storePaths, type RevisionId, type Sha256 } from './layout';
 import { DamagedPointerError, hasHistory, readEvents, readLive, type LivePointer } from './pointer';
@@ -198,9 +198,17 @@ export function revisionCatalogReader({
     return { ok: true, unit: found.unit, unitHash: found.unitHash };
   }
 
-  /** The last known good: the most recently live revision that serves, other than `skip`. */
+  /**
+   * The last known good: the most recently live revision that serves, other
+   * than `skip`. The walk passes over an event file it can't read, and one
+   * it can't read for now makes the answer one to work out again.
+   */
   async function lastKnownGood(skip: RevisionId | null, seen: Seen) {
-    const events = await readEvents(fs, paths);
+    const events = await readEvents(fs, paths, {
+      unreadable: (error) => {
+        if (!isPermanentReadError(error)) seen.transient = true;
+      },
+    });
     const tried = new Set<RevisionId>(skip ? [skip] : []);
     for (let index = events.length - 1; index >= 0; index--) {
       const id = events[index]!.revisionId;
