@@ -11,9 +11,10 @@ import { isTombstoned, revisionHealth, type HealthPurpose } from './revisions';
 // does: the pointer moves, when every check reruns, as item 14 asks; a
 // tombstone appears; or a blob it references goes, or comes back. Each
 // kept verdict is checked for the last two, by stats alone, before it's
-// used. The checks are the build's, and a new build is a new process, so a
-// verdict never outlives its build. It keeps verdicts, never revisions, so
-// it holds no content.
+// used. A revision unreadable for a failure that may pass, such as EACCES
+// or EMFILE, isn't kept: the next call checks it again. The checks are the
+// build's, and a new build is a new process, so a verdict never outlives
+// its build. It keeps verdicts, never revisions, so it holds no content.
 
 recordOwnerModule('core/store/health-cache');
 
@@ -32,6 +33,8 @@ interface Kept {
   readonly verdict: HealthVerdict;
   /** The blobs the revision references, and whether each was there. */
   readonly blobs: readonly (readonly [Sha256, boolean])[];
+  /** Set for a read failure that may pass: the verdict isn't kept past its own call. */
+  readonly transient?: true;
 }
 
 export interface HealthCacheOptions {
@@ -68,6 +71,12 @@ export function healthCache({ fs, paths, checks, hasBlob }: HealthCacheOptions):
           blobs,
         };
       }
+      case 'damaged':
+        return {
+          verdict: { state: 'damaged', reason: health.reason },
+          blobs: [],
+          ...(health.transient ? { transient: true as const } : {}),
+        };
       default:
         return { verdict: health, blobs: [] };
     }
@@ -100,7 +109,9 @@ export function healthCache({ fs, paths, checks, hasBlob }: HealthCacheOptions):
     const checking = check(id, purpose);
     kept.set(name, checking);
     try {
-      return (await checking).verdict;
+      const entry = await checking;
+      if (entry.transient && kept.get(name) === checking) kept.delete(name);
+      return entry.verdict;
     } catch (error) {
       if (kept.get(name) === checking) kept.delete(name);
       throw error;

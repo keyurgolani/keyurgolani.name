@@ -38,6 +38,17 @@ export class StoreError extends Error {
   }
 }
 
+/**
+ * Whether a read failed for what's there, so asking again can't help: a
+ * link in a file's place (ELOOP), or a directory or anything else that
+ * isn't a regular file (EISDIR, ENOTDIR, EFTYPE). Any other failure, such
+ * as EACCES, EMFILE, or EIO, may pass.
+ */
+export function isPermanentReadError(error: unknown): boolean {
+  const code = (error as NodeJS.ErrnoException)?.code;
+  return code === 'ELOOP' || code === 'EISDIR' || code === 'ENOTDIR' || code === 'EFTYPE';
+}
+
 /** A file system failure as the store reports it: a full disk is its own code. */
 export function storageError(error: unknown): StoreError {
   if (error instanceof StoreError) return error;

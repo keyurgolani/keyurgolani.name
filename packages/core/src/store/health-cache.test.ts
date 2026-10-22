@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, rmSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
 import { test } from 'node:test';
 import { validatePublicationUnit } from '@portfolio/schema';
 import type { UnitChecks } from '../catalog/unit';
@@ -132,4 +133,30 @@ test('a tombstone, or a blob that goes or comes back, changes a kept verdict wit
   );
   await store.assets.put(Buffer.from('a picture'), 'image/png');
   assert.equal((await summary(second))?.compatible, true);
+});
+
+test('a revision unreadable for a failure that may pass is checked again on the next call, never kept', async (t) => {
+  const store = await newStore(t);
+  const first = await publishInput(store, pairInput('engineering'));
+  const second = await publishInput(store, contentVariant(pairInput('engineering'), 'two'));
+  const file = path.join(store.paths.revision(first), 'documents', 'portfolio.yml');
+  const compatible = async () =>
+    Object.fromEntries(
+      (await store.publication.revisions()).map((summary) => [
+        summary.revisionId,
+        summary.compatible,
+      ]),
+    );
+  chmodSync(file, 0o000);
+  // Put back if the test stops first; once it's done, the store is gone.
+  t.after(() => {
+    try {
+      chmodSync(file, 0o600);
+    } catch {
+      // Gone already.
+    }
+  });
+  assert.deepEqual(await compatible(), { [first]: false, [second]: true });
+  chmodSync(file, 0o600);
+  assert.deepEqual(await compatible(), { [first]: true, [second]: true });
 });
