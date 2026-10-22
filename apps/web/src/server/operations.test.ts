@@ -82,6 +82,7 @@ const STORE_ENTRIES: Record<string, { capability: string; kind: string; codes: E
           'lock_lost',
           'storage_unavailable',
           'storage_full',
+          'data_dir_in_use',
         ] as ErrorCode[],
       },
     ]),
@@ -96,6 +97,7 @@ const STORE_ENTRIES: Record<string, { capability: string; kind: string; codes: E
       'lock_lost',
       'storage_unavailable',
       'storage_full',
+      'data_dir_in_use',
     ],
   },
   publish: {
@@ -113,6 +115,7 @@ const STORE_ENTRIES: Record<string, { capability: string; kind: string; codes: E
       'lock_lost',
       'storage_unavailable',
       'storage_full',
+      'data_dir_in_use',
     ],
   },
   ...Object.fromEntries(
@@ -131,6 +134,7 @@ const STORE_ENTRIES: Record<string, { capability: string; kind: string; codes: E
           'lock_lost',
           'storage_unavailable',
           'storage_full',
+          'data_dir_in_use',
         ] as ErrorCode[],
       },
     ]),
@@ -168,8 +172,9 @@ test("#3's store entries: their capabilities, a session each, and the codes item
       'lock_lost',
       'storage_unavailable',
       'storage_full',
+      'data_dir_in_use',
     ].map((code) => statuses[code]),
-    [409, 409, 409, 422, 422, 422, 413, 404, 422, 503, 503, 503, 507],
+    [409, 409, 409, 422, 422, 422, 413, 404, 422, 503, 503, 503, 507, 503],
   );
   // #1's step 6 is gone: the store makes its version checks under the lock,
   // so none of its entries answers version_conflict, which only #7's
@@ -451,8 +456,23 @@ test('config.status takes no input and returns the redacted summary', () => {
       servingRevisionId: `rev_${'0'.repeat(32)}`,
       renderDrift: [{ kind: 'variant', id: 'missing-variant', revision: '1.0.0', build: null }],
     },
+    // Whether owner writes go through (#3).
+    writes: { state: 'open' },
   };
   assert.equal(status.output.safeParse(summary).success, true);
+  for (const code of ['data_dir_in_use', 'data_dir_unclaimed', 'store_repair_failed']) {
+    const stopped = { ...summary, writes: { state: 'stopped', code } };
+    assert.equal(status.output.safeParse(stopped).success, true, code);
+  }
+  // Writes stop for a reason the schema names, and with nothing more.
+  for (const writes of [
+    { state: 'stopped' },
+    { state: 'stopped', code: 'EACCES' },
+    { state: 'open', code: 'data_dir_in_use' },
+    { state: 'stopped', code: 'data_dir_in_use', holder: 'pid 1234' },
+  ]) {
+    assert.equal(status.output.safeParse({ ...summary, writes }).success, false);
+  }
   // The documents serve an empty store, and a path or a reason never passes.
   const empty = {
     ...summary,

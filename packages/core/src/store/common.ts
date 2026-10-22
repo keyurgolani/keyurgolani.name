@@ -22,7 +22,12 @@ export const isStoreActor = (value: unknown): value is StoreActor =>
  * returns. Each has its HTTP status in #3's item 22: `lock_timeout` and
  * `storage_unavailable` are 503, `storage_full` 507.
  */
-export type StoreErrorCode = 'lock_timeout' | 'storage_unavailable' | 'storage_full';
+/**
+ * `data_dir_in_use`: another owner server took this process's claim on the
+ * data directory, so it writes nothing more there.
+ */
+export type StoreErrorCode =
+  'lock_timeout' | 'storage_unavailable' | 'storage_full' | 'data_dir_in_use';
 
 export class StoreError extends Error {
   readonly code: StoreErrorCode;
