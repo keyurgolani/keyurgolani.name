@@ -44,7 +44,6 @@ const PROTOTYPE_LANGUAGE_LAYER = `
   }
   [data-ui-slot="action"] {
     min-height: var(--ui-control-height);
-    gap: 0.45em;
     padding: var(--ui-space-control-block) var(--ui-space-control-inline);
     border: var(--ui-border-control);
     border-radius: var(--ui-radius-control);
@@ -66,8 +65,6 @@ const PROTOTYPE_LANGUAGE_LAYER = `
   }
   [data-ui-slot="selection"] { padding: 0; border: 0; }
   [data-ui-slot="badge"] {
-    gap: 0.35em;
-    padding: 0.32em 0.68em;
     border: var(--ui-border-control);
     border-radius: var(--ui-radius-badge);
   }
@@ -261,7 +258,6 @@ test('declarations can only use tokens for type, motion, and color', () => {
       min-height: var(--ui-control-height);
       border: var(--ui-border-control);
       border-color: currentcolor;
-      opacity: var(--ui-state-disabled-opacity);
       backdrop-filter: blur(var(--ui-backdrop-blur));
       -webkit-backdrop-filter: blur(var(--ui-backdrop-blur));
       transition: opacity var(--ui-motion-fast) var(--ui-motion-easing);
@@ -383,7 +379,7 @@ test('outlines, shadows, padding, gaps, borders, and radii stay within their cap
     'box-shadow: 0 0 100px var(--color-shadow)',
     'outline-offset: -65px',
     'gap: 4.5rem',
-    'padding: 0 5em',
+    'padding: 0 65px',
     'border-bottom: 1000px solid var(--color-canvas)',
     'border-width: 65px',
   ]) {
@@ -398,9 +394,21 @@ test('outlines, shadows, padding, gaps, borders, and radii stay within their cap
     'border-width: 1in',
     'padding: 5',
   ]) {
-    refuses(`${slot} { ${declaration}; }`, /a length here is px, rem, or em/);
+    refuses(`${slot} { ${declaration}; }`, /a length here is px or rem/);
   }
   refuses(`${slot} { border-radius: 1000px; }`, /over a radius's cap of 999px or 62\.4375rem/);
+  // em scales with the part's font size, which a display part's typography sets.
+  for (const declaration of [
+    'padding: 4em',
+    'gap: 0.45em',
+    'outline: 1em solid var(--color-focus)',
+    'border-radius: 1em',
+  ]) {
+    refuses(
+      `${slot} { ${declaration}; }`,
+      /scales with the part's font size, the typography profile's/,
+    );
+  }
   // Math or a radius token would stretch a length past its cap.
   refuses(`${slot} { padding: calc(var(--ui-space-surface-block) * 1000); }`, /calls calc\(\)/);
   refuses(`${slot} { gap: max(4rem, 100vw); }`, /calls max\(\)/);
@@ -415,7 +423,7 @@ test('outlines, shadows, padding, gaps, borders, and radii stay within their cap
       box-shadow: 0 22px 60px color-mix(in srgb, var(--color-text-primary) 22%, transparent), var(--ui-shadow-card);
       outline: 4px solid var(--color-focus);
       outline-offset: -64px;
-      padding: 4rem 0 4em 64px;
+      padding: 4rem 0 64px;
       gap: var(--ui-space-surface-block);
       border: var(--ui-border-card);
       border-color: color-mix(in srgb, var(--color-accent) 40%, transparent);
@@ -500,7 +508,6 @@ test("the prototype's language layer reads, and the rules a part needs structura
     'border-width',
     'box-shadow',
     'fill',
-    'gap',
     'min-height',
     'opacity',
     'outline',
@@ -524,6 +531,8 @@ test("the prototype's language layer reads, and the rules a part needs structura
     ['overflow: hidden', /media with rounded corners, does so in the shared primitives/],
     ['cursor: pointer', /which the shared primitives own/],
     ['font-weight: 650', /typography profile/],
+    ['gap: 0.45em', /scales with the part's font size/],
+    ['padding: 0.32em 0.68em', /scales with the part's font size/],
   ] as const) {
     refuses(`[data-ui-slot="media"] { ${declaration}; }`, owner);
   }
@@ -599,6 +608,11 @@ test('motion, blur, and opacity go only through the tokens the accessibility lay
   refuses(`${slot} { backdrop-filter: blur(var(--ui-radius-card)); }`, /blurs outside the tokens/);
   refuses(`${slot} { opacity: 0.6; }`, /sets opacity outside the tokens/);
   refuses(`${slot} { opacity: var(--ui-texture); }`, /sets opacity outside the tokens/);
+  // Surface translucency is the material's, and surface-opacity no part's opacity.
+  refuses(
+    '[data-ui-slot="surface"] { opacity: var(--ui-surface-opacity); }',
+    /var\(--ui-surface-opacity\) sets opacity outside the tokens/,
+  );
   refuses(`${slot} { filter: opacity(0); }`, /filters the part/);
   refuses(`${slot} { filter: blur(24px); }`, /filters the part/);
   assert.ok(
@@ -609,11 +623,48 @@ test('motion, blur, and opacity go only through the tokens the accessibility lay
     }
     ${slot}:active { scale: var(--ui-state-active-transform); }
     [data-ui-slot="surface"] {
-      opacity: var(--ui-surface-opacity);
       backdrop-filter: blur(var(--ui-backdrop-blur));
       -webkit-backdrop-filter: none;
     }
     ${slot}[aria-busy="true"] { opacity: var(--ui-state-loading-opacity); }`).ok,
+  );
+});
+
+test('the state opacities dim only a part each selector tests as disabled or busy', () => {
+  const slot = '[data-ui-slot="action"]';
+  for (const selector of [
+    `${slot}:disabled`,
+    `${slot}[disabled]`,
+    `${slot}[aria-disabled="true"]`,
+    `${slot}[aria-busy="true"]:hover`,
+    `${slot}[disabled]::before`,
+    `[data-ui-slot="form"] > ${slot}[disabled], ${slot}[aria-busy="true"]`,
+  ]) {
+    assert.ok(read(`${selector} { opacity: var(--ui-state-disabled-opacity); }`).ok, selector);
+    assert.ok(read(`${selector} { opacity: var(--ui-state-loading-opacity); }`).ok, selector);
+  }
+  for (const selector of [
+    slot,
+    `${slot}:hover`,
+    `${slot}:not([disabled])`,
+    `${slot}:not(:disabled)`,
+    `${slot}[aria-disabled="false"]`,
+    `${slot}[aria-busy]`,
+    `${slot}:has([disabled])`,
+    `${slot}:is([disabled])`,
+    `[data-ui-slot="form"][disabled] ${slot}`,
+    `${slot}[disabled] + [data-ui-slot="badge"]`,
+    `${slot}[disabled], [data-ui-slot="badge"]`,
+  ]) {
+    refuses(
+      `${selector} { opacity: var(--ui-state-disabled-opacity); }`,
+      /dims a part the rule doesn't test as disabled or busy/,
+    );
+  }
+  // A group doesn't change what a rule's own selector tests.
+  refuses(
+    `@media (hover: hover) { ${slot} { opacity: var(--ui-state-loading-opacity); } }`,
+    /dims a part/,
   );
 });
 

@@ -200,6 +200,10 @@ test('every hiding and layout vector the review of PR #57 lists has its known-ba
     'outline-length',
     'shadow-viewport',
     'padding-viewport',
+    // A surface faded out, a part dimmed without being disabled, and em past the caps.
+    'surface-opacity',
+    'state-opacity',
+    'em-length',
   ]) {
     assert.ok(audits.includes(`audit-${vector}`), vector);
   }

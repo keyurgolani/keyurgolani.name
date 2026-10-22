@@ -116,9 +116,9 @@ test('high contrast makes the signature fill solid text-primary and drops the gl
 
 test('every token a language may move, blur, or fade a part through is one the accessibility layer sets', () => {
   // Which --ui-* tokens the stylesheet reader lets each effect read.
-  const accepted = (declaration: (token: string) => string) =>
+  const accepted = (declaration: (token: string) => string, selector = '[data-ui-slot="a"]') =>
     LANGUAGE_KEYS.map((key) => `--ui-${key}`).filter(
-      (token) => readLanguageStylesheet(`[data-ui-slot="a"] { ${declaration(token)}; }`).ok,
+      (token) => readLanguageStylesheet(`${selector} { ${declaration(token)}; }`).ok,
     );
   const moves = [
     ...new Set(
@@ -128,14 +128,11 @@ test('every token a language may move, blur, or fade a part through is one the a
     ),
   ];
   const blurs = accepted((token) => `backdrop-filter: blur(var(${token}))`);
-  const fades = accepted((token) => `opacity: var(${token})`);
+  // Opacity dims only a disabled or busy part, and never through surface-opacity.
+  const fades = accepted((token) => `opacity: var(${token})`, '[data-ui-slot="a"]:disabled');
   assert.deepEqual(moves, ['--ui-state-hover-transform', '--ui-state-active-transform']);
   assert.deepEqual(blurs, ['--ui-backdrop-blur']);
-  assert.deepEqual(fades, [
-    '--ui-surface-opacity',
-    '--ui-state-disabled-opacity',
-    '--ui-state-loading-opacity',
-  ]);
+  assert.deepEqual(fades, ['--ui-state-disabled-opacity', '--ui-state-loading-opacity']);
   // Reduced motion, a paused boundary, and print stop every move.
   for (const [selector, within] of [
     ['    [data-appearance-boundary]', '@media (prefers-reduced-motion: reduce)'],

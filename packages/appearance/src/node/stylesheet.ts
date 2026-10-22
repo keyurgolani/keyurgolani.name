@@ -199,10 +199,10 @@ export const LANGUAGE_PROPERTIES: ReadonlyMap<string, string> = new Map([
     'background',
     ...BACKGROUND_LONGHANDS.map((part) => `background-${part}`),
   ]),
-  ...serving("translucency: a part's opacity and backdrop blur, through the tokens", [
-    'opacity',
-    'backdrop-filter',
-  ]),
+  ...serving(
+    'translucency and state: backdrop blur, and the opacity that dims a disabled or busy part, through the tokens',
+    ['opacity', 'backdrop-filter'],
+  ),
   ...serving("control anatomy: a control's height, as var(--ui-control-height)", [
     'min-height',
     'min-block-size',
@@ -324,6 +324,37 @@ const MOVES = {
 const CONTROL_HEIGHT = { allowed: ['var(--ui-control-height)'], message: SIZES };
 
 /**
+ * The tests that make a part disabled or busy, the only parts the state
+ * opacities dim. aria-disabled and aria-busy count only as "true", since
+ * "false" marks a part that's neither.
+ */
+const DIMMED_STATES = ['[disabled]', ':disabled', '[aria-disabled="true"]', '[aria-busy="true"]'];
+
+const UNDIMMED = `dims a part the rule doesn't test as disabled or busy: the state opacities apply only where every selector's last compound tests ${DIMMED_STATES.join(', ')}, outside any pseudo-class's argument.`;
+
+/**
+ * Whether a canonical selector's subject, its last compound, tests a
+ * disabled or busy state itself: not through :not(), :has(), or another
+ * pseudo-class's argument, and not on an ancestor or a sibling.
+ */
+function testsDisabledOrBusy(selector: string): boolean {
+  let depth = 0;
+  let subject = 0;
+  for (let index = 0; index < selector.length; index += 1) {
+    const character = selector[index];
+    if (character === '(' || character === '[') depth += 1;
+    else if (character === ')' || character === ']') depth -= 1;
+    else if (character === ' ' && depth === 0) subject = index + 1;
+  }
+  let compound = selector.slice(subject);
+  for (let inner = compound.replace(/\([^()]*\)/g, ''); inner !== compound;) {
+    compound = inner;
+    inner = compound.replace(/\([^()]*\)/g, '');
+  }
+  return DIMMED_STATES.some((state) => compound.includes(state));
+}
+
+/**
  * Properties on the list a language sets only through tokens: reduced motion
  * stops the state transforms, and reduced transparency, a browser without
  * backdrop-filter, forced colors, and print make surfaces opaque and the
@@ -342,13 +373,9 @@ const TOKEN_ONLY_PROPERTIES: Readonly<
       'blurs outside the tokens: it takes none or blur(var(--ui-backdrop-blur)), which reduced transparency sets to 0.',
   },
   opacity: {
-    allowed: [
-      'var(--ui-surface-opacity)',
-      'var(--ui-state-disabled-opacity)',
-      'var(--ui-state-loading-opacity)',
-    ],
+    allowed: ['var(--ui-state-disabled-opacity)', 'var(--ui-state-loading-opacity)'],
     message:
-      'sets opacity outside the tokens: it takes var(--ui-surface-opacity), which reduced transparency makes 1, var(--ui-state-disabled-opacity), or var(--ui-state-loading-opacity).',
+      "sets opacity outside the tokens: it takes var(--ui-state-disabled-opacity) or var(--ui-state-loading-opacity), on a part the rule tests as disabled or busy. A surface's translucency comes from --ui-surface-material.",
   },
   'min-height': CONTROL_HEIGHT,
   'min-block-size': CONTROL_HEIGHT,
@@ -429,7 +456,8 @@ function withoutColorMixes(value: string): string {
 
 /**
  * Why a capped property's value can't be a language's, or null. Its lengths
- * are px, rem, or em, within MAX_LENGTH_PX, or MAX_RADIUS_PX for a radius,
+ * are px or rem, never em, which the typography profile's font size scales,
+ * within MAX_LENGTH_PX, or MAX_RADIUS_PX for a radius,
  * written out or read from a token whose grammar caps it the same way, so no
  * viewport unit, percentage, math, or radius token stretches one past it.
  */
@@ -452,18 +480,19 @@ function lengthProblem(base: string, value: string): string | null {
     const amount = Math.abs(Number.parseFloat(number!));
     const length = `${number}${unit}`;
     if (unit === '%') {
-      return `uses ${length}, a percentage, which scales with the box: a length here is px, rem, or em.`;
+      return `uses ${length}, a percentage, which scales with the box: a length here is px or rem.`;
     }
     if (VIEWPORT_UNIT.test(unit!)) {
-      return `uses ${length}, which scales with the window: a length here is px, rem, or em.`;
+      return `uses ${length}, which scales with the window: a length here is px or rem.`;
     }
     if (unit === '') {
       if (amount === 0) continue;
-      return `uses ${number} with no unit: a length here is px, rem, or em.`;
+      return `uses ${number} with no unit: a length here is px or rem.`;
     }
-    if (unit !== 'px' && unit !== 'rem' && unit !== 'em') {
-      return `uses ${length}: a length here is px, rem, or em.`;
+    if (unit === 'em') {
+      return `uses ${length}, which scales with the part's font size, the typography profile's: a length here is px or rem.`;
     }
+    if (unit !== 'px' && unit !== 'rem') return `uses ${length}: a length here is px or rem.`;
     if (amount > (unit === 'px' ? cap : cap / 16)) {
       return radius
         ? `has ${length}, over a radius's cap of ${cap}px or ${cap / 16}rem.`
@@ -747,12 +776,14 @@ class Reader {
       return null;
     }
     const declarations: StyleDeclaration[] = [];
+    // The state opacities dim only a part every selector tests as disabled or busy.
+    const dims = selectors.length > 0 && selectors.every(testsDisabledOrBusy);
     let cursor = start;
     for (const piece of splitTopLevel(body, ';')) {
       const at = cursor + (piece.length - piece.trimStart().length);
       cursor += piece.length + 1;
       if (piece.trim() === '') continue;
-      const declaration = readDeclaration(piece);
+      const declaration = readDeclaration(piece, dims);
       if ('message' in declaration) {
         this.report(at, declaration.message);
         valid = false;
@@ -987,7 +1018,10 @@ function pseudoClassArgument(
 }
 
 /** A declaration, checked, or why it can't be one. */
-function readDeclaration(piece: string): StyleDeclaration | { readonly message: string } {
+function readDeclaration(
+  piece: string,
+  dims: boolean,
+): StyleDeclaration | { readonly message: string } {
   const colon = piece.indexOf(':');
   if (colon < 0)
     return {
@@ -1021,8 +1055,9 @@ function readDeclaration(piece: string): StyleDeclaration | { readonly message: 
   if (length) return refuse(length);
   const tokens = TOKEN_ONLY_PROPERTIES[base];
   if (tokens) {
-    if (tokens.allowed.includes(value)) return { property, value };
-    return refuse(tokens.message);
+    if (!tokens.allowed.includes(value)) return refuse(tokens.message);
+    if (base === 'opacity' && !dims) return refuse(UNDIMMED);
+    return { property, value };
   }
   if (base === 'content') {
     if (value === '""' || value === "''") return { property, value: '""' };

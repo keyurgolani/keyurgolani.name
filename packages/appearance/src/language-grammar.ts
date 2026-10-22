@@ -4,7 +4,7 @@
 // carry a layout or visibility keyword: a motion recipe is one of the
 // platform's names, never `fixed` or `hidden`; a texture is gradients; a
 // state transform only nudges, and a state opacity only dims. A border,
-// shadow, size, or offset is px, rem, or em within 64px or 4rem, and a
+// shadow, size, or offset is px or rem within 64px or 4rem, and a
 // radius within 999px.
 
 import { languageValueProblem } from './values';
@@ -12,13 +12,13 @@ import type { LanguageKey } from './tokens';
 
 const NUMBER = String.raw`(?:\d+(?:\.\d+)?|\.\d+)`;
 const SIGNED = `-?${NUMBER}`;
-/** A length in px, rem, or em, or 0, never negative. */
-const LENGTH = `(?:0|${NUMBER}(?:px|rem|em))`;
-const SIGNED_LENGTH = `(?:0|${SIGNED}(?:px|rem|em))`;
+/** A length in px or rem, or 0, never negative. Never em, which the typography profile's font size scales. */
+const LENGTH = `(?:0|${NUMBER}(?:px|rem))`;
+const SIGNED_LENGTH = `(?:0|${SIGNED}(?:px|rem))`;
 
 /**
  * The longest length a language gives a border, shadow, outline, padding,
- * gap, blur, or control: 64px, or 4rem or 4em, at 16px to the rem. The
+ * gap, blur, or control: 64px, or 4rem at 16px to the rem. The
  * prototype's longest is its high shadow's 60px blur, so every one of its
  * languages fits, and no outline, shadow, or padding can cover the page or
  * push content off it.
@@ -26,10 +26,12 @@ const SIGNED_LENGTH = `(?:0|${SIGNED}(?:px|rem|em))`;
 export const MAX_LENGTH_PX = 64;
 /** A radius's cap, the prototype's pill radius. A radius can't cover or move anything. */
 export const MAX_RADIUS_PX = 999;
+/** The least --ui-surface-opacity: a surface stays at least half opaque. */
+const MIN_SURFACE_OPACITY = 0.5;
 
-/** Whether every px, rem, or em length in `value` is within `px` either way. */
+/** Whether every px or rem length in `value` is within `px` either way. */
 const within = (px: number) => (value: string) =>
-  [...value.matchAll(/(-?(?:\d+(?:\.\d+)?|\.\d+))(px|rem|em)(?![a-z])/g)].every(
+  [...value.matchAll(/(-?(?:\d+(?:\.\d+)?|\.\d+))(px|rem)(?![a-z])/g)].every(
     ([, number, unit]) => Math.abs(Number.parseFloat(number!)) <= (unit === 'px' ? px : px / 16),
   );
 const COLOR_REFERENCE = String.raw`var\(--color-[a-z0-9-]+\)`;
@@ -186,7 +188,7 @@ const RADIUS: Grammar = {
     MAX_RADIUS_PX,
   ),
   expected:
-    'one to four lengths in px, rem, or em, none negative and none over 999px or 62.4375rem, such as 10px or 16px 24px',
+    'one to four lengths in px or rem, none negative and none over 999px or 62.4375rem, such as 10px or 16px 24px',
 };
 const BORDER: Grammar = {
   accepts: capped(pattern(`none|(?:${LENGTH}|thin|medium|thick) ${LINE_STYLE}(?: ${COLOR})?`)),
@@ -200,7 +202,7 @@ const SHADOWS: Grammar = {
 };
 const SIZE: Grammar = {
   accepts: capped(pattern(LENGTH)),
-  expected: 'a length in px, rem, or em, not negative and at most 64px or 4rem, such as 1rem',
+  expected: 'a length in px or rem, not negative and at most 64px or 4rem, such as 1rem',
 };
 const STATE_OPACITY: Grammar = {
   accepts: (value) => pattern(`${NUMBER}%?`)(value) && between(value, 0.3, 1),
@@ -228,9 +230,11 @@ export const LANGUAGE_GRAMMARS: Readonly<Record<LanguageKey, Grammar>> = {
     expected:
       'one or more gradients, such as linear-gradient(var(--color-surface-default), var(--color-surface-default))',
   },
+  // At least half opaque: the prototype's most translucent surface is 66%.
   'surface-opacity': {
-    accepts: (value) => pattern(`${NUMBER}%?`)(value) && between(value, 0, 1),
-    expected: 'a number from 0 to 1, or a percentage from 0% to 100%, such as 0.72 or 100%',
+    accepts: (value) => pattern(`${NUMBER}%?`)(value) && between(value, MIN_SURFACE_OPACITY, 1),
+    expected:
+      'a number from 0.5 to 1, or a percentage from 50% to 100%, such as 0.72 or 100%: a surface stays at least half opaque',
   },
   'radius-control': RADIUS,
   'radius-card': RADIUS,
@@ -253,7 +257,7 @@ export const LANGUAGE_GRAMMARS: Readonly<Record<LanguageKey, Grammar>> = {
   'focus-width': SIZE,
   'focus-offset': {
     accepts: capped(pattern(SIGNED_LENGTH)),
-    expected: 'a length in px, rem, or em, within 64px or 4rem either way, such as 2px',
+    expected: 'a length in px or rem, within 64px or 4rem either way, such as 2px',
   },
   'focus-style': {
     accepts: oneOf([
