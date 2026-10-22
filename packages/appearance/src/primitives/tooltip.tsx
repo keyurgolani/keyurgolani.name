@@ -88,7 +88,7 @@ export function Tooltip({ id: local, content, children, emphasis, icon, label }:
       <Action ref={action} emphasis={emphasis} icon={icon} label={label} describedBy={id}>
         {children}
       </Action>
-      <div id={id} role="tooltip" popover="hint" data-ui-slot="tooltip" {...tipListeners}>
+      <div ref={tip} id={id} role="tooltip" popover="hint" data-ui-slot="tooltip" {...tipListeners}>
         {content}
       </div>
     </span>
