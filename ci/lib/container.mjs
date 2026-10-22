@@ -117,9 +117,9 @@ function scanFromInside(root) {
 
 /**
  * Lists the browser source maps under `root`, the image's
- * apps/web/.next/static (#6, Slice 1): only the analyze build pnpm
- * test:trace reads has any, and the image is never one. Prints JSON:
- * { exists, count, maps }, with the first 20 paths.
+ * apps/web/.next/static or apps/web/public (#6, Slice 1): only the analyze
+ * build pnpm test:trace reads has any, under .next/static, and the image is
+ * never one. Prints JSON: { exists, count, maps }, with the first 20 paths.
  */
 function sourceMapsFromInside(root) {
   const fs = process.getBuiltinModule('node:fs');

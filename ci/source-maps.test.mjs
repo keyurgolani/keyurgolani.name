@@ -144,6 +144,23 @@ test('the check refuses an analyze build and a missing one', (t) => {
   assert.match(checkSourceMaps(path.join(dir, 'none'), {}), /No build at .*Run pnpm build first\./);
 });
 
+test('a .map file in public/, which the server serves at the site root, fails too', (t) => {
+  const built = staticTree(t, ['chunks/a.js']);
+  const served = staticTree(t, ['.gitkeep', 'img/logo.png', 'vendor/x.js', 'vendor/x.js.map']);
+  assert.match(
+    checkSourceMaps(built, {}, served),
+    /^.*, which the server serves at the site root and the image ships, holds 1 source map file\(s\): vendor\/x\.js\.map\. No build may put one there\.$/,
+  );
+  const both = staticTree(t, ['chunks/a.js.map']);
+  assert.match(
+    checkSourceMaps(both, {}, served),
+    /shipped 1 source map file\(s\) under .*: chunks\/a\.js\.map\. Only a PORTFOLIO_ANALYZE=1 build may\. .*holds 1 source map file\(s\): vendor\/x\.js\.map\./,
+  );
+  const clean = staticTree(t, ['.gitkeep', 'img/logo.png']);
+  assert.equal(checkSourceMaps(built, {}, clean), null);
+  assert.equal(checkSourceMaps(built, {}, path.join(clean, 'none')), null, 'no public/ holds none');
+});
+
 /** MAPS_SNIPPET's answer for `dir`, run as the image smoke runs it inside the container. */
 function mapsInside(dir) {
   const run = spawnSync(process.execPath, ['-e', MAPS_SNIPPET, dir], { encoding: 'utf8' });
@@ -163,12 +180,14 @@ test("the image smoke's scan finds every .map under the image's static tree", (t
   assert.deepEqual(mapsInside(path.join(clean, 'none')), { exists: false, count: 0, maps: [] });
 });
 
-test('the image smoke fails an image with a source map or no static tree (CI only: it needs Docker)', () => {
+test('the image smoke fails an image with a source map in its static tree or public/, or no static tree (CI only: it needs Docker)', () => {
   const smoke = readFileSync(path.join(ROOT, 'ci', 'image-smoke.mjs'), 'utf8');
   assert.match(smoke, /const IMAGE_STATIC = '\/app\/apps\/web\/\.next\/static';/);
-  assert.match(smoke, /container\(\['exec', name, 'node', '-e', MAPS_SNIPPET, IMAGE_STATIC\]\)/);
+  assert.match(smoke, /const IMAGE_PUBLIC = '\/app\/apps\/web\/public';/);
+  assert.match(smoke, /for \(const root of \[IMAGE_STATIC, IMAGE_PUBLIC\]\) \{/);
+  assert.match(smoke, /container\(\['exec', name, 'node', '-e', MAPS_SNIPPET, root\]\)/);
   assert.match(
     smoke,
-    /if \(maps\.exists !== true \|\| maps\.count !== 0\) \{\n\s+throw new SmokeFailure\(/,
+    /if \(\(root === IMAGE_STATIC && maps\.exists !== true\) \|\| maps\.count !== 0\) \{\n\s+throw new SmokeFailure\(/,
   );
 });

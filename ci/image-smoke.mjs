@@ -38,6 +38,8 @@ import {
 
 /** Where the image serves /_next/static from. */
 const IMAGE_STATIC = '/app/apps/web/.next/static';
+/** Where the image serves files at the site root from. */
+const IMAGE_PUBLIC = '/app/apps/web/public';
 
 const cli = process.env.CONTAINER_CLI || 'docker';
 const pulled = process.env.SMOKE_IMAGE;
@@ -280,24 +282,28 @@ async function smoke() {
   }
   console.log('[image] image contents: only the example pair, no test or CI files');
 
-  // The image's build is a default one, so it ships no browser source map (#6).
-  const maps = JSON.parse(
-    container(['exec', name, 'node', '-e', MAPS_SNIPPET, IMAGE_STATIC]).stdout || '{}',
-  );
-  if (maps.exists !== true || maps.count !== 0) {
-    throw new SmokeFailure(
-      maps.exists === true
-        ? `the image ships ${maps.count} browser source map(s): ${maps.maps.join(', ')}`
-        : `the image has no ${IMAGE_STATIC} to check for source maps`,
-      {
-        test: 'image ships no source maps',
-        asset: maps.maps?.[0] ? `${IMAGE_STATIC}/${maps.maps[0]}` : IMAGE_STATIC,
-        expected: `no .map file under ${IMAGE_STATIC}`,
-        actual: maps.exists === true ? `${maps.count} .map files` : 'no such directory',
-      },
+  // The image's build is a default one, so it ships no browser source map
+  // (#6), under the build's static tree or in public/, which the server
+  // serves at the site root. The static tree has to be there to check.
+  for (const root of [IMAGE_STATIC, IMAGE_PUBLIC]) {
+    const maps = JSON.parse(
+      container(['exec', name, 'node', '-e', MAPS_SNIPPET, root]).stdout || '{}',
     );
+    if ((root === IMAGE_STATIC && maps.exists !== true) || maps.count !== 0) {
+      throw new SmokeFailure(
+        maps.exists === true
+          ? `the image ships ${maps.count} browser source map(s) under ${root}: ${maps.maps.join(', ')}`
+          : `the image has no ${root} to check for source maps`,
+        {
+          test: 'image ships no source maps',
+          asset: maps.maps?.[0] ? `${root}/${maps.maps[0]}` : root,
+          expected: `no .map file under ${IMAGE_STATIC} or ${IMAGE_PUBLIC}`,
+          actual: maps.exists === true ? `${maps.count} .map files` : 'no such directory',
+        },
+      );
+    }
   }
-  console.log(`[image] ${IMAGE_STATIC}: no browser source map`);
+  console.log(`[image] ${IMAGE_STATIC} and ${IMAGE_PUBLIC}: no browser source map`);
 
   // The server runs as uid 1001 in group 1001, and the app tree is root's.
   const owned = JSON.parse(

@@ -4,15 +4,18 @@
 // for pnpm test:trace's package attribution, and nothing that builds the
 // image or runs in CI sets it (ci/source-maps.test.mjs). This fails when a
 // build left any .map file under apps/web/.next/static, the tree a server
-// serves at /_next/static. CI's build job runs it after pnpm ci:build.
+// serves at /_next/static, or when apps/web/public, which the server serves
+// at the site root and the image ships, holds one. CI's build job runs it
+// after pnpm ci:build.
 //
-//   node ci/check-source-maps.mjs [static dir]
+//   node ci/check-source-maps.mjs [static dir] [public dir]
 import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { currentGate, REPO_ROOT, reportError, writeFailureRecord } from './lib/reports.mjs';
 
 export const STATIC_DIR = path.join(REPO_ROOT, 'apps', 'web', '.next', 'static');
+export const PUBLIC_DIR = path.join(REPO_ROOT, 'apps', 'web', 'public');
 
 /** Every .map file under `dir`, relative to it, sorted. */
 export function sourceMapFiles(dir) {
@@ -28,42 +31,64 @@ export function sourceMapFiles(dir) {
   return found.sort();
 }
 
+/** Up to ten names, and how many more there are. */
+function listed(names) {
+  const shown = names.slice(0, 10).join(', ');
+  return names.length > 10 ? `${shown}, and ${names.length - 10} more` : shown;
+}
+
 /**
- * What the check finds in `dir`: null when it passes, else the message.
+ * What the check finds: null when it passes, else the message. The static
+ * tree has to be there; public/ may not be, and then holds nothing.
  *
- * @param {string} dir
+ * @param {string} dir the build's static tree
  * @param {Record<string, string | undefined>} [env]
+ * @param {string} [publicDir]
  */
-export function checkSourceMaps(dir, env = process.env) {
+export function checkSourceMaps(dir, env = process.env, publicDir = PUBLIC_DIR) {
   if (env.PORTFOLIO_ANALYZE === '1') {
     return 'PORTFOLIO_ANALYZE=1 is set, and this check is for the default build. Unset it and rebuild.';
   }
   if (!existsSync(dir)) {
     return `No build at ${path.relative(REPO_ROOT, dir)}. Run pnpm build first.`;
   }
-  const maps = sourceMapFiles(dir);
-  if (maps.length === 0) return null;
-  const shown = maps.slice(0, 10).join(', ');
-  const more = maps.length > 10 ? `, and ${maps.length - 10} more` : '';
-  return `The default build shipped ${maps.length} source map file(s) under ${path.relative(REPO_ROOT, dir)}: ${shown}${more}. Only a PORTFOLIO_ANALYZE=1 build may.`;
+  const problems = [];
+  const built = sourceMapFiles(dir);
+  if (built.length > 0) {
+    problems.push(
+      `The default build shipped ${built.length} source map file(s) under ${path.relative(REPO_ROOT, dir)}: ${listed(built)}. Only a PORTFOLIO_ANALYZE=1 build may.`,
+    );
+  }
+  const served = existsSync(publicDir) ? sourceMapFiles(publicDir) : [];
+  if (served.length > 0) {
+    problems.push(
+      `${path.relative(REPO_ROOT, publicDir)}, which the server serves at the site root and the image ships, holds ${served.length} source map file(s): ${listed(served)}. No build may put one there.`,
+    );
+  }
+  return problems.length > 0 ? problems.join(' ') : null;
 }
 
 function main(argv) {
   const dir = path.resolve(argv[0] ?? STATIC_DIR);
-  const problem = checkSourceMaps(dir);
+  const publicDir = path.resolve(argv[1] ?? PUBLIC_DIR);
+  const problem = checkSourceMaps(dir, process.env, publicDir);
   if (!problem) {
-    console.log(`[source-maps] no .map file under ${path.relative(REPO_ROOT, dir)}`);
+    console.log(
+      `[source-maps] no .map file under ${path.relative(REPO_ROOT, dir)} or ${path.relative(REPO_ROOT, publicDir)}`,
+    );
     return 0;
   }
   reportError(problem, { title: 'source maps' });
   const gate = currentGate();
   if (gate) {
-    const maps = existsSync(dir) ? sourceMapFiles(dir) : [];
+    const maps = [dir, publicDir]
+      .filter((tree) => existsSync(tree))
+      .flatMap((tree) => sourceMapFiles(tree).map((file) => path.join(tree, file)));
     writeFailureRecord({
       ...gate,
       test: 'a default build ships no browser source maps',
-      asset: maps[0] ? path.relative(REPO_ROOT, path.join(dir, maps[0])) : undefined,
-      expected: 'no .map file under apps/web/.next/static',
+      asset: maps[0] ? path.relative(REPO_ROOT, maps[0]) : undefined,
+      expected: 'no .map file under apps/web/.next/static or apps/web/public',
       actual: problem,
     });
   }
