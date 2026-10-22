@@ -103,8 +103,9 @@ const AXIS_BY_KIND: Readonly<Record<PackKind, PackAxis>> = {
 /**
  * Indexes the metadata module's variants and packs by axis. It throws when
  * the build is broken: the fallback composition or a pack axis's
- * first-party fallback missing, two packs with one id on an axis, or a
- * fallback scheme without both base modes, which every display mode needs.
+ * first-party fallback missing, one id registered twice anywhere (ids are
+ * global, across the variants and every pack axis), or a fallback scheme
+ * without both base modes, which every display mode needs.
  */
 export function createAppearanceRegistry(meta: AppearanceMeta): AppearanceRegistry {
   if (!findVariant(meta.VARIANTS, FALLBACK_ID)) {
@@ -115,13 +116,23 @@ export function createAppearanceRegistry(meta: AppearanceMeta): AppearanceRegist
     colorScheme: new Map<string, RegisteredScheme>(),
     typography: new Map<string, RegisteredTypography>(),
   };
+  /** What registers each id so far: 'variant', or a pack kind. */
+  const owners = new Map<string, string>(
+    meta.VARIANTS.map(({ manifest }) => [manifest.id, 'variant']),
+  );
   for (const pack of meta.PACKS ?? []) {
     const axis = AXIS_BY_KIND[pack.kind];
     if (!axis) throw new Error(`The metadata module lists a pack of an unknown kind.`);
     const { id } = pack.manifest;
-    if (packs[axis].has(id)) {
-      throw new Error(`Two ${PACK_KIND_BY_AXIS[axis]} packs register the id ${id}.`);
+    const owner = owners.get(id);
+    if (owner === pack.kind) throw new Error(`Two ${pack.kind} packs register the id ${id}.`);
+    if (owner) {
+      const first = owner === 'variant' ? 'A variant' : `A ${owner} pack`;
+      throw new Error(
+        `${first} and a ${pack.kind} pack both register the id ${id}, and an id names one thing.`,
+      );
     }
+    owners.set(id, pack.kind);
     const base = { packageName: pack.packageName, version: pack.version };
     if (pack.kind === 'color-scheme') {
       packs.colorScheme.set(id, { ...base, manifest: pack.manifest, ...schemeSets(pack.manifest) });

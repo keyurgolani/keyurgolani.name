@@ -104,6 +104,36 @@ test('a broken build fails to make a registry, saying why', () => {
   assert.throws(() => testRegistry(without('humanist-ui')), /no humanist-ui/);
   // The metadata module lists no pack until registry generation registers them (Slice 2).
   assert.throws(() => createAppearanceRegistry({ VARIANTS }), /no platform-neutral/);
+  // An id names one thing: a second pack on another axis, or a variant, can't take it.
+  const asScheme = (id: string): MetaPack => ({
+    kind: 'color-scheme',
+    packageName: '@portfolio/x',
+    version: '1.0.0',
+    manifest: { ...DARK_ONLY, id },
+  });
+  assert.throws(
+    () => testRegistry([...PACKS, asScheme('acme-gallery')]),
+    /A variant and a color-scheme pack both register the id acme-gallery/,
+  );
+  assert.throws(
+    () => testRegistry([...PACKS, asScheme('fallback')]),
+    /A variant and a color-scheme pack both register the id fallback/,
+  );
+  assert.throws(
+    () => testRegistry([...PACKS, asScheme('fixture-translucent')]),
+    /A design-language pack and a color-scheme pack both register the id fixture-translucent/,
+  );
+  assert.throws(
+    () =>
+      testRegistry([
+        ...PACKS,
+        {
+          ...PACKS[0]!,
+          manifest: { ...PACKS[0]!.manifest, id: 'multilingual-system' },
+        } as MetaPack,
+      ]),
+    /A typography pack and a design-language pack both register the id multilingual-system/,
+  );
   const twice: MetaPack = { ...PACKS[4]! } as MetaPack;
   assert.throws(
     () => testRegistry([...PACKS, twice]),
