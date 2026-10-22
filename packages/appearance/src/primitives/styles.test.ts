@@ -71,8 +71,19 @@ test('no color literal: colors come from the scheme', () => {
   }
 });
 
-test('a color mix takes its amount from a token too, never a literal percentage', () => {
+/**
+ * The one color mix whose amount is a literal, and its rule: the approved
+ * prototype's backdrop; no contract-1 token carries scrim opacity; slice 5
+ * records it in audit-exceptions.json.
+ */
+const BACKDROP_MIX = {
+  rule: "[data-ui-slot='dialog']::backdrop",
+  call: 'color-mix(in srgb, var(--color-scrim) 62%, transparent)',
+} as const;
+
+test('a color mix takes its amount from a token too, never a literal percentage, but for the backdrop', () => {
   let mixes = 0;
+  let backdrops = 0;
   for (const { property, value } of DECLARATIONS) {
     for (let start = value.indexOf('color-mix('); start >= 0;) {
       // The call, to its own closing parenthesis.
@@ -84,11 +95,19 @@ test('a color mix takes its amount from a token too, never a literal percentage'
       }
       const call = value.slice(start, end + 1);
       mixes += 1;
-      assert.doesNotMatch(call, /(?<![\w-])\d*\.?\d+%/, `${property}: ${call}`);
+      if (call === BACKDROP_MIX.call && property === 'background-color') backdrops += 1;
+      else assert.doesNotMatch(call, /(?<![\w-])\d*\.?\d+%/, `${property}: ${call}`);
       start = value.indexOf('color-mix(', end);
     }
   }
   assert.ok(mixes > 0, 'the surfaces mix their colors');
+  // Once, and in the backdrop's own rule.
+  assert.equal(backdrops, 1, BACKDROP_MIX.call);
+  const rule = CSS.slice(CSS.indexOf(`${BACKDROP_MIX.rule} {`));
+  assert.ok(
+    rule.slice(0, rule.indexOf('}')).includes(`background-color: ${BACKDROP_MIX.call};`),
+    BACKDROP_MIX.rule,
+  );
 });
 
 test('no font, radius, shadow, blur, or timing literal: each comes from its pack', () => {
@@ -108,7 +127,8 @@ test('no font, radius, shadow, blur, or timing literal: each comes from its pack
     const rule = tokenOnly[property];
     if (rule) assert.match(value, rule, `${property}: ${value}`);
     if (property === 'font') assert.equal(value, 'inherit');
-    assert.doesNotMatch(value, /\bblur\(/, `${property}: ${value}`);
+    // A blur takes the language's token, never a length of its own.
+    assert.doesNotMatch(value, /\bblur\((?!var\(--ui-[a-z-]+\)\))/, `${property}: ${value}`);
     // A duration: digits then s or ms, outside a token.
     assert.doesNotMatch(value, /(?<![\w-])\d*\.?\d+m?s\b/, `${property}: ${value}`);
     assert.doesNotMatch(

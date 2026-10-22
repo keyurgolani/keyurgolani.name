@@ -197,6 +197,37 @@ test(
 );
 
 test(
+  "the dialog's backdrop is the scheme's scrim, translucent, under the language's blur, which reduced transparency drops",
+  INTERACTION,
+  async ({ page }) => {
+    // Fixture Translucent blurs by 18px, where Platform Neutral's blur is 0px.
+    await openFixtures(page, '?language=fixture-translucent');
+    await page.locator('#overlays').getByRole('button', { name: 'Open decision note' }).click();
+    await expect(page.locator('#decision')).toBeVisible();
+    const backdrop = () =>
+      page.locator('#decision').evaluate((dialog) => {
+        const style = getComputedStyle(dialog, '::backdrop');
+        return { color: style.backgroundColor, filter: style.backdropFilter };
+      });
+    /** A computed color's alpha: its fourth number, or 1 when it has none. */
+    const alpha = (color: string) => {
+      const match = /(?:,|\/)\s*([\d.]+)\s*\)$/.exec(color);
+      return match ? Number(match[1]) : 1;
+    };
+    const drawn = await backdrop();
+    expect(alpha(drawn.color), drawn.color).toBeGreaterThan(0);
+    expect(alpha(drawn.color), drawn.color).toBeLessThan(1);
+    expect(drawn.filter).toBe('blur(18px)');
+    // The OS asks for less transparency: the accessibility layer zeroes the blur.
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Emulation.setEmulatedMedia', {
+      features: [{ name: 'prefers-reduced-transparency', value: 'reduce' }],
+    });
+    await expect.poll(async () => (await backdrop()).filter).toBe('blur(0px)');
+  },
+);
+
+test(
   'the tooltip shows while its action has focus, closes on Escape, and describes the action',
   INTERACTION,
   async ({ page }) => {
