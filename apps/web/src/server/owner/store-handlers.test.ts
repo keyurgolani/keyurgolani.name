@@ -602,6 +602,49 @@ test('with the lock busy through startup, owner starts and serves, and its write
   assert.ok(events.includes('store.repair.finished'));
 });
 
+test("with something other than a regular file at publication/lock, startup's claim warns data_dir_claim_failed and logs claim_failed with its code, never the busy lock's line", async (t) => {
+  deploy(t);
+  const logged = t.mock.method(console, 'log', () => {});
+  const dataDir = mkdtempSync(path.join(tmpdir(), 'store-handlers-'));
+  t.after(() => rmSync(dataDir, { recursive: true, force: true }));
+  const owner = ownerStore({
+    config: configFor(dataDir),
+    checks: CHECKS,
+    documents: EMPTY,
+    setServable: () => {},
+    timing: { lockWaitMs: 50, claimRetryMs: [20, 40] },
+  });
+  t.after(() => owner.release());
+  assert.equal(await preflight({ dataDir }), null);
+  // A link at the lock's name that leads nowhere: no wait ends it.
+  const lock = path.join(dataDir, 'publication', 'lock');
+  symlinkSync(path.join(dataDir, 'publication', 'nowhere'), lock);
+  const issues = await owner.checkDirectory();
+  assert.deepEqual(
+    issues.map((issue) => [issue.severity, issue.code]),
+    [['warning', 'data_dir_claim_failed']],
+  );
+  assert.doesNotMatch(issues[0]!.message, /busy|backup/);
+  assert.deepEqual(await owner.checkIntegrity(), []);
+  assert.deepEqual(owner.writes(), { state: 'stopped', code: 'data_dir_unclaimed' });
+  const lines = () =>
+    logged.mock.calls.map(
+      (call) => JSON.parse(String(call.arguments[0])) as { event: string; code?: string },
+    );
+  // The retry says the same, once more at least, until the link goes.
+  await until(
+    () => lines().filter((line) => line.event === 'store.server.claim_failed').length >= 2,
+  );
+  rmSync(lock);
+  await until(() => owner.writes().state === 'open');
+  const claims = lines().filter((line) => line.event.startsWith('store.server.claim'));
+  assert.ok(claims.length >= 3, JSON.stringify(claims));
+  for (const line of claims.slice(0, -1)) {
+    assert.deepEqual([line.event, line.code], ['store.server.claim_failed', 'storage_unavailable']);
+  }
+  assert.equal(claims.at(-1)!.event, 'store.server.claimed');
+});
+
 test('a write after another server took the claim answers data_dir_in_use, and claims the directory again once that server stopped', async (t) => {
   deploy(t);
   t.mock.method(console, 'log', () => {});
