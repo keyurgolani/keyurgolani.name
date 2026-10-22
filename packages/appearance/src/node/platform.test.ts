@@ -1,8 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { LAYER_ORDER } from '../layers';
 import { COLOR_ROLES, LANGUAGE_KEYS } from '../tokens';
-import { compilePlatform, platformStylesheet } from './platform';
+import { compilePlatform, layerRules, platformStylesheet } from './platform';
 import { readLanguageStylesheet } from './stylesheet';
 
 // The platform stylesheet (#19, Slice 2, item 3): the reset, utilities, and
@@ -50,6 +51,31 @@ test("the reset puts every id and focusable element below a variant's sticky chr
   assert.deepEqual(Object.fromEntries(offset), {
     'scroll-margin-top': 'var(--layout-sticky-offset, 0px)',
   });
+});
+
+test("the primitives' rules join the platform's reset and utilities layers, under the accessibility layer (Slice 3)", () => {
+  const primitives = readFileSync(new URL('../primitives/styles.css', import.meta.url), 'utf8');
+  const reset = css.slice(css.indexOf('@layer reset {'), css.indexOf('@layer utilities {'));
+  const utilities = css.slice(
+    css.indexOf('@layer utilities {'),
+    css.indexOf('@layer accessibility {'),
+  );
+  assert.ok(reset.includes("  [data-ui-slot='action'] {\n"), 'an action renders from the tokens');
+  assert.ok(reset.includes("  [data-ui-slot='surface'][data-emphasis='prominent'] {\n"));
+  assert.ok(
+    utilities.includes('  [data-appearance-boundary] :focus-visible {\n'),
+    'focus is an outline',
+  );
+  assert.ok(utilities.includes('  @keyframes fade-rise {\n'));
+  // Every rule of theirs is here, once, in its own layer.
+  for (const layer of ['reset', 'utilities'] as const) {
+    const within = layer === 'reset' ? reset : utilities;
+    for (const line of layerRules(primitives, layer).split('\n')) {
+      if (/^\S.*\{$/.test(line)) assert.ok(within.includes(`\n  ${line}\n`), `${layer}: ${line}`);
+    }
+  }
+  assert.equal(css.split('@layer reset {').length, 2, 'still one reset block');
+  assert.throws(() => layerRules('@layer reset {}', 'utilities'), /no @layer utilities block/);
 });
 
 test('reduced motion keeps motion-fast feedback and stops or fades the rest', () => {

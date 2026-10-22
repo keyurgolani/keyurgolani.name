@@ -11,8 +11,7 @@
     "./generators": "./src/generators/index.ts",
     "./node": "./src/node/index.ts",
     "./react": "./src/react/index.ts",
-    "./primitives": "./src/primitives/index.ts",
-    "./primitives/styles.css": "./src/primitives/styles.css"
+    "./primitives": "./src/primitives/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

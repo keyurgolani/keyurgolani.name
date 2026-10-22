@@ -8,6 +8,7 @@ import {
   TYPOGRAPHY_MEASURES,
   TYPOGRAPHY_ROLES,
 } from '../tokens';
+import { LAYER_ORDER } from '../layers';
 import { SLOT_VALUES } from '../slots';
 
 // The primitives' stylesheet (#19, Slice 3, item 2) holds no appearance of
@@ -18,9 +19,6 @@ import { SLOT_VALUES } from '../slots';
 const SOURCE = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
 /** The stylesheet without its comments. */
 const CSS = SOURCE.replace(/\/\*[\s\S]*?\*\//g, '');
-
-const LAYER_ORDER =
-  '@layer reset, scheme, language, typography, variant-layout, utilities, accessibility;';
 
 /** Every declaration, `property: value`, with the at-rule and selector text left out. */
 function declarations(css: string): { property: string; value: string }[] {
