@@ -298,30 +298,38 @@ Data under an `extensions` key, or a section whose `kind` is `<npm package name>
 }
 ```
 
-`capabilities` lists every capability the profile grants. The checks are `catalog` (the document pair loads), `packs` (the site's variant loads, `degraded` while the fallback composition renders in place of a variant this build doesn't register), and, under `demo` and `read-only`, `owner-modules` (no Studio, storage, or sign-in code has loaded). A failed check makes it 503 with `"status": "unavailable"`. When a check is degraded, or a startup requirement fell back to a degraded mode, it's 200 with `"status": "degraded"`. While the site selects a variant this build doesn't register, the bundled sample's `editorial-evidence` included until #13, readiness says `degraded`. Neither endpoint returns a path, a value, or portfolio content, and both send `Cache-Control: no-store`.
+`capabilities` lists every capability the profile grants. The checks are `catalog` (something can be served: under `owner`, `degraded` while the last known good stands in for a live revision that can't be served, and a failure when no published revision can be served), `packs` (the site's variant loads, `degraded` while the fallback composition renders in place of a variant this build doesn't register), under `demo` and `read-only`, `owner-modules` (no Studio, storage, or sign-in code has loaded), and under `owner`, `data-directory` (the data directory takes a write, a sync, and a rename, tried at most every 30 seconds). A failed check makes it 503 with `"status": "unavailable"`. When a check is degraded, or a startup requirement fell back to a degraded mode, it's 200 with `"status": "degraded"`. While the site selects a variant this build doesn't register, the bundled sample's `editorial-evidence` included until #13, readiness says `degraded`. Neither endpoint returns a path, a value, or portfolio content, and both send `Cache-Control: no-store`.
 
 ## Logs
 
-The app writes its log as one JSON object per line on stdout, with `ts`, `level`, and `event`, and only these other fields: `requestId`, `profile`, `route` (the route pattern, never the URL), `operation`, `capability`, `status`, `code`, `key`, and `digest`. `config.fatal` and `config.warning` add `file` (relative to the source directory), `document`, `path`, `line`, `column`, `stableId`, `message`, and `remediation`. No line of the app's carries a request body, a cookie, `Authorization`, a raw URL, or a secret value.
+The app writes its log as one JSON object per line on stdout, with `ts`, `level`, and `event`, and only these other fields: `requestId`, `profile`, `route` (the route pattern, never the URL), `operation`, `capability`, `status`, `code`, `key`, and `digest`. `config.fatal` and `config.warning` add `file` (relative to the source directory), `document`, `path`, `line`, `column`, `stableId`, `message`, and `remediation`. Under `owner`, the revision store's `store.*` lines add `revisionId`, `servingRevisionId`, `seq`, `stage`, `durationMs`, and `drift`, never content. No line of the app's carries a request body, a cookie, `Authorization`, a raw URL, or a secret value.
 
 Next writes its own lines to the same streams, as plain text: its startup banner on stdout (`▲ Next.js`, the address, `✓ Ready`), and on stderr, the message and stack of each error it catches, next to the app's `request.error` line, and a line naming the request URL when a request handler crashes. Those can name server paths and request URLs. None of them is JSON, so a log pipeline keeps the app's lines by parsing each line as a JSON object.
 
-| Event                     | When                                                                                                                          |
-| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `config.fatal`            | A startup check failed. The server exits 1 after the last one.                                                                |
-| `config.warning`          | A startup check found something to fix that doesn't stop the server.                                                          |
-| `deployment.config`       | Once, at startup: the redacted settings summary.                                                                              |
-| `request.error`           | A page or route failed. `digest` is the reference code the error page shows the visitor.                                      |
-| `operation.failed`        | A Studio operation failed. Its response carries the same `requestId`.                                                         |
-| `feed.failed`             | `/feed.xml` couldn't be built: `code` is `catalog_unavailable` or `render_failed`. Its response carries the same `requestId`. |
-| `session.read_failed`     | `owner`: the session store couldn't be read. The request gets no session, and its cookie stays.                               |
-| `session.touch_failed`    | `owner`: a session's last use couldn't be written. The request goes on.                                                       |
-| `session.listener_failed` | `owner`: something told of an ended session failed. The session ended anyway.                                                 |
-| `audit.write_failed`      | `owner`: an audit line couldn't be written. `code` is its type. No decision changes.                                          |
-| `login.store_failed`      | `owner`: a sign-in's session couldn't be stored. It gets 503 `unavailable`, or a form post `state=error`, and no cookie.      |
-| `logout.store_failed`     | `owner`: a sign-out couldn't end its session. The browser is signed out, and the session ends at its idle limit.              |
+| Event                        | When                                                                                                                          |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `config.fatal`               | A startup check failed. The server exits 1 after the last one.                                                                |
+| `config.warning`             | A startup check found something to fix that doesn't stop the server.                                                          |
+| `deployment.config`          | Once, at startup: the redacted settings summary.                                                                              |
+| `request.error`              | A page or route failed. `digest` is the reference code the error page shows the visitor.                                      |
+| `operation.failed`           | A Studio operation failed. Its response carries the same `requestId`.                                                         |
+| `feed.failed`                | `/feed.xml` couldn't be built: `code` is `catalog_unavailable` or `render_failed`. Its response carries the same `requestId`. |
+| `session.read_failed`        | `owner`: the session store couldn't be read. The request gets no session, and its cookie stays.                               |
+| `session.touch_failed`       | `owner`: a session's last use couldn't be written. The request goes on.                                                       |
+| `session.listener_failed`    | `owner`: something told of an ended session failed. The session ended anyway.                                                 |
+| `audit.write_failed`         | `owner`: an audit line couldn't be written. `code` is its type. No decision changes.                                          |
+| `login.store_failed`         | `owner`: a sign-in's session couldn't be stored. It gets 503 `unavailable`, or a form post `state=error`, and no cookie.      |
+| `logout.store_failed`        | `owner`: a sign-out couldn't end its session. The browser is signed out, and the session ends at its idle limit.              |
+| `store.publish.committed`    | `owner`: a publish moved the live pointer, with `revisionId`, `seq`, and `durationMs`. Rollback and recover log their own.    |
+| `store.publish.failed`       | `owner`: a publish didn't move it: `stage` is where it stopped and `code` why. Rollback and recover log their own.            |
+| `store.catalog.degraded`     | `owner`: the live revision can't be served, so `servingRevisionId`, the last known good, is. `code` says why.                 |
+| `store.catalog.incompatible` | `owner`: no published revision can be served, so visitors get 503. `code` says why.                                           |
+| `store.render-drift`         | `owner`: the live revision's variant, packs, or contracts differ from this build's: `drift` lists each ID and both versions.  |
+| `store.repair.failed`        | `owner`: startup repair didn't finish. Visitors are served what can be served, and owner writes wait for the repair.          |
+| `store.writes.stopped`       | `owner`: a Studio write found the repair still failing, and stopped with `code`. Each write tries the repair first.           |
+| `store.repair.finished`      | `owner`: a write finished the repair startup couldn't, and owner writes go on.                                                |
 
-`deployment.config` adds `origin`, `previewOrigin`, `proxyHops`, `capabilities`, `adapters` (which catalog the profile reads), and `secrets`, each secret only as `set` or `unset`. The owner-session `config.status` operation returns the same summary; no anonymous route does.
+`deployment.config` adds `origin`, `previewOrigin`, `proxyHops`, `capabilities`, `adapters` (which catalog the profile reads), and `secrets`, each secret only as `set` or `unset`. The owner-session `config.status` operation returns the same summary, with how the live site's variant renders and `catalog`: the serving state, the revision `live.json` names, the one served, and any render drift. No anonymous route does.
 
 ## Response headers
 
