@@ -5,7 +5,7 @@ import { createElement, isValidElement, type ReactElement } from 'react';
 import {
   parsePortfolio,
   parseSite,
-  toPublicView,
+  resolvePortfolioView,
   type ParsedPair,
   type PublicPortfolio,
   type PublicView,
@@ -15,15 +15,16 @@ import { buildRenderInput } from '@portfolio/variant-contract';
 // so this test runs without the react-server condition (a .test.tsx file).
 import { loadComposition, REGISTRY } from '~/lib/variants';
 
-// Item 16: the public view is the only input to the variants, so neither a
-// hidden section nor unregistered extension data reaches what the server
-// sends a browser. An RSC payload carries what server components render and
+// #4 item 16 and #10 item 5: the published view is the only input to the
+// variants, so no hidden section, no record or asset only a hidden section
+// reaches, no private record or asset, and no unregistered extension data
+// reaches what the server sends a browser. An RSC payload carries what server components render and
 // the props of each client component, including data a client component
 // never renders. The walk below collects every string of both, for each
 // registered variant, the fallback composition included. (The browser suite
 // fetches the real payload for the host's variant.)
 
-const PORTFOLIO = `schemaVersion: 2
+const PORTFOLIO = `schemaVersion: 3
 locale: en
 direction: ltr
 identity:
@@ -35,24 +36,72 @@ links:
     label: Site
     extensions:
       '@other/x': { note: canary-link-extension }
+practice:
+  services:
+    - items: [{ name: canary-hidden-practice }]
+contact:
+  message: canary-hidden-contact
+works:
+  - id: visible-work
+    title: Visible Work
+    medium: software
+  - id: secret-work
+    title: canary-private-record
+    medium: writing
+    visibility: private
+    cover: { asset: secret-cover }
+  - id: draft-work
+    title: canary-hidden-record
+    medium: writing
+    cover: { asset: draft-cover }
+chronology:
+  - id: visible-role
+    kind: role
+    title: Visible Engineer
+    organization: Acme
+    period: { start: '2020' }
+  - id: hidden-role
+    kind: role
+    title: canary-hidden-role
+    organization: Hidden Org
+    period: { start: '2019' }
+media:
+  - id: secret-cover
+    kind: image
+    source: covers/secret.png
+    alt: canary-private-media
+    visibility: private
+  - id: draft-cover
+    kind: image
+    source: covers/draft.png
+    alt: canary-hidden-media
 sections:
   - kind: hero
     id: top
     tagline: Builds calm software.
-  - kind: experience
+  - kind: works
     id: work
     title: Work
-    items:
-      - role: Visible Engineer
-        organization: Acme
-        period: { start: '2020' }
-  - kind: experience
-    id: secret-work
+    items: [visible-work, secret-work]
+  - kind: chronology
+    id: roles
+    title: Roles
+    items: [visible-role]
+  - kind: works
+    id: drafts
     title: canary-hidden-title
-    items:
-      - role: canary-hidden-role
-        organization: Hidden Org
-        period: { start: '2019' }
+    items: [draft-work]
+  - kind: chronology
+    id: secret-roles
+    title: Hidden roles
+    items: [hidden-role]
+  - kind: practice
+    id: services
+    title: Services
+    part: services
+  - kind: contact
+    id: contact
+    title: Contact
   - kind: '@other/x/notes'
     id: notes
     title: canary-unregistered-title
@@ -76,7 +125,10 @@ motionPolicy: respect-os
 features:
   feed: true
 sections:
-  secret-work: { hidden: true }
+  drafts: { hidden: true }
+  secret-roles: { hidden: true }
+  services: { hidden: true }
+  contact: { hidden: true }
 `;
 
 const MARKERS = [
@@ -84,6 +136,12 @@ const MARKERS = [
   'canary-link-extension',
   'canary-hidden-title',
   'canary-hidden-role',
+  'canary-hidden-record',
+  'canary-hidden-media',
+  'canary-hidden-practice',
+  'canary-hidden-contact',
+  'canary-private-record',
+  'canary-private-media',
   'canary-unregistered-title',
   'canary-unregistered-section',
 ];
@@ -168,10 +226,13 @@ async function element(id: string, view: PublicView) {
   return createElement(await loadComposition(id), { input });
 }
 
-test('no variant sends a browser a hidden section or unregistered extension data', async () => {
+/** The pair's published view, as the host builds it. */
+const viewOf = (input: ParsedPair) => resolvePortfolioView(input, {}, { mediaBase: '/media' });
+
+test('no variant sends a browser a hidden section, a private or unreached record, or unregistered extension data', async () => {
   const clients = await clientComponents();
   const input = pair();
-  const view = toPublicView(input);
+  const view = viewOf(input);
   const ids = REGISTRY.map(({ manifest }) => manifest.id);
   assert.ok(ids.includes('fallback'), ids.join(', '));
   for (const id of ids) {
@@ -183,7 +244,7 @@ test('no variant sends a browser a hidden section or unregistered extension data
     // Given the parsed pair instead (forced past the type's brand, which
     // otherwise refuses it), the same walk finds the hidden section, so it
     // would see a leak.
-    const raw = { ...view, portfolio: input.portfolio as PublicPortfolio };
+    const raw = { ...view, portfolio: input.portfolio as unknown as PublicPortfolio };
     assert.ok(
       found(await payloadStrings(await element(id, raw), clients)).includes('canary-hidden-role'),
       id,
@@ -196,5 +257,5 @@ test('a variant takes only the public view, by type', () => {
   const props = (portfolio: PublicPortfolio) => ({ portfolio });
   // @ts-expect-error A parsed portfolio isn't the public view's.
   assert.ok(props(input.portfolio));
-  assert.ok(props(toPublicView(input).portfolio));
+  assert.ok(props(viewOf(input).portfolio));
 });

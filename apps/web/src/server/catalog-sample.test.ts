@@ -1,6 +1,6 @@
 import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -13,13 +13,14 @@ import { BUNDLED_SAMPLE_NAMES } from './catalog-documents';
 import { openSampleCatalog } from './catalog-sample';
 
 // The sample adapter for `demo` (#1, item 16): the bundled pair, read once,
-// checked as a pair, and frozen, without the sections that fetch live data.
+// checked as a pair, and frozen, with the snapshots bundled beside it (#10),
+// which its github section renders instead of fetching.
 
 const EXAMPLES = {
   portfolio: fileURLToPath(new URL('../../../../portfolio.example.yml', import.meta.url)),
   site: fileURLToPath(new URL('../../../../site.example.yml', import.meta.url)),
 };
-const HEAD = 'schemaVersion: 2\nlocale: en\ndirection: ltr\n';
+const HEAD = 'schemaVersion: 3\nlocale: en\ndirection: ltr\n';
 const WITH_EXTENSIONS = `${HEAD}${[
   'identity:',
   '  name: Anamika Devi',
@@ -68,21 +69,39 @@ test('it serves the bundled pair, frozen', async () => {
   assert.equal(await opened.reader.getLive(), live);
 });
 
-test('it drops the github sections, which fetch a live account, and keeps the rest', async () => {
+test('it keeps every section, and hands on the snapshots bundled beside the examples, frozen', async () => {
   const written = (
     parseYaml(readFileSync(EXAMPLES.portfolio, 'utf8')) as { sections: { kind: string }[] }
   ).sections;
   assert.ok(
     written.some(({ kind }) => kind === 'github'),
-    'the sample has a github section to drop',
+    'the sample has a github section, which renders its snapshot',
   );
   const opened = openSampleCatalog({ examples: EXAMPLES });
-  assert.ok(opened.ok);
-  const { sections } = (await opened.reader.getLive()).unit.portfolio;
+  assert.ok(opened.ok, JSON.stringify(opened.issues));
+  const { unit } = await opened.reader.getLive();
   assert.deepEqual(
-    sections.map(({ kind }) => kind),
-    written.map(({ kind }) => kind).filter((kind) => kind !== 'github'),
+    (unit.portfolio.sections ?? []).map(({ kind }) => kind),
+    written.map(({ kind }) => kind),
   );
+  assert.ok(Object.hasOwn(unit.snapshots, 'github'), 'the bundled github snapshot');
+  assert.ok(Object.isFrozen(unit.snapshots));
+  assert.equal(unit.media, undefined);
+});
+
+test('a bundled snapshot that does not read refuses demo, naming its file', (t) => {
+  const dir = scratch(t);
+  const portfolio = path.join(dir, 'portfolio.example.yml');
+  writeFileSync(portfolio, readFileSync(EXAMPLES.portfolio, 'utf8'));
+  mkdirSync(path.join(dir, 'snapshots'));
+  writeFileSync(path.join(dir, 'snapshots', 'github.json'), '{ "records": [canary-snapshot] }');
+  const opened = openSampleCatalog({ examples: { portfolio, site: EXAMPLES.site } });
+  assert.equal(opened.ok, false);
+  assert.deepEqual(
+    opened.issues.map((issue) => `${issue.severity} ${issue.key}:${issue.code} ${issue.file}`),
+    ['fatal PORTFOLIO_PROFILE:sample_invalid snapshots/github.json'],
+  );
+  assert.ok(!JSON.stringify(opened.issues).includes('canary'));
 });
 
 test('extension data the build does not register loads as written, with a warning', async (t) => {
@@ -166,7 +185,7 @@ test('a sample that fails the schema, or a site the build cannot render, refuses
   const broken = openSampleCatalog({
     examples: withPortfolio(
       t,
-      'schemaVersion: 2\nidentity:\n  name: canary-name\n  canary-field: x\n',
+      'schemaVersion: 3\nidentity:\n  name: canary-name\n  canary-field: x\n',
     ),
   });
   assert.equal(broken.ok, false);

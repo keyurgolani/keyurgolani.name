@@ -108,7 +108,7 @@ test.before(async () => {
   dataDir = mkdtempSync(path.join(tmpdir(), 'composition-owner-data-'));
   writeFileSync(
     path.join(sourceDir, 'portfolio.yml'),
-    'schemaVersion: 2\nlocale: en\ndirection: ltr\nidentity:\n  name: Rowan Test\nsections:\n  - kind: lede\n    id: about\n    body: Hi.\n',
+    'schemaVersion: 3\nlocale: en\ndirection: ltr\nidentity:\n  name: Rowan Test\nsections:\n  - kind: lede\n    id: about\n    body: Hi.\n',
   );
   copyFileSync(EXAMPLES.site, path.join(sourceDir, 'site.yml'));
   const read = readDeploymentConfig(

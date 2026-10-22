@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { toPublicView, type PublicView, type Site } from '@portfolio/schema';
+import { resolvePortfolioView, type PublicView, type Site } from '@portfolio/schema';
 import { readPair } from '@portfolio/schema/node';
 import {
   FALLBACK_ID,
@@ -51,7 +51,7 @@ const PAIR = (() => {
 /** The bundled pair's public view, its site selecting `variant`, with `routes` toggles. */
 function viewFor(variant: string, routes?: Site['routes']): PublicView {
   const site = { ...PAIR.site, appearance: { ...PAIR.site.appearance, variant }, routes };
-  return toPublicView({ portfolio: PAIR.portfolio, site });
+  return resolvePortfolioView({ portfolio: PAIR.portfolio, site }, {}, { mediaBase: '/media' });
 }
 
 /** What `path` resolves to, and whether resolving it loaded the view. */

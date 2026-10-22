@@ -4,7 +4,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import * as React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { composeSchemas, toPublicView, type ParsedPair } from '@portfolio/schema';
+import { composeSchemas, resolvePortfolioView, type ParsedPair } from '@portfolio/schema';
 import { readPair } from '@portfolio/schema/node';
 import {
   buildRenderInput,
@@ -72,7 +72,7 @@ function render(portfolio: unknown, idPrefix = '') {
 
 function markup(pair: ParsedPair, idPrefix = '') {
   const input = buildRenderInput({
-    view: toPublicView(pair),
+    view: resolvePortfolioView(pair, {}, { mediaBase: '/media' }),
     manifest: MANIFEST,
     route: { route: 'home' },
     basePath: '',
@@ -86,11 +86,12 @@ function markup(pair: ParsedPair, idPrefix = '') {
 const count = (html: string, pattern: RegExp) => html.match(pattern)?.length ?? 0;
 
 const PORTFOLIO = {
-  schemaVersion: 2,
+  schemaVersion: 3,
   locale: 'en',
   direction: 'ltr',
   identity: { name: 'Rowan Fallback', tagline: 'Builds calm software.' },
   links: [{ url: 'https://rowan.test', label: 'Site' }],
+  contact: { message: 'Write any time.' },
   sections: [
     { kind: 'hero', id: 'top' },
     { kind: 'lede', id: 'about', title: 'About', body: 'Hi.' },
@@ -139,6 +140,26 @@ test('the navigation links each titled section but the hero and calls to action'
   assert.match(prefixed, /<main id="pv-main"/);
   assert.match(prefixed, /<a href="#pv-contact"[^>]*>Contact<\/a>/);
   assert.match(prefixed, /<section id="pv-contact"/);
+});
+
+test('a section with nothing public leaves the page and the navigation (#10)', () => {
+  const html = render({
+    ...PORTFOLIO,
+    works: [
+      { id: 'tide', title: 'Tide', medium: 'writing' },
+      { id: 'draft', title: 'Draft', medium: 'writing', visibility: 'private' },
+    ],
+    archive: ['tide'],
+    sections: [
+      ...PORTFOLIO.sections,
+      { kind: 'works', id: 'selected-work', title: 'Selected work', items: ['tide'] },
+      { kind: 'works', id: 'drafts', title: 'Drafts', items: ['draft'] },
+    ],
+  });
+  assert.match(html, /<a href="#selected-work"[^>]*>Selected work<\/a>/);
+  assert.doesNotMatch(html, /drafts|Drafts|Draft/);
+  // Works in the archive say so, in the order the section lists them.
+  assert.match(html, /<p class="pf-label" data-label="archive">Archive<\/p>/);
 });
 
 test("the navigation's English label is marked so in a portfolio in another language", () => {
