@@ -203,6 +203,13 @@ export async function startApp({
     mkdirSync(fileEnv.PORTFOLIO_DATA_DIR, { mode: 0o700 });
   }
 
+  // next dev flushes its telemetry queue on exit from a detached process,
+  // telemetry off or not, and that process writes its settings under HOME
+  // after stop() has removed the root. A dev server's HOME is in web's
+  // .next instead, which git ignores and stop() leaves alone.
+  const home = dev ? path.join(web, '.next', 'dev-home') : root;
+  if (dev) mkdirSync(home, { recursive: true });
+
   // The trap binds first, so its own port can't be the one picked for the server.
   const trap = await startEgressTrap();
   const log = logFile ?? path.join(root, 'server.log');
@@ -212,7 +219,7 @@ export async function startApp({
   function launch(port) {
     const origin = `http://127.0.0.1:${port}`;
     const serverEnv = {
-      ...baseEnv(root, port),
+      ...baseEnv(home, port),
       // next dev compiles for development, as `pnpm dev` does.
       ...(dev ? { NODE_ENV: 'development' } : {}),
       PORTFOLIO_PROFILE: 'read-only',
