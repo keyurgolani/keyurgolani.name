@@ -306,14 +306,21 @@ export function revisionCatalogReader({
 
   async function current(): Promise<Decision> {
     const key = await pointerKey();
+    let decision: Promise<Decision>;
     // An empty store asks whenEmpty every time, which keeps its own watch.
-    if (decided?.key === key && key !== 'none') return decided.decision;
-    // A decision that throws is kept, as a failure: a broken store isn't
-    // decided again on every request, and no raw error reaches a render.
-    const decision = decide().catch(failure);
-    decided = { key, decision };
+    if (decided?.key === key && key !== 'none') {
+      decision = decided.decision;
+    } else {
+      // A decision that throws is kept, as a failure: a broken store isn't
+      // decided again on every request, and no raw error reaches a render.
+      decision = decide().catch(failure);
+      decided = { key, decision };
+    }
     const done = await decision;
-    announce(done);
+    // The latest decision sets the flag on every call, a kept one included,
+    // so nothing else has to ask the reader again for visitors to see it.
+    // One a newer pointer overtook while it ran says nothing.
+    if (decided?.decision === decision) announce(done);
     return done;
   }
 
