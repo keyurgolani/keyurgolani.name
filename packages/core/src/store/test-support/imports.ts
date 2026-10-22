@@ -1,9 +1,9 @@
 // For the tests that check what a module reaches: the run-time imports of a
-// TypeScript or .mjs module by relative path, followed the way Node and tsx
-// resolve them. `import type` and `export type` load nothing, so they don't
-// count. A bare specifier, such as @portfolio/schema, isn't followed, and
-// neither is apps/web's generated registry, which only its build:registry
-// writes, so a clean checkout reads the same as a built one.
+// TypeScript or .mjs module by relative path, `import()` included, followed
+// the way Node and tsx resolve them. `import type` and `export type` load
+// nothing, so they don't count. A bare specifier, such as @portfolio/schema,
+// isn't followed, and neither is apps/web's generated registry, which only
+// its build:registry writes, so a clean checkout reads the same as a built one.
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { recordOwnerModule } from '../../load-trace';
@@ -12,6 +12,11 @@ recordOwnerModule('core/store/test-support/imports');
 
 const STATEMENT =
   /^\s*(import|export)\s+(type\s+)?(?:[^'";]*?\sfrom\s+)?['"](\.{1,2}\/[^'"]+)['"]/gm;
+/** `import('./x')`, which loads code at run time as a static import does. */
+const DYNAMIC = /\bimport\(\s*['"](\.{1,2}\/[^'"]+)['"]\s*\)/g;
+/** A file's text without its comments, where an `import()` loads nothing. */
+const uncommented = (text: string) =>
+  text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:\\'"`])\/\/.*$/gm, '$1');
 /** apps/web's registry, gitignored until build:registry writes it. */
 const GENERATED = /[\\/]apps[\\/]web[\\/]src[\\/]lib[\\/]generated[\\/]/;
 
@@ -21,10 +26,15 @@ const GENERATED = /[\\/]apps[\\/]web[\\/]src[\\/]lib[\\/]generated[\\/]/;
  */
 export function relativeImports(file: string, { types = false } = {}): string[] {
   const text = readFileSync(file, 'utf8');
+  const specifiers = [
+    ...[...text.matchAll(STATEMENT)]
+      .filter((match) => types || !match[2])
+      .map((match) => match[3]!),
+    ...[...uncommented(text).matchAll(DYNAMIC)].map((match) => match[1]!),
+  ];
   const found: string[] = [];
-  for (const match of text.matchAll(STATEMENT)) {
-    if (match[2] && !types) continue;
-    const base = path.resolve(path.dirname(file), match[3]!);
+  for (const specifier of specifiers) {
+    const base = path.resolve(path.dirname(file), specifier);
     // A stylesheet or JSON loads no code.
     if (/\.(?:css|json)$/.test(base)) continue;
     const resolved = [
@@ -34,7 +44,7 @@ export function relativeImports(file: string, { types = false } = {}): string[] 
       path.join(base, 'index.tsx'),
     ].find((candidate) => /\.(?:tsx?|mjs|js)$/.test(candidate) && existsSync(candidate));
     if (!resolved && GENERATED.test(base)) continue;
-    if (!resolved) throw new Error(`${file}: can't resolve ${match[3]}`);
+    if (!resolved) throw new Error(`${file}: can't resolve ${specifier}`);
     found.push(resolved);
   }
   return found;
