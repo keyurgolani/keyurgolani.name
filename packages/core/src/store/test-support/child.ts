@@ -11,6 +11,7 @@ import { nodeFs } from '../fs-port';
 import { readDraft, draftIds, type CreateDraftInput } from '../drafts';
 import type { DraftId } from '../layout';
 import { readEvents, readLive } from '../pointer';
+import { preflight } from '../preflight';
 import type { PublishInput, RecoverInput, RollbackInput } from '../publication';
 import { readRevision } from '../revisions';
 import { claimServer } from '../server-claim';
@@ -40,7 +41,15 @@ export type Step =
       readonly draftId: DraftId;
       readonly expectedVersion: number;
       readonly documents: readonly UnitInput[];
-    };
+    }
+  /**
+   * Publishes `documents` as Studio would, from another process: as the
+   * working draft, expecting the live revision as it reads it now. For the
+   * server-level specs, which can't load the store's modules themselves.
+   */
+  | { readonly op: 'publishDocuments'; readonly documents: UnitInput }
+  /** Lays out a new data directory, as startup's preflight does; its outcome is the finding, or null. */
+  | { readonly op: 'preflight' };
 
 export type ChildTask =
   | {
@@ -167,6 +176,33 @@ async function run(task: Extract<ChildTask, { kind: 'run' }>): Promise<StepResul
             }
           }
           outcome = { acknowledged, ended };
+          break;
+        }
+        case 'preflight':
+          outcome = await preflight({ dataDir: task.dataDir });
+          break;
+        case 'publishDocuments': {
+          const working = await store.drafts.getWorking();
+          const created = await store.drafts.create(
+            {
+              documents: step.documents,
+              ...(working ? { expectedVersion: working.version } : {}),
+            },
+            'owner',
+          );
+          if (created.kind !== 'saved') {
+            outcome = created;
+            break;
+          }
+          outcome = await store.publication.publish(
+            {
+              draftId: created.draft.draftId,
+              draftVersion: created.draft.version,
+              expectedLiveRevisionId: (await store.publication.status()).liveRevisionId,
+            },
+            'owner',
+            { holdSession: owner.holdSession },
+          );
           break;
         }
       }
