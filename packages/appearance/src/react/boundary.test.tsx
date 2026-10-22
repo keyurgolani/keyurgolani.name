@@ -6,9 +6,11 @@ import type { VariantRenderInput } from '@portfolio/variant-contract';
 import {
   boundaryAttributes,
   boundaryId,
+  createAppearanceRegistry,
   DEFAULT_VISITOR_CONTROLS,
   lowerMotion,
   PLATFORM_DEFAULTS,
+  registryStylesheets,
   resolveAppearance,
   stylesheetHrefs,
   type AppearanceStylesheets,
@@ -16,7 +18,7 @@ import {
 } from '../index';
 import { Field, Main, Navigation, Select, Tabs } from '../primitives';
 import { elements, html, ids, one, slotted } from '../test-support/markup';
-import { testRegistry } from '../test-support/packs';
+import { PACKS, testRegistry, VARIANTS } from '../test-support/packs';
 import { AppearanceDiagnostics, PresentationBoundary, useBoundary } from '.';
 
 // PresentationBoundary (#19, Slice 3, item 1), rendered with
@@ -161,6 +163,28 @@ test("a boundary links the platform's and its packs' stylesheets as resources, e
     ).filter((element) => element.tag === 'link').length,
     0,
   );
+});
+
+test("a build's registry is a stylesheet source: the platform file and each pack's compiled file", () => {
+  const file = (name: string) => ({
+    url: `/_portfolio/pack/${name}.0123456789ab.css`,
+    sha256: '0'.repeat(64),
+  });
+  const built = createAppearanceRegistry({
+    VARIANTS,
+    PACKS: PACKS.map((pack) =>
+      pack.manifest.id === 'humanist-ui' ? pack : { ...pack, stylesheet: file(pack.manifest.id) },
+    ),
+    PLATFORM_STYLESHEET: file('_platform'),
+  });
+  const source = registryStylesheets(built);
+  assert.deepEqual(stylesheetHrefs(PUBLISHED, source), [
+    '/_portfolio/pack/_platform.0123456789ab.css',
+    '/_portfolio/pack/platform-neutral.0123456789ab.css',
+    '/_portfolio/pack/warm-parchment.0123456789ab.css',
+  ]);
+  assert.equal(source.pack('colorScheme', 'missing-scheme'), null);
+  assert.equal(registryStylesheets(registry).platform, null, 'a registry with no files links none');
 });
 
 test('a document boundary renders its attributes and, first, the skip link to the main', () => {

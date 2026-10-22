@@ -5,6 +5,7 @@
 
 import { PACK_AXES, type IdAxis, type PackAxis } from './axes';
 import type { AppearanceDiagnostic } from './diagnostics';
+import { findPack, type AppearanceRegistry } from './registry';
 import type { Motion, ResolvedAppearance } from './resolve';
 import type { Selection } from './selection';
 
@@ -99,6 +100,18 @@ export interface AppearanceStylesheets {
   readonly platform: string | null;
   /** The URL of the compiled stylesheet of the pack `id` names on `axis`, or null when there's none to link. */
   pack(axis: PackAxis, id: string): string | null;
+}
+
+/**
+ * A build's own stylesheets: the platform stylesheet and each pack's
+ * compiled one, as registry generation listed them in the metadata module.
+ * A generated scheme has none here; Slice 4's route serves its CSS.
+ */
+export function registryStylesheets(registry: AppearanceRegistry): AppearanceStylesheets {
+  return {
+    platform: registry.platformStylesheet?.url ?? null,
+    pack: (axis, id) => findPack(registry, axis, id)?.stylesheet?.url ?? null,
+  };
 }
 
 /** The stylesheets a boundary links for `selection`: the platform's, then each pack's in axis order, each once. */

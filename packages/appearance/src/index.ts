@@ -184,6 +184,7 @@ export {
   boundaryAttributes,
   diagnosticCodes,
   lowerMotion,
+  registryStylesheets,
   stylesheetHrefs,
   type AppearanceStylesheets,
   type BoundaryAppearance,
