@@ -81,6 +81,25 @@ const BACKDROP_MIX = {
   call: 'color-mix(in srgb, var(--color-scrim) 62%, transparent)',
 } as const;
 
+/** A literal percentage, such as 62%, .5%, or 6.2e1%, standing on its own. */
+const LITERAL_PERCENTAGE = /(?<![\w.-])(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?%/i;
+
+test('the literal percentage check finds every spelling of one, and no token', () => {
+  for (const literal of ['62%', '0.5%', '.5%', '6.2e1%', '62E0%', '1e+2%', '6.2e-1%']) {
+    assert.match(
+      `color-mix(in srgb, var(--color-scrim) ${literal}, transparent)`,
+      LITERAL_PERCENTAGE,
+      literal,
+    );
+  }
+  for (const token of [
+    'color-mix(in srgb, var(--color-scrim) var(--ui-surface-opacity), transparent)',
+    'color-mix(in srgb, var(--color-x2) calc(var(--ui-a1) * 1), transparent)',
+  ]) {
+    assert.doesNotMatch(token, LITERAL_PERCENTAGE, token);
+  }
+});
+
 test('a color mix takes its amount from a token too, never a literal percentage, but for the backdrop', () => {
   let mixes = 0;
   let backdrops = 0;
@@ -96,7 +115,7 @@ test('a color mix takes its amount from a token too, never a literal percentage,
       const call = value.slice(start, end + 1);
       mixes += 1;
       if (call === BACKDROP_MIX.call && property === 'background-color') backdrops += 1;
-      else assert.doesNotMatch(call, /(?<![\w-])\d*\.?\d+%/, `${property}: ${call}`);
+      else assert.doesNotMatch(call, LITERAL_PERCENTAGE, `${property}: ${call}`);
       start = value.indexOf('color-mix(', end);
     }
   }
