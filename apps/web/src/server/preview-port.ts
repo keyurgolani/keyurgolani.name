@@ -75,4 +75,17 @@ export interface PreviewGrantsPort {
    * render failure.
    */
   open(grant: string): Promise<OpenedGrant | null>;
+  /**
+   * The same check, and what the agent's channel needs (Slice 3), without
+   * reading what the grant renders: null when the grant isn't active. A
+   * frame whose content fails to render still opens its channel, to tell
+   * Studio so with the log's reference.
+   */
+  channel(grant: string): Promise<GrantChannel | null>;
+}
+
+/** What a frame's agent needs to open its channel to Studio. */
+export interface GrantChannel {
+  readonly nonce: string;
+  readonly renderedVersion: number | null;
 }

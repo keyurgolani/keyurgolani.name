@@ -169,7 +169,11 @@ function setup(t: TestContext, options: FrameChannelOptions = SERVER, href = `${
   /** Studio's window posts `data` to the frame's, with `ports`. */
   const fromParent = (
     data: unknown,
-    { source = win.parent, origin = STUDIO, ports = [] as MessagePort[] } = {},
+    {
+      source = win.parent,
+      origin = STUDIO,
+      ports = [],
+    }: { source?: unknown; origin?: string; ports?: MessagePort[] } = {},
   ) => win.fire('message', { data, source, origin, ports });
   /** Studio answers hello: a connect from its window with a fresh port, whose end it keeps. */
   const connect = () => {
@@ -200,7 +204,7 @@ test('the agent says hello to Studio’s origin alone, after its own load, with 
   assert.equal(win.parent.posted.length, 0, 'not before the load is done');
   await wait(5);
   assert.equal(win.parent.posted.length, 1);
-  const [{ message, targetOrigin }] = win.parent.posted as [
+  const [{ message, targetOrigin }] = win.parent.posted as unknown as [
     {
       message: { type: string; payload: { nonce: string; instance: string } };
       targetOrigin: string;
@@ -214,7 +218,7 @@ test('the agent says hello to Studio’s origin alone, after its own load, with 
   const again = new FakeFrame(`${STUDIO}${BASE}`);
   const stop = startFrameChannel(again as unknown as Window, SERVER);
   await wait(5);
-  const [second] = again.parent.posted as [{ message: { payload: { instance: string } } }];
+  const [second] = again.parent.posted as unknown as [{ message: { payload: { instance: string } } }];
   assert.equal(second.message.payload.instance, message.payload.instance);
   stop?.();
 });
@@ -307,10 +311,10 @@ test('the agent reads Studio’s messages over the port, and drops what the prot
     ['type', 'document'],
     ['type', 'asset'],
   ]);
-  assert.deepEqual(win.assigned, []);
-  assert.deepEqual(win.scrolls, []);
-  assert.deepEqual(win.events, []);
-  assert.deepEqual(received, []);
+  assert.equal(win.assigned.length, 0);
+  assert.equal(win.scrolls.length, 0);
+  assert.equal(win.events.length, 0);
+  assert.equal(received.length, 0);
   // And each valid one does what it says.
   send(port, 'environment', {
     displayMode: 'dark',
@@ -357,7 +361,7 @@ test('a local frame takes documents and assets up to their limits and 100 MiB in
   // The fragment's nonce leaves the URL once read; the query's never counted.
   assert.deepEqual(win.replaced, [`/preview/local?nonce=${'Q'.repeat(22)}`]);
   await wait(5);
-  const [{ message }] = win.parent.posted as [{ message: { payload: { nonce: string } } }];
+  const [{ message }] = win.parent.posted as unknown as [{ message: { payload: { nonce: string } } }];
   assert.equal(message.payload.nonce, NONCE);
   // A port that hands the frame Studio's messages as they are, since a
   // structured clone would copy the stand-in blobs' bytes, which they don't hold.
@@ -471,7 +475,7 @@ test('the link guard cancels every link but a fragment and the grant’s own pat
       { href: `${STUDIO}${BASE}/paper.pdf`, kind: 'download' },
     ],
   );
-  assert.deepEqual(win.assigned, [], 'no cancelled link loaded the frame');
+  assert.equal(win.assigned.length, 0, 'no cancelled link loaded the frame');
   // An internal link loads the frame, after telling Studio where to.
   const internal = click(`${BASE}/work/b`);
   win.fire('click', internal);
@@ -528,7 +532,7 @@ test('the frame reports its status in place of ready, and sends scrolled only wh
   // Off, the frame sends nothing as it scrolls.
   win.fire('scroll');
   await wait(5);
-  assert.deepEqual(received, []);
+  assert.equal(received.length, 0);
   send(port, 'sync', { scroll: true });
   await wait(5);
   for (let i = 0; i < 25; i++) {

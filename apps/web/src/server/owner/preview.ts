@@ -265,10 +265,14 @@ export function ownerPreviews({
       view,
       environment: record.environment,
       nonce: record.nonce,
-      renderedVersion: record.subject.kind === 'draft' ? record.subject.version : null,
+      renderedVersion: renderedVersionOf(record),
       ref,
     });
   }
+
+  /** The version a frame's `ready` names: a draft grant's pinned one, or null for a revision or fixture. */
+  const renderedVersionOf = (record: GrantRecord) =>
+    record.subject.kind === 'draft' ? record.subject.version : null;
 
   const port: PreviewGrantsPort = Object.freeze({
     async admit(grant: string) {
@@ -287,6 +291,16 @@ export function ownerPreviews({
       const authorized = authorize('preview.grant', session);
       if (!authorized) return null;
       return read(authorized, checked.record, grant);
+    },
+    async channel(grant: string) {
+      const checked = await grants.check(grant);
+      if (checked.status !== 'active') return null;
+      const session = mintSession({ ref: sessionRef(checked.record.sessionDigest) });
+      if (!authorize('preview.grant', session)) return null;
+      return Object.freeze({
+        nonce: checked.record.nonce,
+        renderedVersion: renderedVersionOf(checked.record),
+      });
     },
   });
 

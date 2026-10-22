@@ -1,7 +1,10 @@
 import type { ReactNode } from 'react';
 import type { Metadata } from 'next';
 import { requireDeploymentConfig } from '~/server/config-store';
-import { openGrant } from '~/server/preview-page';
+import { grantChannel, openGrant } from '~/server/preview-page';
+import type { GrantChannel } from '~/server/preview-port';
+import { PreviewAgent } from '~/preview/agent';
+import type { FrameChannelOptions } from '~/preview/frame-channel';
 import { PREVIEW_ROBOTS, PreviewDocument, previewMetadata } from '../../document';
 
 // A grant's frame document (#7, Slice 2): the root layout of
@@ -10,6 +13,11 @@ import { PREVIEW_ROBOTS, PreviewDocument, previewMetadata } from '../../document
 // since a layout sees no params below it. When the grant's content can't be
 // read, it renders a neutral document and lets the page's boundary say so,
 // and it never fails itself, so no site or Studio error page reaches a frame.
+//
+// Either way an active grant's document has the agent with its channel
+// (Slice 3): Studio, on the deployment's origin, got the grant's nonce at
+// mint and takes a hello from this frame with it alone, so a frame that
+// fails to render still tells Studio, with the log's reference.
 
 export const dynamic = 'force-dynamic';
 
@@ -23,6 +31,17 @@ async function opened(params: Params['params']) {
   return openGrant(grant).catch(() => null);
 }
 
+/** The agent's channel to Studio for the frame of `grant`. */
+function channelOf(grant: string, { nonce, renderedVersion }: GrantChannel): FrameChannelOptions {
+  return {
+    mode: 'server',
+    studioOrigin: requireDeploymentConfig().origin,
+    linkBase: `/preview/${grant}`,
+    nonce,
+    renderedVersion,
+  };
+}
+
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const grant = await opened(params);
   if (!grant) return { title: 'Preview', robots: PREVIEW_ROBOTS };
@@ -33,26 +52,25 @@ export default async function GrantLayout({
   children,
   params,
 }: Params & { readonly children: ReactNode }) {
+  const { grant: token } = await params;
   const grant = await opened(params);
   if (!grant) {
+    const channel = await grantChannel(token);
     return (
       <html lang="en">
-        <body>{children}</body>
+        <body>
+          {children}
+          {channel ? <PreviewAgent channel={channelOf(token, channel)} /> : null}
+        </body>
       </html>
     );
   }
-  const { origin } = requireDeploymentConfig();
-  // The agent's channel (Slice 3): Studio, on the deployment's origin, got
-  // this nonce at mint and takes a hello from this frame with it alone.
-  const channel = {
-    mode: 'server',
-    studioOrigin: origin,
-    linkBase: `/preview/${(await params).grant}`,
-    nonce: grant.nonce,
-    renderedVersion: grant.renderedVersion,
-  } as const;
   return (
-    <PreviewDocument unit={grant.view} origin={origin} channel={channel}>
+    <PreviewDocument
+      unit={grant.view}
+      origin={requireDeploymentConfig().origin}
+      channel={channelOf(token, grant)}
+    >
       {children}
     </PreviewDocument>
   );

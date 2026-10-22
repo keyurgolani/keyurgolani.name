@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import type { ZodTypeAny } from 'zod';
 import { DisplayModeSchema } from '@portfolio/schema';
 import { PreviewEnvironmentSchema } from '~/server/operations';
 import {
@@ -84,12 +85,12 @@ const INVALID: Record<string, unknown> = {
   asset: { key: '', blob: new SizedBlob(1) },
 };
 
-const TABLES = [
+const TABLES: ReadonlyArray<readonly [string, Readonly<Record<string, ZodTypeAny>>]> = [
   ['the hello Studio takes', STUDIO_HANDSHAKE],
   ['the connect a frame takes', FRAME_HANDSHAKE],
   ['what a frame sends Studio', TO_STUDIO],
   ['what Studio sends a frame', TO_FRAME],
-] as const;
+];
 
 const message = (type: string, payload: unknown, extra: Record<string, unknown> = {}) => ({
   ...envelope(type, payload, 1),

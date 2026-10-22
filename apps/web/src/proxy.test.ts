@@ -52,6 +52,7 @@ function grantsPort(admitted = new Set([ACTIVE])) {
       return admitted.has(grant);
     },
     open: () => assert.fail('proxy.ts opens no grant'),
+    channel: () => assert.fail("proxy.ts reads no grant's channel"),
   };
   return { port, checked };
 }
@@ -885,6 +886,7 @@ test('a port that fails to check a grant admits nothing (#7)', async (t) => {
   deploy(t, 'owner', {
     admit: () => Promise.reject(new Error('the data directory is gone')),
     open: () => assert.fail('proxy.ts opens no grant'),
+    channel: () => assert.fail("proxy.ts reads no grant's channel"),
   });
   await assertStatusDocument(await proxy(loaded(`/preview/${ACTIVE}`, 'iframe')), 'failed check');
 });

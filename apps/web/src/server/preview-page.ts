@@ -4,7 +4,7 @@ import { notFound, redirect } from 'next/navigation';
 import { ExperienceDocument } from '~/lib/experience-document';
 import { resolveVisitorPath } from '~/lib/visitor-routes';
 import { getDeploymentState, requireDeploymentConfig } from './config-store';
-import type { OpenedGrant } from './preview-port';
+import type { GrantChannel, OpenedGrant } from './preview-port';
 
 // What a grant path renders (#7, Slice 2). proxy.ts has already checked the
 // grant, from the path alone, and let only an iframe document load, or an
@@ -21,6 +21,16 @@ import type { OpenedGrant } from './preview-port';
 export const openGrant = cache(async (grant: string): Promise<OpenedGrant | null> => {
   const previews = getDeploymentState()?.previews;
   return previews ? previews.open(grant) : null;
+});
+
+/**
+ * What an active grant's agent opens its channel with (Slice 3), checked
+ * without reading what the grant renders, for a frame whose content fails
+ * to render. Null when the grant isn't active, or can't be checked.
+ */
+export const grantChannel = cache(async (grant: string): Promise<GrantChannel | null> => {
+  const previews = getDeploymentState()?.previews;
+  return previews ? previews.channel(grant).catch(() => null) : null;
 });
 
 /**
