@@ -66,6 +66,19 @@ const HELD = Symbol.for('keyurgolani.portfolio.store-locks');
 type Holder = typeof globalThis & { [HELD]?: Set<string> };
 const held = (): Set<string> => ((globalThis as Holder)[HELD] ??= new Set());
 
+// The data directories whose server claim another server took from this
+// process (server-claim.ts), on globalThis for the same reason: every lock
+// over one refuses, so this server stops writing there.
+const CLAIMS_LOST = Symbol.for('keyurgolani.portfolio.store-claims-lost');
+type LostHolder = typeof globalThis & { [CLAIMS_LOST]?: Set<string> };
+const claimsLost = (): Set<string> => ((globalThis as LostHolder)[CLAIMS_LOST] ??= new Set());
+
+/** For the server claim: whether this process lost the data directory at `root` to another server. */
+export function setClaimLost(root: string, lost: boolean): void {
+  if (lost) claimsLost().add(root);
+  else claimsLost().delete(root);
+}
+
 // Turns at each lock file in this process, first come first served, on
 // globalThis for the same reason.
 const TURNS = Symbol.for('keyurgolani.portfolio.store-lock-turns');
@@ -368,6 +381,9 @@ export function publicationLock({
   }
 
   async function acquire(holder: string): Promise<HeldLock> {
+    if (claimsLost().has(paths.root)) {
+      throw new StoreError('storage_unavailable', 'Another server holds this data directory now.');
+    }
     const { record, text } = newRecord(holder);
     const deadline = now() + waitMs;
     // This process's turn first, so its own acquirers never race on disk.

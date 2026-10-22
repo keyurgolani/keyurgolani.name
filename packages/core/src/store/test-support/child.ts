@@ -13,6 +13,7 @@ import type { DraftId } from '../layout';
 import { readEvents, readLive } from '../pointer';
 import type { PublishInput, RecoverInput, RollbackInput } from '../publication';
 import { readRevision } from '../revisions';
+import { claimServer } from '../server-claim';
 import { openStore } from '../store';
 import { sha256, type UnitInput } from '../unit';
 import { crashingFs, type PointHit } from './crash-fs';
@@ -28,6 +29,8 @@ export type Step =
       readonly input: { draftId: DraftId; expectedVersion: number; documents: UnitInput };
     }
   | { readonly op: 'put'; readonly base64: string; readonly mediaType: string }
+  /** Claims the data directory as a server would, holds it `holdMs`, and lets it go. */
+  | { readonly op: 'claim'; readonly holdMs: number }
   /** Saves each of `documents` in turn on the draft until it's gone, tracking its version. */
   | {
       readonly op: 'saveLoop';
@@ -123,6 +126,15 @@ async function run(task: Extract<ChildTask, { kind: 'run' }>): Promise<StepResul
         case 'put':
           outcome = await store.assets.put(Buffer.from(step.base64, 'base64'), step.mediaType);
           break;
+        case 'claim': {
+          const claimed = await claimServer({ fs, paths: store.paths, lock: store.lock });
+          if (claimed.ok) {
+            await sleep(step.holdMs);
+            await claimed.claim.release();
+          }
+          outcome = claimed.ok ? { ok: true } : { ok: false, code: claimed.code };
+          break;
+        }
         case 'saveLoop': {
           const acknowledged: number[] = [];
           let version = step.expectedVersion;

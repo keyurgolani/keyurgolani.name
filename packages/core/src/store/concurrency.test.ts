@@ -247,6 +247,18 @@ test('of two saves of one version, from two processes, one saves and the other g
   assert.equal((await store.drafts.getWorking())?.version, draft.version + 1);
 });
 
+test('of two servers starting at once on one data directory, from two processes, exactly one claims it', async (t) => {
+  // Before the claim took the publication lock, both claimed it every time.
+  for (let round = 0; round < 3; round++) {
+    const store = await newStore(t);
+    const claim: Step = { op: 'claim', holdMs: 500 };
+    const [a, b] = await together(t, store.paths.root, [[claim], [claim]]);
+    const claims = [outcome(a![0]), outcome(b![0])] as unknown as { ok: boolean; code?: string }[];
+    assert.deepEqual(claims.map((entry) => entry.ok).sort(), [false, true], `round ${round}`);
+    assert.equal(claims.find((entry) => !entry.ok)?.code, 'data_dir_in_use');
+  }
+});
+
 test('a reader in another process sees only the old or the new unitHash while publishes run, and every revision it reads is whole', async (t) => {
   const store = await newStore(t);
   const published = new Set<string>();
