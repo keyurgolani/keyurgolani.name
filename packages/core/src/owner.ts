@@ -86,7 +86,7 @@ export {
   type OwnerLog,
 } from './audit/sink';
 export { limitSource, sourcePrefix } from './audit/source';
-export { authPaths, prepareAuthDirectories } from './data/layout.mjs';
+export { authPaths, ensurePrivateDir, prepareAuthDirectories } from './data/layout.mjs';
 
 // Preview grants (#7, Slice 2), beside the sessions they're bound to.
 export {

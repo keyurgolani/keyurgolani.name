@@ -88,7 +88,7 @@ export const ConfigSummarySchema = z
         })
         .strict(),
     ),
-    adapters: z.object({ catalog: z.enum(['documents', 'sample']) }).strict(),
+    adapters: z.object({ catalog: z.enum(['documents', 'sample', 'revisions']) }).strict(),
     secrets: z
       .object({ PORTFOLIO_AUTH_PASSWORD_HASH: SecretState, GITHUB_TOKEN: SecretState })
       .strict(),
@@ -113,9 +113,41 @@ export const VariantHealthSchema = z.union([
   z.object({ status: z.literal('fail'), requested: z.string().nullable() }).strict(),
 ]);
 
-/** What config.status answers: the summary, and how the live site's variant renders. */
+/** A revision's ID in the store (#3): `rev_` and 32 hex digits. */
+export const RevisionIdSchema = z.string().regex(/^rev_[0-9a-f]{32}$/);
+
+/**
+ * What serves (#3, item 23): the state, the revision the pointer names, the
+ * one served (the mounted documents' `doc-` one while the store is empty),
+ * and where the live manifest's rendering differs from the build's.
+ */
+export const CatalogStatusSchema = z
+  .object({
+    state: z.enum(['live', 'degraded', 'incompatible', 'empty']),
+    liveRevisionId: RevisionIdSchema.nullable(),
+    servingRevisionId: z
+      .string()
+      .regex(/^(?:rev_[0-9a-f]{32}|doc-[0-9a-f]{12})$/)
+      .nullable(),
+    renderDrift: z
+      .array(
+        z
+          .object({
+            kind: z.enum(['variant', 'pack', 'contract']),
+            id: z.string(),
+            revision: z.string(),
+            build: z.string().nullable(),
+          })
+          .strict(),
+      )
+      .nullable(),
+  })
+  .strict();
+
+/** What config.status answers: the summary, how the live site's variant renders, and what serves. */
 export const ConfigStatusSchema = ConfigSummarySchema.extend({
   variant: VariantHealthSchema,
+  catalog: CatalogStatusSchema,
 }).strict();
 export type ConfigStatus = z.infer<typeof ConfigStatusSchema>;
 

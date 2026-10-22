@@ -1,12 +1,17 @@
 import 'server-only';
-import { prepareAuthDirectories } from '@portfolio/core/owner';
+import { ensurePrivateDir, prepareAuthDirectories } from '@portfolio/core/owner';
 import type { ConfigIssue, DeploymentConfig } from '../config';
 import { recordOwnerModule } from '../load-trace';
+import { ownerStoreOf } from './store';
 
-// The data.directory startup requirement (#2, until #3 takes it over): owner
-// needs PORTFOLIO_DATA_DIR, a directory the server's user can write. This
+// The data.directory startup requirement (#2, #3): owner needs
+// PORTFOLIO_DATA_DIR, a directory the server's user can write. #2's half
 // creates ephemeral/auth/sessions/ and audit/ there at 0700, and proves a
-// write, a sync, and a rename work, the way session records are written. A
+// write, a sync, and a rename work, the way session records are written.
+// #3's half runs the store's preflight, which makes its directories and
+// checks it sits outside PORTFOLIO_SOURCE_DIR and holds a layout this build
+// reads, then claims publication/server.json, so a second server refuses to
+// start. Under `next dev`, the default .data is made if it's missing. A
 // finding names the variable and the reason, never the path. Typed by
 // shape, so this module doesn't import the composition root.
 
@@ -31,12 +36,17 @@ const MESSAGES: Readonly<Record<string, string>> = {
 
 export async function check({
   config,
+  owner,
 }: {
   readonly config: DeploymentConfig;
+  /** The owner branch's store (#3), which takes the directory's claim. */
+  readonly owner?: object;
 }): Promise<readonly ConfigIssue[]> {
   if (config.dataDir === undefined) return [fatal('required')];
+  if (config.dataDirDefault) await ensurePrivateDir(config.dataDir).catch(() => {});
   const problem = await prepareAuthDirectories(config.dataDir);
-  return problem === null ? [] : [fatal(problem)];
+  if (problem !== null) return [fatal(problem)];
+  return (await ownerStoreOf(owner)?.checkDirectory()) ?? [];
 }
 
 function fatal(code: string): ConfigIssue {

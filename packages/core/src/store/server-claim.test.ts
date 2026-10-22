@@ -189,3 +189,21 @@ test("a server knows its claim by its nonce: release leaves a claim in its own p
   assert.equal(again.ok, true);
   if (again.ok) await again.claim.release();
 });
+
+test("releaseSync lets this server's claim go at once, stops its refresh, and leaves another server's alone", async (t) => {
+  const paths = await pathsIn(t);
+  const claimed = await claimServer({ fs: nodeFs, paths, refreshMs: 20 });
+  if (!claimed.ok) return assert.fail();
+  claimed.claim.releaseSync();
+  assert.equal(existsSync(paths.server), false);
+  await new Promise((resolve) => setTimeout(resolve, 80));
+  assert.equal(existsSync(paths.server), false, 'the refresh stopped');
+
+  // A claim another server took since is its own.
+  const again = await claimServer({ fs: nodeFs, paths });
+  if (!again.ok) return assert.fail();
+  const other = { ...again.claim.record, pid: again.claim.record.pid + 1, nonce: 'other' };
+  writeFileSync(paths.server, JSON.stringify(other));
+  again.claim.releaseSync();
+  assert.deepEqual(JSON.parse(readFileSync(paths.server, 'utf8')), other);
+});

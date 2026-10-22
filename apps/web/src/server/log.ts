@@ -64,6 +64,14 @@ const EXTRA: Readonly<Record<string, readonly string[]>> = {
   ],
 };
 
+/**
+ * What the revision store's lines add (#3, item 23), such as
+ * store.publish.committed and store.render-drift: the revision IDs, the
+ * event's seq, the stage a failure stopped at, how long it took, and the
+ * IDs and versions that drifted. Never content.
+ */
+const STORE = ['revisionId', 'servingRevisionId', 'seq', 'stage', 'durationMs', 'drift'] as const;
+
 export interface LogEntry {
   readonly level: LogLevel;
   readonly event: string;
@@ -72,7 +80,8 @@ export interface LogEntry {
 
 /** The JSON line for `entry`: a timestamp, then each field its event allows that has a value. */
 export function logLine(entry: LogEntry, now = new Date()): string {
-  const allowed = new Set<string>([...BASE, ...(EXTRA[entry.event] ?? [])]);
+  const extra = EXTRA[entry.event] ?? (entry.event.startsWith('store.') ? STORE : []);
+  const allowed = new Set<string>([...BASE, ...extra]);
   const line: Record<string, unknown> = { ts: now.toISOString() };
   for (const [field, value] of Object.entries(entry)) {
     if (allowed.has(field) && value !== undefined) line[field] = value;

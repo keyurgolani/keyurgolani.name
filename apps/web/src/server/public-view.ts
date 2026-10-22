@@ -8,15 +8,20 @@ import type { PublicationUnit } from './catalog-port';
 // view, the only input to the page, its metadata and JSON-LD, the feed, and
 // the Open Graph image. Hidden sections, private records, what nothing
 // visible reaches, and unregistered extension data never reach them. Media
-// renditions serve under /media.
+// renditions serve under /media. It reads the request's own live revision,
+// so every part of one response shows the same one.
 
 /** Where the published view's renditions serve. */
 export const MEDIA_BASE = '/media';
 
 const views = new WeakMap<PublicationUnit, PublicView>();
 
+/** Thrown while nothing is servable, which proxy.ts answers visitors with a 503 for. */
+const NOTHING_SERVABLE = 'Nothing published can be served.';
+
 export async function getPublicView(): Promise<PublicView> {
   const { unit } = await getLive();
+  if (!unit) throw new Error(NOTHING_SERVABLE);
   let view = views.get(unit);
   if (!view) {
     view = resolvePortfolioView(

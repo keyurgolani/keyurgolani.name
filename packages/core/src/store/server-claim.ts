@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto';
+import { closeSync, constants, openSync, readFileSync, rmSync } from 'node:fs';
 import { recordOwnerModule } from '../load-trace';
 import { storageError, type StoreLog } from './common';
 import { nodeFs, type FsPort } from './fs-port';
@@ -25,7 +26,8 @@ import {
 // another server made meanwhile always stands, and a removed file never
 // comes back. Refreshes run one at a time, and release() waits for one under
 // way. The CLI doesn't claim it: it runs alongside the server, under the
-// publication lock. The startup hook releases the claim on SIGTERM.
+// publication lock. The startup hook releases the claim as the process
+// exits, which a SIGTERM ends in.
 
 recordOwnerModule('core/store/server-claim');
 
@@ -45,6 +47,12 @@ export interface ServerClaim {
   readonly lost: boolean;
   /** Stops refreshing and removes server.json, if it's still this claim's. */
   release(): Promise<void>;
+  /**
+   * The same, at once, for a process that's exiting, where nothing waits for
+   * a promise: the startup hook runs it on exit, which Next's own SIGTERM
+   * handling ends in.
+   */
+  releaseSync(): void;
 }
 
 export type ClaimResult =
@@ -52,6 +60,7 @@ export type ClaimResult =
   | { readonly ok: false; readonly code: 'data_dir_in_use'; readonly holder: ServerRecord };
 
 export interface ClaimOptions {
+  /** Defaults to the real filesystem; tests pass a crashing one. */
   readonly fs?: FsPort;
   readonly paths: StorePaths;
   /** The lock the claim is made under, the store's own; by default one over `paths`. */
@@ -194,6 +203,26 @@ export async function claimServer({
         await refreshing;
         try {
           if (ours(await read())) await fs.remove(paths.server, 'server.release');
+        } catch {
+          // Gone already, or not readable: nothing of this claim's to remove.
+        }
+      },
+      releaseSync() {
+        // On exit nothing waits, and nothing under way finishes after it.
+        released = true;
+        clearInterval(timer);
+        try {
+          // Never through a link, as the store's own reads.
+          const fd = openSync(paths.server, constants.O_RDONLY | constants.O_NOFOLLOW);
+          let text: string;
+          try {
+            text = readFileSync(fd, 'utf8');
+          } finally {
+            closeSync(fd);
+          }
+          if ((JSON.parse(text) as Partial<ServerRecord>).nonce === nonce) {
+            rmSync(paths.server, { force: true });
+          }
         } catch {
           // Gone already, or not readable: nothing of this claim's to remove.
         }

@@ -12,6 +12,7 @@ import {
   newSessionToken,
   sessionDigest,
 } from '@portfolio/core/owner';
+import { validatePublicationUnit } from '@portfolio/schema';
 import { authorize, type Authorized } from '../authorize';
 import { accessIn, CAPABILITIES, PROFILES, type Profile } from '../capabilities';
 import { compose, OWNER_PASSWORD_PROVIDER } from '../composition';
@@ -20,7 +21,7 @@ import { setDeploymentState, type DeploymentState } from '../config-store';
 import type { Handler, HandlerContext } from '../dispatcher';
 import { listOperations, type Operation } from '../operations';
 import { provider } from './auth';
-import { ownerHandlers, ownerPreviews } from './index';
+import { ownerHandlers, ownerPreviews, ownerStore } from './index';
 import { mintSession } from './session-mint';
 
 // studio-3 and publish-1 (#2): every protected entry in the registry, read
@@ -270,7 +271,13 @@ test('every protected registry entry is denied without a session, the origin, th
   const handlers: Readonly<Record<string, Handler>> = {
     ...ownerHandlers({
       config,
-      catalog: 'documents',
+      catalog: 'revisions',
+      store: ownerStore({
+        config,
+        checks: { validate: (pair) => validatePublicationUnit(pair), appVersion: 'test' },
+        documents: deployed.get('owner')!.state.catalog,
+        setServable: () => {},
+      }),
       variantHealth: async () => ({ status: 'ok', requested: 'any', rendered: 'any' }),
     }),
     ...auth.handlers,

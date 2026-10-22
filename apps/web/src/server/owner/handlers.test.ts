@@ -1,12 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { validatePublicationUnit } from '@portfolio/schema';
 import { authorize, type Authorized } from '../authorize';
 import { accessIn, CAPABILITIES } from '../capabilities';
 import { readDeploymentConfig } from '../config';
 import { setDeploymentState } from '../config-store';
 import type { HandlerContext } from '../dispatcher';
 import { listOperations } from '../operations';
-import { ownerHandlers } from './index';
+import { ownerHandlers, ownerStore } from './index';
 import { mintSession } from './session-mint';
 
 // Every owner handler re-checks its token (#1, item 12): one authorize()
@@ -24,9 +28,20 @@ const read = readDeploymentConfig(
 );
 assert.ok(read.ok, JSON.stringify(read.issues));
 const config = read.config;
+// An empty store in a directory of its own, whose reader serves nothing.
+const dataDir = mkdtempSync(path.join(tmpdir(), 'owner-handlers-'));
+const store = ownerStore({
+  config: { ...config, dataDir },
+  checks: { validate: (pair) => validatePublicationUnit(pair), appVersion: 'test' },
+  documents: {
+    getLive: async () => ({ state: 'empty', revisionId: null, unitHash: null, unit: null }),
+  },
+  setServable: () => {},
+});
 const handlers = ownerHandlers({
   config,
-  catalog: 'documents',
+  catalog: 'revisions',
+  store,
   variantHealth: async () => ({
     status: 'degraded',
     requested: 'missing-variant',
@@ -43,7 +58,10 @@ test.before(() => {
     degraded: [],
   });
 });
-test.after(() => setDeploymentState(undefined));
+test.after(() => {
+  setDeploymentState(undefined);
+  rmSync(dataDir, { recursive: true, force: true });
+});
 
 test('every owner handler serves a registered operation', () => {
   const names = new Set(listOperations().map((operation) => operation.name));

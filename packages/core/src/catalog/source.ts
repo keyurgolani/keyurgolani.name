@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import {
+  canonicalize,
   detectFormat,
   DOCUMENT_MAX_BYTES,
   parseSource,
@@ -9,11 +10,10 @@ import {
   type Diagnostic,
   type Portfolio,
 } from '@portfolio/schema';
-import { findPair, pairFileNames, type PairFiles } from '@portfolio/schema/node';
+import { findPair, pairFileNames, readUnitFiles, type PairFiles } from '@portfolio/schema/node';
 import type { CatalogReader, LiveRevision } from './port';
 import {
   checkUnit,
-  isSnapshotKind,
   type DocumentInput,
   type DocumentName,
   type UnitChecks,
@@ -26,14 +26,16 @@ import { publicationUnitOf } from './view';
 // PORTFOLIO_SOURCE_DIR with checkUnit(), the code the store builds a
 // revision with: the pair at the top level (#4, item 4), and beside it an
 // optional snapshots/ of <kind>.json files and an optional media/media.json,
-// the layout #3's export-revision writes and #10 reads. bundle.json and
-// media/blobs/ are #10's and #3's to read; this ignores them, and every
-// other file. The pair is checked as served, by #4's startup rule as #5
-// amends it: an unregistered variant and stale controls only warn, and any
-// other blocks-preview or blocks-publish record stops startup, as a
-// snapshot or a media document that doesn't parse does. It reads the
-// directory once at startup, except under `next dev`, where it reads it
-// again whenever a file changes, and renders the bundled examples when the
+// the layout #3's export-revision writes, read and checked with #10's
+// readUnitFiles(), as the sample's are. bundle.json and media/blobs/ are
+// #10's and #3's to read; this ignores them, and every other file. The pair
+// is checked as served, by #4's startup rule as #5 amends it: an
+// unregistered variant and stale controls only warn, and any other
+// blocks-preview or blocks-publish record stops startup, as a snapshot or a
+// media document that doesn't read does; a file in snapshots/ that's no
+// snapshot only warns. It reads the directory once at startup, except under
+// `next dev`, where it reads it again whenever a file changes, and renders
+// the bundled examples, with the snapshots bundled beside them, when the
 // directory holds neither document. It writes nothing.
 
 /** A startup finding about the source directory, as #1's startup log prints it. */
@@ -137,12 +139,16 @@ function fatal(code: string, message: string, extra: Partial<SourceFinding> = {}
   return { severity: 'fatal', code, message, ...extra };
 }
 
-/** A diagnostic record as a finding: blocking records are fatal, warnings stay warnings. */
+/**
+ * A diagnostic record as a finding: blocking records are fatal, warnings
+ * stay warnings. A record about a snapshot or the media document names its
+ * own file (#10).
+ */
 function recordFinding(
   record: Diagnostic | UnitDiagnostic,
   names: Partial<Record<DocumentName, string>> | undefined,
 ): SourceFinding {
-  const file = names?.[record.document as DocumentName];
+  const file = (record as { file?: string }).file ?? names?.[record.document as DocumentName];
   const { stableId } = record as { stableId?: string };
   return {
     severity: record.severity === 'warning' ? 'warning' : 'fatal',
@@ -198,8 +204,8 @@ function load(options: SourceCatalogOptions): Loaded {
   if (!portfolio.ok || !site.ok) {
     return fail(...[portfolio, site].flatMap((read) => (read.ok ? [] : [read.finding])));
   }
-  // The examples stand alone: nothing beside them in the directory is theirs.
-  const extras = usingExamples ? NO_EXTRAS : readExtras(sourceDir);
+  // The unit's files beside the documents, or beside the examples.
+  const extras = readExtras(path.dirname(files.portfolio));
   if (!extras.ok) return fail(...extras.findings);
 
   const checked = checkUnit(
@@ -214,7 +220,8 @@ function load(options: SourceCatalogOptions): Loaded {
     recordFinding(record, { ...names, media: MEDIA }),
   );
   if (!checked.ok) return fail(...records);
-  findings.push(...records);
+  // The pair's own findings first, then its files' warnings, as #10 orders them.
+  findings.push(...records, ...extras.findings);
   const { unit } = checked;
 
   const identity = (unit.portfolio.model as Portfolio).identity.name;
@@ -341,123 +348,41 @@ interface Extras {
   readonly ok: true;
   readonly snapshots: Readonly<Record<string, unknown>>;
   readonly media?: DocumentInput;
-  /** Each file read, by its name under the source directory, for the revision's ID. */
+  /** What each one holds, by its name under the directory, for the revision's ID. */
   readonly texts: readonly (readonly [string, string])[];
-}
-
-const NO_EXTRAS: Extras = Object.freeze({ ok: true, snapshots: Object.freeze({}), texts: [] });
-
-/** snapshots/<kind>.json and media/media.json beside the pair, when they're there. */
-function readExtras(
-  sourceDir: string,
-): Extras | { readonly ok: false; readonly findings: SourceFinding[] } {
-  const findings: SourceFinding[] = [];
-  const texts: [string, string][] = [];
-  const snapshots: Record<string, unknown> = {};
-  const listing = listSnapshots(sourceDir);
-  if (!listing.ok) findings.push(listing.finding);
-  for (const kind of listing.ok ? listing.kinds : []) {
-    const file = path.join(SNAPSHOTS, `${kind}.json`);
-    const read = readSnapshot(path.join(sourceDir, file), file);
-    if (!read.ok) {
-      findings.push(read.finding);
-      continue;
-    }
-    snapshots[kind] = read.value;
-    texts.push([file, read.text]);
-  }
-
-  let media: DocumentInput | undefined;
-  try {
-    const sourceText = readBounded(path.join(sourceDir, MEDIA));
-    media = { format: 'json', sourceText, name: MEDIA };
-    texts.push([MEDIA, sourceText]);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-      findings.push(
-        fatal('media_unreadable', `${MEDIA} can't be read.`, {
-          file: MEDIA,
-          document: 'media',
-          remediation: `Make ${MEDIA} a file the server's user can read, or remove it.`,
-        }),
-      );
-    }
-  }
-  if (findings.length > 0) return { ok: false, findings };
-  return { ok: true, snapshots, ...(media ? { media } : {}), texts };
-}
-
-/** The kinds in snapshots/, each a `<kind>.json` file. Other names there are ignored. */
-function listSnapshots(
-  sourceDir: string,
-):
-  | { readonly ok: true; readonly kinds: readonly string[] }
-  | { readonly ok: false; readonly finding: SourceFinding } {
-  let names: string[];
-  try {
-    names = fs.readdirSync(/*turbopackIgnore: true*/ path.join(sourceDir, SNAPSHOTS));
-  } catch (error) {
-    const code = (error as NodeJS.ErrnoException).code;
-    if (code === 'ENOENT') return { ok: true, kinds: [] };
-    return {
-      ok: false,
-      finding: fatal(
-        'snapshots_unreadable',
-        code === 'ENOTDIR'
-          ? `${SNAPSHOTS} in ${DIRECTORY} is a file. Snapshots are files in a snapshots/ directory.`
-          : `The server can't read the ${SNAPSHOTS} directory in ${DIRECTORY}.`,
-        { file: SNAPSHOTS },
-      ),
-    };
-  }
-  const kinds = names
-    .filter((name) => name.endsWith('.json'))
-    .map((name) => name.slice(0, -'.json'.length))
-    .filter(isSnapshotKind);
-  return { ok: true, kinds: kinds.sort() };
+  /** Its warnings, such as a file in snapshots/ that's no snapshot. */
+  readonly findings: readonly SourceFinding[];
 }
 
 /**
- * One snapshot file: at most 1 MiB of JSON, parsed under #4's guards for a
- * document (its size, depth, entries, and repeated keys). #10 will add a
- * reader of its own for these; this is the one place to swap it in.
+ * snapshots/<kind>.json and media/media.json beside the documents in `dir`,
+ * read and checked by #10's readUnitFiles(): a blocking record, such as a
+ * snapshot that doesn't read, stops startup.
  */
-function readSnapshot(
-  file: string,
-  name: string,
-):
-  | { readonly ok: true; readonly value: unknown; readonly text: string }
-  | { readonly ok: false; readonly finding: SourceFinding } {
-  let text: string;
-  try {
-    text = readBounded(file);
-  } catch {
-    return {
-      ok: false,
-      finding: fatal('snapshot_unreadable', `${name} can't be read.`, {
-        file: name,
-        remediation: `Make ${name} a file the server's user can read, or remove it.`,
-      }),
-    };
-  }
-  const parsed = parseSource(text, 'json');
-  if (parsed.ok) return { ok: true, value: parsed.data, text };
-  const [problem] = parsed.problems;
-  return {
-    ok: false,
-    finding: fatal(
-      'snapshot_invalid',
-      `${name} isn't a snapshot this build can read: ${problem?.message ?? "it isn't valid JSON."}`,
-      {
-        file: name,
-        ...(problem?.line !== undefined ? { line: problem.line, column: problem.column } : {}),
-        remediation: `Export the revision again, or remove ${name}.`,
-      },
-    ),
-  };
+function readExtras(
+  dir: string,
+): Extras | { readonly ok: false; readonly findings: SourceFinding[] } {
+  const unitFiles = readUnitFiles(dir);
+  const findings = unitFiles.diagnostics.map((record) => recordFinding(record, undefined));
+  if (findings.some(({ severity }) => severity === 'fatal')) return { ok: false, findings };
+  const texts: [string, string][] = Object.entries(unitFiles.snapshots).map(([kind, value]) => [
+    `${SNAPSHOTS}/${kind}.json`,
+    canonicalize(value),
+  ]);
+  // The store's unit takes the media document as text: its checked model, canonical.
+  const media: DocumentInput | undefined =
+    unitFiles.media === undefined
+      ? undefined
+      : { format: 'json', sourceText: canonicalize(unitFiles.media), name: MEDIA };
+  if (media) texts.push([MEDIA, media.sourceText]);
+  return { ok: true, snapshots: unitFiles.snapshots, ...(media ? { media } : {}), texts, findings };
 }
 
-/** Changes whenever a file the reader reads is added, removed, or rewritten, or the examples change while they render. */
+/**
+ * Changes whenever a file the reader reads is added, removed, or rewritten,
+ * the snapshots and the media document beside the documents included, or
+ * the examples and theirs change while they render.
+ */
 function fingerprint({ sourceDir, examples }: SourceCatalogOptions): string {
   let names: string[];
   try {
@@ -471,17 +396,8 @@ function fingerprint({ sourceDir, examples }: SourceCatalogOptions): string {
     : examples
       ? [examples.portfolio, examples.site]
       : [];
-  if (watched.length) {
-    const listing = listSnapshots(sourceDir);
-    if (listing.ok) {
-      for (const kind of listing.kinds) {
-        files.push(path.join(/*turbopackIgnore: true*/ sourceDir, SNAPSHOTS, `${kind}.json`));
-      }
-    } else {
-      files.push(path.join(/*turbopackIgnore: true*/ sourceDir, SNAPSHOTS));
-    }
-    files.push(path.join(/*turbopackIgnore: true*/ sourceDir, MEDIA));
-  }
+  const dir = watched.length || !examples ? sourceDir : path.dirname(examples.portfolio);
+  files.push(...unitFilePaths(dir));
   return files
     .map((file) => {
       try {
@@ -492,4 +408,22 @@ function fingerprint({ sourceDir, examples }: SourceCatalogOptions): string {
       }
     })
     .join('|');
+}
+
+/** Every entry in snapshots/ and media/ beside the documents in `dir`, sorted, and media/media.json. */
+function unitFilePaths(dir: string): string[] {
+  const found: string[] = [];
+  for (const folder of [SNAPSHOTS, 'media']) {
+    const full = path.join(/*turbopackIgnore: true*/ dir, folder);
+    found.push(full);
+    try {
+      for (const name of fs.readdirSync(/*turbopackIgnore: true*/ full).sort()) {
+        found.push(path.join(/*turbopackIgnore: true*/ full, name));
+      }
+    } catch {
+      // Neither is required.
+    }
+  }
+  found.push(path.join(/*turbopackIgnore: true*/ dir, MEDIA));
+  return found;
 }
