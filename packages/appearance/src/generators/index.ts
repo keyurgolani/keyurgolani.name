@@ -5,11 +5,13 @@
 // carries its contrast report. This issue ships the deterministic
 // fixture-seed; #20 (Slice 8) adds the first-party generators.
 
-import { mix } from '../color';
+import type { BaseMode } from '../axes';
+import { BLACK, contrast, lightness, mix, WHITE, withLightness } from '../color';
 import { anchorV1 } from '../derive';
-import { contrastReport, type ContrastReport } from '../gate';
+import { contrastReport, GROUND_ROLES, type ContrastReport } from '../gate';
 import type { GeneratedScheme } from '../resolve-tokens';
 import { schemeSets } from '../sets';
+import type { ColorTokens } from '../tokens';
 
 /** What a generator reads: a site's appearanceInputs entry for its scheme. */
 export type GeneratorInput = { readonly seedColor: string } | { readonly sourceAsset: string };
@@ -36,10 +38,58 @@ export interface GeneratorResult {
 const SEED = /^#[0-9a-fA-F]{6}$/;
 
 /**
+ * `color`, or the first 0.02 step of it in OKLCH lightness, darker on a
+ * light page and lighter on a dark one, that reads at 4.6:1 on every ground.
+ */
+function legible(color: string, grounds: readonly string[], mode: BaseMode): string {
+  const reads = (candidate: string) =>
+    grounds.every((ground) => contrast(candidate, ground) >= 4.6);
+  if (reads(color)) return color;
+  const from = lightness(color);
+  for (let step = 1; step <= 50; step += 1) {
+    const candidate = withLightness(
+      color,
+      mode === 'light' ? from - 0.02 * step : from + 0.02 * step,
+    );
+    if (reads(candidate)) return candidate;
+  }
+  return mode === 'light' ? BLACK : WHITE;
+}
+
+/**
+ * One mode from a canvas, text, and two seed colors: anchor-v1, with the
+ * accent and secondary anchors made legible first, since anchors never move
+ * and they're the signature fill's colors. The accent keeps an OKLCH
+ * lightness from 0.3 to 0.8, so its hover and active states have room to
+ * move away from on-accent, whichever of black and white that is.
+ */
+function seededMode(
+  canvas: string,
+  text: string,
+  accent: string,
+  secondary: string,
+  mode: BaseMode,
+): ColorTokens {
+  const draft = anchorV1({ canvas, text, accent, secondary }, mode);
+  const grounds = GROUND_ROLES.map((role) => draft[role]);
+  const toned = withLightness(accent, Math.min(0.8, Math.max(0.3, lightness(accent))));
+  return anchorV1(
+    {
+      canvas,
+      text,
+      accent: legible(toned, grounds, mode),
+      secondary: legible(secondary, grounds, mode),
+    },
+    mode,
+  );
+}
+
+/**
  * fixture-seed, version 1: the seed tints a near-white canvas and near-black
  * text for light, and a near-black canvas and near-white text for dark, so
- * text always passes; the seed is the light accent and a lighter seed the
- * dark one; anchor-v1 solves the rest.
+ * text always passes. The seed, and a lighter seed for dark, is the accent,
+ * and a deeper or paler seed the secondary, each moved until it reads.
+ * anchor-v1 solves the rest, so every seed passes the gate.
  */
 export const FIXTURE_SEED: SchemeGenerator = Object.freeze({
   id: 'fixture-seed',
@@ -51,22 +101,18 @@ export const FIXTURE_SEED: SchemeGenerator = Object.freeze({
     }
     const seed = input.seedColor.toLowerCase();
     return {
-      light: anchorV1(
-        {
-          canvas: mix('#ffffff', seed, 6),
-          text: mix('#000000', seed, 18),
-          accent: seed,
-          secondary: mix(seed, '#000000', 40),
-        },
+      light: seededMode(
+        mix(WHITE, seed, 6),
+        mix(BLACK, seed, 18),
+        seed,
+        mix(seed, BLACK, 40),
         'light',
       ),
-      dark: anchorV1(
-        {
-          canvas: mix('#000000', seed, 12),
-          text: mix('#ffffff', seed, 10),
-          accent: mix(seed, '#ffffff', 30),
-          secondary: mix(seed, '#ffffff', 60),
-        },
+      dark: seededMode(
+        mix(BLACK, seed, 12),
+        mix(WHITE, seed, 10),
+        mix(seed, WHITE, 30),
+        mix(seed, WHITE, 60),
         'dark',
       ),
     };
