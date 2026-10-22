@@ -1,4 +1,5 @@
 import { MIGRATE_COMMAND, shellQuote } from '../legacy';
+import { PORTFOLIO_SCHEMA_VERSION, SITE_SCHEMA_VERSION } from '../versions';
 import { SECRET_LABELS } from '../secrets';
 import { unifiedDiff } from './diff';
 import type { AssignedId } from './section-ids';
@@ -20,8 +21,11 @@ export interface FormatOptions {
 export function formatMigration(migration: Migration, options: FormatOptions): string {
   const { file } = options;
   switch (migration.status) {
-    case 'current':
-      return `${file} is already a schemaVersion 2 ${migration.document} document. Nothing to migrate.\n`;
+    case 'current': {
+      const version =
+        migration.document === 'portfolio' ? PORTFOLIO_SCHEMA_VERSION : SITE_SCHEMA_VERSION;
+      return `${file} is already a schemaVersion ${version} ${migration.document} document. Nothing to migrate.\n`;
+    }
     case 'failed': {
       const reasons = options.summary
         ? (migration.summary ?? migration.reasons)
@@ -48,7 +52,9 @@ function formatPlan(plan: MigrationPlan, options: FormatOptions): string {
   const valued = (text: string, value: string | undefined) =>
     summary || value === undefined ? text : `${text}: ${value}`;
   const out: string[] = [
-    `${file} is in the old one-file format (version ${plan.from}). Migrating it writes portfolio.${extension} and site.${extension} at schemaVersion ${plan.to}.`,
+    plan.site
+      ? `${file} is in the old one-file format (version ${plan.from}). Migrating it writes portfolio.${extension} at schemaVersion ${plan.to} and site.${extension} at schemaVersion ${SITE_SCHEMA_VERSION}.`
+      : `${file} is a schemaVersion ${plan.from} portfolio document. Migrating it writes portfolio.${extension} at schemaVersion ${plan.to}; the site document doesn't change.`,
   ];
   const block = (title: string, lines: readonly string[]) => {
     if (lines.length > 0) out.push('', title, ...lines.map((line) => `  ${line}`));
@@ -62,7 +68,18 @@ function formatPlan(plan: MigrationPlan, options: FormatOptions): string {
   block(
     'Moved:',
     [...by('moved'), ...by('mapped')].map((change) =>
-      sentence(`${change.from} to ${where(change.to!)}`, change.note),
+      change.to
+        ? sentence(
+            `${change.from} to ${where(change.to)}`,
+            summary ? withoutIds(change.note) : change.note,
+          )
+        : sentence(change.from!, change.note),
+    ),
+  );
+  block(
+    'Look at:',
+    by('warned').map((change) =>
+      sentence(change.from!, summary ? withoutIds(change.note) : change.note),
     ),
   );
   block(
@@ -82,6 +99,14 @@ function formatPlan(plan: MigrationPlan, options: FormatOptions): string {
   block(
     'Section ids:',
     plan.ids.flatMap((assigned) => idLine(assigned, summary)),
+  );
+  block(
+    'Record and media ids, minted once from content:',
+    plan.minted.map((minted) =>
+      summary
+        ? `${minted.pointer} gets an id, from ${minted.from}.`
+        : `${minted.pointer} is ${minted.id}, from ${minted.from}.`,
+    ),
   );
   block(
     'Set with --set:',
@@ -134,7 +159,7 @@ function formatPlan(plan: MigrationPlan, options: FormatOptions): string {
   out.push(
     '',
     plan.status === 'ready'
-      ? `Nothing stops the migration. ${command(file, plan, summary)} --write --out <dir> writes both documents into <dir>.`
+      ? `Nothing stops the migration. ${command(file, plan, summary)} --write --out <dir> writes ${plan.site ? 'both documents' : `portfolio.${extension}`} into <dir>.`
       : "The migration can't write until the values above are given and the problems fixed. It changed nothing.",
   );
 
@@ -153,10 +178,17 @@ function formatPlan(plan: MigrationPlan, options: FormatOptions): string {
       diff === null
         ? `portfolio.${extension}, which differs from ${file} on too many lines to show as a diff:\n${plan.portfolio.text}`
         : `portfolio.${extension}, as a diff from ${file}:\n${diff}`,
-      `site.${extension}:\n${plan.site.text}`,
+      ...(plan.site ? [`site.${extension}:\n${plan.site.text}`] : []),
     );
   }
   return `${out.join('\n').replace(/\n+$/, '')}\n`;
+}
+
+/** A note without the ids it names, which a summary leaves out like any value. */
+function withoutIds(note: string): string {
+  return note
+    .replace(/\b(the (?:work|evidence|chronology entry|media asset)) [a-z0-9-]+/g, '$1')
+    .replace(/(Uses the media asset) [a-z0-9-]+/g, '$1');
 }
 
 /** Where a secret is, and what it looks like, never what it is. */
