@@ -276,6 +276,7 @@ export function calibrationEntry(report, meta) {
     selection: first.selection,
     composition: first.composition ?? null,
     profile: first.profile ?? null,
+    browser: first.browser ?? null,
     fixture: first.fixture ?? null,
     ...(meta.notes ?? {}),
     viewports: Object.fromEntries(cases.map((entry) => [entry.viewport, caseSummary(entry)])),

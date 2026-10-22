@@ -262,6 +262,7 @@ const entry = (viewport, overrides = {}) => ({
   composition: 'fallback',
   profile: 'read-only',
   fixture: 'complete',
+  browser: 'chromium 145.0.7632.6',
   requests: REQUESTS.slice(0, 4),
   longTasks: longTaskSummary([{ startTime: 1, duration: 70 }], { loadEventEnd: 500 }),
   idle: { windowS: 2, taskDurationS: 0.005 },
@@ -344,6 +345,7 @@ test('a calibration entry is one selection on one route, by viewport, with where
   assert.equal(calibration.tracedFrom, 'def');
   assert.equal(calibration.selection, 'missing-variant');
   assert.equal(calibration.composition, 'fallback');
+  assert.equal(calibration.browser, 'chromium 145.0.7632.6');
   assert.equal(calibration.thirdPartyBytes, 'unknown: aborted');
   assert.deepEqual(Object.keys(calibration.viewports), ['1440x900', '390x844']);
   const mixed = buildReport({

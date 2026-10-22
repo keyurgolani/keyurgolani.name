@@ -307,7 +307,7 @@ for (const route of ROUTES) {
       test(
         `${route} at ${viewport.size}`,
         { annotation: [{ type: 'route', description: route }] },
-        async ({ page, app, policy }, testInfo) => {
+        async ({ page, app, policy, browser }, testInfo) => {
           const target = testInfo.project.metadata as unknown as TraceTarget;
           await page.addInitScript({ content: `(${installTraceProbe.toString()})(window);` });
           const requests = watchRequests(page, new URL(app.origin).origin, policy);
@@ -351,6 +351,7 @@ for (const route of ROUTES) {
             profile: target.profile,
             fixture: target.fixture,
             origin: app.origin,
+            browser: `${browser.browserType().name()} ${browser.version()}`,
             document: { status: response?.status() ?? null },
             requests: records,
             longTasks: longTaskSummary(longTasks.entries, {

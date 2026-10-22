@@ -10,7 +10,9 @@
       "selection": "editorial",
       "composition": null,
       "profile": null,
+      "browser": "chromium 145.0.7632.6",
       "fixture": null,
+      "conditions": "An 18-core Mac shared with other sessions, 1-minute load about 20 to 27.",
       "server": "A detached worktree at 62a0f06 with no portfolio.yml and no PORTFOLIO_PATH, so portfolio.example.yml renders (variant: editorial): pnpm install --frozen-lockfile, pnpm --filter @portfolio/web build, then next start -H 127.0.0.1 -p 52588 in apps/web, with NEXT_TELEMETRY_DISABLED=1 for both.",
       "egress": "The build and the server ran with NODE_USE_ENV_PROXY=1 and HTTP_PROXY and HTTPS_PROXY at a local trap that refuses every request, and tests/harness/offline-fetch.mjs preloaded. The server's fetch to api.github.com was refused, the trap saw no request, and lsof, sampling every 250 ms, saw no socket of the build, the server, or the browser with a peer outside loopback. The server listened on 127.0.0.1 only.",
       "thirdPartyBytes": "Unknown. The trace recorded and aborted every third-party request: one fonts.googleapis.com stylesheet (Kinetic Cosmos's, the one @import left in the bundled CSS) and picsum.photos images. Their bytes, and the font files that stylesheet names, are not counted, and each has bytes null.",
@@ -181,6 +183,400 @@
             "recalcStyleCount": 0,
             "jsHeapUsedBytes": 3353740,
             "nodes": 1479,
+            "visibility": "visible",
+            "networkIdle": true
+          },
+          "counters": {
+            "frameCallbacks": 0,
+            "frameLoops": 0,
+            "recurringTimers": 0,
+            "canvasContexts": 0,
+            "infiniteAnimations": 0
+          },
+          "cspViolations": 0
+        }
+      }
+    },
+    "fallback-route": {
+      "commit": "a9fa5d44a02b59f40e8a1950d14309300c461f4b",
+      "date": "2026-10-22",
+      "command": "PORTFOLIO_ANALYZE=1 pnpm build && pnpm test:trace",
+      "tracedFrom": "a9fa5d44a02b59f40e8a1950d14309300c461f4b",
+      "route": "/",
+      "selection": "missing-variant",
+      "composition": "fallback",
+      "profile": "read-only",
+      "browser": "chromium 145.0.7632.6",
+      "fixture": "complete",
+      "app": "The #12 app-under-test fixture (tests/harness/fixtures.ts) under read-only, with #5's complete contract fixture as the source directory and its site document selecting missing-variant, which no package registers, so the fallback composition renders. Every image is a data URL, and the server ran behind the harness's egress trap, which saw no attempt.",
+      "thirdPartyBytes": "None. The trace fails on any third-party request, and there was none.",
+      "attribution": "JS and CSS bytes by source package through the build's source maps, gzip shared out by raw share within each chunk. Next vendors react, react-dom, and scheduler, and they count as themselves. 99.4% of JS bytes and 97.7% of CSS bytes map to a source.",
+      "conditions": "An 18-core Mac shared with other sessions, 1-minute load about 16 to 19. Long tasks under 4x throttling vary between runs: an earlier trace of the same build had 2 at 1440x900, 111 ms in all.",
+      "viewports": {
+        "1440x900": {
+          "requests": {
+            "total": 15,
+            "firstParty": 15,
+            "thirdParty": 0,
+            "aborted": 0,
+            "failed": 0,
+            "thirdPartyHosts": [],
+            "byType": {
+              "document": {
+                "count": 1,
+                "transferBytes": 21943,
+                "fileBytes": 89525,
+                "unknownBytes": 0
+              },
+              "script": {
+                "count": 12,
+                "transferBytes": 247658,
+                "fileBytes": 823276,
+                "unknownBytes": 0,
+                "gzipBytes": 240031
+              },
+              "stylesheet": {
+                "count": 2,
+                "transferBytes": 2529,
+                "fileBytes": 4003,
+                "unknownBytes": 0,
+                "gzipBytes": 1399
+              }
+            }
+          },
+          "js": {
+            "files": 12,
+            "bytes": 823276,
+            "gzipBytes": 240031
+          },
+          "css": {
+            "files": 2,
+            "bytes": 4003,
+            "gzipBytes": 1399
+          },
+          "fonts": {
+            "files": 0,
+            "bytes": 0
+          },
+          "images": {
+            "files": 0,
+            "bytes": 0
+          },
+          "attribution": {
+            "js": {
+              "chunks": 12,
+              "bytes": 823276,
+              "mappedShare": 0.994,
+              "packages": [
+                {
+                  "package": "next",
+                  "bytes": 322334,
+                  "gzipBytes": 88110
+                },
+                {
+                  "package": "react-dom",
+                  "bytes": 203420,
+                  "gzipBytes": 63234
+                },
+                {
+                  "package": "yaml",
+                  "bytes": 102929,
+                  "gzipBytes": 29248
+                },
+                {
+                  "package": "zod",
+                  "bytes": 61179,
+                  "gzipBytes": 17385
+                },
+                {
+                  "package": "@chenglou/pretext",
+                  "bytes": 44132,
+                  "gzipBytes": 15129
+                },
+                {
+                  "package": "marked",
+                  "bytes": 37735,
+                  "gzipBytes": 10723
+                },
+                {
+                  "package": "@portfolio/schema",
+                  "bytes": 20184,
+                  "gzipBytes": 5733
+                },
+                {
+                  "package": "react",
+                  "bytes": 8216,
+                  "gzipBytes": 3106
+                },
+                {
+                  "package": "@portfolio/kit",
+                  "bytes": 7099,
+                  "gzipBytes": 2395
+                },
+                {
+                  "package": "@portfolio/variant-contract",
+                  "bytes": 6163,
+                  "gzipBytes": 1751
+                },
+                {
+                  "package": "(unmapped)",
+                  "bytes": 4557,
+                  "gzipBytes": 1506
+                },
+                {
+                  "package": "scheduler",
+                  "bytes": 3512,
+                  "gzipBytes": 1095
+                },
+                {
+                  "package": "apps/web",
+                  "bytes": 1056,
+                  "gzipBytes": 413
+                },
+                {
+                  "package": "@swc/helpers",
+                  "bytes": 760,
+                  "gzipBytes": 204
+                }
+              ]
+            },
+            "css": {
+              "chunks": 2,
+              "bytes": 4003,
+              "mappedShare": 0.977,
+              "packages": [
+                {
+                  "package": "@portfolio/kit",
+                  "bytes": 2236,
+                  "gzipBytes": 625
+                },
+                {
+                  "package": "apps/web",
+                  "bytes": 1190,
+                  "gzipBytes": 602
+                },
+                {
+                  "package": "@portfolio/fallback-composition",
+                  "bytes": 486,
+                  "gzipBytes": 136
+                },
+                {
+                  "package": "(unmapped)",
+                  "bytes": 91,
+                  "gzipBytes": 36
+                }
+              ]
+            }
+          },
+          "longTasks": {
+            "supported": true,
+            "cpuThrottling": 4,
+            "loadEventEndMs": 475.1,
+            "windowMs": 5000,
+            "count": 3,
+            "over50ms": 3,
+            "totalMs": 309,
+            "maxMs": 113,
+            "durationsMs": [113, 99, 97]
+          },
+          "idle": {
+            "windowS": 2.004299,
+            "taskDurationS": 0.000208,
+            "scriptDurationS": 0,
+            "layoutDurationS": 0,
+            "recalcStyleDurationS": 0,
+            "layoutCount": 0,
+            "recalcStyleCount": 0,
+            "jsHeapUsedBytes": 4762420,
+            "nodes": 1115,
+            "visibility": "visible",
+            "networkIdle": true
+          },
+          "counters": {
+            "frameCallbacks": 0,
+            "frameLoops": 0,
+            "recurringTimers": 0,
+            "canvasContexts": 0,
+            "infiniteAnimations": 0
+          },
+          "cspViolations": 0
+        },
+        "390x844": {
+          "requests": {
+            "total": 15,
+            "firstParty": 15,
+            "thirdParty": 0,
+            "aborted": 0,
+            "failed": 0,
+            "thirdPartyHosts": [],
+            "byType": {
+              "document": {
+                "count": 1,
+                "transferBytes": 21943,
+                "fileBytes": 89525,
+                "unknownBytes": 0
+              },
+              "script": {
+                "count": 12,
+                "transferBytes": 247658,
+                "fileBytes": 823276,
+                "unknownBytes": 0,
+                "gzipBytes": 240031
+              },
+              "stylesheet": {
+                "count": 2,
+                "transferBytes": 2529,
+                "fileBytes": 4003,
+                "unknownBytes": 0,
+                "gzipBytes": 1399
+              }
+            }
+          },
+          "js": {
+            "files": 12,
+            "bytes": 823276,
+            "gzipBytes": 240031
+          },
+          "css": {
+            "files": 2,
+            "bytes": 4003,
+            "gzipBytes": 1399
+          },
+          "fonts": {
+            "files": 0,
+            "bytes": 0
+          },
+          "images": {
+            "files": 0,
+            "bytes": 0
+          },
+          "attribution": {
+            "js": {
+              "chunks": 12,
+              "bytes": 823276,
+              "mappedShare": 0.994,
+              "packages": [
+                {
+                  "package": "next",
+                  "bytes": 322334,
+                  "gzipBytes": 88110
+                },
+                {
+                  "package": "react-dom",
+                  "bytes": 203420,
+                  "gzipBytes": 63234
+                },
+                {
+                  "package": "yaml",
+                  "bytes": 102929,
+                  "gzipBytes": 29248
+                },
+                {
+                  "package": "zod",
+                  "bytes": 61179,
+                  "gzipBytes": 17385
+                },
+                {
+                  "package": "@chenglou/pretext",
+                  "bytes": 44132,
+                  "gzipBytes": 15129
+                },
+                {
+                  "package": "marked",
+                  "bytes": 37735,
+                  "gzipBytes": 10723
+                },
+                {
+                  "package": "@portfolio/schema",
+                  "bytes": 20184,
+                  "gzipBytes": 5733
+                },
+                {
+                  "package": "react",
+                  "bytes": 8216,
+                  "gzipBytes": 3106
+                },
+                {
+                  "package": "@portfolio/kit",
+                  "bytes": 7099,
+                  "gzipBytes": 2395
+                },
+                {
+                  "package": "@portfolio/variant-contract",
+                  "bytes": 6163,
+                  "gzipBytes": 1751
+                },
+                {
+                  "package": "(unmapped)",
+                  "bytes": 4557,
+                  "gzipBytes": 1506
+                },
+                {
+                  "package": "scheduler",
+                  "bytes": 3512,
+                  "gzipBytes": 1095
+                },
+                {
+                  "package": "apps/web",
+                  "bytes": 1056,
+                  "gzipBytes": 413
+                },
+                {
+                  "package": "@swc/helpers",
+                  "bytes": 760,
+                  "gzipBytes": 204
+                }
+              ]
+            },
+            "css": {
+              "chunks": 2,
+              "bytes": 4003,
+              "mappedShare": 0.977,
+              "packages": [
+                {
+                  "package": "@portfolio/kit",
+                  "bytes": 2236,
+                  "gzipBytes": 625
+                },
+                {
+                  "package": "apps/web",
+                  "bytes": 1190,
+                  "gzipBytes": 602
+                },
+                {
+                  "package": "@portfolio/fallback-composition",
+                  "bytes": 486,
+                  "gzipBytes": 136
+                },
+                {
+                  "package": "(unmapped)",
+                  "bytes": 91,
+                  "gzipBytes": 36
+                }
+              ]
+            }
+          },
+          "longTasks": {
+            "supported": true,
+            "cpuThrottling": 4,
+            "loadEventEndMs": 189,
+            "windowMs": 5000,
+            "count": 2,
+            "over50ms": 2,
+            "totalMs": 106,
+            "maxMs": 55,
+            "durationsMs": [55, 51]
+          },
+          "idle": {
+            "windowS": 2.003513,
+            "taskDurationS": 0.000141,
+            "scriptDurationS": 0,
+            "layoutDurationS": 0,
+            "recalcStyleDurationS": 0,
+            "layoutCount": 0,
+            "recalcStyleCount": 0,
+            "jsHeapUsedBytes": 4791560,
+            "nodes": 1115,
             "visibility": "visible",
             "networkIdle": true
           },
