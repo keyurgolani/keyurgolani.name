@@ -195,28 +195,45 @@ export function watchRequests(page: Page, appOrigin: string, policy: TracePolicy
  * Each downloaded chunk's bytes by module and package, from the map its
  * sourceMappingURL names on the app's own origin, fetched with no redirect
  * followed. A build without maps attributes nothing, and lists each chunk
- * under withoutMap.
+ * under withoutMap. Every map is fetched, one request after the other,
+ * before any is parsed or attributed: a request sent right after a long
+ * synchronous step can go out on a keep-alive connection the server closed
+ * meanwhile.
  */
 export async function attribute(page: Page, downloads: readonly Download[]) {
+  const bodies: (Buffer | null)[] = [];
+  for (const download of downloads) {
+    const url = sourceMapUrl(download.code, download.url);
+    let body: Buffer | null = null;
+    if (url && new URL(url).origin === new URL(download.url).origin) {
+      const response = await page.request.get(url, { failOnStatusCode: false, maxRedirects: 0 });
+      if (response.ok()) body = await response.body();
+    }
+    bodies.push(body);
+  }
   const workspace = workspacePackages(REPO_ROOT);
   const chunks: (ReturnType<typeof attributeChunk> & { kind: 'js' | 'css' })[] = [];
   const withoutMap: string[] = [];
-  for (const download of downloads) {
+  downloads.forEach((download, index) => {
     const url = sourceMapUrl(download.code, download.url);
     let map: unknown = url ? inlineSourceMap(url) : null;
-    if (url && !map && new URL(url).origin === new URL(download.url).origin) {
-      const response = await page.request.get(url, { failOnStatusCode: false, maxRedirects: 0 });
-      if (response.ok()) map = await response.json().catch(() => null);
+    const body = bodies[index];
+    if (!map && body) {
+      try {
+        map = JSON.parse(body.toString('utf8'));
+      } catch {
+        map = null;
+      }
     }
     if (!map) {
       withoutMap.push(download.url);
-      continue;
+      return;
     }
     chunks.push({
       kind: download.kind,
       ...attributeChunk({ url: download.url, code: download.code, map, workspace }),
     });
-  }
+  });
   return {
     js: attributionSummary(chunks.filter((chunk) => chunk.kind === 'js')),
     css: attributionSummary(chunks.filter((chunk) => chunk.kind === 'css')),
