@@ -15,7 +15,7 @@ export {
   isDisplayMode,
   isPackAxis,
   PACK_AXES,
-  PACK_KINDS,
+  PACK_KIND_BY_AXIS,
   PLATFORM_DEFAULTS,
   QUERY_KEYS,
   type BaseMode,

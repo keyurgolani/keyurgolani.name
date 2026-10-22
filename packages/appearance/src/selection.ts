@@ -129,14 +129,14 @@ function choices(registry: AppearanceRegistry, axis: IdAxis): string {
   const ids = selectableIds(registry, axis);
   return ids.length > 0
     ? `one this build registers: ${ids.join(', ')}`
-    : `one once a ${AXIS_NAMES[axis]} is installed with ${INSTALL}`;
+    : `a ${AXIS_NAMES[axis]} installed with ${INSTALL}`;
 }
 
 /**
- * A selection holding `value` on `axis` and nothing the other axes' checks
- * could object to, for asking about one value on its own.
+ * A selection holding `value` on the id axis `axis` and nothing the other
+ * axes' checks could object to, for asking about one value on its own.
  */
-export function alone(axis: AppearanceAxis, value: string): Selection {
+export function alone(axis: IdAxis, value: string): Selection {
   return {
     variant: '',
     designLanguage: '',

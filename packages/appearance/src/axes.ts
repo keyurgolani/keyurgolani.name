@@ -28,12 +28,12 @@ export const ID_AXES = ['variant', ...PACK_AXES] as const;
 export type IdAxis = (typeof ID_AXES)[number];
 
 /** The `portfolio.kind` a pack package declares, by axis. */
-export const PACK_KINDS = {
+export const PACK_KIND_BY_AXIS = {
   designLanguage: 'design-language',
   colorScheme: 'color-scheme',
   typography: 'typography',
 } as const satisfies Record<PackAxis, string>;
-export type PackKind = (typeof PACK_KINDS)[PackAxis];
+export type PackKind = (typeof PACK_KIND_BY_AXIS)[PackAxis];
 
 /** system, light, dark, and high-contrast, as the site document allows them. */
 export const DISPLAY_MODES: readonly DisplayMode[] = DisplayModeSchema.options;

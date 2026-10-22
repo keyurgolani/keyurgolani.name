@@ -13,7 +13,7 @@ import {
 import {
   ID_AXES,
   PACK_AXES,
-  PACK_KINDS,
+  PACK_KIND_BY_AXIS,
   PLATFORM_DEFAULTS,
   type BaseMode,
   type IdAxis,
@@ -120,7 +120,7 @@ export function createAppearanceRegistry(meta: AppearanceMeta): AppearanceRegist
     if (!axis) throw new Error(`The metadata module lists a pack of an unknown kind.`);
     const { id } = pack.manifest;
     if (packs[axis].has(id)) {
-      throw new Error(`Two ${PACK_KINDS[axis]} packs register the id ${id}.`);
+      throw new Error(`Two ${PACK_KIND_BY_AXIS[axis]} packs register the id ${id}.`);
     }
     const base = { packageName: pack.packageName, version: pack.version };
     if (pack.kind === 'color-scheme') {
@@ -135,9 +135,13 @@ export function createAppearanceRegistry(meta: AppearanceMeta): AppearanceRegist
     const fallback = PLATFORM_DEFAULTS[axis];
     const entry = packs[axis].get(fallback);
     if (!entry)
-      throw new Error(`This build registers no ${fallback}, the ${PACK_KINDS[axis]} fallback.`);
+      throw new Error(
+        `This build registers no ${fallback}, the ${PACK_KIND_BY_AXIS[axis]} fallback.`,
+      );
     if (entry.manifest.tier === 'research') {
-      throw new Error(`The ${PACK_KINDS[axis]} fallback ${fallback} can't be a research pack.`);
+      throw new Error(
+        `The ${PACK_KIND_BY_AXIS[axis]} fallback ${fallback} can't be a research pack.`,
+      );
     }
   }
   const fallbackScheme = packs.colorScheme.get(PLATFORM_DEFAULTS.colorScheme)!;
