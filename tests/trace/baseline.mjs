@@ -23,16 +23,21 @@
 //    aborts every third-party request; one that got an answer still fails it.
 // 5. While the build, the server, and the trace run, lsof samples every
 //    internet socket their process trees hold.
-// 6. Teardown, however the run ends: the server stops, the trap closes, and
-//    the worktree and the temporary directory go.
+// 6. Teardown, however the run ends, a signal or a step over its time limit
+//    among the ways: the running step's and the server's process groups
+//    stop, the trap closes, and the worktree and the temporary directory go.
+//
+// Each step runs in a process group of its own, so stopping it stops what
+// it started. The baseline's own scripts run pnpm through a shim that runs
+// this run's pnpm by its absolute path: the pnpm that started it under pnpm
+// run, else the first one on PATH, else corepack pnpm.
 //
 // The trace report lands in reports/trace/trace-report.json, and the egress
 // evidence in reports/trace/baseline-evidence.json, which
 // tests/trace/calibrate.mjs takes with --evidence.
 //
 //   pnpm test:trace:baseline [--keep]   --keep leaves the worktree, to look at
-import { execFileSync, spawn, spawnSync } from 'node:child_process';
-import { once } from 'node:events';
+import { execFileSync, spawnSync } from 'node:child_process';
 import {
   chmodSync,
   createWriteStream,
@@ -44,13 +49,14 @@ import {
   writeFileSync,
 } from 'node:fs';
 import net from 'node:net';
-import { tmpdir } from 'node:os';
+import { constants, tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { reportsDir } from '../../ci/lib/reports.mjs';
 import { startEgressTrap } from '../harness/egress-trap.mjs';
 import { freePort } from '../harness/net.mjs';
-import { withoutPnpmSettings } from '../harness/trace/pnpm-env.mjs';
+import { resolvePnpm, shimScript, withoutPnpmSettings } from '../harness/trace/pnpm-env.mjs';
+import { groupTracker, stopGroup } from '../harness/trace/process-group.mjs';
 import { watchSockets } from '../harness/trace/sockets.mjs';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -58,29 +64,46 @@ const BASELINE = '62a0f06cf88c5d6c55045945bf0733a6882c5425';
 const OFFLINE_FETCH = pathToFileURL(path.join(REPO_ROOT, 'tests', 'harness', 'offline-fetch.mjs'));
 const REPORTS = path.join(reportsDir(), 'trace');
 const TRACE_ARGS = ['--allow-third-party', '--selection', 'editorial'];
+/** How long each step may take before its process group is stopped. */
+const LIMITS_MS = { install: 10 * 60_000, build: 15 * 60_000, ready: 60_000, trace: 15 * 60_000 };
 const keep = process.argv.includes('--keep');
-
-/** pnpm as the script running this was started with, else from PATH. */
-function pnpmCommand() {
-  const execpath = process.env.npm_execpath;
-  if (!execpath) return ['pnpm'];
-  return /\.[cm]?js$/.test(execpath) ? [process.execPath, execpath] : [execpath];
-}
+const groups = groupTracker();
 
 function git(args, cwd = REPO_ROOT) {
   return execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
 }
 
-/** Runs `command` to its end with its output in `log`, watching its sockets. */
-async function run(command, args, { cwd, env, log }) {
+/**
+ * Runs one step to its end in a process group of its own, with its output
+ * in `log`, watching its sockets. A step over its time limit is stopped,
+ * all of its group, and fails.
+ *
+ * @param {keyof typeof LIMITS_MS} step
+ */
+async function run(step, command, args, { cwd, env, log }) {
   const out = createWriteStream(log);
-  const child = spawn(command, args, { cwd, env, stdio: ['ignore', 'pipe', 'pipe'] });
-  child.stdout.pipe(out, { end: false });
-  child.stderr.pipe(out, { end: false });
-  const watch = watchSockets(child.pid);
-  const [code] = await once(child, 'exit');
+  const group = groups.spawn(command, args, { cwd, env, stdio: ['ignore', 'pipe', 'pipe'] });
+  if (group.child.pid === undefined) {
+    const { error } = await group.exited;
+    throw new Error(`The ${step} did not start: ${error?.message}`);
+  }
+  group.child.stdout?.pipe(out, { end: false });
+  group.child.stderr?.pipe(out, { end: false });
+  const watch = watchSockets(group.child.pid);
+  let overLimit = false;
+  const timer = setTimeout(() => {
+    overLimit = true;
+    void stopGroup(group);
+  }, LIMITS_MS[step]);
+  const { code } = await group.exited;
+  clearTimeout(timer);
   const sockets = watch.stop();
   await new Promise((resolve) => out.end(resolve));
+  if (overLimit) {
+    throw new Error(
+      `The ${step} ran over ${LIMITS_MS[step] / 60_000} minutes and was stopped (${log})`,
+    );
+  }
   return { code, sockets };
 }
 
@@ -95,74 +118,75 @@ function refusals(...logs) {
 }
 
 async function main() {
-  git(['cat-file', '-e', `${BASELINE}^{commit}`]);
-  mkdirSync(REPORTS, { recursive: true });
   const root = mkdtempSync(path.join(tmpdir(), 'portfolio-baseline-'));
   const tree = path.join(root, 'tree');
+  const bin = path.join(root, 'bin');
   const logs = path.join(REPORTS, 'baseline-logs');
-  mkdirSync(logs, { recursive: true });
   let trap;
-  let server;
+  let worktree = false;
   let tornDown = false;
   const teardown = async () => {
     if (tornDown) return;
     tornDown = true;
-    if (server && server.exitCode === null && server.signalCode === null) {
-      server.kill('SIGTERM');
-      const timer = setTimeout(() => server.kill('SIGKILL'), 10_000);
-      await once(server, 'exit').catch(() => {});
-      clearTimeout(timer);
-    }
+    // The step that is running, and the server, with everything they started.
+    await groups.stopAll();
     await trap?.close();
-    if (keep) {
+    if (keep && worktree) {
       console.log(`[baseline] kept ${tree}`);
       return;
     }
-    if (existsSync(tree))
+    if (worktree) {
       spawnSync('git', ['worktree', 'remove', '--force', tree], { cwd: REPO_ROOT });
-    spawnSync('git', ['worktree', 'prune'], { cwd: REPO_ROOT });
+      spawnSync('git', ['worktree', 'prune'], { cwd: REPO_ROOT });
+    }
     rmSync(root, { recursive: true, force: true });
   };
-  for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
-    process.once(signal, () => teardown().finally(() => process.exit(130)));
+  for (const signal of /** @type {const} */ (['SIGINT', 'SIGTERM', 'SIGHUP'])) {
+    process.once(signal, () =>
+      teardown().finally(() => process.exit(128 + constants.signals[signal])),
+    );
   }
 
   try {
+    // The pnpm this run and the baseline's own scripts use, by its absolute
+    // path, and never the shim in bin/ that runs it. A run with no pnpm stops
+    // here, before it makes anything.
+    const pnpmCommand = resolvePnpm(process.env, { exclude: [bin] });
+    const [pnpm, ...pnpmArgs] = pnpmCommand;
+    git(['cat-file', '-e', `${BASELINE}^{commit}`]);
+    mkdirSync(logs, { recursive: true });
+
     console.log(`[baseline] a worktree of ${BASELINE.slice(0, 7)} in ${tree}`);
+    worktree = true;
     git(['worktree', 'add', '--detach', tree, BASELINE]);
     const documents = ['portfolio.yml', 'portfolio.yaml', 'portfolio.toml', 'portfolio.json'];
     const present = documents.filter((name) => existsSync(path.join(tree, name)));
     if (present.length > 0) throw new Error(`The worktree has ${present.join(', ')}.`);
 
-    // pnpm, as this script was started with, for the baseline's own scripts.
-    const bin = path.join(root, 'bin');
     mkdirSync(bin);
-    const [pnpm, ...pnpmArgs] = pnpmCommand();
     const shim = path.join(bin, 'pnpm');
-    writeFileSync(
-      shim,
-      `#!/bin/sh\nexec ${[pnpm, ...pnpmArgs].map((part) => `'${part}'`).join(' ')} "$@"\n`,
-    );
+    writeFileSync(shim, shimScript(pnpmCommand));
     chmodSync(shim, 0o755);
     const PATH = `${bin}${path.delimiter}${process.env.PATH ?? ''}`;
 
     // The install follows the baseline's own pnpm settings, not the ones pnpm
     // run passed down from this checkout (strictDepBuilds, for one).
     console.log('[baseline] pnpm install --frozen-lockfile');
-    const install = spawnSync(
+    const installLog = path.join(logs, 'install.log');
+    const install = await run(
+      'install',
       pnpm,
       [...pnpmArgs, 'install', '--frozen-lockfile', '--prefer-offline'],
       {
         cwd: tree,
         env: { ...withoutPnpmSettings(process.env), PATH, NEXT_TELEMETRY_DISABLED: '1' },
-        encoding: 'utf8',
-        maxBuffer: 64 * 1024 * 1024,
+        log: installLog,
       },
     );
-    writeFileSync(path.join(logs, 'install.log'), `${install.stdout}${install.stderr}`);
-    if (install.status !== 0)
-      throw new Error(`pnpm install failed (${path.join(logs, 'install.log')})`);
-    const downloaded = Number(/downloaded (\d+)/.exec(install.stdout)?.[1] ?? NaN);
+    if (install.code !== 0) throw new Error(`pnpm install failed (${installLog})`);
+    const downloaded = Number(
+      /downloaded (\d+)/.exec(readFileSync(installLog, 'utf8'))?.[1] ?? NaN,
+    );
 
     // Everything from here runs with no way out.
     trap = await startEgressTrap();
@@ -176,17 +200,18 @@ async function main() {
     };
 
     console.log('[baseline] build, egress blocked');
-    const build = await run(pnpm, [...pnpmArgs, '--filter', '@portfolio/web', 'build'], {
+    const buildLog = path.join(logs, 'build.log');
+    const build = await run('build', pnpm, [...pnpmArgs, '--filter', '@portfolio/web', 'build'], {
       cwd: tree,
       env: blocked,
-      log: path.join(logs, 'build.log'),
+      log: buildLog,
     });
-    if (build.code !== 0) throw new Error(`The build failed (${path.join(logs, 'build.log')})`);
+    if (build.code !== 0) throw new Error(`The build failed (${buildLog})`);
 
     const port = await freePort();
     const serverLog = path.join(logs, 'server.log');
     const out = createWriteStream(serverLog);
-    server = spawn(
+    const server = groups.spawn(
       process.execPath,
       [
         path.join(tree, 'apps/web/node_modules/next/dist/bin/next'),
@@ -202,16 +227,20 @@ async function main() {
         stdio: ['ignore', 'pipe', 'pipe'],
       },
     );
+    if (server.child.pid === undefined) {
+      const { error } = await server.exited;
+      throw new Error(`next start did not start: ${error?.message}`);
+    }
     let ready = false;
-    for (const stream of [server.stdout, server.stderr]) {
-      stream.on('data', (chunk) => {
+    for (const stream of [server.child.stdout, server.child.stderr]) {
+      stream?.on('data', (chunk) => {
         out.write(chunk);
         if (String(chunk).includes('Ready in')) ready = true;
       });
     }
-    const serverSockets = watchSockets(server.pid);
-    const deadline = Date.now() + 60_000;
-    while (!ready && Date.now() < deadline && server.exitCode === null) {
+    const serverSockets = watchSockets(server.child.pid);
+    const deadline = Date.now() + LIMITS_MS.ready;
+    while (!ready && Date.now() < deadline && server.child.exitCode === null) {
       await new Promise((resolve) => setTimeout(resolve, 200));
     }
     if (!ready) throw new Error(`next start never got ready (${serverLog})`);
@@ -227,19 +256,16 @@ async function main() {
     console.log(`[baseline] next start on ${baseUrl}, egress blocked`);
 
     const traceArgs = ['--base-url', baseUrl, ...TRACE_ARGS];
+    const traceLog = path.join(logs, 'trace.log');
     const trace = await run(
+      'trace',
       process.execPath,
       [path.join(REPO_ROOT, 'tests', 'trace', 'run.mjs'), ...traceArgs],
-      {
-        cwd: REPO_ROOT,
-        env: process.env,
-        log: path.join(logs, 'trace.log'),
-      },
+      { cwd: REPO_ROOT, env: process.env, log: traceLog },
     );
-    process.stdout.write(readFileSync(path.join(logs, 'trace.log'), 'utf8'));
+    process.stdout.write(readFileSync(traceLog, 'utf8'));
 
-    server.kill('SIGTERM');
-    await once(server, 'exit').catch(() => {});
+    await stopGroup(server);
     await new Promise((resolve) => out.end(resolve));
     const held = serverSockets.stop();
     const evidence = {
@@ -253,7 +279,7 @@ async function main() {
       install: { downloaded: Number.isNaN(downloaded) ? null : downloaded },
       trace: { command: `pnpm test:trace ${traceArgs.join(' ')}`, exit: trace.code },
       trap: trap.attempts(),
-      offlineFetch: refusals(path.join(logs, 'build.log'), serverLog),
+      offlineFetch: refusals(buildLog, serverLog),
       sockets: {
         build: summary(build.sockets),
         server: summary(held),
