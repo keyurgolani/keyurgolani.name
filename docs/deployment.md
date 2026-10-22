@@ -190,7 +190,7 @@ The server reads the hash from the file `PORTFOLIO_AUTH_PASSWORD_HASH_FILE` name
 
 ### The data directory
 
-`owner` keeps its sessions, its preview grants, and its audit log in `PORTFOLIO_DATA_DIR`, the `portfolio-data` volume at `/var/lib/portfolio` in `compose.owner.yml`. At startup it creates `ephemeral/auth/sessions/` and `audit/` there with mode `0700`, and checks that it can write, sync, and rename a file, the way it writes session records. It refuses to start when the variable is unset, names no directory, or names one the server's user (uid 1001) can't reach or write. It makes `ephemeral/preview/` the same way the first time Studio opens a preview. Run one server per data directory.
+`owner` keeps its sessions, its preview grants, and its audit log in `PORTFOLIO_DATA_DIR`, the `portfolio-data` volume at `/var/lib/portfolio` in `compose.owner.yml`. At startup it creates `ephemeral/auth/sessions/` and `audit/` there with mode `0700`, and checks that it can write, sync, and rename a file, the way it writes session records. It refuses to start when the variable is unset, names no directory, or names one the server's user (uid 1001) can't reach or write. It makes `ephemeral/preview/` the same way the first time Studio opens a preview. Run one server per data directory: the running one holds `publication/server.json`, and lets it go as it stops. Under `pnpm dev`, an unset `PORTFOLIO_DATA_DIR` is `.data/` at the workspace root, which git and Docker ignore.
 
 `ephemeral/` holds sessions, auth state, and preview grants only, and never belongs in a backup. A restore that brings it back also brings back sessions revoked since the backup was taken, so run [`revoke-sessions`](#revoking-sessions) after any restore of the volume.
 
