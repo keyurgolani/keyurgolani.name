@@ -838,6 +838,11 @@
     }
   }
 
+  /* A hidden part stays hidden, whatever display its slot's rules give it. */
+  [data-ui-slot][hidden]:not([hidden='until-found']) {
+    display: none;
+  }
+
   /* Focus is an outline in the language's geometry and the scheme's color. */
   [data-appearance-boundary] :focus-visible {
     outline: var(--ui-focus-width) var(--ui-focus-style) var(--color-focus);

@@ -18,7 +18,7 @@
 // If that fails or takes over ten seconds, nothing changes and Retry
 // reloads the page. What happens goes to a polite live region.
 
-import { useMemo, useRef, useState, useTransition } from 'react';
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { partId } from '../ids';
 import { Action } from '../primitives/action';
 import { Radio } from '../primitives/form';
@@ -71,6 +71,27 @@ function applied(model: VisitorAppearanceModel): Record<string, string> {
   return Object.fromEntries(model.controls.map((control) => [control.name, control.value]));
 }
 
+/** What the form holds now, by field name, without the return path. */
+function formValues(form: HTMLFormElement): Record<string, string> {
+  const values: Record<string, string> = {};
+  for (const [name, value] of new FormData(form)) {
+    if (name !== 'return' && typeof value === 'string') values[name] = value;
+  }
+  return values;
+}
+
+/**
+ * Puts each control back to `values` in place, so focus stays where the
+ * visitor left it. The controls stay uncontrolled, as the server rendered
+ * them, so hydration never turns one into a controlled input.
+ */
+function restore(form: HTMLFormElement, values: Readonly<Record<string, string>>) {
+  for (const [name, value] of Object.entries(values)) {
+    const field = form.elements.namedItem(name);
+    if (field && 'value' in field) (field as { value: string }).value = value;
+  }
+}
+
 export function VisitorAppearance({
   model,
   returnTo,
@@ -88,15 +109,12 @@ export function VisitorAppearance({
   const [saving, setSaving] = useState(false);
   const [pending, startTransition] = useTransition();
   const current = useRef<AbortController | null>(null);
+  const form = useRef<HTMLFormElement>(null);
   const initial = useMemo(() => applied(model), [model]);
-  // What the form shows. It starts at what's applied, and goes back to it when a save fails.
-  const [values, setValues] = useState(initial);
-  const [shown, setShown] = useState(initial);
-  if (shown !== initial) {
-    // The page rendered a new selection: show what's applied now.
-    setShown(initial);
-    setValues(initial);
-  }
+  // The page rendered a selection: the form shows what's applied now.
+  useEffect(() => {
+    if (form.current) restore(form.current, initial);
+  }, [initial]);
 
   if (model.controls.length === 0) return null;
 
@@ -115,18 +133,17 @@ export function VisitorAppearance({
       setStatus({ kind: 'saved' });
       startTransition(() => refresh?.());
     } else {
-      setValues(initial);
+      if (form.current) restore(form.current, initial);
       setStatus({ kind: 'failed', timedOut: outcome === 'timed-out' });
     }
   };
 
   const change = (control: VisitorAxisControl, value: string) => {
-    const next = { ...values, [control.name]: value };
-    setValues(next);
+    if (!form.current) return;
     const stylesheet = control.groups
       .flatMap((group) => group.choices)
       .find((choice) => choice.value === value)?.stylesheet;
-    void run(next, stylesheet ? [stylesheet] : []);
+    void run(formValues(form.current), stylesheet ? [stylesheet] : []);
   };
 
   const text =
@@ -144,6 +161,7 @@ export function VisitorAppearance({
     <div data-ui-slot="appearance-control" lang={lang}>
       <Disclosure summary="Appearance" id={id}>
         <form
+          ref={form}
           data-ui-slot="appearance-control.form"
           method="post"
           action={action}
@@ -152,7 +170,7 @@ export function VisitorAppearance({
             live
               ? (event) => {
                   event.preventDefault();
-                  void run(values, []);
+                  void run(formValues(event.currentTarget), []);
                 }
               : undefined
           }
@@ -167,12 +185,8 @@ export function VisitorAppearance({
                 name={control.name}
                 description={control.note}
                 options={control.groups.flatMap((group) => group.choices)}
-                {...(live
-                  ? {
-                      value: values[control.name],
-                      onChange: (value: string) => change(control, value),
-                    }
-                  : { defaultValue: control.value })}
+                defaultValue={control.value}
+                onChange={live ? (value) => change(control, value) : undefined}
               />
             ) : (
               <Select
@@ -184,12 +198,8 @@ export function VisitorAppearance({
                   label: group.tier ? group.label : undefined,
                   choices: group.choices,
                 }))}
-                {...(live
-                  ? {
-                      value: values[control.name],
-                      onChange: (value: string) => change(control, value),
-                    }
-                  : { defaultValue: control.value })}
+                defaultValue={control.value}
+                onChange={live ? (value) => change(control, value) : undefined}
               />
             ),
           )}

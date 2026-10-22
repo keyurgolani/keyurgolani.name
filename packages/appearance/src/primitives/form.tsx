@@ -170,8 +170,9 @@ export interface RadioProps {
   readonly name: string;
   readonly options: readonly RadioOption[];
   readonly defaultValue?: string;
-  /** With onChange, from a client component. */
+  /** With onChange, controlled, from a client component. */
   readonly value?: string;
+  /** Called with the radio a visitor picks, from a client component, controlled or not. */
   readonly onChange?: (value: string) => void;
   readonly description?: ReactNode;
   readonly required?: boolean;
@@ -223,13 +224,12 @@ export function Radio({
                 required={required || undefined}
                 disabled={option.unavailable ? true : undefined}
                 aria-describedby={option.unavailable ? reasonId : undefined}
-                {...(controlled
-                  ? {
-                      checked: selected,
-                      onChange: (event: ChangeEvent<HTMLInputElement>) =>
-                        onChange(event.currentTarget.value),
-                    }
-                  : { defaultChecked: selected })}
+                {...(controlled ? { checked: selected } : { defaultChecked: selected })}
+                onChange={
+                  onChange
+                    ? (event: ChangeEvent<HTMLInputElement>) => onChange(event.currentTarget.value)
+                    : undefined
+                }
               />
               {option.label}
             </label>
