@@ -1,0 +1,303 @@
+// The six modes every composition passes (#5, Slice 6), and the checks they
+// share. Every mode: one h1 and one main, the skip link moves focus to main,
+// one visitor-control slot, nothing wider than the window, every internal
+// link resolves, each section's data-renderer matches the manifest's
+// renderedKinds, and no console error. Desktop and mobile take a screenshot.
+// Without JavaScript, in print, and with its enhancements failing, the page
+// stays readable: the h1, the navigation, and each visible section's heading
+// have a box, opacity, and visibility. Print also has nothing fixed or
+// sticky. Under reduced motion nothing runs once the page settles. A failed
+// enhancement runs twice: with every script chunk blocked, and with the
+// kit's throw switch on.
+import {
+  expect,
+  type APIRequestContext,
+  type BrowserContext,
+  type Page,
+  type TestInfo,
+} from '@playwright/test';
+import { runningAnimations } from '../harness/motion';
+import { COMPARE_SCREENSHOTS, firstParty, type RegisteredVariant } from './target';
+
+export type ModeName =
+  'desktop' | 'mobile' | 'no-javascript' | 'print' | 'failed-enhancement' | 'reduced-motion';
+
+export interface Mode {
+  readonly name: ModeName;
+  /** Context options the mode's tests run with. */
+  readonly context: {
+    readonly viewport: { readonly width: number; readonly height: number };
+    readonly isMobile?: boolean;
+    readonly hasTouch?: boolean;
+    readonly javaScriptEnabled?: boolean;
+    readonly reducedMotion?: 'reduce' | 'no-preference';
+  };
+}
+
+const DESKTOP = { width: 1440, height: 900 };
+
+export const MODES: readonly Mode[] = [
+  { name: 'desktop', context: { viewport: DESKTOP } },
+  {
+    name: 'mobile',
+    context: { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true },
+  },
+  { name: 'no-javascript', context: { viewport: DESKTOP, javaScriptEnabled: false } },
+  { name: 'print', context: { viewport: DESKTOP } },
+  { name: 'failed-enhancement', context: { viewport: DESKTOP } },
+  { name: 'reduced-motion', context: { viewport: DESKTOP, reducedMotion: 'reduce' } },
+];
+
+/** The app's script chunks, which the first failed-enhancement run blocks. */
+const CHUNKS = '**/_next/static/chunks/**';
+
+/** How a failed-enhancement run fails them. */
+type FailedRun = 'blocked-chunks' | 'throw-switch';
+
+/** What the kit throws for each enhancement while its throw switch is on. */
+const THROW_SWITCH_ERROR = 'globalThis.__portfolioFailEnhancements is set';
+
+/**
+ * The page's console errors, read when called: every one but a resource
+ * that failed on purpose, which `expected` names, or that the page never
+ * got, such as what the harness blocks outside the app, and, with
+ * `thrown`, the error the kit's throw switch makes each enhancement throw,
+ * which React reports as its boundary catches it.
+ */
+function consoleErrors(
+  page: Page,
+  expected: (url: string) => boolean,
+  thrown = false,
+): () => string[] {
+  const failed = new Set<string>();
+  const seen: { text: string; url: string }[] = [];
+  page.on('requestfailed', (request) => failed.add(request.url()));
+  page.on('console', (message) => {
+    if (message.type() === 'error')
+      seen.push({ text: message.text(), url: message.location().url });
+  });
+  page.on('pageerror', (error) => seen.push({ text: `${error.name}: ${error.message}`, url: '' }));
+  return () =>
+    seen
+      .filter(
+        ({ text, url }) =>
+          !(text.startsWith('Failed to load resource') && (failed.has(url) || expected(url))) &&
+          !(thrown && text.includes(THROW_SWITCH_ERROR)),
+      )
+      .map(({ text, url }) => (url ? `${text} (${url})` : text));
+}
+
+/** The page's settled state: loaded, its fonts in, and two frames drawn. */
+async function settle(page: Page, javaScript: boolean): Promise<void> {
+  await page.waitForLoadState('load');
+  if (!javaScript) return;
+  await page.evaluate(async () => {
+    await document.fonts.ready;
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  });
+}
+
+/** Links already checked, by URL, so each mode doesn't fetch them again. */
+const resolved = new Map<string, number>();
+
+/** Every check each mode makes. */
+export async function expectEveryMode(
+  page: Page,
+  request: APIRequestContext,
+  variant: RegisteredVariant,
+  errors: () => string[],
+): Promise<void> {
+  await expect(page.locator('h1'), 'one h1').toHaveCount(1);
+  await expect(page.locator('main'), 'one main').toHaveCount(1);
+  await expect(page.locator('[data-visitor-control-slot]'), 'one visitor-control slot').toHaveCount(
+    1,
+  );
+
+  // The skip link comes first, and moves focus to the composition's main.
+  await page.keyboard.press('Tab');
+  await expect(page.getByRole('link', { name: 'Skip to content' })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('main')).toBeFocused();
+
+  // Nothing is wider than the window, so the page never scrolls sideways.
+  const width = await page
+    .locator('html')
+    .evaluate((html) => ({ scroll: html.scrollWidth, client: html.clientWidth }));
+  expect(width.scroll, 'the page is no wider than the window').toBeLessThanOrEqual(width.client);
+
+  // Each section is bespoke exactly when the manifest renders its kind itself.
+  const sections = await page
+    .locator('[data-renderer]')
+    .evaluateAll((elements) =>
+      elements.map((element) => [
+        element.getAttribute('data-kind') ?? '',
+        element.getAttribute('data-renderer') ?? '',
+      ]),
+    );
+  expect(sections.length, 'sections with data-renderer').toBeGreaterThan(0);
+  const rendered: readonly string[] = variant.manifest.renderedKinds;
+  for (const [kind, renderer] of sections) {
+    expect(renderer, kind).toBe(rendered.includes(kind!) ? 'bespoke' : 'shared');
+  }
+
+  // Every internal link resolves: a fragment to an element on the page, a
+  // path to a page that answers.
+  const here = new URL(page.url());
+  const hrefs = await page
+    .locator('a[href]')
+    .evaluateAll((anchors) => anchors.map((anchor) => (anchor as HTMLAnchorElement).href));
+  for (const href of new Set(hrefs)) {
+    const url = new URL(href);
+    if (url.origin !== here.origin) continue;
+    if (url.hash && url.pathname === here.pathname && url.search === here.search) {
+      const id = decodeURIComponent(url.hash.slice(1));
+      await expect(page.locator(`[id="${id.replaceAll('"', '\\"')}"]`), href).toHaveCount(1);
+      continue;
+    }
+    const target = `${url.pathname}${url.search}`;
+    let status = resolved.get(`${url.origin}${target}`);
+    if (status === undefined) {
+      status = (await request.get(target)).status();
+      resolved.set(`${url.origin}${target}`, status);
+    }
+    expect(status, `${href} answers`).toBe(200);
+  }
+
+  expect(errors(), 'console errors').toEqual([]);
+}
+
+/**
+ * The h1, the navigation, and each visible section's heading have a box,
+ * opacity, and visibility, so the page reads without its scripts, on paper,
+ * and with its enhancements gone.
+ */
+export async function expectReadable(page: Page): Promise<void> {
+  const unreadable = await page.evaluate(() => {
+    const opacity = (element: Element | null): number => {
+      let value = 1;
+      for (let node = element; node; node = node.parentElement) {
+        value *= Number(getComputedStyle(node).opacity);
+      }
+      return value;
+    };
+    const targets = [
+      ...document.querySelectorAll('h1, nav'),
+      ...[...document.querySelectorAll('[data-section-id]')].flatMap((section) => {
+        const heading = section.querySelector('h1, h2, h3, h4, h5, h6');
+        return heading ? [heading] : [];
+      }),
+    ];
+    return targets.flatMap((element) => {
+      const box = element.getBoundingClientRect();
+      const { visibility } = getComputedStyle(element);
+      const problems = [
+        box.width > 0 && box.height > 0 ? null : 'no box',
+        opacity(element) > 0 ? null : 'no opacity',
+        visibility === 'visible' ? null : `visibility ${visibility}`,
+      ].filter((problem) => problem !== null);
+      const name = `${element.tagName.toLowerCase()} "${(element.textContent ?? '').trim().slice(0, 40)}"`;
+      return problems.length > 0 ? [`${name}: ${problems.join(', ')}`] : [];
+    });
+  });
+  expect(unreadable, 'unreadable headings and navigation').toEqual([]);
+}
+
+/** Nothing fixed or sticky in print, which would repeat on every page or cover the text. */
+export async function expectNothingFixed(page: Page): Promise<void> {
+  const pinned = await page.evaluate(() =>
+    [...document.querySelectorAll('body *')].flatMap((element) => {
+      const { position } = getComputedStyle(element);
+      return position === 'fixed' || position === 'sticky'
+        ? [`${[element.tagName.toLowerCase(), ...element.classList].join('.')}: ${position}`]
+        : [];
+    }),
+  );
+  expect(pinned, 'fixed or sticky in print').toEqual([]);
+}
+
+/** Nothing runs once the page has settled under reduced motion. */
+export async function expectStill(page: Page): Promise<void> {
+  await page.waitForTimeout(500);
+  expect(await runningAnimations(page), 'running animations').toEqual([]);
+}
+
+/**
+ * The page's screenshot, attached to the report, and compared against its
+ * baseline for the platform's own variants in the pinned image.
+ */
+async function screenshot(
+  page: Page,
+  testInfo: TestInfo,
+  variant: RegisteredVariant,
+  name: string,
+): Promise<void> {
+  const options = { animations: 'disabled', caret: 'hide' } as const;
+  await testInfo.attach(`${name}.png`, {
+    body: await page.screenshot(options),
+    contentType: 'image/png',
+  });
+  if (COMPARE_SCREENSHOTS && firstParty(variant)) {
+    await expect(page).toHaveScreenshot(`${name}.png`, options);
+  }
+}
+
+export interface ModeCheck {
+  readonly mode: ModeName;
+  readonly page: Page;
+  readonly context: BrowserContext;
+  readonly request: APIRequestContext;
+  readonly variant: RegisteredVariant;
+  readonly testInfo: TestInfo;
+  /** Loads the page under test. */
+  readonly go: (page: Page) => Promise<unknown>;
+  /** The screenshot's name, for desktop and mobile. */
+  readonly shot: string;
+  /** A resource the page may fail to load without a console error counting, such as a missing image. */
+  readonly expectedFailure?: (url: string) => boolean;
+}
+
+/** Every check `mode` makes, on the page `go` loads: twice for a failed enhancement. */
+export async function checkMode(check: ModeCheck): Promise<void> {
+  if (check.mode !== 'failed-enhancement') {
+    await checkPage(check, check.page);
+    return;
+  }
+  await checkPage(check, check.page, 'blocked-chunks');
+  await checkPage(check, await check.context.newPage(), 'throw-switch');
+}
+
+async function checkPage(check: ModeCheck, page: Page, run?: FailedRun): Promise<void> {
+  const { mode, context } = check;
+  const errors = consoleErrors(
+    page,
+    check.expectedFailure ?? (() => false),
+    run === 'throw-switch',
+  );
+  if (mode === 'print') await page.emulateMedia({ media: 'print' });
+  if (run === 'blocked-chunks') {
+    // Registered after the harness's route, so it answers the app's own chunks.
+    await context.route(CHUNKS, (route) => route.abort('failed'));
+  }
+  if (run === 'throw-switch') {
+    await page.addInitScript(() => {
+      (globalThis as { __portfolioFailEnhancements?: boolean }).__portfolioFailEnhancements = true;
+    });
+  }
+  try {
+    await check.go(page);
+    await settle(page, mode !== 'no-javascript' && run !== 'blocked-chunks');
+    // Before the keyboard checks, which focus main and scroll to it: the
+    // page as a visitor first sees it.
+    if (mode === 'desktop' || mode === 'mobile') {
+      await screenshot(page, check.testInfo, check.variant, check.shot);
+    }
+    await expectEveryMode(page, check.request, check.variant, errors);
+    if (mode === 'no-javascript' || mode === 'print' || mode === 'failed-enhancement') {
+      await expectReadable(page);
+    }
+    if (mode === 'print') await expectNothingFixed(page);
+    if (mode === 'reduced-motion') await expectStill(page);
+  } finally {
+    if (run === 'blocked-chunks') await context.unroute(CHUNKS);
+  }
+}

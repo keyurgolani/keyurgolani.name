@@ -52,6 +52,13 @@ export interface AppOptions {
    * variants, in place of this checkout's. Only the route specs build one.
    */
   fixtureHost?: boolean;
+  /**
+   * The apps/web whose build runs, in place of this checkout's: the variant
+   * specs' target, such as test:external-variant's worktree.
+   */
+  web?: string;
+  /** Files added to the server copy's public/, by path, as an owner adds the assets a portfolio names. */
+  publicFiles?: Record<string, string | Uint8Array>;
 }
 
 export interface App {
@@ -93,9 +100,9 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
         workerInfo.project.outputDir,
         `app-server-worker-${workerInfo.workerIndex}.log`,
       );
-      const { fixtureHost, ...options } = appOptions;
+      const { fixtureHost, web: built, ...options } = appOptions;
       // The global setup that built it ran before this worker started.
-      const web = fixtureHost ? fixtureHostWeb() : undefined;
+      const web = built ?? (fixtureHost ? fixtureHostWeb() : undefined);
       const app = await startApp({ ...options, web, logFile });
       await provide(app);
       await app.stop();
