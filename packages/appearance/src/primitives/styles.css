@@ -842,7 +842,12 @@
     display: none;
   }
 
-  /* Focus is an outline in the language's geometry and the scheme's color. */
+  /*
+   * Focus is an outline in the language's geometry and the scheme's color,
+   * on whatever takes focus in a boundary, such as a variant's own links. The
+   * platform's accessibility layer draws it again on every slot part, where
+   * no language stylesheet can undo it.
+   */
   [data-appearance-boundary] :focus-visible {
     outline: var(--ui-focus-width) var(--ui-focus-style) var(--color-focus);
     outline-offset: var(--ui-focus-offset);

@@ -15,6 +15,10 @@
 //   more): the signature fill is solid text-primary and emphasis-glow none.
 // - Print: opaque, and still. Each scheme's stylesheet prints its light set
 //   or its light high-contrast set, since only it has the values.
+// - Focus (Slice 3): every focusable [data-ui-slot] part draws its ring here,
+//   from the focus tokens and --color-focus, so no language stylesheet can
+//   remove or hide it. A language shapes the ring through --ui-focus-*
+//   alone, and forced colors map its color to Highlight.
 //
 // The shared primitives' rules (Slice 3, ../primitives/styles.css) join the
 // reset and utilities layers here, so they read the same tokens and every
@@ -108,6 +112,12 @@ const FORCED_COLORS: Readonly<Record<ColorRole, string>> = {
 };
 
 const SOLID_TEXT = 'linear-gradient(var(--color-text-primary), var(--color-text-primary))';
+
+/** The focus ring: the language's focus geometry, in the scheme's focus color. */
+const FOCUS_RING = {
+  outline: 'var(--ui-focus-width) var(--ui-focus-style) var(--color-focus)',
+  'outline-offset': 'var(--ui-focus-offset)',
+};
 
 /** Reduced motion: feedback stays, movement stops, entrances and exits fade. */
 const REDUCED = {
@@ -207,6 +217,7 @@ export function platformStylesheet(): string {
     Object.entries(FORCED_COLORS).map(([role, color]) => [`--color-${role}`, color]),
   );
   const accessibility = [
+    block([`${BOUNDARY} [data-ui-slot]:focus-visible`], FOCUS_RING),
     wrap('@media (prefers-reduced-motion: reduce)', block([BOUNDARY], REDUCED)),
     block([`${BOUNDARY}[data-motion="reduced"]`], REDUCED),
     block([`${BOUNDARY}[data-motion="static"]`], STATIC),

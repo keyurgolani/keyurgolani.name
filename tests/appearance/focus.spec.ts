@@ -1,11 +1,17 @@
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import type { Locator, Page } from '@playwright/test';
+import type { DesignLanguageManifest } from '../../packages/appearance/src/manifests';
+import { compilePack } from '../../packages/appearance/src/node/compile';
 import { expect, test } from '../harness/fixtures';
 import { DOCUMENT, FIXTURE_APP, openFixtures, ROUTE } from './fixture-page';
 
 // Focus and touch (#19, Slice 3): focus is an outline in the scheme's focus
-// color, forced colors keep it, every control keeps its touch target, a
-// variant's sticky chrome pushes what focus and fragments bring into view
-// below it, and reduced motion stops what moves.
+// color, which no language stylesheet can take away and forced colors keep,
+// every control keeps its touch target, a variant's sticky chrome pushes
+// what focus and fragments bring into view below it, and reduced motion
+// stops what moves.
 
 test.use({ appOptions: FIXTURE_APP });
 
@@ -70,6 +76,67 @@ test(
       expect(drawn.color, kind).toBe(drawn.focus);
       expect(drawn.shadowOnly, kind).toBe(false);
     }
+  },
+);
+
+/**
+ * Platform Neutral, the page's language, with a stylesheet that turns the
+ * focus outline off and dots a focused part's border, compiled as registry
+ * generation compiles a language: its rules in the language layer, inside
+ * the language's @scope.
+ */
+function outlineHidingLanguage(): string {
+  const manifest = JSON.parse(
+    readFileSync(
+      new URL(
+        '../../packages/appearance-languages/packs/platform-neutral/manifest.json',
+        import.meta.url,
+      ),
+      'utf8',
+    ),
+  ) as DesignLanguageManifest;
+  const dir = mkdtempSync(path.join(tmpdir(), 'appearance-focus-'));
+  try {
+    writeFileSync(
+      path.join(dir, 'styles.css'),
+      '[data-ui-slot]:focus-visible {\n  outline-style: none;\n  border-style: dotted;\n}\n',
+    );
+    const compiled = compilePack({
+      kind: 'design-language',
+      manifest: { ...manifest, stylesheet: './styles.css' },
+      dir,
+    });
+    if (!compiled.ok || !compiled.pack.stylesheet) {
+      throw new Error(`The language didn't compile: ${JSON.stringify(compiled)}`);
+    }
+    return new TextDecoder().decode(compiled.pack.stylesheet.bytes);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+test(
+  'a language stylesheet that turns the outline off on focus still gets the ring, which the accessibility layer draws',
+  { tag: '@interaction', annotation: [ROUTE] },
+  async ({ page }) => {
+    await openFixtures(page);
+    const css = outlineHidingLanguage();
+    expect(css).toContain('@layer language {');
+    expect(css).toContain('outline-style: none;');
+    await page.addStyleTag({ content: css });
+    for (const [kind, control] of controls(page)) {
+      await keyboardFocus(page, control);
+      const drawn = await outline(control);
+      expect(drawn.style, kind).not.toBe('none');
+      expect(drawn.width, kind).toBeGreaterThan(0);
+      expect(drawn.color, kind).toBe(drawn.focus);
+    }
+    // The language's rules apply all the same: a focused action's border is dotted.
+    const [, action] = controls(page)[0]!;
+    await keyboardFocus(page, action);
+    expect(await action.evaluate((element) => getComputedStyle(element).borderTopStyle)).toBe(
+      'dotted',
+    );
   },
 );
 

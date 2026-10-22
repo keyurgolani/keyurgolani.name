@@ -194,6 +194,37 @@ test('every token a language may move, blur, or fade a part through is one the a
   }
 });
 
+test('every focusable part draws its focus ring in the accessibility layer, past anything a language sets (Slice 3)', () => {
+  const ring = declarations(
+    '  [data-appearance-boundary] [data-ui-slot]:focus-visible',
+    '@layer accessibility',
+  );
+  assert.deepEqual(Object.fromEntries(ring), {
+    outline: 'var(--ui-focus-width) var(--ui-focus-style) var(--color-focus)',
+    'outline-offset': 'var(--ui-focus-offset)',
+  });
+  // A language may set the outline a focused part draws, even none, and the
+  // compiler puts its rules in the language layer, which comes before the
+  // accessibility layer: the ring wins, and the language shapes it only
+  // through the focus tokens. tests/appearance renders the same case.
+  for (const hiding of [
+    '[data-ui-slot]:focus-visible { outline-style: none; }',
+    "[data-ui-slot='action']:focus-visible { outline: none; }",
+  ]) {
+    assert.ok(readLanguageStylesheet(hiding).ok, hiding);
+  }
+  const order = LAYER_ORDER.replace(/^@layer |;$/g, '').split(', ');
+  assert.ok(order.indexOf('language') < order.indexOf('accessibility'));
+  assert.equal(order.at(-1), 'accessibility');
+  // Forced colors give the ring the system highlight.
+  assert.equal(
+    declarations('    [data-appearance-boundary]', '@media (forced-colors: active)').get(
+      '--color-focus',
+    ),
+    'Highlight',
+  );
+});
+
 test('print is opaque and still', () => {
   const print = declarations('    [data-appearance-boundary]', '@media print');
   assert.equal(print.get('--ui-surface-opacity'), '100%');
