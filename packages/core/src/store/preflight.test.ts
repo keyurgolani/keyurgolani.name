@@ -1,5 +1,13 @@
 import assert from 'node:assert/strict';
-import { chmodSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { nodeFs, type FsPort } from './fs-port';
@@ -65,7 +73,7 @@ test('a volume where rename fails is data_dir_rename_failed', async (t) => {
 test('a data directory inside the source mount, or holding it, is data_dir_in_source', async (t) => {
   const root = tempDir(t);
   const source = path.join(root, 'config');
-  mkdirSync(path.join(source, 'data'), { recursive: true });
+  mkdirSync(path.join(source, 'data'), { recursive: true, mode: 0o700 });
   assert.equal(
     await preflight({ dataDir: path.join(source, 'data'), sourceDir: source }),
     'data_dir_in_source',
@@ -73,8 +81,51 @@ test('a data directory inside the source mount, or holding it, is data_dir_in_so
   assert.equal(await preflight({ dataDir: root, sourceDir: source }), 'data_dir_in_source');
   assert.equal(await preflight({ dataDir: source, sourceDir: source }), 'data_dir_in_source');
   const apart = path.join(root, 'data');
-  mkdirSync(apart);
+  mkdirSync(apart, { mode: 0o700 });
   assert.equal(await preflight({ dataDir: apart, sourceDir: source }), null);
+});
+
+test("a data directory its group or anyone may write, or another user's, is data_dir_not_private", async (t) => {
+  const dataDir = tempDir(t);
+  for (const mode of [0o777, 0o770, 0o702]) {
+    chmodSync(dataDir, mode);
+    assert.equal(await preflight({ dataDir }), 'data_dir_not_private', mode.toString(8));
+  }
+  // Read access for others is the operator's call; writing is what's refused.
+  chmodSync(dataDir, 0o755);
+  assert.equal(await preflight({ dataDir }), null);
+  chmodSync(dataDir, 0o700);
+  const uid = process.getuid?.() ?? 0;
+  const someoneElses: FsPort = {
+    ...nodeFs,
+    async stat(target) {
+      const found = await nodeFs.stat(target);
+      return found && target === dataDir ? { ...found, uid: uid + 1 } : found;
+    },
+  };
+  assert.equal(await preflight({ dataDir, fs: someoneElses }), 'data_dir_not_private');
+  assert.equal(await preflight({ dataDir }), null);
+});
+
+test('a store directory that is a symbolic link is data_dir_linked, and nothing it points at changes', async (t) => {
+  const root = tempDir(t);
+  const outside = path.join(root, 'outside');
+  mkdirSync(outside, { mode: 0o755 });
+  for (const linked of ['drafts', 'revisions', 'publication', 'publication/events', 'assets']) {
+    const dataDir = path.join(root, linked.replaceAll('/', '-'));
+    mkdirSync(path.join(dataDir, path.dirname(linked)), { recursive: true, mode: 0o700 });
+    symlinkSync(outside, path.join(dataDir, linked));
+    assert.equal(await preflight({ dataDir }), 'data_dir_linked', linked);
+    // Not chmodded, and nothing made in it.
+    assert.equal(statSync(outside).mode & 0o777, 0o755, linked);
+    assert.deepEqual(readdirSync(outside), [], linked);
+  }
+  // The data directory itself may be a link, to the operator's volume.
+  const volume = path.join(root, 'volume');
+  mkdirSync(volume, { mode: 0o700 });
+  const mounted = path.join(root, 'mounted');
+  symlinkSync(volume, mounted);
+  assert.equal(await preflight({ dataDir: mounted }), null);
 });
 
 test('a store.json of another layout is store_layout_unsupported', async (t) => {

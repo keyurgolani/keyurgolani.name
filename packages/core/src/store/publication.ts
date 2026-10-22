@@ -590,16 +590,34 @@ export function filesystemPublicationService({
     return seqs;
   }
 
-  /** Removes what a crash left in `dir`: temporary files, all of them or those older than `olderThanMs`. */
+  /**
+   * Whether `dir`, and each directory between the data directory and it, is
+   * a directory itself, not a link to one. Repair never goes through a link.
+   */
+  async function realDirectory(dir: string): Promise<boolean> {
+    let current = paths.root;
+    for (const part of path.relative(paths.root, dir).split(path.sep)) {
+      if (part === '') continue;
+      current = path.join(current, part);
+      if ((await fs.lstat(current))?.isDirectory !== true) return false;
+    }
+    return true;
+  }
+
+  /**
+   * Removes what a crash left in `dir`: temporary files, all of them or those
+   * older than `olderThanMs`. Only regular files go, and nothing in a linked
+   * directory.
+   */
   async function removeTemps(dir: string, olderThanMs: number | null): Promise<number> {
+    if (!(await realDirectory(dir))) return 0;
     let removed = 0;
     for (const name of await fs.readdir(dir)) {
       if (!name.startsWith('.') || !name.endsWith('.tmp')) continue;
       const file = path.join(dir, name);
-      if (olderThanMs !== null) {
-        const found = await fs.stat(file);
-        if (!found || now() - found.mtimeMs < olderThanMs) continue;
-      }
+      const found = await fs.lstat(file);
+      if (!found?.isFile) continue;
+      if (olderThanMs !== null && now() - found.mtimeMs < olderThanMs) continue;
       await fs.remove(file, 'repair.temp.remove');
       removed += 1;
     }
@@ -814,8 +832,13 @@ export function filesystemPublicationService({
       return lock.withLock('repair', async () => {
         try {
           let stagingRemoved = 0;
-          for (const name of await fs.readdir(paths.revisions)) {
+          // A linked revisions/ isn't the store's: its .staging-* are someone else's.
+          const stagings = (await realDirectory(paths.revisions))
+            ? await fs.readdir(paths.revisions)
+            : [];
+          for (const name of stagings) {
             if (!name.startsWith('.staging-')) continue;
+            // A linked .staging-* goes as a link; what it points at stays.
             await fs.remove(path.join(paths.revisions, name), 'repair.staging.remove');
             stagingRemoved += 1;
           }
@@ -825,13 +848,14 @@ export function filesystemPublicationService({
           // claim's, and the AssetStore's are written without it, so only old
           // ones go.
           let tempsRemoved = await removeTemps(paths.drafts, null);
-          if (await fs.stat(paths.liveTemp)) {
+          if (await fs.lstat(paths.liveTemp)) {
             await fs.remove(paths.liveTemp, 'repair.temp.remove');
             tempsRemoved += 1;
           }
           tempsRemoved += await removeTemps(paths.publication, LOCK_STALE_MS);
           tempsRemoved += await removeTemps(paths.events, null);
-          for (const shard of await fs.readdir(paths.assets)) {
+          const shards = (await realDirectory(paths.assets)) ? await fs.readdir(paths.assets) : [];
+          for (const shard of shards) {
             if (/^[0-9a-f]{2}$/.test(shard)) {
               tempsRemoved += await removeTemps(path.join(paths.assets, shard), 24 * 60 * 60_000);
             }

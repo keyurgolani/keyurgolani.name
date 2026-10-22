@@ -6,11 +6,12 @@ import { nodeFs, type FsPort } from './fs-port';
 import { STORE_LAYOUT, storePaths, tempBeside, type StorePaths } from './layout';
 
 // The owner startup preflight for the data directory (#3, item 3): it's
-// there, the server's user can write it, it sits outside the source mount,
-// and a write, a sync, and a rename work in it. It makes the store's
-// directories at 0700 and writes store.json, the layout version, into a new
-// store. Startup logs the code it returns and stops; nothing here names the
-// path. Only local Linux volumes are supported.
+// there, only the server's user can write it, it sits outside the source
+// mount, no store directory in it is a symbolic link, and a write, a sync,
+// and a rename work in it. It makes the store's directories at 0700 and
+// writes store.json, the layout version, into a new store. Startup logs the
+// code it returns and stops; nothing here names the path. Only local Linux
+// volumes are supported.
 
 recordOwnerModule('core/store/preflight');
 
@@ -19,10 +20,14 @@ export type PreflightCode =
   | 'data_dir_missing'
   /** The server may not look in a directory above it, or a link loops. */
   | 'data_dir_unreachable'
+  /** Another user owns it, or its group or anyone may write it. */
+  | 'data_dir_not_private'
   | 'data_dir_not_writable'
   | 'data_dir_rename_failed'
   /** It's inside PORTFOLIO_SOURCE_DIR, or holds it. */
   | 'data_dir_in_source'
+  /** A store directory in it, such as drafts/, is a symbolic link. */
+  | 'data_dir_linked'
   /** store.json names a layout this build doesn't read. */
   | 'store_layout_unsupported';
 
@@ -65,6 +70,14 @@ export function storeDirectories(paths: StorePaths): readonly string[] {
   ];
 }
 
+/**
+ * The directories below the data directory a link could stand in for: each
+ * store directory, and assets/, which holds assets/sha256/.
+ */
+function linkableDirectories(paths: StorePaths): readonly string[] {
+  return [...storeDirectories(paths), path.dirname(paths.assets)];
+}
+
 /** Null when the data directory is ready, or what's wrong with it. */
 export async function preflight({
   dataDir,
@@ -72,8 +85,14 @@ export async function preflight({
   fs = nodeFs,
 }: PreflightOptions): Promise<PreflightCode | null> {
   try {
+    // The data directory itself may be a link, to the operator's volume.
     const found = await fs.stat(dataDir);
     if (!found?.isDirectory) return 'data_dir_missing';
+    // Whoever else can write it could swap a store directory for their own.
+    const uid = typeof process.getuid === 'function' ? process.getuid() : null;
+    if ((found.mode & 0o022) !== 0 || (uid !== null && found.uid !== uid)) {
+      return 'data_dir_not_private';
+    }
   } catch (error) {
     return errorCode(error) === 'ENOTDIR' ? 'data_dir_missing' : 'data_dir_unreachable';
   }
@@ -83,6 +102,13 @@ export async function preflight({
     if (within(source, data) || within(data, source)) return 'data_dir_in_source';
   }
   const paths = storePaths(dataDir);
+  try {
+    for (const dir of linkableDirectories(paths)) {
+      if ((await fs.lstat(dir))?.isSymbolicLink) return 'data_dir_linked';
+    }
+  } catch {
+    return 'data_dir_unreachable';
+  }
   try {
     for (const dir of storeDirectories(paths)) await fs.mkdir(dir, 'preflight.mkdir');
   } catch {

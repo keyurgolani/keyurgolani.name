@@ -43,7 +43,8 @@ export function filesystemAssetStore({
   async function stat(hash: Sha256): Promise<AssetStat | null> {
     if (!isSha256(hash)) return null;
     try {
-      const found = await fs.stat(paths.blob(hash));
+      // A blob is a regular file under its hash; a link there is none, and a put replaces it.
+      const found = await fs.lstat(paths.blob(hash));
       return found?.isFile ? { sha256: hash, size: found.size } : null;
     } catch (error) {
       throw storageError(error);

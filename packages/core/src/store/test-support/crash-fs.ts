@@ -31,6 +31,7 @@ function intercepted(inner: FsPort, before: (point: CrashPoint) => void): FsPort
     createReadStream: (file) => inner.createReadStream(file),
     readdir: (dir) => inner.readdir(dir),
     stat: (target) => inner.stat(target),
+    lstat: (target) => inner.lstat(target),
     async mkdir(dir, point) {
       before(point);
       return inner.mkdir(dir, point);
