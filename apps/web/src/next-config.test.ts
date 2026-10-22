@@ -13,7 +13,7 @@ const WEB = fileURLToPath(new URL('..', import.meta.url));
 
 /** productionBrowserSourceMaps, as next.config.ts sets it with PORTFOLIO_ANALYZE at `value`. */
 function sourceMapsWith(value: string | undefined): unknown {
-  const env: Record<string, string | undefined> = { ...process.env };
+  const env: NodeJS.ProcessEnv = { ...process.env };
   delete env.PORTFOLIO_ANALYZE;
   if (value !== undefined) env.PORTFOLIO_ANALYZE = value;
   const run = spawnSync(
