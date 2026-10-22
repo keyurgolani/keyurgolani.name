@@ -11,7 +11,8 @@ import { SECTION_ID_MAX_LENGTH } from '@portfolio/schema/ids';
  * `admin` and `variants` are #1's retired routes, which answer 404 in every
  * profile, so a view there could never be reached. `assets` is where the
  * Compose files mount an owner's assets into public/, whose files win over
- * any view.
+ * any view. `preview` and `preview-assets` are #7's preview documents and
+ * the media they load.
  */
 export const RESERVED_SEGMENTS: readonly string[] = [
   'studio',
@@ -20,6 +21,7 @@ export const RESERVED_SEGMENTS: readonly string[] = [
   'sample',
   'reference',
   'preview',
+  'preview-assets',
   'work',
   'admin',
   'variants',

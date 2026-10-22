@@ -182,12 +182,13 @@ export function patternOfRoutePath(routePath: string): string {
  * file in public/variants/ or else the app's 404 page answers it. The v1
  * screenshots that lived there moved to legacy/public/ with their variants
  * (#5), and the contract reserves each first segment, so no view can sit
- * here.
+ * here. The old /preview/[slug] is no longer one: /preview belongs to #7's
+ * preview routes, and a path under it that none of them serves answers as a
+ * path no route matches.
  */
 export const RETIRED_PATTERNS = [
   '/admin',
   '/variants',
-  '/preview/[slug]',
   '/api/portfolio',
   '/api/variant',
   '/api/customize',

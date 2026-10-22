@@ -139,13 +139,13 @@ module.exports = {
       comment:
         'proxy.ts runs before every request; it imports only the route table, the capability ' +
         'matrix behind it, the frozen config (#1, item 15), the body /api/ready answers ' +
-        "before startup (item 19), and for Studio (#2) its headers, the session cookie's name, " +
-        'and returnTo, none of which reads a session.',
+        "before startup (item 19), for Studio (#2) its headers, the session cookie's name, " +
+        'and returnTo, and for preview (#7) its headers, none of which reads a session.',
       from: { path: '^apps/web/src/proxy\\.ts$' },
       to: {
         pathNot: [
           '^apps/web/src/server/(capabilities|routes|config-store|ready-starting)\\.ts$',
-          '^apps/web/src/server/(studio-headers|session-cookie|return-to)\\.ts$',
+          '^apps/web/src/server/(studio-headers|session-cookie|return-to|preview-headers)\\.ts$',
           '^node_modules/(\\.pnpm/next@|next/)',
         ],
       },

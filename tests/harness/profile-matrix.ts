@@ -31,7 +31,7 @@ import {
 import { DEFAULT_SITE } from './app-server.mjs';
 import { expect, test, type App, type AppOptions } from './fixtures';
 import { VARIANTS } from './registry';
-import { headerProblems, isStudioPath } from './route-headers.mjs';
+import { headerProblems, isPreviewPath, isStudioPath } from './route-headers.mjs';
 import { concrete, scanTargets } from './scan-targets';
 
 // apps/web has no "type": "module", so its modules are CommonJS to Node and
@@ -111,6 +111,26 @@ const STUDIO_SPELLINGS = [
   '/studio/%73ign-in',
   '/studio%2Fsign-in',
   '/%73tudio%2Fsign-in',
+] as const;
+
+/**
+ * Preview paths in every spelling a request may use (#7): /preview and
+ * /preview-assets and below, with a query, in another case, percent-encoded,
+ * and with the slash encoded. No preview route serves any of them yet, so
+ * each answers every method as /no-such-page does, under the preview's
+ * headers in every profile.
+ */
+const PREVIEW_SPELLINGS = [
+  '/preview',
+  '/preview/editorial',
+  '/preview/g_7Hk-2/work/tide-tables?displayMode=dark',
+  '/preview/dev/fallback/complete',
+  '/preview-assets',
+  '/preview-assets/g_7Hk-2/asset/abc/large.webp',
+  '/PREVIEW/x',
+  '/Preview-Assets/x',
+  '/%70review/x',
+  '/preview%2Fx',
 ] as const;
 
 /**
@@ -227,19 +247,18 @@ const hasStudio = (profile: Profile) =>
   );
 
 /**
- * The headers its path gets (route-headers.mjs): the baseline ones, or
- * Studio's (#2) where the profile has Studio. No cookie, and noindex exactly
- * where the profile can't be indexed.
+ * The headers its path gets (route-headers.mjs): the baseline ones, Studio's
+ * (#2) where the profile has Studio, or the preview's (#7). No cookie, and
+ * noindex exactly where the profile can't be indexed, or noindex, nofollow
+ * on every preview path.
  */
 function expectProfileHeaders(profile: Profile, response: APIResponse, what: string) {
   const headers = response.headers();
-  expect(
-    headerProblems(new URL(response.url()).pathname, headers, { studio: hasStudio(profile) }),
-    what,
-  ).toEqual([]);
+  const { pathname } = new URL(response.url());
+  expect(headerProblems(pathname, headers, { studio: hasStudio(profile) }), what).toEqual([]);
   expect(headers['set-cookie'], `${what}: no cookie`).toBeUndefined();
   expect(headers['x-robots-tag'], `${what}: X-Robots-Tag`).toBe(
-    INDEXABLE[profile] ? undefined : 'noindex',
+    isPreviewPath(pathname) ? 'noindex, nofollow' : INDEXABLE[profile] ? undefined : 'noindex',
   );
 }
 
@@ -269,6 +288,22 @@ function withoutOwnPath(body: string, target: string): string {
     if (parts.length === 2) return parts.join('\\"c\\":"<path>"');
   }
   throw new Error(`Next's payload doesn't name ${target} once.`);
+}
+
+/**
+ * A page's body with its response's CSP nonce taken out, as a page with no
+ * CSP has none: the attribute on each script and stylesheet, and what Next's
+ * payload says of it, which is a JS string in a script, its quotes escaped.
+ */
+function withoutNonce(body: string, nonce: string | undefined): string {
+  if (!nonce) return body;
+  return body
+    .split(` nonce="${nonce}"`)
+    .join('')
+    .split(`,{\\"nonce\\":\\"${nonce}\\"}`)
+    .join('')
+    .split(`\\"nonce\\":\\"${nonce}\\"`)
+    .join('\\"nonce\\":\\"$undefined\\"');
 }
 
 /**
@@ -614,6 +649,104 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
         expect(posted.status(), `POST ${target}`).toBe(404);
         expect(posted.headers()['content-type'], `POST ${target}`).toMatch(/^text\/plain/);
         expectProfileHeaders(profile, posted, `POST ${target}`);
+      }
+    },
+  );
+
+  test(
+    'every preview path, in any spelling and to any method, answers as a path no route matches, under the preview headers and with no cookie read (#7)',
+    {
+      annotation: [
+        { type: 'route', description: '/preview' },
+        { type: 'route', description: '/preview-assets' },
+        annotation,
+      ],
+    },
+    async ({ request }) => {
+      // With a session cookie and a preference: proxy.ts drops both before
+      // Next routes the request, so the answer is the same without them.
+      const cookie = `__Host-studio_session=${'x'.repeat(43)}; theme=dark`;
+      // As a path no route matches: the same status, type, and page, but for
+      // the path Next's payload names, and the nonce the preview's scripts
+      // and styles carry.
+      const shape = async (response: APIResponse, target: string) => {
+        const text = await response.text();
+        const type = response.headers()['content-type'] ?? '';
+        const page = /^text\/html/.test(type) && text !== '';
+        const nonce = /'nonce-([A-Za-z0-9+/=]+)'/.exec(
+          response.headers()['content-security-policy'] ?? '',
+        )?.[1];
+        return {
+          status: response.status(),
+          type,
+          body: page ? withoutOwnPath(withoutNonce(text, nonce), target) : text,
+        };
+      };
+      for (const target of PREVIEW_SPELLINGS) {
+        const query = target.includes('?') ? target.slice(target.indexOf('?')) : '';
+        for (const method of EVERY_METHOD) {
+          const what = `${method} ${target}`;
+          const options = { method, maxRedirects: 0, headers: { cookie } };
+          const response = await request.fetch(target, options);
+          const unknown = await request.fetch(`/no-such-page${query}`, { method, maxRedirects: 0 });
+          expect(response.status(), what).toBe(404);
+          expectProfileHeaders(profile, response, what);
+          expect(await shape(response, target), what).toEqual(
+            await shape(unknown, `/no-such-page${query}`),
+          );
+        }
+      }
+    },
+  );
+
+  test(
+    'a build asset allows any origin, and every other method, spelling, or /_portfolio path there is the plain 404 (#7)',
+    {
+      annotation: [
+        { type: 'route', description: '/_next/static' },
+        { type: 'route', description: '/_portfolio' },
+        annotation,
+      ],
+    },
+    async ({ request }) => {
+      const home = await request.get('/', { maxRedirects: 0 });
+      expect(home.status()).toBe(200);
+      expectProfileHeaders(profile, home, 'GET /');
+      const assets = [
+        ...new Set(
+          [...(await home.text()).matchAll(/(?:src|href)="(\/_next\/static\/[^"?]+)/g)].map(
+            ([, asset]) => asset!,
+          ),
+        ),
+      ];
+      expect(assets.length, 'build assets on the home page').toBeGreaterThan(1);
+      for (const asset of assets) {
+        const response = await request.get(asset, { maxRedirects: 0 });
+        expect(response.status(), asset).toBe(200);
+        expect(response.headers()['access-control-allow-origin'], asset).toBe('*');
+        expectProfileHeaders(profile, response, asset);
+      }
+      // One that doesn't exist goes on to the views catch-all, whose 404 is
+      // the site's, under the prefix's headers, as before (#5). It holds
+      // only what an anonymous request for any unknown path gets, and no
+      // browser lets a wildcard origin read a credentialed answer.
+      const gone = await request.get('/_next/static/chunks/no-such-chunk.js', { maxRedirects: 0 });
+      expect(gone.status()).toBe(404);
+      expectProfileHeaders(profile, gone, 'a missing build asset');
+      // Any other method, a spelling Next doesn't serve from disk, and
+      // /_portfolio, which nothing serves yet, get the proxy's plain 404.
+      for (const [target, method] of [
+        [assets[0]!, 'POST'],
+        [assets[0]!, 'DELETE'],
+        [assets[0]!.replace('/_next/static/', '/_NEXT/STATIC/'), 'GET'],
+        ['/_next/static', 'GET'],
+        ['/_portfolio/generated/0123456789ab.css', 'GET'],
+        ['/_portfolio', 'GET'],
+      ] as const) {
+        const response = await request.fetch(target, { method, maxRedirects: 0 });
+        expect(response.status(), `${method} ${target}`).toBe(404);
+        expect(await response.text(), `${method} ${target}`).toBe('Not found.');
+        expectProfileHeaders(profile, response, `${method} ${target}`);
       }
     },
   );

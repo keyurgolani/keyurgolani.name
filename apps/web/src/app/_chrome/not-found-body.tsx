@@ -11,7 +11,8 @@ import { capabilityPolicy, type NavLink } from '~/server/policy';
 // renders inside the live site's presentation boundary (#5, Slice 3, item
 // 6), so #19's tokens reach it once they ship. It reads only the site's
 // presentation settings, and shows nothing about the request or the
-// documents.
+// documents. Its links don't prefetch: under a preview path the page has
+// the preview's CSP, whose connect-src lets no request through (#7).
 const HOME: readonly NavLink[] = [{ href: '/', label: 'Home' }];
 
 /** The live site document, or null before startup and while the catalog can't serve. */
@@ -37,7 +38,9 @@ export async function NotFoundBody() {
         <ul className="host-chrome__links">
           {links.map((link) => (
             <li key={link.href}>
-              <Link href={link.href}>{link.label}</Link>
+              <Link href={link.href} prefetch={false}>
+                {link.label}
+              </Link>
             </li>
           ))}
         </ul>
