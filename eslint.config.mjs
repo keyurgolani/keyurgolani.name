@@ -21,7 +21,6 @@ export default defineConfig([
     // Local-only trees (gitignored).
     'archive/**',
     'experiments/**',
-    '.variant-preview/**',
   ]),
   ...nextCoreWebVitals,
   ...nextTypeScript,
