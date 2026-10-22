@@ -71,7 +71,7 @@ function manifest(extra: Record<string, unknown> = {}) {
       description: 'A test composition for the kit.',
       contract: '2.0',
       schemas: { portfolio: { min: 2, max: 2 }, site: { min: 2, max: 2 } },
-      tokenContract: 0,
+      tokenContract: 1,
       compositionFamily: 'document',
       motionIntent: 'still',
       performanceTier: 'light',

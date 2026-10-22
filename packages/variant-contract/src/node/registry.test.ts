@@ -240,7 +240,7 @@ test("each manifest problem keeps the contract's code and pointer, located in it
   const cases: Array<[string, Record<string, unknown>, string, string, string?, string?]> = [
     ['acme-newer', { contract: '2.1' }, '/contract', 'manifest.contract-newer', '2.0', '2.1'],
     ['acme-major', { contract: '3.0' }, '/contract', 'manifest.contract-unsupported', '2.0', '3.0'],
-    ['acme-tokens', { tokenContract: 1 }, '/tokenContract', 'manifest.token-contract-mismatch'],
+    ['acme-tokens', { tokenContract: 0 }, '/tokenContract', 'manifest.token-contract-mismatch'],
     [
       'acme-schemas',
       { schemas: { portfolio: { min: 3, max: 3 }, site: { min: 2, max: 2 } } },

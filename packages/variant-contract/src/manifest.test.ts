@@ -268,7 +268,7 @@ const CASES: readonly Case[] = [
   },
   {
     name: 'another token contract',
-    change: (m) => (m.tokenContract = 1),
+    change: (m) => (m.tokenContract = 0),
     expect: [['manifest.token-contract-mismatch', '/tokenContract']],
   },
   {

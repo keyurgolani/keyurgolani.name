@@ -75,6 +75,10 @@ Things every variant needs but shouldn't reimplement:
 
 The variant contract, version 2.0: the manifest's schema and `validateManifest`; `buildRenderInput`, which builds the one `VariantRenderInput` a variant renders from, the same way on the server, in #7's preview frame, and in #9's browser render; controls and their migrations; route helpers; and `contractValidators`, the unit validators that check the site's variant selection and control values. Live, as startup runs them, an unregistered selection and a control problem only warn. `@portfolio/variant-contract/node` reads the host's dependencies into a registry, writes the generated modules, and audits variant source.
 
+### `@portfolio/appearance`
+
+The appearance axes (#19): token contract 1, the `--color-*`, `--ui-*`, and `--type-*` properties packs define; the strict manifests of design-language, color-scheme, and typography packs, with `validatePackManifest`; `createAppearanceRegistry`, over the generated metadata module; `resolveAppearance`, what a boundary renders for the published selection, the visitor's cookie or demo query, the profile, and the environment; `setAxis`, `serializeSelection`, and `parseSelection`; `resolveTokens`, typed values for server code; `validateAppearance`, the unit validator that takes over from the appearance catalog; and the appearance part of the `legacy.document` remediation. Its root entry is browser-safe. Nothing calls it yet: until #19's host cutover, startup checks display modes against the interim catalog in `apps/web/src/server/appearance-catalog.ts`.
+
 ### Variants
 
 A variant is an isolated package, a dependency of `@portfolio/web`:

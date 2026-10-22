@@ -76,6 +76,28 @@ module.exports = {
       },
     },
     {
+      name: 'appearance-root-stays-browser-safe',
+      severity: 'error',
+      comment:
+        "@portfolio/appearance's root entry runs in browsers too, in #7's preview frames and #9's " +
+        'Demo Studio, so it imports only zod, the browser-safe @portfolio/schema, and ' +
+        "@portfolio/variant-contract's root: no React, no Node, and no next/* (#19, Slice 1). It " +
+        'imports the token contract version from that root, which the rule above keeps from ' +
+        'importing back. Tests and their test support may import anything.',
+      from: {
+        path: '^packages/appearance/src/',
+        pathNot: ['\\.test\\.ts$', '^packages/appearance/src/test-support/'],
+      },
+      to: {
+        pathNot: [
+          '^packages/appearance/src/(?!test-support/)',
+          '^packages/variant-contract/src/(?!node/)',
+          '^packages/schema/src/(?!node\\.ts$|migrate/)',
+          '^node_modules/(\\.pnpm/zod@|zod/)',
+        ],
+      },
+    },
+    {
       name: 'owner-code-only-from-composition',
       severity: 'error',
       comment:
