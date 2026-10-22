@@ -2,15 +2,19 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { installTraceProbe } from './probe.mjs';
 
+/** Lets every promise continuation that's ready run, as a browser does between tasks. */
+const settle = () => new Promise((resolve) => setImmediate(resolve));
+
 /**
  * A window with a clock, frames, and timers the test drives by hand:
- * frame() runs every frame callback asked for so far, and advance(ms) runs
- * the timers that fall due, in order.
+ * frame() runs every frame callback asked for so far, advance(ms) runs the
+ * timers that fall due, in order, and run(ms) does both every 16 ms with
+ * continuations let run between, as a page sees time pass.
  */
 function fakeWindow() {
   let time = 0;
   let nextId = 1;
-  let frames = [];
+  let frames = new Map();
   const timers = new Map();
   const listeners = {};
   const animations = [];
@@ -23,7 +27,7 @@ function fakeWindow() {
         this.contexts = {};
       }
       getContext(type) {
-        if (type === 'none') return null;
+        if (type === 'none' || type === 'webgl2') return null;
         this.contexts[type] ??= { type };
         return this.contexts[type];
       }
@@ -41,11 +45,16 @@ function fakeWindow() {
     }
   }
   const scope = {
+    Error,
+    location: { href: 'http://127.0.0.1:4100/' },
     performance: { now: () => time },
     requestAnimationFrame(callback) {
       const id = nextId++;
-      frames.push({ id, callback });
+      frames.set(id, callback);
       return id;
+    },
+    cancelAnimationFrame(id) {
+      frames.delete(id);
     },
     setTimeout(callback, delay = 0, ...args) {
       const id = nextId++;
@@ -75,7 +84,7 @@ function fakeWindow() {
     PerformanceObserver: FakeObserver,
     WeakRef,
   };
-  return {
+  const fake = {
     scope,
     listeners,
     animations,
@@ -86,8 +95,8 @@ function fakeWindow() {
     frame(ms = 16) {
       time += ms;
       const due = frames;
-      frames = [];
-      for (const { callback } of due) callback(time);
+      frames = new Map();
+      for (const callback of due.values()) callback(time);
     },
     /** Moves the clock on by `ms`, running each timer as it falls due. */
     advance(ms) {
@@ -104,7 +113,17 @@ function fakeWindow() {
       }
       time = end;
     },
+    /** `ms` of a page's life: timers as they fall due, a frame every 16 ms, continuations between. */
+    async run(ms) {
+      for (let elapsed = 0; elapsed < ms; elapsed += 16) {
+        fake.advance(15);
+        await settle();
+        fake.frame(1);
+        await settle();
+      }
+    },
   };
+  return fake;
 }
 
 test('installs once, keeping the originals for the harness', () => {
@@ -120,84 +139,151 @@ test('installs once, keeping the originals for the harness', () => {
   fake.frame();
   assert.equal(ran, true);
   assert.equal(probe.read().frames.windowCallbacks, 0, "the harness's own frame doesn't count");
+  assert.equal(probe.read().url, 'http://127.0.0.1:4100/');
 });
 
-test('a frame loop is one chain that asks again, at its callbacks per second', () => {
+test('three frame loops of three shapes are three loops, each at its own rate', async () => {
+  const fake = fakeWindow();
+  const probe = installTraceProbe(fake.scope);
+  const raf = (callback) => fake.scope.requestAnimationFrame(callback);
+  let running = true;
+  // A callback that asks for the next frame.
+  const direct = () => {
+    if (running) raf(direct);
+  };
+  raf(direct);
+  // An await on a promise a frame resolves.
+  (async () => {
+    while (running) await new Promise((resolve) => raf(resolve));
+  })();
+  // A frame, then a timeout of 33 ms that asks for the next frame.
+  const bridged = () => {
+    if (running) fake.scope.setTimeout(() => raf(bridged), 33);
+  };
+  raf(bridged);
+  await fake.run(200);
+  probe.start();
+  await fake.run(2000);
+  const { frames, timers } = probe.read();
+  assert.equal(frames.loops.length, 3, JSON.stringify(frames.loops));
+  const rates = frames.loops.map((loop) => loop.perSecond).sort((a, b) => a - b);
+  assert.ok(rates[0] > 15 && rates[0] < 35, `the bridged loop runs about every 48 ms: ${rates}`);
+  assert.ok(rates[1] > 55 && rates[2] > 55, `the other two run every frame: ${rates}`);
+  for (const loop of frames.loops) {
+    assert.equal(loop.sustained, true);
+    assert.match(loop.site, /probe\.test\.mjs:\d+:\d+$/);
+  }
+  assert.equal(frames.transient.length, 0);
+  assert.equal(timers.timeouts.length, 1, 'the bridged loop also recurs as a timeout');
+  running = false;
+  await fake.run(100);
+  probe.start();
+  await fake.run(500);
+  assert.equal(probe.read().frames.loops.length, 0, 'a stopped loop is no loop in the next window');
+});
+
+test('a loop that stops in the first half of the window is transient, not a loop', async () => {
+  const fake = fakeWindow();
+  const probe = installTraceProbe(fake.scope);
+  let frames = 0;
+  const transition = () => {
+    frames += 1;
+    if (frames < 20) fake.scope.requestAnimationFrame(transition);
+  };
+  probe.start();
+  fake.scope.requestAnimationFrame(transition);
+  await fake.run(2000);
+  const read = probe.read();
+  assert.equal(read.frames.loops.length, 0);
+  assert.equal(read.frames.transient.length, 1);
+  assert.equal(read.frames.transient[0].callbacks, 19, 'the first frame came from another site');
+});
+
+test('one-off frames, and a frame asked for from a timer, are no frame loop', async () => {
+  const fake = fakeWindow();
+  const probe = installTraceProbe(fake.scope);
+  probe.start();
+  fake.scope.requestAnimationFrame(() => {});
+  fake.scope.requestAnimationFrame(() => {});
+  await fake.run(500);
+  const read = probe.read();
+  assert.equal(read.frames.loops.length + read.frames.transient.length, 0);
+  assert.equal(read.frames.windowCallbacks, 2);
+});
+
+test('frame callbacks count when they run, not when they are asked for', async () => {
+  const fake = fakeWindow();
+  const probe = installTraceProbe(fake.scope);
+  probe.start();
+  const kept = fake.scope.requestAnimationFrame(() => {});
+  const cancelled = fake.scope.requestAnimationFrame(() => {});
+  fake.scope.cancelAnimationFrame(cancelled);
+  assert.notEqual(kept, cancelled);
+  fake.frame();
+  const read = probe.read();
+  assert.equal(read.frames.requests, 2);
+  assert.equal(read.frames.windowRequests, 2);
+  assert.equal(read.frames.callbacks, 1);
+  assert.equal(read.frames.windowCallbacks, 1);
+});
+
+test('an await on a timeout, round after round, is one recurring timer', async () => {
   const fake = fakeWindow();
   const probe = installTraceProbe(fake.scope);
   let running = true;
-  const loop = () => {
-    if (running) fake.scope.requestAnimationFrame(loop);
-  };
-  fake.scope.requestAnimationFrame(loop);
-  fake.scope.requestAnimationFrame(() => {});
-  fake.frame();
-  fake.frame();
+  (async () => {
+    while (running) await new Promise((resolve) => fake.scope.setTimeout(resolve, 100));
+  })();
+  await fake.run(300);
   probe.start();
-  for (let i = 0; i < 10; i += 1) fake.frame(100);
-  const read = probe.read();
-  assert.equal(read.windowMs, 1000);
-  assert.equal(read.frames.windowCallbacks, 10);
-  assert.equal(read.frames.loops.length, 1);
-  assert.equal(read.frames.loops[0].callbacks, 10);
-  assert.equal(read.frames.loops[0].perSecond, 10);
-  assert.equal(typeof read.frames.loops[0].origin, 'string');
-  assert.equal(read.frames.callbacks, 13, 'every callback since install');
-
+  await fake.run(2000);
+  const { timers } = probe.read();
+  assert.equal(timers.timeouts.length, 1, JSON.stringify(timers.timeouts));
+  assert.ok(timers.timeouts[0].callbacks >= 18, `${timers.timeouts[0].callbacks} rounds`);
+  assert.equal(timers.timeouts[0].sustained, true);
+  assert.equal(timers.recurring, 1);
   running = false;
-  fake.frame();
-  probe.start();
-  fake.frame();
-  const stopped = probe.read();
-  assert.equal(stopped.frames.loops.length, 0, 'a stopped loop is no loop in the next window');
-  assert.equal(stopped.frames.windowCallbacks, 0);
 });
 
-test('one-off frames and a frame asked for from a timer are no loop', () => {
+test('a one-shot timeout never recurs, nor do timeouts that one site sets once each', async () => {
   const fake = fakeWindow();
   const probe = installTraceProbe(fake.scope);
   probe.start();
-  const tick = () => {
-    fake.scope.requestAnimationFrame(() => {});
-    fake.scope.setTimeout(tick, 100);
-  };
-  fake.scope.setTimeout(tick, 100);
-  for (let i = 0; i < 5; i += 1) {
-    fake.advance(100);
-    fake.frame(0);
-  }
-  const read = probe.read();
-  assert.equal(read.frames.loops.length, 0);
-  assert.equal(read.frames.windowCallbacks, 5);
-  assert.equal(
-    read.timers.timeoutChains.length,
-    1,
-    'the timeout that sets itself again is one chain',
-  );
-  assert.equal(read.timers.recurring, 1);
+  for (let i = 0; i < 3; i += 1) fake.scope.setTimeout(() => {}, 10 * i);
+  await fake.run(500);
+  const { timers } = probe.read();
+  assert.equal(timers.timeouts.length, 0);
+  assert.equal(timers.windowTimeoutCallbacks, 3);
+  assert.equal(timers.recurring, 0);
 });
 
-test('an interval recurs until cleared, and a one-shot timeout never does', () => {
+test('an interval recurs until clearInterval or clearTimeout ends it', async () => {
   const fake = fakeWindow();
   const probe = installTraceProbe(fake.scope);
-  const id = fake.scope.setInterval(() => {}, 250);
-  fake.scope.setTimeout(() => {}, 10);
+  const first = fake.scope.setInterval(() => {}, 250);
+  const second = fake.scope.setInterval(() => {}, 500);
   fake.advance(500);
   probe.start();
   fake.advance(1000);
   let read = probe.read();
-  assert.equal(read.timers.intervals.length, 1);
-  assert.equal(read.timers.intervals[0].delayMs, 250);
-  assert.equal(read.timers.intervals[0].callbacks, 4);
-  assert.equal(read.timers.windowIntervalCallbacks, 4);
-  assert.equal(read.timers.timeoutChains.length, 0);
-  assert.equal(read.timers.recurring, 1);
-  assert.equal(read.timers.timeoutCallbacks, 1);
+  assert.equal(read.timers.intervals.length, 2);
+  assert.deepEqual(
+    read.timers.intervals.map(({ delayMs, callbacks }) => [delayMs, callbacks]),
+    [
+      [250, 4],
+      [500, 2],
+    ],
+  );
+  assert.match(read.timers.intervals[0].site, /probe\.test\.mjs:\d+:\d+$/);
+  assert.equal(read.timers.recurring, 2);
 
-  fake.scope.clearInterval(id);
+  fake.scope.clearInterval(first);
+  // setTimeout and setInterval share their IDs, so clearTimeout ends an interval too.
+  fake.scope.clearTimeout(second);
   probe.start();
   fake.advance(1000);
   read = probe.read();
+  assert.equal(read.timers.intervals.length, 0);
   assert.equal(read.timers.recurring, 0);
   assert.equal(read.timers.windowIntervalCallbacks, 0);
 });
@@ -215,7 +301,7 @@ test('timers keep their arguments and return values, and a string callback passe
   assert.equal(typeof fake.scope.requestAnimationFrame('nope'), 'number');
 });
 
-test('canvas contexts count once each, by type, and offscreen ones apart', () => {
+test('canvas contexts count once each, by type, offscreen ones apart, and null WebGL asks too', () => {
   const fake = fakeWindow();
   const probe = installTraceProbe(fake.scope);
   const a = new fake.FakeCanvas();
@@ -223,14 +309,15 @@ test('canvas contexts count once each, by type, and offscreen ones apart', () =>
   a.getContext('2d');
   a.getContext('2d');
   b.getContext('experimental-webgl');
-  b.getContext('none');
-  new fake.FakeOffscreenCanvas().getContext('webgl2');
+  b.getContext('webgl2');
+  new fake.FakeOffscreenCanvas().getContext('webgl');
   b.isConnected = false;
   const { canvas } = probe.read();
-  assert.deepEqual(canvas.contexts, { '2d': 1, webgl: 1, webgl2: 1 });
+  assert.deepEqual(canvas.contexts, { '2d': 1, webgl: 2 });
   assert.equal(canvas.total, 3);
   assert.equal(canvas.connected, 1);
   assert.equal(canvas.offscreen, 1);
+  assert.deepEqual(canvas.nullContexts, { webgl2: 1 });
 });
 
 test('only running animations that never end count as infinite', () => {
@@ -304,4 +391,13 @@ test('a window that never started reads null, and long task timing can be missin
   assert.equal(read.windowMs, null);
   assert.equal(read.longTasks.supported, false);
   assert.deepEqual(read.longTasks.entries, []);
+});
+
+test("the probe leaves the page's stack trace limit as it found it", () => {
+  const fake = fakeWindow();
+  const limit = Error.stackTraceLimit;
+  installTraceProbe(fake.scope);
+  fake.scope.setTimeout(() => {}, 1);
+  fake.scope.requestAnimationFrame(() => {});
+  assert.equal(Error.stackTraceLimit, limit);
 });

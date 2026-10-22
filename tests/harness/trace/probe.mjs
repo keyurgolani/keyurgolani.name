@@ -1,21 +1,25 @@
 // The page side of pnpm test:trace (#6, Slice 1): an init script that runs
-// before any of the page's own scripts and counts what keeps the main
-// thread busy. Playwright sends installTraceProbe as source text, so it
-// closes over nothing: everything it needs is inside it.
+// in every frame before any of the page's own scripts and counts what keeps
+// the main thread busy. Playwright sends installTraceProbe as source text,
+// so it closes over nothing: everything it needs is inside it.
 //
-// - Frame loops. Every requestAnimationFrame callback belongs to a chain: a
-//   request made inside a frame callback continues that callback's chain,
-//   and any other request starts one. A chain that asks for another frame
-//   during the window is a loop, and its rate is its callbacks over the
-//   window. Where a loop asks again is its origin.
-// - Recurring timers. A setInterval that's still set, and a setTimeout
-//   chain, a timeout set inside a timeout callback, that set another during
-//   the window.
+// Frame callbacks and timeouts are grouped by their site: the place in the
+// page's code that asked for them, the frame below the probe's wrapper. A
+// site recurs when it asks again after one of its own callbacks ran during
+// the window, whatever the shape: a callback that asks for the next frame,
+// an await on a promise a frame or a timeout resolves, or a frame asked for
+// from a timeout and the timeout from a frame. A recurring site is
+// sustained when it ran in both halves of the window, so a transition that
+// finishes early in it is no loop. Its rate is its callbacks over the window.
+//
+// - Frame loops: requestAnimationFrame sites that recur and are sustained.
+// - Recurring timers: setInterval timers still set, which clearInterval or
+//   clearTimeout ends (they share one list), and setTimeout sites that recur.
 // - Canvas contexts, by type, from HTMLCanvasElement and OffscreenCanvas
-//   getContext, counted once per context.
+//   getContext, counted once per context, and the WebGL contexts asked for
+//   that came back null.
 // - Running infinite animations: CSS animations, transitions, and Web
-//   Animations whose end time is infinite, from document.getAnimations()
-//   when read.
+//   Animations whose end time is infinite, from document.getAnimations().
 // - Content Security Policy violations, from securitypolicyviolation events.
 // - Long tasks, from a PerformanceObserver.
 //
@@ -23,7 +27,7 @@
 // so they never count.
 
 /**
- * Installs the probe on `scope` (the page's window) as
+ * Installs the probe on `scope` (the frame's window) as
  * `scope.__portfolioTrace`. Installing twice keeps the first.
  *
  * @param {any} scope
@@ -34,94 +38,96 @@ export function installTraceProbe(scope) {
   const original = {
     requestAnimationFrame: scope.requestAnimationFrame?.bind(scope),
     setTimeout: scope.setTimeout.bind(scope),
+    clearTimeout: scope.clearTimeout.bind(scope),
     setInterval: scope.setInterval.bind(scope),
     clearInterval: scope.clearInterval.bind(scope),
   };
 
   // The counting window, from start() until read. Each start() is a new
-  // epoch; a chain's window counts belong to the epoch it last touched, so
-  // nothing has to visit every chain to reset them.
+  // epoch; a site's window counts belong to the epoch it last touched, so
+  // nothing has to visit every site to reset them.
   let epoch = 0;
   let startedAt = null;
   const inWindow = () => startedAt !== null;
-  const windowChains = new Set();
-  const touch = (chain) => {
-    if (chain.epoch === epoch) return;
-    chain.epoch = epoch;
-    chain.windowCallbacks = 0;
-    chain.windowRearms = 0;
-  };
-  const counted = (chain) => (chain.epoch === epoch ? chain.windowCallbacks : 0);
-
-  let nextChain = 1;
-  const newChain = (kind) => ({
-    id: nextChain++,
-    kind,
-    origin: null,
-    epoch: -1,
-    callbacks: 0,
-    windowCallbacks: 0,
-    windowRearms: 0,
-  });
+  const sinceStart = () => now() - startedAt;
 
   /**
-   * The stack frame `depth` frames below the one that made `error`, as
-   * URL:line:column when it has one: the page's code, past the probe's own.
+   * The page's frame that called the wrapper that called this: the stack's
+   * fourth line, after the message, this function, and the wrapper. As
+   * URL:line:column when it has one.
    */
-  const originOf = (error, depth) => {
-    const frame = String(error?.stack ?? '')
-      .split('\n')
-      [depth + 1]?.trim();
-    if (!frame) return null;
+  const ErrorType = scope.Error ?? Error;
+  const callerSite = () => {
+    // Only the frames it reads, so a call costs little even under throttling.
+    const limit = ErrorType.stackTraceLimit;
+    ErrorType.stackTraceLimit = 4;
+    const stack = String(new ErrorType('site').stack ?? '');
+    ErrorType.stackTraceLimit = limit;
+    const frame = stack.split('\n')[3]?.trim();
+    if (!frame) return 'unknown';
     return /((?:https?|file):\/\/[^\s)]+)/.exec(frame)?.[1] ?? frame;
   };
 
-  /**
-   * A request made inside `chain`'s own callback: another round of the
-   * chain. Called by a wrapper the page called, so the page's frame is two
-   * below this one.
-   */
-  const rearm = (chain) => {
-    if (!chain.origin) chain.origin = originOf(new Error('trace origin'), 2);
-    if (!inWindow()) return;
-    touch(chain);
-    chain.windowRearms += 1;
-    windowChains.add(chain);
+  const newEntry = (kind, site) => ({
+    kind,
+    site,
+    epoch: -1,
+    callbacks: 0,
+    rearms: 0,
+    firstAt: null,
+    lastAt: null,
+    total: 0,
+  });
+  const sites = new Map();
+  const siteFor = (kind, site) => {
+    const key = `${kind} ${site}`;
+    if (!sites.has(key)) sites.set(key, newEntry(kind, site));
+    return sites.get(key);
   };
-  const ran = (chain) => {
-    chain.callbacks += 1;
+  const touch = (entry) => {
+    if (entry.epoch === epoch) return;
+    entry.epoch = epoch;
+    entry.callbacks = 0;
+    entry.rearms = 0;
+    entry.firstAt = null;
+    entry.lastAt = null;
+  };
+  /** A site asked again: a round of it, once one of its callbacks has run in the window. */
+  const asked = (entry) => {
     if (!inWindow()) return;
-    touch(chain);
-    chain.windowCallbacks += 1;
+    touch(entry);
+    if (entry.callbacks > 0) entry.rearms += 1;
+  };
+  const ran = (entry) => {
+    entry.total += 1;
+    if (!inWindow()) return;
+    touch(entry);
+    entry.callbacks += 1;
+    const at = sinceStart();
+    if (entry.firstAt === null) entry.firstAt = at;
+    entry.lastAt = at;
   };
 
-  // Frame loops.
-  let currentFrame = null;
+  // Frames.
   const frames = { requests: 0, callbacks: 0, windowRequests: 0, windowCallbacks: 0 };
   if (original.requestAnimationFrame) {
     scope.requestAnimationFrame = function requestAnimationFrame(callback) {
       if (typeof callback !== 'function') return original.requestAnimationFrame(callback);
+      const entry = siteFor('frame', callerSite());
       frames.requests += 1;
       if (inWindow()) frames.windowRequests += 1;
-      const chain = currentFrame ?? newChain('frame');
-      if (chain === currentFrame) rearm(chain);
+      asked(entry);
       return original.requestAnimationFrame((time) => {
         frames.callbacks += 1;
         if (inWindow()) frames.windowCallbacks += 1;
-        ran(chain);
-        const outer = currentFrame;
-        currentFrame = chain;
-        try {
-          return callback(time);
-        } finally {
-          currentFrame = outer;
-        }
+        ran(entry);
+        return callback(time);
       });
     };
   }
 
-  // Timers.
-  let currentTimeout = null;
+  // Timers. setTimeout and setInterval share one list of IDs, which either
+  // clear function ends.
   const timers = {
     timeoutCallbacks: 0,
     intervalCallbacks: 0,
@@ -131,53 +137,54 @@ export function installTraceProbe(scope) {
   const intervals = new Map();
   scope.setTimeout = function setTimeout(callback, delay, ...args) {
     if (typeof callback !== 'function') return original.setTimeout(callback, delay, ...args);
-    const chain = currentTimeout ?? newChain('timeout');
-    if (chain === currentTimeout) rearm(chain);
+    const entry = siteFor('timeout', callerSite());
+    asked(entry);
     return original.setTimeout(() => {
       timers.timeoutCallbacks += 1;
       if (inWindow()) timers.windowTimeoutCallbacks += 1;
-      ran(chain);
-      const outer = currentTimeout;
-      currentTimeout = chain;
-      try {
-        return callback(...args);
-      } finally {
-        currentTimeout = outer;
-      }
+      ran(entry);
+      return callback(...args);
     }, delay);
   };
   scope.setInterval = function setInterval(callback, delay, ...args) {
     if (typeof callback !== 'function') return original.setInterval(callback, delay, ...args);
-    const chain = newChain('interval');
-    chain.origin = originOf(new Error('trace origin'), 1);
-    chain.delay = Number(delay) || 0;
+    // Each interval is its own timer, wherever it was set.
+    const entry = { ...newEntry('interval', callerSite()), delay: Number(delay) || 0 };
     const id = original.setInterval(() => {
       timers.intervalCallbacks += 1;
       if (inWindow()) timers.windowIntervalCallbacks += 1;
-      ran(chain);
+      ran(entry);
       return callback(...args);
     }, delay);
-    intervals.set(id, chain);
+    intervals.set(id, entry);
     return id;
   };
   scope.clearInterval = function clearInterval(id) {
     intervals.delete(id);
     return original.clearInterval(id);
   };
+  scope.clearTimeout = function clearTimeout(id) {
+    intervals.delete(id);
+    return original.clearTimeout(id);
+  };
 
   // Canvas contexts.
   const seenContexts = new WeakSet();
   const canvases = [];
+  const nullContexts = {};
+  const typeName = (type) => (type === 'experimental-webgl' ? 'webgl' : String(type));
   for (const name of ['HTMLCanvasElement', 'OffscreenCanvas']) {
     const proto = scope[name]?.prototype;
     if (!proto?.getContext) continue;
     const getContext = proto.getContext;
     proto.getContext = function getContextCounted(type, ...rest) {
       const context = getContext.call(this, type, ...rest);
-      if (context && typeof context === 'object' && !seenContexts.has(context)) {
+      if (context === null) {
+        nullContexts[typeName(type)] = (nullContexts[typeName(type)] ?? 0) + 1;
+      } else if (context && typeof context === 'object' && !seenContexts.has(context)) {
         seenContexts.add(context);
         canvases.push({
-          type: type === 'experimental-webgl' ? 'webgl' : String(type),
+          type: typeName(type),
           offscreen: name === 'OffscreenCanvas',
           ref: typeof scope.WeakRef === 'function' ? new scope.WeakRef(this) : null,
         });
@@ -256,7 +263,6 @@ export function installTraceProbe(scope) {
     start() {
       epoch += 1;
       startedAt = now();
-      windowChains.clear();
       frames.windowRequests = 0;
       frames.windowCallbacks = 0;
       timers.windowTimeoutCallbacks = 0;
@@ -267,34 +273,42 @@ export function installTraceProbe(scope) {
       const windowMs = startedAt === null ? null : now() - startedAt;
       const rate = (callbacks) =>
         windowMs ? Math.round((callbacks / (windowMs / 1000)) * 10) / 10 : null;
-      const loops = (kind) =>
-        [...windowChains]
-          .filter((chain) => chain.kind === kind && chain.epoch === epoch)
-          .map((chain) => ({
-            id: chain.id,
-            callbacks: counted(chain),
-            perSecond: rate(counted(chain)),
-            origin: chain.origin,
-          }));
-      const frameLoops = loops('frame');
-      const timeoutChains = loops('timeout');
-      const liveIntervals = [...intervals.values()].map((chain) => ({
-        id: chain.id,
-        delayMs: chain.delay,
-        callbacks: counted(chain),
-        origin: chain.origin,
+      const half = windowMs === null ? null : windowMs / 2;
+      const describe = (entry) => ({
+        site: entry.site,
+        callbacks: entry.callbacks,
+        perSecond: rate(entry.callbacks),
+        firstAtMs: entry.firstAt === null ? null : Math.round(entry.firstAt),
+        lastAtMs: entry.lastAt === null ? null : Math.round(entry.lastAt),
+        sustained:
+          half !== null && entry.firstAt !== null && entry.firstAt < half && entry.lastAt >= half,
+      });
+      const recurring = (kind) =>
+        [...sites.values()]
+          .filter((entry) => entry.kind === kind && entry.epoch === epoch && entry.rearms > 0)
+          .map(describe);
+      const frameSites = recurring('frame');
+      const timeoutSites = recurring('timeout');
+      const liveIntervals = [...intervals.values()].map((entry) => ({
+        ...describe(entry.epoch === epoch ? entry : newEntry(entry.kind, entry.site)),
+        delayMs: entry.delay,
       }));
       const contexts = {};
       for (const canvas of canvases) contexts[canvas.type] = (contexts[canvas.type] ?? 0) + 1;
       return {
+        url: String(scope.location?.href ?? ''),
         windowMs,
         visibility: scope.document?.visibilityState ?? null,
-        frames: { ...frames, loops: frameLoops },
+        frames: {
+          ...frames,
+          loops: frameSites.filter((site) => site.sustained),
+          transient: frameSites.filter((site) => !site.sustained),
+        },
         timers: {
           ...timers,
           intervals: liveIntervals,
-          timeoutChains,
-          recurring: liveIntervals.length + timeoutChains.length,
+          timeouts: timeoutSites,
+          recurring: liveIntervals.length + timeoutSites.length,
         },
         canvas: {
           contexts,
@@ -303,6 +317,7 @@ export function installTraceProbe(scope) {
             (canvas) => !canvas.offscreen && canvas.ref?.deref?.()?.isConnected,
           ).length,
           offscreen: canvases.filter((canvas) => canvas.offscreen).length,
+          nullContexts: { ...nullContexts },
         },
         animations: { infinite: infiniteAnimations() },
         csp: violations.slice(),
