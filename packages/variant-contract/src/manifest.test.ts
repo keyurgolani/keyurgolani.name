@@ -263,7 +263,7 @@ const CASES: readonly Case[] = [
   },
   {
     name: "a schema range without this host's version",
-    change: (m) => (m.schemas.portfolio = { min: 3, max: 4 }),
+    change: (m) => (m.schemas.portfolio = { min: 4, max: 5 }),
     expect: [['manifest.schemas-unsupported', '/schemas/portfolio']],
   },
   {

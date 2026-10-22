@@ -64,9 +64,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   const { origin } = requireDeploymentConfig();
   const view = await liveView();
   const portfolio = view?.portfolio;
-  const jsonLdBlocks = portfolio
-    ? buildStructuredData(portfolio, { siteUrl: origin }).map(jsonLdScript)
-    : [];
+  const jsonLdBlocks = view ? buildStructuredData(view, { siteUrl: origin }).map(jsonLdScript) : [];
   // The first paint's theme, until the visitor picks one: the site's display mode.
   const initScript = themeInitScript(
     view ? startingTheme(view.site.appearance.displayMode) : 'system',

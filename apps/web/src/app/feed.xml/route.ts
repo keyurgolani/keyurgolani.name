@@ -12,11 +12,11 @@ async function feed(request: Request): Promise<Response> {
   let step: 'catalog_unavailable' | 'render_failed' = 'catalog_unavailable';
   try {
     const { origin } = requireDeploymentConfig();
-    const { portfolio, site } = await getPublicView();
+    const view = await getPublicView();
     // The site document turns the feed off with features.feed: false.
-    if (!site.features.feed) return notFoundResponse();
+    if (!view.site.features.feed) return notFoundResponse();
     step = 'render_failed';
-    const xml = renderRssFeed(portfolio, { siteUrl: origin });
+    const xml = renderRssFeed(view, { siteUrl: origin });
     return new Response(xml, {
       headers: {
         'Content-Type': 'application/rss+xml; charset=utf-8',

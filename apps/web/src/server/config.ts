@@ -96,8 +96,11 @@ export interface ConfigIssue {
   readonly message: string;
   /** Document name, relative to the source directory. */
   readonly file?: string;
-  /** For a finding in the document pair, which document it's in. */
-  readonly document?: 'portfolio' | 'site';
+  /**
+   * For a finding in the document pair, which document it's in, or for one
+   * in the unit's derived data beside it (#10), `snapshots` or `media`.
+   */
+  readonly document?: 'portfolio' | 'site' | 'snapshots' | 'media';
   /** JSON pointer into the document. */
   readonly path?: string;
   readonly line?: number;
