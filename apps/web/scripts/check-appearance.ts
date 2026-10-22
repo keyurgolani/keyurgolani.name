@@ -159,7 +159,9 @@ async function main(): Promise<number> {
     process.stderr.write(`${TAG} ${plural(findings.length, 'finding')}.\n`);
     return 1;
   }
-  const count = (axis: keyof AppearanceRegistry['packs']) => registry.packs[axis].size;
+  // The packs the gate checked: each registered one it didn't skip.
+  const count = (axis: keyof AppearanceRegistry['packs']) =>
+    registry.packs[axis].size - check.skipped.filter((pack) => pack.axis === axis).length;
   process.stdout.write(
     `${TAG} ${plural(count('designLanguage'), 'design language')}, ` +
       `${plural(count('colorScheme'), 'color scheme')}, and ` +

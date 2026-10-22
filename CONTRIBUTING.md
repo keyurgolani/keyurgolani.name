@@ -81,6 +81,7 @@ pnpm test              # package suites plus the ci/, skills/, and test harness 
 pnpm check:skills      # parity between schema, kit, skill refs, frontmatter
 pnpm check:registry    # the variant registry builds the same twice, and nothing generated is committed
 pnpm check:variants    # the source audit over every registered variant
+pnpm check:appearance  # the contrast gate over every registered appearance combination
 pnpm build             # production build of apps/web
 pnpm ci:browser        # Playwright smoke against that build
 pnpm test:routes       # route specs against a fixture host with test-only variants
@@ -88,7 +89,7 @@ pnpm test:variants     # every registered variant on every contract fixture, in 
 pnpm test:external-variant  # the reference third-party variant, installed in a temporary worktree and removed
 ```
 
-Run `pnpm exec playwright install chromium` once before the browser smoke. `pnpm test:routes` builds a host of its own, a copy of the workspace outside the checkout with the variants in `tests/fixtures/variants/` installed offline from the pnpm store, so it needs `pnpm install` but no `pnpm build`. `pnpm test:external-variant` does the same in a temporary `git worktree` of HEAD, so commit before you run it; its add and remove may read package metadata from the registry. [docs/variants.md](docs/variants.md#testing-a-variant) says what both variant suites check. `pnpm ci:image` builds and checks the container image with Docker (`CONTAINER_CLI=finch` for Finch).
+Run `pnpm exec playwright install chromium` once before the browser smoke. `pnpm test:routes` builds a host of its own, a copy of the workspace outside the checkout with the variants in `tests/fixtures/variants/` installed offline from the pnpm store, so it needs `pnpm install` but no `pnpm build`. `pnpm test:external-variant` does the same in a temporary `git worktree` of HEAD, so commit before you run it; its add and remove may read package metadata from the registry. [docs/variants.md](docs/variants.md#testing-a-variant) says what both variant suites check. Registry generation leaves the test fixture packages out unless their flag is set: with `APPEARANCE_FIXTURES=1`, `pnpm build` and `pnpm dev` also register the appearance fixture packs in `packages/appearance-fixtures-*`, and a build without it fails if any of their ids reach the registry. `pnpm ci:image` builds and checks the container image with Docker (`CONTAINER_CLI=finch` for Finch).
 
 Two more check the deployment profiles. `pnpm --filter @portfolio/web test:profiles` builds once with no profile set and runs the route matrix and the canary scan against the built server under `read-only`, `demo`, and `owner`, with a password made for the run, and checks that `owner` refuses to start without a password hash and a data directory. `pnpm smoke:profiles` builds the image and runs it under every profile and every startup row, those that refuse to start and those that start with a warning, with the same `CONTAINER_CLI` choice.
 

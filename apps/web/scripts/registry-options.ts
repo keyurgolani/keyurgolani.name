@@ -79,7 +79,7 @@ export function packHooks(): PackHooks {
 
 /** How registry generation reads the host's dependencies under `env`'s fixture flags. */
 export function registryOptions(env: Environment): RegistryOptions {
-  return { hostDir: HOST, packs: packHooks(), fixtures: fixtureGate(env, REPO_ROOT) };
+  return { hostDir: HOST, packs: packHooks(), fixtures: fixtureGate(env) };
 }
 
 /** How the generated modules are written under `env`'s fixture flags. */

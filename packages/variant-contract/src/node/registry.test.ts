@@ -94,7 +94,7 @@ test('a portfolio field with no kind, or a kind no host reads, is reported, not 
   );
 });
 
-test("#19's pack kinds can't register until it adds their validators", async () => {
+test("without #19's pack checks, which the host passes in, a pack package is reported, not registered", async () => {
   const kinds = ['design-language', 'color-scheme', 'typography'];
   const packs = kinds.map((kind) => ({
     name: `@acme/${kind}`,

@@ -557,7 +557,10 @@ function readPacks(
           problem.file === 'manifest.json' ? manifestPath : at(path.join(packDir, problem.file));
         reporter(diagnostics, name, version, file)(
           'registry.pack-compile',
-          problem.pointer === '' ? [] : problem.pointer.split('/').slice(1),
+          problem.pointer
+            .split('/')
+            .slice(1)
+            .map((token) => token.replace(/~1/g, '/').replace(/~0/g, '~')),
           problem.message,
           problem.remedy,
         );

@@ -300,6 +300,8 @@ const LEFTOVER = /^[a-z_][a-z0-9-]*\.[0-9a-f]{12}\.(?:css|woff2)\.\d+\.tmp$/;
  * never empty a directory it doesn't own.
  */
 export function writePackFiles(dir: string, files: readonly PackFile[]): PackWriteResult {
+  const misnamed = files.find(({ name }) => !PACK_FILE.test(name));
+  if (misnamed) throw new Error(`${misnamed.name} isn't a pack file's name.`);
   fs.mkdirSync(dir, { recursive: true });
   const names = new Set(files.map(({ name }) => name));
   const stale = fs.readdirSync(dir).filter((name) => !names.has(name));
@@ -313,7 +315,6 @@ export function writePackFiles(dir: string, files: readonly PackFile[]): PackWri
   const unchanged: string[] = [];
   const removed: string[] = [];
   for (const file of files) {
-    if (!PACK_FILE.test(file.name)) throw new Error(`${file.name} isn't a pack file's name.`);
     const target = path.join(dir, file.name);
     let current: Buffer | undefined;
     try {

@@ -21,7 +21,7 @@ export interface FixtureRow {
   /** Its key in the generated FIXTURE_FLAGS, such as appearance. */
   readonly key: string;
   /**
-   * The fixture packages' directories, relative to the repository root, such
+   * The fixture packages' directories, relative to the workspace root, such
    * as packages/appearance-fixtures-*. A trailing * matches the rest of the
    * directory's name.
    */
@@ -48,7 +48,7 @@ function matches(pattern: string, directory: string): boolean {
     : directory === pattern;
 }
 
-/** The row that maps `directory`, relative to the repository root, if any. */
+/** The row that maps `directory`, relative to its workspace's root, if any. */
 export function fixtureRow(
   directory: string,
   rows: readonly FixtureRow[] = FIXTURE_ROWS,
@@ -56,20 +56,30 @@ export function fixtureRow(
   return rows.find((row) => row.directories.some((pattern) => matches(pattern, directory)));
 }
 
+/** The root of the pnpm workspace `dir` is in: the nearest directory with a pnpm-workspace.yaml. */
+function workspaceRoot(dir: string): string | undefined {
+  for (let current = dir; ; current = path.dirname(current)) {
+    try {
+      if (fs.statSync(path.join(current, 'pnpm-workspace.yaml')).isFile()) return current;
+    } catch {
+      // Not this one.
+    }
+    if (path.dirname(current) === current) return undefined;
+  }
+}
+
 /**
- * The gate registry generation runs with: a fixture package's real
- * directory, relative to `repoRoot`, picks its row, and the row's flag in
- * `env` admits it or not. A package outside the repository, such as one
- * installed from a registry, matches no row.
+ * The gate registry generation runs with. A fixture package's real
+ * directory, relative to the root of the workspace that holds it, picks its
+ * row, and the row's flag in `env` admits it or not. A workspace package is
+ * read where pnpm linked it from, which is this repository, or the checkout
+ * a scratch copy links its installs to. A package installed from a registry
+ * is under node_modules, where no row maps.
  */
 export function fixtureGate(
   env: Environment,
-  repoRoot: string,
   rows: readonly FixtureRow[] = FIXTURE_ROWS,
 ): FixtureGate {
-  // Both sides real, so a temporary copy of the workspace, under macOS's
-  // /var -> /private/var, maps as the checkout does.
-  const root = fs.realpathSync(repoRoot);
   return ({ dir }) => {
     let real: string;
     try {
@@ -77,6 +87,8 @@ export function fixtureGate(
     } catch {
       return { mapped: false };
     }
+    const root = workspaceRoot(path.dirname(real));
+    if (!root) return { mapped: false };
     const row = fixtureRow(path.relative(root, real).split(path.sep).join('/'), rows);
     if (!row) return { mapped: false };
     return { mapped: true, flag: row.flag, admitted: row.values.includes(env[row.flag] ?? '') };
