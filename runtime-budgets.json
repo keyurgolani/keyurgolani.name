@@ -1,34 +1,132 @@
 {
-  "description": "Runtime budgets (#6). calibration holds the traces the limits are set from: pnpm test:trace measures, and tests/trace/calibrate.mjs writes each entry from its report.",
+  "version": 1,
+  "description": "Runtime budgets (#6). calibration holds the traces the limits are set from: pnpm test:trace measures, and tests/trace/calibrate.mjs writes each entry from its report. Each entry names what it traced by content: the base commit the app sat on and the git tree ids of its apps and packages.",
+  "notes": {
+    "unmapped": "(unmapped) is chunk bytes no source mapping covers: module wrappers, the bundler glue, and line breaks. It belongs to no package; slice 3 decides whether it counts as platform JS.",
+    "dataUrls": "Playwright reports no request for a data: URL, so the complete fixture, whose images are all data URLs, shows 0 image requests and 0 image bytes: those bytes are in the document. Image budgets need a fixture with image files.",
+    "analyzeBytes": "A PORTFOLIO_ANALYZE=1 build's chunks end in sourceMappingURL comments, so their bytes run a little over the default build's: take byte limits from a default build, and attribution from an analyze build.",
+    "conditions": "Each viewport's conditions are what its case ran under. webgl says whether getContext('webgl') and getContext('webgl2') gave a context; false is null, as in the headless shell with no GPU, so a variant that draws with WebGL draws nothing there and its frame, canvas, and long-task numbers understate it. dpr is window.devicePixelRatio, and loadAverage the machine's 1-minute load as the case ended."
+  },
   "calibration": {
     "baseline-editorial": {
-      "commit": "62a0f06cf88c5d6c55045945bf0733a6882c5425",
+      "base": "62a0f06cf88c5d6c55045945bf0733a6882c5425",
+      "trees": {
+        "apps": "69ad93b2acc3a7e514f280f290dc030b241dd427",
+        "packages": "ce7ba912f101098d9c9cfe907260763975d96187"
+      },
+      "tracer": {
+        "tests": "08a030a5b94a59f041cfb2555cb48f8b09b0af3d"
+      },
       "date": "2026-10-22",
-      "command": "pnpm test:trace --base-url http://127.0.0.1:52588 --allow-third-party --selection editorial",
-      "tracedFrom": "4f4209d86edef0784db72013d69ceae3da617a9d",
+      "command": "pnpm test:trace:baseline",
+      "trace": "pnpm test:trace --base-url http://127.0.0.1:64966 --allow-third-party --selection editorial",
       "route": "/",
       "selection": "editorial",
       "composition": null,
       "profile": null,
-      "browser": "chromium 145.0.7632.6",
       "fixture": null,
-      "conditions": "An 18-core Mac shared with other sessions, 1-minute load about 20 to 27.",
-      "server": "A detached worktree at 62a0f06 with no portfolio.yml and no PORTFOLIO_PATH, so portfolio.example.yml renders (variant: editorial): pnpm install --frozen-lockfile, pnpm --filter @portfolio/web build, then next start -H 127.0.0.1 -p 52588 in apps/web, with NEXT_TELEMETRY_DISABLED=1 for both.",
-      "egress": "The build and the server ran with NODE_USE_ENV_PROXY=1 and HTTP_PROXY and HTTPS_PROXY at a local trap that refuses every request, and tests/harness/offline-fetch.mjs preloaded. The server's fetch to api.github.com was refused, the trap saw no request, and lsof, sampling every 250 ms, saw no socket of the build, the server, or the browser with a peer outside loopback. The server listened on 127.0.0.1 only.",
-      "thirdPartyBytes": "Unknown. The trace recorded and aborted every third-party request: one fonts.googleapis.com stylesheet (Kinetic Cosmos's, the one @import left in the bundled CSS) and picsum.photos images. Their bytes, and the font files that stylesheet names, are not counted, and each has bytes null.",
+      "browser": "chromium 145.0.7632.6",
+      "egress": {
+        "commit": "62a0f06cf88c5d6c55045945bf0733a6882c5425",
+        "method": "build and server: NODE_USE_ENV_PROXY=1 with HTTP_PROXY and HTTPS_PROXY at a local trap that refuses and records each request, tests/harness/offline-fetch.mjs preloaded, NEXT_TELEMETRY_DISABLED=1, no other environment; server: next start -H 127.0.0.1 on a free port; browser: the trace policy, which aborts every third-party request it routes and resolves no name but 127.0.0.1 and localhost; sockets: lsof every 250 ms over each process tree",
+        "trapAttempts": [],
+        "offlineFetchRefusals": ["(no host: a data: or file: URL)", "api.github.com"],
+        "sockets": {
+          "build": {
+            "lsof": true,
+            "samples": 39,
+            "sockets": [],
+            "listeners": [],
+            "outsideLoopback": []
+          },
+          "server": {
+            "lsof": true,
+            "samples": 78,
+            "sockets": [
+              "node TCP 127.0.0.1:64966 (LISTEN)",
+              "node TCP 127.0.0.1:64966->127.0.0.1:65127 (ESTABLISHED)",
+              "node TCP 127.0.0.1:64966->127.0.0.1:65128 (ESTABLISHED)",
+              "node TCP 127.0.0.1:64966->127.0.0.1:65131 (ESTABLISHED)",
+              "node TCP 127.0.0.1:64966->127.0.0.1:65129 (ESTABLISHED)",
+              "node TCP 127.0.0.1:64966->127.0.0.1:65130 (ESTABLISHED)",
+              "node TCP 127.0.0.1:64966->127.0.0.1:65328 (ESTABLISHED)",
+              "node TCP 127.0.0.1:64966->127.0.0.1:65329 (ESTABLISHED)",
+              "node TCP 127.0.0.1:64966->127.0.0.1:65330 (ESTABLISHED)",
+              "node TCP 127.0.0.1:64966->127.0.0.1:65331 (ESTABLISHED)",
+              "node TCP 127.0.0.1:64966->127.0.0.1:65332 (ESTABLISHED)",
+              "node TCP 127.0.0.1:64966->127.0.0.1:65333 (ESTABLISHED)"
+            ],
+            "listeners": ["127.0.0.1:64966"],
+            "outsideLoopback": []
+          },
+          "trace": {
+            "lsof": true,
+            "samples": 77,
+            "sockets": [
+              "node TCP [::1]:64997 (LISTEN)",
+              "node TCP 127.0.0.1:64998 (LISTEN)",
+              "node TCP 127.0.0.1:64998->127.0.0.1:65010 (ESTABLISHED)",
+              "node TCP 127.0.0.1:64998->127.0.0.1:65011 (ESTABLISHED)",
+              "chrome-he TCP 127.0.0.1:65010->127.0.0.1:64998 (ESTABLISHED)",
+              "chrome-he TCP 127.0.0.1:65011->127.0.0.1:64998 (ESTABLISHED)",
+              "chrome-he TCP 127.0.0.1:65127->127.0.0.1:64966 (ESTABLISHED)",
+              "chrome-he TCP 127.0.0.1:65128->127.0.0.1:64966 (ESTABLISHED)",
+              "chrome-he TCP 127.0.0.1:65129->127.0.0.1:64966 (ESTABLISHED)",
+              "chrome-he TCP 127.0.0.1:65130->127.0.0.1:64966 (ESTABLISHED)",
+              "chrome-he TCP 127.0.0.1:65131->127.0.0.1:64966 (ESTABLISHED)",
+              "chrome-he TCP 127.0.0.1:65127->127.0.0.1:64966 (CLOSE_WAIT)",
+              "chrome-he TCP 127.0.0.1:65128->127.0.0.1:64966 (CLOSE_WAIT)",
+              "chrome-he TCP 127.0.0.1:65129->127.0.0.1:64966 (CLOSE_WAIT)",
+              "chrome-he TCP 127.0.0.1:65130->127.0.0.1:64966 (CLOSE_WAIT)",
+              "chrome-he TCP 127.0.0.1:65131->127.0.0.1:64966 (CLOSE_WAIT)",
+              "chrome-he TCP 127.0.0.1:65328->127.0.0.1:64966 (ESTABLISHED)",
+              "chrome-he TCP 127.0.0.1:65329->127.0.0.1:64966 (ESTABLISHED)",
+              "chrome-he TCP 127.0.0.1:65330->127.0.0.1:64966 (ESTABLISHED)",
+              "chrome-he TCP 127.0.0.1:65331->127.0.0.1:64966 (ESTABLISHED)",
+              "chrome-he TCP 127.0.0.1:65332->127.0.0.1:64966 (ESTABLISHED)",
+              "chrome-he TCP 127.0.0.1:65333->127.0.0.1:64966 (ESTABLISHED)",
+              "chrome-he TCP 127.0.0.1:65328->127.0.0.1:64966 (CLOSE_WAIT)",
+              "chrome-he TCP 127.0.0.1:65329->127.0.0.1:64966 (CLOSE_WAIT)",
+              "chrome-he TCP 127.0.0.1:65330->127.0.0.1:64966 (CLOSE_WAIT)",
+              "chrome-he TCP 127.0.0.1:65331->127.0.0.1:64966 (CLOSE_WAIT)",
+              "chrome-he TCP 127.0.0.1:65332->127.0.0.1:64966 (CLOSE_WAIT)",
+              "chrome-he TCP 127.0.0.1:65333->127.0.0.1:64966 (CLOSE_WAIT)"
+            ],
+            "listeners": ["[::1]:64997", "127.0.0.1:64998"],
+            "outsideLoopback": []
+          }
+        }
+      },
+      "notes": {
+        "document": "62a0f06 rendered its own portfolio.example.yml, whose variant is editorial: pnpm test:trace:baseline refuses a worktree with a portfolio.yml, .yaml, .toml, or .json, and starts the server with no PORTFOLIO_PATH.",
+        "offlineFetch": "The refusal with no host is the build prerendering /opengraph-image: next/og's bundled yoga loader fetches its wasm from a data: URL, offline-fetch refuses it, and the loader decodes the data: URL itself instead. It reached no network, and / does not use it."
+      },
       "viewports": {
         "1440x900": {
+          "conditions": {
+            "browser": "chromium 145.0.7632.6",
+            "viewport": "1440x900",
+            "isMobile": false,
+            "hasTouch": false,
+            "dpr": 1,
+            "webgl": {
+              "webgl": false,
+              "webgl2": false
+            },
+            "cpuThrottling": 4,
+            "loadAverage": 39.4,
+            "cpus": 18
+          },
           "requests": {
             "total": 16,
             "firstParty": 13,
             "thirdParty": 3,
             "aborted": 3,
             "failed": 0,
-            "thirdPartyHosts": ["fonts.googleapis.com", "picsum.photos"],
             "byType": {
               "document": {
                 "count": 1,
-                "transferBytes": 34674,
+                "transferBytes": 34738,
                 "fileBytes": 131065,
                 "unknownBytes": 0
               },
@@ -72,27 +170,55 @@
             "files": 0,
             "bytes": 0
           },
+          "thirdParty": {
+            "count": 3,
+            "hosts": ["fonts.googleapis.com", "picsum.photos"],
+            "requests": [
+              {
+                "url": "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Manrope:wght@400;500;600;700;800&family=Source+Sans+3:wght@400;500;600&display=swap",
+                "kind": "stylesheet",
+                "outcome": "aborted",
+                "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector"
+              },
+              {
+                "url": "https://picsum.photos/seed/postmortem-kit/640/420",
+                "kind": "image",
+                "outcome": "aborted",
+                "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector"
+              },
+              {
+                "url": "https://picsum.photos/seed/small-traces/640/420",
+                "kind": "image",
+                "outcome": "aborted",
+                "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector"
+              }
+            ],
+            "bytes": {
+              "known": 0,
+              "unknownRequests": 3
+            }
+          },
           "attribution": null,
           "longTasks": {
             "supported": true,
             "cpuThrottling": 4,
-            "loadEventEndMs": 629,
+            "loadEventEndMs": 648,
             "windowMs": 5000,
             "count": 2,
             "over50ms": 2,
-            "totalMs": 335,
-            "maxMs": 257,
-            "durationsMs": [257, 78]
+            "totalMs": 381,
+            "maxMs": 307,
+            "durationsMs": [307, 74]
           },
           "idle": {
-            "windowS": 2.004049,
-            "taskDurationS": 0.000063,
+            "windowS": 2.001677,
+            "taskDurationS": 0.000064,
             "scriptDurationS": 0,
             "layoutDurationS": 0,
             "recalcStyleDurationS": 0,
             "layoutCount": 0,
             "recalcStyleCount": 0,
-            "jsHeapUsedBytes": 3322840,
+            "jsHeapUsedBytes": 3322220,
             "nodes": 1484,
             "visibility": "visible",
             "networkIdle": true
@@ -100,24 +226,40 @@
           "counters": {
             "frameCallbacks": 0,
             "frameLoops": 0,
+            "transientFrameSites": 0,
             "recurringTimers": 0,
             "canvasContexts": 0,
+            "nullCanvasContexts": 0,
             "infiniteAnimations": 0
           },
-          "cspViolations": 0
+          "cspViolations": 0,
+          "serverEgress": null
         },
         "390x844": {
+          "conditions": {
+            "browser": "chromium 145.0.7632.6",
+            "viewport": "390x844",
+            "isMobile": true,
+            "hasTouch": true,
+            "dpr": 1,
+            "webgl": {
+              "webgl": false,
+              "webgl2": false
+            },
+            "cpuThrottling": 4,
+            "loadAverage": 36.9,
+            "cpus": 18
+          },
           "requests": {
             "total": 15,
             "firstParty": 13,
             "thirdParty": 2,
             "aborted": 2,
             "failed": 0,
-            "thirdPartyHosts": ["fonts.googleapis.com", "picsum.photos"],
             "byType": {
               "document": {
                 "count": 1,
-                "transferBytes": 34674,
+                "transferBytes": 34742,
                 "fileBytes": 131065,
                 "unknownBytes": 0
               },
@@ -161,27 +303,49 @@
             "files": 0,
             "bytes": 0
           },
+          "thirdParty": {
+            "count": 2,
+            "hosts": ["fonts.googleapis.com", "picsum.photos"],
+            "requests": [
+              {
+                "url": "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Manrope:wght@400;500;600;700;800&family=Source+Sans+3:wght@400;500;600&display=swap",
+                "kind": "stylesheet",
+                "outcome": "aborted",
+                "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector"
+              },
+              {
+                "url": "https://picsum.photos/seed/postmortem-kit/640/420",
+                "kind": "image",
+                "outcome": "aborted",
+                "failure": "net::ERR_BLOCKED_BY_CLIENT.Inspector"
+              }
+            ],
+            "bytes": {
+              "known": 0,
+              "unknownRequests": 2
+            }
+          },
           "attribution": null,
           "longTasks": {
             "supported": true,
             "cpuThrottling": 4,
-            "loadEventEndMs": 343,
+            "loadEventEndMs": 490.5,
             "windowMs": 5000,
             "count": 2,
             "over50ms": 2,
-            "totalMs": 208,
-            "maxMs": 153,
-            "durationsMs": [153, 55]
+            "totalMs": 293,
+            "maxMs": 211,
+            "durationsMs": [211, 82]
           },
           "idle": {
-            "windowS": 2.00431,
-            "taskDurationS": 0.000048,
+            "windowS": 2.001909,
+            "taskDurationS": 0.000052,
             "scriptDurationS": 0,
             "layoutDurationS": 0,
             "recalcStyleDurationS": 0,
             "layoutCount": 0,
             "recalcStyleCount": 0,
-            "jsHeapUsedBytes": 3353740,
+            "jsHeapUsedBytes": 3369360,
             "nodes": 1479,
             "visibility": "visible",
             "networkIdle": true
@@ -189,42 +353,65 @@
           "counters": {
             "frameCallbacks": 0,
             "frameLoops": 0,
+            "transientFrameSites": 0,
             "recurringTimers": 0,
             "canvasContexts": 0,
+            "nullCanvasContexts": 0,
             "infiniteAnimations": 0
           },
-          "cspViolations": 0
+          "cspViolations": 0,
+          "serverEgress": null
         }
       }
     },
     "fallback-route": {
-      "commit": "a9fa5d44a02b59f40e8a1950d14309300c461f4b",
+      "base": "a434cd1178c4f198e147863d6cda6b204405d890",
+      "trees": {
+        "apps": "914043b3682994d91ad2ffd064865f5ae2820527",
+        "packages": "5d78d23bc0925247046da710ba6d09133534fce3"
+      },
+      "tracer": {
+        "tests": "08a030a5b94a59f041cfb2555cb48f8b09b0af3d"
+      },
       "date": "2026-10-22",
       "command": "PORTFOLIO_ANALYZE=1 pnpm build && pnpm test:trace",
-      "tracedFrom": "a9fa5d44a02b59f40e8a1950d14309300c461f4b",
+      "trace": "pnpm test:trace",
       "route": "/",
       "selection": "missing-variant",
       "composition": "fallback",
       "profile": "read-only",
-      "browser": "chromium 145.0.7632.6",
       "fixture": "complete",
-      "app": "The #12 app-under-test fixture (tests/harness/fixtures.ts) under read-only, with #5's complete contract fixture as the source directory and its site document selecting missing-variant, which no package registers, so the fallback composition renders. Every image is a data URL, and the server ran behind the harness's egress trap, which saw no attempt.",
-      "thirdPartyBytes": "None. The trace fails on any third-party request, and there was none.",
-      "attribution": "JS and CSS bytes by source package through the build's source maps, gzip shared out by raw share within each chunk. Next vendors react, react-dom, and scheduler, and they count as themselves. 99.4% of JS bytes and 97.7% of CSS bytes map to a source.",
-      "conditions": "An 18-core Mac shared with other sessions, 1-minute load about 16 to 19. Long tasks under 4x throttling vary between runs: an earlier trace of the same build had 2 at 1440x900, 111 ms in all.",
+      "browser": "chromium 145.0.7632.6",
+      "egress": null,
+      "notes": {
+        "rerun": "Traced on #5 slice 6's head, a434cd1, before it reached next. Trace it again on next once it lands, from a clean checkout, and replace this entry."
+      },
       "viewports": {
         "1440x900": {
+          "conditions": {
+            "browser": "chromium 145.0.7632.6",
+            "viewport": "1440x900",
+            "isMobile": false,
+            "hasTouch": false,
+            "dpr": 1,
+            "webgl": {
+              "webgl": false,
+              "webgl2": false
+            },
+            "cpuThrottling": 4,
+            "loadAverage": 31.3,
+            "cpus": 18
+          },
           "requests": {
             "total": 15,
             "firstParty": 15,
             "thirdParty": 0,
             "aborted": 0,
             "failed": 0,
-            "thirdPartyHosts": [],
             "byType": {
               "document": {
                 "count": 1,
-                "transferBytes": 21943,
+                "transferBytes": 21945,
                 "fileBytes": 89525,
                 "unknownBytes": 0
               },
@@ -262,6 +449,15 @@
             "files": 0,
             "bytes": 0
           },
+          "thirdParty": {
+            "count": 0,
+            "hosts": [],
+            "requests": [],
+            "bytes": {
+              "known": 0,
+              "unknownRequests": 0
+            }
+          },
           "attribution": {
             "js": {
               "chunks": 12,
@@ -270,8 +466,8 @@
               "packages": [
                 {
                   "package": "next",
-                  "bytes": 322334,
-                  "gzipBytes": 88110
+                  "bytes": 323094,
+                  "gzipBytes": 88314
                 },
                 {
                   "package": "react-dom",
@@ -332,11 +528,6 @@
                   "package": "apps/web",
                   "bytes": 1056,
                   "gzipBytes": 413
-                },
-                {
-                  "package": "@swc/helpers",
-                  "bytes": 760,
-                  "gzipBytes": 204
                 }
               ]
             },
@@ -371,211 +562,23 @@
           "longTasks": {
             "supported": true,
             "cpuThrottling": 4,
-            "loadEventEndMs": 475.1,
-            "windowMs": 5000,
-            "count": 3,
-            "over50ms": 3,
-            "totalMs": 309,
-            "maxMs": 113,
-            "durationsMs": [113, 99, 97]
-          },
-          "idle": {
-            "windowS": 2.004299,
-            "taskDurationS": 0.000208,
-            "scriptDurationS": 0,
-            "layoutDurationS": 0,
-            "recalcStyleDurationS": 0,
-            "layoutCount": 0,
-            "recalcStyleCount": 0,
-            "jsHeapUsedBytes": 4762420,
-            "nodes": 1115,
-            "visibility": "visible",
-            "networkIdle": true
-          },
-          "counters": {
-            "frameCallbacks": 0,
-            "frameLoops": 0,
-            "recurringTimers": 0,
-            "canvasContexts": 0,
-            "infiniteAnimations": 0
-          },
-          "cspViolations": 0
-        },
-        "390x844": {
-          "requests": {
-            "total": 15,
-            "firstParty": 15,
-            "thirdParty": 0,
-            "aborted": 0,
-            "failed": 0,
-            "thirdPartyHosts": [],
-            "byType": {
-              "document": {
-                "count": 1,
-                "transferBytes": 21943,
-                "fileBytes": 89525,
-                "unknownBytes": 0
-              },
-              "script": {
-                "count": 12,
-                "transferBytes": 247658,
-                "fileBytes": 823276,
-                "unknownBytes": 0,
-                "gzipBytes": 240031
-              },
-              "stylesheet": {
-                "count": 2,
-                "transferBytes": 2529,
-                "fileBytes": 4003,
-                "unknownBytes": 0,
-                "gzipBytes": 1399
-              }
-            }
-          },
-          "js": {
-            "files": 12,
-            "bytes": 823276,
-            "gzipBytes": 240031
-          },
-          "css": {
-            "files": 2,
-            "bytes": 4003,
-            "gzipBytes": 1399
-          },
-          "fonts": {
-            "files": 0,
-            "bytes": 0
-          },
-          "images": {
-            "files": 0,
-            "bytes": 0
-          },
-          "attribution": {
-            "js": {
-              "chunks": 12,
-              "bytes": 823276,
-              "mappedShare": 0.994,
-              "packages": [
-                {
-                  "package": "next",
-                  "bytes": 322334,
-                  "gzipBytes": 88110
-                },
-                {
-                  "package": "react-dom",
-                  "bytes": 203420,
-                  "gzipBytes": 63234
-                },
-                {
-                  "package": "yaml",
-                  "bytes": 102929,
-                  "gzipBytes": 29248
-                },
-                {
-                  "package": "zod",
-                  "bytes": 61179,
-                  "gzipBytes": 17385
-                },
-                {
-                  "package": "@chenglou/pretext",
-                  "bytes": 44132,
-                  "gzipBytes": 15129
-                },
-                {
-                  "package": "marked",
-                  "bytes": 37735,
-                  "gzipBytes": 10723
-                },
-                {
-                  "package": "@portfolio/schema",
-                  "bytes": 20184,
-                  "gzipBytes": 5733
-                },
-                {
-                  "package": "react",
-                  "bytes": 8216,
-                  "gzipBytes": 3106
-                },
-                {
-                  "package": "@portfolio/kit",
-                  "bytes": 7099,
-                  "gzipBytes": 2395
-                },
-                {
-                  "package": "@portfolio/variant-contract",
-                  "bytes": 6163,
-                  "gzipBytes": 1751
-                },
-                {
-                  "package": "(unmapped)",
-                  "bytes": 4557,
-                  "gzipBytes": 1506
-                },
-                {
-                  "package": "scheduler",
-                  "bytes": 3512,
-                  "gzipBytes": 1095
-                },
-                {
-                  "package": "apps/web",
-                  "bytes": 1056,
-                  "gzipBytes": 413
-                },
-                {
-                  "package": "@swc/helpers",
-                  "bytes": 760,
-                  "gzipBytes": 204
-                }
-              ]
-            },
-            "css": {
-              "chunks": 2,
-              "bytes": 4003,
-              "mappedShare": 0.977,
-              "packages": [
-                {
-                  "package": "@portfolio/kit",
-                  "bytes": 2236,
-                  "gzipBytes": 625
-                },
-                {
-                  "package": "apps/web",
-                  "bytes": 1190,
-                  "gzipBytes": 602
-                },
-                {
-                  "package": "@portfolio/fallback-composition",
-                  "bytes": 486,
-                  "gzipBytes": 136
-                },
-                {
-                  "package": "(unmapped)",
-                  "bytes": 91,
-                  "gzipBytes": 36
-                }
-              ]
-            }
-          },
-          "longTasks": {
-            "supported": true,
-            "cpuThrottling": 4,
-            "loadEventEndMs": 189,
+            "loadEventEndMs": 287.3,
             "windowMs": 5000,
             "count": 2,
             "over50ms": 2,
-            "totalMs": 106,
-            "maxMs": 55,
-            "durationsMs": [55, 51]
+            "totalMs": 124,
+            "maxMs": 64,
+            "durationsMs": [64, 60]
           },
           "idle": {
-            "windowS": 2.003513,
-            "taskDurationS": 0.000141,
+            "windowS": 2.003304,
+            "taskDurationS": 0.00016,
             "scriptDurationS": 0,
             "layoutDurationS": 0,
             "recalcStyleDurationS": 0,
             "layoutCount": 0,
             "recalcStyleCount": 0,
-            "jsHeapUsedBytes": 4791560,
+            "jsHeapUsedBytes": 4769796,
             "nodes": 1115,
             "visibility": "visible",
             "networkIdle": true
@@ -583,11 +586,226 @@
           "counters": {
             "frameCallbacks": 0,
             "frameLoops": 0,
+            "transientFrameSites": 0,
             "recurringTimers": 0,
             "canvasContexts": 0,
+            "nullCanvasContexts": 0,
             "infiniteAnimations": 0
           },
-          "cspViolations": 0
+          "cspViolations": 0,
+          "serverEgress": {
+            "attempts": []
+          }
+        },
+        "390x844": {
+          "conditions": {
+            "browser": "chromium 145.0.7632.6",
+            "viewport": "390x844",
+            "isMobile": true,
+            "hasTouch": true,
+            "dpr": 1,
+            "webgl": {
+              "webgl": false,
+              "webgl2": false
+            },
+            "cpuThrottling": 4,
+            "loadAverage": 30.4,
+            "cpus": 18
+          },
+          "requests": {
+            "total": 15,
+            "firstParty": 15,
+            "thirdParty": 0,
+            "aborted": 0,
+            "failed": 0,
+            "byType": {
+              "document": {
+                "count": 1,
+                "transferBytes": 21945,
+                "fileBytes": 89525,
+                "unknownBytes": 0
+              },
+              "script": {
+                "count": 12,
+                "transferBytes": 247658,
+                "fileBytes": 823276,
+                "unknownBytes": 0,
+                "gzipBytes": 240031
+              },
+              "stylesheet": {
+                "count": 2,
+                "transferBytes": 2529,
+                "fileBytes": 4003,
+                "unknownBytes": 0,
+                "gzipBytes": 1399
+              }
+            }
+          },
+          "js": {
+            "files": 12,
+            "bytes": 823276,
+            "gzipBytes": 240031
+          },
+          "css": {
+            "files": 2,
+            "bytes": 4003,
+            "gzipBytes": 1399
+          },
+          "fonts": {
+            "files": 0,
+            "bytes": 0
+          },
+          "images": {
+            "files": 0,
+            "bytes": 0
+          },
+          "thirdParty": {
+            "count": 0,
+            "hosts": [],
+            "requests": [],
+            "bytes": {
+              "known": 0,
+              "unknownRequests": 0
+            }
+          },
+          "attribution": {
+            "js": {
+              "chunks": 12,
+              "bytes": 823276,
+              "mappedShare": 0.994,
+              "packages": [
+                {
+                  "package": "next",
+                  "bytes": 323094,
+                  "gzipBytes": 88314
+                },
+                {
+                  "package": "react-dom",
+                  "bytes": 203420,
+                  "gzipBytes": 63234
+                },
+                {
+                  "package": "yaml",
+                  "bytes": 102929,
+                  "gzipBytes": 29248
+                },
+                {
+                  "package": "zod",
+                  "bytes": 61179,
+                  "gzipBytes": 17385
+                },
+                {
+                  "package": "@chenglou/pretext",
+                  "bytes": 44132,
+                  "gzipBytes": 15129
+                },
+                {
+                  "package": "marked",
+                  "bytes": 37735,
+                  "gzipBytes": 10723
+                },
+                {
+                  "package": "@portfolio/schema",
+                  "bytes": 20184,
+                  "gzipBytes": 5733
+                },
+                {
+                  "package": "react",
+                  "bytes": 8216,
+                  "gzipBytes": 3106
+                },
+                {
+                  "package": "@portfolio/kit",
+                  "bytes": 7099,
+                  "gzipBytes": 2395
+                },
+                {
+                  "package": "@portfolio/variant-contract",
+                  "bytes": 6163,
+                  "gzipBytes": 1751
+                },
+                {
+                  "package": "(unmapped)",
+                  "bytes": 4557,
+                  "gzipBytes": 1506
+                },
+                {
+                  "package": "scheduler",
+                  "bytes": 3512,
+                  "gzipBytes": 1095
+                },
+                {
+                  "package": "apps/web",
+                  "bytes": 1056,
+                  "gzipBytes": 413
+                }
+              ]
+            },
+            "css": {
+              "chunks": 2,
+              "bytes": 4003,
+              "mappedShare": 0.977,
+              "packages": [
+                {
+                  "package": "@portfolio/kit",
+                  "bytes": 2236,
+                  "gzipBytes": 625
+                },
+                {
+                  "package": "apps/web",
+                  "bytes": 1190,
+                  "gzipBytes": 602
+                },
+                {
+                  "package": "@portfolio/fallback-composition",
+                  "bytes": 486,
+                  "gzipBytes": 136
+                },
+                {
+                  "package": "(unmapped)",
+                  "bytes": 91,
+                  "gzipBytes": 36
+                }
+              ]
+            }
+          },
+          "longTasks": {
+            "supported": true,
+            "cpuThrottling": 4,
+            "loadEventEndMs": 251.5,
+            "windowMs": 5000,
+            "count": 3,
+            "over50ms": 3,
+            "totalMs": 217,
+            "maxMs": 88,
+            "durationsMs": [88, 78, 51]
+          },
+          "idle": {
+            "windowS": 2.004274,
+            "taskDurationS": 0.000179,
+            "scriptDurationS": 0,
+            "layoutDurationS": 0,
+            "recalcStyleDurationS": 0,
+            "layoutCount": 0,
+            "recalcStyleCount": 0,
+            "jsHeapUsedBytes": 4802804,
+            "nodes": 1115,
+            "visibility": "visible",
+            "networkIdle": true
+          },
+          "counters": {
+            "frameCallbacks": 0,
+            "frameLoops": 0,
+            "transientFrameSites": 0,
+            "recurringTimers": 0,
+            "canvasContexts": 0,
+            "nullCanvasContexts": 0,
+            "infiniteAnimations": 0
+          },
+          "cspViolations": 0,
+          "serverEgress": {
+            "attempts": []
+          }
         }
       }
     }
