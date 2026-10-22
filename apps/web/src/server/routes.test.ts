@@ -1,6 +1,6 @@
 import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
@@ -557,28 +557,130 @@ function studioGroupFiles(dir = STUDIO_GROUP): string[] {
 const SEGMENT_FILE =
   /^(layout|template|not-found|error|global-error|loading|default|forbidden|unauthorized)\.(tsx|ts|jsx|js)$/;
 
+/** Each node under `node`, nested functions included. */
+function* everyNode(node: ts.Node): Generator<ts.Node> {
+  for (const child of node.getChildren()) {
+    yield child;
+    yield* everyNode(child);
+  }
+}
+
+/** Whether a module's first statement is the 'use client' directive. */
+function isClientModule(source: ts.SourceFile): boolean {
+  const [first] = source.statements;
+  return (
+    first !== undefined &&
+    ts.isExpressionStatement(first) &&
+    ts.isStringLiteral(first.expression) &&
+    first.expression.text === 'use client'
+  );
+}
+
+/** The file a relative or `~/` specifier names from `file`, with its extension found, or null. */
+function resolveImport(file: string, specifier: string): string | null {
+  const base = specifier.startsWith('~/')
+    ? path.join(SRC, specifier.slice(2))
+    : specifier.startsWith('.')
+      ? path.resolve(path.dirname(file), specifier)
+      : null;
+  if (base === null) return null;
+  const candidates = [
+    base,
+    ...['.tsx', '.ts', '.jsx', '.js', '.mjs'].map((extension) => `${base}${extension}`),
+    ...['index.tsx', 'index.ts', 'index.js'].map((name) => path.join(base, name)),
+  ];
+  return (
+    candidates.find((candidate) => existsSync(candidate) && statSync(candidate).isFile()) ?? null
+  );
+}
+
+/**
+ * Every module `source` loads at run time, by its specifier: imports and
+ * re-exports that aren't type-only, import() and require(). A dynamic one
+ * whose specifier isn't a string comes back as null.
+ */
+function runtimeImports(source: ts.SourceFile): (string | null)[] {
+  const found: (string | null)[] = [];
+  const named = (node: ts.Expression | undefined) =>
+    node && ts.isStringLiteralLike(node) ? node.text : null;
+  for (const statement of source.statements) {
+    if (ts.isImportDeclaration(statement)) {
+      const clause = statement.importClause;
+      const typeOnly =
+        clause !== undefined &&
+        (clause.isTypeOnly ||
+          (clause.name === undefined &&
+            clause.namedBindings !== undefined &&
+            ts.isNamedImports(clause.namedBindings) &&
+            clause.namedBindings.elements.every((element) => element.isTypeOnly)));
+      if (!typeOnly) found.push(named(statement.moduleSpecifier));
+    } else if (ts.isExportDeclaration(statement) && statement.moduleSpecifier) {
+      if (!statement.isTypeOnly) found.push(named(statement.moduleSpecifier));
+    } else if (
+      ts.isImportEqualsDeclaration(statement) &&
+      ts.isExternalModuleReference(statement.moduleReference)
+    ) {
+      found.push(named(statement.moduleReference.expression));
+    }
+  }
+  for (const node of everyNode(source)) {
+    if (!ts.isCallExpression(node)) continue;
+    const dynamic = node.expression.kind === ts.SyntaxKind.ImportKeyword;
+    const required = ts.isIdentifier(node.expression) && node.expression.text === 'require';
+    if (dynamic || required) found.push(named(node.arguments[0]));
+  }
+  return found;
+}
+
 /**
  * What a layout, template, or boundary under the Studio group does that it
- * mustn't: be async, await anything, or export metadata made from data. A
- * layout doesn't run again on client navigation, and the sign-in page sits
- * under the same ones, so none of them can be the guard: Studio's data comes
- * through pages, after their guard.
+ * mustn't. A layout doesn't run again on client navigation, and the sign-in
+ * page sits under the same ones, so none of them can be the guard: Studio's
+ * data comes through pages, after their guard. And what they render goes
+ * out with a page's redirect to sign-in too, in its body and its RSC
+ * payload. So one rendered on the server is markup only: nothing in it is
+ * async or awaits, it exports no metadata made from data, and it imports
+ * only CSS, types, react, next/*, and modules that start with 'use client',
+ * which render no server component of their own.
  */
 function studioSegmentProblems(file: string, text?: string): string[] {
   const source = parse(file, text);
-  const fn = defaultFunction(source);
   const problems: string[] = [];
-  if (!fn) problems.push('no default export function to check');
-  else {
-    if ((ts.getModifiers(fn) ?? []).some((m) => m.kind === ts.SyntaxKind.AsyncKeyword)) {
-      problems.push('its default export is async');
+  if (!defaultFunction(source)) problems.push('no default export function to check');
+  if (!isClientModule(source)) {
+    const nodes = [...everyNode(source)];
+    if (
+      nodes.some(
+        (node) =>
+          ts.canHaveModifiers(node) &&
+          (ts.getModifiers(node) ?? []).some((m) => m.kind === ts.SyntaxKind.AsyncKeyword),
+      )
+    ) {
+      problems.push('it has an async function');
     }
-    if ([...inline(fn)].some((node) => ts.isAwaitExpression(node))) {
-      problems.push('its default export awaits');
+    if (
+      nodes.some(
+        (node) => ts.isAwaitExpression(node) || (ts.isForOfStatement(node) && node.awaitModifier),
+      )
+    ) {
+      problems.push('it awaits');
     }
   }
   for (const name of ['generateMetadata', 'generateViewport']) {
     if (exportedNames(source).includes(name)) problems.push(`it exports ${name}`);
+  }
+  for (const specifier of runtimeImports(source)) {
+    if (specifier === null) {
+      problems.push('it imports a module it names only at run time');
+      continue;
+    }
+    if (specifier.endsWith('.css')) continue;
+    if (specifier === 'react' || specifier === 'next' || specifier.startsWith('next/')) continue;
+    const target = resolveImport(file, specifier);
+    if (target !== null && isClientModule(parse(target))) continue;
+    problems.push(
+      `it imports ${specifier}, which is neither CSS, types, react, next/*, nor 'use client'`,
+    );
   }
   return problems;
 }
@@ -597,7 +699,7 @@ test("every Studio page but /studio/sign-in, and every Studio route handler, met
   assert.ok(checked > 0, 'the /studio placeholder, at least');
 });
 
-test("Studio's layouts, templates, and boundaries render markup only: nothing async, awaited, or exported as metadata", () => {
+test("Studio's layouts, templates, and boundaries render markup only: nothing async or awaited, no metadata, and no import but CSS, types, react, next/*, and 'use client' modules", () => {
   const files = studioGroupFiles().filter((file) => SEGMENT_FILE.test(path.basename(file)));
   assert.ok(
     files.some((file) => path.basename(file).startsWith('layout.')),
@@ -629,8 +731,45 @@ test("Studio's layouts, templates, and boundaries render markup only: nothing as
     'async function Layout() {}\nexport default Layout;\n',
     'export default function Layout() {}\nexport async function generateMetadata() {}\n',
     'export default load;\n',
+    // An async component of its own, rendered from a plain layout.
+    'async function Draft() {\n  return null;\n}\nexport default function Layout({ children }) {\n  return children;\n}\n',
   ]) {
     assert.notDeepEqual(studioSegmentProblems(probe, text), [], text);
+  }
+  // What it may import, from where Studio's own layout sits: CSS, types,
+  // react, next/*, and a module that starts with 'use client'.
+  const layout = path.join(STUDIO_GROUP, 'layout.tsx');
+  const rendering = (imports: string) =>
+    `${imports}\nexport default function Layout({ children }) {\n  return children;\n}\n`;
+  for (const imports of [
+    "import './studio.css';",
+    "import type { ReactNode } from 'react';",
+    "import { type Metadata } from 'next';",
+    "import { Fragment } from 'react';",
+    "import Link from 'next/link';",
+    "import { SignInForm as Shown } from './_components/sign-in-form';",
+    "import { type Site } from '~/server/config-store';",
+  ]) {
+    assert.deepEqual(studioSegmentProblems(layout, rendering(imports)), [], imports);
+  }
+  // A server component, or any module that isn't a client one, is refused:
+  // what it renders would go out with a redirect to sign-in.
+  for (const imports of [
+    "import { NotFoundBody as Shown } from '../_chrome/not-found-body';",
+    "import { getDeploymentState } from '~/server/config-store';",
+    "import { type Site, getDeploymentState } from '~/server/config-store';",
+    "export { getDeploymentState } from '~/server/config-store';",
+    "import Shown from './_components/no-such-file';",
+    "import { load } from 'some-package';",
+    "const { load } = require('~/server/config-store');",
+  ]) {
+    assert.notDeepEqual(studioSegmentProblems(layout, rendering(imports)), [], imports);
+  }
+  for (const loader of [
+    "const Shown = (await import('../_chrome/not-found-body')).NotFoundBody;",
+    "const Shown = import(['..', '_chrome', 'not-found-body'].join('/'));",
+  ]) {
+    assert.notDeepEqual(studioSegmentProblems(layout, rendering(loader)), [], loader);
   }
 });
 
