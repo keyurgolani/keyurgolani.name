@@ -368,13 +368,13 @@
       }
     },
     "fallback-route": {
-      "base": "a0cc2471604aaaa56b47963508e8ac7011584a42",
+      "base": "61f03a8390d5af378a9fdbde1d630a0f437089e5",
       "trees": {
-        "apps": "dbb39eb99ac1017b59dc03a036cdf567a225beb5",
-        "packages": "25f2c2156b8a59a4e0ea18196f4a75596a4b1398"
+        "apps": "6b1b8c900a0668e188594b4e6d2c151351637b74",
+        "packages": "332032d0cb458850080b418f8eabe041c7280343"
       },
       "tracer": {
-        "tests": "25de9ce4dcaf1c8feb40721e01052568dc413a4c"
+        "tests": "d4569dd80826adda43277e8bcbf7f74c56ed3c66"
       },
       "date": "2026-10-22",
       "command": "PORTFOLIO_ANALYZE=1 pnpm build && pnpm test:trace",
@@ -386,9 +386,7 @@
       "fixture": "complete",
       "browser": "chromium 145.0.7632.6",
       "egress": null,
-      "notes": {
-        "rerun": "Traced on #5 slice 6's head, a0cc247, before it reached next. Trace it again on next once it lands, from a clean checkout, and replace this entry."
-      },
+      "notes": {},
       "viewports": {
         "1440x900": {
           "conditions": {
@@ -402,7 +400,7 @@
               "webgl2": false
             },
             "cpuThrottling": 4,
-            "loadAverage": 42.1,
+            "loadAverage": 17.6,
             "cpus": 18
           },
           "requests": {
@@ -414,16 +412,16 @@
             "byType": {
               "document": {
                 "count": 1,
-                "transferBytes": 21944,
+                "transferBytes": 21946,
                 "fileBytes": 89525,
                 "unknownBytes": 0
               },
               "script": {
                 "count": 12,
-                "transferBytes": 247659,
-                "fileBytes": 823276,
+                "transferBytes": 247694,
+                "fileBytes": 823413,
                 "unknownBytes": 0,
-                "gzipBytes": 240032
+                "gzipBytes": 240066
               },
               "stylesheet": {
                 "count": 2,
@@ -436,8 +434,8 @@
           },
           "js": {
             "files": 12,
-            "bytes": 823276,
-            "gzipBytes": 240032
+            "bytes": 823413,
+            "gzipBytes": 240066
           },
           "css": {
             "files": 2,
@@ -464,7 +462,7 @@
           "attribution": {
             "js": {
               "chunks": 12,
-              "bytes": 823276,
+              "bytes": 823413,
               "mappedShare": 0.994,
               "packages": [
                 {
@@ -480,12 +478,12 @@
                 {
                   "package": "yaml",
                   "bytes": 102929,
-                  "gzipBytes": 29249
+                  "gzipBytes": 29246
                 },
                 {
                   "package": "zod",
                   "bytes": 61179,
-                  "gzipBytes": 17385
+                  "gzipBytes": 17384
                 },
                 {
                   "package": "@chenglou/pretext",
@@ -494,13 +492,13 @@
                 },
                 {
                   "package": "marked",
-                  "bytes": 37735,
-                  "gzipBytes": 10723
+                  "bytes": 37741,
+                  "gzipBytes": 10724
                 },
                 {
                   "package": "@portfolio/schema",
                   "bytes": 20184,
-                  "gzipBytes": 5733
+                  "gzipBytes": 5734
                 },
                 {
                   "package": "react",
@@ -509,8 +507,8 @@
                 },
                 {
                   "package": "@portfolio/kit",
-                  "bytes": 7099,
-                  "gzipBytes": 2395
+                  "bytes": 7230,
+                  "gzipBytes": 2432
                 },
                 {
                   "package": "@portfolio/variant-contract",
@@ -565,23 +563,23 @@
           "longTasks": {
             "supported": true,
             "cpuThrottling": 4,
-            "loadEventEndMs": 443.8,
+            "loadEventEndMs": 271.4,
             "windowMs": 5000,
-            "count": 3,
-            "over50ms": 3,
-            "totalMs": 285,
-            "maxMs": 114,
-            "durationsMs": [114, 95, 76]
+            "count": 2,
+            "over50ms": 2,
+            "totalMs": 125,
+            "maxMs": 65,
+            "durationsMs": [65, 60]
           },
           "idle": {
-            "windowS": 2.0029,
-            "taskDurationS": 0.000203,
+            "windowS": 2.004526,
+            "taskDurationS": 0.000301,
             "scriptDurationS": 0,
             "layoutDurationS": 0,
             "recalcStyleDurationS": 0,
             "layoutCount": 0,
             "recalcStyleCount": 0,
-            "jsHeapUsedBytes": 4779576,
+            "jsHeapUsedBytes": 4750208,
             "nodes": 1115,
             "visibility": "visible",
             "networkIdle": true
@@ -612,7 +610,7 @@
               "webgl2": false
             },
             "cpuThrottling": 4,
-            "loadAverage": 39.9,
+            "loadAverage": 17.1,
             "cpus": 18
           },
           "requests": {
@@ -624,16 +622,16 @@
             "byType": {
               "document": {
                 "count": 1,
-                "transferBytes": 21944,
+                "transferBytes": 21946,
                 "fileBytes": 89525,
                 "unknownBytes": 0
               },
               "script": {
                 "count": 12,
-                "transferBytes": 247659,
-                "fileBytes": 823276,
+                "transferBytes": 247694,
+                "fileBytes": 823413,
                 "unknownBytes": 0,
-                "gzipBytes": 240032
+                "gzipBytes": 240066
               },
               "stylesheet": {
                 "count": 2,
@@ -646,8 +644,8 @@
           },
           "js": {
             "files": 12,
-            "bytes": 823276,
-            "gzipBytes": 240032
+            "bytes": 823413,
+            "gzipBytes": 240066
           },
           "css": {
             "files": 2,
@@ -674,7 +672,7 @@
           "attribution": {
             "js": {
               "chunks": 12,
-              "bytes": 823276,
+              "bytes": 823413,
               "mappedShare": 0.994,
               "packages": [
                 {
@@ -690,12 +688,12 @@
                 {
                   "package": "yaml",
                   "bytes": 102929,
-                  "gzipBytes": 29249
+                  "gzipBytes": 29246
                 },
                 {
                   "package": "zod",
                   "bytes": 61179,
-                  "gzipBytes": 17385
+                  "gzipBytes": 17384
                 },
                 {
                   "package": "@chenglou/pretext",
@@ -704,13 +702,13 @@
                 },
                 {
                   "package": "marked",
-                  "bytes": 37735,
-                  "gzipBytes": 10723
+                  "bytes": 37741,
+                  "gzipBytes": 10724
                 },
                 {
                   "package": "@portfolio/schema",
                   "bytes": 20184,
-                  "gzipBytes": 5733
+                  "gzipBytes": 5734
                 },
                 {
                   "package": "react",
@@ -719,8 +717,8 @@
                 },
                 {
                   "package": "@portfolio/kit",
-                  "bytes": 7099,
-                  "gzipBytes": 2395
+                  "bytes": 7230,
+                  "gzipBytes": 2432
                 },
                 {
                   "package": "@portfolio/variant-contract",
@@ -775,23 +773,23 @@
           "longTasks": {
             "supported": true,
             "cpuThrottling": 4,
-            "loadEventEndMs": 238.9,
+            "loadEventEndMs": 194.6,
             "windowMs": 5000,
             "count": 2,
             "over50ms": 2,
-            "totalMs": 151,
-            "maxMs": 77,
-            "durationsMs": [77, 74]
+            "totalMs": 118,
+            "maxMs": 61,
+            "durationsMs": [61, 57]
           },
           "idle": {
-            "windowS": 2.004288,
-            "taskDurationS": 0.000191,
+            "windowS": 2.003,
+            "taskDurationS": 0.000147,
             "scriptDurationS": 0,
             "layoutDurationS": 0,
             "recalcStyleDurationS": 0,
             "layoutCount": 0,
             "recalcStyleCount": 0,
-            "jsHeapUsedBytes": 4830876,
+            "jsHeapUsedBytes": 4828172,
             "nodes": 1115,
             "visibility": "visible",
             "networkIdle": true
