@@ -5,7 +5,7 @@ import type { Locator, Page } from '@playwright/test';
 import type { DesignLanguageManifest } from '../../packages/appearance/src/manifests';
 import { compilePack } from '../../packages/appearance/src/node/compile';
 import { expect, test } from '../harness/fixtures';
-import { DOCUMENT, FIXTURE_APP, openFixtures, ROUTE } from './fixture-page';
+import { DOCUMENT, FIXTURE_APP, openFixtures, registeredPacks, ROUTE } from './fixture-page';
 
 // Focus and touch (#19, Slice 3): focus is an outline in the scheme's focus
 // color, which no language stylesheet can take away and forced colors keep,
@@ -137,6 +137,35 @@ test(
     expect(await action.evaluate((element) => getComputedStyle(element).borderTopStyle)).toBe(
       'dotted',
     );
+  },
+);
+
+test(
+  'with every registered language, every surface has a fill and the focus ring is at least 2 pixels wide',
+  { tag: '@interaction', annotation: [ROUTE] },
+  async ({ page }) => {
+    await openFixtures(page);
+    const languages = await registeredPacks(page, 'Design language');
+    for (const language of languages) {
+      await openFixtures(page, `?language=${language}`);
+      await expect(page.locator(DOCUMENT)).toHaveAttribute('data-design-language', language);
+      // The level's color over the material: a fill the browser drew, never none.
+      const fills = await page
+        .locator(DOCUMENT)
+        .evaluate((boundary) =>
+          [...boundary.querySelectorAll('[data-ui-slot="surface"]')]
+            .filter((surface) => surface.closest('[data-appearance-boundary]') === boundary)
+            .map((surface) => getComputedStyle(surface).backgroundImage),
+        );
+      expect(fills.length, language).toBeGreaterThan(3);
+      for (const fill of fills) expect(fill, language).toContain('gradient(');
+      for (const [kind, control] of controls(page)) {
+        await keyboardFocus(page, control);
+        const drawn = await outline(control);
+        expect(drawn.style, `${language} ${kind}`).not.toBe('none');
+        expect(drawn.width, `${language} ${kind}`).toBeGreaterThanOrEqual(2);
+      }
+    }
   },
 );
 

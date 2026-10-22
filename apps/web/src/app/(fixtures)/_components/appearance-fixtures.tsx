@@ -1,8 +1,10 @@
 import type { AppearanceSelection } from '@portfolio/schema';
 import {
+  AXIS_LABELS,
   axisFallback,
   createAppearanceRegistry,
   DEFAULT_VISITOR_CONTROLS,
+  PACK_AXES,
   parseSelection,
   PLATFORM_DEFAULTS,
   registryStylesheets,
@@ -14,7 +16,13 @@ import {
   type Profile,
   type SelectionText,
 } from '@portfolio/appearance';
-import { Header, Navigation, Region } from '@portfolio/appearance/primitives';
+import {
+  DataDisplay,
+  Header,
+  Navigation,
+  Region,
+  type DataRow,
+} from '@portfolio/appearance/primitives';
 import {
   AppearanceDiagnostics,
   PresentationBoundary,
@@ -43,6 +51,7 @@ const SECTIONS = [
   ['overlays', 'Tabs, dialog, tooltip, and toasts'],
   ['media', 'Media and data'],
   ['type', 'Type roles'],
+  ['packs', 'Registered packs'],
   ['plates', 'Plates'],
 ] as const;
 
@@ -101,6 +110,16 @@ export interface AppearanceFixturesProps {
   readonly query: SelectionText;
 }
 
+/** Every pack this build registers, by axis: what a test may render the page in. */
+function packRows(registry: AppearanceRegistry): DataRow[] {
+  return PACK_AXES.flatMap((axis) =>
+    [...registry.packs[axis].values()].map(({ manifest }) => ({
+      key: `${axis}-${manifest.id}`,
+      cells: { pack: manifest.name, axis: AXIS_LABELS[axis], id: manifest.id, tier: manifest.tier },
+    })),
+  );
+}
+
 /** The document's selection from the query: any of the four pack and mode axes it names well. */
 function askedFor(query: SelectionText): Partial<AppearanceSelection> {
   const { designLanguage, colorScheme, typography, displayMode } = parseSelection(query);
@@ -148,6 +167,22 @@ export function AppearanceFixtures({ profile, query }: AppearanceFixturesProps) 
         <VisitorAppearance model={model} returnTo={RETURN_TO} />
       </Header>
       <DocumentSpecimen ids={DOCUMENT_IDS}>
+        <Region labelledBy="packs-title" className="fixtures-section" id="packs">
+          <h2 id="packs-title" data-type-role="headline">
+            Registered packs
+          </h2>
+          <DataDisplay
+            id="packs-table"
+            caption="What this build registers, by axis"
+            columns={[
+              { key: 'pack', label: 'Pack' },
+              { key: 'axis', label: 'Axis' },
+              { key: 'id', label: 'Id' },
+              { key: 'tier', label: 'Tier' },
+            ]}
+            rows={packRows(registry)}
+          />
+        </Region>
         <Region labelledBy="plates-title" className="fixtures-section" id="plates">
           <h2 id="plates-title" data-type-role="headline">
             Plates

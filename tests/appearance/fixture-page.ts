@@ -33,6 +33,45 @@ export async function openFixtures(page: Page, query = ''): Promise<void> {
 }
 
 /**
+ * The ids of the packs this build registers on `axis`, as the page's
+ * Registered packs table lists them, the fixture packs included.
+ */
+export async function registeredPacks(
+  page: Page,
+  axis: 'Design language' | 'Color scheme' | 'Typography',
+): Promise<string[]> {
+  const rows = await page
+    .locator('#packs-table tbody tr')
+    .evaluateAll((elements) =>
+      elements.map((row) => [...row.children].map((cell) => (cell.textContent ?? '').trim())),
+    );
+  const ids = rows.filter(([, kind]) => kind === axis).map(([, , id]) => id!);
+  expect(ids.length, `the build's ${axis} packs`).toBeGreaterThan(0);
+  return ids;
+}
+
+/**
+ * Every React handler on an element inside `scope`, each plate by default,
+ * as `<tag>#<id> <prop>`. React delegates events at its root, so a handler
+ * never shows as a listener of its element: the element's own props, which
+ * React keeps on it, do.
+ */
+export async function reactHandlers(page: Page, scope = PLATE): Promise<string[]> {
+  return page.locator(scope).evaluateAll((boundaries) =>
+    boundaries.flatMap((boundary) =>
+      [boundary, ...boundary.querySelectorAll('*')].flatMap((element) => {
+        const key = Object.keys(element).find((name) => name.startsWith('__reactProps$'));
+        if (!key) return [];
+        const props = (element as unknown as Record<string, Record<string, unknown>>)[key]!;
+        return Object.entries(props)
+          .filter(([name, value]) => /^on[A-Z]/.test(name) && typeof value === 'function')
+          .map(([name]) => `${element.tagName.toLowerCase()}#${element.id} ${name}`);
+      }),
+    ),
+  );
+}
+
+/**
  * Records every listener the page adds to window or document, from before
  * its first script runs, as `window:type` or `document:type`, with
  * `capture` when it listens in the capture phase.
