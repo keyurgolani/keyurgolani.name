@@ -6,6 +6,7 @@ import {
   LabelSchema,
   LanguageTagSchema,
   listOf,
+  MarkdownSchema,
   LooseDateSchema,
   MetricKeySchema,
   RefSchema,
@@ -121,9 +122,9 @@ export type PracticePart = z.infer<typeof PracticePartSchema>;
 
 export function recordSchemas({ object, Link, Placement, Period, FocalPoint }: SchemaParts) {
   const Decision = object({
-    decision: TextSchema,
-    rationale: TextSchema.optional(),
-    alternatives: TextSchema.optional(),
+    decision: MarkdownSchema,
+    rationale: MarkdownSchema.optional(),
+    alternatives: MarkdownSchema.optional(),
   });
 
   /**
@@ -131,14 +132,14 @@ export function recordSchemas({ object, Link, Placement, Period, FocalPoint }: S
    * the ones it has. One with none authored is refused.
    */
   const CaseStudySchema = object({
-    challenge: TextSchema.optional(),
-    context: TextSchema.optional(),
-    role: TextSchema.optional(),
-    constraints: TextSchema.optional(),
+    challenge: MarkdownSchema.optional(),
+    context: MarkdownSchema.optional(),
+    role: MarkdownSchema.optional(),
+    constraints: MarkdownSchema.optional(),
     decisions: listOf(Decision).optional(),
-    evidence: TextSchema.optional(),
-    outcomes: TextSchema.optional(),
-    reflection: TextSchema.optional(),
+    evidence: MarkdownSchema.optional(),
+    outcomes: MarkdownSchema.optional(),
+    reflection: MarkdownSchema.optional(),
   }).refine((study) => Object.keys(study).some((key) => key !== 'extensions'), {
     message: 'has no field authored. Leave caseStudy out, or write one of its fields.',
   });
@@ -161,8 +162,8 @@ export function recordSchemas({ object, Link, Placement, Period, FocalPoint }: S
     medium: WorkMediumSchema,
     visibility: VisibilitySchema.optional(),
     lang: LanguageTagSchema.optional(),
-    summary: TextSchema.optional(),
-    description: TextSchema.optional(),
+    summary: MarkdownSchema.optional(),
+    description: MarkdownSchema.optional(),
     period: Period.optional(),
     role: TextSchema.optional(),
     organization: TextSchema.optional(),
@@ -175,7 +176,7 @@ export function recordSchemas({ object, Link, Placement, Period, FocalPoint }: S
     highlights: listOf(TextSchema).optional(),
     url: UrlSchema.optional(),
     // Writing.
-    excerpt: TextSchema.optional(),
+    excerpt: MarkdownSchema.optional(),
     publication: TextSchema.optional(),
     publishedAt: LooseDateSchema.optional(),
     readingTimeMinutes: z.number().finite().int().positive().optional(),
@@ -189,7 +190,7 @@ export function recordSchemas({ object, Link, Placement, Period, FocalPoint }: S
     series: TextSchema.optional(),
     number: z.number().finite().int().positive().optional(),
     durationMinutes: z.number().finite().positive().optional(),
-    showNotes: TextSchema.optional(),
+    showNotes: MarkdownSchema.optional(),
     guests: listOf(TextSchema).optional(),
     audioUrl: UrlSchema.optional(),
     videoUrl: UrlSchema.optional(),
@@ -234,8 +235,8 @@ export function recordSchemas({ object, Link, Placement, Period, FocalPoint }: S
     lang: LanguageTagSchema.optional(),
     title: LabelSchema.optional(),
     /** The claim itself, Markdown: a testimonial's words, or what a metric counts. */
-    statement: TextSchema.optional(),
-    description: TextSchema.optional(),
+    statement: MarkdownSchema.optional(),
+    description: MarkdownSchema.optional(),
     /** When the claim was true. */
     asOf: LooseDateSchema.optional(),
     source: Source.optional(),
@@ -246,7 +247,7 @@ export function recordSchemas({ object, Link, Placement, Period, FocalPoint }: S
     authors: listOf(TextSchema).optional(),
     venue: TextSchema.optional(),
     publishedAt: LooseDateSchema.optional(),
-    abstract: TextSchema.optional(),
+    abstract: MarkdownSchema.optional(),
     citation: TextSchema.optional(),
     doi: TextSchema.optional(),
     pdfUrl: UrlSchema.optional(),
@@ -269,7 +270,7 @@ export function recordSchemas({ object, Link, Placement, Period, FocalPoint }: S
     assignee: TextSchema.optional(),
     // Press.
     publication: TextSchema.optional(),
-    excerpt: TextSchema.optional(),
+    excerpt: MarkdownSchema.optional(),
     author: TextSchema.optional(),
     // External work.
     locationLabel: TextSchema.optional(),
@@ -320,7 +321,7 @@ export function recordSchemas({ object, Link, Placement, Period, FocalPoint }: S
     organizationUrl: UrlSchema.optional(),
     location: TextSchema.optional(),
     field: TextSchema.optional(),
-    description: TextSchema.optional(),
+    description: MarkdownSchema.optional(),
     highlights: listOf(TextSchema).optional(),
     achievements: listOf(TextSchema).optional(),
     skills: listOf(TextSchema).optional(),
@@ -369,7 +370,7 @@ export function recordSchemas({ object, Link, Placement, Period, FocalPoint }: S
     items: requiredList(
       object({
         name: LabelSchema,
-        description: TextSchema.optional(),
+        description: MarkdownSchema.optional(),
         pricing: TextSchema.optional(),
         url: UrlSchema.optional(),
         highlights: listOf(TextSchema).optional(),
@@ -379,7 +380,7 @@ export function recordSchemas({ object, Link, Placement, Period, FocalPoint }: S
 
   /** The practice: one authored thesis, and ordered groups of skills, tools, and services. */
   const PracticeSchema = object({
-    thesis: TextSchema.optional(),
+    thesis: MarkdownSchema.optional(),
     skills: listOf(SkillGroup).optional(),
     tools: listOf(ToolGroup).optional(),
     services: listOf(ServiceGroup).optional(),

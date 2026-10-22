@@ -2,6 +2,7 @@ import { z } from 'zod';
 import {
   LabelSchema,
   listOf,
+  MarkdownSchema,
   LooseDateSchema,
   RefSchema,
   requiredList,
@@ -36,11 +37,11 @@ export function sectionSchemas({ object, section, Link, Action, Placement }: Sch
   /** Content no other kind holds. It always renders in the shared fallback. */
   const CustomSectionSchema = section('custom', {
     title: LabelSchema,
-    body: TextSchema.optional(),
+    body: MarkdownSchema.optional(),
     items: listOf(
       object({
         title: LabelSchema,
-        summary: TextSchema.optional(),
+        summary: MarkdownSchema.optional(),
         media: listOf(Placement).optional(),
         evidence: listOf(RefSchema).optional(),
         links: listOf(Link).optional(),
@@ -58,11 +59,11 @@ export function sectionSchemas({ object, section, Link, Action, Placement }: Sch
     ctas: listOf(Action).optional(),
   });
 
-  const LedeSchema = section('lede', { body: TextSchema });
+  const LedeSchema = section('lede', { body: MarkdownSchema });
 
   const NowSchema = section('now', {
     asOf: LooseDateSchema.optional(),
-    body: TextSchema,
+    body: MarkdownSchema,
   });
 
   const QuoteSchema = section('quote', {

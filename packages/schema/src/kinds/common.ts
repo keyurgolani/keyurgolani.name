@@ -6,6 +6,7 @@ import {
   SECTION_ID_MAX_LENGTH,
   SECTION_ID_PATTERN,
 } from '../ids';
+import { checkMarkdown } from '../markdown';
 import { isAllowedUrl } from '../url';
 
 // The building blocks every schema shares. Leaf schemas (dates, ids, URLs,
@@ -177,6 +178,13 @@ export const LabelSchema = z.string().refine((value) => value.trim() !== '', {
 export const TextSchema = z.string().refine((value) => value.trim() !== '', {
   message: "is blank. Leave it out instead: a field that's left out isn't authored.",
 });
+
+/**
+ * Text a renderer reads as Markdown: every field `RichText` renders. Over the
+ * Markdown cap in ../markdown.ts (length, nesting, and the marks that make
+ * marked slow), it's a `markdown.*` finding at its pointer.
+ */
+export const MarkdownSchema = TextSchema.superRefine(checkMarkdown);
 
 /** An optional list: when it's there, it has an item. */
 export function listOf<T extends z.ZodTypeAny>(item: T) {

@@ -143,6 +143,10 @@ export const DIAGNOSTIC_SEVERITIES = {
   'legacy.document': 'blocks-preview',
   'site.deployment-setting': 'blocks-preview',
   'appearance.unknown': 'blocks-preview',
+  // The Markdown cap (#10): refused before anything renders the field.
+  'markdown.too-long': 'blocks-preview',
+  'markdown.too-deep': 'blocks-preview',
+  'markdown.too-dense': 'blocks-preview',
   'id.duplicate': 'blocks-publish',
   'id.reused': 'blocks-publish',
   'ref.missing': 'blocks-publish',

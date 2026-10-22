@@ -269,7 +269,7 @@ test('a word longer than any key or kind gets no hint, and costs no time', () =>
   for (const [document, baseline, format, message, line, column] of [
     [
       yaml(`kind: ${million('q')}`),
-      yaml(`kind: lede\n    body: ${million('q')}`),
+      yaml(`kind: quote\n    text: ${million('q')}`),
       'yaml',
       '/sections/0/kind is not a known section kind. A section kind from an extension is <npm package name>/<name>.',
       7,
