@@ -154,23 +154,25 @@ export async function readEvent(
   let text: string;
   try {
     text = (await fs.readFile(paths.event(seq))).toString('utf8');
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
-    throw error;
+  } catch {
+    // Not there, or there and unreadable, such as a link (ELOOP): no event, as for an unparseable file.
+    return null;
   }
   const event = asEvent(safeParse(text));
   return event?.seq === seq ? event : null;
 }
 
-/** Every event in the log, in seq order. A file that isn't an event is left out. */
+/**
+ * Every event in the log, in seq order. A file that isn't an event is left
+ * out, and so is one that can't be read.
+ */
 export async function readEvents(fs: ReadFs, paths: StorePaths): Promise<PublicationEvent[]> {
   const events: PublicationEvent[] = [];
   for (const name of await fs.readdir(paths.events)) {
     const match = /^([1-9][0-9]*)\.json$/.exec(name);
     if (!match) continue;
-    const seq = Number(match[1]);
-    const event = asEvent(safeParse((await fs.readFile(paths.event(seq))).toString('utf8')));
-    if (event?.seq === seq) events.push(event);
+    const event = await readEvent(fs, paths, Number(match[1]));
+    if (event) events.push(event);
   }
   return events.sort((a, b) => a.seq - b.seq);
 }

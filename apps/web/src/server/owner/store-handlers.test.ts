@@ -674,3 +674,79 @@ test("owner opens the store at the data directory's real path, whatever spelling
   });
   assert.equal(owner.store.paths.root, realpathSync(dataDir));
 });
+
+test("owner starts degraded, never stopped, over a live manifest a reader can't walk or a log it can't list", async (t) => {
+  deploy(t);
+  t.mock.method(console, 'log', () => {});
+  for (const spoil of ['rendering', 'log'] as const) {
+    const dataDir = mkdtempSync(path.join(tmpdir(), 'store-handlers-'));
+    t.after(() => rmSync(dataDir, { recursive: true, force: true }));
+    const owner = ownerStore({
+      config: configFor(dataDir),
+      checks: CHECKS,
+      documents: EMPTY,
+      setServable: () => {},
+      // Walks every field, as apps/web's renderDrift does.
+      renderDrift: (rendering) => [
+        ...rendering.packs.map((pack) => ({
+          kind: 'pack' as const,
+          id: pack.id,
+          revision: pack.version,
+          build: null,
+        })),
+        ...Object.keys(rendering.contracts).map((id) => ({
+          kind: 'contract' as const,
+          id,
+          revision: rendering.contracts[id]!,
+          build: null,
+        })),
+      ],
+    });
+    t.after(() => owner.release());
+    assert.deepEqual(await owner.checkDirectory(), []);
+    const ids: string[] = [];
+    for (const name of ['Rowan One', 'Rowan Two']) {
+      const working = await owner.store.drafts.getWorking();
+      const created = await owner.store.drafts.create(
+        { documents: documents(name), ...(working ? { expectedVersion: working.version } : {}) },
+        'owner',
+      );
+      assert.ok(created.kind === 'saved');
+      const published = await owner.store.publication.publish(
+        {
+          draftId: created.draft.draftId,
+          draftVersion: created.draft.version,
+          expectedLiveRevisionId: (ids.at(-1) ?? null) as never,
+        },
+        'operator',
+      );
+      assert.ok(published.kind === 'committed');
+      ids.push(published.revisionId);
+    }
+    if (spoil === 'rendering') {
+      // The live manifest's rendering lacks its contracts.
+      const file = path.join(dataDir, 'revisions', ids[1]!, 'manifest.json');
+      const manifest = JSON.parse(readFileSync(file, 'utf8'));
+      delete manifest.rendering.contracts;
+      writeFileSync(file, JSON.stringify(manifest));
+    } else {
+      // The live revision damaged, and the log, which the last known good's walk reads, unlistable.
+      writeFileSync(
+        path.join(dataDir, 'revisions', ids[1]!, 'documents', 'portfolio.yml'),
+        'x: 1\n',
+      );
+      chmodSync(path.join(dataDir, 'publication', 'events'), 0o000);
+      t.after(() => {
+        if (existsSync(dataDir)) chmodSync(path.join(dataDir, 'publication', 'events'), 0o700);
+      });
+    }
+    const issues = await owner.checkIntegrity();
+    assert.deepEqual(
+      issues.map((issue) => issue.code),
+      // Repair lists the log too, so with it unlistable repair fails as well.
+      spoil === 'rendering' ? ['revision_damaged'] : ['store_repair_failed', 'revision_unservable'],
+      spoil,
+    );
+    if (spoil === 'log') chmodSync(path.join(dataDir, 'publication', 'events'), 0o700);
+  }
+});

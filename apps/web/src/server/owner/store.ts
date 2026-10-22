@@ -498,9 +498,14 @@ export function ownerStore({
           issues.push(finding('store_repair_failed'));
         }
       }
-      const status = await reader.status();
-      if (status.state === 'degraded') issues.push(finding('revision_damaged'));
-      if (status.state === 'incompatible') issues.push(finding('revision_unservable'));
+      // The reader keeps a failure as nothing servable; anything it throws
+      // all the same starts owner degraded too, never stopped.
+      const state = await reader.status().then(
+        (status) => status.state,
+        () => 'incompatible' as const,
+      );
+      if (state === 'degraded') issues.push(finding('revision_damaged'));
+      if (state === 'incompatible') issues.push(finding('revision_unservable'));
       return issues;
     },
     writes(): WriteState {
