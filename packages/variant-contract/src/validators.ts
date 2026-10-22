@@ -4,7 +4,7 @@
 // the selection, the stored control values, and the route toggles.
 
 import type { ParsedPair, UnitValidator } from '@portfolio/schema';
-import { compatibilityFor, type CompatibilityOptions } from './compatibility';
+import { compatibilityFindings, type CompatibilityOptions } from './compatibility';
 import type { VariantRegistry } from './registry';
 
 export type ValidatorOptions = Omit<CompatibilityOptions, 'registry' | 'extensions'>;
@@ -12,7 +12,9 @@ export type ValidatorOptions = Omit<CompatibilityOptions, 'registry' | 'extensio
 /**
  * The compatibility report's findings, for the composition that renders the
  * pair: its selection, or the fallback composition in its place. Live at
- * startup and in loadPair(), and not live for #3's publish.
+ * startup and in loadPair(), and not live for #3's publish. It skips the
+ * report's hash, and keeps `variant.unavailable` when checking the
+ * composition throws, so one broken input can't take every finding with it.
  */
 export function validateCompatibility(
   registry: VariantRegistry,
@@ -22,8 +24,7 @@ export function validateCompatibility(
     id: 'variant-compatibility',
     covers: ['site.appearance.variant', 'site.variantControls.*', 'site.routes.*'],
     validate(pair: ParsedPair, ctx) {
-      const report = compatibilityFor(pair, { ...options, registry, extensions: ctx.extensions });
-      return { diagnostics: [...report.diagnostics], notChecked: [...report.notChecked] };
+      return compatibilityFindings(pair, { ...options, registry, extensions: ctx.extensions });
     },
   };
 }

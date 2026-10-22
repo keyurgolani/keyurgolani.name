@@ -12,6 +12,7 @@ import {
   isPlainObject,
   languageDirection,
   parseExtensionKind,
+  publicSectionIndexes,
   toPublicView,
   type ContentExtension,
   type Diagnostic,
@@ -23,13 +24,14 @@ import {
   checkControlValues,
   contentIndex,
   materializeControls,
+  storedControls,
   type ControlProblem,
   type ControlValues,
 } from './controls';
 import { toPointer, UNIT_CODES, type UnitCode } from './diagnostics';
 import { FALLBACK_ID } from './ids';
 import type { ContentSlot, VariantManifest } from './manifest-schema';
-import { findVariant, type VariantRegistry } from './registry';
+import { findVariant, type RegisteredVariant, type VariantRegistry } from './registry';
 import { viewShape } from './segments';
 import { sha256 } from './sha256';
 import { CONTRACT_VERSION } from './version';
@@ -73,7 +75,11 @@ export interface SlotReport {
   readonly whenEmpty?: ContentSlot['whenEmpty'];
 }
 
-/** A path view of the previous variant that this one doesn't serve, so its address redirects to its parent route. */
+/**
+ * A path view of the previous variant that this one doesn't serve. Its
+ * address redirects to its parent route while the previous variant stays
+ * installed, and is missing (404) once it's removed.
+ */
 export interface RouteReport {
   readonly id: string;
   readonly under: 'home' | 'work';
@@ -146,41 +152,137 @@ export function compatibilityFor(
   options: CompatibilityOptions,
 ): CompatibilityReport {
   const requested = unit.site.appearance.variant;
-  const selected = requested === FALLBACK_ID ? undefined : findVariant(options.registry, requested);
+  const selection = new Findings(options.live ?? false);
+  const selected = selectable(requested, options.registry);
+  if (!selected) unavailable(requested, options.registry, selection);
   const rendered = selected ?? findVariant(options.registry, FALLBACK_ID);
-  if (rendered) return evaluateCompatibility(rendered.manifest, unit, options);
-  const findings = new Findings(options.live ?? false);
-  unavailable(requested, options.registry, findings);
+  if (!rendered) {
+    return report(
+      { requested, rendered: FALLBACK_ID, version: null },
+      hashInputs(null, requested, unit, options),
+      NOTHING_RENDERED,
+      selection.diagnostics,
+      notCheckedWithout(unit),
+    );
+  }
+  const composition = evaluate(rendered.manifest, unit, options, selected !== undefined);
   return report(
-    { requested, rendered: FALLBACK_ID, version: null },
-    hashInputs(null, unit, options),
-    { kinds: [], slots: [], routes: [] },
-    findings,
-    [...entriesNotChecked(unit, undefined), ...togglesNotChecked(unit), 'variant.compatibility'],
+    { requested, rendered: rendered.manifest.id, version: rendered.version },
+    hashInputs(rendered.manifest, requested, unit, options),
+    composition.parts,
+    [...selection.diagnostics, ...composition.diagnostics],
+    composition.notChecked,
   );
 }
 
 /**
- * How `unit` renders in `manifest`'s composition. `variant.unavailable`
- * comes from the selection: when the registry doesn't have it, `manifest`
- * is what renders in its place, the fallback composition.
+ * How `unit` would render with `manifest` selected, as #8 and #9 explain a
+ * candidate before the owner selects it: the candidate is the selection, so
+ * the site's own selection plays no part, and the route toggles are checked
+ * against the candidate's routes. A candidate this build doesn't register,
+ * or the fallback composition, is `variant.unavailable`, as selecting it
+ * would be, and the rest of the report still describes `manifest`.
  */
 export function evaluateCompatibility(
   manifest: VariantManifest,
   unit: ParsedPair,
   options: CompatibilityOptions,
 ): CompatibilityReport {
-  const findings = new Findings(options.live ?? false);
-  const requested = unit.site.appearance.variant;
-  const selected = requested === FALLBACK_ID ? undefined : findVariant(options.registry, requested);
-  if (!selected) unavailable(requested, options.registry, findings);
+  const requested = manifest.id;
+  const selection = new Findings(options.live ?? false);
+  const selected = selectable(requested, options.registry);
+  if (!selected) unavailable(requested, options.registry, selection);
+  const composition = evaluate(manifest, unit, options, selected !== undefined);
+  return report(
+    {
+      requested,
+      rendered: manifest.id,
+      version: findVariant(options.registry, manifest.id)?.version ?? null,
+    },
+    hashInputs(manifest, requested, unit, options),
+    composition.parts,
+    [...selection.diagnostics, ...composition.diagnostics],
+    composition.notChecked,
+  );
+}
 
-  const view = toPublicView(unit, { extensions: options.extensions });
-  const sections = documentIndexes(unit, view.portfolio);
+/**
+ * The report's diagnostics and what it couldn't check, as the compatibility
+ * validator returns them to #4: without the hash, which the validator has
+ * no use for. The selection is checked first and apart, so when checking
+ * the composition throws, `variant.unavailable` still stands, and the
+ * composition, its stored controls, and the route toggles are listed as not
+ * checked in place of what it would have found.
+ */
+export function compatibilityFindings(
+  unit: ParsedPair,
+  options: CompatibilityOptions,
+): { diagnostics: Diagnostic[]; notChecked: string[] } {
+  const requested = unit.site.appearance.variant;
+  const selection = new Findings(options.live ?? false);
+  const selected = selectable(requested, options.registry);
+  if (!selected) unavailable(requested, options.registry, selection);
+  const rendered = selected ?? findVariant(options.registry, FALLBACK_ID);
+  let composition: Composition | undefined;
+  if (rendered) {
+    try {
+      composition = evaluate(rendered.manifest, unit, options, selected !== undefined);
+    } catch {
+      composition = undefined;
+    }
+  }
+  return {
+    diagnostics: [...selection.diagnostics, ...(composition?.diagnostics ?? [])].sort(
+      compareDiagnostics,
+    ),
+    notChecked: [...new Set(composition?.notChecked ?? notCheckedWithout(unit))].sort(),
+  };
+}
+
+const NOTHING_RENDERED: Composition['parts'] = { kinds: [], slots: [], routes: [] };
+
+/** The registered variant `id` names, when a site can select it: any but the fallback composition. */
+function selectable(id: string, registry: VariantRegistry): RegisteredVariant | undefined {
+  return id === FALLBACK_ID ? undefined : findVariant(registry, id);
+}
+
+/** What a report that checks no composition leaves unchecked: the composition, every stored entry, and every toggle. */
+function notCheckedWithout(unit: ParsedPair): string[] {
+  return [
+    ...entriesNotChecked(unit, undefined),
+    ...togglesNotChecked(unit),
+    'variant.compatibility',
+  ];
+}
+
+/** How a pair renders in one composition: everything in the report but the selection's finding. */
+interface Composition {
+  readonly parts: Pick<CompatibilityReport, 'kinds' | 'slots' | 'routes'>;
+  readonly diagnostics: readonly Diagnostic[];
+  readonly notChecked: readonly string[];
+}
+
+/**
+ * How `unit` renders in `manifest`'s composition. `selected` is whether the
+ * composition is the selection itself: the route toggles are about the
+ * selection's routes, so they're checked only then, and not while the
+ * fallback composition renders in its place.
+ */
+function evaluate(
+  manifest: VariantManifest,
+  unit: ParsedPair,
+  options: CompatibilityOptions,
+  selected: boolean,
+): Composition {
+  const findings = new Findings(options.live ?? false);
+  const context = { extensions: options.extensions };
+  const view = toPublicView(unit, context);
+  // Where each visible section sits in the document, by the filter the view used.
+  const sections = publicSectionIndexes(unit, context);
   const kinds = kindReports(manifest, view.portfolio, sections, options, findings);
 
   const content = contentIndex(view.portfolio);
-  const entry = unit.site.variantControls?.[manifest.id];
+  const entry = storedControls(unit.site, manifest.id);
   for (const problem of checkControlValues(manifest, entry, content)) {
     findings.add(
       problem.code,
@@ -213,17 +315,11 @@ export function evaluateCompatibility(
   if (selected) checkToggles(unit, manifest, findings);
   else notChecked.push(...togglesNotChecked(unit));
 
-  return report(
-    {
-      requested,
-      rendered: manifest.id,
-      version: findVariant(options.registry, manifest.id)?.version ?? null,
-    },
-    hashInputs(manifest, unit, options),
-    { kinds, slots, routes: routeReports(manifest, options.previous) },
-    findings,
+  return {
+    parts: { kinds, slots, routes: routeReports(manifest, options.previous) },
+    diagnostics: findings.diagnostics,
     notChecked,
-  );
+  };
 }
 
 /**
@@ -262,11 +358,11 @@ class Findings {
 function report(
   variant: CompatibilityReport['variant'],
   inputHash: string,
-  parts: Pick<CompatibilityReport, 'kinds' | 'slots' | 'routes'>,
-  findings: Findings,
+  parts: Composition['parts'],
+  findings: readonly Diagnostic[],
   notChecked: readonly string[],
 ): CompatibilityReport {
-  const diagnostics = [...findings.diagnostics].sort(compareDiagnostics);
+  const diagnostics = [...findings].sort(compareDiagnostics);
   const status: CompatibilityStatus = diagnostics.some(
     ({ severity }) => severity === 'blocks-publish',
   )
@@ -330,27 +426,6 @@ function controlConsequence(problem: ControlProblem, manifest: VariantManifest):
   return manifest.controls.items.some((control) => control.id === key)
     ? ' The control renders its default.'
     : ' Nothing reads it.';
-}
-
-/**
- * Each visible section's index in the portfolio document, so a finding
- * points where the owner edits. The public view keeps the document's order
- * and drops sections, so its sections are matched in order by id.
- */
-function documentIndexes(unit: ParsedPair, portfolio: PublicPortfolio): number[] {
-  const indexes: number[] = [];
-  let next = 0;
-  for (const section of portfolio.sections) {
-    while (
-      next < unit.portfolio.sections.length &&
-      unit.portfolio.sections[next]!.id !== section.id
-    ) {
-      next++;
-    }
-    indexes.push(next);
-    next++;
-  }
-  return indexes;
 }
 
 function kindReports(
@@ -653,9 +728,14 @@ function routeReports(manifest: VariantManifest, previous?: VariantManifest): Ro
     .map(({ id, under, segment }) => ({ id, under, segment }));
 }
 
-/** The digest of every input the report depends on. */
+/**
+ * The digest of every input the report depends on: what renders, the
+ * selection it's for (the site's, or a candidate's), the pair, and the
+ * options.
+ */
 function hashInputs(
   manifest: VariantManifest | null,
+  requested: string,
   unit: ParsedPair,
   options: CompatibilityOptions,
 ): string {
@@ -663,6 +743,7 @@ function hashInputs(
     reportVersion: REPORT_VERSION,
     contract: CONTRACT_VERSION,
     manifest,
+    requested,
     previous: options.previous ?? null,
     portfolio: unit.portfolio,
     site: unit.site,

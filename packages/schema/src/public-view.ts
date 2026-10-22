@@ -47,20 +47,37 @@ export interface PublicViewContext {
  */
 export function toPublicView(pair: ParsedPair, context: PublicViewContext = {}): PublicView {
   const registry = createExtensionRegistry(context.extensions ?? []);
+  const sections = keptSections(pair, registry).map((index) => pair.portfolio.sections[index]!);
+  return {
+    portfolio: withoutUnregistered({ ...pair.portfolio, sections }, registry) as PublicPortfolio,
+    site: withoutUnregistered(pair.site, registry) as Public<Site>,
+  };
+}
+
+/**
+ * Where each section of the public view sits in the portfolio document, in
+ * the view's order: the view's section `i` is the document's
+ * `/sections/<indexes[i]>`, so a finding about it points where the owner
+ * edits it, even when ids repeat.
+ */
+export function publicSectionIndexes(pair: ParsedPair, context: PublicViewContext = {}): number[] {
+  return keptSections(pair, createExtensionRegistry(context.extensions ?? []));
+}
+
+/** The indexes of the sections toPublicView() keeps: not hidden, and not an unregistered extension's. */
+function keptSections(pair: ParsedPair, registry: ExtensionRegistry): number[] {
   const hidden = new Set(
     Object.entries(pair.site.sections ?? {})
       .filter(([, settings]) => settings.hidden === true)
       .map(([id]) => id),
   );
-  const sections = pair.portfolio.sections.filter((section) => {
-    if (hidden.has(section.id)) return false;
+  const kept: number[] = [];
+  pair.portfolio.sections.forEach((section, index) => {
+    if (hidden.has(section.id)) return;
     const extension = parseExtensionKind(section.kind);
-    return !extension || registry.extension(extension.namespace) !== undefined;
+    if (!extension || registry.extension(extension.namespace) !== undefined) kept.push(index);
   });
-  return {
-    portfolio: withoutUnregistered({ ...pair.portfolio, sections }, registry) as PublicPortfolio,
-    site: withoutUnregistered(pair.site, registry) as Public<Site>,
-  };
+  return kept;
 }
 
 /**

@@ -9,6 +9,7 @@ import {
   materializeControls,
   migrateControls,
   serializeControls,
+  storedControls,
   type ControlsEntry,
 } from './controls';
 import type { VariantManifest } from './manifest-schema';
@@ -81,6 +82,17 @@ test('omitted values, and no entry at all, take the defaults', () => {
   });
   assert.deepEqual(materializeControls(MANIFEST, undefined, CONTENT), DEFAULTS);
   assert.deepEqual(checkControlValues(MANIFEST, undefined, CONTENT), []);
+});
+
+test("storedControls returns the site's own entry for a variant, and nothing it inherits", () => {
+  const entry = { version: 2, values: { columns: 3 } };
+  assert.equal(storedControls({ variantControls: { 'acme-ocean': entry } }, 'acme-ocean'), entry);
+  assert.equal(storedControls({}, 'acme-ocean'), undefined);
+  for (const id of ['constructor', 'toString', '__proto__']) {
+    assert.equal(storedControls({ variantControls: {} }, id), undefined, id);
+  }
+  const inherited = Object.create({ 'acme-ocean': entry }) as Record<string, ControlsEntry>;
+  assert.equal(storedControls({ variantControls: inherited }, 'acme-ocean'), undefined);
 });
 
 test('each kind of bad value is controls.invalid at its own path, and renders its default', () => {

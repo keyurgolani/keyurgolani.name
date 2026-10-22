@@ -3,7 +3,12 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { acmePortfolioPhotography } from './__fixtures__/acme-portfolio-photography';
 import { parsePortfolio, parseSite } from './load';
-import { toPublicView, type ParsedPair, type PublicPortfolio } from './public-view';
+import {
+  publicSectionIndexes,
+  toPublicView,
+  type ParsedPair,
+  type PublicPortfolio,
+} from './public-view';
 
 const SITE = [
   'schemaVersion: 2',
@@ -77,6 +82,30 @@ test('with nothing registered, every extension section and extensions entry is d
   assert.equal('extensions' in view.portfolio.identity, false);
   assert.equal('extensions' in view.site.appearance, false);
   assert.ok(!JSON.stringify(view.portfolio).includes('@other/portfolio-music'));
+});
+
+test("publicSectionIndexes says where each of the view's sections sits in the document", () => {
+  const input = pair();
+  const extensions = [acmePortfolioPhotography];
+  // plates (0) is hidden and releases (2) is unregistered, so the view keeps exhibitions alone.
+  assert.deepEqual(publicSectionIndexes(input, { extensions }), [1]);
+  assert.deepEqual(publicSectionIndexes(input), []);
+  // Matched by position, not by id: the repeat of a dropped section's id is still its own section.
+  const [plates, exhibitions, releases] = input.portfolio.sections;
+  const repeated: ParsedPair = {
+    ...input,
+    portfolio: {
+      ...input.portfolio,
+      sections: [releases!, { ...exhibitions!, id: releases!.id }, plates!],
+    },
+  };
+  const indexes = publicSectionIndexes(repeated, { extensions });
+  assert.deepEqual(indexes, [1]);
+  const view = toPublicView(repeated, { extensions });
+  assert.deepEqual(
+    view.portfolio.sections.map(({ kind }) => kind),
+    indexes.map((index) => repeated.portfolio.sections[index]!.kind),
+  );
 });
 
 test('only toPublicView makes the portfolio a renderer takes', () => {

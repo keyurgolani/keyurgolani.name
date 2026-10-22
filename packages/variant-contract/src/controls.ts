@@ -3,7 +3,7 @@
 // `variantControls.<id>`. Omitted values take defaults, an invalid or stale
 // one renders its default, and inactive variants keep their entries.
 
-import { canonicalize, isPlainObject, type PublicPortfolio } from '@portfolio/schema';
+import { canonicalize, isPlainObject, type PublicPortfolio, type Site } from '@portfolio/schema';
 import type { ControlDeclaration, MigrationOperation, VariantManifest } from './manifest-schema';
 
 /** A control's value: boolean, enum value, integer, content id or null, or a list of content ids. */
@@ -14,6 +14,19 @@ export type ControlValues = Readonly<Record<string, ControlValue>>;
 export interface ControlsEntry {
   readonly version: number;
   readonly values: Readonly<Record<string, unknown>>;
+}
+
+/**
+ * The site's stored values for the variant `id`: its own `variantControls`
+ * entry, never one the object inherits, so a variant with the id
+ * `constructor` has none until the site stores one.
+ */
+export function storedControls(
+  site: Pick<Site, 'variantControls'>,
+  id: string,
+): ControlsEntry | undefined {
+  const stored = site.variantControls;
+  return stored !== undefined && Object.hasOwn(stored, id) ? stored[id] : undefined;
 }
 
 /** The content a contentRef may point at: each visible section's id and kind. */

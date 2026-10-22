@@ -166,6 +166,43 @@ test('the report says how each kind renders, how full each slot is, and what to 
   assert.deepEqual(report.routes, []);
   // No recipe registry until #20, so the recommended appearance waits.
   assert.deepEqual(report.notChecked, ['variant.recommendedAppearance']);
+  // Live, as startup checks the pair, an empty required slot only warns: the page renders around it.
+  const live = compatibilityFor(pair(site('acme-ocean')), { registry: REGISTRY, live: true });
+  assert.deepEqual(where(live.diagnostics), [
+    ['slot.required-empty', 'warning', 'portfolio', '/sections'],
+    ['slot.recommended-empty', 'warning', 'site', '/variantControls/acme-ocean/values/leadSection'],
+  ]);
+  assert.equal(live.status, 'warning');
+});
+
+test('a recommended slot with min 0 still asks for one item', () => {
+  const lenient = manifest((raw) => {
+    raw.id = 'acme-lenient';
+    const slots = raw.contentSlots as Record<string, unknown>[];
+    slots.find((slot) => slot.id === 'lead')!.min = 0;
+  });
+  const registry: VariantRegistry = [
+    ...REGISTRY,
+    { packageName: '@acme/lenient', version: '1.0.0', manifest: lenient },
+  ];
+  const report = compatibilityFor(pair(site('acme-lenient')), { registry });
+  assert.deepEqual(
+    where(report.diagnostics).filter(([code]) => code === 'slot.recommended-empty'),
+    [
+      [
+        'slot.recommended-empty',
+        'warning',
+        'site',
+        '/variantControls/acme-lenient/values/leadSection',
+      ],
+    ],
+  );
+  const slot = report.slots.find(({ id }) => id === 'lead')!;
+  assert.deepEqual([slot.count, slot.min, slot.whenEmpty !== undefined], [0, 0, true]);
+  assert.match(
+    report.diagnostics.find(({ code }) => code === 'slot.recommended-empty')!.message,
+    /holds 0 of the 1 items/,
+  );
 });
 
 test('a slot counts sections of its kind, sections its control points at, and the values its field holds', () => {
@@ -241,11 +278,16 @@ test('every Slice 5 finding has its exact code, document, pointer, and severity'
     ],
   );
   assert.deepEqual(report.notChecked, []);
-  // Live, as startup checks the pair, what renders anyway only warns.
+  // Live, as startup checks the pair, what renders anyway only warns, at the same pointers.
   const live = compatibilityFor(unit, { ...options, live: true });
   assert.deepEqual(
-    live.diagnostics.map(({ code, severity }) => [code, severity]),
-    report.diagnostics.map(({ code }) => [code, 'warning']),
+    where(live.diagnostics),
+    where(report.diagnostics).map(([code, , document, pointer]) => [
+      code,
+      'warning',
+      document,
+      pointer,
+    ]),
   );
   assert.equal(live.status, 'warning');
   // With its extension's renderer registered, the exhibitions render.
@@ -278,6 +320,53 @@ test('a section in a language that runs right to left is direction.unsupported a
   // A composition that declares rtl lays it out either way.
   const ocean = compatibilityFor(pair(site('acme-ocean'), portfolio), { registry: REGISTRY });
   assert.ok(!ocean.diagnostics.some(({ code }) => code === 'direction.unsupported'));
+});
+
+test('a finding about a section points at its index in the document, past hidden and dropped sections', () => {
+  const pictured = manifest((raw) => {
+    raw.id = 'acme-pictured';
+    const slots = raw.contentSlots as Record<string, unknown>[];
+    slots.find((slot) => slot.id === 'project-images')!.max = 1;
+  });
+  const registry: VariantRegistry = [
+    ...REGISTRY,
+    { packageName: '@acme/pictured', version: '1.0.0', manifest: pictured },
+  ];
+  const ASIDE = `
+  - kind: lede
+    id: aside
+    body: Hidden from visitors.
+`;
+  const SHOTS = `
+  - kind: projects
+    id: shots
+    title: Shots
+    items:
+      - { name: Harbor, image: { src: /harbor.jpg, alt: A harbor } }
+      - { name: Dunes, image: { src: /dunes.jpg, alt: Dunes } }
+`;
+  // aside (8) is hidden, so the github section (9) and the shots (10) are 8 and 9 in the view.
+  const portfolio = withSections(ASIDE, GITHUB, SHOTS);
+  const unit = pair(site('acme-pictured', 'sections:\n  aside: { hidden: true }\n'), portfolio);
+  const report = compatibilityFor(unit, { registry });
+  assert.deepEqual(
+    where(report.diagnostics).filter(
+      ([code]) => code === 'kind.unsupported' || code === 'slot.overflow',
+    ),
+    [
+      ['kind.unsupported', 'warning', 'portfolio', '/sections/9'],
+      ['slot.overflow', 'warning', 'portfolio', '/sections/10/items/1/image'],
+    ],
+  );
+  // A dropped section's id, repeated by a later one, doesn't take its place:
+  // the unregistered extension section (8) is dropped, and the github section
+  // (9) is its own.
+  const repeated = withSections(SHOWS.replace('id: shows', 'id: code'), GITHUB);
+  const dropped = compatibilityFor(pair(site('acme-ocean'), repeated), { registry: REGISTRY });
+  assert.deepEqual(
+    where(dropped.diagnostics).filter(([code]) => code === 'kind.unsupported'),
+    [['kind.unsupported', 'warning', 'portfolio', '/sections/9']],
+  );
 });
 
 test('each message starts at its pointer, says what renders, ends on what it blocks, and repeats no document value', () => {
@@ -390,8 +479,86 @@ test('inputHash is the same for the same inputs, and follows what the report dep
   assert.notEqual(compatibilityFor(edited, options).inputHash, hash);
   assert.notEqual(compatibilityFor(unit, { ...options, live: true }).inputHash, hash);
   assert.notEqual(compatibilityFor(unit, { ...options, previous: OCEAN }).inputHash, hash);
+  // What the build registers is an input too: renderers, extensions, and recipes.
+  const renderers = ['@acme/portfolio-photography/exhibitions'];
+  assert.notEqual(
+    compatibilityFor(unit, { ...options, extensionRenderers: renderers }).inputHash,
+    hash,
+  );
+  assert.notEqual(
+    compatibilityFor(unit, { ...options, extensions: [exhibitions] }).inputHash,
+    hash,
+  );
+  assert.notEqual(compatibilityFor(unit, { ...options, recipes: [] }).inputHash, hash);
   const flipped = evaluateCompatibility(OCEAN, structuredClone(unit), options);
   assert.equal(flipped.inputHash, hash);
+  // The fallback composition's own report as a candidate isn't its report standing in.
+  const missing = pair(site('missing-variant'));
+  assert.notEqual(
+    evaluateCompatibility(FALLBACK, missing, options).inputHash,
+    compatibilityFor(missing, options).inputHash,
+  );
+});
+
+test("a candidate is evaluated on its own selection, whatever the site's is", () => {
+  const ROUTES = 'routes:\n  reels:\n    enabled: true\n';
+  // The site selects a variant this build doesn't register.
+  const unit = pair(site('editorial', ROUTES));
+  const current = compatibilityFor(unit, { registry: REGISTRY });
+  assert.equal(current.variant.rendered, 'fallback');
+  assert.ok(current.notChecked.includes('site.routes.reels'));
+  // Ocean as a candidate: no variant.unavailable from the site's selection,
+  // and the toggles are checked against Ocean's routes.
+  const candidate = evaluateCompatibility(OCEAN, unit, { registry: REGISTRY });
+  assert.deepEqual(candidate.variant, {
+    requested: 'acme-ocean',
+    rendered: 'acme-ocean',
+    version: '1.0.0',
+  });
+  assert.deepEqual(where(candidate.diagnostics), [
+    ['slot.required-empty', 'blocks-publish', 'portfolio', '/sections'],
+    ['route.unknown', 'warning', 'site', '/routes/reels'],
+    ['slot.recommended-empty', 'warning', 'site', '/variantControls/acme-ocean/values/leadSection'],
+  ]);
+  assert.ok(!candidate.notChecked.some((entry) => entry.startsWith('site.routes.')));
+  // It's the report the site gets once it selects Ocean, but for the hash of its own pair.
+  const selected = compatibilityFor(pair(site('acme-ocean', ROUTES)), { registry: REGISTRY });
+  assert.deepEqual({ ...candidate, inputHash: '' }, { ...selected, inputHash: '' });
+  // A candidate a site can't select is variant.unavailable, as selecting it would be.
+  const fallback = evaluateCompatibility(FALLBACK, unit, { registry: REGISTRY, live: true });
+  const [record] = fallback.diagnostics.filter(({ code }) => code === 'variant.unavailable');
+  assert.deepEqual([record?.severity, record?.pointer], ['blocks-publish', '/appearance/variant']);
+  assert.match(record!.message, /can't be selected/);
+  const unregistered = manifest((raw) => {
+    raw.id = 'acme-reef';
+  });
+  const reef = evaluateCompatibility(unregistered, unit, { registry: REGISTRY });
+  assert.deepEqual(reef.variant, { requested: 'acme-reef', rendered: 'acme-reef', version: null });
+  assert.deepEqual(
+    where(reef.diagnostics).filter(([code]) => code === 'variant.unavailable'),
+    [['variant.unavailable', 'blocks-publish', 'site', '/appearance/variant']],
+  );
+});
+
+test('a variant id that names an Object property reads only an entry the site stores', () => {
+  const raw = JSON.parse(
+    readFileSync(new URL('./__fixtures__/manifest.json', import.meta.url), 'utf8'),
+  ) as Record<string, unknown>;
+  raw.id = 'constructor';
+  const checked = validateManifest(raw, { packageName: 'constructor' });
+  assert.ok(checked.ok, JSON.stringify(checked.diagnostics));
+  const registry: VariantRegistry = [
+    ...REGISTRY,
+    { packageName: 'constructor', version: '1.0.0', manifest: checked.manifest },
+  ];
+  const codes = (siteText: string) =>
+    compatibilityFor(pair(siteText), { registry })
+      .diagnostics.map(({ code }) => code)
+      .filter((code) => code.startsWith('controls.'));
+  // Object.prototype.constructor is no stored entry, so nothing is stale.
+  assert.deepEqual(codes(site('constructor')), []);
+  const stored = 'variantControls:\n  constructor:\n    version: 1\n    values: {}\n';
+  assert.deepEqual(codes(site('constructor', stored)), ['controls.stale']);
 });
 
 test('the fallback composition renders every fixture pair, with nothing to fix but the selection', () => {

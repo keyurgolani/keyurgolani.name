@@ -176,6 +176,29 @@ sections:
   assert.equal(input.controls.leadSection, null);
 });
 
+test("stored controls are the site's own entry, never one Object.prototype lends", () => {
+  const raw = structuredClone(RAW);
+  raw.id = 'constructor';
+  const checked = validateManifest(raw, { packageName: 'constructor' });
+  assert.ok(checked.ok, JSON.stringify(checked.diagnostics));
+  const defaults = buildRenderInput(args()).controls;
+  assert.equal(defaults.heroLayout, 'wide');
+  // Object.prototype.constructor is no entry, so every control renders its default.
+  assert.deepEqual(
+    buildRenderInput(args(pair(), { manifest: checked.manifest })).controls,
+    defaults,
+  );
+  // Nor is an entry a polluted Object.prototype holds, beside the site's own for another variant.
+  const prepared = args(pair('variantControls:\n  acme-reef:\n    version: 1\n    values: {}\n'));
+  const prototype = Object.prototype as Record<string, unknown>;
+  prototype['acme-ocean'] = { version: 2, values: { heroLayout: 'split' } };
+  try {
+    assert.equal(buildRenderInput(prepared).controls.heroLayout, 'wide');
+  } finally {
+    delete prototype['acme-ocean'];
+  }
+});
+
 test('the id prefix and base path are checked, and the route passes through', () => {
   const input = buildRenderInput(
     args(undefined, {
