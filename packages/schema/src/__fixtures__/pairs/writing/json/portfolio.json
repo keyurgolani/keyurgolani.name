@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "locale": "en-GB",
   "direction": "ltr",
   "identity": {
@@ -18,6 +18,87 @@
     "title": "Hana Kowalczyk",
     "description": "Essays on cities, memory, and the weather."
   },
+  "signature": "the-lending-library",
+  "featured": [
+    "the-weather-in-leith",
+    "notes-on-a-borrowed-flat"
+  ],
+  "proof": [
+    "a-novel-that-reads-you-back",
+    "mairi-campbell"
+  ],
+  "archive": [
+    "first-flat"
+  ],
+  "works": [
+    {
+      "id": "the-lending-library",
+      "slug": "the-lending-library",
+      "title": "The Lending Library",
+      "medium": "writing",
+      "summary": "A novel about a library that lends out its readers.",
+      "evidence": [
+        "a-novel-that-reads-you-back"
+      ],
+      "publication": "Canongate",
+      "publishedAt": "2023",
+      "caseStudy": {
+        "context": "Written over four winters in a reading room that closed before the book came out.",
+        "reflection": "I wanted a book that read its reader back. The library was the only place it could happen."
+      }
+    },
+    {
+      "id": "the-weather-in-leith",
+      "title": "The Weather in Leith",
+      "medium": "writing",
+      "url": "https://granta.test/weather-in-leith",
+      "excerpt": "Rain is a kind of punctuation.",
+      "publication": "Granta",
+      "publishedAt": "2025-11-02",
+      "readingTimeMinutes": 12,
+      "tags": [
+        "cities",
+        "weather"
+      ]
+    },
+    {
+      "id": "notes-on-a-borrowed-flat",
+      "title": "Notes on a Borrowed Flat",
+      "medium": "writing",
+      "url": "https://letters.kowalczyk.test/borrowed-flat",
+      "publication": "letters.kowalczyk.test",
+      "publishedAt": "2025-04-19"
+    },
+    {
+      "id": "first-flat",
+      "title": "The First Flat",
+      "medium": "writing",
+      "publication": "letters.kowalczyk.test",
+      "publishedAt": "2016"
+    }
+  ],
+  "evidence": [
+    {
+      "id": "a-novel-that-reads-you-back",
+      "type": "press",
+      "title": "A novel that reads you back",
+      "publishedAt": "2023-09-14",
+      "publication": "The Scotsman",
+      "author": "Ewan Reid"
+    },
+    {
+      "id": "mairi-campbell",
+      "type": "testimonial",
+      "statement": "The rare essayist who makes rain sound like good news.",
+      "source": {
+        "name": "Mairi Campbell",
+        "role": "Editor"
+      }
+    }
+  ],
+  "contact": {
+    "message": "For rights and readings, write to my agent."
+  },
   "sections": [
     {
       "kind": "lede",
@@ -26,57 +107,29 @@
       "body": "I write about the cities I've lived in and the ones I keep meaning to leave.\n"
     },
     {
-      "kind": "writings",
+      "kind": "works",
       "id": "essays",
       "title": "Essays",
       "items": [
-        {
-          "title": "The Weather in Leith",
-          "excerpt": "Rain is a kind of punctuation.",
-          "publication": "Granta",
-          "publishedAt": "2025-11-02",
-          "url": "https://granta.test/weather-in-leith",
-          "readingTimeMinutes": 12,
-          "tags": [
-            "cities",
-            "weather"
-          ]
-        },
-        {
-          "title": "Notes on a Borrowed Flat",
-          "publication": "letters.kowalczyk.test",
-          "publishedAt": "2025-04-19",
-          "url": "https://letters.kowalczyk.test/borrowed-flat"
-        }
+        "the-weather-in-leith",
+        "notes-on-a-borrowed-flat",
+        "first-flat"
       ]
     },
     {
-      "kind": "publications",
+      "kind": "works",
       "id": "books",
       "title": "Books",
       "items": [
-        {
-          "title": "The Lending Library",
-          "authors": [
-            "Hana Kowalczyk"
-          ],
-          "venue": "Canongate",
-          "publishedAt": "2023",
-          "abstract": "A novel about a library that lends out its readers."
-        }
+        "the-lending-library"
       ]
     },
     {
-      "kind": "press",
+      "kind": "evidence",
       "id": "press",
       "title": "Press",
       "items": [
-        {
-          "title": "A novel that reads you back",
-          "publication": "The Scotsman",
-          "publishedAt": "2023-09-14",
-          "author": "Ewan Reid"
-        }
+        "a-novel-that-reads-you-back"
       ]
     },
     {
@@ -86,22 +139,17 @@
       "attribution": "Thomas Mann"
     },
     {
-      "kind": "testimonials",
+      "kind": "evidence",
       "id": "readers",
       "title": "Readers",
       "items": [
-        {
-          "quote": "The rare essayist who makes rain sound like good news.",
-          "author": "Mairi Campbell",
-          "authorRole": "Editor"
-        }
+        "mairi-campbell"
       ]
     },
     {
       "kind": "contact",
       "id": "contact",
-      "title": "Contact",
-      "message": "For rights and readings, write to my agent."
+      "title": "Contact"
     }
   ]
 }

@@ -498,7 +498,7 @@ export function v3Step(v2: Rec, options: V3StepOptions = {}): V3StepResult {
       ({ section }) =>
         isPlainObject(section) &&
         section.kind === 'contact' &&
-        ['message', 'links', 'showAvailability'].some((key) => section[key] !== undefined),
+        ['message', 'links'].some((key) => section[key] !== undefined),
     );
   const contactSource =
     contactSections.find(({ section }) => !hidden.has(String((section as Rec).id))) ??
@@ -741,8 +741,14 @@ export function v3Step(v2: Rec, options: V3StepOptions = {}): V3StepResult {
 
     if (kind === 'contact') {
       extra(['message', 'links', 'showAvailability']);
+      if (section.showAvailability !== undefined) {
+        removed(
+          `${from}/showAvailability`,
+          "It showed a label no one wrote, and version 3 renders only authored text: say you're available in contact.message instead.",
+        );
+      }
       const data_ = Object.fromEntries(
-        ['message', 'links', 'showAvailability']
+        ['message', 'links']
           .filter((key) => section[key] !== undefined)
           .map((key) => [key, section[key]]),
       );

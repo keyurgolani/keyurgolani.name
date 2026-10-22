@@ -390,7 +390,6 @@ export function recordSchemas({ object, Link, Placement, Period, FocalPoint }: S
   const ContactSchema = object({
     message: TextSchema.optional(),
     links: listOf(Link).optional(),
-    showAvailability: z.boolean().optional(),
   }).refine(({ message, links }) => message !== undefined || links !== undefined, {
     message: 'has no message and no links, so nothing would show. Leave contact out instead.',
   });
