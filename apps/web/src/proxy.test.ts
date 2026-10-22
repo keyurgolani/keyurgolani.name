@@ -423,14 +423,14 @@ test('a route no profile of this build serves, as the appearance fixtures are wi
     // What this run's environment asked registry generation for, never the code under test.
     if (fixtureFlags(process.env).appearance) {
       // A build made with the flag serves the page, to anyone, in every profile.
-      assert.equal(decision(proxy(request('/_fixtures/appearance'))), 'served', profile);
+      assert.equal(decision(await proxy(request('/_fixtures/appearance'))), 'served', profile);
       continue;
     }
     for (const method of ['GET', 'HEAD']) {
-      const unknown = proxy(request('/no-such-page', method));
+      const unknown = await proxy(request('/no-such-page', method));
       assert.equal(decision(unknown), 'missing');
       for (const path of listed) {
-        const response = proxy(request(path, method));
+        const response = await proxy(request(path, method));
         const what = `${profile} ${method} ${path}`;
         assert.equal(response.headers.get('x-middleware-next'), '1', what);
         assert.equal(response.headers.get('x-middleware-request-x-portfolio-not-found'), '1', what);
@@ -439,7 +439,7 @@ test('a route no profile of this build serves, as the appearance fixtures are wi
         assert.equal(response.headers.get('x-robots-tag'), unknown.headers.get('x-robots-tag'));
       }
       for (const path of beside) {
-        const response = proxy(request(path, method));
+        const response = await proxy(request(path, method));
         const what = `${profile} ${method} ${path}`;
         assert.equal(decision(response), 'missing', what);
         for (const name of [
@@ -453,9 +453,9 @@ test('a route no profile of this build serves, as the appearance fixtures are wi
     }
     // Any other method gets the plain 404 /no-such-page gets.
     for (const method of ['POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS']) {
-      const unknown = proxy(request('/no-such-page', method));
+      const unknown = await proxy(request('/no-such-page', method));
       for (const path of [...listed, ...beside]) {
-        const response = proxy(request(path, method));
+        const response = await proxy(request(path, method));
         const what = `${profile} ${method} ${path}`;
         assert.equal(response.status, 404, what);
         assert.equal(await response.text(), 'Not found.', what);
