@@ -5,7 +5,7 @@
   "description": "A test fixture the route tests install in a copy of the repository, never in a release. The home page renders every section, and notes lists their titles.",
   "contract": "2.0",
   "schemas": { "portfolio": { "min": 2, "max": 2 }, "site": { "min": 2, "max": 2 } },
-  "tokenContract": 0,
+  "tokenContract": 1,
   "compositionFamily": "custom",
   "motionIntent": "still",
   "performanceTier": "light",

@@ -194,9 +194,11 @@ const FontStack = z.string().superRefine((value, ctx) => {
 const Rem = z
   .string()
   .regex(REM, { message: 'must be a rem size, such as 1rem or 0.875rem.' })
-  .refine((value) => Number.parseFloat(value) > 0 && Number.parseFloat(value) <= 16, {
-    message: 'must be more than 0rem and at most 16rem.',
-  });
+  .refine(
+    // A size the pattern already refused gets one record, not two.
+    (value) => !REM.test(value) || (Number.parseFloat(value) > 0 && Number.parseFloat(value) <= 16),
+    { message: 'must be more than 0rem and at most 16rem.' },
+  );
 
 const Weight = z.number().int().min(1).max(1000);
 
