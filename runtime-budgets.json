@@ -1,0 +1,199 @@
+{
+  "description": "Runtime budgets (#6). calibration holds the traces the limits are set from: pnpm test:trace measures, and tests/trace/calibrate.mjs writes each entry from its report.",
+  "calibration": {
+    "baseline-editorial": {
+      "commit": "62a0f06cf88c5d6c55045945bf0733a6882c5425",
+      "date": "2026-10-22",
+      "command": "pnpm test:trace --base-url http://127.0.0.1:52588 --allow-third-party --selection editorial",
+      "tracedFrom": "4f4209d86edef0784db72013d69ceae3da617a9d",
+      "route": "/",
+      "selection": "editorial",
+      "composition": null,
+      "profile": null,
+      "fixture": null,
+      "server": "A detached worktree at 62a0f06 with no portfolio.yml and no PORTFOLIO_PATH, so portfolio.example.yml renders (variant: editorial): pnpm install --frozen-lockfile, pnpm --filter @portfolio/web build, then next start -H 127.0.0.1 -p 52588 in apps/web, with NEXT_TELEMETRY_DISABLED=1 for both.",
+      "egress": "The build and the server ran with NODE_USE_ENV_PROXY=1 and HTTP_PROXY and HTTPS_PROXY at a local trap that refuses every request, and tests/harness/offline-fetch.mjs preloaded. The server's fetch to api.github.com was refused, the trap saw no request, and lsof, sampling every 250 ms, saw no socket of the build, the server, or the browser with a peer outside loopback. The server listened on 127.0.0.1 only.",
+      "thirdPartyBytes": "Unknown. The trace recorded and aborted every third-party request: one fonts.googleapis.com stylesheet (Kinetic Cosmos's, the one @import left in the bundled CSS) and picsum.photos images. Their bytes, and the font files that stylesheet names, are not counted, and each has bytes null.",
+      "viewports": {
+        "1440x900": {
+          "requests": {
+            "total": 16,
+            "firstParty": 13,
+            "thirdParty": 3,
+            "aborted": 3,
+            "failed": 0,
+            "thirdPartyHosts": ["fonts.googleapis.com", "picsum.photos"],
+            "byType": {
+              "document": {
+                "count": 1,
+                "transferBytes": 34674,
+                "fileBytes": 131065,
+                "unknownBytes": 0
+              },
+              "image": {
+                "count": 2,
+                "transferBytes": null,
+                "fileBytes": null,
+                "unknownBytes": 2
+              },
+              "script": {
+                "count": 11,
+                "transferBytes": 291341,
+                "fileBytes": 965112,
+                "unknownBytes": 0,
+                "gzipBytes": 286158
+              },
+              "stylesheet": {
+                "count": 2,
+                "transferBytes": 15025,
+                "fileBytes": 86890,
+                "unknownBytes": 1,
+                "gzipBytes": 14494
+              }
+            }
+          },
+          "js": {
+            "files": 11,
+            "bytes": 965112,
+            "gzipBytes": 286158
+          },
+          "css": {
+            "files": 1,
+            "bytes": 86890,
+            "gzipBytes": 14494
+          },
+          "fonts": {
+            "files": 0,
+            "bytes": 0
+          },
+          "images": {
+            "files": 0,
+            "bytes": 0
+          },
+          "attribution": null,
+          "longTasks": {
+            "supported": true,
+            "cpuThrottling": 4,
+            "loadEventEndMs": 629,
+            "windowMs": 5000,
+            "count": 2,
+            "over50ms": 2,
+            "totalMs": 335,
+            "maxMs": 257,
+            "durationsMs": [257, 78]
+          },
+          "idle": {
+            "windowS": 2.004049,
+            "taskDurationS": 0.000063,
+            "scriptDurationS": 0,
+            "layoutDurationS": 0,
+            "recalcStyleDurationS": 0,
+            "layoutCount": 0,
+            "recalcStyleCount": 0,
+            "jsHeapUsedBytes": 3322840,
+            "nodes": 1484,
+            "visibility": "visible",
+            "networkIdle": true
+          },
+          "counters": {
+            "frameCallbacks": 0,
+            "frameLoops": 0,
+            "recurringTimers": 0,
+            "canvasContexts": 0,
+            "infiniteAnimations": 0
+          },
+          "cspViolations": 0
+        },
+        "390x844": {
+          "requests": {
+            "total": 15,
+            "firstParty": 13,
+            "thirdParty": 2,
+            "aborted": 2,
+            "failed": 0,
+            "thirdPartyHosts": ["fonts.googleapis.com", "picsum.photos"],
+            "byType": {
+              "document": {
+                "count": 1,
+                "transferBytes": 34674,
+                "fileBytes": 131065,
+                "unknownBytes": 0
+              },
+              "image": {
+                "count": 1,
+                "transferBytes": null,
+                "fileBytes": null,
+                "unknownBytes": 1
+              },
+              "script": {
+                "count": 11,
+                "transferBytes": 291341,
+                "fileBytes": 965112,
+                "unknownBytes": 0,
+                "gzipBytes": 286158
+              },
+              "stylesheet": {
+                "count": 2,
+                "transferBytes": 15025,
+                "fileBytes": 86890,
+                "unknownBytes": 1,
+                "gzipBytes": 14494
+              }
+            }
+          },
+          "js": {
+            "files": 11,
+            "bytes": 965112,
+            "gzipBytes": 286158
+          },
+          "css": {
+            "files": 1,
+            "bytes": 86890,
+            "gzipBytes": 14494
+          },
+          "fonts": {
+            "files": 0,
+            "bytes": 0
+          },
+          "images": {
+            "files": 0,
+            "bytes": 0
+          },
+          "attribution": null,
+          "longTasks": {
+            "supported": true,
+            "cpuThrottling": 4,
+            "loadEventEndMs": 343,
+            "windowMs": 5000,
+            "count": 2,
+            "over50ms": 2,
+            "totalMs": 208,
+            "maxMs": 153,
+            "durationsMs": [153, 55]
+          },
+          "idle": {
+            "windowS": 2.00431,
+            "taskDurationS": 0.000048,
+            "scriptDurationS": 0,
+            "layoutDurationS": 0,
+            "recalcStyleDurationS": 0,
+            "layoutCount": 0,
+            "recalcStyleCount": 0,
+            "jsHeapUsedBytes": 3353740,
+            "nodes": 1479,
+            "visibility": "visible",
+            "networkIdle": true
+          },
+          "counters": {
+            "frameCallbacks": 0,
+            "frameLoops": 0,
+            "recurringTimers": 0,
+            "canvasContexts": 0,
+            "infiniteAnimations": 0
+          },
+          "cspViolations": 0
+        }
+      }
+    }
+  }
+}

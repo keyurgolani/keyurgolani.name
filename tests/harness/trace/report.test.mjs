@@ -141,6 +141,17 @@ test('request totals count every request, and sum bytes only where they are know
   assert.equal(totals.byType.stylesheet.unknownBytes, 1);
 });
 
+test('a type whose bytes no request knows sums to null, never 0', () => {
+  const aborted = REQUESTS.filter((entry) => entry.aborted !== null);
+  assert.deepEqual(requestTotals(aborted).byType.image, {
+    count: 2,
+    transferBytes: null,
+    fileBytes: null,
+    unknownBytes: 2,
+  });
+  assert.equal(requestTotals(aborted).byType.stylesheet.gzipBytes, undefined);
+});
+
 test("asset totals are the app's own files: JS and CSS with gzip, fonts and images by file bytes", () => {
   assert.deepEqual(assetTotals(REQUESTS), {
     js: { files: 2, bytes: 125000, gzipBytes: 40900 },

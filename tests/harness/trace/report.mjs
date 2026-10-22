@@ -58,17 +58,26 @@ export function requestRecord(fields) {
 const typeOf = (request) => (TYPES.includes(request.resourceType) ? request.resourceType : 'other');
 const add = (sum, value) => (value === null || value === undefined ? sum : sum + value);
 
-/** Requests by type, with byte sums over those whose bytes are known. */
+/**
+ * Requests by type, with byte sums over those whose bytes are known, and
+ * how many aren't. A sum no request of the type knows is null, never 0.
+ */
 export function requestTotals(requests) {
   const byType = {};
+  const known = (sum, value) => (value === null || value === undefined ? sum : (sum ?? 0) + value);
   for (const request of requests) {
     const type = typeOf(request);
-    const row = (byType[type] ??= { count: 0, transferBytes: 0, fileBytes: 0, unknownBytes: 0 });
+    const row = (byType[type] ??= {
+      count: 0,
+      transferBytes: null,
+      fileBytes: null,
+      unknownBytes: 0,
+    });
     row.count += 1;
     if (request.transferBytes === null) row.unknownBytes += 1;
-    row.transferBytes = add(row.transferBytes, request.transferBytes);
-    row.fileBytes = add(row.fileBytes, request.fileBytes);
-    if (request.gzipBytes !== null) row.gzipBytes = add(row.gzipBytes ?? 0, request.gzipBytes);
+    row.transferBytes = known(row.transferBytes, request.transferBytes);
+    row.fileBytes = known(row.fileBytes, request.fileBytes);
+    if (request.gzipBytes !== null) row.gzipBytes = known(row.gzipBytes, request.gzipBytes);
   }
   const thirdParty = requests.filter((request) => request.thirdParty);
   return {
