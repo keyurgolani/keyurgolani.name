@@ -83,8 +83,9 @@ module.exports = {
         'Demo Studio, and so do its ./generators, so they import only zod, the browser-safe ' +
         "@portfolio/schema, and @portfolio/variant-contract's root: no React, no Node, no next/*, " +
         'and not the Node-only ./node (#19, Slices 1 and 2). It imports the token contract version ' +
-        'from that root, which the rule above keeps from importing back. Tests and their test ' +
-        'support may import anything.',
+        'from that root, which the rule above keeps from importing back. ./generators loads no ' +
+        'package at all, which its own test holds it to. Tests and their test support may import ' +
+        'anything.',
       from: {
         path: '^packages/appearance/src/',
         pathNot: [

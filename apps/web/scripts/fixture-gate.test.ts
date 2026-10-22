@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readRegistry } from '@portfolio/variant-contract/node';
 import {
   FIXTURE_ROWS,
   fixtureFlags,
@@ -11,6 +12,7 @@ import {
   fixtureRow,
   type FixtureRow,
 } from './fixture-gate';
+import { packHooks } from './registry-options';
 
 // The fixture gate (#7, item 10; built in #19, Slice 2): a table of which flag
 // admits each fixture package by its directory, which #7, #6, and #11 extend
@@ -202,6 +204,48 @@ test('FIXTURE_FLAGS has one boolean per flag, true when its value admits any of 
       [admits('over', 'budget-fixtures'), admits('over', 'budget-fixtures-over')],
       [true, true],
     );
+  } finally {
+    fs.rmSync(scratch, { recursive: true, force: true });
+  }
+});
+
+test('appearance-fixtures-schemes with its fixture mark removed fails generation, flag or not', async () => {
+  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'portfolio-fixture-gate-'));
+  try {
+    const root = workspace(scratch, 'repo', ['apps/web/node_modules/@portfolio']);
+    const name = '@portfolio/appearance-fixtures-schemes';
+    const copy = path.join(root, 'packages', 'appearance-fixtures-schemes');
+    fs.cpSync(path.join(REPO_ROOT, 'packages', 'appearance-fixtures-schemes'), copy, {
+      recursive: true,
+    });
+    const pkg = JSON.parse(fs.readFileSync(path.join(copy, 'package.json'), 'utf8'));
+    delete pkg.portfolio.fixture;
+    fs.writeFileSync(path.join(copy, 'package.json'), JSON.stringify(pkg));
+    fs.symlinkSync(
+      copy,
+      path.join(root, 'apps', 'web', 'node_modules', '@portfolio', 'appearance-fixtures-schemes'),
+      'dir',
+    );
+    const hostDir = path.join(root, 'apps', 'web');
+    fs.writeFileSync(
+      path.join(hostDir, 'package.json'),
+      JSON.stringify({ name: '@portfolio/web', dependencies: { [name]: 'workspace:*' } }),
+    );
+    for (const env of [{}, { APPEARANCE_FIXTURES: '1' }]) {
+      const result = await readRegistry({
+        hostDir,
+        packs: packHooks(),
+        fixtures: fixtureGate(env),
+      });
+      const own = result.diagnostics.filter((record) => record.package === name);
+      assert.deepEqual(
+        own.map(({ code, pointer }) => [code, pointer]),
+        [['registry.fixture-unmarked', '/portfolio/fixture']],
+        JSON.stringify(env),
+      );
+      assert.equal(result.ok, false);
+      assert.ok(result.packs.every(({ packageName }) => packageName !== name));
+    }
   } finally {
     fs.rmSync(scratch, { recursive: true, force: true });
   }

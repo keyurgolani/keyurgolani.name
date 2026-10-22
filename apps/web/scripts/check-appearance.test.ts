@@ -56,7 +56,10 @@ test('it fails on a bad-contrast input, naming the pair, its ratio, and the mode
 test('an input that is not there, or an argument it does not take, is a usage error', () => {
   const missing = check(['--fixture', 'bad-nothing']);
   assert.equal(missing.status, 2);
-  assert.match(missing.stderr, /There's no known-bad input bad-nothing\. They are: audit-body, /);
+  assert.match(
+    missing.stderr,
+    /There's no known-bad input bad-nothing\. They are: audit-[a-z-]+, .*, bad-contrast, /,
+  );
   const usage = check(['--bogus']);
   assert.equal(usage.status, 2);
   assert.match(usage.stderr, /^Usage: tsx scripts\/check-appearance\.ts \[--fixture <name>\]/);

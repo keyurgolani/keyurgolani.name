@@ -68,6 +68,7 @@ export const REGISTRY_CODES = {
   'registry.pack-id-mismatch': 'error',
   'registry.pack-compile': 'error',
   'registry.fixture-unmapped': 'error',
+  'registry.fixture-unmarked': 'error',
   'registry.fixture-leak': 'error',
 } as const satisfies Record<string, 'error' | 'warning'>;
 
@@ -396,9 +397,12 @@ async function readDependency(
     );
     return;
   }
+  // The gate reads every package's directory: a fixture must be in one a
+  // flag maps, and a package in such a directory must say it's a fixture, so
+  // dropping the mark can't register a fixture in every build.
+  const decision = options.fixtures?.({ name, dir }) ?? { mapped: false as const };
   let gate: { readonly flag: string; readonly admitted: boolean } | undefined;
   if (marked === true) {
-    const decision = options.fixtures?.({ name, dir }) ?? { mapped: false as const };
     if (!decision.mapped) {
       fail(
         'registry.fixture-unmapped',
@@ -409,6 +413,15 @@ async function readDependency(
       return;
     }
     gate = { flag: decision.flag, admitted: decision.admitted };
+  } else if (decision.mapped) {
+    fail(
+      'registry.fixture-unmarked',
+      ['portfolio', 'fixture'],
+      `isn't true, and the package is in a directory ${decision.flag} gates as test fixtures, so it would register in every build.`,
+      'Mark it a fixture with "fixture": true in portfolio, or move it out of the fixture directory.',
+      { expected: 'true', ...(marked !== undefined ? { actual: String(marked) } : {}) },
+    );
+    return;
   }
   const register = gate === undefined || gate.admitted;
   const fixture = (ids: readonly string[]) => {

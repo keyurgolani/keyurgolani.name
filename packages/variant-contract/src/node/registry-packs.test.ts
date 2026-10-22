@@ -297,6 +297,43 @@ test('a fixture package that no flag maps fails generation, and portfolio.fixtur
   }
 });
 
+test('a package in a directory a fixture flag maps fails generation unless it marks itself a fixture', async () => {
+  // The mark removed, or set false: the package would register in every build.
+  const unmarked = packPackage('@acme/fixtures-schemes', 'color-scheme', {
+    'fixture-dusk': { id: 'fixture-dusk' },
+  });
+  const unset = packPackage(
+    '@acme/fixtures-languages',
+    'design-language',
+    { 'fixture-glass': { id: 'fixture-glass' } },
+    { packageJson: { portfolio: { kind: 'design-language', packs: './packs', fixture: false } } },
+  );
+  for (const admits of [false, true]) {
+    const result = await read([unmarked, unset], gate(admits));
+    assert.deepEqual(where(result.diagnostics), [
+      [
+        '@acme/fixtures-languages',
+        at('@acme/fixtures-languages', 'package.json'),
+        '/portfolio/fixture',
+        'registry.fixture-unmarked',
+      ],
+      [
+        '@acme/fixtures-schemes',
+        at('@acme/fixtures-schemes', 'package.json'),
+        '/portfolio/fixture',
+        'registry.fixture-unmarked',
+      ],
+    ]);
+    assert.match(
+      result.diagnostics[1]!.message,
+      /isn't true, and the package is in a directory APPEARANCE_FIXTURES gates as test fixtures/,
+    );
+    assert.equal(result.diagnostics[0]!.actual, 'false');
+    assert.ok(result.packs.every(({ manifest }) => !manifest.id.startsWith('fixture-')));
+    assert.deepEqual(result.fixtures, []);
+  }
+});
+
 test('a fixture package registers only when its flag admits it, and is checked either way', async () => {
   const fixtures = fixturePackage('@acme/fixtures-schemes', {
     'fixture-dusk': { id: 'fixture-dusk' },

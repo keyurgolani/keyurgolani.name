@@ -210,7 +210,8 @@ test('display, visibility, content-visibility, and position take a listed keywor
     position: relative;
   }`);
   assert.ok(kept.ok);
-  assert.deepEqual(kept.ok && kept.nodes[0]!.type === 'rule' ? kept.nodes[0].declarations : [], [
+  const rule = kept.ok ? kept.nodes[0] : undefined;
+  assert.deepEqual(rule?.type === 'rule' ? rule.declarations : [], [
     { property: 'display', value: 'flex' },
     { property: 'visibility', value: 'visible' },
     { property: 'content-visibility', value: 'auto' },
