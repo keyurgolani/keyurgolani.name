@@ -17,6 +17,7 @@ import {
   type HeldLock,
 } from './lock';
 import { preflight } from './preflight';
+import { claimServer } from './server-claim';
 import { tempDir } from './test-support/fixtures';
 
 async function lockIn(t: { after(fn: () => void): void }, waitMs = 300) {
@@ -118,6 +119,32 @@ test('a waiter gives up after its wait with lock_timeout, and gets the lock once
   const next = await waiting;
   assert.equal(next.record.holder, 'publish');
   await next.release();
+});
+
+test('a link at publication/lock that leads nowhere stops an acquirer at once with storage_unavailable, and the claim with it', async (t) => {
+  const { paths } = await lockIn(t);
+  symlinkSync(path.join(paths.publication, 'nowhere'), paths.lock);
+  let links = 0;
+  const counting: FsPort = {
+    ...nodeFs,
+    async link(existing, created, point) {
+      links += 1;
+      return nodeFs.link(existing, created, point);
+    },
+  };
+  const lock = publicationLock({ fs: counting, paths, waitMs: 500 });
+  const refused = (error: unknown) => (error as StoreError).code === 'storage_unavailable';
+  const started = Date.now();
+  await assert.rejects(
+    lock.withLock('publish', async () => assert.fail('it never holds the lock')),
+    refused,
+  );
+  // No spin: one try at the name, and well inside the wait.
+  assert.equal(links, 1);
+  assert.ok(Date.now() - started < 500);
+  // The server's claim, as startup makes it, answers the same.
+  await assert.rejects(claimServer({ fs: counting, paths, lock }), refused);
+  assert.ok(Date.now() - started < 1_000);
 });
 
 test('withLock releases the lock however its body ends', async (t) => {

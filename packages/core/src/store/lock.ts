@@ -423,7 +423,13 @@ export function publicationLock({
         }
         const found = await read();
         if (found && stale(found) && (await breakStale(found))) continue;
-        if (!found) continue;
+        if (!found && (await fs.lstat(lockFile))?.isFile === false) {
+          // Something no holder writes stands at the name, such as a link
+          // that leads nowhere: no wait ends it, and trying again at once
+          // would spin.
+          throw new StoreError('storage_unavailable', "publication/lock isn't a regular file.");
+        }
+        // Held, or let go just now: try again within the wait.
         if (now() >= deadline) {
           throw new StoreError('lock_timeout', 'Another publication is in progress.');
         }
