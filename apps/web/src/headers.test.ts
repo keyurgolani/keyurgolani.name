@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import { modifyRouteRegex } from 'next/dist/lib/redirect-status';
 import { getPathMatch } from 'next/dist/shared/lib/router/utils/path-match';
 import config from '../next.config';
-import { listRoutes } from './server/routes';
 import { NOT_FOUND_HEADER } from './server/studio-headers';
 
 // The headers next.config.ts sends (#1 item 22, #2), path by path, matched
@@ -15,8 +14,9 @@ import { NOT_FOUND_HEADER } from './server/studio-headers';
 // with a Studio page (proxy.test.ts). The transport gets Referrer-Policy:
 // same-origin, since no-referrer would null the Origin of the sign-in form's
 // post, Cross-Origin-Resource-Policy: same-origin, and no-store, in every
-// profile. Then the rewrite proxy.ts uses to send a Studio page to Next's
-// 404 page under a profile with none.
+// profile. Then the rewrite proxy.ts uses to send a path to Next's 404 page:
+// a Studio page under a profile with none, or a route spelled with a fixed
+// segment percent-encoded.
 
 /** The headers next.config.ts gives `pathname`, lowercased, the last entry winning as in Next. */
 async function configHeaders(pathname: string): Promise<Record<string, string>> {
@@ -95,22 +95,25 @@ test("Studio's transport gets Referrer-Policy and Cross-Origin-Resource-Policy: 
   }
 });
 
-test("a Studio page proxy.ts marks goes to Next's 404 page: each one the route table lists, at its fixed path", async () => {
+test("any path proxy.ts marks goes to Next's 404 page, before Next looks anywhere else", async () => {
   const rewrites = await config.rewrites?.();
   assert.ok(rewrites && !Array.isArray(rewrites), 'rewrites in phases');
-  const pages = listRoutes()
-    .filter((entry) => entry.kind === 'page' && /^\/studio(?:\/|$)/.test(entry.pattern))
-    .map((entry) => entry.pattern);
-  assert.ok(pages.length > 0);
-  // A fixed path has no parameter for Next to add to the 404 page's query.
-  for (const page of pages) assert.doesNotMatch(page, /[[\]:*()]/, page);
-  assert.deepEqual(
-    rewrites.beforeFiles,
-    pages.map((source) => ({
-      source,
+  // One rule for every spelling: an unnamed group adds no parameter to the
+  // 404 page's query, so /%73tudio and /%66eed.xml land there as /studio
+  // does.
+  assert.deepEqual(rewrites.beforeFiles, [
+    {
+      source: '/(.*)',
       has: [{ type: 'header', key: NOT_FOUND_HEADER, value: '1' }],
       destination: '/_not-found',
-    })),
-  );
-  assert.deepEqual([rewrites.afterFiles, rewrites.fallback], [[], []]);
+    },
+  ]);
+  const [rule] = rewrites.beforeFiles;
+  assert.ok(rule);
+  const match = getPathMatch(rule.source, { strict: true, removeUnnamedParams: true });
+  for (const path of ['/studio', '/studio/sign-in', '/%73tudio', '/%66eed.xml', '/api/%68ealth']) {
+    assert.deepEqual(match(path), {}, path);
+  }
+  // afterFiles holds #5's rewrite of a missing path, which proxy.test.ts checks.
+  assert.deepEqual(rewrites.fallback, []);
 });

@@ -2,10 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { FALLBACK_ID, validateManifest, type VariantRegistry } from '@portfolio/variant-contract';
-import { compositionFor, liveContext, REGISTRY, sampleVariant } from './variants';
+import { compositionFor, liveContext, REGISTRY } from './variants';
 
 // Which composition renders (#5, Slice 3): the selection when this build
-// registers it, else the fallback composition, and what /sample renders.
+// registers it, else the fallback composition.
 
 const FALLBACK = REGISTRY.find(({ manifest }) => manifest.id === FALLBACK_ID)!;
 
@@ -40,15 +40,6 @@ test('a registered selection renders itself; anything else, the fallback in its 
     assert.equal(composition.fallback, true);
   }
   assert.throws(() => compositionFor('acme-ocean', []), /registers no fallback composition/);
-});
-
-test("/sample renders the sample site's selection, or a registered variant ?variant= names", () => {
-  assert.equal(sampleVariant({}, 'editorial-evidence', BUILD), 'editorial-evidence');
-  assert.equal(sampleVariant({ variant: 'acme-ocean' }, 'editorial-evidence', BUILD), 'acme-ocean');
-  // The fallback, an unknown id, an empty one, and one given twice are a 404.
-  for (const variant of [FALLBACK_ID, 'canary-variant', '', ['acme-ocean', 'acme-ocean']]) {
-    assert.equal(sampleVariant({ variant }, 'editorial-evidence', BUILD), null, String(variant));
-  }
 });
 
 test('documents are checked live: an unavailable selection warns, so startup serves the fallback', () => {

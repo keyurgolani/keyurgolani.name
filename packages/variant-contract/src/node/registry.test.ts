@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { LITERAL_SEGMENT, RESERVED_SEGMENTS } from '../segments';
 import { readRegistry, type RegistryDiagnostic } from './registry';
 import {
   extensionPackage,
@@ -283,6 +284,44 @@ test("each manifest problem keeps the contract's code and pointer, located in it
       result.variants.map(({ manifest }) => manifest.id),
       ['fallback'],
       id,
+    );
+  }
+});
+
+test('a path view under any reserved first segment stops generation (#5, Slice 4)', async () => {
+  for (const segment of RESERVED_SEGMENTS) {
+    const manifest = manifestFor('acme-routes', {
+      routes: {
+        home: 'shared',
+        work: 'shared',
+        views: [{ id: 'probe', under: 'home', type: 'path', segment: `${segment}/{page}` }],
+      },
+    });
+    const result = await read([
+      FALLBACK,
+      variantPackage('@acme/routes', 'acme-routes', { manifest }),
+    ]);
+    assert.equal(result.ok, false, segment);
+    // `_next` and the metadata file names aren't segment words at all.
+    const code = LITERAL_SEGMENT.test(segment)
+      ? 'manifest.route-reserved-segment'
+      : 'manifest.invalid';
+    assert.deepEqual(
+      where(result.diagnostics),
+      [
+        [
+          '@acme/routes',
+          'node_modules/@acme/routes/manifest.json',
+          '/routes/views/0/segment',
+          code,
+        ],
+      ],
+      segment,
+    );
+    assert.deepEqual(
+      result.variants.map(({ manifest: registered }) => registered.id),
+      ['fallback'],
+      segment,
     );
   }
 });

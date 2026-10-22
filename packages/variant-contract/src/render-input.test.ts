@@ -83,6 +83,7 @@ test('the input carries the visible content, presentation, materialized controls
   });
   assert.deepEqual(input.route, { route: 'home' });
   assert.equal(input.basePath, '');
+  assert.deepEqual(input.query, {});
   assert.equal(input.origin, 'https://rowan.test');
   assert.deepEqual([input.derived, input.media, input.appearance], [{}, {}, null]);
   assert.deepEqual(input.ids, { prefix: '', main: 'main' });
@@ -193,9 +194,24 @@ test('the id prefix and base path are checked, and the route passes through', ()
     { origin: 'not a url' },
     { requestTime: 'yesterday' },
     { basePath: 'sample' },
-  ] as Partial<RenderInputArgs>[]) {
+    { query: { variant: 7 } },
+    { query: { '': 'acme-ocean' } },
+  ] as unknown as Partial<RenderInputArgs>[]) {
     assert.throws(() => buildRenderInput(args(undefined, bad)), TypeError, JSON.stringify(bad));
   }
+});
+
+test("the query links keep rides along in name order, as /sample's variant does", () => {
+  const input = buildRenderInput(
+    args(undefined, { basePath: '/sample', query: { variant: 'acme-ocean', lang: 'de' } }),
+  );
+  assert.equal(input.basePath, '/sample');
+  assert.deepEqual(Object.entries(input.query), [
+    ['lang', 'de'],
+    ['variant', 'acme-ocean'],
+  ]);
+  // The input stays plain JSON with it.
+  assert.deepEqual(JSON.parse(JSON.stringify(input)), input);
 });
 
 // What YAML can write that JSON can't, in every number field and in stored control values.

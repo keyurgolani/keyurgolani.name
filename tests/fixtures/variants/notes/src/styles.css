@@ -1,0 +1,17 @@
+/* A route test fixture (#5): one column, scoped to its own boundary. */
+
+[data-variant='fixture-notes'] {
+  display: block;
+  max-inline-size: 46rem;
+  margin-inline: auto;
+  padding: 1.5rem 1.25rem;
+}
+
+[data-variant='fixture-notes'] .fx-header ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}

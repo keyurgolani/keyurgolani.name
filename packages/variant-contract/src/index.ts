@@ -54,16 +54,18 @@ export {
 } from './diagnostics';
 export { validateManifest, type ManifestContext, type ManifestResult } from './validate-manifest';
 export { keyVerdict, type KeyVerdict } from './keys';
-export { RESERVED_SEGMENTS } from './segments';
+export { isReservedSegment, RESERVED_SEGMENTS } from './segments';
 export {
   dispatch,
   href,
   idFor,
   normalizeBasePath,
+  routeHref,
   type DispatchOptions,
   type DispatchResult,
   type HrefOptions,
   type IdOptions,
+  type LinkContext,
   type RouteTarget,
 } from './routes';
 export {

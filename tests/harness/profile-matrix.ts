@@ -88,6 +88,78 @@ export interface MatrixOptions {
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const METHODS = ['GET', 'POST', 'PUT', 'DELETE'] as const;
+/** Every method a client can send a path, for the checks that compare two paths' answers. */
+const EVERY_METHOD = ['GET', 'HEAD', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'] as const;
+
+/**
+ * Studio paths in every spelling a request may use (#2): the pages the table
+ * lists, in another case, deeper than any page, with a fixed segment
+ * percent-encoded, and with the slash encoded. Under a profile with no
+ * Studio, each one answers every method as /no-such-page does.
+ */
+const STUDIO_SPELLINGS = [
+  '/studio',
+  '/studio/sign-in',
+  '/studio/sign-in?state=failed&returnTo=%2Fstudio',
+  '/Studio',
+  '/STUDIO/sign-in',
+  '/sTuDiO/x',
+  '/studio/nowhere',
+  '/studio/sign-in/x',
+  '/%73tudio',
+  '/%73tudio/sign-in',
+  '/studio/%73ign-in',
+  '/studio%2Fsign-in',
+  '/%73tudio%2Fsign-in',
+] as const;
+
+/**
+ * The pattern's concrete path once for each of its fixed segments, with that
+ * segment's first character percent-encoded, as /%66eed.xml spells
+ * /feed.xml. The route table reads it as the route; Next, which matches a
+ * fixed segment as sent, as another path (#5, Slice 4).
+ */
+function encodedSpellings(pattern: string): string[] {
+  const parts = pattern.split('/').filter(Boolean);
+  const sent = concrete(pattern).split('/').filter(Boolean);
+  return parts.flatMap((part, index) => {
+    const segment = sent[index];
+    if (part.startsWith('[') || segment === undefined) return [];
+    const encoded = `%${segment.charCodeAt(0).toString(16).toUpperCase()}${segment.slice(1)}`;
+    return [`/${sent.map((each, at) => (at === index ? encoded : each)).join('/')}`];
+  });
+}
+
+/**
+ * Paths that are a route file's own, as sent or decoded whole: each page
+ * pattern with a dynamic segment written out, and again with its brackets
+ * encoded, each fixed route of two segments or more with its slashes
+ * encoded, and Next's /_not-found with its underscore encoded. The route
+ * table finds each one names nothing, but Next's file check finds a route
+ * file for it (#5, Slice 4).
+ */
+function routeFileSpellings(): string[] {
+  const spellings = new Set(['/%5Fnot-found']);
+  for (const { kind, pattern } of listRoutes()) {
+    if (kind === 'page' && pattern.includes('[')) {
+      spellings.add(pattern);
+      spellings.add(pattern.replace(/\[/g, '%5B').replace(/\]/g, '%5D'));
+    } else if (!pattern.includes('[') && pattern.indexOf('/', 1) > 0) {
+      spellings.add(pattern.replace(/(?!^)\//g, '%2F'));
+    }
+  }
+  return [...spellings];
+}
+
+/**
+ * A page whose concrete path names nothing it can render: no installed
+ * variant declares a view at /probe, and no slug names a work until #10
+ * (#5, Slice 4). The route table calls it missing in every profile, so a
+ * GET gets the app's 404 page, rendered from the server, and any other
+ * method the proxy's plain 404, as an absent route does.
+ */
+const namesNothing = (entry: Routes.RouteEntry) =>
+  entry.kind === 'page' && concrete(entry.pattern).includes('probe');
 
 /** What the transport answers a visitor with no session, by the registry and the matrix. */
 function expected(
@@ -173,19 +245,30 @@ function expectProfileHeaders(profile: Profile, response: APIResponse, what: str
 
 /**
  * A 404 page's body with its own path taken out of Next's payload, which
- * names the path it answers, query and all, so two 404 pages compare as the
- * same page.
+ * names the path it answers, query and all, as sent or decoded, so two 404
+ * pages compare as the same page.
  */
 function withoutOwnPath(body: string, target: string): string {
   const url = new URL(target, 'http://unset.invalid');
-  const segments = ['', ...url.pathname.split('/').filter(Boolean)];
-  segments[segments.length - 1] += url.search;
-  // The payload is JSON inside a JSON string in a script: its quotes come
-  // escaped, and its ampersands as \u0026.
-  const named = `\\"c\\":${JSON.stringify(segments).replace(/"/g, '\\"').replace(/&/g, '\\u0026')}`;
-  const parts = body.split(named);
-  expect(parts.length, `Next's payload names ${target} once`).toBe(2);
-  return parts.join('\\"c\\":"<path>"');
+  const sent = url.pathname.split('/').filter(Boolean);
+  const spellings = [sent];
+  try {
+    // Each segment decoded, and the path decoded whole, encoded slashes and all.
+    spellings.push(sent.map((segment) => decodeURIComponent(segment)));
+    spellings.push(decodeURIComponent(url.pathname).split('/').filter(Boolean));
+  } catch {
+    // Named as sent.
+  }
+  for (const spelling of spellings) {
+    const segments = ['', ...spelling];
+    segments[segments.length - 1] += url.search;
+    // The payload is JSON inside a JSON string in a script: its quotes come
+    // escaped, and its ampersands as \u0026.
+    const named = `\\"c\\":${JSON.stringify(segments).replace(/"/g, '\\"').replace(/&/g, '\\u0026')}`;
+    const parts = body.split(named);
+    if (parts.length === 2) return parts.join('\\"c\\":"<path>"');
+  }
+  throw new Error(`Next's payload doesn't name ${target} once.`);
 }
 
 /**
@@ -230,10 +313,37 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
     const access = routeAccess(profile, entry);
     const served = access !== 'absent';
     const gated = entry.kind === 'page' && access === 'session';
+    const missing = namesNothing(entry);
+    const state = missing
+      ? 'missing there, the 404 page'
+      : served
+        ? gated
+          ? 'served to a session, and sends a visitor to sign-in'
+          : 'served'
+        : 'absent, 404 for every method';
     test(
-      `${entry.pattern} is ${served ? (gated ? 'served to a session, and sends a visitor to sign-in' : 'served') : 'absent, 404 for every method'}`,
+      `${entry.pattern} is ${state}`,
       { annotation: [{ type: 'route', description: entry.pattern }, annotation] },
       async ({ app, request }) => {
+        if (missing) {
+          const page = await request.get(concrete(entry.pattern), { maxRedirects: 0 });
+          expect(page.status()).toBe(404);
+          // The app's 404 page, from the server: it needs no JavaScript.
+          expect(page.headers()['content-type']).toMatch(/^text\/html/);
+          expect(await page.text()).toMatch(/<h1>Page not found<\/h1>/);
+          expect(page.headers()['x-request-id']).toMatch(UUID);
+          expectProfileHeaders(profile, page, 'GET');
+          for (const method of METHODS.filter((each) => each !== 'GET')) {
+            const response = await request.fetch(concrete(entry.pattern), {
+              method,
+              maxRedirects: 0,
+            });
+            expect(response.status(), method).toBe(404);
+            expect(response.headers()['content-type'], method).toMatch(/^text\/plain/);
+            expectProfileHeaders(profile, response, method);
+          }
+          return;
+        }
         if (served) {
           const response = await request.get(concrete(entry.pattern), { maxRedirects: 0 });
           if (gated) {
@@ -255,6 +365,13 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
             maxRedirects: 0,
           });
           expect(response.status(), method).toBe(404);
+          // The proxy's plain answer, before Next routes it, but for a GET
+          // of a Studio page under a profile with none, which answers as an
+          // unknown path does, with the 404 page (#2).
+          const page = method === 'GET' && isStudioPath(entry.pattern);
+          expect(response.headers()['content-type'], method).toMatch(
+            page ? /^text\/html/ : /^text\/plain/,
+          );
           expectProfileHeaders(profile, response, method);
         }
       },
@@ -366,9 +483,10 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
 
   if (profile !== 'owner') {
     test(
-      'in demo and read-only the sign-in page and every auth route answer the unknown-route 404',
+      'in demo and read-only every Studio path, in any spelling and to any method, and every auth route answer the unknown-route 404',
       {
         annotation: [
+          { type: 'route', description: '/studio' },
           { type: 'route', description: '/studio/sign-in' },
           { type: 'route', description: '/api/studio/[name]' },
           annotation,
@@ -379,35 +497,34 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
         // session store reads it, and nothing clears it (#2).
         const cookie = `__Host-studio_session=${'x'.repeat(43)}; studio_session=${'x'.repeat(43)}`;
         // Each one exactly as a path no route matches: the same status,
-        // headers, and page, but for the path Next's payload names.
-        const shape = async (response: APIResponse, pathname: string) => ({
-          status: response.status(),
-          headers: Object.fromEntries(
-            Object.entries(response.headers()).filter(
-              ([name]) => !['date', 'x-request-id'].includes(name),
+        // headers, and body, but for the path Next's payload names in a page.
+        const shape = async (response: APIResponse, target: string) => {
+          const text = await response.text();
+          const page = /^text\/html/.test(response.headers()['content-type'] ?? '') && text !== '';
+          return {
+            status: response.status(),
+            headers: Object.fromEntries(
+              Object.entries(response.headers()).filter(
+                ([name]) => !['date', 'x-request-id'].includes(name),
+              ),
             ),
-          ),
-          body: withoutOwnPath(await response.text(), pathname),
-        });
-        for (const [path, query] of [
-          ['/studio/sign-in', ''],
-          ['/studio', ''],
-          ['/studio/sign-in', '?state=failed&returnTo=%2Fstudio'],
-        ] as const) {
-          const response = await request.get(`${path}${query}`, {
-            maxRedirects: 0,
-            headers: { cookie },
-          });
-          const unknown = await request.get(`/no-such-page${query}`, {
-            maxRedirects: 0,
-            headers: { cookie },
-          });
-          expect(response.status(), path).toBe(404);
-          expect(await response.text(), path).not.toContain('Password');
-          expectProfileHeaders(profile, response, path);
-          expect(await shape(response, `${path}${query}`), `${path}${query}`).toEqual(
-            await shape(unknown, `/no-such-page${query}`),
-          );
+            body: page ? withoutOwnPath(text, target) : text,
+          };
+        };
+        for (const target of STUDIO_SPELLINGS) {
+          const query = target.includes('?') ? target.slice(target.indexOf('?')) : '';
+          for (const method of EVERY_METHOD) {
+            const what = `${method} ${target}`;
+            const options = { method, maxRedirects: 0, headers: { cookie } };
+            const response = await request.fetch(target, options);
+            const unknown = await request.fetch(`/no-such-page${query}`, options);
+            expect(response.status(), what).toBe(404);
+            expect(await response.text(), what).not.toContain('Password');
+            expectProfileHeaders(profile, response, what);
+            expect(await shape(response, target), what).toEqual(
+              await shape(unknown, `/no-such-page${query}`),
+            );
+          }
         }
         for (const operation of listOperations().filter(({ name }) => name.startsWith('auth.'))) {
           for (const method of ['GET', 'POST'] as const) {
@@ -436,6 +553,67 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
         const { error } = (await response.json()) as { error: Record<string, string> };
         expect(error.code, name).toBe('not_available_in_profile');
         expectProfileHeaders(profile, response, name);
+      }
+    },
+  );
+
+  test(
+    'a route spelled with a fixed segment percent-encoded is a path no route matches: the 404 page for GET, the plain 404 for POST',
+    { annotation: [{ type: 'route', description: 'every route' }, annotation] },
+    async ({ request }) => {
+      // The route table reads /%66eed.xml as /feed.xml, but Next matches a
+      // fixed segment as sent and would hand it to the views catch-all,
+      // whose 404 needs JavaScript (#5, Slice 4).
+      let spellings = 0;
+      for (const entry of listRoutes()) {
+        const access = routeAccess(profile, entry);
+        for (const target of encodedSpellings(entry.pattern)) {
+          spellings += 1;
+          const page = await request.get(target, { maxRedirects: 0 });
+          if (entry.kind === 'page' && access === 'session') {
+            // No session cookie: sign-in comes first, as for the route's own spelling.
+            expect(page.status(), target).toBe(303);
+          } else if (access === 'absent' && !namesNothing(entry) && !isStudioPath(entry.pattern)) {
+            // A route the profile doesn't serve: its plain 404, in any spelling.
+            expect(page.status(), target).toBe(404);
+            expect(page.headers()['content-type'], target).toMatch(/^text\/plain/);
+          } else {
+            // The full 404 page, from the server.
+            expect(page.status(), target).toBe(404);
+            expect(page.headers()['content-type'], target).toMatch(/^text\/html/);
+            expect(await page.text(), target).toMatch(/<h1>Page not found<\/h1>/);
+          }
+          expectProfileHeaders(profile, page, `GET ${target}`);
+          const posted = await request.post(target, { maxRedirects: 0 });
+          expect(posted.status(), `POST ${target}`).toBe(404);
+          expect(posted.headers()['content-type'], `POST ${target}`).toMatch(/^text\/plain/);
+          expectProfileHeaders(profile, posted, `POST ${target}`);
+        }
+      }
+      expect(spellings, 'spellings checked').toBeGreaterThan(10);
+    },
+  );
+
+  test(
+    "a path that is a route file's own, as sent or decoded whole, is a path no route matches: the 404 page for GET, the plain 404 for POST",
+    { annotation: [{ type: 'route', description: 'every route' }, annotation] },
+    async ({ request }) => {
+      // Such as /work/[slug] or /studio%2Fsign-in: the route table finds it
+      // names nothing, but Next's file check finds a route file for it before
+      // the afterFiles rewrite runs, and the views catch-all's 404 needs
+      // JavaScript (#5, Slice 4).
+      const spellings = routeFileSpellings();
+      expect(spellings.length, 'spellings checked').toBeGreaterThan(5);
+      for (const target of spellings) {
+        const page = await request.get(target, { maxRedirects: 0 });
+        expect(page.status(), target).toBe(404);
+        expect(page.headers()['content-type'], target).toMatch(/^text\/html/);
+        expect(await page.text(), target).toMatch(/<h1>Page not found<\/h1>/);
+        expectProfileHeaders(profile, page, `GET ${target}`);
+        const posted = await request.post(target, { maxRedirects: 0 });
+        expect(posted.status(), `POST ${target}`).toBe(404);
+        expect(posted.headers()['content-type'], `POST ${target}`).toMatch(/^text\/plain/);
+        expectProfileHeaders(profile, posted, `POST ${target}`);
       }
     },
   );

@@ -43,10 +43,12 @@ export const STUDIO_RESPONSE_HEADERS: Readonly<Record<string, string>> = Object.
 });
 
 /**
- * The request header proxy.ts sets on a Studio path under a profile with no
- * Studio page, which next.config.ts's rewrite sends to Next's 404 page, so
- * the path answers as any unknown one does. proxy.ts drops it from every
- * other request, so a client can't set it.
+ * The request header proxy.ts sets on a GET or HEAD it answers as a path no
+ * route matches: a Studio page under a profile with none, a route spelled
+ * with a fixed segment percent-encoded, or a missing path that is a route
+ * file's own, as sent or decoded whole. next.config.ts's rewrite sends it to
+ * Next's 404 page, so the path answers as any unknown one does. proxy.ts
+ * drops it from every other request, so a client can't set it.
  */
 export const NOT_FOUND_HEADER = 'x-portfolio-not-found';
 

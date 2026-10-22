@@ -93,14 +93,20 @@ function manifest(extra: Record<string, unknown> = {}) {
 
 function inputFor(
   portfolio: unknown = COMPLETE,
-  options: { manifest?: Record<string, unknown>; idPrefix?: string } = {},
+  options: {
+    manifest?: Record<string, unknown>;
+    idPrefix?: string;
+    basePath?: string;
+    query?: Record<string, string>;
+  } = {},
 ): VariantRenderInput {
   const pair = { portfolio: PortfolioSchema.parse(portfolio), site: SITE } as unknown as ParsedPair;
   return buildRenderInput({
     view: toPublicView(pair),
     manifest: manifest(options.manifest),
     route: { route: 'home' },
-    basePath: '',
+    basePath: options.basePath ?? '',
+    query: options.query,
     origin: 'https://rowan.test',
     requestTime: '2026-10-20T12:00:00Z',
     idPrefix: options.idPrefix,
@@ -563,6 +569,26 @@ test("a #fragment link takes the render's id prefix, so it still lands on its se
   assert.match(lede, /<a href="#pv-contact">contact<\/a>/);
   assert.match(lede, /<a href="\/#pv-contact">home<\/a>/);
   assert.match(lede, /<a href="https:\/\/rowan\.test\/#a">docs<\/a>/);
+});
+
+test("a /#id link under /sample keeps the render's query, so it stays in the variant it names (#5, Slice 4)", () => {
+  const sections = [
+    { kind: 'cta', id: 'cta', primaryAction: { url: '/#contact', label: 'Contact' } },
+    { kind: 'lede', id: 'about', body: 'See [home](/#contact) or [here](#contact).' },
+    { kind: 'contact', id: 'contact' },
+  ];
+  const sample = inputFor(
+    { ...COMPLETE, sections },
+    { basePath: '/sample', query: { variant: 'acme-ocean' }, idPrefix: 'pv-' },
+  );
+  assert.match(render('cta', sample), /href="\/sample\?variant=acme-ocean#pv-contact"/);
+  const lede = render('lede', sample);
+  assert.match(lede, /<a href="\/sample\?variant=acme-ocean#pv-contact">home<\/a>/);
+  // A fragment alone stays on this page, whatever its query.
+  assert.match(lede, /<a href="#pv-contact">here<\/a>/);
+  // With no query, under a preview grant's base path.
+  const preview = inputFor({ ...COMPLETE, sections }, { basePath: '/preview/g_7Hk-2' });
+  assert.match(render('cta', preview), /href="\/preview\/g_7Hk-2#contact"/);
 });
 
 test("words and dates the renderers add are marked English in other content, and numbers use the content's locale", () => {

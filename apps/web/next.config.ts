@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import type { NextConfig } from 'next';
-import { listRoutes } from './src/server/routes';
+import { ROUTE_HEADER } from './src/server/routes';
 
 /**
  * The registered variant and content extension packages, which
@@ -16,17 +16,6 @@ function registeredPackages(): string[] {
       'src/lib/generated/transpile-packages.json is missing. Run pnpm --filter @portfolio/web build:registry first.',
     );
   }
-}
-
-/**
- * Every Studio page the route table lists (#2). Each is a fixed path, which
- * headers.test.ts holds them to, so a rewrite from one has no parameter for
- * Next to add to the query.
- */
-function studioPages(): string[] {
-  return listRoutes()
-    .filter((entry) => entry.kind === 'page' && /^\/studio(?:\/|$)/.test(entry.pattern))
-    .map((entry) => entry.pattern);
 }
 
 const config: NextConfig = {
@@ -55,19 +44,39 @@ const config: NextConfig = {
   // app/global-not-found.tsx, which brings its own document. Without the
   // flag, next build exits.
   experimental: { globalNotFound: true },
-  // A Studio page under a profile with none (#2): proxy.ts marks the request
-  // with x-portfolio-not-found (NOT_FOUND_HEADER in server/studio-headers.ts),
-  // and this sends it to Next's own 404 page before Next finds the page, so it
-  // answers as a path no route matches does, with the request's own URL and
-  // query.
   async rewrites() {
     return {
-      beforeFiles: studioPages().map((source) => ({
-        source,
-        has: [{ type: 'header' as const, key: 'x-portfolio-not-found', value: '1' }],
-        destination: '/_not-found',
-      })),
-      afterFiles: [],
+      // A path the route table lists that proxy.ts answers as one it
+      // doesn't: a Studio page under a profile with none (#2), or a route
+      // spelled with a fixed segment percent-encoded (#5, Slice 4). proxy.ts
+      // marks the request with x-portfolio-not-found (NOT_FOUND_HEADER in
+      // server/studio-headers.ts), and this sends it to Next's own 404 page
+      // before Next looks anywhere else, so it answers as a path no route
+      // matches does, with the request's own URL and query. Its source is an
+      // unnamed group, as afterFiles' is.
+      beforeFiles: [
+        {
+          source: '/(.*)',
+          has: [{ type: 'header' as const, key: 'x-portfolio-not-found', value: '1' }],
+          destination: '/_not-found',
+        },
+      ],
+      // A path the route table calls missing (#5, Slice 4): proxy.ts marks it
+      // in the x-portfolio-route header (server/routes.ts ROUTE_HEADER), and
+      // this renders the 404 page through the same /_not-found route, from
+      // the server and with its 404 status. As an afterFiles rewrite it runs
+      // once Next has looked in public/, so a file there is still served, and
+      // before the dynamic routes, so the views catch-all never sees the path.
+      // Its source is an unnamed group: Next adds a named parameter, such as
+      // /:path*'s, to the 404 page's query, which a path no route matches
+      // never has.
+      afterFiles: [
+        {
+          source: '/(.*)',
+          has: [{ type: 'header' as const, key: ROUTE_HEADER, value: 'missing' }],
+          destination: '/_not-found',
+        },
+      ],
       fallback: [],
     };
   },

@@ -18,7 +18,12 @@ import {
   type ControlDeclaration,
   type VariantManifest,
 } from './manifest-schema';
-import { parseFragmentPattern, parsePathPattern, RESERVED_SEGMENTS } from './segments';
+import {
+  isReservedSegment,
+  parseFragmentPattern,
+  parsePathPattern,
+  RESERVED_SEGMENTS,
+} from './segments';
 import {
   CONTRACT_MAJOR,
   CONTRACT_MINOR,
@@ -585,7 +590,7 @@ function checkRoutes(manifest: VariantManifest, report: Report) {
       view.type === 'path' &&
       view.under === 'home' &&
       'literal' in first &&
-      RESERVED_SEGMENTS.includes(first.literal)
+      isReservedSegment(first.literal)
     ) {
       report(
         'manifest.route-reserved-segment',

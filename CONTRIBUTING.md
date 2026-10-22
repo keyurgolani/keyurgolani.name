@@ -80,9 +80,10 @@ pnpm check:skills      # parity between schema, kit, skill refs, frontmatter
 pnpm check:registry    # the variant registry builds the same twice, and check:variants passes
 pnpm build             # production build of apps/web
 pnpm ci:browser        # Playwright smoke against that build
+pnpm test:routes       # route specs against a fixture host with test-only variants
 ```
 
-Run `pnpm exec playwright install chromium` once before the browser smoke. `pnpm ci:image` builds and checks the container image with Docker (`CONTAINER_CLI=finch` for Finch).
+Run `pnpm exec playwright install chromium` once before the browser smoke. `pnpm test:routes` builds a host of its own, a copy of the workspace outside the checkout with the variants in `tests/fixtures/variants/` installed offline from the pnpm store, so it needs `pnpm install` but no `pnpm build`. `pnpm ci:image` builds and checks the container image with Docker (`CONTAINER_CLI=finch` for Finch).
 
 Two more check the deployment profiles. `pnpm --filter @portfolio/web test:profiles` builds once with no profile set and runs the route matrix and the canary scan against the built server under `read-only`, `demo`, and `owner`, with a password made for the run, and checks that `owner` refuses to start without a password hash and a data directory. `pnpm smoke:profiles` builds the image and runs it under every profile and every startup row, those that refuse to start and those that start with a warning, with the same `CONTAINER_CLI` choice.
 

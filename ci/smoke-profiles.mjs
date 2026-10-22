@@ -73,6 +73,7 @@ import {
   warningLines,
 } from '../tests/harness/startup-rows.mjs';
 import { PROBE_SNIPPET, REQUESTS_SNIPPET, TREE_SNIPPET } from './lib/container.mjs';
+import { buildRegistry } from './lib/registry.mjs';
 import {
   currentGate,
   REPO_ROOT,
@@ -82,7 +83,10 @@ import {
 } from './lib/reports.mjs';
 
 // The route table, the registry, and the capability matrix are TypeScript;
-// the script runs under tsx (`node --import tsx`) to read them.
+// the script runs under tsx (`node --import tsx`) to read them. The route
+// table imports the generated registry, and nothing here builds the app, so
+// the registry is written first (ci/lib/registry.mjs).
+console.log(buildRegistry());
 const require = createRequire(import.meta.url);
 const { accessIn, CAPABILITIES, INDEXABLE } = require('../apps/web/src/server/capabilities.ts');
 const { listOperations } = require('../apps/web/src/server/operations.ts');
@@ -127,8 +131,22 @@ function fail(test, message, fields = {}) {
   console.log(`[profiles] FAIL ${test}: ${message}`);
 }
 
-/** A concrete path for a pattern, filling each dynamic segment. */
-const concrete = (pattern) => pattern.replace(/\[\[?\.{0,3}[^\]]+\]\]?/g, 'sample') || '/';
+/**
+ * A concrete path for a pattern: an optional catch-all left empty, and each
+ * other dynamic segment a word no route starts with, so the path is the
+ * pattern's own and not a static route's.
+ */
+const concrete = (pattern) =>
+  pattern.replace(/\/\[\[\.\.\.[^\]]+\]\]/g, '').replace(/\[\.{0,3}[^\]]+\]/g, 'probe') || '/';
+
+/**
+ * A page whose concrete path names nothing it can render: no installed
+ * variant declares a view at /probe, and no slug names a work until #10
+ * (#5, Slice 4). The route table calls it missing in every profile, so a
+ * GET gets the app's 404 page, rendered from the server, and any other
+ * method the proxy's plain 404, as an absent route does.
+ */
+const namesNothing = (entry) => entry.kind === 'page' && concrete(entry.pattern).includes('probe');
 
 /** What the transport answers a visitor with no session, by the registry and the matrix. */
 function expectedOperation(profile, operation, method) {
@@ -281,7 +299,19 @@ function plan(profile, leaks) {
   ]);
   for (const entry of listRoutes().filter((route) => route.capability !== 'operations')) {
     const access = routeAccess(profile, entry);
-    if (access === 'session' && entry.kind === 'page') {
+    if (namesNothing(entry)) {
+      add('GET', concrete(entry.pattern), (response) => [
+        ...status(404)(response),
+        ...(/^text\/html/.test(response.headers['content-type'] ?? '') &&
+        response.body.includes('<h1>Page not found</h1>')
+          ? []
+          : ["not the app's 404 page"]),
+        ...(UUID.test(response.headers['x-request-id'] ?? '') ? [] : ['no x-request-id']),
+      ]);
+      for (const method of METHODS.filter((each) => each !== 'GET')) {
+        add(method, concrete(entry.pattern), status(404));
+      }
+    } else if (access === 'session' && entry.kind === 'page') {
       // No session cookie: proxy.ts sends it to sign-in on the canonical origin (#2).
       add('GET', concrete(entry.pattern), (response) => {
         const location = new URL(response.headers.location ?? '', 'http://unset.invalid');

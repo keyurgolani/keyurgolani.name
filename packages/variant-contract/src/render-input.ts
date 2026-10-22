@@ -49,6 +49,12 @@ export interface VariantRenderInput {
   readonly route: RouteTarget;
   /** Where the routes are mounted, for href(): '' for the site root. */
   readonly basePath: string;
+  /**
+   * The query every internal link keeps, for href(): `/sample`'s `variant`,
+   * so a link from one view to another stays in the variant it names. Empty
+   * at the site root.
+   */
+  readonly query: Readonly<Record<string, string>>;
   /** The deployment's canonical origin, such as https://jane.name. */
   readonly origin: string;
   /** Data derived from the content, such as GitHub's. Empty until #10. */
@@ -78,6 +84,8 @@ export interface RenderInputArgs {
   readonly manifest: VariantManifest;
   readonly route: RouteTarget;
   readonly basePath: string;
+  /** The query every internal link keeps, such as `/sample`'s `variant`. Defaults to none. */
+  readonly query?: Readonly<Record<string, string>>;
   /** The deployment's canonical origin (#1's PORTFOLIO_ORIGIN on the server). */
   readonly origin: string;
   /** When the request arrived. */
@@ -128,6 +136,7 @@ export function buildRenderInput(args: RenderInputArgs): VariantRenderInput {
     controls,
     route,
     basePath: normalizeBasePath(args.basePath),
+    query: linkQuery(args.query),
     origin,
     derived: {},
     media: {},
@@ -135,6 +144,25 @@ export function buildRenderInput(args: RenderInputArgs): VariantRenderInput {
     env: { now: day.toISOString(), seed: viewSeed(view) },
     ids: { prefix, main: `${prefix}main` },
   };
+}
+
+/**
+ * The query links keep, as a plain object in name order, so one request
+ * always builds the same input. It throws on an empty name or a value that
+ * isn't a string.
+ */
+function linkQuery(
+  query: Readonly<Record<string, string>> | undefined,
+): Readonly<Record<string, string>> {
+  const entries = Object.entries(query ?? {});
+  for (const [name, value] of entries) {
+    if (name === '' || typeof value !== 'string') {
+      throw new TypeError(
+        'A query is names with string values, such as { variant: "acme-ocean" }.',
+      );
+    }
+  }
+  return Object.fromEntries(entries.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
 }
 
 /**

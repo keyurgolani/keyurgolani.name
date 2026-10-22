@@ -39,7 +39,7 @@ What each profile grants. `public` is anyone, `session` is a signed-in owner, an
 
 <!-- profile-matrix:end -->
 
-Every profile serves `/`, `/robots.txt`, `/sitemap.xml`, the share image at `/opengraph-image-12o0cb` (Next adds a suffix to a metadata route inside a route group, here the site's), `/api/health`, `/api/ready`, and `/api/studio/<operation>`. `owner` and `read-only` add `/feed.xml`, and `demo` adds `/sample`. Every Studio operation goes through `/api/studio/<operation>`, and one the profile lacks answers with the 404 envelope, `{"error":{"code":"not_available_in_profile",...}}`. There is no image optimizer: images load as they are, and `/_next/image` answers with the 404 page in every profile.
+Every profile serves `/`, `/robots.txt`, `/sitemap.xml`, the share image at `/opengraph-image-12o0cb` (Next adds a suffix to a metadata route inside a route group, here the site's), `/api/health`, `/api/ready`, and `/api/studio/<operation>`. `owner` and `read-only` add `/feed.xml`, `/work/<slug>` (the 404 page until #10 resolves slugs), and the path views of the site's variant below `/` and below `/work/<slug>`. `demo` adds `/sample` and the same routes below it. Every Studio operation goes through `/api/studio/<operation>`, and one the profile lacks answers with the 404 envelope, `{"error":{"code":"not_available_in_profile",...}}`. There is no image optimizer: images load as they are, and `/_next/image` answers with the 404 page in every profile.
 
 ## Supported hosts
 
@@ -68,7 +68,7 @@ echo 'PORTFOLIO_ORIGIN=https://jane.name' > .env
 docker compose up --build
 ```
 
-This mounts `config/` read-only at `/config` and `assets/` at the site's `/assets/`. Nothing in the container is writable but a tmpfs at Next.js's cache, `/app/apps/web/.next/cache`.
+This mounts `config/` read-only at `/config` and `assets/` at the site's `/assets/`, a first segment the variant contract reserves, so no variant's view can take a path a file there answers. Nothing in the container is writable but a tmpfs at Next.js's cache, `/app/apps/web/.next/cache`.
 
 ### `demo`
 
@@ -317,7 +317,7 @@ Next writes its own lines to the same streams, as plain text: its startup banner
 
 Every response the app sends carries `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, and `Content-Security-Policy: frame-ancestors 'none'`, so no other site can frame the pages, and a fresh `X-Request-Id`. Under `demo`, each adds `X-Robots-Tag: noindex`.
 
-Studio is the exception. Under `owner`, every `/studio` response, however the path is cased or percent-encoded (`/Studio` and `/%73tudio` too), gets its own Content-Security-Policy with a nonce made for that response: `default-src 'self'; script-src 'self' 'nonce-<n>' 'strict-dynamic'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; frame-src 'self'; frame-ancestors 'none'; form-action 'self'; base-uri 'none'; object-src 'none'`. Studio's pages have their own layout, with none of the site's inline script or JSON-LD, so the only scripts there are Next's, which carry the nonce. Those responses, and every `/api/studio` response in every profile, send `Referrer-Policy: same-origin` instead of the site's, since `no-referrer` would empty the `Origin` of the sign-in form's post, `Cross-Origin-Resource-Policy: same-origin`, so a page on another origin, the demo's included, can't load one to tell whether the owner is signed in, and `Cache-Control` with `no-store`. Under `demo` and `read-only`, which have no Studio, `/studio` and `/studio/sign-in` answer as a path no route matches: the same 404 page, with the same headers. Next's redirects for a trailing or repeated slash have none of these headers: Next answers `/sample/` and `//sample` with a 308 to `/sample`, whose body is only that path, before the app sees the request. `Strict-Transport-Security` belongs at the TLS proxy (see [Reverse proxy and HTTPS](#reverse-proxy-and-https)).
+Studio is the exception. Under `owner`, every `/studio` response, however the path is cased or percent-encoded (`/Studio` and `/%73tudio` too), gets its own Content-Security-Policy with a nonce made for that response: `default-src 'self'; script-src 'self' 'nonce-<n>' 'strict-dynamic'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; frame-src 'self'; frame-ancestors 'none'; form-action 'self'; base-uri 'none'; object-src 'none'`. Studio's pages have their own layout, with none of the site's inline script or JSON-LD, so the only scripts there are Next's, which carry the nonce. Those responses, and every `/api/studio` response in every profile, send `Referrer-Policy: same-origin` instead of the site's, since `no-referrer` would empty the `Origin` of the sign-in form's post, `Cross-Origin-Resource-Policy: same-origin`, so a page on another origin, the demo's included, can't load one to tell whether the owner is signed in, and `Cache-Control` with `no-store`. Under `demo` and `read-only`, which have no Studio, every Studio path, however it is cased or percent-encoded and to any method, answers as a path no route matches: the same status, headers, and body as `/no-such-page`. Next's redirects for a trailing or repeated slash have none of these headers: Next answers `/sample/` and `//sample` with a 308 to `/sample`, whose body is only that path, before the app sees the request. `Strict-Transport-Security` belongs at the TLS proxy (see [Reverse proxy and HTTPS](#reverse-proxy-and-https)).
 
 ## Plain Node
 
@@ -340,7 +340,7 @@ For a process manager (PM2, systemd, etc.), wrap `pnpm start` with the same envi
 PORTFOLIO_PROFILE=demo PORTFOLIO_ORIGIN=https://demo.jane.name pnpm start
 ```
 
-`/` and `/sample` show the sample in the sample site's selection, `editorial-evidence`, which renders as the fallback composition until #13 installs it. `/sample?variant=<id>` shows it in any registered variant; `fallback`, an id this build doesn't register, an empty one, or two are a 404. The sample's `github` section doesn't render, since it would fetch a live account. Until the demo's indexing rules are settled, every response the app sends has `X-Robots-Tag: noindex`, `robots.txt` disallows everything, the sitemap is empty, and there is no feed. Every Studio operation answers with the 404 envelope.
+`/` and `/sample` show the sample in the sample site's selection, `editorial-evidence`, which renders as the fallback composition until #13 installs it. `/sample?variant=<id>` shows it in any registered variant, with that variant's views below `/sample` and the parameter on every link; `fallback`, an id this build doesn't register, an empty one, or two are a 404. The sample's `github` section doesn't render, since it would fetch a live account. Until the demo's indexing rules are settled, every response the app sends has `X-Robots-Tag: noindex`, `robots.txt` disallows everything, the sitemap is empty, and there is no feed. Every Studio operation answers with the 404 envelope.
 
 ## Environment variables
 

@@ -88,6 +88,7 @@ function code(file: string): string {
 }
 
 test("the package's own modules import only zod, @portfolio/schema, and each other", () => {
+  // The schema's id rules, which segments.ts reads, are part of its root entry too.
   for (const file of SOURCES) {
     const text = code(file);
     const specifiers = [
@@ -96,7 +97,10 @@ test("the package's own modules import only zod, @portfolio/schema, and each oth
     ].map((match) => match[1]!);
     for (const specifier of specifiers) {
       assert.ok(
-        specifier === 'zod' || specifier === '@portfolio/schema' || specifier.startsWith('./'),
+        specifier === 'zod' ||
+          specifier === '@portfolio/schema' ||
+          specifier === '@portfolio/schema/ids' ||
+          specifier.startsWith('./'),
         `${file} imports ${specifier}`,
       );
     }

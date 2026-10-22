@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import type { MotionPolicy, PublicView } from '@portfolio/schema';
 import { buildRenderInput, type RouteTarget } from '@portfolio/variant-contract';
 import './host-modules';
-import { compositionFor, loadComposition, type Composition } from './variants';
+import { loadComposition, type Composition } from './variants';
 
 // The page around a variant (#5, Slice 3, item 6): a skip link to the
 // variant's main, then the presentation boundary, <div data-variant>, with
@@ -12,33 +12,41 @@ import { compositionFor, loadComposition, type Composition } from './variants';
 export interface CompositionPage {
   /** The public view of the pair: the only content a variant gets. */
   readonly view: PublicView;
+  /** What renders: the selection, or the fallback composition in its place. */
+  readonly composition: Composition;
   readonly route: RouteTarget;
   /** Where the routes are mounted: '' for the site root, '/sample' under demo. */
   readonly basePath: string;
+  /** The query every internal link keeps, such as /sample's `variant`. */
+  readonly query?: Readonly<Record<string, string>>;
   /** The deployment's canonical origin, PORTFOLIO_ORIGIN. */
   readonly origin: string;
-  /** The variant to render instead of the site's selection, as /sample's ?variant= names one. */
-  readonly selected?: string;
+  /** A path view's parent route, below `basePath`, which its canonical link names (#5, Slice 4). */
+  readonly canonical?: string;
   /** When the request arrived. Tests pass a fixed time. */
   readonly requestTime?: Date;
 }
 
 /** The skip link, then the selected variant, or the fallback composition in its place, in its boundary. */
 export async function renderComposition(page: CompositionPage) {
-  const { view } = page;
-  const composition = compositionFor(page.selected ?? view.site.appearance.variant);
+  const { view, composition } = page;
   const { manifest } = composition.rendered;
   const input = buildRenderInput({
     view,
     manifest,
     route: page.route,
     basePath: page.basePath,
+    query: page.query,
     origin: page.origin,
     requestTime: page.requestTime ?? new Date(),
   });
   const Variant = await loadComposition(manifest.id);
   return (
     <>
+      {/* React places it in the document's head. */}
+      {page.canonical === undefined ? null : (
+        <link rel="canonical" href={`${page.origin}${page.canonical}`} />
+      )}
       <a className="host-skip-link" href={`#${input.ids.main}`} lang={hostLang(view)}>
         Skip to content
       </a>

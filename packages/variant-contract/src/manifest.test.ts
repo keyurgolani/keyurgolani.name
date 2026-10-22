@@ -342,6 +342,16 @@ const CASES: readonly Case[] = [
     expect: [['manifest.route-reserved-segment', '/routes/views/0/segment']],
   },
   {
+    name: "a view under home starting at assets, where Compose mounts an owner's assets",
+    change: (m) => (m.routes.views[0].segment = 'assets/{chapter}'),
+    expect: [['manifest.route-reserved-segment', '/routes/views/0/segment']],
+  },
+  {
+    name: "a view at an image metadata route with a route group's suffix",
+    change: (m) => (m.routes.views[0].segment = 'opengraph-image-12o0cb'),
+    expect: [['manifest.route-reserved-segment', '/routes/views/0/segment']],
+  },
+  {
     name: 'a view that takes the id of a built-in route',
     change: (m) => (m.routes.views[1].id = 'work'),
     expect: [['manifest.route-conflict', '/routes/views/1/id']],

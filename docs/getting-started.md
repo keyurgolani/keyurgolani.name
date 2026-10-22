@@ -96,7 +96,7 @@ links:
   - { url: '/resume.pdf', platform: resume }
 ```
 
-`/me.jpg` resolves to `apps/web/public/me.jpg`. The host doesn't fetch arbitrary URLs.
+`/me.jpg` resolves to `apps/web/public/me.jpg`. The host doesn't fetch arbitrary URLs. Give each file at the top of `public/` a name with its extension, as here: a folder named like `images` could take a path a variant's view uses, and `pnpm test` fails on one.
 
 ## GitHub data
 

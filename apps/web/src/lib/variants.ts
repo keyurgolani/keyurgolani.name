@@ -14,8 +14,9 @@ import { VARIANTS } from './generated/registry.meta';
 
 // The variants and content extensions this build registers (#5, Slice 3),
 // from the modules registry generation writes: which composition renders
-// for a selection, which one /sample renders, and what documents are checked
-// against. The only variant id the host names is the fallback composition's.
+// for a selection, and what documents are checked against. lib/sample.ts
+// says which one /sample renders. The only variant id the host names is the
+// fallback composition's.
 // It imports no server-only module, so `pnpm config:validate` loads it too.
 
 /** Every variant this build registers, the fallback composition included. */
@@ -73,23 +74,4 @@ export function liveContext(): {
     extensions: CONTENT_EXTENSIONS,
     validators: contractValidators(REGISTRY, { live: true }),
   };
-}
-
-export type SearchParams = Readonly<Record<string, string | string[] | undefined>>;
-
-/**
- * The variant /sample renders (#1, item 17): with no `variant` parameter, the
- * sample site's own selection, which falls back like `/` does; with one, the
- * registered variant it names. The fallback composition, an unknown id, an
- * empty one, and a parameter given twice are null, which is a 404.
- */
-export function sampleVariant(
-  query: SearchParams,
-  siteSelection: string,
-  registry: VariantRegistry = REGISTRY,
-): string | null {
-  const named = query.variant;
-  if (named === undefined) return siteSelection;
-  if (typeof named !== 'string' || named === FALLBACK_ID) return null;
-  return findVariant(registry, named) ? named : null;
 }

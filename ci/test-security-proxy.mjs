@@ -4,7 +4,11 @@
 // (tests/harness/security-suite.ts) against the image under owner, behind
 // the HTTPS proxy fixture with one trusted hop: tests/proxy/security.spec.ts,
 // under tests/proxy/playwright.config.ts. It needs the image, which
-// `pnpm ci:image` builds, and a container runtime, and no browser.
+// `pnpm ci:image` builds, and a container runtime, and no browser. The suite
+// loads the route table, which imports the generated registry, and nothing
+// in the image job builds the app, so this writes the registry first
+// (ci/lib/registry.mjs). Arguments go on to Playwright: --list loads every
+// spec and runs none.
 //
 // Environment:
 //   PORTFOLIO_IMAGE   the image under test (default portfolio:ci)
@@ -12,18 +16,23 @@
 //   CONTAINER_PREFIX  Compose project name prefix (default portfolio-ci-)
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
+import { buildRegistry } from './lib/registry.mjs';
 import { REPO_ROOT } from './lib/reports.mjs';
 
 const PLAYWRIGHT = path.join(REPO_ROOT, 'node_modules', '@playwright', 'test', 'cli.js');
 const CONFIG = path.join(REPO_ROOT, 'tests', 'proxy', 'playwright.config.ts');
 
+try {
+  console.log(buildRegistry());
+} catch (error) {
+  console.error(`[test:security:proxy] ${error.message}`);
+  process.exit(1);
+}
 console.log(
   `[test:security:proxy] the security suite through the HTTPS proxy, on ${process.env.PORTFOLIO_IMAGE || 'portfolio:ci'}`,
 );
-const result = spawnSync(process.execPath, [PLAYWRIGHT, 'test', '-c', CONFIG], {
-  cwd: REPO_ROOT,
-  stdio: 'inherit',
-});
+const args = [PLAYWRIGHT, 'test', '-c', CONFIG, ...process.argv.slice(2)];
+const result = spawnSync(process.execPath, args, { cwd: REPO_ROOT, stdio: 'inherit' });
 if (result.status !== 0) {
   console.error(`[test:security:proxy] failed (exit ${result.status ?? result.signal})`);
   process.exit(result.status || 1);

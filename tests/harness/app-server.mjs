@@ -53,10 +53,10 @@ process.on('exit', () => {
   }
 });
 
-function requireBuild() {
-  if (!existsSync(SERVER_JS)) {
+function requireBuild(serverJs = SERVER_JS) {
+  if (!existsSync(serverJs)) {
     throw new Error(
-      `no standalone build at ${path.relative(REPO_ROOT, SERVER_JS)}; run pnpm build first`,
+      `no standalone build at ${path.relative(REPO_ROOT, serverJs)}; run pnpm build first`,
     );
   }
 }
@@ -98,6 +98,8 @@ function baseEnv(home, port) {
  * @param {string} [options.logFile] where the server's stdout and stderr go
  * @param {number} [options.port] the port to try first, instead of a free one, so a
  *   test can hold it and check that a start on a taken port moves to another
+ * @param {string} [options.web] the apps/web whose build runs: this checkout's, or a
+ *   fixture host's (fixture-host.mjs)
  */
 export async function startApp({
   env = {},
@@ -109,17 +111,20 @@ export async function startApp({
   dataName,
   logFile,
   port: firstPort,
+  web = WEB,
 } = {}) {
-  requireBuild();
+  const standalone = path.join(web, '.next', 'standalone');
+  const serverJs = path.join(standalone, 'apps', 'web', 'server.js');
+  requireBuild(serverJs);
   const root = mkdtempSync(path.join(tmpdir(), 'portfolio-app-'));
   const appDir = path.join(root, 'app');
   const sourceDir = path.join(root, sourceName);
   // The image's layout: the standalone tree plus static assets and public/.
-  cpSync(STANDALONE, appDir, { recursive: true, verbatimSymlinks: true });
-  cpSync(path.join(WEB, '.next', 'static'), path.join(appDir, 'apps', 'web', '.next', 'static'), {
+  cpSync(standalone, appDir, { recursive: true, verbatimSymlinks: true });
+  cpSync(path.join(web, '.next', 'static'), path.join(appDir, 'apps', 'web', '.next', 'static'), {
     recursive: true,
   });
-  cpSync(path.join(WEB, 'public'), path.join(appDir, 'apps', 'web', 'public'), { recursive: true });
+  cpSync(path.join(web, 'public'), path.join(appDir, 'apps', 'web', 'public'), { recursive: true });
   mkdirSync(sourceDir);
   if (portfolio) cpSync(portfolio, path.join(sourceDir, `portfolio${path.extname(portfolio)}`));
   if (siteText !== undefined) writeFileSync(path.join(sourceDir, 'site.yml'), siteText);
@@ -154,7 +159,7 @@ export async function startApp({
       ...trap.env,
       NODE_OPTIONS: nodeOptions(env, trap),
     };
-    const child = spawn(process.execPath, [SERVER_JS.replace(STANDALONE, appDir)], {
+    const child = spawn(process.execPath, [serverJs.replace(standalone, appDir)], {
       cwd: path.join(appDir, 'apps', 'web'),
       env: serverEnv,
       stdio: ['ignore', 'pipe', 'pipe'],

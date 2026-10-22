@@ -4,7 +4,7 @@ import { onRequestError } from './instrumentation';
 
 // onRequestError (#1, item 21): the digest, the request ID, and the route
 // pattern, and nothing from the error, the URL, or the other headers. Next
-// reports a page's route path as its file path (`/page`, `/sample/page`),
+// reports a page's route path as its file path (`/page`, `/[...view]/page`),
 // and a route handler's as `/api/ready/route` or already as `/api/ready`.
 
 /** The one line onRequestError writes for an error at Next's `routePath`, without its time. */
@@ -40,7 +40,7 @@ test('a request error logs its digest with the request ID and the route pattern'
     },
     {
       routerKind: 'App Router',
-      routePath: '/sample/page',
+      routePath: '/sample/[[...path]]/page',
       routeType: 'render',
       renderSource: 'react-server-components',
       revalidateReason: undefined,
@@ -56,7 +56,7 @@ test('a request error logs its digest with the request ID and the route pattern'
     event: 'request.error',
     digest: '2918',
     requestId: 'req-9',
-    route: '/sample',
+    route: '/sample/[[...path]]',
   });
 });
 
@@ -83,7 +83,9 @@ test('an error without a digest, or a request without an ID, still logs the rout
 test('the route is the table pattern, whatever form of route path Next reports', async (t) => {
   const cases: [routePath: string, routeType: 'render' | 'route', route: string][] = [
     ['/page', 'render', '/'],
-    ['/sample/page', 'render', '/sample'],
+    ['/sample/[[...path]]/page', 'render', '/sample/[[...path]]'],
+    ['/[...view]/page', 'render', '/[...view]'],
+    ['/work/[slug]/[...view]/page', 'render', '/work/[slug]/[...view]'],
     ['/api/studio/[name]/route', 'route', '/api/studio/[name]'],
     ['/api/ready', 'route', '/api/ready'],
     ['/(site)/opengraph-image-12o0cb/route', 'route', '/opengraph-image-12o0cb'],

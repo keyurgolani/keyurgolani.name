@@ -1,0 +1,19 @@
+{
+  "name": "@fixture/chapters",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "A route test fixture (#5): each titled section on its own page. Never installed in a release.",
+  "main": "./src/index.tsx",
+  "types": "./src/index.tsx",
+  "exports": {
+    ".": "./src/index.tsx",
+    "./manifest": "./manifest.json",
+    "./styles.css": "./src/styles.css",
+    "./package.json": "./package.json"
+  },
+  "portfolio": {
+    "kind": "variant",
+    "manifest": "./manifest.json"
+  }
+}
