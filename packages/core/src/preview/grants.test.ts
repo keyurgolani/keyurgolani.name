@@ -136,7 +136,10 @@ async function signIn(sessions: Sessions) {
 async function newDraft(store: Store): Promise<Draft> {
   const working = await store.drafts.getWorking();
   const created = await store.drafts.create(
-    { documents: pairInput('engineering'), ...(working ? { expectedVersion: working.version } : {}) },
+    {
+      documents: pairInput('engineering'),
+      ...(working ? { expectedVersion: working.version } : {}),
+    },
     'owner',
   );
   assert.equal(created.kind, 'saved');
@@ -246,7 +249,10 @@ test("a grant is bound to its session's digest, the profile, the Studio origin, 
   await saveDraft(store, draft, 'moved on');
   const checked = await grants.check(first.token);
   assert.equal(checked.status, 'active');
-  assert.deepEqual(checked.status === 'active' ? checked.record.documents : null, draftInput(draft));
+  assert.deepEqual(
+    checked.status === 'active' ? checked.record.documents : null,
+    draftInput(draft),
+  );
 });
 
 test('every request re-checks a grant: an unknown or malformed token, another profile, and another Studio origin render nothing', async (t) => {
@@ -375,7 +381,10 @@ test("renewal slides only the grant's idle limit, never past its cap or its sess
     advance(10 * MINUTE);
     const each = await grants.renew(token, signedIn.digest);
     assert.ok(each.status === 'active', `${minutes} minutes in`);
-    assert.equal(each.expiry.idleExpiresAt, Math.min(start + (minutes + 15) * MINUTE, start + HOUR));
+    assert.equal(
+      each.expiry.idleExpiresAt,
+      Math.min(start + (minutes + 15) * MINUTE, start + HOUR),
+    );
   }
   // At the session's absolute expiry the grant's own cap passes with it.
   advance(10 * MINUTE);
@@ -425,7 +434,11 @@ test('draft grants stop on publish, discard, and a newer minted version, and rev
   // Publishing the draft stops its grants, and no revision or fixture grant.
   const live = await store.publication.status();
   const published = await owned(store).publish(
-    { draftId: saved.draftId, draftVersion: saved.version, expectedLiveRevisionId: live.liveRevisionId },
+    {
+      draftId: saved.draftId,
+      draftVersion: saved.version,
+      expectedLiveRevisionId: live.liveRevisionId,
+    },
     'owner',
   );
   assert.equal(published.kind, 'committed');
@@ -542,7 +555,11 @@ test(`a session holds at most ${MAX_ACTIVE_GRANTS} active grants, and a mint pas
   });
   for (const token of tokens) assert.equal(await statusOf(grants, token), 'active');
   advance(1);
-  await grants.mint({ session, subject: { kind: 'fixture', fixture: 'complete' }, environment: ENVIRONMENT });
+  await grants.mint({
+    session,
+    subject: { kind: 'fixture', fixture: 'complete' },
+    environment: ENVIRONMENT,
+  });
   assert.equal(await statusOf(grants, tokens[0]!), 'superseded');
   for (const token of tokens.slice(1)) assert.equal(await statusOf(grants, token), 'active');
   assert.equal(await statusOf(grants, theirs.token), 'active', "another session's grants stay");

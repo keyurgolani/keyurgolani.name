@@ -13,7 +13,14 @@ import {
   serializeGrant,
   type GrantRecord,
 } from './grant-store';
-import { grantDigest, grantRef, isGrantDigest, isGrantToken, newChannelNonce, newGrantToken } from './token';
+import {
+  grantDigest,
+  grantRef,
+  isGrantDigest,
+  isGrantToken,
+  newChannelNonce,
+  newGrantToken,
+} from './token';
 
 // The grant store's records on disk (#7, Slice 2): what a record holds, the
 // text it's kept as, and what counts as a damaged one. grants.test.ts runs
@@ -53,7 +60,15 @@ test('a grant token is 16 random bytes of base64url, named by its SHA-256 digest
     assert.ok(isGrantDigest(grantDigest(token)));
   }
   assert.equal(grantRef('0123456789abcdef'.repeat(4)), '01234567');
-  for (const value of [undefined, '', 'local', 'dev', 'x'.repeat(21), 'x'.repeat(23), `${'x'.repeat(21)}=`]) {
+  for (const value of [
+    undefined,
+    '',
+    'local',
+    'dev',
+    'x'.repeat(21),
+    'x'.repeat(23),
+    `${'x'.repeat(21)}=`,
+  ]) {
     assert.equal(isGrantToken(value), false, String(value));
   }
   assert.equal(isGrantDigest('A'.repeat(64)), false);
@@ -66,8 +81,10 @@ test("a grant record keeps its times in ISO 8601 and no digest, which is its fil
   assert.match(text, /"createdAt":"2026-10-22T12:00:00\.000Z"/);
   assert.deepEqual(parseGrant(written.digest, text), written);
   // An ended grant drops its documents, and one with no override has none.
-  const { documents: _documents, appearance: _appearance, ...bare } = record();
-  const ended = { ...bare, state: 'session_ended' as const };
+  const bare: Partial<GrantRecord> = { ...record() };
+  delete bare.documents;
+  delete bare.appearance;
+  const ended = { ...(bare as GrantRecord), state: 'session_ended' as const };
   assert.deepEqual(parseGrant(ended.digest, serializeGrant(ended)), ended);
 });
 

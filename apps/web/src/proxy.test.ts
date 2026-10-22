@@ -848,7 +848,10 @@ test('a trailing slash is a 308 to the path without it, under the headers its pa
   ]) {
     const response = await redirect(path!, to!);
     assert.deepEqual(previewHeaderProblems(response), [], path);
-    assert.match(response.headers.get('content-security-policy') ?? '', previewPolicy('https://rowan.test'));
+    assert.match(
+      response.headers.get('content-security-policy') ?? '',
+      previewPolicy('https://rowan.test'),
+    );
   }
   assert.deepEqual(checked, [], 'the 308 never depends on a grant');
   // Elsewhere, the 308 Next sent, with that path's own headers.

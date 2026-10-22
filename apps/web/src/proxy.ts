@@ -233,10 +233,11 @@ function hasGrants(profile: Profile): boolean {
 }
 
 /** What each kind of grant route may be loaded as, by Sec-Fetch-Dest (#7, Slice 2, item 8). */
-const GRANT_DESTINATIONS: Readonly<Record<NonNullable<RouteEntry['grant']>, ReadonlySet<string>>> = {
-  document: new Set(['iframe']),
-  asset: new Set(['image', 'video', 'audio', 'track', 'font']),
-};
+const GRANT_DESTINATIONS: Readonly<Record<NonNullable<RouteEntry['grant']>, ReadonlySet<string>>> =
+  {
+    document: new Set(['iframe']),
+    asset: new Set(['image', 'video', 'audio', 'track', 'font']),
+  };
 
 interface Gate {
   readonly pathname: string;

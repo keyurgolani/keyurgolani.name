@@ -111,7 +111,9 @@ export function asSubject(value: unknown): GrantSubject | null {
       : null;
   }
   if (value.kind === 'revision') {
-    return isRevisionId(value.revisionId) ? { kind: 'revision', revisionId: value.revisionId } : null;
+    return isRevisionId(value.revisionId)
+      ? { kind: 'revision', revisionId: value.revisionId }
+      : null;
   }
   if (value.kind === 'fixture') {
     return isFixtureId(value.fixture) ? { kind: 'fixture', fixture: value.fixture } : null;
@@ -148,7 +150,8 @@ function asDocuments(value: unknown): UnitInput | null {
   const site = asDocument(value.site);
   const media = value.media === undefined ? undefined : asDocument(value.media);
   if (!portfolio || !site || media === null) return null;
-  if (Object.keys(value).some((name) => !['portfolio', 'site', 'media'].includes(name))) return null;
+  if (Object.keys(value).some((name) => !['portfolio', 'site', 'media'].includes(name)))
+    return null;
   return { portfolio, site, ...(media ? { media } : {}) };
 }
 
@@ -386,7 +389,8 @@ export function filesystemGrantStore(dataDir: string): GrantStore {
       return Number.MAX_SAFE_INTEGER;
     },
     async setNewestDraftVersion(draftId, version) {
-      if (!Number.isSafeInteger(version) || version < 1) throw new TypeError('Not a draft version.');
+      if (!Number.isSafeInteger(version) || version < 1)
+        throw new TypeError('Not a draft version.');
       await prepared(paths.drafts);
       await writePrivateFile(markerFile(draftId), `${JSON.stringify({ v: 1, newest: version })}\n`);
     },

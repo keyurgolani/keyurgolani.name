@@ -110,7 +110,9 @@ const documentsOf = (unit: {
 }): UnitInput => ({
   portfolio: { format: unit.portfolio.format, sourceText: unit.portfolio.sourceText },
   site: { format: unit.site.format, sourceText: unit.site.sourceText },
-  ...(unit.media ? { media: { format: unit.media.format, sourceText: unit.media.sourceText } } : {}),
+  ...(unit.media
+    ? { media: { format: unit.media.format, sourceText: unit.media.sourceText } }
+    : {}),
 });
 
 export function ownerPreviews({
@@ -209,7 +211,9 @@ export function ownerPreviews({
     let view = views.get(record.digest);
     if (!view) {
       const documents =
-        record.subject.kind === 'draft' ? (record.documents ?? null) : await contentOf(record.subject);
+        record.subject.kind === 'draft'
+          ? (record.documents ?? null)
+          : await contentOf(record.subject);
       const outcome = documents ? rendered(documents, record.appearance) : null;
       if (!outcome || !('pair' in outcome)) {
         // Never the sample in its place, and never the reason: the log has the grant's ref.
@@ -259,12 +263,14 @@ export function ownerPreviews({
     const session = caller(context);
     if (!session) return errorResult('authentication_required');
     const { subject, appearance, environment } = input as {
-      readonly subject: { draft: string; version: number } | { revision: string } | { fixture: string };
+      readonly subject:
+        { draft: string; version: number } | { revision: string } | { fixture: string };
       readonly appearance?: Record<string, unknown>;
       readonly environment: GrantRecord['environment'];
     };
     // The override is a whole selection in the site document's shape.
-    const override = appearance === undefined ? undefined : AppearanceSelectionSchema.safeParse(appearance);
+    const override =
+      appearance === undefined ? undefined : AppearanceSelectionSchema.safeParse(appearance);
     if (override && !override.success) return errorResult('invalid_input');
     const selection = override?.data as Record<string, unknown> | undefined;
 
@@ -344,7 +350,9 @@ export function ownerPreviews({
       quietly(() => grants.supersedeDraft(draftId));
     }
   });
-  const stopSessions = sessions.onSessionEnded((digest) => quietly(() => grants.endSession(digest)));
+  const stopSessions = sessions.onSessionEnded((digest) =>
+    quietly(() => grants.endSession(digest)),
+  );
   // What a restart left behind past its cap.
   quietly(() => grants.sweep());
 

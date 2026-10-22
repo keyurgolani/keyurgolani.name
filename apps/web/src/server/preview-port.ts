@@ -13,7 +13,9 @@ export interface GrantSessionPort {
    * provider minted for it: its digest and when it ends regardless, or null
    * once it ended during the request.
    */
-  of(session: Session | null): { readonly digest: string; readonly absoluteExpiresAt: number } | null;
+  of(
+    session: Session | null,
+  ): { readonly digest: string; readonly absoluteExpiresAt: number } | null;
   /** Whether the session `digest` names still counts, read without sliding it. */
   resolveDigest(digest: string): Promise<{ readonly status: 'valid' | 'ended' | 'unavailable' }>;
   /** Called with the digest of each session that ends in this process. Returns an unsubscribe. */

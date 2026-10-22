@@ -52,7 +52,11 @@ test('the grant commands need a session and preview.grant, take a grant only in 
     if (name !== 'preview.grant.mint') {
       assert.equal(operation.input.safeParse({ grant }).success, true, name);
       for (const input of [{}, { grant: `${grant}=` }, { grant, extra: 1 }, { grant: 42 }]) {
-        assert.equal(operation.input.safeParse(input).success, false, `${name} ${JSON.stringify(input)}`);
+        assert.equal(
+          operation.input.safeParse(input).success,
+          false,
+          `${name} ${JSON.stringify(input)}`,
+        );
       }
     }
   }
@@ -63,13 +67,22 @@ test('the grant commands need a session and preview.grant, take a grant only in 
   ]);
 
   const mint = entry('preview.grant.mint');
-  const environment = { displayMode: 'dark', contrast: 'more', motion: 'reduce', enhancement: 'off' };
+  const environment = {
+    displayMode: 'dark',
+    contrast: 'more',
+    motion: 'reduce',
+    enhancement: 'off',
+  };
   for (const subject of [
     { draft: `drf_${'a'.repeat(32)}`, version: 3 },
     { revision: `rev_${'b'.repeat(32)}` },
     { fixture: 'complete' },
   ]) {
-    assert.equal(mint.input.safeParse({ subject, environment }).success, true, JSON.stringify(subject));
+    assert.equal(
+      mint.input.safeParse({ subject, environment }).success,
+      true,
+      JSON.stringify(subject),
+    );
   }
   for (const input of [
     { subject: { draft: '../drafts/x', version: 1 }, environment },
@@ -83,20 +96,32 @@ test('the grant commands need a session and preview.grant, take a grant only in 
     assert.equal(mint.input.safeParse(input).success, false, JSON.stringify(input));
   }
   const at = '2026-10-22T12:00:00.000Z';
-  const active = { status: 'active', grant, nonce: grant, idleExpiresAt: at, absoluteExpiresAt: at };
+  const active = {
+    status: 'active',
+    grant,
+    nonce: grant,
+    idleExpiresAt: at,
+    absoluteExpiresAt: at,
+  };
   assert.equal(mint.output.safeParse(active).success, true);
   assert.equal(mint.output.safeParse({ status: 'preview_blocked', diagnostics: 2 }).success, true);
   assert.equal(mint.output.safeParse({ ...active, digest: 'a'.repeat(64) }).success, false);
   assert.equal(mint.output.safeParse({ status: 'preview_blocked', diagnostics: 0 }).success, false);
 
   const renew = entry('preview.grant.renew');
-  assert.equal(renew.output.safeParse({ status: 'active', idleExpiresAt: at, absoluteExpiresAt: at }).success, true);
+  assert.equal(
+    renew.output.safeParse({ status: 'active', idleExpiresAt: at, absoluteExpiresAt: at }).success,
+    true,
+  );
   for (const status of ['superseded', 'expired', 'unknown', 'session_ended']) {
     assert.equal(renew.output.safeParse({ status }).success, true, status);
     assert.equal(entry('preview.grant.status').output.safeParse({ status }).success, true, status);
   }
   assert.equal(renew.output.safeParse({ status: 'active' }).success, false);
-  assert.equal(entry('preview.grant.status').output.safeParse({ status: 'revoked' }).success, false);
+  assert.equal(
+    entry('preview.grant.status').output.safeParse({ status: 'revoked' }).success,
+    false,
+  );
 });
 
 test('auth.login needs no session, takes JSON or the sign-in form up to 4 KB, and any password at all', () => {

@@ -3,7 +3,14 @@ import { sessionRef } from '../auth/token';
 import type { DraftId } from '../store/layout';
 import type { UnitInput } from '../store/unit';
 import type { GrantEnvironment, GrantRecord, GrantStore, GrantSubject } from './grant-store';
-import { grantDigest, grantRef, isGrantDigest, isGrantToken, newChannelNonce, newGrantToken } from './token';
+import {
+  grantDigest,
+  grantRef,
+  isGrantDigest,
+  isGrantToken,
+  newChannelNonce,
+  newGrantToken,
+} from './token';
 
 // Preview grants (#7, Slice 2): what makes one, what keeps it, and what ends
 // it. The store holds the records; this decides with them. A grant is bound
@@ -174,8 +181,9 @@ function serializer() {
 /** A record without the copy of a draft it no longer renders. */
 function withoutDocuments(record: GrantRecord): GrantRecord {
   if (!record.documents) return record;
-  const { documents: _documents, ...rest } = record;
-  return Object.freeze(rest);
+  const copy: Partial<GrantRecord> = { ...record };
+  delete copy.documents;
+  return Object.freeze(copy as GrantRecord);
 }
 
 export function createPreviewGrants({

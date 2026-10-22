@@ -68,7 +68,12 @@ const AUTH_OUTPUT: Record<string, unknown> = {
   'auth.sessions.revoke': { revoked: false },
   'auth.sessions.revokeAll': { revoked: 0 },
 };
-const ENVIRONMENT = { displayMode: 'system', contrast: 'system', motion: 'system', enhancement: 'on' };
+const ENVIRONMENT = {
+  displayMode: 'system',
+  contrast: 'system',
+  motion: 'system',
+  enhancement: 'on',
+};
 /** A body each command's input schema takes, where `{}` isn't one. */
 const INPUT: Record<string, unknown> = {
   'auth.sessions.revoke': { ref: '0123abcd' },
