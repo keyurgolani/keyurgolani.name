@@ -1,8 +1,12 @@
-# Contract fixture (#5, Slice 6): every core section kind, with every field each kind
-# defines, and every image bundled as a data URL, so nothing renders from outside the
-# app. Each value is distinct, so a test can find it in the markup. Links go to .test
-# hosts only, and the github section names an account and carries no GitHub data.
-schemaVersion: 2
+# Contract fixture (#5, Slice 6; #10): every core section kind and every record
+# type, with every field each defines: the curation lists, a case study with
+# every field, every evidence type, every chronology kind with threads and
+# links, media of every kind, and placements that override their asset. Each
+# value is distinct, so a test can find it in the markup. Every image is a
+# path under the media root with no file yet, so it renders as unavailable.
+# Links go to .test hosts only, and the github section names an account and
+# has no snapshot beside it.
+schemaVersion: 3
 locale: en
 direction: ltr
 identity:
@@ -12,18 +16,369 @@ identity:
   location: Lisbon
   email: rowan@rowan.test
   avatar:
-    src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-    alt: Alt avatar
-    width: 640
-    height: 480
-    credit: Credit avatar
-    focalPoint:
-      x: 0.25
-      y: 0.75
+    asset: avatar
 links:
   - platform: mastodon
     url: https://social.rowan.test/@rowan
     label: Portfolio link
+meta:
+  title: Meta title
+  description: Meta description.
+  ogImage:
+    asset: og-image
+practice:
+  thesis: Practice thesis.
+  skills:
+    - name: Skill group
+      description: Skill group description
+      items: [Grouped skill]
+    - items: [Loose skill]
+  tools:
+    - name: Stack group
+      description: Stack group description
+      items:
+        - name: Stack tool
+          url: https://tools.rowan.test/tool
+          version: v4.2
+  services:
+    - name: Service group
+      items:
+        - name: Service name
+          description: Service description.
+          pricing: Service pricing
+          url: https://work.rowan.test/service
+          highlights: [Service highlight]
+signature: project-name
+featured: [writing-title, release-title]
+proof: [stat-label, award-name, client-name]
+archive: [gallery-title]
+works:
+  - id: project-name
+    slug: project-name
+    title: Project name
+    medium: software
+    summary: Project summary.
+    description: Project description.
+    period: { start: 2022-01, end: 2023-05 }
+    role: Project role
+    organization: Project organization
+    tools: [Project technology]
+    url: https://rowan.test/project
+    cover:
+      asset: project-image
+      alt: Alt project-image override
+      focalPoint: { x: 0.4, y: 0.6 }
+    media:
+      - asset: project-shot
+        caption: Project shot caption
+      - asset: project-document
+        caption: Project document caption
+    evidence: [repository-name, client-name]
+    links:
+      - platform: github
+        url: https://code.rowan.test/tide
+        label: Project link
+    highlights: [Project highlight]
+    caseStudy:
+      challenge: Case study challenge.
+      context: Case study context.
+      role: Case study role.
+      constraints: Case study constraints.
+      decisions:
+        - decision: Case study decision.
+          rationale: Case study rationale.
+          alternatives: Case study alternatives.
+      evidence: Case study evidence.
+      outcomes: Case study outcomes.
+      reflection: Case study reflection.
+  - id: writing-title
+    title: Writing title
+    medium: writing
+    summary: Writing summary.
+    url: https://rowan.test/essays/tide
+    excerpt: Writing excerpt
+    publication: Writing publication
+    publishedAt: 2024-02-03
+    readingTimeMinutes: 7
+    tags: [Writing tag]
+  - id: episode-title
+    title: Episode title
+    medium: audio-video
+    description: Episode description.
+    links:
+      - platform: web
+        url: https://pod.rowan.test/12/notes
+        label: Episode link
+    media:
+      - asset: episode-audio
+        caption: Episode audio caption
+    publishedAt: 2026-02-01
+    series: Episodes show name
+    number: 12
+    durationMinutes: 42
+    showNotes: Episode show notes.
+    guests: [Guest One]
+    audioUrl: https://pod.rowan.test/12.mp3
+    videoUrl: https://pod.rowan.test/12
+  - id: gallery-title
+    title: Gallery title
+    medium: image-series
+    media:
+      - asset: gallery-photo
+        caption: Gallery caption
+        alt: Alt gallery-photo override
+        takenAt: 2025-08-30
+        location: Gallery location
+        tags: [Gallery tag]
+      - asset: gallery-video
+        caption: Gallery video caption
+  - id: release-title
+    title: Release title
+    medium: music
+    description: Release description.
+    role: Release role
+    cover:
+      asset: release-cover
+    links:
+      - platform: web
+        url: https://music.rowan.test/release
+        label: Release link
+    artist: Release artist
+    releasedAt: 2022-10
+    label: Release label
+    tracks:
+      - title: Track title
+        durationSeconds: 245
+        url: https://music.rowan.test/track
+  - id: object-title
+    title: Object title
+    medium: object
+    summary: Object summary.
+    visibility: public
+evidence:
+  - id: publication-title
+    type: publication
+    title: Publication title
+    url: https://papers.rowan.test/tide
+    authors: [Author One, Author Two]
+    venue: Publication venue
+    publishedAt: 2023-11
+    abstract: Publication abstract.
+    citation: Publication citation
+    doi: 10.1000/tide.42
+    pdfUrl: https://papers.rowan.test/tide.pdf
+    awards: [Publication award]
+  - id: talk-title
+    type: talk
+    title: Talk title
+    description: Talk description.
+    links:
+      - platform: web
+        url: https://talks.rowan.test/page
+        label: Talk link
+    venue: Talk venue
+    abstract: Talk abstract.
+    location: Talk location
+    presentedAt: 2025-05-20
+    format: keynote
+    slidesUrl: https://talks.rowan.test/slides
+    videoUrl: https://talks.rowan.test/video
+  - id: award-name
+    type: award
+    title: Award name
+    description: Award description.
+    url: https://awards.rowan.test/42
+    organization: Award organization
+    receivedAt: '2021'
+  - id: patent-title
+    type: patent
+    title: Patent title
+    description: Patent description.
+    url: https://patents.rowan.test/1234567
+    number: US 1,234,567
+    status: granted
+    filedAt: 2018-04
+    grantedAt: 2020-09
+    inventors: [Inventor One]
+    assignee: Patent assignee
+  - id: testimonial-author
+    type: testimonial
+    statement: Testimonial quote
+    source:
+      name: Testimonial author
+      url: https://people.rowan.test/author
+      role: Testimonial role
+      organization: Testimonial organization
+      avatar:
+        asset: testimonial-avatar
+        decorative: true
+    url: https://people.rowan.test/source
+  - id: press-headline
+    type: press
+    title: Press headline
+    url: https://news.rowan.test/story
+    publishedAt: 2024-06-10
+    publication: Press publication
+    excerpt: Press excerpt
+    author: Press author
+  - id: stat-label
+    type: metric
+    statement: Stat label
+    description: Stat description
+    asOf: 2026-06
+    source:
+      name: Stat source
+      url: https://data.rowan.test/ships
+    metric: { key: ships-built, value: 1200, unit: Stat unit }
+  - id: stat-label-two
+    type: metric
+    statement: 10B+ Stat label two
+  - id: tenure-years
+    type: metric
+    statement: Tenure summary
+    metric: { key: tenure-years, value: 12, unit: years }
+  - id: exhibition-title
+    type: exhibition
+    title: Exhibition title
+    statement: Exhibition statement.
+    location: Exhibition location
+  - id: client-name
+    type: client
+    title: Client name
+    description: Client description.
+    url: https://client.rowan.test
+  - id: recording-title
+    type: recording
+    title: Recording title
+    statement: Recording statement.
+    url: https://recordings.rowan.test/one
+  - id: repository-name
+    type: repository
+    title: Repository name
+    statement: Repository statement.
+    url: https://code.rowan.test/tide
+  - id: external-brand
+    type: external-work
+    title: External brand
+    description: External description
+    url: https://photos.rowan.test
+    locationLabel: External location
+    categories: [External category]
+    highlights:
+      - label: External highlight
+        sub: External highlight detail
+    urlLabel: photos.rowan.test
+    buttonText: External button
+    iconName: camera
+chronology:
+  - id: experience-role-experience-organization
+    kind: role
+    title: Experience role
+    period: { start: 2019-06, end: 2021-03 }
+    organization: Experience organization
+    organizationUrl: https://harbor.test
+    location: Experience location
+    description: Experience description.
+    highlights: [Experience highlight]
+    skills: [Experience skill]
+    thread: work
+    works: [project-name]
+    logo:
+      asset: experience-logo
+      decorative: true
+  - id: education-degree-education-institution
+    kind: study
+    title: Education degree
+    period: { start: '2012', end: '2016' }
+    organization: Education institution
+    organizationUrl: https://university.test
+    location: Education location
+    field: Education field
+    description: Education description.
+    achievements: [Education achievement]
+    thread: study
+    mergesInto: experience-role-experience-organization
+    logo:
+      asset: education-logo
+      decorative: true
+  - id: project-entry
+    kind: project
+    title: Project entry
+    period: { start: 2024-01 }
+    thread: creative
+    branchesFrom: experience-role-experience-organization
+    works: [release-title]
+  - id: event-entry
+    kind: event
+    title: Event entry
+    period: { start: 2025-05-20 }
+    location: Event location
+    thread: creative
+  - id: milestone-entry
+    kind: milestone
+    title: Milestone entry
+    period: { start: '2026' }
+    thread: work
+media:
+  - id: avatar
+    kind: image
+    source: complete/avatar.png
+    alt: Alt avatar
+    credit: Credit avatar
+    focalPoint: { x: 0.25, y: 0.75 }
+  - id: og-image
+    kind: image
+    source: complete/og-image.png
+    alt: Alt og-image
+  - id: project-image
+    kind: image
+    source: complete/project-image.png
+    alt: Alt project-image
+    credit: Credit project-image
+  - id: project-shot
+    kind: image
+    source: https://images.rowan.test/project-shot.png
+    alt: Alt project-shot
+  - id: project-document
+    kind: document
+    source: complete/project-document.pdf
+  - id: episode-audio
+    kind: audio
+    source: complete/episode-audio.mp3
+  - id: gallery-photo
+    kind: image
+    source: complete/gallery-photo.png
+    alt: Alt gallery-photo
+    credit: Credit gallery-photo
+  - id: gallery-video
+    kind: video
+    source: complete/gallery-video.mp4
+  - id: release-cover
+    kind: image
+    source: complete/release-cover.png
+    alt: Alt release-cover
+  - id: testimonial-avatar
+    kind: image
+    source: complete/testimonial-avatar.png
+    decorative: true
+  - id: experience-logo
+    kind: image
+    source: complete/experience-logo.png
+    decorative: true
+  - id: education-logo
+    kind: image
+    source: complete/education-logo.png
+    decorative: true
+  - id: custom-item-image
+    kind: image
+    source: complete/custom-item-image.png
+    alt: Alt custom-item-image
+contact:
+  message: Contact message
+  links:
+    - platform: email
+      url: mailto:rowan@rowan.test
+      label: Contact link
 sections:
   - kind: hero
     id: top
@@ -36,8 +391,13 @@ sections:
     subtagline: Hero subtagline
     ctas:
       - platform: email
-        url: "#contact"
+        url: '#contact'
         label: Hero action
+  - kind: practice
+    id: thesis
+    title: Thesis title
+    subtitle: Thesis subtitle
+    part: thesis
   - kind: lede
     id: about
     title: Lede title
@@ -49,271 +409,80 @@ sections:
     subtitle: Now subtitle
     asOf: 2026-09
     body: Now body.
-  - kind: experience
+  - kind: chronology
     id: experience
     title: Experience title
     subtitle: Experience subtitle
-    items:
-      - role: Experience role
-        organization: Experience organization
-        organizationUrl: https://harbor.test
-        location: Experience location
-        period:
-          start: 2019-06
-          end: 2021-03
-        description: Experience description.
-        highlights:
-          - Experience highlight
-        skills:
-          - Experience skill
-        logo:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Alt experience-logo
-          width: 640
-          height: 480
-          credit: Credit experience-logo
-          focalPoint:
-            x: 0.25
-            y: 0.75
-  - kind: education
+    items: [experience-role-experience-organization]
+  - kind: chronology
     id: education
     title: Education title
     subtitle: Education subtitle
-    items:
-      - degree: Education degree
-        field: Education field
-        institution: Education institution
-        institutionUrl: https://university.test
-        location: Education location
-        period:
-          start: "2012"
-          end: "2016"
-        description: Education description.
-        achievements:
-          - Education achievement
-        logo:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Alt education-logo
-          width: 640
-          height: 480
-          credit: Credit education-logo
-          focalPoint:
-            x: 0.25
-            y: 0.75
-  - kind: projects
+    items: [education-degree-education-institution]
+  - kind: chronology
+    id: timeline
+    title: Timeline title
+    subtitle: Timeline subtitle
+  - kind: works
     id: projects
     title: Projects title
     subtitle: Projects subtitle
-    items:
-      - name: Project name
-        summary: Project summary.
-        description: Project description.
-        period:
-          start: 2022-01
-          end: 2023-05
-        role: Project role
-        organization: Project organization
-        technologies:
-          - Project technology
-        image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Alt project-image
-          width: 640
-          height: 480
-          credit: Credit project-image
-          focalPoint:
-            x: 0.25
-            y: 0.75
-        images:
-          - src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-            alt: Alt project-shot
-            width: 640
-            height: 480
-            credit: Credit project-shot
-            focalPoint:
-              x: 0.25
-              y: 0.75
-        links:
-          - platform: github
-            url: https://code.rowan.test/tide
-            label: Project link
-        highlights:
-          - Project highlight
-  - kind: writings
+    items: [project-name, object-title]
+  - kind: works
     id: writings
     title: Writings title
     subtitle: Writings subtitle
-    items:
-      - title: Writing title
-        summary: Writing summary.
-        excerpt: Writing excerpt
-        publication: Writing publication
-        publishedAt: 2024-02-03
-        url: https://rowan.test/essays/tide
-        readingTimeMinutes: 7
-        tags:
-          - Writing tag
-  - kind: publications
+    items: [writing-title]
+  - kind: evidence
     id: publications
     title: Publications title
     subtitle: Publications subtitle
-    items:
-      - title: Publication title
-        authors:
-          - Author One
-          - Author Two
-        venue: Publication venue
-        publishedAt: 2023-11
-        abstract: Publication abstract.
-        citation: Publication citation
-        doi: 10.1000/tide.42
-        url: https://papers.rowan.test/tide
-        pdfUrl: https://papers.rowan.test/tide.pdf
-        awards:
-          - Publication award
-  - kind: talks
+    items: [publication-title]
+  - kind: evidence
     id: talks
     title: Talks title
     subtitle: Talks subtitle
-    items:
-      - title: Talk title
-        venue: Talk venue
-        location: Talk location
-        presentedAt: 2025-05-20
-        type: keynote
-        description: Talk description.
-        abstract: Talk abstract.
-        slidesUrl: https://talks.rowan.test/slides
-        videoUrl: https://talks.rowan.test/video
-        links:
-          - platform: web
-            url: https://talks.rowan.test/page
-            label: Talk link
-  - kind: awards
+    items: [talk-title]
+  - kind: evidence
     id: awards
     title: Awards title
     subtitle: Awards subtitle
-    items:
-      - name: Award name
-        organization: Award organization
-        receivedAt: "2021"
-        description: Award description.
-        url: https://awards.rowan.test/42
-  - kind: episodes
+    items: [award-name]
+  - kind: works
     id: episodes
     title: Episodes title
     subtitle: Episodes subtitle
-    showName: Episodes show name
-    showDescription: Episodes show description.
-    items:
-      - number: 12
-        title: Episode title
-        publishedAt: 2026-02-01
-        durationMinutes: 42
-        description: Episode description.
-        showNotes: Episode show notes.
-        guests:
-          - Guest One
-        audioUrl: https://pod.rowan.test/12.mp3
-        videoUrl: https://pod.rowan.test/12
-        links:
-          - platform: web
-            url: https://pod.rowan.test/12/notes
-            label: Episode link
-  - kind: patents
+    items: [episode-title]
+  - kind: evidence
     id: patents
     title: Patents title
     subtitle: Patents subtitle
-    items:
-      - title: Patent title
-        number: US 1,234,567
-        status: granted
-        filedAt: 2018-04
-        grantedAt: 2020-09
-        inventors:
-          - Inventor One
-        assignee: Patent assignee
-        description: Patent description.
-        url: https://patents.rowan.test/1234567
-  - kind: gallery
+    items: [patent-title]
+  - kind: works
     id: gallery
     title: Gallery title
     subtitle: Gallery subtitle
-    layout: columns
-    items:
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Alt gallery-photo
-          width: 640
-          height: 480
-          credit: Credit gallery-photo
-          focalPoint:
-            x: 0.25
-            y: 0.75
-        caption: Gallery caption
-        takenAt: 2025-08-30
-        location: Gallery location
-        tags:
-          - Gallery tag
-  - kind: discography
+    items: [gallery-title]
+  - kind: works
     id: discography
     title: Discography title
     subtitle: Discography subtitle
-    items:
-      - title: Release title
-        artist: Release artist
-        role: Release role
-        releasedAt: 2022-10
-        label: Release label
-        cover:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Alt release-cover
-          width: 640
-          height: 480
-          credit: Credit release-cover
-          focalPoint:
-            x: 0.25
-            y: 0.75
-        description: Release description.
-        tracks:
-          - title: Track title
-            durationSeconds: 245
-            url: https://music.rowan.test/track
-        links:
-          - platform: web
-            url: https://music.rowan.test/release
-            label: Release link
-  - kind: testimonials
+    items: [release-title]
+  - kind: evidence
     id: testimonials
     title: Testimonials title
     subtitle: Testimonials subtitle
-    items:
-      - quote: Testimonial quote
-        author: Testimonial author
-        authorRole: Testimonial role
-        authorOrganization: Testimonial organization
-        authorAvatar:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Alt testimonial-avatar
-          width: 640
-          height: 480
-          credit: Credit testimonial-avatar
-          focalPoint:
-            x: 0.25
-            y: 0.75
-        authorUrl: https://people.rowan.test/author
-        sourceUrl: https://people.rowan.test/source
-  - kind: press
+    items: [testimonial-author]
+  - kind: evidence
     id: press
     title: Press title
     subtitle: Press subtitle
-    items:
-      - title: Press headline
-        publication: Press publication
-        publishedAt: 2024-06-10
-        excerpt: Press excerpt
-        url: https://news.rowan.test/story
-        author: Press author
+    items: [press-headline]
+  - kind: evidence
+    id: more-evidence
+    title: More evidence title
+    subtitle: More evidence subtitle
+    items: [exhibition-title, client-name, recording-title, repository-name]
   - kind: quote
     id: quote
     title: Quote title
@@ -322,48 +491,40 @@ sections:
     attribution: Quote attribution
     source: Quote source
     sourceUrl: https://quotes.rowan.test/source
-  - kind: skills
+  - kind: practice
     id: skills
     title: Skills title
     subtitle: Skills subtitle
-    groups:
-      - name: Skill group
-        description: Skill group description
-        items:
-          - Grouped skill
-    items:
-      - Loose skill
-  - kind: stack
+    part: skills
+  - kind: practice
     id: stack
     title: Stack title
     subtitle: Stack subtitle
-    groups:
-      - name: Stack group
-        items:
-          - name: Stack tool
-            url: https://tools.rowan.test/tool
-            version: v4.2
-  - kind: services
+    part: tools
+  - kind: practice
     id: services
     title: Services title
     subtitle: Services subtitle
+    part: services
+  - kind: custom
+    id: custom
+    title: Custom title
+    subtitle: Custom subtitle
+    body: Custom body.
     items:
-      - name: Service name
-        description: Service description.
-        pricing: Service pricing
-        url: https://work.rowan.test/service
-        highlights:
-          - Service highlight
+      - title: Custom item title
+        summary: Custom item summary.
+        media:
+          - asset: custom-item-image
+            caption: Custom item caption
+        evidence: [recording-title]
+        links:
+          - url: https://custom.rowan.test/item
+            label: Custom item link
   - kind: contact
     id: contact
     title: Contact title
     subtitle: Contact subtitle
-    message: Contact message
-    links:
-      - platform: email
-        url: mailto:rowan@rowan.test
-        label: Contact link
-    showAvailability: true
   - kind: cta
     id: cta
     title: Cta title
@@ -375,54 +536,33 @@ sections:
       label: Cta primary
     secondaryAction:
       platform: web
-      url: "#services"
+      url: '#services'
       label: Cta secondary
-  - kind: stats
+  - kind: evidence
     id: stats
     title: Stats title
     subtitle: Stats subtitle
-    items:
-      - value: 1200
-        label: Stat label
-        description: Stat description
-        metric: ships-built
-      - value: 10B+
-        label: Stat label two
+    items: [stat-label, stat-label-two]
   - kind: focus
     id: focus
     title: Focus title
     subtitle: Focus subtitle
-    items:
-      - Focus item
+    items: [Focus item]
   - kind: fun-facts
     id: fun-facts
     title: Fun facts title
     subtitle: Fun facts subtitle
-    items:
-      - Fun fact
-  - kind: tenure
+    items: [Fun fact]
+  - kind: evidence
     id: tenure
     title: Tenure title
     subtitle: Tenure subtitle
-    years: 12
-    summary: Tenure summary
-  - kind: external-portfolios
+    items: [tenure-years]
+  - kind: evidence
     id: elsewhere
     title: External title
     subtitle: External subtitle
-    items:
-      - url: https://photos.rowan.test
-        brandName: External brand
-        description: External description
-        locationLabel: External location
-        categories:
-          - External category
-        highlights:
-          - label: External highlight
-            sub: External highlight detail
-        urlLabel: photos.rowan.test
-        buttonText: External button
-        iconName: camera
+    items: [external-brand]
   - kind: github
     id: github
     title: GitHub title
@@ -434,7 +574,5 @@ sections:
     showLanguageBreakdown: true
     showRecentlyActive: true
     recentlyActiveLimit: 5
-    featuredRepos:
-      - tide
-    excludeRepos:
-      - scratch
+    featuredRepos: [tide]
+    excludeRepos: [scratch]

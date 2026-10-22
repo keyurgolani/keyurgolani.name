@@ -1,5 +1,5 @@
-# Contract fixture (#5, Slice 6): the hidden-canary portfolio, in light mode, with its
-# drafts hidden.
+# Contract fixture (#5, Slice 6; #10): the hidden-canary portfolio, in light mode, with its
+# drafts, its services, and its contact section hidden.
 schemaVersion: 2
 appearance:
   variant: missing-variant
@@ -22,4 +22,8 @@ sections:
   skills-draft:
     hidden: true
   drafts:
+    hidden: true
+  services-draft:
+    hidden: true
+  contact:
     hidden: true

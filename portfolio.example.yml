@@ -66,7 +66,8 @@ practice:
       description: My professional centre of gravity
       items: [Consensus, Replication, Anti-entropy, Service meshes, Geo-replication]
     - name: Reliability
-      items: [SLO design, Error budgets, Incident response, Postmortem facilitation, Chaos engineering]
+      items:
+        [SLO design, Error budgets, Incident response, Postmortem facilitation, Chaos engineering]
     - name: Languages
       items: [Go, TypeScript, Python, Rust]
     - name: Writing
@@ -500,7 +501,12 @@ chronology:
     thread: creative
     branchesFrom: principal-engineer-reliability-solstice-payments
     description: A monthly conversation about one famous incident, which grew out of the reviews at Solstice.
-    works: [the-2010-blackberry-outage-was-not-about-blackberry, knight-capital-twelve-years-on, the-s3-console-day]
+    works:
+      [
+        the-2010-blackberry-outage-was-not-about-blackberry,
+        knight-capital-twelve-years-on,
+        the-s3-console-day,
+      ]
   - id: senior-engineer-mosaic-search
     kind: role
     title: Senior Engineer
