@@ -1,238 +1,145 @@
-# Section kinds — narrative reference
+# Section kinds: narrative reference
 
 > Each kind, narrative form: when it shines, when to skip it, ideal data
 > shape, what readers expect to see. Loaded by the agent before adding a
 > section it hasn't used. Audience: both portfolio authors composing
-> portfolio.yml AND variant developers designing renderers — same content
+> portfolio.yml AND variant developers designing renderers. The same content
 > serves both because both need to know what data lives in each section.
+>
+> Version 3: a portfolio's content is records (works, evidence, chronology
+> entries, media assets) with ids, plus one practice and one contact record.
+> Sections place them in reading order; they don't hold them. A section with
+> nothing public to show leaves the page and the navigation.
 
 ## When-to-use matrix
 
-| Kind                  | Use when…                                                               | Skip when…                                                |
-| --------------------- | ----------------------------------------------------------------------- | --------------------------------------------------------- |
-| `hero`                | Always. First section.                                                  | Never.                                                    |
-| `lede`                | The user has a paragraph-length bio that earns the space.               | Their bio fits in the hero subtagline.                    |
-| `now`                 | Updated monthly with current focus (nownownow.com style).               | They won't update it — staleness is worse than absence.   |
-| `experience`          | Conventional career portfolio.                                          | Pure-academic CV — `publications`/`awards` may be enough. |
-| `education`           | Recent grad, academic, or strong school signal.                         | Mid-career; experience already speaks.                    |
-| `projects`            | Almost always for engineers/designers/makers.                           | Pure researcher with no shipped work.                     |
-| `writings`            | They blog or publish essays.                                            | One-off post.                                             |
-| `publications`        | Academic, IEEE/ACM/etc. papers.                                         | Trade-press articles — `press` fits better.               |
-| `talks`               | Public speaking history.                                                | Internal-only.                                            |
-| `awards`              | Recognition that named external judges.                                 | Participation trophies.                                   |
-| `episodes`            | Podcast appearances or hosting.                                         | Single appearance.                                        |
-| `patents`             | Granted patents.                                                        | Filed-but-not-granted (or be explicit).                   |
-| `gallery`             | Visual work — photography, illustration, design.                        | List-based body of work — use `projects`.                 |
-| `discography`         | Music releases.                                                         | One-off track.                                            |
-| `testimonials`        | Has 2+ strong quotes.                                                   | Only one quote — use `quote` instead.                     |
-| `press`               | Trade-press/news mentions.                                              | Self-published links — `writings`.                        |
-| `quote`               | One signature quote that lands hard.                                    | Multiple quotes — use `testimonials`.                     |
-| `skills`              | Engineers, designers — skill-tag listing.                               | Senior leaders — context speaks louder than tags.         |
-| `stack`               | Wants to share their daily-drivers / tooling.                           | Reads as bragging about brands.                           |
-| `services`            | Freelance/consulting.                                                   | Salaried job hunt.                                        |
-| `contact`             | Always include something contact-shaped.                                | The hero already has CTAs.                                |
-| `cta`                 | Single strong call-to-action at end.                                    | Already has it in hero.                                   |
-| `stats`               | Quantified accomplishments worth a number.                              | Numbers don't add credibility.                            |
-| `focus`               | Currently-working-on bullets.                                           | Vague aspirations rather than concrete focuses.           |
-| `fun-facts`           | Personality-additive bullets.                                           | Forced — feels like LinkedIn "fun fact."                  |
-| `tenure`              | "N years in" — a single anchor of seniority.                            | <3 years experience.                                      |
-| `external-portfolios` | Has multiple identity sites (e.g. photography lives on its own domain). | Just one site — use `links` instead.                      |
-| `github`              | Has public OSS work.                                                    | Empty/private GitHub.                                     |
+| Kind         | Use when…                                                                   | Skip when…                                             |
+| ------------ | --------------------------------------------------------------------------- | ------------------------------------------------------ |
+| `hero`       | Always. First section.                                                      | Never.                                                 |
+| `lede`       | The user has a paragraph-length bio that earns the space.                   | Their bio fits in the hero subtagline.                 |
+| `works`      | Almost always: it's the body of work, whatever the medium.                  | Nothing made is public yet.                            |
+| `evidence`   | There are checkable facts: metrics, testimonials, publications, talks.      | The facts are unverifiable or vanity numbers.          |
+| `chronology` | The path itself is proof: roles, studies, milestones.                       | The work speaks for itself and dates add nothing.      |
+| `practice`   | There's a thesis worth one sentence, or grouped skills, tools, or services. | A tag cloud would be the whole of it.                  |
+| `now`        | Updated monthly with current focus (nownownow.com style).                   | They won't update it: staleness is worse than absence. |
+| `focus`      | A few things are getting energy this quarter.                               | Vague aspirations rather than concrete focuses.        |
+| `quote`      | One signature quote that lands hard.                                        | Several quotes: those are testimonial evidence.        |
+| `fun-facts`  | Personality-additive bullets.                                               | Forced: reads like a LinkedIn "fun fact."              |
+| `github`     | Has public OSS work.                                                        | Empty or private GitHub.                               |
+| `custom`     | Content no other kind holds.                                                | Another kind fits, even loosely.                       |
+| `cta`        | One strong call to action at the end.                                       | The hero already has it.                               |
+| `contact`    | Always include something contact-shaped.                                    | Never: at least an email or a link.                    |
+
+## Records, not section items
+
+Version 2 had a section kind per item type (`projects`, `talks`, `gallery`, `experience`, and so on). Version 3 has three list kinds, and the record says what it is:
+
+| Content                                                            | Record                                                                     | Section                     |
+| ------------------------------------------------------------------ | -------------------------------------------------------------------------- | --------------------------- |
+| Projects, essays, records, episodes, photo series, objects         | A work, with `medium` (`software`, `writing`, `music`, `image-series`, …)  | `works`                     |
+| Metrics, testimonials, publications, talks, awards, patents, press | Evidence, with `type` (`metric`, `testimonial`, `publication`, `talk`, …)  | `evidence`                  |
+| Jobs, degrees, residencies, milestones                             | A chronology entry, with `kind` (`role`, `study`, `event`, `milestone`, …) | `chronology`                |
+| Skills, tools, services, a thesis                                  | One part of `practice`                                                     | `practice`, with `part`     |
+| Images, audio, video, documents                                    | A media asset, which placements name                                       | Wherever a record places it |
+
+One work can sit in several sections, and in the curation lists (`signature`, `featured`, `archive`). Its id is its anchor on the first visible section that lists it.
 
 ## Per-kind detail
 
 ### `hero`
 
-- **Ideal**: `tagline` (≤80 chars), `subtagline` (≤120 chars), 1–2 `ctas`. `greeting` optional, often skipped in 2026.
+- **Ideal**: `tagline` (≤80 chars), `subtagline` (≤120 chars), 1–2 `ctas`, each with its `label`. `greeting` optional, often skipped.
 - **Avoid**: marketing-speak. "Award-winning" is not a tagline.
 - **Reader expects**: `identity.name` + a one-line claim that's specific.
-- **Renderer expects**: title rendered large, subtagline below, CTAs as button cluster. Some variants compose all into a single typographic moment.
+- **Renderer expects**: title rendered large, subtagline below, CTAs as a button cluster. Some variants compose all into a single typographic moment. Nothing it didn't get is made up.
 
 ### `lede`
 
-- **Ideal**: 150–400 words. Markdown allowed in `body`. Optional `title` defaults to "About".
+- **Ideal**: 150–400 words. Markdown allowed in `body`. A `title` if the page should name it; there's no default heading.
 - **Avoid**: a paragraph that re-states the tagline.
 - **Reader expects**: a real bio paragraph that earns its space.
 - **Renderer expects**: long-form prose, often constrained to ~38rem measure.
 
-### `now`
+### `works`
 
-- **Ideal**: 3–7 short bullets in `body` (markdown). Update monthly; set `asOf` to month of last edit.
-- **Avoid**: stale "now" — older than 6 weeks reads as careless.
-- **Reader expects**: present-tense, current focus.
-- **Renderer expects**: short list, often with a "last updated" timestamp.
+- **Ideal**: 3–8 works in reading order, the signature or the strongest first. Each work has a one-line `summary`, a `cover` when it's visual, and 2–4 `highlights` or cited `evidence` naming traction. The signature work, and any worth a page of its own, gets a `caseStudy` and a `slug`.
+- **Avoid**: 30 repos with no curation; tutorials; a work with no summary.
+- **Reader expects**: things they can click into; what was made and what came of it.
+- **Renderer expects**: a card, list, or gallery layout chosen by the works' `medium`: image-forward for `photography` and `image-series`, title-and-date for `writing`, playable for `music` and `audio-video`. A work with a case study links to `/work/<slug>`.
 
-### `experience`
+### `evidence`
 
-- **Ideal**: 3–6 most relevant roles. Each item: `role`, `organization`, `period`, plus 2–4 `highlights` naming outcomes (numbers, scope, scale).
-- **Avoid**: every job since high school; bullets that describe responsibilities instead of outcomes.
-- **Reader expects**: CV-shaped timeline, recent roles richer than older ones.
-- **Renderer expects**: chronological list (newest first), with optional logos and skills tag rows.
+- **Ideal**: 3–6 entries of one register: a strip of metrics (each with `metric.key` and a numeric `value`), a few testimonials (statement plus `source` with name and role), a citation list (publications with `authors`, `venue`, `publishedAt`, `doi`), talks (`venue`, `presentedAt`, `format`), awards (`organization`, `receivedAt`), patents (`number`, `status`), or press (`publication`, `excerpt`).
+- **Avoid**: vanity metrics; anonymous quotes; mixing a metric strip and a citation list in one section (make two).
+- **Reader expects**: third-party, checkable signal: who said it, where it ran, what the number counts.
+- **Renderer expects**: large-number tiles for metrics, pull quotes for testimonials, citation blocks for publications, dated lists for talks and awards, rendered by each entry's `type`. A number shows as written, with no decoration around it.
 
-### `education`
+### `chronology`
 
-- **Ideal**: 1–3 entries; recent or signal-bearing. Include `achievements` only when they outrank generic graduation.
-- **Avoid**: stuffing high school in for mid-career professionals.
-- **Reader expects**: degree, institution, years — that's the floor.
-- **Renderer expects**: condensed list, similar shape to experience but shorter per item.
+- **Ideal**: the 3–6 roles or studies that explain the work, each with `title`, `organization`, `period`, and 2–4 `highlights` naming outcomes. List them in `items`, or leave `items` out for every public entry, newest first. `thread`, `branchesFrom`, and `mergesInto` draw lanes when the path branched.
+- **Avoid**: every job since high school; highlights that describe responsibilities instead of outcomes.
+- **Reader expects**: a timeline with recent entries richer than older ones.
+- **Renderer expects**: a dated list or a lane diagram, with optional logos and skills.
 
-### `projects`
+### `practice`
 
-- **Ideal**: 3–8 items. Each has a one-line `summary` and 2–4 `highlights` naming traction. `image`/`images` if visual.
-- **Avoid**: 30 repos with no curation; "TODO app" tutorials.
-- **Reader expects**: shippable things they can click into; a sense of what was built and what came of it.
-- **Renderer expects**: card or grid layout; image-forward layouts when items have art.
-
-### `writings`
-
-- **Ideal**: 5–10 essays with `publication`, `publishedAt`, `summary`. Set `readingTimeMinutes` for long pieces.
-- **Avoid**: dumping a feed; tagline-length excerpts that don't sell the click.
-- **Reader expects**: a curated reading list — not a blog index.
-- **Renderer expects**: title-summary stack with publication/date metadata row.
-
-### `publications`
-
-- **Ideal**: full citation: `authors`, `venue`, `publishedAt`, `doi` or `url`. `abstract` optional but appreciated.
-- **Avoid**: blog posts (use `writings`); workshop drafts (use `talks`).
-- **Reader expects**: academic-citation rigor — venue, year, DOI/PDF link.
-- **Renderer expects**: dense citation-shaped block; often hangs DOI as monospace tail.
-
-### `talks`
-
-- **Ideal**: 3–8 most recent. `venue`, `presentedAt`, and `type` (keynote/session/etc.) help readers calibrate scale.
-- **Avoid**: every internal lunch-and-learn.
-- **Reader expects**: where it happened, when, and whether the recording exists.
-- **Renderer expects**: list with optional video/slides icons; type chips when present.
-
-### `awards`
-
-- **Ideal**: 2–6 with `organization` and `receivedAt`. `description` only when the name alone doesn't carry.
-- **Avoid**: company "spot bonuses"; participation-trophy framing.
-- **Reader expects**: external arbiters — who gave it, when.
-- **Renderer expects**: tight list; some variants compose award + organization on one line.
-
-### `episodes`
-
-- **Ideal**: 5–12 most recent. `showName` once at section level. Per-item: `number`, `title`, `publishedAt`, `durationMinutes`.
-- **Avoid**: a single guest spot — link from `links` instead.
-- **Reader expects**: episode-style listing, recognizable as podcast media.
-- **Renderer expects**: numbered list with audio/video play affordances.
-
-### `patents`
-
-- **Ideal**: granted patents with `number`, `status: granted`, `grantedAt`, `inventors`, `assignee`.
-- **Avoid**: pending applications without explicit `status: pending`.
-- **Reader expects**: USPTO-style identifier with link.
-- **Renderer expects**: monospace number, title-prominent, dated tail.
-
-### `gallery`
-
-- **Ideal**: 6–24 images with consistent aspect ratios; meaningful `alt` text. `layout` (`plates|grid|columns`) hints to renderer.
-- **Avoid**: decorative noise; mixing aspect ratios randomly within a grid.
-- **Reader expects**: image-first browsing, captions a courtesy not a crutch.
-- **Renderer expects**: masonry/grid/lightbox-friendly layout. `focalPoint` matters when cropping.
-
-### `discography`
-
-- **Ideal**: each release has `releasedAt`, `cover`, `tracks`, and a `links` row pointing to streaming or Bandcamp.
-- **Avoid**: SoundCloud links with no metadata; one-off tracks (link them instead).
-- **Reader expects**: album-art-forward listing with playable affordance.
-- **Renderer expects**: cover-image-prominent cards; tracks may render as expandable list.
-
-### `testimonials`
-
-- **Ideal**: 2–4 strong quotes from named, role-titled humans. `authorOrganization` adds weight.
-- **Avoid**: anonymous quotes; quote stuffing — three good ones beat eight thin ones.
-- **Reader expects**: short, attributable, credible — name + role + org.
-- **Renderer expects**: pull-quote treatment, often with avatar; rotates or stacks per variant.
-
-### `press`
-
-- **Ideal**: 2–6 mentions with `publication`, `author`, `excerpt`. Excerpt is the hook — choose the line that names the user's contribution.
-- **Avoid**: routine PR-wire republications; press releases the user wrote themselves.
-- **Reader expects**: third-party validation — outlet name and date are the signal.
-- **Renderer expects**: outlet-prominent listing; excerpt as pull-quote.
-
-### `quote`
-
-- **Ideal**: a single line that says something true about the work. `attribution`, optional `source`/`sourceUrl`.
-- **Avoid**: motivational-poster quotes.
-- **Reader expects**: an epigraph — typographic, brief, deliberately placed.
-- **Renderer expects**: oversized, centred, low density. Often a section break of its own.
-
-### `skills`
-
-- **Ideal**: 3–5 named `groups` with 4–8 items each. Group names matter: "Languages" beats "Tech I know."
-- **Avoid**: flat 50-item list; trendy-tool name-dropping.
-- **Reader expects**: scannable buckets, not a buzzword cloud.
-- **Renderer expects**: grouped tag clusters; group descriptions as tooltips/subheaders.
-
-### `stack`
-
-- **Ideal**: tools currently in active use, grouped (Runtimes, Infra, Authoring). `version` and `url` nice but optional.
-- **Avoid**: aspirational stack; everything they once installed.
-- **Reader expects**: a "uses" page in miniature.
-- **Renderer expects**: grouped logo/text rows; version chips small.
-
-### `services`
-
-- **Ideal**: 1–4 productized offerings with `name`, `description`, `pricing` shape (even "Contact for rate"), `highlights`.
-- **Avoid**: vague "happy to chat" entries; pricing left as a mystery on hire-shaped sites.
-- **Reader expects**: a pricing page in miniature; a clear "what I do for money" answer.
-- **Renderer expects**: card layout with action button per service.
+- **Ideal**: one part per section. `thesis` is a sentence or two on what the practice is. `skills` is 3–5 named groups of 4–8 items; `tools` the ones in active use, with `version` and `url` when they help; `services` 1–4 productized offerings with `pricing` (even "Contact for rate") and `highlights`.
+- **Avoid**: a flat 50-item skill list; an aspirational stack; vague "happy to chat" services.
+- **Reader expects**: scannable buckets, a "uses" page in miniature, or a pricing page in miniature.
+- **Renderer expects**: grouped tag clusters, tool rows, or service cards, by `part`.
 
 ### `contact`
 
-- **Ideal**: a short `message` setting tone + 1–3 contact `links`. Set `id: contact` so the hero CTA can anchor here.
-- **Avoid**: a kitchen-sink form; six redundant social links.
+- **Ideal**: a short `contact.message` setting tone, and 1–3 contact `links`. Give the section `id: contact` so the hero's CTA can anchor to it.
+- **Avoid**: six redundant social links; a message that promises a reply time nobody keeps.
 - **Reader expects**: one obvious way to reach the human.
-- **Renderer expects**: low-friction block, optional `showAvailability` badge.
+- **Renderer expects**: the contact record, `identity.email`, and `links`, as a low-friction block. Nothing it shows is made up: no availability badge.
 
-### `cta`
+### `now`
 
-- **Ideal**: one strong line + `primaryAction`. Use as a closing band, not mid-page.
-- **Avoid**: more than one CTA section per portfolio; competing with hero CTAs.
-- **Reader expects**: a direct ask after seeing the work.
-- **Renderer expects**: full-width band, button-prominent, near the end of the page.
-
-### `stats`
-
-- **Ideal**: 3–4 numeric `items`. Round numbers, units in `label`. `description` adds context only when the number is ambiguous.
-- **Avoid**: vanity metrics; numbers that need a paragraph to defend.
-- **Reader expects**: a quick scan — "12 years," "10B requests/day."
-- **Renderer expects**: large-number-with-label tiles in a row.
+- **Ideal**: 3–7 short bullets in `body` (Markdown). Update monthly; set `asOf` to the month of the last edit.
+- **Avoid**: a stale "now": older than 6 weeks reads as careless.
+- **Reader expects**: present-tense, current focus.
+- **Renderer expects**: a short list, with its `asOf` date when there is one.
 
 ### `focus`
 
-- **Ideal**: 3–5 short labels (≤6 words each). Distinct from `now` (prose) and `skills` (comprehensive).
+- **Ideal**: 3–5 short labels (≤6 words each). Distinct from `now` (prose) and practice skills (comprehensive).
 - **Avoid**: aspirations ("learn Rust someday"); skills restated.
 - **Reader expects**: chips that name what's getting energy this quarter.
-- **Renderer expects**: tag/chip cluster, often as a hero-adjacent strip.
+- **Renderer expects**: a tag or chip cluster, often as a hero-adjacent strip.
+
+### `quote`
+
+- **Ideal**: a single line that says something true about the work. `attribution`, optional `source` and `sourceUrl`.
+- **Avoid**: motivational-poster quotes.
+- **Reader expects**: an epigraph: typographic, brief, deliberately placed.
+- **Renderer expects**: oversized, centred, low density. Often a section break of its own.
 
 ### `fun-facts`
 
 - **Ideal**: 3–5 specific, weird, true sentences. Each one a tiny story.
-- **Avoid**: "I love coffee" — the LinkedIn-fun-fact reflex. If you'd say it on a dating app, skip it.
+- **Avoid**: "I love coffee," the LinkedIn-fun-fact reflex. If you'd say it on a dating app, skip it.
 - **Reader expects**: personality without performance.
-- **Renderer expects**: bullet list, often near the end; some variants treat as tickertape.
-
-### `tenure`
-
-- **Ideal**: one figure (`years`) plus a single-sentence `summary` framing what those years cover.
-- **Avoid**: stretching the number; using when career is too short to matter.
-- **Reader expects**: a single seniority anchor — "12 years."
-- **Renderer expects**: oversized number, summary as caption.
-
-### `external-portfolios`
-
-- **Ideal**: 1–4 cards with `brandName`, `url`, `description`, `iconName`, and 2–3 `highlights` per card.
-- **Avoid**: duplicating links already in `identity.links`; using as a generic "elsewhere" dump.
-- **Reader expects**: clearly-distinct identity sites, each with its own brand.
-- **Renderer expects**: card grid; icon as visual anchor; highlights as small stats row.
+- **Renderer expects**: a bullet list, often near the end.
 
 ### `github`
 
 - **Ideal**: `username` plus 1–6 `featuredRepos` to surface specific work. Set `showLanguageBreakdown: true` only if multilingual is part of the story.
-- **Avoid**: enabling all panels when the account is sparse — empty contribution graphs read worse than a missing section.
+- **Avoid**: enabling every panel when the account is sparse: empty contribution graphs read worse than a missing section.
 - **Reader expects**: contribution graph, pinned repos, total stars.
-- **Renderer expects**: server-fetched data via GraphQL (with token) or REST fallback; component handles loading/error states.
+- **Renderer expects**: the snapshot frozen at `snapshots/github.json` with the date it was taken, never a fetch at render time. Without one, the profile link alone.
+
+### `custom`
+
+- **Ideal**: a `title`, a `body`, and a few `items` (`title`, `summary`, placements in `media`, cited `evidence`, `links`) for content no other kind holds, such as a workshop series.
+- **Avoid**: using it for works or evidence, which then miss their own renderers, the feed, and JSON-LD.
+- **Reader expects**: a plain section that reads like the rest of the page.
+- **Renderer expects**: always the shared fallback renderer: heading, body, item list.
+
+### `cta`
+
+- **Ideal**: one strong line in `description` + `primaryAction` with its `label`. Use as a closing band, not mid-page.
+- **Avoid**: more than one CTA section per portfolio; competing with the hero's CTAs.
+- **Reader expects**: a direct ask after seeing the work.
+- **Renderer expects**: a full-width band, button-prominent, near the end of the page.
