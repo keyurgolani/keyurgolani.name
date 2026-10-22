@@ -24,18 +24,18 @@ export const SEEDED = {
   [HOPS_FILE.key]: { path: `${CANARY_SECRET}/${HOPS_FILE.name}`, text: HOPS_FILE.text },
 };
 
-/** The section ids of a portfolio document. */
-export const sectionsOf = (file: string): string[] =>
-  (parse(readFileSync(file, 'utf8')) as { sections: { id: string }[] }).sections.map(
-    ({ id }) => id,
+/** The sections of a portfolio document, each its id and kind. */
+export const sectionsOf = (file: string): { id: string; kind: string }[] =>
+  (parse(readFileSync(file, 'utf8')) as { sections: { id: string; kind: string }[] }).sections.map(
+    ({ id, kind }) => ({ id, kind }),
   );
 
 export interface View {
   readonly path: string;
   readonly status: 200 | 307 | 404;
-  /** The variant that renders a 200, and the section it renders, if it renders one. */
+  /** The variant that renders a 200, and the section it renders, null for none. */
   readonly variant?: string;
-  readonly section?: string;
+  readonly section?: string | null;
   /** Where a 307 goes. */
   readonly location?: string;
 }
@@ -64,9 +64,10 @@ export async function expectNoLeaks(
     expect(page.status(), view.path).toBe(view.status);
     const html = await page.text();
     if (view.status === 200) {
-      // The view renders from the server, in its variant, its section if it has one.
+      // The view renders from the server, in its variant, with the section it names or none.
       expect(html, view.path).toContain(`data-variant="${view.variant}"`);
       if (view.section) expect(html, view.path).toContain(`data-section-id="${view.section}"`);
+      if (view.section === null) expect(html, view.path).not.toContain('data-section-id=');
     } else if (view.status === 307) {
       expect(page.headers().location, view.path).toBe(view.location);
     } else {

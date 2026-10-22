@@ -14,7 +14,7 @@ test.use({
   appOptions: { ...readOnlyApp('fixture-chapters'), sourceName: CANARY_SOURCE, envFiles: SEEDED },
 });
 
-const sections = sectionsOf(DEFAULT_PORTFOLIO);
+const sections = sectionsOf(DEFAULT_PORTFOLIO).map(({ id }) => id);
 
 test(
   'no declared view, or the answer for one this selection lacks, carries a path, a secret, or the request body',
