@@ -9,19 +9,24 @@ import { DOCUMENT, FIXTURE_APP, openFixtures, ROUTE } from './fixture-page';
 
 test.use({ appOptions: FIXTURE_APP });
 
-/** The controls, one of each kind, in the document boundary. */
+/** The controls, one of each kind, in the document boundary's own sections, past the plates' copies. */
 function controls(page: Page): [string, Locator][] {
-  const boundary = page.locator(DOCUMENT);
+  const section = (id: string) => page.locator(`${DOCUMENT} #${id}`);
   return [
-    ['action', boundary.getByRole('button', { name: 'Save draft' })],
-    ['link action', boundary.getByRole('link', { name: 'Go to the forms' })],
-    ['navigation link', boundary.getByRole('link', { name: 'Forms', exact: true })],
-    ['field', boundary.getByRole('textbox', { name: 'Revision title' })],
-    ['select', boundary.getByRole('combobox', { name: 'Basin' })],
-    ['checkbox', boundary.getByRole('checkbox', { name: 'Include print' })],
-    ['radio', boundary.getByRole('radio', { name: 'Comfortable' })],
-    ['tab', boundary.getByRole('tab', { name: 'Summary' })],
-    ['summary', boundary.locator('#why > summary')],
+    ['action', section('actions').getByRole('button', { name: 'Save draft' })],
+    ['link action', section('actions').getByRole('link', { name: 'Go to the forms' })],
+    [
+      'navigation link',
+      page
+        .getByRole('navigation', { name: 'Fixture sections' })
+        .getByRole('link', { name: 'Forms', exact: true }),
+    ],
+    ['field', section('forms').getByRole('textbox', { name: 'Revision title' })],
+    ['select', section('forms').getByRole('combobox', { name: 'Basin' })],
+    ['checkbox', section('forms').getByRole('checkbox', { name: 'Include print' })],
+    ['radio', section('forms').getByRole('radio', { name: 'Comfortable' })],
+    ['tab', section('overlays').getByRole('tab', { name: 'Summary' })],
+    ['summary', page.locator('#why > summary')],
   ];
 }
 

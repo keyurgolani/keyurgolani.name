@@ -48,7 +48,7 @@ test(
 );
 
 test(
-  'Tab reaches every control in the document boundary, in order, and none in a plate',
+  'Tab reaches every kind of control in the document boundary, in document order, and none in a plate',
   INTERACTION,
   async ({ page }) => {
     await openFixtures(page);
@@ -77,7 +77,7 @@ test(
     }
     expect(stops.filter((stop) => stop.inPlate)).toEqual([]);
     const names = stops.map((stop) => stop.text);
-    for (const name of [
+    const order = [
       'Skip to the fixtures',
       'Appearance',
       'Publish revision',
@@ -87,12 +87,10 @@ test(
       'Explain confidence',
       'Open decision note',
       'Show a toast',
-    ]) {
-      expect(
-        names.some((text) => text.startsWith(name)),
-        name,
-      ).toBe(true);
-    }
+    ].map((name) => [name, names.findIndex((text) => text.startsWith(name))] as const);
+    for (const [name, index] of order) expect(index, name).toBeGreaterThanOrEqual(0);
+    const indices = order.map(([, index]) => index);
+    expect(indices).toEqual([...indices].sort((a, b) => a - b));
     // Disabled controls take no stop, and neither does a link that goes
     // nowhere; one that's loading keeps its place.
     expect(names.includes('Unavailable')).toBe(false);
@@ -140,7 +138,8 @@ test(
   INTERACTION,
   async ({ page }) => {
     await openFixtures(page);
-    const trigger = page.locator(DOCUMENT).getByRole('button', { name: 'Open decision note' });
+    // The document's own, in its section: every plate has one too, inert.
+    const trigger = page.locator('#overlays').getByRole('button', { name: 'Open decision note' });
     const dialog = page.getByRole('dialog', { name: 'Decision note' });
     await expect(trigger).toHaveAttribute('aria-haspopup', 'dialog');
     await trigger.focus();
@@ -181,7 +180,7 @@ test(
   INTERACTION,
   async ({ page }) => {
     await openFixtures(page);
-    const action = page.locator(DOCUMENT).getByRole('button', { name: 'Explain confidence' });
+    const action = page.locator('#overlays').getByRole('button', { name: 'Explain confidence' });
     const tooltip = page.locator('#confidence');
     await expect(action).toHaveAccessibleDescription(
       'Confidence combines recency, agreement, and coverage.',
@@ -217,7 +216,7 @@ test(
     await page.keyboard.press('Space');
     await expect(disclosure).not.toHaveAttribute('open', '');
 
-    const group = page.getByRole('group', { name: 'Review depth' }).first();
+    const group = page.locator('#forms').getByRole('group', { name: 'Review depth' });
     const comfortable = group.getByRole('radio', { name: 'Comfortable' });
     await comfortable.focus();
     await expect(comfortable).toBeChecked();
@@ -240,7 +239,7 @@ test(
     const region = page.locator('#toasts');
     await expect(region).toHaveAttribute('role', 'status');
     const toasts = region.locator('[data-ui-slot="toast"]');
-    const buttons = page.locator(DOCUMENT);
+    const buttons = page.locator('#overlays');
     await buttons.getByRole('button', { name: 'Show a toast', exact: true }).click();
     const show = buttons.getByRole('button', { name: 'Show a toast with an action' });
     await show.focus();

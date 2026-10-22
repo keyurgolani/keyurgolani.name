@@ -15,18 +15,31 @@ test(
     await openFixtures(page);
     await expect(page.locator(DOCUMENT)).toHaveCount(1);
     await expect(page.locator(PLATE)).toHaveCount(PLATES);
-    const slots = (scope: string) =>
+    /** The slots rendered in a boundary of `kind`, outside any boundary nested in it. */
+    const slots = (kind: 'document' | 'plate') =>
       page
-        .locator(`${scope} [data-ui-slot]`)
-        .evaluateAll((elements) => [
-          ...new Set(elements.map((element) => element.getAttribute('data-ui-slot'))),
-        ]);
-    const inDocument = new Set(await slots(DOCUMENT));
+        .locator('[data-ui-slot]')
+        .evaluateAll(
+          (elements, wanted) => [
+            ...new Set(
+              elements
+                .filter(
+                  (element) =>
+                    element
+                      .closest('[data-appearance-boundary]')
+                      ?.getAttribute('data-appearance-boundary') === wanted,
+                )
+                .map((element) => element.getAttribute('data-ui-slot')),
+            ),
+          ],
+          kind,
+        );
+    const inDocument = new Set(await slots('document'));
     for (const slot of Object.keys(SLOTS) as SlotName[]) {
       expect(inDocument.has(slot), `the document renders ${slot}`).toBe(true);
     }
     // Tabs' headings are the form without JavaScript, which the plates keep.
-    const everywhere = new Set([...inDocument, ...(await slots(PLATE))]);
+    const everywhere = new Set([...inDocument, ...(await slots('plate'))]);
     expect(SLOT_VALUES.filter((value) => !everywhere.has(value))).toEqual([]);
   },
 );

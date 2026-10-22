@@ -142,12 +142,12 @@ test(
     const extra = (listeners: string[]) => listeners.filter((each) => !framework.includes(each));
     expect(extra(await globalListeners(page))).toEqual([]);
     // Using the document's primitives adds none either.
-    const boundary = page.locator(DOCUMENT);
-    await boundary.getByRole('button', { name: 'Open decision note' }).click();
+    const overlays = page.locator('#overlays');
+    await overlays.getByRole('button', { name: 'Open decision note' }).click();
     await page.keyboard.press('Escape');
-    await boundary.getByRole('button', { name: 'Explain confidence' }).hover();
-    await boundary.getByRole('tab', { name: 'Activity' }).click();
-    await boundary.getByRole('button', { name: 'Show a toast', exact: true }).click();
+    await overlays.getByRole('button', { name: 'Explain confidence' }).hover();
+    await overlays.getByRole('tab', { name: 'Activity' }).click();
+    await overlays.getByRole('button', { name: 'Show a toast', exact: true }).click();
     await expect(page.locator('#toasts [data-ui-slot="toast"]')).toHaveCount(1);
     expect(extra(await globalListeners(page))).toEqual([]);
   },
