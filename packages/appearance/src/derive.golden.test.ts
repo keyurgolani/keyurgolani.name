@@ -1,9 +1,10 @@
 // Goldens for the color derivations: warm-parchment's light and dark sets
 // from anchor-v1 and its light set from high-contrast-v1, byte for byte, as
 // the refined body's rules give them today. A reviewer's independent
-// recompute matched these. Slice 2 changes them on purpose, when it gives
-// warm-parchment back the prototype's distinct muted text and accent states
-// with the contrast gates still winning, and updates this file with it.
+// recompute matched the two anchor-v1 sets. Slice 2 changes them on purpose,
+// when it gives warm-parchment back the prototype's distinct muted text and
+// accent states with the contrast gates still winning, and updates this file
+// with it.
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
