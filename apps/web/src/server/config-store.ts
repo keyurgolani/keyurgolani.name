@@ -61,7 +61,7 @@ export function setDeploymentState(state: DeploymentState | undefined): void {
  * callback the composition root passes it, each time it decides what serves:
  * false while nothing is servable, `empty` or `incompatible`, and proxy.ts
  * answers each visitor page with a 503 meanwhile, since a page can't set its
- * own status.
+ * own status, once servableAgain() says it still isn't.
  */
 export function isServable(): boolean {
   return (globalThis as Holder)[SERVABLE] ?? true;
@@ -70,4 +70,38 @@ export function isServable(): boolean {
 /** Called by #3's CatalogReader, and by tests. */
 export function setServable(servable: boolean): void {
   (globalThis as Holder)[SERVABLE] = servable;
+}
+
+/** How long proxy.ts waits on the catalog before it answers 503 all the same. */
+export const RECHECK_MS = 1_000;
+
+/** The catalog read servableAgain() started, which every request meanwhile waits on. */
+let asking: Promise<boolean> | undefined;
+
+/**
+ * Whether visitor pages can render once the catalog has read again, for
+ * proxy.ts while isServable() says no: #3's reader sets the flag on each
+ * read, so a publish from another process shows on the next one. One read
+ * at a time, and false, never a throw, when it fails or takes longer than
+ * RECHECK_MS.
+ */
+export function servableAgain(): Promise<boolean> {
+  const catalog = getDeploymentState()?.catalog;
+  if (!catalog) return Promise.resolve(isServable());
+  asking ??= (async () => catalog.getLive())()
+    .then(
+      () => isServable(),
+      () => false,
+    )
+    .finally(() => {
+      asking = undefined;
+    });
+  const read = asking;
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(false), RECHECK_MS);
+    void read.then((servable) => {
+      clearTimeout(timer);
+      resolve(servable);
+    });
+  });
 }

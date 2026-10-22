@@ -5,7 +5,13 @@ import { proxy } from './proxy';
 import { fixtureFlags } from '../scripts/fixture-gate';
 import { PROFILES, type Profile } from './server/capabilities';
 import { readDeploymentConfig } from './server/config';
-import { setDeploymentState, setServable } from './server/config-store';
+import type { CatalogReader, LiveRevision } from './server/catalog-port';
+import {
+  getDeploymentState,
+  RECHECK_MS,
+  setDeploymentState,
+  setServable,
+} from './server/config-store';
 import type { PreviewGrantsPort } from './server/preview-port';
 import { readiness } from './server/readiness';
 import { ROUTE_HEADER } from './server/routes';
@@ -251,6 +257,174 @@ test('demo serves /sample, a visitor page, under the same rule', async (t) => {
   t.after(() => setServable(true));
   assert.equal((await proxy(request('/sample'))).status, 503);
   assert.equal((await proxy(request('/sample'))).headers.get('x-robots-tag'), 'noindex');
+});
+
+/** The deployment deploy() stored, reading `catalog` in place of the one that fails. */
+function reading(catalog: CatalogReader): void {
+  const state = getDeploymentState();
+  assert.ok(state, 'deploy() first');
+  setDeploymentState({ ...state, catalog });
+}
+
+const NOTHING_SERVES: LiveRevision = {
+  state: 'incompatible',
+  revisionId: null,
+  unitHash: null,
+  unit: null,
+};
+
+/**
+ * A catalog that, as owner's reader does, sets the servable flag on every
+ * read: to what `servable()` says, once `ready` settles. It counts reads.
+ */
+function ownerCatalog(servable: () => boolean, ready: Promise<unknown> = Promise.resolve()) {
+  const reads = { count: 0 };
+  const catalog: CatalogReader = {
+    getLive: async () => {
+      reads.count += 1;
+      await ready;
+      setServable(servable());
+      // proxy.ts goes by the flag, never by what this returns.
+      return NOTHING_SERVES;
+    },
+  };
+  return { catalog, reads };
+}
+
+/** A response's status, its headers but the request ID, and its body. */
+async function shape(response: Response) {
+  const headers = [...response.headers].filter(([name]) => name !== 'x-request-id');
+  return { status: response.status, headers, body: await response.text() };
+}
+
+/** Lets every promise that can settle now settle. */
+const settled = () => new Promise((resolve) => setImmediate(resolve));
+
+test('while nothing serves, a visitor page asks the catalog once more before the 503, and goes on to Next once it serves (#3)', async (t) => {
+  deploy(t, 'owner');
+  setServable(false);
+  t.after(() => setServable(true));
+  let up = false;
+  const { catalog, reads } = ownerCatalog(() => up);
+  reading(catalog);
+  for (const path of ['/', '/feed.xml']) {
+    const down = await proxy(request(path));
+    assert.equal(down.status, 503, path);
+    assert.match(await down.text(), /<h1>Temporarily unavailable<\/h1>/, path);
+  }
+  assert.equal(reads.count, 2);
+  // Another process publishes: the next request's read finds it, and that request goes on.
+  up = true;
+  const back = await proxy(request('/'));
+  assert.equal(back.headers.get('x-middleware-next'), '1');
+  assert.equal(decision(back), 'served');
+  assert.equal(reads.count, 3);
+  // Servable now, the requests after it read nothing.
+  assert.equal(decision(await proxy(request('/feed.xml'))), 'served');
+  assert.equal(reads.count, 3);
+});
+
+test('a catalog read that takes longer than RECHECK_MS gets the same 503 at RECHECK_MS, and so does one that throws, at once (#3)', async (t) => {
+  deploy(t, 'owner');
+  setServable(false);
+  t.after(() => setServable(true));
+  reading(ownerCatalog(() => false).catalog);
+  const today = await shape(await proxy(request('/')));
+  assert.equal(today.status, 503);
+
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  let finish!: () => void;
+  const slow = ownerCatalog(
+    () => true,
+    new Promise<void>((resolve) => {
+      finish = resolve;
+    }),
+  );
+  reading(slow.catalog);
+  let answered = false;
+  const answer = proxy(request('/')).finally(() => {
+    answered = true;
+  });
+  await settled();
+  t.mock.timers.tick(RECHECK_MS - 1);
+  await settled();
+  assert.equal(answered, false);
+  t.mock.timers.tick(1);
+  await settled();
+  assert.equal(answered, true);
+  assert.deepEqual(await shape(await answer), today);
+  // The read goes on, and once it ends the flag lets the next request through.
+  finish();
+  await settled();
+  assert.equal(decision(await proxy(request('/'))), 'served');
+  assert.equal(slow.reads.count, 1);
+  t.mock.timers.reset();
+
+  const failing: Array<CatalogReader['getLive']> = [
+    () => {
+      throw new Error('EIO: the disk');
+    },
+    async () => {
+      throw new Error('EIO: the disk');
+    },
+  ];
+  for (const getLive of failing) {
+    setServable(false);
+    reading({ getLive });
+    const response = await proxy(request('/'));
+    assert.deepEqual(await shape(response), today);
+  }
+});
+
+test('requests that come while the catalog reads again wait on that one read (#3)', async (t) => {
+  deploy(t, 'owner');
+  setServable(false);
+  t.after(() => setServable(true));
+  let up = true;
+  let release!: () => void;
+  const { catalog, reads } = ownerCatalog(
+    () => up,
+    new Promise<void>((resolve) => {
+      release = resolve;
+    }),
+  );
+  reading(catalog);
+  const answers = ['/', '/feed.xml', '/', '/sitemap.xml', '/robots.txt'].map((path) =>
+    proxy(request(path)),
+  );
+  await settled();
+  assert.equal(reads.count, 1);
+  release();
+  for (const response of await Promise.all(answers)) assert.equal(decision(response), 'served');
+  assert.equal(reads.count, 1);
+  // Nothing serves again later: the next request reads again, once.
+  up = false;
+  setServable(false);
+  assert.equal((await proxy(request('/'))).status, 503);
+  assert.equal(reads.count, 2);
+});
+
+test('a request while the catalog serves never reads it, in every profile (#3)', async (t) => {
+  for (const profile of ['owner', 'demo', 'read-only'] as const) {
+    deploy(t, profile);
+    const { catalog, reads } = ownerCatalog(() => true);
+    reading(catalog);
+    for (const path of [
+      '/',
+      '/sample',
+      '/feed.xml',
+      '/sitemap.xml',
+      '/robots.txt',
+      '/opengraph-image-12o0cb',
+      '/api/ready',
+      '/studio/sign-in',
+      '/_next/static/a.js',
+      '/nowhere',
+    ]) {
+      await proxy(request(path));
+    }
+    assert.equal(reads.count, 0, profile);
+  }
 });
 
 test('build assets and optimized images go through the proxy too', async () => {
