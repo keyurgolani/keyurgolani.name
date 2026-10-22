@@ -33,12 +33,17 @@ test(
   { annotation: [{ type: 'route', description: '/' }, READ_ONLY] },
   async ({ page, request, app }, testInfo) => {
     const { variant, fixture } = projectTarget(testInfo);
-    const bundles = await parityBundles();
+    // The host's page before the bundles. Importing the server half holds
+    // the event loop, and a request sent straight after it can go out on a
+    // keep-alive socket the server closed meanwhile, unseen. Node's server
+    // closes one idle for 6 s, and Playwright's API requests keep theirs
+    // until it does.
     const response = await request.get('/');
     expect(response.status()).toBe(200);
     const host = await snapshotHtml(page, await response.text());
     expect(host, 'the host renders a boundary').not.toBeNull();
 
+    const bundles = await parityBundles();
     const args = bundles.renderArgs(
       contractFixture(fixture!).files,
       variant.manifest.id,
