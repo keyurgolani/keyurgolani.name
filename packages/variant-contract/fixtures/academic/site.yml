@@ -1,0 +1,20 @@
+# Classic type, with the patent hidden until it's granted.
+schemaVersion: 2
+appearance:
+  variant: missing-variant
+  designLanguage: platform-neutral
+  colorScheme: warm
+  typography: classic
+  displayMode: system
+visitorControls:
+  variant: locked
+  designLanguage: locked
+  colorScheme: selectable
+  typography: selectable
+  displayMode: selectable
+motionPolicy: respect-os
+features:
+  feed: true
+sections:
+  patents:
+    hidden: true

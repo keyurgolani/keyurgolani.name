@@ -1,0 +1,73 @@
+# Music: a composer and bassist with records, shows, and a quote from a review.
+schemaVersion: 2
+locale: pt-BR
+direction: ltr
+
+identity:
+  name: Joana Ribeiro
+  tagline: Compositora e baixista
+  location: Recife, Brasil
+
+links:
+  - platform: bandcamp
+    url: https://joana.bandcamp.test
+    label: Bandcamp
+
+sections:
+  - kind: hero
+    id: top
+    tagline: Frevo, jazz, and the space between them.
+
+  - kind: discography
+    id: records
+    title: Discos
+    items:
+      - title: Maré Alta
+        artist: Joana Ribeiro Quarteto
+        role: Composer, bass
+        releasedAt: 2024-11
+        label: Selo Capibaribe
+        cover:
+          src: /images/mare-alta.jpg
+          alt: A boat on a high tide at night
+        tracks:
+          - { title: Abertura, durationSeconds: 214 }
+          - { title: Ponte Velha, durationSeconds: 388, url: https://joana.bandcamp.test/track/ponte-velha }
+        links:
+          - url: https://joana.bandcamp.test/album/mare-alta
+            label: Listen
+      - title: Primeira Luz
+        releasedAt: '2020'
+
+  - kind: talks
+    id: shows
+    title: Shows
+    items:
+      - title: Maré Alta release show
+        venue: Teatro de Santa Isabel
+        location: Recife
+        presentedAt: 2024-12-06
+        type: session
+
+  - kind: quote
+    id: review
+    text: The most patient bass player in Brazil, and the least predictable.
+    attribution: Revista Som
+    sourceUrl: https://som.test/reviews/mare-alta
+
+  - kind: now
+    id: now
+    title: Agora
+    asOf: 2026-09
+    body: Writing for strings for the first time, and teaching on Saturdays.
+
+  - kind: fun-facts
+    id: facts
+    title: Fun facts
+    items:
+      - My first bass had three strings for a year.
+      - I tune by ear, badly, and then by app.
+
+  - kind: contact
+    id: contact
+    title: Contato

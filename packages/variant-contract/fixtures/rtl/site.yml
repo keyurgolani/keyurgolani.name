@@ -1,0 +1,17 @@
+# Contract fixture (#5, Slice 6): the right-to-left portfolio, in light mode.
+schemaVersion: 2
+appearance:
+  variant: missing-variant
+  designLanguage: platform-neutral
+  colorScheme: ink-and-paper
+  typography: classic
+  displayMode: light
+visitorControls:
+  variant: locked
+  designLanguage: locked
+  colorScheme: selectable
+  typography: locked
+  displayMode: selectable
+motionPolicy: respect-os
+features:
+  feed: true
