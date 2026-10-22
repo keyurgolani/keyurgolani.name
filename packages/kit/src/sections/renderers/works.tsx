@@ -1,6 +1,6 @@
 import type { Work } from '@portfolio/schema';
 import { formatEpisodeDuration, formatTrackDuration } from '../../format';
-import { MediaFigure } from '../media';
+import { MediaFigure, placedMedia } from '../media';
 import {
   DateText,
   deeper,
@@ -22,14 +22,7 @@ import {
 } from '../primitives';
 import { RichText } from '../rich-text';
 import type { SectionOf, SectionRendererProps } from '../types';
-import {
-  evidenceByIds,
-  isArchived,
-  isSignature,
-  placedImage,
-  recordAnchor,
-  worksOf,
-} from '../view';
+import { evidenceByIds, isArchived, isSignature, recordAnchor, worksOf } from '../view';
 import { EvidenceEntry } from './evidence';
 
 // The works a works section lists, in its order (#10, slice 1, item 7).
@@ -41,27 +34,7 @@ import { EvidenceEntry } from './evidence';
 /** The work's own media placements, each with its caption and, for a photo, when and where. */
 function WorkMedia({ work, ctx }: { work: Work; ctx: RenderContext }) {
   const placed = (work.media ?? []).flatMap((placement) => {
-    const details = [
-      placement.takenAt !== undefined && (
-        <DateText key="taken" raw={placement.takenAt} ctx={ctx} field="takenAt" />
-      ),
-      placement.location,
-    ];
-    const hasCaption =
-      present(placement.caption) ||
-      details.some((part) => (typeof part === 'string' ? present(part) : Boolean(part))) ||
-      Boolean(placement.tags?.length);
-    const image = placedImage(
-      placement,
-      ctx.input,
-      hasCaption ? (
-        <>
-          {present(placement.caption) ? <p className="pf-caption">{placement.caption}</p> : null}
-          <Meta parts={details} />
-          <TagList items={placement.tags} />
-        </>
-      ) : undefined,
-    );
+    const image = placedMedia(placement, ctx);
     return image ? [image] : [];
   });
   if (placed.length === 0) return null;
@@ -125,7 +98,7 @@ export function WorkEntry({
   anchor?: string;
 }) {
   const { input } = ctx;
-  const cover = placedImage(work.cover, input);
+  const cover = placedMedia(work.cover, ctx);
   return (
     <li
       id={anchor}

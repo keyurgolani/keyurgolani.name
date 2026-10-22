@@ -1,5 +1,5 @@
 import type { ChronologyEntry } from '@portfolio/schema';
-import { MediaFigure } from '../media';
+import { MediaFigure, placedMedia } from '../media';
 import {
   ItemTitle,
   MaybeLink,
@@ -13,7 +13,7 @@ import {
 } from '../primitives';
 import { RichText } from '../rich-text';
 import type { SectionOf, SectionRendererProps } from '../types';
-import { anchorSection, chronologyOf, placedImage, recordAnchor, worksByIds } from '../view';
+import { anchorSection, chronologyOf, recordAnchor, worksByIds } from '../view';
 
 // A chronology (#10, slice 1, item 7): the entries a section lists, in its
 // order, or with none, every public entry newest first, as the view orders
@@ -48,7 +48,7 @@ function ChronologyItem({
   ctx: RenderContext;
   anchor?: string;
 }) {
-  const logo = placedImage(entry.logo, ctx.input);
+  const logo = placedMedia(entry.logo, ctx);
   return (
     <li
       id={anchor}

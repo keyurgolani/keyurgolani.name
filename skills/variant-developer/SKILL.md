@@ -135,7 +135,7 @@ For each cluster:
 Renderer reminders:
 
 - **Render defensively.** Every renderer handles optional fields left out and blank strings. Return `null` rather than an empty shell. The view drops a section with nothing public, so a records section always has records.
-- **Read records through the kit.** A works, evidence, or chronology section lists record ids: `worksOf(section, input)`, `evidenceOf`, and `chronologyOf` give its visible records in order, and `recordAnchor` the id for each one's anchor. An image is a placement: `placedImage(placement, input)` resolves it and `MediaFigure` renders it, as its labeled box until it has a rendition.
+- **Read records through the kit.** A works, evidence, or chronology section lists record ids: `worksOf(section, input)`, `evidenceOf`, and `chronologyOf` give its visible records in order, and `recordAnchor` the id for each one's anchor. An image is a placement: `placedMedia(placement, ctx)` resolves it with its caption and details, and `MediaFigure` renders it, as its labeled box until it has a rendition.
 - **Write no words of your own.** Every heading, label, and alt text comes from the document, formatted, or is one of #10's fixed labels, which the kit's renderers already use: no `Projects` heading for an untitled section, no `View project` link, no alt text for a decorative image.
 - **Render from the input alone, synchronously.** No `async` component, no fetch, no storage, no environment, no code run from a string. Use `input.env.now` for the time and `seededRandom(input.env.seed)` for anything random-looking. `pnpm check:variants` refuses the rest.
 - **Markdown goes through `RichText`.** Never `dangerouslySetInnerHTML`.

@@ -18,6 +18,8 @@ import {
   type VariantRenderInput,
 } from '@portfolio/variant-contract';
 import { formatDate, formatEpisodeDuration, formatTrackDuration } from '../format';
+import { deriveNavItems } from '../nav';
+import { buildStructuredData } from '../seo';
 import { withoutClock } from '../test-support/clock';
 import { COMPLETE, GITHUB, MEDIA } from './__fixtures__/complete';
 import { formatUrl } from './primitives';
@@ -27,8 +29,10 @@ import { hrefFor } from './primitives';
 import { corpus } from '../test-support/markdown-corpus';
 import { htmlProblems } from '../test-support/strict-html';
 import {
+  anchorSection,
   CaseStudy,
   focalStyle,
+  recordAnchor,
   registerHostModules,
   renderContext,
   renderSection,
@@ -552,6 +556,7 @@ test('no section takes a default heading: an untitled one has none, and its item
       { kind: 'works', id: 'work', items: ['tide-atlas'] },
       { kind: 'contact', id: 'reach' },
       { kind: 'focus', id: 'focus', items: ['Tides'] },
+      { kind: 'github', id: 'on-github', username: 'rowan-vale' },
     ],
   });
   const works = render('work', untitled);
@@ -562,6 +567,21 @@ test('no section takes a default heading: an untitled one has none, and its item
   );
   assert.doesNotMatch(render('reach', untitled), /<h2/);
   assert.doesNotMatch(render('focus', untitled), /<h2/);
+  // An untitled github section has no heading, with or without its snapshot, and its
+  // repositories take its level.
+  assert.doesNotMatch(render('on-github', untitled), /<h2|pf-section__title/);
+  const code = render(
+    'on-github',
+    inputFor(
+      { ...COMPLETE, sections: [{ kind: 'github', id: 'on-github', username: 'rowan-vale' }] },
+      { unit: { snapshots: { github: GITHUB } } },
+    ),
+  );
+  assert.doesNotMatch(code, /pf-section__title/);
+  assert.match(
+    code,
+    /<h2 class="pf-item__title"><a href="https:\/\/github\.com\/rowan-vale\/tide-tables">tide-tables<\/a><\/h2>/,
+  );
 });
 
 test('a section takes its heading level from the caller, and its items go one deeper', () => {
@@ -650,7 +670,7 @@ test('an unavailable image keeps its box, caption, and credit with Image unavail
   const works = render('selected-work');
   assert.match(
     works,
-    /<figure class="pf-figure pf-figure--unavailable" data-media-asset="atlas-cover"><span class="pf-media-box" data-media-state="unavailable" data-media-reason="processing"><span class="pf-media-box__label">Image unavailable<\/span><\/span><figcaption><small class="pf-credit">Credit atlas-cover<\/small><\/figcaption><\/figure>/,
+    /<figure class="pf-figure pf-figure--unavailable" data-media-asset="atlas-cover"><span class="pf-media-box" data-media-state="unavailable" data-media-reason="processing"><span class="pf-media-box__label">Image unavailable<\/span><\/span><figcaption><p class="pf-caption">Cover caption<\/p>[\s\S]*?<small class="pf-credit">Credit atlas-cover<\/small><\/figcaption><\/figure>/,
   );
   assert.match(
     works,
@@ -667,6 +687,89 @@ test('an unavailable image keeps its box, caption, and credit with Image unavail
     'atlas-plate',
   ];
   assert.equal(markup.match(/Image unavailable/g)?.length, visiblePlacements.length);
+});
+
+test('an image without alt text has none, never one made from its title or caption', () => {
+  // The cover's asset has no alt text, and its placement none either, but a caption.
+  const media = COMPLETE.media.map((asset) =>
+    asset.id === 'atlas-cover'
+      ? Object.fromEntries(Object.entries(asset).filter(([key]) => key !== 'alt'))
+      : asset,
+  );
+  const markup = page(
+    inputFor({ ...COMPLETE, media }, { unit: { media: MEDIA, snapshots: { github: GITHUB } } }),
+  );
+  const cover = /<img class="pf-cover"[^>]*>/.exec(markup)?.[0];
+  assert.ok(cover, 'the cover is ready');
+  assert.doesNotMatch(cover, /\balt=/);
+  assert.ok(markup.includes('<p class="pf-caption">Cover caption</p>'));
+  for (const made of ['Work title', 'Cover caption', 'atlas-cover']) {
+    assert.ok(!markup.includes(`alt="${made}"`), made);
+  }
+});
+
+test('the JSON-LD names the signature and featured works, each @id its anchor on the page', () => {
+  const [person] = buildStructuredData(READY, { siteUrl: 'https://rowan.test/' });
+  assert.deepEqual(person!.workExample, [
+    {
+      '@type': 'CreativeWork',
+      '@id': 'https://rowan.test/#tide-atlas',
+      name: 'Work title',
+      url: 'https://atlas.rowan.test',
+    },
+    { '@type': 'CreativeWork', '@id': 'https://rowan.test/#harbor-notes', name: 'Featured title' },
+  ]);
+  // Each is an id the page has.
+  const markup = page(READY);
+  assert.ok(markup.includes('id="tide-atlas"'));
+  // Without the site's origin, no block carries a URL or an id.
+  const [bare] = buildStructuredData(READY);
+  assert.equal(bare!.workExample, undefined);
+});
+
+test("a kind the composition doesn't render takes the anchors, the links to them, and the navigation with it", () => {
+  const input = inputFor(COMPLETE, { manifest: { unsupportedKinds: ['works'] } });
+  const work = input.portfolio.works.find(({ id }) => id === 'tide-atlas')!;
+  // The works section renders nothing, so no work has an anchor to link to.
+  assert.equal(render('selected-work', input), '');
+  assert.equal(anchorSection(work, input), undefined);
+  assert.equal(recordAnchor(sectionOf(input, 'selected-work'), work, input), undefined);
+  assert.doesNotMatch(render('timeline', input), /href="#tide-atlas"/);
+  assert.ok(!deriveNavItems(input).some(({ href }) => href === '#selected-work'));
+  // Where the composition renders works, each link lands.
+  assert.equal(anchorSection(work, INPUT)?.id, 'selected-work');
+  assert.match(render('timeline'), /href="#tide-atlas"/);
+  assert.ok(deriveNavItems(INPUT).some(({ href }) => href === '#selected-work'));
+});
+
+test('every placement shows its caption, and when, where, and with what tags it was taken', () => {
+  const markup = page(READY);
+  const details = (caption: string, date: string, location: string, tag: string) =>
+    new RegExp(
+      `<p class="pf-caption">${caption}</p><p class="pf-meta"><time class="pf-date" dateTime="${date}" data-field="takenAt">${escape(formatDate(date))}</time> <span class="pf-sep" aria-hidden="true">·</span> ${location}</p><ul class="pf-tags" role="list"><li>${tag}</li></ul>`,
+    );
+  // A cover, in its figure's caption, before the credit.
+  assert.match(
+    markup,
+    new RegExp(
+      `data-media-asset="atlas-cover"><picture>(?:(?!</picture>)[\\s\\S])*</picture><figcaption>${details('Cover caption', '2019-07-08', 'Cover location', 'Cover tag').source}<small class="pf-credit">Credit atlas-cover</small></figcaption>`,
+    ),
+  );
+  // A custom item's photograph, and a gallery's.
+  assert.match(markup, details('Custom caption', '2022-08-09', 'Custom location', 'Custom tag'));
+  assert.match(
+    markup,
+    details('Placement caption', '2020-05-04', 'Placement location', 'Placement tag'),
+  );
+  // A logo and an avatar beside their text: the caption right after the image, then the credit.
+  assert.match(
+    markup,
+    /<img class="pf-logo"[^>]*>(?:<\/picture>)?<p class="pf-caption">Logo caption<\/p><small class="pf-credit">Credit lab-logo<\/small>/,
+  );
+  assert.match(
+    markup,
+    /<img class="pf-avatar"[^>]*alt="Alt source-avatar"[^>]*>(?:<\/picture>)?<p class="pf-caption">Avatar caption<\/p><small class="pf-credit">Credit source-avatar<\/small>/,
+  );
 });
 
 test('the github section shows its snapshot’s values with their date, else the profile link alone', () => {

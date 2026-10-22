@@ -1,10 +1,10 @@
 import type { ReactNode } from 'react';
 import type { CaseStudy as CaseStudyFields, Work } from '@portfolio/schema';
-import { MediaFigure } from '../media';
+import { MediaFigure, placedMedia } from '../media';
 import { deeper, Heading, present, Ui, type RenderContext } from '../primitives';
 import type { HeadingLevel } from '../types';
 import { RichText } from '../rich-text';
-import { evidenceByIds, isSignature, placedImage } from '../view';
+import { evidenceByIds, isSignature } from '../view';
 import { EvidenceEntry } from './evidence';
 
 // A work's case study (#10, slice 1, item 7), for the /work/<slug> view
@@ -68,7 +68,7 @@ export function CaseStudy({ work, ctx, level = 1 }: CaseStudyProps) {
   const decisionLevel = deeper(fieldLevel);
   const decisions = study.decisions ?? [];
   const evidence = evidenceByIds(work.evidence, input);
-  const cover = placedImage(work.cover, input);
+  const cover = placedMedia(work.cover, ctx);
   // The work's evidence records sit under Evidence, below the field's headings.
   const nested: RenderContext = { ...ctx, level: fieldLevel, itemLevel: decisionLevel };
   return (

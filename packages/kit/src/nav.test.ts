@@ -82,6 +82,36 @@ test('navigation never links a section from a content extension', () => {
   assert.deepEqual(deriveNavItems(portfolio), [{ label: 'About', href: '#about' }]);
 });
 
+test("navigation leaves out what the page does: a section with nothing public, or of a kind the composition doesn't render", () => {
+  const published = view({
+    ...BASE,
+    works: [{ id: 'tide', title: 'Tide', medium: 'writing' }],
+    sections: [
+      { kind: 'works', id: 'selected-work', title: 'Selected work', items: ['tide'] },
+      { kind: 'github', id: 'code', title: 'Code', username: 'rowan' },
+    ],
+  });
+  const hrefs = (source: Parameters<typeof deriveNavItems>[0]) =>
+    deriveNavItems(source).map(({ href }) => href);
+  assert.deepEqual(hrefs(published), ['#selected-work', '#code']);
+  // A section handed in from elsewhere, listing only a record the view doesn't hold.
+  const elsewhere = {
+    ...published,
+    portfolio: {
+      ...published.portfolio,
+      sections: [
+        ...published.portfolio.sections,
+        { kind: 'works' as const, id: 'drafts', title: 'Drafts', items: ['draft'] },
+      ],
+    },
+  };
+  assert.deepEqual(hrefs(elsewhere), ['#selected-work', '#code']);
+  // A kind the manifest's unsupportedKinds lists renders nothing, so it isn't linked.
+  assert.deepEqual(hrefs({ ...published, capabilities: { unsupportedKinds: ['github'] } }), [
+    '#selected-work',
+  ]);
+});
+
 test('navigation leaves out a hidden section and one with nothing public, as the page does', () => {
   const portfolio = view({
     ...BASE,

@@ -1,9 +1,12 @@
 # Contract fixture (#5, Slice 6; #10): content no visitor may see. The site document hides
-# five sections, and data from a content extension no host registers sits on the identity, a
+# eight sections, and data from a content extension no host registers sits on the identity, a
 # link, a section, an item, and in a section of its own. Records only a hidden section lists,
-# their media, a practice part and the contact record only a hidden section places, and a
-# private work a visible section lists, with a private asset only it uses, are gone from the
-# view too. Each holds a canary-hidden marker, in its id where it has one, which must never
+# their media, the thesis and the other practice parts and the contact record only a hidden
+# section places, and a hidden github section's snapshot are gone from the view too. So are
+# private works, evidence, and media wherever they're named: in a visible section, on a
+# visible work, in a custom item, and in the curation lists. snapshots/github.json holds the
+# hidden section's record, and the visible github section's, whose excluded repository is
+# gone too. Each holds a canary-hidden marker, in its id where it has one, which must never
 # reach the page, its RSC payload, the feed, JSON-LD, or a render input, whichever
 # composition renders it. Each visible section keeps one plain entry. .test hosts only.
 schemaVersion: 3
@@ -22,7 +25,12 @@ links:
     extensions:
       '@other/portfolio-x':
         note: canary-hidden-link
+signature: canary-hidden-private-work
+featured: [notes-on-visible-things, canary-hidden-private-featured]
+proof: [plain-award, canary-hidden-private-evidence]
+archive: [canary-hidden-private-archived]
 practice:
+  thesis: canary-hidden-thesis
   skills:
     - items: [canary-hidden-skill]
   services:
@@ -36,6 +44,9 @@ works:
     summary: An essay every visitor sees.
     url: https://hidden.test/visible
     publishedAt: 2026-01-02
+    media:
+      - asset: canary-hidden-private-shot
+        caption: canary-hidden-private-shot-caption
   - id: canary-hidden-essay
     title: canary-hidden-essay
     medium: writing
@@ -64,6 +75,25 @@ works:
       asset: canary-hidden-private-cover
     caseStudy:
       challenge: canary-hidden-private-challenge
+  - id: canary-hidden-private-featured
+    title: canary-hidden-private-featured
+    medium: writing
+    visibility: private
+  - id: canary-hidden-private-archived
+    title: canary-hidden-private-archived
+    medium: writing
+    visibility: private
+evidence:
+  - id: plain-award
+    type: award
+    title: A plain award
+  - id: canary-hidden-private-evidence
+    type: award
+    title: canary-hidden-private-evidence
+    visibility: private
+  - id: canary-hidden-evidence
+    type: award
+    title: canary-hidden-evidence
 chronology:
   - id: canary-hidden-role-canary-hidden-organization
     kind: role
@@ -89,6 +119,11 @@ media:
     source: hidden/canary-hidden-private.png
     visibility: private
     alt: canary-hidden-private-media
+  - id: canary-hidden-private-shot
+    kind: image
+    source: hidden/canary-hidden-private-shot.png
+    visibility: private
+    alt: canary-hidden-private-shot
 contact:
   message: canary-hidden-contact
 sections:
@@ -111,6 +146,10 @@ sections:
     id: services-draft
     title: canary-hidden-services
     part: services
+  - kind: practice
+    id: thesis-draft
+    title: canary-hidden-thesis-title
+    part: thesis
   - kind: works
     id: essays
     title: Essays
@@ -122,6 +161,31 @@ sections:
     id: drafts
     title: canary-hidden-title
     items: [canary-hidden-essay, canary-hidden-record]
+  - kind: evidence
+    id: proof
+    title: Proof
+    items: [plain-award, canary-hidden-private-evidence]
+  - kind: evidence
+    id: evidence-draft
+    title: canary-hidden-evidence-title
+    items: [canary-hidden-evidence]
+  - kind: custom
+    id: notes
+    title: Notes
+    items:
+      - title: A plain note
+        evidence: [canary-hidden-private-evidence]
+        media:
+          - asset: canary-hidden-private-shot
+  - kind: github
+    id: code
+    title: Code
+    username: robin-hidden
+    excludeRepos: [canary-hidden-excluded]
+  - kind: github
+    id: github-draft
+    title: canary-hidden-github-title
+    username: canary-hidden-github-user
   - kind: '@other/portfolio-x/gallery'
     id: gallery
     title: canary-hidden-gallery

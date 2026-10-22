@@ -612,13 +612,19 @@ test("a GitHub section's settings filter its snapshot, so what it doesn't show n
         `  - { kind: github, id: on-github, username: anamika${settings} }`,
       ),
     );
-    const derived = view(pair, { snapshots: { github } }).derived['on-github'];
+    const published = view(pair, { snapshots: { github } });
+    assert.equal(
+      published.portfolio.sections.some((section) => 'excludeRepos' in section),
+      false,
+    );
+    const derived = published.derived['on-github'];
     assert.equal(derived?.state, 'ready');
     if (derived?.state !== 'ready') throw new Error('unreachable');
     return derived.value;
   };
   const names = (repos: ReadonlyArray<{ readonly name: string }>) => repos.map(({ name }) => name);
-  // An excluded repository leaves every list, and the language breakdown is off by default.
+  // An excluded repository leaves every list, and the section's own list of them goes too.
+  // The language breakdown is off by default.
   const excluded = shown(', excludeRepos: [canary-pinned, canary-recent]');
   assert.deepEqual(names(excluded.pinnedRepos), names(data.pinnedRepos as never));
   assert.deepEqual(names(excluded.recentlyActive), names(data.recentlyActive as never));

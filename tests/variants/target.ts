@@ -97,13 +97,20 @@ export function ownerAssets(fixture: ContractFixture): Record<string, string | U
   return assets;
 }
 
-/** read-only on the fixture, its site selecting `variant`, under the fixed clock. */
+/**
+ * read-only on the fixture, its site selecting `variant`, under the fixed
+ * clock, with the snapshots and media document beside it.
+ */
 export function fixtureApp(fixture: ContractFixture, variant: RegisteredVariant): AppOptions {
+  const dir = path.dirname(fixture.files.portfolio);
   return {
     web: WEB,
     portfolio: fixture.files.portfolio,
     siteText: siteFor(fixture, variant),
     publicFiles: ownerAssets(fixture),
+    sourceFiles: Object.fromEntries(
+      fixture.unitFiles.map((file) => [file, readFileSync(path.join(dir, file), 'utf8')]),
+    ),
     env: { NODE_OPTIONS: `--import=${pathToFileURL(FIXED_CLOCK).href}` },
   };
 }

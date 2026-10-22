@@ -1,16 +1,19 @@
 import type { CSSProperties, ReactNode } from 'react';
-import type { Derived, ViewMediaValue, ViewRendition } from '@portfolio/schema';
+import type { Derived, Placement, ViewMediaValue, ViewRendition } from '@portfolio/schema';
 import { cn } from '../cn';
-import { present, Ui, type RenderContext } from './primitives';
+import { DateText, Meta, present, TagList, Ui, type RenderContext } from './primitives';
+import { placedImage } from './view';
 
 // How a shared renderer shows an image placement (#10, slice 1, item 7).
 // Everything about the picture itself comes from derived data: its
 // renditions, width, and height. Until a rendition exists, a placement that
 // isn't decorative keeps its box, its caption, and its credit, and says
-// "Image unavailable"; a decorative one renders nothing. Alt text is the
-// owner's alone, never a title or a caption. The focal point is the one
-// inline style a shared renderer sets: two custom properties, which the
-// stylesheet's object-position reads.
+// "Image unavailable"; a decorative one renders nothing. Every placement
+// goes through placedMedia(), so each shows its caption, and when, where,
+// and with what tags it was taken. Alt text is the owner's alone, never a
+// title or a caption. The focal point is the one inline style a shared
+// renderer sets: two custom properties, which the stylesheet's
+// object-position reads.
 
 /** One rendition of an image, as the view lists it, its URL under the view's media base. */
 export type ImageRendition = ViewRendition;
@@ -36,6 +39,41 @@ export interface PlacedImage {
   /** Where the subject sits, 0 to 1 from the start and the top. */
   readonly focalPoint?: { readonly x: number; readonly y: number };
   readonly image: ImageState;
+}
+
+/**
+ * A placement as a shared renderer shows it: its image, with the overrides
+ * placedImage() applies, and its caption with when, where, and with what
+ * tags it was taken. Every placement goes through it, a cover, a logo, or an
+ * avatar as much as a gallery's photograph. None when the asset isn't an
+ * image the view holds.
+ */
+export function placedMedia(
+  placement: Placement | undefined,
+  ctx: RenderContext,
+): PlacedImage | undefined {
+  if (!placement) return undefined;
+  const details: ReactNode[] = [
+    placement.takenAt !== undefined && (
+      <DateText key="taken" raw={placement.takenAt} ctx={ctx} field="takenAt" />
+    ),
+    placement.location,
+  ];
+  const captioned =
+    present(placement.caption) ||
+    details.some((part) => (typeof part === 'string' ? present(part) : Boolean(part))) ||
+    Boolean(placement.tags?.length);
+  return placedImage(
+    placement,
+    ctx.input,
+    captioned ? (
+      <>
+        {present(placement.caption) ? <p className="pf-caption">{placement.caption}</p> : null}
+        <Meta parts={details} />
+        <TagList items={placement.tags} />
+      </>
+    ) : undefined,
+  );
 }
 
 /** A focal coordinate as the style takes it: a finite number, held to 0 through 1. */
@@ -174,7 +212,7 @@ export interface MediaFigureProps {
   readonly eager?: boolean;
   /** How wide it shows, for the renditions a browser picks. */
   readonly sizes?: string;
-  /** A logo or avatar beside text: no figure, the credit right after it. */
+  /** A logo or avatar beside text: no figure, its caption and credit right after it. */
   readonly inline?: boolean;
 }
 
@@ -207,15 +245,16 @@ export function MediaFigure({
   const credit = present(placed.credit) ? (
     <small className="pf-credit">{placed.credit}</small>
   ) : null;
+  const caption = placed.caption ?? null;
   if (inline) {
     return (
       <>
         {picture}
+        {caption}
         {credit}
       </>
     );
   }
-  const caption = placed.caption ?? null;
   return (
     <figure
       className={cn('pf-figure', !ready && 'pf-figure--unavailable')}

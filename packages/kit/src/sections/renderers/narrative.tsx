@@ -1,5 +1,5 @@
 import type { Hero, Lede, Now } from '@portfolio/schema';
-import { MediaFigure } from '../media';
+import { MediaFigure, placedMedia } from '../media';
 import {
   Heading,
   LabeledDate,
@@ -11,7 +11,7 @@ import {
 } from '../primitives';
 import { RichText } from '../rich-text';
 import type { SectionRendererProps } from '../types';
-import { placedImage } from '../view';
+
 
 /**
  * The opening. Its heading is the name, at the level the caller gives, which
@@ -24,7 +24,7 @@ export function HeroSection({ section, input, level }: SectionRendererProps<Hero
   const { identity } = input.portfolio;
   const name = present(section.name) ? section.name : identity.name;
   const tagline = present(section.tagline) ? section.tagline : identity.tagline;
-  const avatar = placedImage(identity.avatar, input);
+  const avatar = placedMedia(identity.avatar, ctx);
   return (
     <div className="pf-hero">
       {present(section.title) ? <p className="pf-hero__label">{section.title}</p> : null}

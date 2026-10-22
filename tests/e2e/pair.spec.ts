@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { DEFAULT_PORTFOLIO } from '../harness/app-server.mjs';
 import { expect, test } from '../harness/fixtures';
@@ -8,8 +9,10 @@ import { visitorOutput } from '../harness/visitor-output';
 // site's unregistered selection (#5): the site document picks the motion
 // policy and the starting theme, and hides sections; the portfolio's locale
 // and direction set <html lang dir>. No marker from a hidden section, from
-// what only a hidden section reaches, from a private record, or from
-// unregistered extension data reaches a visitor (#10). pair-rtl.spec.ts
+// what only a hidden section reaches, from a private record wherever it's
+// named, from a hidden github section's snapshot or a repository the visible
+// one excludes, or from unregistered extension data reaches a visitor (#10).
+// pair-rtl.spec.ts
 // checks a right-to-left portfolio. The color scheme and typography are
 // #19's.
 
@@ -21,6 +24,9 @@ test.use({
   appOptions: {
     portfolio: path.join(HIDDEN, 'portfolio.yml'),
     site: path.join(HIDDEN, 'site.yml'),
+    sourceFiles: {
+      'snapshots/github.json': readFileSync(path.join(HIDDEN, 'snapshots', 'github.json'), 'utf8'),
+    },
   },
   // The site's displayMode is dark, against the browser's preference.
   colorScheme: 'light',
@@ -31,8 +37,9 @@ test(
   { annotation: [{ type: 'route', description: '/' }, READ_ONLY] },
   async ({ request }) => {
     const { html, jsonLd, payload, feed } = await visitorOutput(request);
-    // Each did render the portfolio.
+    // Each did render the portfolio, the visible github section's snapshot included.
     expect(html).toContain('Notes on visible things');
+    expect(html).toContain('visible-tools');
     expect(payload).toContain('Notes on visible things');
     expect(feed).toContain('<title>Notes on visible things</title>');
     for (const [name, text] of Object.entries({ html, payload, feed })) {
@@ -75,13 +82,16 @@ test(
       'roles-draft',
       'skills-draft',
       'services-draft',
+      'thesis-draft',
+      'evidence-draft',
+      'github-draft',
       'contact',
       'gallery',
     ]) {
       await expect(page.locator(`[id="${id}"]`), id).toHaveCount(0);
       await expect(page.locator(`a[href="#${id}"]`), id).toHaveCount(0);
     }
-    for (const id of ['essays', 'work', 'skills']) {
+    for (const id of ['essays', 'work', 'skills', 'proof', 'notes', 'code']) {
       await expect(page.locator(`[id="${id}"]`), id).toHaveCount(1);
     }
     // The render, for the report: the closing evidence for the pair (#4).

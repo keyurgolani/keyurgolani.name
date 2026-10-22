@@ -1,5 +1,5 @@
 import type { Evidence } from '@portfolio/schema';
-import { MediaFigure } from '../media';
+import { MediaFigure, placedMedia } from '../media';
 import {
   DateText,
   formatFigure,
@@ -20,7 +20,7 @@ import {
 } from '../primitives';
 import { RichText } from '../rich-text';
 import type { SectionOf, SectionRendererProps } from '../types';
-import { evidenceOf, placedImage, recordAnchor } from '../view';
+import { evidenceOf, recordAnchor } from '../view';
 
 // Evidence (#10, slice 1, item 7): typed, attributable facts. Each shows the
 // owner's words, its source by the owner's name for it, and when it was
@@ -82,7 +82,7 @@ function MetricValue({ entry, ctx }: { entry: Evidence; ctx: RenderContext }) {
 /** A testimonial: the words, then who said them, with their role, organization, and portrait. */
 function Testimonial({ entry, ctx }: { entry: Evidence; ctx: RenderContext }) {
   const { input } = ctx;
-  const avatar = placedImage(entry.source?.avatar, input);
+  const avatar = placedMedia(entry.source?.avatar, ctx);
   return (
     <figure className="pf-quote">
       <blockquote

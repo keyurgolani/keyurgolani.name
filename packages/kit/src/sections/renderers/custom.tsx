@@ -1,8 +1,8 @@
-import { MediaFigure } from '../media';
+import { MediaFigure, placedMedia } from '../media';
 import { deeper, ItemTitle, LinkList, present, renderContext, SectionHeader } from '../primitives';
 import { RichText } from '../rich-text';
 import type { SectionOf, SectionRendererProps } from '../types';
-import { evidenceByIds, placedImage } from '../view';
+import { evidenceByIds } from '../view';
 import { EvidenceEntry } from './evidence';
 
 // A custom section (#10, slice 1, item 7): the owner's own title, body, and
@@ -27,13 +27,7 @@ export function CustomSection({
         <ul className="pf-list" role="list">
           {section.items.map((item, index) => {
             const media = (item.media ?? []).flatMap((placement) => {
-              const image = placedImage(
-                placement,
-                input,
-                present(placement.caption) ? (
-                  <p className="pf-caption">{placement.caption}</p>
-                ) : undefined,
-              );
+              const image = placedMedia(placement, ctx);
               return image ? [image] : [];
             });
             const evidence = evidenceByIds(item.evidence, input);

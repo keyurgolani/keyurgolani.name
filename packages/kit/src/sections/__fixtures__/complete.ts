@@ -78,7 +78,13 @@ export const COMPLETE = {
       role: 'Work role',
       organization: 'Work organization',
       tools: ['Work tool'],
-      cover: { asset: 'atlas-cover' },
+      cover: {
+        asset: 'atlas-cover',
+        caption: 'Cover caption',
+        takenAt: '2019-07-08',
+        location: 'Cover location',
+        tags: ['Cover tag'],
+      },
       media: [
         {
           asset: 'atlas-plate',
@@ -144,7 +150,7 @@ export const COMPLETE = {
         url: 'https://praise.rowan.test',
         role: 'Source role',
         organization: 'Source organization',
-        avatar: { asset: 'source-avatar' },
+        avatar: { asset: 'source-avatar', caption: 'Avatar caption' },
       },
     },
     {
@@ -225,7 +231,7 @@ export const COMPLETE = {
       highlights: ['Chronology highlight'],
       achievements: ['Chronology achievement'],
       skills: ['Chronology skill'],
-      logo: { asset: 'lab-logo', decorative: true },
+      logo: { asset: 'lab-logo', decorative: true, caption: 'Logo caption' },
       thread: 'work',
       branchesFrom: 'tidal-school',
       mergesInto: 'studio-now',
@@ -318,7 +324,15 @@ export const COMPLETE = {
         {
           title: 'Custom item title',
           summary: 'Custom item summary.',
-          media: [{ asset: 'atlas-plate', caption: 'Custom caption' }],
+          media: [
+            {
+              asset: 'atlas-plate',
+              caption: 'Custom caption',
+              takenAt: '2022-08-09',
+              location: 'Custom location',
+              tags: ['Custom tag'],
+            },
+          ],
           evidence: ['readers'],
           links: [{ platform: 'site', url: 'https://custom.rowan.test', label: 'Custom link' }],
         },

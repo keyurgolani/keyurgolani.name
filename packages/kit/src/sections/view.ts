@@ -22,6 +22,14 @@ type Section = VariantRenderInput['portfolio']['sections'][number];
 /** What the record helpers read: a render input, or the published view it came from. */
 export type ViewSource = Pick<VariantRenderInput, 'portfolio'>;
 
+/** A view source with the composition's capabilities, when it's a render input. */
+type RenderedSource = ViewSource & Partial<Pick<VariantRenderInput, 'capabilities'>>;
+
+/** Whether the composition renders the section's kind: its manifest's unsupportedKinds don't. */
+export function rendersKind(section: Section, input: RenderedSource): boolean {
+  return !(input.capabilities?.unsupportedKinds ?? []).includes(section.kind);
+}
+
 /** The records of one collection by id. Built once per collection. */
 const indexes = new WeakMap<readonly Identified[], ReadonlyMap<string, Identified>>();
 
@@ -95,9 +103,15 @@ export function isSignature(work: Identified, input: ViewSource): boolean {
   return input.portfolio.signature === work.id;
 }
 
-/** The first visible section that lists the record, which holds its anchor. */
-export function anchorSection(record: Identified, input: ViewSource): Section | undefined {
-  return input.portfolio.sections.find((section) => itemsOf(section).includes(record.id));
+/**
+ * The first visible section that lists the record, which holds its anchor.
+ * A section of a kind the composition doesn't render is passed over, since
+ * it isn't on the page.
+ */
+export function anchorSection(record: Identified, input: RenderedSource): Section | undefined {
+  return input.portfolio.sections.find(
+    (section) => rendersKind(section, input) && itemsOf(section).includes(record.id),
+  );
 }
 
 /**
@@ -108,7 +122,7 @@ export function anchorSection(record: Identified, input: ViewSource): Section | 
 export function recordAnchor(
   section: Section,
   record: Identified,
-  input: Pick<VariantRenderInput, 'portfolio' | 'ids'>,
+  input: RenderedSource & Pick<VariantRenderInput, 'ids'>,
 ): string | undefined {
   return anchorSection(record, input)?.id === section.id
     ? `${input.ids.prefix}${record.id}`

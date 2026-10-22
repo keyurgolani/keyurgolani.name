@@ -308,7 +308,7 @@ export function resolvePortfolioView(
     evidence,
     chronology,
     contact: reached.contact ? portfolio.contact : undefined,
-    sections: reached.sections,
+    sections: reached.sections.map(shownSection),
     extensions: portfolio.extensions,
   });
 
@@ -585,6 +585,18 @@ function viewDerived(
     });
   }
   return out;
+}
+
+/**
+ * A section as the view holds it. A github section leaves out excludeRepos,
+ * which viewDerived() applied to its snapshot, so the names it hides stay
+ * out of the view too.
+ */
+function shownSection(section: Section): Section {
+  if (section.kind !== 'github' || section.excludeRepos === undefined) return section;
+  const shown: Github = { ...section };
+  delete shown.excludeRepos;
+  return shown;
 }
 
 /**

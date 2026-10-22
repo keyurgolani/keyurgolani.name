@@ -12,7 +12,7 @@ import {
   type AppearanceCatalog,
   type ParsedPair,
 } from '@portfolio/schema';
-import { loadPair } from '@portfolio/schema/node';
+import { loadPair, readUnitFiles } from '@portfolio/schema/node';
 import { buildRenderInput } from '../render-input';
 import { validateManifest } from '../validate-manifest';
 import { CONTRACT_FIXTURES, contractFixture, FIXTURES_DIR, HIDDEN_CANARY } from './fixtures';
@@ -70,13 +70,26 @@ test('the fixtures directory holds exactly the fixtures the module lists', () =>
     dirs,
     CONTRACT_FIXTURES.map(({ name }) => name),
   );
-  for (const { name, files } of CONTRACT_FIXTURES) {
-    assert.deepEqual(fs.readdirSync(path.join(FIXTURES_DIR, name)).sort(), [
-      'portfolio.yml',
-      'site.yml',
-    ]);
+  for (const { name, files, unitFiles } of CONTRACT_FIXTURES) {
+    // The two documents, and the unit files the module lists beside them.
+    const folders = [...new Set(unitFiles.map((file) => file.split('/')[0]!))];
+    assert.deepEqual(
+      fs.readdirSync(path.join(FIXTURES_DIR, name)).sort(),
+      ['portfolio.yml', 'site.yml', ...folders].sort(),
+      name,
+    );
     assert.ok(fs.existsSync(files.portfolio) && fs.existsSync(files.site), name);
+    for (const file of unitFiles) {
+      assert.ok(fs.statSync(path.join(FIXTURES_DIR, name, file)).isFile(), `${name}: ${file}`);
+    }
   }
+  // Only the hidden canary has a snapshot.
+  assert.deepEqual(
+    CONTRACT_FIXTURES.filter(({ unitFiles }) => unitFiles.length > 0).map(
+      ({ name, unitFiles }) => [name, unitFiles],
+    ),
+    [['hidden-canary', ['snapshots/github.json']]],
+  );
   assert.throws(() => contractFixture('no-such-fixture'), /No contract fixture/);
 });
 
@@ -216,18 +229,50 @@ test('hidden-canary holds the marker in the pair, and no published view or rende
     'gallery',
     'roles',
     'skill',
-    // #10: a record only a hidden section lists, its media, a practice part and the
-    // contact record only hidden sections place, and a private work and asset.
+    // #10: a record only a hidden section lists, its media, the thesis and other
+    // practice parts and the contact record only hidden sections place, a hidden github
+    // section, an excluded repository, and private works, evidence, and media, named in
+    // a visible section, on a visible work, in a custom item, and in the curation lists.
     'record',
     'media',
     'practice',
+    'thesis',
     'contact',
+    'github',
+    'excluded',
+    'evidence',
     'private',
+    'private-evidence',
+    'private-shot',
+    'private-featured',
+    'private-archived',
   ]) {
     assert.ok(text.includes(`${HIDDEN_CANARY}-${place}`), place);
   }
-  const view = viewOf(pair);
+  // The snapshot holds it for the hidden github section and the excluded repository.
+  const dir = path.join(FIXTURES_DIR, 'hidden-canary');
+  const unit = readUnitFiles(dir);
+  assert.deepEqual(unit.diagnostics, []);
+  const snapshot = JSON.stringify(unit.snapshots);
+  for (const place of ['github-user', 'github-repo', 'excluded', 'language']) {
+    assert.ok(snapshot.includes(`${HIDDEN_CANARY}-${place}`), place);
+  }
+  const view = resolvePortfolioView(
+    pair,
+    { snapshots: unit.snapshots, media: unit.media },
+    { mediaBase: '/media' },
+  );
   assert.ok(!JSON.stringify(view).includes(HIDDEN_CANARY));
+  // The visible github section keeps its snapshot, less the repository it excludes.
+  const code = view.derived.code;
+  assert.equal(code?.state, 'ready');
+  if (code?.state === 'ready') {
+    assert.deepEqual(
+      code.value.pinnedRepos.map(({ name }) => name),
+      ['visible-tools'],
+    );
+  }
+  assert.deepEqual(Object.keys(view.derived), ['code']);
   const raw = JSON.parse(
     fs.readFileSync(new URL('../__fixtures__/manifest.json', import.meta.url), 'utf8'),
   );
@@ -244,15 +289,32 @@ test('hidden-canary holds the marker in the pair, and no published view or rende
   assert.ok(!JSON.stringify(input).includes(HIDDEN_CANARY));
   // Each hidden section is out of the input, and each visible one is in it.
   const ids = input.portfolio.sections.map(({ id }) => id);
-  for (const hidden of ['roles-draft', 'skills-draft', 'services-draft', 'drafts', 'gallery']) {
+  for (const hidden of [
+    'roles-draft',
+    'skills-draft',
+    'services-draft',
+    'thesis-draft',
+    'drafts',
+    'evidence-draft',
+    'github-draft',
+    'gallery',
+  ]) {
     assert.ok(!ids.includes(hidden), hidden);
   }
-  assert.deepEqual(ids, ['top', 'work', 'essays']);
-  // So is what only they reach: the practice, the contact record, and every asset.
+  assert.deepEqual(ids, ['top', 'work', 'essays', 'proof', 'notes', 'code']);
+  // So is what only they reach, and every private record and asset, wherever it's named.
   assert.deepEqual(
     input.portfolio.works.map(({ id }) => id),
     ['notes-on-visible-things'],
   );
+  assert.deepEqual(
+    input.portfolio.evidence.map(({ id }) => id),
+    ['plain-award'],
+  );
+  assert.equal(input.portfolio.signature, undefined);
+  assert.deepEqual(input.portfolio.featured, ['notes-on-visible-things']);
+  assert.deepEqual(input.portfolio.proof, ['plain-award']);
+  assert.deepEqual(input.portfolio.archive, []);
   assert.equal(input.portfolio.practice, undefined);
   assert.equal(input.portfolio.contact, undefined);
   assert.deepEqual(input.media, {});

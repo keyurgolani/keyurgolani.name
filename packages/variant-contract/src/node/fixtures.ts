@@ -2,12 +2,14 @@
 // that push a composition, in packages/variant-contract/fixtures/<name>/.
 // Each is a version 3 portfolio.yml and a site.yml that selects
 // missing-variant, which no package registers, so a host renders it in the
-// fallback composition until a test selects the variant it checks. None has
-// a snapshot beside it, so a github section shows its profile link alone, and
-// none reaches a host outside the app: links go to .test hosts, and every
-// media asset names a file under the media root that has no rendition yet,
-// so each image renders as unavailable.
+// fallback composition until a test selects the variant it checks. Only
+// hidden-canary has a snapshot beside it, snapshots/github.json; every other
+// github section shows its profile link alone. None reaches a host outside
+// the app: links go to .test hosts, and every media asset names a file under
+// the media root that has no rendition yet, so each image renders as
+// unavailable.
 
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -27,7 +29,7 @@ const PURPOSES = {
   engineering:
     "#4's engineering pair: a deploy orchestrator with a case study, a stack, experience, and a github section with no snapshot.",
   'hidden-canary':
-    'Hidden sections, what only they reach, a private work, and unregistered extension data, each holding canary-hidden.',
+    "Hidden sections and what only they reach, a hidden github section's snapshot and an excluded repository, private records and media wherever they're named, and unregistered extension data, each holding canary-hidden.",
   'identity-only': 'The identity and one bare hero: the least that can go live.',
   large: 'A hundred works, a series of a hundred photos, and a hundred skills.',
   'long-text': 'Long and unbroken text, non-Latin titles, and duplicate titles.',
@@ -50,6 +52,23 @@ export interface ContractFixture {
   readonly purpose: string;
   /** The absolute paths of its two documents. */
   readonly files: { readonly portfolio: string; readonly site: string };
+  /**
+   * The unit files beside them, by their path in the unit, such as
+   * snapshots/github.json: what a host reads from the source directory.
+   */
+  readonly unitFiles: readonly string[];
+}
+
+/** The snapshots and media document in a fixture's directory, by their path in the unit. */
+function unitFilesIn(dir: string): string[] {
+  return ['snapshots', 'media'].flatMap((folder) => {
+    const at = path.join(dir, folder);
+    if (!fs.existsSync(at)) return [];
+    return fs
+      .readdirSync(at)
+      .sort()
+      .map((name) => `${folder}/${name}`);
+  });
 }
 
 /** The marker hidden-canary holds wherever a visitor must not see it. */
@@ -67,6 +86,7 @@ export const CONTRACT_FIXTURES: readonly ContractFixture[] = (
       portfolio: path.join(FIXTURES_DIR, name, 'portfolio.yml'),
       site: path.join(FIXTURES_DIR, name, 'site.yml'),
     },
+    unitFiles: unitFilesIn(path.join(FIXTURES_DIR, name)),
   }));
 
 /** The fixture `name`. Throws for one that doesn't exist. */

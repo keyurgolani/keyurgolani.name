@@ -1,6 +1,7 @@
 # Harness fixture: the fallback composition (missing-variant), motion always
 # reduced, a dark display mode, and the roles-draft, skills-draft,
-# services-draft, drafts, and contact sections hidden.
+# services-draft, thesis-draft, drafts, evidence-draft, github-draft, and
+# contact sections hidden.
 schemaVersion: 2
 appearance:
   variant: missing-variant
@@ -25,6 +26,12 @@ sections:
   drafts:
     hidden: true
   services-draft:
+    hidden: true
+  thesis-draft:
+    hidden: true
+  evidence-draft:
+    hidden: true
+  github-draft:
     hidden: true
   contact:
     hidden: true

@@ -1,16 +1,19 @@
 # Harness fixture: sections the site document hides, and data from a content
 # extension the host doesn't register: a section of its own, and entries on
 # the identity, a link, a section, and an item. Records only a hidden section
-# lists, their media, the parts of the practice and the contact record only a
-# hidden section places, and a private work a visible section lists, with a
-# private asset only it uses, are gone from what visitors get too. Each holds
-# a canary-hidden- marker, in its id where it has one, that must never reach a
-# visitor: not the page, its RSC payload, its JSON-LD, or the feed. The hidden
-# chronology and practice sections come before the visible ones the JSON-LD
-# reads, so one that leaked would change what it says. In version 3 a part of
-# the practice shows wherever a visible section places it, so the hidden
-# skill sits in the tools part, which only a hidden section places. .test
-# hosts only.
+# lists, their media, the thesis and the other parts of the practice and the
+# contact record only a hidden section places, and a hidden github section's
+# snapshot are gone from what visitors get too. So are private works,
+# evidence, and media wherever they're named: in a visible section, on a
+# visible work, in a custom item, and in the curation lists, and the
+# repository the visible github section excludes. snapshots/github.json holds
+# both github sections' records. Each holds a canary-hidden- marker, in its id
+# where it has one, that must never reach a visitor: not the page, its RSC
+# payload, its JSON-LD, or the feed. The hidden chronology and practice
+# sections come before the visible ones the JSON-LD reads, so one that leaked
+# would change what it says. In version 3 a part of the practice shows
+# wherever a visible section places it, so the hidden skill sits in the tools
+# part, which only a hidden section places. .test hosts only.
 schemaVersion: 3
 locale: en-GB
 direction: ltr
@@ -30,7 +33,13 @@ links:
       '@other/portfolio-x':
         note: canary-hidden-link
 
+signature: canary-hidden-private-work
+featured: [notes-on-visible-things, canary-hidden-private-featured]
+proof: [plain-award, canary-hidden-private-evidence]
+archive: [canary-hidden-private-archived]
+
 practice:
+  thesis: canary-hidden-thesis
   skills:
     - items: [Accessibility, TypeScript]
   tools:
@@ -47,6 +56,9 @@ works:
     url: https://rowan.test/visible
     publishedAt: '2026-01-02'
     summary: An essay every visitor sees.
+    media:
+      - asset: canary-hidden-private-shot
+        caption: canary-hidden-private-shot-caption
   - id: canary-hidden-essay
     title: canary-hidden-essay
     medium: writing
@@ -75,6 +87,26 @@ works:
       asset: canary-hidden-private-cover
     caseStudy:
       challenge: canary-hidden-private-challenge
+  - id: canary-hidden-private-featured
+    title: canary-hidden-private-featured
+    medium: writing
+    visibility: private
+  - id: canary-hidden-private-archived
+    title: canary-hidden-private-archived
+    medium: writing
+    visibility: private
+
+evidence:
+  - id: plain-award
+    type: award
+    title: A plain award
+  - id: canary-hidden-private-evidence
+    type: award
+    title: canary-hidden-private-evidence
+    visibility: private
+  - id: canary-hidden-evidence
+    type: award
+    title: canary-hidden-evidence
 
 chronology:
   - id: canary-hidden-role-canary-hidden-organization
@@ -102,6 +134,11 @@ media:
     source: hidden/canary-hidden-private.png
     visibility: private
     alt: canary-hidden-private-media
+  - id: canary-hidden-private-shot
+    kind: image
+    source: hidden/canary-hidden-private-shot.png
+    visibility: private
+    alt: canary-hidden-private-shot
 
 contact:
   message: canary-hidden-contact
@@ -132,6 +169,11 @@ sections:
     part: services
 
   - kind: practice
+    id: thesis-draft
+    title: canary-hidden-thesis-title
+    part: thesis
+
+  - kind: practice
     id: skills
     title: Skills
     part: skills
@@ -148,6 +190,36 @@ sections:
     id: drafts
     title: canary-hidden-title
     items: [canary-hidden-essay, canary-hidden-record]
+
+  - kind: evidence
+    id: proof
+    title: Proof
+    items: [plain-award, canary-hidden-private-evidence]
+
+  - kind: evidence
+    id: evidence-draft
+    title: canary-hidden-evidence-title
+    items: [canary-hidden-evidence]
+
+  - kind: custom
+    id: notes
+    title: Notes
+    items:
+      - title: A plain note
+        evidence: [canary-hidden-private-evidence]
+        media:
+          - asset: canary-hidden-private-shot
+
+  - kind: github
+    id: code
+    title: Code
+    username: rowan-hidden
+    excludeRepos: [canary-hidden-excluded]
+
+  - kind: github
+    id: github-draft
+    title: canary-hidden-github-title
+    username: canary-hidden-github-user
 
   - kind: '@other/portfolio-x/gallery'
     id: gallery
