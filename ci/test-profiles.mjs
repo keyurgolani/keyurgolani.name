@@ -15,6 +15,7 @@
 //   TEST_PROFILES_WORKERS  Playwright workers (default 2)
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
+import { FIXTURE_FLAG } from './lib/fixture-flags.mjs';
 import { REPO_ROOT } from './lib/reports.mjs';
 
 const WEB = path.join(REPO_ROOT, 'apps', 'web');
@@ -23,7 +24,6 @@ const PLAYWRIGHT = path.join(REPO_ROOT, 'node_modules', '@playwright', 'test', '
 const DEPLOYMENT = /^(PORTFOLIO_|GITHUB_TOKEN(_FILE)?$|NEXT_PUBLIC_BASE_URL$)/;
 // The test fixtures' build-time flags, such as APPEARANCE_FIXTURES (#19): the
 // matrix runs against a build without them, where no fixture page serves.
-const FIXTURE_FLAG = /^[A-Z][A-Z0-9_]*_FIXTURES$/;
 const env = Object.fromEntries(
   Object.entries(process.env).filter(
     ([name]) => !DEPLOYMENT.test(name) && !FIXTURE_FLAG.test(name),

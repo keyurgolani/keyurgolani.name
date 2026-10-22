@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readRegistry } from '@portfolio/variant-contract/node';
+import { FIXTURE_FLAG } from '../../../ci/lib/fixture-flags.mjs';
 import {
   FIXTURE_ROWS,
   fixtureFlags,
@@ -44,6 +45,14 @@ test('APPEARANCE_FIXTURES=1 admits packages/appearance-fixtures-*, and nothing e
     '../packages/appearance-fixtures-schemes',
   ]) {
     assert.equal(fixtureRow(directory), undefined, directory);
+  }
+});
+
+test("every row's flag is one ci/test-profiles.mjs clears, so the profile matrix builds without it", () => {
+  assert.ok(FIXTURE_ROWS.length > 0);
+  for (const { flag } of FIXTURE_ROWS) assert.match(flag, FIXTURE_FLAG, flag);
+  for (const name of ['APPEARANCE', 'appearance_FIXTURES', 'APPEARANCE_FIXTURE', 'X_FIXTURES_1']) {
+    assert.doesNotMatch(name, FIXTURE_FLAG, name);
   }
 });
 
