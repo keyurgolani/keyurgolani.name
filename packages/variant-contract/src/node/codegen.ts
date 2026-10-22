@@ -1,12 +1,13 @@
 // What registry generation writes (#5, Slice 3, item 1): the host's
-// gitignored src/lib/generated/ files, from readRegistry()'s result. Each is
-// sorted, so two runs over the same dependencies write the same bytes, and
-// each is written to a temporary file and renamed into place, so the host
-// never reads half of one.
+// gitignored src/lib/generated/ files, from readRegistry()'s result, and
+// (#19, Slice 2) each appearance pack's compiled files in the host's
+// gitignored public/_portfolio/pack/. Each is sorted, so two runs over the
+// same dependencies write the same bytes, and each is written to a temporary
+// file and renamed into place, so the host never reads half of one.
 
 import fs from 'node:fs';
 import path from 'node:path';
-import type { RegistryResult } from './registry';
+import type { PackFile, RegistryResult } from './registry';
 
 /** Every file generation writes, by name. */
 export const GENERATED_FILES = [
@@ -35,16 +36,42 @@ const entries = (lines: readonly string[]) =>
   lines.length ? `{\n${lines.map((line) => `  ${line}\n`).join('')}}` : '{}';
 const json = (value: unknown) => JSON.stringify(value, null, 2);
 
+export interface RenderOptions {
+  /**
+   * The fixture flags generation ran with (#7, item 10), one boolean per
+   * flag: true only when it admitted its fixtures. The metadata module
+   * exports them as FIXTURE_FLAGS.
+   */
+  readonly fixtureFlags?: Readonly<Record<string, boolean>>;
+}
+
+const fileRef = (file: PackFile) => ({ url: file.url, sha256: file.sha256 });
+
 /** The generated files' contents, by name, for a registry with no errors. */
-export function renderRegistry(result: RegistryResult): ReadonlyMap<GeneratedFile, string> {
+export function renderRegistry(
+  result: RegistryResult,
+  options: RenderOptions = {},
+): ReadonlyMap<GeneratedFile, string> {
   if (!result.ok)
     throw new Error('A registry with errors generates nothing; report its diagnostics.');
-  const { variants, extensions } = result;
+  const { variants, extensions, packs } = result;
   const files = new Map<GeneratedFile, string>();
+  const flagEntries = Object.entries(options.fixtureFlags ?? {}).sort(([a], [b]) =>
+    a < b ? -1 : a > b ? 1 : 0,
+  );
+  for (const [key, value] of flagEntries) {
+    if (!/^[a-z][a-zA-Z0-9]*$/.test(key) || typeof value !== 'boolean') {
+      throw new Error(`A fixture flag is a camelCase key with a boolean, and ${key} isn't.`);
+    }
+  }
+  const flags = flagEntries.length
+    ? `{ ${flagEntries.map(([key, value]) => `${key}: ${value}`).join(', ')} }`
+    : '{}';
 
   files.set(
     'registry.meta.ts',
     `${HEADER}
+import type { MetaPack, PackFileRef } from '@portfolio/appearance';
 import type { VariantRegistry } from '@portfolio/variant-contract';
 
 /** Every variant this build registers, sorted by id, each with its manifest. */
@@ -57,6 +84,27 @@ export const CONTENT_EXTENSION_PACKAGES: readonly {
   readonly packageName: string;
   readonly version: string;
 }[] = ${json(extensions.map(({ packageName, version }) => ({ packageName, version })))};
+
+/** Every appearance pack this build registers (#19), sorted by kind and id, with its compiled files. */
+export const PACKS: readonly MetaPack[] = ${json(
+      packs.map(({ kind, packageName, version, fixture, manifest, stylesheet, assets }) => ({
+        kind,
+        packageName,
+        version,
+        fixture,
+        manifest,
+        stylesheet: stylesheet ? fileRef(stylesheet) : null,
+        ...(assets.length > 0 ? { fonts: assets.map(fileRef) } : {}),
+      })),
+    )};
+
+/** The platform stylesheet every presentation boundary links (#19). */
+export const PLATFORM_STYLESHEET: PackFileRef | null = ${json(
+      result.platform ? fileRef(result.platform) : null,
+    )};
+
+/** The fixture flags this build was generated with: true only when the flag admitted its fixtures. */
+export const FIXTURE_FLAGS = Object.freeze(${flags});
 `,
   );
 
@@ -171,4 +219,71 @@ export function writeRegistry(dir: string, files: ReadonlyMap<GeneratedFile, str
     written.push(name);
   }
   return { written, unchanged };
+}
+
+/** Every file in the pack directory: each pack's stylesheet and fonts, and the platform stylesheet. */
+export function packFiles(result: RegistryResult): PackFile[] {
+  const files = new Map<string, PackFile>();
+  for (const pack of result.packs) {
+    for (const file of [...(pack.stylesheet ? [pack.stylesheet] : []), ...pack.assets]) {
+      files.set(file.name, file);
+    }
+  }
+  if (result.platform) files.set(result.platform.name, result.platform);
+  return [...files.values()].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+}
+
+/** Which pack files writePackFiles() wrote, kept, and removed. */
+export interface PackWriteResult {
+  readonly written: readonly string[];
+  readonly unchanged: readonly string[];
+  readonly removed: readonly string[];
+}
+
+const PACK_FILE = /^[a-z_][a-z0-9-]*\.[0-9a-f]{12}\.(?:css|woff2)$/;
+const LEFTOVER = /^[a-z_][a-z0-9-]*\.[0-9a-f]{12}\.(?:css|woff2)\.\d+\.tmp$/;
+
+/**
+ * Writes the pack files into `dir` the way writeRegistry() writes its own,
+ * and removes every other pack file there, so a build only ever serves the
+ * files of what it registers: a fixture's never outlive the build that
+ * admitted it. Anything else in `dir` stops it before it writes, so it can
+ * never empty a directory it doesn't own.
+ */
+export function writePackFiles(dir: string, files: readonly PackFile[]): PackWriteResult {
+  fs.mkdirSync(dir, { recursive: true });
+  const names = new Set(files.map(({ name }) => name));
+  const stale = fs.readdirSync(dir).filter((name) => !names.has(name));
+  const foreign = stale.filter((name) => !PACK_FILE.test(name) && !LEFTOVER.test(name));
+  if (foreign.length > 0) {
+    throw new Error(
+      `${dir} holds ${foreign.join(', ')}, which no pack wrote, so nothing was written there.`,
+    );
+  }
+  const written: string[] = [];
+  const unchanged: string[] = [];
+  const removed: string[] = [];
+  for (const file of files) {
+    if (!PACK_FILE.test(file.name)) throw new Error(`${file.name} isn't a pack file's name.`);
+    const target = path.join(dir, file.name);
+    let current: Buffer | undefined;
+    try {
+      current = fs.readFileSync(target);
+    } catch {
+      current = undefined;
+    }
+    if (current && Buffer.compare(current, Buffer.from(file.bytes)) === 0) {
+      unchanged.push(file.name);
+      continue;
+    }
+    const temporary = `${target}.${process.pid}.tmp`;
+    fs.writeFileSync(temporary, file.bytes);
+    fs.renameSync(temporary, target);
+    written.push(file.name);
+  }
+  for (const name of stale) {
+    fs.rmSync(path.join(dir, name), { force: true });
+    removed.push(name);
+  }
+  return { written, unchanged, removed: removed.sort() };
 }

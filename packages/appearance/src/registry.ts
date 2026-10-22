@@ -25,8 +25,8 @@ import type { ColorSchemeManifest, DesignLanguageManifest, TypographyManifest } 
 import type { ColorTokens } from './tokens';
 import { baseModes } from './validate-pack';
 
-/** A compiled stylesheet registry generation wrote, where the host serves it from. */
-export interface PackStylesheet {
+/** A file registry generation wrote into the pack directory, where the host serves it from. */
+export interface PackFileRef {
   /** Such as /_portfolio/pack/warm-parchment.<sha256-12>.css. */
   readonly url: string;
   /** The hex SHA-256 of its bytes. */
@@ -39,7 +39,9 @@ interface MetaPackBase {
   /** A test fixture, which registers only when APPEARANCE_FIXTURES=1 (Slice 2). */
   readonly fixture?: boolean;
   /** Its compiled stylesheet; null for a generator scheme, which compiles from what it generates. */
-  readonly stylesheet?: PackStylesheet | null;
+  readonly stylesheet?: PackFileRef | null;
+  /** The font files a typography profile ships, which its stylesheet's @font-face rules load. */
+  readonly fonts?: readonly PackFileRef[];
 }
 
 /** One installed pack, as registry generation lists it in the metadata module. */
@@ -66,14 +68,15 @@ export type MetaPack =
 export interface AppearanceMeta {
   readonly VARIANTS: VariantRegistry;
   readonly PACKS?: readonly MetaPack[];
-  readonly PLATFORM_STYLESHEET?: PackStylesheet | null;
+  readonly PLATFORM_STYLESHEET?: PackFileRef | null;
 }
 
 interface RegisteredPack {
   readonly packageName: string;
   readonly version: string;
   readonly fixture: boolean;
-  readonly stylesheet: PackStylesheet | null;
+  readonly stylesheet: PackFileRef | null;
+  readonly fonts: readonly PackFileRef[];
 }
 
 export interface RegisteredLanguage extends RegisteredPack {
@@ -106,7 +109,7 @@ export interface AppearanceRegistry {
   /** Each pack axis's packs, by id. */
   readonly packs: { readonly [A in PackAxis]: ReadonlyMap<string, PackEntries[A]> };
   /** The platform stylesheet every boundary links, once registry generation has written it. */
-  readonly platformStylesheet: PackStylesheet | null;
+  readonly platformStylesheet: PackFileRef | null;
 }
 
 const AXIS_BY_KIND: Readonly<Record<PackKind, PackAxis>> = {
@@ -153,6 +156,7 @@ export function createAppearanceRegistry(meta: AppearanceMeta): AppearanceRegist
       version: pack.version,
       fixture: pack.fixture === true,
       stylesheet: pack.stylesheet ?? null,
+      fonts: pack.fonts ?? [],
     };
     if (pack.kind === 'color-scheme') {
       packs.colorScheme.set(id, { ...base, manifest: pack.manifest, ...schemeSets(pack.manifest) });

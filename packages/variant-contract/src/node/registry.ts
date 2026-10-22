@@ -1,7 +1,14 @@
 // Registry generation (#5, Slice 3, item 1): which of the host's direct
-// dependencies are variants and content extensions, whether each is one this
-// build can register, and what it registers. Nothing is skipped quietly: a
-// dependency that declares a portfolio kind is registered or reported.
+// dependencies are variants, content extensions, and #19's appearance packs,
+// whether each is one this build can register, and what it registers.
+// Nothing is skipped quietly: a dependency that declares a portfolio kind is
+// registered or reported.
+//
+// Packs are checked and compiled by hooks the host passes in (#19, Slice 2),
+// @portfolio/appearance's validator and compiler, so this package depends on
+// nothing of #19's and there's no package cycle. A dependency marked
+// `portfolio.fixture: true` registers only when the fixture gate the host
+// passes admits it (#7, item 10).
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -32,12 +39,16 @@ export const REGISTRY_KINDS = [
 ] as const;
 export type RegistryKind = (typeof REGISTRY_KINDS)[number];
 
-/** #19's appearance pack kinds, which have no validator yet. */
-export const PACK_KINDS: readonly RegistryKind[] = [
+/** #19's appearance pack kinds, which the host's pack hooks check and compile. */
+export const PACK_KINDS = [
   'design-language',
   'color-scheme',
   'typography',
-];
+] as const satisfies readonly RegistryKind[];
+export type PackKind = (typeof PACK_KINDS)[number];
+
+const isPackKind = (kind: string): kind is PackKind =>
+  (PACK_KINDS as readonly string[]).includes(kind);
 
 /** Every code generation raises besides the manifest's own, with its severity. */
 export const REGISTRY_CODES = {
@@ -53,6 +64,11 @@ export const REGISTRY_CODES = {
   'registry.duplicate-id': 'error',
   'registry.fallback-missing': 'error',
   'registry.extension-invalid': 'error',
+  'registry.packs-missing': 'error',
+  'registry.pack-id-mismatch': 'error',
+  'registry.pack-compile': 'error',
+  'registry.fixture-unmapped': 'error',
+  'registry.fixture-leak': 'error',
 } as const satisfies Record<string, 'error' | 'warning'>;
 
 export type RegistryCode = keyof typeof REGISTRY_CODES;
@@ -107,6 +123,105 @@ export interface ExtensionEntry {
   readonly renderedKinds: readonly string[];
 }
 
+/** A file pack compilation gives registry generation to write into the pack directory. */
+export interface PackFile {
+  /** Its name there, such as warm-parchment.<sha256-12>.css. */
+  readonly name: string;
+  /** Where the host serves it, such as /_portfolio/pack/warm-parchment.<sha256-12>.css. */
+  readonly url: string;
+  /** The hex SHA-256 of its bytes. */
+  readonly sha256: string;
+  readonly bytes: Uint8Array;
+}
+
+/** A pack's manifest.json as the pack validator reads it: `manifest` when there's no error. */
+export interface PackCheck {
+  readonly ok: boolean;
+  readonly manifest?: { readonly id: string };
+  /** In #5's manifest record shape, with its codes. */
+  readonly diagnostics: readonly ManifestDiagnostic[];
+}
+
+/** A valid pack, compiled: its stylesheet, if it has one, and the font files it ships. */
+export type PackCompile =
+  | {
+      readonly ok: true;
+      readonly stylesheet: PackFile | null;
+      readonly assets: readonly PackFile[];
+    }
+  | {
+      readonly ok: false;
+      readonly problems: readonly {
+        /** The pack file it's about, relative to the pack's directory. */
+        readonly file: string;
+        /** JSON pointer into manifest.json; '' for the file as a whole. */
+        readonly pointer: string;
+        readonly message: string;
+        readonly remedy: string;
+      }[];
+    };
+
+/**
+ * #19's pack checks, which the host passes in (Slice 2): @portfolio/appearance's
+ * validatePackManifest and @portfolio/appearance/node's compilePack and
+ * platform stylesheet. Without them, a pack package is registry.no-validator.
+ */
+export interface PackHooks {
+  readonly validate: (
+    manifest: unknown,
+    context: { readonly kind: PackKind; readonly packageName: string; readonly exports?: unknown },
+  ) => PackCheck;
+  readonly compile: (pack: {
+    readonly kind: PackKind;
+    readonly manifest: { readonly id: string };
+    /** The pack's directory, packs/<id> in its package. */
+    readonly dir: string;
+  }) => PackCompile;
+  /** The platform stylesheet every presentation boundary links, written with the packs' files. */
+  readonly platform: () => PackFile;
+  /** Each pack kind's first-party fallback, which every build registers. */
+  readonly fallbacks: Readonly<
+    Record<PackKind, { readonly id: string; readonly packageName: string }>
+  >;
+}
+
+/**
+ * The fixture gate (#7, item 10): for a `portfolio.fixture: true` package in
+ * `dir`, the flag its directory maps to and whether that flag admits it.
+ */
+export type FixtureGate = (fixture: {
+  readonly name: string;
+  readonly dir: string;
+}) =>
+  | { readonly mapped: false }
+  | { readonly mapped: true; readonly flag: string; readonly admitted: boolean };
+
+/** An appearance pack generation registers. */
+export interface PackEntry {
+  readonly kind: PackKind;
+  readonly packageName: string;
+  readonly version: string;
+  /** Its directory, packs/<id> in its package. */
+  readonly dir: string;
+  /** Its manifest.json. */
+  readonly manifestFile: string;
+  /** The manifest the pack validator returned. */
+  readonly manifest: { readonly id: string };
+  /** From a `portfolio.fixture: true` package its flag admitted. */
+  readonly fixture: boolean;
+  readonly stylesheet: PackFile | null;
+  readonly assets: readonly PackFile[];
+}
+
+/** A `portfolio.fixture: true` package, and what the fixture gate decided. */
+export interface FixturePackage {
+  readonly packageName: string;
+  readonly flag: string;
+  readonly admitted: boolean;
+  /** The ids it holds, which mustn't reach the registry when it isn't admitted. */
+  readonly ids: readonly string[];
+}
+
 export interface RegistryResult {
   /** No error diagnostics. */
   readonly ok: boolean;
@@ -114,6 +229,12 @@ export interface RegistryResult {
   readonly variants: readonly VariantEntry[];
   /** Sorted by package name. */
   readonly extensions: readonly ExtensionEntry[];
+  /** Sorted by kind, then id. Empty without pack hooks. */
+  readonly packs: readonly PackEntry[];
+  /** The platform stylesheet, with pack hooks. */
+  readonly platform: PackFile | null;
+  /** Every fixture package the gate decided, admitted or not, sorted by package. */
+  readonly fixtures: readonly FixturePackage[];
   /** Sorted by package, file, and pointer. */
   readonly diagnostics: readonly RegistryDiagnostic[];
 }
@@ -121,6 +242,10 @@ export interface RegistryResult {
 export interface RegistryOptions {
   /** The host package's directory, apps/web. */
   readonly hostDir: string;
+  /** #19's pack checks. */
+  readonly packs?: PackHooks;
+  /** The fixture gate. Without it, every fixture package is unmapped, which fails generation. */
+  readonly fixtures?: FixtureGate;
 }
 
 /** The host's install command, which remedies name. */
@@ -136,11 +261,11 @@ const VARIANT_EXPORTS = ['.', './styles.css'] as const;
  * package.json declares a `portfolio.kind`. It never throws for a package's
  * sake: whatever's wrong with one is a diagnostic naming it.
  */
-export async function readRegistry({ hostDir }: RegistryOptions): Promise<RegistryResult> {
-  const diagnostics: RegistryDiagnostic[] = [];
-  const variants: VariantEntry[] = [];
-  const extensions: ExtensionEntry[] = [];
-  const done = () => finish(variants, extensions, diagnostics);
+export async function readRegistry(options: RegistryOptions): Promise<RegistryResult> {
+  const { hostDir } = options;
+  const found: Found = { diagnostics: [], variants: [], extensions: [], packs: [], fixtures: [] };
+  const { diagnostics, variants } = found;
+  const done = () => finish(found, options.packs ? options.packs.platform() : null);
 
   const hostFile = path.join(hostDir, 'package.json');
   const host = readJson(hostFile);
@@ -158,10 +283,15 @@ export async function readRegistry({ hostDir }: RegistryOptions): Promise<Regist
   }
   const dependencies = isRecord(host.value.dependencies) ? host.value.dependencies : {};
   for (const name of Object.keys(dependencies).sort()) {
-    await readDependency(name, hostDir, { diagnostics, variants, extensions });
+    await readDependency(name, hostDir, found, options);
   }
 
   duplicateIds(variants, hostDir, diagnostics);
+  if (options.packs) {
+    duplicatePackIds(found, hostDir);
+    packFallbacks(found, options.packs);
+  }
+  fixtureLeaks(found, hostDir);
   if (!variants.some((entry) => entry.manifest.id === FALLBACK_ID)) {
     diagnostics.push({
       code: 'registry.fallback-missing',
@@ -181,9 +311,16 @@ interface Found {
   readonly diagnostics: RegistryDiagnostic[];
   readonly variants: VariantEntry[];
   readonly extensions: ExtensionEntry[];
+  readonly packs: PackEntry[];
+  readonly fixtures: FixturePackage[];
 }
 
-async function readDependency(name: string, hostDir: string, found: Found) {
+async function readDependency(
+  name: string,
+  hostDir: string,
+  found: Found,
+  options: RegistryOptions,
+) {
   const at = (file: string) => posix(path.relative(hostDir, file));
   const dir = findInstalled(name, hostDir);
   if (!dir) {
@@ -245,22 +382,319 @@ async function readDependency(name: string, hostDir: string, found: Found) {
   }
   const version = pkg.version;
   const fail = reporter(found.diagnostics, name, version, at(packageFile));
-  if ((PACK_KINDS as readonly string[]).includes(kind)) {
+
+  // A fixture package is read and checked in every build, so a broken one
+  // never hides; it registers only when the gate admits it.
+  const marked = isRecord(pkg.portfolio) ? pkg.portfolio.fixture : undefined;
+  if (marked !== undefined && typeof marked !== 'boolean') {
     fail(
-      'registry.no-validator',
-      ['portfolio', 'kind'],
-      `is ${kind}, a kind #19 adds validators for, and this host has none yet, so it can't register the package.`,
-      'Wait for a host that checks it.',
-      { actual: kind },
+      'registry.package-invalid',
+      ['portfolio', 'fixture'],
+      'must be true or false.',
+      'Upgrade or pin a release whose portfolio.fixture is a boolean.',
+      { actual: JSON.stringify(marked) },
     );
     return;
   }
-  if (kind === 'variant') {
+  let gate: { readonly flag: string; readonly admitted: boolean } | undefined;
+  if (marked === true) {
+    const decision = options.fixtures?.({ name, dir }) ?? { mapped: false as const };
+    if (!decision.mapped) {
+      fail(
+        'registry.fixture-unmapped',
+        ['portfolio', 'fixture'],
+        "marks a test fixture, and no fixture flag maps the package's directory, so no build can say when it registers.",
+        'Map its directory to a flag in apps/web/scripts/fixture-gate.ts, or drop portfolio.fixture.',
+      );
+      return;
+    }
+    gate = { flag: decision.flag, admitted: decision.admitted };
+  }
+  const register = gate === undefined || gate.admitted;
+  const fixture = (ids: readonly string[]) => {
+    if (gate) found.fixtures.push({ packageName: name, ...gate, ids });
+  };
+
+  if (isPackKind(kind)) {
+    if (!options.packs) {
+      fail(
+        'registry.no-validator',
+        ['portfolio', 'kind'],
+        `is ${kind}, an appearance pack, and this run of registry generation has no pack checks to register it with.`,
+        'Generate the registry with apps/web/scripts/build-registry.ts, which passes them.',
+        { actual: kind },
+      );
+      return;
+    }
+    const entries = readPacks(
+      name,
+      version,
+      dir,
+      pkg,
+      kind,
+      hostDir,
+      options.packs,
+      found.diagnostics,
+    );
+    fixture(entries.map(({ manifest }) => manifest.id));
+    if (register)
+      found.packs.push(...entries.map((entry) => ({ ...entry, fixture: gate !== undefined })));
+  } else if (kind === 'variant') {
     const entry = readVariant(name, version, dir, pkg, hostDir, found.diagnostics);
-    if (entry) found.variants.push(entry);
+    fixture(entry ? [entry.manifest.id] : []);
+    if (entry && register) found.variants.push(entry);
   } else {
     const entry = await readExtension(name, version, dir, pkg, hostDir, found.diagnostics);
-    if (entry) found.extensions.push(entry);
+    fixture(entry ? [entry.namespace] : []);
+    if (entry && register) found.extensions.push(entry);
+  }
+}
+
+/**
+ * The packs a pack package holds: one `<packs>/<id>/manifest.json` per pack,
+ * each checked by the pack validator and compiled. A pack that can't
+ * register is reported, never left out quietly.
+ */
+function readPacks(
+  name: string,
+  version: string,
+  dir: string,
+  pkg: PackageJson,
+  kind: PackKind,
+  hostDir: string,
+  hooks: PackHooks,
+  diagnostics: RegistryDiagnostic[],
+): Omit<PackEntry, 'fixture'>[] {
+  const at = (file: string) => posix(path.relative(hostDir, file));
+  const fail = reporter(diagnostics, name, version, at(path.join(dir, 'package.json')));
+  const declared = isRecord(pkg.portfolio) ? pkg.portfolio.packs : undefined;
+  if (typeof declared !== 'string' || declared === '') {
+    fail(
+      'registry.packs-missing',
+      ['portfolio', 'packs'],
+      'is missing, so the host has no packs directory to read.',
+      'Upgrade or pin a release that names it, such as "packs": "./packs".',
+      { expected: './packs' },
+    );
+    return [];
+  }
+  const packsDir = inside(dir, declared);
+  if (!packsDir) {
+    fail(
+      'registry.package-invalid',
+      ['portfolio', 'packs'],
+      'names a directory outside the package.',
+      'Upgrade or pin a release whose packs are in the package.',
+      { actual: declared },
+    );
+    return [];
+  }
+  let listed: fs.Dirent[];
+  try {
+    listed = fs.readdirSync(packsDir, { withFileTypes: true });
+  } catch {
+    fail(
+      'registry.packs-missing',
+      ['portfolio', 'packs'],
+      "names a directory the package doesn't have.",
+      'Reinstall the package, or pin a release that ships its packs.',
+      { actual: declared },
+    );
+    return [];
+  }
+  const entries: Omit<PackEntry, 'fixture'>[] = [];
+  const names = listed
+    .filter((entry) => !entry.name.startsWith('.'))
+    .sort((a, b) => compare(a.name, b.name));
+  for (const entry of names) {
+    if (!entry.isDirectory()) {
+      fail(
+        'registry.package-invalid',
+        ['portfolio', 'packs'],
+        `holds ${entry.name}, which isn't a directory, and the packs directory holds one directory per pack.`,
+        `Upgrade or pin a release without the stray ${entry.name}.`,
+        { actual: entry.name },
+      );
+      continue;
+    }
+    const packDir = path.join(packsDir, entry.name);
+    const manifestFile = path.join(packDir, 'manifest.json');
+    const manifestPath = at(manifestFile);
+    const raw = readJson(manifestFile);
+    if (!raw.ok) {
+      reporter(diagnostics, name, version, manifestPath)(
+        raw.reason === 'missing' ? 'registry.manifest-missing' : 'registry.manifest-syntax',
+        [],
+        raw.reason === 'missing'
+          ? `The pack ${entry.name} has no manifest.json.`
+          : `The pack ${entry.name}'s manifest isn't valid JSON.`,
+        raw.reason === 'missing'
+          ? 'Reinstall the package, or pin a release that ships the manifest.'
+          : 'Upgrade or pin a release whose manifest parses.',
+      );
+      continue;
+    }
+    const checked = hooks.validate(raw.value, { kind, packageName: name, exports: pkg.exports });
+    for (const record of checked.diagnostics) {
+      diagnostics.push(fromManifest(record, name, version, manifestPath));
+    }
+    if (!checked.ok || !checked.manifest) continue;
+    const { manifest } = checked;
+    if (manifest.id !== entry.name) {
+      reporter(diagnostics, name, version, manifestPath)(
+        'registry.pack-id-mismatch',
+        ['id'],
+        `is ${manifest.id}, and the pack's directory is ${entry.name}: a pack's directory is its id.`,
+        `Upgrade or pin a release whose pack directory and id agree.`,
+        { expected: entry.name, actual: manifest.id },
+      );
+      continue;
+    }
+    const compiled = hooks.compile({ kind, manifest, dir: packDir });
+    if (!compiled.ok) {
+      for (const problem of compiled.problems) {
+        const file =
+          problem.file === 'manifest.json' ? manifestPath : at(path.join(packDir, problem.file));
+        reporter(diagnostics, name, version, file)(
+          'registry.pack-compile',
+          problem.pointer === '' ? [] : problem.pointer.split('/').slice(1),
+          problem.message,
+          problem.remedy,
+        );
+      }
+      continue;
+    }
+    entries.push({
+      kind,
+      packageName: name,
+      version,
+      dir: packDir,
+      manifestFile,
+      manifest,
+      stylesheet: compiled.stylesheet,
+      assets: compiled.assets,
+    });
+  }
+  if (names.length === 0) {
+    fail(
+      'registry.packs-missing',
+      ['portfolio', 'packs'],
+      'names a directory with no packs in it.',
+      'Reinstall the package, or pin a release that ships its packs.',
+      { actual: declared },
+    );
+  }
+  return entries;
+}
+
+/**
+ * Two registered things with one id: an id names one thing across variants
+ * and every pack kind, so none of them registers, and each record names the
+ * others.
+ */
+function duplicatePackIds(found: Found, hostDir: string) {
+  const owners = new Map<
+    string,
+    { packageName: string; version: string; file: string; pack?: PackEntry }[]
+  >();
+  const add = (
+    id: string,
+    owner: { packageName: string; version: string; file: string; pack?: PackEntry },
+  ) => owners.set(id, [...(owners.get(id) ?? []), owner]);
+  for (const variant of found.variants) {
+    add(variant.manifest.id, {
+      packageName: variant.packageName,
+      version: variant.version,
+      file: variant.manifestFile,
+    });
+  }
+  for (const pack of found.packs) {
+    add(pack.manifest.id, {
+      packageName: pack.packageName,
+      version: pack.version,
+      file: pack.manifestFile,
+      pack,
+    });
+  }
+  for (const [id, entries] of owners) {
+    if (entries.length < 2 || entries.every((entry) => !entry.pack)) continue;
+    for (const entry of entries) {
+      const others = entries.filter((other) => other !== entry).map((other) => other.packageName);
+      reporter(
+        found.diagnostics,
+        entry.packageName,
+        entry.version,
+        posix(path.relative(hostDir, entry.file)),
+      )(
+        'registry.duplicate-id',
+        ['id'],
+        `is ${id}, which ${[...new Set(others)].join(' and ')} also registers, and ids are unique across the registry.`,
+        'Uninstall one of them, or pin a release of one with another id.',
+        { actual: id },
+      );
+      if (entry.pack) found.packs.splice(found.packs.indexOf(entry.pack), 1);
+      else {
+        const variant = found.variants.findIndex((item) => item.manifestFile === entry.file);
+        if (variant >= 0) found.variants.splice(variant, 1);
+      }
+    }
+  }
+}
+
+/** Each pack kind's first-party fallback, which a build without it can't render without. */
+function packFallbacks(found: Found, hooks: PackHooks) {
+  for (const kind of PACK_KINDS) {
+    const fallback = hooks.fallbacks[kind];
+    if (found.packs.some((pack) => pack.kind === kind && pack.manifest.id === fallback.id))
+      continue;
+    found.diagnostics.push({
+      code: 'registry.fallback-missing',
+      severity: REGISTRY_CODES['registry.fallback-missing'],
+      package: HOST_PACKAGE,
+      manifestPath: 'package.json',
+      pointer: '/dependencies',
+      message: `No dependency registers ${fallback.id}, the ${kind} pack every axis falls back to.`,
+      expected: fallback.packageName,
+      remedy: `Add it back: pnpm --filter ${HOST_PACKAGE} add ${fallback.packageName}@workspace:*.`,
+    });
+  }
+}
+
+/**
+ * A fixture package its flag didn't admit: none of its ids may reach the
+ * registry any other way, such as a copy of the fixture under another
+ * package's name.
+ */
+function fixtureLeaks(found: Found, hostDir: string) {
+  for (const fixture of found.fixtures) {
+    if (fixture.admitted) continue;
+    for (const id of fixture.ids) {
+      const leaks = [
+        ...found.variants
+          .filter((entry) => entry.manifest.id === id)
+          .map((entry) => ({ ...entry, file: entry.manifestFile })),
+        ...found.packs
+          .filter((entry) => entry.manifest.id === id)
+          .map((entry) => ({ ...entry, file: entry.manifestFile })),
+        ...found.extensions
+          .filter((entry) => entry.namespace === id)
+          .map((entry) => ({ ...entry, file: path.join(entry.dir, 'package.json') })),
+      ];
+      for (const leak of leaks) {
+        reporter(
+          found.diagnostics,
+          leak.packageName,
+          leak.version,
+          posix(path.relative(hostDir, leak.file)),
+        )(
+          'registry.fixture-leak',
+          leak.file.endsWith('package.json') ? ['name'] : ['id'],
+          `registers ${id}, the id of the fixture ${fixture.packageName}, in a build without ${fixture.flag}, where no fixture's ids may reach the registry.`,
+          `Give it an id of its own, or set ${fixture.flag} when the fixture is wanted.`,
+          { actual: id },
+        );
+      }
+    }
   }
 }
 
@@ -656,12 +1090,8 @@ function duplicateIds(
   }
 }
 
-function finish(
-  variants: VariantEntry[],
-  extensions: ExtensionEntry[],
-  diagnostics: RegistryDiagnostic[],
-): RegistryResult {
-  const sorted = [...diagnostics].sort(
+function finish(found: Found, platform: PackFile | null): RegistryResult {
+  const sorted = [...found.diagnostics].sort(
     (a, b) =>
       compare(a.package, b.package) ||
       compare(a.manifestPath, b.manifestPath) ||
@@ -670,8 +1100,13 @@ function finish(
   );
   return {
     ok: !sorted.some(({ severity }) => severity === 'error'),
-    variants: [...variants].sort((a, b) => compare(a.manifest.id, b.manifest.id)),
-    extensions: [...extensions].sort((a, b) => compare(a.packageName, b.packageName)),
+    variants: [...found.variants].sort((a, b) => compare(a.manifest.id, b.manifest.id)),
+    extensions: [...found.extensions].sort((a, b) => compare(a.packageName, b.packageName)),
+    packs: [...found.packs].sort(
+      (a, b) => compare(a.kind, b.kind) || compare(a.manifest.id, b.manifest.id),
+    ),
+    platform,
+    fixtures: [...found.fixtures].sort((a, b) => compare(a.packageName, b.packageName)),
     diagnostics: sorted,
   };
 }
