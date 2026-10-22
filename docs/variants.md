@@ -129,7 +129,7 @@ The route table knows from the build's manifests, before any page runs, which pa
 
 Every check of a pair against the composition that renders it is one report, `compatibilityFor(pair, { registry })` from `@portfolio/variant-contract`. Startup and `pnpm config:validate` get its findings as diagnostics, and so will #3's publish. It needs nothing from Node, so #9 can run the same code in the browser. `evaluateCompatibility(manifest, pair, { registry })` reports on a candidate as if the site selected it, so #8 and #9 can explain one before the owner switches. The report has:
 
-- `variant`: what the site selects, what renders (the selection, or the fallback composition in its place), and its package version.
+- `variant`: what the site selects, what renders (the selection, or the fallback composition in its place), and its package version. In a candidate's report both name the candidate, and a `variant.unavailable` there says what selecting it would render.
 - `kinds`: each visible kind and how it renders: `bespoke`, `shared`, through its content extension's renderer, `unsupported`, or `none`.
 - `slots`: each content slot's fill count, with its `whenEmpty` note when it has fewer than it asks for.
 - `routes`: the previous variant's path views this one doesn't serve. Each redirects to its parent route while the previous variant stays installed, and is a 404 once it's removed.

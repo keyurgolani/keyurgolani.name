@@ -538,6 +538,15 @@ test("a candidate is evaluated on its own selection, whatever the site's is", ()
     where(reef.diagnostics).filter(([code]) => code === 'variant.unavailable'),
     [['variant.unavailable', 'blocks-publish', 'site', '/appearance/variant']],
   );
+  // Selecting either would render the fallback composition, so their routes
+  // aren't what a site gets, and the toggles stay unchecked.
+  for (const report of [reef, fallback]) {
+    assert.ok(report.notChecked.includes('site.routes.reels'), report.variant.requested);
+    assert.ok(
+      !report.diagnostics.some(({ code }) => code.startsWith('route.')),
+      report.variant.requested,
+    );
+  }
 });
 
 test('a variant id that names an Object property reads only an entry the site stores', () => {

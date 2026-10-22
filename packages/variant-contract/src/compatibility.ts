@@ -92,9 +92,13 @@ export type CompatibilityStatus = 'ok' | 'warning' | 'blocks-publish';
 export interface CompatibilityReport {
   readonly reportVersion: typeof REPORT_VERSION;
   readonly variant: {
-    /** What the site document selects. */
+    /** What the site document selects. In a candidate's report from evaluateCompatibility(), the candidate's id. */
     readonly requested: string;
-    /** What renders: the selection, or the fallback composition in its place. */
+    /**
+     * What renders: the selection, or the fallback composition in its place.
+     * A candidate's report describes the candidate, so it's the candidate's
+     * id there, even when its `variant.unavailable` says what would render.
+     */
     readonly rendered: string;
     /** The rendered variant's package version, when the registry lists it. */
     readonly version: string | null;
@@ -180,8 +184,9 @@ export function compatibilityFor(
  * candidate before the owner selects it: the candidate is the selection, so
  * the site's own selection plays no part, and the route toggles are checked
  * against the candidate's routes. A candidate this build doesn't register,
- * or the fallback composition, is `variant.unavailable`, as selecting it
- * would be, and the rest of the report still describes `manifest`.
+ * or the fallback composition, is `variant.unavailable`, whose message says
+ * what selecting it would render. The rest of the report still describes
+ * `manifest`, without the route toggles, which no site selecting it gets.
  */
 export function evaluateCompatibility(
   manifest: VariantManifest,
