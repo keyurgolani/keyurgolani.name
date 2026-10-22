@@ -2,7 +2,8 @@ import 'server-only';
 import {
   applyEdits,
   composeSchemas,
-  toPublicView,
+  parseSource,
+  resolvePortfolioView,
   validatePublicationUnit,
   type AppearanceCatalog,
   type ContentExtension,
@@ -102,6 +103,19 @@ const sourceOf = (
   name: `${name}.${document.format === 'yaml' ? 'yml' : 'json'}`,
 });
 
+/** What a grant renders from: its documents, and the snapshots derived beside them. */
+interface Content {
+  readonly documents: UnitInput;
+  readonly snapshots: Readonly<Record<string, unknown>>;
+}
+
+/** A media document's data, for the view: none when there's none, or it doesn't parse. */
+function mediaOf(documents: UnitInput): unknown {
+  if (!documents.media) return undefined;
+  const parsed = parseSource(documents.media.sourceText, documents.media.format);
+  return parsed.ok ? parsed.data : undefined;
+}
+
 /** A unit's documents as a grant pins them: each document's format and text. */
 const documentsOf = (unit: {
   readonly portfolio: UnitInput['portfolio'];
@@ -186,15 +200,23 @@ export function ownerPreviews({
     return { pair: result.pair };
   }
 
-  /** What a revision or fixture subject holds; a draft's is what its grant pinned. */
-  async function contentOf(subject: GrantSubject): Promise<UnitInput | null> {
+  /**
+   * What a revision or fixture subject holds: its documents, and the
+   * snapshots derived beside them. A draft's is what its grant pinned, and a
+   * draft has no snapshots until it's published.
+   */
+  async function contentOf(subject: GrantSubject): Promise<Content | null> {
     if (subject.kind === 'revision') {
       const read = await store.revisions.read(subject.revisionId);
-      return read.ok ? documentsOf(read.revision.unit) : null;
+      if (!read.ok) return null;
+      const { unit } = read.revision;
+      return { documents: documentsOf(unit), snapshots: unit.snapshots };
     }
     if (subject.kind === 'fixture') {
       const fixture = fixtures(subject.fixture);
-      return fixture ? documentsOf(fixture) : null;
+      return fixture
+        ? { documents: documentsOf(fixture), snapshots: fixture.snapshots ?? {} }
+        : null;
     }
     return null;
   }
@@ -203,24 +225,36 @@ export function ownerPreviews({
 
   /**
    * The owner service a grant's content is read through: it takes the token
-   * the check built from the grant's session, and checks it first.
+   * the check built from the grant's session, and checks it first. The
+   * view's renditions serve under the grant's own path, `grant`, as #10
+   * serves a draft's.
    */
-  async function read(authorized: Authorized, record: GrantRecord): Promise<OpenedGrant> {
+  async function read(
+    authorized: Authorized,
+    record: GrantRecord,
+    grant: string,
+  ): Promise<OpenedGrant> {
     assertAuthorized(authorized, 'preview.grant');
     const ref = grantRef(record.digest);
     let view = views.get(record.digest);
     if (!view) {
-      const documents =
+      const content: Content | null =
         record.subject.kind === 'draft'
-          ? (record.documents ?? null)
+          ? record.documents
+            ? { documents: record.documents, snapshots: {} }
+            : null
           : await contentOf(record.subject);
-      const outcome = documents ? rendered(documents, record.appearance) : null;
-      if (!outcome || !('pair' in outcome)) {
+      const outcome = content ? rendered(content.documents, record.appearance) : null;
+      if (!content || !outcome || !('pair' in outcome)) {
         // Never the sample in its place, and never the reason: the log has the grant's ref.
         log({ level: 'error', event: 'preview.render_failed', grantRef: ref });
         throw new Error("The grant's content doesn't render.");
       }
-      view = toPublicView(outcome.pair, { extensions });
+      view = resolvePortfolioView(
+        outcome.pair,
+        { media: mediaOf(content.documents), snapshots: content.snapshots },
+        { mediaBase: `/preview-assets/${grant}`, extensions },
+      );
       views.set(record.digest, view);
       for (const key of views.keys()) {
         if (views.size <= VIEWS) break;
@@ -251,7 +285,7 @@ export function ownerPreviews({
       const session = mintSession({ ref: sessionRef(checked.record.sessionDigest) });
       const authorized = authorize('preview.grant', session);
       if (!authorized) return null;
-      return read(authorized, checked.record);
+      return read(authorized, checked.record, grant);
     },
   });
 
@@ -285,10 +319,10 @@ export function ownerPreviews({
       documents = documentsOf(draft.documents);
     } else if ('revision' in subject) {
       grantSubject = { kind: 'revision', revisionId: subject.revision as RevisionId };
-      documents = await contentOf(grantSubject);
+      documents = (await contentOf(grantSubject))?.documents ?? null;
     } else {
       grantSubject = { kind: 'fixture', fixture: subject.fixture };
-      documents = await contentOf(grantSubject);
+      documents = (await contentOf(grantSubject))?.documents ?? null;
     }
     if (!documents) return errorResult('not_found');
 

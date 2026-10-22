@@ -51,7 +51,7 @@ const SITE = readFileSync(
   'utf8',
 );
 const portfolio = (name: string, extra = '') =>
-  `schemaVersion: 2\nlocale: en\ndirection: ltr\nidentity:\n  name: ${name}\nsections:\n  - kind: lede\n    id: about\n    body: Hi.\n${extra}`;
+  `schemaVersion: 3\nlocale: en\ndirection: ltr\nidentity:\n  name: ${name}\nsections:\n  - kind: lede\n    id: about\n    body: Hi.\n${extra}`;
 const pair = (portfolioText: string, siteText = SITE) => ({
   portfolio: { format: 'yaml' as DocumentFormat, sourceText: portfolioText },
   site: { format: 'yaml' as DocumentFormat, sourceText: siteText },

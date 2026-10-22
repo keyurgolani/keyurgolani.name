@@ -28,10 +28,14 @@ export interface PreviewDocumentSource {
   readonly sourceText: string;
 }
 
-/** A #5 contract fixture's pair, which a fixture grant renders. */
+/** A #5 contract fixture, which a fixture grant renders: its pair, and what sits beside it. */
 export interface PreviewFixture {
   readonly portfolio: PreviewDocumentSource;
   readonly site: PreviewDocumentSource;
+  /** Its media document (#10), as written. */
+  readonly media?: PreviewDocumentSource;
+  /** Its snapshots by kind, as plain JSON, which the view checks itself. */
+  readonly snapshots?: Readonly<Record<string, unknown>>;
 }
 
 /** The environment a frame starts in, as its grant holds it (Slice 4's controls). */

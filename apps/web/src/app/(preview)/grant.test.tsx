@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { parsePortfolio, parseSite, toPublicView } from '@portfolio/schema';
+import { parsePortfolio, parseSite, resolvePortfolioView } from '@portfolio/schema';
 import { href } from '@portfolio/variant-contract';
 import { resolveVisitorPath } from '~/lib/visitor-routes';
 import {
@@ -24,7 +24,7 @@ const token = () => randomBytes(16).toString('base64url');
 
 test("a frame's link base is its grant path, for any grant a mint makes, so its internal links stay under the grant", async () => {
   const portfolio = parsePortfolio(
-    'schemaVersion: 2\nlocale: en\ndirection: ltr\nidentity:\n  name: Frame Person\nsections:\n  - kind: lede\n    id: about\n    body: Hi.\n',
+    'schemaVersion: 3\nlocale: en\ndirection: ltr\nidentity:\n  name: Frame Person\nsections:\n  - kind: lede\n    id: about\n    body: Hi.\n',
     'yaml',
   );
   const site = parseSite(
@@ -50,9 +50,15 @@ test("a frame's link base is its grant path, for any grant a mint makes, so its 
     'yaml',
   );
   assert.ok(portfolio.ok && site.ok);
-  const view = toPublicView({ portfolio: portfolio.value, site: site.value });
   for (let i = 0; i < 64; i++) {
-    const basePath = `/preview/${token()}` as const;
+    const grant = token();
+    const basePath = `/preview/${grant}` as const;
+    // The view a grant's frame renders, its renditions under the grant's own path.
+    const view = resolvePortfolioView(
+      { portfolio: portfolio.value, site: site.value },
+      {},
+      { mediaBase: `/preview-assets/${grant}` },
+    );
     assert.equal(href({ route: 'home' }, { basePath }), basePath);
     assert.equal(
       href({ route: 'work', slug: 'tide-tables' }, { basePath }),
