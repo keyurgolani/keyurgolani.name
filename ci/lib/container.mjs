@@ -30,7 +30,9 @@ function probeFromInside(pathname) {
  * headers? }, to the app inside its own container, one after another, at the
  * address the image HEALTHCHECK uses. A body goes as JSON, with any headers
  * the request names. Prints a JSON array with one { status, headers, cookies,
- * body } or { error } per request, `cookies` holding each Set-Cookie.
+ * body } or { error } per request, `cookies` holding each Set-Cookie. The
+ * snippet reads the array from stdin: a batch of pages is too long for an
+ * argument to `finch exec`, which fails with "sendmsg: Message too long".
  */
 function requestsFromInside(requests) {
   const h = process.env.HOSTNAME;
@@ -145,7 +147,7 @@ function writableFromInside(root, uid, gid) {
 
 export const PROBE_SNIPPET = `(${probeFromInside.toString()})(process.argv[1])`;
 export const WRITABLE_SNIPPET = `(${writableFromInside.toString()})(process.argv[1], Number(process.argv[2]), Number(process.argv[3]))`;
-export const REQUESTS_SNIPPET = `(${requestsFromInside.toString()})(process.argv[1])`;
+export const REQUESTS_SNIPPET = `(${requestsFromInside.toString()})(process.getBuiltinModule('node:fs').readFileSync(0, 'utf8'))`;
 export const SCAN_SNIPPET = `(${scanFromInside.toString()})(process.argv[1])`;
 export const TREE_SNIPPET = `(${treeFromInside.toString()})(process.argv[1])`;
 

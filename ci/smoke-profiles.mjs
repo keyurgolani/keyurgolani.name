@@ -355,10 +355,11 @@ function plan(profile, leaks) {
 
 /** Sends `requests` from inside the container, in order. Pages and images make it long. */
 function send(name, requests) {
-  const result = container(
-    ['exec', name, 'node', '-e', REQUESTS_SNIPPET, JSON.stringify(requests)],
-    { maxBuffer: 64 * 1024 * 1024 },
-  );
+  // On stdin, never as an argument: a batch is too long for one.
+  const result = container(['exec', '-i', name, 'node', '-e', REQUESTS_SNIPPET], {
+    input: JSON.stringify(requests),
+    maxBuffer: 64 * 1024 * 1024,
+  });
   const responses = parse(result.stdout ?? '');
   if (!Array.isArray(responses) || responses.length !== requests.length) {
     throw new Error(`the in-container requests failed: ${(result.stderr || '').trim()}`);
