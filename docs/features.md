@@ -6,16 +6,18 @@ What the platform can do today.
 
 - **Two documents.** `config/portfolio.yml` holds the content, and `config/site.yml` how it looks and which sections show. Deployment settings and secrets stay in the environment. You never touch code to change either document. [configuration.md](configuration.md) is the reference.
 - **YAML or JSON.** Each document can be either, and both parse to the same typed model.
-- **28 profession-neutral section kinds** spanning narrative, dated entries, lists, media, voice, accents, personal notes, external work, and contact. See [authoring.md](authoring.md#section-kind-quick-reference).
+- **A body of work, not a CV (version 3).** Works, evidence, chronology entries, and media assets are records with ids, which sections list in the order the owner reads them, beside one practice (a thesis, and grouped skills, tools, and services) and one contact record. `signature`, `featured`, `proof`, and `archive` curate the works and evidence a composition leads with. Fourteen section kinds place them: `works`, `evidence`, `chronology`, `practice`, `contact`, `custom`, and the eight carried from version 2, `hero`, `lede`, `now`, `quote`, `focus`, `fun-facts`, `cta`, and `github`. Nothing assumes a profession: a work's `medium` and an evidence entry's `type` say what it is. See [configuration.md](configuration.md) and [authoring.md](authoring.md).
+- **Private records.** A work, evidence entry, chronology entry, or media asset with `visibility: private` stays in the document and never reaches a visitor, and neither does a record that only hidden sections reach.
 - **Content extensions.** A profession package adds namespaced fields and section kinds of its own. Data from a package the build doesn't register is kept as written, warned about, and never shown to visitors.
-- **Stable section ids.** Every section has an `id`, its anchor and its key in the site document.
+- **Stable ids.** Every section, record, and media asset has an `id`, never derived when the document loads. A section's id is its anchor and its key in the site document; a record's id is its anchor on the first section that lists it, its feed GUID, and its JSON-LD `@id`. `pnpm config:ids-fix` mints the missing ones.
 - **Hidden sections.** The site document hides a section without deleting it from the portfolio.
 - **Strict validation.** Unknown keys fail with a did-you-mean hint, URLs are checked against an allowlist, and secret-shaped strings are refused. Each problem is a record with a code, the file, the line and column, and how to fix it, from `pnpm config:validate`, the `validate.mjs` script, or the server at startup. A `source.*` record is about the file itself, so it has no line or column.
 - **Cross-document checks.** Broken anchors and references, duplicate ids, contradictory or repeated metrics, links to sample or stale origins, a variant this build doesn't register, and control values the variant doesn't declare.
-- **One-time migration.** `pnpm config:migrate` converts the old one-file format into the pair, with a dry run and a diff before it writes anything.
+- **One-time migration.** `pnpm config:migrate` converts the old one-file format, or a version 2 portfolio document, to version 3 in one run, with a dry run and a diff before it writes anything.
 - **Loose date strings.** `period: { start: "Jan 2024", end: "present" }` is fine, since people read this output, not parsers. ISO dates work too.
 - **Markdown in prose fields.** `lede.body`, `experience.items[].highlights[]`, and others honor a curated subset of Markdown.
-- **External assets via `apps/web/public/`.** Resume PDFs, avatar images, and gallery photos reference `/path`, which resolves to `apps/web/public/path`.
+- **Media by id.** An image is a media asset, with its alt text, credit, and focal point, which a placement names and may override. Its renditions are derived data: until #10's next slice derives them, every image renders as `Image unavailable`, keeping its box, caption, and credit, and a decorative one renders nothing.
+- **Snapshots, not fetches.** Data from outside the documents, such as a GitHub profile, is a snapshot in `snapshots/<kind>.json` beside the two documents, frozen when it's taken. Nothing a visitor requests reaches a source.
 
 ## Variants and appearance
 
@@ -23,7 +25,7 @@ What the platform can do today.
 - **Installing a variant is a dependency.** `pnpm --filter @portfolio/web add <package>`, and the build registers it. A package the build can't register stops the build with a diagnostic that names the package, the file, the pointer, and the fix.
 - **The fallback composition.** When the site's variant isn't installed, every section renders in content order, in one column, in its place. The page answers 200, the owner gets a `variant.unavailable` warning at startup and in `config.status`, readiness says `degraded`, and visitors see no label. It's the one composition this build registers; #13 to #17 add the approved five.
 - **Views.** A variant can declare path views below `/` and below `/work/<slug>`, such as `/chapters/<chapter>`. Each renders from the server, so it works without JavaScript, links back to its parent route as canonical, and stays out of the sitemap. After a switch, a view only the old variant declares redirects to its parent route while the old variant stays installed, and is a 404 once it's removed.
-- **Shared section renderers.** Every core section kind has an accessible renderer in the kit, which a variant uses for each kind it doesn't render bespoke, so no section's content goes missing.
+- **Shared section renderers.** Every core section kind has an accessible renderer in the kit, which a variant uses for each kind it doesn't render bespoke, so no section's content goes missing. They render only what the owner wrote, formatted, a snapshot's values with their date, and a short list of fixed labels (`Archive`, `As of`, the case-study headings, `Image unavailable`, and GitHub's three figures): no default heading, link label, or alt text, and no decoration around a number. A section with nothing public leaves the page and the navigation.
 - **Owner controls.** A variant can declare composition controls, such as a hero layout or a featured project, stored per variant in the site document and checked against its manifest. When a variant raises its controls version, `pnpm variants:migrate-controls` steps the stored values through its migrations, with a dry run first.
 - **Compatibility report.** How the portfolio renders in the selected composition: each kind's renderer, how full each content slot is, which of the previous variant's views it drops, and every finding, saying what renders instead and whether publishing is blocked. Startup and `pnpm config:validate` print its findings, and it needs nothing from Node, so #9 can run it in the browser.
 - **Appearance in the site document.** The variant, and the design language, color scheme, typography, and display mode that #19 resolves. Today the display mode sets the theme a visit starts in (`system` follows the visitor's `prefers-color-scheme`; `light` and `dark` pin one), painted before hydration so there's no flash of the wrong theme, and the other three are recorded.
@@ -33,19 +35,19 @@ What the platform can do today.
 
 ## GitHub sections
 
-- **A link to the profile.** The shared renderer names the account and links it.
-- **Repository data comes with #10.** Pinned and recent repositories, the language breakdown, and the contribution calendar reach variants through the render input's derived data, so no variant fetches anything. The kit's server-side fetcher stays for host code, unauthenticated unless a caller passes a token.
+- **The snapshot, never a fetch.** With a snapshot in `snapshots/github.json`, the shared renderer shows its repositories, stars received, and contributions in the last year, its pinned repositories, and the date it was taken. Without one, it shows the profile link alone, labeled with the username. Variants get the snapshot through the render input's `derived`, so none fetches anything.
+- **Refreshing comes later.** #10's third slice takes snapshots; the bundled sample ships a fictional one. The kit's server-side fetcher stays for host code until then, unused by any render.
 
 ## SEO
 
 - **Metadata** generated from `identity` and `meta` (title, description, Open Graph, Twitter Card).
 - **Open Graph image** generated per request from the identity's name and tagline.
-- **Structured data (JSON-LD)** for Person and ProfilePage.
-- **Feed** at `/feed.xml`, listing writings, publications, and episodes newest first, with the portfolio's `locale` as its language. `features.feed: false` in the site document turns it off.
+- **Structured data (JSON-LD)** for Person, ProfilePage, and WebSite, from the published view: the current role and organization from the chronology, the practice's skills, and the signature and featured works, each with an `@id` from its record id.
+- **Feed** at `/feed.xml`, listing writing and audio and video works and publications newest first, each GUID made from its record id, with the portfolio's `locale` as its language. `features.feed: false` in the site document turns it off.
 - **`/robots.txt` and `/sitemap.xml`** generated server-side, per request.
 - **Absolute URLs** (Open Graph, sitemap, robots.txt, feed, JSON-LD) on `PORTFOLIO_ORIGIN`, the deployment's canonical origin.
 - **`<html lang dir>`** from the portfolio's `locale` and `direction`.
-- **Hidden content stays hidden.** Hidden sections and unregistered extension data never reach the page, its JSON-LD, the feed, or the Open Graph image.
+- **Hidden content stays hidden.** Hidden sections, private records, what only they reach, and unregistered extension data never reach the page, its client payload, its JSON-LD, the feed, or the Open Graph image.
 
 ## Skills (AI-assisted authoring and development)
 
@@ -60,7 +62,7 @@ Both skills work in any harness that supports skills (Claude Code, Copilot CLI, 
 
 These keep the system honest:
 
-- **`pnpm check:skills`** verifies that `section-kinds.md` matches the schema's `ALL_SECTION_KINDS`, that `kit-catalog.md` mentions every export from `@portfolio/kit`, that `schema.md` mentions every section kind, and that both SKILL.md frontmatters parse and stay under their length caps.
+- **`pnpm check:skills`** verifies that `section-kinds.md` matches the schema's `CORE_SECTION_KINDS`, that `kit-catalog.md` mentions every export from `@portfolio/kit`, that `schema.md` mentions every section kind, and that both SKILL.md frontmatters parse and stay under their length caps.
 - **`validate.mjs`** validates a directory's portfolio and site documents together and reports each problem's file, line, and column.
 - **`pnpm check:variants`** generates the registry and lints every registered variant, code the host trusts at build time, so a lint and not a sandbox: no network, storage, clock, randomness, environment, or code from text, reached directly or through an alias, a destructuring, or a string key; no `async` component, server module, or `<style>`, `<link>`, or `<script>`; markdown only through `RichText`; every style scoped to the variant, with keyframes named after it, nothing loaded from another host or package, color, type, radius, and shadow only through #19's tokens, and logical properties when it declares right to left.
 - **`pnpm test:variants`** renders every registered variant on every contract fixture and on the bundled sample, offline, in six modes (desktop, mobile, no JavaScript, print, failed enhancement, reduced motion), checks that hidden content never reaches a visitor, and that the server, a standalone `react-dom/server` render, and a browser render match. CI compares the platform's own variants' screenshots in a pinned Playwright image.
@@ -77,7 +79,8 @@ These keep the system honest:
 
 - The appearance axes, and a visitor control for each, applying `visitorControls` (#19).
 - The five approved compositions, starting with Editorial Evidence and Kinetic Cosmos (#13 to #17).
-- Work pages, once #10 resolves slugs.
+- Work pages at `/work/<slug>`, with redirects for a changed slug (#10, next slice). The kit's case-study renderer is ready for them.
+- Media ingestion and renditions (#10, slice 2), and snapshot refresh (#10, slice 3).
 - CI/CD workflow templates.
 
 If you want a feature that isn't shipped, open an issue.

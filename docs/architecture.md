@@ -10,16 +10,17 @@ An open-source portfolio platform configured by two documents and its environmen
 
 ```
 ┌───────────────────┐
-│  config/          │  The portfolio document
-│   portfolio.yml   │  and the site document
-│   site.yml        │
+│  config/          │  The portfolio document and the site
+│   portfolio.yml   │  document, and beside them the unit's
+│   site.yml        │  derived data: snapshots/<kind>.json
+│   snapshots/      │  and, from #10's slice 2, media/
 └─────────┬─────────┘
           │ read once at startup by the documents adapter (CatalogReader)
           ▼
 ┌───────────────────┐
 │  @portfolio/      │  loadPair: find, read, parse, validate the pair
-│   schema          │  toPublicView: drop hidden sections and
-│                   │  unregistered extension data
+│   schema          │  readUnitFiles: the snapshots and media document
+│                   │  resolvePortfolioView: the published view
 └─────────┬─────────┘
           │
           ▼
@@ -48,11 +49,11 @@ An open-source portfolio platform configured by two documents and its environmen
 The contract. Its entry points:
 
 - **`@portfolio/schema`**: the schemas and the pure, browser-safe functions on them.
-  - `PortfolioSchema` and `SiteSchema`, both at `schemaVersion: 2`. `composeSchemas(extensions)` builds them for a set of content extensions, and `DEFAULT_SCHEMAS` is the set for none. Every object is strict, and any object may carry namespaced `extensions`.
-  - The section union: 28 core kinds discriminated by `kind`, plus `<package name>/<name>` kinds from content extensions. `ALL_SECTION_KINDS` lists the core kinds for the variant contract and the skill drift gates.
-  - `parseSource` reads YAML or JSON within the document limits and locates every pointer by line and column. `validatePublicationUnit(unit, ctx)` takes both documents, checks each alone and then the pair against an appearance catalog, the registered extensions, and the canonical origin, and returns `Diagnostic` records. `toPublicView(pair, ctx)` drops hidden sections and unregistered extension data, so it's the only input visitors' output is built from.
+  - `PortfolioSchema` at `schemaVersion: 3` and `SiteSchema` at `schemaVersion: 2` (`SCHEMA_VERSIONS`). `composeSchemas(extensions)` builds them for a set of content extensions, and `DEFAULT_SCHEMAS` is the set for none. Every object is strict, and any object may carry namespaced `extensions`.
+  - The version 3 model (#10): works, evidence, chronology entries, and media assets are records with document-unique ids; the practice and the contact record sit beside them; `signature`, `featured`, `proof`, and `archive` curate them; and the sections list them in reading order. The section union is 14 core kinds discriminated by `kind`, plus `<package name>/<name>` kinds from content extensions. `CORE_SECTION_KINDS` lists the core kinds for the variant contract and the skill drift gates.
+  - `parseSource` reads YAML or JSON within the document limits and locates every pointer by line and column. `validatePublicationUnit(unit, ctx)` takes both documents, checks each alone and then the pair against an appearance catalog, the registered extensions, and the canonical origin, and returns `Diagnostic` records. `resolvePortfolioView(pair, unit, { mediaBase, extensions })` makes the published view, the only input visitors' output is built from: it drops hidden sections, private records, every record and asset nothing visible reaches, and unregistered extension data, resolves references, and wraps each derived value, a media asset's renditions or a github section's snapshot, as ready with when it was derived, or unavailable with why. It's pure: no file, no network, no clock.
   - `defineContentExtension`, `applyEdits`, `serialize`, `canonicalize`, `detectDocument`, the URL allowlist, and the secret scan.
-- **`@portfolio/schema/node`**: `findPair`, `readPair`, `loadPair`, and `formatRecords`, which read a directory or two files from disk. It's Node only, and `pnpm check:deps` keeps it to server code, the config command, and tests.
+- **`@portfolio/schema/node`**: `findPair`, `readPair`, `loadPair`, and `formatRecords`, which read a directory or two files from disk, and `readUnitFiles`, which reads the unit's `snapshots/<kind>.json` and `media/media.json` beside them. It's Node only, and `pnpm check:deps` keeps it to server code, the config command, and tests.
 - **`@portfolio/schema/migrate`**: the one-time migration from the old one-file format, which only `pnpm config:migrate` and its tests import.
 - **`@portfolio/schema/ids`**: the section id and extension kind rules, free of zod so the kit and the variants can use them.
 
@@ -62,13 +63,13 @@ The schema is the only source of truth. If a doc disagrees, the schema wins.
 
 Things every variant needs but shouldn't reimplement:
 
-- **`@portfolio/kit/sections`**: `renderSection`, the shared, accessible renderer of every core kind, which a variant uses for each kind it doesn't render bespoke; `RichText`, the one markdown path; `seededRandom`; `VisitorControlSlot`; and `registerHostModules`, through which the host hands the kit the registered extension renderers and enhancement loaders.
+- **`@portfolio/kit/sections`**: `renderSection`, the shared, accessible renderer of every core kind, which a variant uses for each kind it doesn't render bespoke, and which renders nothing for a section with nothing public; the pieces they're built from, `WorkEntry`, `EvidenceEntry`, `MediaFigure`, and `CaseStudy`, with the view helpers that find a section's records and a placement's image (`worksOf`, `placedImage`, and the rest); `RichText`, the one markdown path; `seededRandom`; `VisitorControlSlot`; and `registerHostModules`, through which the host hands the kit the registered extension renderers and enhancement loaders. Every text node they render is the owner's, formatted from the owner's data, a snapshot's value with its date, or one of the fixed labels #10 lists.
 - **`@portfolio/kit/enhancements`**: `Enhancement`, the client component that loads a variant's declared enhancement in the browser after the page is readable, and renders nothing if it fails.
 - **`MotionPolicyProvider`** and **`useMotionPreference`**: the site's motion policy for every component below them. A component's own policy can only add a reduce.
 - **`themeInitScript(defaultPreference)`**: paints the starting theme before hydration. `ThemePreference`, `ThemeProvider`, and `useTheme` stay for #19's visitor control; no page wraps a variant in the provider.
-- **`fetchGitHubData`**: the server-side GitHub fetcher, for host code: the variant audit refuses it. Public pages get unauthenticated REST; GraphQL, with the contribution calendar, needs a caller that passes a token.
+- **`fetchGitHubData`**: the server-side GitHub fetcher, which no render uses: a github section renders its snapshot. #10's third slice moves it behind the snapshot adapter, and the variant audit refuses it.
 - **`format.ts`**: `formatDate`, `formatPeriod`, `formatDuration`, `formatRelativeTime`, `formatCompactNumber`, `formatList`, `slugify`, and more.
-- **`buildStructuredData`**: JSON-LD for SEO from the public portfolio.
+- **`buildStructuredData`**, **`renderRssFeed`**, and **`deriveNavItems`**: JSON-LD, the feed, and the navigation from the published view, each record's `@id`, GUID, and anchor made from its id.
 - **Pretext, spatial, spatial-r3f, motion-fx, and markdown**: opt-in submodules for variants that need them.
 
 ### `@portfolio/variant-contract`
@@ -95,7 +96,7 @@ The Next.js host. Responsibilities:
 
 - **Startup**: `src/instrumentation.ts` validates the deployment settings (`src/server/config.ts`, the only code that reads them) and composes the profile before the server takes a request. The `documents.pair` startup requirement reports the pair's records, so the pair is checked once: a blocking record logs a `config.fatal` line and stops the process, and a warning logs a `config.warning` line.
 - **`getLive()`**: `src/server/catalog.ts`, the one way pages and metadata routes read the pair. Under `owner` and `read-only` it's the frozen revision the documents adapter (`server/catalog-documents.ts`) loaded from `PORTFOLIO_SOURCE_DIR`; under `next dev` the adapter checks the pair again after each edit. Under `demo` it's the bundled sample pair (`server/catalog-sample.ts`), which never reads a source directory.
-- **Public view**: `server/public-view.ts` turns the live pair into what visitors may see. It's the only input to the page, its metadata and JSON-LD, the feed, and the Open Graph image.
+- **Public view**: `server/public-view.ts` turns the live unit into the published view, with renditions under `/media`. It's the only input to the page, its metadata and JSON-LD, the feed, and the Open Graph image. Both catalog adapters read the unit's snapshots beside the pair, and a snapshot that doesn't read stops startup with a named record (`snapshot.syntax`, `snapshot.invalid`).
 - **Appearance catalog**: `server/appearance-catalog.ts` is the interim catalog until #19: it names the display modes, and leaves the design language, color scheme, and typography unchecked. The contract's validators check the variant (`lib/variants.ts`'s `liveContext()`).
 - **Capabilities**: `src/server/capabilities.ts` is the profile matrix: what `owner`, `demo`, and `read-only` may do, as data. `CapabilityPolicy` (`server/policy.ts`) answers from it and builds the server-side navigation.
 - **Route table**: `server/routes.ts` maps every route file to a capability. Pages and metadata routes export `servedPage('<pattern>', render)` as their default, and route handlers export each method as `served('<pattern>', handler)`, so a profile that doesn't serve the route gets a 404. `pnpm test` maps every app file to its URL with Next's own helpers and fails on a route file without an entry, on any other export, on a route directory outside `src/app`, and on any `'use server'` directive; the browser suite checks the build's route manifests against the table. `src/proxy.ts` answers 404 early for routes the profile doesn't serve, gives each request a fresh `x-request-id`, and marks a path no route renders as missing.
@@ -117,7 +118,7 @@ The site's `displayMode` (`system`, `light`, `dark`, or `high-contrast`) is the 
 
 These scripts enforce parity:
 
-- **`skills/scripts/sync-checks.mjs`** checks that `section-kinds.md` matches `ALL_SECTION_KINDS`, that `kit-catalog.md` mentions every kit export, that `schema.md` mentions every section kind, and that both SKILL.md frontmatters parse and stay under their length caps.
+- **`skills/scripts/sync-checks.mjs`** checks that `section-kinds.md` matches `CORE_SECTION_KINDS`, that `kit-catalog.md` mentions every kit export, that `schema.md` mentions every section kind, and that both SKILL.md frontmatters parse and stay under their length caps.
 - **`skills/portfolio-author/scripts/validate.mjs`** validates a directory's `portfolio.yml` and `site.yml` the way the server does at startup, and prints each problem with its file, line, column, code, and how to fix it.
 - **`pnpm check:variants`** generates the registry and lints every registered variant's source and styles, the kit modules they reach for the clock and randomness rules, and the kit's shared stylesheet for appearance. It's a lint over code the host trusts at build time, not a sandbox. CI runs it in its own `check-variants` job; `pnpm check:registry` checks that two registry builds match, with `APPEARANCE_FIXTURES=1` and without.
 - **`pnpm check:appearance`** reads the registry and runs #19's contrast gate over every registered combination of design language, color scheme, typography, and display mode, with the hierarchy check and the layer order of every layered stylesheet. It also registers each known-bad input in `packages/appearance/test/fixtures/` in turn and fails unless the gate fails on each for the reason it names; `--fixture <name>` runs the gate with one of them, such as `bad-contrast`. CI runs it in the `static` job.
