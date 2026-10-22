@@ -802,7 +802,7 @@ test('a publish whose session ends before the pointer moves leaves the live revi
   const elsewhere = AsyncResource.bind((ask: () => Promise<boolean>) => ask());
   const watching: FsPort = {
     ...nodeFs,
-    async rename(from, to, point) {
+    async rename(from, to, point, pass) {
       if (point === 'publish.live.rename') {
         logout = elsewhere(() => held.sessions.end(held.digest, 'logout')).then((existed) => {
           order.push('logout');
@@ -810,7 +810,7 @@ test('a publish whose session ends before the pointer moves leaves the live revi
         });
         await new Promise((resolve) => setTimeout(resolve, 20));
       }
-      await nodeFs.rename(from, to, point);
+      await nodeFs.rename(from, to, point, pass);
       if (point === 'publish.live.rename') order.push('moved');
     },
   };
@@ -900,9 +900,9 @@ test('a publish whose session hold runs out of time before its commit point move
       }
       return nodeFs.fsync(target, point);
     },
-    async rename(from, to, point) {
+    async rename(from, to, point, pass) {
       if (point === 'publish.live.rename') order.push('renamed');
-      return nodeFs.rename(from, to, point);
+      return nodeFs.rename(from, to, point, pass);
     },
   };
   const stalled = openStore({ dataDir: store.paths.root, checks: testChecks(), fs: stalling });
@@ -947,7 +947,7 @@ test('a logout queued behind a commit runs after it, never between its final che
   const elsewhere = AsyncResource.bind((ask: () => Promise<boolean>) => ask());
   const slow: FsPort = {
     ...nodeFs,
-    async rename(from, to, point) {
+    async rename(from, to, point, pass) {
       if (point === 'publish.live.rename') {
         // Past the final check: the logout queues, and the rename takes
         // longer than the hold.
@@ -957,7 +957,7 @@ test('a logout queued behind a commit runs after it, never between its final che
         });
         await new Promise((resolve) => setTimeout(resolve, HOLD_MS + 50));
       }
-      await nodeFs.rename(from, to, point);
+      await nodeFs.rename(from, to, point, pass);
       if (point === 'publish.live.rename') order.push('renamed');
     },
   };
@@ -1078,9 +1078,9 @@ test("what the pointer move did decides the outcome, not holdSession()'s answer"
     checks: testChecks(),
     fs: {
       ...nodeFs,
-      async rename(from, to, point) {
+      async rename(from, to, point, pass) {
         if (point === 'publish.live.rename') throw Object.assign(new Error('EIO'), { code: 'EIO' });
-        return nodeFs.rename(from, to, point);
+        return nodeFs.rename(from, to, point, pass);
       },
     },
   });
@@ -1294,8 +1294,8 @@ test('a publish whose session ended removes its never-live revision only while t
     log,
     fs: {
       ...nodeFs,
-      async rename(from, to, point) {
-        await nodeFs.rename(from, to, point);
+      async rename(from, to, point, pass) {
+        await nodeFs.rename(from, to, point, pass);
         if (point === 'publish.revision.rename') writeFileSync(store.paths.lock, theirLock());
       },
     },
@@ -1323,8 +1323,8 @@ test('a publish whose rename lands and then reports a failure keeps the revision
     checks: testChecks(),
     fs: {
       ...nodeFs,
-      async rename(from, to, point) {
-        await nodeFs.rename(from, to, point);
+      async rename(from, to, point, pass) {
+        await nodeFs.rename(from, to, point, pass);
         if (point === 'publish.live.rename') {
           throw Object.assign(new Error('EIO after the rename'), { code: 'EIO' });
         }
@@ -1429,8 +1429,8 @@ test('a commit whose event file another event took writes its own over it, movin
   // Another event lands at the new seq as the pointer moves, as a second holder's would.
   const intruding: FsPort = {
     ...nodeFs,
-    async rename(from, to, point) {
-      await nodeFs.rename(from, to, point);
+    async rename(from, to, point, pass) {
+      await nodeFs.rename(from, to, point, pass);
       if (point === 'rollback.live.rename') {
         writeFileSync(store.paths.event(3), anotherEvent(3, second, first));
       }

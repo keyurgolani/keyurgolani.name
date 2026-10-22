@@ -423,8 +423,8 @@ test('a draft write or discard whose lock was broken and retaken writes nothing 
         if (point === armed) writeFileSync(store.paths.lock, theirs);
         return nodeFs.writeFile(file, data, point, options);
       },
-      async rename(from, to, point) {
-        await nodeFs.rename(from, to, point);
+      async rename(from, to, point, pass) {
+        await nodeFs.rename(from, to, point, pass);
         if (point === armed) writeFileSync(store.paths.lock, theirs);
       },
       async readFile(file) {

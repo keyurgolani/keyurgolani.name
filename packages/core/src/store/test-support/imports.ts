@@ -12,8 +12,12 @@ recordOwnerModule('core/store/test-support/imports');
 
 const STATEMENT =
   /^\s*(import|export)\s+(type\s+)?(?:[^'";]*?\sfrom\s+)?['"](\.{1,2}\/[^'"]+)['"]/gm;
-/** `import('./x')`, which loads code at run time as a static import does. */
-const DYNAMIC = /\bimport\(\s*['"](\.{1,2}\/[^'"]+)['"]\s*\)/g;
+/**
+ * `import('./x')`, or a template with nothing in it, `import(\`./x\`)`, which
+ * loads code at run time as a static import does. One whose specifier is
+ * computed can't be followed; pointer-moves.test.ts refuses it.
+ */
+const DYNAMIC = /\bimport\(\s*(['"`])(\.{1,2}\/[^'"`$]+)\1\s*\)/g;
 /** A file's text without its comments, where an `import()` loads nothing. */
 const uncommented = (text: string) =>
   text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:\\'"`])\/\/.*$/gm, '$1');
@@ -30,7 +34,7 @@ export function relativeImports(file: string, { types = false } = {}): string[] 
     ...[...text.matchAll(STATEMENT)]
       .filter((match) => types || !match[2])
       .map((match) => match[3]!),
-    ...[...uncommented(text).matchAll(DYNAMIC)].map((match) => match[1]!),
+    ...[...uncommented(text).matchAll(DYNAMIC)].map((match) => match[2]!),
   ];
   const found: string[] = [];
   for (const specifier of specifiers) {
