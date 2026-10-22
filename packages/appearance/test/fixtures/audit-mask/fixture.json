@@ -1,0 +1,13 @@
+{
+  "kind": "design-language",
+  "base": "platform-neutral",
+  "description": "platform-neutral with a part masked by a transparent gradient, which hides it.",
+  "patch": {
+    "stylesheet": "./styles.css"
+  },
+  "expect": [
+    {
+      "problem": "mask: linear-gradient(transparent, transparent) can clip or mask the part"
+    }
+  ]
+}

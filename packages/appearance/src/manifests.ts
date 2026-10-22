@@ -17,11 +17,11 @@ import {
   type TypographyMeasure,
   type TypographyRole,
 } from './tokens';
+import { languageTokenProblem } from './language-grammar';
 import {
   CH,
   EM,
   fontStackProblem,
-  languageValueProblem,
   REM,
   SCRIPT_CODE,
   UNICODE_RANGE,
@@ -170,15 +170,26 @@ const PackFile = (extension: string) =>
       message: `must be a .${extension} file in the pack's directory, such as ./styles.${extension}.`,
     });
 
-const LanguageValue = z.string().superRefine((value, ctx) => {
-  const problem = languageValueProblem(value);
-  if (problem) ctx.addIssue({ code: 'custom', message: problem });
-});
+/** A design-language token: the value rules, then its key's grammar (Slice 2). */
+const languageToken = (key: LanguageKey) =>
+  z.string().superRefine((value, ctx) => {
+    const problem = languageTokenProblem(key, value);
+    if (problem) ctx.addIssue({ code: 'custom', message: problem });
+  });
+
+const LanguageTokensSchema = z
+  .object(
+    Object.fromEntries(LANGUAGE_KEYS.map((key) => [key, languageToken(key)])) as Record<
+      LanguageKey,
+      ReturnType<typeof languageToken>
+    >,
+  )
+  .strict();
 
 export const DesignLanguageManifestSchema = z
   .object({
     ...common,
-    tokens: strictRecord<LanguageKey, typeof LanguageValue>(LANGUAGE_KEYS, LanguageValue),
+    tokens: LanguageTokensSchema,
     /** The language's stylesheet, compiled into its layer and scope (Slice 2). */
     stylesheet: PackFile('css').optional(),
     /** #5's enhancement declarations, the same shape a variant's are. */

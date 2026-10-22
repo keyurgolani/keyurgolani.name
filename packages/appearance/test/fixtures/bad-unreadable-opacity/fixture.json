@@ -1,0 +1,15 @@
+{
+  "kind": "design-language",
+  "base": "platform-neutral",
+  "description": "platform-neutral with a surface-opacity the gate can't compute, which fails rather than passing unchecked.",
+  "patch": {
+    "tokens": {
+      "surface-opacity": "calc(1 - 0.5)"
+    }
+  },
+  "expect": [
+    {
+      "problem": "/tokens/surface-opacity must be a percentage from 50% to 100%"
+    }
+  ]
+}

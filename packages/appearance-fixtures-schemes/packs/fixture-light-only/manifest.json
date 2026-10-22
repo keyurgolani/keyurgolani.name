@@ -1,0 +1,24 @@
+{
+  "id": "fixture-light-only",
+  "name": "Fixture Light Only",
+  "description": "A test fixture: a single-mode light scheme, for mode locking and the light-only high-contrast mode.",
+  "tokenContract": 1,
+  "tier": "extended",
+  "provenance": {
+    "source": { "name": "Keyur Golani portfolio platform" },
+    "license": "first-party",
+    "researchedAt": "2026-10-22",
+    "maintainer": "keyurgolani",
+    "derivation": "anchor-v1 from one light set of anchors, the reviewed prototype's iridescent-pearl.",
+    "caveats": ["A test fixture: it registers only when APPEARANCE_FIXTURES=1."]
+  },
+  "derivation": "anchor-v1",
+  "anchors": {
+    "light": {
+      "canvas": "#faf8ff",
+      "text": "#282638",
+      "accent": "#8c72d9",
+      "secondary": "#4caeb3"
+    }
+  }
+}

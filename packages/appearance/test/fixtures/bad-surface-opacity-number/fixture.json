@@ -1,0 +1,15 @@
+{
+  "kind": "design-language",
+  "base": "platform-neutral",
+  "description": "platform-neutral with surface-opacity 0.72, a number, which color-mix() reads as no percentage, so the surface loses its background.",
+  "patch": {
+    "tokens": {
+      "surface-opacity": "0.72"
+    }
+  },
+  "expect": [
+    {
+      "problem": "/tokens/surface-opacity must be a percentage from 50% to 100%"
+    }
+  ]
+}

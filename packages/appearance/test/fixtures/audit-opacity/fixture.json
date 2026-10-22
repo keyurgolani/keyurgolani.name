@@ -1,0 +1,13 @@
+{
+  "kind": "design-language",
+  "base": "platform-neutral",
+  "description": "platform-neutral with a literal opacity, which reduced transparency can't turn off.",
+  "patch": {
+    "stylesheet": "./styles.css"
+  },
+  "expect": [
+    {
+      "problem": "opacity: 0.6 sets opacity outside the tokens"
+    }
+  ]
+}

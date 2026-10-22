@@ -1,0 +1,30 @@
+{
+  "id": "warm-parchment",
+  "name": "Warm Parchment",
+  "description": "The platform's fallback color scheme: warm paper and ink with a terracotta accent and a sage secondary, in light and dark.",
+  "tokenContract": 1,
+  "tier": "stable",
+  "provenance": {
+    "source": { "name": "Keyur Golani portfolio platform" },
+    "license": "first-party",
+    "researchedAt": "2026-10-17",
+    "maintainer": "keyurgolani",
+    "derivation": "anchor-v1 from the reviewed prototype's warm-parchment anchors."
+  },
+  "derivation": "anchor-v1",
+  "anchors": {
+    "light": {
+      "canvas": "#f6eddc",
+      "text": "#2b241c",
+      "accent": "#b95f32",
+      "secondary": "#5f7653"
+    },
+    "dark": {
+      "canvas": "#251f19",
+      "text": "#f4e8d2",
+      "accent": "#f09d70",
+      "secondary": "#9db38d"
+    }
+  },
+  "swatches": ["#f6eddc", "#2b241c", "#b95f32", "#5f7653"]
+}

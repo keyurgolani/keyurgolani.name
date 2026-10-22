@@ -1,0 +1,25 @@
+{
+  "id": "fixture-dark-only",
+  "name": "Fixture Dark Only",
+  "description": "A test fixture: a single-mode dark scheme, for mode locking, system on a single-mode scheme, and the light high-contrast set print uses.",
+  "tokenContract": 1,
+  "tier": "experimental",
+  "provenance": {
+    "source": { "name": "Keyur Golani portfolio platform" },
+    "license": "first-party",
+    "researchedAt": "2026-10-22",
+    "maintainer": "keyurgolani",
+    "attribution": "The anchors are the reviewed prototype's nord dark anchors, from the Nord palette (nordtheme/nord, MIT).",
+    "derivation": "anchor-v1 from one dark set of anchors.",
+    "caveats": ["A test fixture: it registers only when APPEARANCE_FIXTURES=1."]
+  },
+  "derivation": "anchor-v1",
+  "anchors": {
+    "dark": {
+      "canvas": "#2e3440",
+      "text": "#eceff4",
+      "accent": "#88c0d0",
+      "secondary": "#b48ead"
+    }
+  }
+}

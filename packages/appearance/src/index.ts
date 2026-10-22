@@ -2,9 +2,9 @@
 // This root entry imports only zod, @portfolio/schema, and
 // @portfolio/variant-contract's browser-safe root: no React, no Node, and
 // no next/*, so the host, #7's preview frames, and #9's Demo Studio in the
-// browser resolve the same way. The compiler and audit (./node), the
-// boundary and primitives (./react, ./primitives), and the scheme
-// generators (./generators) arrive in Slices 2 and 3.
+// browser resolve the same way. So does ./generators. The compiler and the
+// contrast check are ./node (Slice 2); the boundary and primitives
+// (./react, ./primitives) arrive in Slice 3.
 
 export {
   APPEARANCE_AXES,
@@ -48,9 +48,49 @@ export {
   type TypographyRole,
   type TypographyRoles,
 } from './tokens';
-export { fontStackProblem, languageValueProblem } from './values';
-export { contrast, isHex, luminance, mix } from './color';
-export { anchorV1, highContrastV1, type Anchors } from './derive';
+export { fontStackProblem, languageValueProblem, stylesheetValueProblem } from './values';
+export { composite, contrast, deltaE, isHex, luminance, mix } from './color';
+export {
+  ACCENT_DELTA,
+  anchorV1,
+  DISTINCT_PAIRS,
+  highContrastV1,
+  QUIET_TEXT_DELTA,
+  type Anchors,
+} from './derive';
+export {
+  APPEARANCE_LAYERS,
+  LAYER_ORDER,
+  startsWithLayerOrder,
+  type AppearanceLayer,
+} from './layers';
+export {
+  COLOR_SET_NAMES,
+  isHighContrastSet,
+  printSet,
+  schemeSets,
+  setPolarity,
+  type ColorSetName,
+  type SchemeSets,
+} from './sets';
+export {
+  CATEGORICAL_ROLES,
+  contrastReport,
+  FILL_PAIRS,
+  GATE_TARGETS,
+  gateLanguage,
+  gateSet,
+  gateTypography,
+  GROUND_ROLES,
+  isLargeText,
+  NEUTRAL_LANGUAGE,
+  SMALL_SIGNATURE,
+  TEXT_ROLES,
+  type ContrastReport,
+  type GateLanguage,
+  type GatePair,
+  type GateTypography,
+} from './gate';
 export {
   ColorSchemeManifestSchema,
   ColorTokenSetSchema,
@@ -83,6 +123,7 @@ export {
   otherAxes,
   selectableIds,
   type AppearanceMeta,
+  type PackFileRef,
   type AppearanceRegistry,
   type MetaPack,
   type PackEntry,

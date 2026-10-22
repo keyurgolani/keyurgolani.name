@@ -3,14 +3,25 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { GENERATED_FILES, renderRegistry, writeRegistry } from './codegen';
+import {
+  GENERATED_FILES,
+  packFiles,
+  registryMeta,
+  renderRegistry,
+  writePackFiles,
+  writeRegistry,
+} from './codegen';
 import { readRegistry } from './registry';
 import {
   extensionPackage,
   FALLBACK,
   manifestFor,
+  packPackage,
   removeTestHosts,
+  TEST_FALLBACK_PACKS,
+  TEST_PACK_HOOKS,
   testHost,
+  testPackFile,
   variantPackage,
 } from './test-hosts';
 
@@ -155,6 +166,156 @@ test('it writes through a temporary file, and leaves a file that already has the
       fs.readdirSync(target).filter((name) => name.endsWith('.tmp')),
       [],
     );
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// The appearance packs (#19, Slice 2): the metadata module lists each with
+// its compiled files' URLs and hashes, the platform stylesheet, and the
+// fixture flags generation ran with, and the pack directory holds exactly the
+// files of what's registered.
+
+const SERIF = packPackage('@acme/type', 'typography', {
+  'acme-serif': { id: 'acme-serif', font: true },
+});
+
+async function withPacks() {
+  const result = await readRegistry({
+    hostDir: testHost([FALLBACK, ...TEST_FALLBACK_PACKS, SERIF]),
+    packs: TEST_PACK_HOOKS,
+  });
+  assert.ok(result.ok, JSON.stringify(result.diagnostics));
+  return result;
+}
+
+test('the meta file lists each pack with its files, the platform stylesheet, and the fixture flags', async () => {
+  const result = await withPacks();
+  const meta = renderRegistry(result, { fixtureFlags: { appearance: false } }).get(
+    'registry.meta.ts',
+  )!;
+  assert.match(meta, /^import type \{ MetaPack, PackFileRef \} from '@portfolio\/appearance';$/m);
+  assert.match(
+    meta,
+    /export const PACKS: readonly MetaPack\[\] = \[\n {2}\{\n {4}"kind": "color-scheme",\n {4}"packageName": "@portfolio\/test-schemes",\n {4}"version": "1\.0\.0",\n {4}"fixture": false,\n {4}"manifest": \{\n {6}"id": "test-scheme"\n {4}\},\n {4}"stylesheet": \{\n {6}"url": "\/_portfolio\/pack\/test-scheme\.[0-9a-f]{12}\.css",\n {6}"sha256": "[0-9a-f]{64}"\n {4}\}\n {2}\},/,
+  );
+  // Only a pack with fonts lists them.
+  assert.equal(meta.match(/"fonts": \[/g)?.length, 1);
+  assert.match(
+    meta,
+    /"fonts": \[\n {6}\{\n {8}"url": "\/_portfolio\/pack\/acme-serif\.[0-9a-f]{12}\.woff2"/,
+  );
+  assert.match(
+    meta,
+    /export const PLATFORM_STYLESHEET: PackFileRef \| null = \{\n {2}"url": "\/_portfolio\/pack\/_platform\.[0-9a-f]{12}\.css",\n {2}"sha256": "[0-9a-f]{64}"\n\};/,
+  );
+  assert.match(meta, /^export const FIXTURE_FLAGS = Object\.freeze\(\{ appearance: false \}\);$/m);
+  const flagged = renderRegistry(result, { fixtureFlags: { appearance: true } }).get(
+    'registry.meta.ts',
+  )!;
+  assert.match(
+    flagged,
+    /^export const FIXTURE_FLAGS = Object\.freeze\(\{ appearance: true \}\);$/m,
+  );
+  // The flags are the one difference rendering adds; which packs a flag admits is readRegistry's.
+  assert.equal(flagged.replace('appearance: true', 'appearance: false'), meta);
+  assert.deepEqual(registryMeta(result, { fixtureFlags: { appearance: true } }).FIXTURE_FLAGS, {
+    appearance: true,
+  });
+});
+
+test('the fixture flags are sorted camelCase keys with booleans, and empty without any', async () => {
+  const result = await withPacks();
+  const flags = (fixtureFlags: Record<string, boolean>) =>
+    /FIXTURE_FLAGS = (.*);/.exec(
+      renderRegistry(result, { fixtureFlags }).get('registry.meta.ts')!,
+    )![1];
+  assert.equal(
+    flags({ preview: false, appearance: true }),
+    'Object.freeze({ appearance: true, preview: false })',
+  );
+  assert.equal(flags({}), 'Object.freeze({})');
+  assert.match(
+    renderRegistry(result).get('registry.meta.ts')!,
+    /FIXTURE_FLAGS = Object\.freeze\(\{\}\);/,
+  );
+  const bad: Record<string, unknown>[] = [
+    { APPEARANCE: true },
+    { 'budget-fixtures': true },
+    { appearance: '1' },
+  ];
+  for (const fixtureFlags of bad) {
+    assert.throws(
+      () => renderRegistry(result, { fixtureFlags: fixtureFlags as Record<string, boolean> }),
+      /A fixture flag is a camelCase key with a boolean/,
+    );
+  }
+});
+
+test('without pack checks, the meta file lists no packs and no platform stylesheet', async () => {
+  const meta = (await files()).get('registry.meta.ts')!;
+  assert.match(meta, /export const PACKS: readonly MetaPack\[\] = \[\];/);
+  assert.match(meta, /export const PLATFORM_STYLESHEET: PackFileRef \| null = null;/);
+});
+
+test('packFiles() lists each stylesheet and font, and the platform stylesheet, once, sorted', async () => {
+  const names = packFiles(await withPacks()).map(({ name }) =>
+    name.replace(/[0-9a-f]{12}/, '<hash>'),
+  );
+  assert.deepEqual(names, [
+    '_platform.<hash>.css',
+    'acme-serif.<hash>.css',
+    'acme-serif.<hash>.woff2',
+    'test-language.<hash>.css',
+    'test-scheme.<hash>.css',
+    'test-type.<hash>.css',
+  ]);
+});
+
+test('writePackFiles() writes the pack files, keeps what has the bytes, and removes the rest', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'portfolio-packs-'));
+  try {
+    const target = path.join(dir, '_portfolio', 'pack');
+    const packs = packFiles(await withPacks());
+    const names = packs.map(({ name }) => name);
+    assert.deepEqual(writePackFiles(target, packs), { written: names, unchanged: [], removed: [] });
+    assert.deepEqual(fs.readdirSync(target).sort(), [...names].sort());
+    const css = packs.find(({ name }) => name.startsWith('test-scheme.'))!;
+    assert.deepEqual(new Uint8Array(fs.readFileSync(path.join(target, css.name))), css.bytes);
+    assert.deepEqual(writePackFiles(target, packs), { written: [], unchanged: names, removed: [] });
+
+    // A file from a build that registered more, such as a fixture's, and a
+    // temporary file a stopped run left, go.
+    const stale = testPackFile('fixture-dusk', 'css', '[data-pack="fixture-dusk"] {}\n');
+    fs.writeFileSync(path.join(target, stale.name), stale.bytes);
+    fs.writeFileSync(path.join(target, `${css.name}.123.tmp`), 'partial');
+    const pruned = writePackFiles(target, packs);
+    assert.deepEqual(pruned.written, []);
+    assert.deepEqual(pruned.removed, [`${css.name}.123.tmp`, stale.name].sort());
+    assert.deepEqual(fs.readdirSync(target).sort(), [...names].sort());
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('writePackFiles() writes nothing into a directory holding a file no pack wrote', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'portfolio-packs-'));
+  try {
+    const packs = packFiles(await withPacks());
+    fs.writeFileSync(path.join(dir, 'notes.txt'), 'mine');
+    assert.throws(
+      () => writePackFiles(dir, packs),
+      /holds notes\.txt, which no pack wrote, so nothing was written there/,
+    );
+    assert.deepEqual(fs.readdirSync(dir), ['notes.txt']);
+    const empty = fs.mkdtempSync(path.join(os.tmpdir(), 'portfolio-packs-'));
+    try {
+      const misnamed = { ...packs[0]!, name: '../escape.css' };
+      assert.throws(() => writePackFiles(empty, [misnamed]), /isn't a pack file's name/);
+      assert.deepEqual(fs.readdirSync(empty), []);
+    } finally {
+      fs.rmSync(empty, { recursive: true, force: true });
+    }
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

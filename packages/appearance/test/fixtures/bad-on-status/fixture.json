@@ -1,0 +1,19 @@
+{
+  "kind": "color-scheme",
+  "base": "warm-parchment",
+  "description": "warm-parchment with a light warning that white on-status text reads on at 2.2:1.",
+  "patch": {
+    "light": {
+      "warning": "#e0a040"
+    }
+  },
+  "expect": [
+    {
+      "pair": {
+        "set": "light",
+        "foreground": "on-status",
+        "ground": "warning"
+      }
+    }
+  ]
+}

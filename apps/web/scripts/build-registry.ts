@@ -1,25 +1,22 @@
 // Registry generation (#5, Slice 3, item 1): reads @portfolio/web's direct
-// dependencies, checks every variant and content extension among them, and
-// writes the modules the host imports into the gitignored src/lib/generated/.
-// predev, prebuild, typecheck, test, and check:variants run it, and any error
-// stops them. Installing never runs it, so a broken package can't block
-// `pnpm remove`.
+// dependencies, checks every variant, content extension, and appearance pack
+// among them, and writes the modules the host imports into the gitignored
+// src/lib/generated/, and each pack's compiled files into the gitignored
+// public/_portfolio/pack/ (#19, Slice 2). It passes the generator #19's pack
+// validator and compiler and the fixture gate (registry-options.ts), so
+// @portfolio/variant-contract imports neither. predev, prebuild, typecheck,
+// test, and check:variants run it, and any error stops them. Installing
+// never runs it, so a broken package can't block `pnpm remove`.
 //
 //   tsx scripts/build-registry.ts [--check] [--format text|json]
 //
 // --check reports without writing. --format json prints the whole result.
+// A fixture package registers only when its flag is set, such as
+// APPEARANCE_FIXTURES=1 (fixture-gate.ts).
 
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import {
-  formatRegistryDiagnostics,
-  readRegistry,
-  renderRegistry,
-  writeRegistry,
-} from '@portfolio/variant-contract/node';
+import { formatRegistryDiagnostics } from '@portfolio/variant-contract/node';
+import { generateRegistry, plural, registrySummary } from './registry-options';
 
-const HOST = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const OUT = path.join(HOST, 'src', 'lib', 'generated');
 const USAGE = 'Usage: tsx scripts/build-registry.ts [--check] [--format text|json]\n';
 
 function parse(args: readonly string[]): { check: boolean; format: 'text' | 'json' } | null {
@@ -41,9 +38,9 @@ async function main(): Promise<number> {
     process.stderr.write(USAGE);
     return 2;
   }
-  const result = await readRegistry({ hostDir: HOST });
-  const files = result.ok ? renderRegistry(result) : undefined;
-  const written = files && !options.check ? writeRegistry(OUT, files) : undefined;
+  const { result, files, packs, written } = await generateRegistry(process.env, {
+    write: !options.check,
+  });
 
   if (options.format === 'json') {
     const report = {
@@ -57,8 +54,16 @@ async function main(): Promise<number> {
         package: packageName,
         version,
       })),
+      packs: result.packs.map(({ kind, manifest, packageName, version, fixture }) => ({
+        kind,
+        id: manifest.id,
+        package: packageName,
+        version,
+        fixture,
+      })),
+      fixtures: result.fixtures,
       diagnostics: result.diagnostics,
-      ...(written ? { written: written.written } : {}),
+      ...(written ? { written: written.modules.written, packFiles: written.packs } : {}),
     };
     process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
     return result.ok ? 0 : 1;
@@ -71,21 +76,17 @@ async function main(): Promise<number> {
     process.stderr.write(`[registry] ${plural(errors, 'error')}, so nothing was generated.\n`);
     return 1;
   }
-  const variants = result.variants
-    .map(({ manifest, packageName, version }) => `${manifest.id} (${packageName}@${version})`)
-    .join(', ');
   process.stdout.write(
-    `[registry] ${plural(result.variants.length, 'variant')}: ${variants}; ` +
-      `${plural(result.extensions.length, 'content extension')}. ` +
+    `[registry] ${registrySummary(result)}. ` +
       (written
-        ? `Wrote ${written.written.length} of ${files!.size} files in src/lib/generated.\n`
+        ? `Wrote ${written.modules.written.length} of ${files!.size} files in src/lib/generated, ` +
+          `and ${written.packs.written.length} of ${packs!.length} in public/_portfolio/pack` +
+          (written.packs.removed.length > 0
+            ? `, removing ${plural(written.packs.removed.length, 'stale file')} there.\n`
+            : '.\n')
         : 'Checked, and wrote nothing.\n'),
   );
   return 0;
-}
-
-function plural(count: number, noun: string): string {
-  return `${count} ${noun}${count === 1 ? '' : 's'}`;
 }
 
 void main().then((code) => {

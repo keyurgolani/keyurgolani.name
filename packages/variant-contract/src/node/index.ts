@@ -12,6 +12,14 @@ export {
   REGISTRY_CODES,
   REGISTRY_KINDS,
   type ExtensionEntry,
+  type FixtureGate,
+  type FixturePackage,
+  type PackCheck,
+  type PackCompile,
+  type PackEntry,
+  type PackFile,
+  type PackHooks,
+  type PackKind,
   type RegistryCode,
   type RegistryDiagnostic,
   type RegistryKind,
@@ -21,9 +29,17 @@ export {
 } from './registry';
 export {
   GENERATED_FILES,
+  packFiles,
+  registryMeta,
   renderRegistry,
+  writePackFiles,
   writeRegistry,
   type GeneratedFile,
+  type MetaPackEntry,
+  type PackFileRef,
+  type PackWriteResult,
+  type RegistryMeta,
+  type RenderOptions,
   type WriteResult,
 } from './codegen';
 export {

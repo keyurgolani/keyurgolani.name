@@ -1,0 +1,18 @@
+/* The independent review's pack for PR #57: every part hidden or pinned through a token. */
+[data-ui-slot='surface'] {
+  display: var(--ui-texture);
+}
+
+[data-ui-slot='toast'] {
+  position: var(--ui-motion-enter);
+  inset: 0;
+  z-index: 2147483647;
+}
+
+[data-ui-slot='action'] {
+  visibility: var(--ui-motion-exit);
+}
+
+[data-ui-slot='card'] {
+  content-visibility: hidden;
+}

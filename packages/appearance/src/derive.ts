@@ -8,10 +8,17 @@
 // A derived role moves only when it fails its gate pair (4.5:1 for text and
 // 3:1 for non-text, 7:1 and 4.5:1 in a high-contrast set), and then stops at
 // the first step at or past the gate limit plus 0.1. Anchors never move.
+//
+// Slice 2 keeps the reviewed prototype's hierarchy (#19, the owner's lead):
+// accent-hover and accent-active mix 12% and 22% away from on-accent, so
+// they stay apart from the accent and each other and only gain contrast,
+// and text-secondary keeps clear of text-muted, which stays at its contrast
+// limit: when the two land closer than QUIET_TEXT_DELTA, text-secondary
+// moves further toward text.
 
-import { BLACK, contrast, lightness, luminance, mix, WHITE, withLightness } from './color';
+import { BLACK, contrast, deltaE, lightness, luminance, mix, WHITE, withLightness } from './color';
 import type { BaseMode } from './axes';
-import type { ColorTokens } from './tokens';
+import type { ColorRole, ColorTokens } from './roles';
 
 /** The colors an `anchor-v1` mode is derived from. */
 export interface Anchors {
@@ -25,6 +32,34 @@ const TEXT = 4.5;
 const NON_TEXT = 3;
 const HIGH_CONTRAST_TEXT = 7;
 const HEADROOM = 0.1;
+
+/**
+ * The least OKLab distance between accent, accent-hover, and accent-active.
+ * Every non-Research scheme in the reviewed prototype clears it in every
+ * mode it has, generated and single-mode schemes included. The closest is
+ * material-hct's dark accent-hover and accent-active, 0.0128 with its
+ * color-mix() values rounded to hex and 0.0119 at full precision.
+ */
+export const ACCENT_DELTA = 0.011;
+
+/**
+ * The least OKLab distance between text-secondary and text-muted: the
+ * prototype's own closest pair, low-stimulus-warm's dark, at 0.0363 rounded
+ * to hex (0.0367 at full precision). No non-Research prototype scheme falls
+ * below it.
+ */
+export const QUIET_TEXT_DELTA = 0.036;
+
+/** The pairs of roles a solved set keeps apart, each with the least distance it holds them. */
+export const DISTINCT_PAIRS = [
+  ['accent', 'accent-hover', ACCENT_DELTA],
+  ['accent', 'accent-active', ACCENT_DELTA],
+  ['accent-hover', 'accent-active', ACCENT_DELTA],
+  ['text-secondary', 'text-muted', QUIET_TEXT_DELTA],
+] as const satisfies readonly (readonly [ColorRole, ColorRole, number])[];
+
+const apart = (color: string, others: readonly string[], least: number) =>
+  others.every((other) => deltaE(color, other) >= least);
 
 /** The percentages and starting colors `anchor-v1` uses, by mode. */
 const ANCHOR_V1 = {
@@ -93,6 +128,43 @@ function onColor(color: string): string {
 }
 
 /**
+ * An accent state: `accent` mixed `start` percent away from `on`, toward
+ * white under a black `on` and black under a white one, then 2% further at
+ * a time until it's ACCENT_DELTA from each of `others` and `on` reads on it
+ * at `limit`. Moving away from `on` only adds contrast, so a state never
+ * falls below the accent's.
+ */
+function accentState(
+  accent: string,
+  on: string,
+  start: number,
+  others: readonly string[],
+  limit: number,
+): string {
+  const away = contrast(on, WHITE) >= contrast(on, BLACK) ? WHITE : BLACK;
+  for (let percent = start; percent <= 100; percent += 2) {
+    const candidate = mix(accent, away, percent);
+    if (contrast(on, candidate) >= limit && apart(candidate, others, ACCENT_DELTA))
+      return candidate;
+  }
+  return away;
+}
+
+/**
+ * text-secondary: `color`, or the first 2% step of it toward `text` that's
+ * QUIET_TEXT_DELTA from `muted`. Toward text only adds contrast, so it still
+ * passes, and text-muted keeps its place at its contrast limit.
+ */
+function apartTowardText(color: string, text: string, muted: string): string {
+  if (apart(color, [muted], QUIET_TEXT_DELTA)) return color;
+  for (let percent = 2; percent <= 100; percent += 2) {
+    const candidate = mix(color, text, percent);
+    if (apart(candidate, [muted], QUIET_TEXT_DELTA)) return candidate;
+  }
+  return text;
+}
+
+/**
  * One mode's complete color set from its anchors. Surfaces and borders mix
  * canvas toward text, text-secondary and text-muted mix text toward canvas,
  * accent states mix accent toward text, and selection and the sequential
@@ -115,7 +187,14 @@ export function anchorV1(anchors: Anchors, mode: BaseMode): ColorTokens {
   const positive = awayFrom(rules.positive, onStatus, TEXT);
   const warning = awayFrom(rules.warning, onStatus, TEXT);
   const danger = awayFrom(rules.danger, onStatus, TEXT);
-  const textSecondary = towardText(mix(text, canvas, 28), text, grounds, TEXT, 2);
+  const textMuted = towardText(mix(text, canvas, rules.muted), text, grounds, TEXT, 2);
+  const textSecondary = apartTowardText(
+    towardText(mix(text, canvas, 28), text, grounds, TEXT, 2),
+    text,
+    textMuted,
+  );
+  const accentHover = accentState(accent, onAccent, 12, [accent], TEXT);
+  const accentActive = accentState(accent, onAccent, 22, [accent, accentHover], TEXT);
   const categorical = (color: string) => towardText(color, text, [surface], NON_TEXT, 2);
 
   return {
@@ -126,14 +205,14 @@ export function anchorV1(anchors: Anchors, mode: BaseMode): ColorTokens {
     'surface-overlay': overlay,
     'text-primary': text,
     'text-secondary': textSecondary,
-    'text-muted': towardText(mix(text, canvas, rules.muted), text, grounds, TEXT, 2),
+    'text-muted': textMuted,
     'text-inverse': canvas,
     'border-subtle': borderSubtle,
     'border-default': borderDefault,
     'border-strong': towardText(borderStrong, text, grounds, NON_TEXT, 2),
     accent,
-    'accent-hover': awayFrom(mix(accent, text, 12), onAccent, TEXT),
-    'accent-active': awayFrom(mix(accent, text, 22), onAccent, TEXT),
+    'accent-hover': accentHover,
+    'accent-active': accentActive,
     'accent-text': towardText(accent, text, grounds, TEXT, 2),
     'on-accent': onAccent,
     focus: towardText(accent, text, grounds, NON_TEXT, 2),
@@ -184,6 +263,9 @@ export function highContrastV1(
   const grounds = [canvas, subtle, surface, prominent, overlay];
   const solve = (color: string) => towardText(color, text, grounds, HIGH_CONTRAST_TEXT, 5);
   const accent = solve(source.accent);
+  // on-accent is the canvas, so away from it is toward the text color.
+  const accentHover = accentState(accent, canvas, 12, [accent], HIGH_CONTRAST_TEXT);
+  const accentActive = accentState(accent, canvas, 22, [accent, accentHover], HIGH_CONTRAST_TEXT);
   const positive = solve(source.positive);
   const warning = solve(source.warning);
   const danger = solve(source.danger);
@@ -203,8 +285,8 @@ export function highContrastV1(
     'border-default': text,
     'border-strong': text,
     accent,
-    'accent-hover': awayFrom(mix(accent, text, 12), canvas, HIGH_CONTRAST_TEXT),
-    'accent-active': awayFrom(mix(accent, text, 22), canvas, HIGH_CONTRAST_TEXT),
+    'accent-hover': accentHover,
+    'accent-active': accentActive,
     'accent-text': towardText(accent, text, grounds, HIGH_CONTRAST_TEXT, 2),
     'on-accent': canvas,
     focus: text,

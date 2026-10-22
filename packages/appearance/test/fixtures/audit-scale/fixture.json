@@ -1,0 +1,13 @@
+{
+  "kind": "design-language",
+  "base": "platform-neutral",
+  "description": "platform-neutral with a literal scale, which reduced motion can't turn off.",
+  "patch": {
+    "stylesheet": "./styles.css"
+  },
+  "expect": [
+    {
+      "problem": "scale: 1.5 moves the part outside the tokens"
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "kind": "design-language",
+  "base": "platform-neutral",
+  "description": "platform-neutral with a literal backdrop blur, which reduced transparency can't turn off.",
+  "patch": {
+    "stylesheet": "./styles.css"
+  },
+  "expect": [
+    {
+      "problem": "backdrop-filter: blur(24px) blurs outside the tokens"
+    }
+  ]
+}

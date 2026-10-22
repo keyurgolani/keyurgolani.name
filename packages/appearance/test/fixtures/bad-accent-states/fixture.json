@@ -1,0 +1,18 @@
+{
+  "kind": "color-scheme",
+  "base": "warm-parchment",
+  "description": "warm-parchment with a light accent-hover equal to the accent, so hover shows nothing.",
+  "patch": {
+    "light": {
+      "accent-hover": "#b95f32"
+    }
+  },
+  "expect": [
+    {
+      "hierarchy": {
+        "first": "accent",
+        "second": "accent-hover"
+      }
+    }
+  ]
+}

@@ -1,0 +1,190 @@
+// The platform stylesheet (#19, Slice 2, item 3): the reset, utilities, and
+// accessibility layers every boundary shares. Accessibility rules override
+// tokens, not rules: they set --color-* and --ui-* values on the boundary,
+// so every primitive and language that reads the tokens follows, and the
+// accessibility layer, last in LAYER_ORDER, wins over every pack.
+//
+// - OS reduced motion and data-motion="reduced": motion-fast feedback stays;
+//   movement stops, entrances and exits fade, and emphasis stops.
+//   data-motion="static" (#6's pause) stops everything.
+// - Forced colors: every color role maps to a system color, and shadows,
+//   blur, translucency, texture, and glow drop.
+// - Reduced transparency, and a browser without backdrop-filter: opaque
+//   surfaces and no blur.
+// - High contrast (the mode, data-contrast="more", or prefers-contrast:
+//   more): the signature fill is solid text-primary and emphasis-glow none.
+// - Print: opaque, and still. Each scheme's stylesheet prints its light set
+//   or its light high-contrast set, since only it has the values.
+
+import { LAYER_ORDER } from '../layers';
+import type { ColorRole } from '../tokens';
+import { packFile, type PackFile } from './compile';
+
+const BOUNDARY = '[data-appearance-boundary]';
+
+/** Each role in forced colors: actions as buttons, focus and selection as highlights, the rest as canvas and text. */
+const FORCED_COLORS: Readonly<Record<ColorRole, string>> = {
+  canvas: 'Canvas',
+  'surface-subtle': 'Canvas',
+  'surface-default': 'Canvas',
+  'surface-prominent': 'Canvas',
+  'surface-overlay': 'Canvas',
+  'text-primary': 'CanvasText',
+  'text-secondary': 'CanvasText',
+  'text-muted': 'CanvasText',
+  'text-inverse': 'Canvas',
+  'border-subtle': 'CanvasText',
+  'border-default': 'CanvasText',
+  'border-strong': 'CanvasText',
+  accent: 'ButtonText',
+  'accent-hover': 'ButtonText',
+  'accent-active': 'ButtonText',
+  'accent-text': 'LinkText',
+  'on-accent': 'ButtonFace',
+  focus: 'Highlight',
+  selection: 'Highlight',
+  positive: 'CanvasText',
+  warning: 'CanvasText',
+  danger: 'CanvasText',
+  information: 'CanvasText',
+  'on-status': 'Canvas',
+  'data-categorical-1': 'CanvasText',
+  'data-categorical-2': 'CanvasText',
+  'data-categorical-3': 'CanvasText',
+  'data-categorical-4': 'CanvasText',
+  'data-categorical-5': 'CanvasText',
+  'data-categorical-6': 'CanvasText',
+  'data-sequential-start': 'CanvasText',
+  'data-sequential-middle': 'CanvasText',
+  'data-sequential-end': 'CanvasText',
+  'signature-start': 'CanvasText',
+  'signature-end': 'CanvasText',
+  emphasis: 'Highlight',
+  scrim: 'Canvas',
+  'on-scrim': 'CanvasText',
+  shadow: 'CanvasText',
+};
+
+const SOLID_TEXT = 'linear-gradient(var(--color-text-primary), var(--color-text-primary))';
+
+/** Reduced motion: feedback stays, movement stops, entrances and exits fade. */
+const REDUCED = {
+  '--ui-state-hover-transform': 'none',
+  '--ui-state-active-transform': 'none',
+  '--ui-motion-enter': 'fade',
+  '--ui-motion-exit': 'fade',
+  '--ui-motion-emphasis': 'none',
+};
+
+/** Paused: nothing moves or fades. */
+const STATIC = {
+  '--ui-motion-fast': '0s',
+  '--ui-motion-standard': '0s',
+  '--ui-motion-slow': '0s',
+  '--ui-state-hover-transform': 'none',
+  '--ui-state-active-transform': 'none',
+  '--ui-motion-enter': 'none',
+  '--ui-motion-exit': 'none',
+  '--ui-motion-emphasis': 'none',
+};
+
+const OPAQUE = {
+  '--ui-surface-opacity': '100%',
+  '--ui-backdrop-blur': '0px',
+};
+
+const HIGH_CONTRAST = {
+  '--ui-signature-fill': SOLID_TEXT,
+  '--ui-emphasis-glow': 'none',
+};
+
+const FORCED_EFFECTS = {
+  ...OPAQUE,
+  '--ui-surface-material':
+    'linear-gradient(var(--color-surface-default), var(--color-surface-default))',
+  '--ui-shadow-card': 'none',
+  '--ui-shadow-overlay': 'none',
+  '--ui-shadow-raised': 'none',
+  '--ui-shadow-inset': 'none',
+  '--ui-texture': 'none',
+  ...HIGH_CONTRAST,
+};
+
+function block(
+  selectors: readonly string[],
+  declarations: Readonly<Record<string, string>>,
+): string {
+  return `${selectors.join(',\n')} {\n${Object.entries(declarations)
+    .map(([property, value]) => `  ${property}: ${value};\n`)
+    .join('')}}\n`;
+}
+
+function wrap(prelude: string, body: string): string {
+  return `${prelude} {\n${body
+    .split('\n')
+    .map((line) => (line === '' ? line : `  ${line}`))
+    .join('\n')}}\n`;
+}
+
+/** The platform stylesheet's text. */
+export function platformStylesheet(): string {
+  const reset = [
+    block([BOUNDARY], {
+      color: 'var(--color-text-primary)',
+      'background-color': 'var(--color-canvas)',
+      'accent-color': 'var(--color-accent)',
+      'caret-color': 'var(--color-accent-text)',
+      'font-family': 'var(--type-body-font-family)',
+      'font-size': 'var(--type-body-font-size)',
+      'font-weight': 'var(--type-body-font-weight)',
+      'line-height': 'var(--type-body-line-height)',
+      'letter-spacing': 'var(--type-body-letter-spacing)',
+      'font-variation-settings': 'var(--type-body-font-variation-settings)',
+      // A plate inside another boundary inherits none of its host's text treatment.
+      'font-style': 'normal',
+      'text-transform': 'none',
+      'word-spacing': 'normal',
+      'text-shadow': 'none',
+    }),
+    block([`${BOUNDARY} ::selection`], {
+      color: 'var(--color-text-primary)',
+      'background-color': 'var(--color-selection)',
+    }),
+  ].join('');
+  // Hidden stays hidden whatever display a variant or language gives the element.
+  const utilities = block([`${BOUNDARY} [hidden]:not([hidden="until-found"])`], {
+    display: 'none',
+  });
+  const forced = Object.fromEntries(
+    Object.entries(FORCED_COLORS).map(([role, color]) => [`--color-${role}`, color]),
+  );
+  const accessibility = [
+    wrap('@media (prefers-reduced-motion: reduce)', block([BOUNDARY], REDUCED)),
+    block([`${BOUNDARY}[data-motion="reduced"]`], REDUCED),
+    block([`${BOUNDARY}[data-motion="static"]`], STATIC),
+    wrap('@media (prefers-reduced-transparency: reduce)', block([BOUNDARY], OPAQUE)),
+    wrap(
+      '@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)))',
+      block([BOUNDARY], OPAQUE),
+    ),
+    block(
+      [`${BOUNDARY}[data-display-mode="high-contrast"]`, `${BOUNDARY}[data-contrast="more"]`],
+      HIGH_CONTRAST,
+    ),
+    wrap('@media (prefers-contrast: more)', block([BOUNDARY], HIGH_CONTRAST)),
+    wrap('@media (forced-colors: active)', block([BOUNDARY], { ...forced, ...FORCED_EFFECTS })),
+    wrap('@media print', block([BOUNDARY], { ...OPAQUE, ...STATIC })),
+  ].join('');
+  return [
+    LAYER_ORDER,
+    '/* The platform stylesheet, compiled by @portfolio/appearance. */',
+    wrap('@layer reset', reset).trimEnd(),
+    wrap('@layer utilities', utilities).trimEnd(),
+    wrap('@layer accessibility', accessibility),
+  ].join('\n');
+}
+
+/** The platform stylesheet as the file registry generation writes: `_platform.<sha256-12>.css`. */
+export function compilePlatform(): PackFile {
+  return packFile('_platform', 'css', new TextEncoder().encode(platformStylesheet()));
+}

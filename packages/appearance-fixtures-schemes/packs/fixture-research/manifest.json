@@ -1,0 +1,31 @@
+{
+  "id": "fixture-research",
+  "name": "Fixture Research",
+  "description": "A test fixture: a Research scheme, which preview renders and publish refuses, and visitors never get.",
+  "tokenContract": 1,
+  "tier": "research",
+  "provenance": {
+    "source": { "name": "Keyur Golani portfolio platform" },
+    "license": "first-party",
+    "researchedAt": "2026-10-22",
+    "maintainer": "keyurgolani",
+    "attribution": "The anchors are the reviewed prototype's catppuccin anchors, from the Catppuccin palette (catppuccin/catppuccin, MIT).",
+    "derivation": "anchor-v1 from light and dark anchors.",
+    "caveats": ["A test fixture: it registers only when APPEARANCE_FIXTURES=1."]
+  },
+  "derivation": "anchor-v1",
+  "anchors": {
+    "light": {
+      "canvas": "#eff1f5",
+      "text": "#4c4f69",
+      "accent": "#8839ef",
+      "secondary": "#179299"
+    },
+    "dark": {
+      "canvas": "#1e1e2e",
+      "text": "#cdd6f4",
+      "accent": "#cba6f7",
+      "secondary": "#89dceb"
+    }
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "kind": "color-scheme",
+  "base": "warm-parchment",
+  "description": "warm-parchment with a light text-muted at 2.4:1 on the canvas, under the 4.5:1 text target.",
+  "patch": {
+    "light": {
+      "text-muted": "#a69a88"
+    }
+  },
+  "expect": [
+    {
+      "pair": {
+        "set": "light",
+        "foreground": "text-muted",
+        "ground": "canvas"
+      }
+    }
+  ]
+}

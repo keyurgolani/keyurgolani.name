@@ -1,0 +1,100 @@
+{
+  "id": "humanist-ui",
+  "name": "Humanist UI",
+  "description": "The platform's fallback typography profile: a humanist system stack from 0.75rem captions to a 3.5rem display, with a monospace system stack for code and numerals.",
+  "tokenContract": 1,
+  "tier": "stable",
+  "provenance": {
+    "source": { "name": "Keyur Golani portfolio platform" },
+    "license": "first-party",
+    "researchedAt": "2026-10-17",
+    "maintainer": "keyurgolani",
+    "derivation": "The reviewed prototype's humanist-ui profile: its humanist and technical system stacks and its role metrics.",
+    "caveats": ["System fonts only: the stacks fall back to what each platform installs."]
+  },
+  "roles": {
+    "display": {
+      "font-family": "\"Trebuchet MS\", \"Segoe UI\", sans-serif",
+      "font-size": "3.5rem",
+      "font-weight": 700,
+      "line-height": 1.05,
+      "letter-spacing": "-0.035em",
+      "font-variation-settings": "normal"
+    },
+    "headline": {
+      "font-family": "\"Trebuchet MS\", \"Segoe UI\", sans-serif",
+      "font-size": "2.25rem",
+      "font-weight": 700,
+      "line-height": 1.12,
+      "letter-spacing": "-0.025em",
+      "font-variation-settings": "normal"
+    },
+    "title": {
+      "font-family": "\"Trebuchet MS\", \"Segoe UI\", sans-serif",
+      "font-size": "1.375rem",
+      "font-weight": 650,
+      "line-height": 1.25,
+      "letter-spacing": "-0.015em",
+      "font-variation-settings": "normal"
+    },
+    "body": {
+      "font-family": "\"Trebuchet MS\", \"Segoe UI\", sans-serif",
+      "font-size": "1rem",
+      "font-weight": 400,
+      "line-height": 1.65,
+      "letter-spacing": "0em",
+      "font-variation-settings": "normal"
+    },
+    "body-compact": {
+      "font-family": "\"Trebuchet MS\", \"Segoe UI\", sans-serif",
+      "font-size": "0.875rem",
+      "font-weight": 400,
+      "line-height": 1.5,
+      "letter-spacing": "0em",
+      "font-variation-settings": "normal"
+    },
+    "label": {
+      "font-family": "\"Trebuchet MS\", \"Segoe UI\", sans-serif",
+      "font-size": "0.8125rem",
+      "font-weight": 650,
+      "line-height": 1.3,
+      "letter-spacing": "0.04em",
+      "font-variation-settings": "normal"
+    },
+    "caption": {
+      "font-family": "\"Trebuchet MS\", \"Segoe UI\", sans-serif",
+      "font-size": "0.75rem",
+      "font-weight": 500,
+      "line-height": 1.4,
+      "letter-spacing": "0.02em",
+      "font-variation-settings": "normal"
+    },
+    "quote": {
+      "font-family": "\"Trebuchet MS\", \"Segoe UI\", sans-serif",
+      "font-size": "1.5rem",
+      "font-weight": 400,
+      "line-height": 1.5,
+      "letter-spacing": "-0.01em",
+      "font-variation-settings": "normal"
+    },
+    "code": {
+      "font-family": "\"SFMono-Regular\", Consolas, \"Liberation Mono\", monospace",
+      "font-size": "0.875rem",
+      "font-weight": 400,
+      "line-height": 1.55,
+      "letter-spacing": "0em",
+      "font-variation-settings": "normal"
+    },
+    "numeric": {
+      "font-family": "\"SFMono-Regular\", Consolas, \"Liberation Mono\", monospace",
+      "font-size": "0.875rem",
+      "font-weight": 650,
+      "line-height": 1.2,
+      "letter-spacing": "0.01em",
+      "font-variation-settings": "normal"
+    }
+  },
+  "measures": { "body": "68ch", "compact": "52ch" },
+  "scripts": ["Latn"],
+  "fontAssets": []
+}

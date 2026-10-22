@@ -5,6 +5,7 @@
   "scripts": {
     "build:registry": "tsx scripts/build-registry.ts",
     "check:variants": "tsx scripts/check-variants.ts",
+    "check:appearance": "tsx scripts/check-appearance.ts",
     "predev": "pnpm build:registry",
     "dev": "next dev --hostname 127.0.0.1",
     "prebuild": "pnpm build:registry",
@@ -17,6 +18,13 @@
     "test:security:proxy": "node ../../ci/test-security-proxy.mjs"
   },
   "dependencies": {
+    "@portfolio/appearance": "workspace:*",
+    "@portfolio/appearance-fixtures-languages": "workspace:*",
+    "@portfolio/appearance-fixtures-schemes": "workspace:*",
+    "@portfolio/appearance-fixtures-typography": "workspace:*",
+    "@portfolio/appearance-languages": "workspace:*",
+    "@portfolio/appearance-schemes": "workspace:*",
+    "@portfolio/appearance-typography": "workspace:*",
     "@portfolio/core": "workspace:*",
     "@portfolio/fallback-composition": "workspace:*",
     "@portfolio/kit": "workspace:*",

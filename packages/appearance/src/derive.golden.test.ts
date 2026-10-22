@@ -1,15 +1,21 @@
 // Goldens for the color derivations: warm-parchment's light and dark sets
-// from anchor-v1 and its light set from high-contrast-v1, byte for byte, as
-// the refined body's rules give them today. A reviewer's independent
-// recompute matched the two anchor-v1 sets. Slice 2 changes them on purpose,
-// when it gives warm-parchment back the prototype's distinct muted text and
-// accent states with the contrast gates still winning, and updates this file
-// with it.
+// from anchor-v1 and its light set from high-contrast-v1, byte for byte. A
+// reviewer's independent recompute matched the two anchor-v1 sets as Slice 1
+// froze them. Slice 2 changed them on purpose (the owner's lead), keeping
+// the prototype's distinct quieter text and accent states with the contrast
+// gates still winning. text-muted didn't move: it stays at its contrast
+// limit, #645c52 in light and #b6ac9b in dark. text-secondary moved toward
+// text to sit QUIET_TEXT_DELTA from it, from #645c52 to #5a5248 in light and
+// from #bab09e to #c2b8a5 in dark, and data-categorical-6 follows it.
+// accent-hover and accent-active mix 12% and 22% away from the black
+// on-accent: from #b5643b and #ad643f to #c1724b and #c8825f in light, and
+// from #f0a67c and #f1ae86 to #f2a981 and #f3b38f in dark. The high-contrast
+// set didn't change.
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { contrast } from './color';
-import { anchorV1, highContrastV1 } from './derive';
+import { contrast, deltaE, mix } from './color';
+import { anchorV1, highContrastV1, QUIET_TEXT_DELTA } from './derive';
 import type { ColorTokens } from './tokens';
 import { WARM_PARCHMENT } from './test-support/packs';
 import { anchorStops, assertStops, highContrastStops } from './test-support/stops';
@@ -24,15 +30,15 @@ const LIGHT_GOLDEN: ColorTokens = {
   'surface-prominent': '#e2d9c9',
   'surface-overlay': '#f2e9d8',
   'text-primary': '#2b241c',
-  'text-secondary': '#645c52',
+  'text-secondary': '#5a5248',
   'text-muted': '#645c52',
   'text-inverse': '#f6eddc',
   'border-subtle': '#ded5c5',
   'border-default': '#c5bdae',
   'border-strong': '#7e766a',
   accent: '#b95f32',
-  'accent-hover': '#b5643b',
-  'accent-active': '#ad643f',
+  'accent-hover': '#c1724b',
+  'accent-active': '#c8825f',
   'accent-text': '#8e4d2b',
   'on-accent': '#000000',
   focus: '#b95f32',
@@ -47,7 +53,7 @@ const LIGHT_GOLDEN: ColorTokens = {
   'data-categorical-3': '#268551',
   'data-categorical-4': '#9b5700',
   'data-categorical-5': '#b53143',
-  'data-categorical-6': '#645c52',
+  'data-categorical-6': '#5a5248',
   'data-sequential-start': '#e5c5ac',
   'data-sequential-middle': '#d39b79',
   'data-sequential-end': '#c07046',
@@ -66,15 +72,15 @@ const DARK_GOLDEN: ColorTokens = {
   'surface-prominent': '#463f37',
   'surface-overlay': '#3e372f',
   'text-primary': '#f4e8d2',
-  'text-secondary': '#bab09e',
+  'text-secondary': '#c2b8a5',
   'text-muted': '#b6ac9b',
   'text-inverse': '#251f19',
   'border-subtle': '#4a433a',
   'border-default': '#635b51',
   'border-strong': '#958c7e',
   accent: '#f09d70',
-  'accent-hover': '#f0a67c',
-  'accent-active': '#f1ae86',
+  'accent-hover': '#f2a981',
+  'accent-active': '#f3b38f',
   'accent-text': '#f09d70',
   'on-accent': '#000000',
   focus: '#f09d70',
@@ -89,7 +95,7 @@ const DARK_GOLDEN: ColorTokens = {
   'data-categorical-3': '#78d39b',
   'data-categorical-4': '#ffc264',
   'data-categorical-5': '#ff8e9c',
-  'data-categorical-6': '#bab09e',
+  'data-categorical-6': '#c2b8a5',
   'data-sequential-start': '#5e4231',
   'data-sequential-middle': '#9b684b',
   'data-sequential-end': '#d88e66',
@@ -170,18 +176,22 @@ test('every role the goldens move stopped at the first step past its limit plus 
     assert.equal(golden['on-accent'], black ? '#000000' : '#ffffff');
   }
   // The roles that moved in light, so the checks above had something to hold.
-  for (const role of [
-    'text-muted',
-    'border-strong',
-    'accent-text',
-    'accent-hover',
-    'accent-active',
-    'positive',
-  ] as const) {
-    assert.notEqual(
-      LIGHT_GOLDEN[role],
-      anchorStops(LIGHT_ANCHORS, 'light', LIGHT_GOLDEN).find((stop) => stop.role === role)!.start,
-      role,
-    );
+  const stops = anchorStops(LIGHT_ANCHORS, 'light', LIGHT_GOLDEN);
+  for (const role of ['text-muted', 'border-strong', 'accent-text', 'positive'] as const) {
+    const stop = stops.find((item) => item.role === role)!;
+    assert.ok(stop.by !== 'exact', role);
+    assert.notEqual(LIGHT_GOLDEN[role], stop.start, role);
   }
+  // text-secondary moved on to keep apart from text-muted, which stayed at
+  // its contrast limit, and the accent states sit at their 12% and 22% mixes
+  // away from the black on-accent.
+  assert.notEqual(
+    LIGHT_GOLDEN['text-secondary'],
+    mix(LIGHT_ANCHORS.text, LIGHT_ANCHORS.canvas, 28),
+  );
+  for (const golden of [LIGHT_GOLDEN, DARK_GOLDEN]) {
+    assert.ok(deltaE(golden['text-secondary'], golden['text-muted']) >= QUIET_TEXT_DELTA);
+  }
+  assert.equal(LIGHT_GOLDEN['accent-hover'], mix(LIGHT_ANCHORS.accent, '#ffffff', 12));
+  assert.equal(LIGHT_GOLDEN['accent-active'], mix(LIGHT_ANCHORS.accent, '#ffffff', 22));
 });

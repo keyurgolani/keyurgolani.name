@@ -1,0 +1,18 @@
+{
+  "kind": "color-scheme",
+  "base": "warm-parchment",
+  "description": "warm-parchment with a light text-secondary 0.0154 from text-muted in OKLab, where Slice 2's first solver left it, under the 0.036 the two keep.",
+  "patch": {
+    "light": {
+      "text-secondary": "#5f584e"
+    }
+  },
+  "expect": [
+    {
+      "hierarchy": {
+        "first": "text-secondary",
+        "second": "text-muted"
+      }
+    }
+  ]
+}
