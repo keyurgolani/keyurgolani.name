@@ -244,6 +244,22 @@ test("the content's scripts are checked against the typography profile, visible 
     ),
     [['appearance.script-coverage', 'warning', 'portfolio', '/works/0/lang']],
   );
+  // A private work that repeats a kept id stays private: id.duplicate blocks publishing, but
+  // the pair previews, and only the public notes the essays show are checked.
+  const repeated = {
+    ...PORTFOLIO,
+    works: [
+      { id: 'notes', title: 'Notes', medium: 'writing' },
+      { id: 'notes', title: 'Σημειώσεις', medium: 'writing', lang: 'el', visibility: 'private' },
+    ],
+    sections: [...PORTFOLIO.sections, { kind: 'works', id: 'essays', items: ['notes'] }],
+  };
+  const duplicated = check(site(), { portfolio: repeated });
+  assert.ok(duplicated.records.some(([code]) => code === 'id.duplicate'));
+  assert.deepEqual(
+    duplicated.records.filter(([code]) => code === 'appearance.script-coverage'),
+    [],
+  );
   // A profile covering every part of a script covers it.
   assert.deepEqual(
     check(

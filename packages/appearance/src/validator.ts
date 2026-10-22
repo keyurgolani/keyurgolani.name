@@ -5,6 +5,8 @@
 // variant is registered stays #5's validateSelection to say.
 
 import {
+  isPublic,
+  publicSectionIndexes,
   resolvePortfolioView,
   type ContentExtension,
   type Diagnostic,
@@ -191,13 +193,11 @@ function checkScripts(
     findPack(registry, 'typography', pair.site.appearance.typography) ??
     findPack(registry, 'typography', PLATFORM_DEFAULTS.typography)!;
   const { id, scripts } = typography.manifest;
-  // The published view keeps only what a visitor reads, whose ids are unique in the document.
+  // The published view keeps only what a visitor reads: the visible sections, matched by
+  // their positions, and the public records it reaches, matched by id in their own list. A
+  // private record that repeats a kept id is id.duplicate, but still private.
   const view = resolvePortfolioView(pair, {}, { mediaBase: '/media', extensions }).portfolio;
-  const visible = new Set(
-    [view.sections, view.works, view.evidence, view.chronology].flatMap((list) =>
-      list.map(({ id }) => id),
-    ),
-  );
+  const sections = new Set(publicSectionIndexes(pair, { extensions }));
   const check = (path: readonly (string | number)[], tag: unknown) => {
     if (typeof tag !== 'string') return;
     const script = scriptOf(tag);
@@ -216,14 +216,22 @@ function checkScripts(
   };
   check(['locale'], pair.portfolio.locale);
   const { portfolio } = pair;
-  for (const [list, items] of [
-    ['sections', portfolio.sections],
-    ['works', portfolio.works],
-    ['evidence', portfolio.evidence],
-    ['chronology', portfolio.chronology],
+  portfolio.sections.forEach((section, index) => {
+    if (sections.has(index)) check(['sections', index, 'lang'], section.lang);
+  });
+  for (const [list, items, kept] of [
+    ['works', portfolio.works, view.works],
+    ['evidence', portfolio.evidence, view.evidence],
+    ['chronology', portfolio.chronology, view.chronology],
   ] as const) {
-    (items ?? []).forEach((item: { readonly id: string; readonly lang?: unknown }, index) => {
-      if (visible.has(item.id)) check([list, index, 'lang'], item.lang);
-    });
+    const ids = new Set(kept.map(({ id }) => id));
+    (items ?? []).forEach(
+      (
+        item: { readonly id: string; readonly lang?: unknown; readonly visibility?: string },
+        index,
+      ) => {
+        if (isPublic(item) && ids.has(item.id)) check([list, index, 'lang'], item.lang);
+      },
+    );
   }
 }
