@@ -53,11 +53,28 @@ import {
   type LivePointer,
   type PublicationEvent,
 } from './pointer';
-import { manifestFor, readManifest, readRevision, revisionIds, type Manifest } from './revisions';
+import {
+  isTombstoned,
+  manifestFor,
+  migratable,
+  MIGRATE_COMMAND,
+  readManifest,
+  readRevision,
+  revisionIds,
+  type Manifest,
+} from './revisions';
 import {
   checkUnit,
+  documentFileName,
   DOCUMENT_NAMES,
   type DocumentName,
+  type MigrationId,
+  type MigrationNeed,
+  type MigrationSecret,
+  type MigrationValue,
+  type Rendering,
+  type SchemaVersions,
+  type StoredUnit,
   type Unit,
   type UnitChecks,
   type UnitDiagnostic,
@@ -165,6 +182,11 @@ export interface LiveStatus {
   readonly unitHash: Sha256 | null;
   /** Why the live revision isn't served, when it isn't. */
   readonly reason?: string;
+  /**
+   * The command that serves the live revision again, when an older build
+   * wrote it: `portfolio-store migrate-store` (#3, item 25).
+   */
+  readonly command?: string;
 }
 
 export interface RevisionSummary {
@@ -264,6 +286,83 @@ export interface ImportInput {
   readonly reason?: string;
 }
 
+/**
+ * `migrate-store`, and the CLI's `rollback --to` a revision an older build
+ * wrote (#3, items 13 and 25): that revision migrated to this build's
+ * schema, as a new child of it, made live. Only the operator runs one.
+ */
+export interface MigrateInput {
+  /**
+   * The revision to migrate. Without it, the live one, as `migrate-store`
+   * runs it, with a `schema-migration` event. With it, `rollback --to`'s
+   * target: a `rollback` event that records it as `restoredFrom`.
+   */
+  readonly fromRevisionId?: RevisionId;
+  /** The revision the CLI read live when it started, or null for none. */
+  readonly expectedLiveRevisionId: RevisionId | null;
+  /** Values only the owner can give, as `--set` gives them. */
+  readonly set?: readonly MigrationValue[];
+}
+
+/** A document a migration changes: its stored text, and the text it gets. */
+export interface MigratedDocument {
+  readonly document: DocumentName;
+  /** Its file under documents/, such as portfolio.yml. */
+  readonly file: string;
+  readonly before: string;
+  readonly after: string;
+}
+
+/** What a migration does to a revision, as a dry run shows it and the run writes it. */
+export interface MigrationPlan {
+  readonly fromRevisionId: RevisionId;
+  readonly from: SchemaVersions;
+  readonly to: SchemaVersions;
+  /** The documents it changes. One it doesn't change keeps every byte. */
+  readonly changed: readonly MigratedDocument[];
+  /** The ids it mints, from content: a dry run and the run mint the same ones. */
+  readonly ids: readonly MigrationId[];
+  /** Values only the owner can give: while there's any, nothing is written. */
+  readonly needs: readonly MigrationNeed[];
+  /** Portfolio source lines whose comments the new text doesn't keep. */
+  readonly comments: readonly number[];
+  /** Where it found secret-shaped text, never the text: a dry run then shows no document. */
+  readonly secrets: readonly MigrationSecret[];
+}
+
+/** Why a migration wrote nothing, besides what refuses a publish. */
+export type MigrationRejectionCode =
+  | PublicationRejectionCode
+  /** This build has no migration to run. */
+  | 'migration_unavailable'
+  /** The revision is at this build's schema already. */
+  | 'nothing_to_migrate'
+  /** Values only the owner can give, which `--set` gives. `plan` names them. */
+  | 'migration_blocked'
+  /** No step reads the revision, or it doesn't parse. `summary` says why, with no value from it. */
+  | 'migration_failed';
+
+export interface MigrationRejection extends Rejection<MigrationRejectionCode> {
+  /** For revision_incompatible: why, such as `damaged:hash_mismatch`. */
+  readonly reason?: string;
+  /** For migration_blocked, and validation_failed after a migration: what it would write. */
+  readonly plan?: MigrationPlan;
+  /** For migration_failed. */
+  readonly summary?: readonly string[];
+}
+
+export type MigrationOutcome =
+  | {
+      readonly kind: 'committed';
+      readonly revisionId: RevisionId;
+      readonly seq: number;
+      readonly plan: MigrationPlan;
+    }
+  /** A dry run's: what the run would write. Nothing was written. */
+  | { readonly kind: 'planned'; readonly plan: MigrationPlan }
+  | MigrationRejection
+  | LiveConflict;
+
 export interface PublicationService {
   publish(
     input: PublishInput,
@@ -294,6 +393,18 @@ export interface PublicationService {
     actor: StoreActor,
     context?: PublicationContext,
   ): Promise<PublicationOutcome>;
+  /**
+   * `migrate-store`, and `rollback --to` an older revision (item 25):
+   * migrates a revision through `checks.migration` into a new child of it,
+   * checked as a publish, and makes that live, under the lock. It changes
+   * no revision that exists. With `dryRun`, it plans the same migration
+   * without the lock, and writes nothing.
+   */
+  migrate(
+    input: MigrateInput,
+    actor: StoreActor,
+    options?: { readonly dryRun?: boolean },
+  ): Promise<MigrationOutcome>;
   status(): Promise<LiveStatus>;
   /**
    * Every event, in seq order. A page reads only its own events: seq
@@ -357,6 +468,21 @@ function rejected(
   extra: Omit<PublicationRejection, 'kind' | 'code' | 'diagnostics'> = {},
 ): PublicationRejection {
   return { kind: 'rejected', code, diagnostics, ...extra };
+}
+
+/** How an operation under the lock ends: committed, or with a code. */
+type Ended =
+  | { readonly kind: 'committed'; readonly revisionId: RevisionId; readonly seq: number }
+  | { readonly kind: 'rejected' | 'conflict'; readonly code: string };
+
+function refusedMigration(
+  code: MigrationRejectionCode,
+  extra: Omit<MigrationRejection, 'kind' | 'code' | 'diagnostics'> & {
+    readonly diagnostics?: readonly UnitDiagnostic[];
+  } = {},
+): MigrationRejection {
+  const { diagnostics = [], ...rest } = extra;
+  return { kind: 'rejected', code, diagnostics, ...rest };
 }
 
 /** Throws unless an owner's operation can hold its session for the pointer move. */
@@ -653,15 +779,15 @@ export function filesystemPublicationService({
   }
 
   /** Runs an operation under the lock, logging how it ended, by stage, never with content. */
-  async function run(
-    operation: 'publish' | 'rollback' | 'recover' | 'import',
-    body: (stage: (name: string) => void) => Promise<PublicationOutcome>,
-  ): Promise<PublicationOutcome> {
+  async function run<T extends Ended>(
+    operation: 'publish' | 'rollback' | 'recover' | 'import' | 'migrate',
+    body: (stage: (name: string) => void) => Promise<T>,
+  ): Promise<T | PublicationRejection> {
     const started = performance.now();
     let stage = 'lock';
     const durationMs = () => Math.round(performance.now() - started);
     try {
-      const outcome = await lock.withLock(operation, async () => {
+      const outcome: T | PublicationRejection = await lock.withLock(operation, async () => {
         stage = 'check';
         try {
           return await body((name) => {
@@ -674,12 +800,13 @@ export function filesystemPublicationService({
           return rejected('lock_lost');
         }
       });
-      if (outcome.kind === 'committed') {
+      const ended: Ended = outcome;
+      if (ended.kind === 'committed') {
         log({
           level: 'info',
           event: `store.${operation}.committed`,
-          revisionId: outcome.revisionId,
-          seq: outcome.seq,
+          revisionId: ended.revisionId,
+          seq: ended.seq,
           durationMs: durationMs(),
         });
       } else {
@@ -687,7 +814,7 @@ export function filesystemPublicationService({
           level: 'info',
           event: `store.${operation}.failed`,
           stage,
-          code: outcome.code,
+          code: ended.code,
           durationMs: durationMs(),
         });
       }
@@ -706,8 +833,15 @@ export function filesystemPublicationService({
     }
   }
 
-  /** Whether `health` lets a rollback or recover make its revision live, and if not, why. */
-  function targetProblem(id: RevisionId, found: HealthVerdict): PublicationRejection | null {
+  /**
+   * Whether `health` lets a rollback or recover make its revision live, and
+   * if not, why. One an older build wrote names the CLI's `rollback --to`,
+   * which migrates it (item 13).
+   */
+  async function targetProblem(
+    id: RevisionId,
+    found: HealthVerdict,
+  ): Promise<PublicationRejection | null> {
     switch (found.state) {
       case 'ok':
         return null;
@@ -718,9 +852,121 @@ export function filesystemPublicationService({
       case 'incompatible':
         return rejected('revision_incompatible', found.diagnostics, {
           reason: found.reason,
-          command: `rollback --to ${id}`,
+          ...((await migratable(fs, paths, id, found.reason, checks.versions))
+            ? { command: `portfolio-store rollback --to ${id}` }
+            : {}),
         });
     }
+  }
+
+  /**
+   * #10 slice 2's media ingestion: what a media document references, put
+   * into the AssetStore before the unit is checked, for an import and a
+   * migration alike. Until then there's nothing to ingest.
+   */
+  async function ingested(documents: UnitInput): Promise<UnitInput> {
+    return documents;
+  }
+
+  /**
+   * The migration of `id` through `checks.migration`, and the migrated unit
+   * checked as a publish (item 25), or why there's none. It writes nothing.
+   */
+  async function planMigration(
+    id: RevisionId,
+    set: readonly MigrationValue[],
+  ): Promise<
+    | {
+        readonly kind: 'plan';
+        readonly plan: MigrationPlan;
+        readonly unit: Unit;
+        readonly rendering: Rendering;
+      }
+    | MigrationRejection
+  > {
+    const migration = checks.migration;
+    if (!migration) return refusedMigration('migration_unavailable');
+    if (!(await fs.stat(paths.revision(id))) || (await isTombstoned(fs, paths, id))) {
+      return refusedMigration('not_found');
+    }
+    const read = await readRevision(fs, paths, id);
+    if (!read.ok) {
+      return refusedMigration('revision_incompatible', { reason: `damaged:${read.damage}` });
+    }
+    const { unit } = read.revision;
+    const stored: StoredUnit = {
+      portfolio: { text: unit.portfolio.sourceText, format: unit.portfolio.format },
+      site: { text: unit.site.sourceText, format: unit.site.format },
+      ...(unit.media ? { media: { text: unit.media.sourceText, format: unit.media.format } } : {}),
+    };
+    const result = migration.migrateDocuments(stored, set.length > 0 ? { set } : {});
+    if (result.status === 'current') return refusedMigration('nothing_to_migrate');
+    if (result.status === 'failed') {
+      return refusedMigration('migration_failed', { summary: [...result.summary] });
+    }
+    const changed: MigratedDocument[] = [];
+    for (const name of DOCUMENT_NAMES) {
+      const before = unit[name];
+      const after = result.documents[name];
+      if (!after) continue;
+      if (before && before.sourceText === after.text && before.format === after.format) continue;
+      changed.push({
+        document: name,
+        file: documentFileName(name, after.format),
+        before: before?.sourceText ?? '',
+        after: after.text,
+      });
+    }
+    const plan: MigrationPlan = {
+      fromRevisionId: id,
+      from: { portfolio: result.from.portfolio, site: result.from.site },
+      to: { portfolio: result.to.portfolio, site: result.to.site },
+      changed,
+      ids: result.ids.map(({ id: minted, owner, pointer, from }) => ({
+        id: minted,
+        ...(owner === undefined ? {} : { owner }),
+        pointer,
+        from,
+      })),
+      needs: result.needs.map(({ path: need, reason, accepts }) => ({
+        path: need,
+        reason,
+        ...(accepts === undefined ? {} : { accepts: [...accepts] }),
+      })),
+      comments: [...(result.comments ?? [])],
+      secrets: (result.secrets ?? []).map((spot) => ({ ...spot })),
+    };
+    if (plan.needs.length > 0) return refusedMigration('migration_blocked', { plan });
+    const { portfolio, site, media } = result.documents;
+    const checked = checkUnit(
+      await ingested({
+        portfolio: { format: portfolio.format, sourceText: portfolio.text },
+        site: { format: site.format, sourceText: site.text },
+        ...(media ? { media: { format: media.format, sourceText: media.text } } : {}),
+      }),
+      checks,
+    );
+    if (!checked.ok) {
+      return refusedMigration('validation_failed', { diagnostics: checked.diagnostics, plan });
+    }
+    // Its own check found what blocks it, though the build's passed: it stays refused.
+    if (result.status === 'blocked') {
+      return refusedMigration('validation_failed', { diagnostics: result.diagnostics, plan });
+    }
+    return { kind: 'plan', plan, unit: checked.unit, rendering: checked.rendering };
+  }
+
+  /** The `--set` values a migration takes. */
+  function setValues(set: readonly MigrationValue[] | undefined): readonly MigrationValue[] {
+    if (set === undefined) return [];
+    if (!Array.isArray(set)) throw new TypeError('Set values are a list.');
+    for (const entry of set as readonly unknown[]) {
+      const value = entry as Partial<MigrationValue> | null;
+      if (typeof value?.path !== 'string' || typeof value.value !== 'string') {
+        throw new TypeError('A set value is a path and a value, each a string.');
+      }
+    }
+    return set;
   }
 
   /** Rollback and recover: step 1, the target's check, then steps 4 and 5 without a draft. */
@@ -755,7 +1001,7 @@ export function filesystemPublicationService({
       if (!target || !(await fs.stat(paths.revision(target)))) return rejected('not_found');
       if (target === pointer?.revisionId) return rejected('nothing_to_publish');
       const found = await health(target, 'publish');
-      const problem = targetProblem(target, found);
+      const problem = await targetProblem(target, found);
       if (problem) return problem;
       const unitHash = found.state === 'ok' ? found.unitHash : null;
       if (!unitHash) return rejected('revision_incompatible');
@@ -990,8 +1236,10 @@ export function filesystemPublicationService({
         // process moved since then is a race this import lost.
         if (expected !== live) return liveConflict(pointer, expected);
 
+        stage('ingest');
+        const unitInput = await ingested(documents);
         stage('validate');
-        const checked = checkUnit(documents, checks);
+        const checked = checkUnit(unitInput, checks);
         if (!checked.ok) return rejected('validation_failed', checked.diagnostics);
         const { unit, rendering } = checked;
         const manifest = manifestFor(
@@ -1042,6 +1290,91 @@ export function filesystemPublicationService({
       });
     },
 
+    async migrate(input, actor, options = {}) {
+      if (actor !== 'operator') {
+        throw new TypeError('A migration runs from portfolio-store, as the operator.');
+      }
+      const expected = expectation(input.expectedLiveRevisionId);
+      if (input.fromRevisionId !== undefined && !isRevisionId(input.fromRevisionId)) {
+        throw new TypeError('Not a revision ID.');
+      }
+      const set = setValues(input.set);
+      const restoring = input.fromRevisionId !== undefined;
+      /** What to migrate: the target, or the live revision. */
+      const source = (pointer: LivePointer | null): RevisionId | MigrationRejection => {
+        const live = pointer?.revisionId ?? null;
+        const id = input.fromRevisionId ?? live;
+        if (!id) return refusedMigration('not_found');
+        // The live revision is migrate-store's: a rollback to it moves nothing.
+        if (restoring && id === live) return refusedMigration('nothing_to_publish');
+        return id;
+      };
+      if (options.dryRun) {
+        const pointer = await readPointer();
+        if ((pointer?.revisionId ?? null) !== expected) return liveConflict(pointer, expected);
+        const id = source(pointer);
+        if (typeof id !== 'string') return id;
+        try {
+          const planned = await planMigration(id, set);
+          return planned.kind === 'plan' ? { kind: 'planned', plan: planned.plan } : planned;
+        } catch (error) {
+          throw storageError(error);
+        }
+      }
+      const operation = restoring ? 'rollback' : 'migrate';
+      return run(
+        operation,
+        async (stage): Promise<Exclude<MigrationOutcome, { kind: 'planned' }>> => {
+          const pointer = await livePointer(operation);
+          if ((pointer?.revisionId ?? null) !== expected) return liveConflict(pointer, expected);
+          const id = source(pointer);
+          if (typeof id !== 'string') return id;
+          stage('migrate');
+          const planned = await planMigration(id, set);
+          if (planned.kind !== 'plan') return planned;
+          const { unit, rendering } = planned;
+          const manifest = manifestFor(
+            unit,
+            {
+              revisionId: newRevisionId(),
+              parentRevisionId: id,
+              createdAt: stamp(),
+              createdBy: actor,
+              source: { kind: 'migration' },
+            },
+            checks,
+            rendering,
+          );
+          const missing = await missingBlobs(manifest);
+          if (missing) return missing;
+          stage('stage');
+          try {
+            await writeRevision(fs, paths, { manifest, unit }, operation);
+          } catch (error) {
+            await fs
+              .remove(paths.staging(manifest.revisionId), `${operation}.staging.remove`)
+              .catch(() => {});
+            throw error;
+          }
+          stage('commit');
+          const event: PublicationEvent = {
+            seq: (pointer?.seq ?? 0) + 1,
+            type: restoring ? 'rollback' : 'schema-migration',
+            revisionId: manifest.revisionId,
+            previousRevisionId: pointer?.revisionId ?? null,
+            actor,
+            at: stamp(),
+            ...(restoring ? { restoredFrom: id } : {}),
+          };
+          const outcome = await commit(operation, event, unit.unitHash, {});
+          if (outcome.kind === 'committed') return { ...outcome, plan: planned.plan };
+          // Without a draft, a commit ends committed, rejected, or in a live conflict.
+          if (outcome.code === 'draft_conflict') throw new TypeError('A migration has no draft.');
+          return outcome;
+        },
+      );
+    },
+
     async status() {
       try {
         let pointer: LivePointer | null;
@@ -1078,9 +1411,12 @@ export function filesystemPublicationService({
           return { state: 'live', servingRevisionId: pointer.revisionId, ...base };
         const reason = found.state === 'removed' ? 'removed' : `${found.state}:${found.reason}`;
         const lkg = await walkLastKnownGood(pointer);
+        const command = (await migratable(fs, paths, pointer.revisionId, reason, checks.versions))
+          ? { command: MIGRATE_COMMAND }
+          : {};
         return lkg
-          ? { state: 'degraded', servingRevisionId: lkg, reason, ...base }
-          : { state: 'incompatible', servingRevisionId: null, reason, ...base };
+          ? { state: 'degraded', servingRevisionId: lkg, reason, ...base, ...command }
+          : { state: 'incompatible', servingRevisionId: null, reason, ...base, ...command };
       } catch (error) {
         throw storageError(error);
       }

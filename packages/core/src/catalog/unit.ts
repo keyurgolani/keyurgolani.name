@@ -122,8 +122,151 @@ export interface UnitChecks {
   exportBlobs?(media: unknown): readonly Sha256[];
   /** What the build renders a pair with, for the manifest. */
   rendering?(pair: ParsedPair): Rendering;
+  /**
+   * This build's schema version for each document (#10's SCHEMA_VERSIONS),
+   * which tells a revision an older build wrote, that a migration takes to
+   * this build's, from one a newer build wrote.
+   */
+  readonly versions?: SchemaVersions;
+  /**
+   * The migration from older schema versions (#3, item 25), which
+   * `migrate-store` and the CLI's `rollback --to` run. Only the CLI's checks
+   * have it: startup never migrates.
+   */
+  readonly migration?: StoreMigration;
   /** This build's version, for the manifest. */
   readonly appVersion: string;
+}
+
+/** One stored document, as a migration takes and gives it: its text and its format. */
+export interface StoredDocument {
+  readonly text: string;
+  readonly format: DocumentFormat;
+}
+
+/** A stored unit's documents, as a migration reads them. */
+export interface StoredUnit {
+  readonly portfolio: StoredDocument;
+  readonly site: StoredDocument;
+  readonly media?: StoredDocument;
+}
+
+/** Schema versions by document. */
+export interface SchemaVersions {
+  readonly portfolio: number;
+  readonly site: number;
+}
+
+/** A value the owner gives a migration: `--set <portfolio|site>.<path>=<value>`. */
+export interface MigrationValue {
+  readonly path: string;
+  readonly value: string;
+}
+
+/** A value only the owner can give, which a migration can't fill on its own. */
+export interface MigrationNeed {
+  /** Such as `site.appearance.colorScheme`. */
+  readonly path: string;
+  readonly reason: string;
+  /** The ids this build takes there, when there's a list. */
+  readonly accepts?: readonly string[];
+}
+
+/** An id a migration minted from content, so a dry run and the run mint the same. */
+export interface MigrationId {
+  readonly id: string;
+  /** What it identifies, such as `work`. */
+  readonly owner?: string;
+  /** Where it is in the new document. */
+  readonly pointer: string;
+  /** What it came from in the old one. */
+  readonly from: string;
+}
+
+/** Where a migration found secret-shaped text. Never the text. */
+export interface MigrationSecret {
+  readonly kind: string;
+  /** A value or a key at `pointer`, a comment, or the `--set` value for `path`. */
+  readonly in: string;
+  readonly pointer?: string;
+  readonly path?: string;
+  readonly line?: number;
+  readonly column?: number;
+}
+
+/** What a migration makes of a stored unit, as far as the store reads it. */
+export type UnitMigration =
+  | { readonly status: 'current' }
+  | {
+      readonly status: 'failed';
+      readonly reasons: readonly string[];
+      /** The reasons without any value from the documents, for a log. */
+      readonly summary: readonly string[];
+    }
+  | {
+      /** `blocked`: values only the owner can give, or a blocking finding. */
+      readonly status: 'ready' | 'blocked';
+      readonly from: SchemaVersions;
+      readonly to: SchemaVersions;
+      /** Each document in its own format. One no step changes comes back byte for byte. */
+      readonly documents: StoredUnit;
+      readonly ids: readonly MigrationId[];
+      readonly needs: readonly MigrationNeed[];
+      readonly diagnostics: readonly Diagnostic[];
+      /** Portfolio source lines whose comments the new text doesn't keep. */
+      readonly comments?: readonly number[];
+      /** While there's any, a dry run shows no diff and no document. */
+      readonly secrets?: readonly MigrationSecret[];
+    };
+
+/**
+ * The migration from older schema versions (#3, item 25): #10's
+ * migrateDocuments and unifiedDiff, from `@portfolio/schema/migrate`, or a
+ * test's own step. A migration is deterministic: the same bytes and values
+ * give the same bytes and ids.
+ */
+export interface StoreMigration {
+  migrateDocuments(
+    unit: StoredUnit,
+    options?: { readonly set?: readonly MigrationValue[] },
+  ): UnitMigration;
+  /** `before` and `after` as a unified diff: '' when they're equal, null when it's too long to show. */
+  unifiedDiff?(
+    before: string,
+    after: string,
+    names: { readonly before: string; readonly after: string },
+  ): string | null;
+}
+
+/** The finding codes that mean another schema major wrote a document. */
+const SCHEMA_CODES = new Set(['schema.version', 'schema.outdated']);
+
+/**
+ * Whether a health reason names another schema major: one of its codes,
+ * joined by commas after the state the reader puts first, as in
+ * `incompatible:schema.version`.
+ */
+export function schemaMismatch(reason: string | undefined): boolean {
+  if (reason === undefined) return false;
+  const codes = reason.replace(/^(?:incompatible|damaged):/, '').split(',');
+  return codes.some((code) => SCHEMA_CODES.has(code));
+}
+
+/**
+ * Whether documents at `found` versions are older than this build's
+ * `versions`: none newer, and one older. A newer one is for the build that
+ * wrote it, and no migration here reads it.
+ */
+export function olderSchema(
+  found: { readonly portfolio: number | null; readonly site: number | null },
+  versions: SchemaVersions | undefined,
+): boolean {
+  if (!versions || found.portfolio === null || found.site === null) return false;
+  return (
+    found.portfolio <= versions.portfolio &&
+    found.site <= versions.site &&
+    (found.portfolio < versions.portfolio || found.site < versions.site)
+  );
 }
 
 /** A finding about a unit: #4's and #10's, or the store's own about the media document. */

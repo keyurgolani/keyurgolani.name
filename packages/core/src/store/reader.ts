@@ -14,7 +14,14 @@ import type { FileStats, ReadFs } from './fs-port';
 import { storePaths, type RevisionId, type Sha256 } from './layout';
 import { DamagedPointerError, hasHistory, readEvents, readLive, type LivePointer } from './pointer';
 import { nodeReadFs } from './read-fs';
-import { isTombstoned, readManifest, readRevision, revisionHealth } from './revisions';
+import {
+  isTombstoned,
+  migratable,
+  MIGRATE_COMMAND,
+  readManifest,
+  readRevision,
+  revisionHealth,
+} from './revisions';
 
 // RevisionCatalogReader (#3, item 19): owner's CatalogReader, over the
 // revision store. Each request stats publication/live.json, so a publish
@@ -30,7 +37,9 @@ import { isTombstoned, readManifest, readRevision, revisionHealth } from './revi
 // tombstone. With none, it's `incompatible`. With no pointer it's `empty`,
 // as owner's store is until its first-start import commits, unless the
 // store has published before, when the pointer is damaged. Visitors get 503
-// while it's `incompatible` or `empty`. It
+// while it's `incompatible` or `empty`. A live revision an older build
+// wrote is one it can't serve, and its status and log line name
+// `portfolio-store migrate-store`, since startup never migrates (item 25). It
 // never rewrites the pointer: it gets the reads of node:fs and nothing
 // else, and imports no module that writes. It keeps up to four served units
 // by revision ID; as the pointer moves to a kept one, its tombstone, its
@@ -276,6 +285,10 @@ export function revisionCatalogReader({
       }
       reason = served.reason;
     }
+    const command =
+      pointer && (await migratable(fs, paths, pointer.revisionId, reason, checks.versions))
+        ? { command: MIGRATE_COMMAND }
+        : {};
     const good = await lastKnownGood(pointer?.revisionId ?? null, seen);
     if (good) {
       return done({
@@ -285,6 +298,7 @@ export function revisionCatalogReader({
           ...base,
           servingRevisionId: good.id,
           reason,
+          ...command,
           renderDrift: drifted,
         },
       });
@@ -296,6 +310,7 @@ export function revisionCatalogReader({
         ...base,
         servingRevisionId: null,
         reason,
+        ...command,
         renderDrift: drifted,
       },
     });
@@ -313,6 +328,7 @@ export function revisionCatalogReader({
           ...(status.liveRevisionId ? { revisionId: status.liveRevisionId } : {}),
           ...(status.servingRevisionId ? { servingRevisionId: status.servingRevisionId } : {}),
           ...(status.reason ? { code: status.reason } : {}),
+          ...(status.command ? { command: status.command } : {}),
         });
       }
     }

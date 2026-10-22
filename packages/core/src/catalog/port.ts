@@ -75,6 +75,12 @@ export interface CatalogStatus {
   readonly unitHash: string | null;
   /** Why the live revision isn't served, when it isn't, such as `damaged:hash_mismatch`. */
   readonly reason?: string;
+  /**
+   * The command that serves the live revision again, when an older build
+   * wrote it: `portfolio-store migrate-store` (#3, item 25). Startup never
+   * migrates.
+   */
+  readonly command?: string;
   /** How the live manifest's rendering differs from the build's, or null when it doesn't. */
   readonly renderDrift: readonly RenderDrift[] | null;
 }

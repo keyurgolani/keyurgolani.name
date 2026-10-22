@@ -18,11 +18,14 @@ import {
   DOCUMENT_NAMES,
   documentFileName,
   isSnapshotKind,
+  olderSchema,
   plainModel,
+  schemaMismatch,
   sha256,
   unitHashOf,
   type DocumentName,
   type Rendering,
+  type SchemaVersions,
   type Unit,
   type UnitChecks,
   type UnitDiagnostic,
@@ -49,7 +52,11 @@ export interface ManifestDocument {
   readonly contentHash: Sha256;
 }
 
-/** Where a revision's documents came from: a draft and its version, or an import's mounted files. */
+/**
+ * Where a revision's documents came from: a draft and its version, an
+ * import's mounted files, or a migration to this build's schema of its
+ * parent, a revision an older build wrote (#3, item 25).
+ */
 export type RevisionSource =
   | {
       readonly kind: 'draft';
@@ -58,7 +65,8 @@ export type RevisionSource =
       /** A draft imported from source keeps the mounted files' hash (#3, item 24). */
       readonly sourceHash?: Sha256;
     }
-  | { readonly kind: 'import'; readonly sourceHash: Sha256 };
+  | { readonly kind: 'import'; readonly sourceHash: Sha256 }
+  | { readonly kind: 'migration' };
 
 /**
  * What a revision is (#3, item 8). It holds no secret, session ID, cookie,
@@ -208,7 +216,8 @@ function asManifest(value: unknown, id: RevisionId): Manifest | null {
       isDraftId(source.draftId) &&
       Number.isSafeInteger(source.draftVersion) &&
       (source.sourceHash === undefined || isSha256(source.sourceHash))) ||
-      (source.kind === 'import' && isSha256(source.sourceHash)));
+      (source.kind === 'import' && isSha256(source.sourceHash)) ||
+      (source.kind === 'migration' && isRevisionId(manifest.parentRevisionId)));
   const ok =
     manifest.manifestVersion === 1 &&
     manifest.revisionId === id &&
@@ -395,6 +404,29 @@ export async function readManifest(
   if (text === null) return null;
   const parsed = parseJson(text);
   return parsed.ok ? asManifest(parsed.value, id) : null;
+}
+
+/** What serves a live revision an older build wrote again (#3, item 25). */
+export const MIGRATE_COMMAND = 'portfolio-store migrate-store';
+
+/**
+ * Whether a migration is what makes revision `id` serve under this build
+ * again (#3, item 25): its health `reason` names another schema major, and
+ * its manifest's documents are at versions older than this build's. One a
+ * newer build wrote is for that build.
+ */
+export async function migratable(
+  fs: ReadFs,
+  paths: StorePaths,
+  id: RevisionId,
+  reason: string | undefined,
+  versions: SchemaVersions | undefined,
+): Promise<boolean> {
+  if (!versions || !schemaMismatch(reason)) return false;
+  const manifest = await readManifest(fs, paths, id);
+  if (!manifest) return false;
+  const { portfolio, site } = manifest.documents;
+  return olderSchema({ portfolio: portfolio.schemaVersion, site: site.schemaVersion }, versions);
 }
 
 /** Every revision ID with a directory, staging and tombstones aside. */
