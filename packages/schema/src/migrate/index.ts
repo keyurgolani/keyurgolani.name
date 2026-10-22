@@ -1,7 +1,7 @@
 import type { ContentExtension } from '../extensions';
 import { isPlainObject } from '../json';
 import { detectDocument } from '../legacy';
-import { SCHEMA_VERSION } from '../portfolio';
+import { V2_SCHEMA_VERSION as SCHEMA_VERSION } from './v2/schema';
 import { findSecrets, redactedPointer, redactSecrets, secretKind } from '../secrets';
 import { serialize } from '../serialize';
 import { DisplayModeSchema, type AppearanceSelection } from '../site';

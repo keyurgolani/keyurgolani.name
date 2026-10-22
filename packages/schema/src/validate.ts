@@ -4,6 +4,7 @@ import { isPlainObject } from './json';
 import {
   detectDocument,
   legacyNeeds,
+  IDS_FIX_COMMAND,
   MIGRATE_COMMAND,
   migratedNames,
   shellQuote,
@@ -19,8 +20,9 @@ import {
   type DocumentWarning,
 } from './load';
 import type { Portfolio } from './portfolio';
-import type { ParsedPair } from './public-view';
+import type { ParsedPair } from './view';
 import { findSecrets, redactedPointer, redactSecrets, SECRET_LABELS, secretKind } from './secrets';
+import { checkPair } from './pair-checks';
 import type { AppearanceAxis, AppearanceSelection, Site } from './site';
 import { parsePointer, yamlComments, type DocumentFormat, type Locate } from './source';
 
@@ -29,6 +31,12 @@ import { parsePointer, yamlComments, type DocumentFormat, type Locate } from './
 // throws, and startup, the CLI, and Studio print the records it returns.
 
 export type DiagnosticSeverity = 'blocks-preview' | 'blocks-publish' | 'warning';
+
+/** The pair's two documents. */
+type PairDoc = 'portfolio' | 'site';
+
+/** Where a finding is: one of the pair's documents, or a snapshot or the media document beside them. */
+export type DiagnosticDocument = PairDoc | 'snapshots' | 'media';
 
 /**
  * One finding. `blocks-preview`: the pair can't render. `blocks-publish`: a
@@ -39,7 +47,13 @@ export type DiagnosticSeverity = 'blocks-preview' | 'blocks-publish' | 'warning'
 export interface Diagnostic {
   readonly code: string;
   readonly severity: DiagnosticSeverity;
-  readonly document: 'portfolio' | 'site';
+  /**
+   * The document the finding is in: one of the pair, or a unit file beside
+   * them, a snapshot or the media document, which `file` names.
+   */
+  readonly document: DiagnosticDocument;
+  /** For a snapshot or the media document, its path in the unit, such as snapshots/github.json. */
+  readonly file?: string;
   /** JSON pointer into `document`; '' is the whole document. */
   readonly pointer: string;
   /** The id of the section the finding is about, when there is one. */
@@ -92,6 +106,28 @@ export interface UnitValidator {
   validate(pair: ParsedPair, ctx: Context): { diagnostics: Diagnostic[]; notChecked?: string[] };
 }
 
+/**
+ * What #3 knows at publish and import: the live revision and the draft's
+ * derived block. The publication validators (urls.vanished, id.reused) read
+ * it; without it, they report `notChecked`.
+ */
+export interface Publication {
+  /** The live revision: null for an empty store. */
+  readonly live: {
+    readonly pair: ParsedPair;
+    readonly media?: unknown;
+    readonly snapshots?: Readonly<Record<string, unknown>>;
+  } | null;
+  /** The draft's derived block; absent for an import, which counts as accepting derived values. */
+  readonly derived?: unknown;
+  /**
+   * The view paths each side's variant serves, which the schema can't read
+   * from manifests. Without them, only the home page and the case-study
+   * routes are checked.
+   */
+  readonly viewPaths?: { readonly live?: readonly string[]; readonly next?: readonly string[] };
+}
+
 /** What the checks may rely on. A check whose context is missing goes in `notChecked`. */
 export interface Context {
   readonly catalog?: AppearanceCatalog;
@@ -99,6 +135,8 @@ export interface Context {
   /** The deployment's canonical origin, such as https://jane.name. */
   readonly canonicalOrigin?: string;
   readonly validators?: readonly UnitValidator[];
+  /** At publish and import, the live revision and the draft's derived block (#3). */
+  readonly publication?: Publication;
 }
 
 export interface PublicationUnitResult {
@@ -115,6 +153,11 @@ export const DIAGNOSTIC_SEVERITIES = {
   'parse.syntax': 'blocks-preview',
   'schema.invalid': 'blocks-preview',
   'schema.version': 'blocks-preview',
+  'schema.outdated': 'blocks-preview',
+  'id.missing': 'blocks-preview',
+  'id.invalid': 'blocks-preview',
+  'snapshot.syntax': 'blocks-preview',
+  'snapshot.invalid': 'blocks-preview',
   'source.missing': 'blocks-preview',
   'source.duplicate': 'blocks-preview',
   'source.unreadable': 'blocks-preview',
@@ -122,11 +165,20 @@ export const DIAGNOSTIC_SEVERITIES = {
   'site.deployment-setting': 'blocks-preview',
   'appearance.unknown': 'blocks-preview',
   'id.duplicate': 'blocks-publish',
+  'id.reused': 'blocks-publish',
   'ref.missing': 'blocks-publish',
+  'ref.unresolved': 'blocks-publish',
+  'ref.type': 'blocks-publish',
+  'curation.overlap': 'blocks-publish',
+  'slug.duplicate': 'blocks-publish',
+  'urls.vanished': 'blocks-publish',
   'metric.conflict': 'blocks-publish',
   'anchor.broken': 'blocks-publish',
   'secret.detected': 'blocks-publish',
   'content.empty': 'blocks-publish',
+  'ref.private': 'warning',
+  'section.empty': 'warning',
+  'snapshot.ignored': 'warning',
   'metric.duplicate': 'warning',
   'image.alt-missing': 'warning',
   'origin.sample': 'warning',
@@ -143,7 +195,17 @@ export const DIAGNOSTIC_REMEDIATIONS: Readonly<Record<DiagnosticCode, string>> =
     'Fix the text at this position. A document is one plain YAML or JSON document, with no anchors, aliases, merge keys, tags, or directives.',
   'schema.invalid':
     "Change the value at this pointer to what the schema expects. Data the schema doesn't define goes under extensions, keyed by an npm package name.",
-  'schema.version': 'Set schemaVersion: 2. This release reads only version 2 documents.',
+  'schema.version':
+    'Set schemaVersion: 3 in the portfolio document and schemaVersion: 2 in the site document. This release reads only those versions.',
+  'schema.outdated': `Run ${MIGRATE_COMMAND} <file> to see every change it makes, then ${MIGRATE_COMMAND} <file> --write --out <dir> to write the schemaVersion 3 portfolio document into <dir>, and put it in place of the old one. Running it on its own output changes nothing.`,
+  'id.missing': `Run ${IDS_FIX_COMMAND} to give every section, record, and media asset without an id one, keeping the file's comments and key order. An id is never derived when the document loads.`,
+  'id.invalid': `Run ${IDS_FIX_COMMAND} to replace it with a well-formed id, or write one yourself: lowercase words and digits joined by hyphens, at most 64 characters, not main.`,
+  'snapshot.syntax':
+    'Fix the snapshot file at this position. A snapshot is one plain JSON document of at most 1 MiB. Refreshing the source rewrites it.',
+  'snapshot.invalid':
+    "Fix the value at this pointer, or remove the file and refresh the source. Until then the deployment won't start.",
+  'snapshot.ignored':
+    'Rename it to <kind>.json, with a kind of lowercase letters, digits, and hyphens, or remove it.',
   'source.missing':
     'Add the document: portfolio.yml and site.yml, or their .yaml or .json forms. portfolio.example.yml and site.example.yml are ones to start from.',
   'source.duplicate': 'Keep one of them, in the format you edit, and remove the others.',
@@ -153,17 +215,33 @@ export const DIAGNOSTIC_REMEDIATIONS: Readonly<Record<DiagnosticCode, string>> =
   'site.deployment-setting':
     "Remove it. Deployment settings come from the server's environment; docs/deployment.md lists them.",
   'appearance.unknown': 'Pick an id this build registers.',
-  'id.duplicate': 'Give each section an id of its own.',
+  'id.duplicate': `Give each section, record, and media asset an id of its own. ${IDS_FIX_COMMAND} gives the later one a new id; references to the repeated id then name the first.`,
+  'id.reused': `Give it an id of its own: the live revision's id names something of another type in anchors, feed entries, JSON-LD, and media URLs. ${IDS_FIX_COMMAND} mints one.`,
   'ref.missing':
     "Remove this entry from the site document's sections, or rename it to a section id the portfolio has.",
-  'metric.conflict': 'Give both the same value, or give the stats different metric keys.',
-  'anchor.broken': 'Point the link at a visible section id, or drop the #fragment.',
+  'ref.unresolved': 'Point it at an id the portfolio has, of the right type, or remove it.',
+  'ref.type':
+    'Point it at a record of the type this place lists: works list works, proof lists evidence, and a cover, an avatar, a logo, or an og image shows an image asset.',
+  'curation.overlap':
+    'Keep each work in one place: the signature, featured, or archive. A list names each id once.',
+  'slug.duplicate':
+    'Give each case study a slug of its own. A slug may change; publish redirects the old one.',
+  'urls.vanished':
+    'Acknowledge the URL with portfolio-store urls ack <url> so it answers 410, or redirect it to a live URL with --redirect <path>.',
+  'metric.conflict': 'Give both the same value, or give the evidence different metric keys.',
+  'anchor.broken': 'Point the link at a visible section or record id, or drop the #fragment.',
   'secret.detected':
     'Remove it from the document and revoke it. Secrets belong in the environment or a secret file.',
-  'content.empty': "Add a section, or unhide one in the site document's sections.",
-  'metric.duplicate': 'Keep the metric in one section, unless repeating it is deliberate.',
+  'content.empty':
+    "Add a section with something public to show, or unhide one in the site document's sections.",
+  'ref.private':
+    "Make the record public, or leave it out here. Until then visitors don't see it here, and nothing else changes.",
+  'section.empty':
+    'List public records in it, author the part of the practice or the contact it shows, or remove the section.',
+  'metric.duplicate':
+    'Keep the metric in one piece of evidence, unless repeating it is deliberate.',
   'image.alt-missing':
-    "Give it alt text that says what it shows, or alt: '' if it's only decoration. A gallery image can take a caption instead.",
+    "Give the asset, or this placement, alt text that says what it shows, or decorative: true if it's only decoration. A caption isn't alt text.",
   'origin.sample': 'Replace the sample address with your own, or remove the link.',
   'origin.stale': "If that's an old domain, point the link at the configured origin's host.",
   'extension.unregistered':
@@ -280,7 +358,7 @@ function check(
   const notChecked: string[] = [];
   const data = { portfolio: portfolio.data, site: site.data };
   const add = (
-    document: Diagnostic['document'],
+    document: PairDoc,
     code: DiagnosticCode,
     found: { pointer: string; message: string; line?: number; column?: number },
     remediation = DIAGNOSTIC_REMEDIATIONS[code],
@@ -343,7 +421,7 @@ function check(
 
   if (!swapped.portfolio) {
     for (const problem of portfolio.problems) {
-      add('portfolio', problemCode(problem), located(problem));
+      add('portfolio', portfolioCode(problem), located(problem));
     }
     for (const problem of portfolio.duplicates) {
       add('portfolio', 'id.duplicate', located(problem));
@@ -393,7 +471,7 @@ function check(
   if (portfolio.value && site.value && portfolio.locate && site.locate) {
     pair = { portfolio: portfolio.value, site: site.value };
     const locateIn = { portfolio: portfolio.locate, site: site.locate };
-    const at = (document: Diagnostic['document'], path: readonly (string | number)[]) => ({
+    const at = (document: PairDoc, path: readonly (string | number)[]) => ({
       pointer: redactedPointer(path),
       ...locateIn[document](path),
     });
@@ -451,8 +529,8 @@ function runValidator(
   validator: UnitValidator,
   pair: ParsedPair,
   ctx: Context,
-  locateIn: Readonly<Record<Diagnostic['document'], Locate>>,
-  data: Readonly<Record<Diagnostic['document'], unknown>>,
+  locateIn: Readonly<Record<PairDoc, Locate>>,
+  data: Readonly<Record<PairDoc, unknown>>,
 ): { diagnostics: Diagnostic[]; notChecked: string[] } | null {
   let result: unknown;
   try {
@@ -535,6 +613,8 @@ function problemCode(problem: DocumentProblem): DiagnosticCode {
       return 'parse.syntax';
     case 'legacy':
       return 'legacy.document';
+    case 'outdated':
+      return 'schema.outdated';
     case 'version':
       return 'schema.version';
     case 'duplicate-id':
@@ -542,6 +622,24 @@ function problemCode(problem: DocumentProblem): DiagnosticCode {
     default:
       return 'schema.invalid';
   }
+}
+
+/** An entry id's pointer: a section's, a record's, or a media asset's. */
+const ENTRY_ID = /^\/(?:sections|works|evidence|chronology|media)\/\d+\/id$/;
+
+/** A portfolio problem's code: a missing or malformed entry id points at ids-fix. */
+function portfolioCode(problem: DocumentProblem): DiagnosticCode {
+  const code = problemCode(problem);
+  if (
+    code !== 'schema.invalid' ||
+    problem.pointer === undefined ||
+    !ENTRY_ID.test(problem.pointer)
+  ) {
+    return code;
+  }
+  return problem.code === 'invalid_type' && /is required\.$/.test(problem.message)
+    ? 'id.missing'
+    : 'id.invalid';
 }
 
 function located(problem: DocumentProblem) {
@@ -572,7 +670,7 @@ function deploymentSetting(problem: DocumentProblem): string | undefined {
  * site document. Only an id in the section-id shape counts, so a value
  * that's no id, such as a pasted token, never rides along in the records.
  */
-function stableId(document: Diagnostic['document'], pointer: string, data: unknown) {
+function stableId(document: PairDoc, pointer: string, data: unknown) {
   const [first, second] = pointer.split('/').slice(1);
   if (first !== 'sections' || second === undefined) return {};
   let id: unknown = second;
@@ -661,279 +759,6 @@ function catalogIds(
   } catch {
     return null;
   }
-}
-
-type PairReport = (
-  document: Diagnostic['document'],
-  code: DiagnosticCode,
-  path: readonly (string | number)[],
-  message: string,
-) => void;
-
-function checkPair(pair: ParsedPair, ctx: Context, notChecked: string[], report: PairReport) {
-  const { portfolio, site } = pair;
-  const registered = new Set((ctx.extensions ?? []).map(({ namespace }) => namespace));
-  const ids = new Set(portfolio.sections.map(({ id }) => id));
-  for (const id of Object.keys(site.sections ?? {})) {
-    if (!ids.has(id)) {
-      report(
-        'site',
-        'ref.missing',
-        ['sections', id],
-        `${redactedPointer(['sections', id])} names no section in the portfolio.`,
-      );
-    }
-  }
-
-  // A section is visible unless the site hides it or no registered extension renders it.
-  const visible = portfolio.sections.map((section) => {
-    if (site.sections?.[section.id]?.hidden === true) return false;
-    const extension = parseExtensionKind(section.kind);
-    return !extension || registered.has(extension.namespace);
-  });
-  if (!visible.includes(true)) {
-    report('portfolio', 'content.empty', ['sections'], 'The portfolio has no visible section.');
-  }
-
-  const links = publicUrls(portfolio, visible);
-  const targets = new Set([
-    ...RESERVED_SECTION_IDS,
-    ...portfolio.sections.filter((_, index) => visible[index]).map(({ id }) => id),
-  ]);
-  for (const { path, url } of links) {
-    const fragment = /^\/?#(.+)$/.exec(url)?.[1];
-    if (fragment !== undefined && !targets.has(fragment)) {
-      report(
-        'portfolio',
-        'anchor.broken',
-        path,
-        `${redactedPointer(path)} links to no visible section.`,
-      );
-    }
-  }
-
-  checkMetrics(portfolio, visible, report);
-  checkAltText(portfolio, visible, report);
-
-  const origin = canonicalHost(ctx.canonicalOrigin);
-  if (origin === undefined) {
-    notChecked.push('origin.sample', 'origin.stale');
-    return;
-  }
-  for (const { path, url } of links) {
-    const host = httpHost(url);
-    const sample = host !== undefined ? isSampleHost(host) : mailDomains(url).some(isSampleHost);
-    if (!isSampleHost(origin) && sample) {
-      report(
-        'portfolio',
-        'origin.sample',
-        path,
-        `${redactedPointer(path)} links to a sample address.`,
-      );
-    } else if (host !== undefined && isStaleHost(host, origin)) {
-      report(
-        'portfolio',
-        'origin.stale',
-        path,
-        `${redactedPointer(path)} links to a host that differs from the configured origin's only in its last label.`,
-      );
-    }
-  }
-}
-
-/**
- * Every url, src, and *Url value visitors can reach: outside hidden sections,
- * outside sections no registered extension renders, and outside extension
- * data, which only its extension understands.
- */
-function publicUrls(portfolio: Portfolio, visible: readonly boolean[]) {
-  const found: Array<{ path: (string | number)[]; url: string }> = [];
-  const walk = (node: unknown, path: (string | number)[]): void => {
-    if (Array.isArray(node)) {
-      node.forEach((child, index) => walk(child, [...path, index]));
-      return;
-    }
-    if (!isPlainObject(node)) return;
-    const extensionSection = typeof node.kind === 'string' && parseExtensionKind(node.kind);
-    for (const [key, child] of Object.entries(node)) {
-      if (key === 'extensions' || (extensionSection && key === 'data')) continue;
-      if (typeof child === 'string' && (key === 'url' || key === 'src' || key.endsWith('Url'))) {
-        found.push({ path: [...path, key], url: child });
-      } else {
-        walk(child, [...path, key]);
-      }
-    }
-  };
-  const { sections, ...rest } = portfolio;
-  walk(rest, []);
-  sections.forEach((section, index) => {
-    if (visible[index]) walk(section, ['sections', index]);
-  });
-  return found;
-}
-
-/**
- * Visible images that show something no text beside them names, with no
- * words for it: a gallery image without alt text or a caption, and a
- * project's screenshot without alt text. The shared renderers give such an
- * image no alt at all, so an audit finds it too. Logos, avatars, and covers
- * sit beside the name they show, so they're decorative without alt text, and
- * `alt: ''` says an image is decoration on purpose.
- */
-function checkAltText(portfolio: Portfolio, visible: readonly boolean[], report: PairReport) {
-  const missing = (path: (string | number)[], what: string) =>
-    report('portfolio', 'image.alt-missing', path, `${redactedPointer(path)} ${what}`);
-  portfolio.sections.forEach((section, index) => {
-    if (!visible[index]) return;
-    if (section.kind === 'gallery') {
-      section.items.forEach((item, position) => {
-        if (item.image.alt === undefined && !item.caption?.trim()) {
-          missing(
-            ['sections', index, 'items', position, 'image'],
-            "has no alt text or caption, so a visitor who can't see it can't tell what it shows.",
-          );
-        }
-      });
-    } else if (section.kind === 'projects') {
-      section.items.forEach((item, position) => {
-        item.images?.forEach((image, at) => {
-          if (image.alt !== undefined) return;
-          missing(
-            ['sections', index, 'items', position, 'images', at],
-            "has no alt text, so a visitor who can't see it can't tell what it shows.",
-          );
-        });
-      });
-    }
-  });
-}
-
-function checkMetrics(portfolio: Portfolio, visible: readonly boolean[], report: PairReport) {
-  interface Stated {
-    readonly path: (string | number)[];
-    readonly value: string | number;
-    readonly section: number;
-  }
-  const byKey = new Map<string, Stated[]>();
-  const state = (key: string, stated: Stated) =>
-    byKey.set(key, [...(byKey.get(key) ?? []), stated]);
-  portfolio.sections.forEach((section, index) => {
-    if (section.kind === 'stats') {
-      section.items.forEach((item, position) => {
-        if (!item.metric) return;
-        const path = ['sections', index, 'items', position, 'value'];
-        state(item.metric, { path, value: item.value, section: index });
-      });
-    } else if (section.kind === 'tenure' && section.years !== undefined) {
-      state('tenure-years', {
-        path: ['sections', index, 'years'],
-        value: section.years,
-        section: index,
-      });
-    }
-  });
-  const between = (a: Stated, b: Stated) =>
-    `${redactedPointer(a.path)} and ${redactedPointer(b.path)}`;
-  for (const stated of byKey.values()) {
-    // One group per value, in the order each value is first stated.
-    const groups = new Map<string, Stated[]>();
-    for (const one of stated) {
-      const value = normalizedValue(one.value);
-      groups.set(value, [...(groups.get(value) ?? []), one]);
-    }
-    const [first] = stated;
-    for (const [value, group] of groups) {
-      // Every statement of a value other than the first statement's contradicts it.
-      if (value !== normalizedValue(first!.value)) {
-        for (const later of group) {
-          report(
-            'portfolio',
-            'metric.conflict',
-            later.path,
-            `${between(later, first!)} give one metric different values.`,
-          );
-        }
-      }
-      // A value visitors see in two sections, hidden statements aside.
-      const shown = group.filter(({ section }) => visible[section]);
-      const [earliest] = shown;
-      for (const later of shown.slice(1)) {
-        if (later.section === earliest!.section) continue;
-        report(
-          'portfolio',
-          'metric.duplicate',
-          later.path,
-          `${between(later, earliest!)} show one metric with the same value.`,
-        );
-      }
-    }
-  }
-}
-
-/**
- * A metric value as it compares: a number when it reads as a finite number,
- * else its text trimmed and lowercased.
- */
-function normalizedValue(value: string | number): string {
-  const text = String(value).trim();
-  const number = text === '' ? Number.NaN : Number(text);
-  return Number.isFinite(number) ? `number:${number}` : `text:${text.toLowerCase()}`;
-}
-
-function canonicalHost(origin: string | undefined): string | undefined {
-  if (!origin) return undefined;
-  try {
-    return new URL(origin).hostname.toLowerCase() || undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-function httpHost(url: string): string | undefined {
-  if (!/^https?:\/\//i.test(url)) return undefined;
-  try {
-    return new URL(url).hostname.toLowerCase();
-  } catch {
-    return undefined;
-  }
-}
-
-/** The domain of each address a mailto: URL names, lowercased. */
-function mailDomains(url: string): string[] {
-  if (!/^mailto:/i.test(url)) return [];
-  let to = url.slice('mailto:'.length).split('?')[0]!;
-  try {
-    to = decodeURIComponent(to);
-  } catch {
-    // Kept as written: a stray % only makes the address unreadable.
-  }
-  return to
-    .split(',')
-    .map((address) =>
-      address
-        .slice(address.lastIndexOf('@') + 1)
-        .trim()
-        .toLowerCase(),
-    )
-    .filter((domain) => domain !== '');
-}
-
-/** The reserved names sample content uses: example.com, .net, .org, *.example, *.test, *.invalid, and localhost. */
-function isSampleHost(host: string): boolean {
-  const name = host.replace(/\.$/, '');
-  return (
-    /(^|\.)example\.(?:com|net|org)$/.test(name) ||
-    /(^|\.)(?:example|test|invalid|localhost)$/.test(name)
-  );
-}
-
-/** keyurgolani.com on keyurgolani.name: every label the same but the last, ignoring www. */
-function isStaleHost(host: string, origin: string): boolean {
-  const labels = (name: string) => name.replace(/^www\./, '').split('.');
-  const [a, b] = [labels(host), labels(origin)];
-  if (a.length < 2 || a.length !== b.length) return false;
-  const last = a.length - 1;
-  return a[last] !== b[last] && a.slice(0, last).every((label, index) => label === b[index]);
 }
 
 /** By document, then pointer (array indexes in number order), then code. */

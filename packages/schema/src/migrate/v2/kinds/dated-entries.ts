@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { LooseDateSchema, UrlSchema, type SchemaParts } from './common';
+import { LooseDateSchema, UrlSchema, type SchemaParts } from '../../../kinds/common';
 
 export function datedEntrySchemas({ object, section, Image, Link, Period }: SchemaParts) {
   const ExperienceSchema = section('experience', {

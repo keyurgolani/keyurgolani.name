@@ -39,7 +39,7 @@ function formatPlan(plan: MigrationPlan, options: FormatOptions): string {
   const summary = (options.summary ?? false) || withheld;
   const extension = plan.format === 'json' ? 'json' : 'yml';
   // A site section key is an id, which a summary leaves out like any value.
-  const masked = (document: Target['document'], pointer: string) =>
+  const masked = (document: string, pointer: string) =>
     summary && document === 'site'
       ? pointer.replace(/^\/sections\/[^/]+/, '/sections/<its id>')
       : pointer;

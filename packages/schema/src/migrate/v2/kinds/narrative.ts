@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { LabelSchema, LooseDateSchema, type SchemaParts } from './common';
+import { LabelSchema, LooseDateSchema, type SchemaParts } from '../../../kinds/common';
 
 export function narrativeSchemas({ section, Link }: SchemaParts) {
   const HeroSchema = section('hero', {

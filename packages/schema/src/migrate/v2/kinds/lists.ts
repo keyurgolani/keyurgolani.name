@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { UrlSchema, type SchemaParts } from './common';
+import { UrlSchema, type SchemaParts } from '../../../kinds/common';
 
 export function listSchemas({ object, section }: SchemaParts) {
   const SkillsSchema = section('skills', {

@@ -1,88 +1,47 @@
 import type { Extensions } from '../extensions';
 import type { SchemaParts } from './common';
-import { narrativeSchemas, type Hero, type Lede, type Now } from './narrative';
 import {
-  datedEntrySchemas,
-  type Awards,
-  type Education,
-  type Episodes,
-  type Experience,
-  type Patents,
-  type Projects,
-  type Publications,
-  type Talks,
-  type Writings,
-} from './dated-entries';
-import { visualSchemas, type Discography, type Gallery } from './visual';
-import { quotedSchemas, type Press, type Quote, type Testimonials } from './quoted';
-import { listSchemas, type Services, type Skills, type Stack } from './lists';
-import { connectionSchemas, type Contact, type Cta } from './connection';
-import { accentSchemas, type Stats } from './accent';
-import { personalSchemas, type Focus, type FunFacts, type Tenure } from './personal';
-import { externalSchemas, type ExternalPortfolios } from './external';
-import { githubSchemas, type Github } from './github';
+  sectionSchemas,
+  type ChronologySection,
+  type ContactSection,
+  type Cta,
+  type CustomSection,
+  type EvidenceSection,
+  type Focus,
+  type FunFacts,
+  type Github,
+  type Hero,
+  type Lede,
+  type Now,
+  type PracticeSection,
+  type Quote,
+  type WorksSection,
+} from './sections';
 
 export * from './common';
-export * from './narrative';
-export * from './dated-entries';
-export * from './visual';
-export * from './quoted';
-export * from './lists';
-export * from './connection';
-export * from './accent';
-export * from './personal';
-export * from './external';
-export * from './github';
+export * from './records';
+export * from './sections';
 
 /** Every core kind's schema for one set of parts. */
 export function coreSectionSchemas(parts: SchemaParts) {
-  const { ExternalPortfolioItemSchema, ExternalPortfoliosSchema } = externalSchemas(parts);
-  return {
-    sections: [
-      ...Object.values(narrativeSchemas(parts)),
-      ...Object.values(datedEntrySchemas(parts)),
-      ...Object.values(visualSchemas(parts)),
-      ...Object.values(quotedSchemas(parts)),
-      ...Object.values(listSchemas(parts)),
-      ...Object.values(connectionSchemas(parts)),
-      ...Object.values(accentSchemas(parts)),
-      ...Object.values(personalSchemas(parts)),
-      ExternalPortfoliosSchema,
-      ...Object.values(githubSchemas(parts)),
-    ],
-    ExternalPortfolioItemSchema,
-  };
+  return { sections: Object.values(sectionSchemas(parts)) };
 }
 
-/** A section of one of the 28 core kinds. */
+/** A section of one of the 14 core kinds. */
 export type CoreSection =
+  | WorksSection
+  | EvidenceSection
+  | ChronologySection
+  | PracticeSection
+  | ContactSection
+  | CustomSection
   | Hero
   | Lede
   | Now
-  | Experience
-  | Education
-  | Projects
-  | Writings
-  | Publications
-  | Talks
-  | Awards
-  | Episodes
-  | Patents
-  | Gallery
-  | Discography
-  | Testimonials
-  | Press
   | Quote
-  | Skills
-  | Stack
-  | Services
-  | Contact
-  | Cta
-  | Stats
   | Focus
   | FunFacts
-  | Tenure
-  | ExternalPortfolios
+  | Cta
   | Github;
 
 /**
@@ -102,33 +61,30 @@ export interface ExtensionSection {
 export type Section = CoreSection | ExtensionSection;
 export type SectionKind = CoreSection['kind'];
 
-export const ALL_SECTION_KINDS: readonly SectionKind[] = [
+/** The version 3 core section kinds, in the order the docs list them. */
+export const CORE_SECTION_KINDS: readonly SectionKind[] = [
+  'works',
+  'evidence',
+  'chronology',
+  'practice',
+  'contact',
+  'custom',
   'hero',
   'lede',
   'now',
-  'experience',
-  'education',
-  'projects',
-  'writings',
-  'publications',
-  'talks',
-  'awards',
-  'episodes',
-  'patents',
-  'gallery',
-  'discography',
-  'testimonials',
-  'press',
   'quote',
-  'skills',
-  'stack',
-  'services',
-  'contact',
-  'cta',
-  'stats',
   'focus',
   'fun-facts',
-  'tenure',
-  'external-portfolios',
+  'cta',
   'github',
 ] as const;
+
+/** Every core section kind. The same list as CORE_SECTION_KINDS. */
+export const ALL_SECTION_KINDS: readonly SectionKind[] = CORE_SECTION_KINDS;
+
+/** The kinds that list record ids in `items`, and the record each lists. */
+export const RECORD_SECTION_KINDS = {
+  works: 'work',
+  evidence: 'evidence',
+  chronology: 'chronology',
+} as const satisfies Partial<Record<SectionKind, string>>;

@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { SECTION_ID_MAX_LENGTH, SECTION_ID_PATTERN } from '../ids';
-import type { SchemaParts } from './common';
+import { SECTION_ID_MAX_LENGTH, SECTION_ID_PATTERN } from '../../../ids';
+import type { SchemaParts } from '../../../kinds/common';
 
 /**
  * Names what a stat measures, so every place that states it can be checked

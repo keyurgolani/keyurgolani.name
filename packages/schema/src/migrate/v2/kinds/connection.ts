@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { SchemaParts } from './common';
+import type { SchemaParts } from '../../../kinds/common';
 
 export function connectionSchemas({ section, Link }: SchemaParts) {
   const ContactSchema = section('contact', {

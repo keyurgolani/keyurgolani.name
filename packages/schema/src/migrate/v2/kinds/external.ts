@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { UrlSchema, type SchemaParts } from './common';
+import { UrlSchema, type SchemaParts } from '../../../kinds/common';
 
 /**
  * Iconography for external portfolios. Variants map these to concrete icon

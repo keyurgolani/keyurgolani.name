@@ -1,17 +1,19 @@
-import { DEFAULT_SCHEMAS } from '../compose';
 import { allowedKeysAt } from '../hints';
 import { isPlainObject } from '../json';
 import { LanguageTagSchema } from '../kinds/common';
 import { PORTFOLIO_DEFAULTS, SITE_DEFAULTS } from '../legacy';
-import { DirectionSchema, SCHEMA_VERSION } from '../portfolio';
+import { DirectionSchema } from '../portfolio';
+import { SITE_SCHEMA_VERSION } from '../versions';
 import { redactedPointer } from '../secrets';
 import { toPointer, type Locate } from '../source';
 import { assignSectionIds, type AssignedId } from './section-ids';
+import { V2_PORTFOLIO_SCHEMA, V2_SCHEMA_VERSION } from './v2/schema';
 import type { Change, NeedReason, UnknownKey } from './types';
 
-// The one step so far: the unversioned one-file format (version 1) to the
-// version 2 pair, per the mapping in #4, item 20. Keep it, and its
-// fixtures, until #18 (homelab migration) closes.
+// The first step: the unversioned one-file format (version 1) to the
+// version 2 pair, per the mapping in #4, item 20. The 2-to-3 step runs on
+// its portfolio next. Keep it, and its fixtures, until #18 (homelab
+// migration) closes.
 
 type Path = readonly (string | number)[];
 
@@ -38,7 +40,7 @@ const OLD_META = new Set(['title', 'description', 'url', 'ogImage']);
 function oldKeysAt(legacy: Record<string, unknown>, path: Path): ReadonlySet<string> | undefined {
   if (path.length === 0) return OLD_TOP;
   if (path.length === 1 && path[0] === 'meta') return OLD_META;
-  const allowed = allowedKeysAt(DEFAULT_SCHEMAS.PortfolioSchema, legacy, path);
+  const allowed = allowedKeysAt(V2_PORTFOLIO_SCHEMA, legacy, path);
   if (!allowed) return undefined;
   const keys = new Set(allowed.filter((key) => key !== 'extensions'));
   if (path.length === 2 && path[0] === 'sections') {
@@ -149,7 +151,7 @@ export function legacyStep(
 
   // The portfolio: content keeps its pointers. A locale or direction the file
   // already has carries over; the old pages had en and left to right.
-  const portfolio: Record<string, unknown> = { schemaVersion: SCHEMA_VERSION };
+  const portfolio: Record<string, unknown> = { schemaVersion: V2_SCHEMA_VERSION };
   for (const [key, note] of [
     ['locale', 'Pages were always marked en.'],
     ['direction', 'Pages were always left to right.'],
@@ -256,7 +258,7 @@ export function legacyStep(
   }
 
   const site: Record<string, unknown> = {
-    schemaVersion: SCHEMA_VERSION,
+    schemaVersion: SITE_SCHEMA_VERSION,
     appearance,
     visitorControls: { ...SITE_DEFAULTS.visitorControls },
   };
