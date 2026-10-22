@@ -356,6 +356,53 @@ test('a surrogate pair counts its 4 bytes once, and a lone surrogate 3, as UTF-8
   assert.deepEqual(Object.fromEntries(sources), { 'a.js': 1 + 4 + 1 + 4, 'b.js': 1 + 3 });
 });
 
+test('an astral character is 4 bytes, all to the source whose mapping holds its first half', () => {
+  // U+1F600, U+20000, and U+1D11E: each two UTF-16 units and four UTF-8
+  // bytes. Each character has a mapping of its own, the sources alternate,
+  // and the line ends on a.js, so a pair counted short moves bytes from b.js
+  // to a.js rather than hiding in the line's last mapping.
+  const code = 'x😀y𠀀z𝄞w';
+  const columns = [0, 1, 3, 4, 6, 7, 9];
+  const map = {
+    sources: ['a.js', 'b.js'],
+    mappings: mappings([columns.map((column, k) => [column, k % 2])]),
+  };
+  const { bytes, unmapped, sources } = attributeCode(code, map);
+  assert.equal(bytes, Buffer.byteLength(code));
+  assert.equal(unmapped, 0);
+  assert.deepEqual(Object.fromEntries(sources), { 'a.js': 4, 'b.js': 12 });
+
+  // A mapping that starts on a pair's second half gets none of its bytes.
+  const split = {
+    sources: ['a.js', 'b.js'],
+    mappings: mappings([
+      [
+        [0, 0],
+        [2, 1],
+      ],
+    ]),
+  };
+  assert.deepEqual(Object.fromEntries(attributeCode('p😀q', split).sources), {
+    'a.js': 1 + 4,
+    'b.js': 1,
+  });
+  // A lone second half is 3 bytes, as a lone first half is.
+  const lone = {
+    sources: ['a.js', 'b.js'],
+    mappings: mappings([
+      [
+        [0, 0],
+        [1, 1],
+        [2, 0],
+      ],
+    ]),
+  };
+  assert.deepEqual(Object.fromEntries(attributeCode('a\udc00b', lone).sources), {
+    'a.js': 2,
+    'b.js': 3,
+  });
+});
+
 test('a long non-ASCII line attributes in one pass, not one pass per mapping', () => {
   // 1,200,000 UTF-16 units, 2,388,000 UTF-8 bytes, and a mapping every 100 units.
   const unit = `${'é'.repeat(99)}x`;
