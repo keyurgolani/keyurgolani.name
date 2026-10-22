@@ -9,6 +9,7 @@ import {
   validatePublicationUnit,
   type DocumentFormat,
   type ParsedPair,
+  type UnitValidator,
 } from '@portfolio/schema';
 import { memoryAuditSink } from '../../audit/sink';
 import { memorySessionStore } from '../../auth/session-store';
@@ -103,6 +104,43 @@ export function testChecks(overrides: Partial<UnitChecks> = {}): UnitChecks {
     appVersion: '0.0.0-test',
     ...overrides,
   };
+}
+
+/**
+ * The checks of a build that registers only the `registered` variants, as
+ * #5's contract validators check a selection: any other is
+ * variant.unavailable, which blocks a publish (`validate`) and only warns
+ * live (`validateLive`), where the fallback composition renders. The
+ * fixture pairs select `missing-variant`.
+ */
+export function registryChecks(
+  registered: readonly string[],
+  overrides: Partial<UnitChecks> = {},
+): UnitChecks {
+  const selection = (live: boolean): UnitValidator => ({
+    id: 'test-variant-selection',
+    covers: ['site.appearance.variant'],
+    validate: (pair) =>
+      registered.includes(pair.site.appearance.variant)
+        ? { diagnostics: [] }
+        : {
+            diagnostics: [
+              {
+                code: 'variant.unavailable',
+                severity: live ? 'warning' : 'blocks-publish',
+                document: 'site',
+                pointer: '/appearance/variant',
+                message: "/appearance/variant names a variant this build doesn't register.",
+                remediation: 'Install its package and rebuild.',
+              },
+            ],
+          },
+  });
+  return testChecks({
+    validate: (pair) => validatePublicationUnit(pair, { validators: [selection(false)] }),
+    validateLive: (pair) => validatePublicationUnit(pair, { validators: [selection(true)] }),
+    ...overrides,
+  });
 }
 
 /** A new empty directory under the system temp directory, removed when the test ends. */

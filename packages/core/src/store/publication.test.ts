@@ -25,6 +25,8 @@ import {
   ownerSession,
   pairInput,
   publishInput,
+  registryChecks,
+  tempDir,
   testChecks,
 } from './test-support/fixtures';
 
@@ -806,6 +808,54 @@ test('a publish whose session ends before the pointer moves leaves the live revi
   assert.equal(await logout, true);
   assert.deepEqual(order, ['moved', 'logout']);
   assert.notEqual((await readLive(nodeFs, store.paths))?.revisionId, first);
+});
+
+test('an uninstalled variant on the live revision serves it as live, and a rollback to one is revision_incompatible', async (t) => {
+  const dataDir = tempDir(t);
+  // Published while the build registered the variant the fixture pairs select.
+  const before = await newStore(t, { dataDir, checks: registryChecks(['missing-variant']) });
+  const first = await publishInput(before, pairInput('engineering'));
+  const second = await publishInput(before, contentVariant(pairInput('engineering'), 'two'));
+  assert.equal(
+    (await before.publication.revisions()).every((summary) => summary.compatible),
+    true,
+  );
+
+  // A later build no longer registers it: the live revision still serves,
+  // on the fallback composition, and is its own last known good.
+  const after = openStore({ dataDir, checks: registryChecks([]) });
+  const status = await after.publication.status();
+  assert.deepEqual(
+    [status.state, status.liveRevisionId, status.servingRevisionId, status.reason],
+    ['live', second, second, undefined],
+  );
+  assert.equal(await after.publication.lastKnownGood(), second);
+  assert.equal((await after.revisions.health(second, 'serve')).state, 'ok');
+  assert.equal((await after.revisions.health(second, 'publish')).state, 'incompatible');
+
+  // Nothing with it can be made live again, though.
+  const rollback = await owned(after).rollback(
+    { targetRevisionId: first, expectedLiveRevisionId: second },
+    'owner',
+  );
+  assert.equal(rollback.kind, 'rejected');
+  if (rollback.kind !== 'rejected') return;
+  assert.deepEqual(
+    [rollback.code, rollback.reason, rollback.command],
+    ['revision_incompatible', 'variant.unavailable', `rollback --to ${first}`],
+  );
+  assert.deepEqual(
+    (await after.publication.revisions()).map((summary) => [
+      summary.revisionId,
+      summary.compatible,
+      summary.reason,
+    ]),
+    [
+      [second, false, 'incompatible:variant.unavailable'],
+      [first, false, 'incompatible:variant.unavailable'],
+    ],
+  );
+  assert.equal((await readLive(nodeFs, after.paths))?.revisionId, second);
 });
 
 /** A promise and the function that resolves it. */

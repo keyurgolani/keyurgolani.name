@@ -196,7 +196,7 @@ async function check(dataDir: string): Promise<CheckReport> {
   if (pointer) {
     const read = await readRevision(nodeFs, store.paths, pointer.revisionId);
     liveReads = read.ok && read.revision.unit.unitHash === pointer.unitHash;
-    liveHealth = (await store.revisions.health(pointer.revisionId)).state;
+    liveHealth = (await store.revisions.health(pointer.revisionId, 'serve')).state;
   }
   const drafts = [];
   for (const id of await draftIds(nodeFs, store.paths)) {

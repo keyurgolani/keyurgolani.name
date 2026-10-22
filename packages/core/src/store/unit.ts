@@ -81,8 +81,21 @@ export interface Rendering {
  * from a valid unit.
  */
 export interface UnitChecks {
-  /** validatePublicationUnit with the build's context (#4, #5). */
+  /**
+   * validatePublicationUnit with the build's context (#4, #5), as a publish
+   * checks a unit: what can go live. An unregistered variant blocks it.
+   */
   validate(pair: {
+    readonly portfolio: SourceDocument;
+    readonly site: SourceDocument;
+  }): PublicationUnitResult;
+  /**
+   * The same, as serving checks a revision that is live already (#5's live
+   * validators): an unregistered variant or stale controls only warn, since
+   * the fallback composition and the controls' defaults render. Without
+   * it, `validate` serves for both.
+   */
+  validateLive?(pair: {
     readonly portfolio: SourceDocument;
     readonly site: SourceDocument;
   }): PublicationUnitResult;
