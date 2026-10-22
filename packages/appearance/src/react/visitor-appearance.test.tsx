@@ -133,16 +133,19 @@ test('a choice the current selection cannot take is disabled with the reason', (
   assert.equal(mode.note, `${DARK_ONLY} has only a dark mode, so it shows dark.`);
 });
 
-test('a scheme that pins the mode shows the mode that renders as the value, which the form can post', () => {
-  for (const published of [
-    // A mode the scheme lacks, and system, which it locks to its own.
-    { ...PUBLISHED, colorScheme: 'fixture-dark-only', displayMode: 'light' as const },
-    { ...PUBLISHED, colorScheme: 'fixture-dark-only' },
-  ]) {
+test('a scheme that pins the mode shows a mode it lacks as the mode that renders, and keeps System', () => {
+  for (const [published, value] of [
+    // A mode the scheme lacks shows as its own, which the form can post.
+    [{ ...PUBLISHED, colorScheme: 'fixture-dark-only', displayMode: 'light' as const }, 'dark'],
+    // System stays System, as the approved control keeps it: the scheme resolves it to dark.
+    [{ ...PUBLISHED, colorScheme: 'fixture-dark-only' }, 'system'],
+  ] as const) {
     const appearance = resolve({ published });
     assert.equal(appearance.modeLocked, true);
+    assert.equal(appearance.resolvedMode, 'dark');
     const mode = model({ appearance }).controls[1]!;
-    assert.equal(mode.value, 'dark', published.displayMode);
+    assert.equal(mode.value, value, published.displayMode);
+    assert.equal(mode.note, `${DARK_ONLY} has only a dark mode, so it shows dark.`);
     // The checked radio is one the form posts: never a disabled one.
     const markup = html(<VisitorAppearance model={model({ appearance })} returnTo="/" />);
     const checked = elements(markup).filter(
@@ -150,7 +153,7 @@ test('a scheme that pins the mode shows the mode that renders as the value, whic
     );
     assert.deepEqual(
       checked.map((element) => [element.attributes.value, element.attributes.disabled]),
-      [['dark', undefined]],
+      [[value, undefined]],
       published.displayMode,
     );
   }

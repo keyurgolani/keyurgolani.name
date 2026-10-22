@@ -131,11 +131,15 @@ function control(input: VisitorModelInput, axis: AppearanceAxis): VisitorAxisCon
       };
     });
     const native = scheme?.modes[0];
+    const requested = appearance.selection.displayMode;
     return {
       ...base,
-      // A scheme that pins the mode shows the mode that renders, a choice it
-      // has, so the form never holds a checked choice it can't post.
-      value: appearance.modeLocked ? appearance.resolvedMode : appearance.selection.displayMode,
+      // A mode the scheme lacks shows as the mode that renders, a choice it
+      // has, so the form never holds a checked choice it can't post. System
+      // stays System: the scheme resolves it, and the note says how.
+      value: modeFits(registry, appearance.selection.colorScheme, requested)
+        ? requested
+        : appearance.resolvedMode,
       groups: [{ tier: null, label: AXIS_LABELS.displayMode, choices }],
       ...(appearance.modeLocked && native
         ? { note: `${schemeName} has only a ${native} mode, so it shows ${native}.` }
