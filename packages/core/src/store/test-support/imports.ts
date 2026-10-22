@@ -1,7 +1,9 @@
 // For the tests that check what a module reaches: the run-time imports of a
 // TypeScript or .mjs module by relative path, followed the way Node and tsx
 // resolve them. `import type` and `export type` load nothing, so they don't
-// count. A bare specifier, such as @portfolio/schema, isn't followed.
+// count. A bare specifier, such as @portfolio/schema, isn't followed, and
+// neither is apps/web's generated registry, which only its build:registry
+// writes, so a clean checkout reads the same as a built one.
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { recordOwnerModule } from '../../load-trace';
@@ -10,6 +12,8 @@ recordOwnerModule('core/store/test-support/imports');
 
 const STATEMENT =
   /^\s*(import|export)\s+(type\s+)?(?:[^'";]*?\sfrom\s+)?['"](\.{1,2}\/[^'"]+)['"]/gm;
+/** apps/web's registry, gitignored until build:registry writes it. */
+const GENERATED = /[\\/]apps[\\/]web[\\/]src[\\/]lib[\\/]generated[\\/]/;
 
 /**
  * The modules `file` imports by a relative path, resolved to files: at run
@@ -29,6 +33,7 @@ export function relativeImports(file: string, { types = false } = {}): string[] 
       path.join(base, 'index.ts'),
       path.join(base, 'index.tsx'),
     ].find((candidate) => /\.(?:tsx?|mjs|js)$/.test(candidate) && existsSync(candidate));
+    if (!resolved && GENERATED.test(base)) continue;
     if (!resolved) throw new Error(`${file}: can't resolve ${match[3]}`);
     found.push(resolved);
   }
