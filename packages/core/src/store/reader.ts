@@ -207,9 +207,7 @@ export function revisionCatalogReader({
     if (!pointer && reason === undefined) {
       if (!(await hasHistory(fs, paths))) return EMPTY;
       // live.json is gone from a store that has published, as after a bad
-      // restore: the last known good serves, never whenEmpty's documents. A
-      // first publish's revision lands a moment before its pointer does, so
-      // a request in between finds the same, and the next one finds it live.
+      // restore: the last known good serves, never whenEmpty's documents.
       reason = 'pointer_damaged';
       log({ level: 'error', event: 'store.pointer.missing', code: 'pointer_damaged' });
     }

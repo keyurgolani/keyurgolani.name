@@ -179,18 +179,21 @@ export async function readEvents(fs: ReadFs, paths: StorePaths): Promise<Publica
 
 /** An event's own file, or one live.json overruled, moved aside. */
 const LOGGED = /^[1-9][0-9]*(?:\.aside-[0-9a-f]+)?\.json$/;
+const TOMBSTONE = '.tombstone.json';
 
 /**
  * Whether the store has published before: events/ holds an event, or one
- * moved aside, or revisions/ a revision or the tombstone of one. A
- * publish's revisions/.staging-<id> isn't one, nor is a temporary file.
- * Without live.json, a store that has is one whose pointer is damaged,
- * never an empty one: once a revision exists, the data directory is what
- * serves (#3, item 1).
+ * moved aside, or revisions/ the tombstone of a revision. A revision alone
+ * isn't: every publish writes its revision before its pointer and its
+ * event after it, and repair writes a missing event from live.json, so a
+ * revision with neither was never live, as a first publish that failed or
+ * crashed in between leaves one. Without live.json, a store that has
+ * published is one whose pointer is damaged, never an empty one (#3, item
+ * 1). Slice 3's first-start import goes by the same rule.
  */
 export async function hasHistory(fs: ReadFs, paths: StorePaths): Promise<boolean> {
   if ((await fs.readdir(paths.events)).some((name) => LOGGED.test(name))) return true;
-  return (await fs.readdir(paths.revisions)).some((name) =>
-    isRevisionId(name.replace(/\.tombstone\.json$/, '')),
+  return (await fs.readdir(paths.revisions)).some(
+    (name) => name.endsWith(TOMBSTONE) && isRevisionId(name.slice(0, -TOMBSTONE.length)),
   );
 }

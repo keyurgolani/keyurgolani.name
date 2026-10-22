@@ -182,6 +182,7 @@ export {
 export { preflight, type PreflightCode, type PreflightOptions } from './store/preflight';
 export {
   EVENT_TYPES,
+  hasHistory,
   isIdempotencyKey,
   type EventType,
   type LivePointer,
