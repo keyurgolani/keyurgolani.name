@@ -15,11 +15,11 @@
         "packages": "ce7ba912f101098d9c9cfe907260763975d96187"
       },
       "tracer": {
-        "tests": "25de9ce4dcaf1c8feb40721e01052568dc413a4c"
+        "tests": "d4569dd80826adda43277e8bcbf7f74c56ed3c66"
       },
       "date": "2026-10-22",
       "command": "pnpm test:trace:baseline",
-      "trace": "pnpm test:trace --base-url http://127.0.0.1:50732 --allow-third-party --selection editorial",
+      "trace": "pnpm test:trace --base-url http://127.0.0.1:49238 --allow-third-party --selection editorial",
       "route": "/",
       "selection": "editorial",
       "composition": null,
@@ -34,68 +34,68 @@
         "sockets": {
           "build": {
             "lsof": true,
-            "samples": 38,
+            "samples": 42,
             "sockets": [],
             "listeners": [],
             "outsideLoopback": []
           },
           "server": {
             "lsof": true,
-            "samples": 76,
+            "samples": 80,
             "sockets": [
-              "node TCP 127.0.0.1:50732 (LISTEN)",
-              "node TCP 127.0.0.1:50732->127.0.0.1:50785 (ESTABLISHED)",
-              "node TCP 127.0.0.1:50732->127.0.0.1:50788 (ESTABLISHED)",
-              "node TCP 127.0.0.1:50732->127.0.0.1:50790 (ESTABLISHED)",
-              "node TCP 127.0.0.1:50732->127.0.0.1:50791 (ESTABLISHED)",
-              "node TCP 127.0.0.1:50732->127.0.0.1:50792 (ESTABLISHED)",
-              "node TCP 127.0.0.1:50732->127.0.0.1:50793 (ESTABLISHED)",
-              "node TCP 127.0.0.1:50732->127.0.0.1:50856 (ESTABLISHED)",
-              "node TCP 127.0.0.1:50732->127.0.0.1:50857 (ESTABLISHED)",
-              "node TCP 127.0.0.1:50732->127.0.0.1:50858 (ESTABLISHED)",
-              "node TCP 127.0.0.1:50732->127.0.0.1:50859 (ESTABLISHED)",
-              "node TCP 127.0.0.1:50732->127.0.0.1:50860 (ESTABLISHED)",
-              "node TCP 127.0.0.1:50732->127.0.0.1:50861 (ESTABLISHED)"
+              "node TCP 127.0.0.1:49238 (LISTEN)",
+              "node TCP 127.0.0.1:49238->127.0.0.1:49265 (ESTABLISHED)",
+              "node TCP 127.0.0.1:49238->127.0.0.1:49266 (ESTABLISHED)",
+              "node TCP 127.0.0.1:49238->127.0.0.1:49267 (ESTABLISHED)",
+              "node TCP 127.0.0.1:49238->127.0.0.1:49268 (ESTABLISHED)",
+              "node TCP 127.0.0.1:49238->127.0.0.1:49269 (ESTABLISHED)",
+              "node TCP 127.0.0.1:49238->127.0.0.1:49270 (ESTABLISHED)",
+              "node TCP 127.0.0.1:49238->127.0.0.1:49277 (ESTABLISHED)",
+              "node TCP 127.0.0.1:49238->127.0.0.1:49278 (ESTABLISHED)",
+              "node TCP 127.0.0.1:49238->127.0.0.1:49279 (ESTABLISHED)",
+              "node TCP 127.0.0.1:49238->127.0.0.1:49280 (ESTABLISHED)",
+              "node TCP 127.0.0.1:49238->127.0.0.1:49281 (ESTABLISHED)",
+              "node TCP 127.0.0.1:49238->127.0.0.1:49282 (ESTABLISHED)"
             ],
-            "listeners": ["127.0.0.1:50732"],
+            "listeners": ["127.0.0.1:49238"],
             "outsideLoopback": []
           },
           "trace": {
             "lsof": true,
-            "samples": 75,
+            "samples": 79,
             "sockets": [
-              "node TCP [::1]:50771 (LISTEN)",
-              "node TCP 127.0.0.1:50772 (LISTEN)",
-              "node TCP 127.0.0.1:50772->127.0.0.1:50777 (ESTABLISHED)",
-              "node TCP 127.0.0.1:50772->127.0.0.1:50778 (ESTABLISHED)",
-              "chrome-he TCP 127.0.0.1:50777->127.0.0.1:50772 (ESTABLISHED)",
-              "chrome-he TCP 127.0.0.1:50778->127.0.0.1:50772 (ESTABLISHED)",
-              "chrome-he TCP 127.0.0.1:50785->127.0.0.1:50732 (ESTABLISHED)",
-              "chrome-he TCP 127.0.0.1:50788->127.0.0.1:50732 (ESTABLISHED)",
-              "chrome-he TCP 127.0.0.1:50790->127.0.0.1:50732 (ESTABLISHED)",
-              "chrome-he TCP 127.0.0.1:50791->127.0.0.1:50732 (ESTABLISHED)",
-              "chrome-he TCP 127.0.0.1:50792->127.0.0.1:50732 (ESTABLISHED)",
-              "chrome-he TCP 127.0.0.1:50793->127.0.0.1:50732 (ESTABLISHED)",
-              "chrome-he TCP 127.0.0.1:50785->127.0.0.1:50732 (CLOSE_WAIT)",
-              "chrome-he TCP 127.0.0.1:50788->127.0.0.1:50732 (CLOSE_WAIT)",
-              "chrome-he TCP 127.0.0.1:50790->127.0.0.1:50732 (CLOSE_WAIT)",
-              "chrome-he TCP 127.0.0.1:50791->127.0.0.1:50732 (CLOSE_WAIT)",
-              "chrome-he TCP 127.0.0.1:50792->127.0.0.1:50732 (CLOSE_WAIT)",
-              "chrome-he TCP 127.0.0.1:50793->127.0.0.1:50732 (CLOSE_WAIT)",
-              "chrome-he TCP 127.0.0.1:50856->127.0.0.1:50732 (ESTABLISHED)",
-              "chrome-he TCP 127.0.0.1:50857->127.0.0.1:50732 (ESTABLISHED)",
-              "chrome-he TCP 127.0.0.1:50858->127.0.0.1:50732 (ESTABLISHED)",
-              "chrome-he TCP 127.0.0.1:50859->127.0.0.1:50732 (ESTABLISHED)",
-              "chrome-he TCP 127.0.0.1:50860->127.0.0.1:50732 (ESTABLISHED)",
-              "chrome-he TCP 127.0.0.1:50861->127.0.0.1:50732 (ESTABLISHED)",
-              "chrome-he TCP 127.0.0.1:50856->127.0.0.1:50732 (CLOSE_WAIT)",
-              "chrome-he TCP 127.0.0.1:50857->127.0.0.1:50732 (CLOSE_WAIT)",
-              "chrome-he TCP 127.0.0.1:50858->127.0.0.1:50732 (CLOSE_WAIT)",
-              "chrome-he TCP 127.0.0.1:50859->127.0.0.1:50732 (CLOSE_WAIT)",
-              "chrome-he TCP 127.0.0.1:50860->127.0.0.1:50732 (CLOSE_WAIT)",
-              "chrome-he TCP 127.0.0.1:50861->127.0.0.1:50732 (CLOSE_WAIT)"
+              "node TCP [::1]:49259 (LISTEN)",
+              "node TCP 127.0.0.1:49260 (LISTEN)",
+              "node TCP 127.0.0.1:49260->127.0.0.1:49261 (ESTABLISHED)",
+              "node TCP 127.0.0.1:49260->127.0.0.1:49262 (ESTABLISHED)",
+              "chrome-he TCP 127.0.0.1:49261->127.0.0.1:49260 (ESTABLISHED)",
+              "chrome-he TCP 127.0.0.1:49262->127.0.0.1:49260 (ESTABLISHED)",
+              "chrome-he TCP 127.0.0.1:49265->127.0.0.1:49238 (ESTABLISHED)",
+              "chrome-he TCP 127.0.0.1:49266->127.0.0.1:49238 (ESTABLISHED)",
+              "chrome-he TCP 127.0.0.1:49267->127.0.0.1:49238 (ESTABLISHED)",
+              "chrome-he TCP 127.0.0.1:49268->127.0.0.1:49238 (ESTABLISHED)",
+              "chrome-he TCP 127.0.0.1:49269->127.0.0.1:49238 (ESTABLISHED)",
+              "chrome-he TCP 127.0.0.1:49270->127.0.0.1:49238 (ESTABLISHED)",
+              "chrome-he TCP 127.0.0.1:49265->127.0.0.1:49238 (CLOSE_WAIT)",
+              "chrome-he TCP 127.0.0.1:49266->127.0.0.1:49238 (CLOSE_WAIT)",
+              "chrome-he TCP 127.0.0.1:49267->127.0.0.1:49238 (CLOSE_WAIT)",
+              "chrome-he TCP 127.0.0.1:49268->127.0.0.1:49238 (CLOSE_WAIT)",
+              "chrome-he TCP 127.0.0.1:49269->127.0.0.1:49238 (CLOSE_WAIT)",
+              "chrome-he TCP 127.0.0.1:49270->127.0.0.1:49238 (CLOSE_WAIT)",
+              "chrome-he TCP 127.0.0.1:49277->127.0.0.1:49238 (ESTABLISHED)",
+              "chrome-he TCP 127.0.0.1:49278->127.0.0.1:49238 (ESTABLISHED)",
+              "chrome-he TCP 127.0.0.1:49279->127.0.0.1:49238 (ESTABLISHED)",
+              "chrome-he TCP 127.0.0.1:49280->127.0.0.1:49238 (ESTABLISHED)",
+              "chrome-he TCP 127.0.0.1:49281->127.0.0.1:49238 (ESTABLISHED)",
+              "chrome-he TCP 127.0.0.1:49282->127.0.0.1:49238 (ESTABLISHED)",
+              "chrome-he TCP 127.0.0.1:49277->127.0.0.1:49238 (CLOSE_WAIT)",
+              "chrome-he TCP 127.0.0.1:49278->127.0.0.1:49238 (CLOSE_WAIT)",
+              "chrome-he TCP 127.0.0.1:49279->127.0.0.1:49238 (CLOSE_WAIT)",
+              "chrome-he TCP 127.0.0.1:49280->127.0.0.1:49238 (CLOSE_WAIT)",
+              "chrome-he TCP 127.0.0.1:49281->127.0.0.1:49238 (CLOSE_WAIT)",
+              "chrome-he TCP 127.0.0.1:49282->127.0.0.1:49238 (CLOSE_WAIT)"
             ],
-            "listeners": ["[::1]:50771", "127.0.0.1:50772"],
+            "listeners": ["[::1]:49259", "127.0.0.1:49260"],
             "outsideLoopback": []
           }
         }
@@ -117,7 +117,7 @@
               "webgl2": false
             },
             "cpuThrottling": 4,
-            "loadAverage": 34.5,
+            "loadAverage": 36,
             "cpus": 18
           },
           "requests": {
@@ -129,8 +129,8 @@
             "byType": {
               "document": {
                 "count": 1,
-                "transferBytes": 34597,
-                "fileBytes": 131065,
+                "transferBytes": 35261,
+                "fileBytes": 132107,
                 "unknownBytes": 0
               },
               "image": {
@@ -205,24 +205,24 @@
           "longTasks": {
             "supported": true,
             "cpuThrottling": 4,
-            "loadEventEndMs": 586.3,
+            "loadEventEndMs": 604.6,
             "windowMs": 5000,
             "count": 2,
             "over50ms": 2,
-            "totalMs": 317,
-            "maxMs": 246,
-            "durationsMs": [246, 71]
+            "totalMs": 336,
+            "maxMs": 265,
+            "durationsMs": [265, 71]
           },
           "idle": {
-            "windowS": 2.002227,
-            "taskDurationS": 0.000057,
+            "windowS": 2.003769,
+            "taskDurationS": 0.00007,
             "scriptDurationS": 0,
             "layoutDurationS": 0,
             "recalcStyleDurationS": 0,
             "layoutCount": 0,
             "recalcStyleCount": 0,
-            "jsHeapUsedBytes": 3316104,
-            "nodes": 1484,
+            "jsHeapUsedBytes": 3327596,
+            "nodes": 1495,
             "visibility": "visible",
             "networkIdle": true
           },
@@ -250,7 +250,7 @@
               "webgl2": false
             },
             "cpuThrottling": 4,
-            "loadAverage": 36.2,
+            "loadAverage": 40.5,
             "cpus": 18
           },
           "requests": {
@@ -262,7 +262,7 @@
             "byType": {
               "document": {
                 "count": 1,
-                "transferBytes": 34676,
+                "transferBytes": 34683,
                 "fileBytes": 131065,
                 "unknownBytes": 0
               },
@@ -332,23 +332,23 @@
           "longTasks": {
             "supported": true,
             "cpuThrottling": 4,
-            "loadEventEndMs": 442.8,
+            "loadEventEndMs": 361.8,
             "windowMs": 5000,
             "count": 2,
             "over50ms": 2,
-            "totalMs": 283,
-            "maxMs": 202,
-            "durationsMs": [202, 81]
+            "totalMs": 216,
+            "maxMs": 157,
+            "durationsMs": [157, 59]
           },
           "idle": {
-            "windowS": 2.004531,
-            "taskDurationS": 0.000067,
+            "windowS": 2.003586,
+            "taskDurationS": 0.000054,
             "scriptDurationS": 0,
             "layoutDurationS": 0,
             "recalcStyleDurationS": 0,
             "layoutCount": 0,
             "recalcStyleCount": 0,
-            "jsHeapUsedBytes": 3366844,
+            "jsHeapUsedBytes": 3370116,
             "nodes": 1479,
             "visibility": "visible",
             "networkIdle": true
