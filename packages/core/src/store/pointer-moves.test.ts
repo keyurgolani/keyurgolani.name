@@ -49,6 +49,30 @@ const code = (file: string) => readFileSync(file, 'utf8').replace(/^\s*(?:\/\/|\
 
 const relativeTo = (file: string) => path.relative(REPO, file).split(path.sep).join('/');
 
+/** The calls that make or replace a file or a directory where they're pointed. */
+const MOVES = /\b(?:rename|link|symlink|writeFile|copyFile|cp)(?:Sync)?\s*\(/g;
+
+/**
+ * Each call in `text` that makes or replaces something at a target naming
+ * the publication directory or live.json: its arguments mention
+ * `publication` or `live` as a word, such as `paths.live`, a `live` taken
+ * out of the store's paths, or a path spelled out.
+ */
+function movesNamingThePointer(text: string): string[] {
+  const found: string[] = [];
+  for (const match of text.matchAll(MOVES)) {
+    let depth = 1;
+    let at = match.index + match[0].length;
+    for (; at < text.length && depth > 0; at++) {
+      if (text[at] === '(') depth += 1;
+      if (text[at] === ')') depth -= 1;
+    }
+    const args = text.slice(match.index + match[0].length, at - 1);
+    if (/\b(?:publication|live)\b/.test(args)) found.push(`${match[0]}${args})`);
+  }
+  return found;
+}
+
 /** The bytes and inode of live.json, which a move over it changes. */
 function pointerFile(file: string) {
   return { bytes: readFileSync(file).toString('utf8'), ino: statSync(file).ino };
@@ -58,7 +82,7 @@ test('no code outside PublicationService moves the published pointer', async (t)
   const files = sources();
   assert.ok(files.length > 100, `${files.length} source files`);
 
-  // Only the PublicationService imports the commit point.
+  // Only the PublicationService imports the commit point, `import()` included.
   const commit = path.join(STORE, 'commit.ts');
   assert.deepEqual(files.filter((file) => relativeImports(file).includes(commit)).map(relativeTo), [
     'packages/core/src/store/publication.ts',
@@ -96,9 +120,24 @@ test('no code outside PublicationService moves the published pointer', async (t)
       );
     }
   }
+  // live.json anywhere in a string or a template, as in 'publication/live.json':
+  // only the module that names the store's paths, and pointer.ts's error.
   assert.deepEqual(
-    files.filter((file) => /['"`]live\.json(?:\.tmp)?['"`]/.test(code(file))).map(relativeTo),
-    ['packages/core/src/store/layout.ts'],
+    files
+      .filter((file) => /['"`][^'"`\n]*\blive\.json/.test(code(file)))
+      .map(relativeTo)
+      .sort(),
+    ['packages/core/src/store/layout.ts', 'packages/core/src/store/pointer.ts'],
+  );
+  // And no write outside commit.ts points at publication/ or live.json, by
+  // whatever name it got the path.
+  assert.deepEqual(
+    files
+      .filter((file) => file !== commit)
+      .flatMap((file) =>
+        movesNamingThePointer(code(file)).map((call) => `${relativeTo(file)}: ${call}`),
+      ),
+    [],
   );
 
   // And at run time: every store operation but the PublicationService's,
