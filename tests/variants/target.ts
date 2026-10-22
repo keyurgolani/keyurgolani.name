@@ -82,16 +82,15 @@ const PDF =
   '3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 200]>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n';
 
 /**
- * The files a fixture names on the site itself, such as #4's pairs'
- * /images/... and /papers/..., which an owner would ship in public/:
- * stand-ins for each, so its links and images resolve. missing-media's
- * paths stay missing, on purpose.
+ * The files a fixture links on the site itself, such as #4's academic
+ * pair's /papers/..., which an owner would ship in public/: stand-ins for
+ * each, so its links resolve. Images are media assets (#10), which the view
+ * serves under /media once a rendition is derived, so none is here.
  */
 export function ownerAssets(fixture: ContractFixture): Record<string, string | Uint8Array> {
   const text = readFileSync(fixture.files.portfolio, 'utf8');
   const assets: Record<string, string | Uint8Array> = {};
   for (const [, value] of text.matchAll(/:\s*['"]?(\/(?!\/)[^\s'"#?]+\.[a-z0-9]+)['"]?\s*$/gim)) {
-    if (value!.startsWith('/media/missing-')) continue;
     const file = value!.slice(1);
     assets[file] = /\.pdf$/i.test(file) ? PDF : IMAGE;
   }

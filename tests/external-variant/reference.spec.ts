@@ -124,8 +124,6 @@ test(
 );
 
 test.describe('on the bundled sample', () => {
-  test.use({ blockedHosts: ['picsum.photos'] });
-
   test(
     'the colophon view renders under /sample and links back to it',
     { tag: '@sample', annotation: [{ type: 'route', description: '/sample/[[...path]]' }, DEMO] },

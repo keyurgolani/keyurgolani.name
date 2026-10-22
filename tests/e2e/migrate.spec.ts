@@ -54,8 +54,9 @@ test('the old example, migrated, renders the baseline section ids, for its selec
     expect(site).toContain(`\n  ${attribute}: ${value}\n`);
   }
 
-  // offline-fetch.mjs refuses any fetch that would leave the machine, so the
-  // example's GitHub section can't reach api.github.com while it renders.
+  // offline-fetch.mjs refuses any fetch that would leave the machine. The
+  // example's GitHub section renders without a snapshot, from its username
+  // alone (#10), so nothing should try one.
   const app = await startApp({
     portfolio: path.join(out, 'portfolio.yml'),
     site: path.join(out, 'site.yml'),

@@ -7,9 +7,11 @@ import { visitorOutput } from '../harness/visitor-output';
 // The mounted pair (#4) in the fallback composition, which renders for the
 // site's unregistered selection (#5): the site document picks the motion
 // policy and the starting theme, and hides sections; the portfolio's locale
-// and direction set <html lang dir>. No marker from a hidden section or from
-// unregistered extension data reaches a visitor. pair-rtl.spec.ts checks a
-// right-to-left portfolio. The color scheme and typography are #19's.
+// and direction set <html lang dir>. No marker from a hidden section, from
+// what only a hidden section reaches, from a private record, or from
+// unregistered extension data reaches a visitor (#10). pair-rtl.spec.ts
+// checks a right-to-left portfolio. The color scheme and typography are
+// #19's.
 
 const HIDDEN = path.join(path.dirname(DEFAULT_PORTFOLIO), 'hidden');
 const MARKER = 'canary-hidden-';
@@ -25,7 +27,7 @@ test.use({
 });
 
 test(
-  'a hidden section never reaches /, its RSC payload, its JSON-LD, or the feed',
+  'a hidden section, what only it reaches, and a private record never reach /, its RSC payload, its JSON-LD, or the feed',
   { annotation: [{ type: 'route', description: '/' }, READ_ONLY] },
   async ({ request }) => {
     const { html, jsonLd, payload, feed } = await visitorOutput(request);
@@ -39,8 +41,8 @@ test(
     // The channel's language is the portfolio's locale.
     expect(feed).toContain('<language>en-GB</language>');
 
-    // The JSON-LD reads the first experience and every skills section. The
-    // hidden ones come first, so it names them only if they leak.
+    // The JSON-LD reads the current role in the chronology and the practice's
+    // skills. The hidden ones come first, so it names them only if they leak.
     const person = jsonLd.find((block) => block['@type'] === 'Person');
     expect(person).toMatchObject({
       name: 'Rowan Hidden',
@@ -68,7 +70,14 @@ test(
     await expect(page.locator('html')).toHaveAttribute('dir', 'ltr');
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
     // No hidden or unregistered section is on the page, and nothing links to one.
-    for (const id of ['drafts', 'roles-draft', 'skills-draft', 'gallery']) {
+    for (const id of [
+      'drafts',
+      'roles-draft',
+      'skills-draft',
+      'services-draft',
+      'contact',
+      'gallery',
+    ]) {
       await expect(page.locator(`[id="${id}"]`), id).toHaveCount(0);
       await expect(page.locator(`a[href="#${id}"]`), id).toHaveCount(0);
     }
@@ -103,8 +112,11 @@ test(
   'under motionPolicy reduce a link in the table of contents jumps to its section',
   { annotation: [{ type: 'route', description: '/' }, READ_ONLY] },
   async ({ page }) => {
+    // Short enough that the last visible section starts below the fold.
+    await page.setViewportSize({ width: 1280, height: 360 });
     await loadHome(page);
-    const { farthest } = await scrollTops(page, '#contact');
+    const { before, settled, farthest } = await scrollTops(page, '#essays');
+    expect(settled).toBeLessThan(before);
     expect(farthest).toBeLessThan(4);
   },
 );

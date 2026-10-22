@@ -67,10 +67,24 @@ test(
   'requests outside the app are blocked',
   { annotation: { type: 'route', description: '/' } },
   async ({ page, blockedRequests }) => {
-    await page.goto('/');
-    const image = page.getByRole('img', { name: 'Rows of identical seedlings' });
-    await image.scrollIntoViewIfNeeded();
+    await page.goto('/', { waitUntil: 'networkidle' });
+    // The work's cover has no rendition yet (#10), so it renders as unavailable,
+    // and the page asks the cover's own host for nothing.
+    await expect(page.locator('[data-media-asset="fixture-garden-cover"]')).toContainText(
+      'Image unavailable',
+    );
+    expect(blockedRequests).not.toContain(FIXTURE_IMAGE);
+    // An image the page loads from that host never arrives.
+    const width = await page.evaluate(
+      (src) =>
+        new Promise<number>((resolve) => {
+          const image = new Image();
+          image.onload = image.onerror = () => resolve(image.naturalWidth);
+          image.src = src;
+        }),
+      FIXTURE_IMAGE,
+    );
+    expect(width).toBe(0);
     await expect.poll(() => blockedRequests).toContain(FIXTURE_IMAGE);
-    expect(await image.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBe(0);
   },
 );

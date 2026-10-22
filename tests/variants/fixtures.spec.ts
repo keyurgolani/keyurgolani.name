@@ -5,8 +5,9 @@ import { FIXED_TIME, projectTarget, READ_ONLY } from './target';
 // A registered composition on a contract fixture (#5, Slice 6), in every
 // mode, at the site root under read-only: the project's fixture is the
 // server's source directory, its site selecting the project's variant, and
-// the server's clock starts at the fixed time and runs on. missing-media's
-// images answer 404, which is the point.
+// the server's clock starts at the fixed time and runs on. No fixture's
+// media has a rendition (#10), so every image renders as unavailable and the
+// page asks for none: any request that fails is an error.
 
 test(
   'the server runs on the fixed clock: the sitemap, modified per request, says 2026-01-01',
@@ -17,8 +18,6 @@ test(
     expect(await sitemap.text()).toContain(`<lastmod>${FIXED_TIME.slice(0, 10)}T`);
   },
 );
-
-const missingMedia = (url: string) => new URL(url).pathname.startsWith('/media/missing-');
 
 for (const mode of MODES) {
   test.describe(() => {
@@ -39,7 +38,6 @@ for (const mode of MODES) {
           testInfo,
           go: (target) => target.goto('/'),
           shot: `${variant.manifest.id}-${fixture}-${mode.name}`,
-          expectedFailure: missingMedia,
         });
       },
     );
