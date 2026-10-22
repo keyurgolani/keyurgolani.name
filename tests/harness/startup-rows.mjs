@@ -567,11 +567,11 @@ export const WARNING_ROWS = [
     name: 'a file in snapshots/ that is no snapshot, ignored',
     documents: {
       'portfolio.yml': WITH_GITHUB,
-      'site.yml': SITE,
+      'site.yml': selecting('canary-variant'),
       'snapshots/canary-notes.txt': 'canary-notes-text',
     },
     env: (paths) => readOnly(paths),
-    never: ['canary-notes-text'],
+    never: ['canary-notes-text', 'canary-variant'],
     warning: [
       { code: 'variant.unavailable', document: 'site' },
       { code: 'snapshot.ignored', file: 'snapshots/canary-notes.txt', document: 'snapshots' },

@@ -40,8 +40,8 @@ test(
       .toEqual([
         ['/identity/extensions/@acme~1portfolio-photography', 11],
         ['/links/0/extensions/@acme~1portfolio-photography', 17],
-        ['/works/0/extensions/@acme~1portfolio-photography', 27],
         ['/sections/2', 40],
+        ['/works/0/extensions/@acme~1portfolio-photography', 27],
       ]);
     expect(readFileSync(app.log, 'utf8')).not.toContain(MARKER);
   },
