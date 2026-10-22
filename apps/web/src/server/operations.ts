@@ -57,8 +57,14 @@ export const ERRORS = {
   revision_incompatible: { status: 422, message: "This build can't make that revision live." },
   asset_missing: { status: 422, message: "A file the content references isn't stored." },
   payload_too_large: { status: 413, message: 'A document is over the 1 MiB limit.' },
-  // #3: with Retry-After.
+  // #3: a key already used for another request.
+  idempotency_conflict: {
+    status: 422,
+    message: 'That idempotency key went with another request.',
+  },
+  // #3: both with Retry-After. Nothing moved, so a retry is safe.
   lock_timeout: { status: 503, message: 'Another publication is running. Try again shortly.' },
+  lock_lost: { status: 503, message: 'Another publication took over. Try again shortly.' },
   storage_unavailable: { status: 503, message: "The data directory can't be used right now." },
   storage_full: { status: 507, message: 'The data directory is full.' },
   // #2: auth.login. Every credential failure answers this one, whatever was wrong.
@@ -326,9 +332,11 @@ const SESSION_COMMAND_ERRORS: readonly ErrorCode[] = [
 const NO_INPUT = z.object({}).strict();
 
 // #3's store entries (item 22). A store query can find the data directory
-// unreadable; a store write can also wait out the lock, or find the disk full.
+// unreadable; a store write can also wait out the lock, lose it to another
+// holder before it moves anything, or find the disk full.
 const STORE_FAILURES: readonly ErrorCode[] = [
   'lock_timeout',
+  'lock_lost',
   'storage_unavailable',
   'storage_full',
 ];
@@ -475,6 +483,7 @@ const STORE_OPERATIONS: readonly Operation[] = [
       'validation_failed',
       'asset_missing',
       'not_found',
+      'idempotency_conflict',
     ],
     {
       live_conflict: LiveConflictDetails,
@@ -490,7 +499,13 @@ const STORE_OPERATIONS: readonly Operation[] = [
       'rollback',
       moveInput(name === 'rollback' ? 'required' : 'optional'),
       CommittedSchema,
-      ['live_conflict', 'nothing_to_publish', 'revision_incompatible', 'not_found'],
+      [
+        'live_conflict',
+        'nothing_to_publish',
+        'revision_incompatible',
+        'not_found',
+        'idempotency_conflict',
+      ],
       { live_conflict: LiveConflictDetails, revision_incompatible: IncompatibleDetails },
     ),
   ),

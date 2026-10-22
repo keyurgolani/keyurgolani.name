@@ -32,18 +32,14 @@ import type { OwnerMoveContext, StudioStore } from './store';
 
 recordOwnerModule('server/owner/store-handlers');
 
-/** How long to wait after lock_timeout: a publish holds the lock for well under that. */
+/** How long to wait after lock_timeout or lock_lost: a publish holds the lock for well under that. */
 export const RETRY_AFTER_SECONDS = 2;
+const RETRY = { headers: { 'retry-after': String(RETRY_AFTER_SECONDS) } };
 
 /** A StoreError's answer: 503, with Retry-After for the lock, or 507. Anything else is a 500. */
 function storeFailure(error: unknown): StudioResult {
   if (!(error instanceof StoreError)) throw error;
-  return errorResult(
-    error.code,
-    error.code === 'lock_timeout'
-      ? { headers: { 'retry-after': String(RETRY_AFTER_SECONDS) } }
-      : {},
-  );
+  return errorResult(error.code, error.code === 'lock_timeout' ? RETRY : {});
 }
 
 function conflict(outcome: DraftConflict | LiveConflict): StudioResult {
@@ -67,6 +63,11 @@ type Rejected =
 
 function rejection(outcome: Rejected): StudioResult {
   switch (outcome.code) {
+    // Another holder took the lock before anything moved: a retry is safe.
+    case 'lock_lost':
+      return errorResult('lock_lost', RETRY);
+    case 'idempotency_conflict':
+      return errorResult('idempotency_conflict');
     case 'validation_failed':
       return errorResult('validation_failed', { details: { diagnostics: outcome.diagnostics } });
     case 'asset_missing':
@@ -82,11 +83,21 @@ function rejection(outcome: Rejected): StudioResult {
         },
       });
     case 'payload_too_large':
+      return errorResult('payload_too_large');
     case 'not_found':
+      return errorResult('not_found');
     case 'nothing_to_publish':
-      return errorResult(outcome.code);
-    default:
-      throw new Error(`The store answered with ${outcome.code}, which no entry declares.`);
+      return errorResult('nothing_to_publish');
+    // moveAnswer() answers this one with what commitWithSession() did.
+    case 'session_ended':
+      return errorResult('authentication_required');
+    default: {
+      // Every code the store's types name is above; a store that answers
+      // another is newer than this build.
+      const other: never = outcome;
+      const code = String((other as Rejected).code);
+      throw new Error(`The store answered with ${code}, which no entry declares.`);
+    }
   }
 }
 
