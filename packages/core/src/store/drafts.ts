@@ -20,7 +20,7 @@ import {
   type Sha256,
   type StorePaths,
 } from './layout';
-import type { PublicationLock } from './lock';
+import { LockLostError, type PublicationLock } from './lock';
 import { DamagedPointerError, readLive, type LivePointer } from './pointer';
 import { readManifest, readRevision } from './revisions';
 import type { AssetStore } from './assets';
@@ -118,8 +118,12 @@ export interface Rejection<Code extends string> {
   readonly blobs?: readonly Sha256[];
 }
 
+/**
+ * `lock_lost`: the publication lock was broken and retaken while the write
+ * held it, and nothing was written. A retry is safe.
+ */
 export type DraftRejection = Rejection<
-  'payload_too_large' | 'asset_missing' | 'validation_failed' | 'not_found'
+  'payload_too_large' | 'asset_missing' | 'validation_failed' | 'not_found' | 'lock_lost'
 >;
 
 export type DraftOutcome =
@@ -127,7 +131,7 @@ export type DraftOutcome =
 
 export type DiscardOutcome =
   | { readonly kind: 'discarded'; readonly draftId: DraftId }
-  | Rejection<'not_found'>
+  | Rejection<'not_found' | 'lock_lost'>
   | DraftConflict;
 
 export interface CreateDraftInput {
@@ -316,7 +320,8 @@ export async function readWorkingDraft(
  * Writes `draft` over drafts/<draftId>.json: a synced temporary file,
  * renamed into place once `previousText`, the version it replaces, is
  * synced and renamed to <draftId>.prev.json, then drafts/ synced. The
- * caller holds the publication lock.
+ * caller holds the publication lock, and `fence` checks it still does
+ * before each rename; a LockLostError from it leaves the draft as it was.
  */
 export async function writeDraft(
   fs: FsPort,
@@ -324,6 +329,7 @@ export async function writeDraft(
   draft: Draft,
   previousText: string | null,
   operation: string,
+  fence: () => Promise<void> = async () => {},
 ): Promise<void> {
   const file = paths.draft(draft.draftId);
   const temp = tempBeside(file);
@@ -337,14 +343,17 @@ export async function writeDraft(
       previousTemp = tempBeside(previous);
       await fs.writeFile(previousTemp, previousText, point('prev.write'));
       await fs.fsync(previousTemp, point('prev.fsync'));
+      await fence();
       await fs.rename(previousTemp, previous, point('prev.rename'));
       previousTemp = undefined;
     }
+    await fence();
     await fs.rename(temp, file, point('rename'));
     await fs.fsync(paths.drafts, point('dir.fsync'));
   } catch (error) {
     await fs.remove(temp, point('temp.remove')).catch(() => {});
     if (previousTemp) await fs.remove(previousTemp, point('temp.remove')).catch(() => {});
+    if (error instanceof LockLostError) throw error;
     throw storageError(error);
   }
 }
@@ -533,17 +542,25 @@ export function filesystemDraftStore({
       ...(fields.sourceHash === undefined ? {} : { sourceHash: fields.sourceHash }),
       documents,
     };
-    await writeDraft(fs, paths, draft, found?.text ?? null, operation);
+    await writeDraft(fs, paths, draft, found?.text ?? null, operation, () => lock.fence());
     emitStoreEvent({ name: 'draftSaved', draftId: draft.draftId, version: draft.version });
     return { kind: 'saved', draft };
   }
 
-  function locked<T>(operation: string, body: () => Promise<T>): Promise<T> {
+  function locked<T>(
+    operation: string,
+    body: () => Promise<T>,
+  ): Promise<T | Rejection<'lock_lost'>> {
     return lock.withLock(operation, async () => {
       try {
         return await body();
       } catch (error) {
         if (error instanceof TypeError) throw error;
+        if (error instanceof LockLostError) {
+          // Broken and retaken while this write held it: nothing was written.
+          log({ level: 'error', event: 'store.lock.lost', code: 'lock_lost' });
+          return rejected('lock_lost', []);
+        }
         const failure = storageError(error);
         log({ level: 'error', event: `store.${operation}.failed`, code: failure.code });
         throw failure;
@@ -679,6 +696,7 @@ export function filesystemDraftStore({
         if (expectedVersion !== undefined && found.draft.version !== expectedVersion) {
           return conflict(found);
         }
+        await lock.fence();
         await removeDraft(fs, paths, draftId, 'draft.discard');
         emitStoreEvent({ name: 'draftDiscarded', draftId });
         return { kind: 'discarded', draftId };

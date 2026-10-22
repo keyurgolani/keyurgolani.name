@@ -13,7 +13,10 @@ import { recordOwnerModule } from '../load-trace';
 //   revisions/<id>.tombstone.json   a revision retention removed
 //   publication/live.json           the published pointer; backed up last
 //   publication/events/<seq>.json   append-only publication log
-//   publication/lock, server.json   runtime only, not backed up
+//   publication/events/<seq>.aside-<hex>.json
+//                                   an event file live.json overruled; kept, never read
+//   publication/lock, lock.break,   runtime only, not backed up
+//     server.json
 //   assets/sha256/<aa>/<hash>       content-addressed blobs
 //   audit/<yyyy-mm>.jsonl           AuditSink
 //   ephemeral/                      #2's auth state, #7's grants; never backed up
@@ -58,9 +61,10 @@ export interface StorePaths {
   readonly revisions: string;
   readonly publication: string;
   readonly live: string;
-  readonly liveTemp: string;
   readonly events: string;
   readonly lock: string;
+  /** The marker the one breaker of a stale lock holds. */
+  readonly lockBreak: string;
   readonly server: string;
   readonly assets: string;
   readonly audit: string;
@@ -71,6 +75,8 @@ export interface StorePaths {
   staging(id: RevisionId): string;
   tombstone(id: RevisionId): string;
   event(seq: number): string;
+  /** A new name for event file `seq` moved aside, which the log doesn't read. */
+  eventAside(seq: number): string;
   blob(hash: Sha256): string;
 }
 
@@ -82,6 +88,10 @@ export function storePaths(dataDir: string): StorePaths {
   const drafts = path.join(root, 'drafts');
   const events = path.join(publication, 'events');
   const assets = path.join(root, 'assets', 'sha256');
+  const seqChecked = (seq: number) => {
+    if (!Number.isSafeInteger(seq) || seq < 1) throw new TypeError('Not an event seq.');
+    return seq;
+  };
   return Object.freeze({
     root,
     storeFile: path.join(root, 'store.json'),
@@ -89,9 +99,9 @@ export function storePaths(dataDir: string): StorePaths {
     revisions,
     publication,
     live: path.join(publication, 'live.json'),
-    liveTemp: path.join(publication, 'live.json.tmp'),
     events,
     lock: path.join(publication, 'lock'),
+    lockBreak: path.join(publication, 'lock.break'),
     server: path.join(publication, 'server.json'),
     assets,
     audit: path.join(root, 'audit'),
@@ -104,10 +114,9 @@ export function storePaths(dataDir: string): StorePaths {
       path.join(revisions, `.staging-${checked(id, isRevisionId, 'revision ID')}`),
     tombstone: (id: RevisionId) =>
       path.join(revisions, `${checked(id, isRevisionId, 'revision ID')}.tombstone.json`),
-    event: (seq: number) => {
-      if (!Number.isSafeInteger(seq) || seq < 1) throw new TypeError('Not an event seq.');
-      return path.join(events, `${seq}.json`);
-    },
+    event: (seq: number) => path.join(events, `${seqChecked(seq)}.json`),
+    eventAside: (seq: number) =>
+      path.join(events, `${seqChecked(seq)}.aside-${randomBytes(6).toString('hex')}.json`),
     blob: (hash: Sha256) => {
       const hex = checked(hash, isSha256, 'SHA-256 digest').slice('sha256:'.length);
       return path.join(assets, hex.slice(0, 2), hex);

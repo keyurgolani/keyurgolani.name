@@ -30,20 +30,20 @@ import {
   type Sha256,
   type StorePaths,
 } from './layout';
-import { LOCK_STALE_MS, type PublicationLock } from './lock';
+import { LOCK_STALE_MS, LockLostError, type PublicationLock } from './lock';
 import {
   DamagedPointerError,
-  eventRecorded,
-  EventMismatchError,
   isIdempotencyKey,
   readEvent,
   readEvents,
   readLive,
-  writeEvent,
+  reconcileEvents,
   writeLive,
+  writeLiveEvent,
   type EventType,
   type LivePointer,
   type PublicationEvent,
+  type Reconciled,
 } from './pointer';
 import {
   manifestFor,
@@ -85,6 +85,8 @@ recordOwnerModule('core/store/publication');
 /** How many recent events an idempotency key is looked up in. */
 export const IDEMPOTENCY_WINDOW = 100;
 const REASON_MAX = 500;
+/** live.json's temporary files, tempBeside()'s names for it, which only lock holders write. */
+const LIVE_TEMP = /^\.live\.json\.[0-9a-f]+\.tmp$/;
 
 export type PublicationRejectionCode =
   | 'validation_failed'
@@ -93,7 +95,13 @@ export type PublicationRejectionCode =
   | 'revision_incompatible'
   | 'not_found'
   /** The owner's session ended before the pointer could move; nothing did. */
-  | 'session_ended';
+  | 'session_ended'
+  /**
+   * The publication lock was broken and retaken while this operation held
+   * it, as after a stall past 2 minutes; the pointer didn't move. A retry is
+   * safe: 503 with Retry-After, as lock_timeout.
+   */
+  | 'lock_lost';
 
 export interface PublicationRejection extends Rejection<PublicationRejectionCode> {
   /** For revision_incompatible: why, such as `schema.version` or `damaged:hash_mismatch`. */
@@ -154,6 +162,8 @@ export interface RepairReport {
   readonly tempsRemoved: number;
   /** Whether the live event's own file was missing or unreadable, and is written now. */
   readonly eventWritten: boolean;
+  /** Event files that disagreed with live.json, above its seq or at it, moved aside. */
+  readonly eventsAside: number;
   /** Whether the draft the live revision was published from was still there, and is gone now. */
   readonly draftRemoved: boolean;
 }
@@ -308,19 +318,10 @@ export function filesystemPublicationService({
     }
   }
 
-  /** Step 1's start: the pointer, with its event's own file written if a crash left it out. */
-  async function livePointer(operation: string): Promise<LivePointer | null> {
-    const pointer = await readPointer();
-    if (pointer && !(await eventRecorded(fs, paths, pointer))) {
-      try {
-        await writeEvent(fs, paths, pointer.event, `${operation}.repair`);
-      } catch (error) {
-        if (error instanceof EventMismatchError) {
-          log({ level: 'error', event: 'store.event.mismatch', seq: pointer.seq });
-          throw new StoreError('storage_unavailable', error.message, { cause: error });
-        }
-        throw error;
-      }
+  /** Logs what reconcileEvents() changed: each file moved aside at error, a written one at warn. */
+  function logReconciled(pointer: LivePointer, reconciled: Reconciled) {
+    for (const seq of reconciled.aside) log({ level: 'error', event: 'store.event.mismatch', seq });
+    if (reconciled.written) {
       log({
         level: 'warn',
         event: 'store.event.repaired',
@@ -328,6 +329,18 @@ export function filesystemPublicationService({
         revisionId: pointer.revisionId,
       });
     }
+  }
+
+  /**
+   * Step 1's start: the pointer, with the log made to agree with it, since
+   * live.json wins. The live event's own file is written if a crash left it
+   * out, and an event file that disagrees, at the live seq or above it, is
+   * moved aside first.
+   */
+  async function livePointer(operation: string): Promise<LivePointer | null> {
+    const pointer = await readPointer();
+    if (!pointer) return null;
+    logReconciled(pointer, await reconcileEvents(fs, paths, pointer, `${operation}.repair`));
     return pointer;
   }
 
@@ -374,13 +387,22 @@ export function filesystemPublicationService({
     context: PublicationContext,
     draft?: { readonly draftId: DraftId; readonly version: number },
   ): Promise<PublicationOutcome> {
-    const move = () =>
-      writeLive(
-        fs,
-        paths,
-        { seq: event.seq, revisionId: event.revisionId, unitHash, event },
-        operation,
-      );
+    // The lock must still be this operation's as the pointer moves.
+    let lockLost = false;
+    const move = async () => {
+      try {
+        await writeLive(
+          fs,
+          paths,
+          { seq: event.seq, revisionId: event.revisionId, unitHash, event },
+          operation,
+          () => lock.fence(),
+        );
+      } catch (error) {
+        if (!(error instanceof LockLostError)) throw error;
+        lockLost = true;
+      }
+    };
     if (event.actor === 'operator') {
       await move();
     } else {
@@ -394,6 +416,10 @@ export function filesystemPublicationService({
       });
       if (!held.ok) return rejected('session_ended');
     }
+    if (lockLost) {
+      log({ level: 'error', event: 'store.lock.lost', seq: event.seq, code: 'lock_lost' });
+      return rejected('lock_lost');
+    }
     // Committed. What follows finishes the step, and repair does what a
     // failure here leaves undone.
     try {
@@ -402,7 +428,10 @@ export function filesystemPublicationService({
       log({ level: 'warn', event: `store.${operation}.sync_failed`, seq: event.seq });
     }
     try {
-      await writeEvent(fs, paths, event, operation);
+      // live.json is this event's now, and wins over a file in its way.
+      if (await writeLiveEvent(fs, paths, event, operation)) {
+        log({ level: 'error', event: 'store.event.mismatch', seq: event.seq });
+      }
     } catch {
       log({ level: 'warn', event: `store.${operation}.event_deferred`, seq: event.seq });
     }
@@ -606,14 +635,19 @@ export function filesystemPublicationService({
 
   /**
    * Removes what a crash left in `dir`: temporary files, all of them or those
-   * older than `olderThanMs`. Only regular files go, and nothing in a linked
-   * directory.
+   * older than `olderThanMs`, and with `only`, those its pattern names. Only
+   * regular files go, and nothing in a linked directory.
    */
-  async function removeTemps(dir: string, olderThanMs: number | null): Promise<number> {
+  async function removeTemps(
+    dir: string,
+    olderThanMs: number | null,
+    only?: RegExp,
+  ): Promise<number> {
     if (!(await realDirectory(dir))) return 0;
     let removed = 0;
     for (const name of await fs.readdir(dir)) {
       if (!name.startsWith('.') || !name.endsWith('.tmp')) continue;
+      if (only && !only.test(name)) continue;
       const file = path.join(dir, name);
       const found = await fs.lstat(file);
       if (!found?.isFile) continue;
@@ -848,10 +882,7 @@ export function filesystemPublicationService({
           // claim's, and the AssetStore's are written without it, so only old
           // ones go.
           let tempsRemoved = await removeTemps(paths.drafts, null);
-          if (await fs.lstat(paths.liveTemp)) {
-            await fs.remove(paths.liveTemp, 'repair.temp.remove');
-            tempsRemoved += 1;
-          }
+          tempsRemoved += await removeTemps(paths.publication, null, LIVE_TEMP);
           tempsRemoved += await removeTemps(paths.publication, LOCK_STALE_MS);
           tempsRemoved += await removeTemps(paths.events, null);
           const shards = (await realDirectory(paths.assets)) ? await fs.readdir(paths.assets) : [];
@@ -861,13 +892,14 @@ export function filesystemPublicationService({
             }
           }
 
+          // The log agrees with live.json, which wins.
           const pointer = await readPointer();
-          let eventWritten = false;
-          if (pointer && !(await eventRecorded(fs, paths, pointer))) {
-            await writeEvent(fs, paths, pointer.event, 'repair');
-            eventWritten = true;
-            log({ level: 'warn', event: 'store.event.repaired', seq: pointer.seq });
-          }
+          const reconciled = pointer
+            ? await reconcileEvents(fs, paths, pointer, 'repair')
+            : { aside: [], written: false };
+          if (pointer) logReconciled(pointer, reconciled);
+          const eventWritten = reconciled.written;
+          const eventsAside = reconciled.aside.length;
           let draftRemoved = false;
           const manifest = pointer ? await readManifest(fs, paths, pointer.revisionId) : null;
           if (manifest?.source.kind === 'draft') {
@@ -878,7 +910,7 @@ export function filesystemPublicationService({
               draftRemoved = true;
             }
           }
-          return { stagingRemoved, tempsRemoved, eventWritten, draftRemoved };
+          return { stagingRemoved, tempsRemoved, eventWritten, eventsAside, draftRemoved };
         } catch (error) {
           throw storageError(error);
         }

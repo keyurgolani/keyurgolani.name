@@ -16,9 +16,10 @@ import {
 // point of every publish, rollback, recover, and import. Each event also has
 // its own file, publication/events/<seq>.json, created after the commit the
 // way wx creates a file, never over another; live.json carries the event so
-// a crash between the two leaves nothing a restart can't rebuild. History
-// orders by seq, never by clock, and a revision never records its own
-// events, since one can go live twice.
+// a crash between the two leaves nothing a restart can't rebuild. Where the
+// log and live.json disagree, live.json wins, and the event file in the way
+// is moved aside, never deleted. History orders by seq, never by clock, and
+// a revision never records its own events, since one can go live twice.
 
 recordOwnerModule('core/store/pointer');
 
@@ -133,21 +134,33 @@ export async function readLive(fs: FsPort, paths: StorePaths): Promise<LivePoint
 }
 
 /**
- * Moves the published pointer: live.json.tmp, synced, then renamed over
- * live.json, which is the commit point. The caller syncs publication/ next,
- * after the commit, so a failure there doesn't read as one before it.
+ * Moves the published pointer: a temporary file of its own beside live.json,
+ * synced, then renamed over live.json, which is the commit point. `fence`
+ * runs just before the rename, and stops it by throwing, as when the
+ * publication lock isn't the caller's any more. The caller syncs
+ * publication/ next, after the commit, so a failure there doesn't read as
+ * one before it.
  */
 export async function writeLive(
   fs: FsPort,
   paths: StorePaths,
   pointer: LivePointer,
   operation: string,
+  fence: () => Promise<void> = async () => {},
 ): Promise<void> {
   const point = (step: string): CrashPoint => `${operation}.live.${step}`;
   const record = { ...pointer, event: eventRecord(pointer.event) };
-  await fs.writeFile(paths.liveTemp, `${JSON.stringify(record)}\n`, point('write'));
-  await fs.fsync(paths.liveTemp, point('fsync'));
-  await fs.rename(paths.liveTemp, paths.live, point('rename'));
+  // A new name each time, so no two writers share one, and nothing planted waits there.
+  const temp = tempBeside(paths.live);
+  try {
+    await fs.writeFile(temp, `${JSON.stringify(record)}\n`, point('write'));
+    await fs.fsync(temp, point('fsync'));
+    await fence();
+    await fs.rename(temp, paths.live, point('rename'));
+  } catch (error) {
+    await fs.remove(temp, point('temp.remove')).catch(() => {});
+    throw error;
+  }
 }
 
 export class EventMismatchError extends Error {
@@ -198,6 +211,74 @@ export async function writeEvent(
 export async function eventRecorded(fs: FsPort, paths: StorePaths, pointer: LivePointer) {
   const existing = await readEvent(fs, paths, pointer.seq);
   return existing !== null && sameEvent(existing, pointer.event);
+}
+
+/**
+ * Moves events/<seq>.json aside, to a name the log never reads, and syncs
+ * events/. It's kept, not deleted: what it says may matter to whoever looks
+ * into how it got there.
+ */
+export async function moveEventAside(
+  fs: FsPort,
+  paths: StorePaths,
+  seq: number,
+  operation: string,
+): Promise<void> {
+  await fs.rename(paths.event(seq), paths.eventAside(seq), `${operation}.event.aside`);
+  await fs.fsync(paths.events, `${operation}.event.aside.fsync`);
+}
+
+/**
+ * Writes `event`'s own file for the pointer that carries it, which wins: a
+ * file at its seq that holds another event is moved aside first. Returns
+ * whether one was.
+ */
+export async function writeLiveEvent(
+  fs: FsPort,
+  paths: StorePaths,
+  event: PublicationEvent,
+  operation: string,
+): Promise<boolean> {
+  try {
+    await writeEvent(fs, paths, event, operation);
+    return false;
+  } catch (error) {
+    if (!(error instanceof EventMismatchError)) throw error;
+  }
+  await moveEventAside(fs, paths, event.seq, operation);
+  await writeEvent(fs, paths, event, operation);
+  return true;
+}
+
+/** What reconcileEvents() changed. */
+export interface Reconciled {
+  /** The seqs of the event files it moved aside: above the live seq, or at it with another event. */
+  readonly aside: readonly number[];
+  /** Whether it wrote the live event's own file. */
+  readonly written: boolean;
+}
+
+/**
+ * Makes the log agree with live.json, which wins: every event file above
+ * the live seq, and one at it that holds another event, is moved aside, and
+ * the live event's own file is written if it's missing. Runs under the lock.
+ */
+export async function reconcileEvents(
+  fs: FsPort,
+  paths: StorePaths,
+  pointer: LivePointer,
+  operation: string,
+): Promise<Reconciled> {
+  const aside: number[] = [];
+  for (const name of await fs.readdir(paths.events)) {
+    const match = /^([1-9][0-9]*)\.json$/.exec(name);
+    if (!match || Number(match[1]) <= pointer.seq) continue;
+    await moveEventAside(fs, paths, Number(match[1]), operation);
+    aside.push(Number(match[1]));
+  }
+  if (await eventRecorded(fs, paths, pointer)) return { aside, written: false };
+  if (await writeLiveEvent(fs, paths, pointer.event, operation)) aside.push(pointer.seq);
+  return { aside: aside.sort((a, b) => a - b), written: true };
 }
 
 function safeParse(text: string): unknown {

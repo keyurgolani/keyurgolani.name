@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
-import { readFileSync, statSync, writeFileSync } from 'node:fs';
+import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { onStoreEvent, type StoreEvent } from './common';
 import { asDraft } from './drafts';
 import { nodeFs } from './fs-port';
 import { readLive } from './pointer';
+import { openStore } from './store';
 import { sha256 } from './unit';
 import {
   contentVariant,
@@ -15,6 +16,7 @@ import {
   owned,
   pairInput,
   publishInput,
+  testChecks,
 } from './test-support/fixtures';
 
 const tooBig = (input = pairInput('engineering')) => ({
@@ -385,4 +387,84 @@ test('draft files are 0600 in a 0700 directory', async (t) => {
   assert.equal(statSync(store.paths.drafts).mode & 0o777, 0o700);
   assert.equal(statSync(store.paths.draft(created.draft.draftId)).mode & 0o777, 0o600);
   assert.equal(statSync(store.paths.draftPrevious(created.draft.draftId)).mode & 0o777, 0o600);
+});
+
+test('a draft write or discard whose lock was broken and retaken writes nothing and answers lock_lost', async (t) => {
+  const store = await newStore(t);
+  const created = await store.drafts.create(
+    { documents: contentVariant(pairInput('engineering'), 'one') },
+    'owner',
+  );
+  if (created.kind !== 'saved') return assert.fail();
+  const { draftId } = created.draft;
+  const saved = await store.drafts.save(
+    { draftId, expectedVersion: 1, documents: contentVariant(pairInput('engineering'), 'two') },
+    'owner',
+  );
+  assert.equal(saved.kind, 'saved');
+  const draftText = readFileSync(store.paths.draft(draftId), 'utf8');
+  const previousText = readFileSync(store.paths.draftPrevious(draftId), 'utf8');
+  // Another process takes the lock while the write is under way.
+  const theirs = JSON.stringify({
+    pid: 1,
+    startTime: 'x',
+    hostname: 'another-host',
+    holder: 'cli:backup',
+    at: new Date().toISOString(),
+    nonce: 'theirs',
+  });
+  let armed = '';
+  const breaking = openStore({
+    dataDir: store.paths.root,
+    checks: testChecks(),
+    fs: {
+      ...nodeFs,
+      async writeFile(file, data, point, options) {
+        if (point === armed) writeFileSync(store.paths.lock, theirs);
+        return nodeFs.writeFile(file, data, point, options);
+      },
+      async rename(from, to, point) {
+        await nodeFs.rename(from, to, point);
+        if (point === armed) writeFileSync(store.paths.lock, theirs);
+      },
+      async readFile(file) {
+        if (armed === 'discard' && file === store.paths.draft(draftId)) {
+          writeFileSync(store.paths.lock, theirs);
+        }
+        return nodeFs.readFile(file);
+      },
+    },
+  });
+  const save = () =>
+    breaking.drafts.save(
+      { draftId, expectedVersion: 2, documents: contentVariant(pairInput('engineering'), 'three') },
+      'owner',
+    );
+  const unchanged = (previous: string) => {
+    assert.equal(readFileSync(store.paths.draft(draftId), 'utf8'), draftText);
+    assert.equal(readFileSync(store.paths.draftPrevious(draftId), 'utf8'), previous);
+    assert.deepEqual(
+      readdirSync(store.paths.drafts).filter((name) => name.endsWith('.tmp')),
+      [],
+    );
+  };
+
+  // Taken before either rename: nothing changes.
+  armed = 'draft.save.write';
+  const lost = await save();
+  assert.equal(lost.kind === 'rejected' && lost.code, 'lock_lost');
+  assert.ok(await store.lock.forceUnlock());
+  unchanged(previousText);
+  armed = 'discard';
+  const kept = await breaking.drafts.discard({ draftId, expectedVersion: 2 }, 'owner');
+  assert.equal(kept.kind === 'rejected' && kept.code, 'lock_lost');
+  assert.ok(await store.lock.forceUnlock());
+  unchanged(previousText);
+  // Taken as the previous version moves: the draft stays, and its previous
+  // version is a copy of it.
+  armed = 'draft.save.prev.rename';
+  const late = await save();
+  assert.equal(late.kind === 'rejected' && late.code, 'lock_lost');
+  assert.ok(await store.lock.forceUnlock());
+  unchanged(draftText);
 });

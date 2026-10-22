@@ -595,6 +595,7 @@ test('startup repair deletes staging directories, writes a missing event file fr
     stagingRemoved: 1,
     tempsRemoved: 0,
     eventWritten: true,
+    eventsAside: 0,
     draftRemoved: true,
   });
   assert.equal((await readEvents(nodeFs, store.paths)).length, 2);
@@ -603,6 +604,7 @@ test('startup repair deletes staging directories, writes a missing event file fr
     stagingRemoved: 0,
     tempsRemoved: 0,
     eventWritten: false,
+    eventsAside: 0,
     draftRemoved: false,
   });
 });
@@ -787,5 +789,188 @@ test("an operation first writes the live event's own file when a failure after t
       [2, 'publish', second],
       [3, 'rollback', first],
     ],
+  );
+});
+
+/** The lock record of another process, as one that broke this one's lock and took it writes. */
+const theirLock = () =>
+  JSON.stringify({
+    pid: 1,
+    startTime: 'x',
+    hostname: 'another-host',
+    holder: 'cli:backup',
+    at: new Date().toISOString(),
+    nonce: 'theirs',
+  });
+
+test('a commit whose lock was broken and retaken moves nothing and answers lock_lost, and a retry commits', async (t) => {
+  const logs: StoreLogEntry[] = [];
+  const log = (entry: StoreLogEntry) => logs.push(entry);
+  const store = await newStore(t, { log });
+  const first = await publishInput(store, pairInput('engineering'));
+  const second = await publishInput(store, contentVariant(pairInput('engineering'), 'two'));
+  const draft = await draftOf(store, contentVariant(pairInput('engineering'), 'three'));
+  const live = readFileSync(store.paths.live, 'utf8');
+  // Another process takes the lock just as the pointer is about to move.
+  const breakingAt = (at: string) =>
+    openStore({
+      dataDir: store.paths.root,
+      checks: testChecks(),
+      log,
+      fs: {
+        ...nodeFs,
+        async writeFile(file, data, point, options) {
+          if (point === at) writeFileSync(store.paths.lock, theirLock());
+          return nodeFs.writeFile(file, data, point, options);
+        },
+      },
+    });
+  const publish = {
+    draftId: draft.draftId,
+    draftVersion: draft.version,
+    expectedLiveRevisionId: second,
+  };
+  const lost = await owned(breakingAt('publish.live.write')).publish(publish, 'owner');
+  assert.equal(lost.kind === 'rejected' && lost.code, 'lock_lost');
+  assert.equal((await store.lock.holder())?.holder, 'cli:backup');
+  assert.ok(await store.lock.forceUnlock());
+  const rollback = { targetRevisionId: first, expectedLiveRevisionId: second };
+  const lostRollback = await owned(breakingAt('rollback.live.write')).rollback(rollback, 'owner');
+  assert.equal(lostRollback.kind === 'rejected' && lostRollback.code, 'lock_lost');
+  assert.ok(await store.lock.forceUnlock());
+  // Nothing moved, nothing was recorded, and nothing was left behind.
+  assert.equal(readFileSync(store.paths.live, 'utf8'), live);
+  assert.deepEqual(
+    (await readEvents(nodeFs, store.paths)).map((event) => event.seq),
+    [1, 2],
+  );
+  assert.equal((await store.drafts.getWorking())?.version, draft.version);
+  assert.deepEqual(
+    (await nodeFs.readdir(store.paths.publication)).filter((name) => name.endsWith('.tmp')),
+    [],
+  );
+  assert.equal(
+    logs.filter((entry) => entry.level === 'error' && entry.event === 'store.lock.lost').length,
+    2,
+  );
+  // With the lock its own again, the same publish commits.
+  assert.equal((await owned(store).publish(publish, 'owner')).kind, 'committed');
+});
+
+/** An event that disagrees with live.json's, as a second holder of the lock writes one. */
+function anotherEvent(seq: number, revisionId: RevisionId, previousRevisionId: RevisionId) {
+  return JSON.stringify({
+    seq,
+    type: 'rollback',
+    revisionId,
+    previousRevisionId,
+    actor: 'owner',
+    at: new Date().toISOString(),
+  });
+}
+
+const asideIn = async (store: Store) =>
+  (await nodeFs.readdir(store.paths.events)).filter((name) => name.includes('.aside-')).sort();
+
+const mismatches = (logs: readonly StoreLogEntry[]) =>
+  logs
+    .filter((entry) => entry.level === 'error' && entry.event === 'store.event.mismatch')
+    .map((entry) => entry.seq);
+
+test('startup repair moves aside event files that disagree with live.json, writes the live one, and the store runs on', async (t) => {
+  const logs: StoreLogEntry[] = [];
+  const store = await newStore(t, { log: (entry) => logs.push(entry) });
+  const first = await publishInput(store, pairInput('engineering'));
+  const second = await publishInput(store, contentVariant(pairInput('engineering'), 'two'));
+  // As two holders, or a pointer a power loss took back, leave the log:
+  // events/2.json holds the other event, and one is above the live seq.
+  writeFileSync(store.paths.event(2), anotherEvent(2, first, second));
+  writeFileSync(store.paths.event(3), anotherEvent(3, second, first));
+
+  const report = await store.publication.repair();
+  assert.equal(report.eventWritten, true);
+  assert.equal(report.eventsAside, 2);
+  assert.deepEqual(
+    (await readEvents(nodeFs, store.paths)).map((event) => [event.seq, event.type]),
+    [
+      [1, 'publish'],
+      [2, 'publish'],
+    ],
+  );
+  // Kept, where the log doesn't read them.
+  const aside = await asideIn(store);
+  assert.deepEqual(
+    aside.map((name) => name.split('.')[0]),
+    ['2', '3'],
+  );
+  assert.deepEqual(mismatches(logs), [2, 3]);
+  const rolled = await owned(store).rollback(
+    { targetRevisionId: first, expectedLiveRevisionId: second },
+    'owner',
+  );
+  assert.deepEqual(rolled, { kind: 'committed', revisionId: first, seq: 3 });
+  assert.equal((await store.publication.repair()).eventsAside, 0);
+});
+
+test('an operation moves aside an event file that disagrees with live.json before it runs, and commits', async (t) => {
+  const logs: StoreLogEntry[] = [];
+  const store = await newStore(t, { log: (entry) => logs.push(entry) });
+  const first = await publishInput(store, pairInput('engineering'));
+  const second = await publishInput(store, contentVariant(pairInput('engineering'), 'two'));
+  writeFileSync(store.paths.event(2), anotherEvent(2, first, second));
+  writeFileSync(store.paths.event(3), anotherEvent(3, second, first));
+  const rolled = await owned(store).rollback(
+    { targetRevisionId: first, expectedLiveRevisionId: second },
+    'owner',
+  );
+  assert.deepEqual(rolled, { kind: 'committed', revisionId: first, seq: 3 });
+  assert.deepEqual(
+    (await readEvents(nodeFs, store.paths)).map((event) => [event.seq, event.type]),
+    [
+      [1, 'publish'],
+      [2, 'publish'],
+      [3, 'rollback'],
+    ],
+  );
+  assert.equal((await asideIn(store)).length, 2);
+  assert.deepEqual(mismatches(logs), [2, 3]);
+});
+
+test('a commit whose event file another event took writes its own over it, moving the other aside', async (t) => {
+  const logs: StoreLogEntry[] = [];
+  const store = await newStore(t, { log: (entry) => logs.push(entry) });
+  const first = await publishInput(store, pairInput('engineering'));
+  const second = await publishInput(store, contentVariant(pairInput('engineering'), 'two'));
+  // Another event lands at the new seq as the pointer moves, as a second holder's would.
+  const intruding: FsPort = {
+    ...nodeFs,
+    async rename(from, to, point) {
+      await nodeFs.rename(from, to, point);
+      if (point === 'rollback.live.rename') {
+        writeFileSync(store.paths.event(3), anotherEvent(3, second, first));
+      }
+    },
+  };
+  const rolling = openStore({
+    dataDir: store.paths.root,
+    checks: testChecks(),
+    fs: intruding,
+    log: (entry) => logs.push(entry),
+  });
+  const rolled = await owned(rolling).rollback(
+    { targetRevisionId: first, expectedLiveRevisionId: second },
+    'owner',
+  );
+  assert.deepEqual(rolled, { kind: 'committed', revisionId: first, seq: 3 });
+  const live = (await readLive(nodeFs, store.paths))!;
+  assert.deepEqual(
+    (await readEvents(nodeFs, store.paths)).find((event) => event.seq === 3),
+    { ...live.event },
+  );
+  assert.equal((await asideIn(store)).length, 1);
+  assert.deepEqual(mismatches(logs), [3]);
+  assert.equal(
+    logs.some((entry) => entry.event === 'store.rollback.event_deferred'),
+    false,
   );
 });
