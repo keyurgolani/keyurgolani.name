@@ -7,8 +7,8 @@ export const CONTRACT_MAJOR = 2;
 export const CONTRACT_MINOR = 0;
 
 /**
- * The appearance token contract a variant or appearance pack builds against:
- * #19's tokens, which @portfolio/appearance defines and re-exports this from.
+ * The appearance token contract a variant or appearance pack builds against.
+ * @portfolio/appearance defines #19's tokens and re-exports this constant.
  */
 export const TOKEN_CONTRACT_VERSION = 1;
 
