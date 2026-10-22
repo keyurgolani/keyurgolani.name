@@ -223,6 +223,13 @@ export function checkMarkdown(value: string, ctx: z.RefinementCtx): void {
   });
 }
 
+/**
+ * Where the link-parenthesis count stops: it grows with the square of the
+ * links in one word, and past this it would leave small-integer arithmetic
+ * and slow the pass. Every limit is far below it.
+ */
+const COUNT_CEILING = 2 ** 30;
+
 // Character codes the measure compares against.
 const TAB = 0x09;
 const LF = 0x0a;
@@ -498,12 +505,14 @@ export function measureMarkdown(text: string): MarkdownShape {
         openSites = 0;
       } else if (code === PAREN_OPEN && previous === BRACKET_CLOSE) {
         // A link's own `(`, which also sits in every destination still open.
-        linkParens += openSites + endedSites;
+        linkParens = Math.min(linkParens + openSites + endedSites, COUNT_CEILING);
         endedSites = 0;
         openSites++;
         siteJustOpened = true;
       } else {
-        if (code === PAREN_OPEN) linkParens += openSites + endedSites;
+        if (code === PAREN_OPEN) {
+          linkParens = Math.min(linkParens + openSites + endedSites, COUNT_CEILING);
+        }
         endedSites = 0;
       }
     }

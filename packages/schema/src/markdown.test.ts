@@ -209,8 +209,8 @@ function fastest(run: () => unknown): number {
   return best;
 }
 
-test('the measure is linear: twice the text takes at most about twice the time', () => {
-  // Shapes that are quadratic or worse in marked, and plain prose, at 1 MiB and 2.
+test('the measure is linear: four times the text takes at most about four times the time', () => {
+  // Shapes that are quadratic or worse in marked, and plain prose, at 512 KiB and 2 MiB.
   const shapes = [
     (n: number) => `x ${'*'.repeat(n)}`,
     (n: number) => '[a]('.repeat(n / 4),
@@ -221,14 +221,14 @@ test('the measure is linear: twice the text takes at most about twice the time',
       'The quick brown fox, *jumps* over [the](https://a.test) lazy dog. '.repeat(n / 64),
   ];
   for (const shape of shapes) {
-    const small = shape(1 << 20);
+    const small = shape(1 << 19);
     const large = shape(1 << 21);
     measureMarkdown(small);
     const ratio = fastest(() => measureMarkdown(large)) / fastest(() => measureMarkdown(small));
-    // Linear doubles; quadratic would quadruple. The slack is for a busy machine.
+    // Linear is 4 times; quadratic would be 16. The slack is for a busy machine.
     assert.ok(
-      ratio < 3,
-      `${small.slice(0, 12)}: twice the text took ${ratio.toFixed(2)} times as long`,
+      ratio < 8,
+      `${small.slice(0, 12)}: four times the text took ${ratio.toFixed(2)} times as long`,
     );
   }
 });
