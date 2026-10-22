@@ -1,0 +1,40 @@
+{
+  "name": "@portfolio/fixture-variant-medium",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A budget test fixture (#6): a medium variant with a WebGL2 fragment shader over an SSR still, an infinite CSS animation, and one enhancement that loads when its slot is visible. Registers only in a build with BUDGET_FIXTURES=1, never in a release.",
+  "main": "./src/index.tsx",
+  "types": "./src/index.tsx",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.tsx",
+    "./manifest": "./manifest.json",
+    "./styles.css": "./src/styles.css",
+    "./package.json": "./package.json",
+    "./enhancements/glint": "./src/enhancements/glint.tsx"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "portfolio": {
+    "kind": "variant",
+    "manifest": "./manifest.json",
+    "fixture": true
+  },
+  "dependencies": {
+    "@portfolio/kit": "workspace:*",
+    "@portfolio/variant-contract": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "typescript": "^5.7.2"
+  }
+}

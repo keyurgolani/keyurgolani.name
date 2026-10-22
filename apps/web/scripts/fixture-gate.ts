@@ -6,10 +6,10 @@
 // flag fails if that package's ids reach the registry another way.
 //
 // Each fixture family adds a row. A flag may have several rows, each admitting
-// its own directories at its own values: #6's BUDGET_FIXTURES takes 1 and
-// over, and each admits different fixtures. FIXTURE_FLAGS in the generated
-// metadata module holds one boolean per flag, true when the flag's value
-// admits any of its rows.
+// its own directories at its own values: #6's BUDGET_FIXTURES=1 admits the
+// light and medium fixture variants, and BUDGET_FIXTURES=over the one over
+// its budget, alone. FIXTURE_FLAGS in the generated metadata module holds
+// one boolean per flag, true when the flag's value admits any of its rows.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -56,6 +56,23 @@ export const FIXTURE_ROWS: readonly FixtureRow[] = [
     key: 'quality',
     directories: ['packages/quality-fixtures-schemes-meta'],
     values: ['meta'],
+  },
+  // #6, Slice 2: the variants the trace publishes in turn.
+  {
+    flag: 'BUDGET_FIXTURES',
+    key: 'budget',
+    directories: [
+      'packages/budget-fixtures/fixture-variant-light',
+      'packages/budget-fixtures/fixture-variant-medium',
+    ],
+    values: ['1'],
+  },
+  // The variant over its budget, which the budget check must fail, on its own.
+  {
+    flag: 'BUDGET_FIXTURES',
+    key: 'budget',
+    directories: ['packages/budget-fixtures/fixture-over-budget'],
+    values: ['over'],
   },
 ];
 

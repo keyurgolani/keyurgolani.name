@@ -1,0 +1,83 @@
+/*
+ * fixture-variant-medium (#6, Slice 2): one column under a stage, layout
+ * only, every rule under [data-variant='fixture-variant-medium']. The
+ * stage's still is a file in the package, which registry generation copies
+ * to /_portfolio/asset/. The pulse runs forever, except under reduced
+ * motion.
+ */
+
+[data-variant='fixture-variant-medium'] {
+  display: block;
+  box-sizing: border-box;
+  max-inline-size: 48rem;
+  margin-inline: auto;
+  padding-block: 1.5rem 4rem;
+  padding-inline: 1.25rem;
+  overflow-wrap: anywhere;
+}
+
+[data-variant='fixture-variant-medium'] .fvm-header {
+  display: flex;
+  justify-content: flex-end;
+  margin-block-end: 2rem;
+}
+
+[data-variant='fixture-variant-medium'] .fvm-stage {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  margin-block-end: 2rem;
+  background-image: url('./still.svg');
+  background-size: cover;
+}
+
+[data-variant='fixture-variant-medium'] .fvm-canvas {
+  display: block;
+  inline-size: 100%;
+  block-size: 100%;
+}
+
+[data-variant='fixture-variant-medium'] .fvm-canvas:not([data-running]) {
+  visibility: hidden;
+}
+
+[data-variant='fixture-variant-medium'] .fvm-pulse {
+  position: absolute;
+  inset-block-end: 1rem;
+  inset-inline-end: 1rem;
+  inline-size: 1rem;
+  block-size: 1rem;
+  background: currentColor;
+  animation: fixture-variant-medium-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes fixture-variant-medium-pulse {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-variant='fixture-variant-medium'] .fvm-pulse {
+    animation: none;
+  }
+}
+
+[data-variant='fixture-variant-medium'] .fvm-name {
+  margin-block: 0 2rem;
+}
+
+[data-variant='fixture-variant-medium'] .fvm-glint-slot {
+  min-block-size: 1rem;
+}
+
+[data-variant='fixture-variant-medium'] .fvm-glint {
+  display: inline-block;
+  inline-size: 1rem;
+  block-size: 1rem;
+  background: currentColor;
+}

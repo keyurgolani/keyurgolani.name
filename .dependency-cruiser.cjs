@@ -5,20 +5,31 @@ const { readdirSync, readFileSync } = require('node:fs');
 const path = require('node:path');
 
 /**
- * The workspace packages that are variants: their package.json says
- * `portfolio.kind: "variant"`, whatever their folder is called, so a renamed
- * or new one is covered the moment it's declared.
+ * The workspace packages that are variants, as paths under packages/: their
+ * package.json says `portfolio.kind: "variant"`, whatever their folder is
+ * called, so a renamed or new one is covered the moment it's declared. They
+ * sit where pnpm-workspace.yaml looks: packages/* and #6's
+ * packages/budget-fixtures/*.
  */
 function variantDirs() {
   const packages = path.join(__dirname, 'packages');
-  return readdirSync(packages).filter((dir) => {
+  const under = (parent) => {
     try {
-      const manifest = JSON.parse(readFileSync(path.join(packages, dir, 'package.json'), 'utf8'));
-      return manifest.portfolio?.kind === 'variant';
+      return readdirSync(path.join(packages, parent)).map((dir) => path.posix.join(parent, dir));
     } catch {
-      return false;
+      return [];
     }
-  });
+  };
+  return [...under('.'), ...under('budget-fixtures')]
+    .map((dir) => path.posix.normalize(dir))
+    .filter((dir) => {
+      try {
+        const manifest = JSON.parse(readFileSync(path.join(packages, dir, 'package.json'), 'utf8'));
+        return manifest.portfolio?.kind === 'variant';
+      } catch {
+        return false;
+      }
+    });
 }
 
 const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -67,6 +78,25 @@ module.exports = {
         path: '^(?:packages|apps)/',
         pathNot: ['^packages/$1/', '^packages/(?:schema|kit|variant-contract|appearance)/'],
       },
+    },
+    {
+      name: 'host-loads-variants-only-through-the-registry',
+      severity: 'error',
+      comment:
+        'A variant reaches the host only through what registry generation writes (#6, Slice 2): ' +
+        "each registered variant's import() in generated/registry.loaders.ts, which loads it only " +
+        "when a page renders it, and its declared enhancements' in " +
+        'generated/registry.enhancements.ts. No other host module imports a variant package, ' +
+        "statically or with import(), so no page's chunks hold another variant's code. Tests may. " +
+        'A variant is a package whose package.json has portfolio.kind "variant".',
+      from: {
+        path: '^apps/web/',
+        pathNot: [
+          '^apps/web/src/lib/generated/registry\\.(?:loaders|enhancements)\\.ts$',
+          '\\.test\\.(?:tsx?|mjs)$',
+        ],
+      },
+      to: { path: `^packages/(?:${VARIANT_DIRS})/` },
     },
     {
       name: 'variant-contract-root-stays-browser-safe',

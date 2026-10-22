@@ -1,6 +1,8 @@
 packages:
   - 'apps/*'
   - 'packages/*'
+  # #6's budget fixture variants, one directory each.
+  - 'packages/budget-fixtures/*'
   - 'experiments/*'
 
 # Dependency install scripts are reviewed. A dependency that ships one must be

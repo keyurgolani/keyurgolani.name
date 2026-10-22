@@ -77,6 +77,15 @@ importers:
       '@portfolio/fallback-composition':
         specifier: workspace:*
         version: link:../../packages/fallback-composition
+      '@portfolio/fixture-over-budget':
+        specifier: workspace:*
+        version: link:../../packages/budget-fixtures/fixture-over-budget
+      '@portfolio/fixture-variant-light':
+        specifier: workspace:*
+        version: link:../../packages/budget-fixtures/fixture-variant-light
+      '@portfolio/fixture-variant-medium':
+        specifier: workspace:*
+        version: link:../../packages/budget-fixtures/fixture-variant-medium
       '@portfolio/kit':
         specifier: workspace:*
         version: link:../../packages/kit
@@ -172,6 +181,81 @@ importers:
   packages/appearance-schemes: {}
 
   packages/appearance-typography: {}
+
+  packages/budget-fixtures/fixture-over-budget:
+    dependencies:
+      '@portfolio/kit':
+        specifier: workspace:*
+        version: link:../../kit
+      '@portfolio/variant-contract':
+        specifier: workspace:*
+        version: link:../../variant-contract
+    devDependencies:
+      '@types/react':
+        specifier: ^19.0.0
+        version: 19.2.14
+      '@types/react-dom':
+        specifier: ^19.0.0
+        version: 19.2.3(@types/react@19.2.14)
+      react:
+        specifier: ^19.0.0
+        version: 19.2.5
+      react-dom:
+        specifier: ^19.0.0
+        version: 19.2.5(react@19.2.5)
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+
+  packages/budget-fixtures/fixture-variant-light:
+    dependencies:
+      '@portfolio/kit':
+        specifier: workspace:*
+        version: link:../../kit
+      '@portfolio/variant-contract':
+        specifier: workspace:*
+        version: link:../../variant-contract
+    devDependencies:
+      '@types/react':
+        specifier: ^19.0.0
+        version: 19.2.14
+      '@types/react-dom':
+        specifier: ^19.0.0
+        version: 19.2.3(@types/react@19.2.14)
+      react:
+        specifier: ^19.0.0
+        version: 19.2.5
+      react-dom:
+        specifier: ^19.0.0
+        version: 19.2.5(react@19.2.5)
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+
+  packages/budget-fixtures/fixture-variant-medium:
+    dependencies:
+      '@portfolio/kit':
+        specifier: workspace:*
+        version: link:../../kit
+      '@portfolio/variant-contract':
+        specifier: workspace:*
+        version: link:../../variant-contract
+    devDependencies:
+      '@types/react':
+        specifier: ^19.0.0
+        version: 19.2.14
+      '@types/react-dom':
+        specifier: ^19.0.0
+        version: 19.2.3(@types/react@19.2.14)
+      react:
+        specifier: ^19.0.0
+        version: 19.2.5
+      react-dom:
+        specifier: ^19.0.0
+        version: 19.2.5(react@19.2.5)
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
 
   packages/core:
     dependencies:

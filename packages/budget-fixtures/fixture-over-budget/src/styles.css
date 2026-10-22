@@ -1,0 +1,29 @@
+/*
+ * fixture-over-budget (#6, Slice 2): one column, layout only, every rule
+ * under [data-variant='fixture-over-budget'], after an @import from another
+ * host, which the audit and #6's budget check must report, and its ballast.
+ * The host is .invalid, so it resolves nowhere.
+ */
+
+@import url('https://fonts.example.invalid/fixture-over-budget.css');
+@import './ballast.css';
+
+[data-variant='fixture-over-budget'] {
+  display: block;
+  box-sizing: border-box;
+  max-inline-size: 44rem;
+  margin-inline: auto;
+  padding-block: 1.5rem 4rem;
+  padding-inline: 1.25rem;
+  overflow-wrap: anywhere;
+}
+
+[data-variant='fixture-over-budget'] .fob-header {
+  display: flex;
+  justify-content: flex-end;
+  margin-block-end: 2rem;
+}
+
+[data-variant='fixture-over-budget'] .fob-name {
+  margin-block: 0 2rem;
+}
