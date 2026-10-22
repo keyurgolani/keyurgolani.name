@@ -61,8 +61,11 @@ export interface ExtensionSection {
 export type Section = CoreSection | ExtensionSection;
 export type SectionKind = CoreSection['kind'];
 
-/** The version 3 core section kinds, in the order the docs list them. */
-export const CORE_SECTION_KINDS: readonly SectionKind[] = [
+/**
+ * The version 3 core section kinds, in the order the docs list them. The
+ * skills' sync check reads this literal.
+ */
+export const ALL_SECTION_KINDS: readonly SectionKind[] = [
   'works',
   'evidence',
   'chronology',
@@ -79,8 +82,8 @@ export const CORE_SECTION_KINDS: readonly SectionKind[] = [
   'github',
 ] as const;
 
-/** Every core section kind. The same list as CORE_SECTION_KINDS. */
-export const ALL_SECTION_KINDS: readonly SectionKind[] = CORE_SECTION_KINDS;
+/** The version 3 core section kinds: the same list as ALL_SECTION_KINDS. */
+export const CORE_SECTION_KINDS: readonly SectionKind[] = ALL_SECTION_KINDS;
 
 /** The kinds that list record ids in `items`, and the record each lists. */
 export const RECORD_SECTION_KINDS = {

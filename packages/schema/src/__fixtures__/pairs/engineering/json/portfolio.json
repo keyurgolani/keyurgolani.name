@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "locale": "en",
   "direction": "ltr",
   "identity": {
@@ -25,6 +25,181 @@
     "title": "Ines Okafor",
     "description": "Platform engineer who builds deploy tooling people trust."
   },
+  "practice": {
+    "thesis": "A platform earns trust by being boring. I build the parts that roll back before anyone notices.",
+    "skills": [
+      {
+        "name": "Platforms",
+        "items": [
+          "Kubernetes",
+          "Terraform",
+          "Nomad"
+        ]
+      },
+      {
+        "name": "Languages",
+        "items": [
+          "Go",
+          "TypeScript",
+          "Bash"
+        ]
+      }
+    ],
+    "tools": [
+      {
+        "name": "Daily",
+        "items": [
+          {
+            "name": "Go",
+            "version": "1.23"
+          },
+          {
+            "name": "Neovim"
+          }
+        ]
+      }
+    ]
+  },
+  "signature": "shipyard",
+  "featured": [
+    "quiet-alerts"
+  ],
+  "proof": [
+    "years-engineering",
+    "services-migrated",
+    "shipyard-repository"
+  ],
+  "archive": [
+    "deploy-scripts"
+  ],
+  "works": [
+    {
+      "id": "shipyard",
+      "slug": "shipyard",
+      "title": "shipyard",
+      "medium": "software",
+      "summary": "A deploy orchestrator that rolls back before you notice.",
+      "period": {
+        "start": "2021-03"
+      },
+      "role": "Author",
+      "tools": [
+        "Go",
+        "Kubernetes"
+      ],
+      "evidence": [
+        "shipyard-repository"
+      ],
+      "links": [
+        {
+          "url": "https://code.okafor.test/ines/shipyard",
+          "label": "Source"
+        }
+      ],
+      "highlights": [
+        "Runs 4,000 deploys a week"
+      ],
+      "caseStudy": {
+        "challenge": "Deploys took forty minutes and failed quietly, so teams batched changes and made each one riskier.",
+        "role": "I wrote shipyard and moved the first forty services onto it.",
+        "decisions": [
+          {
+            "decision": "Roll back on the canary's error budget, not on a timer.",
+            "rationale": "A timer rolls back healthy deploys and keeps bad ones that fail slowly."
+          }
+        ],
+        "outcomes": "Median deploy time fell from forty minutes to six, and teams deploy several times a day."
+      }
+    },
+    {
+      "id": "quiet-alerts",
+      "title": "quiet-alerts",
+      "medium": "software",
+      "summary": "Alert routing that pages one person, not twelve.",
+      "role": "Maintainer",
+      "tools": [
+        "TypeScript"
+      ]
+    },
+    {
+      "id": "deploy-scripts",
+      "title": "deploy-scripts",
+      "medium": "software",
+      "summary": "The shell scripts shipyard replaced, kept for the history.",
+      "period": {
+        "start": "2016",
+        "end": "2020"
+      }
+    }
+  ],
+  "evidence": [
+    {
+      "id": "years-engineering",
+      "type": "metric",
+      "statement": "Years engineering",
+      "metric": {
+        "key": "years-engineering",
+        "value": 10
+      }
+    },
+    {
+      "id": "services-migrated",
+      "type": "metric",
+      "statement": "Services migrated",
+      "metric": {
+        "key": "services-migrated",
+        "value": 40
+      }
+    },
+    {
+      "id": "shipyard-repository",
+      "type": "repository",
+      "title": "shipyard on Code",
+      "statement": "Thirty teams deploy with it.",
+      "url": "https://code.okafor.test/ines/shipyard"
+    }
+  ],
+  "chronology": [
+    {
+      "id": "staff-engineer-platform-harbor-freight-labs",
+      "kind": "role",
+      "title": "Staff Engineer, Platform",
+      "period": {
+        "start": "2022-01"
+      },
+      "organization": "Harbor Freight Labs",
+      "location": "Remote",
+      "highlights": [
+        "Cut median deploy time from 40 minutes to 6"
+      ],
+      "skills": [
+        "Go",
+        "Kubernetes",
+        "Terraform"
+      ],
+      "thread": "work",
+      "works": [
+        "shipyard"
+      ]
+    },
+    {
+      "id": "senior-engineer-bluefin",
+      "kind": "role",
+      "title": "Senior Engineer",
+      "period": {
+        "start": "2016-05",
+        "end": "2021-12"
+      },
+      "organization": "Bluefin",
+      "thread": "work",
+      "works": [
+        "deploy-scripts"
+      ]
+    }
+  ],
+  "contact": {
+    "message": "Email is best. I answer within a week."
+  },
   "sections": [
     {
       "kind": "hero",
@@ -49,135 +224,55 @@
       "body": "Ten years of build systems, deploy pipelines, and the dashboards nobody looks at until 3 a.m.\n"
     },
     {
-      "kind": "stats",
+      "kind": "evidence",
       "id": "numbers",
       "title": "Numbers",
       "items": [
-        {
-          "value": "10",
-          "label": "Years engineering",
-          "metric": "years-engineering"
-        },
-        {
-          "value": "40",
-          "label": "Services migrated"
-        }
+        "years-engineering",
+        "services-migrated"
       ]
     },
     {
-      "kind": "projects",
+      "kind": "works",
       "id": "work",
       "title": "Work",
       "items": [
-        {
-          "name": "shipyard",
-          "summary": "A deploy orchestrator that rolls back before you notice.",
-          "period": {
-            "start": "2021-03"
-          },
-          "role": "Author",
-          "technologies": [
-            "Go",
-            "Kubernetes"
-          ],
-          "links": [
-            {
-              "url": "https://code.okafor.test/ines/shipyard",
-              "label": "Source"
-            }
-          ],
-          "highlights": [
-            "Runs 4,000 deploys a week"
-          ]
-        },
-        {
-          "name": "quiet-alerts",
-          "summary": "Alert routing that pages one person, not twelve.",
-          "role": "Maintainer",
-          "technologies": [
-            "TypeScript"
-          ]
-        }
+        "shipyard",
+        "quiet-alerts",
+        "deploy-scripts"
       ]
     },
     {
-      "kind": "experience",
+      "kind": "chronology",
       "id": "experience",
       "title": "Experience",
       "items": [
-        {
-          "role": "Staff Engineer, Platform",
-          "organization": "Harbor Freight Labs",
-          "location": "Remote",
-          "period": {
-            "start": "2022-01"
-          },
-          "highlights": [
-            "Cut median deploy time from 40 minutes to 6"
-          ],
-          "skills": [
-            "Go",
-            "Kubernetes",
-            "Terraform"
-          ]
-        },
-        {
-          "role": "Senior Engineer",
-          "organization": "Bluefin",
-          "period": {
-            "start": "2016-05",
-            "end": "2021-12"
-          }
-        }
+        "staff-engineer-platform-harbor-freight-labs",
+        "senior-engineer-bluefin"
       ]
     },
     {
-      "kind": "skills",
+      "kind": "practice",
       "id": "skills",
       "title": "Skills",
-      "groups": [
-        {
-          "name": "Platforms",
-          "items": [
-            "Kubernetes",
-            "Terraform",
-            "Nomad"
-          ]
-        },
-        {
-          "name": "Languages",
-          "items": [
-            "Go",
-            "TypeScript",
-            "Bash"
-          ]
-        }
-      ]
+      "part": "skills"
     },
     {
-      "kind": "stack",
+      "kind": "practice",
       "id": "stack",
       "title": "Stack",
-      "groups": [
-        {
-          "name": "Daily",
-          "items": [
-            {
-              "name": "Go",
-              "version": "1.23"
-            },
-            {
-              "name": "Neovim"
-            }
-          ]
-        }
-      ]
+      "part": "tools"
+    },
+    {
+      "kind": "github",
+      "id": "on-code",
+      "title": "On Code",
+      "username": "ines"
     },
     {
       "kind": "contact",
       "id": "contact",
-      "title": "Contact",
-      "message": "Email is best. I answer within a week."
+      "title": "Contact"
     }
   ]
 }

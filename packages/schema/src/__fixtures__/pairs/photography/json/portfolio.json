@@ -1,14 +1,14 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "locale": "sv",
   "direction": "ltr",
   "identity": {
     "name": "Mateo Lindqvist",
     "tagline": "Documentary photographer",
     "location": "Gothenburg, Sweden",
+    "email": "mateo@lindqvist.test",
     "avatar": {
-      "src": "/images/mateo.jpg",
-      "alt": "Mateo with a medium-format camera"
+      "asset": "portrait"
     }
   },
   "links": [
@@ -18,6 +18,152 @@
       "label": "Instagram"
     }
   ],
+  "practice": {
+    "thesis": "I photograph the work that keeps a coast running, at the hours nobody else is there to see it.",
+    "services": [
+      {
+        "items": [
+          {
+            "name": "Editorial assignments",
+            "description": "Two-day shoots for magazines and newspapers.",
+            "url": "mailto:mateo@lindqvist.test"
+          }
+        ]
+      }
+    ]
+  },
+  "signature": "harbors-series",
+  "proof": [
+    "nordic-documentary-prize",
+    "harbors-exhibition"
+  ],
+  "works": [
+    {
+      "id": "harbors-series",
+      "slug": "harbors",
+      "title": "Harbors",
+      "medium": "image-series",
+      "summary": "Ten years of ferries, quays, and the crews who work them.",
+      "period": {
+        "start": "2015"
+      },
+      "media": [
+        {
+          "asset": "ferry-at-dawn",
+          "caption": "The 6:10 to Vinga",
+          "takenAt": "2025-03",
+          "location": "Gothenburg"
+        },
+        {
+          "asset": "nets-on-the-quay",
+          "caption": "Nets, Fiskebäckskil",
+          "takenAt": "2024-08"
+        }
+      ],
+      "evidence": [
+        "harbors-exhibition",
+        "the-quiet-coast"
+      ],
+      "caseStudy": {
+        "context": "The west coast's working harbors, photographed through every season from 2015 on.",
+        "reflection": "The series became about time. The same quay reads differently every year it's still there."
+      }
+    },
+    {
+      "id": "first-winters",
+      "title": "First winters",
+      "medium": "photography",
+      "visibility": "private",
+      "summary": "Early street photographs, kept for myself."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "lindqvist-prints",
+      "type": "external-work",
+      "title": "Lindqvist Prints",
+      "description": "Limited editions of the harbor series.",
+      "url": "https://prints.lindqvist.test",
+      "categories": [
+        "Prints"
+      ],
+      "buttonText": "Visit the shop"
+    },
+    {
+      "id": "the-quiet-coast",
+      "type": "press",
+      "title": "The quiet coast",
+      "url": "https://tidskrift.test/quiet-coast",
+      "publishedAt": "2025-06-01",
+      "publication": "Fotografisk Tidskrift"
+    },
+    {
+      "id": "nordic-documentary-prize",
+      "type": "award",
+      "title": "Nordic Documentary Prize",
+      "organization": "Nordic Photo Foundation",
+      "receivedAt": "2024"
+    },
+    {
+      "id": "harbors-exhibition",
+      "type": "exhibition",
+      "title": "Harbors, Hasselblad Center",
+      "statement": "Forty prints from the series, shown for three months.",
+      "url": "https://hasselbladcenter.test/harbors",
+      "location": "Gothenburg"
+    }
+  ],
+  "chronology": [
+    {
+      "id": "harbors-exhibition-opening",
+      "kind": "event",
+      "title": "Harbors opens at the Hasselblad Center",
+      "period": {
+        "start": "2025-02"
+      },
+      "thread": "creative",
+      "works": [
+        "harbors-series"
+      ]
+    },
+    {
+      "id": "staff-photographer",
+      "kind": "role",
+      "title": "Staff photographer",
+      "period": {
+        "start": "2012",
+        "end": "2018"
+      },
+      "organization": "Göteborgs-Posten",
+      "thread": "work"
+    }
+  ],
+  "media": [
+    {
+      "id": "portrait",
+      "kind": "image",
+      "source": "images/mateo.jpg",
+      "alt": "Mateo with a medium-format camera"
+    },
+    {
+      "id": "ferry-at-dawn",
+      "kind": "image",
+      "source": "images/harbor-1.jpg",
+      "alt": "A ferry leaving the harbor at dawn",
+      "credit": "Mateo Lindqvist"
+    },
+    {
+      "id": "nets-on-the-quay",
+      "kind": "image",
+      "source": "images/harbor-2.jpg",
+      "alt": "Nets drying on a quay",
+      "credit": "Mateo Lindqvist",
+      "focalPoint": {
+        "x": 0.3,
+        "y": 0.6
+      }
+    }
+  ],
   "sections": [
     {
       "kind": "hero",
@@ -25,82 +171,48 @@
       "tagline": "Harbors, ferries, and the people who keep them running."
     },
     {
-      "kind": "gallery",
+      "kind": "works",
       "id": "harbors",
       "title": "Harbors",
       "subtitle": "Ten years on the west coast.",
       "items": [
-        {
-          "image": {
-            "src": "/images/harbor-1.jpg",
-            "alt": "A ferry leaving the harbor at dawn"
-          },
-          "caption": "The 6:10 to Vinga",
-          "takenAt": "2025-03",
-          "location": "Gothenburg"
-        },
-        {
-          "image": {
-            "src": "/images/harbor-2.jpg",
-            "alt": "Nets drying on a quay"
-          },
-          "caption": "Nets, Fiskebäckskil",
-          "takenAt": "2024-08"
-        }
+        "harbors-series"
       ]
     },
     {
-      "kind": "external-portfolios",
+      "kind": "evidence",
       "id": "elsewhere",
       "title": "Elsewhere",
       "items": [
-        {
-          "url": "https://prints.lindqvist.test",
-          "brandName": "Lindqvist Prints",
-          "description": "Limited editions of the harbor series.",
-          "categories": [
-            "Prints"
-          ],
-          "buttonText": "Visit the shop"
-        }
+        "lindqvist-prints"
       ]
     },
     {
-      "kind": "press",
+      "kind": "evidence",
       "id": "press",
       "title": "Press",
       "items": [
-        {
-          "title": "The quiet coast",
-          "publication": "Fotografisk Tidskrift",
-          "publishedAt": "2025-06-01",
-          "url": "https://tidskrift.test/quiet-coast"
-        }
+        "the-quiet-coast"
       ]
     },
     {
-      "kind": "awards",
+      "kind": "evidence",
       "id": "awards",
       "title": "Awards",
       "items": [
-        {
-          "name": "Nordic Documentary Prize",
-          "organization": "Nordic Photo Foundation",
-          "receivedAt": "2024"
-        }
+        "nordic-documentary-prize"
       ]
     },
     {
-      "kind": "services",
+      "kind": "chronology",
+      "id": "timeline",
+      "title": "Timeline"
+    },
+    {
+      "kind": "practice",
       "id": "commissions",
       "title": "Commissions",
-      "items": [
-        {
-          "name": "Editorial assignments",
-          "description": "Two-day shoots for magazines and newspapers.",
-          "url": "mailto:mateo@lindqvist.test"
-        }
-      ]
+      "part": "services"
     },
     {
       "kind": "contact",

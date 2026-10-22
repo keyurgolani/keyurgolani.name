@@ -1,19 +1,86 @@
-# Consulting: an independent advisor with services, clients, and results.
-schemaVersion: 2
+# Consulting: an independent advisor with services, clients, and results. The
+# signature is a client engagement written up as a case study, the proof strip
+# is metrics with keys, and a named client is evidence of type client.
+schemaVersion: 3
 locale: en-US
 direction: ltr
-
 identity:
   name: Marcus Bell
   tagline: Fractional CTO for seed-stage teams
   location: Austin, Texas
   email: marcus@bell.test
-
 links:
   - platform: linkedin
     url: https://linkedin.test/in/marcusbell
     label: LinkedIn
-
+practice:
+  thesis: Small teams rarely need a rewrite. They need the second system designed around what the first one taught them.
+  services:
+    - items:
+        - name: Architecture review
+          description: A two-week review of your system and your roadmap, ending in a written plan.
+          pricing: Fixed fee
+          url: mailto:marcus@bell.test?subject=Review
+          highlights: [Written plan, Two working sessions]
+        - name: Fractional CTO
+          description: One day a week, for a quarter, until you hire your first engineering lead.
+          pricing: Monthly retainer
+signature: lumen-health-migration
+proof: [clients-served, exits, priya-nair]
+works:
+  - id: lumen-health-migration
+    slug: lumen-health-migration
+    title: Lumen Health's three-week migration
+    medium: system
+    summary: Moving a patient-scheduling monolith onto two services without a freeze.
+    period: { start: 2024-02, end: 2024-03 }
+    role: Fractional CTO
+    organization: Lumen Health
+    evidence: [priya-nair, lumen-health]
+    caseStudy:
+      challenge: The team had planned a six-month rewrite and stopped shipping while they planned it.
+      constraints: No downtime for clinics, and no new hires during the work.
+      decisions:
+        - decision: Split along the booking flow, not the data model.
+          rationale: Bookings were where the incidents were, so that seam paid for itself first.
+          alternatives: A shared-database strangler, which would have kept the incidents.
+      outcomes: Shipped in three weeks, with the clinics' booking errors down by half in the first month.
+evidence:
+  - id: clients-served
+    type: metric
+    statement: Clients served
+    metric: { key: clients-served, value: 31 }
+  - id: exits
+    type: metric
+    statement: Exits
+    metric: { key: client-exits, value: 4 }
+  - id: priya-nair
+    type: testimonial
+    statement: Marcus turned a six-month rewrite into a three-week migration.
+    source:
+      name: Priya Nair
+      role: CEO
+      organization: Lumen Health
+  - id: lumen-health
+    type: client
+    title: Lumen Health
+    description: Patient scheduling for independent clinics.
+    url: https://lumen-health.test
+chronology:
+  - id: vp-engineering-fieldnote
+    kind: role
+    title: VP Engineering
+    period: { start: 2015-01, end: 2020-06 }
+    organization: Fieldnote
+    thread: work
+  - id: independent-practice
+    kind: milestone
+    title: Independent practice
+    period: { start: 2020-09 }
+    thread: work
+    branchesFrom: vp-engineering-fieldnote
+contact:
+  message: Two clients at a time, so write a few lines about your team and when you'd like to start.
 sections:
   - kind: hero
     id: top
@@ -21,45 +88,26 @@ sections:
     ctas:
       - url: '#services'
         label: How I work
-
-  - kind: services
+  - kind: works
+    id: engagements
+    title: Engagements
+    items: [lumen-health-migration]
+  - kind: practice
     id: services
     title: Services
     subtitle: Two clients at a time.
-    items:
-      - name: Architecture review
-        description: A two-week review of your system and your roadmap, ending in a written plan.
-        pricing: Fixed fee
-        highlights: [Written plan, Two working sessions]
-        url: mailto:marcus@bell.test?subject=Review
-      - name: Fractional CTO
-        description: One day a week, for a quarter, until you hire your first engineering lead.
-        pricing: Monthly retainer
-
-  - kind: stats
+    part: services
+  - kind: evidence
     id: results
     title: Results
-    items:
-      - { metric: clients-served, value: '31', label: Clients served }
-      - { value: '4', label: Exits }
-
-  - kind: testimonials
+    items: [clients-served, exits]
+  - kind: evidence
     id: clients
     title: Clients
-    items:
-      - quote: Marcus turned a six-month rewrite into a three-week migration.
-        author: Priya Nair
-        authorRole: CEO
-        authorOrganization: Lumen Health
-
-  - kind: experience
+    items: [priya-nair, lumen-health]
+  - kind: chronology
     id: background
     title: Background
-    items:
-      - role: VP Engineering
-        organization: Fieldnote
-        period: { start: 2015-01, end: 2020-06 }
-
   - kind: cta
     id: work-together
     title: Work together
@@ -67,8 +115,6 @@ sections:
     primaryAction:
       url: mailto:marcus@bell.test
       label: Email me
-
   - kind: contact
     id: contact
     title: Contact
-    showAvailability: true

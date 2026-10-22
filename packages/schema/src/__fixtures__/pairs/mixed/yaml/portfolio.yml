@@ -1,56 +1,97 @@
-# Mixed practice, right to left: a writer who also hosts a podcast and gives talks.
-schemaVersion: 2
+# Mixed practice, right to left: a writer who also hosts a podcast and gives
+# talks. Titles in Arabic leave no letter an id can use, so the works' ids are
+# work-1 and work-2. A custom section holds a workshop no other kind fits, and
+# the talks section is hidden.
+schemaVersion: 3
 locale: ar
 direction: rtl
-
 identity:
   name: ليلى حداد
   tagline: كاتبة ومصممة ومقدّمة بودكاست
   location: عمّان
   email: layla@haddad.test
-
 links:
   - platform: website
     url: https://haddad.test
     label: haddad.test
-
+practice:
+  thesis: أكتب عن المدن كما يرسمها سكانها، لا كما تطبعها الخرائط الرسمية.
+signature: work-1
+featured: [work-2]
+proof: [episodes-published]
+works:
+  - id: work-1
+    title: مدينة على سبعة جبال
+    medium: writing
+    url: https://haddad.test/essays/seven-hills
+    publication: مجلة الطريق
+    publishedAt: 2025-04-12
+    readingTimeMinutes: 9
+  - id: work-2
+    title: الدرج القديم
+    medium: audio-video
+    publishedAt: 2026-02-01
+    series: خرائط
+    number: 12
+    durationMinutes: 48
+    guests: [سامي يوسف]
+    audioUrl: https://haddad.test/audio/12.mp3
+evidence:
+  - id: maps-people-draw-by-hand
+    type: talk
+    title: Maps people draw by hand
+    lang: en
+    venue: Amman Design Week
+    presentedAt: 2025-09-20
+    format: panel
+  - id: episodes-published
+    type: metric
+    statement: حلقة منشورة
+    metric: { key: episodes-published, value: 12 }
+chronology:
+  - id: khara-it-podcast
+    kind: project
+    title: خرائط
+    period: { start: '2024' }
+    thread: creative
+    works: [work-2]
+  - id: essays-column
+    kind: role
+    title: كاتبة عمود
+    organization: مجلة الطريق
+    period: { start: '2022' }
+    thread: work
+    works: [work-1]
 sections:
-  - kind: lede
+  - kind: practice
     id: about
     title: نبذة
-    body: أكتب عن المدن، وأصمم الخرائط، وأتحدث مع من يبنونها.
-
-  - kind: writings
+    part: thesis
+  - kind: works
     id: essays
     title: مقالات
-    items:
-      - title: مدينة على سبعة جبال
-        publication: مجلة الطريق
-        publishedAt: 2025-04-12
-        url: https://haddad.test/essays/seven-hills
-        readingTimeMinutes: 9
-
-  - kind: episodes
+    items: [work-1]
+  - kind: works
     id: podcast
     title: حلقات
-    showName: خرائط
-    items:
-      - number: 12
-        title: الدرج القديم
-        publishedAt: 2026-02-01
-        durationMinutes: 48
-        guests: [سامي يوسف]
-        audioUrl: https://haddad.test/audio/12.mp3
-
-  - kind: talks
+    items: [work-2]
+  - kind: evidence
     id: talks
     title: محاضرات
+    items: [maps-people-draw-by-hand]
+  - kind: chronology
+    id: timeline
+    title: مسار
+  - kind: custom
+    id: workshop
+    title: ورشة الخرائط
+    body: ورشة شهرية يرسم فيها المشاركون أحياءهم من الذاكرة.
     items:
-      - title: Maps people draw by hand
-        venue: Amman Design Week
-        presentedAt: 2025-09-20
-        type: panel
-
+      - title: الجلسة القادمة
+        summary: السبت الأول من كل شهر، في وسط البلد.
+        links:
+          - url: https://haddad.test/workshop
+            label: التسجيل
   - kind: cta
     id: newsletter
     title: النشرة
@@ -58,7 +99,6 @@ sections:
     primaryAction:
       url: https://haddad.test/newsletter
       label: اشترك
-
   - kind: contact
     id: contact
     title: تواصل
