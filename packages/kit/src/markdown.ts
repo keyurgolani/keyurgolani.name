@@ -1,16 +1,285 @@
-import { marked } from 'marked';
+import { Marked, type MarkedToken, type Token, type Tokens } from 'marked';
+import { isAllowedUrl } from '@portfolio/schema';
+import { escapeHtml } from './html-escape';
 
-marked.setOptions({
-  gfm: true,
-  breaks: false,
-});
+// Markdown from the content, as HTML that RichText injects with
+// dangerouslySetInnerHTML. marked only tokenizes: every tag is written here,
+// from one allowlist, so nothing marked would emit on its own gets through.
+//
+// - Block: p, a, em, strong, code, pre, ul, ol, li, blockquote, h3 to h6, br,
+//   and hr. Inline (renderInlineMarkdown): a, em, strong, code, and br.
+// - The one attribute is href on a, and only for a URL #4's link rule
+//   accepts. A link it refuses renders its text alone.
+// - Raw HTML, block and inline, renders as escaped text, so a tag shows as it
+//   was typed rather than vanishing. Comments, CDATA sections, processing
+//   instructions, and declarations are dropped: no browser ever showed them.
+// - An image renders its alt text. Headings of depth 1 and 2 render as h3,
+//   since the section renderers own a page's h1 and h2.
+// - Anything else keeps its text and loses its markup: tables, strikethrough,
+//   task-list checkboxes, a code block's language, a list's start number, and
+//   link titles.
+//
+// No Node API and no DOM: #7's preview frame and #9's browser render call it.
+
+/** Our own instance, so nothing that configures the global `marked` reaches it. */
+const markdown = new Marked({ async: false, breaks: false, gfm: true, pedantic: false });
 
 export function renderMarkdown(source: string | undefined | null): string {
   if (!source) return '';
-  return marked.parse(source, { async: false }) as string;
+  // A copy of the options per call: the lexer keeps its tokenizer on them.
+  return blocks(markdown.lexer(withoutNul(source), { ...markdown.defaults }), true);
 }
 
 export function renderInlineMarkdown(source: string | undefined | null): string {
   if (!source) return '';
-  return marked.parseInline(source, { async: false }) as string;
+  return inlines(markdown.Lexer.lexInline(withoutNul(source), { ...markdown.defaults }), false);
 }
+
+/** CommonMark replaces U+0000 before it parses. */
+const withoutNul = (source: string) => source.replaceAll('\0', '\uFFFD');
+
+/**
+ * Block tokens, as marked's own parser walks them: `top` is false inside a
+ * tight list item, whose text runs join without a paragraph.
+ */
+function blocks(tokens: readonly Token[], top: boolean): string {
+  let html = '';
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i] as MarkedToken;
+    switch (token.type) {
+      case 'space':
+      case 'def':
+        break;
+      case 'paragraph':
+        html += `<p>${inlines(token.tokens, false)}</p>\n`;
+        break;
+      case 'heading': {
+        const level = Math.min(Math.max(token.depth, 3), 6);
+        html += `<h${level}>${inlines(token.tokens, false)}</h${level}>\n`;
+        break;
+      }
+      case 'code':
+        html += `<pre><code>${escapeHtml(`${token.text.replace(/\n$/, '')}\n`)}</code></pre>\n`;
+        break;
+      case 'blockquote':
+        html += `<blockquote>\n${blocks(token.tokens, true)}</blockquote>\n`;
+        break;
+      case 'list': {
+        const tag = token.ordered ? 'ol' : 'ul';
+        const items = token.items.map((item) => `<li>${blocks(item.tokens, item.loose)}</li>\n`);
+        html += `<${tag}>\n${items.join('')}</${tag}>\n`;
+        break;
+      }
+      case 'hr':
+        html += '<hr>\n';
+        break;
+      case 'html': {
+        const text = withoutComments(token.text).trim();
+        if (text) html += `<p>${escapeHtml(text)}</p>\n`;
+        break;
+      }
+      case 'table':
+        // Each row a paragraph, each cell a line of it.
+        for (const row of [token.header, ...token.rows]) {
+          const cells = row
+            .map((cell) => inlines(cell.tokens, false))
+            .filter((cell) => cell.trim());
+          if (cells.length > 0) html += `<p>${cells.join('<br>')}</p>\n`;
+        }
+        break;
+      case 'text': {
+        let body = textOf(token, false);
+        while (tokens[i + 1]?.type === 'text')
+          body += `\n${textOf(tokens[++i] as Tokens.Text, false)}`;
+        html += top ? `<p>${body}</p>\n` : body;
+        break;
+      }
+      default: {
+        const text = plainText([tokens[i]!]);
+        if (text.trim()) html += `<p>${text}</p>\n`;
+      }
+    }
+  }
+  return html;
+}
+
+/** Inline tokens. Inside a link's text a nested link renders its text alone. */
+function inlines(tokens: readonly Token[], inLink: boolean): string {
+  let html = '';
+  for (const any of tokens) {
+    const token = any as MarkedToken;
+    switch (token.type) {
+      case 'text':
+        html += textOf(token, inLink);
+        break;
+      case 'escape':
+        html += escapeText(token.text);
+        break;
+      case 'strong':
+        html += `<strong>${inlines(token.tokens, inLink)}</strong>`;
+        break;
+      case 'em':
+        html += `<em>${inlines(token.tokens, inLink)}</em>`;
+        break;
+      case 'codespan':
+        html += `<code>${escapeHtml(token.text)}</code>`;
+        break;
+      case 'br':
+        html += '<br>';
+        break;
+      case 'del':
+        html += inlines(token.tokens, inLink);
+        break;
+      case 'link': {
+        const text = inlines(token.tokens, true);
+        const href = inLink ? null : linkHref(token.href);
+        html += href === null ? text : `<a href="${escapeHtml(href)}">${text}</a>`;
+        break;
+      }
+      case 'image':
+        html += token.tokens ? plainText(token.tokens) : escapeText(token.text);
+        break;
+      case 'html':
+        html += escapeHtml(withoutComments(token.text));
+        break;
+      default:
+        html += plainText([any]);
+    }
+  }
+  return html;
+}
+
+function textOf(token: Tokens.Text, inLink: boolean): string {
+  return token.tokens ? inlines(token.tokens, inLink) : escapeText(token.text);
+}
+
+/** Tokens' text alone, escaped: an image's alt text, or a token the allowlist has no place for. */
+function plainText(tokens: readonly Token[]): string {
+  let text = '';
+  for (const token of tokens) {
+    if (token.type === 'html') text += escapeHtml(withoutComments(token.text as string));
+    else if (token.type === 'codespan' || token.type === 'code') {
+      text += escapeHtml(token.text as string);
+    } else if ('tokens' in token && Array.isArray(token.tokens)) text += plainText(token.tokens);
+    else if ('text' in token && typeof token.text === 'string') text += escapeText(token.text);
+  }
+  return text;
+}
+
+/**
+ * A link's URL as the page carries it, or null when #4's link rule refuses
+ * it. marked hands over the destination with its backslash escapes removed
+ * and its character references left in, which the old renderer wrote out for
+ * the browser to decode, so they're decoded here and the rule judges the URL a
+ * browser would follow. It's then percent-encoded as marked did, judged again,
+ * and escaped as it's written, so the page carries exactly what was judged.
+ */
+function linkHref(destination: string): string | null {
+  const url = decodeReferences(destination);
+  if (!isAllowedUrl(url)) return null;
+  let encoded: string;
+  try {
+    encoded = encodeURI(url).replace(/%25/g, '%');
+  } catch {
+    // A lone surrogate.
+    return null;
+  }
+  return isAllowedUrl(encoded) ? encoded : null;
+}
+
+/** The named references that spell ASCII, so a URL can hide behind them, and the no-break space. */
+const NAMED: Readonly<Record<string, string>> = {
+  Tab: '\t',
+  NewLine: '\n',
+  excl: '!',
+  quot: '"',
+  QUOT: '"',
+  num: '#',
+  dollar: '$',
+  percnt: '%',
+  amp: '&',
+  AMP: '&',
+  apos: "'",
+  lpar: '(',
+  rpar: ')',
+  ast: '*',
+  midast: '*',
+  plus: '+',
+  comma: ',',
+  period: '.',
+  sol: '/',
+  colon: ':',
+  semi: ';',
+  lt: '<',
+  LT: '<',
+  equals: '=',
+  gt: '>',
+  GT: '>',
+  quest: '?',
+  commat: '@',
+  lsqb: '[',
+  lbrack: '[',
+  bsol: '\\',
+  rsqb: ']',
+  rbrack: ']',
+  Hat: '^',
+  lowbar: '_',
+  UnderBar: '_',
+  grave: '`',
+  DiacriticalGrave: '`',
+  lcub: '{',
+  lbrace: '{',
+  verbar: '|',
+  vert: '|',
+  VerticalLine: '|',
+  rcub: '}',
+  rbrace: '}',
+  nbsp: '\u00A0',
+  NonBreakingSpace: '\u00A0',
+};
+/** The ones a browser also decodes without their semicolon. */
+const LEGACY = new Set(['amp', 'AMP', 'lt', 'LT', 'gt', 'GT', 'quot', 'QUOT', 'nbsp']);
+const REFERENCE = /&(?:#[xX]([0-9a-fA-F]+);?|#([0-9]+);?|([A-Za-z][A-Za-z0-9]*)(;?))/g;
+
+/**
+ * Character references decoded as a browser decodes an attribute value:
+ * numeric ones with or without their semicolon, the names in NAMED, and a
+ * legacy name without its semicolon unless `=` follows it. Any other `&`
+ * stays as it is, and is escaped when the URL is written, so whatever isn't
+ * decoded here reaches the page as text and never as a reference.
+ */
+function decodeReferences(value: string): string {
+  return value.replace(
+    REFERENCE,
+    (
+      match: string,
+      hex: string | undefined,
+      decimal: string | undefined,
+      name: string | undefined,
+      semicolon: string | undefined,
+      offset: number,
+    ) => {
+      if (hex !== undefined) return fromCodePoint(parseInt(hex, 16));
+      if (decimal !== undefined) return fromCodePoint(parseInt(decimal, 10));
+      if (name === undefined || !Object.hasOwn(NAMED, name)) return match;
+      if (semicolon) return NAMED[name]!;
+      // The name's letters and digits all matched, so only `=` can follow and stop it.
+      return LEGACY.has(name) && value[offset + match.length] !== '=' ? NAMED[name]! : match;
+    },
+  );
+}
+
+/** A numeric reference's character: 0, a surrogate, or past U+10FFFF is U+FFFD, as in a browser. */
+function fromCodePoint(value: number): string {
+  if (value === 0 || value > 0x10ffff || (value >= 0xd800 && value <= 0xdfff)) return '\uFFFD';
+  return String.fromCodePoint(value);
+}
+
+/** Comments, CDATA sections, processing instructions, and declarations, each to its end or the text's. */
+const COMMENT_LIKE =
+  /<!--(?:-?>|[\s\S]*?(?:-->|$))|<!\[CDATA\[[\s\S]*?(?:\]\]>|$)|<\?[\s\S]*?(?:\?>|$)|<![A-Za-z][\s\S]*?(?:>|$)/g;
+const withoutComments = (html: string) => html.replace(COMMENT_LIKE, '');
+
+/** Text, escaped as escapeHtml does, except that a character reference the author wrote stays one, as marked left it. */
+const escapeText = (text: string) =>
+  text.replace(/[<>"']|&(?!#\d{1,7};|#[xX][0-9a-fA-F]{1,6};|\w+;)/g, escapeHtml);
