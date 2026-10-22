@@ -91,7 +91,7 @@ export function sectionSchemas({ object, section, Link, Action, Placement }: Sch
   const GithubSchema = section('github', {
     /** The GitHub user it shows. */
     username: z.string().refine((value) => value.trim() !== '', {
-      message: 'is blank. A github section shows one GitHub user: give the username.',
+      message: 'is blank. Give the GitHub username the section shows.',
     }),
     /** Show the 53-week contribution heatmap. */
     showContributionGraph: z.boolean().default(true),

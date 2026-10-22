@@ -386,10 +386,10 @@ function migrateV2Portfolio(
  * the version 2 portfolio to 3, and the site document without the entries of
  * the sections that go, edited in place. Each document keeps its format; one
  * no step changes comes back byte for byte, and the media document always
- * does. Deterministic, so a dry run and the real run
- * mint the same ids, and idempotent: its own output answers `current`. A
- * version no step reads, version 1 included, is `failed`, with a summary
- * that holds no value from the documents.
+ * does. Deterministic, so a dry run and the real run mint the same ids, and
+ * idempotent: its own output answers `current`. A version no step reads,
+ * version 1 included, is `failed`, with a summary that holds no value from
+ * the documents.
  */
 export function migrateDocuments(unit: StoredUnit, options: MigrateOptions = {}): UnitMigration {
   const failed = (reasons: string[], summary: string[]): UnitMigration => ({
