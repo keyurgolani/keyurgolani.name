@@ -3,6 +3,7 @@ import type { ActionEmphasis } from '../slots';
 
 declare module 'react' {
   // HTML's invoker commands, which React passes through but its types don't list yet.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- a merged declaration repeats React's type parameter.
   interface ButtonHTMLAttributes<T> {
     commandfor?: string | undefined;
     command?: string | undefined;
