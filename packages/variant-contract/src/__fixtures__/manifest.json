@@ -5,101 +5,58 @@
   "description": "A test composition that uses every field contract 2.0 defines.",
   "author": "Acme Studio",
   "homepage": "https://acme.test/ocean",
-  "bestFor": [
-    "Writers",
-    "Researchers"
-  ],
+  "bestFor": ["Writers", "Researchers"],
   "contract": "2.0",
   "schemas": { "portfolio": { "min": 3, "max": 3 }, "site": { "min": 2, "max": 2 } },
   "tokenContract": 1,
   "compositionFamily": "monograph",
   "motionIntent": "subtle",
   "performanceTier": "light",
-  "renderedKinds": [
-    "hero",
-    "works"
-  ],
-  "unsupportedKinds": [
-    "github"
-  ],
+  "renderedKinds": ["hero", "works"],
+  "unsupportedKinds": ["github"],
   "contentSlots": [
     {
       "id": "lead",
       "label": "Lead story",
-      "select": {
-        "control": "leadSection"
-      },
+      "select": { "control": "leadSection" },
       "level": "recommended",
       "min": 1,
       "max": 1,
-      "whenEmpty": {
-        "mode": "omit",
-        "note": "The page opens on the hero instead."
-      }
+      "whenEmpty": { "mode": "omit", "note": "The page opens on the hero instead." }
     },
     {
       "id": "essays",
       "label": "Essays",
-      "select": {
-        "kind": "works"
-      },
+      "select": { "kind": "works" },
       "level": "required",
       "min": 1,
-      "whenEmpty": {
-        "mode": "keep",
-        "note": "An empty shelf shows until essays exist."
-      }
+      "whenEmpty": { "mode": "keep", "note": "An empty shelf shows until essays exist." }
     },
     {
       "id": "portrait",
       "label": "Portrait",
-      "select": {
-        "field": "/identity/avatar"
-      },
+      "select": { "field": "/identity/avatar" },
       "level": "optional",
       "min": 0,
       "max": 1,
-      "whenEmpty": {
-        "mode": "omit",
-        "note": "The masthead shows no portrait."
-      }
+      "whenEmpty": { "mode": "omit", "note": "The masthead shows no portrait." }
     },
     {
       "id": "covers",
       "label": "Work covers",
-      "select": {
-        "field": "/works/*/cover"
-      },
+      "select": { "field": "/works/*/cover" },
       "level": "optional",
       "min": 0,
-      "whenEmpty": {
-        "mode": "omit",
-        "note": "Works show as text."
-      }
+      "whenEmpty": { "mode": "omit", "note": "Works show as text." }
     }
   ],
   "routes": {
     "home": "bespoke",
     "work": "shared",
     "views": [
-      {
-        "id": "chapters",
-        "under": "home",
-        "type": "path",
-        "segment": "chapters/{chapter}"
-      },
-      {
-        "id": "notes",
-        "under": "work",
-        "type": "path",
-        "segment": "notes"
-      },
-      {
-        "id": "chapter-anchor",
-        "under": "home",
-        "type": "fragment",
-        "segment": "chapter-{chapter}"
-      }
+      { "id": "chapters", "under": "home", "type": "path", "segment": "chapters/{chapter}" },
+      { "id": "notes", "under": "work", "type": "path", "segment": "notes" },
+      { "id": "chapter-anchor", "under": "home", "type": "fragment", "segment": "chapter-{chapter}" }
     ]
   },
   "controls": {
@@ -118,14 +75,8 @@
         "label": "Hero layout",
         "description": "How the opening spreads across the page.",
         "options": [
-          {
-            "value": "wide",
-            "label": "Wide"
-          },
-          {
-            "value": "split",
-            "label": "Split"
-          }
+          { "value": "wide", "label": "Wide" },
+          { "value": "split", "label": "Split" }
         ],
         "default": "wide"
       },
@@ -144,10 +95,7 @@
         "id": "leadSection",
         "label": "Lead section",
         "description": "The section the page opens on.",
-        "kinds": [
-          "works",
-          "evidence"
-        ],
+        "kinds": ["works", "evidence"],
         "default": null
       },
       {
@@ -165,28 +113,10 @@
         "from": 1,
         "to": 2,
         "operations": [
-          {
-            "op": "rename",
-            "from": "layout",
-            "to": "heroLayout"
-          },
-          {
-            "op": "mapValue",
-            "control": "heroLayout",
-            "map": {
-              "full": "wide"
-            }
-          },
-          {
-            "op": "clamp",
-            "control": "columns",
-            "min": 1,
-            "max": 4
-          },
-          {
-            "op": "drop",
-            "control": "legacyFlag"
-          }
+          { "op": "rename", "from": "layout", "to": "heroLayout" },
+          { "op": "mapValue", "control": "heroLayout", "map": { "full": "wide" } },
+          { "op": "clamp", "control": "columns", "min": 1, "max": 4 },
+          { "op": "drop", "control": "legacyFlag" }
         ]
       }
     ]
@@ -195,36 +125,22 @@
     {
       "id": "tide-lines",
       "export": "./enhancements/tide-lines",
-      "requires": [
-        "motion-allowed",
-        "min-width:768"
-      ]
+      "requires": ["motion-allowed", "min-width:768"]
     }
   ],
   "keyBindings": [
     {
       "region": "chapters",
-      "keys": [
-        "ArrowLeft",
-        "ArrowRight"
-      ],
+      "keys": ["ArrowLeft", "ArrowRight"],
       "action": "Moves to the previous or next chapter."
     }
   ],
-  "visitorControl": {
-    "placement": "header"
-  },
-  "textDirection": [
-    "ltr",
-    "rtl"
-  ],
+  "visitorControl": { "placement": "header" },
+  "textDirection": ["ltr", "rtl"],
   "provenance": {
     "provisional": false,
     "sources": [
-      {
-        "source": "Page 8 composition",
-        "disposition": "preserved"
-      },
+      { "source": "Page 8 composition", "disposition": "preserved" },
       {
         "source": "Neon overlay",
         "disposition": "retired",

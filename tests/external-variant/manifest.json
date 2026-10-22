@@ -16,9 +16,7 @@
     {
       "id": "works",
       "label": "Works",
-      "select": {
-        "kind": "works"
-      },
+      "select": { "kind": "works" },
       "level": "recommended",
       "min": 1,
       "whenEmpty": {
@@ -30,14 +28,7 @@
   "routes": {
     "home": "shared",
     "work": "shared",
-    "views": [
-      {
-        "id": "colophon",
-        "under": "home",
-        "type": "path",
-        "segment": "colophon"
-      }
-    ]
+    "views": [{ "id": "colophon", "under": "home", "type": "path", "segment": "colophon" }]
   },
   "controls": {
     "version": 1,
@@ -52,19 +43,8 @@
     ],
     "migrations": []
   },
-  "enhancements": [
-    {
-      "id": "badge",
-      "export": "./enhancements/badge",
-      "requires": []
-    }
-  ],
-  "visitorControl": {
-    "placement": "header"
-  },
+  "enhancements": [{ "id": "badge", "export": "./enhancements/badge", "requires": [] }],
+  "visitorControl": { "placement": "header" },
   "textDirection": ["ltr"],
-  "provenance": {
-    "provisional": false,
-    "sources": []
-  }
+  "provenance": { "provisional": false, "sources": [] }
 }
