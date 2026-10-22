@@ -179,13 +179,15 @@ export async function moveEventAside(
 /**
  * Writes `event`'s own file for the pointer that carries it, which wins: a
  * file at its seq that holds another event is moved aside first. Returns
- * whether one was.
+ * whether one was. `fence` runs before the file is moved, and stops that by
+ * throwing.
  */
 export async function writeLiveEvent(
   fs: FsPort,
   paths: StorePaths,
   event: PublicationEvent,
   operation: string,
+  fence: () => Promise<void> = async () => {},
 ): Promise<boolean> {
   try {
     await writeEvent(fs, paths, event, operation);
@@ -193,6 +195,7 @@ export async function writeLiveEvent(
   } catch (error) {
     if (!(error instanceof EventMismatchError)) throw error;
   }
+  await fence();
   await moveEventAside(fs, paths, event.seq, operation);
   await writeEvent(fs, paths, event, operation);
   return true;
@@ -209,22 +212,28 @@ export interface Reconciled {
 /**
  * Makes the log agree with live.json, which wins: every event file above
  * the live seq, and one at it that holds another event, is moved aside, and
- * the live event's own file is written if it's missing. Runs under the lock.
+ * the live event's own file is written if it's missing. Runs under the lock,
+ * and `fence` checks it's still the caller's before each change: one that
+ * lost it read a pointer another holder may have moved past since, and the
+ * events above it are committed ones.
  */
 export async function reconcileEvents(
   fs: FsPort,
   paths: StorePaths,
   pointer: LivePointer,
   operation: string,
+  fence: () => Promise<void> = async () => {},
 ): Promise<Reconciled> {
   const aside: number[] = [];
   for (const name of await fs.readdir(paths.events)) {
     const match = /^([1-9][0-9]*)\.json$/.exec(name);
     if (!match || Number(match[1]) <= pointer.seq) continue;
+    await fence();
     await moveEventAside(fs, paths, Number(match[1]), operation);
     aside.push(Number(match[1]));
   }
   if (await eventRecorded(fs, paths, pointer)) return { aside, written: false };
-  if (await writeLiveEvent(fs, paths, pointer.event, operation)) aside.push(pointer.seq);
+  await fence();
+  if (await writeLiveEvent(fs, paths, pointer.event, operation, fence)) aside.push(pointer.seq);
   return { aside: aside.sort((a, b) => a - b), written: true };
 }
