@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {
   chmodSync,
   copyFileSync,
+  cpSync,
   mkdirSync,
   readdirSync,
   readFileSync,
@@ -453,6 +454,39 @@ test('the reader reads no file through a symbolic link: a linked document or blo
     const live = await reader(store).catalog.getLive();
     assert.equal(live.state, 'degraded', linked);
     assert.equal(live.revisionId, first, linked);
+  }
+});
+
+test('the reader reads no revision through a linked directory: its own, documents/, snapshots/, or revisions/ is damaged:unreadable', async (t) => {
+  for (const linked of ['its own', 'documents/', 'snapshots/', 'revisions/'] as const) {
+    const store = await newStore(t);
+    const first = await publishInput(store, pairInput('engineering'));
+    const second = await publishInput(store, contentVariant(pairInput('engineering'), 'two'));
+    const own = store.paths.revision(second);
+    const dir = {
+      'its own': own,
+      'documents/': path.join(own, 'documents'),
+      'snapshots/': path.join(own, 'snapshots'),
+      'revisions/': store.paths.revisions,
+    }[linked];
+    // A copy, with the same bytes, so only the link tells it apart.
+    const copy = path.join(tempDir(t, 'outside-'), path.basename(dir));
+    cpSync(dir, copy, { recursive: true });
+    rmSync(dir, { recursive: true });
+    symlinkSync(copy, dir);
+    const { catalog } = reader(store);
+    const live = await catalog.getLive();
+    const status = await catalog.status();
+    if (linked === 'revisions/') {
+      // Every revision is read through it, so none serves.
+      assert.deepEqual([live.state, status.reason], ['incompatible', 'damaged:unreadable'], linked);
+    } else {
+      assert.deepEqual(
+        [live.state, live.revisionId, status.reason],
+        ['degraded', first, 'damaged:unreadable'],
+        linked,
+      );
+    }
   }
 });
 
