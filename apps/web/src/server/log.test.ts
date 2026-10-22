@@ -143,6 +143,25 @@ test('store.source.drift adds the two sourceHashes, and only it does', () => {
   );
 });
 
+test('store.catalog lines add the command that migrates the live revision, and other store lines drop it', () => {
+  const entry = {
+    revisionId: `rev_${'1'.repeat(32)}`,
+    code: 'incompatible:schema.version',
+    command: 'portfolio-store migrate-store',
+  };
+  for (const [level, event] of [
+    ['warn', 'store.catalog.degraded'],
+    ['error', 'store.catalog.incompatible'],
+  ] as const) {
+    const line = parse(logLine({ level, event, ...entry, dataDir: '/srv/data' }, NOW));
+    assert.deepEqual(line, { ts: line.ts, level, event, ...entry });
+  }
+  assert.deepEqual(
+    Object.keys(parse(logLine({ level: 'info', event: 'store.publish.committed', ...entry }))),
+    ['ts', 'level', 'event', 'revisionId', 'code'],
+  );
+});
+
 test('an empty field is left out', () => {
   assert.deepEqual(
     Object.keys(parse(logLine({ level: 'warn', event: 'x', requestId: undefined, code: 'c' }))),

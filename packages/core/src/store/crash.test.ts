@@ -1,6 +1,7 @@
 // The crash criterion (#3, Slice 1, and Verification required): every write,
-// sync, and rename of a publish, a rollback, an import (Slice 3), a draft
-// save, and an asset put has a named crash point, and so does each step of
+// sync, and rename of a publish, a rollback, an import (Slice 3), a
+// migration (Slice 4), a draft save, and an asset put has a named crash
+// point, and so does each step of
 // breaking a stale lock and clearing a dead breaker's marker, of moving
 // aside event files live.json disagrees with, of removing a revision that
 // never went live, and of repair. Each is hit twice, as a failed call in
@@ -20,7 +21,7 @@ import { newRevisionId, storePaths, type DraftId, type RevisionId } from './layo
 import { thisProcess } from './lock';
 import { openStore, type Store } from './store';
 import { checkUnit, importSourceHash, sha256, type UnitInput } from '../catalog/unit';
-import type { CheckReport, ChildTask, Step } from './test-support/child';
+import type { CheckReport, ChildBuild, ChildTask, Step } from './test-support/child';
 import { crashingFs, recordingFs, type FsCall, type PointHit } from './test-support/crash-fs';
 import {
   contentVariant,
@@ -31,6 +32,7 @@ import {
   publishInput,
   testChecks,
 } from './test-support/fixtures';
+import { migrateToNext, nextChecks } from './test-support/next-schema';
 import { runChild, runChildren } from './test-support/spawn';
 
 interface Seeded {
@@ -56,6 +58,8 @@ interface Scenario {
   readonly required: readonly string[];
   /** The sides its crashes land on: both, unless it never moves the pointer. */
   readonly sides?: readonly ('old' | 'new')[];
+  /** The build it runs, and a fresh process checks, with: this one, or the next major. */
+  readonly build?: ChildBuild;
 }
 
 const range = (to: number) => Array.from({ length: to }, (_, index) => index + 1);
@@ -72,12 +76,15 @@ function scratch(t: TestContext): () => string {
   return () => path.join(root, `d${count++}`);
 }
 
-/** What holds for any data directory once a fresh process repaired it. */
-function verifyCommon(report: CheckReport, label: string) {
+/**
+ * What holds for any data directory once a fresh process repaired it. The
+ * live revision validates, unless an older build wrote it: `incompatible`.
+ */
+function verifyCommon(report: CheckReport, label: string, health = 'ok') {
   assert.equal((report.repair as { error?: string }).error, undefined, `${label}: repair`);
   assert.ok(report.live, `${label}: live`);
   assert.ok(report.liveReads, `${label}: the live revision reads and its hashes match`);
-  assert.equal(report.liveHealth, 'ok', `${label}: the live revision validates`);
+  assert.equal(report.liveHealth, health, `${label}: the live revision validates`);
   assert.deepEqual(report.staging, [], `${label}: no staging directory remains`);
   assert.ok(report.liveEventRecorded, `${label}: the live event has its file`);
   assert.deepEqual(report.eventSeqs, range(report.live.seq), `${label}: events`);
@@ -324,6 +331,90 @@ const importSameScenario = importScenario('an import of unchanged files', (first
   'import.event.write',
 ]);
 
+/**
+ * A migration of `R2`, which this build wrote, by the next major's build:
+ * `migrate-store`'s of the live revision, or the CLI's `rollback --to` one
+ * of `R1`. Before its commit the live revision is still one the next build
+ * can't serve.
+ */
+function migrateScenario(name: string, restoring: boolean, required: readonly string[]): Scenario {
+  const input = (seeded: Seeded) => ({
+    ...(restoring ? { fromRevisionId: seeded.target! } : {}),
+    expectedLiveRevisionId: seeded.liveBefore,
+  });
+  return {
+    name,
+    required,
+    build: 'next',
+    async seed(t) {
+      const store = await newStore(t);
+      const first = pairInput('engineering');
+      const target = await publishInput(store, first);
+      const second = contentVariant(first, 'two');
+      const liveBefore = await publishInput(store, second);
+      const migrated = migrateToNext({
+        portfolio: { text: (restoring ? first : second).portfolio.sourceText, format: 'yaml' },
+        site: { text: first.site.sourceText, format: 'yaml' },
+      });
+      assert.equal(migrated.status, 'ready');
+      if (migrated.status !== 'ready') throw new Error('The step blocked.');
+      const checked = checkUnit(
+        {
+          portfolio: { format: 'yaml', sourceText: migrated.documents.portfolio.text },
+          site: { format: 'yaml', sourceText: migrated.documents.site.text },
+        },
+        nextChecks(),
+      );
+      assert.ok(checked.ok);
+      return {
+        template: store.paths.root,
+        liveBefore,
+        seqBefore: 2,
+        target,
+        newHash: checked.unit.unitHash,
+      };
+    },
+    step: (seeded) => ({ op: 'migrate', input: input(seeded) }),
+    run: (store, seeded) => store.publication.migrate(input(seeded), 'operator'),
+    verify(report, seeded, label) {
+      if (report.live?.seq === 2) {
+        verifyCommon(report, label, 'incompatible');
+        assert.equal(report.live.revisionId, seeded.liveBefore, label);
+        return 'old';
+      }
+      verifyCommon(report, label);
+      assert.equal(report.live!.seq, 3, label);
+      assert.equal(report.live!.unitHash, seeded.newHash, `${label}: the migrated unit`);
+      return 'new';
+    },
+  };
+}
+
+const migrateStoreScenario = migrateScenario('a migration of the live revision', false, [
+  'migrate.staging.manifest.write',
+  'migrate.staging.dir.fsync',
+  'migrate.revision.rename',
+  'migrate.revisions.fsync',
+  'migrate.live.write',
+  'migrate.live.fsync',
+  'migrate.live.rename',
+  'migrate.publication.fsync',
+  'migrate.event.write',
+  'migrate.events.fsync',
+]);
+
+const migrateRollbackScenario = migrateScenario(
+  "a rollback that migrates an older build's revision",
+  true,
+  [
+    'rollback.staging.manifest.write',
+    'rollback.revision.rename',
+    'rollback.live.write',
+    'rollback.live.rename',
+    'rollback.event.write',
+  ],
+);
+
 const saveScenario: Scenario = {
   name: 'a draft save',
   required: [
@@ -502,11 +593,9 @@ async function crashEveryPoint(t: TestContext, scenario: Scenario) {
 
   // The points the operation passes, in order, and the calls it makes there.
   const recording = recordingFs();
+  const checks = () => (scenario.build === 'next' ? nextChecks() : testChecks());
   const recorded = copy();
-  await scenario.run(
-    openStore({ dataDir: recorded, checks: testChecks(), fs: recording.fs }),
-    seeded,
-  );
+  await scenario.run(openStore({ dataDir: recorded, checks: checks(), fs: recording.fs }), seeded);
   const hits = recording.hits;
   const names = new Set(hits.map((hit) => hit.point));
   for (const point of scenario.required)
@@ -521,10 +610,10 @@ async function crashEveryPoint(t: TestContext, scenario: Scenario) {
   for (const hit of hits) {
     const dataDir = copy();
     const fs = crashingFs(hit, 'throw');
-    await scenario.run(openStore({ dataDir, checks: testChecks(), fs }), seeded).catch(() => {});
+    await scenario.run(openStore({ dataDir, checks: checks(), fs }), seeded).catch(() => {});
     assert.ok(fs.crashed(), `${label(hit, 'throw')} was reached`);
     // The next start in this process repairs what the failure left.
-    await openStore({ dataDir, checks: testChecks() }).publication.repair();
+    await openStore({ dataDir, checks: checks() }).publication.repair();
     checked.push({ dataDir, label: label(hit, 'throw') });
   }
 
@@ -533,6 +622,7 @@ async function crashEveryPoint(t: TestContext, scenario: Scenario) {
     kind: 'run',
     dataDir: copy(),
     crash: hit,
+    ...(scenario.build ? { build: scenario.build } : {}),
     steps: [scenario.step(seeded)],
   }));
   const runs = await runChildren(tasks, 3);
@@ -548,7 +638,11 @@ async function crashEveryPoint(t: TestContext, scenario: Scenario) {
 
   // One fresh process repairs and checks them all.
   const check = await runChild(
-    { kind: 'check', dataDirs: checked.map((entry) => entry.dataDir) },
+    {
+      kind: 'check',
+      dataDirs: checked.map((entry) => entry.dataDir),
+      ...(scenario.build ? { build: scenario.build } : {}),
+    },
     { timeoutMs: 120_000 },
   );
   assert.equal(check.code, 0, check.stderr.slice(-800));
@@ -567,6 +661,8 @@ for (const scenario of [
   rollbackScenario,
   importNewScenario,
   importSameScenario,
+  migrateStoreScenario,
+  migrateRollbackScenario,
   saveScenario,
   putScenario,
   leftScenario,

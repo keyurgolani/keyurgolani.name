@@ -227,13 +227,13 @@ test('each store outcome answers its status, and an owner 409 or 422 carries its
       code: 'revision_incompatible',
       diagnostics: [],
       reason: 'schema.version',
-      command: `rollback --to ${REVISION}`,
+      command: `portfolio-store rollback --to ${REVISION}`,
     }),
   )(command('rollback', { targetRevisionId: REVISION, expectedLiveRevisionId: null }), 'rollback');
   assert.equal(incompatible.status, 422);
   assert.deepEqual(((await incompatible.json()) as { error: { details: unknown } }).error.details, {
     reason: 'schema.version',
-    command: `rollback --to ${REVISION}`,
+    command: `portfolio-store rollback --to ${REVISION}`,
     diagnostics: [],
   });
 });

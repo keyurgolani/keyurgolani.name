@@ -19,6 +19,7 @@ import { mountedSource, openStore, preflight, type RevisionId } from '@portfolio
 import { readPairBytes } from '@portfolio/schema/node';
 import { liveContext } from '~/lib/variants';
 import { runCli } from '../../../../../packages/core/src/cli';
+import { nextChecks } from '../../../../../packages/core/src/store/test-support/next-schema';
 import { storeChecks } from '../../../scripts/portfolio-store';
 import { compose, type AuthProviderFactory, type CompositionInput } from '../composition';
 import { readDeploymentConfig, type ConfigIssue, type DeploymentConfig } from '../config';
@@ -36,7 +37,9 @@ import { ownerStore } from './store';
 // visitors get 503. Once a revision exists, the pair's findings and source
 // drift only warn, drift never publishes, and Studio's draft.importSource
 // saves the pair as the working draft with its sourceHash. A store with
-// history but no live.json is never imported over.
+// history but no live.json is never imported over. Startup never migrates
+// a store an older build wrote (item 25): it names portfolio-store's
+// migrate-store, which serves it again.
 
 const REPO = fileURLToPath(new URL('../../../../../', import.meta.url));
 const EXAMPLES = {
@@ -678,6 +681,95 @@ test("draft.importSource saves the mounted pair as the working draft with its so
   assert.equal(unreadable.status, 422);
   assert.equal(unreadable.body.error?.code, 'validation_failed');
   assert.match(JSON.stringify(unreadable.body.error?.details), /source\.missing/);
+});
+
+test("startup never migrates: on a store an older build wrote, owner starts degraded on 503 and names migrate-store; the CLI's migration serves, and a Studio rollback to an older revision names portfolio-store's", async (t) => {
+  const logged = t.mock.method(console, 'log', () => {});
+  const site = deployment(t, PAIR);
+  const first = await start(t, site);
+  assert.ok(first.ok, JSON.stringify(first.ok ? [] : first.issues));
+  const old = (await first.state.catalog.getLive()).revisionId as RevisionId;
+  const pointer = readFileSync(livePath(site.dataDir));
+
+  // The next schema major's image, before the migration.
+  const next = (origin: string) => nextChecks(registered(origin));
+  const upgraded = await start(t, site, { unitChecks: next });
+  assert.ok(upgraded.ok, JSON.stringify(upgraded.ok ? [] : upgraded.issues));
+  assert.deepEqual(
+    findings(upgraded.issues).filter((code) => code.includes('revision_')),
+    ['warning revision_outdated'],
+  );
+  assert.match(
+    upgraded.issues.find((issue) => issue.code === 'revision_outdated')!.message,
+    /Run portfolio-store migrate-store --dry-run with this image .* then portfolio-store migrate-store\./,
+  );
+  assert.equal((await upgraded.state.catalog.getLive()).state, 'incompatible');
+  assert.equal(isServable(), false);
+  assert.ok(
+    logLines(logged).some(
+      (line) =>
+        line.event === 'store.catalog.incompatible' &&
+        line.revisionId === old &&
+        line.code === 'incompatible:schema.version' &&
+        line.command === 'portfolio-store migrate-store',
+    ),
+  );
+  assert.deepEqual(readFileSync(livePath(site.dataDir)), pointer, 'startup never migrates');
+  assert.equal(eventsIn(site.dataDir).length, 1);
+
+  // portfolio-store migrate-store, with the new image, beside the server.
+  let printed = '';
+  const code = await runCli({
+    argv: ['migrate-store'],
+    env: { PORTFOLIO_DATA_DIR: site.dataDir },
+    checks: next(ORIGIN),
+    readSource: (dir) => readPairBytes(dir),
+    envBase: path.dirname(site.dataDir),
+    cwd: path.dirname(site.dataDir),
+    io: {
+      out: (text) => {
+        printed += text;
+      },
+      err: (text) => {
+        printed += text;
+      },
+    },
+  });
+  assert.equal(code, 0, printed);
+  const migrated = await start(t, site, { unitChecks: next });
+  assert.ok(migrated.ok);
+  assert.equal(
+    findings(migrated.issues).some((issue) => issue.includes('revision_')),
+    false,
+    findings(migrated.issues).join(', '),
+  );
+  const live = await migrated.state.catalog.getLive();
+  assert.equal(live.state, 'live');
+  assert.notEqual(live.revisionId, old);
+  assert.deepEqual(
+    eventsIn(site.dataDir).map((event) => [event.type, event.previousRevisionId]),
+    [
+      ['import', null],
+      ['schema-migration', old],
+    ],
+  );
+
+  // Studio can't roll back to what the older build wrote: the CLI migrates it.
+  const rollback = await studio(migrated.state.dispatch, 'rollback', {
+    targetRevisionId: old,
+    expectedLiveRevisionId: live.revisionId,
+  });
+  assert.equal(rollback.status, 422, JSON.stringify(rollback.body));
+  assert.equal(rollback.body.error?.code, 'revision_incompatible');
+  const details = rollback.body.error?.details as {
+    reason: string;
+    command: string;
+    diagnostics: { code: string }[];
+  };
+  assert.deepEqual(
+    [details.reason, details.command, details.diagnostics.map((diagnostic) => diagnostic.code)],
+    ['schema.version', `portfolio-store rollback --to ${old}`, ['schema.version']],
+  );
 });
 
 test("a full export of owner's live revision serves under read-only as PORTFOLIO_SOURCE_DIR, with its unitHash, and passes verify-revision", async (t) => {

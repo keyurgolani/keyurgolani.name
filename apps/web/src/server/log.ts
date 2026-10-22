@@ -44,6 +44,14 @@ const FINDING = [
  */
 const GRANT = ['grantRef', 'sessionRef', 'count'] as const;
 
+/**
+ * What the revision store's lines add (#3, item 23), such as
+ * store.publish.committed and store.render-drift: the revision IDs, the
+ * event's seq, the stage a failure stopped at, how long it took, and the
+ * IDs and versions that drifted. Never content.
+ */
+const STORE = ['revisionId', 'servingRevisionId', 'seq', 'stage', 'durationMs', 'drift'] as const;
+
 /** What particular events add. */
 const EXTRA: Readonly<Record<string, readonly string[]>> = {
   'config.fatal': FINDING,
@@ -64,15 +72,10 @@ const EXTRA: Readonly<Record<string, readonly string[]>> = {
   ],
   // Source drift (#3, item 24): the two sourceHashes, never a file's content or path.
   'store.source.drift': ['mountedSourceHash', 'importedSourceHash'],
+  // A live revision an older build wrote (#3, item 25): the command that migrates it.
+  'store.catalog.degraded': [...STORE, 'command'],
+  'store.catalog.incompatible': [...STORE, 'command'],
 };
-
-/**
- * What the revision store's lines add (#3, item 23), such as
- * store.publish.committed and store.render-drift: the revision IDs, the
- * event's seq, the stage a failure stopped at, how long it took, and the
- * IDs and versions that drifted. Never content.
- */
-const STORE = ['revisionId', 'servingRevisionId', 'seq', 'stage', 'durationMs', 'drift'] as const;
 
 export interface LogEntry {
   readonly level: LogLevel;

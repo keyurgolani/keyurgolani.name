@@ -1,6 +1,7 @@
 import type { RenderDrift, Rendering, UnitChecks } from '@portfolio/core';
 import {
   resolvePortfolioView,
+  SCHEMA_VERSIONS,
   validatePublicationUnit,
   type ContentExtension,
   type Context,
@@ -24,9 +25,10 @@ import { createAppearanceCatalog } from './appearance-catalog';
 // (an unregistered variant blocks) and as serving checks the live one (it
 // only warns, and the fallback composition renders); #5's controls as the
 // `controls` snapshot; the blobs #10's media document references, none
-// until #10; and what the build renders a pair with, for the manifest and
-// for drift. It imports nothing server-only and nothing from Next, since the
-// CLI bundles it with esbuild.
+// until #10; what the build renders a pair with, for the manifest and for
+// drift; and the schema version of each document, which tells a revision an
+// older build wrote from a newer one's (#3, item 25). It imports nothing
+// server-only and nothing from Next, since the CLI bundles it with esbuild.
 
 export interface UnitChecksInput {
   /** The variants this build registers. */
@@ -90,6 +92,7 @@ export function buildUnitChecks({
       };
     },
     referencedBlobs: () => [],
+    versions: SCHEMA_VERSIONS,
     rendering(pair: ParsedPair): Rendering {
       const registered = selected(pair);
       return {

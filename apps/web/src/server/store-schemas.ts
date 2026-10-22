@@ -132,6 +132,8 @@ const ManifestSchema = z
         })
         .strict(),
       z.object({ kind: z.literal('import'), sourceHash: Sha256Schema }).strict(),
+      // Its parent migrated to the schema of the build that wrote it (#3, item 25).
+      z.object({ kind: z.literal('migration') }).strict(),
     ]),
     appVersion: z.string(),
     documents: z
@@ -289,9 +291,10 @@ export const AssetMissingDetails = z.object({ blobs: z.array(Sha256Schema) }).st
 export const IncompatibleDetails = z
   .object({
     reason: HealthReason,
+    /** For a revision an older build wrote: the CLI command that migrates it (#3, item 13). */
     command: z
       .string()
-      .regex(/^(?:rollback|recover) --to rev_[0-9a-f]{32}$/)
+      .regex(/^portfolio-store rollback --to rev_[0-9a-f]{32}$/)
       .optional(),
     diagnostics: z.array(DiagnosticSchema),
   })

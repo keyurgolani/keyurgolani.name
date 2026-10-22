@@ -14,13 +14,20 @@ import { readDraft, draftIds, type CreateDraftInput } from '../drafts';
 import type { DraftId } from '../layout';
 import { readEvents, readLive } from '../pointer';
 import { preflight } from '../preflight';
-import type { ImportInput, PublishInput, RecoverInput, RollbackInput } from '../publication';
+import type {
+  ImportInput,
+  MigrateInput,
+  PublishInput,
+  RecoverInput,
+  RollbackInput,
+} from '../publication';
 import { readRevision } from '../revisions';
 import { claimServer } from '../server-claim';
 import { openStore } from '../store';
 import { sha256, type UnitInput } from '../../catalog/unit';
 import { crashingFs, type PointHit } from './crash-fs';
 import { ownerSession, testChecks } from './fixtures';
+import { nextChecks } from './next-schema';
 
 export type Step =
   | { readonly op: 'publish'; readonly input: PublishInput }
@@ -30,6 +37,8 @@ export type Step =
   | { readonly op: 'rollback'; readonly input: RollbackInput }
   | { readonly op: 'recover'; readonly input: RecoverInput }
   | { readonly op: 'import'; readonly input: ImportInput }
+  /** `migrate-store`'s migration, or the CLI's `rollback --to` one, as the operator. */
+  | { readonly op: 'migrate'; readonly input: MigrateInput }
   | { readonly op: 'create'; readonly input: CreateDraftInput }
   | {
       readonly op: 'save';
@@ -58,10 +67,16 @@ export type Step =
   /** Lays out a new data directory, as startup's preflight does; its outcome is the finding, or null. */
   | { readonly op: 'preflight' };
 
+/** Which build's checks a child runs with: this build's, or the test-only next major's. */
+export type ChildBuild = 'this' | 'next';
+
+const checksOf = (build: ChildBuild = 'this') => (build === 'next' ? nextChecks() : testChecks());
+
 export type ChildTask =
   | {
       readonly kind: 'run';
       readonly dataDir: string;
+      readonly build?: ChildBuild;
       /** Where to die, by SIGKILL. */
       readonly crash?: PointHit;
       /** Where to stop and wait, for good, once it has written `readyFile`, so a test can signal it there. */
@@ -70,7 +85,7 @@ export type ChildTask =
       readonly barrier?: { readonly dir: string; readonly id: string };
       readonly steps: readonly Step[];
     }
-  | { readonly kind: 'check'; readonly dataDirs: readonly string[] }
+  | { readonly kind: 'check'; readonly dataDirs: readonly string[]; readonly build?: ChildBuild }
   | {
       readonly kind: 'read-loop';
       readonly dataDir: string;
@@ -156,7 +171,7 @@ function pausingFs(
 async function run(task: Extract<ChildTask, { kind: 'run' }>): Promise<StepResult[]> {
   const base = task.crash ? crashingFs(task.crash, 'kill') : nodeFs;
   const fs = task.pause ? pausingFs(base, task.pause) : base;
-  const store = openStore({ dataDir: task.dataDir, checks: testChecks(), fs });
+  const store = openStore({ dataDir: task.dataDir, checks: checksOf(task.build), fs });
   // The owner's pointer moves hold a session, as Studio's do.
   const owner = await ownerSession();
   if (task.barrier) {
@@ -194,6 +209,9 @@ async function run(task: Extract<ChildTask, { kind: 'run' }>): Promise<StepResul
           break;
         case 'import':
           outcome = await store.publication.importSource(step.input, 'operator');
+          break;
+        case 'migrate':
+          outcome = await store.publication.migrate(step.input, 'operator');
           break;
         case 'create':
           outcome = await store.drafts.create(step.input, 'owner');
@@ -302,8 +320,8 @@ async function run(task: Extract<ChildTask, { kind: 'run' }>): Promise<StepResul
   return results;
 }
 
-async function check(dataDir: string): Promise<CheckReport> {
-  const store = openStore({ dataDir, checks: testChecks() });
+async function check(dataDir: string, build?: ChildBuild): Promise<CheckReport> {
+  const store = openStore({ dataDir, checks: checksOf(build) });
   let repair: unknown;
   try {
     repair = await store.publication.repair();
@@ -394,7 +412,7 @@ function main(task: ChildTask): Promise<unknown> {
   if (task.kind === 'check') {
     return (async () => {
       const reports: CheckReport[] = [];
-      for (const dataDir of task.dataDirs) reports.push(await check(dataDir));
+      for (const dataDir of task.dataDirs) reports.push(await check(dataDir, task.build));
       return { reports };
     })();
   }

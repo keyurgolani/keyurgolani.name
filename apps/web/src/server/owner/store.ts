@@ -201,6 +201,7 @@ type FindingCode =
   | 'store_repair_failed'
   | 'revision_damaged'
   | 'revision_unservable'
+  | 'revision_outdated'
   | 'store_import_waiting'
   | 'store_import_failed'
   | 'source_drift';
@@ -252,6 +253,11 @@ const MESSAGES: Readonly<Record<FindingCode, string>> = {
   revision_unservable:
     'No published revision can be served, so visitors get 503. Publish a revision, or restore a ' +
     'backup. The store.catalog.incompatible line says why.',
+  revision_outdated:
+    'An older build wrote the live revision, in a schema this build does not read, and startup ' +
+    'never migrates one: visitors get the last known good this build serves, or 503 with none. ' +
+    'Run portfolio-store migrate-store --dry-run with this image to see what migrating it ' +
+    'changes, then portfolio-store migrate-store. The store.catalog line names the revision.',
   store_import_waiting:
     'The store is empty, and the publication lock stayed busy, so the mounted pair is not ' +
     'imported yet. Visitors get 503 until it is: the server imports it as revision 1 once the ' +
@@ -729,12 +735,12 @@ export function ownerStore({
       }
       // The reader keeps a failure as nothing servable; anything it throws
       // all the same starts owner degraded too, never stopped.
-      const state = await reader.status().then(
-        (status) => status.state,
-        () => 'incompatible' as const,
-      );
-      if (state === 'degraded') issues.push(finding('revision_damaged'));
-      if (state === 'incompatible') issues.push(finding('revision_unservable'));
+      const status = await reader.status().catch(() => null);
+      const state = status?.state ?? 'incompatible';
+      // One an older build wrote: migrate-store serves it again.
+      if (status?.command) issues.push(finding('revision_outdated'));
+      else if (state === 'degraded') issues.push(finding('revision_damaged'));
+      else if (state === 'incompatible') issues.push(finding('revision_unservable'));
       return issues;
     },
     async checkSource(documents?: MountedFindings) {
