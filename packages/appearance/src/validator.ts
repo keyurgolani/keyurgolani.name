@@ -216,7 +216,7 @@ function checkScripts(
   };
   check(['locale'], pair.portfolio.locale);
   const { portfolio } = pair;
-  portfolio.sections.forEach((section, index) => {
+  (portfolio.sections ?? []).forEach((section, index) => {
     if (sections.has(index)) check(['sections', index, 'lang'], section.lang);
   });
   for (const [list, items, kept] of [
