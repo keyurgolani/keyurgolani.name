@@ -1,0 +1,67 @@
+/*
+ * The reference variant (#5, Slice 6): layout only, with color, type, and
+ * motion left to the appearance axes, and every rule under
+ * [data-variant='acme-reference'], as the host's audit requires.
+ */
+
+[data-variant='acme-reference'] {
+  display: block;
+  box-sizing: border-box;
+  max-inline-size: 48rem;
+  margin-inline: auto;
+  padding-block: 1.5rem 4rem;
+  padding-inline: 1.25rem;
+  /* A word too long for the line breaks rather than widening the page. */
+  overflow-wrap: anywhere;
+}
+
+[data-variant='acme-reference'] .acme-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+  margin-block-end: 2.5rem;
+}
+
+[data-variant='acme-reference'] .acme-nav ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1.25rem;
+  margin-block: 0;
+  padding-inline: 0;
+  list-style: none;
+}
+
+[data-variant='acme-reference'] .acme-badge {
+  display: inline-block;
+  padding-inline: 0.5rem;
+}
+
+[data-variant='acme-reference'] .acme-name {
+  margin-block: 0 2rem;
+}
+
+[data-variant='acme-reference'] .acme-main > section {
+  margin-block: 0 3rem;
+}
+
+/* The compact control: the same sections, closer together. */
+[data-variant='acme-reference'] .acme-main[data-density='compact'] > section {
+  margin-block: 0 1rem;
+}
+
+[data-variant='acme-reference'] .acme-ledger {
+  display: grid;
+  gap: 1rem;
+  margin-block: 1rem 0;
+}
+
+[data-variant='acme-reference'] .acme-ledger > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+[data-variant='acme-reference'] .acme-ledger dd {
+  margin-inline: 0;
+}
