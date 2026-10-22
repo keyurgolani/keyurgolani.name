@@ -4,13 +4,13 @@
 // wider than the window, every internal link resolves, each section's
 // data-renderer matches the manifest's renderedKinds and no kind it leaves
 // out renders, and no console error. Desktop and mobile take a screenshot of
-// the whole page. Without JavaScript, in print, and with its enhancements
-// failing, the page stays readable: the h1, the navigation, and each visible
-// section's heading have a box, opacity, and visibility. Print also has
-// nothing fixed or sticky. Under reduced motion nothing runs once the page
-// settles. A failed enhancement runs twice: with every script chunk blocked
-// while the stylesheets load, and with the kit's throw switch on, which
-// fails every enhancement the kit mounted on the page.
+// the whole page, every image on it loaded. Without JavaScript, in print, and
+// with its enhancements failing, the page stays readable: the h1, the
+// navigation, and each visible section's heading have a box, opacity, and
+// visibility. Print also has nothing fixed or sticky. Under reduced motion
+// nothing runs once the page settles. A failed enhancement runs twice: with
+// every script chunk blocked while the stylesheets load, and with the kit's
+// throw switch on, which fails every enhancement the kit mounted on the page.
 import {
   expect,
   type APIRequestContext,
@@ -271,8 +271,30 @@ export async function expectStill(page: Page): Promise<void> {
 }
 
 /**
- * The whole page's screenshot, attached to the report, and compared against
- * its baseline for the platform's own variants in the pinned image.
+ * Every image on the page loaded, or failed, and decoded. A lazy image
+ * starts loading only once the window scrolls near it, so most of a long
+ * page's would still be empty boxes in a whole-page shot. Each one is made
+ * eager, which loads it as that scroll would, without moving the page.
+ */
+async function loadImages(page: Page): Promise<void> {
+  await page.evaluate(async () => {
+    const images = [...document.images];
+    for (const image of images) image.loading = 'eager';
+    // A broken image rejects, and the shot shows it broken.
+    await Promise.all(images.map((image) => image.decode().catch(() => undefined)));
+  });
+  const loading = await page.evaluate(() =>
+    [...document.images]
+      .filter((image) => !image.complete)
+      .map((image) => image.currentSrc || image.src),
+  );
+  expect(loading, 'images still loading at the screenshot').toEqual([]);
+}
+
+/**
+ * The whole page's screenshot, every image on it loaded, attached to the
+ * report, and compared against its baseline for the platform's own variants
+ * in the pinned image.
  */
 async function screenshot(
   page: Page,
@@ -280,6 +302,7 @@ async function screenshot(
   variant: RegisteredVariant,
   name: string,
 ): Promise<void> {
+  await loadImages(page);
   const options = { animations: 'disabled', caret: 'hide', fullPage: true } as const;
   await testInfo.attach(`${name}.png`, {
     body: await page.screenshot(options),
