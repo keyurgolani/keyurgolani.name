@@ -246,8 +246,9 @@ export function patternOfRoutePath(routePath: string): string {
  * screenshots that lived there moved to legacy/public/ with their variants
  * (#5), and the contract reserves each first segment, so no view can sit
  * here. The old /preview/[slug] is no longer one: /preview belongs to #7's
- * preview routes, and a path under it that none of them serves answers as a
- * path no route matches.
+ * grant routes. Under owner, a path under it that no active grant admits
+ * gets the preview's status document, and under the other profiles it
+ * answers as a path no route matches.
  */
 export const RETIRED_PATTERNS = [
   '/admin',

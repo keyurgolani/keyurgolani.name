@@ -6,9 +6,12 @@
 //   ephemeral/auth/sessions/<digest>.json   one session record each (#2)
 //   ephemeral/auth/revoked-before           the last revoke-sessions run
 //   ephemeral/auth/fingerprint              the configured hash's fingerprint
+//   ephemeral/preview/grants/<digest>.json  one preview grant each (#7)
+//   ephemeral/preview/drafts/<draftId>.json the newest version a grant names
 //   audit/<yyyy-mm>.jsonl                   AuditSink (#2, #3)
 //
 // Directories are 0700 and files 0600. ephemeral/ is never backed up (#3).
+// preview/grant-store.ts makes ephemeral/preview/ at the first mint.
 import { randomBytes } from 'node:crypto';
 import { chmod, mkdir, open, rename, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
