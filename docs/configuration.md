@@ -47,6 +47,8 @@ A portfolio is a body of work. Its records, the works, evidence, chronology entr
 
 A date is `YYYY`, `YYYY-MM`, `YYYY-MM-DD`, `Month YYYY`, or `present`, and a period is `{ start, end? }` that doesn't end before it starts. Text fields such as a summary, a statement, or a case study's parts are Markdown.
 
+A Markdown field holds at most 8,192 characters, nests block quotes at most 4 deep and lists at most 8 deep, and runs a list item at most 128 lines between blank lines (`markdown.too-long`, `markdown.too-deep`). It has at most 128 of the marks `*`, `_`, `~`, `!`, and backtick (a mark escaped with a backslash, or with spaces on both sides, doesn't count), 128 `<` characters, 32 parentheses inside link destinations, and 64 punctuation marks in one bare web address (`markdown.too-dense`). Past those, the renderer's time grows faster than the text, so a field over a limit is refused before anything renders it.
+
 ### Works
 
 A work is something made: an interface, a system, a photograph series, an essay, a record, an object. It has an `id`, a `title`, and a `medium`, one of `interface`, `system`, `software`, `photography`, `image-series`, `writing`, `research`, `music`, `audio-video`, and `object`, or an extension's `<package name>/<name>`. Nothing assumes a profession: the medium says what it is.
@@ -305,6 +307,9 @@ Startup treats the mounted pair as live, so both blocking severities stop it, ex
 | `legacy.document`           | blocks-preview | The portfolio is in the old one-file format, with or without a `site.yml`, or it's a `portfolio.toml`. Nothing else is reported with it.                       |
 | `site.deployment-setting`   | blocks-preview | The site document holds a deployment setting.                                                                                                                  |
 | `appearance.unknown`        | blocks-preview | An appearance id the catalog doesn't register. This build's interim catalog checks only `displayMode`, which the schema already limits.                        |
+| `markdown.too-long`         | blocks-preview | A Markdown field past 8,192 characters, or with a list item past 128 lines between blank lines.                                                                |
+| `markdown.too-deep`         | blocks-preview | A Markdown field that nests block quotes past 4 deep or lists past 8 deep.                                                                                     |
+| `markdown.too-dense`        | blocks-preview | A Markdown field past the limits on inline marks, `<` characters, parentheses inside link destinations, or punctuation in one web address.                     |
 | `validator.failed`          | blocks-preview | A bug in the build, such as two extensions with one namespace, not in the documents.                                                                           |
 | `id.duplicate`              | blocks-publish | Two entries share an id: sections, records, and media assets share one set.                                                                                    |
 | `id.reused`                 | blocks-publish | At publish: the draft gives an id the live revision uses to something of another type.                                                                         |
