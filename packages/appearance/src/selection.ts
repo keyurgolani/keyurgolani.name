@@ -102,6 +102,21 @@ export function valueProblem(
   };
 }
 
+/**
+ * Whether the scheme `schemeId` names can show `mode`. System and high
+ * contrast fit every scheme, and light or dark a scheme that has it. An id
+ * the build doesn't register has no modes to hold against a mode.
+ */
+export function modeFits(
+  registry: AppearanceRegistry,
+  schemeId: string,
+  mode: DisplayMode,
+): boolean {
+  if (mode === 'system' || mode === 'high-contrast') return true;
+  const scheme = findPack(registry, 'colorScheme', schemeId);
+  return !scheme || scheme.modes.includes(mode);
+}
+
 /** `mode` against the scheme `schemeId` names, when the build registers it. */
 function modeProblem(
   registry: AppearanceRegistry,
@@ -109,10 +124,8 @@ function modeProblem(
   mode: DisplayMode,
   axis: 'colorScheme' | 'displayMode',
 ): AppearanceDiagnostic | null {
-  const scheme = findPack(registry, 'colorScheme', schemeId);
-  if (!scheme || mode === 'system' || mode === 'high-contrast') return null;
-  if (scheme.modes.includes(mode)) return null;
-  const native = scheme.modes[0] as BaseMode;
+  if (modeFits(registry, schemeId, mode)) return null;
+  const native = findPack(registry, 'colorScheme', schemeId)!.modes[0] as BaseMode;
   return {
     code: 'appearance.mode-incompatible',
     axis,

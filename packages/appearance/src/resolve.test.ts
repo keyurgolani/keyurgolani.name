@@ -5,6 +5,7 @@ import {
   anchorV1,
   APPEARANCE_AXES,
   DEFAULT_VISITOR_CONTROLS,
+  modeFits,
   PLATFORM_DEFAULTS,
   resolveAppearance,
   serializeSelection,
@@ -221,35 +222,206 @@ test('visitor values that are unregistered, Research, the fallback, or unrendera
   );
 });
 
-test('visitor values apply in axis order, and one that does not fit what is applied drops', () => {
-  const lightPublished = { ...PUBLISHED, displayMode: 'light' as const };
-  // The scheme comes before the mode, so a dark-only scheme meets the published light mode and drops.
-  const dropped = resolve({
-    profile: 'demo',
-    published: lightPublished,
-    visitor: { query: 'scheme=fixture-dark-only&mode=dark' },
+type Mode = 'system' | 'light' | 'dark' | 'high-contrast';
+
+/** The scheme and mode that render for a published pair and a cookie, and what set them. */
+function pair(
+  published: { colorScheme: string; displayMode: Mode },
+  cookie: string,
+  visitorControls: VisitorControls = DEFAULT_VISITOR_CONTROLS,
+) {
+  const resolved = resolve({
+    published: { ...PUBLISHED, ...published },
+    visitorControls,
+    visitor: { cookie },
   });
-  assert.deepEqual(dropped.selection, { ...lightPublished, displayMode: 'dark' });
-  assert.deepEqual(dropped.visitorAxes, ['displayMode']);
-  // Under system, the dark-only scheme fits, and then the dark mode fits it.
-  const applied = resolve({
-    profile: 'demo',
-    visitor: { query: 'scheme=fixture-dark-only&mode=dark' },
+  return {
+    scheme: resolved.selection.colorScheme,
+    mode: resolved.selection.displayMode,
+    visitor: resolved.visitorAxes,
+    resolvedMode: resolved.resolvedMode,
+    modeLocked: resolved.modeLocked,
+    codes: resolved.diagnostics.map(({ code }) => code),
+  };
+}
+
+const WARM_LIGHT = { colorScheme: 'warm-parchment', displayMode: 'light' } as const;
+const DARK_SYSTEM = { colorScheme: 'fixture-dark-only', displayMode: 'system' } as const;
+
+test('a visitor scheme and mode that fit each other apply together, whatever the published pair', () => {
+  const both = {
+    scheme: 'fixture-dark-only',
+    mode: 'dark',
+    visitor: ['colorScheme', 'displayMode'],
+    resolvedMode: 'dark',
+    modeLocked: false,
+    codes: [],
+  };
+  // Each half alone would meet the other published half and not fit; the pair still applies.
+  assert.deepEqual(pair(WARM_LIGHT, 'scheme=fixture-dark-only&mode=dark'), both);
+  assert.deepEqual(
+    pair(
+      { colorScheme: 'fixture-light-only', displayMode: 'light' },
+      'scheme=fixture-dark-only&mode=dark',
+    ),
+    both,
+  );
+  // High contrast fits every scheme.
+  assert.deepEqual(pair(WARM_LIGHT, 'scheme=fixture-dark-only&mode=high-contrast'), {
+    ...both,
+    mode: 'high-contrast',
+    resolvedMode: 'high-contrast',
   });
-  assert.deepEqual(applied.selection, {
-    ...PUBLISHED,
-    colorScheme: 'fixture-dark-only',
-    displayMode: 'dark',
+});
+
+test('a visitor scheme that fits the published mode applies, and a mode it lacks drops', () => {
+  assert.deepEqual(
+    pair(
+      { colorScheme: 'warm-parchment', displayMode: 'system' },
+      'scheme=fixture-dark-only&mode=light',
+    ),
+    {
+      scheme: 'fixture-dark-only',
+      mode: 'system',
+      visitor: ['colorScheme'],
+      resolvedMode: 'dark',
+      modeLocked: true,
+      codes: [],
+    },
+  );
+  assert.deepEqual(
+    pair({ colorScheme: 'warm-parchment', displayMode: 'dark' }, 'scheme=fixture-dark-only'),
+    {
+      scheme: 'fixture-dark-only',
+      mode: 'dark',
+      visitor: ['colorScheme'],
+      resolvedMode: 'dark',
+      modeLocked: false,
+      codes: [],
+    },
+  );
+});
+
+test('a visitor scheme that fits neither drops, and the mode applies when it fits the published scheme', () => {
+  const kept = {
+    scheme: 'warm-parchment',
+    mode: 'light',
+    resolvedMode: 'light',
+    modeLocked: false,
+    codes: [],
+  };
+  assert.deepEqual(pair(WARM_LIGHT, 'scheme=fixture-dark-only&mode=light'), {
+    ...kept,
+    visitor: ['displayMode'],
   });
-  // A mode the applied scheme lacks drops, and the scheme stays.
-  const mode = resolve({
-    profile: 'demo',
-    visitor: { query: 'scheme=fixture-dark-only&mode=light' },
+  assert.deepEqual(pair(WARM_LIGHT, 'scheme=fixture-dark-only'), { ...kept, visitor: [] });
+});
+
+test('with no visitor scheme, a mode applies only when it fits the published scheme', () => {
+  assert.deepEqual(pair(DARK_SYSTEM, 'mode=light'), {
+    scheme: 'fixture-dark-only',
+    mode: 'system',
+    visitor: [],
+    resolvedMode: 'dark',
+    modeLocked: true,
+    codes: [],
   });
-  assert.deepEqual(mode.selection, { ...PUBLISHED, colorScheme: 'fixture-dark-only' });
-  assert.equal(mode.resolvedMode, 'dark');
-  assert.equal(mode.modeLocked, true);
-  assert.deepEqual(mode.diagnostics, []);
+  assert.deepEqual(pair(DARK_SYSTEM, 'mode=dark'), {
+    scheme: 'fixture-dark-only',
+    mode: 'dark',
+    visitor: ['displayMode'],
+    resolvedMode: 'dark',
+    modeLocked: false,
+    codes: [],
+  });
+  assert.equal(pair(DARK_SYSTEM, 'mode=high-contrast').mode, 'high-contrast');
+  // A locked scheme axis, a Research scheme, and an unregistered one count as no scheme.
+  assert.deepEqual(
+    pair(WARM_LIGHT, 'scheme=fixture-dark-only&mode=dark', {
+      ...DEFAULT_VISITOR_CONTROLS,
+      colorScheme: 'locked',
+    }),
+    { ...pair(WARM_LIGHT, ''), mode: 'dark', resolvedMode: 'dark', visitor: ['displayMode'] },
+  );
+  for (const scheme of ['fixture-research', 'missing-pack', 'fixture-seed']) {
+    assert.deepEqual(
+      pair(DARK_SYSTEM, `scheme=${scheme}&mode=light`),
+      pair(DARK_SYSTEM, ''),
+      scheme,
+    );
+  }
+});
+
+test('a published mode the scheme lacks is the owner diagnostic whatever the cookie says, and the final pair renders', () => {
+  const published = { colorScheme: 'fixture-dark-only', displayMode: 'light' } as const;
+  const codes = ['appearance.mode-incompatible'];
+  assert.deepEqual(pair(published, ''), {
+    scheme: 'fixture-dark-only',
+    mode: 'light',
+    visitor: [],
+    resolvedMode: 'dark',
+    modeLocked: true,
+    codes,
+  });
+  assert.deepEqual(pair(published, 'mode=dark'), {
+    scheme: 'fixture-dark-only',
+    mode: 'dark',
+    visitor: ['displayMode'],
+    resolvedMode: 'dark',
+    modeLocked: false,
+    codes,
+  });
+  assert.deepEqual(pair(published, 'scheme=warm-parchment'), {
+    scheme: 'warm-parchment',
+    mode: 'light',
+    visitor: ['colorScheme'],
+    resolvedMode: 'light',
+    modeLocked: false,
+    codes,
+  });
+  assert.deepEqual(pair(published, 'mode=high-contrast'), {
+    scheme: 'fixture-dark-only',
+    mode: 'high-contrast',
+    visitor: ['displayMode'],
+    resolvedMode: 'high-contrast',
+    modeLocked: false,
+    codes,
+  });
+});
+
+test('property: no visitor value leaves a scheme on a mode it lacks, and the owner sees the published pair alone', () => {
+  const random = seeded(19_004);
+  const schemes = ['warm-parchment', 'fixture-dark-only', 'fixture-light-only', 'missing-pack'];
+  const cookieSchemes = [...schemes, 'fixture-research', 'fixture-seed', 'platform-neutral'];
+  const modes = ['system', 'light', 'dark', 'high-contrast'] as const;
+  const controls = ['locked', 'selectable'] as const;
+  for (let index = 0; index < 4000; index += 1) {
+    const published = { colorScheme: pick(random, schemes), displayMode: pick(random, modes) };
+    const parts = [
+      ...(random() < 0.7 ? [`scheme=${pick(random, cookieSchemes)}`] : []),
+      ...(random() < 0.7 ? [`mode=${pick(random, [...modes, 'sepia'])}`] : []),
+    ];
+    const visitorControls = {
+      ...DEFAULT_VISITOR_CONTROLS,
+      colorScheme: pick(random, controls),
+      displayMode: pick(random, controls),
+    };
+    const result = pair(published, parts.join('&'), visitorControls);
+    const shown =
+      published.colorScheme === 'missing-pack' ? 'warm-parchment' : published.colorScheme;
+    const label = `${JSON.stringify(published)} ${parts.join('&')} ${JSON.stringify(visitorControls)}`;
+    assert.equal(
+      result.codes.includes('appearance.mode-incompatible'),
+      !modeFits(registry, shown, published.displayMode),
+      label,
+    );
+    if (result.visitor.length > 0) {
+      assert.ok(modeFits(registry, result.scheme, result.mode), `left a misfit: ${label}`);
+    }
+    if (!modeFits(registry, result.scheme, result.mode)) {
+      assert.deepEqual([result.scheme, result.mode], [shown, published.displayMode], label);
+    }
+  }
 });
 
 test('a visitor value on an axis whose published pack fell back still applies', () => {

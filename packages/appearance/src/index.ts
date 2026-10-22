@@ -92,6 +92,7 @@ export {
 } from './registry';
 export { APPEARANCE_CODES, type AppearanceCode, type AppearanceDiagnostic } from './diagnostics';
 export {
+  modeFits,
   parseSelection,
   serializeSelection,
   setAxis,

@@ -11,12 +11,13 @@ import type {
   MotionPolicy,
   VisitorControls,
 } from '@portfolio/schema';
-import { APPEARANCE_AXES, ID_AXES, type IdAxis } from './axes';
+import { APPEARANCE_AXES, ID_AXES, isDisplayMode, type IdAxis } from './axes';
 import type { AppearanceDiagnostic } from './diagnostics';
 import { axisFallback, findPack, isRegistered, type AppearanceRegistry } from './registry';
 import { schemeRenders, type GeneratedSchemes } from './resolve-tokens';
 import {
   alone,
+  modeFits,
   parseSelection,
   valueProblem,
   type Selection,
@@ -86,11 +87,15 @@ export interface ResolvedAppearance {
 /**
  * Resolves one boundary's appearance. Each published id that this build
  * can't render falls back on its axis alone: a pack to the first-party one,
- * a variant to #5's fallback composition. Then visitor values apply, only on
- * selectable axes (every axis under `demo`), only for registered,
- * renderable, non-Research values, in axis order, each dropped silently
- * when it doesn't fit what's applied already. `demo` reads the query and
- * `owner` and `read-only` the cookie, never the other.
+ * a variant to #5's fallback composition. A published mode the scheme lacks
+ * is reported then, whatever the visitor sends. Then visitor values apply,
+ * only on selectable axes (every axis under `demo`), and only registered,
+ * renderable, non-Research ones. The variant, language, and typography
+ * apply alone. The scheme and mode apply as a pair: both when they fit each
+ * other, else the scheme when it fits the published mode, else the mode
+ * when it fits the published scheme. Whatever doesn't fit drops silently,
+ * so no visitor value leaves a scheme on a mode it lacks. `demo` reads the
+ * query and `owner` and `read-only` the cookie, never the other.
  */
 export function resolveAppearance(input: ResolveInput): ResolvedAppearance {
   const { registry, generated } = input;
@@ -114,39 +119,54 @@ export function resolveAppearance(input: ResolveInput): ResolvedAppearance {
     }
   }
 
-  const visitorAxes: AppearanceAxis[] = [];
-  const values = visitorValues(input);
-  for (const axis of APPEARANCE_AXES) {
-    const value = values[axis];
-    if (value === undefined) continue;
-    if (input.profile !== 'demo' && input.visitorControls[axis] !== 'selectable') continue;
-    if (!visitorAccepts(registry, axis, value, current, generated)) continue;
-    // parseSelection() and valueProblem() have checked the value fits its axis.
-    (requested as Record<AppearanceAxis, string>)[axis] = value;
-    (current as Record<AppearanceAxis, string>)[axis] = value;
-    visitorAxes.push(axis);
-  }
-
-  const { modes } = findPack(registry, 'colorScheme', current.colorScheme)!;
-  const native = modes[0]!;
-  let resolvedMode: DisplayMode = current.displayMode;
-  let modeLocked = false;
-  if (current.displayMode === 'system' && modes.length === 1) {
-    resolvedMode = native;
-    modeLocked = true;
-  } else if (
-    (current.displayMode === 'light' || current.displayMode === 'dark') &&
-    !modes.includes(current.displayMode)
-  ) {
-    resolvedMode = native;
-    modeLocked = true;
+  // The owner's diagnostic is about the published pair, so the cookie can't hide it.
+  if (!modeFits(registry, current.colorScheme, current.displayMode)) {
+    const native = findPack(registry, 'colorScheme', current.colorScheme)!.modes[0]!;
     diagnostics.push({
       code: 'appearance.mode-incompatible',
       axis: 'displayMode',
-      message: `${current.colorScheme} has only a ${native} mode, so it renders ${native} in place of the requested ${current.displayMode}.`,
+      message: `${current.colorScheme} has only a ${native} mode, so it can't show the published ${current.displayMode} and renders ${native} in its place.`,
       remediation: `Set the display mode to system, ${native}, or high-contrast, or pick a color scheme with a ${current.displayMode} mode.`,
     });
   }
+
+  const values = visitorValues(input);
+  const applied = new Set<AppearanceAxis>();
+  /** The visitor's value on `axis`, when it's one that counts. */
+  const counted = (axis: AppearanceAxis): string | undefined => {
+    const value = values[axis];
+    if (value === undefined) return undefined;
+    if (input.profile !== 'demo' && input.visitorControls[axis] !== 'selectable') return undefined;
+    return visitorAccepts(registry, axis, value, generated) ? value : undefined;
+  };
+  const apply = (axis: AppearanceAxis, value: string) => {
+    // parseSelection() and visitorAccepts() have checked the value fits its axis.
+    (requested as Record<AppearanceAxis, string>)[axis] = value;
+    (current as Record<AppearanceAxis, string>)[axis] = value;
+    applied.add(axis);
+  };
+  for (const axis of ['variant', 'designLanguage', 'typography'] as const) {
+    const value = counted(axis);
+    if (value !== undefined) apply(axis, value);
+  }
+  const scheme = counted('colorScheme');
+  const mode = counted('displayMode') as DisplayMode | undefined;
+  if (scheme !== undefined && mode !== undefined && modeFits(registry, scheme, mode)) {
+    apply('colorScheme', scheme);
+    apply('displayMode', mode);
+  } else if (scheme !== undefined && modeFits(registry, scheme, current.displayMode)) {
+    // A mode that came too doesn't fit this scheme, so it drops.
+    apply('colorScheme', scheme);
+  } else if (mode !== undefined && modeFits(registry, current.colorScheme, mode)) {
+    apply('displayMode', mode);
+  }
+
+  // The scheme pins the mode on system, and on a published mode it lacks, which visitor values never make.
+  const { modes } = findPack(registry, 'colorScheme', current.colorScheme)!;
+  const pinned =
+    (current.displayMode === 'system' && modes.length === 1) ||
+    !modeFits(registry, current.colorScheme, current.displayMode);
+  const resolvedMode: DisplayMode = pinned ? modes[0]! : current.displayMode;
 
   const base: Motion = input.motionPolicy === 'reduce' ? 'reduced' : 'full';
   const override = input.environment?.motion ?? 'full';
@@ -154,12 +174,12 @@ export function resolveAppearance(input: ResolveInput): ResolvedAppearance {
     selection: current,
     requested,
     resolvedMode,
-    modeLocked,
+    modeLocked: pinned,
     contrast: input.environment?.contrast === 'more' ? 'more' : 'system',
     motion: MOTION_RANK[override] < MOTION_RANK[base] ? override : base,
     enhancement: input.environment?.enhancement === 'off' ? 'off' : 'on',
     fallbackAxes: ID_AXES.filter((axis) => current[axis] !== requested[axis]),
-    visitorAxes,
+    visitorAxes: APPEARANCE_AXES.filter((axis) => applied.has(axis)),
     diagnostics,
   };
 }
@@ -210,16 +230,21 @@ function visitorValues(input: ResolveInput) {
   return source === undefined || source === null ? {} : parseSelection(source);
 }
 
-/** Whether a visitor value applies: registered, renderable, not Research, and fitting what's applied. */
+/**
+ * Whether a visitor value counts on its own axis: a display mode, or an id
+ * registered there (the fallback composition isn't), not Research, and for
+ * a scheme, one that can render. How a scheme and a mode fit each other is
+ * resolveAppearance()'s to weigh.
+ */
 function visitorAccepts(
   registry: AppearanceRegistry,
   axis: AppearanceAxis,
   value: string,
-  current: Selection,
   generated: GeneratedSchemes | undefined,
 ): boolean {
-  if (valueProblem(registry, axis, value, current)) return false;
-  if (axis === 'variant' || axis === 'displayMode') return true;
+  if (axis === 'displayMode') return isDisplayMode(value);
+  if (valueProblem(registry, axis, value, alone(axis, value))) return false;
+  if (axis === 'variant') return true;
   const pack = findPack(registry, axis, value)!;
   if (pack.manifest.tier === 'research') return false;
   return (
