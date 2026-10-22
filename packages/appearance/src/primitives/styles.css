@@ -276,6 +276,11 @@
     stroke-width: var(--ui-icon-stroke-width);
   }
 
+  /*
+   * The loading indicator: a ring that pulses with the language's emphasis
+   * motion, so reduced motion, a paused boundary, and print, which set that
+   * to none, leave it still. aria-busy and the label say it's working.
+   */
   [data-ui-slot='action.spinner'] {
     flex: none;
     inline-size: 1em;
@@ -284,7 +289,7 @@
     border-color: currentcolor;
     border-inline-end-color: transparent;
     border-radius: var(--ui-radius-badge);
-    animation: ui-spin calc(var(--ui-motion-slow) * 4) var(--ui-motion-easing) infinite;
+    animation: var(--ui-motion-emphasis) var(--ui-motion-slow) var(--ui-motion-easing) infinite;
   }
 
   /* Surface: the level's color at the language's opacity, over its material. */
@@ -829,12 +834,6 @@
   @keyframes pulse-once {
     50% {
       opacity: var(--ui-state-loading-opacity);
-    }
-  }
-
-  @keyframes ui-spin {
-    to {
-      rotate: 1turn;
     }
   }
 

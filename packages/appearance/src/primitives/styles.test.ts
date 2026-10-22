@@ -102,7 +102,7 @@ test('no font, radius, shadow, blur, or timing literal: each comes from its pack
   for (const animation of DECLARATIONS.filter(({ property }) => property === 'animation')) {
     assert.match(
       animation.value,
-      /^(?:var\(--ui-motion-(?:enter|exit|emphasis)\)|ui-spin) (?:calc\()?var\(--ui-motion-(?:fast|standard|slow)\)(?: \* \d\))? var\(--ui-motion-easing\)(?: infinite)?$/,
+      /^var\(--ui-motion-(?:enter|exit|emphasis)\) var\(--ui-motion-(?:fast|standard|slow)\) var\(--ui-motion-easing\)(?: infinite)?$/,
       animation.value,
     );
   }
