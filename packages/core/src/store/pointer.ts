@@ -137,9 +137,11 @@ export async function readLive(fs: FsPort, paths: StorePaths): Promise<LivePoint
  * Moves the published pointer: a temporary file of its own beside live.json,
  * synced, then renamed over live.json, which is the commit point. `fence`
  * runs just before the rename, and stops it by throwing, as when the
- * publication lock isn't the caller's any more. The caller syncs
- * publication/ next, after the commit, so a failure there doesn't read as
- * one before it.
+ * publication lock isn't the caller's any more. `beforeCommit` runs after
+ * it, with nothing in between it and the rename, and stops the move the
+ * same way, as the owner's session hold does once its time has run out. The
+ * caller syncs publication/ next, after the commit, so a failure there
+ * doesn't read as one before it.
  */
 export async function writeLive(
   fs: FsPort,
@@ -147,6 +149,7 @@ export async function writeLive(
   pointer: LivePointer,
   operation: string,
   fence: () => Promise<void> = async () => {},
+  beforeCommit: () => void = () => {},
 ): Promise<void> {
   const point = (step: string): CrashPoint => `${operation}.live.${step}`;
   const record = { ...pointer, event: eventRecord(pointer.event) };
@@ -156,6 +159,7 @@ export async function writeLive(
     await fs.writeFile(temp, `${JSON.stringify(record)}\n`, point('write'));
     await fs.fsync(temp, point('fsync'));
     await fence();
+    beforeCommit();
     await fs.rename(temp, paths.live, point('rename'));
   } catch (error) {
     await fs.remove(temp, point('temp.remove')).catch(() => {});

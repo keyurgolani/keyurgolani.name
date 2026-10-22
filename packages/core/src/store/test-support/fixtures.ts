@@ -128,11 +128,12 @@ export async function newStore(
  * would, and returns the revision ID.
  */
 /** An owner session in memory, as #2 issues one at sign-in. */
-export async function ownerSession() {
+export async function ownerSession(options: { readonly commitTimeoutMs?: number } = {}) {
   const sessions = createSessions({
     store: memorySessionStore(),
     audit: memoryAuditSink(),
     fingerprint: 'test-fingerprint',
+    ...options,
   });
   const { token, record } = await sessions.issue({ uaFamily: 'firefox' });
   /** The store's holdSession(), the way a Studio command passes commitWithSession(). */
