@@ -1,7 +1,9 @@
 // Gathers each case's trace-case.json attachment into one report (#6,
 // Slice 1), reports/trace/trace-report.json unless `outputFile` names
 // another, and prints a line per case. The report says which checkout ran
-// the trace, and whether it had uncommitted changes.
+// the trace, whether it had uncommitted changes, and the git tree ids of its
+// apps, packages, and tests at HEAD, which name what was built and the trace
+// tool by content, whatever becomes of the commit.
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -46,8 +48,13 @@ export default class TraceReportWriter implements Reporter {
     const status = git(['status', '--porcelain']);
     const report = buildReport({
       cases: this.cases,
-      commit: git(['rev-parse', 'HEAD']),
-      dirty: status === null ? null : status.length > 0,
+      checkout: {
+        commit: git(['rev-parse', 'HEAD']),
+        dirty: status === null ? null : status.length > 0,
+        trees: Object.fromEntries(
+          ['apps', 'packages', 'tests'].map((name) => [name, git(['rev-parse', `HEAD:${name}`])]),
+        ),
+      },
       command: options.command,
       options: {
         baseUrl: options.baseUrl,
