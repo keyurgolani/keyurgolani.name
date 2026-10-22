@@ -30,7 +30,11 @@ function tracked(...patterns) {
   return run.stdout.split('\0').filter(Boolean);
 }
 
-/** The files that build, run, or configure the image, or that CI runs. */
+/**
+ * The files that build, run, or configure the image, and everything CI
+ * runs: every workflow, and every script under ci/ but its tests and this
+ * check's own script, which names the variable to refuse it.
+ */
 function imageAndCiFiles() {
   const workflows = readdirSync(path.join(ROOT, '.github', 'workflows'))
     .filter((name) => /\.ya?ml$/.test(name))
@@ -38,22 +42,29 @@ function imageAndCiFiles() {
   const compose = readdirSync(path.join(ROOT, 'deploy'))
     .filter((name) => /\.ya?ml$/.test(name))
     .map((name) => path.join('deploy', name));
+  const scripts = readdirSync(path.join(ROOT, 'ci'), { recursive: true })
+    .map(String)
+    .filter((name) => /\.m?js$/.test(name) && !/\.test\.m?js$/.test(name))
+    .filter((name) => name !== 'check-source-maps.mjs')
+    .map((name) => path.join('ci', name));
   return [
     'Dockerfile',
     '.dockerignore',
     'docker-compose.yml',
     ...compose,
     ...workflows,
-    'ci/image-smoke.mjs',
-    'ci/smoke-profiles.mjs',
-    'ci/proxy-smoke.mjs',
-    'ci/lib/container.mjs',
+    ...scripts,
   ];
 }
 
 test('nothing that builds the image or runs in CI sets or passes PORTFOLIO_ANALYZE', () => {
   const files = imageAndCiFiles();
-  assert.ok(files.includes(path.join('.github', 'workflows', 'ci.yml')), 'ci.yml is checked');
+  for (const expected of ['ci.yml', 'image-smoke.mjs', 'container.mjs']) {
+    assert.ok(
+      files.some((file) => path.basename(file) === expected),
+      `${expected} is checked`,
+    );
+  }
   for (const file of files) {
     const text = readFileSync(path.join(ROOT, file), 'utf8');
     assert.doesNotMatch(text, NAME, file);

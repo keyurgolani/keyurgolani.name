@@ -83,11 +83,15 @@ pnpm check:registry    # the variant registry builds the same twice, and nothing
 pnpm check:variants    # the source audit over every registered variant
 pnpm check:appearance  # the contrast gate over every registered appearance combination
 pnpm build             # production build of apps/web
+pnpm check:source-maps # that build shipped no browser source map
 pnpm ci:browser        # Playwright smoke against that build
 pnpm test:routes       # route specs against a fixture host with test-only variants
 pnpm test:variants     # every registered variant on every contract fixture, in six modes, against that build
 pnpm test:external-variant  # the reference third-party variant, installed in a temporary worktree and removed
+pnpm test:trace        # the runtime trace against that build: requests, bytes, long tasks, idle work
 ```
+
+`pnpm test:trace` (#6) boots the build once per registered variant on the `complete` contract fixture and traces `/` at 1440x900 and 390x844, in Chromium: every request with its bytes, long tasks with the CPU throttled 4x, CSP violations, frame loops, recurring timers, canvas contexts, running infinite animations, and two seconds of idle main-thread work. It fails on any request outside the app. After `PORTFOLIO_ANALYZE=1 pnpm build`, which alone ships source maps, it also splits each downloaded chunk's bytes by package. `--base-url <origin>` traces a server on this machine that it didn't start, and `--allow-third-party`, for the baseline calibration only, records and aborts third-party requests rather than failing. The report is `reports/trace/trace-report.json`, and `node tests/trace/calibrate.mjs` writes an entry of `runtime-budgets.json`'s calibration block from one.
 
 Run `pnpm exec playwright install chromium` once before the browser smoke. `pnpm test:routes` builds a host of its own, a copy of the workspace outside the checkout with the variants in `tests/fixtures/variants/` installed offline from the pnpm store, so it needs `pnpm install` but no `pnpm build`. `pnpm test:external-variant` does the same in a temporary `git worktree` of HEAD, so commit before you run it; its add and remove may read package metadata from the registry. [docs/variants.md](docs/variants.md#testing-a-variant) says what both variant suites check. Registry generation leaves the test fixture packages out unless their flag is set: with `APPEARANCE_FIXTURES=1`, `pnpm build` and `pnpm dev` also register the appearance fixture packs in `packages/appearance-fixtures-*`, and a build without it fails if any of their ids reach the registry. `pnpm ci:image` builds and checks the container image with Docker (`CONTAINER_CLI=finch` for Finch).
 
