@@ -18,8 +18,12 @@ import {
   type VariantRenderInput,
 } from '@portfolio/variant-contract';
 import { formatDate, formatEpisodeDuration, formatStatValue, formatTrackDuration } from '../format';
+import { unescapeHtml } from '../html-escape';
 import { doiLink } from './renderers/dated-entries';
+import { hrefFor } from './primitives';
 import { withoutClock } from '../test-support/clock';
+import { corpus } from '../test-support/markdown-corpus';
+import { htmlProblems } from '../test-support/strict-html';
 import { COMPLETE } from './__fixtures__/complete';
 import {
   registerHostModules,
@@ -782,6 +786,53 @@ test('RichText renders markdown, and inline renders a phrase', () => {
     html(<RichText source={'An *aside*'} inline className="note" />),
     '<span class="pf-rich-text note">An <em>aside</em></span>',
   );
+});
+
+test('RichText renders a sample of the markdown corpus to markup the strict reader accepts, and a render input changes only its fragment links, each to the href link fields get', () => {
+  // markdown.test.ts runs the whole corpus through the renderers RichText
+  // calls. Here, every 50th input and every fragment link in an inline link,
+  // through RichText itself, without a render input and with one that has an
+  // id prefix, a mount point, and a query.
+  const input = inputFor(COMPLETE, {
+    basePath: '/sample',
+    query: { variant: 'acme-ocean' },
+    idPrefix: 'pv-',
+  });
+  const sample = corpus().filter(
+    ({ label, url }, i) =>
+      i % 50 === 0 || (/^inline link, /.test(label) && /^\/?#/.test(url?.spelling.reads ?? '')),
+  );
+  const LINK = /<a href="([^"]*)">/g;
+  const hrefs = (markup: string) => Array.from(markup.matchAll(LINK), ([, href = '']) => href);
+  const fragment = /^\/?#./;
+  const failures: string[] = [];
+  let prefixed = 0;
+  for (const { source } of sample) {
+    for (const inline of [false, true]) {
+      const tag = inline ? 'span' : 'div';
+      const [open, close] = [`<${tag} class="pf-rich-text">`, `</${tag}>`];
+      const plain = html(<RichText source={source} inline={inline} />);
+      const linked = html(<RichText source={source} inline={inline} input={input} />);
+      for (const markup of [plain, linked]) {
+        const inner = markup.startsWith(open) && markup.endsWith(close);
+        const problems = inner
+          ? htmlProblems(markup.slice(open.length, -close.length), inline ? 'inline' : 'block')
+          : [`not one ${tag}`];
+        if (problems.length > 0) failures.push(`${JSON.stringify(source)}: ${problems.join('; ')}`);
+      }
+      const before = hrefs(plain).map(unescapeHtml);
+      const expected = before.map((href) => (fragment.test(href) ? hrefFor(href, input) : href));
+      if (
+        JSON.stringify(hrefs(linked).map(unescapeHtml)) !== JSON.stringify(expected) ||
+        plain.replace(LINK, '<a>') !== linked.replace(LINK, '<a>')
+      ) {
+        failures.push(`${JSON.stringify(source)}: ${linked} from ${plain}`);
+      }
+      prefixed += before.filter((href) => fragment.test(href)).length;
+    }
+  }
+  assert.deepEqual(failures.slice(0, 10), []);
+  assert.ok(prefixed > 100, `only ${prefixed} fragment links`);
 });
 
 test('seededRandom gives the same sequence for a seed, a different one for another', () => {
