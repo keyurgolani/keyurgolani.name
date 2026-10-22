@@ -19,6 +19,13 @@ export function isSectionId(value: string): boolean {
   );
 }
 
+/**
+ * The id of #5's fallback composition, which renders in place of a variant
+ * this build doesn't register. The build registers it, but a site can't
+ * select it.
+ */
+export const FALLBACK_VARIANT_ID = 'fallback';
+
 /** A BCP 47 language tag, such as `en` or `pt-BR`: one Intl.getCanonicalLocales accepts. */
 export function isLanguageTag(value: string): boolean {
   try {

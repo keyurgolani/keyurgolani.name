@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { EXTENSION_MAX_DEPTH, isPlainObject, plainJsonProblem } from './json';
+import { FALLBACK_VARIANT_ID } from './ids';
 import { SectionIdSchema, type SchemaParts } from './kinds/common';
 import { SCHEMA_VERSION } from './portfolio';
 
@@ -31,13 +32,6 @@ export const RegistryIdSchema = z.string().regex(REGISTRY_ID_PATTERN, {
   message:
     'must start with a lowercase letter, then 1 to 47 lowercase letters, digits, or hyphens, such as editorial.',
 });
-
-/**
- * The id of #5's fallback composition, which renders in place of a variant
- * this build doesn't register. The build registers it, but a site can't
- * select it.
- */
-export const FALLBACK_VARIANT_ID = 'fallback';
 
 /** A selected variant: a registry id, other than the fallback composition's. */
 const SelectedVariantSchema = RegistryIdSchema.refine((id) => id !== FALLBACK_VARIANT_ID, {
