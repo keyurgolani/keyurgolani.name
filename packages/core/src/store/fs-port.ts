@@ -13,6 +13,7 @@ import {
 } from 'node:fs/promises';
 import type { Readable } from 'node:stream';
 import { recordOwnerModule } from '../load-trace';
+import { readRegularFile, type FileStats, type ReadFs } from './read-fs';
 
 // The file operations the revision store makes (#3), behind a port so a test
 // can stand in for them. Every operation that changes the disk names its
@@ -23,38 +24,21 @@ import { recordOwnerModule } from '../load-trace';
 //
 // No file is opened through a symbolic link: a link planted where the store
 // reads or writes a file fails with ELOOP, and mkdir() refuses a link where
-// a directory should be, rather than chmod what it points at.
+// a directory should be, rather than chmod what it points at. Nor is one
+// read that isn't a regular file: a FIFO, which would wait for a writer,
+// fails at once with EFTYPE.
 
 recordOwnerModule('core/store/fs-port');
 
 /** A named place in a write sequence, such as `publish.live.rename`. */
 export type CrashPoint = string;
 
-export interface FileStats {
-  readonly isFile: boolean;
-  readonly isDirectory: boolean;
-  /** Only lstat() sees a link; stat() reports what it points at. */
-  readonly isSymbolicLink: boolean;
-  readonly size: number;
-  readonly mtimeMs: number;
-  readonly mode: number;
-  /** The owner's uid. */
-  readonly uid: number;
-  /** The inode, which a rename over the file changes. */
-  readonly ino: number;
-}
+export type { FileStats, ReadFs };
 
-export interface FsPort {
-  /** The file's bytes. A symbolic link fails with ELOOP. */
-  readFile(file: string): Promise<Buffer>;
+/** The reads, read-fs.ts's, and the writes. */
+export interface FsPort extends ReadFs {
   /** A stream of the file's bytes, for a blob too big to read whole. A link fails with ELOOP. */
   createReadStream(file: string): Readable;
-  /** The names in `dir`, or [] when it doesn't exist. */
-  readdir(dir: string): Promise<string[]>;
-  /** What's at `target`, following a link, or null when nothing is. */
-  stat(target: string): Promise<FileStats | null>;
-  /** What's at `target` itself, a link as a link, or null when nothing is. */
-  lstat(target: string): Promise<FileStats | null>;
   /**
    * Makes `dir` and its parents, each 0700, and sets `dir` to 0700 either
    * way. A symbolic link at `dir` fails with ELOOP and is left as it is.
@@ -83,9 +67,6 @@ export interface FsPort {
   touch(file: string, point: CrashPoint): Promise<void>;
 }
 
-/** The reads alone: what reading revisions and the pointer needs, and all the reader gets. */
-export type ReadFs = Pick<FsPort, 'readFile' | 'readdir' | 'stat' | 'lstat'>;
-
 const missing = (error: unknown) => (error as NodeJS.ErrnoException)?.code === 'ENOENT';
 
 const NO_FOLLOW = constants.O_NOFOLLOW;
@@ -113,17 +94,15 @@ function linkError(target: string): NodeJS.ErrnoException {
 
 /** The node:fs adapter. Crash points are names only here. */
 export const nodeFs: FsPort = Object.freeze({
-  async readFile(file: string) {
-    const handle = await open(file, constants.O_RDONLY | NO_FOLLOW);
-    try {
-      return await handle.readFile();
-    } finally {
-      await handle.close();
-    }
-  },
+  readFile: readRegularFile,
   createReadStream: (file: string) =>
-    // open() takes numeric flags, though the stream's options are typed as a string.
-    createReadStream(file, { flags: (constants.O_RDONLY | NO_FOLLOW) as unknown as string }),
+    // open() takes numeric flags, though the stream's options are typed as a
+    // string. O_NONBLOCK: a FIFO swapped in for a blob after its lstat opens
+    // at once rather than waiting for a writer, and its read ends or fails
+    // at once too.
+    createReadStream(file, {
+      flags: (constants.O_RDONLY | NO_FOLLOW | constants.O_NONBLOCK) as unknown as string,
+    }),
   async readdir(dir: string) {
     try {
       return await readdir(dir);

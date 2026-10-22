@@ -18,7 +18,7 @@ import {
 } from './lock';
 import { preflight } from './preflight';
 import { claimServer } from './server-claim';
-import { tempDir } from './test-support/fixtures';
+import { fifoAt, tempDir, within } from './test-support/fixtures';
 
 async function lockIn(t: { after(fn: () => void): void }, waitMs = 300) {
   const dataDir = tempDir(t);
@@ -145,6 +145,47 @@ test('a link at publication/lock that leads nowhere stops an acquirer at once wi
   // The server's claim, as startup makes it, answers the same.
   await assert.rejects(claimServer({ fs: counting, paths, lock }), refused);
   assert.ok(Date.now() - started < 1_000);
+});
+
+test('a FIFO at publication/lock or its break marker is storage_unavailable at once: no read of the lock waits for a writer', async (t) => {
+  const { paths } = await lockIn(t);
+  const lock = publicationLock({ fs: nodeFs, paths, waitMs: 500 });
+  const refused = (name: string) => (error: unknown) =>
+    (error as StoreError).code === 'storage_unavailable' &&
+    (error as StoreError).message === `${name} isn't a regular file.`;
+  const release = fifoAt(paths.lock);
+  try {
+    const started = Date.now();
+    await within(
+      2_000,
+      assert.rejects(
+        lock.withLock('publish', async () => assert.fail('it never holds the lock')),
+        refused('publication/lock'),
+      ),
+    );
+    assert.ok(Date.now() - started < 500);
+    // The claim at startup, and the lock's other reads, answer the same.
+    await within(2_000, assert.rejects(claimServer({ paths, lock }), refused('publication/lock')));
+    await within(2_000, assert.rejects(lock.holder(), refused('publication/lock')));
+  } finally {
+    release();
+  }
+  // A breaker of a stale lock finds a FIFO at the break marker.
+  staleLock(paths);
+  const releaseMarker = fifoAt(paths.lockBreak);
+  try {
+    await within(
+      2_000,
+      assert.rejects(
+        lock.withLock('publish', async () => assert.fail('it never holds the lock')),
+        refused('publication/lock.break'),
+      ),
+    );
+  } finally {
+    releaseMarker();
+  }
+  // Once it's gone, the stale lock is broken and taken.
+  assert.equal(await lock.withLock('publish', async () => 'held'), 'held');
 });
 
 test('withLock releases the lock however its body ends', async (t) => {

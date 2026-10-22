@@ -1,6 +1,16 @@
 // For the store's tests: #4's fixture pairs as unit input, a UnitChecks
 // built on the real composite validator, and temporary data directories.
-import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import {
+  closeSync,
+  constants,
+  mkdtempSync,
+  openSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -148,6 +158,42 @@ export function tempDir(t: { after(fn: () => void): void }, prefix = 'store-'): 
   const dir = mkdtempSync(path.join(tmpdir(), prefix));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   return dir;
+}
+
+/**
+ * Makes a FIFO at `file`, which nothing writes, and returns what takes it
+ * away again: a writer opens it once, which lets go a read that waits on
+ * it, and then its name goes, so no read waits on it after. Call it before
+ * the test ends: a read left waiting keeps the test's process from ending.
+ */
+export function fifoAt(file: string): () => void {
+  const made = spawnSync('mkfifo', [file], { encoding: 'utf8' });
+  if (made.status !== 0) throw new Error(`mkfifo: ${made.stderr}`);
+  return () => {
+    let writer: number | undefined;
+    try {
+      writer = openSync(file, constants.O_WRONLY | constants.O_NONBLOCK);
+    } catch {
+      // ENXIO: no read waits on it.
+    }
+    rmSync(file, { force: true });
+    if (writer !== undefined) closeSync(writer);
+  };
+}
+
+/** What `run` settles to, or a failure once `ms` pass first, so a wait fails a test rather than hangs it. */
+export async function within<T>(ms: number, run: Promise<T>): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    return await Promise.race([
+      run,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`Still waiting after ${ms} ms.`)), ms);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /** A store over a new data directory that passed preflight. */
