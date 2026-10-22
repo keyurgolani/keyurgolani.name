@@ -309,7 +309,42 @@ test('a breaker that finds a live lock where the stale one was puts it back, and
   await next.release();
 });
 
-test('of two breakers at once, one slow, and a third acquirer, only one holds the lock at a time: the breaker decides again under the marker', async (t) => {
+test('a breaker that finds a live lock in place of the stale one once it holds the marker leaves it where it is', async (t) => {
+  const { paths } = await lockIn(t);
+  const live = publicationLock({ fs: nodeFs, paths, waitMs: 1_000 });
+  const third = publicationLock({ fs: nodeFs, paths: anotherSpelling(t, paths), waitMs: 1_000 });
+  staleLock(paths);
+  let taken: HeldLock | undefined;
+  let intruder: HeldLock | undefined;
+  const meddling: FsPort = {
+    ...nodeFs,
+    async writeFile(file, data, point, options) {
+      // The breaker found the lock stale. Before it holds the marker, another
+      // process breaks the lock and takes it.
+      if (point === 'lock.break.write' && !taken) {
+        rmSync(paths.lock);
+        taken = await live.acquire('publish');
+      }
+      return nodeFs.writeFile(file, data, point, options);
+    },
+    async rename(from, to, point) {
+      await nodeFs.rename(from, to, point);
+      // Had the breaker moved the live lock aside, a third acquirer would link into the gap.
+      if (point === 'lock.break.rename') {
+        intruder = await third.acquire('recover').catch(() => undefined);
+      }
+    },
+  };
+  const breaker = publicationLock({ fs: meddling, paths: anotherSpelling(t, paths), waitMs: 300 });
+  await assert.rejects(breaker.acquire('rollback'), timedOut);
+  assert.ok(taken);
+  assert.equal(intruder, undefined);
+  await live.fence();
+  assert.equal((await live.holder())?.holder, 'publish');
+  await taken.release();
+});
+
+test('of two breakers at once, one slow, and a third acquirer, only one holds the lock at a time', async (t) => {
   for (let round = 0; round < 3; round++) {
     const { paths } = await lockIn(t);
     staleLock(paths);

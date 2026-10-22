@@ -1,15 +1,16 @@
 // The crash criterion (#3, Slice 1, and Verification required): every write,
 // sync, and rename of a publish, a rollback, a draft save, and an asset put
-// has a named crash point, and so does each step of breaking a stale lock,
-// of moving aside event files live.json disagrees with, of removing a
-// revision that never went live, and of repair. Each is hit twice, as a
-// failed call in this process and as a SIGKILL of a child process, and then
-// one fresh process repairs and checks every resulting data directory: the
-// live revision is the old or the new one, it validates, nothing staged
-// remains, and no acknowledged draft is lost. These are process crashes,
-// not power loss. A crash point stops before its call, never inside it, so
-// the write discipline is checked on its own: no file the store keeps is
-// ever written in place, so a torn write is only ever a temporary file's.
+// has a named crash point, and so does each step of breaking a stale lock
+// and clearing a dead breaker's marker, of moving aside event files
+// live.json disagrees with, of removing a revision that never went live,
+// and of repair. Each is hit twice, as a failed call in this process and as
+// a SIGKILL of a child process, and then one fresh process repairs and
+// checks every resulting data directory: the live revision is the old or
+// the new one, it validates, nothing staged remains, and no acknowledged
+// draft is lost. These are process crashes, not power loss. A crash point
+// stops before its call, never inside it, so the write discipline is
+// checked on its own: no file the store keeps is ever written in place, so
+// a torn write is only ever a temporary file's.
 import assert from 'node:assert/strict';
 import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -113,14 +114,17 @@ function assertWritesWhole(calls: readonly FsCall[], root: string, label: string
   }
 }
 
-/** A lock this test's process took before a restart: stale to every process on this host. */
-const staleLock = () =>
+/**
+ * A lock, or a break marker, that this test's process took before a
+ * restart: stale to every process on this host.
+ */
+const stale = (holder: string) =>
   JSON.stringify({
     ...thisProcess(),
     startTime: 'an earlier start',
-    holder: 'cli:backup',
+    holder,
     at: new Date().toISOString(),
-    nonce: 'stale',
+    nonce: `stale-${holder}`,
   });
 
 /**
@@ -336,10 +340,12 @@ const putScenario: Scenario = {
 
 const leftScenario: Scenario = {
   ...publishScenario,
-  name: 'a publish over a stale lock and stray event files',
+  name: 'a publish over stale lock files and stray event files',
   required: [
     'lock.break.write',
     'lock.break.link',
+    'lock.break.clear',
+    'lock.break.clear.remove',
     'lock.break.rename',
     'lock.break.remove',
     'lock.break.release',
@@ -351,7 +357,10 @@ const leftScenario: Scenario = {
   ],
   async seed(t) {
     const seeded = await publishScenario.seed(t);
-    writeFileSync(storePaths(seeded.template).lock, staleLock());
+    // A stale lock, and the marker of a breaker that died breaking it.
+    const paths = storePaths(seeded.template);
+    writeFileSync(paths.lock, stale('cli:backup'));
+    writeFileSync(paths.lockBreak, stale('break'));
     strayEvents(seeded.template, seeded.liveBefore!);
     return seeded;
   },

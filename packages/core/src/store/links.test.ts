@@ -1,6 +1,6 @@
-// Symbolic links planted in the data directory (#3, review F3): the store
-// never writes, reads, chmods, or deletes through one, so nothing outside the
-// store is created, changed, or removed.
+// Symbolic links planted in the data directory (#3, from #50's review): the
+// store never writes, reads, chmods, or deletes through one, so nothing
+// outside the store is created, changed, or removed.
 import assert from 'node:assert/strict';
 import {
   existsSync,
@@ -121,18 +121,27 @@ test('repair never goes through a linked directory, and removes only regular tem
 
   const report = await store.publication.repair();
   assert.equal(report.stagingRemoved, 0);
+  assert.equal(report.tempsRemoved, 0);
   assert.equal(existsSync(path.join(outside, '.precious.tmp')), true);
   assert.equal(existsSync(path.join(outsideShard, '.old-work.tmp')), true);
   assert.equal(existsSync(path.join(staging, 'keep.txt')), true);
   assert.equal(readFileSync(outsideFile, 'utf8'), 'keep me too\n');
+  // A temporary name on what isn't a regular file isn't a crash's temporary file.
+  assert.equal(lstatSync(path.join(store.paths.events, '.linked.tmp')).isSymbolicLink(), true);
 
   // In a real revisions/, a .staging-* that's a link goes as a link only.
   const second = await newStore(t);
   const linkedStaging = path.join(second.paths.revisions, `.staging-rev_${'1'.repeat(32)}`);
   symlinkSync(outsideRevisions, linkedStaging);
-  assert.equal((await second.publication.repair()).stagingRemoved, 1);
+  const directory = path.join(second.paths.drafts, '.not-a-file.tmp');
+  mkdirSync(directory);
+  writeFileSync(path.join(directory, 'keep.txt'), 'keep me\n');
+  const repaired = await second.publication.repair();
+  assert.equal(repaired.stagingRemoved, 1);
+  assert.equal(repaired.tempsRemoved, 0);
   assert.equal(existsSync(linkedStaging), false);
   assert.equal(existsSync(path.join(staging, 'keep.txt')), true);
+  assert.equal(existsSync(path.join(directory, 'keep.txt')), true);
 });
 
 test("a blob that is a link isn't one the AssetStore holds, and a put replaces the link", async (t) => {
