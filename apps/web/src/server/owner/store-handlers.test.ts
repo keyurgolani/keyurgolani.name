@@ -190,10 +190,24 @@ test('each store outcome answers its status, and an owner 409 or 422 carries its
       undefined,
     ],
     [{ kind: 'rejected', code: 'not_found', diagnostics: [] }, 404, 'not_found', undefined],
+    // A key from another request, and a lock another holder took.
+    [
+      { kind: 'rejected', code: 'idempotency_conflict', diagnostics: [] },
+      422,
+      'idempotency_conflict',
+      undefined,
+    ],
+    [{ kind: 'rejected', code: 'lock_lost', diagnostics: [] }, 503, 'lock_lost', undefined],
   ];
   for (const [outcome, status, code, details] of cases) {
     const response = await dispatcher(answering(outcome))(command('publish', PUBLISH), 'publish');
     assert.equal(response.status, status, code);
+    // Nothing moved after lock_lost, so it says when to try again, as lock_timeout does.
+    assert.equal(
+      response.headers.get('retry-after'),
+      code === 'lock_lost' ? String(RETRY_AFTER_SECONDS) : null,
+      code,
+    );
     const { error } = (await response.json()) as { error: Record<string, unknown> };
     assert.equal(error.code, code);
     assert.deepEqual(error.details, details, code);
