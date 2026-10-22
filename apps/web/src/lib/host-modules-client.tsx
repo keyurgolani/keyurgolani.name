@@ -2,17 +2,25 @@
 
 import { registerHostModules } from '@portfolio/kit/sections';
 import { ENHANCEMENT_LOADERS } from './generated/registry.enhancements';
+import { EXTENSION_RENDERERS } from './generated/registry.renderers';
 
-// The enhancement loaders host-modules.ts registers, registered in the
-// browser (#5, Slice 3), where <Enhancement> loads a variant's enhancement
-// modules. Sections render on the server, so the client gets no extension
-// renderers: only what it renders itself. The root layout renders
+// The package code the kit reaches in the browser (#5, Slices 3 and 6): the
+// enhancement loaders <Enhancement> loads a variant's enhancements through,
+// each its own import(), so each loads only once a page that renders it has
+// hydrated; and each content extension's section renderers, the ones
+// host-modules.ts registers on the server, so a render in the browser reaches
+// the same package code as the server's. The host's pages render their
+// sections on the server; render parity's createRoot render, #7's preview
+// frame, and #9's in-browser render use both. The root layout renders
 // <ClientHostModules />, so this module runs on every page before anything
 // below it hydrates.
 
-registerHostModules({ enhancementLoaders: ENHANCEMENT_LOADERS });
+registerHostModules({
+  extensionRenderers: EXTENSION_RENDERERS,
+  enhancementLoaders: ENHANCEMENT_LOADERS,
+});
 
-/** Renders nothing: loading this module is what registers the loaders. */
+/** Renders nothing: loading this module is what registers the maps. */
 export function ClientHostModules() {
   return null;
 }
