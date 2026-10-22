@@ -251,8 +251,28 @@ function parseJson(text: string): { ok: true; value: unknown } | { ok: false } {
 }
 
 /**
+ * Whether each directory a revision's files are read through is one itself,
+ * never a link to one: revisions/, the revision's own, documents/, and
+ * snapshots/. A file's own read refuses a link only as its last component.
+ * One that isn't there leaves its files missing, as their reads find.
+ */
+async function throughDirectories(fs: ReadFs, dir: string): Promise<boolean> {
+  for (const each of [
+    path.dirname(dir),
+    dir,
+    path.join(dir, 'documents'),
+    path.join(dir, 'snapshots'),
+  ]) {
+    const found = await fs.lstat(each).catch(() => undefined);
+    if (found !== null && found?.isDirectory !== true) return false;
+  }
+  return true;
+}
+
+/**
  * Reads and checks the revision in `dir`: every file there, and every hash
- * right. A file that's there but can't be read leaves it `unreadable`.
+ * right. A file that's there but can't be read leaves it `unreadable`, and
+ * so does a link in place of a directory it's read through.
  */
 export async function readRevisionAt(
   fs: ReadFs,
@@ -260,6 +280,7 @@ export async function readRevisionAt(
   id: RevisionId,
 ): Promise<RevisionRead> {
   try {
+    if (!(await throughDirectories(fs, dir))) return { ok: false, damage: 'unreadable' };
     return await readRevisionFiles(fs, dir, id);
   } catch (error) {
     if (error instanceof UnreadableError) return { ok: false, damage: 'unreadable' };
