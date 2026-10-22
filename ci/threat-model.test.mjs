@@ -49,12 +49,14 @@ const COMMAND = /^`pnpm ([\w:-]+)`$/;
 const TEST_FILE = /\.(test|spec)\.[cm]?[jt]sx?$/;
 /**
  * The harness modules whose tests count, and where their titles are: the
- * profile matrix declares test() calls the profile projects run, and
- * startup-rows.mjs names each row, which startup.spec.ts and the image smoke
- * run as a test of that name. No other harness module holds a test.
+ * profile matrix declares test() calls the profile projects run, the
+ * security suite test() calls both security specs run, and startup-rows.mjs
+ * names each row, which startup.spec.ts and the image smoke run as a test of
+ * that name. No other harness module holds a test.
  */
 const HARNESS = {
   'tests/harness/profile-matrix.ts': 'tests',
+  'tests/harness/security-suite.ts': 'tests',
   'tests/harness/startup-rows.mjs': 'rows',
 };
 
