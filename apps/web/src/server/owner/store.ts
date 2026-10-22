@@ -1,4 +1,6 @@
 import 'server-only';
+import { realpathSync } from 'node:fs';
+import path from 'node:path';
 import type {
   CatalogReader,
   CatalogStatus,
@@ -34,6 +36,7 @@ import {
   type ServerClaim,
   type Store,
   type StoreActor,
+  type StoreErrorCode,
   type StoreLogEntry,
   type UnitInput,
 } from '@portfolio/core/owner';
@@ -55,15 +58,26 @@ import { log } from '../log';
 // Studio's handlers get the store only as a StudioStore, which acts as the
 // owner, whose pointer moves hold the session (#2), and never as the
 // operator, which skips the hold and is the CLI's alone. Each of its writes
-// first finishes a startup repair that didn't: while that still fails,
-// owner writes stop with store.writes.stopped, and visitors are served what
-// the reader can serve.
+// first makes sure this server holds the data directory's claim, and
+// finishes a startup repair that didn't: while either still fails, owner
+// writes stop with store.writes.stopped, and visitors are served what the
+// reader can serve.
+//
+// Startup never stops over the publication lock. When the CLI holds it, as
+// through a long backup, the claim waits past the lock's 5 s, and the
+// server starts anyway, serving visitors, and claims the directory and
+// finishes the repair in the background, with backoff, once the lock is
+// free. Owner writes wait until then.
 
 recordOwnerModule('server/owner/store');
 
 const KEY = 'PORTFOLIO_DATA_DIR';
 /** How often readiness may run the data directory's probe. */
 export const PROBE_INTERVAL_MS = 30_000;
+/** How long the background claim waits between tries: each in turn, then the last again and again. */
+export const CLAIM_RETRY_MS: readonly number[] = Object.freeze([
+  1_000, 2_000, 4_000, 8_000, 16_000, 30_000,
+]);
 
 export interface OwnerStoreInput {
   readonly config: DeploymentConfig;
@@ -78,6 +92,12 @@ export interface OwnerStoreInput {
   /** Where publication events join #2's audit log. Defaults to the data directory's. */
   readonly audit?: AuditSink;
   readonly now?: () => number;
+  /** Tests' timings, in place of the store's: the lock's wait, the claim's refresh, and its retries. */
+  readonly timing?: {
+    readonly lockWaitMs?: number;
+    readonly claimRefreshMs?: number;
+    readonly claimRetryMs?: readonly number[];
+  };
 }
 
 /** A pointer move's context: the request, and the owner's session held through the move. */
@@ -145,6 +165,7 @@ export interface OwnerStore {
 type FindingCode =
   | PreflightCode
   | 'data_dir_in_use'
+  | 'data_dir_unclaimed'
   | 'store_repair_failed'
   | 'revision_damaged'
   | 'revision_unservable';
@@ -175,6 +196,11 @@ const MESSAGES: Readonly<Record<FindingCode, string>> = {
   data_dir_in_use:
     'Another owner server holds PORTFOLIO_DATA_DIR. Stop it first: one server runs per data ' +
     'directory. A claim its server stopped refreshing is free after 45 seconds.',
+  data_dir_unclaimed:
+    'The publication lock stayed busy, as while the CLI takes a backup, so this server has not ' +
+    'claimed PORTFOLIO_DATA_DIR yet. It serves visitors, and claims the directory and finishes ' +
+    'its repair once the lock is free; owner writes wait until then. The store.server.claimed ' +
+    'line says when.',
   store_repair_failed:
     "The store's startup repair didn't finish, so what a crash left is still there. Visitors " +
     'are served what can be served, and owner writes stop until the repair finishes, which ' +
@@ -204,6 +230,23 @@ export function ownerStoreOf(value: unknown): OwnerStore | undefined {
 
 /** Store log lines through the server's log: IDs, seq, stage, duration, and drift, never content. */
 const storeLog = (entry: StoreLogEntry) => log({ ...entry });
+
+/** A StoreError's code alone: a cause can carry a path. */
+const codeOf = (error: unknown): StoreErrorCode =>
+  error instanceof StoreError ? error.code : 'storage_unavailable';
+
+/**
+ * The data directory by its real path, found once, so the lock's turns and
+ * the claim key one spelling of it; as given, resolved, while it isn't
+ * there yet, as `next dev`'s .data before startup makes it.
+ */
+function realDataDir(dataDir: string): string {
+  try {
+    return realpathSync(dataDir);
+  } catch {
+    return path.resolve(dataDir);
+  }
+}
 
 /** Who Studio acts as. The operator, who skips the session hold, is the CLI's alone. */
 const OWNER: StoreActor = 'owner';
@@ -289,13 +332,15 @@ export function ownerStore({
   setServable,
   audit,
   now,
+  timing = {},
 }: OwnerStoreInput): OwnerStore {
   // The data.directory requirement refuses startup without one.
-  const dataDir = config.dataDir ?? '';
+  const dataDir = realDataDir(config.dataDir ?? '');
   const store = openStore({
     dataDir,
     checks,
     log: storeLog,
+    ...(timing.lockWaitMs === undefined ? {} : { lockWaitMs: timing.lockWaitMs }),
     audit:
       audit ??
       filesystemAuditSink({ dataDir, ...(now ? { now } : {}), log: (entry) => log(entry) }),
@@ -310,35 +355,108 @@ export function ownerStore({
     log: storeLog,
   });
   let claim: ServerClaim | undefined;
-  let ready = false;
+  let claiming: Promise<ServerClaim> | undefined;
+  let retry: NodeJS.Timeout | undefined;
+  let preflighted = false;
   let probed: { readonly at: number; readonly result: Promise<boolean> } | undefined;
   const clock = now ?? Date.now;
-  // Set when startup repair fails: each write tries it again first, and
-  // stops while it still fails.
+  const retryMs = timing.claimRetryMs ?? CLAIM_RETRY_MS;
+  // Set when startup repair fails, or waits for the claim: each write tries
+  // it again first, and stops while it still fails.
   let repairPending = false;
   let repairing: Promise<void> | undefined;
 
-  /** Before a write: the startup repair that didn't finish, finished now, or the write stops. */
-  function writable(): Promise<void> {
-    if (!repairPending) return Promise.resolve();
+  /**
+   * This server's claim on the data directory: the one it holds, or a new
+   * one taken now. It throws the StoreError that says why not: the lock
+   * still busy (lock_timeout), or another server holding the directory
+   * (data_dir_in_use). One try at a time.
+   */
+  function ensureClaim(): Promise<ServerClaim> {
+    if (claim?.held) return Promise.resolve(claim);
+    claiming ??= claimServer({
+      paths: store.paths,
+      lock: store.lock,
+      log: storeLog,
+      ...(timing.claimRefreshMs === undefined ? {} : { refreshMs: timing.claimRefreshMs }),
+    })
+      .then((claimed) => {
+        if (!claimed.ok) {
+          throw new StoreError(
+            'data_dir_in_use',
+            'Another owner server holds this data directory.',
+          );
+        }
+        claim = claimed.claim;
+        return claimed.claim;
+      })
+      .finally(() => {
+        claiming = undefined;
+      });
+    return claiming;
+  }
+
+  /** The repair startup couldn't finish, one run at a time. */
+  function finishRepair(): Promise<void> {
     repairing ??= store.publication
       .repair()
-      .then(
-        () => {
-          repairPending = false;
-          log({ level: 'info', event: 'store.repair.finished' });
-        },
-        (error: unknown) => {
-          // The code alone: a cause can carry a path.
-          const code = error instanceof StoreError ? error.code : 'storage_unavailable';
-          log({ level: 'error', event: 'store.writes.stopped', code });
-          throw new StoreError(code, "Owner writes stop until the store's repair finishes.");
-        },
-      )
+      .then(() => {
+        repairPending = false;
+        log({ level: 'info', event: 'store.repair.finished' });
+      })
       .finally(() => {
         repairing = undefined;
       });
     return repairing;
+  }
+
+  /** Before a write: the claim, and the startup repair that didn't finish, done now, or the write stops. */
+  async function writable(): Promise<void> {
+    let code: StoreErrorCode;
+    try {
+      await ensureClaim();
+      if (repairPending) await finishRepair();
+      return;
+    } catch (error) {
+      code = codeOf(error);
+    }
+    log({ level: 'error', event: 'store.writes.stopped', code });
+    throw new StoreError(
+      code,
+      "Owner writes stop until this server holds the data directory and the store's repair finishes.",
+    );
+  }
+
+  /**
+   * After startup found the lock busy: claims the directory, then finishes
+   * the repair, trying again with backoff while the lock stays busy. It
+   * stops once another server holds the directory, where each write tries
+   * the claim again, and leaves a repair that fails to the writes too.
+   */
+  function claimInBackground(attempt: number): void {
+    if (retry) return;
+    retry = setTimeout(
+      () => {
+        retry = undefined;
+        ensureClaim().then(
+          () => {
+            log({ level: 'info', event: 'store.server.claimed' });
+            if (repairPending) finishRepair().catch(() => {});
+          },
+          (error: unknown) => {
+            const code = codeOf(error);
+            if (code === 'data_dir_in_use') {
+              log({ level: 'error', event: 'store.server.claim_refused', code });
+              return;
+            }
+            log({ level: 'warn', event: 'store.server.claim_waiting', code });
+            claimInBackground(attempt + 1);
+          },
+        );
+      },
+      retryMs[Math.min(attempt, retryMs.length - 1)],
+    );
+    retry.unref();
   }
 
   const owner: OwnerStore = Object.freeze({
@@ -348,29 +466,37 @@ export function ownerStore({
     async checkDirectory() {
       const problem = await preflight({ dataDir, sourceDir: config.sourceDir });
       if (problem) return [finding(problem)];
-      const claimed = await claimServer({ paths: store.paths, lock: store.lock, log: storeLog });
-      if (!claimed.ok) return [finding(claimed.code)];
-      claim = claimed.claim;
-      ready = true;
-      return [];
+      preflighted = true;
+      try {
+        await ensureClaim();
+        return [];
+      } catch (error) {
+        if (!(error instanceof StoreError)) throw error;
+        if (error.code === 'data_dir_in_use') return [finding('data_dir_in_use')];
+        // The lock stayed busy: start anyway, and claim it once it's free.
+        log({ level: 'warn', event: 'store.server.claim_waiting', code: error.code });
+        claimInBackground(0);
+        return [finding('data_dir_unclaimed', 'warning')];
+      }
     },
     async checkIntegrity() {
       // Nothing to check in a directory that failed its own.
-      if (!ready) return [];
+      if (!preflighted) return [];
       const issues: ConfigIssue[] = [];
-      try {
-        await store.publication.repair();
-      } catch (error) {
-        // Visitors are still served what the reader can serve, and owner
-        // starts degraded; owner writes wait for the repair, which each one
-        // tries again first.
+      if (!claim?.held) {
+        // Repair writes, so it waits for the claim, and the claim's retry runs it.
         repairPending = true;
-        log({
-          level: 'warn',
-          event: 'store.repair.failed',
-          code: error instanceof StoreError ? error.code : 'storage_unavailable',
-        });
-        issues.push(finding('store_repair_failed'));
+      } else {
+        try {
+          await store.publication.repair();
+        } catch (error) {
+          // Visitors are still served what the reader can serve, and owner
+          // starts degraded; owner writes wait for the repair, which each one
+          // tries again first.
+          repairPending = true;
+          log({ level: 'warn', event: 'store.repair.failed', code: codeOf(error) });
+          issues.push(finding('store_repair_failed'));
+        }
       }
       const status = await reader.status();
       if (status.state === 'degraded') issues.push(finding('revision_damaged'));
@@ -395,6 +521,7 @@ export function ownerStore({
       return probed.result;
     },
     release() {
+      if (retry) clearTimeout(retry);
       claim?.releaseSync();
     },
   });

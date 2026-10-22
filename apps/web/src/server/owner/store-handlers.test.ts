@@ -1,5 +1,6 @@
 import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
 import {
   chmodSync,
   existsSync,
@@ -7,8 +8,13 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  realpathSync,
   rmSync,
+  symlinkSync,
+  utimesSync,
+  writeFileSync,
 } from 'node:fs';
+import { hostname } from 'node:os';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -16,6 +22,7 @@ import {
   createSessions,
   memoryAuditSink,
   memorySessionStore,
+  preflight,
   StoreError,
   type Draft,
   type PublicationOutcome,
@@ -522,4 +529,148 @@ test('while a startup repair still fails, owner writes stop with store.writes.st
   assert.ok(
     logged.mock.calls.some((call) => String(call.arguments[0]).includes('"store.repair.finished"')),
   );
+});
+
+/** Waits for `done`, up to 10 s. */
+async function until(done: () => boolean): Promise<void> {
+  for (const started = Date.now(); !done();) {
+    assert.ok(Date.now() - started < 10_000, 'still waiting after 10 s');
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+}
+
+const EMPTY = {
+  getLive: async () => ({ state: 'empty' as const, revisionId: null, unitHash: null, unit: null }),
+};
+
+test('with the lock busy through startup, owner starts and serves, and its writes wait until the claim and the repair are done in the background', async (t) => {
+  deploy(t);
+  const logged = t.mock.method(console, 'log', () => {});
+  const dataDir = mkdtempSync(path.join(tmpdir(), 'store-handlers-'));
+  t.after(() => rmSync(dataDir, { recursive: true, force: true }));
+  const owner = ownerStore({
+    config: configFor(dataDir),
+    checks: CHECKS,
+    documents: EMPTY,
+    setServable: () => {},
+    timing: { lockWaitMs: 50, claimRetryMs: [20, 40] },
+  });
+  t.after(() => owner.release());
+  // A live revision the CLI published, and then the lock it holds through
+  // a backup: its record, from another host.
+  assert.equal(await preflight({ dataDir }), null);
+  const first = await owner.store.drafts.create({ documents: documents('Rowan First') }, 'owner');
+  assert.ok(first.kind === 'saved');
+  const published = await owner.store.publication.publish(
+    { draftId: first.draft.draftId, draftVersion: 1, expectedLiveRevisionId: null },
+    'operator',
+  );
+  assert.equal(published.kind, 'committed');
+  const lock = path.join(dataDir, 'publication', 'lock');
+  const cli = { pid: 1, startTime: 'x', hostname: 'another-host', holder: 'cli:backup' };
+  writeFileSync(lock, JSON.stringify({ ...cli, at: new Date().toISOString(), nonce: 'cli' }));
+  const issues = await owner.checkDirectory();
+  assert.deepEqual(
+    issues.map((issue) => [issue.severity, issue.code]),
+    [['warning', 'data_dir_unclaimed']],
+  );
+  assert.deepEqual(await owner.checkIntegrity(), []);
+  const server = path.join(dataDir, 'publication', 'server.json');
+  assert.equal(existsSync(server), false);
+  assert.deepEqual(owner.writes(), { state: 'stopped', code: 'data_dir_unclaimed' });
+  // Visitors are served, and a write waits, saying why.
+  assert.equal((await owner.reader.getLive()).state, 'live');
+  await assert.rejects(
+    () => owner.studio.createDraft({}),
+    (error: unknown) => error instanceof StoreError && error.code === 'lock_timeout',
+  );
+  // The backup ends: the retry claims the directory, finishes the repair, and writes go on.
+  rmSync(lock);
+  await until(() => owner.writes().state === 'open');
+  assert.equal(existsSync(server), true);
+  assert.equal((await owner.studio.createDraft({})).kind, 'saved');
+  const events = logged.mock.calls.map(
+    (call) => (JSON.parse(String(call.arguments[0])) as { event: string; code?: string }).event,
+  );
+  for (const event of [
+    'store.server.claim_waiting',
+    'store.writes.stopped',
+    'store.server.claimed',
+  ]) {
+    assert.ok(events.includes(event), event);
+  }
+  assert.ok(events.includes('store.repair.finished'));
+});
+
+test('a write after another server took the claim answers data_dir_in_use, and claims the directory again once that server stopped', async (t) => {
+  deploy(t);
+  t.mock.method(console, 'log', () => {});
+  const dataDir = mkdtempSync(path.join(tmpdir(), 'store-handlers-'));
+  t.after(() => rmSync(dataDir, { recursive: true, force: true }));
+  const owner = ownerStore({
+    config: configFor(dataDir),
+    checks: CHECKS,
+    documents: EMPTY,
+    setServable: () => {},
+    timing: { claimRefreshMs: 20 },
+  });
+  t.after(() => owner.release());
+  assert.deepEqual(await owner.checkDirectory(), []);
+  assert.deepEqual(await owner.checkIntegrity(), []);
+  // A live revision, as the CLI publishes one, for Studio's draft.create to start from.
+  const first = await owner.store.drafts.create({ documents: documents('Rowan First') }, 'owner');
+  assert.ok(first.kind === 'saved');
+  const published = await owner.store.publication.publish(
+    { draftId: first.draft.draftId, draftVersion: 1, expectedLiveRevisionId: null },
+    'operator',
+  );
+  assert.equal(published.kind, 'committed');
+  // Another server's fresh claim, in a process that runs.
+  const other = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60_000)'], {
+    stdio: 'ignore',
+  });
+  t.after(() => other.kill('SIGKILL'));
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  const server = path.join(dataDir, 'publication', 'server.json');
+  const theirs = {
+    pid: other.pid,
+    startTime: null,
+    hostname: hostname(),
+    at: new Date().toISOString(),
+    nonce: 'theirs',
+  };
+  writeFileSync(server, JSON.stringify(theirs));
+  await until(() => owner.writes().state === 'stopped');
+  assert.deepEqual(owner.writes(), { state: 'stopped', code: 'data_dir_in_use' });
+  const dispatch = dispatcher(owner.studio);
+  const create = {};
+  const refused = await dispatch(command('draft.create', create), 'draft.create');
+  assert.equal(refused.status, 503);
+  assert.equal(
+    ((await refused.json()) as { error: { code: string } }).error.code,
+    'data_dir_in_use',
+  );
+  assert.equal(JSON.parse(readFileSync(server, 'utf8')).nonce, 'theirs');
+  // That server stopped refreshing: the next write claims the directory again, and goes through.
+  const old = (Date.now() - 60_000) / 1000;
+  utimesSync(server, old, old);
+  const created = await dispatch(command('draft.create', create), 'draft.create');
+  assert.equal(created.status, 200, await created.clone().text());
+  assert.notEqual(JSON.parse(readFileSync(server, 'utf8')).nonce, 'theirs');
+  assert.deepEqual(owner.writes(), { state: 'open' });
+});
+
+test("owner opens the store at the data directory's real path, whatever spelling PORTFOLIO_DATA_DIR uses", (t) => {
+  const dataDir = mkdtempSync(path.join(tmpdir(), 'store-handlers-'));
+  t.after(() => rmSync(dataDir, { recursive: true, force: true }));
+  const linked = `${dataDir}-link`;
+  symlinkSync(dataDir, linked);
+  t.after(() => rmSync(linked, { force: true }));
+  const owner = ownerStore({
+    config: configFor(path.join(linked, '.', '')),
+    checks: CHECKS,
+    documents: EMPTY,
+    setServable: () => {},
+  });
+  assert.equal(owner.store.paths.root, realpathSync(dataDir));
 });
