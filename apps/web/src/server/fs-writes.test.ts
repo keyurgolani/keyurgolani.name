@@ -9,8 +9,11 @@ import ts from 'typescript';
 // and #2's session files, in @portfolio/core, make every write the server
 // makes, so a file under apps/web/src that calls a node:fs write API fails
 // here. So does one that imports the store's write-capable FsPort, which
-// would do the same without naming node:fs, or loads node:fs in a way this
-// can't follow. Tests are exempt: they make their own temporary directories.
+// would do the same without naming node:fs, or gets node:fs in a way this
+// can't follow: a re-export, `import x = require()`, import(), require(),
+// process.getBuiltinModule(), createRequire(), or a module object used for
+// anything but a read, as when it's destructured, indexed, or passed on.
+// Tests are exempt: they make their own temporary directories.
 
 const SRC = fileURLToPath(new URL('../', import.meta.url));
 const FS_MODULES = new Set(['fs', 'node:fs', 'fs/promises', 'node:fs/promises']);
@@ -61,6 +64,26 @@ function fsWrites(source: string, file = 'source.ts'): string[] {
   const modules = new Set<string>();
 
   for (const statement of tree.statements) {
+    // A re-export hands node:fs on to a module this file can't see.
+    if (
+      ts.isExportDeclaration(statement) &&
+      statement.moduleSpecifier &&
+      ts.isStringLiteral(statement.moduleSpecifier) &&
+      FS_MODULES.has(statement.moduleSpecifier.text)
+    ) {
+      at(statement, `re-exports from ${statement.moduleSpecifier.text}`);
+      continue;
+    }
+    if (
+      ts.isImportEqualsDeclaration(statement) &&
+      ts.isExternalModuleReference(statement.moduleReference) &&
+      ts.isStringLiteral(statement.moduleReference.expression) &&
+      FS_MODULES.has(statement.moduleReference.expression.text)
+    ) {
+      at(statement, `loads ${statement.moduleReference.expression.text} with import = require()`);
+      modules.add(statement.name.text);
+      continue;
+    }
     if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) {
       continue;
     }
@@ -91,14 +114,40 @@ function fsWrites(source: string, file = 'source.ts'): string[] {
     }
   }
 
+  /** The import that binds `name` here, not a use of it. */
+  const declares = (name: ts.Identifier) =>
+    ts.isImportClause(name.parent) ||
+    ts.isNamespaceImport(name.parent) ||
+    ts.isImportSpecifier(name.parent) ||
+    ts.isImportEqualsDeclaration(name.parent);
+
+  /** A use of a bound node:fs module: only `x.<read>`, or `x.promises.<read>`, passes. */
+  const used = (name: ts.Identifier) => {
+    const parent = name.parent;
+    if (!ts.isPropertyAccessExpression(parent) || parent.expression !== name) {
+      at(name, `uses ${name.text} other than to call a read`);
+      return;
+    }
+    if (parent.name.text !== 'promises') {
+      if (WRITES.has(parent.name.text)) at(parent, `calls ${parent.getText()}`);
+      return;
+    }
+    const outer = parent.parent;
+    if (!ts.isPropertyAccessExpression(outer) || outer.expression !== parent) {
+      at(parent, `uses ${parent.getText()} other than to call a read`);
+      return;
+    }
+    if (WRITES.has(outer.name.text)) at(outer, `calls ${outer.getText()}`);
+  };
+
   const visit = (node: ts.Node) => {
-    if (ts.isPropertyAccessExpression(node) && WRITES.has(node.name.text)) {
-      // fs.writeFileSync, or fs.promises.writeFile.
-      let target: ts.Expression = node.expression;
-      if (ts.isPropertyAccessExpression(target) && target.name.text === 'promises') {
-        target = target.expression;
-      }
-      if (ts.isIdentifier(target) && modules.has(target.text)) at(node, `calls ${node.getText()}`);
+    if (ts.isIdentifier(node) && modules.has(node.text) && !declares(node)) used(node);
+    // Both hand out node:fs where no import names it.
+    if (ts.isPropertyAccessExpression(node) && node.name.text === 'getBuiltinModule') {
+      at(node, 'loads a builtin through getBuiltinModule()');
+    }
+    if (ts.isIdentifier(node) && node.text === 'createRequire') {
+      at(node, 'uses createRequire');
     }
     // import('node:fs') and require('fs') bind names this can't follow.
     if (ts.isCallExpression(node) && node.arguments.length > 0) {
@@ -148,6 +197,10 @@ test('the check finds each way a file could write, and passes reads', () => {
     fsWrites("import { readFile } from 'node:fs/promises';\nawait readFile('a');"),
     [],
   );
+  assert.deepEqual(
+    fsWrites("import fs from 'node:fs';\nawait fs.promises.readFile('a');\nfs.constants;"),
+    [],
+  );
   const cases: Array<[string, string]> = [
     ["import fs from 'node:fs';\nfs.writeFileSync('a', 'b');", 'calls fs.writeFileSync'],
     ["import * as fs from 'fs';\nfs.renameSync('a', 'b');", 'calls fs.renameSync'],
@@ -163,6 +216,28 @@ test('the check finds each way a file could write, and passes reads', () => {
     [
       "import { nodeFs } from '@portfolio/core/owner';",
       "imports the store's nodeFs from @portfolio/core/owner",
+    ],
+    // The review of #60's FW1 to FW6: a re-export, a destructuring, an
+    // element access, a rebinding, getBuiltinModule(), import = require().
+    ["export { writeFileSync as put } from 'node:fs';", 're-exports from node:fs'],
+    [
+      "import fs from 'node:fs';\nconst { writeFileSync: put } = fs;",
+      'uses fs other than to call a read',
+    ],
+    [
+      "import fs from 'node:fs';\nfs['writeFileSync']('a', 'b');",
+      'uses fs other than to call a read',
+    ],
+    ["import * as fs from 'node:fs';\nconst disk = fs;", 'uses fs other than to call a read'],
+    [
+      "const fs = process.getBuiltinModule('node:fs');",
+      'loads a builtin through getBuiltinModule()',
+    ],
+    ["import fs = require('node:fs');", 'loads node:fs with import = require()'],
+    ["import { createRequire } from 'node:module';", 'uses createRequire'],
+    [
+      "import { promises } from 'node:fs';\nconst { rm } = promises;",
+      'uses promises other than to call a read',
     ],
   ];
   for (const [source, what] of cases) {
