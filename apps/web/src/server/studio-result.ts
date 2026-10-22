@@ -3,17 +3,18 @@ import type { ErrorCode } from './operations';
 // What a Studio handler, or the dispatcher's throttle binding, can answer
 // with besides plain output: a status and headers with the data (login's
 // Set-Cookie), a 303 for a form post, or an error the operation declares,
-// with headers such as Retry-After. A handler that returns anything else
-// returns its output, validated and sent as `{ "data": ... }` with 200.
-// Headers can't replace content-type, cache-control, location, or
-// content-length: the dispatcher sets those.
+// with headers such as Retry-After, and details, such as #3's conflict
+// payloads, which the dispatcher sends only where the entry allows them. A
+// handler that returns anything else returns its output, validated and sent
+// as `{ "data": ... }` with 200. Headers can't replace content-type,
+// cache-control, location, or content-length: the dispatcher sets those.
 
 const RESULT: unique symbol = Symbol.for('keyurgolani.portfolio.studio-result');
 
 export type StudioResult = { readonly [RESULT]: true; readonly headers?: HeadersInit } & (
   | { readonly kind: 'data'; readonly data: unknown; readonly status: 200 | 201 | 202 }
   | { readonly kind: 'redirect'; readonly location: string }
-  | { readonly kind: 'error'; readonly code: ErrorCode }
+  | { readonly kind: 'error'; readonly code: ErrorCode; readonly details?: unknown }
 );
 
 export interface ResultOptions {
@@ -45,13 +46,21 @@ export function redirectResult(location: string, options: ResultOptions = {}): S
   });
 }
 
-/** An error the operation declares in `errors`, such as `rate_limited` with Retry-After. */
-export function errorResult(code: ErrorCode, options: ResultOptions = {}): StudioResult {
+/**
+ * An error the operation declares in `errors`, such as `rate_limited` with
+ * Retry-After. `details` go out only for an owner session's 409 or 422 of a
+ * code whose details the entry declares, and only once they pass its schema.
+ */
+export function errorResult(
+  code: ErrorCode,
+  options: ResultOptions & { readonly details?: unknown } = {},
+): StudioResult {
   return Object.freeze({
     [RESULT]: true as const,
     kind: 'error' as const,
     code,
     headers: options.headers,
+    ...(options.details === undefined ? {} : { details: options.details }),
   });
 }
 

@@ -5,6 +5,7 @@ import { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from '
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { validatePublicationUnit } from '@portfolio/schema';
 import {
   compose,
   type AuthBindings,
@@ -17,7 +18,7 @@ import { setDeploymentState, type DeploymentState } from './config-store';
 import { loadedOwnerModules } from './load-trace';
 import { listOperations } from './operations';
 import { listRoutes, resolveRoute, RETIRED_PATTERNS, routeAccess } from './routes';
-import { redirectResult } from './studio-result';
+import { errorResult, redirectResult } from './studio-result';
 
 // Owner in process, with a test double for #2's provider: the route and
 // operation matrix for owner, which tests/e2e/owner.spec.ts runs end to end
@@ -91,12 +92,30 @@ const PROVIDER: AuthProviderFactory = {
   name: 'test-double',
   load: async ({ config, mintSession }) => {
     const session = mintSession();
+    // #2's sessions over memory, for the real hold #3's pointer moves ask
+    // for. The composition root has loaded owner code by now.
+    const core = await import('@portfolio/core/owner');
+    const sessions = core.createSessions({
+      store: core.memorySessionStore(),
+      audit: core.memoryAuditSink(),
+      fingerprint: 'test-fingerprint',
+    });
+    const { token } = await sessions.issue({ uaFamily: 'firefox' });
     return {
       resolveSession: async ({ request }) => ({
         session: request.headers.get('x-test-session') === 'owner' ? session : null,
       }),
       checkOrigin: async ({ request }) => request.headers.get('origin') === config.origin,
       touchSession: async () => {},
+      commitWithSession: async (context, commit) => {
+        if (context.session !== session) {
+          return { ok: false, result: errorResult('authentication_required') };
+        }
+        const holding = await sessions.holding(token, (hold) => commit(hold));
+        return holding.status === 'valid'
+          ? { ok: true, value: holding.value }
+          : { ok: false, result: errorResult('authentication_required') };
+      },
       handlers: Object.fromEntries(
         Object.entries(AUTH_OUTPUT).map(([name, output]) => [name, () => output]),
       ),
@@ -170,10 +189,49 @@ test.after(() => {
   rmSync(dataDir, { recursive: true, force: true });
 });
 
-function studio(method: string, name: string, headers: Record<string, string> = {}) {
+/**
+ * A query's input goes in the search parameters, a command's in its JSON
+ * body: by default, the body INPUT gives the command.
+ */
+function studio(
+  method: string,
+  name: string,
+  headers: Record<string, string> = {},
+  input = (INPUT[name] ?? {}) as Record<string, unknown>,
+) {
   const init: RequestInit = { method, headers: { 'x-request-id': 'req-owner', ...headers } };
-  if (method === 'POST') init.body = JSON.stringify(INPUT[name] ?? {});
-  return state.dispatch(new Request(`${ORIGIN}/api/studio/${name}`, init), name);
+  let query = '';
+  if (method === 'POST') init.body = JSON.stringify(input);
+  else if (Object.keys(input).length > 0) {
+    query = `?${new URLSearchParams(input as Record<string, string>)}`;
+  }
+  return state.dispatch(new Request(`${ORIGIN}/api/studio/${name}${query}`, init), name);
+}
+
+/** Documents the store takes, with `name` as the portfolio's identity. */
+function documents(name: string) {
+  return {
+    portfolio: {
+      format: 'yaml' as const,
+      sourceText: `schemaVersion: 3\nlocale: en\ndirection: ltr\nidentity:\n  name: ${name}\nsections:\n  - kind: lede\n    id: about\n    body: Hi.\n`,
+    },
+    site: { format: 'yaml' as const, sourceText: readFileSync(EXAMPLES.site, 'utf8') },
+  };
+}
+
+/**
+ * The data directory's store, as the CLI opens one beside the server, with
+ * the checks the composition root uses here. Loaded once owner code has.
+ */
+async function sideStore() {
+  const core = await import('@portfolio/core/owner');
+  return core.openStore({
+    dataDir,
+    checks: {
+      validate: (pair) => validatePublicationUnit(pair, { canonicalOrigin: ORIGIN }),
+      appVersion: '',
+    },
+  });
 }
 
 test('owner loads its modules only through the composition root', () => {
@@ -220,35 +278,9 @@ test('owner loads its modules only through the composition root', () => {
     'server/owner/revision-integrity',
     'server/owner/session-mint',
     'server/owner/store',
+    'server/owner/store-handlers',
   ]);
   assert.deepEqual(state.degraded, []);
-});
-
-test('every registered operation fails closed without a session and runs with one', async () => {
-  for (const operation of listOperations()) {
-    const [method, wrong] = operation.kind === 'query' ? ['GET', 'POST'] : ['POST', 'GET'];
-    const origin = { origin: ORIGIN, 'content-type': 'application/json' };
-
-    const anonymous = await studio(method, operation.name, origin);
-    assert.equal(anonymous.status, operation.session ? 401 : 200, operation.name);
-    assert.equal(anonymous.headers.get('cache-control'), 'no-store');
-
-    const misrouted = await studio(wrong, operation.name, { ...origin, 'x-test-session': 'owner' });
-    assert.equal(misrouted.status, 405, operation.name);
-
-    if (operation.kind === 'command') {
-      const foreign = await studio(method, operation.name, {
-        origin: 'https://elsewhere.test',
-        'x-test-session': 'owner',
-      });
-      assert.equal(foreign.status, 403, operation.name);
-    }
-
-    const signedIn = await studio(method, operation.name, { ...origin, 'x-test-session': 'owner' });
-    assert.equal(signedIn.status, 200, operation.name);
-    const body = (await signedIn.json()) as { data: unknown };
-    assert.equal(operation.output.safeParse(body.data).success, true, operation.name);
-  }
 });
 
 test('config.status shows each secret as set and never a value or a path', async () => {
@@ -277,6 +309,124 @@ test('config.status shows each secret as set and never a value or a path', async
     requested: 'editorial-evidence',
     rendered: 'fallback',
   });
+});
+
+test('every registered operation fails closed without a session and runs with one', async () => {
+  // Two revisions, published from beside the server as the CLI would, and
+  // a working draft, so each store entry has something to act on.
+  const side = await sideStore();
+  const revisions: string[] = [];
+  for (const name of ['Rowan First', 'Rowan Second']) {
+    const created = await side.drafts.create({ documents: documents(name) }, 'owner');
+    assert.equal(created.kind, 'saved');
+    if (created.kind !== 'saved') return;
+    const live = (await side.publication.status()).liveRevisionId;
+    const outcome = await side.publication.publish(
+      { draftId: created.draft.draftId, draftVersion: 1, expectedLiveRevisionId: live },
+      'operator',
+    );
+    assert.equal(outcome.kind, 'committed', JSON.stringify(outcome));
+    if (outcome.kind === 'committed') revisions.push(outcome.revisionId);
+  }
+  assert.equal((await side.drafts.create({}, 'owner')).kind, 'saved');
+  const live = async () => (await side.publication.status()).liveRevisionId;
+  const working = async () => {
+    const draft = await side.drafts.getWorking();
+    assert.ok(draft);
+    return draft;
+  };
+  /** The input each entry runs with, signed in, from what the store holds by then. */
+  const inputs: Record<string, () => Promise<Record<string, unknown>>> = {
+    'auth.sessions.revoke': async () => ({ ref: '0123abcd' }),
+    'revision.list': async () => ({ limit: '1' }),
+    'revision.get': async () => ({ revisionId: revisions[0] }),
+    'history.list': async () => ({ offset: '1' }),
+    'draft.get': async () => ({ draftId: (await working()).draftId }),
+    'draft.create': async () => ({ expectedVersion: (await working()).version }),
+    'draft.save': async () => {
+      const draft = await working();
+      return {
+        draftId: draft.draftId,
+        expectedVersion: draft.version,
+        documents: documents('Rowan Saved'),
+      };
+    },
+    'draft.applyEdits': async () => {
+      const draft = await working();
+      return {
+        draftId: draft.draftId,
+        expectedVersion: draft.version,
+        edits: [
+          { document: 'portfolio', pointer: '/identity/name', op: 'set', value: 'Rowan Edited' },
+        ],
+      };
+    },
+    'draft.rebase': async () => {
+      const draft = await working();
+      return {
+        draftId: draft.draftId,
+        expectedVersion: draft.version,
+        documents: documents('Rowan Rebased'),
+        baseRevisionId: await live(),
+      };
+    },
+    'draft.discard': async () => {
+      const draft = await working();
+      return { draftId: draft.draftId, expectedVersion: draft.version };
+    },
+    publish: async () => {
+      const created = await side.drafts.create({ documents: documents('Rowan Third') }, 'owner');
+      assert.equal(created.kind, 'saved');
+      const draft = created.kind === 'saved' ? created.draft : await working();
+      return {
+        draftId: draft.draftId,
+        draftVersion: draft.version,
+        expectedLiveRevisionId: await live(),
+      };
+    },
+    rollback: async () => ({
+      targetRevisionId: revisions[0],
+      expectedLiveRevisionId: await live(),
+    }),
+    recover: async () => ({ targetRevisionId: revisions[1], expectedLiveRevisionId: await live() }),
+  };
+
+  for (const operation of listOperations()) {
+    const [method, wrong] = operation.kind === 'query' ? ['GET', 'POST'] : ['POST', 'GET'];
+    const origin = { origin: ORIGIN, 'content-type': 'application/json' };
+
+    const anonymous = await studio(method, operation.name, origin);
+    assert.equal(anonymous.status, operation.session ? 401 : 200, operation.name);
+    assert.equal(anonymous.headers.get('cache-control'), 'no-store');
+
+    const misrouted = await studio(wrong, operation.name, { ...origin, 'x-test-session': 'owner' });
+    assert.equal(misrouted.status, 405, operation.name);
+
+    if (operation.kind === 'command') {
+      const foreign = await studio(method, operation.name, {
+        origin: 'https://elsewhere.test',
+        'x-test-session': 'owner',
+      });
+      assert.equal(foreign.status, 403, operation.name);
+    }
+
+    const signedIn = await studio(
+      method,
+      operation.name,
+      { ...origin, 'x-test-session': 'owner' },
+      await (
+        inputs[operation.name] ??
+        (async () => (INPUT[operation.name] ?? {}) as Record<string, unknown>)
+      )(),
+    );
+    const text = await signedIn.text();
+    assert.equal(signedIn.status, 200, `${operation.name}: ${text}`);
+    const body = JSON.parse(text) as { data: unknown };
+    assert.equal(operation.output.safeParse(body.data).success, true, operation.name);
+  }
+  // The pointer moved three times through Studio: publish, rollback, recover.
+  assert.equal((await side.publication.status()).seq, 5);
+  assert.equal(await live(), revisions[1]);
 });
 
 test("the owner branch puts the provider's Studio page sessions in the deployment state, and none without them", async () => {
@@ -345,7 +495,8 @@ test("the owner branch binds the provider's throttle and invalidInput, and goes 
 test('an unknown operation is the same 404 with or without a session', async () => {
   const visitors: Record<string, string>[] = [{}, { 'x-test-session': 'owner' }];
   for (const headers of visitors) {
-    const response = await studio('GET', 'publish', headers);
+    // No entry has the name; publish, which this used to stand in for, has one now (#3).
+    const response = await studio('GET', 'revision.delete', headers);
     assert.equal(response.status, 404);
     const { error } = (await response.json()) as { error: { code: string; requestId: string } };
     assert.deepEqual(error.code, 'not_available_in_profile');

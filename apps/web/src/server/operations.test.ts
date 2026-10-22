@@ -8,13 +8,13 @@ function reachable(operation: Operation): ErrorCode[] {
   const codes: ErrorCode[] = ['not_available_in_profile', 'method_not_allowed'];
   if (operation.session) codes.push('authentication_required');
   if (operation.originCheck) codes.push('request_origin_rejected');
-  codes.push('capability_denied', 'invalid_input');
-  if (operation.expects) codes.push('version_conflict');
-  codes.push('internal_error');
+  codes.push('capability_denied', 'invalid_input', 'internal_error');
   return codes;
 }
 
-test("the registry holds config.status, #2's auth entries, and #7's grant commands", () => {
+const entry = (name: string) => listOperations().find((operation) => operation.name === name)!;
+
+test("the registry holds config.status, #2's auth entries, #3's store entries, and #7's grant commands", () => {
   assert.deepEqual(
     listOperations().map((operation) => operation.name),
     [
@@ -30,11 +30,206 @@ test("the registry holds config.status, #2's auth entries, and #7's grant comman
       'preview.grant.renew',
       'preview.grant.revoke',
       'preview.grant.status',
+      'live.get',
+      'revision.list',
+      'revision.get',
+      'history.list',
+      'draft.getWorking',
+      'draft.get',
+      'draft.create',
+      'draft.save',
+      'draft.applyEdits',
+      'draft.rebase',
+      'draft.discard',
+      'publish',
+      'rollback',
+      'recover',
     ],
   );
 });
 
-const entry = (name: string) => listOperations().find((operation) => operation.name === name)!;
+// #3, item 22: each store entry's capability, and the codes it can answer
+// beyond the dispatcher's own.
+const STORE_ENTRIES: Record<string, { capability: string; kind: string; codes: ErrorCode[] }> = {
+  'live.get': { capability: 'history.read', kind: 'query', codes: ['storage_unavailable'] },
+  'revision.list': { capability: 'history.read', kind: 'query', codes: ['storage_unavailable'] },
+  'revision.get': {
+    capability: 'history.read',
+    kind: 'query',
+    codes: ['storage_unavailable', 'not_found'],
+  },
+  'history.list': { capability: 'history.read', kind: 'query', codes: ['storage_unavailable'] },
+  'draft.getWorking': { capability: 'draft.read', kind: 'query', codes: ['storage_unavailable'] },
+  'draft.get': {
+    capability: 'draft.read',
+    kind: 'query',
+    codes: ['storage_unavailable', 'not_found'],
+  },
+  ...Object.fromEntries(
+    ['draft.create', 'draft.save', 'draft.applyEdits', 'draft.rebase'].map((name) => [
+      name,
+      {
+        capability: 'draft.write',
+        kind: 'command',
+        codes: [
+          'draft_conflict',
+          'live_conflict',
+          'payload_too_large',
+          'asset_missing',
+          'validation_failed',
+          'not_found',
+          'lock_timeout',
+          'storage_unavailable',
+          'storage_full',
+        ] as ErrorCode[],
+      },
+    ]),
+  ),
+  'draft.discard': {
+    capability: 'draft.write',
+    kind: 'command',
+    codes: ['draft_conflict', 'not_found', 'lock_timeout', 'storage_unavailable', 'storage_full'],
+  },
+  publish: {
+    capability: 'publish',
+    kind: 'command',
+    codes: [
+      'live_conflict',
+      'draft_conflict',
+      'nothing_to_publish',
+      'validation_failed',
+      'asset_missing',
+      'not_found',
+      'lock_timeout',
+      'storage_unavailable',
+      'storage_full',
+    ],
+  },
+  ...Object.fromEntries(
+    ['rollback', 'recover'].map((name) => [
+      name,
+      {
+        capability: 'rollback',
+        kind: 'command',
+        codes: [
+          'live_conflict',
+          'nothing_to_publish',
+          'revision_incompatible',
+          'not_found',
+          'lock_timeout',
+          'storage_unavailable',
+          'storage_full',
+        ] as ErrorCode[],
+      },
+    ]),
+  ),
+};
+
+test("#3's store entries: their capabilities, a session each, and the codes item 22 lists", () => {
+  for (const [name, expected] of Object.entries(STORE_ENTRIES)) {
+    const operation = entry(name);
+    assert.equal(operation.capability, expected.capability, name);
+    assert.equal(operation.kind, expected.kind, name);
+    assert.equal(operation.session, true, name);
+    assert.deepEqual(
+      [...operation.errors].sort(),
+      [...reachable(operation), ...expected.codes].sort(),
+      name,
+    );
+  }
+  // The statuses item 22 gives them.
+  const statuses = Object.fromEntries(
+    Object.entries(ERRORS).map(([code, { status }]) => [code, status]),
+  );
+  assert.deepEqual(
+    [
+      'draft_conflict',
+      'live_conflict',
+      'nothing_to_publish',
+      'validation_failed',
+      'revision_incompatible',
+      'asset_missing',
+      'payload_too_large',
+      'not_found',
+      'lock_timeout',
+      'storage_unavailable',
+      'storage_full',
+    ].map((code) => statuses[code]),
+    [409, 409, 409, 422, 422, 422, 413, 404, 503, 503, 507],
+  );
+  // #1's step 6 is gone: the store makes its version checks under the lock,
+  // so none of its entries answers version_conflict, which only #7's
+  // preview.grant.mint does.
+  for (const name of Object.keys(STORE_ENTRIES)) {
+    assert.equal(entry(name).errors.includes('version_conflict'), false, name);
+  }
+});
+
+test('details are declared only for codes that answer 409 or 422', () => {
+  for (const operation of listOperations()) {
+    for (const code of Object.keys(operation.details ?? {}) as ErrorCode[]) {
+      assert.ok(operation.errors.includes(code), `${operation.name} ${code}`);
+      assert.ok([409, 422].includes(ERRORS[code].status), `${operation.name} ${code}`);
+    }
+  }
+});
+
+const REVISION = `rev_${'a'.repeat(32)}`;
+const DRAFT = `drf_${'b'.repeat(32)}`;
+const DOCUMENT = { format: 'yaml', sourceText: 'schemaVersion: 2\n' };
+
+test("the store entries' inputs are strict, so the store never sees a key it doesn't take", () => {
+  const accepts = (name: string, input: unknown) => entry(name).input.safeParse(input).success;
+  const documents = { portfolio: DOCUMENT, site: DOCUMENT };
+  assert.ok(accepts('draft.save', { draftId: DRAFT, expectedVersion: 1, documents }));
+  // A document key the store doesn't take, which its TypeError would echo, is a 400 here.
+  assert.equal(
+    accepts('draft.save', {
+      draftId: DRAFT,
+      expectedVersion: 1,
+      documents: { ...documents, '/srv/canary': DOCUMENT },
+    }),
+    false,
+  );
+  assert.equal(
+    accepts('draft.save', {
+      draftId: DRAFT,
+      expectedVersion: 1,
+      documents: { ...documents, site: { ...DOCUMENT, name: '../x' } },
+    }),
+    false,
+  );
+  for (const draftId of [`${DRAFT}\n`, `${DRAFT}/../x`, 'drf_x']) {
+    assert.equal(accepts('draft.get', { draftId }), false, draftId);
+  }
+  assert.ok(accepts('publish', { draftId: DRAFT, draftVersion: 1, expectedLiveRevisionId: null }));
+  assert.equal(
+    accepts('publish', {
+      draftId: DRAFT,
+      draftVersion: 1,
+      expectedLiveRevisionId: null,
+      actor: 'operator',
+    }),
+    false,
+  );
+  assert.equal(accepts('rollback', { expectedLiveRevisionId: REVISION }), false);
+  assert.ok(accepts('recover', { expectedLiveRevisionId: REVISION }));
+  assert.equal(
+    accepts('recover', { expectedLiveRevisionId: REVISION, reason: 'x'.repeat(501) }),
+    false,
+  );
+  // Pages: digits only, and a limit of 1 to 100.
+  assert.ok(accepts('revision.list', { offset: '50', limit: '100' }));
+  for (const page of [
+    { limit: '0' },
+    { limit: '101' },
+    { offset: '-1' },
+    { offset: '01' },
+    { offset: '1e3' },
+  ]) {
+    assert.equal(accepts('history.list', page), false, JSON.stringify(page));
+  }
+});
 
 test('the grant commands need a session and preview.grant, take a grant only in the body, and answer only what the grant may say (#7)', () => {
   const grant = 'g_7Hk-2abcdefghijklmnop'.slice(0, 22);

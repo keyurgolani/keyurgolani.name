@@ -26,20 +26,23 @@ import type { Dispatch } from './studio-port';
 //      or hold a place for the request until it has its answer (#2)
 //   5. input schema, on the search parameters or the JSON or form body: 400,
 //      or what invalidInput answers instead, such as a form post's 303 (#2)
-//   6. expected draft version or live revision (#3): 409
-//   7. handler, then output schema; anything unexpected: 500. A command of
+//   6. handler, then output schema; anything unexpected: 500. A command of
 //      more than one step runs its commit point, such as #3's pointer
 //      advance, inside commitWithSession(), which holds the session's lock
 //      while it reads the session again and commits, and stops with what it
 //      answers once the session has ended (#2). recheckSession() is the
-//      same read, without the hold, for stopping early
+//      same read, without the hold, for stopping early. #3's version checks,
+//      draft_conflict and live_conflict, are the handler's: the store makes
+//      them under the publication lock, so no step before it can
 //
 // It decides with the policy of the deployment register() froze, read per
 // request. Every response is `Cache-Control: no-store`. Errors are
 // `{ "error": { "code", "message", "requestId" } }`, with the status and the
-// message from ERRORS; a result is `{ "data" }`, or a 303. Headers that step
-// 2 returns, such as a Set-Cookie that clears an ended session, go on every
-// response after it.
+// message from ERRORS. An owner session's 409 or 422 adds `details`, the
+// payload the entry declares for its code, once it passes that schema (#3,
+// amending #1 item 5); any other error, a 5xx above all, carries none. A
+// result is `{ "data" }`, or a 303. Headers that step 2 returns, such as a
+// Set-Cookie that clears an ended session, go on every response after it.
 
 /** What every binding gets: the request, its ID, and the registry entry it names. */
 export interface OperationContext {
@@ -145,18 +148,14 @@ export interface StudioBindings {
    * sign-in page for auth.login's form, or null for the 400.
    */
   readonly invalidInput: (context: SessionContext) => Promise<StudioResult | null>;
-  /** Step 6 (#3): whether the version the input names is still current. */
-  readonly checkVersion: (
-    context: SessionContext & { readonly input: unknown },
-  ) => Promise<boolean>;
   /**
-   * Step 7, when a handler asks before its commit point (#2): null while
+   * Step 6, when a handler asks before its commit point (#2): null while
    * the request's session still counts, or the answer to stop with once it
    * has ended, whether by logout, revocation, revoke-sessions, or a limit
    * passing while the command ran.
    */
   readonly recheckSession: (context: SessionContext) => Promise<StudioResult | null>;
-  /** Step 7's commit point, for HandlerContext.commitWithSession (#2). */
+  /** Step 6's commit point, for HandlerContext.commitWithSession (#2). */
   readonly commitWithSession: <T>(
     context: SessionContext,
     commit: (hold: SessionHold) => Promise<T>,
@@ -164,10 +163,10 @@ export interface StudioBindings {
 }
 
 /**
- * No handlers, no session, every origin and version refused, nothing to
- * slide or throttle, no session that still counts when a handler checks
- * again, and no commit: read-only and demo, and the parts of owner that #2
- * and #3 haven't supplied yet.
+ * No handlers, no session, every origin refused, nothing to slide or
+ * throttle, no session that still counts when a handler checks again, and
+ * no commit: read-only and demo, and the parts of owner that #2 and #3
+ * haven't supplied yet.
  */
 export const NO_BINDINGS: StudioBindings = Object.freeze({
   handlers: Object.freeze({}),
@@ -176,7 +175,6 @@ export const NO_BINDINGS: StudioBindings = Object.freeze({
   touchSession: async () => {},
   throttle: async () => null,
   invalidInput: async () => null,
-  checkVersion: async () => false,
   recheckSession: async ({ session }: SessionContext) =>
     session === null ? null : errorResult('authentication_required'),
   commitWithSession: async () => ({
@@ -210,9 +208,24 @@ export function createDispatcher(options: DispatcherOptions): Dispatch {
     const requestId = request.headers.get('x-request-id') ?? crypto.randomUUID();
     // Step 2's headers, once it has run.
     let kept: HeaderList = [];
-    const fail = (code: ErrorCode, extra: HeaderList = []) => {
+    // Whether step 2 found an owner session: only then can an error carry details.
+    let owner = false;
+    const fail = (code: ErrorCode, extra: HeaderList = [], details?: unknown) => {
       const { status, message } = ERRORS[code];
-      return json(status, { error: { code, message, requestId } }, [...kept, ...extra]);
+      const error = { code, message, requestId, ...(details === undefined ? {} : { details }) };
+      return json(status, { error }, [...kept, ...extra]);
+    };
+    /** An error's details, when it may carry them, checked against the entry's schema. */
+    const detailsOf = (operation: Operation, code: ErrorCode, details: unknown): unknown => {
+      const status: number = ERRORS[code].status;
+      const schema = operation.details?.[code];
+      if (details === undefined || !owner || !schema || (status !== 409 && status !== 422)) {
+        return undefined;
+      }
+      const checked = schema.safeParse(details);
+      if (!checked.success)
+        throw new Error(`${operation.name} answered with details outside its schema.`);
+      return checked.data;
     };
 
     /** Output, checked against the entry's schema. */
@@ -243,7 +256,7 @@ export function createDispatcher(options: DispatcherOptions): Dispatch {
       if (!Object.hasOwn(ERRORS, answer.code) || !operation.errors.includes(answer.code)) {
         throw new Error(`${operation.name} answered with an error it doesn't declare.`);
       }
-      return fail(answer.code, extra);
+      return fail(answer.code, extra, detailsOf(operation, answer.code, answer.details));
     };
 
     try {
@@ -262,6 +275,7 @@ export function createDispatcher(options: DispatcherOptions): Dispatch {
       const resolved = await options.resolveSession({ request, requestId, operation });
       kept = headerList(resolved.headers);
       const session = isMintedSession(resolved.session) ? resolved.session : null;
+      owner = session !== null;
       if (operation.session && !session) return fail('authentication_required');
       const context: SessionContext = { request, requestId, operation, session };
 
@@ -290,10 +304,6 @@ export function createDispatcher(options: DispatcherOptions): Dispatch {
           const answer = await options.invalidInput(context);
           if (answer && answer.kind !== 'data') return respond(operation, answer);
           return fail('invalid_input');
-        }
-
-        if (operation.expects && !(await options.checkVersion({ ...context, input: input.data }))) {
-          return fail('version_conflict');
         }
 
         const handler = handlers[operation.name];

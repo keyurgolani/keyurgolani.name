@@ -215,6 +215,12 @@ export interface RollbackInput {
   readonly reason?: string;
 }
 
+/** A page of a list: `limit` items from `offset`, 0 first. Without one, the whole list. */
+export interface ListPage {
+  readonly offset?: number;
+  readonly limit?: number;
+}
+
 export interface RecoverInput {
   /** Defaults to the last known good. */
   readonly targetRevisionId?: RevisionId;
@@ -242,10 +248,17 @@ export interface PublicationService {
     context?: PublicationContext,
   ): Promise<PublicationOutcome>;
   status(): Promise<LiveStatus>;
-  /** Every event, in seq order. */
-  history(): Promise<readonly PublicationEvent[]>;
-  /** Every revision, the most recently live first. */
-  revisions(): Promise<readonly RevisionSummary[]>;
+  /**
+   * Every event, in seq order. A page reads only its own events: seq
+   * offset + 1 on, up to `limit` of them.
+   */
+  history(page?: ListPage): Promise<readonly PublicationEvent[]>;
+  /**
+   * Every revision, the most recently live first. A page checks only its
+   * own revisions' health, after ordering them all by what their events and
+   * manifests say.
+   */
+  revisions(page?: ListPage): Promise<readonly RevisionSummary[]>;
   revision(revisionId: RevisionId): Promise<RevisionDetail | null>;
   /** The most recently live revision this build can serve, or null. */
   lastKnownGood(): Promise<RevisionId | null>;
@@ -302,6 +315,16 @@ function checkOptional(input: { readonly idempotencyKey?: string; readonly reaso
   ) {
     throw new TypeError(`A reason is text of at most ${REASON_MAX} characters.`);
   }
+}
+
+/** A page's bounds, checked: a whole offset, and a limit of 1 or more. */
+function pageOf(page: ListPage): { readonly offset: number; readonly limit: number } {
+  const offset = page.offset ?? 0;
+  const limit = page.limit ?? Number.MAX_SAFE_INTEGER;
+  if (!Number.isSafeInteger(offset) || offset < 0 || !Number.isSafeInteger(limit) || limit < 1) {
+    throw new TypeError('A page is a whole offset from 0 and a limit of 1 or more.');
+  }
+  return { offset, limit };
 }
 
 const expectation = (value: unknown): RevisionId | null => {
@@ -900,10 +923,21 @@ export function filesystemPublicationService({
       }
     },
 
-    async history() {
+    async history(page) {
       try {
-        const events = await readEvents(fs, paths);
         const pointer = await readPointer();
+        if (page) {
+          // Seqs run from 1 to the pointer's, so a page reads its own range.
+          const { offset, limit } = pageOf(page);
+          const last = Math.min(pointer?.seq ?? 0, offset + limit);
+          const events: PublicationEvent[] = [];
+          for (let seq = offset + 1; seq <= last; seq++) {
+            const event = seq === pointer?.seq ? pointer.event : await readEvent(fs, paths, seq);
+            if (event) events.push(event);
+          }
+          return events;
+        }
+        const events = await readEvents(fs, paths);
         if (pointer && !events.some((event) => event.seq === pointer.seq)) {
           events.push(pointer.event);
         }
@@ -913,17 +947,24 @@ export function filesystemPublicationService({
       }
     },
 
-    async revisions() {
+    async revisions(page) {
       try {
         const seqs = await latestSeqs();
-        const list: RevisionSummary[] = [];
-        for (const id of await revisionIds(fs, paths)) list.push((await summary(id, seqs)).result);
-        return list.sort(
+        const ids = await revisionIds(fs, paths);
+        const created = new Map<RevisionId, string>();
+        for (const id of ids) created.set(id, (await readManifest(fs, paths, id))?.createdAt ?? '');
+        ids.sort(
           (a, b) =>
-            (b.seq ?? 0) - (a.seq ?? 0) ||
-            (b.createdAt ?? '').localeCompare(a.createdAt ?? '') ||
-            a.revisionId.localeCompare(b.revisionId),
+            (seqs.get(b) ?? 0) - (seqs.get(a) ?? 0) ||
+            created.get(b)!.localeCompare(created.get(a)!) ||
+            a.localeCompare(b),
         );
+        const { offset, limit } = pageOf(page ?? {});
+        const list: RevisionSummary[] = [];
+        for (const id of ids.slice(offset, page ? offset + limit : undefined)) {
+          list.push((await summary(id, seqs)).result);
+        }
+        return list;
       } catch (error) {
         throw storageError(error);
       }
