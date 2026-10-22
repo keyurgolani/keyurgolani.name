@@ -161,7 +161,7 @@ Long text, such as a lede's `body` or an item's `description`, takes Markdown. T
 - Raw HTML shows as the text you typed, and HTML comments are dropped.
 - An image shows its alt text. Pictures go in the fields that take an image, such as a gallery item's.
 - A heading of level 1 or 2 renders at level 3, since the page owns the top two levels.
-- A link takes the same URLs as a `url` field (see [configuration.md](configuration.md#files-and-formats)). A link to anything else, or one with a space in its URL, shows its text alone.
+- A link takes the same URLs as a `url` field (see [configuration.md](configuration.md#files-and-formats)), and a link to anything else shows its text alone. Write a space in a URL as `%20`. With a raw space, `[docs](https://example.com/a b)` isn't a link. It shows as you typed it, and only the bare URL before the space links.
 - A table becomes a paragraph per row, and a numbered list starts at 1. Strikethrough shows as plain text, and task-list boxes and link titles are dropped.
 
 ## Validation
