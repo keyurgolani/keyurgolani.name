@@ -4,7 +4,7 @@
 // color only through var(--color-<role>), never a literal, and references no
 // other custom property.
 
-import { COLOR_ROLES } from './tokens';
+import { COLOR_ROLES, LANGUAGE_KEYS } from './tokens';
 
 /** The characters a language value may use: no quote, brace, semicolon, backslash, #, !, @, :, or angle bracket. */
 const LANGUAGE_CHARACTERS = /^[A-Za-z0-9 .,%()+\-*/_]+$/;
@@ -121,7 +121,8 @@ const COLOR_KEYWORDS: ReadonlySet<string> = new Set(
   ).split(' '),
 );
 
-const ROLES: ReadonlySet<string> = new Set(COLOR_ROLES);
+const COLOR_PROPERTIES: ReadonlySet<string> = new Set(COLOR_ROLES.map((role) => `--color-${role}`));
+const LANGUAGE_PROPERTIES: ReadonlySet<string> = new Set(LANGUAGE_KEYS.map((key) => `--ui-${key}`));
 
 /** Longer than any gradient a language needs. */
 const MAX_LANGUAGE_VALUE = 2000;
@@ -135,6 +136,31 @@ const MAX_LANGUAGE_VALUE = 2000;
  * other custom property, and no literal.
  */
 export function languageValueProblem(value: unknown): string | null {
+  return valueProblem(
+    value,
+    COLOR_PROPERTIES,
+    'may use var() only as var(--color-<role>), with a color role and no fallback.',
+  );
+}
+
+/**
+ * Why `value` can't be a declaration's value in a design language's
+ * stylesheet (Slice 2), or null when it can: a language value, which may
+ * also read the language's own tokens as var(--ui-<key>).
+ */
+export function stylesheetValueProblem(value: unknown): string | null {
+  return valueProblem(
+    value,
+    new Set([...COLOR_PROPERTIES, ...LANGUAGE_PROPERTIES]),
+    'may use var() only as var(--color-<role>) or var(--ui-<key>), with no fallback.',
+  );
+}
+
+function valueProblem(
+  value: unknown,
+  variables: ReadonlySet<string>,
+  variableMessage: string,
+): string | null {
   if (typeof value !== 'string' || value.trim() === '') return 'must be CSS text, not empty.';
   if (value.trim() !== value) return 'must not start or end with whitespace.';
   if (value.length > MAX_LANGUAGE_VALUE) {
@@ -168,10 +194,8 @@ export function languageValueProblem(value: unknown): string | null {
       }
       if (!LANGUAGE_FUNCTIONS.has(name)) return `calls ${name}(), which a language value can't.`;
       if (name === 'var') {
-        const reference = /^var\(--color-([a-z0-9-]+)\)/.exec(value.slice(match.index!));
-        if (!reference || !ROLES.has(reference[1]!)) {
-          return 'may use var() only as var(--color-<role>), with a color role and no fallback.';
-        }
+        const reference = /^var\((--[a-z0-9-]+)\)/.exec(value.slice(match.index!));
+        if (!reference || !variables.has(reference[1]!)) return variableMessage;
       }
     } else if (COLOR_KEYWORDS.has(name)) {
       return `can't hold the color ${name}. Colors come from the scheme: use var(--color-<role>).`;

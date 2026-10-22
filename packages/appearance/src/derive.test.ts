@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { contrast, isHex, mix } from './color';
-import { anchorV1, highContrastV1, type Anchors } from './derive';
+import { contrast, deltaE, isHex, mix } from './color';
+import { anchorV1, DISTINCT_DELTA, DISTINCT_PAIRS, highContrastV1, type Anchors } from './derive';
 import { COLOR_ROLES, type ColorTokens } from './tokens';
 import { WARM_PARCHMENT, pick, randomHex, seeded } from './test-support/packs';
 import { anchorStops, assertStops, highContrastStops } from './test-support/stops';
@@ -94,10 +94,22 @@ test('warm-parchment passes every pair anchor-v1 solves, moving only what failed
   const dark = anchorV1(DARK, 'dark');
   assertGate(light, 'light');
   assertGate(dark, 'dark');
-  // text-secondary passes at its 28% mix and stays there; text-muted's 44% fails on surface-prominent and moves.
-  assert.equal(light['text-secondary'], mix(LIGHT.text, LIGHT.canvas, 28));
+  // text-muted's 44% fails on surface-prominent and moves toward text, onto
+  // text-secondary's 28% mix; text-secondary then moves further toward text
+  // to keep the two apart (Slice 2).
   assert.notEqual(light['text-muted'], mix(LIGHT.text, LIGHT.canvas, 44));
   assert.ok(worst(light, 'text-muted') >= 4.6);
+  assert.equal(light['text-muted'], mix(LIGHT.text, LIGHT.canvas, 28));
+  assert.notEqual(light['text-secondary'], mix(LIGHT.text, LIGHT.canvas, 28));
+  assert.ok(deltaE(light['text-secondary'], light['text-muted']) >= DISTINCT_DELTA);
+  assert.ok(
+    contrast(light['text-secondary'], LIGHT.canvas) > contrast(light['text-muted'], LIGHT.canvas),
+  );
+  // The accent states mix 12% and 22% away from on-accent, black here, so they lighten.
+  assert.equal(light['accent-hover'], mix(LIGHT.accent, '#ffffff', 12));
+  assert.equal(light['accent-active'], mix(LIGHT.accent, '#ffffff', 22));
+  assert.equal(dark['accent-hover'], mix(DARK.accent, '#ffffff', 12));
+  assert.equal(dark['accent-active'], mix(DARK.accent, '#ffffff', 22));
   // Statuses that pass keep their starting colors; light positive fails on white and darkens.
   assert.equal(light.warning, '#9b5700');
   assert.equal(light.danger, '#b53143');
@@ -141,8 +153,56 @@ test('property: for any anchors whose text passes, every role anchor-v1 solves p
     const set = anchorV1(anchors, mode);
     const label = `${mode} ${JSON.stringify(anchors)}`;
     assertGate(set, label);
-    // Each role that moved stopped at the first step past its limit plus 0.1.
+    // Each role that moved stopped at the first step past its limit plus 0.1, or, for
+    // text-secondary and the accent states, at the first step that keeps them apart (Slice 2).
     assertStops(set, anchorStops(anchors, mode, set), label);
+    assertDistinct(set, label);
+  }
+});
+
+/**
+ * The hierarchy holds: each pair DISTINCT_PAIRS names is DISTINCT_DELTA
+ * apart, unless the role that moves to make room has nowhere left to go
+ * (text-secondary became the text color, or a state became black or white).
+ */
+function assertDistinct(set: ColorTokens, label: string) {
+  const away = set['on-accent'] === '#000000' ? '#ffffff' : '#000000';
+  for (const [first, second] of DISTINCT_PAIRS) {
+    const distance = deltaE(set[first], set[second]);
+    if (distance >= DISTINCT_DELTA) continue;
+    const saturated =
+      second === 'text-muted'
+        ? set['text-secondary'] === set['text-primary']
+        : set[second] === away;
+    assert.ok(saturated, `${label}: ${first} and ${second} are ${distance.toFixed(4)} apart`);
+  }
+}
+
+test('anchor-v1 keeps the accent states and the two quieter text roles apart', () => {
+  for (const [anchors, mode] of [
+    [LIGHT, 'light'],
+    [DARK, 'dark'],
+  ] as const) {
+    const set = anchorV1(anchors, mode);
+    for (const [first, second] of DISTINCT_PAIRS) {
+      assert.ok(deltaE(set[first], set[second]) >= DISTINCT_DELTA, `${mode} ${first} ${second}`);
+    }
+  }
+  // A white on-accent darkens the states: away from white is toward black.
+  const deep = anchorV1({ ...LIGHT, accent: '#1f4fa8' }, 'light');
+  assert.equal(deep['on-accent'], '#ffffff');
+  assert.equal(deep['accent-hover'], mix('#1f4fa8', '#000000', 12));
+  assert.equal(deep['accent-active'], mix('#1f4fa8', '#000000', 22));
+});
+
+test('the high-contrast states mix away from on-accent too, and stay apart', () => {
+  const sets = { light: anchorV1(LIGHT, 'light'), dark: anchorV1(DARK, 'dark') };
+  for (const polarity of ['light', 'dark'] as const) {
+    const set = highContrastV1(sets, polarity);
+    const text = polarity === 'dark' ? '#ffffff' : '#000000';
+    assert.equal(set['accent-hover'], mix(set.accent, text, 12));
+    assert.equal(set['accent-active'], mix(set.accent, text, 22));
+    assertDistinct(set, `high-contrast ${polarity}`);
   }
 });
 

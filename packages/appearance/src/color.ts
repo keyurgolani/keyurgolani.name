@@ -44,6 +44,17 @@ export function mix(from: string, to: string, percent: number): string {
   );
 }
 
+/**
+ * `color` painted at `alpha` (0 to 1) over the opaque `backdrop`, as a
+ * browser composites a translucent surface in sRGB, each channel rounded.
+ */
+export function composite(color: string, backdrop: string, alpha: number): string {
+  if (!(alpha >= 0 && alpha <= 1)) throw new RangeError('An alpha is a number from 0 to 1.');
+  const top = channels(color);
+  const bottom = channels(backdrop);
+  return hex(top.map((value, index) => Math.round(value * alpha + bottom[index]! * (1 - alpha))));
+}
+
 function toLinear(channel: number): number {
   const value = channel / 255;
   return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
@@ -117,6 +128,13 @@ function fromOklab([lightness, a, b]: Lab): string {
 /** The color's OKLCH lightness, from 0 to 1. */
 export function lightness(color: string): number {
   return oklab(color)[0];
+}
+
+/** How far apart two colors look: their Euclidean distance in OKLab. */
+export function deltaE(first: string, second: string): number {
+  const [l1, a1, b1] = oklab(first);
+  const [l2, a2, b2] = oklab(second);
+  return Math.hypot(l1 - l2, a1 - a2, b1 - b2);
 }
 
 /** The color at OKLCH lightness `value`, with its hue, in sRGB. */
