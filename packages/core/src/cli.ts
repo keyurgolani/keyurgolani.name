@@ -42,9 +42,11 @@ import { verifyStore, type VerifyReport } from './store/verify';
 // server: every pointer move and draft write, retention, and all of a backup
 // hold the publication lock, and a SIGINT, SIGTERM, or SIGHUP releases it
 // before the command exits. It acts as `operator`, needs no session, and
-// prints IDs, hashes, codes, and the paths it was given, never a secret or a
-// document's content. It never runs as root, and works on a data directory
-// only as the user that owns it, the server's own.
+// prints IDs, hashes, codes, and the paths it was given, never a secret. A
+// document's content it prints only in `migrate-store --dry-run`'s diff, and
+// not while the document holds secret-shaped text. It never runs as root,
+// and works on a data directory only as the user that owns it, the server's
+// own.
 //
 //   status                     the store's state, its live revision, and source drift; exits 1 unless live
 //   history                    every publication event, in seq order
