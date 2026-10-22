@@ -18,6 +18,7 @@ export * from './media';
 export * from './snapshots';
 export * from './view';
 export * from './record-ids';
+export * from './ids-fix';
 export * from './published-urls';
 export * from './validate';
 export * from './edit';
