@@ -1,5 +1,6 @@
 // `pnpm check:variants [--package <name>]` (#5, Slice 3, items 5 and 9). It
-// generates the registry, as build:registry does, then audits each
+// generates the registry, as build:registry does, appearance packs included
+// (#19, Slice 2), then audits each
 // registered variant's code and styles, every @portfolio/kit entry the
 // variant imports (and @portfolio/kit/sections, which renderSection() runs
 // for it) with each kit module those import, for the clock and randomness
@@ -9,7 +10,6 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import {
   auditKitSections,
   auditSharedStylesheet,
@@ -19,15 +19,11 @@ import {
   formatAuditFindings,
   formatRegistryDiagnostics,
   kitImports,
-  readRegistry,
-  renderRegistry,
-  writeRegistry,
   type AuditFinding,
   type PackageJson,
 } from '@portfolio/variant-contract/node';
+import { generateRegistry, HOST, registrySummary } from './registry-options';
 
-const HOST = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const OUT = path.join(HOST, 'src', 'lib', 'generated');
 const USAGE = 'Usage: tsx scripts/check-variants.ts [--package <name>]\n';
 const KIT = '@portfolio/kit';
 const SHARED_STYLES = './sections/styles.css';
@@ -44,7 +40,7 @@ async function main(): Promise<number> {
     process.stderr.write(USAGE);
     return 2;
   }
-  const result = await readRegistry({ hostDir: HOST });
+  const { result } = await generateRegistry(process.env, { write: true });
   const diagnostics =
     options.only && result.ok
       ? result.diagnostics.filter((record) => record.package === options.only)
@@ -54,7 +50,7 @@ async function main(): Promise<number> {
     process.stderr.write('[check:variants] Registry generation failed, so nothing was audited.\n');
     return 1;
   }
-  writeRegistry(OUT, renderRegistry(result));
+  process.stdout.write(`[check:variants] Registered ${registrySummary(result)}.\n`);
 
   const variants = options.only
     ? result.variants.filter(({ packageName }) => packageName === options.only)

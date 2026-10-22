@@ -47,6 +47,27 @@ importers:
 
   apps/web:
     dependencies:
+      '@portfolio/appearance':
+        specifier: workspace:*
+        version: link:../../packages/appearance
+      '@portfolio/appearance-fixtures-languages':
+        specifier: workspace:*
+        version: link:../../packages/appearance-fixtures-languages
+      '@portfolio/appearance-fixtures-schemes':
+        specifier: workspace:*
+        version: link:../../packages/appearance-fixtures-schemes
+      '@portfolio/appearance-fixtures-typography':
+        specifier: workspace:*
+        version: link:../../packages/appearance-fixtures-typography
+      '@portfolio/appearance-languages':
+        specifier: workspace:*
+        version: link:../../packages/appearance-languages
+      '@portfolio/appearance-schemes':
+        specifier: workspace:*
+        version: link:../../packages/appearance-schemes
+      '@portfolio/appearance-typography':
+        specifier: workspace:*
+        version: link:../../packages/appearance-typography
       '@portfolio/core':
         specifier: workspace:*
         version: link:../../packages/core

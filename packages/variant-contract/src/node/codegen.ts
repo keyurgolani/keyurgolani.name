@@ -7,7 +7,8 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import type { PackFile, RegistryResult } from './registry';
+import type { VariantRegistry } from '../registry';
+import type { PackFile, PackKind, RegistryResult } from './registry';
 
 /** Every file generation writes, by name. */
 export const GENERATED_FILES = [
@@ -45,27 +46,89 @@ export interface RenderOptions {
   readonly fixtureFlags?: Readonly<Record<string, boolean>>;
 }
 
-const fileRef = (file: PackFile) => ({ url: file.url, sha256: file.sha256 });
+/** A pack file as the metadata module lists it: where the host serves it, and its hash. */
+export interface PackFileRef {
+  readonly url: string;
+  readonly sha256: string;
+}
+
+/** An appearance pack as the metadata module lists it. #19's MetaPack types its manifest. */
+export interface MetaPackEntry {
+  readonly kind: PackKind;
+  readonly packageName: string;
+  readonly version: string;
+  readonly fixture: boolean;
+  readonly manifest: { readonly id: string };
+  readonly stylesheet: PackFileRef | null;
+  readonly fonts?: readonly PackFileRef[];
+}
+
+/** What the metadata module exports, as data. */
+export interface RegistryMeta {
+  readonly VARIANTS: VariantRegistry;
+  readonly CONTENT_EXTENSION_PACKAGES: readonly {
+    readonly packageName: string;
+    readonly version: string;
+  }[];
+  readonly PACKS: readonly MetaPackEntry[];
+  readonly PLATFORM_STYLESHEET: PackFileRef | null;
+  readonly FIXTURE_FLAGS: Readonly<Record<string, boolean>>;
+}
+
+const fileRef = (file: PackFile): PackFileRef => ({ url: file.url, sha256: file.sha256 });
+const byName = ([a]: [string, unknown], [b]: [string, unknown]) => (a < b ? -1 : a > b ? 1 : 0);
+
+/**
+ * The metadata module's exports for a registry with no errors, which
+ * renderRegistry() writes as registry.meta.ts and `pnpm check:appearance`
+ * reads in place of it.
+ */
+export function registryMeta(result: RegistryResult, options: RenderOptions = {}): RegistryMeta {
+  if (!result.ok)
+    throw new Error('A registry with errors generates nothing; report its diagnostics.');
+  const flags = Object.entries(options.fixtureFlags ?? {}).sort(byName);
+  for (const [key, value] of flags) {
+    if (!/^[a-z][a-zA-Z0-9]*$/.test(key) || typeof value !== 'boolean') {
+      throw new Error(`A fixture flag is a camelCase key with a boolean, and ${key} isn't.`);
+    }
+  }
+  return {
+    VARIANTS: result.variants.map(({ packageName, version, manifest }) => ({
+      packageName,
+      version,
+      manifest,
+    })),
+    CONTENT_EXTENSION_PACKAGES: result.extensions.map(({ packageName, version }) => ({
+      packageName,
+      version,
+    })),
+    PACKS: result.packs.map(
+      ({ kind, packageName, version, fixture, manifest, stylesheet, assets }) => ({
+        kind,
+        packageName,
+        version,
+        fixture,
+        manifest,
+        stylesheet: stylesheet ? fileRef(stylesheet) : null,
+        ...(assets.length > 0 ? { fonts: assets.map(fileRef) } : {}),
+      }),
+    ),
+    PLATFORM_STYLESHEET: result.platform ? fileRef(result.platform) : null,
+    FIXTURE_FLAGS: Object.fromEntries(flags),
+  };
+}
 
 /** The generated files' contents, by name, for a registry with no errors. */
 export function renderRegistry(
   result: RegistryResult,
   options: RenderOptions = {},
 ): ReadonlyMap<GeneratedFile, string> {
-  if (!result.ok)
-    throw new Error('A registry with errors generates nothing; report its diagnostics.');
-  const { variants, extensions, packs } = result;
+  const meta = registryMeta(result, options);
+  const { variants, extensions } = result;
   const files = new Map<GeneratedFile, string>();
-  const flagEntries = Object.entries(options.fixtureFlags ?? {}).sort(([a], [b]) =>
-    a < b ? -1 : a > b ? 1 : 0,
-  );
-  for (const [key, value] of flagEntries) {
-    if (!/^[a-z][a-zA-Z0-9]*$/.test(key) || typeof value !== 'boolean') {
-      throw new Error(`A fixture flag is a camelCase key with a boolean, and ${key} isn't.`);
-    }
-  }
-  const flags = flagEntries.length
-    ? `{ ${flagEntries.map(([key, value]) => `${key}: ${value}`).join(', ')} }`
+  const flags = Object.entries(meta.FIXTURE_FLAGS);
+  const flagLiteral = flags.length
+    ? `{ ${flags.map(([key, value]) => `${key}: ${value}`).join(', ')} }`
     : '{}';
 
   files.set(
@@ -75,36 +138,22 @@ import type { MetaPack, PackFileRef } from '@portfolio/appearance';
 import type { VariantRegistry } from '@portfolio/variant-contract';
 
 /** Every variant this build registers, sorted by id, each with its manifest. */
-export const VARIANTS: VariantRegistry = ${json(
-      variants.map(({ packageName, version, manifest }) => ({ packageName, version, manifest })),
-    )};
+export const VARIANTS: VariantRegistry = ${json(meta.VARIANTS)};
 
 /** Every content extension this build registers, sorted by package. */
 export const CONTENT_EXTENSION_PACKAGES: readonly {
   readonly packageName: string;
   readonly version: string;
-}[] = ${json(extensions.map(({ packageName, version }) => ({ packageName, version })))};
+}[] = ${json(meta.CONTENT_EXTENSION_PACKAGES)};
 
 /** Every appearance pack this build registers (#19), sorted by kind and id, with its compiled files. */
-export const PACKS: readonly MetaPack[] = ${json(
-      packs.map(({ kind, packageName, version, fixture, manifest, stylesheet, assets }) => ({
-        kind,
-        packageName,
-        version,
-        fixture,
-        manifest,
-        stylesheet: stylesheet ? fileRef(stylesheet) : null,
-        ...(assets.length > 0 ? { fonts: assets.map(fileRef) } : {}),
-      })),
-    )};
+export const PACKS: readonly MetaPack[] = ${json(meta.PACKS)};
 
 /** The platform stylesheet every presentation boundary links (#19). */
-export const PLATFORM_STYLESHEET: PackFileRef | null = ${json(
-      result.platform ? fileRef(result.platform) : null,
-    )};
+export const PLATFORM_STYLESHEET: PackFileRef | null = ${json(meta.PLATFORM_STYLESHEET)};
 
 /** The fixture flags this build was generated with: true only when the flag admitted its fixtures. */
-export const FIXTURE_FLAGS = Object.freeze(${flags});
+export const FIXTURE_FLAGS = Object.freeze(${flagLiteral});
 `,
   );
 

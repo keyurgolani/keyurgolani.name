@@ -69,6 +69,9 @@ jobs:
       - name: pnpm ci:registry
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: pnpm ci:registry
+      - name: pnpm ci:appearance
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: pnpm ci:appearance
       - name: pnpm ci:deps
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: pnpm ci:deps

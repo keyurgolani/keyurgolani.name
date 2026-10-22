@@ -30,11 +30,15 @@ export {
 export {
   GENERATED_FILES,
   packFiles,
+  registryMeta,
   renderRegistry,
   writePackFiles,
   writeRegistry,
   type GeneratedFile,
+  type MetaPackEntry,
+  type PackFileRef,
   type PackWriteResult,
+  type RegistryMeta,
   type RenderOptions,
   type WriteResult,
 } from './codegen';

@@ -12,8 +12,10 @@ out
 *.tsbuildinfo
 next-env.d.ts
 
-# generated: what `pnpm --filter @portfolio/web build:registry` writes (#5)
+# generated: what `pnpm --filter @portfolio/web build:registry` writes (#5),
+# and the appearance packs' compiled files it writes beside them (#19)
 apps/web/src/lib/generated/
+apps/web/public/_portfolio/pack/
 
 # coverage / test
 coverage
