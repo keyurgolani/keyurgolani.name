@@ -8,10 +8,11 @@ import {
 import { closestWord, keyContext } from './hints';
 import { parseExtensionKind } from './ids';
 import { isPlainObject } from './json';
-import { detectDocument, legacyFields, legacyMessage } from './legacy';
+import { detectDocument, legacyFields, legacyMessage, MIGRATE_COMMAND, shellQuote } from './legacy';
 import type { Portfolio } from './portfolio';
-import { SCHEMA_VERSION } from './portfolio';
+import { ownerName, repeatedIds } from './record-ids';
 import { redactedPointer, redactSecrets } from './secrets';
+import { PORTFOLIO_SCHEMA_VERSION, SITE_SCHEMA_VERSION } from './versions';
 import type { Site } from './site';
 import { parseSource, type DocumentFormat, type Locate } from './source';
 
@@ -23,11 +24,12 @@ export interface DocumentProblem {
   /**
    * `syntax`: not one plain YAML or JSON document within the size and
    * nesting limits. `legacy`: the old one-file format, so nothing else was
-   * checked. `version`: no `schemaVersion: 2`, so nothing else was checked.
-   * `schema`: the data doesn't match the schema. `duplicate-id`: two
-   * sections share an id.
+   * checked. `outdated`: a version 2 portfolio, which `pnpm config:migrate`
+   * converts, so nothing else was checked. `version`: no schemaVersion this
+   * release reads, so nothing else was checked. `schema`: the data doesn't
+   * match the schema. `duplicate-id`: two entries share an id.
    */
-  readonly kind: 'syntax' | 'legacy' | 'version' | 'schema' | 'duplicate-id';
+  readonly kind: 'syntax' | 'legacy' | 'outdated' | 'version' | 'schema' | 'duplicate-id';
   /** The parser's or the schema's own code, such as DUPLICATE_KEY or invalid_type. */
   readonly code: string;
   /** JSON pointer into the document; absent for a syntax problem that isn't a node. */
@@ -108,12 +110,19 @@ export function readPortfolio(
   options: ParseOptions = {},
 ): DocumentRead<Portfolio> & { readonly duplicates: readonly DocumentProblem[] } {
   const schemas = schemasFor(options.extensions);
-  const read = readWith(schemas.PortfolioSchema, schemas.registry, source, format, options.name);
+  const read = readWith(
+    schemas.PortfolioSchema,
+    schemas.registry,
+    source,
+    format,
+    options.name,
+    'portfolio',
+  );
   const checked = read.problems.every(({ kind }) => kind === 'schema');
   return {
     ...read,
     duplicates:
-      checked && read.locate ? redactProblems(repeatedSectionIds(read.data, read.locate)) : [],
+      checked && read.locate ? redactProblems(repeatedEntryIds(read.data, read.locate)) : [],
   };
 }
 
@@ -124,7 +133,7 @@ export function readSite(
   options: ParseOptions = {},
 ): DocumentRead<Site> {
   const schemas = schemasFor(options.extensions);
-  return readWith(schemas.SiteSchema, schemas.registry, source, format, options.name);
+  return readWith(schemas.SiteSchema, schemas.registry, source, format, options.name, 'site');
 }
 
 function finish<T>(read: DocumentRead<T>, more: readonly DocumentProblem[]): DocumentResult<T> {
@@ -151,21 +160,23 @@ export function duplicateSectionIds(
 }
 
 /**
- * Two sections with one id, found in the data as written, so a schema
- * problem anywhere else in the document doesn't hide them.
+ * Two entries with one id, sections, records, and media assets alike, found
+ * in the data as written, so a schema problem anywhere else in the document
+ * doesn't hide them.
  */
-function repeatedSectionIds(data: unknown, locate: Locate): DocumentProblem[] {
-  const sections = isPlainObject(data) && Array.isArray(data.sections) ? data.sections : [];
-  const ids = sections.map((section: unknown) => ({
-    id: isPlainObject(section) ? section.id : undefined,
-  }));
-  return duplicateSectionIds(ids).map(({ index, firstIndex }) => ({
-    kind: 'duplicate-id',
-    code: 'duplicate_id',
-    pointer: `/sections/${index}/id`,
-    message: `/sections/${index}/id repeats the id of /sections/${firstIndex}. Section ids must be unique.`,
-    ...locate(['sections', index, 'id']),
-  }));
+function repeatedEntryIds(data: unknown, locate: Locate): DocumentProblem[] {
+  return repeatedIds(data).map(({ entry, first }) => {
+    const pointer = redactedPointer([...entry.path, 'id']);
+    const earlier = redactedPointer(first.path);
+    const what = entry.owner === first.owner ? '' : `, which is ${ownerName(first.owner)}`;
+    return {
+      kind: 'duplicate-id',
+      code: 'duplicate_id',
+      pointer,
+      message: `${pointer} repeats the id of ${earlier}${what}. Every id is unique in the document: sections, records, and media assets share one set.`,
+      ...locate([...entry.path, 'id']),
+    };
+  });
 }
 
 const composed = new WeakMap<readonly ContentExtension[], ComposedSchemas>();
@@ -185,7 +196,8 @@ function readWith<T>(
   registry: ExtensionRegistry,
   source: string,
   format: DocumentFormat,
-  name?: string,
+  name: string | undefined,
+  document: 'portfolio' | 'site',
 ): DocumentRead<T> {
   const parsed = parseSource(source, format);
   if (!parsed.ok) {
@@ -215,8 +227,26 @@ function readWith<T>(
     };
   }
 
-  // Checking the rest against version 2 would only bury this one problem.
-  if (isPlainObject(data) && data.schemaVersion !== SCHEMA_VERSION) {
+  // Checking the rest against this release's version would only bury this one problem.
+  const version = document === 'portfolio' ? PORTFOLIO_SCHEMA_VERSION : SITE_SCHEMA_VERSION;
+  if (isPlainObject(data) && data.schemaVersion !== version) {
+    if (document === 'portfolio' && data.schemaVersion === 2) {
+      const file = name ?? 'portfolio.yml';
+      return {
+        problems: [
+          {
+            kind: 'outdated',
+            code: 'outdated_version',
+            pointer: '/schemaVersion',
+            message: `${file} is a schemaVersion 2 portfolio document. This release reads schemaVersion ${version}: run ${MIGRATE_COMMAND} ${shellQuote(file)} to convert it.`,
+            ...locate(['schemaVersion']),
+          },
+        ],
+        data,
+        locate,
+        warnings: [],
+      };
+    }
     const missing = data.schemaVersion === undefined;
     return {
       problems: [
@@ -224,7 +254,7 @@ function readWith<T>(
           kind: 'version',
           code: missing ? 'invalid_type' : 'invalid_literal',
           pointer: '/schemaVersion',
-          message: `/schemaVersion ${missing ? 'is required' : `must be ${SCHEMA_VERSION}`}. This release reads only schemaVersion ${SCHEMA_VERSION} documents.`,
+          message: `/schemaVersion ${missing ? 'is required' : `must be ${version}`}. This release reads only schemaVersion ${version} ${document} documents.`,
           ...locate(['schemaVersion']),
         },
       ],

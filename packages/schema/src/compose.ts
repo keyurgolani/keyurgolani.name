@@ -39,7 +39,6 @@ export function composeSchemas(extensions: readonly ContentExtension[] = []) {
     registry,
     parts,
     SectionSchema,
-    ExternalPortfolioItemSchema: core.ExternalPortfolioItemSchema,
     coreSections: core.sections,
     ...portfolioSchemas(parts, SectionSchema),
     ...siteSchemas(parts),
@@ -53,7 +52,7 @@ export type ComposedSchemas = ReturnType<typeof composeSchemas>;
  * extension kind to its `data` schema, and any other `<package>/<name>` kind
  * to plain JSON `data`, kept as written. Any other kind is refused.
  */
-function sectionRouter(
+export function sectionRouter(
   parts: SchemaParts,
   core: readonly z.AnyZodObject[],
   registry: ExtensionRegistry,
@@ -134,12 +133,25 @@ export const DEFAULT_SCHEMAS: ComposedSchemas = DEFAULTS;
 export const {
   PortfolioSchema,
   IdentitySchema,
+  MetaSchema,
   SectionSchema,
+  WorkSchema,
+  CaseStudySchema,
+  EvidenceSchema,
+  ChronologyEntrySchema,
+  MediaAssetSchema,
+  PracticeSchema,
+  ContactSchema,
   SiteSchema,
   AppearanceSelectionSchema,
   VisitorControlsSchema,
   AppearanceInputSchema,
   SiteFeaturesSchema,
-  ExternalPortfolioItemSchema,
 } = DEFAULTS;
-export const { Link: LinkSchema, Image: ImageSchema, Period: PeriodSchema } = DEFAULTS.parts;
+export const {
+  Link: LinkSchema,
+  Action: ActionSchema,
+  Placement: PlacementSchema,
+  FocalPoint: FocalPointSchema,
+  Period: PeriodSchema,
+} = DEFAULTS.parts;

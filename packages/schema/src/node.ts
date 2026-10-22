@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { MIGRATE_COMMAND } from './legacy';
-import type { ParsedPair } from './public-view';
+import type { ParsedPair } from './view';
 import { detectFormat, DOCUMENT_MAX_BYTES, type DocumentFormat } from './source';
 import {
   DIAGNOSTIC_REMEDIATIONS,
@@ -245,7 +245,12 @@ export function formatRecords(result: LoadPairResult): string {
   const names = pairFileNames(result);
   return result.diagnostics
     .map((record) => {
-      const file = names?.[record.document] ?? `${record.document} document`;
+      const file =
+        record.file ??
+        (record.document === 'portfolio' || record.document === 'site'
+          ? names?.[record.document]
+          : undefined) ??
+        `${record.document} document`;
       const where = record.line === undefined ? file : `${file}:${record.line}:${record.column}`;
       const pointer = record.pointer === '' ? '' : ` at ${record.pointer}`;
       return `${where}: ${record.code} (${record.severity})${pointer}\n  ${record.message}\n  ${record.remediation}\n\n`;

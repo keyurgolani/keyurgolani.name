@@ -8,17 +8,21 @@ import {
 } from '../ids';
 import { isAllowedUrl } from '../url';
 
-// The building blocks every schema shares. Leaf schemas (dates, ids, URLs)
-// are fixed. Objects come from makeParts(), once per set of registered
+// The building blocks every schema shares. Leaf schemas (dates, ids, URLs,
+// text) are fixed. Objects come from makeParts(), once per set of registered
 // extensions: every object is strict, rejecting unknown keys, and accepts an
 // `extensions` field checked against those extensions.
+//
+// Authored absence (#10, item 5): an optional field that's left out wasn't
+// authored, so an empty string or an empty list is refused rather than read
+// as "nothing to show".
 
 /** Every url and *Url field. See ../url.ts. */
 export const UrlSchema = z.string().refine((value) => isAllowedUrl(value), {
   message: 'must be an https, http, mailto, or tel URL, a relative path, or a #fragment.',
 });
 
-/** An image `src`: what UrlSchema allows, plus data:image URLs in raster formats. */
+/** A version 2 image `src`: what UrlSchema allows, plus data:image URLs. Only the migration reads it. */
 export const ImageSourceSchema = z
   .string()
   .refine((value) => isAllowedUrl(value, { dataImages: true }), {
@@ -89,8 +93,12 @@ function inOrder({ start, end }: { start: string; end?: string }): boolean {
   return endN >= startN;
 }
 
-/** Coarse comparator for date strings — used only for ordering in PeriodSchema. */
-function looseDateOrder(raw: string): number | null {
+/**
+ * A loose date as a number that sorts like the date: YYYYMMDD, with a missing
+ * month or day as 1, and `present`, `now`, or `current` after every date.
+ * Null for text that isn't a loose date.
+ */
+export function looseDateOrder(raw: string): number | null {
   const trimmed = raw.trim();
   if (/^(?:present|now|current)$/i.test(trimmed)) return Number.POSITIVE_INFINITY;
   const iso = /^(\d{4})(?:-(\d{1,2})(?:-(\d{1,2}))?)?$/.exec(trimmed);
@@ -123,17 +131,30 @@ function looseDateOrder(raw: string): number | null {
   return null;
 }
 
+const ID_MESSAGE =
+  'must be lowercase letters and digits in hyphen-separated words, such as get-in-touch.';
+
 /** A section id. The rules are in ../ids.ts. */
 export const SectionIdSchema = z
   .string()
   .max(SECTION_ID_MAX_LENGTH)
-  .regex(SECTION_ID_PATTERN, {
-    message:
-      'must be lowercase letters and digits in hyphen-separated words, such as get-in-touch.',
-  })
+  .regex(SECTION_ID_PATTERN, { message: ID_MESSAGE })
   .refine((id) => !RESERVED_SECTION_IDS.includes(id), {
     message: "can't be main, which every variant uses for its <main> element.",
   });
+
+/**
+ * The id of a section, a record (work, evidence, chronology entry), or a
+ * media asset: required, unique within the document, and never derived at
+ * load time. It follows the section-id rule, so it can be an anchor.
+ */
+export const IdSchema = SectionIdSchema;
+
+/** A reference to a record or a media asset by its id. */
+export const RefSchema = SectionIdSchema;
+
+/** A work's slug, its `/work/<slug>` route: the section-id rule. */
+export const SlugSchema = SectionIdSchema;
 
 /** A BCP 47 language tag, such as `en` or `pt-BR`. */
 export const LanguageTagSchema = z.string().refine(isLanguageTag, {
@@ -143,11 +164,45 @@ export const LanguageTagSchema = z.string().refine(isLanguageTag, {
 /**
  * Text shown as a heading or a name, such as a section's title. Blank text
  * would show as an empty heading, so it's refused: an optional one is left
- * out instead, and the default shows.
+ * out instead, and nothing shows.
  */
 export const LabelSchema = z.string().refine((value) => value.trim() !== '', {
   message: 'is blank, so nothing would show. Leave it out instead.',
 });
+
+/**
+ * Any other authored text, Markdown for the long fields. Blank text is
+ * refused: leaving a field out says it isn't authored.
+ */
+export const TextSchema = z.string().refine((value) => value.trim() !== '', {
+  message: "is blank. Leave it out instead: a field that's left out isn't authored.",
+});
+
+/** An optional list: when it's there, it has an item. */
+export function listOf<T extends z.ZodTypeAny>(item: T) {
+  return z.array(item).refine((items) => items.length > 0, {
+    message: "is empty. Leave it out instead: a list that's left out isn't authored.",
+  });
+}
+
+/** A list that must be there, with an item. */
+export function requiredList<T extends z.ZodTypeAny>(item: T) {
+  return z.array(item).refine((items) => items.length > 0, {
+    message: 'is empty. It needs at least one item.',
+  });
+}
+
+/**
+ * Names what a metric measures, so every place that states it can be checked
+ * against the others, such as `tenure-years`.
+ */
+export const MetricKeySchema = z.string().max(SECTION_ID_MAX_LENGTH).regex(SECTION_ID_PATTERN, {
+  message: 'must be lowercase letters and digits in hyphen-separated words, such as tenure-years.',
+});
+
+/** Whether a record, or a media asset, is visible. Left out, it's public. */
+export const VisibilitySchema = z.enum(['public', 'private']);
+export type Visibility = z.infer<typeof VisibilitySchema>;
 
 /** The fields every section has, core or extension. */
 export const sectionBase = {
@@ -179,21 +234,50 @@ export function makeParts(registry: ExtensionRegistry) {
   }
 
   const Link = object({
-    platform: z.string().optional(),
+    platform: TextSchema.optional(),
     url: UrlSchema,
-    label: z.string().optional(),
+    label: TextSchema.optional(),
   });
 
+  /** A call to action: its label is required, since no renderer makes one up. */
+  const Action = object({
+    platform: TextSchema.optional(),
+    url: UrlSchema,
+    label: LabelSchema,
+  });
+
+  const FocalPoint = object({
+    x: z.number().finite().min(0).max(1),
+    y: z.number().finite().min(0).max(1),
+  });
+
+  /** A version 2 image, which only the migration reads. */
   const Image = object({
     src: ImageSourceSchema,
     alt: z.string().optional(),
     width: z.number().finite().int().positive().optional(),
     height: z.number().finite().int().positive().optional(),
     credit: z.string().optional(),
-    focalPoint: object({
-      x: z.number().finite().min(0).max(1),
-      y: z.number().finite().min(0).max(1),
-    }).optional(),
+    focalPoint: FocalPoint.optional(),
+  });
+
+  /**
+   * Where a media asset shows: the asset's id, and what this use changes.
+   * `alt`, `decorative`, and `focalPoint` override the asset's own; `caption`
+   * belongs to the placement. A gallery's photographs keep when and where
+   * each was taken, and its tags.
+   */
+  const Placement = object({
+    asset: RefSchema,
+    caption: TextSchema.optional(),
+    alt: TextSchema.optional(),
+    decorative: z.boolean().optional(),
+    focalPoint: FocalPoint.optional(),
+    takenAt: LooseDateSchema.optional(),
+    location: TextSchema.optional(),
+    tags: listOf(TextSchema).optional(),
+  }).refine(({ alt, decorative }) => !(decorative === true && alt !== undefined), {
+    message: 'has alt text and decorative: true. Keep one: decoration takes no alt text.',
   });
 
   const Period = object({ start: LooseDateSchema, end: LooseDateSchema.optional() }).refine(
@@ -201,10 +285,23 @@ export function makeParts(registry: ExtensionRegistry) {
     { message: 'ends before it starts: end must not precede start.' },
   );
 
-  return { registry, extensions, object, section, Link, Image, Period };
+  return {
+    registry,
+    extensions,
+    object,
+    section,
+    Link,
+    Action,
+    FocalPoint,
+    Image,
+    Placement,
+    Period,
+  };
 }
 
 export type SchemaParts = ReturnType<typeof makeParts>;
 export type Link = z.infer<SchemaParts['Link']>;
-export type Image = z.infer<SchemaParts['Image']>;
+export type Action = z.infer<SchemaParts['Action']>;
+export type FocalPoint = z.infer<SchemaParts['FocalPoint']>;
+export type Placement = z.infer<SchemaParts['Placement']>;
 export type Period = z.infer<SchemaParts['Period']>;

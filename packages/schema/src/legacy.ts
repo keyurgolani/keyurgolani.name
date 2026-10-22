@@ -56,6 +56,9 @@ export const SITE_DEFAULTS = Object.freeze({
 /** The command that converts an old file, as messages print it. */
 export const MIGRATE_COMMAND = 'pnpm config:migrate';
 
+/** The command that gives every entry without a well-formed id one, as messages print it. */
+export const IDS_FIX_COMMAND = 'pnpm config:ids-fix';
+
 const SKELETON_IDS = {
   colorScheme: '<a color scheme id this release registers>',
   typography: '<a typography preset id this release registers>',

@@ -2,7 +2,9 @@ import { z } from 'zod';
 import { EXTENSION_MAX_DEPTH, isPlainObject, plainJsonProblem } from './json';
 import { FALLBACK_VARIANT_ID } from './ids';
 import { SectionIdSchema, type SchemaParts } from './kinds/common';
-import { SCHEMA_VERSION } from './portfolio';
+import { SITE_SCHEMA_VERSION } from './versions';
+
+export { SITE_SCHEMA_VERSION } from './versions';
 
 /**
  * How the selected color scheme resolves: `system` follows the visitor's
@@ -86,7 +88,7 @@ export function siteSchemas({ object }: SchemaParts) {
 
   /**
    * Input for a generator-backed color scheme: a seed color, or a media asset
-   * whose colors seed the scheme. Asset ids follow the section-id rule.
+   * whose colors seed the scheme, by the portfolio's media id.
    */
   const AppearanceInputSchema = z
     .unknown()
@@ -124,7 +126,7 @@ export function siteSchemas({ object }: SchemaParts) {
    * from the environment.
    */
   const SiteSchema = object({
-    schemaVersion: z.literal(SCHEMA_VERSION),
+    schemaVersion: z.literal(SITE_SCHEMA_VERSION),
     appearance: AppearanceSelectionSchema,
     visitorControls: VisitorControlsSchema,
     /** Keyed by generator-backed color scheme id. */

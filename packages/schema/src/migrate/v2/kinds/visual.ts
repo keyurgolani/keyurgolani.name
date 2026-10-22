@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { LooseDateSchema, UrlSchema, type SchemaParts } from './common';
+import { LooseDateSchema, UrlSchema, type SchemaParts } from '../../../kinds/common';
 
 export function visualSchemas({ object, section, Image, Link }: SchemaParts) {
   const GallerySchema = section('gallery', {
