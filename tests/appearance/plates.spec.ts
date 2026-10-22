@@ -131,7 +131,8 @@ test(
   'nothing on the page adds a window or document listener the framework does not, before or after its primitives are used',
   { tag: '@interaction', annotation: [ROUTE] },
   async ({ page }) => {
-    // The framework's own: what the same build's 404 page adds.
+    // The framework's own: what the same build's 404 page adds. Those it adds
+    // only while a page streams in, globalListeners leaves out on both pages.
     await recordGlobalListeners(page);
     expect((await page.goto('/no-such-page'))?.status()).toBe(404);
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Page not found');

@@ -71,6 +71,12 @@ export async function reactHandlers(page: Page, scope = PLATE): Promise<string[]
   );
 }
 
+/** One listener added to window or document, and whether the document was still loading. */
+interface GlobalListener {
+  readonly kind: string;
+  readonly loading: boolean;
+}
+
 /**
  * Records every listener the page adds to window or document, from before
  * its first script runs, as `window:type` or `document:type`, with
@@ -78,7 +84,7 @@ export async function reactHandlers(page: Page, scope = PLATE): Promise<string[]
  */
 export async function recordGlobalListeners(page: Page): Promise<void> {
   await page.addInitScript(() => {
-    const seen: string[] = [];
+    const seen: GlobalListener[] = [];
     Object.defineProperty(window, '__globalListeners', { value: seen });
     const add = EventTarget.prototype.addEventListener;
     EventTarget.prototype.addEventListener = function (
@@ -89,17 +95,36 @@ export async function recordGlobalListeners(page: Page): Promise<void> {
     ) {
       if (this === window || this === document) {
         const capture = typeof options === 'boolean' ? options : Boolean(options?.capture);
-        seen.push(`${this === window ? 'window' : 'document'}:${type}${capture ? ':capture' : ''}`);
+        seen.push({
+          kind: `${this === window ? 'window' : 'document'}:${type}${capture ? ':capture' : ''}`,
+          loading: document.readyState === 'loading',
+        });
       }
       return add.call(this, type, listener, options);
     };
   });
 }
 
-/** The window and document listeners the page has added so far, each kind once, sorted. */
+/**
+ * The listener the framework adds only while the document is still loading,
+ * so whether a page has it depends on how fast the page streams: Next's
+ * bootstrap (next/dist/client/app-index.js) listens for DOMContentLoaded
+ * then, and so does React for each Suspense boundary still streaming in
+ * (registerSuspenseInstanceRetry in react-dom). One added once the document
+ * has loaded is the page's own.
+ */
+const WHILE_LOADING = 'document:DOMContentLoaded';
+
+/**
+ * The window and document listeners the page has added so far, each kind
+ * once, sorted, without the framework's DOMContentLoaded listeners.
+ */
 export async function globalListeners(page: Page): Promise<string[]> {
   const seen = await page.evaluate(
-    () => (window as unknown as { __globalListeners: string[] }).__globalListeners,
+    () => (window as unknown as { __globalListeners: GlobalListener[] }).__globalListeners,
   );
-  return [...new Set(seen)].sort();
+  const kinds = seen
+    .filter(({ kind, loading }) => !(kind === WHILE_LOADING && loading))
+    .map(({ kind }) => kind);
+  return [...new Set(kinds)].sort();
 }
