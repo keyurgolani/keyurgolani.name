@@ -122,6 +122,35 @@ test('owner startup makes the auth and audit directories in the data directory, 
   }
 });
 
+test('under next dev an unset data directory is .data, made at 0700 whatever the umask, or put back to 0700', async (t) => {
+  const { root, env } = workspace(t);
+  // A umask that would leave a plain mkdir group-writable, which the store's
+  // preflight refuses.
+  const umask = process.umask(0o002);
+  t.after(() => process.umask(umask));
+  const dev = async (devDataDir: string) => {
+    const result = await runStartup({
+      env: { ...env, NODE_ENV: 'development' },
+      cwd: '/srv/app',
+      examples: EXAMPLES,
+      report: () => {},
+      authProviders: [DOUBLE],
+      devDataDir,
+    });
+    assert.ok(result.ok, JSON.stringify(result.issues));
+    if (result.ok) result.state.release?.();
+  };
+  const fresh = path.join(root, '.data');
+  await dev(fresh);
+  assert.equal(statSync(fresh).mode & 0o777, 0o700);
+  // One an older run left group-writable.
+  const loose = path.join(root, 'loose', '.data');
+  mkdirSync(loose, { recursive: true });
+  chmodSync(loose, 0o775);
+  await dev(loose);
+  assert.equal(statSync(loose).mode & 0o777, 0o700);
+});
+
 test("the config's session lifetimes are the ones @portfolio/core enforces", () => {
   const { PORTFOLIO_AUTH_SESSION_IDLE_MINUTES: idle, PORTFOLIO_AUTH_SESSION_MAX_HOURS: max } =
     SESSION_LIFETIME_KEYS;
