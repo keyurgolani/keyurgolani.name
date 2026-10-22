@@ -1,6 +1,6 @@
 import { Fragment, type ReactNode } from 'react';
 import type { Image, Link, Period, Section } from '@portfolio/schema';
-import type { VariantRenderInput } from '@portfolio/variant-contract';
+import { routeHref, type VariantRenderInput } from '@portfolio/variant-contract';
 import { formatDate, parseLooseDate } from '../format';
 import type { HeadingLevel } from './types';
 
@@ -218,16 +218,19 @@ export function SectionHeader({
 
 /**
  * A URL as an href. A `#fragment` names a section on this page, and `/#id`
- * one on the home page, where the routes are mounted; either way the DOM id
- * carries the render's id prefix.
+ * one on the home page, where the routes are mounted, keeping the render's
+ * query, such as /sample's `variant`; either way the DOM id carries the
+ * render's id prefix.
  */
 export function hrefFor(url: string, input: VariantRenderInput): string {
   if (url.startsWith('#') && url.length > 1) return `#${input.ids.prefix}${url.slice(1)}`;
   if (url.startsWith('/#') && url.length > 2) {
-    return `${input.basePath || '/'}#${input.ids.prefix}${url.slice(2)}`;
+    return `${routeHref(input, HOME)}#${input.ids.prefix}${url.slice(2)}`;
   }
   return url;
 }
+
+const HOME = { route: 'home' } as const;
 
 /** A link whose text is its label, else its platform, else its URL. */
 export function LinkText({
