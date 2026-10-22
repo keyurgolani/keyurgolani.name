@@ -109,14 +109,14 @@ test('next.config.ts sends a request marked missing to the 404 page, after publi
   const rewrites = await config.rewrites?.();
   assert.ok(rewrites && !Array.isArray(rewrites), 'rewrites in phases');
   // afterFiles: Next has looked in public/ first. An unnamed group adds
-  // nothing to the 404 page's query.
-  assert.deepEqual(rewrites.afterFiles, [
-    {
-      source: '/(.*)',
-      has: [{ type: 'header', key: ROUTE_HEADER, value: 'missing' }],
-      destination: '/_not-found',
-    },
-  ]);
+  // nothing to the 404 page's query. The router prefetch rule for /_next/
+  // follows it, which headers.test.ts checks.
+  assert.deepEqual(rewrites.afterFiles?.[0], {
+    source: '/(.*)',
+    has: [{ type: 'header', key: ROUTE_HEADER, value: 'missing' }],
+    destination: '/_not-found',
+  });
+  assert.equal(rewrites.afterFiles?.length, 2);
 });
 
 test('a path no route renders goes on marked missing for GET and HEAD, in every profile (#5, Slice 4)', async (t) => {
