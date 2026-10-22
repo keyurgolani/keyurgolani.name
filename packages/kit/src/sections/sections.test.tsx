@@ -742,6 +742,30 @@ test("a kind the composition doesn't render takes the anchors, the links to them
   assert.ok(deriveNavItems(INPUT).some(({ href }) => href === '#selected-work'));
 });
 
+test('a line of facts starts with its first one, so evidence without a source has no stray separator', () => {
+  const input = inputFor({
+    schemaVersion: 3,
+    locale: 'en',
+    direction: 'ltr',
+    identity: { name: 'Rowan Vale' },
+    evidence: [
+      {
+        id: 'paper',
+        type: 'publication',
+        title: 'Paper title',
+        venue: 'Paper venue',
+        publishedAt: '2025-11',
+      },
+      { id: 'prize', type: 'award', title: 'Prize title', receivedAt: '2024-03' },
+    ],
+    sections: [{ kind: 'evidence', id: 'proof', title: 'Proof', items: ['paper', 'prize'] }],
+  });
+  const markup = render('proof', input);
+  assert.match(markup, /<p class="pf-meta">Paper venue <span class="pf-sep"/);
+  assert.match(markup, /<p class="pf-meta"><time class="pf-date" dateTime="2024-03"/);
+  assert.doesNotMatch(markup, /<p class="pf-meta"> <span class="pf-sep"/);
+});
+
 test('every placement shows its caption, and when, where, and with what tags it was taken', () => {
   const markup = page(READY);
   const details = (caption: string, date: string, location: string, tag: string) =>

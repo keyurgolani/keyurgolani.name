@@ -97,7 +97,7 @@ function Testimonial({ entry, ctx }: { entry: Evidence; ctx: RenderContext }) {
         ) : null}
         <Meta
           parts={[
-            <SourceName key="source" entry={entry} ctx={ctx} />,
+            entry.source !== undefined && <SourceName key="source" entry={entry} ctx={ctx} />,
             entry.source?.role,
             entry.source?.organization,
             entry.asOf !== undefined && (
@@ -137,7 +137,7 @@ function Fact({ entry, ctx }: { entry: Evidence; ctx: RenderContext }) {
               {TALK_FORMATS[entry.format]}
             </Ui>
           ),
-          <SourceName key="source" entry={entry} ctx={ctx} />,
+          entry.source !== undefined && <SourceName key="source" entry={entry} ctx={ctx} />,
           entry.source?.role,
           entry.source?.organization,
           entry.venue,
