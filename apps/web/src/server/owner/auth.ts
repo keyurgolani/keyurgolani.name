@@ -44,7 +44,13 @@ recordOwnerModule('server/owner/auth');
 /** What the provider binds into the dispatcher. */
 export type OwnerAuthBindings = Pick<
   StudioBindings,
-  'resolveSession' | 'checkOrigin' | 'touchSession' | 'throttle' | 'invalidInput'
+  | 'resolveSession'
+  | 'checkOrigin'
+  | 'touchSession'
+  | 'throttle'
+  | 'invalidInput'
+  | 'recheckSession'
+  | 'commitWithSession'
 > & {
   /** The auth entries' handlers, by operation name. */
   readonly handlers: Readonly<Record<string, Handler>>;
@@ -227,6 +233,55 @@ export async function provider(
       // later in it acts on the record it had.
       if (touched) entry.record = touched;
       else held.delete(session);
+    },
+
+    // Before a multi-step command's commit point: the session read from the
+    // store again, so a logout in another tab, a revocation, revoke-sessions,
+    // or a limit that passed since the request came in stops the command
+    // there. An ended session is let go of and its cookie cleared; one the
+    // store can't read stops the command too, and keeps its cookie, as at
+    // step 2.
+    async recheckSession({ session }) {
+      if (!session) return null;
+      const entry = held.get(session);
+      if (entry) {
+        const resolution = await sessions.resolve(entry.token);
+        if (resolution.status === 'valid') {
+          entry.record = resolution.record;
+          return null;
+        }
+        held.delete(session);
+        if (resolution.status === 'unavailable') return errorResult('authentication_required');
+      }
+      return errorResult('authentication_required', { headers: clearing() });
+    },
+
+    // The commit point itself: the session read again under its lock, and
+    // the commit run before the lock is let go, so a logout, a revocation,
+    // an eviction, or revoke-all in this process lands before the check or
+    // after the commit, never between them. An ended session stops the
+    // command as recheckSession does. revoke-sessions writes from another
+    // process, outside the lock: a commit already running finishes, and the
+    // next request is refused (docs/threat-model.md, publish-2).
+    async commitWithSession({ session }, commit) {
+      const entry = session ? held.get(session) : undefined;
+      if (!session) return { ok: false, result: errorResult('authentication_required') };
+      if (!entry) {
+        return {
+          ok: false,
+          result: errorResult('authentication_required', { headers: clearing() }),
+        };
+      }
+      const holding = await sessions.holding(entry.token, (hold, record) => {
+        entry.record = record;
+        return commit(hold);
+      });
+      if (holding.status === 'valid') return { ok: true, value: holding.value };
+      held.delete(session);
+      if (holding.status === 'unavailable') {
+        return { ok: false, result: errorResult('authentication_required') };
+      }
+      return { ok: false, result: errorResult('authentication_required', { headers: clearing() }) };
     },
 
     // auth.login's per-source limits, before the body is read: its block,

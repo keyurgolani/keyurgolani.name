@@ -10,7 +10,7 @@ import {
 } from './operations';
 import { capabilityPolicy } from './policy';
 import { isMintedSession, type Session } from './session';
-import { isStudioResult, type StudioResult } from './studio-result';
+import { errorResult, isStudioResult, type StudioResult } from './studio-result';
 import type { Dispatch } from './studio-port';
 
 // The one dispatcher behind /api/studio/[name] (#1, item 11). It runs its
@@ -27,7 +27,12 @@ import type { Dispatch } from './studio-port';
 //   5. input schema, on the search parameters or the JSON or form body: 400,
 //      or what invalidInput answers instead, such as a form post's 303 (#2)
 //   6. expected draft version or live revision (#3): 409
-//   7. handler, then output schema; anything unexpected: 500
+//   7. handler, then output schema; anything unexpected: 500. A command of
+//      more than one step runs its commit point, such as #3's pointer
+//      advance, inside commitWithSession(), which holds the session's lock
+//      while it reads the session again and commits, and stops with what it
+//      answers once the session has ended (#2). recheckSession() is the
+//      same read, without the hold, for stopping early
 //
 // It decides with the policy of the deployment register() froze, read per
 // request. Every response is `Cache-Control: no-store`. Errors are
@@ -53,7 +58,40 @@ export type InputType = 'search' | BodyType;
 
 export interface HandlerContext extends SessionContext {
   readonly inputType: InputType;
+  /**
+   * The session read again, for a command of more than one step just
+   * before its commit point (#2): null while the session the request
+   * carried still counts, or the answer to stop with once it has ended,
+   * such as 401 with the cookie cleared. A request that carried no session
+   * has none to end, and gets null.
+   */
+  readonly recheckSession: () => Promise<StudioResult | null>;
+  /**
+   * The commit point of a command of more than one step (#2): the session
+   * read again under its lock, and `commit` run without letting go while
+   * it still counts, so a logout or a revocation in this process lands
+   * before the commit or after it, never between the check and the write.
+   * `commit` gets the hold, which #3's pointer advance asks for, and must
+   * not read or touch the session itself. Once the session has ended, it
+   * doesn't run, and the answer is the one to stop with, such as 401 with
+   * the cookie cleared. A request with no session can't commit.
+   */
+  readonly commitWithSession: <T>(
+    commit: (hold: SessionHold) => Promise<T>,
+  ) => Promise<Committed<T>>;
 }
+
+/**
+ * What a hold proves, opaque here: @portfolio/core makes one for each commit
+ * and checks it (assertSessionHeld) while the commit runs.
+ */
+export interface SessionHold {
+  readonly sessionRef: string;
+}
+
+/** What commitWithSession() did: the commit's value, or the answer to stop with. */
+export type Committed<T> =
+  { readonly ok: true; readonly value: T } | { readonly ok: false; readonly result: StudioResult };
 
 /** Step 2's answer. */
 export interface SessionResolution {
@@ -111,12 +149,25 @@ export interface StudioBindings {
   readonly checkVersion: (
     context: SessionContext & { readonly input: unknown },
   ) => Promise<boolean>;
+  /**
+   * Step 7, when a handler asks before its commit point (#2): null while
+   * the request's session still counts, or the answer to stop with once it
+   * has ended, whether by logout, revocation, revoke-sessions, or a limit
+   * passing while the command ran.
+   */
+  readonly recheckSession: (context: SessionContext) => Promise<StudioResult | null>;
+  /** Step 7's commit point, for HandlerContext.commitWithSession (#2). */
+  readonly commitWithSession: <T>(
+    context: SessionContext,
+    commit: (hold: SessionHold) => Promise<T>,
+  ) => Promise<Committed<T>>;
 }
 
 /**
- * No handlers, no session, every origin and version refused, and nothing to
- * slide or throttle: read-only and demo, and the parts of owner that #2 and
- * #3 haven't supplied yet.
+ * No handlers, no session, every origin and version refused, nothing to
+ * slide or throttle, no session that still counts when a handler checks
+ * again, and no commit: read-only and demo, and the parts of owner that #2
+ * and #3 haven't supplied yet.
  */
 export const NO_BINDINGS: StudioBindings = Object.freeze({
   handlers: Object.freeze({}),
@@ -126,6 +177,12 @@ export const NO_BINDINGS: StudioBindings = Object.freeze({
   throttle: async () => null,
   invalidInput: async () => null,
   checkVersion: async () => false,
+  recheckSession: async ({ session }: SessionContext) =>
+    session === null ? null : errorResult('authentication_required'),
+  commitWithSession: async () => ({
+    ok: false as const,
+    result: errorResult('authentication_required'),
+  }),
 });
 
 export interface DispatcherOptions extends StudioBindings {
@@ -241,7 +298,12 @@ export function createDispatcher(options: DispatcherOptions): Dispatch {
 
         const handler = handlers[operation.name];
         if (!handler) throw new Error(`No handler is bound for ${operation.name}.`);
-        const answer = await handler(authorized, input.data, { ...context, inputType: read.type });
+        const answer = await handler(authorized, input.data, {
+          ...context,
+          inputType: read.type,
+          recheckSession: () => options.recheckSession(context),
+          commitWithSession: (commit) => options.commitWithSession(context, commit),
+        });
         return respond(operation, answer);
       } finally {
         // Whatever happened after the throttle, including a body that broke

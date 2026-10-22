@@ -45,13 +45,14 @@ function composeHealthcheck(file) {
  * Runs a `node ...` command (the leading `node` is optional) with a clean env
  * plus `env`; resolves to { status, stdout }.
  */
-function runNode(args, env) {
+function runNode(args, env, input) {
   const nodeArgs = args[0] === 'node' ? args.slice(1) : args;
   return new Promise((resolve) => {
     const child = spawn(process.execPath, nodeArgs, { env: { PATH: process.env.PATH, ...env } });
     let stdout = '';
     child.stdout.on('data', (chunk) => (stdout += chunk));
     child.on('exit', (status) => resolve({ status, stdout }));
+    child.stdin.end(input ?? '');
   });
 }
 
@@ -301,10 +302,11 @@ test('the in-container requests send each method and body, in order', async () =
     { method: 'DELETE', path: '/x', body: { a: 1 } },
   ];
   const output = await withServer('127.0.0.1', async (port) =>
-    runNode(['-e', REQUESTS_SNIPPET, JSON.stringify(requests)], {
-      HOSTNAME: '0.0.0.0',
-      PORT: String(port),
-    }),
+    runNode(
+      ['-e', REQUESTS_SNIPPET],
+      { HOSTNAME: '0.0.0.0', PORT: String(port) },
+      JSON.stringify(requests),
+    ),
   );
   const results = JSON.parse(output.stdout);
   assert.deepEqual(
@@ -328,7 +330,7 @@ test("the in-container requests send each request's own headers, and report ever
     { method: 'GET', path: '/x' },
   ];
   const output = await withServer('127.0.0.1', async (port) =>
-    runNode(['-e', REQUESTS_SNIPPET, JSON.stringify(requests)], { PORT: String(port) }),
+    runNode(['-e', REQUESTS_SNIPPET], { PORT: String(port) }, JSON.stringify(requests)),
   );
   const results = JSON.parse(output.stdout);
   assert.deepEqual(
@@ -342,6 +344,30 @@ test("the in-container requests send each request's own headers, and report ever
       ['https://rowan.test', 'application/json', []],
       ['none', 'none', []],
     ],
+  );
+});
+
+test('the in-container requests take their batch on stdin, however long, and nothing from the command line', async () => {
+  // Hundreds of pages' worth of requests: far past what one argument to
+  // `finch exec` carries.
+  const requests = Array.from({ length: 400 }, (_, index) => ({
+    method: 'GET',
+    path: `/page-${index}`,
+    headers: { 'x-padding': 'p'.repeat(2000) },
+  }));
+  assert.ok(JSON.stringify(requests).length > 512 * 1024);
+  const output = await withServer('127.0.0.1', async (port) =>
+    runNode(
+      ['-e', REQUESTS_SNIPPET, JSON.stringify([{ method: 'GET', path: '/from-argv' }])],
+      { PORT: String(port) },
+      JSON.stringify(requests),
+    ),
+  );
+  const results = JSON.parse(output.stdout);
+  assert.equal(results.length, 400);
+  assert.deepEqual(
+    [JSON.parse(results[0].body).path, JSON.parse(results[399].body).path],
+    ['/page-0', '/page-399'],
   );
 });
 
@@ -363,8 +389,9 @@ test('the in-container tree read gives the text of every file under the root', (
 test('the in-container requests report a connection error per request', async () => {
   const port = await withServer('127.0.0.1', async (p) => p);
   const output = await runNode(
-    ['-e', REQUESTS_SNIPPET, JSON.stringify([{ method: 'GET', path: '/' }])],
+    ['-e', REQUESTS_SNIPPET],
     { PORT: String(port) },
+    JSON.stringify([{ method: 'GET', path: '/' }]),
   );
   const [result] = JSON.parse(output.stdout);
   assert.match(result.error, /ECONNREFUSED/);

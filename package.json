@@ -40,6 +40,7 @@
     "ci:browser": "node ci/run.mjs browser -- playwright test",
     "ci:image": "node ci/run.mjs image -- node ci/image-smoke.mjs",
     "ci:proxy": "node ci/run.mjs proxy -- node ci/proxy-smoke.mjs",
+    "ci:security-proxy": "node ci/run.mjs security-proxy -- node ci/test-security-proxy.mjs",
     "ci:summary": "node ci/summarize.mjs",
     "smoke:profiles": "node --import tsx ci/smoke-profiles.mjs",
     "clean": "pnpm -r exec rm -rf dist .next node_modules tsconfig.tsbuildinfo && rm -rf node_modules",

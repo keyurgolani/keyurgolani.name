@@ -1291,6 +1291,10 @@ test('every auth handler checks its token before it does anything', async (t) =>
       operation,
       session,
       inputType: operation.kind === 'query' ? 'search' : 'json',
+      recheckSession: async () => null,
+      commitWithSession: async () => {
+        throw new Error('Nothing commits in this test.');
+      },
     };
     const forged = Object.freeze({
       capability: operation.capability,

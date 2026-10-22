@@ -13,11 +13,14 @@ import {
   type SessionStore,
 } from './session-store';
 import {
+  assertSessionHeld,
   browserFamily,
   createSessions,
+  isSessionHeld,
   MAX_SESSIONS,
   slides,
   type Activity,
+  type Issued,
   type Resolution,
   type SessionsOptions,
 } from './sessions';
@@ -330,6 +333,105 @@ test('logout, revocation, and revoke-all each end a session in the store, tell o
   );
 });
 
+test('every way a session ends fires onSessionEnded with its digest', async () => {
+  type Run = ReturnType<typeof setup> & { readonly issued: Issued };
+  /**
+   * One session, ended one way, and what the listener heard: once, with
+   * that session's digest. A way that ends it in another Sessions, as a
+   * restart does, returns what that one's listener heard.
+   */
+  const ways: [way: string, end: (run: Run) => Promise<readonly string[] | void>][] = [
+    [
+      'logout',
+      async ({ sessions, issued }) => void (await sessions.end(issued.record.digest, 'logout')),
+    ],
+    [
+      'revoking it',
+      async ({ sessions, issued }) => void (await sessions.end(issued.record.digest, 'revoked')),
+    ],
+    ['revoking every session', async ({ sessions }) => void (await sessions.revokeAll())],
+    [
+      'a sign-in that carried its cookie',
+      async ({ sessions, issued }) =>
+        void (await sessions.issue({ uaFamily: 'firefox', replacing: issued.token })),
+    ],
+    [
+      'a sixth session, which evicts it as the least recently seen',
+      async ({ sessions, time }) => {
+        for (let count = 1; count <= MAX_SESSIONS; count += 1) {
+          time.advance(MINUTE);
+          await sessions.issue({ uaFamily: 'firefox' });
+        }
+      },
+    ],
+    [
+      'the idle limit, at its next request',
+      async ({ sessions, time, issued }) => {
+        time.advance(60 * MINUTE);
+        await sessions.resolve(issued.token);
+      },
+    ],
+    [
+      'the absolute limit, at its next request, however busy',
+      async ({ sessions, time, issued }) => {
+        for (let elapsed = 0; elapsed < 12 * HOUR; elapsed += 30 * MINUTE) {
+          time.advance(30 * MINUTE);
+          const resolved = await sessions.resolve(issued.token);
+          if (resolved.status === 'valid') await sessions.touch(resolved.record, COMMAND);
+        }
+      },
+    ],
+    [
+      'a limit the session list finds passed',
+      async ({ sessions, time }) => {
+        time.advance(60 * MINUTE);
+        await sessions.list();
+      },
+    ],
+    [
+      'a restart under another password hash',
+      async ({ store, time, issued }) => {
+        const heard: string[] = [];
+        const after = createSessions({
+          store,
+          audit: memoryAuditSink(time.now),
+          fingerprint: NEW,
+          now: time.now,
+        });
+        after.onSessionEnded((digest) => heard.push(digest));
+        await after.resolve(issued.token);
+        return heard;
+      },
+    ],
+    [
+      'revoke-sessions from another process, with a racing write putting its record back',
+      async ({ sessions, store, time, issued }) => {
+        await store.revokeAll(time.now());
+        await store.put(issued.record);
+        time.advance(1);
+        await sessions.resolve(issued.token);
+      },
+    ],
+  ];
+  for (const [way, end] of ways) {
+    const run = setup();
+    const issued = await run.sessions.issue({ uaFamily: 'firefox' });
+    const heard = (await end({ ...run, issued })) ?? run.ended;
+    assert.deepEqual(heard, [issued.record.digest], way);
+    assert.equal(statusOf(await run.sessions.resolve(issued.token)), 'ended:unknown', way);
+  }
+
+  // revoke-sessions from another process, with nothing put back, ends no
+  // session this process sees, so there is nothing to tell: the next
+  // request finds no record. #7 checks the session on every preview request
+  // for that reason, and for a limit that passed with nobody looking.
+  const { sessions, store, time, ended } = setup();
+  const { token } = await sessions.issue({ uaFamily: 'firefox' });
+  await store.revokeAll(time.now());
+  assert.equal(statusOf(await sessions.resolve(token)), 'ended:unknown');
+  assert.deepEqual(ended, []);
+});
+
 test('a session signed in under another password hash no longer counts', async (t) => {
   const dir = await dataDir(t);
   const time = clock();
@@ -556,4 +658,81 @@ test('a session list shows a coarse browser family, never the user agent', () =>
     [null, 'other'],
   ];
   for (const [agent, family] of cases) assert.equal(browserFamily(agent), family, String(agent));
+});
+
+test("holding runs a commit under the session's lock: an ending asked for meanwhile waits, and the hold counts only while it runs", async () => {
+  const { sessions, time } = setup();
+  const { token, record } = await sessions.issue({ uaFamily: 'firefox' });
+  let hold: unknown;
+  const order: string[] = [];
+  let ending: Promise<boolean> | undefined;
+  const holding = await sessions.holding(token, async (proof, current) => {
+    hold = proof;
+    assert.equal(current.digest, record.digest);
+    assert.equal(isSessionHeld(proof), true);
+    assert.equal(proof.sessionRef, sessionRef(record.digest));
+    ending = sessions.end(record.digest, 'logout').then((ended) => {
+      order.push('logout');
+      return ended;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    order.push('commit');
+    return 'committed';
+  });
+  assert.equal(holding.status, 'valid');
+  assert.equal(holding.status === 'valid' && holding.value, 'committed');
+  assert.equal(await ending, true);
+  assert.deepEqual(order, ['commit', 'logout']);
+  assert.equal(isSessionHeld(hold), false);
+  assert.throws(() => assertSessionHeld(hold));
+  assert.throws(() => assertSessionHeld({ sessionRef: sessionRef(record.digest) }));
+
+  // An ended session runs nothing, and neither does one past its limit.
+  let ran = false;
+  const ended = await sessions.holding(token, async () => {
+    ran = true;
+  });
+  assert.equal(statusOf(ended as Resolution), 'ended:unknown');
+  const idle = await sessions.issue({ uaFamily: 'firefox' });
+  time.advance(61 * MINUTE);
+  assert.equal(
+    statusOf(
+      (await sessions.holding(idle.token, async () => {
+        ran = true;
+      })) as Resolution,
+    ),
+    'ended:expired',
+  );
+  assert.equal(
+    statusOf(
+      (await sessions.holding('not a token', async () => {
+        ran = true;
+      })) as Resolution,
+    ),
+    'ended:malformed',
+  );
+  assert.equal(
+    (
+      await sessions.holding(null, async () => {
+        ran = true;
+      })
+    ).status,
+    'none',
+  );
+  assert.equal(ran, false);
+});
+
+test('a commit that throws lets go of the session and of its hold', async () => {
+  const { sessions } = setup();
+  const { token, record } = await sessions.issue({ uaFamily: 'firefox' });
+  let hold: unknown;
+  await assert.rejects(
+    sessions.holding(token, async (proof) => {
+      hold = proof;
+      throw new Error('the commit failed');
+    }),
+    /the commit failed/,
+  );
+  assert.equal(isSessionHeld(hold), false);
+  assert.equal(await sessions.end(record.digest, 'logout'), true);
 });

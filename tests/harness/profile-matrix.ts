@@ -32,6 +32,7 @@ import { DEFAULT_SITE } from './app-server.mjs';
 import { expect, test, type App, type AppOptions } from './fixtures';
 import { VARIANTS } from './registry';
 import { headerProblems, isStudioPath } from './route-headers.mjs';
+import { concrete, scanTargets } from './scan-targets';
 
 // apps/web has no "type": "module", so its modules are CommonJS to Node and
 // load through require().
@@ -87,9 +88,6 @@ export interface MatrixOptions {
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const METHODS = ['GET', 'POST', 'PUT', 'DELETE'] as const;
-
-/** A concrete path for a pattern, filling each dynamic segment. */
-const concrete = (pattern: string) => pattern.replace(/\[\[?\.{0,3}[^\]]+\]\]?/g, 'sample') || '/';
 
 /** What the transport answers a visitor with no session, by the registry and the matrix. */
 function expected(
@@ -188,21 +186,6 @@ function withoutOwnPath(body: string, target: string): string {
   const parts = body.split(named);
   expect(parts.length, `Next's payload names ${target} once`).toBe(2);
   return parts.join('\\"c\\":"<path>"');
-}
-
-/** Every target the leak scan requests: each route, retired route, and operation, and some that don't exist. */
-function scanTargets(): string[] {
-  return [
-    ...listRoutes()
-      .filter((route) => route.capability !== 'operations')
-      .map((route) => concrete(route.pattern)),
-    ...RETIRED_PATTERNS.map(concrete),
-    ...listOperations().map((operation) => `/api/studio/${operation.name}`),
-    '/api/studio/no.such.operation',
-    '/no-such-page',
-    '/api/no-such-route',
-    IMAGE_PROBE,
-  ];
 }
 
 /**

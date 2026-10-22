@@ -228,7 +228,7 @@ To sign every session out without changing the password, run `revoke-sessions` i
 docker compose -f compose.owner.yml exec web node apps/web/bin/owner.mjs revoke-sessions
 ```
 
-It runs as the server's user, which owns the data directory, and refuses to run as anyone else. It deletes every session record, and the server refuses any session created before the run, even one a request in flight writes back. If `ephemeral/auth/revoked-before` is ever damaged, no session counts until `revoke-sessions` writes it again.
+It runs as the server's user, which owns the data directory, and refuses to run as anyone else. It deletes every session record, and the server refuses any session created before the run, even one a request in flight writes back. It runs outside the server's process, so it can't wait for a command that is already committing, such as a publish moving the live pointer: that one finishes, and the session's next request is refused. If `ephemeral/auth/revoked-before` is ever damaged, no session counts until `revoke-sessions` writes it again.
 
 ### Audit log
 

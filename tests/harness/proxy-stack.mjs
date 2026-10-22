@@ -1,7 +1,8 @@
 // Starts the Compose fixture in tests/harness/compose/: the image under test on
 // an internal network behind a Caddy HTTPS proxy that issues its certificate
 // from its own local CA (`tls internal`). `pnpm ci:proxy` smoke-tests it, and
-// proxy-shape security tests (#2) build on it.
+// #2's security suite runs through it under owner (`test:security:proxy`),
+// with compose.owner.yml on top.
 //
 //   const stack = await startProxyStack({ image: 'portfolio:ci' });
 //   const res = await stack.request('/api/health');
@@ -9,18 +10,22 @@
 import { spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { cpSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
-import https from 'node:https';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { send } from './http-client.mjs';
 import { freePort, waitFor } from './net.mjs';
 
 const HARNESS = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(HARNESS, '..', '..');
 const COMPOSE_FILE = path.join(HARNESS, 'compose', 'compose.yml');
+const OWNER_FILE = path.join(HARNESS, 'compose', 'compose.owner.yml');
 const CA_ROOT = '/data/caddy/pki/authorities/local/root.crt';
 export const PROXY_HOST = 'portfolio.test';
 export const DEFAULT_PORTFOLIO = path.join(REPO_ROOT, 'tests', 'fixtures', 'portfolio.yml');
 export const DEFAULT_SITE = path.join(REPO_ROOT, 'tests', 'fixtures', 'site.yml');
+/** Where compose.owner.yml mounts the owner's data directory and hash, in the app container. */
+export const OWNER_DATA_DIR = '/var/lib/portfolio';
+export const OWNER_HASH_FILE = '/run/owner-secret/owner_password_hash';
 
 /**
  * @param {object} options
@@ -29,6 +34,9 @@ export const DEFAULT_SITE = path.join(REPO_ROOT, 'tests', 'fixtures', 'site.yml'
  * @param {string} [options.projectPrefix] Compose project name prefix
  * @param {string} [options.portfolio] portfolio file mounted at /config/portfolio.yml
  * @param {string} [options.site] site file mounted beside it, at /config/site.yml
+ * @param {{ hash: string, hops?: number }} [options.owner] the app under owner with the
+ *   password provider instead of read-only: the hash it reads from its _FILE, and how many
+ *   proxies it trusts to append to X-Forwarded-For (default 1, the fixture's one)
  */
 export async function startProxyStack({
   image,
@@ -36,6 +44,7 @@ export async function startProxyStack({
   projectPrefix = process.env.CONTAINER_PREFIX || 'portfolio-ci-',
   portfolio = DEFAULT_PORTFOLIO,
   site = DEFAULT_SITE,
+  owner,
 } = {}) {
   if (!image) throw new Error('startProxyStack needs the image under test');
   const project = `${projectPrefix}proxy-${randomBytes(4).toString('hex')}`;
@@ -51,30 +60,63 @@ export async function startProxyStack({
   // An env file rather than the process environment: Finch runs Compose inside
   // its VM, where this process's environment doesn't reach interpolation.
   // Finch also only takes --env-file after -f.
+  const env = [`PORTFOLIO_IMAGE=${image}`, `FIXTURE_SOURCE_DIR=${sourceDir}`, `PROXY_PORT=${port}`];
+  const files = ['-f', COMPOSE_FILE];
+  if (owner) {
+    const secretDir = path.join(stateDir, 'owner-secret');
+    mkdirSync(secretDir, { recursive: true });
+    // 0400, as docs/deployment.md asks of the real one. CI's runner is uid
+    // 1001, the server's user in the image, so the server can read it.
+    writeFileSync(path.join(secretDir, path.basename(OWNER_HASH_FILE)), `${owner.hash}\n`, {
+      mode: 0o400,
+    });
+    env.push(`OWNER_SECRET_DIR=${secretDir}`, `TRUSTED_PROXY_HOPS=${owner.hops ?? 1}`);
+    files.push('-f', OWNER_FILE);
+  }
   const envFile = path.join(stateDir, 'stack.env');
-  writeFileSync(
-    envFile,
-    `PORTFOLIO_IMAGE=${image}\nFIXTURE_SOURCE_DIR=${sourceDir}\nPROXY_PORT=${port}\n`,
-  );
+  writeFileSync(envFile, `${env.join('\n')}\n`);
   const compose = (args, options = {}) =>
-    spawnSync(cli, ['compose', '-p', project, '-f', COMPOSE_FILE, '--env-file', envFile, ...args], {
+    spawnSync(cli, ['compose', '-p', project, ...files, '--env-file', envFile, ...args], {
       encoding: 'utf8',
       ...options,
     });
-  const logs = () => {
-    const result = compose(['logs', '--no-color']);
+  /** What a service, or every service, has written so far. */
+  const logs = (service) => {
+    const result = compose(['logs', '--no-color', ...(service ? [service] : [])]);
     return `${result.stdout ?? ''}${result.stderr ?? ''}`;
   };
   const stop = () => {
     compose(['down', '-v', '--remove-orphans'], { stdio: 'inherit' });
     rmSync(stateDir, { recursive: true, force: true });
   };
+  /** Caddy's local CA root certificate, once the proxy has made it. */
+  let ca;
+  const request = (pathname, { method, headers = {}, body, timeoutMs } = {}) =>
+    send({
+      protocol: 'https:',
+      port,
+      path: pathname,
+      method,
+      headers: { host: `${PROXY_HOST}:${port}`, ...headers },
+      body,
+      servername: PROXY_HOST,
+      ca,
+      timeoutMs,
+    });
+  const healthy = () =>
+    waitFor(
+      async () => {
+        const response = await request('/api/health', { timeoutMs: 5_000 });
+        return response.status === 200 ? response : undefined;
+      },
+      { timeoutMs: 90_000, what: 'GET /api/health through the proxy' },
+    );
 
   try {
     if (compose(['up', '-d'], { stdio: 'inherit' }).status !== 0) {
       throw new Error(`${cli} compose up failed for project ${project}`);
     }
-    const ca = await waitFor(
+    ca = await waitFor(
       () => {
         const result = compose(['exec', '-T', 'proxy', 'cat', CA_ROOT]);
         return result.status === 0 && result.stdout.includes('BEGIN CERTIFICATE')
@@ -89,58 +131,26 @@ export async function startProxyStack({
       port,
       ca,
       origin: `https://${PROXY_HOST}:${port}`,
-      request: (pathname, options) => request({ port, ca, pathname, ...options }),
-      /** Runs a command in a service container; returns spawnSync's result. */
-      exec: (service, command) => compose(['exec', '-T', service, ...command]),
+      /** One HTTPS request through the proxy, verified against Caddy's local CA (http-client.mjs). */
+      request,
+      /** Runs a command in a service container, with `input` on its stdin; returns spawnSync's result. */
+      exec: (service, command, { input } = {}) =>
+        compose(['exec', '-T', service, ...command], input === undefined ? {} : { input }),
       logs,
+      /** Restarts a service, and waits until the app answers through the proxy again. */
+      restart: async (service) => {
+        if (compose(['restart', service], { stdio: 'inherit' }).status !== 0) {
+          throw new Error(`${cli} compose restart ${service} failed for project ${project}`);
+        }
+        await healthy();
+      },
       stop,
     };
-    await waitFor(
-      async () => {
-        const response = await stack.request('/api/health');
-        return response.status === 200 ? response : undefined;
-      },
-      { timeoutMs: 90_000, what: 'GET /api/health through the proxy' },
-    );
+    await healthy();
     return stack;
   } catch (error) {
     error.logs = logs();
     stop();
     throw error;
   }
-}
-
-/** One HTTPS request through the proxy, verified against Caddy's local CA. */
-function request({ port, ca, pathname, method = 'GET', headers = {} }) {
-  return new Promise((resolve, reject) => {
-    const req = https.request(
-      {
-        host: '127.0.0.1',
-        port,
-        path: pathname,
-        method,
-        servername: PROXY_HOST,
-        ca,
-        headers: { host: `${PROXY_HOST}:${port}`, ...headers },
-        timeout: 5_000,
-      },
-      (res) => {
-        const certificate = res.socket.getPeerCertificate();
-        let body = '';
-        res.setEncoding('utf8');
-        res.on('data', (chunk) => (body += chunk));
-        res.on('end', () =>
-          resolve({
-            status: res.statusCode,
-            headers: res.headers,
-            body,
-            issuer: certificate?.issuer?.CN,
-          }),
-        );
-      },
-    );
-    req.on('timeout', () => req.destroy(new Error('request timed out')));
-    req.on('error', reject);
-    req.end();
-  });
 }

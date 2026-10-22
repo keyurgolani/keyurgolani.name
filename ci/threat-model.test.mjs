@@ -15,7 +15,8 @@ import ts from 'typescript';
 // anywhere in the file must have them, so a header that drifts fails here
 // rather than hiding its rows. A cited title counts only as the title of a
 // test that runs: the first argument of test() or it(), never a comment, an
-// assertion message, or a skipped or todo test.
+// assertion message, or a skipped or todo test. A title from a harness
+// module counts while the specs that run it still call it.
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DOC = 'docs/threat-model.md';
@@ -49,13 +50,33 @@ const COMMAND = /^`pnpm ([\w:-]+)`$/;
 const TEST_FILE = /\.(test|spec)\.[cm]?[jt]sx?$/;
 /**
  * The harness modules whose tests count, and where their titles are: the
- * profile matrix declares test() calls the profile projects run, and
- * startup-rows.mjs names each row, which startup.spec.ts and the image smoke
- * run as a test of that name. No other harness module holds a test.
+ * profile matrix declares test() calls the profile projects run, the
+ * security suite test() calls both security specs run, and startup-rows.mjs
+ * names each row, which startup.spec.ts and the image smoke run as a test of
+ * that name. No other harness module holds a test.
  */
 const HARNESS = {
   'tests/harness/profile-matrix.ts': 'tests',
+  'tests/harness/security-suite.ts': 'tests',
   'tests/harness/startup-rows.mjs': 'rows',
+};
+
+/**
+ * The specs that run a harness module's tests, and the call that runs them:
+ * the suite's titles count only while both security specs call
+ * securitySuite(test), and the matrix's only while each profile's spec calls
+ * profileMatrix(). A cited title in a module no spec runs is no test.
+ */
+const RUNNERS = {
+  'tests/harness/security-suite.ts': {
+    call: 'securitySuite',
+    argument: 'test',
+    files: ['tests/e2e/security.spec.ts', 'tests/proxy/security.spec.ts'],
+  },
+  'tests/harness/profile-matrix.ts': {
+    call: 'profileMatrix',
+    files: ['tests/e2e/demo.spec.ts', 'tests/e2e/owner.spec.ts', 'tests/e2e/profiles.spec.ts'],
+  },
 };
 
 /** The cells of a Markdown table line, trimmed, keeping escaped pipes inside cells. */
@@ -288,6 +309,50 @@ export function citationProblems(model, { root = ROOT, scripts }) {
   return problems;
 }
 
+/**
+ * Whether `source` calls `call` in a statement of its own at the top level,
+ * with the identifier `argument` first when one is given: not in a comment,
+ * a block, a condition, or a function nothing calls.
+ */
+export function runsAtTopLevel(file, source, { call, argument }) {
+  const tree = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
+  return tree.statements.some((statement) => {
+    if (!ts.isExpressionStatement(statement) || !ts.isCallExpression(statement.expression)) {
+      return false;
+    }
+    const { expression: callee, arguments: args } = statement.expression;
+    if (!ts.isIdentifier(callee) || callee.text !== call) return false;
+    return (
+      argument === undefined ||
+      (args[0] !== undefined && ts.isIdentifier(args[0]) && args[0].text === argument)
+    );
+  });
+}
+
+/** Each spec that should run a harness module's tests and doesn't, or a module no spec is named to run. */
+export function runnerProblems({
+  root = ROOT,
+  read = (file) => readFileSync(path.join(root, file), 'utf8'),
+} = {}) {
+  const problems = [];
+  for (const [module, kind] of Object.entries(HARNESS)) {
+    if (kind === 'tests' && !(module in RUNNERS))
+      problems.push(`no spec is named to run ${module}`);
+  }
+  for (const [module, { call, argument, files }] of Object.entries(RUNNERS)) {
+    for (const file of files) {
+      if (!existsSync(path.join(root, file))) {
+        problems.push(`${file}, which runs ${module}, is missing`);
+      } else if (!runsAtTopLevel(file, read(file), { call, argument })) {
+        problems.push(
+          `${file} no longer calls ${call}(${argument ?? ''}), so ${module} runs no test there`,
+        );
+      }
+    }
+  }
+  return problems;
+}
+
 /** Each section #2 asks for that's missing or has no rows. */
 export function areaProblems({ sections }) {
   return REQUIRED_SECTIONS.filter(
@@ -310,6 +375,40 @@ test('every threat table has the threat columns, and every row a unique ID, a kn
 
 test('every row names a test, and each test it cites by file exists under that title', () => {
   assert.deepEqual(citationProblems(model, { scripts }), []);
+});
+
+test('every spec that runs a harness suite still calls it, so the titles cited from the suite run', () => {
+  assert.deepEqual(runnerProblems(), []);
+});
+
+test('a spec that drops its suite call, comments it out, or moves it into a block no longer runs the suite', () => {
+  const security = { call: 'securitySuite', argument: 'test' };
+  assert.equal(runsAtTopLevel('a.spec.ts', 'securitySuite(test);', security), true);
+  for (const source of [
+    '',
+    '// securitySuite(test);',
+    'securitySuite(other);',
+    'securitySuite();',
+    'someOtherSuite(test);',
+    'if (process.env.SUITE) securitySuite(test);',
+    "test.describe.skip('a block', () => { securitySuite(test); });",
+    'function later() { securitySuite(test); }',
+  ]) {
+    assert.equal(runsAtTopLevel('a.spec.ts', source, security), false, source);
+  }
+  assert.equal(
+    runsAtTopLevel('b.spec.ts', "profileMatrix('demo');", { call: 'profileMatrix' }),
+    true,
+  );
+  const problems = runnerProblems({
+    read: (file) =>
+      file === 'tests/proxy/security.spec.ts'
+        ? '// securitySuite(test);'
+        : readFileSync(path.join(ROOT, file), 'utf8'),
+  });
+  assert.deepEqual(problems, [
+    'tests/proxy/security.spec.ts no longer calls securitySuite(test), so tests/harness/security-suite.ts runs no test there',
+  ]);
 });
 
 test('every area #2 asks for has a section with rows', () => {

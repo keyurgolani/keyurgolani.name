@@ -1,4 +1,4 @@
-import type { APIResponse, Page } from '@playwright/test';
+import type { APIResponse, Page, Route } from '@playwright/test';
 import { expect, test } from '../harness/fixtures';
 import { ownerSecret } from '../harness/owner-secret.mjs';
 import { ownerApp } from '../harness/profile-matrix';
@@ -131,7 +131,7 @@ test(
   async ({ page, app }) => {
     await page.goto('/studio/sign-in');
     const password = page.getByLabel('Password');
-    // Paste works, and the toggle shows what was pasted.
+    // The toggle shows what was typed.
     await password.fill('not the owner password at all');
     await page.getByRole('button', { name: 'Show password' }).click();
     await expect(password).toHaveAttribute('type', 'text');
@@ -146,6 +146,174 @@ test(
     await page.getByRole('button', { name: 'Sign in' }).click();
     await expect(page).toHaveURL(`${app.origin}/studio`);
     await expect(page.getByText('Signed in')).toBeVisible();
+  },
+);
+
+test(
+  'keyboard only, the owner reaches the password, the toggle, and Sign in in that order, shows the password with Space, and signs in with Enter',
+  { annotation: [SIGN_IN] },
+  async ({ page, app }) => {
+    await page.goto('/studio/sign-in');
+    const password = page.getByLabel('Password');
+    const toggle = page.getByRole('button', { name: 'Show password' });
+    // The toggle is there once the page has hydrated, and the scripted post with it.
+    await expect(toggle).toBeVisible();
+    await page.keyboard.press('Tab');
+    await expect(password).toBeFocused();
+    await page.keyboard.type('not the owner password at all');
+    await page.keyboard.press('Tab');
+    await expect(toggle).toBeFocused();
+    await page.keyboard.press('Space');
+    await expect(password).toHaveAttribute('type', 'text');
+    await expect(page.getByRole('button', { name: 'Hide password' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await page.keyboard.press('Space');
+    await expect(password).toHaveAttribute('type', 'password');
+    await page.keyboard.press('Tab');
+    await expect(page.getByRole('button', { name: 'Sign in' })).toBeFocused();
+    await page.keyboard.press('Enter');
+    const alert = notice(page);
+    await expect(alert).toHaveText("That password didn't work.");
+    await expect(alert).toBeFocused();
+    // From the alert, Tab is back at the password, and Enter there signs in.
+    await page.keyboard.press('Tab');
+    await expect(password).toBeFocused();
+    await page.keyboard.press('ControlOrMeta+A');
+    await page.keyboard.type(secret.password);
+    await page.keyboard.press('Enter');
+    await expect(page).toHaveURL(`${app.origin}/studio`);
+    await expect(page.getByText('Signed in')).toBeVisible();
+  },
+);
+
+test(
+  'a password pasted from the clipboard goes into the field as it was, and signs the owner in',
+  { annotation: [SIGN_IN] },
+  async ({ page, context, app }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: app.origin });
+    await page.goto('/studio/sign-in');
+    await expect(page.getByRole('button', { name: 'Show password' })).toBeVisible();
+    await page.evaluate((text) => navigator.clipboard.writeText(text), secret.password);
+    const password = page.getByLabel('Password');
+    await password.focus();
+    await page.keyboard.press('ControlOrMeta+V');
+    await expect(password).toHaveValue(secret.password);
+    await page.getByRole('button', { name: 'Sign in' }).click();
+    await expect(page).toHaveURL(`${app.origin}/studio`);
+    await expect(page.getByText('Signed in')).toBeVisible();
+  },
+);
+
+/** A JSON error envelope, as auth.login answers with one. */
+const envelope = (code: string) =>
+  JSON.stringify({ error: { code, message: 'Stood in for by the test.', requestId: 'stub' } });
+
+test(
+  'every sign-in state shows in its alert, with JavaScript and without, and each is attached as a screenshot',
+  { annotation: [SIGN_IN] },
+  async ({ browser, page, app }, testInfo) => {
+    const shot = async (on: Page, name: string) => {
+      await testInfo.attach(`sign-in-${name}.png`, {
+        body: await on.screenshot({ fullPage: true }),
+        contentType: 'image/png',
+      });
+    };
+    const password = page.getByLabel('Password');
+    const alert = notice(page);
+    // With JavaScript, each answer the scripted post can meet. The server
+    // gives a wrong password itself; the route stands in for the rest.
+    const answers: [name: string, text: string, answer?: (route: Route) => Promise<void>][] = [
+      ['wrong-password', "That password didn't work."],
+      [
+        'rate-limited',
+        'Too many attempts. Try again in 30 seconds.',
+        (route) =>
+          route.fulfill({
+            status: 429,
+            headers: { 'retry-after': '30', 'content-type': 'application/json' },
+            body: envelope('rate_limited'),
+          }),
+      ],
+      [
+        'network-failure',
+        "Couldn't reach the server. Check your connection, then try again.",
+        (route) => route.abort('failed'),
+      ],
+      [
+        'server-error',
+        'Something went wrong on the server. Try again soon.',
+        (route) =>
+          route.fulfill({
+            status: 500,
+            contentType: 'application/json',
+            body: envelope('internal_error'),
+          }),
+      ],
+    ];
+    for (const [name, text, answer] of answers) {
+      await page.unrouteAll();
+      if (answer) await page.route('**/api/studio/auth.login', answer);
+      await page.goto('/studio/sign-in');
+      await password.fill('not the owner password at all');
+      await page.getByRole('button', { name: 'Sign in' }).click();
+      await expect(alert, name).toHaveText(text);
+      await expect(alert, name).toBeFocused();
+      await shot(page, name);
+    }
+    // Submitting: the post is held until the screenshot is taken.
+    await page.unrouteAll();
+    let release = () => {};
+    const held = new Promise<void>((resolve) => (release = resolve));
+    await page.route('**/api/studio/auth.login', async (route) => {
+      await held;
+      await route.abort('failed');
+    });
+    await page.goto('/studio/sign-in');
+    await password.fill('not the owner password at all');
+    await page.getByRole('button', { name: 'Sign in' }).click();
+    await expect(alert).toHaveText('Signing in…');
+    await expect(alert).toBeFocused();
+    await shot(page, 'submitting');
+    release();
+    await expect(alert).toHaveText(
+      "Couldn't reach the server. Check your connection, then try again.",
+    );
+    await page.unrouteAll();
+    // The states a redirect names, which the page renders from its URL.
+    for (const [state, text] of [
+      ['signed_out', "You're signed out."],
+      ['session_ended', 'Your session ended. Sign in again to go on.'],
+    ] as const) {
+      await page.goto(`/studio/sign-in?state=${state}`);
+      await expect(alert, state).toHaveText(text);
+      await expect(alert, state).toBeFocused();
+      await shot(page, state.replace('_', '-'));
+    }
+
+    // Without JavaScript, the server renders each state a form post's
+    // redirect names, the rate limit's time with it.
+    const context = await browser.newContext({ javaScriptEnabled: false, baseURL: app.origin });
+    try {
+      const plain = await context.newPage();
+      for (const [query, text] of [
+        ['state=failed', "That password didn't work."],
+        ['state=rate_limited&retryAfter=30', 'Too many attempts. Try again in 30 seconds.'],
+        ['state=error', 'Something went wrong on the server. Try again soon.'],
+        ['state=signed_out', "You're signed out."],
+        ['state=session_ended', 'Your session ended. Sign in again to go on.'],
+      ] as const) {
+        await plain.goto(`/studio/sign-in?${query}`);
+        await expect(notice(plain), query).toHaveText(text);
+        await shot(plain, `no-js-${query.slice('state='.length).split('&')[0]!.replace('_', '-')}`);
+      }
+      await expect(plain.locator('p.studio-countdown')).toHaveCount(0);
+      await plain.goto('/studio/sign-in?state=rate_limited&retryAfter=30');
+      await expect(plain.locator('p.studio-countdown')).toHaveText('30 seconds left.');
+    } finally {
+      await context.close();
+    }
   },
 );
 
