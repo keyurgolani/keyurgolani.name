@@ -54,7 +54,9 @@ export function previewCsp(nonce: string, { mode, studioOrigin }: PreviewPolicyO
     "default-src 'none'",
     // React's dev build rebuilds server error stacks with eval.
     `script-src 'nonce-${nonce}' 'strict-dynamic'${development ? " 'unsafe-eval'" : ''}`,
-    `style-src 'self' 'nonce-${nonce}'`,
+    // Next's dev tools and hot reloading add styles with no nonce, and a
+    // nonce would void 'unsafe-inline', so under next dev the policy has none.
+    `style-src 'self' ${development ? "'unsafe-inline'" : `'nonce-${nonce}'`}`,
     "style-src-attr 'unsafe-inline'",
     "font-src 'self'",
     "img-src 'self' https: data:",

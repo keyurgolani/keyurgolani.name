@@ -40,7 +40,7 @@ test('a preview path is /preview or /preview-assets or below either, in any case
   }
 });
 
-test("only next dev's policy adds eval and same-origin connections, and only Studio's origin may frame a preview", () => {
+test("only next dev's policy adds eval, inline styles, and same-origin connections, and only Studio's origin may frame a preview", () => {
   const production = previewCsp('bm9uY2Vub25jZW5vbmNlMQ==', {
     mode: 'production',
     studioOrigin: 'https://rowan.test',
@@ -57,6 +57,11 @@ test("only next dev's policy adds eval and same-origin connections, and only Stu
     development,
     production
       .replace("'strict-dynamic'", "'strict-dynamic' 'unsafe-eval'")
+      // Next's dev tools and hot reloading add styles with no nonce.
+      .replace(
+        "style-src 'self' 'nonce-bm9uY2Vub25jZW5vbmNlMQ=='",
+        "style-src 'self' 'unsafe-inline'",
+      )
       .replace("connect-src 'none'", "connect-src 'self'")
       .replace('https://rowan.test', 'http://127.0.0.1:3000'),
   );

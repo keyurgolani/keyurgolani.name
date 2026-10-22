@@ -33,10 +33,14 @@ test.afterAll(async () => {
 
 const escaped = (text: string) => text.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
 
-/** The preview's policy under next dev, which adds eval and same-origin connections, framed by `origin` alone. */
+/**
+ * The preview's policy under next dev, which adds eval, the inline styles
+ * Next's dev tools and hot reloading add, and same-origin connections,
+ * framed by `origin` alone.
+ */
 const devPolicy = (origin: string) =>
   new RegExp(
-    `^default-src 'none'; script-src 'nonce-([A-Za-z0-9+/]{22}==)' 'strict-dynamic' 'unsafe-eval'; style-src 'self' 'nonce-\\1'; style-src-attr 'unsafe-inline'; font-src 'self'; img-src 'self' https: data:; media-src 'self' https:; connect-src 'self'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors ${escaped(origin)}$`,
+    `^default-src 'none'; script-src 'nonce-([A-Za-z0-9+/]{22}==)' 'strict-dynamic' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; style-src-attr 'unsafe-inline'; font-src 'self'; img-src 'self' https: data:; media-src 'self' https:; connect-src 'self'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors ${escaped(origin)}$`,
   );
 
 /** Selectors from host chrome or Studio's own stylesheet. */
@@ -69,7 +73,11 @@ test(
         expect(csp, path).toMatch(devPolicy(app.origin));
         const headers = response!.headers();
         for (const [name, value] of Object.entries(PREVIEW_HEADERS)) {
-          expect(headers[name], `${path}: ${name}`).toBe(value);
+          // next dev sends its own Cache-Control on every page after the
+          // app's, so a dev page never stays in a cache; a production build
+          // sends private, no-store, which the profile matrix checks.
+          const expected = name === 'cache-control' ? 'no-cache, must-revalidate' : value;
+          expect(headers[name], `${path}: ${name}`).toBe(expected);
         }
         // The composition the route names, in the preview document.
         await expect(page.locator('[data-variant]'), path).toHaveAttribute(
@@ -95,12 +103,18 @@ test(
         expect(await violations(page), `${path}: CSP violations`).toEqual([]);
       }
     }
-    expect(app.egress(), 'requests the dev server tried to send out').toEqual([]);
+    // next dev asks npm for its latest version once hot reloading connects
+    // (hot-reloader-shared-utils.js), which the egress trap refuses. Nothing
+    // the app does may try to go out.
+    expect(
+      app.egress().filter((target) => target !== 'registry.npmjs.org:443'),
+      'requests the dev server tried to send out',
+    ).toEqual([]);
   },
 );
 
 test(
-  'the dev route sets the environment its query asks for on the presentation boundary, and a variant, fixture, or value that names nothing is the 404 page',
+  'the dev route sets the environment its query asks for on the presentation boundary, and a variant, fixture, or value that names nothing gets the 404 an unknown path gets',
   { annotation: [PREVIEW] },
   async ({ page }) => {
     await recordViolations(page);
@@ -119,6 +133,13 @@ test(
     await open(page, `${path}?motion=system`);
     await expect(page.locator('[data-variant]')).not.toHaveAttribute('data-motion', /.*/);
     expect(await violations(page)).toEqual([]);
+    // next dev answers a path no route matches with Next's own 404 document,
+    // where a production build renders the app's (the profile matrix checks
+    // that one), so each is held to what /no-such-page gets here.
+    const notFound = /<meta name="next-error" content="not-found"\/>/;
+    const unknown = await page.request.get(`${app.origin}/no-such-page`, { maxRedirects: 0 });
+    expect(unknown.status()).toBe(404);
+    expect(await unknown.text()).toMatch(notFound);
     for (const target of [
       '/preview/dev/no-such-variant/complete',
       '/preview/dev/fallback/no-such-fixture',
@@ -127,7 +148,7 @@ test(
     ]) {
       const missing = await page.request.get(`${app.origin}${target}`, { maxRedirects: 0 });
       expect(missing.status(), target).toBe(404);
-      expect(await missing.text(), target).toMatch(/<h1>Page not found<\/h1>/);
+      expect(await missing.text(), target).toMatch(notFound);
       expect(missing.headers()['x-robots-tag'], target).toBe('noindex, nofollow');
     }
   },
