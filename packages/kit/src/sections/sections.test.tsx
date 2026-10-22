@@ -361,6 +361,8 @@ const LAYOUT_PROPERTIES = new Set([
   'margin-inline',
   'max-inline-size',
   'object-fit',
+  // Where a line breaks, so a long word never widens the page.
+  'overflow-wrap',
   'padding-inline',
   'padding-inline-start',
 ]);
