@@ -180,7 +180,9 @@ export function openStudioChannel(options: StudioChannelOptions): StudioChannel 
       const message = envelope(type, payload, seq + 1);
       const checked = readMessage(message, TO_FRAME);
       if (!checked.ok) {
-        throw new TypeError(`The preview protocol refuses this ${type} message (${checked.reason}).`);
+        throw new TypeError(
+          `The preview protocol refuses this ${type} message (${checked.reason}).`,
+        );
       }
       seq += 1;
       port.postMessage(message);

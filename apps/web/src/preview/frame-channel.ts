@@ -83,14 +83,7 @@ export function nonceFromFragment(hash: string): string | null {
 
 /** What a click on a link does in a frame. */
 export type LinkKind =
-  | 'fragment'
-  | 'internal'
-  | 'external'
-  | 'live'
-  | 'mailto'
-  | 'tel'
-  | 'download'
-  | 'unsupported';
+  'fragment' | 'internal' | 'external' | 'live' | 'mailto' | 'tel' | 'download' | 'unsupported';
 
 /** Whether `pathname` is the link base or below it. */
 const under = (pathname: string, linkBase: string) =>
@@ -158,10 +151,7 @@ function sectionOf(document: Document, anchor: string): Element | null {
  * Starts the frame's channel in `win`, with the settings the server
  * rendered. Returns what stops it, or null when the document isn't framed.
  */
-export function startFrameChannel(
-  win: Window,
-  options: FrameChannelOptions,
-): (() => void) | null {
+export function startFrameChannel(win: Window, options: FrameChannelOptions): (() => void) | null {
   if (win.parent === win) return null;
   const { mode, studioOrigin, linkBase } = options;
   const nonce = mode === 'server' ? (options.nonce ?? null) : nonceFromFragment(win.location.hash);

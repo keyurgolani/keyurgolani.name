@@ -231,9 +231,7 @@ export const TO_FRAME = {
   /** Go to `route` below the link base, and nowhere else. */
   navigate: z.object({ route: Route }).strict(),
   /** Whether the frame shows and has the user's attention, for #6's runtime to pause on. */
-  lifecycle: z
-    .object({ state: z.enum(['visible', 'hidden']), focused: z.boolean() })
-    .strict(),
+  lifecycle: z.object({ state: z.enum(['visible', 'hidden']), focused: z.boolean() }).strict(),
   /** Whether the frame sends `scrolled`: scroll sync, off until Studio turns it on (Slice 5). */
   sync: z.object({ scroll: z.boolean() }).strict(),
   /** A local frame's document (Slice 6): #4's sources, the selection, and #10's media and snapshots. */
@@ -313,6 +311,11 @@ export function readMessage<T extends Table>(data: unknown, table: T): Read<T> {
   const size = sizeOf(data, limit, type === 'asset');
   if (size < 0) return { ok: false, reason: 'payload', type };
   if (size > limit) return { ok: false, reason: 'size', type };
+  // An asset's blob has its own limit, apart from the message's.
+  const blob = isRecord(data.payload) ? data.payload.blob : undefined;
+  if (typeof Blob !== 'undefined' && blob instanceof Blob && blob.size > LIMITS.blob) {
+    return { ok: false, reason: 'size', type };
+  }
   const parsed = envelopeSchema(table, type).safeParse(data);
   if (!parsed.success) return { ok: false, reason: 'payload', type };
   const { seq, payload } = parsed.data as { seq: number; payload: unknown };
