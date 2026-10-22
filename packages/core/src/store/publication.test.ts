@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { AsyncResource } from 'node:async_hooks';
-import { readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { PORTFOLIO_SCHEMA_VERSION } from '@portfolio/schema';
@@ -8,7 +8,7 @@ import { memoryAuditSink } from '../audit/sink';
 import type { SessionHold } from '../auth/sessions';
 import { onStoreEvent, type StoreError, type StoreEvent, type StoreLogEntry } from './common';
 import { nodeFs, type FsPort } from './fs-port';
-import { newRevisionId, type RevisionId } from './layout';
+import { isRevisionId, newRevisionId, type RevisionId } from './layout';
 import { readEvents, readLive } from './pointer';
 import { IDEMPOTENCY_WINDOW, type HeldMove } from './publication';
 import { writeRevision } from './commit';
@@ -30,6 +30,7 @@ import {
   tempDir,
   testChecks,
 } from './test-support/fixtures';
+import { runChild } from './test-support/spawn';
 
 async function draftOf(store: Store, input = pairInput('engineering')) {
   const working = await store.drafts.getWorking();
@@ -713,6 +714,7 @@ test('startup repair deletes staging directories, writes a missing event file fr
     eventWritten: true,
     eventsAside: 0,
     draftRemoved: true,
+    unpublishedRemoved: 0,
   });
   assert.equal((await readEvents(nodeFs, store.paths)).length, 2);
   assert.equal(await store.drafts.getWorking(), null);
@@ -722,6 +724,7 @@ test('startup repair deletes staging directories, writes a missing event file fr
     eventWritten: false,
     eventsAside: 0,
     draftRemoved: false,
+    unpublishedRemoved: 0,
   });
 });
 
@@ -1455,4 +1458,41 @@ test('a commit whose event file another event took writes its own over it, movin
     logs.some((entry) => entry.event === 'store.rollback.event_deferred'),
     false,
   );
+});
+
+test('startup repair removes a revision that was never live, with no pointer and no history, and keeps one a store that has published needs', async (t) => {
+  // A first publish killed before its pointer: its revision, and no pointer or event.
+  const store = await newStore(t);
+  const child = await runChild({
+    kind: 'run',
+    dataDir: store.paths.root,
+    crash: { point: 'publish.live.write', nth: 1 },
+    steps: [{ op: 'publishDocuments', documents: pairInput('engineering') }],
+  });
+  assert.equal(child.signal, 'SIGKILL', child.stderr);
+  const [left] = readdirSync(store.paths.revisions).filter(isRevisionId);
+  assert.ok(left);
+  const logs: StoreLogEntry[] = [];
+  const reopened = openStore({
+    dataDir: store.paths.root,
+    checks: testChecks(),
+    log: (entry) => logs.push(entry),
+  });
+  const report = await reopened.publication.repair();
+  assert.equal(report.unpublishedRemoved, 1);
+  assert.deepEqual(readdirSync(store.paths.revisions), []);
+  assert.deepEqual(
+    logs.filter((entry) => entry.event === 'store.repair.unpublished'),
+    [{ level: 'warn', event: 'store.repair.unpublished', revisionId: left }],
+  );
+  // And the store publishes as if new.
+  const first = await publishInput(reopened, pairInput('engineering'));
+  assert.equal((await reopened.publication.status()).liveRevisionId, first);
+
+  // With history and no pointer, every revision stays: the last known good is among them.
+  const published = await newStore(t);
+  const only = await publishInput(published, pairInput('engineering'));
+  rmSync(published.paths.live);
+  assert.equal((await published.publication.repair()).unpublishedRemoved, 0);
+  assert.ok(readdirSync(published.paths.revisions).includes(only));
 });

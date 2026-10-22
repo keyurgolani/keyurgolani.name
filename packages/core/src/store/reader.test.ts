@@ -17,7 +17,7 @@ import { validatePublicationUnit } from '@portfolio/schema';
 import type { LiveRevision, RenderDrift } from '../catalog/port';
 import type { Rendering } from '../catalog/unit';
 import type { StoreLogEntry } from './common';
-import type { ReadFs } from './fs-port';
+import { nodeFs, type FsPort, type ReadFs } from './fs-port';
 import { newRevisionId, type StorePaths } from './layout';
 import { readLive } from './pointer';
 import { nodeReadFs } from './read-fs';
@@ -770,7 +770,7 @@ test('live.json gone from a store that has published serves the last known good 
   assert.equal(seen.asked, 2);
 });
 
-test("without live.json, an event, one moved aside, a revision, or a tombstone says the store has published, and a publish's staging or a temporary file doesn't", async (t) => {
+test("without live.json, an event, one moved aside, or a tombstone says the store has published, and a revision alone, a publish's staging, or a temporary file doesn't", async (t) => {
   const id = newRevisionId();
   const cases: Array<[string, (paths: StorePaths) => void, boolean]> = [
     ['an event', (paths) => writeFileSync(paths.event(1), '{}\n'), true],
@@ -779,7 +779,8 @@ test("without live.json, an event, one moved aside, a revision, or a tombstone s
       (paths) => writeFileSync(path.join(paths.events, '1.aside-0a1b2c3d4e5f.json'), '{}\n'),
       true,
     ],
-    ['a revision', (paths) => mkdirSync(paths.revision(id)), true],
+    // Never live: its publish wrote neither its pointer nor its event.
+    ['a revision alone', (paths) => mkdirSync(paths.revision(id)), false],
     ['a tombstone', (paths) => writeFileSync(paths.tombstone(id), '{}\n'), true],
     ["a publish's staging", (paths) => mkdirSync(paths.staging(id)), false],
     [
@@ -839,4 +840,82 @@ test("a live.json, or with none an events/, that can't be looked at decides all 
       );
     }
   }
+});
+
+test("a first publish that fails or dies before its pointer leaves the store empty, whenEmpty serving, and so does the moment before a good one's pointer lands", async (t) => {
+  const mounted: LiveRevision = {
+    state: 'live',
+    revisionId: 'doc-0123456789ab',
+    unitHash: 'sha256:0',
+    unit: served(await reader(await storeWithOne(t)).catalog.getLive()).unit,
+  };
+  const whenEmpty = { getLive: async () => mounted };
+  const failing = (point: string, act: () => Promise<void>): FsPort => ({
+    ...nodeFs,
+    async writeFile(file, data, at, options) {
+      if (at === point) await act();
+      return nodeFs.writeFile(file, data, at, options);
+    },
+  });
+
+  // Its pointer write fails, as on a full disk: a revision is left, with no pointer and no event.
+  const full = await newStore(t);
+  const failed = openStore({
+    dataDir: full.paths.root,
+    checks: testChecks(),
+    fs: failing('publish.live.write', async () => {
+      throw Object.assign(new Error('no space left on device'), { code: 'ENOSPC' });
+    }),
+  });
+  await assert.rejects(publishInput(failed, pairInput('engineering')));
+  // A process killed at the same point leaves the same.
+  const killed = await newStore(t);
+  const child = await runChild({
+    kind: 'run',
+    dataDir: killed.paths.root,
+    crash: { point: 'publish.live.write', nth: 1 },
+    steps: [{ op: 'publishDocuments', documents: pairInput('engineering') }],
+  });
+  assert.equal(child.signal, 'SIGKILL', child.stderr);
+  for (const store of [full, killed]) {
+    assert.equal(readdirSync(store.paths.revisions).length, 1);
+    assert.deepEqual(readdirSync(store.paths.events), []);
+    // Served now, and again by a new reader, as after a restart.
+    for (let start = 0; start < 2; start++) {
+      const { catalog, servable, logs } = reader(store, { whenEmpty });
+      assert.equal(await catalog.getLive(), mounted);
+      assert.equal((await catalog.status()).state, 'live');
+      assert.deepEqual(flags(servable), [true]);
+      assert.deepEqual(logs, []);
+    }
+  }
+
+  // A good first publish, held just before its pointer's write: meanwhile whenEmpty serves.
+  const fresh = await newStore(t);
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let reached!: () => void;
+  const atPointer = new Promise<void>((resolve) => {
+    reached = resolve;
+  });
+  const held = openStore({
+    dataDir: fresh.paths.root,
+    checks: testChecks(),
+    fs: failing('publish.live.write', async () => {
+      reached();
+      await gate;
+    }),
+  });
+  const { catalog, servable, logs } = reader(fresh, { whenEmpty });
+  const publishing = publishInput(held, pairInput('engineering'));
+  await atPointer;
+  assert.equal(await catalog.getLive(), mounted);
+  release();
+  const published = await publishing;
+  const live = await catalog.getLive();
+  assert.deepEqual([live.state, live.revisionId], ['live', published]);
+  assert.deepEqual(flags(servable), [true]);
+  assert.deepEqual(logs, []);
 });
