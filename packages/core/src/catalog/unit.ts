@@ -115,6 +115,11 @@ export interface UnitChecks {
   snapshots?(pair: ParsedPair, media: unknown): Readonly<Record<string, unknown>>;
   /** The blobs a media document references (#10). None until #10 registers it. */
   referencedBlobs?(media: unknown): readonly Sha256[];
+  /**
+   * The blobs a full `export-revision` writes under media/blobs/: #10's
+   * renditions and the sources that aren't images. None until #10 registers it.
+   */
+  exportBlobs?(media: unknown): readonly Sha256[];
   /** What the build renders a pair with, for the manifest. */
   rendering?(pair: ParsedPair): Rendering;
   /** This build's version, for the manifest. */

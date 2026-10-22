@@ -217,6 +217,50 @@ export function readPair(files: PairFiles, ctx: Context = {}): LoadPairResult {
   };
 }
 
+/** One of the pair's files as read: its name, such as portfolio.yml, and its bytes. */
+export interface PairFileBytes {
+  readonly name: string;
+  readonly bytes: Uint8Array;
+}
+
+export type PairBytesResult =
+  | { readonly ok: true; readonly files: { readonly [D in PairDocument]: PairFileBytes } }
+  | Extract<LoadPairResult, { ok: false }>;
+
+/**
+ * Finds the pair in `dir` like loadPair() and reads its two files' bytes,
+ * without validating them, for #3's `import`, whose sourceHash covers the
+ * bytes as mounted. It reports what loadPair() reports before validation:
+ * the directory, `source.*`, and the old format alone. Never throws.
+ */
+export function readPairBytes(dir: string, ctx: Context = {}): PairBytesResult {
+  const found = findPair(dir, ctx);
+  if (!found.ok) return found;
+  const files: Partial<Record<PairDocument, PairFileBytes>> = {};
+  const diagnostics: Diagnostic[] = [];
+  for (const document of ['portfolio', 'site'] as const) {
+    const name = path.basename(found.files[document]);
+    try {
+      files[document] = { name, bytes: readBoundedBytes(found.files[document]) };
+    } catch (error) {
+      diagnostics.push(
+        (error as NodeJS.ErrnoException).code === 'ENOENT'
+          ? record('source.missing', document, `${name} doesn't exist.`)
+          : record(
+              'source.unreadable',
+              document,
+              `${name} can't be read.`,
+              `Make ${name} a file the server's user can read.`,
+            ),
+      );
+    }
+  }
+  if (!files.portfolio || !files.site) {
+    return { ok: false, diagnostics, notChecked: [], files: found.files };
+  }
+  return { ok: true, files: { portfolio: files.portfolio, site: files.site } };
+}
+
 /** The old format's record for the portfolio in `file`, or undefined when it's current or can't be read. */
 function legacyRecord(file: string, ctx: Context): Diagnostic | undefined {
   const name = path.basename(file);
@@ -269,6 +313,11 @@ export function formatRecords(result: LoadPairResult): string {
  * writer, which would hang startup.
  */
 function readBounded(file: string): string {
+  return readBoundedBytes(file).toString('utf8');
+}
+
+/** The file's bytes, at most READ_LIMIT of them, as readBounded() reads them. */
+function readBoundedBytes(file: string): Buffer {
   if (!fs.statSync(/*turbopackIgnore: true*/ file).isFile()) {
     throw Object.assign(new Error(`${path.basename(file)} isn't a regular file.`), {
       code: 'ENOTFILE',
@@ -287,7 +336,7 @@ function readBounded(file: string): string {
       length += read;
       want = 64 * 1024;
     }
-    return Buffer.concat(chunks, length).toString('utf8');
+    return Buffer.concat(chunks, length);
   } finally {
     fs.closeSync(fd);
   }

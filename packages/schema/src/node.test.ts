@@ -12,6 +12,7 @@ import {
   loadPair,
   pairFileNames,
   readPair,
+  readPairBytes,
   readUnitFiles,
   type LoadPairResult,
 } from './node';
@@ -503,6 +504,34 @@ test('a loaded pair keeps the source text and format of both documents', () => {
   );
   assert.equal(result.sources.site.text, text('pairs', 'writing', 'yaml', 'site.yml'));
   assert.equal(result.sources.portfolio.path, path.join(dir, 'portfolio.yml'));
+});
+
+test('readPairBytes finds the pair as loadPair does, and returns each file as its bytes', (t) => {
+  const dir = tempDir(t, { 'portfolio.yml': 'not: validated\n', 'site.json': '{"x":\n' });
+  const bom = Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from('é\n')]);
+  fs.writeFileSync(path.join(dir, 'portfolio.yml'), bom);
+  const read = readPairBytes(dir);
+  assert.ok(read.ok);
+  assert.deepEqual(
+    [read.files.portfolio.name, read.files.site.name],
+    ['portfolio.yml', 'site.json'],
+  );
+  // The bytes as mounted, byte order mark and all: nothing decodes or validates them.
+  assert.deepEqual(Buffer.from(read.files.portfolio.bytes), bom);
+  assert.equal(Buffer.from(read.files.site.bytes).toString('utf8'), '{"x":\n');
+
+  for (const code of ['source.missing', 'source.duplicate', 'source.unreadable'] as const) {
+    const bytes = readPairBytes(fixture('invalid', code));
+    const loaded = loadPair(fixture('invalid', code));
+    assert.equal(bytes.ok, false, code);
+    assert.deepEqual(
+      !bytes.ok && bytes.diagnostics.map(({ code: found, document }) => [found, document]),
+      loaded.diagnostics.map(({ code: found, document }) => [found, document]),
+      code,
+    );
+  }
+  const missing = readPairBytes(path.join(dir, 'nowhere'));
+  assert.equal(!missing.ok && missing.directory, 'missing');
 });
 
 test('the bundled examples load as one pair with no blocking diagnostic', () => {

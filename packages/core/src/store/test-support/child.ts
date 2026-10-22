@@ -3,16 +3,18 @@
 // what a fresh process finds in a data directory, or what a reader saw.
 //
 //   node --import tsx child.ts '{"kind":"run","dataDir":"...","steps":[...]}'
-import { existsSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, writeSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { runCli } from '../../cli';
 import { recordOwnerModule } from '../../load-trace';
-import { nodeFs } from '../fs-port';
+import type { SourceReader } from '../source';
+import { nodeFs, type CrashPoint, type FsPort } from '../fs-port';
 import { readDraft, draftIds, type CreateDraftInput } from '../drafts';
 import type { DraftId } from '../layout';
 import { readEvents, readLive } from '../pointer';
 import { preflight } from '../preflight';
-import type { PublishInput, RecoverInput, RollbackInput } from '../publication';
+import type { ImportInput, PublishInput, RecoverInput, RollbackInput } from '../publication';
 import { readRevision } from '../revisions';
 import { claimServer } from '../server-claim';
 import { openStore } from '../store';
@@ -27,6 +29,7 @@ export type Step =
   | { readonly op: 'repair' }
   | { readonly op: 'rollback'; readonly input: RollbackInput }
   | { readonly op: 'recover'; readonly input: RecoverInput }
+  | { readonly op: 'import'; readonly input: ImportInput }
   | { readonly op: 'create'; readonly input: CreateDraftInput }
   | {
       readonly op: 'save';
@@ -35,6 +38,10 @@ export type Step =
   | { readonly op: 'put'; readonly base64: string; readonly mediaType: string }
   /** Claims the data directory as a server would, holds it `holdMs`, and lets it go. */
   | { readonly op: 'claim'; readonly holdMs: number }
+  /** Runs portfolio-store, as the operator would beside the server: `import --from <dir>`. */
+  | { readonly op: 'cli'; readonly argv: readonly string[] }
+  /** Waits, to give the other side of a race a head start. */
+  | { readonly op: 'sleep'; readonly ms: number }
   /** Saves each of `documents` in turn on the draft until it's gone, tracking its version. */
   | {
       readonly op: 'saveLoop';
@@ -57,6 +64,8 @@ export type ChildTask =
       readonly dataDir: string;
       /** Where to die, by SIGKILL. */
       readonly crash?: PointHit;
+      /** Where to stop and wait, for good, once it has written `readyFile`, so a test can signal it there. */
+      readonly pause?: { readonly point: CrashPoint; readonly readyFile: string };
       /** Writes <dir>/<id>.ready, then waits for <dir>/go, so two children start together. */
       readonly barrier?: { readonly dir: string; readonly id: string };
       readonly steps: readonly Step[];
@@ -94,6 +103,19 @@ recordOwnerModule('core/store/test-support/child');
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/**
+ * The pair in a directory a test wrote, by its two plain names: #4's pair
+ * loader is for tests and the CLI's entry alone, and the tests that use
+ * this race the store, not the loader.
+ */
+const pairOf: SourceReader = (dir) => ({
+  ok: true,
+  files: {
+    portfolio: { name: 'portfolio.yml', bytes: readFileSync(path.join(dir, 'portfolio.yml')) },
+    site: { name: 'site.yml', bytes: readFileSync(path.join(dir, 'site.yml')) },
+  },
+});
+
 async function waitFor(file: string, limitMs = 30_000) {
   const deadline = Date.now() + limitMs;
   while (!existsSync(file)) {
@@ -102,8 +124,38 @@ async function waitFor(file: string, limitMs = 30_000) {
   }
 }
 
+/** `inner`, except that the first call at `pause.point` writes `pause.readyFile` and never returns. */
+function pausingFs(
+  inner: FsPort,
+  pause: NonNullable<Extract<ChildTask, { kind: 'run' }>['pause']>,
+) {
+  let paused = false;
+  const hold = <T>(point: CrashPoint, call: () => Promise<T>): Promise<T> => {
+    if (paused || point !== pause.point) return call();
+    paused = true;
+    writeFileSync(pause.readyFile, '');
+    // A timer, since a promise alone doesn't keep the process running.
+    return new Promise<T>(() => {
+      setInterval(() => {}, 60_000);
+    });
+  };
+  const fs: FsPort = {
+    ...inner,
+    mkdir: (dir, point) => hold(point, () => inner.mkdir(dir, point)),
+    writeFile: (file, data, point, options) =>
+      hold(point, () => inner.writeFile(file, data, point, options)),
+    fsync: (target, point) => hold(point, () => inner.fsync(target, point)),
+    rename: (from, to, point) => hold(point, () => inner.rename(from, to, point)),
+    link: (existing, created, point) => hold(point, () => inner.link(existing, created, point)),
+    remove: (target, point) => hold(point, () => inner.remove(target, point)),
+    touch: (file, point) => hold(point, () => inner.touch(file, point)),
+  };
+  return fs;
+}
+
 async function run(task: Extract<ChildTask, { kind: 'run' }>): Promise<StepResult[]> {
-  const fs = task.crash ? crashingFs(task.crash, 'kill') : nodeFs;
+  const base = task.crash ? crashingFs(task.crash, 'kill') : nodeFs;
+  const fs = task.pause ? pausingFs(base, task.pause) : base;
   const store = openStore({ dataDir: task.dataDir, checks: testChecks(), fs });
   // The owner's pointer moves hold a session, as Studio's do.
   const owner = await ownerSession();
@@ -140,6 +192,9 @@ async function run(task: Extract<ChildTask, { kind: 'run' }>): Promise<StepResul
         case 'recover':
           outcome = await store.publication.recover(step.input, 'operator');
           break;
+        case 'import':
+          outcome = await store.publication.importSource(step.input, 'operator');
+          break;
         case 'create':
           outcome = await store.drafts.create(step.input, 'owner');
           break;
@@ -158,6 +213,35 @@ async function run(task: Extract<ChildTask, { kind: 'run' }>): Promise<StepResul
           outcome = claimed.ok ? { ok: true } : { ok: false, code: claimed.code };
           break;
         }
+        case 'cli': {
+          let out = '';
+          let err = '';
+          const code = await runCli({
+            argv: step.argv,
+            env: { PORTFOLIO_DATA_DIR: task.dataDir },
+            checks: testChecks(),
+            readSource: pairOf,
+            envBase: task.dataDir,
+            cwd: task.dataDir,
+            fs,
+            io: {
+              out: (text) => {
+                out += text;
+              },
+              // To this process's stderr too: a signal ends it before the result line.
+              err: (text) => {
+                err += text;
+                writeSync(2, text);
+              },
+            },
+          });
+          outcome = { code, out, err };
+          break;
+        }
+        case 'sleep':
+          await sleep(step.ms);
+          outcome = null;
+          break;
         case 'saveLoop': {
           const acknowledged: number[] = [];
           let version = step.expectedVersion;

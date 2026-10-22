@@ -1,22 +1,26 @@
 // Seeded secret and session canaries appear in no file in the data
-// directory (#3, Slice 1), however the store is used beside #2's auth state,
-// and no revision or event names a path. A backup's own scan is Slice 3's.
+// directory (#3, Slice 1), however the store and its CLI are used beside
+// #2's auth state, nor in a backup or a store restored from one (Slice 3),
+// and no revision, event, or backup manifest names a path.
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
-import { readFileSync } from 'node:fs';
-import { homedir } from 'node:os';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
-import { test } from 'node:test';
+import { test, type TestContext } from 'node:test';
+import { readPairBytes } from '@portfolio/schema/node';
 import { credentialFingerprint } from '../auth/phc.mjs';
 import { filesystemSessionStore } from '../auth/session-store';
 import { createSessions } from '../auth/sessions';
 import { csrfToken } from '../auth/token';
 import { filesystemAuditSink } from '../audit/sink';
 import { prepareAuthDirectories } from '../data/layout.mjs';
+import { backupStore, restoreStore } from './backup';
 import { readLive } from './pointer';
 import { nodeFs } from './fs-port';
 import { preflight } from './preflight';
 import { openStore } from './store';
+import { cli } from './test-support/cli';
 import {
   contentVariant,
   filesUnder,
@@ -31,7 +35,11 @@ import {
 
 const base64 = (bytes: Buffer) => bytes.toString('base64').replace(/=+$/, '');
 
-test('seeded secret and session canaries appear in no file in the data directory, and no revision or event names a path', async (t) => {
+/**
+ * A data directory with #2's auth state beside every write the store makes,
+ * the CLI's included, and the canaries none of its files may hold.
+ */
+async function everyWrite(t: TestContext) {
   const dataDir = tempDir(t);
   assert.equal(await prepareAuthDirectories(dataDir), null);
   assert.equal(await preflight({ dataDir }), null);
@@ -75,8 +83,7 @@ test('seeded secret and session canaries appear in no file in the data directory
     },
     'owner',
   );
-  assert.equal(created.kind, 'saved');
-  if (created.kind !== 'saved') return;
+  if (created.kind !== 'saved') assert.fail(created.kind);
   const edited = await store.drafts.applyEdits(
     {
       draftId: created.draft.draftId,
@@ -96,8 +103,7 @@ test('seeded secret and session canaries appear in no file in the data directory
     'owner',
     { requestId: 'req-canary' },
   );
-  assert.equal(second.kind, 'committed');
-  if (second.kind !== 'committed') return;
+  if (second.kind !== 'committed') assert.fail(second.kind);
   await owned(store).rollback(
     { targetRevisionId: first, expectedLiveRevisionId: second.revisionId, reason: 'Checking' },
     'owner',
@@ -110,22 +116,67 @@ test('seeded secret and session canaries appear in no file in the data directory
   await store.drafts.create({}, 'owner');
   assert.equal((await readLive(nodeFs, store.paths))?.seq, 4);
 
-  const files = filesUnder(dataDir);
-  assert.ok(files.some((file) => file.startsWith('audit/')));
-  assert.ok(files.some((file) => file.startsWith('ephemeral/auth/sessions/')));
+  // The CLI's writes: an import, an import as a draft, and retention.
+  const source = tempDir(t, 'store-source-');
+  const imported = contentVariant(pairInput('engineering'), 'imported');
+  writeFileSync(path.join(source, 'portfolio.yml'), imported.portfolio.sourceText);
+  writeFileSync(path.join(source, 'site.yml'), imported.site.sourceText);
+  for (const argv of [
+    ['import', '--from', source],
+    ['import', '--from', source, '--draft'],
+    ['retention'],
+  ]) {
+    const run = await cli(argv, { dataDir, readSource: readPairBytes });
+    assert.equal(run.code, 0, `${argv.join(' ')}: ${run.err}`);
+  }
+  assert.equal((await readLive(nodeFs, store.paths))?.seq, 5);
+  return { dataDir, canaries, store };
+}
+
+/** No file under `root` holds a canary, and no store record there names a path. */
+function scan(root: string, canaries: readonly string[], dataDir: string) {
+  const files = filesUnder(root);
   for (const file of files) {
-    const text = readFileSync(path.join(dataDir, file), 'latin1');
+    const text = readFileSync(path.join(root, file), 'latin1');
     for (const canary of canaries) {
       assert.equal(text.includes(canary), false, `${file} holds a canary`);
     }
   }
   // Drafts go back over HTTP, so they name no path either.
   assert.ok(files.some((file) => file.startsWith('drafts/')));
-  const paths = [dataDir, SCHEMA_FIXTURES, homedir(), process.cwd()];
-  for (const file of files.filter((name) => /^(revisions|publication|audit|drafts)\//.test(name))) {
-    const text = readFileSync(path.join(dataDir, file), 'utf8');
+  // The temporary directory holds the source directory the CLI imported from.
+  const paths = [dataDir, root, SCHEMA_FIXTURES, homedir(), process.cwd(), tmpdir()];
+  for (const file of files.filter((name) =>
+    /^(revisions|publication|audit|drafts)\/|backup-manifest/.test(name),
+  )) {
+    const text = readFileSync(path.join(root, file), 'utf8');
     for (const where of paths) assert.equal(text.includes(where), false, `${file} names a path`);
   }
+  return files;
+}
+
+test('seeded secret and session canaries appear in no file in the data directory, and no revision or event names a path', async (t) => {
+  const { dataDir, canaries } = await everyWrite(t);
+  const files = scan(dataDir, canaries, dataDir);
+  assert.ok(files.some((file) => file.startsWith('audit/')));
+  assert.ok(files.some((file) => file.startsWith('ephemeral/auth/sessions/')));
+});
+
+test('the canaries appear in no file of a backup, or of the store restored from it', async (t) => {
+  const { dataDir, canaries, store } = await everyWrite(t);
+  const out = path.join(tempDir(t, 'store-backup-'), 'b1');
+  const backup = await backupStore({ fs: nodeFs, paths: store.paths, lock: store.lock }, out);
+  assert.equal(backup.kind, 'done');
+  const files = scan(out, canaries, dataDir);
+  assert.ok(files.includes('backup-manifest.json'));
+  assert.ok(files.some((file) => file.startsWith('audit/')));
+  assert.equal(
+    files.some((file) => file.startsWith('ephemeral/')),
+    false,
+  );
+  const into = path.join(tempDir(t, 'store-restored-'), 'data');
+  assert.equal((await restoreStore({ fs: nodeFs }, out, into)).kind, 'restored');
+  scan(into, canaries, dataDir);
 });
 
 test('a document holding a secret saves as a draft but never publishes', async (t) => {
