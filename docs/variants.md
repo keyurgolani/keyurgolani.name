@@ -113,7 +113,7 @@ export default function AcmeOcean({ input }: { readonly input: VariantRenderInpu
 
 The host owns every route, and asks `dispatch()` what each path is, against the composition that renders:
 
-- `/` is home, and `/work/<slug>` a work, which is the 404 page until #10's next slice resolves slugs.
+- `/` is home, and `/work/<slug>` a work, which is the 404 page until #10 resolves slugs.
 - A path view the manifest declares renders below its parent route, such as `/chapters/<chapter>` or `/work/<slug>/notes`, from the server, so it works without JavaScript and after a refresh. It carries a canonical link to its parent route and stays out of the sitemap. A view the site document's `routes` turns off is the 404 page.
 - A placeholder takes one segment of lowercase words joined by hyphens, at most 64 characters, as a content id does. A longer value is no view. Any value that fits renders the view, whether or not it names anything: a way for a view to answer 404 for one that names nothing is a later addition to the contract.
 - A path only another installed variant declares is a 307 to its parent route, so a bookmark from before a switch lands home, not on a 404.
@@ -124,7 +124,7 @@ Link to a route with `routeHref(input, target)` from `@portfolio/variant-contrac
 
 A path view can't start with a segment the host owns: `studio`, `api`, `_next`, `sample`, `reference`, `preview`, `work`, `admin`, `variants`, and the metadata files. Generation fails on one, and the root catch-all leaves each to its own route, so a view never shadows an API or metadata route.
 
-The route table knows from the build's manifests, before any page runs, which paths name nothing: one no installed variant declares, a work until #10's next slice, a placeholder value over 64 characters, or a `?variant=` that names nothing. Each gets the 404 page from the server, with its 404 status, so it works without JavaScript. One 404 still draws in the browser: a view the live variant declares and the site document's `routes` turns off. Next 16 answers a page's `notFound()` with an error document the browser fills in, so without JavaScript that page is empty; the status is 404 either way.
+The route table knows from the build's manifests, before any page runs, which paths name nothing: one no installed variant declares, a work until #10, a placeholder value over 64 characters, or a `?variant=` that names nothing. Each gets the 404 page from the server, with its 404 status, so it works without JavaScript. One 404 still draws in the browser: a view the live variant declares and the site document's `routes` turns off. Next 16 answers a page's `notFound()` with an error document the browser fills in, so without JavaScript that page is empty; the status is 404 either way.
 
 ## Compatibility
 
