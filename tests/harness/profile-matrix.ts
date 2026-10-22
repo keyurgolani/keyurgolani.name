@@ -695,6 +695,27 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
             await shape(unknown, `/no-such-page${query}`),
           );
         }
+        // With Next's router prefetch header and no RSC header, next.config.ts
+        // sends the request to the 404 page (#1), and the preview's headers
+        // still go on it.
+        for (const method of ['GET', 'HEAD'] as const) {
+          const what = `${method} ${target}, prefetch without RSC`;
+          const prefetch = { 'next-router-prefetch': '1' };
+          const options = { method, maxRedirects: 0, timeout: 5_000 };
+          const response = await request.fetch(target, {
+            ...options,
+            headers: { cookie, ...prefetch },
+          });
+          const unknown = await request.fetch(`/no-such-page${query}`, {
+            ...options,
+            headers: prefetch,
+          });
+          expect(response.status(), what).toBe(404);
+          expectProfileHeaders(profile, response, what);
+          expect(await shape(response, target), what).toEqual(
+            await shape(unknown, `/no-such-page${query}`),
+          );
+        }
       }
     },
   );
