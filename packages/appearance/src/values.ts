@@ -17,6 +17,23 @@ const LANGUAGE_FUNCTIONS: ReadonlySet<string> = new Set([
   'min',
   'max',
   'clamp',
+  'round',
+  'abs',
+  'sign',
+  'mod',
+  'rem',
+  'pow',
+  'sqrt',
+  'hypot',
+  'exp',
+  'log',
+  'sin',
+  'cos',
+  'tan',
+  'asin',
+  'acos',
+  'atan',
+  'atan2',
   'linear-gradient',
   'radial-gradient',
   'conic-gradient',
@@ -39,6 +56,9 @@ const LANGUAGE_FUNCTIONS: ReadonlySet<string> = new Set([
   'rotatex',
   'rotatey',
   'rotatez',
+  'rotate3d',
+  'matrix',
+  'matrix3d',
   'skew',
   'skewx',
   'skewy',
@@ -109,10 +129,10 @@ const MAX_LANGUAGE_VALUE = 2000;
 /**
  * Why `value` can't be a design-language token, or null when it can. It's
  * CSS text using letters, digits, spaces, and `. , % ( ) + - * / _` only, so
- * no quote, brace, semicolon, comment, or backslash reaches the stylesheet;
- * it calls no url() and no function outside a fixed list; and its colors
- * are var(--color-<role>), with no fallback, no other custom property, and
- * no literal.
+ * no quote, brace, semicolon, comment, or backslash reaches the stylesheet,
+ * and a dot only in a number; it calls no url() and no function outside a
+ * fixed list; and its colors are var(--color-<role>), with no fallback, no
+ * other custom property, and no literal.
  */
 export function languageValueProblem(value: unknown): string | null {
   if (typeof value !== 'string' || value.trim() === '') return 'must be CSS text, not empty.';
@@ -135,9 +155,12 @@ export function languageValueProblem(value: unknown): string | null {
   for (const match of value.matchAll(/(-?[A-Za-z_][A-Za-z0-9_-]*)(\(?)/g)) {
     const name = match[1]!.toLowerCase();
     const call = match[2] === '(';
-    // A dimension's unit, such as the px in 2px, isn't a word of its own.
+    // A dimension's unit, such as the px in 2px, isn't a word of its own, and never opens a call.
     const before = value[match.index! - 1];
-    if (before !== undefined && /[0-9.]/.test(before)) continue;
+    if (before !== undefined && /[0-9]/.test(before)) {
+      if (call) return `puts ${name}( right after a number.`;
+      continue;
+    }
     if (call) {
       if (name === 'url') return "can't load anything, so url() isn't allowed.";
       if (COLOR_FUNCTIONS.has(name)) {
@@ -154,6 +177,8 @@ export function languageValueProblem(value: unknown): string | null {
       return `can't hold the color ${name}. Colors come from the scheme: use var(--color-<role>).`;
     }
   }
+  // A dot only ever starts a number's decimals, as in 0.5 or .5, so no word or call hides behind one.
+  if (/\.(?![0-9])/.test(value)) return 'uses a . that starts no decimals, as in 0.5.';
   return null;
 }
 

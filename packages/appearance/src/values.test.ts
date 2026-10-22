@@ -77,6 +77,61 @@ test('a language value gets color only through var(--color-<role>)', () => {
   assert.equal(languageValueProblem('hue-rotate(20deg)'), null);
 });
 
+test('a dot only starts decimals, so no word or call hides behind one', () => {
+  const rejected: Array<[string, RegExp]> = [
+    ['.url(//host/x.png)', /url\(\) isn't allowed/],
+    ['.var(--layout-x)', /only as var\(--color-<role>\)/],
+    ['1px solid .var(--layout-gap)', /only as var\(--color-<role>\)/],
+    ['1.rgb(0 0 0)', /can't make a color with rgb\(\)/],
+    ['.red', /can't hold the color red/],
+    ['.image-set(x)', /calls image-set\(\)/],
+    ['.env(safe-area-inset-top)', /calls env\(\)/],
+    ['.attr(data-x)', /calls attr\(\)/],
+    // Nothing else wrong, so the dot itself is the problem.
+    ['1.', /starts no decimals/],
+    ['.calc(1px)', /starts no decimals/],
+    ['2px .solid', /starts no decimals/],
+  ];
+  for (const [value, message] of rejected) {
+    assert.match(languageValueProblem(value) ?? 'accepted', message, value);
+  }
+  // A unit after a number is skipped, so it can't open a call either.
+  for (const value of ['2rgb(0, 0, 0)', '1url(x)', '0var(--layout-x)']) {
+    assert.match(languageValueProblem(value) ?? 'accepted', /right after a number/, value);
+  }
+  for (const value of ['.5', '0.5px', 'calc(.5 * 2px)', 'scale(0.98)', '-.25em', '1.5rem']) {
+    assert.equal(languageValueProblem(value), null, value);
+  }
+});
+
+test('the CSS math functions and the matrix and 3D rotate transforms are allowed', () => {
+  for (const value of [
+    'round(up, 2.5px, 1px)',
+    'abs(-2px)',
+    'sign(-1)',
+    'mod(5px, 3px)',
+    'rem(5px, 3px)',
+    'pow(2, 3)',
+    'sqrt(4)',
+    'hypot(3px, 4px)',
+    'exp(1)',
+    'log(2)',
+    'sin(45deg)',
+    'cos(0)',
+    'tan(0)',
+    'asin(0)',
+    'acos(1)',
+    'atan(1)',
+    'atan2(1, 2)',
+    'rotate3d(1, 1, 0, 45deg)',
+    'matrix(1, 0, 0, 1, 0, 0)',
+    'matrix3d(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1)',
+    'calc(1rem + 2px)',
+  ]) {
+    assert.equal(languageValueProblem(value), null, value);
+  }
+});
+
 test('a font stack is plain families that end with a generic family', () => {
   for (const stack of [
     '"Trebuchet MS", "Segoe UI", sans-serif',
