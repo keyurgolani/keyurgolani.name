@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { COMPOSITION_IDS, FALLBACK_ID, MISSING_VARIANT_ID } from '@portfolio/variant-contract';
+import { FALLBACK_ID, MISSING_VARIANT_ID, RESERVED_IDS } from '@portfolio/variant-contract';
 
 // Nothing in the host's source names a variant (#5, Slice 3): neither an id
 // the contract reserves for the platform's own packages nor the one fixtures
@@ -16,15 +16,14 @@ const SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const GENERATED = path.join(SRC, 'lib', 'generated');
 const escape = (id: string) => id.replace(/[-]/g, '\\-');
 
+/** Every reserved id but the fallback's, which is a common word, and MISSING_VARIANT_ID. */
+const TOKENS = [...RESERVED_IDS.filter((id) => id !== FALLBACK_ID), MISSING_VARIANT_ID];
+
 /**
- * A composition id or MISSING_VARIANT_ID anywhere, as a whole token: on its
- * own, in a path or query, in a selector, in a comment.
+ * One of TOKENS anywhere, as a whole token: on its own, in a path or query,
+ * in a selector, in a comment.
  */
-const token = () =>
-  new RegExp(
-    `(?<![\\w-])(${[...COMPOSITION_IDS, MISSING_VARIANT_ID].map(escape).join('|')})(?![\\w-])`,
-    'g',
-  );
+const token = () => new RegExp(`(?<![\\w-])(${TOKENS.map(escape).join('|')})(?![\\w-])`, 'g');
 
 /** The fallback's id as a string, quoted in any of the three quotes: the word alone is common. */
 const fallback = () => new RegExp(`(['"\`])${escape(FALLBACK_ID)}\\1`, 'g');
@@ -54,8 +53,8 @@ test('no host source file names a variant id', () => {
   assert.deepEqual(found, []);
 });
 
-test('the scan finds a composition id or missing-variant wherever it is written', () => {
-  for (const id of [...COMPOSITION_IDS, MISSING_VARIANT_ID]) {
+test('the scan finds a reserved id but fallback, or missing-variant, wherever it is written', () => {
+  for (const id of TOKENS) {
     for (const text of [
       `const selected = '${id}';`,
       `const selected = "${id}";`,
