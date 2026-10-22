@@ -14,7 +14,7 @@ import {
   type SiteFeatures,
   type VisitorControls,
 } from '@portfolio/schema';
-import { contentIndex, materializeControls, type ControlValues } from './controls';
+import { contentIndex, materializeControls, storedControls, type ControlValues } from './controls';
 import type { VariantManifest, ViewDeclaration } from './manifest-schema';
 import { normalizeBasePath, type RouteTarget } from './routes';
 import { sha256 } from './sha256';
@@ -114,7 +114,7 @@ export function buildRenderInput(args: RenderInputArgs): VariantRenderInput {
   const site = view.site;
   const controls = materializeControls(
     manifest,
-    site.variantControls?.[manifest.id],
+    storedControls(site, manifest.id),
     contentIndex(view.portfolio),
   );
   return {

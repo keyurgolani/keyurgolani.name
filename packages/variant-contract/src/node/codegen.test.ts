@@ -33,8 +33,12 @@ const ENHANCED = variantPackage('@acme/ocean', 'acme-ocean', {
   files: { 'tide.js': 'export default () => null;\n' },
 });
 const PHOTOS = extensionPackage('@acme/portfolio-photography', {
+  entry:
+    "export default { namespace: '@acme/portfolio-photography', sections: { exhibitions: {}, prints: {} } };\n",
   packageJson: { exports: { '.': './index.mjs', './renderers': './renderers.mjs' } },
-  files: { 'renderers.mjs': 'export default {};\n' },
+  files: {
+    'renderers.mjs': "export default { '@acme/portfolio-photography/exhibitions': () => null };\n",
+  },
 });
 const NOTES = extensionPackage('@acme/portfolio-notes');
 
@@ -81,6 +85,11 @@ test('loaders, styles, extensions, and enhancements name each package once, sort
     /CONTENT_EXTENSIONS: readonly ContentExtension\[\] = \[extension0, extension1\];/,
   );
   assert.doesNotMatch(extensions, /renderers/);
+  // Which kinds have a renderer, for the compatibility check, without loading one.
+  assert.match(
+    extensions,
+    /EXTENSION_RENDERED_KINDS: readonly string\[\] = \["@acme\/portfolio-photography\/exhibitions"\];/,
+  );
   const renderers = generated.get('registry.renderers.ts')!;
   assert.match(renderers, /import renderers0 from "@acme\/portfolio-photography\/renderers";\n/);
   assert.match(renderers, /= \{\n {2}\.\.\.renderers0,\n\};/);
@@ -113,6 +122,7 @@ test('a host with only the fallback generates empty maps', async () => {
   const generated = renderRegistry(result);
   assert.match(generated.get('registry.enhancements.ts')!, /ENHANCEMENT_LOADERS: [^=]+= \{\};/);
   assert.match(generated.get('registry.extensions.ts')!, /CONTENT_EXTENSIONS: [^=]+= \[\];/);
+  assert.match(generated.get('registry.extensions.ts')!, /EXTENSION_RENDERED_KINDS: [^=]+= \[\];/);
   assert.match(generated.get('registry.renderers.ts')!, /EXTENSION_RENDERERS: [^=]+= \{\};/);
 });
 

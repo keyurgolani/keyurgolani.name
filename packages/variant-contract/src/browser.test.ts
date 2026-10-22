@@ -6,6 +6,7 @@ import { runInNewContext } from 'node:vm';
 import { build } from 'esbuild';
 import ts from 'typescript';
 import { toPublicView, validatePublicationUnit } from '@portfolio/schema';
+import { compatibilityFor } from './compatibility';
 import { buildRenderInput } from './render-input';
 import { validateManifest } from './validate-manifest';
 
@@ -202,4 +203,19 @@ test('bundled and run with browser globals alone, it builds the same input as in
     ),
     true,
   );
+  // So does #9's compatibility report (Slice 5), the same as in Node, hash and all.
+  const selected = {
+    ...pair,
+    site: { ...pair.site, appearance: { ...pair.site.appearance, variant: 'acme-ocean' } },
+  };
+  const registry = [{ packageName: '@acme/ocean', version: '1.0.0', manifest: checked.manifest }];
+  context.pairJson = JSON.stringify(selected);
+  context.registryJson = JSON.stringify(registry);
+  const report = runInNewContext(
+    'JSON.stringify(Contract.compatibilityFor(JSON.parse(pairJson), { registry: JSON.parse(registryJson) }))',
+    context,
+  );
+  const inNode = compatibilityFor(selected, { registry });
+  assert.ok(inNode.slots.length > 0 && inNode.diagnostics.length > 0);
+  assert.deepEqual(JSON.parse(report), JSON.parse(JSON.stringify(inNode)));
 });

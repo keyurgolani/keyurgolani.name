@@ -73,7 +73,7 @@ Things every variant needs but shouldn't reimplement:
 
 ### `@portfolio/variant-contract`
 
-The variant contract, version 2.0: the manifest's schema and `validateManifest`; `buildRenderInput`, which builds the one `VariantRenderInput` a variant renders from, the same way on the server, in #7's preview frame, and in #9's browser render; controls and their migrations; route helpers; and `contractValidators`, the unit validators that check the site's variant selection and control values. Live, as startup runs them, an unregistered selection and a control problem only warn. `@portfolio/variant-contract/node` reads the host's dependencies into a registry, writes the generated modules, and audits variant source.
+The variant contract, version 2.0: the manifest's schema and `validateManifest`; `buildRenderInput`, which builds the one `VariantRenderInput` a variant renders from, the same way on the server, in #7's preview frame, and in #9's browser render; controls and their migrations, with `planControlsMigration`, which `pnpm variants:migrate-controls` applies; route helpers; and `compatibilityFor`, the report of how a pair renders in its composition, which `contractValidators` hands to `validatePublicationUnit` as one unit validator. Live, as startup runs it, a finding only warns when something renders in its place. `@portfolio/variant-contract/node` reads the host's dependencies into a registry, writes the generated modules, and audits variant source.
 
 ### `@portfolio/appearance`
 

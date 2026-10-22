@@ -125,6 +125,34 @@ A path view can't start with a segment the host owns: `studio`, `api`, `_next`, 
 
 The route table knows from the build's manifests, before any page runs, which paths name nothing: one no installed variant declares, a work until #10, a placeholder value over 64 characters, or a `?variant=` that names nothing. Each gets the 404 page from the server, with its 404 status, so it works without JavaScript. One 404 still draws in the browser: a view the live variant declares and the site document's `routes` turns off. Next 16 answers a page's `notFound()` with an error document the browser fills in, so without JavaScript that page is empty; the status is 404 either way.
 
+## Compatibility
+
+Every check of a pair against the composition that renders it is one report, `compatibilityFor(pair, { registry })` from `@portfolio/variant-contract`. Startup and `pnpm config:validate` get its findings as diagnostics, and so will #3's publish. It needs nothing from Node, so #9 can run the same code in the browser. `evaluateCompatibility(manifest, pair, { registry })` reports on a candidate as if the site selected it, so #8 and #9 can explain one before the owner switches. The report has:
+
+- `variant`: what the site selects, what renders (the selection, or the fallback composition in its place), and its package version. In a candidate's report both name the candidate, and a `variant.unavailable` there says what selecting it would render.
+- `kinds`: each visible kind and how it renders: `bespoke`, `shared`, through its content extension's renderer, `unsupported`, or `none`.
+- `slots`: each content slot's fill count, with its `whenEmpty` note when it has fewer than it asks for.
+- `routes`: the previous variant's path views this one doesn't serve. Each redirects to its parent route while the previous variant stays installed, and is a 404 once it's removed.
+- `inputHash`, of everything the report depends on, and `status`: `ok`, `warning`, or `blocks-publish`.
+
+| Finding                                                            | Code                                                          | Preview                                 | Publish |
+| ------------------------------------------------------------------ | ------------------------------------------------------------- | --------------------------------------- | ------- |
+| The selected variant isn't registered                              | `variant.unavailable`                                         | the fallback composition renders        | blocked |
+| A required slot holds fewer than its `min`                         | `slot.required-empty`                                         | renders, as the slot's `whenEmpty` says | blocked |
+| A recommended slot is empty                                        | `slot.recommended-empty`                                      | renders, as `whenEmpty` says            | allowed |
+| A slot holds more than its `max`                                   | `slot.overflow`                                               | the extras render after the slot        | allowed |
+| A visible section of an `unsupportedKinds` kind                    | `kind.unsupported`                                            | visitors don't see it                   | allowed |
+| A visible extension section nothing renders                        | `kind.no-renderer`                                            | the rest of the page renders            | blocked |
+| A stored control value that's invalid, stale, or points at nothing | `controls.invalid`, `controls.stale`, `controls.dangling-ref` | the control renders its default         | blocked |
+| Right-to-left content in a variant that declares only `ltr`        | `direction.unsupported`                                       | renders left to right                   | allowed |
+| A `recommendedAppearance` this build doesn't list                  | `appearance.unknown-recipe`                                   | the site's own appearance renders       | allowed |
+
+An empty optional slot shows only in `slots`. A slot counts the visible sections of its kind, the visible sections its control points at, or the values its field holds, an array counting each item. Startup checks the pair as live, so a finding that blocks publishing only warns there: something renders in its place either way.
+
+After a variant raises its controls version, `pnpm variants:migrate-controls --site config/site.yml` steps the stored values through the manifest's migrations. It prints each change and a diff, and writes only with `--write`, through a symbolic link to the file the link names, keeping that file's mode, owner, and group, so the server's user reads it as before. Once it has written, a second run finds nothing to do. It writes nothing and exits 1 for a link whose file is named for the other format, or a file whose owner and group the user running it can't give a new file. Values of another version are never read: until they migrate, every control renders its default.
+
+A YAML document keeps every line the migration doesn't change, comments included. A renamed control moves to the end of its `values` mapping, and a key or value the migration writes is plain, or double-quoted when it must be, whatever quotes the document used. A JSON document is written whole, in its own indent with one value per line, so a document already in that layout, as `JSON.stringify` writes it, changes only in the entries that migrate. YAML the edits can't change in place, such as a complex key (`? key`), stops the command with exit status 1 and the file as it was.
+
 ## Motion
 
 The site's policy reaches a variant as `input.presentation.motionPolicy`: `respect-os` follows the visitor's `prefers-reduced-motion`, and `reduce` always reduces. The boundary carries it as `data-motion-policy`, so a stylesheet reduces CSS motion under `[data-variant='<id>'][data-motion-policy='reduce']` as it does under `prefers-reduced-motion`.

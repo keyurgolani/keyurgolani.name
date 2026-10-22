@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { applyEdits, type Edit } from './edit';
+import { applyEdits, jsonIndent, type Edit } from './edit';
 import { parseSource } from './source';
 
 const lines = (...text: string[]) => `${text.join('\n')}\n`;
@@ -399,4 +399,34 @@ test('a JSON edit rewrites the document with two-space indent, keeping its key o
     /5 isn't an index/,
   );
   assert.throws(() => applyEdits('{ "a": 1, }', 'json', []), /needs a document that parses/);
+});
+
+test("with the document's own indent, a JSON edit changes only the lines it edits", () => {
+  const data = { schemaVersion: 2, features: { feed: true }, tags: ['a', 'b'] };
+  for (const step of ['    ', '\t', ' ']) {
+    const text = `${JSON.stringify(data, null, step)}\n`;
+    assert.equal(jsonIndent(text), step, JSON.stringify(step));
+    const edited = applyEdits(
+      text,
+      'json',
+      [
+        { pointer: '/features/feed', op: 'set', value: false },
+        { pointer: '/tags/-', op: 'set', value: 'c' },
+      ],
+      { indent: jsonIndent(text) },
+    );
+    assert.equal(
+      edited,
+      `${JSON.stringify({ ...data, features: { feed: false }, tags: ['a', 'b', 'c'] }, null, step)}\n`,
+    );
+  }
+  // A document on one line has no indent to keep, so the edit writes two spaces.
+  assert.equal(jsonIndent('{ "a": 1 }'), '  ');
+  assert.equal(jsonIndent(JSON_TEXT), '    ');
+  // YAML keeps its own layout, whatever the option says.
+  assert.equal(applyEdits('a: 1\n', 'yaml', [], { indent: '\t' }), 'a: 1\n');
+  assert.throws(
+    () => applyEdits('{}', 'json', [], { indent: '--' }),
+    /indents JSON with 1 to 10 spaces or 1 to 10 tabs/,
+  );
 });

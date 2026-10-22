@@ -140,6 +140,26 @@ export function matchPathView(
 }
 
 /**
+ * The addresses a view answers, as a key: two views with one key match the
+ * same paths or fragments, since a placeholder matches any segment, whatever
+ * it's named. Undefined for a segment that doesn't parse.
+ */
+export function viewShape(view: {
+  readonly under: string;
+  readonly type: 'path' | 'fragment';
+  readonly segment: string;
+}): string | undefined {
+  const parsed =
+    view.type === 'path' ? parsePathPattern(view.segment) : parseFragmentPattern(view.segment);
+  if ('problem' in parsed) return undefined;
+  return [
+    view.under,
+    view.type,
+    ...parsed.parts.map((part) => ('literal' in part ? part.literal : '{}')),
+  ].join('/');
+}
+
+/**
  * A fragment view's segment, such as `chapter-{chapter}`, as parts, or a
  * reason it isn't one. It starts with a letter, so it's a valid element id.
  */
