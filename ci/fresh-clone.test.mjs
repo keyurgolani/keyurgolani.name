@@ -18,7 +18,8 @@ import { REPO_ROOT } from './lib/reports.mjs';
 
 // The scripts that load the route table without building the app write the
 // generated registry it imports first (ci/lib/registry.mjs), so each runs on
-// a fresh clone, as CI's image job runs `pnpm ci:security-proxy` on one.
+// a fresh clone, as CI's image job runs `pnpm ci:security-proxy` on one, and
+// a registry that doesn't build is the script's own reported failure.
 // Each runs here in a scratch copy of the checkout as a clone of it has it:
 // no build output and no apps/web/src/lib/generated/, with each workspace
 // package's node_modules linked to the checkout's, so nothing installs.
@@ -116,9 +117,26 @@ test('pnpm smoke:profiles writes the registry, so it loads the route table on a 
     { CONTAINER_CLI: path.join(clone.bin, 'docker') },
   );
   assert.doesNotMatch(output, /Cannot find module/);
-  // Past the route table, it stops at its first container step, which the stub refuses.
-  assert.match(output, /\[profiles\] building portfolio:profiles with /);
-  assert.match(output, /^stub docker build /m);
+  // Past the route table, it stops at its first container step, whichever
+  // that is: the stub refuses every one.
+  assert.match(output, /^stub docker \S/m);
   assert.equal(status, 1, output);
   assert.ok(existsSync(path.join(clone.root, GENERATED, 'registry.meta.ts')), output);
+});
+
+test("each script reports a registry that doesn't build as its own failure, before any container or spec runs", (t) => {
+  const clone = freshClone(t);
+  rmSync(path.join(clone.root, 'apps', 'web', 'scripts', 'build-registry.ts'));
+  const env = { CONTAINER_CLI: path.join(clone.bin, 'docker') };
+  const smoke = inClone(clone, ['--import', 'tsx', path.join('ci', 'smoke-profiles.mjs')], env);
+  assert.equal(smoke.status, 1, smoke.output);
+  // Its own failure line, as the end of a run prints one, and no stack of its own.
+  assert.match(smoke.output, /^\[profiles\] FAIL smoke:profiles: the registry doesn't build/m);
+  assert.doesNotMatch(smoke.output, /registry\.mjs:\d+/);
+  assert.doesNotMatch(smoke.output, /^stub /m, 'smoke:profiles reached a container CLI');
+  const proxy = inClone(clone, [path.join('ci', 'test-security-proxy.mjs'), '--list'], env);
+  assert.equal(proxy.status, 1, proxy.output);
+  assert.match(proxy.output, /^\[test:security:proxy\] the registry doesn't build/m);
+  assert.doesNotMatch(proxy.output, /registry\.mjs:\d+/);
+  assert.doesNotMatch(proxy.output, /Listing tests|Running \d+ tests?/, 'Playwright ran');
 });

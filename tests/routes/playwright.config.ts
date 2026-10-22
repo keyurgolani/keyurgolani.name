@@ -1,5 +1,5 @@
 // The route specs (#5, Slice 4): `pnpm test:routes`, and `pnpm ci:routes` in
-// CI's browser job. They need variants that declare path views, so they run
+// CI's routes job. They need variants that declare path views, so they run
 // against a fixture host (tests/harness/fixture-host.mjs), built once by the
 // global setup, not against this checkout's build. Everything else is the
 // browser suite's config.
