@@ -13,7 +13,9 @@ import { EXTENSION_RENDERERS } from './generated/registry.renderers';
 // sections on the server; render parity's createRoot render, #7's preview
 // frame, and #9's in-browser render use both. The root layout renders
 // <ClientHostModules />, so this module runs on every page before anything
-// below it hydrates.
+// below it hydrates. That puts every content extension's ./renderers in the
+// browser on every page, so it must be client-safe: a server-only import
+// there breaks `next build` (docs/configuration.md).
 
 registerHostModules({
   extensionRenderers: EXTENSION_RENDERERS,
