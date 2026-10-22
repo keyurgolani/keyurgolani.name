@@ -108,6 +108,23 @@ export default function AcmeOcean({ input }: { readonly input: VariantRenderInpu
 - Under the demo profile, `/sample` renders the bundled sample in the sample site's selection, and `/sample?variant=<id>` in any registered variant. `fallback`, an unregistered id, an empty one, or two are a 404.
 - While `isServable()` is false, which #3's catalog sets when it has nothing to serve, visitor pages answer a static 503 with `Retry-After: 120` and `X-Robots-Tag: noindex`.
 
+## Routes
+
+The host owns every route, and asks `dispatch()` what each path is, against the composition that renders:
+
+- `/` is home, and `/work/<slug>` a work, which is the 404 page until #10 resolves slugs.
+- A path view the manifest declares renders below its parent route, such as `/chapters/<chapter>` or `/work/<slug>/notes`, from the server, so it works without JavaScript and after a refresh. It carries a canonical link to its parent route and stays out of the sitemap. A view the site document's `routes` turns off is the 404 page.
+- A placeholder takes one segment of lowercase words joined by hyphens, at most 64 characters, as a content id does. A longer value is no view. Any value that fits renders the view, whether or not it names anything: a way for a view to answer 404 for one that names nothing is a later addition to the contract.
+- A path only another installed variant declares is a 307 to its parent route, so a bookmark from before a switch lands home, not on a 404.
+- Anything else is the 404 page.
+- Under `demo`, the same routes sit below `/sample`, and `?variant=<id>` stays on every link and redirect.
+
+Link to a route with `routeHref(input, target)` from `@portfolio/variant-contract`. It writes the URL below `input.basePath`, keeps `input.query`, and puts `input.ids.prefix` on a fragment view's id, so one render links right at `/`, below `/sample`, and below #7's preview prefix. The kit's shared renderers do the same for a `/#section` link.
+
+A path view can't start with a segment the host owns: `studio`, `api`, `_next`, `sample`, `reference`, `preview`, `work`, `admin`, `variants`, and the metadata files. Generation fails on one, and the root catch-all leaves each to its own route, so a view never shadows an API or metadata route.
+
+The route table knows from the build's manifests, before any page runs, which paths name nothing: one no installed variant declares, a work until #10, a placeholder value over 64 characters, or a `?variant=` that names nothing. Each gets the 404 page from the server, with its 404 status, so it works without JavaScript. One 404 still draws in the browser: a view the live variant declares and the site document's `routes` turns off. Next 16 answers a page's `notFound()` with an error document the browser fills in, so without JavaScript that page is empty; the status is 404 either way.
+
 ## Motion
 
 The site's policy reaches a variant as `input.presentation.motionPolicy`: `respect-os` follows the visitor's `prefers-reduced-motion`, and `reduce` always reduces. The boundary carries it as `data-motion-policy`, so a stylesheet reduces CSS motion under `[data-variant='<id>'][data-motion-policy='reduce']` as it does under `prefers-reduced-motion`.

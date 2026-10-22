@@ -176,6 +176,13 @@ Script running on the owner origin can fetch the CSRF token and act as the signe
 | demo-4 | The demo server sends data to a third party, such as fetching the live GitHub account the sample names. | Visitors | Server-side fetches under `demo` | The sample drops its `github` sections, and the browser tests fail on any outbound request from the server. | #1 | `apps/web/src/server/catalog-sample.test.ts`: "it drops the github sections, which fetch a live account, and keeps the rest"<br>`tests/e2e/demo.spec.ts`: "rendering the sample in every variant reaches no host outside the app" | in place |
 | demo-5 | The demo passes for the owner's site in search results or shared links. | Identity | Metadata, robots, and the sitemap under `demo` | Every demo response sends `X-Robots-Tag: noindex`, robots disallows everything, and the sitemap is empty. #22 removes Person JSON-LD from every demo route. | #22 | `tests/e2e/demo.spec.ts`: "robots.txt disallows everything and the sitemap is empty"<br>#22 (planned): "under demo no route emits Person JSON-LD" | planned |
 
+### Visitor routes
+
+<!-- prettier-ignore -->
+| ID | Threat | Asset | Entry point | Mitigation | Owner | Tests | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| route-1 | A visitor path redirects off the site, or a variant's view takes a path an API, Studio, or metadata route answers. | Visitors, live site | `/[...view]`, `/work/[slug]/[...view]`, `/sample/[[...path]]` | A view's redirect goes only to its parent route on this site, written from the base path and a registered `?variant=`. A path view can't start with a segment the host owns, and generation fails on one. The root catch-all leaves every first segment the route table owns to its own route, and a path under one is missing before the catalog loads. A top-level `public/` name is one no view or route can take. | #5 | `packages/variant-contract/src/routes.test.ts`: "a view only another installed variant declares redirects to its canonical parent"<br>`apps/web/src/lib/visitor-routes.test.ts`: "a path under a first segment the host owns is missing before the catalog loads"<br>`apps/web/src/server/routes.test.ts`: "the catch-all shadows no API, metadata, or build path, in any profile (#5, Slice 4)"<br>`packages/variant-contract/src/node/registry.test.ts`: "a path view under any reserved first segment stops generation (#5, Slice 4)"<br>`tests/routes/views.spec.ts`: "beside the catch-all, every API and metadata route still answers for itself"<br>`apps/web/src/server/routes.test.ts`: "every top-level public/ entry is a name no view or route takes, so a file there is served" | in place |
+
 ### GitHub token and data
 
 <!-- prettier-ignore -->

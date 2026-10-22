@@ -151,7 +151,7 @@ The clusters:
 
 ### Wave 3: Polish
 
-- **Navigation.** Pick the affordance that fits the idea: a table of contents, a sidebar, an overlay, marginalia. Link only sections that render. A link to a section is `#${input.ids.prefix}${section.id}`.
+- **Navigation.** Pick the affordance that fits the idea: a table of contents, a sidebar, an overlay, marginalia. Link only sections that render. A link to a section is `#${input.ids.prefix}${section.id}`, and a link to a route, a view included, is `routeHref(input, target)` from `@portfolio/variant-contract`, so it works below `/sample` and #7's preview prefix too.
 - **Controls and content slots.** Owner-tunable choices (a hero layout, a featured project) are manifest `controls`, read from `input.controls`. Places the composition needs content are `contentSlots`, with what happens when they're empty.
 - **Enhancements.** Optional client islands, declared in the manifest's `enhancements` with their `requires` (such as `webgl2` or `motion-allowed`). The page must read completely without them. Reserve their space in the layout.
 - **Motion.** `motionIntent` says how much the composition moves. Under the site's `reduce` policy, or a visitor's reduced-motion setting under `respect-os`, nothing runs at load, after a jump, or as the page scrolls, no `requestAnimationFrame` loop keeps going, and links jump. CSS rules don't reach script motion: gate it on `useMotionPreference()` inside a `MotionPolicyProvider` fed `input.presentation.motionPolicy`. `tests/e2e/motion-contract.spec.ts` checks every registered composition. (`references/common-bugs.md` §8)
