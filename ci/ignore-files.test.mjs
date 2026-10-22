@@ -94,3 +94,11 @@ test('the image build context leaves out env files at any depth, and keeps .env.
   }
   assert.equal(ignored('.env.example'), false);
 });
+
+test("next dev's data directory stays out of commits and out of the image", () => {
+  const data = ['.data/store.json', '.data/ephemeral/auth/sessions/x.json', '.data/revisions/x'];
+  assert.deepEqual(gitIgnored(data), data);
+  for (const file of data) assert.ok(ignored(file), file);
+  // Only the root's: a .data deeper down is someone else's.
+  assert.deepEqual(gitIgnored(['packages/core/.data/x']), []);
+});

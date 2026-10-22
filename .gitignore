@@ -32,6 +32,8 @@ playwright-report
 # Deployment secrets, such as the owner password hash in deploy/secrets/.
 # None is ever committed (#2).
 secrets/
+# `pnpm dev`'s owner data directory (#3): sessions, drafts, and revisions.
+/.data/
 # `pnpm dev`'s defaults: read-only from config/. No secrets.
 !apps/web/.env.development
 

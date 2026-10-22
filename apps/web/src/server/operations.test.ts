@@ -235,8 +235,33 @@ test('config.status takes no input and returns the redacted summary', () => {
     secrets: { PORTFOLIO_AUTH_PASSWORD_HASH: 'set', GITHUB_TOKEN: 'unset' },
     // How the live site's variant renders (#5).
     variant: { status: 'degraded', requested: 'missing-variant', rendered: 'fallback' },
+    // What serves (#3, item 23).
+    catalog: {
+      state: 'degraded',
+      liveRevisionId: `rev_${'1'.repeat(32)}`,
+      servingRevisionId: `rev_${'0'.repeat(32)}`,
+      renderDrift: [{ kind: 'variant', id: 'missing-variant', revision: '1.0.0', build: null }],
+    },
   };
   assert.equal(status.output.safeParse(summary).success, true);
+  // The documents serve an empty store, and a path or a reason never passes.
+  const empty = {
+    ...summary,
+    catalog: {
+      state: 'live',
+      liveRevisionId: null,
+      servingRevisionId: 'doc-0123456789ab',
+      renderDrift: null,
+    },
+  };
+  assert.equal(status.output.safeParse(empty).success, true);
+  for (const catalog of [
+    { ...summary.catalog, reason: 'damaged:hash_mismatch' },
+    { ...summary.catalog, servingRevisionId: '/srv/data/revisions/x' },
+    { ...summary.catalog, state: 'broken' },
+  ]) {
+    assert.equal(status.output.safeParse({ ...summary, catalog }).success, false);
+  }
   assert.equal(
     status.output.safeParse({ ...summary, variant: { ...summary.variant, status: 'broken' } })
       .success,

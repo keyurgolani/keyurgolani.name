@@ -9,7 +9,7 @@ import { contractValidators } from '@portfolio/variant-contract';
 import { acmePortfolioPhotography } from '../../../../packages/schema/src/__fixtures__/acme-portfolio-photography';
 import { REGISTRY } from '~/lib/variants';
 import { createAppearanceCatalog } from './appearance-catalog';
-import { BUNDLED_SAMPLE_NAMES } from './catalog-documents';
+import { BUNDLED_SAMPLE_NAMES } from '../lib/sample-identity';
 import { openSampleCatalog } from './catalog-sample';
 
 // The sample adapter for `demo` (#1, item 16): the bundled pair, read once,
@@ -60,12 +60,15 @@ test('it serves the bundled pair, frozen', async () => {
   assert.ok(opened.ok, JSON.stringify(opened.issues));
   assert.deepEqual(opened.issues, []);
   const live = await opened.reader.getLive();
-  assert.ok(BUNDLED_SAMPLE_NAMES.includes(live.unit.portfolio.identity.name));
-  assert.equal(live.unit.site.appearance.variant, 'editorial-evidence');
-  assert.match(live.revisionId, /^sample-[0-9a-f]{12}$/);
+  assert.ok(BUNDLED_SAMPLE_NAMES.includes(live.unit!.portfolio.identity.name));
+  assert.equal(live.unit!.site.appearance.variant, 'editorial-evidence');
+  assert.match(live.revisionId ?? '', /^sample-[0-9a-f]{12}$/);
+  // The port's shape (#3): always live, with its unit's hash.
+  assert.equal(live.state, 'live');
+  assert.match(live.unitHash ?? '', /^sha256:[0-9a-f]{64}$/);
   assert.ok(Object.isFrozen(live));
-  assert.ok(Object.isFrozen(live.unit.portfolio.identity));
-  assert.ok(Object.isFrozen(live.unit.site.appearance));
+  assert.ok(Object.isFrozen(live.unit!.portfolio.identity));
+  assert.ok(Object.isFrozen(live.unit!.site.appearance));
   assert.equal(await opened.reader.getLive(), live);
 });
 
@@ -79,7 +82,7 @@ test('it keeps every section, and hands on the snapshots bundled beside the exam
   );
   const opened = openSampleCatalog({ examples: EXAMPLES });
   assert.ok(opened.ok, JSON.stringify(opened.issues));
-  const { unit } = await opened.reader.getLive();
+  const unit = (await opened.reader.getLive()).unit!;
   assert.deepEqual(
     (unit.portfolio.sections ?? []).map(({ kind }) => kind),
     written.map(({ kind }) => kind),

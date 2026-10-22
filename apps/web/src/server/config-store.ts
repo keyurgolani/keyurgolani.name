@@ -20,6 +20,10 @@ export interface DeploymentState {
   readonly pages?: StudioPages;
   /** How grant paths are checked and what they render (#7). Only owner's composition binds it. */
   readonly previews?: PreviewGrantsPort;
+  /** Owner only: whether the data directory passes its write, sync, and rename probe (#3), at most every 30 s. */
+  readonly dataDirectory?: () => Promise<boolean>;
+  /** Owner only: lets the data directory's server claim go, at once (#3). register() runs it as the process exits. */
+  readonly release?: () => void;
 }
 
 export const NOT_LOADED =
@@ -53,10 +57,11 @@ export function setDeploymentState(state: DeploymentState | undefined): void {
 
 /**
  * Whether visitor pages can render (#5, Slice 3, item 6). It's true until
- * something says otherwise. #3's CatalogReader sets it at startup and on
- * every getLive(), false while the catalog is empty or incompatible, and
- * proxy.ts answers each visitor page with a 503 meanwhile, since a page
- * can't set its own status.
+ * something says otherwise. #3's RevisionCatalogReader sets it, through the
+ * callback the composition root passes it, each time it decides what serves:
+ * false while nothing is servable, `empty` or `incompatible`, and proxy.ts
+ * answers each visitor page with a 503 meanwhile, since a page can't set its
+ * own status.
  */
 export function isServable(): boolean {
   return (globalThis as Holder)[SERVABLE] ?? true;

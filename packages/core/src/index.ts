@@ -24,7 +24,9 @@ export {
   type SourceFinding,
 } from './catalog/source';
 export {
+  contentHash,
   isSha256,
+  unitHashOf,
   type DocumentInput,
   type DocumentName,
   type Rendering,

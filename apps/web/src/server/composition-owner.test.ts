@@ -217,7 +217,9 @@ test('owner loads its modules only through the composition root', () => {
     'server/owner/data-directory',
     'server/owner/index',
     'server/owner/preview',
+    'server/owner/revision-integrity',
     'server/owner/session-mint',
+    'server/owner/store',
   ]);
   assert.deepEqual(state.degraded, []);
 });
@@ -257,7 +259,16 @@ test('config.status shows each secret as set and never a value or a path', async
   assert.ok(!text.includes(sourceDir), text);
   const { data } = JSON.parse(text) as { data: Record<string, unknown> };
   assert.deepEqual(data.secrets, { PORTFOLIO_AUTH_PASSWORD_HASH: 'set', GITHUB_TOKEN: 'set' });
-  assert.deepEqual(data.adapters, { catalog: 'documents' });
+  // Owner reads through the revision store's reader (#3), which serves the
+  // mounted documents while the store is empty.
+  assert.deepEqual(data.adapters, { catalog: 'revisions' });
+  assert.deepEqual(data.catalog, {
+    state: 'live',
+    liveRevisionId: null,
+    servingRevisionId: (await state.catalog.getLive()).revisionId,
+    renderDrift: null,
+  });
+  assert.match(String((data.catalog as { servingRevisionId: unknown }).servingRevisionId), /^doc-/);
   assert.equal(data.origin, ORIGIN);
   // The owner's diagnostic (#5): the site example selects a variant this
   // build doesn't register yet, so the fallback composition renders.

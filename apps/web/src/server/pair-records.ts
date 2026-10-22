@@ -6,8 +6,8 @@ import type { PublicationUnit } from './catalog-port';
 import type { ConfigIssue } from './config';
 import { deepFreeze } from './freeze';
 
-// What both catalog adapters do with a loaded pair: its records as startup
-// issues, its revision id, and its frozen publication unit.
+// What demo's sample adapter does with its loaded pair: its records as
+// startup issues, its revision id, and its frozen publication unit.
 
 /**
  * A diagnostic record as a startup issue, as `pnpm config:validate` prints

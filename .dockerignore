@@ -30,6 +30,8 @@ legacy
 # Deployment secrets, such as deploy/secrets/owner_password_hash (#2). The
 # builder copies the whole tree, so they'd otherwise reach the image.
 **/secrets/
+# `pnpm dev`'s owner data directory (#3): sessions, drafts, and revisions.
+.data
 
 # Personal portfolio data stays out of the image: the six document names, and
 # any other portfolio.* such as an old portfolio.toml. Only the examples ship.

@@ -21,17 +21,19 @@ import { REGISTRY } from '~/lib/variants';
 import { acmePortfolioPhotography } from '../../../../packages/schema/src/__fixtures__/acme-portfolio-photography';
 import {
   BUNDLED_SAMPLE_NAMES,
-  openDocumentsCatalog,
-  type DocumentsCatalogOptions,
-  type OpenDocumentsResult,
-} from './catalog-documents';
+  openSourceCatalog,
+  type OpenSourceCatalogResult,
+  type SourceCatalogInput,
+} from './catalog-source';
 import type { ConfigIssue, RuntimeMode } from './config';
 import { pairDigest } from './pair-records';
 
 // The source-directory and document rows of the startup matrix for the pair
-// (#4, items 4 to 6), plus the adapter's re-validation under next dev. The
-// schema package's own tests cover each diagnostic; these cover how the
-// adapter turns them into startup issues.
+// (#4, items 4 to 6), plus the reader's re-validation under next dev, through
+// @portfolio/core's SourceCatalogReader (#3, item 19). The schema package's
+// own tests cover each diagnostic; these cover how the reader turns them
+// into startup issues. packages/core/src/catalog/source.test.ts covers the
+// snapshots and the media document beside the pair.
 
 const ROOT = '../../../../';
 const EXAMPLES = {
@@ -63,7 +65,7 @@ const CATALOG: AppearanceCatalog = {
 const LIVE = contractValidators(REGISTRY, { live: true });
 
 function tempDir(t: { after: (fn: () => void) => void }, files: Record<string, string> = {}) {
-  const dir = mkdtempSync(path.join(tmpdir(), 'catalog-documents-'));
+  const dir = mkdtempSync(path.join(tmpdir(), 'catalog-source-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   for (const [name, text] of Object.entries(files)) writeFileSync(path.join(dir, name), text);
   return dir;
@@ -77,9 +79,9 @@ const pair = (portfolio = PORTFOLIO, site = SITE) => ({
 function open(
   sourceDir: string,
   mode: RuntimeMode,
-  overrides: Partial<DocumentsCatalogOptions> = {},
-): OpenDocumentsResult {
-  return openDocumentsCatalog({
+  overrides: Partial<SourceCatalogInput> = {},
+): OpenSourceCatalogResult {
+  return openSourceCatalog({
     sourceDir,
     mode,
     examples: EXAMPLES,
@@ -89,7 +91,7 @@ function open(
   });
 }
 
-function fatal(result: OpenDocumentsResult): ConfigIssue[] {
+function fatal(result: OpenSourceCatalogResult): ConfigIssue[] {
   assert.equal(result.ok, false);
   return result.issues.filter((issue) => issue.severity === 'fatal');
 }
@@ -144,8 +146,8 @@ test('neither document renders the bundled examples under next dev, with a warni
   assert.ok(result.ok, JSON.stringify(result.issues));
   assert.deepEqual(codes(result.issues), ['warning:source_empty']);
   const live = await result.reader.getLive();
-  assert.equal(live.unit.portfolio.identity.name, BUNDLED_SAMPLE_NAMES[0]);
-  assert.equal(live.unit.site.appearance.variant, 'editorial-evidence');
+  assert.equal(live.unit!.portfolio.identity.name, BUNDLED_SAMPLE_NAMES[0]);
+  assert.equal(live.unit!.site.appearance.variant, 'editorial-evidence');
 });
 
 test('one document alone is fatal in every mode', (t) => {
@@ -284,7 +286,7 @@ test('a variant the build does not register only warns, and the pair serves, for
   // It names neither the id nor a path, and says how to install one.
   assert.ok(!result.issues[0]!.message.includes('retro'));
   assert.match(result.issues[0]!.remediation ?? '', /pnpm --filter @portfolio\/web add/);
-  assert.equal((await result.reader.getLive()).unit.site.appearance.variant, 'retro');
+  assert.equal((await result.reader.getLive()).unit!.site.appearance.variant, 'retro');
   // Not live, as #3's publish will check, the same record blocks.
   const published = open(dir, 'production', { validators: contractValidators(REGISTRY) });
   assert.deepEqual(
@@ -376,9 +378,14 @@ test('a valid pair becomes one frozen revision, named by a hash over both docume
   });
   assert.ok(read.ok);
   assert.equal(live.revisionId, `doc-${pairDigest(read.sources)}`);
-  assert.equal(live.unit.portfolio.identity.name, 'Rowan Test');
-  assert.equal(live.unit.site.appearance.colorScheme, 'warm');
-  for (const frozen of [live, live.unit, live.unit.portfolio.sections, live.unit.site.appearance]) {
+  assert.equal(live.unit!.portfolio.identity.name, 'Rowan Test');
+  assert.equal(live.unit!.site.appearance.colorScheme, 'warm');
+  for (const frozen of [
+    live,
+    live.unit,
+    live.unit!.portfolio.sections,
+    live.unit!.site.appearance,
+  ]) {
     assert.ok(Object.isFrozen(frozen));
   }
   assert.ok(Object.isFrozen(result.reader));
@@ -426,14 +433,15 @@ test('the snapshots beside the pair reach the revision, frozen (#10)', async (t)
   const result = open(withSnapshot(t, 'github.json', GITHUB_SNAPSHOT), 'production');
   assert.ok(result.ok, JSON.stringify(result.issues));
   assert.deepEqual(result.issues, []);
-  const live = await result.reader.getLive();
-  assert.deepEqual(Object.keys(live.unit.snapshots), ['github']);
-  assert.ok(Object.isFrozen(live.unit.snapshots));
-  assert.equal(live.unit.media, undefined);
+  const { unit } = await result.reader.getLive();
+  assert.ok(unit);
+  assert.deepEqual(Object.keys(unit.snapshots), ['github']);
+  assert.ok(Object.isFrozen(unit.snapshots));
+  assert.equal(unit.media, undefined);
   // Without a snapshots directory, the unit has none.
   const bare = open(tempDir(t, pair()), 'production');
   assert.ok(bare.ok);
-  assert.deepEqual((await bare.reader.getLive()).unit.snapshots, {});
+  assert.deepEqual((await bare.reader.getLive()).unit?.snapshots, {});
 });
 
 test('a snapshot that does not read stops startup, naming its file and never quoting it (#10)', (t) => {
@@ -480,7 +488,7 @@ test('a file in snapshots/ that is no snapshot only warns, and the pair serves (
     result.issues.map((issue) => [issue.severity, issue.code, issue.file]),
     [['warning', 'snapshot.ignored', 'snapshots/notes.txt']],
   );
-  assert.deepEqual((await result.reader.getLive()).unit.snapshots, {});
+  assert.deepEqual((await result.reader.getLive()).unit?.snapshots, {});
 });
 
 test('under next dev an edit to a snapshot re-validates, as an edit to a document does (#10)', async (t) => {
@@ -498,7 +506,7 @@ test('under next dev an edit to a snapshot re-validates, as an edit to a documen
     [['snapshot.syntax', 'snapshots/github.json']],
   );
   rewrite(file, GITHUB_SNAPSHOT, 3_000);
-  assert.deepEqual((await result.reader.getLive()).unit.snapshots, first.unit.snapshots);
+  assert.deepEqual((await result.reader.getLive()).unit?.snapshots, first.unit?.snapshots);
 });
 
 test('production reads the pair once and never again', async (t) => {
@@ -525,7 +533,7 @@ test('under next dev an edit to either document re-validates, and an invalid one
 
   rewrite(portfolio, PORTFOLIO.replace('Rowan Test', 'Rowan Edited'), 2_000);
   const edited = await result.reader.getLive();
-  assert.equal(edited.unit.portfolio.identity.name, 'Rowan Edited');
+  assert.equal(edited.unit!.portfolio.identity.name, 'Rowan Edited');
   assert.notEqual(edited.revisionId, first.revisionId);
 
   rewrite(site, SITE.replace('colorScheme: warm', 'colorScheme: retro'), 3_000);
@@ -549,7 +557,7 @@ test('under next dev an edit to either document re-validates, and an invalid one
   rmSync(portfolio);
   rmSync(site);
   const fallback = await result.reader.getLive();
-  assert.equal(fallback.unit.portfolio.identity.name, BUNDLED_SAMPLE_NAMES[0]);
+  assert.equal(fallback.unit!.portfolio.identity.name, BUNDLED_SAMPLE_NAMES[0]);
   assert.equal(reported.at(-1)?.code, 'source_empty');
 });
 

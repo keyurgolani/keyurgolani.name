@@ -1,11 +1,13 @@
 import 'server-only';
 import path from 'node:path';
-import { liveContext } from '~/lib/variants';
+import { CONTENT_EXTENSIONS, liveContext, REGISTRY } from '~/lib/variants';
+import webPackage from '../../package.json';
 import { issueLogLine, type ConfigIssue, type Profile } from './config';
 import { setDeploymentState } from './config-store';
 import { log } from './log';
 import type { Registration } from './start-or-exit';
 import { runStartup, type StartupResult } from './startup';
+import { buildUnitChecks, renderDrift } from './unit-checks';
 
 /**
  * Validates the deployment. When it can start, stores the result, logs any
@@ -34,6 +36,17 @@ export async function registerDeployment(): Promise<Registration> {
     report: (issue) => {
       console.log(issueLogLine(issue, result.profile));
     },
+    // What a revision is checked with, published and served (#3).
+    unitChecks: (origin) =>
+      buildUnitChecks({
+        registry: REGISTRY,
+        extensions: CONTENT_EXTENSIONS,
+        origin,
+        appVersion: webPackage.version,
+      }),
+    renderDrift: (rendering) => renderDrift(REGISTRY, rendering),
+    // `next dev` keeps owner's data in the workspace root's .data (#3).
+    devDataDir: path.resolve(/*turbopackIgnore: true*/ cwd, '..', '..', '.data'),
   });
   if (!result.ok) {
     return {
@@ -42,6 +55,10 @@ export async function registerDeployment(): Promise<Registration> {
     };
   }
   setDeploymentState(result.state);
+  // The data directory's server claim goes with the process, however it
+  // exits; Next's own SIGTERM handling ends in an exit (#3, item 21).
+  const { release } = result.state;
+  if (release) process.once('exit', release);
   // The server keeps running, so stdout can take its time with these.
   for (const issue of result.issues) console.log(issueLogLine(issue, result.profile));
   log({ level: 'info', event: 'deployment.config', ...result.summary });
