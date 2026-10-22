@@ -4,6 +4,7 @@ import { contrast, isHex, mix } from './color';
 import { anchorV1, highContrastV1, type Anchors } from './derive';
 import { COLOR_ROLES, type ColorTokens } from './tokens';
 import { WARM_PARCHMENT, pick, randomHex, seeded } from './test-support/packs';
+import { anchorStops, assertStops, highContrastStops } from './test-support/stops';
 
 const LIGHT = WARM_PARCHMENT.anchors!.light!;
 const DARK = WARM_PARCHMENT.anchors!.dark!;
@@ -138,18 +139,10 @@ test('property: for any anchors whose text passes, every role anchor-v1 solves p
     const mode = pick(random, ['light', 'dark'] as const);
     const anchors = randomAnchors(random, mode);
     const set = anchorV1(anchors, mode);
-    assertGate(set, `${mode} ${JSON.stringify(anchors)}`);
-    // A text role that moved, short of becoming the text color itself, stopped at its limit plus 0.1.
-    const starts = {
-      'text-secondary': mix(anchors.text, anchors.canvas, 28),
-      'text-muted': mix(anchors.text, anchors.canvas, mode === 'light' ? 44 : 34),
-      'accent-text': anchors.accent,
-    } as const;
-    for (const [role, start] of Object.entries(starts) as [keyof typeof starts, string][]) {
-      if (set[role] !== start && set[role] !== anchors.text) {
-        assert.ok(worst(set, role) >= 4.6, `${mode} ${role} ${JSON.stringify(anchors)}`);
-      }
-    }
+    const label = `${mode} ${JSON.stringify(anchors)}`;
+    assertGate(set, label);
+    // Each role that moved stopped at the first step past its limit plus 0.1.
+    assertStops(set, anchorStops(anchors, mode, set), label);
   }
 });
 
@@ -202,7 +195,9 @@ test('property: high-contrast-v1 passes its targets from any base set', () => {
     const mode = pick(random, ['light', 'dark'] as const);
     const base = anchorV1(randomAnchors(random, mode), mode);
     for (const polarity of ['light', 'dark'] as const) {
-      assertGate(highContrastV1({ [mode]: base }, polarity), `${mode} to ${polarity}`, 7, 4.5);
+      const set = highContrastV1({ [mode]: base }, polarity);
+      assertGate(set, `${mode} to ${polarity}`, 7, 4.5);
+      assertStops(set, highContrastStops(base, polarity, set), `${mode} to ${polarity}`);
     }
   }
 });
