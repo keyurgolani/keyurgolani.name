@@ -1,6 +1,6 @@
 # Harness fixture whose text looks like markup. The tagline reaches the
 # page's JSON-LD; it must stay text there and never close the script element.
-schemaVersion: 2
+schemaVersion: 3
 locale: en
 direction: ltr
 
@@ -8,7 +8,11 @@ identity:
   name: Rowan Fixture
   tagline: 'Ships </script><script>window.__injected = true</script> & <!-- notes --> daily'
 
-# A section, so the pair has one to show (content.empty otherwise).
+# A contact record and the section that places it, so the pair has one to
+# show (content.empty otherwise).
+contact:
+  message: Write any time.
+
 sections:
   - kind: contact
     id: contact

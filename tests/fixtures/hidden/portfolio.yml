@@ -1,11 +1,17 @@
 # Harness fixture: sections the site document hides, and data from a content
 # extension the host doesn't register: a section of its own, and entries on
-# the identity, a link, a section, and an item. Each holds a canary-hidden-
-# marker that must never reach a visitor: not the page, its RSC payload, its
-# JSON-LD, or the feed. The hidden experience and skills sections come before
-# the visible ones the JSON-LD reads, so one that leaked would change what it
-# says. .test hosts only.
-schemaVersion: 2
+# the identity, a link, a section, and an item. Records only a hidden section
+# lists, their media, the parts of the practice and the contact record only a
+# hidden section places, and a private work a visible section lists, with a
+# private asset only it uses, are gone from what visitors get too. Each holds
+# a canary-hidden- marker, in its id where it has one, that must never reach a
+# visitor: not the page, its RSC payload, its JSON-LD, or the feed. The hidden
+# chronology and practice sections come before the visible ones the JSON-LD
+# reads, so one that leaked would change what it says. In version 3 a part of
+# the practice shows wherever a visible section places it, so the hidden
+# skill sits in the tools part, which only a hidden section places. .test
+# hosts only.
+schemaVersion: 3
 locale: en-GB
 direction: ltr
 
@@ -24,60 +30,124 @@ links:
       '@other/portfolio-x':
         note: canary-hidden-link
 
+practice:
+  skills:
+    - items: [Accessibility, TypeScript]
+  tools:
+    - items:
+        - name: canary-hidden-skill
+  services:
+    - items:
+        - name: canary-hidden-practice
+
+works:
+  - id: notes-on-visible-things
+    title: Notes on visible things
+    medium: writing
+    url: https://rowan.test/visible
+    publishedAt: '2026-01-02'
+    summary: An essay every visitor sees.
+  - id: canary-hidden-essay
+    title: canary-hidden-essay
+    medium: writing
+    url: https://rowan.test/canary-hidden-url
+    publishedAt: '2026-02-03'
+    summary: canary-hidden-summary
+  - id: canary-hidden-record
+    slug: canary-hidden-record-slug
+    title: canary-hidden-record
+    medium: writing
+    publishedAt: '2026-03-04'
+    summary: canary-hidden-record-summary
+    cover:
+      asset: canary-hidden-media-cover
+      caption: canary-hidden-media
+    caseStudy:
+      challenge: canary-hidden-record-challenge
+  - id: canary-hidden-private-work
+    slug: canary-hidden-private-slug
+    title: canary-hidden-private
+    medium: writing
+    visibility: private
+    publishedAt: '2026-04-05'
+    summary: canary-hidden-private-summary
+    cover:
+      asset: canary-hidden-private-cover
+    caseStudy:
+      challenge: canary-hidden-private-challenge
+
+chronology:
+  - id: canary-hidden-role-canary-hidden-organization
+    kind: role
+    title: canary-hidden-role
+    organization: canary-hidden-organization
+    period: { start: '2025-01' }
+  - id: staff-engineer-calm-co
+    kind: role
+    title: Staff engineer
+    organization: Calm Co
+    period: { start: '2023-04' }
+    extensions:
+      '@other/portfolio-x':
+        note: canary-hidden-item
+
+media:
+  - id: canary-hidden-media-cover
+    kind: image
+    source: hidden/canary-hidden-media.png
+    alt: canary-hidden-media
+    credit: canary-hidden-media
+  - id: canary-hidden-private-cover
+    kind: image
+    source: hidden/canary-hidden-private.png
+    visibility: private
+    alt: canary-hidden-private-media
+
+contact:
+  message: canary-hidden-contact
+
 sections:
   - kind: hero
     id: top
     tagline: I build calm software.
 
-  - kind: experience
+  - kind: chronology
     id: roles-draft
     title: canary-hidden-roles
-    items:
-      - role: canary-hidden-role
-        organization: canary-hidden-organization
-        period: { start: '2025-01' }
+    items: [canary-hidden-role-canary-hidden-organization]
 
-  - kind: experience
+  - kind: chronology
     id: work
     title: Work
-    items:
-      - role: Staff engineer
-        organization: Calm Co
-        period: { start: '2023-04' }
-        extensions:
-          '@other/portfolio-x':
-            note: canary-hidden-item
+    items: [staff-engineer-calm-co]
 
-  - kind: skills
+  - kind: practice
     id: skills-draft
     title: canary-hidden-skills
-    items: [canary-hidden-skill]
+    part: tools
 
-  - kind: skills
+  - kind: practice
+    id: services-draft
+    title: canary-hidden-services
+    part: services
+
+  - kind: practice
     id: skills
     title: Skills
-    items: [Accessibility, TypeScript]
+    part: skills
 
-  - kind: writings
+  - kind: works
     id: essays
     title: Essays
     extensions:
       '@other/portfolio-x':
         note: canary-hidden-section
-    items:
-      - title: Notes on visible things
-        url: https://rowan.test/visible
-        publishedAt: '2026-01-02'
-        summary: An essay every visitor sees.
+    items: [notes-on-visible-things, canary-hidden-private-work]
 
-  - kind: writings
+  - kind: works
     id: drafts
     title: canary-hidden-title
-    items:
-      - title: canary-hidden-essay
-        url: https://rowan.test/canary-hidden-url
-        publishedAt: '2026-02-03'
-        summary: canary-hidden-summary
+    items: [canary-hidden-essay, canary-hidden-record]
 
   - kind: '@other/portfolio-x/gallery'
     id: gallery
@@ -88,4 +158,4 @@ sections:
 
   - kind: contact
     id: contact
-    title: Contact
+    title: canary-hidden-contact-title

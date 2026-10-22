@@ -1,19 +1,20 @@
-# Contract fixture (#5, Slice 6): content no visitor may see. The site document hides three
-# sections, and data from a content extension no host registers sits on the identity, a
-# link, a section, an item, and in a section of its own. Each holds the marker canary-hidden,
-# which must never reach the page, its RSC payload, or a render input, whichever
-# composition renders it. .test hosts only.
-schemaVersion: 2
+# Contract fixture (#5, Slice 6; #10): content no visitor may see. The site document hides
+# six sections, and data from a content extension no host registers sits on the identity, a
+# link, a section, an item, and in a section of its own. Records only a hidden section lists,
+# their media, a practice part and the contact record only a hidden section places, and a
+# private work a visible section lists, with a private asset only it uses, are gone from the
+# view too. Each holds a canary-hidden marker, in its id where it has one, which must never
+# reach the page, its RSC payload, the feed, JSON-LD, or a render input, whichever
+# composition renders it. Each visible section keeps one plain entry. .test hosts only.
+schemaVersion: 3
 locale: en
 direction: ltr
-
 identity:
   name: Robin Hidden
   tagline: Shows only what's ready
   extensions:
     '@other/portfolio-x':
       note: canary-hidden-identity
-
 links:
   - platform: website
     url: https://hidden.test
@@ -21,64 +22,112 @@ links:
     extensions:
       '@other/portfolio-x':
         note: canary-hidden-link
-
+practice:
+  skills:
+    - items: [canary-hidden-skill]
+  services:
+    - items:
+        - name: canary-hidden-practice
+          description: canary-hidden-practice-description
+works:
+  - id: notes-on-visible-things
+    title: Notes on visible things
+    medium: writing
+    summary: An essay every visitor sees.
+    url: https://hidden.test/visible
+    publishedAt: 2026-01-02
+  - id: canary-hidden-essay
+    title: canary-hidden-essay
+    medium: writing
+    summary: canary-hidden-summary
+    url: https://hidden.test/canary-hidden-url
+    publishedAt: 2026-02-03
+  - id: canary-hidden-record
+    slug: canary-hidden-record-slug
+    title: canary-hidden-record
+    medium: writing
+    summary: canary-hidden-record-summary
+    publishedAt: 2026-03-04
+    cover:
+      asset: canary-hidden-media-cover
+      caption: canary-hidden-media
+    caseStudy:
+      challenge: canary-hidden-record-challenge
+  - id: canary-hidden-private-work
+    slug: canary-hidden-private-slug
+    title: canary-hidden-private
+    medium: writing
+    visibility: private
+    summary: canary-hidden-private-summary
+    publishedAt: 2026-04-05
+    cover:
+      asset: canary-hidden-private-cover
+    caseStudy:
+      challenge: canary-hidden-private-challenge
+chronology:
+  - id: canary-hidden-role-canary-hidden-organization
+    kind: role
+    title: canary-hidden-role
+    period: { start: 2025-01 }
+    organization: canary-hidden-organization
+  - id: staff-engineer-calm-co
+    kind: role
+    title: Staff engineer
+    period: { start: 2023-04 }
+    organization: Calm Co
+    extensions:
+      '@other/portfolio-x':
+        note: canary-hidden-item
+media:
+  - id: canary-hidden-media-cover
+    kind: image
+    source: hidden/canary-hidden-media.png
+    alt: canary-hidden-media
+    credit: canary-hidden-media
+  - id: canary-hidden-private-cover
+    kind: image
+    source: hidden/canary-hidden-private.png
+    visibility: private
+    alt: canary-hidden-private-media
+contact:
+  message: canary-hidden-contact
 sections:
   - kind: hero
     id: top
     tagline: Some of this page is still a draft.
-
-  - kind: experience
+  - kind: chronology
     id: roles-draft
     title: canary-hidden-roles
-    items:
-      - role: canary-hidden-role
-        organization: canary-hidden-organization
-        period: { start: '2025-01' }
-
-  - kind: experience
+    items: [canary-hidden-role-canary-hidden-organization]
+  - kind: chronology
     id: work
     title: Work
-    items:
-      - role: Staff engineer
-        organization: Calm Co
-        period: { start: '2023-04' }
-        extensions:
-          '@other/portfolio-x':
-            note: canary-hidden-item
-
-  - kind: skills
+    items: [staff-engineer-calm-co]
+  - kind: practice
     id: skills-draft
     title: canary-hidden-skills
-    items: [canary-hidden-skill]
-
-  - kind: writings
+    part: skills
+  - kind: practice
+    id: services-draft
+    title: canary-hidden-services
+    part: services
+  - kind: works
     id: essays
     title: Essays
+    items: [notes-on-visible-things, canary-hidden-private-work]
     extensions:
       '@other/portfolio-x':
         note: canary-hidden-section
-    items:
-      - title: Notes on visible things
-        url: https://hidden.test/visible
-        publishedAt: '2026-01-02'
-        summary: An essay every visitor sees.
-
-  - kind: writings
+  - kind: works
     id: drafts
     title: canary-hidden-title
-    items:
-      - title: canary-hidden-essay
-        url: https://hidden.test/canary-hidden-url
-        publishedAt: '2026-02-03'
-        summary: canary-hidden-summary
-
+    items: [canary-hidden-essay, canary-hidden-record]
   - kind: '@other/portfolio-x/gallery'
     id: gallery
     title: canary-hidden-gallery
     data:
       items:
         - caption: canary-hidden-gallery-item
-
   - kind: contact
     id: contact
-    title: Contact
+    title: canary-hidden-contact-title

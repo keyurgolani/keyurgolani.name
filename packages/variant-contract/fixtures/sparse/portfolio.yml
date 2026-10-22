@@ -1,42 +1,51 @@
-# Contract fixture (#5, Slice 6): many kinds, each with only what it requires and one item
-# at most, and no hero, so the page's h1 comes from the composition. Nothing optional is
-# set: no subtitles, links, images, dates, or tags.
-schemaVersion: 2
+# Contract fixture (#5, Slice 6; #10): many kinds, each with only what it requires and one
+# item at most, and no hero, so the page's h1 comes from the composition. Nothing optional
+# is set: no subtitles, links, images, dates, or tags, and no curation lists. The contact
+# section shows a contact record of one message, which it needs to show at all.
+schemaVersion: 3
 locale: en
 direction: ltr
-
 identity:
   name: Jo Sparse
-
+practice:
+  skills:
+    - items:
+        - Listening
+works:
+  - id: one-project
+    title: One project
+    medium: software
+chronology:
+  - id: engineer-small-co
+    kind: role
+    title: Engineer
+    period:
+      start: "2020"
+    organization: Small Co
+contact:
+  message: Say hello.
 sections:
   - kind: lede
     id: about
     title: About
     body: A little about me.
-
-  - kind: experience
+  - kind: chronology
     id: experience
     title: Experience
     items:
-      - role: Engineer
-        organization: Small Co
-        period: { start: '2020' }
-
-  - kind: projects
+      - engineer-small-co
+  - kind: works
     id: projects
     title: Projects
     items:
-      - name: One project
-
-  - kind: skills
+      - one-project
+  - kind: practice
     id: skills
     title: Skills
-    items: [Listening]
-
+    part: skills
   - kind: quote
     id: quote
     text: Less, but better.
-
   - kind: contact
     id: contact
     title: Contact
