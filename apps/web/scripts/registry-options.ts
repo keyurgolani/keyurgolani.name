@@ -1,19 +1,13 @@
-// What registry generation runs with (#5, Slice 3; #19, Slice 2):
-// @portfolio/appearance's pack validator and compiler, which
-// @portfolio/variant-contract can't import, since @portfolio/appearance
-// imports it, and the fixture gate. build:registry, check:variants, and
-// check:appearance each read the registry through here, so they read the
-// same one.
+// What registry generation runs with (#5, Slice 3; #19, Slice 2): the
+// fixture gate, and @portfolio/appearance's pack validator and compiler. The
+// generator takes those as functions because @portfolio/appearance imports
+// @portfolio/variant-contract, so importing them there would be a cycle.
+// build:registry, check:variants, and check:appearance all read the registry
+// through here, so they read the same one.
 
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import {
-  PACK_AXES,
-  PACK_KIND_BY_AXIS,
-  PLATFORM_DEFAULTS,
-  validatePackManifest,
-  type PackManifest,
-} from '@portfolio/appearance';
+import { PLATFORM_DEFAULTS, validatePackManifest, type PackManifest } from '@portfolio/appearance';
 import { compilePack, compilePlatform } from '@portfolio/appearance/node';
 import {
   packFiles,
@@ -24,7 +18,6 @@ import {
   type GeneratedFile,
   type PackFile,
   type PackHooks,
-  type PackKind,
   type PackWriteResult,
   type RegistryOptions,
   type RegistryResult,
@@ -41,13 +34,6 @@ export const OUT = path.join(HOST, 'src', 'lib', 'generated');
 export const PACK_OUT = path.join(HOST, 'public', '_portfolio', 'pack');
 
 type Environment = Readonly<Record<string, string | undefined>>;
-
-/** The workspace package that ships each pack kind's first-party fallback. */
-const FALLBACK_PACKAGES: Readonly<Record<PackKind, string>> = {
-  'design-language': '@portfolio/appearance-languages',
-  'color-scheme': '@portfolio/appearance-schemes',
-  typography: '@portfolio/appearance-typography',
-};
 
 /** #19's pack checks, as registry generation takes them. */
 export function packHooks(): PackHooks {
@@ -68,12 +54,21 @@ export function packHooks(): PackHooks {
       return compiled.ok ? { ok: true, ...compiled.pack } : compiled;
     },
     platform: compilePlatform,
-    fallbacks: Object.fromEntries(
-      PACK_AXES.map((axis) => {
-        const kind = PACK_KIND_BY_AXIS[axis];
-        return [kind, { id: PLATFORM_DEFAULTS[axis], packageName: FALLBACK_PACKAGES[kind] }];
-      }),
-    ) as PackHooks['fallbacks'],
+    // Each pack kind's first-party fallback, and the workspace package that ships it.
+    fallbacks: {
+      'design-language': {
+        id: PLATFORM_DEFAULTS.designLanguage,
+        packageName: '@portfolio/appearance-languages',
+      },
+      'color-scheme': {
+        id: PLATFORM_DEFAULTS.colorScheme,
+        packageName: '@portfolio/appearance-schemes',
+      },
+      typography: {
+        id: PLATFORM_DEFAULTS.typography,
+        packageName: '@portfolio/appearance-typography',
+      },
+    },
   };
 }
 

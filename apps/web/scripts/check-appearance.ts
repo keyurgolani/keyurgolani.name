@@ -8,9 +8,9 @@
 // each for the reason it names, so a gate that passes everything fails here.
 // Any failure fails it.
 //
-// --fixture <name> runs the gate with that known-bad input registered beside
-// the build's packs instead, and fails as the gate does: such as
-// `pnpm check:appearance --fixture bad-contrast`.
+// --fixture <name> instead runs the gate with that one known-bad input
+// registered beside the build's packs, and fails when the gate does, as
+// `pnpm check:appearance --fixture bad-contrast` must.
 
 import path from 'node:path';
 import {
