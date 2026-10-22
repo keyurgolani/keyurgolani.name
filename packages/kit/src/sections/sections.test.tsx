@@ -74,7 +74,7 @@ function manifest(extra: Record<string, unknown> = {}) {
       promise: 'Every kind through the shared renderers.',
       description: 'A test composition for the kit.',
       contract: '2.0',
-      schemas: { portfolio: { min: 2, max: 2 }, site: { min: 2, max: 2 } },
+      schemas: { portfolio: { min: 3, max: 3 }, site: { min: 2, max: 2 } },
       tokenContract: 1,
       compositionFamily: 'document',
       motionIntent: 'still',

@@ -1,10 +1,11 @@
 import type { ReactElement } from 'react';
-import type { Stats } from '@portfolio/schema';
 import { Enhancement } from '@portfolio/kit/enhancements';
 import {
+  evidenceOf,
   renderSection,
   VisitorControlSlot,
   type BespokeRenderers,
+  type SectionOf,
   type SectionRendererProps,
 } from '@portfolio/kit/sections';
 import {
@@ -17,25 +18,35 @@ import {
 // ships in: compiled ESM, its .d.ts, styles.css, and manifest.json, with the
 // platform's packages as peers. pnpm test:external-variant builds and packs
 // it, installs the tarball in a temporary worktree, and removes it; nothing
-// installs it in a release. It renders stats bespoke, leaves fun facts out,
-// has a colophon view, and a compact control, and lazy-loads one
+// installs it in a release. It renders evidence bespoke, leaves fun facts
+// out, has a colophon view, and a compact control, and lazy-loads one
 // enhancement, a badge beside the navigation.
 
 type Props = { readonly input: VariantRenderInput };
 
-/** Stats as a ledger: what each figure counts, then the figure. */
-function StatsLedger({ section, level }: SectionRendererProps<Stats>): ReactElement {
+/** Evidence as a ledger: each statement, then its figure, or else its source. */
+function EvidenceLedger({
+  section,
+  input,
+  level,
+}: SectionRendererProps<SectionOf<'evidence'>>): ReactElement {
   const Heading = `h${level}` as const;
   return (
     <>
       {section.title ? <Heading>{section.title}</Heading> : null}
       {section.subtitle ? <p>{section.subtitle}</p> : null}
       <dl className="acme-ledger">
-        {section.items.map((item, index) => (
-          <div key={index} data-metric={item.metric}>
-            <dt>{item.label}</dt>
-            <dd>{String(item.value)}</dd>
-            {item.description ? <dd>{item.description}</dd> : null}
+        {evidenceOf(section, input).map((entry) => (
+          <div key={entry.id} data-evidence-type={entry.type} data-metric={entry.metric?.key}>
+            <dt>{entry.statement}</dt>
+            {entry.metric?.value !== undefined ? (
+              <dd>
+                {String(entry.metric.value)}
+                {entry.metric.unit ? ` ${entry.metric.unit}` : ''}
+              </dd>
+            ) : entry.source ? (
+              <dd>{entry.source.name}</dd>
+            ) : null}
           </div>
         ))}
       </dl>
@@ -44,7 +55,7 @@ function StatsLedger({ section, level }: SectionRendererProps<Stats>): ReactElem
 }
 
 /** The kinds in the manifest's renderedKinds, each with its renderer. */
-const RENDERERS: BespokeRenderers = { stats: StatsLedger };
+const RENDERERS: BespokeRenderers = { evidence: EvidenceLedger };
 
 /** The host's words are English, marked so in a portfolio in another language. */
 const uiLang = ({ portfolio }: VariantRenderInput) =>

@@ -51,7 +51,7 @@ A `file:` dependency must sit under `apps/` or `packages/`, the trees the Docker
   "promise": "Every section in content order, in one readable column.",
   "description": "The host's stand-in. ...",
   "contract": "2.0",
-  "schemas": { "portfolio": { "min": 2, "max": 2 }, "site": { "min": 2, "max": 2 } },
+  "schemas": { "portfolio": { "min": 3, "max": 3 }, "site": { "min": 2, "max": 2 } },
   "tokenContract": 1,
   "compositionFamily": "document",
   "motionIntent": "still",

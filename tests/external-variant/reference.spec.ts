@@ -43,13 +43,16 @@ test(
 );
 
 test(
-  'stats render bespoke as a ledger, and fun facts not at all',
+  'evidence renders bespoke as a ledger, and fun facts not at all',
   { tag: '@defaults', annotation: [ROOT, READ_ONLY] },
   async ({ page }) => {
     await page.goto('/');
-    const stats = page.locator('[data-kind="stats"]');
-    await expect(stats).toHaveAttribute('data-renderer', 'bespoke');
-    await expect(stats.locator('dl.acme-ledger')).toHaveCount(1);
+    const evidence = page.locator('[data-kind="evidence"]');
+    expect(await evidence.count(), 'evidence sections').toBeGreaterThan(0);
+    for (const section of await evidence.all()) {
+      await expect(section).toHaveAttribute('data-renderer', 'bespoke');
+      await expect(section.locator('dl.acme-ledger')).toHaveCount(1);
+    }
     await expect(page.locator('[data-kind="fun-facts"]')).toHaveCount(0);
   },
 );
