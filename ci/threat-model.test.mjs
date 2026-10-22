@@ -23,9 +23,10 @@ const DOC = 'docs/threat-model.md';
 
 const COLUMNS = ['ID', 'Threat', 'Asset', 'Entry point', 'Mitigation', 'Owner', 'Tests', 'Status'];
 // The owners #2 names, plus #3 and #4, which own the publication storage and
-// document controls, #5, which owns the visitor routes, and #8, which owns
-// Studio's browser journal.
-const OWNERS = ['#1', '#2', '#3', '#4', '#5', '#7', '#8', '#9', '#10', '#12', '#21', '#22'];
+// document controls, #5, which owns the visitor routes, #6, which keeps
+// browser source maps out of the default build, and #8, which owns Studio's
+// browser journal.
+const OWNERS = ['#1', '#2', '#3', '#4', '#5', '#6', '#7', '#8', '#9', '#10', '#12', '#21', '#22'];
 // What #2 asks the model to cover, by section: login, session, mutation,
 // import, preview, publish, rollback, and demo isolation, plus the baseline
 // exposure, GitHub, the image optimizer, the same-site demo origin, and

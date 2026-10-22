@@ -141,6 +141,10 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: pnpm ci:build
         run: pnpm ci:build
+      # The default build ships no browser source maps. Only the analyze
+      # build pnpm test:trace reads has them (#6, ci/source-maps.test.mjs).
+      - name: pnpm ci:source-maps
+        run: pnpm ci:source-maps
       - name: Failure summary
         if: ${{ always() }}
         run: node ci/summarize.mjs

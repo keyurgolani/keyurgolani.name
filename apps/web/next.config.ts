@@ -43,6 +43,11 @@ const config: NextConfig = {
     '@portfolio/core',
     ...registeredPackages(),
   ],
+  // Browser source maps only in a PORTFOLIO_ANALYZE=1 build, which pnpm
+  // test:trace reads to attribute chunk bytes to packages (#6, Slice 1).
+  // The default build, the image, and CI never set it, so they ship no
+  // .map file: ci/source-maps.test.mjs and pnpm check:source-maps hold that.
+  productionBrowserSourceMaps: process.env.PORTFOLIO_ANALYZE === '1',
   // No image optimizer: images render as plain <img>. Left on, /_next/image
   // sends its own CSP in place of the baseline one below and writes the
   // decoded url parameter to stderr as it came, so a visitor could forge log
