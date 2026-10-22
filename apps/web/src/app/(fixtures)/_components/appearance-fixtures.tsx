@@ -14,7 +14,7 @@ import {
   type Profile,
   type SelectionText,
 } from '@portfolio/appearance';
-import { Header, Navigation } from '@portfolio/appearance/primitives';
+import { Header, Navigation, Region } from '@portfolio/appearance/primitives';
 import {
   AppearanceDiagnostics,
   PresentationBoundary,
@@ -148,7 +148,7 @@ export function AppearanceFixtures({ profile, query }: AppearanceFixturesProps) 
         <VisitorAppearance model={model} returnTo={RETURN_TO} />
       </Header>
       <DocumentSpecimen ids={DOCUMENT_IDS}>
-        <section aria-labelledby="plates-title" className="fixtures-section" id="plates">
+        <Region labelledBy="plates-title" className="fixtures-section" id="plates">
           <h2 id="plates-title" data-type-role="headline">
             Plates
           </h2>
@@ -177,7 +177,7 @@ export function AppearanceFixtures({ profile, query }: AppearanceFixturesProps) 
               );
             })}
           </div>
-        </section>
+        </Region>
       </DocumentSpecimen>
     </PresentationBoundary>
   );
