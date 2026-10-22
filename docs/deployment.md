@@ -327,6 +327,7 @@ Next writes its own lines to the same streams, as plain text: its startup banner
 | `store.publish.failed`       | `owner`: a publish didn't move it: `stage` is where it stopped and `code` why. Rollback and recover log their own.            |
 | `store.catalog.degraded`     | `owner`: the live revision can't be served, so `servingRevisionId`, the last known good, is. `code` says why.                 |
 | `store.catalog.incompatible` | `owner`: no published revision can be served, so visitors get 503. `code` says why.                                           |
+| `store.pointer.missing`      | `owner`: `live.json` is gone from a store that has published. The last known good serves, `pointer_damaged`.                  |
 | `store.render-drift`         | `owner`: the live revision's variant, packs, or contracts differ from this build's: `drift` lists each ID and both versions.  |
 | `store.repair.failed`        | `owner`: startup repair didn't finish. Visitors are served what can be served, and owner writes wait for the repair.          |
 | `store.writes.stopped`       | `owner`: a Studio write stopped with `code`: the claim isn't this server's, or the repair still fails. Each tries both first. |

@@ -10,9 +10,9 @@ import type { Rendering, UnitChecks } from '../catalog/unit';
 import { publicationUnitOf } from '../catalog/view';
 import { recordOwnerModule } from '../load-trace';
 import { StoreError, type StoreLog } from './common';
-import type { ReadFs } from './fs-port';
+import type { FileStats, ReadFs } from './fs-port';
 import { storePaths, type RevisionId, type Sha256 } from './layout';
-import { DamagedPointerError, readEvents, readLive, type LivePointer } from './pointer';
+import { DamagedPointerError, hasHistory, readEvents, readLive, type LivePointer } from './pointer';
 import { nodeReadFs } from './read-fs';
 import { isTombstoned, readManifest, readRevision, revisionHealth } from './revisions';
 
@@ -27,7 +27,8 @@ import { isTombstoned, readManifest, readRevision, revisionHealth } from './revi
 // check passed. One it can't serve is damaged or incompatible, and the
 // reader serves the last known good in its place, `degraded`, with the
 // reason: the most recently live revision that serves, without a
-// tombstone. With none, it's `incompatible`; with no pointer, `empty`. It
+// tombstone. With none, it's `incompatible`. With no pointer it's `empty`,
+// unless the store has published before, when the pointer is damaged. It
 // never rewrites the pointer: it gets the reads of node:fs and nothing
 // else, and imports no module that writes. It keeps up to four served units
 // by revision ID; as the pointer moves to a kept one, its tombstone, its
@@ -71,6 +72,13 @@ interface Decision {
 
 const NOTHING = { revisionId: null, unitHash: null, unit: null } as const;
 
+/**
+ * The decision for a store that has never published: whenEmpty answers,
+ * asked on every request, since it keeps its own watch.
+ */
+const EMPTY = Symbol('empty');
+type Found = Decision | typeof EMPTY;
+
 export function revisionCatalogReader({
   dataDir,
   checks,
@@ -86,9 +94,9 @@ export function revisionCatalogReader({
     RevisionId,
     { readonly unit: PublicationUnit; readonly unitHash: string }
   >();
-  // The decision for the pointer as last stat'ed, shared by every request
-  // that stats the same file.
-  let decided: { readonly key: string; readonly decision: Promise<Decision> } | undefined;
+  // The decision for the pointer as last stat'ed, or with none, for the
+  // store's events/ and revisions/, shared by every request that finds the same.
+  let decided: { readonly key: string; readonly decision: Promise<Found> } | undefined;
   let lastState: CatalogStatus['state'] | undefined;
   let lastDrift: string | undefined;
   // As the AssetStore finds one: a regular file under its hash, never a
@@ -170,7 +178,23 @@ export function revisionCatalogReader({
     }
   }
 
-  async function decide(): Promise<Decision> {
+  /** What serves while the store has never published: whenEmpty's answer, or nothing. */
+  async function empty(): Promise<Decision> {
+    const base = { liveRevisionId: null, seq: null, unitHash: null };
+    if (!whenEmpty) {
+      return {
+        live: { state: 'empty', ...NOTHING },
+        status: { state: 'empty', ...base, servingRevisionId: null, renderDrift: null },
+      };
+    }
+    const live = await whenEmpty.getLive();
+    return {
+      live,
+      status: { state: live.state, ...base, servingRevisionId: live.revisionId, renderDrift: null },
+    };
+  }
+
+  async function decide(): Promise<Found> {
     let pointer: LivePointer | null;
     let reason: string | undefined;
     try {
@@ -180,29 +204,20 @@ export function revisionCatalogReader({
       pointer = null;
       reason = 'pointer_damaged';
     }
+    if (!pointer && reason === undefined) {
+      if (!(await hasHistory(fs, paths))) return EMPTY;
+      // live.json is gone from a store that has published, as after a bad
+      // restore: the last known good serves, never whenEmpty's documents. A
+      // first publish's revision lands a moment before its pointer does, so
+      // a request in between finds the same, and the next one finds it live.
+      reason = 'pointer_damaged';
+      log({ level: 'error', event: 'store.pointer.missing', code: 'pointer_damaged' });
+    }
     const base = {
       liveRevisionId: pointer?.revisionId ?? null,
       seq: pointer?.seq ?? null,
       unitHash: pointer?.unitHash ?? null,
     };
-    if (!pointer && reason === undefined) {
-      if (whenEmpty) {
-        const live = await whenEmpty.getLive();
-        return {
-          live,
-          status: {
-            state: live.state,
-            ...base,
-            servingRevisionId: live.revisionId,
-            renderDrift: null,
-          },
-        };
-      }
-      return {
-        live: { state: 'empty', ...NOTHING },
-        status: { state: 'empty', ...base, servingRevisionId: null, renderDrift: null },
-      };
-    }
     const drifted = pointer ? await drift(pointer) : null;
     if (pointer) {
       const served = await serve(pointer.revisionId);
@@ -294,11 +309,17 @@ export function revisionCatalogReader({
     };
   }
 
-  /** live.json's stat, the key a decision is kept under, or the error that stopped it. */
+  /**
+   * The key a decision is kept under: live.json's stat; with none, those of
+   * events/ and revisions/, which change as anything lands in either or
+   * leaves it; or the error that stopped it.
+   */
   async function pointerKey(): Promise<string> {
+    const of = (stats: FileStats | null) => (stats ? `${stats.ino}:${stats.mtimeMs}` : 'none');
     try {
       const stats = await fs.stat(paths.live);
-      return stats ? `${stats.ino}:${stats.mtimeMs}:${stats.size}` : 'none';
+      if (stats) return `${stats.ino}:${stats.mtimeMs}:${stats.size}`;
+      return `none:${of(await fs.stat(paths.events))}:${of(await fs.stat(paths.revisions))}`;
     } catch (error) {
       return `unreadable:${String((error as NodeJS.ErrnoException)?.code)}`;
     }
@@ -306,9 +327,8 @@ export function revisionCatalogReader({
 
   async function current(): Promise<Decision> {
     const key = await pointerKey();
-    let decision: Promise<Decision>;
-    // An empty store asks whenEmpty every time, which keeps its own watch.
-    if (decided?.key === key && key !== 'none') {
+    let decision: Promise<Found>;
+    if (decided?.key === key) {
       decision = decided.decision;
     } else {
       // A decision that throws is kept, as a failure: a broken store isn't
@@ -316,7 +336,9 @@ export function revisionCatalogReader({
       decision = decide().catch(failure);
       decided = { key, decision };
     }
-    const done = await decision;
+    const found = await decision;
+    // An empty store asks whenEmpty every time, which keeps its own watch.
+    const done = found === EMPTY ? await empty().catch(failure) : found;
     // The latest decision sets the flag on every call, a kept one included,
     // so nothing else has to ask the reader again for visitors to see it.
     // One a newer pointer overtook while it ran says nothing.
