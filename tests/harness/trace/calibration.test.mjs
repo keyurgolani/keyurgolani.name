@@ -106,7 +106,7 @@ test('an entry joins the block in name order, under the tool version, descriptio
     withCalibration(later, 'fallback-route', { n: 3 }).calibration['fallback-route'],
     { n: 3 },
   );
-  for (const note of ['unmapped', 'dataUrls', 'analyzeBytes']) {
+  for (const note of ['unmapped', 'dataUrls', 'analyzeBytes', 'conditions']) {
     assert.ok(CALIBRATION_NOTES[note], `slice 3's ${note} note`);
   }
 });

@@ -15,6 +15,8 @@ export const CALIBRATION_NOTES = {
     'Playwright reports no request for a data: URL, so the complete fixture, whose images are all data URLs, shows 0 image requests and 0 image bytes: those bytes are in the document. Image budgets need a fixture with image files.',
   analyzeBytes:
     "A PORTFOLIO_ANALYZE=1 build's chunks end in sourceMappingURL comments, so their bytes run a little over the default build's: take byte limits from a default build, and attribution from an analyze build.",
+  conditions:
+    "Each viewport's conditions are what its case ran under. webgl says whether getContext('webgl') and getContext('webgl2') gave a context; false is null, as in the headless shell with no GPU, so a variant that draws with WebGL draws nothing there and its frame, canvas, and long-task numbers understate it. dpr is window.devicePixelRatio, and loadAverage the machine's 1-minute load as the case ended.",
 };
 
 /**
