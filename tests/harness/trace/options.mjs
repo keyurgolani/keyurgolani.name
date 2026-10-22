@@ -19,7 +19,7 @@ export const ENV = {
   command: 'PORTFOLIO_TRACE_COMMAND',
 };
 
-const LOOPBACK = new Set(['127.0.0.1', 'localhost', '[::1]']);
+const LOOPBACK = new Set(['127.0.0.1', 'localhost']);
 
 /**
  * A base URL the trace may visit: http or https on this machine, the
@@ -39,7 +39,7 @@ export function checkBaseUrl(value) {
   }
   if (!LOOPBACK.has(url.hostname)) {
     throw new Error(
-      `--base-url traces a server on this machine only (127.0.0.1, localhost, or [::1]); got ${url.hostname}`,
+      `--base-url traces a server on this machine only (127.0.0.1 or localhost); got ${url.hostname}`,
     );
   }
   if (url.pathname !== '/' || url.search || url.hash || url.username || url.password) {

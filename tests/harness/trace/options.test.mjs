@@ -20,7 +20,8 @@ test('--base-url takes an origin on this machine, either way it is written', () 
     parseTraceArgs(['--base-url=http://localhost:4000/']).baseUrl,
     'http://localhost:4000',
   );
-  assert.equal(checkBaseUrl('https://[::1]:8443'), 'https://[::1]:8443');
+  assert.equal(checkBaseUrl('https://127.0.0.1:8443'), 'https://127.0.0.1:8443');
+  assert.throws(() => checkBaseUrl('http://[::1]:3000'), /on this machine only/);
 });
 
 test('--base-url refuses another host, a path, credentials, and a non-web scheme', () => {

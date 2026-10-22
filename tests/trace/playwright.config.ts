@@ -4,8 +4,8 @@
 // from the standalone build (`pnpm build` first), or against the server
 // --base-url names. Cases run one at a time, since long tasks and idle work
 // are timings, and Playwright's own tracing stays off for the same reason.
-// The browser resolves no name but localhost. Everything else is the
-// browser suite's config.
+// The browser resolves nothing but 127.0.0.1 and localhost. Everything
+// else is the browser suite's config.
 import path from 'node:path';
 import { defineConfig, devices } from '@playwright/test';
 import { reportsDir } from '../../ci/lib/reports.mjs';
@@ -31,7 +31,9 @@ export default defineConfig({
   use: {
     ...base.use,
     trace: 'off',
-    launchOptions: { args: ['--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE localhost'] },
+    launchOptions: {
+      args: ['--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE 127.0.0.1, EXCLUDE localhost'],
+    },
   },
   projects: traceTargets(readTraceEnv()).map(({ appOptions, ...target }) => ({
     name: target.name,

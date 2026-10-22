@@ -19,8 +19,8 @@
 // input, no form. Every request outside the app's origin is recorded and
 // aborted, and fails the case unless --allow-third-party, for the baseline
 // calibration only, says to record it and go on. A request that isn't a GET
-// or HEAD is aborted too. The browser resolves no name but localhost
-// (playwright.config.ts), so nothing it misses reaches a host either. On
+// or HEAD is aborted too. The browser resolves nothing but 127.0.0.1 and
+// localhost (playwright.config.ts), so nothing it misses reaches a host. On
 // the app under test, the harness's egress trap fails a case whose server
 // tried to reach one. Each case attaches trace-case.json, which
 // report-writer.ts gathers into reports/trace/trace-report.json.

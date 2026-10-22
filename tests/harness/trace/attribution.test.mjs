@@ -195,6 +195,15 @@ test('a source belongs to the npm package after its last node_modules, a workspa
   const workspace = { kit: '@portfolio/kit' };
   const cases = [
     ['node_modules/.pnpm/next@16.2.4_react@19/node_modules/next/dist/client/index.js', 'next'],
+    ['node_modules/.pnpm/next@16.2.4/node_modules/next/src/client/app-index.tsx', 'next'],
+    // React's packages, which Next vendors, count as themselves.
+    ['node_modules/next/dist/compiled/react/cjs/react.production.js', 'react'],
+    ['node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.production.js', 'react-dom'],
+    ['node_modules/next/dist/compiled/react-dom-experimental/cjs/client.js', 'react-dom'],
+    ['node_modules/next/dist/compiled/scheduler/cjs/scheduler.production.js', 'scheduler'],
+    // Anything else Next vendors is Next's.
+    ['node_modules/next/dist/compiled/react-server-dom-turbopack/client.js', 'next'],
+    ['node_modules/next/dist/compiled/process/browser.js', 'next'],
     ['node_modules/.pnpm/@swc+helpers@0.5/node_modules/@swc/helpers/esm/a.js', '@swc/helpers'],
     ['apps/web/node_modules/react-dom/cjs/react-dom.production.js', 'react-dom'],
     ['node_modules/.pnpm/scheduler@0.27/node_modules/scheduler/index.js', 'scheduler'],

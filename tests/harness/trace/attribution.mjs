@@ -221,10 +221,18 @@ export function normalizeSource(source) {
 }
 
 /**
+ * React's packages, which Next vendors under next/dist/compiled/ (the
+ * experimental builds too) and the app router loads from there.
+ */
+const VENDORED_BY_NEXT = /^dist\/compiled\/(react|react-dom|scheduler)(?:-experimental)?\//;
+
+/**
  * The package a normalized source belongs to: the npm name after its last
- * `node_modules/`, `apps/<name>` for an app, the workspace package's name
- * for `packages/<dir>/` (`workspace` maps a directory to its name), and
- * `next` for the bundler runtime Next ships. Anything else is `(other)`.
+ * `node_modules/`, with React, React DOM, and the scheduler as themselves
+ * where Next vendors them, `apps/<name>` for an app, the workspace
+ * package's name for `packages/<dir>/` (`workspace` maps a directory to its
+ * name), and `next` for the bundler runtime Next ships. Anything else is
+ * `(other)`.
  *
  * @param {string} source normalized, as normalizeSource returns it
  * @param {Record<string, string>} [workspace] package names by directory under packages/
@@ -233,7 +241,12 @@ export function packageOf(source, workspace = {}) {
   const modules = source.lastIndexOf('node_modules/');
   if (modules !== -1) {
     const rest = source.slice(modules + 'node_modules/'.length).split('/');
-    const name = rest[0]?.startsWith('@') ? rest.slice(0, 2).join('/') : rest[0];
+    const scoped = rest[0]?.startsWith('@');
+    const name = scoped ? rest.slice(0, 2).join('/') : rest[0];
+    if (name === 'next') {
+      const vendored = VENDORED_BY_NEXT.exec(rest.slice(1).join('/'));
+      if (vendored) return vendored[1];
+    }
     if (name && name !== '.pnpm') return name;
   }
   if (/^\[(turbopack|next)\]\//.test(source)) return 'next';
