@@ -271,7 +271,7 @@ test('declarations can only use tokens for type, motion, and color', () => {
 
 test('deny by default: display, visibility, content-visibility, and position are never a language property, whatever the value', () => {
   const slot = '[data-ui-slot="surface"]';
-  // 85866e7 took these keywords as written.
+  // Before the allowlist, the reader took these keywords as written.
   for (const value of ['block', 'flex', 'inline-flex', 'grid', 'flow-root', 'none', 'contents']) {
     refuses(`${slot} { display: ${value}; }`, new RegExp(`display: ${value} lays the part out`));
   }
