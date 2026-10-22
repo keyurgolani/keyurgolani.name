@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, renameSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
+import { validatePublicationUnit } from '@portfolio/schema';
 import type { LiveRevision, RenderDrift } from '../catalog/port';
 import type { Rendering } from '../catalog/unit';
 import type { StoreLogEntry } from './common';
@@ -294,7 +295,7 @@ test('drift between the live manifest and the build is reported, and logged once
   assert.deepEqual(same.logs, []);
 });
 
-test('the reader keeps at most four units, and reads a dropped one again', async (t) => {
+test('the reader keeps at most four units, and validates a dropped one again', async (t) => {
   const store = await newStore(t);
   const ids = [await publishInput(store, pairInput('engineering'))];
   for (const marker of ['two', 'three', 'four', 'five']) {
@@ -302,7 +303,14 @@ test('the reader keeps at most four units, and reads a dropped one again', async
   }
   assert.equal(UNIT_CACHE_SIZE, 4);
   const { fs, calls } = counting();
-  const { catalog } = reader(store, { fs });
+  let validations = 0;
+  const checks = testChecks({
+    validateLive: (pair) => {
+      validations += 1;
+      return validatePublicationUnit(pair);
+    },
+  });
+  const { catalog } = reader(store, { fs, checks });
   // Serve each of the five in turn, the way rollbacks move the pointer.
   const moveTo = async (target: string, expected: string) => {
     const outcome = await owned(store).rollback(
@@ -318,16 +326,76 @@ test('the reader keeps at most four units, and reads a dropped one again', async
     current = target;
     await catalog.getLive();
   }
-  // ids[4] was served first and is the one dropped: serving it again reads it again.
-  calls.length = 0;
+  assert.equal(validations, 5);
+  // ids[4] was served first and is the one dropped: serving it again checks it again.
+  validations = 0;
   await moveTo(ids[4]!, current);
   assert.equal(served(await catalog.getLive()).revisionId, ids[4]);
-  assert.ok(calls.includes('read portfolio.yml'), calls.join(', '));
-  // ids[3], still kept, serves without a read of its documents.
+  assert.equal(validations, 1);
+  // ids[3], still kept, serves with its files read and their hashes checked
+  // again, as on every move of the pointer, and isn't validated again.
+  validations = 0;
   calls.length = 0;
   await moveTo(ids[3]!, ids[4]!);
   assert.equal(served(await catalog.getLive()).revisionId, ids[3]);
-  assert.ok(!calls.includes('read portfolio.yml'), calls.join(', '));
+  assert.ok(calls.includes('read portfolio.yml'), calls.join(', '));
+  assert.equal(validations, 0);
+});
+
+test('a kept unit the pointer moves back to is served only while its files, its tombstone, and its blobs still allow', async (t) => {
+  const store = await newStore(t);
+  const first = await publishInput(store, pairInput('engineering'));
+  const second = await publishInput(store, contentVariant(pairInput('engineering'), 'two'));
+  const { catalog } = reader(store);
+  assert.equal(served(await catalog.getLive()).revisionId, second);
+  const pointsAtSecond = readFileSync(store.paths.live);
+  const third = await publishInput(store, contentVariant(pairInput('engineering'), 'three'));
+  assert.equal(served(await catalog.getLive()).revisionId, third);
+
+  // The pointer names the kept second again, as another process could
+  // leave it, but a document of it changed on disk since it was kept.
+  writeFileSync(
+    path.join(store.paths.revision(second), 'documents', 'portfolio.yml'),
+    '# damaged\n',
+  );
+  const moveBack = (bytes: Buffer) => {
+    writeFileSync(`${store.paths.live}.test`, bytes);
+    renameSync(`${store.paths.live}.test`, store.paths.live);
+  };
+  moveBack(pointsAtSecond);
+  const damaged = await catalog.status();
+  assert.deepEqual(
+    [damaged.state, damaged.liveRevisionId, damaged.servingRevisionId, damaged.reason],
+    ['degraded', second, third, 'damaged:hash_mismatch'],
+  );
+
+  // A tombstone on the kept third: the last known good is the first now.
+  writeFileSync(
+    store.paths.tombstone(third),
+    `${JSON.stringify({ revisionId: third, removedAt: new Date().toISOString(), actor: 'operator' })}\n`,
+  );
+  moveBack(readFileSync(store.paths.live));
+  const tombstoned = served(await catalog.getLive());
+  assert.deepEqual([tombstoned.state, tombstoned.revisionId], ['degraded', first]);
+});
+
+test('the reader serves the pair its check passed, the stored text as this build parses it, while revision.get shows the stored model', async (t) => {
+  const store = await newStore(t);
+  const live = await publishInput(store, pairInput('engineering'));
+  // A build whose parse of the same text differs from the one that published it.
+  const checks = testChecks({
+    validateLive: (pair) => {
+      const result = validatePublicationUnit(pair);
+      if (!result.pair) return result;
+      const site = { ...result.pair.site, parsedBy: 'this build' } as typeof result.pair.site;
+      return { ...result, pair: { ...result.pair, site } };
+    },
+  });
+  const { catalog } = reader(store, { checks });
+  const unit = served(await catalog.getLive()).unit;
+  assert.equal((unit.site as unknown as { parsedBy?: string }).parsedBy, 'this build');
+  const detail = await store.publication.revision(live);
+  assert.equal((detail?.documents.site?.model as { parsedBy?: string }).parsedBy, undefined);
 });
 
 test('a reopened store serves the same revision through a new reader', async (t) => {

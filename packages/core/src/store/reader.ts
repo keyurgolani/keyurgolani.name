@@ -14,22 +14,26 @@ import type { ReadFs } from './fs-port';
 import { storePaths, type RevisionId, type Sha256 } from './layout';
 import { DamagedPointerError, readEvents, readLive, type LivePointer } from './pointer';
 import { nodeReadFs } from './read-fs';
-import { readManifest, revisionHealth } from './revisions';
+import { isTombstoned, readManifest, readRevision, revisionHealth } from './revisions';
 
 // RevisionCatalogReader (#3, item 19): owner's CatalogReader, over the
 // revision store. Each request stats publication/live.json, so a publish
 // from this process or another shows on the next request; while the
-// pointer hasn't moved, the answer is the one already worked out. When it
-// has, the reader reads the revision the pointer names, checks every hash,
-// and checks it as served (UnitChecks.validateLive), under which an
-// unregistered variant only warns and renders on the fallback composition.
-// One it can't serve is damaged or incompatible, and the reader serves the
-// last known good in its place, `degraded`, with the reason: the most
-// recently live revision that serves, without a tombstone. With none, it's
-// `incompatible`; with no pointer, `empty`. It never rewrites the pointer:
-// it gets the reads of node:fs and nothing else, and imports no module that
-// writes. It keeps up to four served units by revision ID, and tells the
-// composition root whether anything is servable each time it decides.
+// pointer hasn't moved, the answer is the one already worked out, and no
+// request checks a revision. When it has, the reader reads the revision the
+// pointer names, checks every hash, and checks its text as served
+// (UnitChecks.validateLive), under which an unregistered variant only warns
+// and renders on the fallback composition; what it serves is the pair that
+// check passed. One it can't serve is damaged or incompatible, and the
+// reader serves the last known good in its place, `degraded`, with the
+// reason: the most recently live revision that serves, without a
+// tombstone. With none, it's `incompatible`; with no pointer, `empty`. It
+// never rewrites the pointer: it gets the reads of node:fs and nothing
+// else, and imports no module that writes. It keeps up to four served units
+// by revision ID; as the pointer moves to a kept one, its tombstone, its
+// files' hashes, and its blobs are checked again, and only the validator is
+// skipped. It tells the composition root whether anything is servable each
+// time it decides.
 
 recordOwnerModule('core/store/reader');
 
@@ -90,6 +94,23 @@ export function revisionCatalogReader({
   // As the AssetStore finds one: a regular file under its hash, never a link.
   const hasBlob = async (hash: Sha256) => (await fs.lstat(paths.blob(hash)))?.isFile === true;
 
+  /**
+   * Whether a kept unit still serves, as the pointer moves to it: no
+   * tombstone, every file still whole with the hashes it had, and every
+   * blob there. What it skips is the validator, whose verdict on the same
+   * text, with the same build, can't change.
+   */
+  async function stillServes(
+    id: RevisionId,
+    kept: { readonly unitHash: string },
+  ): Promise<boolean> {
+    if (await isTombstoned(fs, paths, id)) return false;
+    const read = await readRevision(fs, paths, id);
+    if (!read.ok || read.revision.unit.unitHash !== kept.unitHash) return false;
+    for (const blob of read.revision.manifest.blobs) if (!(await hasBlob(blob))) return false;
+    return true;
+  }
+
   /** The unit `id` serves, or why it can't. */
   async function serve(id: RevisionId): Promise<
     | { readonly ok: true; readonly unit: PublicationUnit; readonly unitHash: string }
@@ -99,21 +120,25 @@ export function revisionCatalogReader({
       }
   > {
     const kept = units.get(id);
-    if (kept) {
-      units.delete(id);
+    units.delete(id);
+    if (kept && (await stillServes(id, kept))) {
       units.set(id, kept);
-      return { ok: true, ...kept };
+      return { ok: true, unit: kept.unit, unitHash: kept.unitHash };
     }
     const health = await revisionHealth(fs, paths, id, checks, hasBlob, 'serve');
     if (health.state === 'removed') return { ok: false, reason: 'removed' };
     if (health.state !== 'ok') return { ok: false, reason: `${health.state}:${health.reason}` };
-    const found = {
-      unit: publicationUnitOf(health.revision.unit),
-      unitHash: health.revision.unit.unitHash,
+    const { unit } = health.revision;
+    // The models the validator passed: the stored text, as this build parses it.
+    const served = {
+      ...unit,
+      portfolio: { ...unit.portfolio, model: health.served.portfolio },
+      site: { ...unit.site, model: health.served.site },
     };
+    const found = { unit: publicationUnitOf(served), unitHash: unit.unitHash };
     units.set(id, found);
     while (units.size > UNIT_CACHE_SIZE) units.delete(units.keys().next().value!);
-    return { ok: true, ...found };
+    return { ok: true, unit: found.unit, unitHash: found.unitHash };
   }
 
   /** The last known good: the most recently live revision that serves, other than `skip`. */

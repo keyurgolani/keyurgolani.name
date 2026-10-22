@@ -18,6 +18,7 @@ import {
   DOCUMENT_NAMES,
   documentFileName,
   isSnapshotKind,
+  plainModel,
   sha256,
   unitHashOf,
   type DocumentName,
@@ -313,9 +314,20 @@ export async function isTombstoned(fs: ReadFs, paths: StorePaths, id: RevisionId
  * can't render (#3, item 14). `incompatible`: it renders, but this build
  * can't publish it, by its schema version, the contract, its packs, or a
  * blob that's gone (item 13). `removed`: retention left a tombstone.
+ *
+ * The validator checks the stored text, as the running build parses it,
+ * and that parse is what serves: `served` holds it, so the reader serves
+ * the very models the check passed, as read-only does from its mounted
+ * text. The revision's own models stay what the publishing build
+ * normalized, which its hashes cover and revision.get shows.
  */
 export type RevisionHealth =
-  | { readonly state: 'ok'; readonly revision: Revision }
+  | {
+      readonly state: 'ok';
+      readonly revision: Revision;
+      /** The pair the validator passed: the stored text, as the running build parses it. */
+      readonly served: { readonly portfolio: unknown; readonly site: unknown };
+    }
   | { readonly state: 'damaged'; readonly reason: string }
   | {
       readonly state: 'incompatible';
@@ -389,7 +401,14 @@ export async function revisionHealth(
       return { state: 'incompatible', reason: 'asset_missing', revision, diagnostics: [] };
     }
   }
-  return { state: 'ok', revision };
+  // With no blocking finding the validator returns the pair; one that
+  // doesn't has nothing to serve.
+  if (!result.pair) return { state: 'damaged', reason: 'parse_failure' };
+  return {
+    state: 'ok',
+    revision,
+    served: { portfolio: plainModel(result.pair.portfolio), site: plainModel(result.pair.site) },
+  };
 }
 
 /** The RevisionStore port: reading revisions. Only the PublicationService writes them. */
