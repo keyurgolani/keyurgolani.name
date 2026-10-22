@@ -28,8 +28,6 @@ import { freePort, getText, waitFor } from './net.mjs';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const WEB = path.join(REPO_ROOT, 'apps', 'web');
-const STANDALONE = path.join(WEB, '.next', 'standalone');
-const SERVER_JS = path.join(STANDALONE, 'apps', 'web', 'server.js');
 export const DEFAULT_PORTFOLIO = path.join(REPO_ROOT, 'tests', 'fixtures', 'portfolio.yml');
 export const DEFAULT_SITE = path.join(REPO_ROOT, 'tests', 'fixtures', 'site.yml');
 const START_ATTEMPTS = 3;
@@ -53,7 +51,7 @@ process.on('exit', () => {
   }
 });
 
-function requireBuild(serverJs = SERVER_JS) {
+function requireBuild(serverJs) {
   if (!existsSync(serverJs)) {
     throw new Error(
       `no standalone build at ${path.relative(REPO_ROOT, serverJs)}; run pnpm build first`,
@@ -77,6 +75,31 @@ function baseEnv(home, port) {
     HOSTNAME: '127.0.0.1',
     PORT: String(port),
   };
+}
+
+/** Whether a server's output says another process took its port first. */
+function lostPort(lines) {
+  return lines.some((line) => line.includes('EADDRINUSE'));
+}
+
+/**
+ * Runs `attempt` on `firstPort`, if given, or else a free port, and again on
+ * a new free port each time its result has `lostPort` set, START_ATTEMPTS
+ * times at most, and returns the last result. freePort() lets its port go
+ * before the server binds it, so another process can take it in between.
+ *
+ * @template {{ lostPort?: boolean }} T
+ * @param {(port: number) => Promise<T>} attempt
+ * @param {number} [firstPort]
+ * @returns {Promise<T>}
+ */
+async function onFreePort(attempt, firstPort) {
+  for (let tries = 1; ; tries += 1) {
+    const result = await attempt(
+      tries === 1 && firstPort !== undefined ? firstPort : await freePort(),
+    );
+    if (!result.lostPort || tries === START_ATTEMPTS) return result;
+  }
 }
 
 /**
@@ -211,15 +234,13 @@ export async function startApp({
     await new Promise((resolve) => server.out.end(resolve));
   }
 
-  // freePort() lets its port go before the server binds it, so another
-  // process can take it first. A start that fails that way gets a new port,
-  // and no health check goes out until the server holds its own port, so
-  // another process's answer is never taken for this server's.
+  // A start that lost its port gets a new one (onFreePort), and no health
+  // check goes out until the server holds its own port, so another process's
+  // answer is never taken for this server's.
   let server;
   try {
-    for (let attempt = 1; ; attempt += 1) {
-      server = launch(attempt === 1 && firstPort !== undefined ? firstPort : await freePort());
-      const current = server;
+    const start = await onFreePort(async (port) => {
+      const current = launch(port);
       try {
         await waitFor(
           async () => {
@@ -233,16 +254,19 @@ export async function startApp({
             what: 'the app to take its port and answer GET /api/health',
           },
         );
-        break;
+        return { server: current };
       } catch (error) {
         await halt(current);
-        const taken = current.lines.some((line) => line.includes('EADDRINUSE'));
-        if (taken && attempt < START_ATTEMPTS) continue;
-        if (taken) error.message += `, on each of the ${START_ATTEMPTS} ports it tried`;
-        if (logFile) error.message += ` (server log: ${logFile})`;
-        error.message += `\nThe server's last output:\n${current.lines.join('\n')}`;
-        throw error;
+        return { server: current, error, lostPort: lostPort(current.lines) };
       }
+    }, firstPort);
+    server = start.server;
+    if (start.error) {
+      const { error } = start;
+      if (start.lostPort) error.message += `, on each of the ${START_ATTEMPTS} ports it tried`;
+      if (logFile) error.message += ` (server log: ${logFile})`;
+      error.message += `\nThe server's last output:\n${server.lines.join('\n')}`;
+      throw error;
     }
   } catch (error) {
     await trap.close();
@@ -280,61 +304,81 @@ export async function startApp({
  * that long after it starts: a slow log reader. A long enough log fills them,
  * so the server's writes have to wait for the reader.
  *
+ * Next binds its port before it reads the configuration, so a run that lost
+ * its port to another process never got that far. It goes again on a new
+ * port, as a start does (onFreePort).
+ *
  * @param {object} options
  * @param {Record<string, string>} options.env deployment environment
  * @param {number} [options.timeoutMs]
  * @param {number} [options.readDelayMs]
+ * @param {number} [options.port] the port to try first, instead of a free one, so a
+ *   test can hold it and check that a run on a taken port moves to another
+ * @param {string} [options.web] the apps/web whose build runs
  * @returns {Promise<{ exited: boolean, code: number | null, output: string, egress: string[] }>}
  */
-export async function runAppToExit({ env, timeoutMs = 30_000, readDelayMs = 0 }) {
-  requireBuild();
+export async function runAppToExit({
+  env,
+  timeoutMs = 30_000,
+  readDelayMs = 0,
+  port: firstPort,
+  web = WEB,
+}) {
+  const serverJs = path.join(web, '.next', 'standalone', 'apps', 'web', 'server.js');
+  requireBuild(serverJs);
   const home = mkdtempSync(path.join(tmpdir(), 'portfolio-run-'));
   const trap = await startEgressTrap();
-  const child = spawn(process.execPath, [SERVER_JS], {
-    cwd: path.dirname(SERVER_JS),
-    env: {
-      ...baseEnv(home, await freePort()),
-      ...env,
-      ...trap.env,
-      NODE_OPTIONS: nodeOptions(env, trap),
-    },
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
-  running.set(child, home);
-  child.once('exit', () => running.delete(child));
-  // Each stream on its own, so stderr never splits a JSON line from stdout.
-  const output = { stdout: '', stderr: '' };
-  for (const [name, stream] of /** @type {const} */ ([
-    ['stdout', child.stdout],
-    ['stderr', child.stderr],
-  ])) {
-    stream.setEncoding('utf8');
-    // Paused streams stop reading once their buffer fills.
-    if (readDelayMs > 0) stream.pause();
-    stream.on('data', (chunk) => (output[name] += chunk));
+
+  /** Runs the server on `port` until it exits, or `timeoutMs` passes. */
+  async function run(port) {
+    const child = spawn(process.execPath, [serverJs], {
+      cwd: path.dirname(serverJs),
+      env: {
+        ...baseEnv(home, port),
+        ...env,
+        ...trap.env,
+        NODE_OPTIONS: nodeOptions(env, trap),
+      },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    running.set(child, home);
+    child.once('exit', () => running.delete(child));
+    // Each stream on its own, so stderr never splits a JSON line from stdout.
+    const output = { stdout: '', stderr: '' };
+    for (const [name, stream] of /** @type {const} */ ([
+      ['stdout', child.stdout],
+      ['stderr', child.stderr],
+    ])) {
+      stream.setEncoding('utf8');
+      // Paused streams stop reading once their buffer fills.
+      if (readDelayMs > 0) stream.pause();
+      stream.on('data', (chunk) => (output[name] += chunk));
+    }
+    const reader =
+      readDelayMs > 0
+        ? setTimeout(() => {
+            child.stdout.resume();
+            child.stderr.resume();
+          }, readDelayMs)
+        : undefined;
+    const timer = setTimeout(() => {
+      child.kill('SIGKILL');
+      // A killed server's pipes still have to drain before 'close'.
+      child.stdout.resume();
+      child.stderr.resume();
+    }, timeoutMs);
+    const [code, signal] = await once(child, 'close');
+    clearTimeout(timer);
+    clearTimeout(reader);
+    const text = output.stdout + output.stderr;
+    return { exited: signal === null, code, output: text, lostPort: lostPort(text.split('\n')) };
   }
-  const reader =
-    readDelayMs > 0
-      ? setTimeout(() => {
-          child.stdout.resume();
-          child.stderr.resume();
-        }, readDelayMs)
-      : undefined;
-  const timer = setTimeout(() => {
-    child.kill('SIGKILL');
-    // A killed server's pipes still have to drain before 'close'.
-    child.stdout.resume();
-    child.stderr.resume();
-  }, timeoutMs);
-  const [code, signal] = await once(child, 'close');
-  clearTimeout(timer);
-  clearTimeout(reader);
-  await trap.close();
-  rmSync(home, { recursive: true, force: true });
-  return {
-    exited: signal === null,
-    code,
-    output: output.stdout + output.stderr,
-    egress: trap.attempts(),
-  };
+
+  try {
+    const { exited, code, output } = await onFreePort(run, firstPort);
+    return { exited, code, output, egress: trap.attempts() };
+  } finally {
+    await trap.close();
+    rmSync(home, { recursive: true, force: true });
+  }
 }
