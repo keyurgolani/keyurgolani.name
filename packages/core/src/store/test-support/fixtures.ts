@@ -16,6 +16,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   applyEdits,
+  SCHEMA_VERSIONS,
   validatePublicationUnit,
   type DocumentFormat,
   type ParsedPair,
@@ -89,7 +90,8 @@ export function mediaDocument(blobs: readonly Sha256[]) {
 /**
  * The checks a test store runs: #4's composite validator with an empty
  * context, a `controls` snapshot from the site's visitor controls, the test
- * media document's blobs, and the site's variant as the rendering.
+ * media document's blobs, the site's variant as the rendering, and this
+ * build's schema versions.
  */
 export function testChecks(overrides: Partial<UnitChecks> = {}): UnitChecks {
   return {
@@ -111,6 +113,7 @@ export function testChecks(overrides: Partial<UnitChecks> = {}): UnitChecks {
         contracts: { variant: '2' },
       };
     },
+    versions: SCHEMA_VERSIONS,
     appVersion: '0.0.0-test',
     ...overrides,
   };

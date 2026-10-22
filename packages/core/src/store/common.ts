@@ -72,6 +72,11 @@ export interface StoreLogEntry {
   readonly stage?: string;
   readonly durationMs?: number;
   readonly code?: string;
+  /**
+   * For `store.catalog.degraded` and `store.catalog.incompatible`: the
+   * command that serves the live revision again, when an older build wrote it.
+   */
+  readonly command?: string;
   /** For `store.render-drift`: the IDs and versions that differ from the build's. */
   readonly drift?: readonly RenderDrift[];
 }

@@ -547,7 +547,8 @@ test('rollback checks the live revision, its target, and refuses one that is gon
     if (incompatible.kind !== 'rejected') return;
     assert.equal(incompatible.code, 'revision_incompatible');
     assert.equal(incompatible.reason, code);
-    assert.equal(incompatible.command, `rollback --to ${old}`);
+    // An older build wrote it, so the CLI's rollback --to migrates it.
+    assert.equal(incompatible.command, `portfolio-store rollback --to ${old}`);
     assert.ok(incompatible.diagnostics.some((diagnostic) => diagnostic.code === code));
   }
 
@@ -595,7 +596,7 @@ async function writeOlderSchemaRevision(store: Store, version: number): Promise<
       sourceText: input.portfolio.sourceText.replace(current, `schemaVersion: ${version}`),
     },
   };
-  // The older build's validator took it.
+  // The older build's validator took it, and its model has the older version.
   const lenient = testChecks({
     validate: (pair) => {
       const result = testChecks().validate({
@@ -605,7 +606,9 @@ async function writeOlderSchemaRevision(store: Store, version: number): Promise<
           text: pair.portfolio.text.replace(`schemaVersion: ${version}`, current),
         },
       });
-      return result;
+      if (!result.pair) return result;
+      const portfolio = { ...result.pair.portfolio, schemaVersion: version };
+      return { ...result, pair: { ...result.pair, portfolio } as typeof result.pair };
     },
   });
   const checked = checkUnit(older, lenient);
@@ -912,7 +915,8 @@ test('an uninstalled variant on the live revision serves it as live, and a rollb
   if (rollback.kind !== 'rejected') return;
   assert.deepEqual(
     [rollback.code, rollback.reason, rollback.command],
-    ['revision_incompatible', 'variant.unavailable', `rollback --to ${first}`],
+    // No command takes it there: the build has to register the variant.
+    ['revision_incompatible', 'variant.unavailable', undefined],
   );
   assert.deepEqual(
     (await after.publication.revisions()).map((summary) => [

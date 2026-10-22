@@ -17,7 +17,12 @@ import {
   type PublicationEvent,
 } from './store/pointer';
 import { preflight, type PreflightCode } from './store/preflight';
-import type { PublicationOutcome } from './store/publication';
+import type {
+  MigrationOutcome,
+  MigrationPlan,
+  MigrationRejection,
+  PublicationOutcome,
+} from './store/publication';
 import { runRetention, type Protection } from './store/retention';
 import {
   mountedSource,
@@ -26,7 +31,7 @@ import {
   type SourceReader,
 } from './store/source';
 import { openStore, type Store } from './store/store';
-import type { UnitChecks, UnitDiagnostic } from './catalog/unit';
+import type { MigrationValue, UnitChecks, UnitDiagnostic } from './catalog/unit';
 import { verifyStore, type VerifyReport } from './store/verify';
 
 // portfolio-store (#3, item 26): the operator's command line for the
@@ -45,7 +50,8 @@ import { verifyStore, type VerifyReport } from './store/verify';
 //   history                    every publication event, in seq order
 //   verify                     every file of the store and every hash
 //   import [--from <dir>] [--expect <revisionId|empty>] [--draft]
-//   rollback --to <revisionId>
+//   migrate-store [--dry-run] [--set <path>=<value>]...
+//   rollback --to <revisionId> [--set <path>=<value>]...
 //   recover [--to <revisionId>]
 //   unlock --force
 //   backup --out <dir>
@@ -71,7 +77,13 @@ const USAGE = `Usage: portfolio-store <command> [options]
   import [--from <dir>] [--expect <revisionId|empty>] [--draft]
                                            Publishes the pair in <dir>, PORTFOLIO_SOURCE_DIR by default,
                                            or with --draft saves it as the working draft.
-  rollback --to <revisionId>               Makes an earlier revision live again.
+  migrate-store [--dry-run] [--set <path>=<value>]...
+                                           Migrates the live revision to this build's schema as a new
+                                           revision, and makes it live. --dry-run prints the diff and
+                                           the values only the owner can give, which --set gives.
+  rollback --to <revisionId> [--set <path>=<value>]...
+                                           Makes an earlier revision live again. One an older build
+                                           wrote is migrated to this build's schema first.
   recover [--to <revisionId>]              Makes the last known good revision, or <revisionId>, live.
   unlock --force                           Removes the publication lock, whoever holds it.
   backup --out <dir>                       Copies the store into <dir>, which must be empty or new.
@@ -121,6 +133,7 @@ const COMMANDS = [
   'history',
   'verify',
   'import',
+  'migrate-store',
   'rollback',
   'recover',
   'unlock',
@@ -169,6 +182,23 @@ function setting(env: CliOptions['env'], key: string): string | undefined {
   } catch {
     throw new Refusal(`${key}_FILE names a file that can't be read.`);
   }
+}
+
+/** A document's `--set <portfolio|site>.<path>=<value>`, as #10's parseSet reads one. */
+function setValue(argument: string): MigrationValue {
+  const equals = argument.indexOf('=');
+  const path = equals === -1 ? '' : argument.slice(0, equals);
+  if (!/^(?:portfolio|site)(?:\.[^.=]+)+$/.test(path)) {
+    throw new UsageError(
+      '--set takes <portfolio|site>.<path>=<value>, such as site.appearance.colorScheme=warm.',
+    );
+  }
+  return { path, value: argument.slice(equals + 1) };
+}
+
+/** Schema versions as the CLI says them: portfolio 2 and site 2. */
+function versionsLine(versions: { readonly portfolio: number; readonly site: number }): string {
+  return `portfolio ${versions.portfolio} and site ${versions.site}`;
 }
 
 function count(n: number, noun: string, plural = `${noun}s`): string {
@@ -354,6 +384,8 @@ class Commands {
         return this.verify(args);
       case 'import':
         return this.import(args);
+      case 'migrate-store':
+        return this.migrateStore(args);
       case 'rollback':
         return this.move('rollback', args);
       case 'recover':
@@ -374,7 +406,7 @@ class Commands {
   }
 
   /** The command's flags, strictly: one it doesn't take is a usage error. */
-  private parse<T extends Record<string, { type: 'string' | 'boolean' }>>(
+  private parse<T extends Record<string, { type: 'string' | 'boolean'; multiple?: boolean }>>(
     args: readonly string[],
     flags: T,
     positionals = 0,
@@ -387,7 +419,13 @@ class Commands {
     });
     if (parsed.positionals.length > positionals) throw new UsageError('Too many arguments.');
     return parsed as unknown as {
-      values: { [K in keyof T]?: T[K]['type'] extends 'boolean' ? boolean : string };
+      values: {
+        [K in keyof T]?: T[K]['type'] extends 'boolean'
+          ? boolean
+          : T[K]['multiple'] extends true
+            ? string[]
+            : string;
+      };
       positionals: string[];
     };
   }
@@ -522,6 +560,12 @@ class Commands {
       this.say(`serving revision: ${status.servingRevisionId ?? 'none'}`);
     }
     if (status.reason) this.say(`reason: ${status.reason}`);
+    if (status.command) {
+      this.say(
+        `migrate: an older build wrote the live revision. \`${status.command} --dry-run\` ` +
+          `shows what migrating it changes, and \`${status.command}\` migrates it.`,
+      );
+    }
     this.say(`revisions: ${(await store.revisions.list()).length}`);
     const events = await store.publication.history();
     const last = events.at(-1);
@@ -782,39 +826,249 @@ class Commands {
   }
 
   private async move(operation: 'rollback' | 'recover', args: readonly string[]): Promise<number> {
-    const { values } = this.parse(args, { to: { type: 'string' } });
+    const { values } = this.parse(args, {
+      to: { type: 'string' },
+      set: { type: 'string', multiple: true },
+    });
     if (values.to !== undefined && !isRevisionId(values.to)) {
       throw new UsageError('--to takes a revision ID: rev_ and 32 hex digits.');
     }
     if (operation === 'rollback' && values.to === undefined) {
       throw new UsageError('rollback needs --to <revisionId>, the revision to make live.');
     }
+    if (operation === 'recover' && values.set !== undefined) {
+      throw new UsageError('recover takes no --set. rollback --to migrates a revision.');
+    }
+    const set = (values.set ?? []).map(setValue);
     const store = await this.writable();
     const expected = (await this.pointer(store))?.revisionId ?? null;
     this.running.note = `\`status\` says whether the ${operation} took effect.`;
-    const outcome =
-      operation === 'rollback'
-        ? await store.publication.rollback(
-            { targetRevisionId: values.to as RevisionId, expectedLiveRevisionId: expected },
-            'operator',
-          )
-        : await store.publication.recover(
-            {
-              ...(values.to === undefined ? {} : { targetRevisionId: values.to as RevisionId }),
-              expectedLiveRevisionId: expected,
-            },
-            'operator',
-          );
+    if (operation === 'rollback') {
+      return this.rollback(store, values.to as RevisionId, expected, set);
+    }
+    const outcome = await store.publication.recover(
+      {
+        ...(values.to === undefined ? {} : { targetRevisionId: values.to as RevisionId }),
+        expectedLiveRevisionId: expected,
+      },
+      'operator',
+    );
     if (outcome.kind === 'committed') {
-      this.say(
-        operation === 'rollback'
-          ? `Rolled back: ${outcome.revisionId} is live again.`
-          : `Recovered: ${outcome.revisionId} is live.`,
-      );
+      this.say(`Recovered: ${outcome.revisionId} is live.`);
       for (const line of liveLines(await this.pointer(store))) this.say(line);
       return 0;
     }
     return this.rejected(outcome, 'Nothing changed.');
+  }
+
+  /**
+   * `rollback --to` (item 13): the target made live again, and one an older
+   * build wrote migrated first, into a child revision that records it as
+   * `restoredFrom`. It stays as it is. `--set` gives the values only the
+   * owner can give, and says the target is one to migrate.
+   */
+  private async rollback(
+    store: Store,
+    target: RevisionId,
+    expected: RevisionId | null,
+    set: readonly MigrationValue[],
+  ): Promise<number> {
+    if (set.length === 0) {
+      const outcome = await store.publication.rollback(
+        { targetRevisionId: target, expectedLiveRevisionId: expected },
+        'operator',
+      );
+      if (outcome.kind === 'committed') {
+        this.say(`Rolled back: ${outcome.revisionId} is live again.`);
+        for (const line of liveLines(await this.pointer(store))) this.say(line);
+        return 0;
+      }
+      // Only a target an older build wrote names this command: the rest stand.
+      if (!(outcome.kind === 'rejected' && outcome.code === 'revision_incompatible')) {
+        return this.rejected(outcome, 'Nothing changed.');
+      }
+      if (outcome.command === undefined) return this.rejected(outcome, 'Nothing changed.');
+    }
+    const migrated = await store.publication.migrate(
+      { fromRevisionId: target, expectedLiveRevisionId: expected, set },
+      'operator',
+    );
+    if (migrated.kind === 'committed') {
+      const { from, to } = migrated.plan;
+      this.say(
+        `Rolled back: ${target}, which an older build wrote, is migrated from ` +
+          `${versionsLine(from)} to ${versionsLine(to)} as ${migrated.revisionId}, which is live ` +
+          `now, restored from ${target}. ${target} itself is unchanged.`,
+      );
+      for (const line of liveLines(await this.pointer(store))) this.say(line);
+      this.printIds(migrated.plan);
+      return 0;
+    }
+    if (migrated.kind === 'planned') throw new TypeError('Only a dry run plans.');
+    if (migrated.kind === 'rejected' && migrated.code === 'nothing_to_migrate') {
+      this.complain(
+        `nothing_to_migrate: ${target} is at this build's schema, so --set has nothing to set. ` +
+          'Run the rollback without --set. Nothing changed.',
+      );
+      return 1;
+    }
+    return this.migrationRefused(migrated, target, 'Nothing changed.');
+  }
+
+  /**
+   * `migrate-store` (item 25): the live revision migrated to this build's
+   * schema as a new revision, its child, made live with a
+   * `schema-migration` event. No revision that exists changes. `--dry-run`
+   * prints the diff, the ids it mints, and the values only the owner can
+   * give, and writes nothing.
+   */
+  private async migrateStore(args: readonly string[]): Promise<number> {
+    const { values } = this.parse(args, {
+      'dry-run': { type: 'boolean' },
+      set: { type: 'string', multiple: true },
+    });
+    const set = (values.set ?? []).map(setValue);
+    const dryRun = values['dry-run'] === true;
+    const store = dryRun ? await this.readable() : await this.writable();
+    const live = (await this.pointer(store))?.revisionId ?? null;
+    const nothing = dryRun ? 'Dry run: nothing was written.' : 'Nothing was written.';
+    if (!live) {
+      this.complain(`not_found: there's no live revision to migrate. ${nothing}`);
+      return 1;
+    }
+    if (!dryRun) this.running.note = '`status` says whether the migration took effect.';
+    const outcome = await store.publication.migrate(
+      { expectedLiveRevisionId: live, set },
+      'operator',
+      { dryRun },
+    );
+    if (outcome.kind === 'planned') {
+      this.say(nothing);
+      this.printPlan(outcome.plan);
+      this.say('`migrate-store` writes this as a new revision, and makes it live.');
+      return 0;
+    }
+    if (outcome.kind === 'committed') {
+      const { from, to } = outcome.plan;
+      this.say(
+        `Migrated ${live} from ${versionsLine(from)} to ${versionsLine(to)} as ` +
+          `${outcome.revisionId}, which is live now. ${live} itself is unchanged.`,
+      );
+      for (const line of liveLines(await this.pointer(store))) this.say(line);
+      this.printIds(outcome.plan);
+      return 0;
+    }
+    if (outcome.kind === 'rejected' && outcome.code === 'nothing_to_migrate') {
+      this.say(`Nothing to migrate: ${live} is at this build's schema already.`);
+      return 0;
+    }
+    if (dryRun && outcome.kind === 'rejected' && outcome.plan) {
+      this.say(nothing);
+      this.printPlan(outcome.plan);
+    }
+    return this.migrationRefused(outcome, live, nothing);
+  }
+
+  /** A migration's diff, the ids it mints, and the values it needs, as a dry run prints them. */
+  private printPlan(plan: MigrationPlan): void {
+    this.say(
+      `${plan.fromRevisionId} migrates from ${versionsLine(plan.from)} to ${versionsLine(plan.to)}.`,
+    );
+    if (plan.secrets.length > 0) {
+      // As #10's report does: with secret-shaped text, no value and no document.
+      this.say(
+        `Secret-shaped text in ${count(plan.secrets.length, 'place')}, so no diff and no ` +
+          'document is shown:',
+      );
+      for (const spot of plan.secrets) {
+        const where = spot.pointer ?? spot.path ?? '';
+        const line = spot.line === undefined ? '' : `, line ${spot.line}`;
+        this.say(`  ${spot.kind} in a ${spot.in}${where ? ` at ${where}` : ''}${line}`);
+      }
+    } else if (plan.changed.length === 0) {
+      this.say("No document's text changes.");
+    } else {
+      const diff = this.options.checks.migration?.unifiedDiff;
+      for (const document of plan.changed) {
+        const shown = diff?.(document.before, document.after, {
+          before: `${plan.fromRevisionId}/${document.file}`,
+          after: `migrated/${document.file}`,
+        });
+        if (typeof shown === 'string') {
+          for (const line of shown.replace(/\n$/, '').split('\n')) this.say(line);
+        } else {
+          this.say(`${document.file}, migrated, whole:`);
+          for (const line of document.after.replace(/\n$/, '').split('\n')) this.say(line);
+        }
+      }
+    }
+    if (plan.comments.length > 0) {
+      this.say(
+        `The migrated portfolio document doesn't keep the comments on ` +
+          `${plan.comments.length === 1 ? 'line' : 'lines'} ${plan.comments.join(', ')}.`,
+      );
+    }
+    this.printIds(plan);
+    if (plan.needs.length === 0) this.say('needs: none');
+    else this.printNeeds(plan, (line) => this.say(line));
+  }
+
+  /** The ids a migration mints, which a dry run and the run share. */
+  private printIds(plan: MigrationPlan): void {
+    this.say(`minted ids: ${plan.ids.length === 0 ? 'none' : plan.ids.length}`);
+    for (const minted of plan.ids) {
+      this.say(
+        `  ${minted.id}${minted.owner ? ` (${minted.owner})` : ''} at ${minted.pointer}, from ` +
+          `${minted.from}`,
+      );
+    }
+  }
+
+  private printNeeds(plan: MigrationPlan, print: (line: string) => void): void {
+    print(
+      `needs: ${count(plan.needs.length, 'value')} only the owner can give, each with ` +
+        '--set <path>=<value>:',
+    );
+    for (const need of plan.needs) {
+      const accepts = need.accepts?.length ? ` It takes one of: ${need.accepts.join(', ')}.` : '';
+      print(`  ${need.path}: ${need.reason}${accepts}`);
+    }
+  }
+
+  /** Prints why a migration wrote nothing, and exits 1. */
+  private migrationRefused(
+    outcome: Exclude<MigrationOutcome, { kind: 'committed' | 'planned' }>,
+    revision: RevisionId,
+    nothing: string,
+  ): number {
+    if (outcome.kind === 'conflict') return this.rejected(outcome, nothing);
+    const refusal: MigrationRejection = outcome;
+    switch (refusal.code) {
+      case 'migration_unavailable':
+        this.complain(
+          `migration_unavailable: this build has no schema migration, so it can't migrate ` +
+            `${revision}. ${nothing}`,
+        );
+        return 1;
+      case 'migration_blocked':
+        this.complain(
+          `migration_blocked: migrating ${revision} needs values only the owner can give. ` +
+            `${nothing} Give each with --set <path>=<value>, and run it again.`,
+        );
+        if (refusal.plan) this.printNeeds(refusal.plan, (line) => this.complain(line));
+        return 1;
+      case 'migration_failed':
+        this.complain(
+          `migration_failed: ${revision} can't be migrated. ${(refusal.summary ?? []).join(' ')} ` +
+            nothing,
+        );
+        return 1;
+      case 'nothing_to_migrate':
+        this.complain(`nothing_to_migrate: ${revision} is at this build's schema. ${nothing}`);
+        return 1;
+      default:
+        return this.rejected({ ...refusal, code: refusal.code }, nothing);
+    }
   }
 
   private async unlock(args: readonly string[]): Promise<number> {
