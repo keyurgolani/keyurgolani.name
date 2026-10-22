@@ -192,7 +192,11 @@ test('sources lose their bundler prefixes', () => {
 });
 
 test('a source belongs to the npm package after its last node_modules, a workspace package, or an app', () => {
-  const workspace = { kit: '@portfolio/kit' };
+  const workspace = {
+    kit: '@portfolio/kit',
+    'budget-fixtures/fixture-variant-light': '@portfolio/fixture-variant-light',
+    'budget-fixtures/fixture-variant-medium': '@portfolio/fixture-variant-medium',
+  };
   const cases = [
     ['node_modules/.pnpm/next@16.2.4_react@19/node_modules/next/dist/client/index.js', 'next'],
     ['node_modules/.pnpm/next@16.2.4/node_modules/next/src/client/app-index.tsx', 'next'],
@@ -209,6 +213,16 @@ test('a source belongs to the npm package after its last node_modules, a workspa
     ['apps/web/node_modules/react-dom/cjs/react-dom.production.js', 'react-dom'],
     ['node_modules/.pnpm/scheduler@0.27/node_modules/scheduler/index.js', 'scheduler'],
     ['packages/kit/src/sections/hero.tsx', '@portfolio/kit'],
+    // A nested workspace package is its own, never its parent directory's (#6).
+    [
+      'packages/budget-fixtures/fixture-variant-light/src/spotlight.tsx',
+      '@portfolio/fixture-variant-light',
+    ],
+    [
+      'packages/budget-fixtures/fixture-variant-medium/src/shader-stage.tsx',
+      '@portfolio/fixture-variant-medium',
+    ],
+    ['packages/budget-fixtures/ballast.mjs', 'packages/budget-fixtures'],
     ['packages/unknown/src/a.ts', 'packages/unknown'],
     ['apps/web/src/lib/render-composition.tsx', 'apps/web'],
     ['[turbopack]/browser/runtime/base.ts', 'next'],
@@ -224,6 +238,10 @@ test("the workspace's packages are named by their directory", () => {
   const names = workspacePackages(REPO_ROOT);
   assert.equal(names.kit, '@portfolio/kit');
   assert.equal(names['fallback-composition'], '@portfolio/fallback-composition');
+  assert.equal(names['budget-fixtures/fixture-variant-light'], '@portfolio/fixture-variant-light');
+  assert.equal(names['budget-fixtures/fixture-over-budget'], '@portfolio/fixture-over-budget');
+  // The directory that holds them is no package.
+  assert.equal(names['budget-fixtures'], undefined);
 });
 
 test('a chunk splits into modules and packages, gzip shared out by raw share', () => {

@@ -112,7 +112,10 @@ test("the global 404's document is in the portfolio's language and direction, wi
   const preview = renderToStaticMarkup(
     await NotFoundDocument({ nonce: 'MVlEoQyHU2PoMq1Imu8oSA==', theme: false }),
   );
-  assert.ok(preview.startsWith('<html lang="ar" dir="rtl"><head></head><body>'), preview);
+  assert.ok(
+    preview.startsWith(`<html lang="ar" dir="rtl"><head>${stylesheet}</head><body>`),
+    preview,
+  );
   assert.ok(!preview.includes('<script'), preview);
   assert.match(preview, /<h1>Page not found<\/h1>/);
 });

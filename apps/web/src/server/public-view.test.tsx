@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { createElement, isValidElement, type ReactElement } from 'react';
 import {
   parsePortfolio,
@@ -154,14 +154,22 @@ function pair(): ParsedPair {
   return { portfolio: portfolio.value, site: site.value };
 }
 
+/** Each workspace package's directory under packages/, where pnpm-workspace.yaml looks. */
+function packageDirs(): URL[] {
+  const packages = new URL('../../../../packages/', import.meta.url);
+  const under = (parent: URL) => readdirSync(parent).map((name) => new URL(`${name}/`, parent));
+  return [...under(packages), ...under(new URL('budget-fixtures/', packages))].filter((dir) =>
+    existsSync(new URL('package.json', dir)),
+  );
+}
+
 /** Every export of each `'use client'` module in the kit and the workspace's variant packages. */
 async function clientComponents(): Promise<Set<unknown>> {
-  const packages = new URL('../../../../packages/', import.meta.url);
   const found = new Set<unknown>();
-  for (const name of readdirSync(packages)) {
-    const manifest = JSON.parse(readFileSync(new URL(`${name}/package.json`, packages), 'utf8'));
-    if (name !== 'kit' && manifest.portfolio?.kind !== 'variant') continue;
-    const src = new URL(`${name}/src/`, packages);
+  for (const dir of packageDirs()) {
+    const manifest = JSON.parse(readFileSync(new URL('package.json', dir), 'utf8'));
+    if (manifest.name !== '@portfolio/kit' && manifest.portfolio?.kind !== 'variant') continue;
+    const src = new URL('src/', dir);
     for (const file of readdirSync(src, { recursive: true, encoding: 'utf8' })) {
       if (!/\.tsx?$/.test(file) || file.includes('.test.')) continue;
       const url = new URL(file, src);

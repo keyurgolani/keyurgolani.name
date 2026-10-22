@@ -10,13 +10,13 @@
     ".": "./src/index.ts",
     "./pretext": "./src/pretext/index.ts",
     "./theme": "./src/theme.tsx",
-    "./theme-init": "./src/theme-init.ts",
+    "./theme-init": "./src/entries/theme-init.ts",
     "./markdown": {
       "react-server": "./src/markdown.server.ts",
       "default": "./src/markdown.ts"
     },
     "./sections": "./src/sections/index.ts",
-    "./host-modules": "./src/sections/host-modules.ts",
+    "./host-modules": "./src/entries/host-modules.ts",
     "./sections/styles.css": "./src/sections/styles.css",
     "./enhancements": "./src/enhancements/index.tsx",
     "./spatial": "./src/spatial/index.ts",

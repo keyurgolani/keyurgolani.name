@@ -262,10 +262,10 @@ const VENDORED_BY_NEXT = /^dist\/compiled\/(react|react-dom|scheduler)(?:-experi
  * The package a normalized source belongs to: the npm name after its last
  * `node_modules/`, with React, React DOM, and the scheduler as themselves
  * where Next vendors them, `apps/<name>` for an app, the workspace
- * package's name for `packages/<dir>/` (`workspace` maps a directory to its
- * name), and `next` for Next's own runtime: the bundler runtime it ships
- * and the @swc/helpers its compiled client imports. Anything else is
- * `(other)`.
+ * package's name for `packages/<dir>/`, the deepest directory `workspace`
+ * maps to a name, such as `budget-fixtures/fixture-variant-light` (#6), and
+ * `next` for Next's own runtime: the bundler runtime it ships and the
+ * @swc/helpers its compiled client imports. Anything else is `(other)`.
  *
  * @param {string} source normalized, as normalizeSource returns it
  * @param {Record<string, string>} [workspace] package names by directory under packages/
@@ -287,28 +287,46 @@ export function packageOf(source, workspace = {}) {
   if (/^\[(turbopack|next)\]\//.test(source)) return 'next';
   const app = /(?:^|\/)apps\/([^/]+)\//.exec(source);
   if (app) return `apps/${app[1]}`;
-  const pkg = /(?:^|\/)packages\/([^/]+)\//.exec(source);
-  if (pkg) return workspace[pkg[1]] ?? `packages/${pkg[1]}`;
+  const pkg = /(?:^|\/)packages\/(.+)$/.exec(source);
+  if (pkg) {
+    const rest = pkg[1];
+    const dir = Object.keys(workspace)
+      .filter((key) => rest.startsWith(`${key}/`))
+      .sort((a, b) => b.length - a.length)[0];
+    if (dir) return workspace[dir];
+    const first = /^([^/]+)\//.exec(rest);
+    if (first) return `packages/${first[1]}`;
+  }
   return '(other)';
 }
 
 /**
  * The workspace's package names by their directory under `root`/packages,
- * for packageOf.
+ * for packageOf: each of packages/* and packages/budget-fixtures/* that has
+ * a package.json, as pnpm-workspace.yaml lists them.
  *
  * @param {string} root
  * @returns {Record<string, string>}
  */
 export function workspacePackages(root) {
   const names = {};
-  const dir = path.join(root, 'packages');
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    if (!entry.isDirectory()) continue;
+  const packages = path.join(root, 'packages');
+  for (const parent of ['', 'budget-fixtures']) {
+    let entries;
     try {
-      const { name } = JSON.parse(readFileSync(path.join(dir, entry.name, 'package.json'), 'utf8'));
-      if (typeof name === 'string') names[entry.name] = name;
+      entries = readdirSync(path.join(packages, parent), { withFileTypes: true });
     } catch {
-      // A directory with no package.json is no package.
+      continue;
+    }
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const dir = parent ? `${parent}/${entry.name}` : entry.name;
+      try {
+        const { name } = JSON.parse(readFileSync(path.join(packages, dir, 'package.json'), 'utf8'));
+        if (typeof name === 'string') names[dir] = name;
+      } catch {
+        // A directory with no package.json is no package.
+      }
     }
   }
   return names;

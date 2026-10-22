@@ -944,7 +944,13 @@ function usesServer(file: string, text?: string): boolean {
 }
 
 test('no module in apps/web/src or packages/*/src declares a Server Function', () => {
-  const roots = [SRC, ...readdirSync(PACKAGES).map((name) => path.join(PACKAGES, name, 'src'))];
+  // packages/* and #6's packages/budget-fixtures/*, as pnpm-workspace.yaml lists them.
+  const fixtures = path.join(PACKAGES, 'budget-fixtures');
+  const roots = [
+    SRC,
+    ...readdirSync(PACKAGES).map((name) => path.join(PACKAGES, name, 'src')),
+    ...readdirSync(fixtures).map((name) => path.join(fixtures, name, 'src')),
+  ];
   const offenders = roots
     .flatMap((root) => (existsSync(root) ? sources(root) : []))
     .filter((file) => usesServer(file));
