@@ -43,6 +43,7 @@ export {
   TOUCH_INTERVAL_MS,
   type Activity,
   type AuditContext,
+  type DigestResolution,
   type EndedReason,
   type HeaderReader,
   type Holding,
@@ -80,6 +81,48 @@ export {
 } from './audit/sink';
 export { limitSource, sourcePrefix } from './audit/source';
 export { authPaths, prepareAuthDirectories } from './data/layout.mjs';
+
+// Preview grants (#7, Slice 2), beside the sessions they're bound to.
+export {
+  grantDigest,
+  grantRef,
+  isGrantDigest,
+  isGrantToken,
+  newChannelNonce,
+  newGrantToken,
+} from './preview/token';
+export {
+  asEnvironment,
+  asSubject,
+  filesystemGrantStore,
+  isFixtureId,
+  memoryGrantStore,
+  previewPaths,
+  type GrantEnvironment,
+  type GrantRecord,
+  type GrantStore,
+  type GrantSubject,
+  type RecordedState,
+} from './preview/grant-store';
+export {
+  createPreviewGrants,
+  GRANT_LIFETIME,
+  GRANT_LIFETIME_RANGE,
+  MAX_ACTIVE_GRANTS,
+  type GrantCheck,
+  type GrantDrafts,
+  type GrantExpiry,
+  type GrantLifetime,
+  type GrantLog,
+  type GrantLogEntry,
+  type GrantSessions,
+  type GrantStatus,
+  type MintInput,
+  type Minted,
+  type PreviewGrants,
+  type PreviewGrantsOptions,
+  type Renewal,
+} from './preview/grants';
 
 // The revision store (#3, Slice 1). Nothing wires it yet: owner reads the
 // documents adapter until Slice 3's first-start import.
