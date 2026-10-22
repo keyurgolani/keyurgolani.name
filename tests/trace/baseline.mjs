@@ -8,8 +8,9 @@
 //
 // 1. A detached git worktree of the commit, in a temporary directory outside
 //    the checkout, with pnpm install --frozen-lockfile. Its packages come from
-//    its own lockfile; the install is the one step that may reach the
-//    registry.
+//    its own lockfile, and its install settings from its own
+//    pnpm-workspace.yaml and .npmrc; the install is the one step that may
+//    reach the registry.
 // 2. Its build and its server run with server egress blocked: Node sends
 //    every outbound request to a local trap that refuses and records it
 //    (NODE_USE_ENV_PROXY=1 with HTTP_PROXY and HTTPS_PROXY), and
@@ -49,6 +50,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { reportsDir } from '../../ci/lib/reports.mjs';
 import { startEgressTrap } from '../harness/egress-trap.mjs';
 import { freePort } from '../harness/net.mjs';
+import { withoutPnpmSettings } from '../harness/trace/pnpm-env.mjs';
 import { watchSockets } from '../harness/trace/sockets.mjs';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -144,13 +146,15 @@ async function main() {
     chmodSync(shim, 0o755);
     const PATH = `${bin}${path.delimiter}${process.env.PATH ?? ''}`;
 
+    // The install follows the baseline's own pnpm settings, not the ones pnpm
+    // run passed down from this checkout (strictDepBuilds, for one).
     console.log('[baseline] pnpm install --frozen-lockfile');
     const install = spawnSync(
       pnpm,
       [...pnpmArgs, 'install', '--frozen-lockfile', '--prefer-offline'],
       {
         cwd: tree,
-        env: { ...process.env, PATH, NEXT_TELEMETRY_DISABLED: '1' },
+        env: { ...withoutPnpmSettings(process.env), PATH, NEXT_TELEMETRY_DISABLED: '1' },
         encoding: 'utf8',
         maxBuffer: 64 * 1024 * 1024,
       },
