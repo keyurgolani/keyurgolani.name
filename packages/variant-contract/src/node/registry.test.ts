@@ -243,7 +243,7 @@ test("each manifest problem keeps the contract's code and pointer, located in it
     ['acme-tokens', { tokenContract: 0 }, '/tokenContract', 'manifest.token-contract-mismatch'],
     [
       'acme-schemas',
-      { schemas: { portfolio: { min: 3, max: 3 }, site: { min: 2, max: 2 } } },
+      { schemas: { portfolio: { min: 4, max: 4 }, site: { min: 2, max: 2 } } },
       '/schemas/portfolio',
       'manifest.schemas-unsupported',
     ],

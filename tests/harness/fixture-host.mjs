@@ -3,7 +3,8 @@
 // path views, and the fallback composition declares none.
 //
 // It copies the workspace, the root files, apps/, and packages/, as the
-// checkout has them, into a temporary directory. Each fixture package from
+// checkout has them, with what sits beside the bundled sample pair (#10), into
+// a temporary directory. Each fixture package from
 // tests/fixtures/variants/ goes inside the copy's apps/web, under
 // fixture-variants/, and becomes a `link:` dependency of its @portfolio/web,
 // the way `pnpm --filter @portfolio/web add link:<dir>` adds one. A fixture
@@ -57,6 +58,8 @@ const ROOT_FILES = [
   'portfolio.example.yml',
   'site.example.yml',
 ];
+/** What sits beside the bundled sample pair (#10): its snapshots, and its media sources. */
+const ROOT_DIRS = ['snapshots', 'example-media'];
 /** Directories never copied, wherever they are: installs and build output. */
 const SKIPPED_DIRS = new Set(['node_modules', '.next', '.turbo', 'dist', 'coverage']);
 /** What registry generation writes, which the copy's build writes again. */
@@ -124,6 +127,11 @@ export function buildFixtureHost({ variants, publicFiles = {}, log }) {
     }
     for (const dir of ['apps', 'packages']) {
       copyTree(path.join(REPO_ROOT, dir), path.join(root, dir), dir);
+    }
+    for (const dir of ROOT_DIRS) {
+      if (existsSync(path.join(REPO_ROOT, dir))) {
+        copyTree(path.join(REPO_ROOT, dir), path.join(root, dir), dir);
+      }
     }
     const web = path.join(root, 'apps', 'web');
     const host = JSON.parse(readFileSync(path.join(web, 'package.json'), 'utf8'));

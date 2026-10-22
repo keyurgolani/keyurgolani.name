@@ -83,17 +83,16 @@ const where = (diagnostics: readonly Diagnostic[]) =>
 
 /** A section appended to the engineering portfolio. */
 const withSections = (...yaml: string[]) => `${PORTFOLIO}${yaml.join('')}`;
-const GITHUB = `
-  - kind: github
-    id: code
-    username: ines
-`;
+/** Its nine sections: the github section, at 7, is of a kind Ocean doesn't show. */
+const AUTHORED = 9;
+/** Hides its github section, so nothing but what a test adds is a finding. */
+const NO_GITHUB = 'sections:\n  on-code:\n    hidden: true\n';
+/** A works section listing a work the portfolio already has. */
 const ESSAYS = (id: string) => `
-  - kind: writings
+  - kind: works
     id: ${id}
     title: Essays
-    items:
-      - { title: On rollbacks, url: 'https://okafor.test/rollbacks' }
+    items: [quiet-alerts]
 `;
 const SHOWS = `
   - kind: '@acme/portfolio-photography/exhibitions'
@@ -113,11 +112,11 @@ test('the report says how each kind renders, how full each slot is, and what to 
   assert.deepEqual(report.kinds, [
     { kind: 'hero', sections: 1, renderer: 'bespoke' },
     { kind: 'lede', sections: 1, renderer: 'shared' },
-    { kind: 'stats', sections: 1, renderer: 'shared' },
-    { kind: 'projects', sections: 1, renderer: 'shared' },
-    { kind: 'experience', sections: 1, renderer: 'shared' },
-    { kind: 'skills', sections: 1, renderer: 'shared' },
-    { kind: 'stack', sections: 1, renderer: 'shared' },
+    { kind: 'evidence', sections: 1, renderer: 'shared' },
+    { kind: 'works', sections: 1, renderer: 'bespoke' },
+    { kind: 'chronology', sections: 1, renderer: 'shared' },
+    { kind: 'practice', sections: 2, renderer: 'shared' },
+    { kind: 'github', sections: 1, renderer: 'unsupported' },
     { kind: 'contact', sections: 1, renderer: 'shared' },
   ]);
   const notes = (id: string) => OCEAN.contentSlots.find((slot) => slot.id === id)!.whenEmpty;
@@ -135,9 +134,8 @@ test('the report says how each kind renders, how full each slot is, and what to 
       id: 'essays',
       label: 'Essays',
       level: 'required',
-      count: 0,
+      count: 1,
       min: 1,
-      whenEmpty: notes('essays'),
     },
     {
       id: 'portrait',
@@ -149,27 +147,54 @@ test('the report says how each kind renders, how full each slot is, and what to 
       whenEmpty: notes('portrait'),
     },
     {
-      id: 'project-images',
-      label: 'Project images',
+      id: 'covers',
+      label: 'Work covers',
       level: 'optional',
       count: 0,
       min: 0,
-      whenEmpty: notes('project-images'),
+      whenEmpty: notes('covers'),
     },
   ]);
   // Empty optional slots are in slots alone; the rest say where to fill them.
   assert.deepEqual(where(report.diagnostics), [
-    ['slot.required-empty', 'blocks-publish', 'portfolio', '/sections'],
+    ['kind.unsupported', 'warning', 'portfolio', '/sections/7'],
     ['slot.recommended-empty', 'warning', 'site', '/variantControls/acme-ocean/values/leadSection'],
   ]);
-  assert.equal(report.status, 'blocks-publish');
+  assert.equal(report.status, 'warning');
   assert.deepEqual(report.routes, []);
   // No recipe registry until #20, so the recommended appearance waits.
   assert.deepEqual(report.notChecked, ['variant.recommendedAppearance']);
+  // With its one works section hidden, the required slot is empty, which blocks publishing.
+  const HIDE_WORK = 'sections:\n  work:\n    hidden: true\n';
+  const hidden = compatibilityFor(
+    pair(site('acme-ocean', HIDE_WORK)),
+    { registry: REGISTRY },
+  );
+  assert.deepEqual(
+    hidden.slots.find(({ id }) => id === 'essays'),
+    {
+      id: 'essays',
+      label: 'Essays',
+      level: 'required',
+      count: 0,
+      min: 1,
+      whenEmpty: notes('essays'),
+    },
+  );
+  assert.deepEqual(where(hidden.diagnostics), [
+    ['slot.required-empty', 'blocks-publish', 'portfolio', '/sections'],
+    ['kind.unsupported', 'warning', 'portfolio', '/sections/7'],
+    ['slot.recommended-empty', 'warning', 'site', '/variantControls/acme-ocean/values/leadSection'],
+  ]);
+  assert.equal(hidden.status, 'blocks-publish');
   // Live, as startup checks the pair, an empty required slot only warns: the page renders around it.
-  const live = compatibilityFor(pair(site('acme-ocean')), { registry: REGISTRY, live: true });
+  const live = compatibilityFor(pair(site('acme-ocean', HIDE_WORK)), {
+    registry: REGISTRY,
+    live: true,
+  });
   assert.deepEqual(where(live.diagnostics), [
     ['slot.required-empty', 'warning', 'portfolio', '/sections'],
+    ['kind.unsupported', 'warning', 'portfolio', '/sections/7'],
     ['slot.recommended-empty', 'warning', 'site', '/variantControls/acme-ocean/values/leadSection'],
   ]);
   assert.equal(live.status, 'warning');
@@ -206,16 +231,21 @@ test('a recommended slot with min 0 still asks for one item', () => {
 });
 
 test('a slot counts sections of its kind, sections its control points at, and the values its field holds', () => {
-  const portfolio = withSections(ESSAYS('essays'), ESSAYS('notebook')).replace(
-    '  email: ines@okafor.test\n',
-    '  email: ines@okafor.test\n  avatar: { src: /ines.jpg, alt: Ines Okafor }\n',
-  );
+  const portfolio = withSections(ESSAYS('essays'), ESSAYS('notebook'))
+    .replace(
+      '  email: ines@okafor.test\n',
+      '  email: ines@okafor.test\n  avatar: { asset: ines-portrait }\n',
+    )
+    .replace(
+      '\nsections:\n',
+      '\nmedia:\n  - { id: ines-portrait, kind: image, source: ines.jpg, alt: Ines Okafor }\nsections:\n',
+    );
   const stored = `variantControls:
   acme-ocean:
     version: 2
     values:
       leadSection: notebook
-`;
+${NO_GITHUB}`;
   const report = compatibilityFor(pair(site('acme-ocean', stored), portfolio), {
     registry: REGISTRY,
   });
@@ -223,9 +253,9 @@ test('a slot counts sections of its kind, sections its control points at, and th
     report.slots.map(({ id, count, whenEmpty }) => [id, count, whenEmpty !== undefined]),
     [
       ['lead', 1, false],
-      ['essays', 2, false],
+      ['essays', 3, false],
       ['portrait', 1, false],
-      ['project-images', 0, true],
+      ['covers', 0, true],
     ],
   );
   assert.deepEqual(where(report.diagnostics), []);
@@ -245,7 +275,7 @@ const STRICT_REGISTRY: VariantRegistry = [
 ];
 
 test('every Slice 5 finding has its exact code, document, pointer, and severity', () => {
-  const portfolio = withSections(GITHUB, ESSAYS('essays'), ESSAYS('notebook'), SHOWS).replace(
+  const portfolio = withSections(ESSAYS('essays'), ESSAYS('notebook'), SHOWS).replace(
     'direction: ltr',
     'direction: rtl',
   );
@@ -256,12 +286,13 @@ test('every Slice 5 finding has its exact code, document, pointer, and severity'
     recipes: ['quiet-paper'],
   };
   const report = compatibilityFor(unit, options);
-  // The engineering portfolio has 8 sections, so the appended ones are 8 to 11.
+  // The engineering portfolio has 9 sections, so the appended ones are 9 to 11, and the
+  // essays slot's second item, past its max, is the first appended.
   assert.deepEqual(where(report.diagnostics), [
     ['direction.unsupported', 'warning', 'portfolio', '/direction'],
-    ['kind.unsupported', 'warning', 'portfolio', '/sections/8'],
-    ['slot.overflow', 'warning', 'portfolio', '/sections/10'],
-    ['kind.no-renderer', 'blocks-publish', 'portfolio', '/sections/11'],
+    ['kind.unsupported', 'warning', 'portfolio', '/sections/7'],
+    ['slot.overflow', 'warning', 'portfolio', `/sections/${AUTHORED}`],
+    ['kind.no-renderer', 'blocks-publish', 'portfolio', `/sections/${AUTHORED + 2}`],
     ['appearance.unknown-recipe', 'warning', 'site', '/appearance/variant'],
     [
       'slot.recommended-empty',
@@ -315,7 +346,7 @@ test('a section in a language that runs right to left is direction.unsupported a
   });
   assert.deepEqual(
     where(report.diagnostics).filter(([code]) => code === 'direction.unsupported'),
-    [['direction.unsupported', 'warning', 'portfolio', '/sections/8/lang']],
+    [['direction.unsupported', 'warning', 'portfolio', `/sections/${AUTHORED}/lang`]],
   );
   // A composition that declares rtl lays it out either way.
   const ocean = compatibilityFor(pair(site('acme-ocean'), portfolio), { registry: REGISTRY });
@@ -370,7 +401,7 @@ test('a finding about a section points at its index in the document, past hidden
 });
 
 test('each message starts at its pointer, says what renders, ends on what it blocks, and repeats no document value', () => {
-  const portfolio = withSections(GITHUB, ESSAYS('essays'), ESSAYS('notebook'), SHOWS).replace(
+  const portfolio = withSections(ESSAYS('essays'), ESSAYS('notebook'), SHOWS).replace(
     'direction: ltr',
     'direction: rtl',
   );
@@ -401,7 +432,15 @@ test('each message starts at its pointer, says what renders, ends on what it blo
         : 'It blocks neither preview nor publishing.';
     assert.ok(record.message.endsWith(gate), record.message);
     assert.ok(record.remediation.length > 0, record.code);
-    for (const value of ['missing-variant', 'notebook', 'shows', 'code', 'github', 'exhibitions']) {
+    for (const value of [
+      'missing-variant',
+      'notebook',
+      'shows',
+      'on-code',
+      'quiet-alerts',
+      'github',
+      'exhibitions',
+    ]) {
       assert.ok(!record.message.includes(value), `${record.code}: ${record.message}`);
     }
   }
@@ -620,18 +659,17 @@ test('the fallback composition renders every fixture pair, with nothing to fix b
 });
 
 test('in #4, the records are located, and a section finding carries its stable id', () => {
-  const portfolio = withSections(GITHUB);
   const result = validatePublicationUnit(
     {
-      portfolio: { text: portfolio, format: 'yaml', name: 'portfolio.yml' },
+      portfolio: { text: PORTFOLIO, format: 'yaml', name: 'portfolio.yml' },
       site: { text: site('acme-ocean'), format: 'yaml', name: 'site.yml' },
     },
     { validators: contractValidators(REGISTRY) },
   );
   const record = result.diagnostics.find(({ code }) => code === 'kind.unsupported');
   assert.ok(record, JSON.stringify(result.diagnostics));
-  assert.equal(record.pointer, '/sections/8');
-  assert.equal(record.stableId, 'code');
-  assert.equal(record.line, PORTFOLIO.split('\n').length + 1);
+  assert.equal(record.pointer, '/sections/7');
+  assert.equal(record.stableId, 'on-code');
+  assert.equal(record.line, PORTFOLIO.split('\n').indexOf('  - kind: github') + 1);
   assert.ok(result.pair);
 });

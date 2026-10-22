@@ -358,8 +358,6 @@ function shown(key: string, value: unknown, record: Record<string, unknown>): st
       return [`data-medium="${value}"`];
     case 'platform':
       return [`data-platform="${value}"`];
-    case 'showAvailability':
-      return ['data-availability="open"'];
     case 'doi':
       return [escape(String(value)), `href="${escape(doiLink(String(value))!.url)}"`];
     case 'audioUrl':
@@ -768,15 +766,11 @@ test('a chronology section without items lists every public entry, newest first'
   assert.deepEqual(ids, ['Current title', 'Chronology title', 'Study title']);
 });
 
-test('contact shows the contact record, the identity’s email first, and says availability on a data attribute', () => {
+test('contact shows the contact record, the identity’s email first, and no words of its own', () => {
   const contact = render('get-in-touch');
   assert.match(
     contact,
-    /<div class="pf-contact" data-availability="open"><p class="pf-message">Contact message<\/p>/,
-  );
-  assert.match(
-    contact,
-    /<ul class="pf-links" role="list"><li><a href="mailto:rowan@rowan\.test" data-platform="email">rowan@rowan\.test<\/a><\/li><li><a href="mailto:hello@rowan\.test" data-platform="email">Contact link<\/a><\/li><\/ul>/,
+    /<p class="pf-message">Contact message<\/p><ul class="pf-links" role="list"><li><a href="mailto:rowan@rowan\.test" data-platform="email">rowan@rowan\.test<\/a><\/li><li><a href="mailto:hello@rowan\.test" data-platform="email">Contact link<\/a><\/li><\/ul>/,
   );
   assert.doesNotMatch(contact, /Available/);
   // A link to the same address isn't listed twice.
@@ -785,6 +779,27 @@ test('contact shows the contact record, the identity’s email first, and says a
     contact: { links: [{ url: 'mailto:Rowan@rowan.test', label: 'Write' }] },
   });
   assert.equal(render('get-in-touch', linked).match(/mailto:/gi)?.length, 1);
+});
+
+test('without a contact record, a contact section is the email and the portfolio’s links, and with neither it leaves', () => {
+  const recordless = inputFor({ ...COMPLETE, contact: undefined });
+  assert.equal(recordless.portfolio.contact, undefined);
+  const contact = render('get-in-touch', recordless);
+  assert.doesNotMatch(contact, /pf-message/);
+  assert.match(
+    contact,
+    /<li><a href="mailto:rowan@rowan\.test" data-platform="email">rowan@rowan\.test<\/a><\/li>/,
+  );
+  for (const link of COMPLETE.links) assert.ok(contact.includes(`href="${link.url}"`), link.url);
+  const unreachable = inputFor({
+    ...COMPLETE,
+    contact: undefined,
+    links: undefined,
+    identity: { ...COMPLETE.identity, email: undefined },
+  });
+  assert.ok(!unreachable.portfolio.sections.some(({ kind }) => kind === 'contact'));
+  const stray = { kind: 'contact', id: 'stray' } as Section;
+  assert.equal(renderSection(stray, unreachable, {}), null);
 });
 
 test('each practice section shows its part, groups in order, an unnamed group straight under the section', () => {

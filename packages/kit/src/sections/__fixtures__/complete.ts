@@ -258,7 +258,6 @@ export const COMPLETE = {
   contact: {
     message: 'Contact message',
     links: [{ platform: 'email', url: 'mailto:hello@rowan.test', label: 'Contact link' }],
-    showAvailability: true,
   },
   sections: [
     {

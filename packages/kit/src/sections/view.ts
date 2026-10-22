@@ -168,7 +168,12 @@ export function sectionShows(section: Section, input: ViewSource): boolean {
     case 'practice':
       return input.portfolio.practice?.[section.part] !== undefined;
     case 'contact':
-      return input.portfolio.contact !== undefined;
+      // The contact record, or the ways to reach the author it adds to.
+      return (
+        input.portfolio.contact !== undefined ||
+        input.portfolio.identity.email !== undefined ||
+        input.portfolio.links.length > 0
+      );
     default:
       return true;
   }

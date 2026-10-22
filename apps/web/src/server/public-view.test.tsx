@@ -242,9 +242,18 @@ test('no variant sends a browser a hidden section, a private or unreached record
     assert.deepEqual(found(strings), [], id);
 
     // Given the parsed pair instead (forced past the type's brand, which
-    // otherwise refuses it), the same walk finds the hidden section, so it
-    // would see a leak.
-    const raw = { ...view, portfolio: input.portfolio as unknown as PublicPortfolio };
+    // otherwise refuses it, with the lists a view always has), the same walk
+    // finds the hidden section, so it would see a leak.
+    const parsed = input.portfolio;
+    const raw = {
+      ...view,
+      portfolio: {
+        ...parsed,
+        works: parsed.works ?? [],
+        evidence: parsed.evidence ?? [],
+        chronology: parsed.chronology ?? [],
+      } as unknown as PublicPortfolio,
+    };
     assert.ok(
       found(await payloadStrings(await element(id, raw), clients)).includes('canary-hidden-role'),
       id,

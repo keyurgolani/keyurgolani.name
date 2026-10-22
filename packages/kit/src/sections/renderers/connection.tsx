@@ -3,9 +3,10 @@ import { LinkList, LinkText, present, renderContext, SectionHeader } from '../pr
 import type { SectionOf, SectionRendererProps } from '../types';
 
 /**
- * Ways to get in touch, from the portfolio's contact record, which a contact
- * section places: its message, then the identity's email, unless a link
- * already points at it, then the contact's links, else the portfolio's.
+ * Ways to get in touch, which a contact section places: the contact record's
+ * message, then the identity's email, unless a link already points at it,
+ * then the contact's links, else the portfolio's. Without a contact record,
+ * the email and the portfolio's links are the section.
  */
 export function ContactSection({
   section,
@@ -21,18 +22,11 @@ export function ContactSection({
     mailto !== undefined && !links.some((link) => link.url.toLowerCase() === mailto.toLowerCase())
       ? [{ platform: 'email', url: mailto, label: email }, ...links]
       : links;
-  // Whether the owner is open to work goes on a data attribute: no words of
-  // the renderer's own say it.
   return (
     <>
       <SectionHeader section={section} ctx={ctx} />
-      <div
-        className="pf-contact"
-        data-availability={contact?.showAvailability === true ? 'open' : undefined}
-      >
-        {present(contact?.message) ? <p className="pf-message">{contact.message}</p> : null}
-        <LinkList links={listed} ctx={ctx} />
-      </div>
+      {present(contact?.message) ? <p className="pf-message">{contact.message}</p> : null}
+      <LinkList links={listed} ctx={ctx} />
     </>
   );
 }
