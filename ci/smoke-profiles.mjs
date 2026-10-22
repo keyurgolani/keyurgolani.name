@@ -739,6 +739,8 @@ function rowRuns() {
     mkdirSync(config, { recursive: true });
     mkdirSync(files, { recursive: true });
     for (const [name, text] of Object.entries(rowDocuments(row))) {
+      // A name may sit in a directory beside the documents, such as snapshots/github.json.
+      mkdirSync(path.dirname(path.join(config, name)), { recursive: true });
       writeFileSync(path.join(config, name), text);
     }
     for (const [name, text] of Object.entries(row.files ?? {})) {
@@ -772,6 +774,7 @@ async function warningRowRuns() {
     const config = path.join(stateDir, `warning-${index}`, 'config');
     mkdirSync(config, { recursive: true });
     for (const [file, text] of Object.entries(row.documents)) {
+      mkdirSync(path.dirname(path.join(config, file)), { recursive: true });
       writeFileSync(path.join(config, file), text);
     }
     const paths = { source: '/config', beside: (file) => `/files/${file}` };

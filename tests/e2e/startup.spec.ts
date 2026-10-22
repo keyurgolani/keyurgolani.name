@@ -80,6 +80,8 @@ function place(row: StartupRow | WarningRow): RowPaths {
   mkdirSync(source, { recursive: true });
   const documents = 'fatal' in row ? rowDocuments(row) : row.documents;
   for (const [name, text] of Object.entries(documents)) {
+    // A name may sit in a directory beside the documents, such as snapshots/github.json.
+    mkdirSync(path.dirname(path.join(source, name)), { recursive: true });
     writeFileSync(path.join(source, name), text);
   }
   const beside = (name: string) => test.info().outputPath(name);

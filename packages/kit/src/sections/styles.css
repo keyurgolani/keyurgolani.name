@@ -64,6 +64,23 @@
   display: block;
   max-inline-size: 100%;
   block-size: auto;
+  /* The owner's focal point, from the one inline style a shared renderer sets, for any crop. */
+  object-position: calc(var(--focal-x, 0.5) * 100%) calc(var(--focal-y, 0.5) * 100%);
+}
+
+/* An image with no rendition yet keeps its place, with its label in the middle. */
+:where([data-variant] [data-renderer='shared'] .pf-media-box) {
+  display: grid;
+  place-items: center;
+  inline-size: 100%;
+  aspect-ratio: 3 / 2;
+  padding-inline: 1rem;
+}
+
+:where([data-variant] [data-renderer='shared'] .pf-media-box--small) {
+  display: inline-grid;
+  inline-size: auto;
+  aspect-ratio: auto;
 }
 
 :where([data-variant] [data-renderer='shared'] :is(.pf-logo, .pf-avatar)) {

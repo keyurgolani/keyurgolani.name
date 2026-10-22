@@ -59,6 +59,8 @@ export interface AppOptions {
   web?: string;
   /** Files added to the server copy's public/, by path, as an owner adds the assets a portfolio names. */
   publicFiles?: Record<string, string | Uint8Array>;
+  /** Files added to the source directory beside the documents, by path, such as `snapshots/github.json` (#10). */
+  sourceFiles?: Record<string, string | Uint8Array>;
 }
 
 export interface App {
