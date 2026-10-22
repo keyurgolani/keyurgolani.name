@@ -52,6 +52,11 @@
   margin-block-start: 2rem;
 }
 
+/* The evidence a work or a custom item cites, a step closer than the records around it. */
+:where([data-variant] [data-renderer='shared'] .pf-evidence > li + li) {
+  margin-block-start: 1rem;
+}
+
 :where(
   [data-variant] [data-renderer='shared'] :is(.pf-tags, .pf-links, .pf-named-links, .pf-actions)
 ) {
