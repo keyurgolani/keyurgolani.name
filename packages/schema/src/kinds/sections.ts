@@ -89,7 +89,10 @@ export function sectionSchemas({ object, section, Link, Action, Placement }: Sch
    * snapshot at snapshots/github.json, never from a fetch at render time.
    */
   const GithubSchema = section('github', {
-    username: z.string().min(1),
+    /** The GitHub user it shows. */
+    username: z.string().refine((value) => value.trim() !== '', {
+      message: 'is blank. A github section shows one GitHub user: give the username.',
+    }),
     /** Show the 53-week contribution heatmap. */
     showContributionGraph: z.boolean().default(true),
     /** Show pinned repositories (up to 6). */
@@ -103,9 +106,9 @@ export function sectionSchemas({ object, section, Link, Action, Placement }: Sch
     /** Number of repositories to show in the recently-active list (1-20). */
     recentlyActiveLimit: z.number().finite().int().min(1).max(20).default(10),
     /** Repository names to feature even if they aren't pinned. */
-    featuredRepos: z.array(z.string()).default([]),
+    featuredRepos: listOf(TextSchema).optional(),
     /** Repository names to suppress from listings. */
-    excludeRepos: z.array(z.string()).default([]),
+    excludeRepos: listOf(TextSchema).optional(),
   });
 
   return {

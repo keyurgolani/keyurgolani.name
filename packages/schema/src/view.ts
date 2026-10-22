@@ -1,5 +1,6 @@
 import {
   createExtensionRegistry,
+  isRegisteredMedium,
   type ContentExtension,
   type ExtensionRegistry,
 } from './extensions';
@@ -17,7 +18,7 @@ import type {
   Work,
 } from './kinds/records';
 import type { FocalPoint, Link, Placement } from './kinds/common';
-import type { Section } from './kinds';
+import type { Github, Section } from './kinds';
 import {
   normalizeMediaBase,
   parseMediaDocument,
@@ -27,7 +28,12 @@ import {
 } from './media';
 import type { Identity, Portfolio, PortfolioMeta } from './portfolio';
 import type { Site } from './site';
-import { parseSnapshot, type GitHubData, type GitHubSnapshot } from './snapshots';
+import {
+  parseSnapshot,
+  type GitHubData,
+  type GitHubSnapshot,
+  type GitHubSnapshotData,
+} from './snapshots';
 
 // What visitors may see of a publication unit (#10, item 5): the published
 // view. Variants, the render input, JSON-LD, the feed, and the Open Graph
@@ -117,8 +123,17 @@ export interface ViewMediaAsset {
   readonly derived: Derived<ViewMediaValue>;
 }
 
+/**
+ * What a github section shows of its snapshot: the record's data less what
+ * the section's settings leave out. A list it turns off is empty, and a
+ * figure null.
+ */
+export type ViewGitHubData = Omit<GitHubData, 'totalStarsReceived'> & {
+  readonly totalStarsReceived: number | null;
+};
+
 /** What a section's derived data holds: GitHub's snapshot in slice 1. */
-export type SectionDerived = Derived<GitHubData>;
+export type SectionDerived = Derived<ViewGitHubData>;
 
 /**
  * The portfolio a renderer takes. Every list is present, possibly empty, and
@@ -211,10 +226,11 @@ export function resolvePortfolioView(
   const registry = createExtensionRegistry(options.extensions ?? []);
   const reached = reachRecords(pair, registry);
   const { portfolio } = pair;
-  const keep = <T extends { readonly id: string }>(
+  // Public records only: a private record that repeats a kept one's id stays out too.
+  const keep = <T extends { readonly id: string; readonly visibility?: string }>(
     records: readonly T[] | undefined,
     ids: ReadonlySet<string>,
-  ) => (records ?? []).filter(({ id }) => ids.has(id));
+  ) => (records ?? []).filter((record) => ids.has(record.id) && isPublic(record));
   const placement = (value: Placement | undefined) =>
     value !== undefined && reached.media.has(value.asset) ? value : undefined;
   const placements = (values: readonly Placement[] | undefined) => {
@@ -226,7 +242,7 @@ export function resolvePortfolioView(
     return kept.length > 0 ? kept : undefined;
   };
 
-  const works = keep(portfolio.works, reached.works).map((work) =>
+  const works = keep(shownWorks(portfolio.works, registry), reached.works).map((work) =>
     compact({
       ...work,
       cover: placement(work.cover),
@@ -296,10 +312,12 @@ export function resolvePortfolioView(
     extensions: portfolio.extensions,
   });
 
+  const media = viewMedia(portfolio.media ?? [], reached.media, unit.media, base, registry);
+  const site = keptInputs(keptSettings(pair.site, reached.sections), media);
   return {
     portfolio: withoutUnregistered(view, registry) as PublicPortfolio,
-    site: withoutUnregistered(keptSettings(pair.site, reached.sections), registry) as Public<Site>,
-    media: viewMedia(portfolio.media ?? [], reached.media, unit.media, base, registry),
+    site: withoutUnregistered(site, registry) as Public<Site>,
+    media,
     derived: viewDerived(reached.sections, unit.snapshots),
   };
 }
@@ -315,6 +333,14 @@ export function publicSectionIndexes(
   options: Pick<ViewOptions, 'extensions'> = {},
 ): number[] {
   return [...reachRecords(pair, createExtensionRegistry(options.extensions ?? [])).sectionIndexes];
+}
+
+/** The works a visitor may see by their medium: core media, and registered extensions'. */
+function shownWorks<T extends { readonly medium: string }>(
+  works: readonly T[] | undefined,
+  registry: ExtensionRegistry,
+): T[] {
+  return (works ?? []).filter(({ medium }) => isRegisteredMedium(medium, registry));
 }
 
 /** Whether a record is public: one left without `visibility` is. */
@@ -333,7 +359,7 @@ export function reachRecords(pair: ParsedPair, registry: ExtensionRegistry): Rea
   const publicIds = <T extends { readonly id: string; readonly visibility?: string }>(
     records: readonly T[] | undefined,
   ) => new Map((records ?? []).filter(isPublic).map((record) => [record.id, record]));
-  const works = publicIds(portfolio.works);
+  const works = publicIds(shownWorks(portfolio.works, registry));
   const evidence = publicIds(portfolio.evidence);
   const chronology = publicIds(portfolio.chronology);
   const media = publicIds(portfolio.media);
@@ -480,7 +506,7 @@ function viewMedia(
   const records = new Map((document?.assets ?? []).map((record) => [record.assetId, record]));
   const out: Record<string, ViewMediaAsset> = {};
   for (const asset of assets) {
-    if (!kept.has(asset.id)) continue;
+    if (!kept.has(asset.id) || !isPublic(asset)) continue;
     const record = records.get(asset.id);
     const derived: Derived<ViewMediaValue> = record
       ? { state: 'ready', value: mediaValue(record, base), derivedAt: record.derivedAt }
@@ -545,7 +571,7 @@ function viewDerived(
     const value: SectionDerived = record
       ? {
           state: 'ready',
-          value: { ...record.data, fetchedAt: record.fetchedAt },
+          value: { ...shownGitHub(section, record.data), fetchedAt: record.fetchedAt },
           derivedAt: record.fetchedAt,
         }
       : parsed && !parsed.ok
@@ -562,6 +588,32 @@ function viewDerived(
 }
 
 /**
+ * A GitHub record's data as its section shows it: without the repositories
+ * it excludes, and with the parts its settings turn off empty, or null for a
+ * figure. The view crosses to the browser, so what the section doesn't show
+ * never reaches it.
+ */
+function shownGitHub(
+  section: Github,
+  data: GitHubSnapshotData,
+): Omit<ViewGitHubData, 'fetchedAt'> {
+  const excluded = new Set(section.excludeRepos ?? []);
+  const kept = <T extends { readonly name: string }>(repos: readonly T[]) =>
+    repos.filter(({ name }) => !excluded.has(name));
+  return {
+    ...data,
+    totalStarsReceived: section.showTotalStars ? data.totalStarsReceived : null,
+    starsGiven: section.showTotalStars ? data.starsGiven : null,
+    pinnedRepos: section.showPinnedRepos ? kept(data.pinnedRepos) : [],
+    recentlyActive: section.showRecentlyActive
+      ? kept(data.recentlyActive).slice(0, section.recentlyActiveLimit)
+      : [],
+    contributionCalendar: section.showContributionGraph ? data.contributionCalendar : [],
+    languageBreakdown: section.showLanguageBreakdown ? data.languageBreakdown : [],
+  };
+}
+
+/**
  * The site document with the settings of the sections the view keeps only,
  * so a hidden section's id stays out of the view as well.
  */
@@ -571,6 +623,20 @@ function keptSettings(site: Site, sections: readonly Section[]): Site {
   const { sections: settings, ...rest } = site;
   const entries = Object.entries(settings).filter(([id]) => kept.has(id));
   return entries.length > 0 ? { ...rest, sections: Object.fromEntries(entries) } : rest;
+}
+
+/**
+ * The site document without the appearanceInputs entries whose sourceAsset
+ * isn't an asset the view keeps, so a private or unreached asset's id stays
+ * out of the view too. Generation reads the pair, never the view.
+ */
+function keptInputs(site: Site, media: Readonly<Record<string, ViewMediaAsset>>): Site {
+  if (site.appearanceInputs === undefined) return site;
+  const { appearanceInputs: inputs, ...rest } = site;
+  const entries = Object.entries(inputs).filter(
+    ([, input]) => !('sourceAsset' in input) || Object.hasOwn(media, input.sourceAsset),
+  );
+  return entries.length > 0 ? { ...rest, appearanceInputs: Object.fromEntries(entries) } : rest;
 }
 
 /** The list, or undefined when it's empty or missing. */

@@ -254,13 +254,12 @@ const RENAMES: Readonly<Record<string, string>> = {
   education: ' Its degree is the title, and the institution the organization.',
 };
 
-/** Whether a stat's value is a number, written as one or as decimal digits. */
+/**
+ * A stat's value as a metric value: a number written as one. A string is
+ * text, digits or not, since reading "007" as 7 would lose what it says.
+ */
 function numericValue(value: unknown): number | undefined {
-  if (typeof value === 'number' && Number.isFinite(value)) return value;
-  if (typeof value === 'string' && /^-?(?:\d+(?:\.\d+)?|\.\d+)$/.test(value.trim())) {
-    return Number(value.trim());
-  }
-  return undefined;
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
 /** A v2 image src as a media source: /assets/ and other root paths become media-root paths. */

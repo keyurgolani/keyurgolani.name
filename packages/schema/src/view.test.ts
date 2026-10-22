@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { acmePortfolioPhotography } from './__fixtures__/acme-portfolio-photography';
-import { parsePortfolio, parseSite } from './load';
+import { parsePortfolio, parseSite, readPortfolio } from './load';
 import {
   isPublic,
   newestFirst,
@@ -293,6 +293,129 @@ test('a private record is gone wherever it is named, and so is what only it uses
   assert.equal(isPublic({ visibility: 'private' }), false);
 });
 
+test("a private record or asset that repeats a public one's id stays out of the view", () => {
+  // A repeated id blocks publishing, but the pair still previews.
+  const read = readPortfolio(
+    lines(
+      'schemaVersion: 3',
+      'locale: en',
+      'direction: ltr',
+      'identity: { name: Rowan Twice }',
+      'works:',
+      '  - { id: atlas, title: Atlas, medium: interface, cover: { asset: shot } }',
+      '  - { id: atlas, title: canary-work, medium: interface, visibility: private }',
+      'evidence:',
+      '  - { id: award, type: award, title: Award }',
+      '  - { id: award, type: award, title: canary-evidence, visibility: private }',
+      'chronology:',
+      "  - { id: role, kind: role, title: Role, period: { start: '2020' } }",
+      "  - { id: role, kind: role, title: canary-role, period: { start: '2021' }, visibility: private }",
+      'media:',
+      '  - { id: shot, kind: image, source: shots/atlas.png, alt: Atlas }',
+      '  - { id: shot, kind: image, source: shots/b.png, alt: canary-media, visibility: private }',
+      'sections:',
+      '  - { kind: works, id: work, items: [atlas] }',
+      '  - { kind: evidence, id: proof, items: [award] }',
+      '  - { kind: chronology, id: history, items: [role] }',
+    ),
+    'yaml',
+  );
+  assert.equal(read.duplicates.length, 4);
+  assert.ok(read.value);
+  const site = parseSite(SITE_HEAD, 'yaml');
+  assert.ok(site.ok);
+  const published = view({ portfolio: read.value, site: site.value });
+  assert.deepEqual(
+    published.portfolio.works.map(({ title }) => title),
+    ['Atlas'],
+  );
+  assert.deepEqual(
+    published.portfolio.evidence.map(({ title }) => title),
+    ['Award'],
+  );
+  assert.deepEqual(
+    published.portfolio.chronology.map(({ title }) => title),
+    ['Role'],
+  );
+  assert.equal(published.media.shot?.alt, 'Atlas');
+  assert.ok(!JSON.stringify(published).includes('canary'));
+});
+
+test("an appearance input's sourceAsset stays in the view only when the view keeps that asset", () => {
+  const portfolio = lines(
+    'schemaVersion: 3',
+    'locale: en',
+    'direction: ltr',
+    'identity: { name: Rowan Inputs, avatar: { asset: portrait } }',
+    'media:',
+    '  - { id: portrait, kind: image, source: me.jpg, alt: Rowan }',
+    '  - { id: canary-private, kind: image, source: p.jpg, alt: P, visibility: private }',
+    '  - { id: canary-unplaced, kind: image, source: u.jpg, alt: U }',
+    'sections:',
+    '  - { kind: lede, id: about, body: Hi. }',
+  );
+  const inputs = (...entries: string[]) =>
+    `${SITE_HEAD}appearanceInputs:\n${entries.map((entry) => `  ${entry}\n`).join('')}`;
+  const published = view(
+    parsed(
+      portfolio,
+      inputs(
+        'from-portrait: { sourceAsset: portrait }',
+        'from-private: { sourceAsset: canary-private }',
+        'from-unplaced: { sourceAsset: canary-unplaced }',
+        "from-seed: { seedColor: '#3366ff' }",
+      ),
+    ),
+  );
+  assert.deepEqual(published.site.appearanceInputs, {
+    'from-portrait': { sourceAsset: 'portrait' },
+    'from-seed': { seedColor: '#3366ff' },
+  });
+  assert.ok(!JSON.stringify(published).includes('canary'));
+  // With none left, the key goes too.
+  const none = view(parsed(portfolio, inputs('from-private: { sourceAsset: canary-private }')));
+  assert.equal(Object.hasOwn(none.site, 'appearanceInputs'), false);
+});
+
+test('a work whose medium names an unregistered extension is reported, and never reaches the view', () => {
+  const text = lines(
+    'schemaVersion: 3',
+    'locale: en',
+    'direction: ltr',
+    'identity: { name: Rowan Media }',
+    'featured: [darkroom]',
+    'works:',
+    "  - { id: darkroom, title: canary-darkroom, medium: '@other/portfolio-film/darkroom', cover: { asset: print } }",
+    "  - { id: prints, title: Prints, medium: '@acme/portfolio-photography/darkroom' }",
+    'media:',
+    '  - { id: print, kind: image, source: print.jpg, alt: canary-print }',
+    'sections:',
+    '  - { kind: works, id: work, items: [darkroom, prints] }',
+    '  - { kind: works, id: film, items: [darkroom] }',
+  );
+  const read = parsePortfolio(text, 'yaml', { extensions: [acmePortfolioPhotography] });
+  assert.ok(read.ok);
+  assert.deepEqual(
+    read.warnings.map(({ pointer, message }) => [pointer, message]),
+    [
+      [
+        '/works/0/medium',
+        "/works/0/medium is a medium from an extension this build doesn't register. Its work is kept as written, unchecked, and never shown to visitors.",
+      ],
+    ],
+  );
+  const published = view(parsed(text));
+  assert.deepEqual(ids(published.portfolio.works), ['prints']);
+  assert.deepEqual(
+    published.portfolio.sections.map(({ id }) => id),
+    ['work'],
+  );
+  assert.deepEqual(published.portfolio.featured, []);
+  assert.deepEqual(published.media, {});
+  assert.ok(!JSON.stringify(published).includes('canary'));
+  assert.ok(!JSON.stringify(published).includes('@other'));
+});
+
 test("a custom section's items keep only the public evidence and media they name", () => {
   const { portfolio, media } = view(
     parsed(
@@ -454,6 +577,67 @@ test("a GitHub section's snapshot is ready, never refreshed, or failed, and a hi
   });
   // A snapshot of a kind the view doesn't read changes nothing.
   assert.deepEqual(view(pair, { snapshots: { 'npm-stats': { any: 'thing' } } }), view(pair));
+});
+
+test("a GitHub section's settings filter its snapshot, so what it doesn't show never reaches the view", () => {
+  const record = SNAPSHOT.records[0]!;
+  const data = record.data as Record<string, Array<Record<string, unknown>>>;
+  const github = {
+    records: [
+      {
+        ...record,
+        data: {
+          ...record.data,
+          pinnedRepos: [...data.pinnedRepos!, { ...data.pinnedRepos![0], name: 'canary-pinned' }],
+          recentlyActive: [
+            { ...data.recentlyActive![0], name: 'canary-recent' },
+            ...data.recentlyActive!,
+          ],
+          languageBreakdown: [
+            ...data.languageBreakdown!,
+            { ...data.languageBreakdown![0], language: 'canary-language' },
+          ],
+        },
+      },
+    ],
+  };
+  const shown = (settings: string) => {
+    const pair = parsed(
+      lines(
+        'schemaVersion: 3',
+        'locale: en',
+        'direction: ltr',
+        'identity: { name: Rowan Code }',
+        'sections:',
+        `  - { kind: github, id: on-github, username: anamika${settings} }`,
+      ),
+    );
+    const derived = view(pair, { snapshots: { github } }).derived['on-github'];
+    assert.equal(derived?.state, 'ready');
+    if (derived?.state !== 'ready') throw new Error('unreachable');
+    return derived.value;
+  };
+  const names = (repos: ReadonlyArray<{ readonly name: string }>) => repos.map(({ name }) => name);
+  // An excluded repository leaves every list, and the language breakdown is off by default.
+  const excluded = shown(', excludeRepos: [canary-pinned, canary-recent]');
+  assert.deepEqual(names(excluded.pinnedRepos), names(data.pinnedRepos as never));
+  assert.deepEqual(names(excluded.recentlyActive), names(data.recentlyActive as never));
+  assert.deepEqual(excluded.languageBreakdown, []);
+  assert.equal(excluded.totalStarsReceived, record.data.totalStarsReceived);
+  assert.ok(!JSON.stringify(excluded).includes('canary'));
+  // A part a setting turns off is empty, and a figure null.
+  const off = shown(
+    ', showPinnedRepos: false, showRecentlyActive: false, showContributionGraph: false, showTotalStars: false',
+  );
+  assert.deepEqual([off.pinnedRepos, off.recentlyActive, off.contributionCalendar], [[], [], []]);
+  assert.deepEqual([off.totalStarsReceived, off.starsGiven], [null, null]);
+  // The recently active list keeps to its limit, and the breakdown shows when it's asked for.
+  const limited = shown(', recentlyActiveLimit: 2, showLanguageBreakdown: true');
+  assert.deepEqual(names(limited.recentlyActive), [
+    'canary-recent',
+    names(data.recentlyActive as never)[0],
+  ]);
+  assert.equal(limited.languageBreakdown.at(-1)?.language, 'canary-language');
 });
 
 test('the view is plain JSON: it round-trips, with no undefined left in it', () => {

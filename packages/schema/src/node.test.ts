@@ -1,9 +1,10 @@
 import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
+import { execFileSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { defineContentExtension } from './extensions';
 import { parsePortfolio, parseSite } from './load';
 import {
@@ -444,6 +445,39 @@ test("a document that can't be read is source.unreadable, and loadPair never thr
     absent.diagnostics.map(({ code, document, message }) => [code, document, message]),
     [['source.missing', 'portfolio', "gone.yml doesn't exist."]],
   );
+});
+
+test('a FIFO for a document, a snapshot, or the media document is unreadable, never a hang', (t) => {
+  if (process.platform === 'win32') return t.skip('Windows has no FIFOs.');
+  const dir = tempDir(t, { 'site.yml': text('invalid', 'source.unreadable', 'site.yml') });
+  fs.mkdirSync(path.join(dir, 'snapshots'));
+  fs.mkdirSync(path.join(dir, 'media'));
+  for (const name of ['portfolio.yml', 'snapshots/github.json', 'media/media.json']) {
+    execFileSync('mkfifo', [path.join(dir, name)]);
+  }
+  // In a child process, so a read that blocks fails the test instead of hanging it.
+  const reader = pathToFileURL(fileURLToPath(new URL('./node.ts', import.meta.url))).href;
+  const script = [
+    `import { loadPair, readUnitFiles } from ${JSON.stringify(reader)};`,
+    'const dir = process.env.FIFO_DIR;',
+    'const pair = loadPair(dir).diagnostics.map(({ code, document }) => [code, document]);',
+    'const unit = readUnitFiles(dir).diagnostics.map(({ code, file }) => [code, file]);',
+    'console.log(JSON.stringify({ pair, unit }));',
+  ].join('\n');
+  const run = spawnSync(
+    process.execPath,
+    [...process.execArgv, '--input-type=module', '--eval', script],
+    { env: { ...process.env, FIFO_DIR: dir }, encoding: 'utf8', timeout: 60_000 },
+  );
+  assert.equal(run.signal, null, 'a read blocked on a FIFO');
+  assert.equal(run.status, 0, run.stderr);
+  assert.deepEqual(JSON.parse(run.stdout), {
+    pair: [['source.unreadable', 'portfolio']],
+    unit: [
+      ['snapshot.invalid', 'snapshots/github.json'],
+      ['media.invalid', 'media/media.json'],
+    ],
+  });
 });
 
 test('a document over the size limit is refused where it passes it', (t) => {

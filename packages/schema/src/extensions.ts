@@ -211,16 +211,27 @@ export function makeExtensionsSchema(registry: ExtensionRegistry): ExtensionsSch
 
 /** Extension data in a parsed document that no registered extension checks. */
 export interface UnregisteredExtensionUse {
-  /** Path to the `extensions` entry, or to the extension section. */
+  /** Path to the `extensions` entry, the extension section, or a work's `medium`. */
   readonly path: readonly (string | number)[];
   readonly namespace: string;
-  readonly use: 'fields' | 'section';
+  readonly use: 'fields' | 'section' | 'medium';
 }
 
 /**
- * Every `extensions` entry and extension section in a parsed document whose
- * namespace isn't registered. It never looks inside extension data, or inside
- * the site document's `variantControls.<id>.values`, which take any keys.
+ * Whether a work's medium is a core one or a registered extension's. A work
+ * whose medium names an unregistered extension is that extension's data, so
+ * like its sections it never reaches visitors.
+ */
+export function isRegisteredMedium(medium: string, registry: ExtensionRegistry): boolean {
+  const extension = parseExtensionKind(medium);
+  return extension === null || registry.extension(extension.namespace) !== undefined;
+}
+
+/**
+ * Every `extensions` entry, extension section, and work medium in a parsed
+ * document whose namespace isn't registered. It never looks inside extension
+ * data, or inside the site document's `variantControls.<id>.values`, which
+ * take any keys.
  */
 export function findUnregisteredExtensions(
   document: unknown,
@@ -236,6 +247,13 @@ export function findUnregisteredExtensions(
     const kind = typeof node.kind === 'string' ? parseExtensionKind(node.kind) : null;
     if (kind && !registry.extension(kind.namespace)) {
       found.push({ path, namespace: kind.namespace, use: 'section' });
+    }
+    const medium =
+      path.length === 2 && path[0] === 'works' && typeof node.medium === 'string'
+        ? parseExtensionKind(node.medium)
+        : null;
+    if (medium && !registry.extension(medium.namespace)) {
+      found.push({ path: [...path, 'medium'], namespace: medium.namespace, use: 'medium' });
     }
     const control = path.length === 2 && path[0] === 'variantControls';
     for (const [key, child] of Object.entries(node)) {

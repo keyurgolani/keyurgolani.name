@@ -278,11 +278,13 @@ function readWith<T>(
   const warnings = findUnregisteredExtensions(result.data, registry).map(
     ({ path, use }): DocumentWarning => {
       const pointer = redactedPointer(path);
-      const what = use === 'section' ? 'is a section from' : 'belongs to';
+      const what =
+        use === 'section' ? 'is a section from' : use === 'medium' ? 'is a medium from' : 'belongs to';
+      const kept = use === 'medium' ? 'Its work is' : "It's";
       return {
         code: 'extension_unregistered',
         pointer,
-        message: `${pointer} ${what} an extension this build doesn't register. It's kept as written, unchecked, and never shown to visitors.`,
+        message: `${pointer} ${what} an extension this build doesn't register. ${kept} kept as written, unchecked, and never shown to visitors.`,
         // An extensions entry is located at its namespace key.
         ...locate(path, use === 'fields' ? 'key' : 'value'),
       };

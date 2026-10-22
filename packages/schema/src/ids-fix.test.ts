@@ -147,6 +147,32 @@ test('a repeated id gets the next free one, and its references keep naming the f
   assert.ok(result.text.includes('items: [about]'));
 });
 
+test('a malformed id two entries repeat: its references follow the first', () => {
+  const result = fixed(
+    lines(
+      'schemaVersion: 3',
+      'locale: en',
+      'direction: ltr',
+      'identity: { name: Rowan Twice }',
+      'signature: Tide Atlas',
+      'works:',
+      '  - { id: Tide Atlas, title: Tide Atlas, medium: writing }',
+      '  - { id: Tide Atlas, title: Tide Atlas again, medium: writing }',
+      'sections:',
+      '  - { kind: works, id: work, items: [Tide Atlas] }',
+    ),
+  );
+  assert.deepEqual(
+    result.fixes.map(({ pointer, id, reason, references }) => [pointer, id, reason, references]),
+    [
+      ['/works/0/id', 'tide-atlas', 'invalid', ['/signature', '/sections/0/items/0']],
+      ['/works/1/id', 'tide-atlas-2', 'invalid', []],
+    ],
+  );
+  assert.ok(result.text.includes('signature: tide-atlas\n'), result.text);
+  assert.ok(result.text.includes('items: [tide-atlas] }'), result.text);
+});
+
 test('a JSON document keeps its key order, with the new id last in its entry', () => {
   const text = `${JSON.stringify(
     {

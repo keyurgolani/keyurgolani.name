@@ -264,9 +264,16 @@ export function formatRecords(result: LoadPairResult): string {
 /**
  * The file's text, from at most READ_LIMIT bytes, so an oversized file is
  * never read or decoded whole. The size on disk sets the first read, and no
- * read passes the limit, even if the file grows meanwhile.
+ * read passes the limit, even if the file grows meanwhile. Anything but a
+ * regular file is refused before it's opened: opening a FIFO waits for a
+ * writer, which would hang startup.
  */
 function readBounded(file: string): string {
+  if (!fs.statSync(/*turbopackIgnore: true*/ file).isFile()) {
+    throw Object.assign(new Error(`${path.basename(file)} isn't a regular file.`), {
+      code: 'ENOTFILE',
+    });
+  }
   const fd = fs.openSync(/*turbopackIgnore: true*/ file, 'r');
   try {
     const chunks: Buffer[] = [];

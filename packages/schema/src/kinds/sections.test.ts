@@ -39,3 +39,23 @@ test('rejects recentlyActiveLimit=21', () => {
 test('rejects non-integer recentlyActiveLimit', () => {
   assert.throws(() => GithubSchema.parse({ ...BASE, recentlyActiveLimit: 5.5 }));
 });
+
+test('a blank username, a blank repository name, and an empty list are refused, like every other blank', () => {
+  for (const bad of [
+    { username: '' },
+    { username: '   ' },
+    { featuredRepos: [] },
+    { featuredRepos: [''] },
+    { excludeRepos: [] },
+    { excludeRepos: ['  '] },
+  ]) {
+    assert.equal(GithubSchema.safeParse({ ...BASE, ...bad }).success, false, JSON.stringify(bad));
+  }
+  // Left out, there are none.
+  const out = GithubSchema.parse(BASE);
+  assert.equal(out.featuredRepos, undefined);
+  assert.equal(out.excludeRepos, undefined);
+  assert.deepEqual(GithubSchema.parse({ ...BASE, excludeRepos: ['scratch'] }).excludeRepos, [
+    'scratch',
+  ]);
+});

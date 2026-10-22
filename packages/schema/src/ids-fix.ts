@@ -174,6 +174,9 @@ export function fixIds(source: {
   const refs = references(data);
   const edits: Edit[] = [];
   const fixes: IdFix[] = [];
+  // The malformed ids whose references already follow an entry, the first
+  // that had each, by the record type they name.
+  const followed = new Set<string>();
   entries.forEach((entry, index) => {
     if (firsts.has(index)) return;
     const record = valueAt(data, entry.path);
@@ -191,8 +194,10 @@ export function fixIds(source: {
     const pointer = toPointer([...entry.path, 'id']);
     edits.push({ op: 'set', pointer, value: id });
     const renamed: string[] = [];
-    if (reason === 'invalid' && typeof entry.id === 'string') {
-      const target = entry.owner === 'section' ? undefined : entry.owner;
+    const target = entry.owner === 'section' ? undefined : entry.owner;
+    const key = `${target}\u0000${String(entry.id)}`;
+    if (reason === 'invalid' && typeof entry.id === 'string' && !followed.has(key)) {
+      followed.add(key);
       for (const reference of refs) {
         if (reference.value === entry.id && reference.target === target) {
           const at = toPointer(reference.path);

@@ -309,14 +309,15 @@ test("an image's later use keeps its own alt text and focal point, and a logo or
   });
 });
 
-test('a stat is metric evidence: a number is its value, anything else its statement', () => {
+test('a stat is metric evidence: a number is its value, a string its statement', () => {
   const migration = v2(
     V2(
       '  - kind: stats',
       '    id: numbers',
       '    items:',
-      "      - { metric: talks-given, value: '40', label: Talks given }",
+      '      - { metric: talks-given, value: 40, label: Talks given }',
       "      - { value: 'Forty', label: Talks }",
+      "      - { metric: agents, value: '007', label: Agents }",
       '  - kind: tenure',
       '    id: tenure',
       '    years: 12',
@@ -331,6 +332,8 @@ test('a stat is metric evidence: a number is its value, anything else its statem
       metric: { key: 'talks-given', value: 40 },
     },
     { id: 'talks', type: 'metric', statement: 'Forty Talks' },
+    // Digits in a string are text too, so the leading zeros stay.
+    { id: 'agents', type: 'metric', statement: '007 Agents', metric: { key: 'agents' } },
     {
       id: 'tenure-years',
       type: 'metric',
@@ -340,7 +343,7 @@ test('a stat is metric evidence: a number is its value, anything else its statem
   ]);
   assert.deepEqual(
     notes(migration, 'warned').map(([from]) => from),
-    ['/sections/0/items/1', '/sections/0/items/1/value'],
+    ['/sections/0/items/1', '/sections/0/items/1/value', '/sections/0/items/2/value'],
   );
 });
 

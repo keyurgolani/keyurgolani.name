@@ -116,7 +116,7 @@ Every section has a `kind` and an `id`, and may have a `title`, a `subtitle`, an
 
 A call to action, a hero's `ctas` and a `cta`'s actions, is `{ url, label, platform? }`: its label is required, since no renderer makes one up. A section with nothing visitors may see, such as a `works` section whose works are all private, leaves the page and the navigation (`section.empty`). A practice the core kinds don't cover adds its own through an [extension](#extensions). [`skills/portfolio-author/references/schema.md`](../skills/portfolio-author/references/schema.md) lists each kind's fields, and `packages/schema/src/kinds/` is the source of truth.
 
-A `github` section renders the snapshot frozen beside the pair at `snapshots/github.json`, never a fetch at render time. Its settings say what to show: `showContributionGraph`, `showPinnedRepos`, `showTotalStars`, and `showRecentlyActive` default to `true`, `showLanguageBreakdown` to `false`, `recentlyActiveLimit` to 10 (1 to 20), and `featuredRepos` and `excludeRepos` to none. Until a snapshot holds its section, it renders a link to the profile.
+A `github` section renders the snapshot frozen beside the pair at `snapshots/github.json`, never a fetch at render time. Its settings say what to show: `showContributionGraph`, `showPinnedRepos`, `showTotalStars`, and `showRecentlyActive` default to `true`, `showLanguageBreakdown` to `false`, `recentlyActiveLimit` to 10 (1 to 20), and `featuredRepos` and `excludeRepos` to none. What a section doesn't show never reaches the page: the published view leaves out its excluded repositories, and each part its settings turn off. Until a snapshot holds its section, it renders a link to the profile.
 
 ### Ordering
 
@@ -228,7 +228,7 @@ An extension section's `kind` is `<package name>/<name>`. It has the base fields
       - { title: Low Tide, venue: Harbor Gallery, year: 2024 }
 ```
 
-A work's `medium` may be `<package name>/<name>` too, such as `'@acme/portfolio-photography/darkroom'`.
+A work's `medium` may be `<package name>/<name>` too, such as `'@acme/portfolio-photography/darkroom'`. A work whose medium names a package this build doesn't register is that package's data, like its sections: an `extension.unregistered` warning, and the work never reaches visitors.
 
 - Extension data is plain JSON. Each namespace's entry, and each section's `data`, nests at most 8 levels. One object's whole `extensions` mapping, every namespace together, holds at most 32 KiB as JSON, and so does one section's `data`.
 - An extension adds keys only under its own namespace, so core fields keep their checks.

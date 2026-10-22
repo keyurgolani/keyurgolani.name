@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import type { GitHubData, Github, SectionDerived } from '@portfolio/schema';
+import type { Github, SectionDerived, ViewGitHubData } from '@portfolio/schema';
 import {
   formatFigure,
   Heading,
@@ -17,9 +17,9 @@ import { githubSnapshot } from '../view';
 // fetches at render time. Without a snapshot, the profile link alone shows,
 // labeled with the authored username.
 
-/** What the renderer reads of a GitHub snapshot's data. */
+/** What the renderer reads of a GitHub snapshot's data, as the view filtered it. */
 type GithubSnapshotData = Pick<
-  GitHubData,
+  ViewGitHubData,
   'totalRepos' | 'totalStarsReceived' | 'contributionsLastYear' | 'pinnedRepos'
 >;
 
@@ -76,7 +76,9 @@ function Figures({
   const figures: Array<readonly [label: string, value: number]> = [
     ['Repositories', data.totalRepos],
   ];
-  if (fields.showTotalStars !== false) figures.push(['Stars received', data.totalStarsReceived]);
+  if (fields.showTotalStars !== false && data.totalStarsReceived !== null) {
+    figures.push(['Stars received', data.totalStarsReceived]);
+  }
   if (data.contributionsLastYear !== null) {
     figures.push(['Contributions in the last year', data.contributionsLastYear]);
   }
