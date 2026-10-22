@@ -68,6 +68,10 @@ export function installTraceProbe(scope) {
     return /((?:https?|file):\/\/[^\s)]+)/.exec(frame)?.[1] ?? frame;
   };
 
+  // A site's `concurrent` is how many of its rounds ran at once during the
+  // window: the most callbacks it ran in one frame, or the most timeouts it
+  // had pending at once. Loops behind one shared helper count as many, so a
+  // count never comes out low.
   const newEntry = (kind, site) => ({
     kind,
     site,
@@ -76,6 +80,10 @@ export function installTraceProbe(scope) {
     rearms: 0,
     firstAt: null,
     lastAt: null,
+    concurrent: 0,
+    frameTime: null,
+    inFrame: 0,
+    pending: 0,
     total: 0,
   });
   const sites = new Map();
@@ -91,6 +99,19 @@ export function installTraceProbe(scope) {
     entry.rearms = 0;
     entry.firstAt = null;
     entry.lastAt = null;
+    entry.concurrent = 0;
+    entry.frameTime = null;
+    entry.inFrame = 0;
+  };
+  /** Frame callbacks given the same timestamp ran in the same frame. */
+  const inFrame = (entry, time) => {
+    if (!inWindow()) return;
+    if (entry.frameTime !== time) {
+      entry.frameTime = time;
+      entry.inFrame = 0;
+    }
+    entry.inFrame += 1;
+    entry.concurrent = Math.max(entry.concurrent, entry.inFrame);
   };
   /** A site asked again: a round of it, once one of its callbacks has run in the window. */
   const asked = (entry) => {
@@ -121,6 +142,7 @@ export function installTraceProbe(scope) {
         frames.callbacks += 1;
         if (inWindow()) frames.windowCallbacks += 1;
         ran(entry);
+        inFrame(entry, time);
         return callback(time);
       });
     };
@@ -135,16 +157,28 @@ export function installTraceProbe(scope) {
     windowIntervalCallbacks: 0,
   };
   const intervals = new Map();
+  const pendingTimeouts = new Map();
+  const settled = (id) => {
+    const entry = pendingTimeouts.get(id);
+    if (!entry) return;
+    pendingTimeouts.delete(id);
+    entry.pending -= 1;
+  };
   scope.setTimeout = function setTimeout(callback, delay, ...args) {
     if (typeof callback !== 'function') return original.setTimeout(callback, delay, ...args);
     const entry = siteFor('timeout', callerSite());
     asked(entry);
-    return original.setTimeout(() => {
+    entry.pending += 1;
+    if (inWindow()) entry.concurrent = Math.max(entry.concurrent, entry.pending);
+    const id = original.setTimeout(() => {
+      settled(id);
       timers.timeoutCallbacks += 1;
       if (inWindow()) timers.windowTimeoutCallbacks += 1;
       ran(entry);
       return callback(...args);
     }, delay);
+    pendingTimeouts.set(id, entry);
+    return id;
   };
   scope.setInterval = function setInterval(callback, delay, ...args) {
     if (typeof callback !== 'function') return original.setInterval(callback, delay, ...args);
@@ -161,10 +195,12 @@ export function installTraceProbe(scope) {
   };
   scope.clearInterval = function clearInterval(id) {
     intervals.delete(id);
+    settled(id);
     return original.clearInterval(id);
   };
   scope.clearTimeout = function clearTimeout(id) {
     intervals.delete(id);
+    settled(id);
     return original.clearTimeout(id);
   };
 
@@ -282,17 +318,24 @@ export function installTraceProbe(scope) {
         lastAtMs: entry.lastAt === null ? null : Math.round(entry.lastAt),
         sustained:
           half !== null && entry.firstAt !== null && entry.firstAt < half && entry.lastAt >= half,
+        concurrent: Math.max(1, entry.concurrent),
       });
       const recurring = (kind) =>
         [...sites.values()]
           .filter((entry) => entry.kind === kind && entry.epoch === epoch && entry.rearms > 0)
           .map(describe);
+      const count = (list) => list.reduce((total, site) => total + site.concurrent, 0);
       const frameSites = recurring('frame');
+      const loops = frameSites.filter((site) => site.sustained);
       const timeoutSites = recurring('timeout');
-      const liveIntervals = [...intervals.values()].map((entry) => ({
-        ...describe(entry.epoch === epoch ? entry : newEntry(entry.kind, entry.site)),
-        delayMs: entry.delay,
-      }));
+      // Each interval is one timer: it has no concurrency of its own.
+      const liveIntervals = [...intervals.values()].map((entry) => {
+        const described = describe(
+          entry.epoch === epoch ? entry : newEntry(entry.kind, entry.site),
+        );
+        delete described.concurrent;
+        return { ...described, delayMs: entry.delay };
+      });
       const contexts = {};
       for (const canvas of canvases) contexts[canvas.type] = (contexts[canvas.type] ?? 0) + 1;
       return {
@@ -301,14 +344,15 @@ export function installTraceProbe(scope) {
         visibility: scope.document?.visibilityState ?? null,
         frames: {
           ...frames,
-          loops: frameSites.filter((site) => site.sustained),
+          loops,
+          loopCount: count(loops),
           transient: frameSites.filter((site) => !site.sustained),
         },
         timers: {
           ...timers,
           intervals: liveIntervals,
           timeouts: timeoutSites,
-          recurring: liveIntervals.length + timeoutSites.length,
+          recurring: liveIntervals.length + count(timeoutSites),
         },
         canvas: {
           contexts,

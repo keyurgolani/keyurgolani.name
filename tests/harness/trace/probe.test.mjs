@@ -142,44 +142,104 @@ test('installs once, keeping the originals for the harness', () => {
   assert.equal(probe.read().url, 'http://127.0.0.1:4100/');
 });
 
-test('three frame loops of three shapes are three loops, each at its own rate', async () => {
-  const fake = fakeWindow();
-  const probe = installTraceProbe(fake.scope);
-  const raf = (callback) => fake.scope.requestAnimationFrame(callback);
+/**
+ * Starts three frame loops of three shapes, each asking through `raf`: a
+ * callback that asks for the next frame, an await on a promise a frame
+ * resolves, and a frame then a timeout of 33 ms that asks for the next one.
+ * Returns a function that stops them.
+ */
+function threeLoops(fake, raf) {
   let running = true;
-  // A callback that asks for the next frame.
   const direct = () => {
     if (running) raf(direct);
   };
   raf(direct);
-  // An await on a promise a frame resolves.
   (async () => {
     while (running) await new Promise((resolve) => raf(resolve));
   })();
-  // A frame, then a timeout of 33 ms that asks for the next frame.
   const bridged = () => {
     if (running) fake.scope.setTimeout(() => raf(bridged), 33);
   };
   raf(bridged);
+  return () => {
+    running = false;
+  };
+}
+
+test('three frame loops of three shapes, each at its own site, are three loops', async () => {
+  const fake = fakeWindow();
+  const probe = installTraceProbe(fake.scope);
+  // Each shape asks from its own line, as separate code does.
+  let running = true;
+  const direct = () => {
+    if (running) fake.scope.requestAnimationFrame(direct);
+  };
+  fake.scope.requestAnimationFrame(direct);
+  (async () => {
+    while (running) await new Promise((resolve) => fake.scope.requestAnimationFrame(resolve));
+  })();
+  const bridged = () => {
+    if (running) fake.scope.setTimeout(() => fake.scope.requestAnimationFrame(bridged), 33);
+  };
+  fake.scope.requestAnimationFrame(bridged);
   await fake.run(200);
   probe.start();
   await fake.run(2000);
   const { frames, timers } = probe.read();
   assert.equal(frames.loops.length, 3, JSON.stringify(frames.loops));
+  assert.equal(frames.loopCount, 3);
   const rates = frames.loops.map((loop) => loop.perSecond).sort((a, b) => a - b);
   assert.ok(rates[0] > 15 && rates[0] < 35, `the bridged loop runs about every 48 ms: ${rates}`);
   assert.ok(rates[1] > 55 && rates[2] > 55, `the other two run every frame: ${rates}`);
   for (const loop of frames.loops) {
     assert.equal(loop.sustained, true);
+    assert.equal(loop.concurrent, 1);
     assert.match(loop.site, /probe\.test\.mjs:\d+:\d+$/);
   }
   assert.equal(frames.transient.length, 0);
   assert.equal(timers.timeouts.length, 1, 'the bridged loop also recurs as a timeout');
+  assert.equal(timers.recurring, 1);
   running = false;
   await fake.run(100);
   probe.start();
   await fake.run(500);
-  assert.equal(probe.read().frames.loops.length, 0, 'a stopped loop is no loop in the next window');
+  const stopped = probe.read().frames;
+  assert.equal(stopped.loops.length, 0, 'a stopped loop is no loop in the next window');
+  assert.equal(stopped.loopCount, 0);
+});
+
+test('three frame loops behind one shared helper are one site and still three loops', async () => {
+  const fake = fakeWindow();
+  const probe = installTraceProbe(fake.scope);
+  const stop = threeLoops(fake, (callback) => fake.scope.requestAnimationFrame(callback));
+  await fake.run(200);
+  probe.start();
+  await fake.run(2000);
+  const { frames } = probe.read();
+  assert.equal(frames.loops.length, 1, 'the helper is the one site that asks');
+  assert.equal(frames.loops[0].concurrent, 3, 'three of its callbacks run in one frame');
+  assert.equal(frames.loopCount, 3);
+  stop();
+});
+
+test('two timeout loops behind one shared sleep helper are two recurring timers', async () => {
+  const fake = fakeWindow();
+  const probe = installTraceProbe(fake.scope);
+  let running = true;
+  const sleep = (ms) => new Promise((resolve) => fake.scope.setTimeout(resolve, ms));
+  for (const ms of [100, 250]) {
+    (async () => {
+      while (running) await sleep(ms);
+    })();
+  }
+  await fake.run(300);
+  probe.start();
+  await fake.run(2000);
+  const { timers } = probe.read();
+  assert.equal(timers.timeouts.length, 1);
+  assert.equal(timers.timeouts[0].concurrent, 2);
+  assert.equal(timers.recurring, 2);
+  running = false;
 });
 
 test('a loop that stops in the first half of the window is transient, not a loop', async () => {
