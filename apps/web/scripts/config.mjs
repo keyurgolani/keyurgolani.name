@@ -331,13 +331,13 @@ function siteBeside(file) {
 }
 
 /** The portfolio document in a directory: exactly one portfolio.{yml,yaml,json}. */
-function portfolioIn(dir) {
+function portfolioIn(dir, shown) {
   const found = ['portfolio.yml', 'portfolio.yaml', 'portfolio.json'].filter((name) =>
     fs.existsSync(path.join(dir, name)),
   );
-  if (found.length === 0) throw new UsageError(`${dir} holds no portfolio.yml, .yaml, or .json.`);
+  if (found.length === 0) throw new UsageError(`${shown} holds no portfolio.yml, .yaml, or .json.`);
   if (found.length > 1) {
-    throw new UsageError(`${dir} holds ${found.join(' and ')}. Keep one portfolio document.`);
+    throw new UsageError(`${shown} holds ${found.join(' and ')}. Keep one portfolio document.`);
   }
   return path.join(dir, found[0]);
 }
@@ -360,7 +360,7 @@ async function idsFixCommand(args) {
   const target = positionals[0] === undefined ? CONFIG_DIR : path.resolve(base, positionals[0]);
   let file = target;
   try {
-    if (fs.statSync(target).isDirectory()) file = portfolioIn(target);
+    if (fs.statSync(target).isDirectory()) file = portfolioIn(target, shownPath(base, target));
   } catch (error) {
     if (error instanceof UsageError) throw error;
     process.stderr.write(`${shownPath(base, target)} doesn't exist or can't be read.\n`);

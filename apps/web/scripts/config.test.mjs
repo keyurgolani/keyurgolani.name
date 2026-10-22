@@ -10,15 +10,16 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// `pnpm config:migrate` and `pnpm config:validate`, run the way the root
-// scripts run them: config.mjs through tsx. Each run gets a scratch directory
-// as INIT_CWD, the directory pnpm would have run in.
+// `pnpm config:migrate`, `pnpm config:validate`, and `pnpm config:ids-fix`,
+// run the way the root scripts run them: config.mjs through tsx. Each run
+// gets a scratch directory as INIT_CWD, the directory pnpm would have run in.
 
 const CONFIG = fileURLToPath(new URL('./config.mjs', import.meta.url));
 const TSX = fileURLToPath(import.meta.resolve('tsx/cli'));
@@ -388,4 +389,103 @@ test('validate warns when the portfolio is still the bundled sample, which produ
     JSON.parse(renamed.stdout).diagnostics.map(({ code }) => code),
     ['variant.unavailable'],
   );
+});
+
+function idsFix(cwd, ...args) {
+  const result = spawnSync(process.execPath, [TSX, CONFIG, 'ids-fix', ...args], {
+    cwd,
+    env: { ...process.env, INIT_CWD: cwd },
+    encoding: 'utf8',
+    timeout: 120_000,
+  });
+  return { code: result.status, stdout: result.stdout, stderr: result.stderr };
+}
+
+function idsDir(t, files) {
+  const dir = mkdtempSync(path.join(tmpdir(), 'config-ids-fix-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  for (const [name, text] of Object.entries(files)) writeFileSync(path.join(dir, name), text);
+  return dir;
+}
+
+const NEEDS_IDS = [
+  '# Rowan, before ids.',
+  'schemaVersion: 3',
+  'locale: en',
+  'direction: ltr',
+  'identity: { name: Rowan Ids }',
+  'works:',
+  '  - { id: Tidewater Atlas, title: Tidewater Atlas, medium: interface }',
+  'sections:',
+  '  - kind: lede',
+  '    title: About Me',
+  '    body: Hi.',
+  '  - { kind: works, id: work, items: [Tidewater Atlas] }',
+  '',
+].join('\n');
+
+test('ids-fix prints the ids it would give, and writes them only with --write, keeping comments', (t) => {
+  const dir = idsDir(t, { 'portfolio.yml': NEEDS_IDS });
+  const dry = idsFix(dir, '.');
+  assert.equal(dry.code, 0, dry.stderr);
+  assert.equal(
+    dry.stdout,
+    [
+      'portfolio.yml:',
+      '  /sections/0/id gets about-me: it had none.',
+      "  /works/0/id gets tidewater-atlas: its id wasn't well formed.",
+      '    /sections/1/items/0 names it too, and changes with it.',
+      '',
+      'Nothing was written. Run pnpm config:ids-fix with --write to write 2 ids into portfolio.yml.',
+      '',
+    ].join('\n'),
+  );
+  assert.equal(readFileSync(path.join(dir, 'portfolio.yml'), 'utf8'), NEEDS_IDS);
+
+  const wrote = idsFix(dir, 'portfolio.yml', '--write');
+  assert.equal(wrote.code, 0, wrote.stderr);
+  assert.match(wrote.stdout, /\nWrote 2 ids into portfolio\.yml\.\n$/);
+  const fixed = readFileSync(path.join(dir, 'portfolio.yml'), 'utf8');
+  assert.ok(fixed.startsWith('# Rowan, before ids.\n'), fixed);
+  assert.match(fixed, /\n {4}body: Hi\.\n {4}id: about-me\n/);
+  assert.match(fixed, /items: \[tidewater-atlas\]/);
+  // Nothing is left beside it, and its own output has nothing to fix.
+  assert.deepEqual(readdirSync(dir), ['portfolio.yml']);
+  const again = idsFix(dir, '.');
+  assert.equal(again.code, 0);
+  assert.equal(
+    again.stdout,
+    'portfolio.yml has an id on every section, record, and media asset. Nothing to fix.\n',
+  );
+});
+
+test('ids-fix refuses a version 2 document, a symbolic link, two portfolio documents, and bad arguments', (t) => {
+  const dir = idsDir(t, {
+    'portfolio.yml': NEEDS_IDS.replace('schemaVersion: 3', 'schemaVersion: 2'),
+  });
+  const old = idsFix(dir, '.');
+  assert.equal(old.code, 1);
+  assert.equal(
+    old.stderr,
+    "portfolio.yml can't be fixed.\n  It isn't a schemaVersion 3 portfolio document. Run pnpm config:migrate on it first, which mints every id.\n",
+  );
+  symlinkSync(path.join(dir, 'portfolio.yml'), path.join(dir, 'link.yml'));
+  const link = idsFix(dir, 'link.yml', '--write');
+  assert.equal(link.code, 1);
+  assert.equal(link.stderr, 'link.yml is a symbolic link. Run this on the file it points at.\n');
+
+  const two = idsDir(t, { 'portfolio.yml': NEEDS_IDS, 'portfolio.json': '{}\n' });
+  for (const [cwd, args, message] of [
+    [two, ['.'], /^\. holds portfolio\.yml and portfolio\.json\. Keep one portfolio document\.\n/],
+    [dir, ['a', 'b'], /^Give one directory or portfolio document\.\n/],
+    [dir, ['.', '--force'], /Unknown option '--force'/],
+  ]) {
+    const run = idsFix(cwd, ...args);
+    assert.equal(run.code, 1, args.join(' '));
+    assert.match(run.stderr, message, args.join(' '));
+    assert.match(run.stderr, /Usage: pnpm config:ids-fix \[dir \| portfolio-file\] \[--write\]/);
+  }
+  const missing = idsFix(dir, 'nowhere');
+  assert.equal(missing.code, 1);
+  assert.equal(missing.stderr, "nowhere doesn't exist or can't be read.\n");
 });
