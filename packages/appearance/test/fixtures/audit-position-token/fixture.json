@@ -7,7 +7,7 @@
   },
   "expect": [
     {
-      "problem": "position: var(--ui-motion-enter) isn't a value"
+      "problem": "position: var(--ui-motion-enter) places the part"
     }
   ]
 }

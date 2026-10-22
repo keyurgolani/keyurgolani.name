@@ -17,16 +17,16 @@
       "problem": "/tokens/motion-exit must be one of the platform's motion recipes"
     },
     {
-      "problem": "display: var(--ui-texture) isn't a value"
+      "problem": "display: var(--ui-texture) lays the part out"
     },
     {
-      "problem": "position: var(--ui-motion-enter) isn't a value"
+      "problem": "position: var(--ui-motion-enter) places the part"
     },
     {
-      "problem": "visibility: var(--ui-motion-exit) isn't a value"
+      "problem": "visibility: var(--ui-motion-exit) can hide the part"
     },
     {
-      "problem": "content-visibility: hidden skips rendering"
+      "problem": "content-visibility: hidden can skip rendering"
     }
   ]
 }

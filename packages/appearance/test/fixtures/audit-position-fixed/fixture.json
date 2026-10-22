@@ -7,7 +7,7 @@
   },
   "expect": [
     {
-      "problem": "pins the part to the viewport"
+      "problem": "position: fixed places the part"
     }
   ]
 }

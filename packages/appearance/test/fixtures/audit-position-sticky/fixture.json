@@ -7,7 +7,7 @@
   },
   "expect": [
     {
-      "problem": "position: sticky pins the part to the viewport"
+      "problem": "position: sticky places the part"
     }
   ]
 }

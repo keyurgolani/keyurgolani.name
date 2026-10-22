@@ -468,7 +468,7 @@ test("a language's stylesheet problems name the file, line, and column", () => {
       file: './styles.css',
       pointer: '',
       message:
-        './styles.css:2:3 display: none removes the part from the page or its semantics: languages style parts, never hide them.',
+        "./styles.css:2:3 display: none lays the part out, or takes it off the page: display is the shared primitives' and the variant's, never a language's.",
       remedy: "Change the rule to style [data-ui-slot] parts through the language's tokens.",
     });
     const missing = compilePack({

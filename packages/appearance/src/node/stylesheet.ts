@@ -1,11 +1,14 @@
 // A design language's stylesheet (#19, Slice 2, item 1), read strictly. A
 // language styles the shared primitives' `[data-ui-slot]` parts and their
-// state attributes, and nothing else: no display: none, visibility: hidden,
-// non-empty content, order, grid placement, fixed or sticky position, color
-// literal, @import, @font-face, :root, html, body, or !important. display,
-// visibility, content-visibility, and position take only a literal keyword
-// from a short list, and transforms, backdrop blur, and opacity go only
-// through the tokens the accessibility layer overrides.
+// state attributes, and sets only the properties in LANGUAGE_PROPERTIES, the
+// ones the spec's ownership table gives a design language. Every other
+// property is refused, whoever owns it: the typography profile's type, the
+// variant's layout, sizes, placement, and order, the color scheme's text
+// colors, and the structure the shared primitives give a part, such as
+// clipping a media part's corners. Colors come only as var(--color-*), and
+// transforms, opacity, backdrop blur, and a control's height only through
+// tokens. No non-empty content, color literal, @import, @font-face, :root,
+// html, body, or !important.
 //
 // The reader takes a small, explicit subset of CSS and refuses the rest. The
 // compiler writes the rules back out from what it read, never the source
@@ -127,77 +130,186 @@ const PSEUDO_ELEMENTS: ReadonlySet<string> = new Set([
   'placeholder',
 ]);
 
-/** Typography's: a language never sets a family or a size. */
-const TYPE_PROPERTIES: ReadonlySet<string> = new Set(['font', 'font-family', 'font-size']);
+/** A box's sides, physical and logical, as their longhands spell them. */
+const SIDES = [
+  '-top',
+  '-right',
+  '-bottom',
+  '-left',
+  '-block',
+  '-block-start',
+  '-block-end',
+  '-inline',
+  '-inline-start',
+  '-inline-end',
+] as const;
 
-/** Where a grid item goes, which is the variant's to say. */
-const GRID_PLACEMENT: ReadonlySet<string> = new Set([
-  'grid-area',
-  'grid-row',
-  'grid-row-start',
-  'grid-row-end',
-  'grid-column',
-  'grid-column-start',
-  'grid-column-end',
-]);
+const CORNERS = [
+  'top-left',
+  'top-right',
+  'bottom-right',
+  'bottom-left',
+  'start-start',
+  'start-end',
+  'end-start',
+  'end-end',
+] as const;
 
-/** Properties that reorder what reads in document order. */
-const ORDER_PROPERTIES: ReadonlySet<string> = new Set([
-  'order',
-  'direction',
-  'writing-mode',
-  'unicode-bidi',
-]);
+const BACKGROUND_LONGHANDS = [
+  'attachment',
+  'blend-mode',
+  'clip',
+  'color',
+  'image',
+  'origin',
+  'position',
+  'position-x',
+  'position-y',
+  'repeat',
+  'size',
+] as const;
+
+const serving = (reason: string, properties: readonly string[]) =>
+  properties.map((property) => [property, reason] as const);
 
 /**
- * Properties a language may set only to a literal keyword from a short list,
- * never through a token: a token, or a word off the list, could take the part
- * off the page, out of the reading order, or over the rest of it.
+ * Every property a design language's stylesheet may set, with what the
+ * spec's ownership table gives a language that it serves. The reader refuses
+ * every other property: what the table gives typography (family, size,
+ * weight, tracking, leading), variants (layout, sizes, placement, order), and
+ * color schemes (text color), and what a part needs structurally, which the
+ * shared primitives' stylesheet sets. A -webkit- or -moz- property reads as
+ * its unprefixed name.
  */
-const KEYWORD_PROPERTIES: Readonly<
-  Record<
-    string,
-    { readonly allowed: readonly string[]; readonly refused: Readonly<Record<string, string>> }
-  >
-> = {
-  display: {
-    allowed: [
-      'block',
-      'inline',
-      'inline-block',
-      'flex',
-      'inline-flex',
-      'grid',
-      'inline-grid',
-      'flow-root',
-    ],
-    refused: {
-      none: 'removes the part from the page or its semantics: languages style parts, never hide them.',
-      contents:
-        'removes the part from the page or its semantics: languages style parts, never hide them.',
-    },
-  },
-  visibility: {
-    allowed: ['visible'],
-    refused: {
-      hidden: 'hides the part from assistive technology too.',
-      collapse: 'hides the part from assistive technology too.',
-    },
-  },
-  'content-visibility': {
-    allowed: ['visible', 'auto'],
-    refused: { hidden: "skips rendering the part's contents, which hides them." },
-  },
-  position: {
-    allowed: ['static', 'relative'],
-    refused: {
-      fixed: "pins the part to the viewport, which is the variant's layout to decide.",
-      sticky: "pins the part to the viewport, which is the variant's layout to decide.",
-      absolute:
-        'takes the part out of the flow, where it could cover the page: a language positions parts static or relative.',
-    },
-  },
-};
+export const LANGUAGE_PROPERTIES: ReadonlyMap<string, string> = new Map([
+  ...serving(
+    "borders: a part's edges, with their width, line style, and color",
+    ['', ...SIDES].flatMap((side) =>
+      ['', '-width', '-style', '-color'].map((part) => `border${side}${part}`),
+    ),
+  ),
+  ...serving("radii: a part's corners", [
+    'border-radius',
+    ...CORNERS.map((corner) => `border-${corner}-radius`),
+  ]),
+  ...serving("elevation: a part's shadows", ['box-shadow']),
+  ...serving("surfaces: a part's material and texture", [
+    'background',
+    ...BACKGROUND_LONGHANDS.map((part) => `background-${part}`),
+  ]),
+  ...serving("translucency: a part's opacity and backdrop blur, through the tokens", [
+    'opacity',
+    'backdrop-filter',
+  ]),
+  ...serving("control anatomy: a control's height, as var(--ui-control-height)", [
+    'min-height',
+    'min-block-size',
+  ]),
+  ...serving("density inside parts: a part's padding and the gaps between its children", [
+    'padding',
+    ...SIDES.map((side) => `padding${side}`),
+    'gap',
+    'row-gap',
+    'column-gap',
+  ]),
+  ...serving('focus treatment: the outline a focused part draws', [
+    'outline',
+    'outline-color',
+    'outline-offset',
+    'outline-style',
+    'outline-width',
+  ]),
+  ...serving("icon treatment: an icon's fill and stroke weight", ['fill', 'stroke-width']),
+  ...serving('duration, easing, and transition character', [
+    'transition',
+    'transition-delay',
+    'transition-duration',
+    'transition-property',
+    'transition-timing-function',
+  ]),
+  ...serving(
+    'transition character: the state nudges, through the tokens reduced motion turns off',
+    ['transform', 'translate', 'scale', 'rotate'],
+  ),
+  ...serving('decoration: an empty ::before or ::after', ['content']),
+]);
+
+const SIZES =
+  "sizes the part, which is the variant's layout to decide: a language sizes only a control, as min-height: var(--ui-control-height).";
+
+/**
+ * Why a property off the list is refused, for the ones a language reaches
+ * for: whose it is, or how it would hide a part. The first match says.
+ */
+const REFUSALS: readonly (readonly [RegExp, string])[] = [
+  [/^all$/, 'resets every property, including what the accessibility layer sets.'],
+  [
+    /^text-indent$/,
+    "indents the text, which can push it out of sight: indentation is the typography profile's.",
+  ],
+  [
+    /^(?:font|font-[a-z-]+|letter-spacing|line-height|word-spacing|text-transform)$/,
+    'sets type, which belongs to the typography profile.',
+  ],
+  [
+    /^(?:order|direction|writing-mode|unicode-bidi|reading-flow|reading-order)$/,
+    'reorders content, which a language must not.',
+  ],
+  [
+    /^grid-(?:area|row|column)(?:-start|-end)?$/,
+    "places a grid item, which is the variant's layout to decide.",
+  ],
+  [
+    /^(?:position|inset|inset-[a-z-]+|top|right|bottom|left|z-index|float|clear)$/,
+    "places the part, which is the variant's layout to decide.",
+  ],
+  [
+    /^display$/,
+    "lays the part out, or takes it off the page: display is the shared primitives' and the variant's, never a language's.",
+  ],
+  [
+    /^visibility$/,
+    'can hide the part, from assistive technology too: languages style parts, never hide them.',
+  ],
+  [/^content-visibility$/, "can skip rendering the part's contents, which hides them."],
+  [/^(?:(?:min-|max-)?(?:width|height|inline-size|block-size)|aspect-ratio)$/, SIZES],
+  [
+    /^(?:overflow|overflow-[a-z-]+|text-overflow)$/,
+    "can clip the part's contents, which hides them: a part that clips, such as media with rounded corners, does so in the shared primitives.",
+  ],
+  [
+    /^(?:clip|clip-path|clip-rule|mask|mask-[a-z-]+)$/,
+    'can clip or mask the part, which hides it.',
+  ],
+  [/^zoom$/, 'scales the part and its layout, which can shrink it out of sight.'],
+  [
+    /^filter$/,
+    'filters the part, which no accessibility setting undoes: blur goes through backdrop-filter and --ui-backdrop-blur.',
+  ],
+  [
+    /^(?:forced-color-adjust|print-color-adjust)$/,
+    'changes how forced colors or print treat the part, which only the accessibility layer may.',
+  ],
+  [
+    /^(?:color|text-fill-color|text-stroke|text-stroke-[a-z]+|text-shadow|text-decoration-color|text-emphasis-color|accent-color|caret-color|color-scheme)$/,
+    "colors the part's text or controls, which the color scheme does through the shared primitives: a language never colors text.",
+  ],
+  [
+    /^(?:animation|animation-[a-z-]+)$/,
+    "animates through keyframes, and a language can't declare any: motion comes from the --ui-motion-* tokens.",
+  ],
+  [
+    /^(?:flex|flex-[a-z-]+|grid|grid-[a-z-]+|align-[a-z-]+|justify-[a-z-]+|place-[a-z-]+|margin|margin-[a-z-]+|columns|column-[a-z-]+|box-sizing|vertical-align|table-layout|container|container-[a-z-]+)$/,
+    "lays out the part or its contents, which the shared primitives and the variant's layout own.",
+  ],
+  [
+    /^(?:cursor|pointer-events|user-select|touch-action|appearance|resize|scroll-[a-z-]+|overscroll-[a-z-]+|will-change|contain|isolation|mix-blend-mode)$/,
+    'changes how the part behaves or composites, which the shared primitives own.',
+  ],
+];
+
+const UNLISTED =
+  "isn't a property a design language sets: a language styles surfaces, borders, radii, elevation, translucency, control anatomy, focus, density inside parts, icons, and motion.";
 
 const STATE_TRANSFORMS = LANGUAGE_KEYS.filter((key) => /^state-[a-z]+-transform$/.test(key)).map(
   (key) => `var(--ui-${key})`,
@@ -207,11 +319,13 @@ const MOVES = {
   message: `moves the part outside the tokens: it takes none, ${STATE_TRANSFORMS.join(', or ')}, which reduced motion turns off.`,
 };
 
+const CONTROL_HEIGHT = { allowed: ['var(--ui-control-height)'], message: SIZES };
+
 /**
- * Effects a language may apply only through the tokens the accessibility
- * layer overrides: reduced motion stops the state transforms, and reduced
- * transparency, a browser without backdrop-filter, forced colors, and print
- * make surfaces opaque and the blur 0.
+ * Properties on the list a language sets only through tokens: reduced motion
+ * stops the state transforms, and reduced transparency, a browser without
+ * backdrop-filter, forced colors, and print make surfaces opaque and the
+ * blur 0. A control's height is the one size a language sets.
  */
 const TOKEN_ONLY_PROPERTIES: Readonly<
   Record<string, { readonly allowed: readonly string[]; readonly message: string }>
@@ -234,15 +348,9 @@ const TOKEN_ONLY_PROPERTIES: Readonly<
     message:
       'sets opacity outside the tokens: it takes var(--ui-surface-opacity), which reduced transparency makes 1, var(--ui-state-disabled-opacity), or var(--ui-state-loading-opacity).',
   },
-  filter: {
-    allowed: ['none'],
-    message:
-      'filters the part, which no accessibility setting undoes: filter takes only none, and blur goes through backdrop-filter and --ui-backdrop-blur.',
-  },
+  'min-height': CONTROL_HEIGHT,
+  'min-block-size': CONTROL_HEIGHT,
 };
-
-const list = (words: readonly string[]) =>
-  words.length < 3 ? words.join(' or ') : `${words.slice(0, -1).join(', ')}, or ${words.at(-1)}`;
 
 /** Media features a language may branch on: the viewport and the input, never a preference. */
 const MEDIA_FEATURES: ReadonlySet<string> = new Set([
@@ -828,8 +936,11 @@ function readDeclaration(piece: string): StyleDeclaration | { readonly message: 
     return { message: `${JSON.stringify(property)} isn't a lowercase property name.` };
   }
   const base = property.replace(/^-(?:webkit|moz)-/, '');
-  const words = value.toLowerCase().split(/[\s,()]+/);
   const refuse = (message: string) => ({ message: `${property}: ${value} ${message}` });
+  // Deny by default: a property off the list is refused whatever its value.
+  if (!LANGUAGE_PROPERTIES.has(base)) {
+    return refuse(REFUSALS.find(([names]) => names.test(base))?.[1] ?? UNLISTED);
+  }
   let depth = 0;
   for (const character of value) {
     if (character === '(') depth += 1;
@@ -838,40 +949,10 @@ function readDeclaration(piece: string): StyleDeclaration | { readonly message: 
   if (depth !== 0) return refuse('leaves a parenthesis open.');
   if (/\burl\(/i.test(value))
     return refuse("loads a file, and a language can't: url() isn't allowed.");
-  if (base === 'all')
-    return refuse('resets every property, including what the accessibility layer sets.');
-  if (TYPE_PROPERTIES.has(base))
-    return refuse('sets type, which belongs to the typography profile.');
-  if (GRID_PLACEMENT.has(base))
-    return refuse("places a grid item, which is the variant's layout to decide.");
-  if (ORDER_PROPERTIES.has(base)) return refuse('reorders content, which a language must not.');
-  if (
-    (base === 'flex-direction' || base === 'flex-flow') &&
-    words.some((word) => word.endsWith('-reverse'))
-  ) {
-    return refuse('reverses the content order, which a language must not.');
-  }
-  const keywords = KEYWORD_PROPERTIES[base];
-  if (keywords) {
-    const word = value.toLowerCase();
-    const reason = keywords.refused[word];
-    if (reason) return refuse(reason);
-    if (!keywords.allowed.includes(word)) {
-      return refuse(
-        `isn't a value a language may give ${base}: it takes ${list(keywords.allowed)}, written out, never through a token.`,
-      );
-    }
-    return { property, value: word };
-  }
   const tokens = TOKEN_ONLY_PROPERTIES[base];
   if (tokens) {
     if (tokens.allowed.includes(value)) return { property, value };
     return refuse(tokens.message);
-  }
-  if (base === 'animation' || base === 'animation-name') {
-    return refuse(
-      "names keyframes, and a language can't declare any: motion comes from the --ui-motion-* tokens.",
-    );
   }
   if (base === 'content') {
     if (value === '""' || value === "''") return { property, value: '""' };

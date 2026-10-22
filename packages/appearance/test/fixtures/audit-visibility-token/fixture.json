@@ -7,7 +7,7 @@
   },
   "expect": [
     {
-      "problem": "visibility: var(--ui-motion-exit) isn't a value"
+      "problem": "visibility: var(--ui-motion-exit) can hide the part"
     }
   ]
 }

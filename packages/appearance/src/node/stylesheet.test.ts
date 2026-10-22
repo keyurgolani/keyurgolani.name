@@ -1,10 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { MAX_STYLESHEET_BYTES, readLanguageStylesheet, writeStyleNodes } from './stylesheet';
+import {
+  LANGUAGE_PROPERTIES,
+  MAX_STYLESHEET_BYTES,
+  readLanguageStylesheet,
+  writeStyleNodes,
+} from './stylesheet';
 
 // A design language's stylesheet (#19, Slice 2, item 1): the subset it may
-// use, each refusal the refined body lists, and inputs that try to reach
-// past the language's @scope or layer.
+// use, each refusal the refined body lists, the properties it may set and
+// nothing else, and inputs that try to reach past the language's @scope or
+// layer.
 
 function read(css: string) {
   return readLanguageStylesheet(css);
@@ -23,6 +29,82 @@ function refuses(css: string, pattern: RegExp) {
     `${css}\n  gave: ${messages.join(' | ')}`,
   );
 }
+
+/**
+ * The reviewed prototype's language layer (appearance-boundary.css, lines
+ * 333 to 453), every rule it styles per language through a token, written as
+ * a language's stylesheet: --appearance-* tokens as --ui-*, its focus color as
+ * var(--color-focus), and its parts as [data-ui-slot] parts.
+ */
+const PROTOTYPE_LANGUAGE_LAYER = `
+  [data-ui-slot="surface"] {
+    border-radius: var(--ui-radius-card);
+    box-shadow: var(--ui-shadow-card);
+    backdrop-filter: blur(var(--ui-backdrop-blur));
+  }
+  [data-ui-slot="action"] {
+    min-height: var(--ui-control-height);
+    gap: 0.45em;
+    padding: var(--ui-space-control-block) var(--ui-space-control-inline);
+    border: var(--ui-border-control);
+    border-radius: var(--ui-radius-control);
+    transition:
+      transform var(--ui-motion-fast) var(--ui-motion-easing),
+      background-color var(--ui-motion-fast) var(--ui-motion-easing),
+      border-color var(--ui-motion-fast) var(--ui-motion-easing);
+  }
+  [data-ui-slot="action"]:hover:not(:disabled) { transform: var(--ui-state-hover-transform); }
+  [data-ui-slot="action"]:active:not(:disabled) { transform: var(--ui-state-active-transform); }
+  [data-ui-slot="action"]:disabled { opacity: var(--ui-state-disabled-opacity); }
+  [data-ui-slot="action"][aria-busy="true"] { opacity: var(--ui-state-loading-opacity); }
+  [data-ui-slot="field"] > [data-ui-slot="field.input"] {
+    min-height: var(--ui-control-height);
+    padding: var(--ui-space-control-block) var(--ui-space-control-inline);
+    border: var(--ui-border-control);
+    border-width: var(--ui-state-validation-emphasis);
+    border-radius: var(--ui-radius-control);
+  }
+  [data-ui-slot="selection"] { padding: 0; border: 0; }
+  [data-ui-slot="badge"] {
+    gap: 0.35em;
+    padding: 0.32em 0.68em;
+    border: var(--ui-border-control);
+    border-radius: var(--ui-radius-badge);
+  }
+  [data-ui-slot="tab"] {
+    min-height: var(--ui-control-height);
+    padding-inline: var(--ui-space-control-inline);
+    border: var(--ui-border-control);
+    border-radius: var(--ui-radius-control);
+  }
+  [data-ui-slot="disclosure"] {
+    padding-block: var(--ui-space-control-block);
+    border-top: var(--ui-border-divider);
+    border-bottom: var(--ui-border-divider);
+  }
+  [data-ui-slot="dialog"] {
+    border: var(--ui-border-card);
+    border-radius: var(--ui-radius-overlay);
+    box-shadow: var(--ui-shadow-overlay);
+  }
+  [data-ui-slot="tooltip"] {
+    border: var(--ui-border-control);
+    border-radius: var(--ui-radius-control);
+    box-shadow: var(--ui-shadow-raised);
+  }
+  [data-ui-slot="media"] {
+    border: var(--ui-border-card);
+    border-radius: var(--ui-radius-media);
+  }
+  [data-ui-slot]:focus-visible {
+    outline: var(--ui-focus-width) var(--ui-focus-style) var(--color-focus);
+    outline-offset: var(--ui-focus-offset);
+  }
+  [data-ui-slot="icon"] {
+    fill: var(--ui-icon-fill);
+    stroke-width: var(--ui-icon-stroke-width);
+  }
+`;
 
 test('slots, their parts, and state attributes read back in canonical form', () => {
   const css = `
@@ -88,15 +170,15 @@ test('slots, their parts, and state attributes read back in canonical form', () 
 
 test('each refusal the refined body lists', () => {
   const slot = '[data-ui-slot="surface"]';
-  refuses(`${slot} { display: none; }`, /display: none removes the part/);
-  refuses(`${slot} { visibility: hidden; }`, /visibility: hidden hides the part/);
+  refuses(`${slot} { display: none; }`, /display: none lays the part out, or takes it off/);
+  refuses(`${slot} { visibility: hidden; }`, /visibility: hidden can hide the part/);
   refuses(`${slot}::before { content: "New"; }`, /content: "New" adds text/);
   refuses(`${slot} { order: -1; }`, /order: -1 reorders content/);
   refuses(`${slot} { grid-column: 1 / -1; }`, /places a grid item/);
   refuses(`${slot} { grid-area: hero; }`, /places a grid item/);
-  refuses(`${slot} { position: fixed; }`, /pins the part to the viewport/);
-  refuses(`${slot} { color: #ff0000; }`, /hex color literal/);
-  refuses(`${slot} { color: rebeccapurple; }`, /can't hold the color rebeccapurple/);
+  refuses(`${slot} { position: fixed; }`, /position: fixed places the part/);
+  refuses(`${slot} { border-color: #ff0000; }`, /hex color literal/);
+  refuses(`${slot} { border-color: rebeccapurple; }`, /can't hold the color rebeccapurple/);
   refuses(`${slot} { background: rgb(0 0 0); }`, /can't make a color with rgb\(\)/);
   refuses(`@import "elsewhere.css";`, /@import can't import another stylesheet/);
   refuses(`@font-face { font-family: Hijack; }`, /@font-face can't declare a font/);
@@ -152,23 +234,23 @@ test('declarations can only use tokens for type, motion, and color', () => {
   refuses(`${slot} { font: 700 2rem serif; }`, /belongs to the typography profile/);
   refuses(`${slot} { font-size: 2rem; }`, /belongs to the typography profile/);
   refuses(`${slot} { transition: opacity 200ms ease; }`, /literal duration/);
-  refuses(`${slot} { animation: spin 1s linear infinite; }`, /names keyframes/);
-  refuses(`${slot} { animation-name: spin; }`, /names keyframes/);
+  refuses(`${slot} { animation: spin 1s linear infinite; }`, /animates through keyframes/);
+  refuses(`${slot} { animation-name: spin; }`, /animates through keyframes/);
   refuses(`${slot} { background: url(https://example.test/x.png); }`, /url\(\)/);
   refuses(`${slot} { background: image-set(x 1x); }`, /calls image-set\(\)/);
   refuses(
-    `${slot} { color: var(--type-body-font-size); }`,
+    `${slot} { border-color: var(--type-body-font-size); }`,
     /var\(--color-<role>\) or var\(--ui-<key>\)/,
   );
-  refuses(`${slot} { color: var(--color-accent, red); }`, /no fallback/);
+  refuses(`${slot} { border-color: var(--color-accent, red); }`, /no fallback/);
   refuses(
-    `${slot} { color: var(--color-nonexistent); }`,
+    `${slot} { border-color: var(--color-nonexistent); }`,
     /var\(--color-<role>\) or var\(--ui-<key>\)/,
   );
   refuses(`${slot} { all: unset; }`, /resets every property/);
-  refuses(`${slot} { display: contents; }`, /removes the part/);
-  refuses(`${slot} { position: sticky; }`, /pins the part/);
-  refuses(`${slot} { flex-direction: row-reverse; }`, /reverses the content order/);
+  refuses(`${slot} { display: contents; }`, /display: contents lays the part out/);
+  refuses(`${slot} { position: sticky; }`, /position: sticky places the part/);
+  refuses(`${slot} { flex-direction: row-reverse; }`, /lays out the part or its contents/);
   refuses(`${slot} { direction: rtl; }`, /reorders content/);
   refuses(`${slot} { -webkit-order: 2; }`, /reorders content/);
   refuses(`${slot} { DISPLAY: block; }`, /isn't a lowercase property name/);
@@ -176,50 +258,264 @@ test('declarations can only use tokens for type, motion, and color', () => {
   // What a language does style.
   assert.ok(
     read(`${slot} {
-      display: inline-flex;
-      position: relative;
       min-height: var(--ui-control-height);
       border: var(--ui-border-control);
+      border-color: currentcolor;
       opacity: var(--ui-state-disabled-opacity);
       backdrop-filter: blur(var(--ui-backdrop-blur));
       -webkit-backdrop-filter: blur(var(--ui-backdrop-blur));
       transition: opacity var(--ui-motion-fast) var(--ui-motion-easing);
-      color: currentcolor;
     }`).ok,
   );
 });
 
-test('display, visibility, content-visibility, and position take a listed keyword, never a token', () => {
+test('deny by default: display, visibility, content-visibility, and position are never a language property, whatever the value', () => {
   const slot = '[data-ui-slot="surface"]';
+  // 85866e7 took these keywords as written.
+  for (const value of ['block', 'flex', 'inline-flex', 'grid', 'flow-root', 'none', 'contents']) {
+    refuses(`${slot} { display: ${value}; }`, new RegExp(`display: ${value} lays the part out`));
+  }
+  refuses(`${slot} { display: Flex; }`, /display: Flex lays the part out/);
+  for (const value of ['visible', 'hidden', 'collapse']) {
+    refuses(`${slot} { visibility: ${value}; }`, new RegExp(`visibility: ${value} can hide`));
+  }
+  for (const value of ['visible', 'auto', 'hidden']) {
+    refuses(
+      `${slot} { content-visibility: ${value}; }`,
+      new RegExp(`content-visibility: ${value} can skip rendering`),
+    );
+  }
+  for (const value of ['static', 'relative', 'absolute', 'fixed', 'sticky']) {
+    refuses(`${slot} { position: ${value}; }`, new RegExp(`position: ${value} places the part`));
+  }
   // A token's value lands at compute time, where nothing reads it first.
-  refuses(`${slot} { display: var(--ui-texture); }`, /display: var\(--ui-texture\) isn't a value/);
-  refuses(`${slot} { display: var(--ui-texture); }`, /written out, never through a token/);
-  refuses(`${slot} { visibility: var(--ui-motion-exit); }`, /never through a token/);
-  refuses(`${slot} { position: var(--ui-motion-enter); }`, /never through a token/);
-  refuses(`${slot} { content-visibility: var(--ui-motion-exit); }`, /never through a token/);
-  refuses(`${slot} { visibility: collapse; }`, /visibility: collapse hides the part/);
-  refuses(`${slot} { content-visibility: hidden; }`, /skips rendering the part's contents/);
-  refuses(`${slot} { position: absolute; inset: 0; }`, /takes the part out of the flow/);
-  refuses(`${slot} { display: table; }`, /it takes block, inline, inline-block, flex/);
-  refuses(`${slot} { display: block flex; }`, /isn't a value a language may give display/);
-  refuses(`${slot} { position: revert-layer; }`, /it takes static or relative/);
-  const kept = read(`${slot} {
-    display: Flex;
-    visibility: visible;
-    content-visibility: auto;
-    position: relative;
-  }`);
-  assert.ok(kept.ok);
-  const rule = kept.ok ? kept.nodes[0] : undefined;
-  assert.deepEqual(rule?.type === 'rule' ? rule.declarations : [], [
-    { property: 'display', value: 'flex' },
-    { property: 'visibility', value: 'visible' },
-    { property: 'content-visibility', value: 'auto' },
-    { property: 'position', value: 'relative' },
-  ]);
+  refuses(`${slot} { display: var(--ui-texture); }`, /display: var\(--ui-texture\) lays/);
+  refuses(
+    `${slot} { visibility: var(--ui-motion-exit); }`,
+    /visibility: var\(--ui-motion-exit\) can hide/,
+  );
+  refuses(
+    `${slot} { position: var(--ui-motion-enter); }`,
+    /position: var\(--ui-motion-enter\) places/,
+  );
+  // Whatever the part could be placed with goes the same way.
+  for (const declaration of [
+    'inset: 0',
+    'top: -9999px',
+    'inset-inline-start: 0',
+    'z-index: 2147483647',
+    'float: left',
+  ]) {
+    refuses(`${slot} { ${declaration}; }`, /places the part, which is the variant's layout/);
+  }
 });
 
-test('motion, blur, opacity, and filters go only through the tokens the accessibility layer overrides', () => {
+test('every hiding and layout vector the review lists is refused', () => {
+  const slot = '[data-ui-slot="surface"]';
+  refuses(
+    `${slot} { clip-path: inset(50%); }`,
+    /clip-path: inset\(50%\) can clip or mask the part/,
+  );
+  refuses(`${slot} { clip-path: content-box; }`, /can clip or mask the part/);
+  refuses(
+    `${slot} { mask: linear-gradient(transparent, transparent); }`,
+    /mask: linear-gradient\(transparent, transparent\) can clip or mask the part/,
+  );
+  refuses(
+    `${slot} { -webkit-mask-image: linear-gradient(transparent, transparent); }`,
+    /can clip or mask the part/,
+  );
+  refuses(`${slot} { zoom: 0.01; }`, /zoom: 0.01 scales the part and its layout/);
+  // Sizes, zero ones included, are the variant's.
+  for (const property of [
+    'width',
+    'height',
+    'max-width',
+    'max-height',
+    'max-inline-size',
+    'max-block-size',
+    'inline-size',
+    'block-size',
+    'min-width',
+    'min-inline-size',
+  ]) {
+    refuses(`${slot} { ${property}: 0; }`, new RegExp(`^${property}: 0 sizes the part`));
+  }
+  refuses(`${slot} { aspect-ratio: 1000; }`, /sizes the part/);
+  refuses(`${slot} { overflow: hidden; }`, /overflow: hidden can clip the part's contents/);
+  refuses(`${slot} { overflow-y: clip; }`, /can clip the part's contents/);
+  refuses(`${slot} { text-overflow: ellipsis; }`, /can clip the part's contents/);
+  refuses(`${slot} { color: transparent; }`, /color: transparent colors the part's text/);
+  // The scheme's colors on the part's own ground hide text as well as transparent does.
+  refuses(`${slot} { color: var(--color-canvas); }`, /a language never colors text/);
+  refuses(`${slot} { -webkit-text-fill-color: transparent; }`, /a language never colors text/);
+  refuses(`${slot} { font-size: 0; }`, /font-size: 0 sets type/);
+  refuses(`${slot} { text-indent: -9999px; }`, /text-indent: -9999px indents the text/);
+  // What the ownership table gives typography: weight, tracking, and leading as well.
+  for (const declaration of [
+    'font-weight: 650',
+    'letter-spacing: -1em',
+    'line-height: 0',
+    'font-style: italic',
+    'text-transform: uppercase',
+    'word-spacing: 1em',
+  ]) {
+    refuses(`${slot} { ${declaration}; }`, /sets type, which belongs to the typography profile/);
+  }
+});
+
+test('a control height is the one size a language sets, through its token', () => {
+  const slot = '[data-ui-slot="action"]';
+  assert.ok(read(`${slot} { min-height: var(--ui-control-height); }`).ok);
+  assert.ok(read(`${slot} { min-block-size: var(--ui-control-height); }`).ok);
+  for (const value of [
+    '2rem',
+    '0',
+    '100vh',
+    'var(--ui-space-control-block)',
+    'calc(var(--ui-control-height) * 100)',
+  ]) {
+    refuses(`${slot} { min-height: ${value}; }`, /a language sizes only a control, as min-height/);
+  }
+  refuses(`${slot} { min-block-size: 100vh; }`, /sizes the part/);
+});
+
+test('a property off the list is refused with whose it is, or as one a language never sets', () => {
+  const slot = '[data-ui-slot="action"]';
+  for (const declaration of [
+    'margin: 0 0 0 -100vw',
+    'align-items: center',
+    'justify-content: center',
+    'flex: 1',
+    'grid-template-columns: 1fr',
+    'columns: 2',
+    'box-sizing: content-box',
+  ]) {
+    refuses(`${slot} { ${declaration}; }`, /lays out the part or its contents/);
+  }
+  for (const declaration of [
+    'cursor: pointer',
+    'pointer-events: none',
+    'user-select: none',
+    'appearance: none',
+    'mix-blend-mode: difference',
+  ]) {
+    refuses(`${slot} { ${declaration}; }`, /which the shared primitives own/);
+  }
+  refuses(`${slot} { forced-color-adjust: none; }`, /forced colors or print/);
+  refuses(`${slot} { filter: opacity(0); }`, /filters the part/);
+  for (const declaration of [
+    'list-style: none',
+    'text-align: center',
+    '-webkit-box-reflect: below',
+    '-webkit-line-clamp: 1',
+  ]) {
+    refuses(`${slot} { ${declaration}; }`, /isn't a property a design language sets/);
+  }
+});
+
+test("the prototype's language layer reads, and the rules a part needs structurally are the primitives'", () => {
+  const result = read(PROTOTYPE_LANGUAGE_LAYER);
+  assert.ok(result.ok, JSON.stringify(result.ok ? [] : result.problems));
+  const properties = new Set<string>();
+  const collect = (nodes: typeof result.nodes) => {
+    for (const node of nodes) {
+      if (node.type === 'group') collect(node.children);
+      else for (const { property } of node.declarations) properties.add(property);
+    }
+  };
+  collect(result.ok ? result.nodes : []);
+  assert.deepEqual([...properties].sort(), [
+    'backdrop-filter',
+    'border',
+    'border-bottom',
+    'border-radius',
+    'border-top',
+    'border-width',
+    'box-shadow',
+    'fill',
+    'gap',
+    'min-height',
+    'opacity',
+    'outline',
+    'outline-offset',
+    'padding',
+    'padding-block',
+    'padding-inline',
+    'stroke-width',
+    'transform',
+    'transition',
+  ]);
+  for (const property of properties) assert.ok(LANGUAGE_PROPERTIES.has(property), property);
+  // The layer's rules that every language shares, which slice 3's primitives own.
+  for (const [declaration, owner] of [
+    ['display: inline-flex', /display is the shared primitives'/],
+    ['align-items: center', /lays out the part or its contents, which the shared primitives/],
+    ['justify-content: center', /lays out the part or its contents, which the shared primitives/],
+    ['width: 100%', /sizes the part/],
+    ['width: fit-content', /sizes the part/],
+    ['min-height: 2rem', /sizes the part/],
+    ['overflow: hidden', /media with rounded corners, does so in the shared primitives/],
+    ['cursor: pointer', /which the shared primitives own/],
+    ['font-weight: 650', /typography profile/],
+  ] as const) {
+    refuses(`[data-ui-slot="media"] { ${declaration}; }`, owner);
+  }
+});
+
+test('the list gives a language what the ownership table does, and nothing it gives another axis', () => {
+  for (const property of [
+    'border',
+    'border-inline-end-color',
+    'border-end-start-radius',
+    'box-shadow',
+    'background-image',
+    'opacity',
+    'backdrop-filter',
+    'min-height',
+    'padding-block-start',
+    'column-gap',
+    'outline-offset',
+    'fill',
+    'stroke-width',
+    'transition-timing-function',
+    'transform',
+    'content',
+  ]) {
+    assert.ok(LANGUAGE_PROPERTIES.has(property), property);
+  }
+  for (const property of [
+    'font',
+    'font-family',
+    'font-size',
+    'font-weight',
+    'letter-spacing',
+    'line-height',
+    'display',
+    'position',
+    'width',
+    'height',
+    'max-width',
+    'min-width',
+    'margin',
+    'order',
+    'grid-area',
+    'color',
+    'visibility',
+    'overflow',
+    'clip-path',
+    'mask',
+    'zoom',
+    'filter',
+    'text-indent',
+    'z-index',
+  ]) {
+    assert.ok(!LANGUAGE_PROPERTIES.has(property), property);
+  }
+  assert.equal(LANGUAGE_PROPERTIES.size, 101);
+});
+
+test('motion, blur, and opacity go only through the tokens the accessibility layer overrides', () => {
   const slot = '[data-ui-slot="action"]';
   refuses(
     `${slot}:hover { transform: translateY(-12px) rotate(8deg); transition: transform var(--ui-motion-slow); }`,
@@ -250,7 +546,6 @@ test('motion, blur, opacity, and filters go only through the tokens the accessib
       opacity: var(--ui-surface-opacity);
       backdrop-filter: blur(var(--ui-backdrop-blur));
       -webkit-backdrop-filter: none;
-      filter: none;
     }
     ${slot}[aria-busy="true"] { opacity: var(--ui-state-loading-opacity); }`).ok,
   );
@@ -324,7 +619,7 @@ test('problems carry their line and column, and the reader never throws', () => 
     line: 3,
     column: 3,
     message:
-      'display: none removes the part from the page or its semantics: languages style parts, never hide them.',
+      "display: none lays the part out, or takes it off the page: display is the shared primitives' and the variant's, never a language's.",
   });
   for (const input of [
     '',

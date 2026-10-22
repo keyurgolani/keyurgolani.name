@@ -183,6 +183,24 @@ test('every refusal the refined body lists for a language stylesheet has its kno
   }
 });
 
+test('every hiding and layout vector the review of PR #57 lists has its known-bad input', () => {
+  const audits = knownBadNames().filter((name) => name.startsWith('audit-'));
+  for (const vector of [
+    'clip-path',
+    'mask',
+    'zoom',
+    'width',
+    'height',
+    'max-size',
+    'overflow',
+    'color-transparent',
+    'font-size',
+    'text-indent',
+  ]) {
+    assert.ok(audits.includes(`audit-${vector}`), vector);
+  }
+});
+
 test('a known-bad input that names no registered base, or an unknown role, is refused', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'portfolio-known-bad-'));
   try {

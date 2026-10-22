@@ -7,7 +7,7 @@
   },
   "expect": [
     {
-      "problem": "position: absolute takes the part out of the flow"
+      "problem": "position: absolute places the part"
     }
   ]
 }
