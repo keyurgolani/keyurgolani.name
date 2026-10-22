@@ -80,3 +80,102 @@ export {
 } from './audit/sink';
 export { limitSource, sourcePrefix } from './audit/source';
 export { authPaths, prepareAuthDirectories } from './data/layout.mjs';
+
+// The revision store (#3, Slice 1). Nothing wires it yet: owner reads the
+// documents adapter until Slice 3's first-start import.
+export { openStore, type Store, type StoreOptions } from './store/store';
+export {
+  onStoreEvent,
+  StoreError,
+  type StoreActor,
+  type StoreErrorCode,
+  type StoreEvent,
+  type StoreEventName,
+  type StoreLog,
+  type StoreLogEntry,
+} from './store/common';
+// The port's types only: openStore() defaults to node:fs, and apps/web gets
+// no port it could write files through.
+export { type CrashPoint, type FileStats, type FsPort } from './store/fs-port';
+export {
+  isDraftId,
+  isRevisionId,
+  isSha256,
+  STORE_LAYOUT,
+  type DraftId,
+  type RevisionId,
+  type Sha256,
+  type StorePaths,
+} from './store/layout';
+export {
+  LOCK_STALE_MS,
+  LOCK_TOUCH_MS,
+  LOCK_WAIT_MS,
+  type LockRecord,
+  type PublicationLock,
+} from './store/lock';
+export {
+  claimServer,
+  SERVER_FRESH_MS,
+  SERVER_REFRESH_MS,
+  type ClaimResult,
+  type ServerClaim,
+  type ServerRecord,
+} from './store/server-claim';
+export { preflight, type PreflightCode, type PreflightOptions } from './store/preflight';
+export {
+  EVENT_TYPES,
+  isIdempotencyKey,
+  type EventType,
+  type LivePointer,
+  type PublicationEvent,
+} from './store/pointer';
+export {
+  type DocumentInput,
+  type DocumentName,
+  type Rendering,
+  type Unit,
+  type UnitChecks,
+  type UnitDiagnostic,
+  type UnitDocument,
+  type UnitInput,
+  type Versioned,
+} from './store/unit';
+export {
+  type Manifest,
+  type ManifestDocument,
+  type RevisionHealth,
+  type RevisionRead,
+  type RevisionSource,
+  type RevisionStore,
+} from './store/revisions';
+export {
+  type CreateDraftInput,
+  type DiscardOutcome,
+  type Draft,
+  type DraftConflict,
+  type DraftDocument,
+  type DraftDocuments,
+  type DraftEdit,
+  type DraftOutcome,
+  type DraftRejection,
+  type DraftStore,
+  type LiveConflict,
+} from './store/drafts';
+export { type AssetStat, type AssetStore } from './store/assets';
+export {
+  IDEMPOTENCY_WINDOW,
+  type HeldMove,
+  type LiveStatus,
+  type PublicationContext,
+  type PublicationOutcome,
+  type PublicationRejection,
+  type PublicationService,
+  type PublishInput,
+  type RecoverInput,
+  type RepairReport,
+  type RevisionDetail,
+  type RevisionSummary,
+  type RollbackInput,
+  type ServingState,
+} from './store/publication';

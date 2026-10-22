@@ -27,6 +27,12 @@ export const AUDIT_TYPES = Object.freeze(
     'session_evicted',
     'credential_changed',
     'command_denied',
+    // The publication events (#3): each refs the event's seq and revision.
+    'published',
+    'rolled_back',
+    'recovered',
+    'imported',
+    'schema_migrated',
   ]),
 );
 export const AUDIT_ACTORS = Object.freeze(
@@ -51,6 +57,8 @@ export const AUDIT_OUTCOMES = Object.freeze(
  * @property {string} [reason] one of AUDIT_REASONS, such as `origin_mismatch`
  * @property {string} [requestId]
  * @property {number} [count] how many events an aggregated record stands for
+ * @property {number} [seq] a publication event's seq (#3)
+ * @property {string} [revisionId] the revision a publication event made live (#3)
  */
 
 /**
@@ -86,7 +94,12 @@ const REFS = Object.freeze({
   reason: /^[a-z][a-z0-9_]{0,63}$/,
   requestId: /^[A-Za-z0-9-]{1,64}$/,
   count: null,
+  seq: null,
+  revisionId: /^rev_[0-9a-f]{32}$/,
 });
+
+/** The refs that hold a number: a count may be 0, a seq starts at 1. */
+const NUMBER_REFS = Object.freeze({ count: 0, seq: 1 });
 
 /**
  * The record for one event, at `at`. Refs it doesn't know, or whose value
@@ -106,8 +119,9 @@ export function auditRecord({ at, type, actor, outcome, refs = {} }, { commands 
   const kept = {};
   for (const [key, pattern] of Object.entries(REFS)) {
     const value = refs[key];
-    if (key === 'count') {
-      if (Number.isSafeInteger(value) && /** @type {number} */ (value) >= 0) {
+    if (key in NUMBER_REFS) {
+      const least = NUMBER_REFS[/** @type {keyof typeof NUMBER_REFS} */ (key)];
+      if (Number.isSafeInteger(value) && /** @type {number} */ (value) >= least) {
         kept[key] = /** @type {number} */ (value);
       }
     } else if (typeof value === 'string' && pattern?.test(value)) {

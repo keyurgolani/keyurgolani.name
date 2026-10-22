@@ -1,0 +1,320 @@
+import { recordOwnerModule } from '../load-trace';
+import { isStoreActor, type StoreActor } from './common';
+import type { CrashPoint, FsPort } from './fs-port';
+import {
+  isRevisionId,
+  isSha256,
+  tempBeside,
+  type RevisionId,
+  type Sha256,
+  type StorePaths,
+} from './layout';
+
+// The published pointer and the publication log (#3, items 9 and 11).
+// publication/live.json names the live revision, with its seq, unitHash,
+// and the event that made it live; renaming a new one over it is the commit
+// point of every publish, rollback, recover, and import. Each event also has
+// its own file, publication/events/<seq>.json, created after the commit the
+// way wx creates a file, never over another; live.json carries the event so
+// a crash between the two leaves nothing a restart can't rebuild. Where the
+// log and live.json disagree, live.json wins, and the event file in the way
+// is moved aside, never deleted. History orders by seq, never by clock, and
+// a revision never records its own events, since one can go live twice.
+
+recordOwnerModule('core/store/pointer');
+
+export type EventType = 'import' | 'publish' | 'rollback' | 'recover' | 'schema-migration';
+export const EVENT_TYPES: readonly EventType[] = Object.freeze([
+  'import',
+  'publish',
+  'rollback',
+  'recover',
+  'schema-migration',
+]);
+
+export interface PublicationEvent {
+  readonly seq: number;
+  readonly type: EventType;
+  readonly revisionId: RevisionId;
+  readonly previousRevisionId: RevisionId | null;
+  readonly actor: StoreActor;
+  /** ISO 8601. */
+  readonly at: string;
+  readonly reason?: string;
+  readonly idempotencyKey?: string;
+  /** For an import, and a draft imported from source: what was mounted (#3, item 24). */
+  readonly sourceHash?: Sha256;
+  /** For a revision migrated from an older one (#3, item 13). */
+  readonly restoredFrom?: RevisionId;
+}
+
+export interface LivePointer {
+  readonly seq: number;
+  readonly revisionId: RevisionId;
+  readonly unitHash: Sha256;
+  readonly event: PublicationEvent;
+}
+
+const IDEMPOTENCY_KEY = /^[A-Za-z0-9._:-]{1,128}$/;
+export const isIdempotencyKey = (value: unknown): value is string =>
+  typeof value === 'string' && IDEMPOTENCY_KEY.test(value);
+
+const REASON_MAX = 500;
+
+/** The event in `value`, or null when it isn't one. */
+export function asEvent(value: unknown): PublicationEvent | null {
+  if (value === null || typeof value !== 'object') return null;
+  const event = value as Record<string, unknown>;
+  const ok =
+    Number.isSafeInteger(event.seq) &&
+    (event.seq as number) >= 1 &&
+    EVENT_TYPES.includes(event.type as EventType) &&
+    isRevisionId(event.revisionId) &&
+    (event.previousRevisionId === null || isRevisionId(event.previousRevisionId)) &&
+    isStoreActor(event.actor) &&
+    typeof event.at === 'string' &&
+    !Number.isNaN(Date.parse(event.at)) &&
+    (event.reason === undefined ||
+      (typeof event.reason === 'string' && event.reason.length <= REASON_MAX)) &&
+    (event.idempotencyKey === undefined || isIdempotencyKey(event.idempotencyKey)) &&
+    (event.sourceHash === undefined || isSha256(event.sourceHash)) &&
+    (event.restoredFrom === undefined || isRevisionId(event.restoredFrom));
+  return ok ? (event as unknown as PublicationEvent) : null;
+}
+
+function asPointer(value: unknown): LivePointer | null {
+  if (value === null || typeof value !== 'object') return null;
+  const pointer = value as Record<string, unknown>;
+  const event = asEvent(pointer.event);
+  const ok =
+    event !== null &&
+    pointer.seq === event.seq &&
+    pointer.revisionId === event.revisionId &&
+    isRevisionId(pointer.revisionId) &&
+    isSha256(pointer.unitHash);
+  return ok ? (pointer as unknown as LivePointer) : null;
+}
+
+/** An event as its file holds it: only the fields it has, in one order. */
+export function eventRecord(event: PublicationEvent): PublicationEvent {
+  return Object.freeze({
+    seq: event.seq,
+    type: event.type,
+    revisionId: event.revisionId,
+    previousRevisionId: event.previousRevisionId,
+    actor: event.actor,
+    at: event.at,
+    ...(event.reason === undefined ? {} : { reason: event.reason }),
+    ...(event.idempotencyKey === undefined ? {} : { idempotencyKey: event.idempotencyKey }),
+    ...(event.sourceHash === undefined ? {} : { sourceHash: event.sourceHash }),
+    ...(event.restoredFrom === undefined ? {} : { restoredFrom: event.restoredFrom }),
+  });
+}
+
+export class DamagedPointerError extends Error {
+  constructor() {
+    super("publication/live.json can't be read as a published pointer.");
+    this.name = 'DamagedPointerError';
+  }
+}
+
+/** The published pointer, or null before the first revision goes live. */
+export async function readLive(fs: FsPort, paths: StorePaths): Promise<LivePointer | null> {
+  const stats = await fs.stat(paths.live);
+  if (!stats) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse((await fs.readFile(paths.live)).toString('utf8'));
+  } catch {
+    throw new DamagedPointerError();
+  }
+  const pointer = asPointer(parsed);
+  if (!pointer) throw new DamagedPointerError();
+  return pointer;
+}
+
+/**
+ * Moves the published pointer: a temporary file of its own beside live.json,
+ * synced, then renamed over live.json, which is the commit point. `fence`
+ * runs just before the rename, and stops it by throwing, as when the
+ * publication lock isn't the caller's any more. The caller syncs
+ * publication/ next, after the commit, so a failure there doesn't read as
+ * one before it.
+ */
+export async function writeLive(
+  fs: FsPort,
+  paths: StorePaths,
+  pointer: LivePointer,
+  operation: string,
+  fence: () => Promise<void> = async () => {},
+): Promise<void> {
+  const point = (step: string): CrashPoint => `${operation}.live.${step}`;
+  const record = { ...pointer, event: eventRecord(pointer.event) };
+  // A new name each time, so no two writers share one, and nothing planted waits there.
+  const temp = tempBeside(paths.live);
+  try {
+    await fs.writeFile(temp, `${JSON.stringify(record)}\n`, point('write'));
+    await fs.fsync(temp, point('fsync'));
+    await fence();
+    await fs.rename(temp, paths.live, point('rename'));
+  } catch (error) {
+    await fs.remove(temp, point('temp.remove')).catch(() => {});
+    throw error;
+  }
+}
+
+export class EventMismatchError extends Error {
+  constructor(seq: number) {
+    super(`publication/events/${seq}.json holds another event than the published pointer.`);
+    this.name = 'EventMismatchError';
+  }
+}
+
+const sameEvent = (a: PublicationEvent, b: PublicationEvent) =>
+  JSON.stringify(eventRecord(a)) === JSON.stringify(eventRecord(b));
+
+/**
+ * Writes an event's own file, which appears whole or not at all: the record
+ * is synced to a temporary file, then linked into place, which fails like
+ * wx when the name is taken. One that's there with the same event is fine,
+ * as when repair writes it after a crash, and one a crash left unreadable is
+ * replaced. One holding another event is an EventMismatchError.
+ */
+export async function writeEvent(
+  fs: FsPort,
+  paths: StorePaths,
+  event: PublicationEvent,
+  operation: string,
+): Promise<void> {
+  const file = paths.event(event.seq);
+  const temp = tempBeside(file);
+  const point = (step: string): CrashPoint => `${operation}.event.${step}`;
+  try {
+    await fs.writeFile(temp, `${JSON.stringify(eventRecord(event))}\n`, point('write'));
+    await fs.fsync(temp, point('fsync'));
+    try {
+      await fs.link(temp, file, point('link'));
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+      const existing = await readEvent(fs, paths, event.seq);
+      if (existing && sameEvent(existing, event)) return;
+      if (existing) throw new EventMismatchError(event.seq);
+      await fs.rename(temp, file, point('replace'));
+    }
+  } finally {
+    await fs.remove(temp, point('temp.remove')).catch(() => {});
+  }
+  await fs.fsync(paths.events, `${operation}.events.fsync`);
+}
+
+/** Whether events/<seq>.json holds the pointer's event, as it does once step 5 or repair wrote it. */
+export async function eventRecorded(fs: FsPort, paths: StorePaths, pointer: LivePointer) {
+  const existing = await readEvent(fs, paths, pointer.seq);
+  return existing !== null && sameEvent(existing, pointer.event);
+}
+
+/**
+ * Moves events/<seq>.json aside, to a name the log never reads, and syncs
+ * events/. It's kept, not deleted: what it says may matter to whoever looks
+ * into how it got there.
+ */
+export async function moveEventAside(
+  fs: FsPort,
+  paths: StorePaths,
+  seq: number,
+  operation: string,
+): Promise<void> {
+  await fs.rename(paths.event(seq), paths.eventAside(seq), `${operation}.event.aside`);
+  await fs.fsync(paths.events, `${operation}.event.aside.fsync`);
+}
+
+/**
+ * Writes `event`'s own file for the pointer that carries it, which wins: a
+ * file at its seq that holds another event is moved aside first. Returns
+ * whether one was.
+ */
+export async function writeLiveEvent(
+  fs: FsPort,
+  paths: StorePaths,
+  event: PublicationEvent,
+  operation: string,
+): Promise<boolean> {
+  try {
+    await writeEvent(fs, paths, event, operation);
+    return false;
+  } catch (error) {
+    if (!(error instanceof EventMismatchError)) throw error;
+  }
+  await moveEventAside(fs, paths, event.seq, operation);
+  await writeEvent(fs, paths, event, operation);
+  return true;
+}
+
+/** What reconcileEvents() changed. */
+export interface Reconciled {
+  /** The seqs of the event files it moved aside: above the live seq, or at it with another event. */
+  readonly aside: readonly number[];
+  /** Whether it wrote the live event's own file. */
+  readonly written: boolean;
+}
+
+/**
+ * Makes the log agree with live.json, which wins: every event file above
+ * the live seq, and one at it that holds another event, is moved aside, and
+ * the live event's own file is written if it's missing. Runs under the lock.
+ */
+export async function reconcileEvents(
+  fs: FsPort,
+  paths: StorePaths,
+  pointer: LivePointer,
+  operation: string,
+): Promise<Reconciled> {
+  const aside: number[] = [];
+  for (const name of await fs.readdir(paths.events)) {
+    const match = /^([1-9][0-9]*)\.json$/.exec(name);
+    if (!match || Number(match[1]) <= pointer.seq) continue;
+    await moveEventAside(fs, paths, Number(match[1]), operation);
+    aside.push(Number(match[1]));
+  }
+  if (await eventRecorded(fs, paths, pointer)) return { aside, written: false };
+  if (await writeLiveEvent(fs, paths, pointer.event, operation)) aside.push(pointer.seq);
+  return { aside: aside.sort((a, b) => a - b), written: true };
+}
+
+function safeParse(text: string): unknown {
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return null;
+  }
+}
+
+/** The event in publication/events/<seq>.json, or null when there's none or it isn't one. */
+export async function readEvent(
+  fs: FsPort,
+  paths: StorePaths,
+  seq: number,
+): Promise<PublicationEvent | null> {
+  let text: string;
+  try {
+    text = (await fs.readFile(paths.event(seq))).toString('utf8');
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
+    throw error;
+  }
+  const event = asEvent(safeParse(text));
+  return event?.seq === seq ? event : null;
+}
+
+/** Every event in the log, in seq order. A file that isn't an event is left out. */
+export async function readEvents(fs: FsPort, paths: StorePaths): Promise<PublicationEvent[]> {
+  const events: PublicationEvent[] = [];
+  for (const name of await fs.readdir(paths.events)) {
+    const match = /^([1-9][0-9]*)\.json$/.exec(name);
+    if (!match) continue;
+    const seq = Number(match[1]);
+    const event = asEvent(safeParse((await fs.readFile(paths.event(seq))).toString('utf8')));
+    if (event?.seq === seq) events.push(event);
+  }
+  return events.sort((a, b) => a.seq - b.seq);
+}

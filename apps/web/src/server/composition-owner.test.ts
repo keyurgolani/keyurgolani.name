@@ -147,7 +147,8 @@ function studio(method: string, name: string, headers: Record<string, string> = 
 
 test('owner loads its modules only through the composition root', () => {
   // Owner code, then the auth.secret and data.directory checks, which load
-  // all of @portfolio/core through its one entry (#2).
+  // all of @portfolio/core through its one entry (#2), the revision store's
+  // modules (#3) with the rest, though nothing calls them yet.
   assert.deepEqual([...loadedOwnerModules()].sort(), [
     'core/audit/record',
     'core/audit/sink',
@@ -161,6 +162,19 @@ test('owner loads its modules only through the composition root', () => {
     'core/auth/token',
     'core/data/layout',
     'core/owner',
+    'core/store/assets',
+    'core/store/common',
+    'core/store/drafts',
+    'core/store/fs-port',
+    'core/store/layout',
+    'core/store/lock',
+    'core/store/pointer',
+    'core/store/preflight',
+    'core/store/publication',
+    'core/store/revisions',
+    'core/store/server-claim',
+    'core/store/store',
+    'core/store/unit',
     'server/owner/auth-secret',
     'server/owner/config-status',
     'server/owner/data-directory',
