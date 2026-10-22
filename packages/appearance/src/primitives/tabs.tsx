@@ -33,53 +33,68 @@ export interface TabsProps {
   readonly className?: string;
 }
 
-export function Tabs({
-  id: local,
-  label,
-  items,
-  defaultSelected,
-  headingLevel = 3,
-  orientation = 'horizontal',
-  className,
-}: TabsProps) {
+/** What both forms render from: the prefixed id and the props. */
+type Resolved = Omit<TabsProps, 'id'> & { readonly id: string };
+
+export function Tabs({ id: local, ...props }: TabsProps) {
   const id = useBoundaryId(local);
   const { plate } = useBoundary();
   // The server and the hydrating render agree on the sections; the tablist
   // replaces them once the browser has hydrated, outside a plate.
   const interactive = useHydrated() && !plate;
-  const first = Math.max(
-    0,
-    items.findIndex((item) => item.id === defaultSelected),
+  return interactive ? <TabList {...props} id={id} /> : <TabSections {...props} id={id} />;
+}
+
+const panelId = (id: string, item: TabItem) => partId(id, `panel-${item.id}`);
+const tabId = (id: string, item: TabItem) => partId(id, `tab-${item.id}`);
+
+/** The form without JavaScript: a headed section per tab. */
+export function TabSections({
+  id,
+  items,
+  headingLevel = 3,
+  orientation = 'horizontal',
+  className,
+}: Resolved) {
+  const Heading = `h${headingLevel}` as const;
+  return (
+    <div id={id} className={className} data-ui-slot="tabs" data-orientation={orientation}>
+      {items.map((item) => {
+        const headingId = partId(id, `heading-${item.id}`);
+        return (
+          <section
+            key={item.id}
+            id={panelId(id, item)}
+            data-ui-slot="tabs.panel"
+            aria-labelledby={headingId}
+          >
+            <Heading data-ui-slot="tabs.heading" id={headingId}>
+              {item.label}
+            </Heading>
+            {item.content}
+          </section>
+        );
+      })}
+    </div>
   );
-  const [selected, setSelected] = useState(first);
+}
+
+/** The interactive form: a tablist with roving focus, and its panels. */
+export function TabList({
+  id,
+  label,
+  items,
+  defaultSelected,
+  orientation = 'horizontal',
+  className,
+}: Resolved) {
+  const [selected, setSelected] = useState(() =>
+    Math.max(
+      0,
+      items.findIndex((item) => item.id === defaultSelected),
+    ),
+  );
   const tabs = useRef<(HTMLButtonElement | null)[]>([]);
-
-  const tabId = (item: TabItem) => partId(id, `tab-${item.id}`);
-  const panelId = (item: TabItem) => partId(id, `panel-${item.id}`);
-
-  if (!interactive) {
-    const Heading = `h${headingLevel}` as const;
-    return (
-      <div id={id} className={className} data-ui-slot="tabs" data-orientation={orientation}>
-        {items.map((item) => {
-          const headingId = partId(id, `heading-${item.id}`);
-          return (
-            <section
-              key={item.id}
-              id={panelId(item)}
-              data-ui-slot="tabs.panel"
-              aria-labelledby={headingId}
-            >
-              <Heading data-ui-slot="tabs.heading" id={headingId}>
-                {item.label}
-              </Heading>
-              {item.content}
-            </section>
-          );
-        })}
-      </div>
-    );
-  }
 
   const select = (index: number) => {
     const count = items.length;
@@ -87,17 +102,20 @@ export function Tabs({
     setSelected(next);
     tabs.current[next]?.focus();
   };
-  const keys: Readonly<Record<string, (index: number) => number>> =
-    orientation === 'horizontal'
-      ? { ArrowRight: (i) => i + 1, ArrowLeft: (i) => i - 1 }
-      : { ArrowDown: (i) => i + 1, ArrowUp: (i) => i - 1 };
+  const step: Readonly<Record<string, number>> =
+    orientation === 'horizontal' ? { ArrowRight: 1, ArrowLeft: -1 } : { ArrowDown: 1, ArrowUp: -1 };
   const onKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
-    const move =
-      keys[event.key] ??
-      (event.key === 'Home' ? () => 0 : event.key === 'End' ? () => items.length - 1 : null);
-    if (!move) return;
+    const next =
+      event.key in step
+        ? index + step[event.key]!
+        : event.key === 'Home'
+          ? 0
+          : event.key === 'End'
+            ? items.length - 1
+            : null;
+    if (next === null) return;
     event.preventDefault();
-    select(move(index));
+    select(next);
   };
 
   return (
@@ -116,10 +134,10 @@ export function Tabs({
             }}
             type="button"
             role="tab"
-            id={tabId(item)}
+            id={tabId(id, item)}
             data-ui-slot="tabs.tab"
             aria-selected={index === selected}
-            aria-controls={panelId(item)}
+            aria-controls={panelId(id, item)}
             tabIndex={index === selected ? 0 : -1}
             onClick={() => select(index)}
             onKeyDown={(event) => onKeyDown(event, index)}
@@ -132,9 +150,9 @@ export function Tabs({
         <div
           key={item.id}
           role="tabpanel"
-          id={panelId(item)}
+          id={panelId(id, item)}
           data-ui-slot="tabs.panel"
-          aria-labelledby={tabId(item)}
+          aria-labelledby={tabId(id, item)}
           tabIndex={0}
           hidden={index !== selected}
         >

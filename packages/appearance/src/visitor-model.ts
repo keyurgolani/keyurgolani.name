@@ -2,8 +2,10 @@
 // plain data the server builds and VisitorAppearance renders: one control
 // per selectable axis, in axis order, the packs grouped by tier with Stable
 // first, the variants by name, and each choice the current selection can't
-// take disabled with the reason. Research packs never appear. Under demo
-// there's none, since #9's pickers drive the appearance there.
+// take disabled with the reason. Research packs never appear, and neither
+// does a generated scheme with nothing generated for it, which a visitor
+// couldn't apply. Under demo there's none, since #9's pickers drive the
+// appearance there.
 
 import type { AppearanceAxis, DisplayMode, VisitorControls } from '@portfolio/schema';
 import { FALLBACK_ID } from '@portfolio/variant-contract';
@@ -12,7 +14,16 @@ import type { AppearanceStylesheets } from './boundary';
 import type { PackTier } from './manifests';
 import { findPack, type AppearanceRegistry } from './registry';
 import type { Profile, ResolvedAppearance } from './resolve';
+import { schemeRenders, type GeneratedSchemes } from './resolve-tokens';
 import { modeFits } from './selection';
+
+/**
+ * Where the control's form posts: Slice 4's preference route, which sets
+ * the visitor's appearance cookie. Its body is the form's fields under the
+ * query keys parseSelection() reads, with `reset` and `return`; with
+ * JavaScript, the same values as JSON, or { "reset": true }.
+ */
+export const APPEARANCE_PREFERENCE_ROUTE = '/api/appearance';
 
 /** One choice in a control. */
 export interface VisitorChoice {
@@ -71,6 +82,8 @@ export interface VisitorModelInput {
   readonly profile: Profile;
   /** Where each pack's stylesheet is, so the control can load one before it applies it. */
   readonly stylesheets?: AppearanceStylesheets;
+  /** The generated scheme sets the resolver has, so a generated scheme with none isn't offered. */
+  readonly generated?: GeneratedSchemes;
 }
 
 /** Each axis's label, the reviewed prototype's. */
@@ -154,11 +167,16 @@ function packControl(
   axis: PackAxis,
   base: Pick<VisitorAxisControl, 'axis' | 'name' | 'label'>,
 ): VisitorAxisControl {
-  const { registry, appearance, stylesheets } = input;
+  const { registry, appearance, stylesheets, generated } = input;
   const mode = appearance.selection.displayMode;
   const groups = VISITOR_TIERS.map((tier): VisitorChoiceGroup => {
     const choices = [...registry.packs[axis].values()]
       .filter(({ manifest }) => manifest.tier === tier)
+      .filter(
+        (pack) =>
+          axis !== 'colorScheme' ||
+          schemeRenders(findPack(registry, 'colorScheme', pack.manifest.id)!, generated),
+      )
       .map(({ manifest }): VisitorChoice => {
         const stylesheet = stylesheets?.pack(axis, manifest.id) ?? undefined;
         const fits = axis !== 'colorScheme' || modeFits(registry, manifest.id, mode);

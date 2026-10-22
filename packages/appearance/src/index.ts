@@ -191,6 +191,7 @@ export {
   type BoundaryKind,
 } from './boundary';
 export {
+  APPEARANCE_PREFERENCE_ROUTE,
   AXIS_LABELS,
   DISPLAY_MODE_LABELS,
   TIER_LABELS,
