@@ -94,7 +94,9 @@ export {
   type StoreLog,
   type StoreLogEntry,
 } from './store/common';
-export { nodeFs, type CrashPoint, type FileStats, type FsPort } from './store/fs-port';
+// The port's types only: openStore() defaults to node:fs, and apps/web gets
+// no port it could write files through.
+export { type CrashPoint, type FileStats, type FsPort } from './store/fs-port';
 export {
   isDraftId,
   isRevisionId,

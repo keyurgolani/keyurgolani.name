@@ -145,6 +145,17 @@ module.exports = {
       },
     },
     {
+      name: 'store-test-support-only-from-tests',
+      severity: 'error',
+      comment:
+        "The revision store's test support, with the only FsPort whose crash points act, is for " +
+        'tests: nothing but a test, or the test support itself, imports it (#3).',
+      from: {
+        pathNot: ['\\.test\\.(?:tsx?|mjs)$', '^packages/core/src/store/test-support/'],
+      },
+      to: { path: '^packages/core/src/store/test-support/' },
+    },
+    {
       name: 'migration-only-from-its-command',
       severity: 'error',
       comment:
