@@ -106,14 +106,37 @@ test("a preview's metadata is the previewed unit's head, noindex", async () => {
   assert.equal(previewMetadata(view, ORIGIN).title, 'Noa Preview — Portfolio');
 });
 
-test('the preview agent is a client module that renders nothing', async () => {
+test('the preview agent is a client module that renders nothing, with a channel or without (#7, Slice 3)', async () => {
   const source = readFileSync(
     fileURLToPath(new URL('../../preview/agent.tsx', import.meta.url)),
     'utf8',
   );
   assert.match(source, /^'use client';\n/);
   const { PreviewAgent } = await import('~/preview/agent');
-  assert.equal(PreviewAgent(), null);
+  const channel = {
+    mode: 'server',
+    studioOrigin: ORIGIN,
+    linkBase: '/preview/AAAAAAAAAAAAAAAAAAAAAA',
+    nonce: 'BBBBBBBBBBBBBBBBBBBBBB',
+    renderedVersion: 3,
+  } as const;
+  assert.equal(renderToStaticMarkup(<PreviewAgent />), '');
+  assert.equal(renderToStaticMarkup(<PreviewAgent channel={channel} />), '');
+  // A document with a channel is the same markup as one without.
+  const { PreviewDocument } = await import('./document');
+  const page = <main id="page">the page</main>;
+  assert.equal(
+    renderToStaticMarkup(
+      <PreviewDocument unit={unit()} origin={ORIGIN} channel={channel}>
+        {page}
+      </PreviewDocument>,
+    ),
+    renderToStaticMarkup(
+      <PreviewDocument unit={unit()} origin={ORIGIN}>
+        {page}
+      </PreviewDocument>,
+    ),
+  );
 });
 
 test('no preview module reads cookies or request headers (#7, item 4)', () => {

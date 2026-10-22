@@ -54,6 +54,8 @@ export interface OpenedGrant {
   readonly environment: PreviewEnvironment;
   /** The channel nonce Studio got at mint, for the agent's handshake (Slice 3). */
   readonly nonce: string;
+  /** The version the agent's `ready` says the frame renders: a draft grant's pinned version, or null. */
+  readonly renderedVersion: number | null;
   /** What a log line calls the grant: the first 8 hex characters of its digest. */
   readonly ref: string;
 }

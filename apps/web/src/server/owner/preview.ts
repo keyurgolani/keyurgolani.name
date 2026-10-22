@@ -265,6 +265,7 @@ export function ownerPreviews({
       view,
       environment: record.environment,
       nonce: record.nonce,
+      renderedVersion: record.subject.kind === 'draft' ? record.subject.version : null,
       ref,
     });
   }

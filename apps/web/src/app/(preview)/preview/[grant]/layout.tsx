@@ -41,8 +41,18 @@ export default async function GrantLayout({
       </html>
     );
   }
+  const { origin } = requireDeploymentConfig();
+  // The agent's channel (Slice 3): Studio, on the deployment's origin, got
+  // this nonce at mint and takes a hello from this frame with it alone.
+  const channel = {
+    mode: 'server',
+    studioOrigin: origin,
+    linkBase: `/preview/${(await params).grant}`,
+    nonce: grant.nonce,
+    renderedVersion: grant.renderedVersion,
+  } as const;
   return (
-    <PreviewDocument unit={grant.view} origin={requireDeploymentConfig().origin}>
+    <PreviewDocument unit={grant.view} origin={origin} channel={channel}>
       {children}
     </PreviewDocument>
   );
