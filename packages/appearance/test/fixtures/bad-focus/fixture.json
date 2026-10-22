@@ -1,0 +1,19 @@
+{
+  "kind": "color-scheme",
+  "base": "warm-parchment",
+  "description": "warm-parchment with a pale light focus ring, under 3:1 on the canvas.",
+  "patch": {
+    "light": {
+      "focus": "#e8c9a8"
+    }
+  },
+  "expect": [
+    {
+      "pair": {
+        "set": "light",
+        "foreground": "focus",
+        "ground": "canvas"
+      }
+    }
+  ]
+}

@@ -113,6 +113,18 @@ importers:
         specifier: ^5.7.2
         version: 5.9.3
 
+  packages/appearance-fixtures-languages: {}
+
+  packages/appearance-fixtures-schemes: {}
+
+  packages/appearance-fixtures-typography: {}
+
+  packages/appearance-languages: {}
+
+  packages/appearance-schemes: {}
+
+  packages/appearance-typography: {}
+
   packages/core:
     dependencies:
       '@portfolio/schema':

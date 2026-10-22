@@ -1,0 +1,21 @@
+{
+  "kind": "typography",
+  "base": "humanist-ui",
+  "description": "humanist-ui with a 1rem display, so signature text is not large and needs 4.5:1, which warm-parchment light misses.",
+  "patch": {
+    "roles": {
+      "display": {
+        "font-size": "1rem"
+      }
+    }
+  },
+  "expect": [
+    {
+      "pair": {
+        "set": "light",
+        "foreground": "signature-start to signature-end",
+        "ground": "canvas"
+      }
+    }
+  ]
+}

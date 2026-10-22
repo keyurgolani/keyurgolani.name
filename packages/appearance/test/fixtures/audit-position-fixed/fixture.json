@@ -1,0 +1,13 @@
+{
+  "kind": "design-language",
+  "base": "platform-neutral",
+  "description": "A design language whose stylesheet breaks one rule: position: fixed.",
+  "patch": {
+    "stylesheet": "./styles.css"
+  },
+  "expect": [
+    {
+      "problem": "pins the part to the viewport"
+    }
+  ]
+}

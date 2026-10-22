@@ -1,0 +1,17 @@
+{
+  "kind": "design-language",
+  "base": "platform-neutral",
+  "description": "platform-neutral with a 1px focus ring, under the 2px the gate needs.",
+  "patch": {
+    "tokens": {
+      "focus-width": "1px"
+    }
+  },
+  "expect": [
+    {
+      "pair": {
+        "foreground": "focus-width"
+      }
+    }
+  ]
+}

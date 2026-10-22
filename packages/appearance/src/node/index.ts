@@ -31,4 +31,24 @@ export {
   type StylesheetProblem,
   type StylesheetResult,
 } from './stylesheet';
+export {
+  checkAppearance,
+  hierarchyFailures,
+  KNOWN_BAD_DIR,
+  knownBadNames,
+  layerOrderProblems,
+  readKnownBadFixture,
+  runKnownBad,
+  setsForMode,
+  stylesheetsUnder,
+  unmetExpectations,
+  type AppearanceCheck,
+  type GateFailure,
+  type HierarchyFailure,
+  type KnownBadExpectation,
+  type KnownBadFixture,
+  type KnownBadRun,
+  type PackProblem,
+  type SkippedPack,
+} from './check';
 export { LAYER_ORDER, startsWithLayerOrder } from '../layers';

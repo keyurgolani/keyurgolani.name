@@ -1,0 +1,10 @@
+{
+  "name": "@portfolio/appearance-schemes",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The platform's color-scheme packs (#19): warm-parchment, the fallback for color schemes.",
+  "portfolio": {
+    "kind": "color-scheme",
+    "packs": "./packs"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "kind": "design-language",
+  "base": "platform-neutral",
+  "description": "platform-neutral with a grain texture, which raises the targets on canvas and surfaces by 10%, past what warm-parchment solves to.",
+  "patch": {
+    "tokens": {
+      "texture": "radial-gradient(circle, color-mix(in srgb, var(--color-text-primary) 12%, transparent) 0 0.5px, transparent 0.75px)"
+    }
+  },
+  "expect": [
+    {
+      "pair": {
+        "set": "light",
+        "foreground": "text-muted",
+        "ground": "surface-prominent"
+      }
+    }
+  ]
+}

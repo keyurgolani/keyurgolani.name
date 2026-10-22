@@ -25,47 +25,62 @@ import type { ColorSchemeManifest, DesignLanguageManifest, TypographyManifest } 
 import type { ColorTokens } from './tokens';
 import { baseModes } from './validate-pack';
 
+/** A compiled stylesheet registry generation wrote, where the host serves it from. */
+export interface PackStylesheet {
+  /** Such as /_portfolio/pack/warm-parchment.<sha256-12>.css. */
+  readonly url: string;
+  /** The hex SHA-256 of its bytes. */
+  readonly sha256: string;
+}
+
+interface MetaPackBase {
+  readonly packageName: string;
+  readonly version: string;
+  /** A test fixture, which registers only when APPEARANCE_FIXTURES=1 (Slice 2). */
+  readonly fixture?: boolean;
+  /** Its compiled stylesheet; null for a generator scheme, which compiles from what it generates. */
+  readonly stylesheet?: PackStylesheet | null;
+}
+
 /** One installed pack, as registry generation lists it in the metadata module. */
 export type MetaPack =
-  | {
+  | (MetaPackBase & {
       readonly kind: 'design-language';
-      readonly packageName: string;
-      readonly version: string;
       readonly manifest: DesignLanguageManifest;
-    }
-  | {
+    })
+  | (MetaPackBase & {
       readonly kind: 'color-scheme';
-      readonly packageName: string;
-      readonly version: string;
       readonly manifest: ColorSchemeManifest;
-    }
-  | {
+    })
+  | (MetaPackBase & {
       readonly kind: 'typography';
-      readonly packageName: string;
-      readonly version: string;
       readonly manifest: TypographyManifest;
-    };
+    });
 
 /**
  * What the registry reads from #5's metadata module (`registry.meta.ts`):
- * its `VARIANTS`, and the `PACKS` registry generation lists once it
- * registers the pack kinds (Slice 2). A module without `PACKS` registers no
- * pack.
+ * its `VARIANTS`, and the `PACKS` and `PLATFORM_STYLESHEET` registry
+ * generation writes once it registers the pack kinds (Slice 2). A module
+ * without `PACKS` registers no pack.
  */
 export interface AppearanceMeta {
   readonly VARIANTS: VariantRegistry;
   readonly PACKS?: readonly MetaPack[];
+  readonly PLATFORM_STYLESHEET?: PackStylesheet | null;
 }
 
-export interface RegisteredLanguage {
+interface RegisteredPack {
   readonly packageName: string;
   readonly version: string;
+  readonly fixture: boolean;
+  readonly stylesheet: PackStylesheet | null;
+}
+
+export interface RegisteredLanguage extends RegisteredPack {
   readonly manifest: DesignLanguageManifest;
 }
 
-export interface RegisteredScheme {
-  readonly packageName: string;
-  readonly version: string;
+export interface RegisteredScheme extends RegisteredPack {
   readonly manifest: ColorSchemeManifest;
   /** The base modes it has. A generator scheme has both, once generated. */
   readonly modes: readonly BaseMode[];
@@ -73,9 +88,7 @@ export interface RegisteredScheme {
   readonly sets: { readonly light?: ColorTokens; readonly dark?: ColorTokens };
 }
 
-export interface RegisteredTypography {
-  readonly packageName: string;
-  readonly version: string;
+export interface RegisteredTypography extends RegisteredPack {
   readonly manifest: TypographyManifest;
 }
 
@@ -92,6 +105,8 @@ export interface AppearanceRegistry {
   readonly variants: VariantRegistry;
   /** Each pack axis's packs, by id. */
   readonly packs: { readonly [A in PackAxis]: ReadonlyMap<string, PackEntries[A]> };
+  /** The platform stylesheet every boundary links, once registry generation has written it. */
+  readonly platformStylesheet: PackStylesheet | null;
 }
 
 const AXIS_BY_KIND: Readonly<Record<PackKind, PackAxis>> = {
@@ -133,7 +148,12 @@ export function createAppearanceRegistry(meta: AppearanceMeta): AppearanceRegist
       );
     }
     owners.set(id, pack.kind);
-    const base = { packageName: pack.packageName, version: pack.version };
+    const base = {
+      packageName: pack.packageName,
+      version: pack.version,
+      fixture: pack.fixture === true,
+      stylesheet: pack.stylesheet ?? null,
+    };
     if (pack.kind === 'color-scheme') {
       packs.colorScheme.set(id, { ...base, manifest: pack.manifest, ...schemeSets(pack.manifest) });
     } else if (pack.kind === 'design-language') {
@@ -159,7 +179,11 @@ export function createAppearanceRegistry(meta: AppearanceMeta): AppearanceRegist
   if (fallbackScheme.modes.length < 2 || fallbackScheme.manifest.generator) {
     throw new Error('The color scheme fallback needs authored or anchored light and dark modes.');
   }
-  return Object.freeze({ variants: meta.VARIANTS, packs });
+  return Object.freeze({
+    variants: meta.VARIANTS,
+    packs,
+    platformStylesheet: meta.PLATFORM_STYLESHEET ?? null,
+  });
 }
 
 function schemeSets(manifest: ColorSchemeManifest): Pick<RegisteredScheme, 'modes' | 'sets'> {

@@ -1,0 +1,3 @@
+html [data-ui-slot='surface'] {
+  opacity: 0.5;
+}

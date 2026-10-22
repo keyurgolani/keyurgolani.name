@@ -8,12 +8,17 @@ import { LAYER_ORDER } from '../layers';
 import type { DesignLanguageManifest, TypographyManifest } from '../manifests';
 import { schemeSets, type ColorSetName, type SchemeSets } from '../sets';
 import { COLOR_ROLES, LANGUAGE_KEYS } from '../tokens';
+import { fileURLToPath } from 'node:url';
 import {
   DARK_ONLY,
+  FONT,
   HUMANIST_UI,
   LIGHT_ONLY,
+  packDir as shippedDir,
   PLATFORM_NEUTRAL,
+  RESEARCH,
   SEED,
+  TRANSLUCENT,
   WARM_PARCHMENT,
 } from '../test-support/packs';
 import {
@@ -476,4 +481,54 @@ test("a language's stylesheet problems name the file, line, and column", () => {
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('every first-party pack compiles from the directory its package ships', () => {
+  const shipped = [
+    ['design-language', 'appearance-languages', PLATFORM_NEUTRAL],
+    ['color-scheme', 'appearance-schemes', WARM_PARCHMENT],
+    ['typography', 'appearance-typography', HUMANIST_UI],
+    ['design-language', 'appearance-fixtures-languages', TRANSLUCENT],
+    ['color-scheme', 'appearance-fixtures-schemes', DARK_ONLY],
+    ['color-scheme', 'appearance-fixtures-schemes', LIGHT_ONLY],
+    ['color-scheme', 'appearance-fixtures-schemes', RESEARCH],
+    ['color-scheme', 'appearance-fixtures-schemes', SEED],
+    ['typography', 'appearance-fixtures-typography', FONT],
+  ] as const;
+  for (const [kind, packageDir, manifest] of shipped) {
+    const dir = fileURLToPath(shippedDir(packageDir, manifest.id));
+    const result = compilePack({ kind, manifest, dir });
+    assert.ok(result.ok, `${manifest.id}: ${JSON.stringify(result.ok ? null : result.problems)}`);
+    const { stylesheet, assets } = result.pack;
+    if (manifest.id === 'fixture-seed') {
+      assert.equal(stylesheet, null);
+      continue;
+    }
+    assert.ok(
+      new TextDecoder().decode(stylesheet!.bytes).startsWith(`${LAYER_ORDER}\n`),
+      manifest.id,
+    );
+    assert.equal(assets.length, manifest.id === 'fixture-font' ? 1 : 0, manifest.id);
+  }
+  // The font ships byte for byte, and the translucent stylesheet compiles into its scope.
+  const font = compilePack({
+    kind: 'typography',
+    manifest: FONT,
+    dir: fileURLToPath(shippedDir('appearance-fixtures-typography', 'fixture-font')),
+  });
+  assert.ok(font.ok);
+  assert.equal(
+    font.pack.assets[0]!.sha256,
+    '1b5ebfb3a01a97343ac96873e6d59a8cb285c66012b6a1ac509cb2765e995ba8',
+  );
+  const translucent = compilePack({
+    kind: 'design-language',
+    manifest: TRANSLUCENT,
+    dir: fileURLToPath(shippedDir('appearance-fixtures-languages', 'fixture-translucent')),
+  });
+  assert.ok(translucent.ok);
+  assert.match(
+    new TextDecoder().decode(translucent.pack.stylesheet!.bytes),
+    /@scope \(\[data-design-language="fixture-translucent"\]\) to \(\[data-appearance-boundary\]\) \{\n {4}\[data-ui-slot="surface"\] \{\n {6}backdrop-filter: blur\(var\(--ui-backdrop-blur\)\);/,
+  );
 });

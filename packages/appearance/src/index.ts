@@ -116,6 +116,7 @@ export {
   otherAxes,
   selectableIds,
   type AppearanceMeta,
+  type PackStylesheet,
   type AppearanceRegistry,
   type MetaPack,
   type PackEntry,
