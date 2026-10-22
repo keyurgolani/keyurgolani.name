@@ -1,7 +1,12 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { PREVIEW_STATUS, PREVIEW_STATUS_DOCUMENT, PREVIEW_STATUS_TYPE } from './preview/status';
 import { INDEXABLE, type Profile } from './server/capabilities';
-import { getDeploymentConfig, getDeploymentState, isServable } from './server/config-store';
+import {
+  getDeploymentConfig,
+  getDeploymentState,
+  isServable,
+  servableAgain,
+} from './server/config-store';
 import { isPreviewPath, previewCsp, previewHeaders } from './server/preview-headers';
 import { READY_PATH, STARTING, STARTING_HEADERS } from './server/ready-starting';
 import { safeReturnTo, signInLocation } from './server/return-to';
@@ -177,8 +182,12 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   if (decision.status === 'missing' && spellsRouteFile(pathname)) {
     return unknownPath(request, requestId, extra, { csp, preview });
   }
+  // While nothing serves, the catalog reads once more before the 503, so a
+  // publish from another process serves on the next request (#3): one read
+  // for every request meanwhile, waited on for a second at most
+  // (config-store's RECHECK_MS).
   if (decision.status === 'served' && decision.entry.visitor && !isServable()) {
-    return unavailable(requestId);
+    if (!(await servableAgain())) return unavailable(requestId);
   }
   if (
     decision.status === 'served' &&

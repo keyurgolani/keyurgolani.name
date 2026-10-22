@@ -10,8 +10,9 @@ import { ownerSecret } from '../harness/owner-secret.mjs';
 // Slice 2): it serves its store's live revision through the real
 // composition root, a publish from another process shows on the next
 // request, one response comes from one revision, a damaged live revision
-// serves the last known good, nothing servable is a 503 that says nothing,
-// and the server lets publication/server.json go as it stops. The other
+// serves the last known good, nothing servable is a 503 that says nothing
+// until a publish from another process serves on the next request, and the
+// server lets publication/server.json go as it stops. The other
 // process is the store's own test child, which publishes as Studio does.
 const OWNER = { type: 'profile', description: 'owner' };
 const secret = ownerSecret();
@@ -258,6 +259,40 @@ test(
       const ready = await request.get(`${app.origin}/api/ready`);
       expect(ready.status()).toBe(503);
       expect(JSON.stringify(await ready.json())).not.toContain('rev_');
+    } finally {
+      await app.stop();
+      rmSync(dataDir, { recursive: true, force: true });
+    }
+  },
+);
+
+test(
+  'with nothing servable, a publish from another process serves on the next visitor request, with nothing else asking the reader between',
+  {
+    annotation: [
+      { type: 'route', description: '/' },
+      { type: 'route', description: '/feed.xml' },
+      OWNER,
+    ],
+  },
+  async ({ request }, testInfo) => {
+    const dataDir = dataDirFor(testInfo);
+    const [only] = await publish(dataDir, 'Rowan Only');
+    writeFileSync(path.join(dataDir, 'revisions', only!, 'documents', 'portfolio.yml'), DAMAGE);
+    const app = await owner(dataDir);
+    try {
+      for (const route of ['/', '/feed.xml']) {
+        expect((await request.get(`${app.origin}${route}`)).status(), route).toBe(503);
+      }
+      await publish(dataDir, 'Rowan Fixed');
+      // No readiness call, nor anything else, between the publish and these.
+      const home = await request.get(`${app.origin}/`);
+      expect(home.status()).toBe(200);
+      expect(names(await home.text()).title).toContain('Rowan Fixed');
+      const feed = await request.get(`${app.origin}/feed.xml`);
+      expect(feed.status()).toBe(200);
+      expect(await feed.text()).toContain('Rowan Fixed');
+      expect(app.egress()).toEqual([]);
     } finally {
       await app.stop();
       rmSync(dataDir, { recursive: true, force: true });
