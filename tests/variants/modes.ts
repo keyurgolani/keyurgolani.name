@@ -280,8 +280,10 @@ async function loadImages(page: Page): Promise<void> {
   await page.evaluate(async () => {
     const images = [...document.images];
     for (const image of images) image.loading = 'eager';
-    // A broken image rejects, and the shot shows it broken.
-    await Promise.all(images.map((image) => image.decode().catch(() => undefined)));
+    // A broken image rejects, and the shot shows it broken. One still
+    // loading after 10 s is named below rather than waited on.
+    const decoded = Promise.all(images.map((image) => image.decode().catch(() => undefined)));
+    await Promise.race([decoded, new Promise((resolve) => setTimeout(resolve, 10_000))]);
   });
   const loading = await page.evaluate(() =>
     [...document.images]
