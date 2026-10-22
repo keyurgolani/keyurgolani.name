@@ -38,10 +38,24 @@ export interface PlacedImage {
   readonly image: ImageState;
 }
 
-/** The two custom properties the stylesheet's object-position reads. */
+/** A focal coordinate as the style takes it: a finite number, held to 0 through 1. */
+function coordinate(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.min(1, Math.max(0, value))
+    : undefined;
+}
+
+/**
+ * The two custom properties the stylesheet's object-position reads. Each is
+ * a number from 0 to 1, so the attribute holds nothing else: a point that
+ * isn't two finite numbers gets no style at all.
+ */
 export function focalStyle(focalPoint: PlacedImage['focalPoint']): CSSProperties | undefined {
   if (!focalPoint) return undefined;
-  return { '--focal-x': focalPoint.x, '--focal-y': focalPoint.y } as CSSProperties;
+  const x = coordinate(focalPoint.x);
+  const y = coordinate(focalPoint.y);
+  if (x === undefined || y === undefined) return undefined;
+  return { '--focal-x': x, '--focal-y': y } as CSSProperties;
 }
 
 /** The renditions of one type that say how wide they are, narrowest first, as a srcset. */

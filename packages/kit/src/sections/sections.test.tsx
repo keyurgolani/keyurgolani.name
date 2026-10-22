@@ -28,6 +28,7 @@ import { corpus } from '../test-support/markdown-corpus';
 import { htmlProblems } from '../test-support/strict-html';
 import {
   CaseStudy,
+  focalStyle,
   registerHostModules,
   renderContext,
   renderSection,
@@ -587,6 +588,30 @@ test('the one inline style a shared renderer sets is an image’s focal point', 
     assert.match(style!, /^--focal-x:[\d.]+;--focal-y:[\d.]+$/);
   }
   assert.doesNotMatch(page(INPUT), /\sstyle=/);
+});
+
+test('a focal point carries two numbers from 0 to 1 and nothing else', () => {
+  const style = (point: unknown) =>
+    html(<span style={focalStyle(point as { x: number; y: number })} data-focal="probe" />);
+  assert.equal(
+    style({ x: 0.25, y: 1 }),
+    '<span style="--focal-x:0.25;--focal-y:1" data-focal="probe"></span>',
+  );
+  // Out of range holds to the edge.
+  assert.equal(
+    style({ x: -2, y: 7 }),
+    '<span style="--focal-x:0;--focal-y:1" data-focal="probe"></span>',
+  );
+  // Anything but two finite numbers, such as CSS passed as a string, sets no style.
+  for (const point of [
+    { x: '0.5;background:url(https://elsewhere.test/x)', y: 0.5 },
+    { x: 0.5, y: Number.NaN },
+    { x: Number.POSITIVE_INFINITY, y: 0 },
+    { x: 0.5 },
+  ]) {
+    assert.equal(style(point), '<span data-focal="probe"></span>', JSON.stringify(point));
+  }
+  assert.equal(focalStyle(undefined), undefined);
 });
 
 test('a ready image takes its srcset, sizes, width, and height from derived data, and loads lazily unless it is the signature cover', () => {
