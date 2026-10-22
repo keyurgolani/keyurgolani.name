@@ -13,8 +13,10 @@ import { MEDIA_BASE } from './public-view';
 // packages/variant-contract/fixtures/, with the snapshots and media document
 // beside it and its site selecting the variant the route names, as pnpm
 // test:variants renders it. Only `next dev` serves the route
-// (server/routes.ts PREVIEW_DEV), so a build never reads a fixture, and none
-// is in its output.
+// (server/routes.ts PREVIEW_DEV), so a build never reads a fixture. The
+// tracer still follows the reads below, turbopackIgnore hints and all, so
+// next.config.ts excludes the fixtures from the standalone output, and pnpm
+// check:standalone fails a build whose output holds a fixture's document.
 
 /** Where the fixtures are, from apps/web, where `next dev` runs. */
 const FIXTURES_DIR = path.join(

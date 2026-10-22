@@ -36,6 +36,14 @@ const config: NextConfig = {
       '../../example-media/**/*.png',
     ],
   },
+  // #5's contract fixtures stay out of it. Only the preview's dev fixture
+  // route reads them, under next dev alone, but the tracer follows its reads
+  // and would ship every fixture's portfolio and site documents,
+  // hidden-canary's among them, in the standalone output, and so in the
+  // image. pnpm check:standalone fails a build whose output holds one.
+  outputFileTracingExcludes: {
+    '/**': ['../../packages/variant-contract/fixtures/**'],
+  },
   transpilePackages: [
     '@portfolio/schema',
     '@portfolio/kit',
