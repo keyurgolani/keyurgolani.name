@@ -44,6 +44,20 @@ test('a group that ignores SIGTERM gets SIGKILL once the grace period is over', 
   assert.equal(await gone(grandchild), true);
 });
 
+test('a group left with only its exited leader, not yet reaped, stops without an error', async () => {
+  const group = spawnGroup('sh', ['-c', 'exit 0'], { stdio: 'ignore' });
+  // A busy wait, so the event loop can't reap the leader: the group holds
+  // nothing but a zombie, which macOS answers EPERM for.
+  const until = Date.now() + 300;
+  while (Date.now() < until) {
+    // waiting
+  }
+  assert.doesNotThrow(() => signalGroup(group.child.pid, 0));
+  assert.doesNotThrow(() => signalGroup(group.child.pid, 'SIGTERM'));
+  await stopGroup(group, { graceMs: 1000 });
+  assert.equal((await group.exited).code, 0);
+});
+
 test('a command that cannot start settles with its error', async () => {
   const group = spawnGroup('/nonexistent/command', []);
   const { error } = await group.exited;
@@ -57,7 +71,9 @@ test('teardown stops the step that is running, and nothing starts after it', asy
   const finished = groups.spawn('sh', ['-c', 'exit 0']);
   await finished.exited;
   assert.equal(groups.running, 1, 'only the running step is tracked');
+  assert.equal(groups.stopped, false);
   await groups.stopAll({ graceMs: 2000 });
+  assert.equal(groups.stopped, true);
   assert.equal(groups.running, 0);
   assert.equal(await gone(grandchild), true, "the running step's child went too");
   assert.throws(() => groups.spawn('sh', ['-c', 'exit 0']), /Stopping: sh does not start\./);

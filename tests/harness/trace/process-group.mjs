@@ -32,7 +32,8 @@ export function spawnGroup(command, args, options = {}) {
 
 /**
  * Sends `signal` to every process in the group `pid` leads. False when none
- * is left.
+ * is left that this process may signal: ESRCH, or EPERM, which macOS answers
+ * for a group whose only member is its leader, exited and not yet reaped.
  *
  * @param {number} pid
  * @param {NodeJS.Signals | 0} signal
@@ -42,7 +43,8 @@ export function signalGroup(pid, signal) {
     process.kill(-pid, signal);
     return true;
   } catch (error) {
-    if (/** @type {NodeJS.ErrnoException} */ (error).code === 'ESRCH') return false;
+    const { code } = /** @type {NodeJS.ErrnoException} */ (error);
+    if (code === 'ESRCH' || code === 'EPERM') return false;
     throw error;
   }
 }
@@ -91,6 +93,10 @@ export function groupTracker() {
     /** How many tracked groups' leaders are still running. */
     get running() {
       return live.size;
+    },
+    /** Whether stopAll has run, so a step that ended was stopped. */
+    get stopped() {
+      return stopped;
     },
     /**
      * Stops every tracked group, and refuses new ones.

@@ -68,6 +68,8 @@ const TRACE_ARGS = ['--allow-third-party', '--selection', 'editorial'];
 const LIMITS_MS = { install: 10 * 60_000, build: 15 * 60_000, ready: 60_000, trace: 15 * 60_000 };
 const keep = process.argv.includes('--keep');
 const groups = groupTracker();
+/** The signal that stopped the run, if one did. */
+let signalled = null;
 
 function git(args, cwd = REPO_ROOT) {
   return execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
@@ -104,6 +106,7 @@ async function run(step, command, args, { cwd, env, log }) {
       `The ${step} ran over ${LIMITS_MS[step] / 60_000} minutes and was stopped (${log})`,
     );
   }
+  if (groups.stopped) throw new Error(`The ${step} was stopped.`);
   return { code, sockets };
 }
 
@@ -124,27 +127,41 @@ async function main() {
   const logs = path.join(REPORTS, 'baseline-logs');
   let trap;
   let worktree = false;
-  let tornDown = false;
-  const teardown = async () => {
-    if (tornDown) return;
-    tornDown = true;
-    // The step that is running, and the server, with everything they started.
-    await groups.stopAll();
-    await trap?.close();
-    if (keep && worktree) {
-      console.log(`[baseline] kept ${tree}`);
-      return;
-    }
-    if (worktree) {
-      spawnSync('git', ['worktree', 'remove', '--force', tree], { cwd: REPO_ROOT });
-      spawnSync('git', ['worktree', 'prune'], { cwd: REPO_ROOT });
-    }
-    rmSync(root, { recursive: true, force: true });
-  };
-  for (const signal of /** @type {const} */ (['SIGINT', 'SIGTERM', 'SIGHUP'])) {
-    process.once(signal, () =>
-      teardown().finally(() => process.exit(128 + constants.signals[signal])),
-    );
+  /** @type {Promise<void> | undefined} */
+  let tornDown;
+  // One teardown, however many ask for it, and each part runs even when one
+  // before it fails, so the worktree goes whatever else went wrong.
+  const teardown = () =>
+    (tornDown ??= (async () => {
+      const problems = [];
+      const attempt = async (what, part) => {
+        try {
+          await part();
+        } catch (error) {
+          problems.push(`${what}: ${error.message}`);
+        }
+      };
+      // The step that is running, and the server, with everything they started.
+      await attempt('stopping its processes', () => groups.stopAll());
+      await attempt('closing the trap', async () => trap?.close());
+      if (keep && worktree) {
+        console.log(`[baseline] kept ${tree}`);
+      } else {
+        if (worktree) {
+          spawnSync('git', ['worktree', 'remove', '--force', tree], { cwd: REPO_ROOT });
+          spawnSync('git', ['worktree', 'prune'], { cwd: REPO_ROOT });
+        }
+        await attempt('removing its temporary directory', async () =>
+          rmSync(root, { recursive: true, force: true }),
+        );
+      }
+      if (problems.length > 0) console.error(`[baseline] teardown: ${problems.join('; ')}`);
+    })());
+  for (const name of /** @type {const} */ (['SIGINT', 'SIGTERM', 'SIGHUP'])) {
+    process.once(name, () => {
+      signalled = name;
+      void teardown().finally(() => process.exit(128 + constants.signals[name]));
+    });
   }
 
   try {
@@ -322,10 +339,12 @@ function summary(sockets) {
   };
 }
 
+// A run a signal stopped exits as that signal says, after its teardown.
+const exitCode = (code) => (signalled ? 128 + constants.signals[signalled] : code);
 main().then(
-  (code) => process.exit(code),
+  (code) => process.exit(exitCode(code)),
   (error) => {
     console.error(`[baseline] ${error.message}`);
-    process.exit(1);
+    process.exit(exitCode(1));
   },
 );
