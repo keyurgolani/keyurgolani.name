@@ -7,6 +7,8 @@ import { hostModules, type EnhancementComponent } from '../sections/host-modules
 declare global {
   /** Set by tests to make every enhancement fail, as a blocked chunk would. */
   var __portfolioFailEnhancements: unknown;
+  /** Set by tests to 0 to count the enhancements a page mounts: each one adds 1. */
+  var __portfolioMountedEnhancements: unknown;
 }
 
 /** Renders nothing once anything below it throws, so a broken enhancement leaves the page as it was. */
@@ -15,6 +17,14 @@ export class EnhancementBoundary extends Component<{ children: ReactNode }, { fa
 
   static getDerivedStateFromError(): { failed: boolean } {
     return { failed: true };
+  }
+
+  override componentDidMount() {
+    // Every <Enhancement> mounts one boundary, whether or not what's below
+    // it then fails, so a test that sets the count learns how many the
+    // throw switch has to fail. Otherwise nothing is written.
+    const mounted = globalThis.__portfolioMountedEnhancements;
+    if (typeof mounted === 'number') globalThis.__portfolioMountedEnhancements = mounted + 1;
   }
 
   override render() {

@@ -10,7 +10,7 @@
 // nothing fixed or sticky. Under reduced motion nothing runs once the page
 // settles. A failed enhancement runs twice: with every script chunk blocked
 // while the stylesheets load, and with the kit's throw switch on, which
-// fails an enhancement of every composition that declares one.
+// fails every enhancement the kit mounted on the page.
 import {
   expect,
   type APIRequestContext,
@@ -62,6 +62,14 @@ type FailedRun = 'blocked-chunks' | 'throw-switch';
 
 /** What the kit throws for each enhancement while its throw switch is on. */
 const THROW_SWITCH_ERROR = 'globalThis.__portfolioFailEnhancements is set';
+
+/** The kit's test switches (packages/kit/src/enhancements/load.tsx). */
+interface KitSwitches {
+  /** Every enhancement throws. */
+  __portfolioFailEnhancements?: boolean;
+  /** Each enhancement that mounts adds 1. */
+  __portfolioMountedEnhancements?: number;
+}
 
 /**
  * The page's console errors, read when called: every one but a resource
@@ -335,7 +343,9 @@ async function checkPage(check: ModeCheck, page: Page, run?: FailedRun): Promise
       if (error.message.includes(THROW_SWITCH_ERROR)) thrown += 1;
     });
     await page.addInitScript(() => {
-      (globalThis as { __portfolioFailEnhancements?: boolean }).__portfolioFailEnhancements = true;
+      const kit = globalThis as KitSwitches;
+      kit.__portfolioFailEnhancements = true;
+      kit.__portfolioMountedEnhancements = 0;
     });
   }
   try {
@@ -348,12 +358,17 @@ async function checkPage(check: ModeCheck, page: Page, run?: FailedRun): Promise
     }
     await expectEveryMode(page, check.request, check.variant, errors);
     if (run === 'blocked-chunks') expectScriptsAlone(blocked, sheets());
-    if (run === 'throw-switch' && (check.variant.manifest.enhancements?.length ?? 0) > 0) {
-      // A composition that declares an enhancement renders it here, as the
-      // reference does in its header, so the switch has one to fail.
+    if (run === 'throw-switch') {
+      // The switch fails each enhancement the kit mounted on this page, as
+      // many as the kit counted: none on a page that renders none, whatever
+      // the manifest declares.
+      const unfailed = async () =>
+        (await page.evaluate(() =>
+          Number((globalThis as KitSwitches).__portfolioMountedEnhancements),
+        )) - thrown;
       await expect
-        .poll(() => thrown, { message: 'enhancements the throw switch failed' })
-        .toBeGreaterThan(0);
+        .poll(unfailed, { message: 'enhancements the kit mounted, less those the switch failed' })
+        .toBe(0);
     }
     if (mode === 'no-javascript' || mode === 'print' || mode === 'failed-enhancement') {
       await expectReadable(page);
