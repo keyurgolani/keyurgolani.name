@@ -4,6 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { builtWithFixtures } from './capabilities';
 import {
   DEPLOYMENT_KEYS,
   issueLogLine,
@@ -587,6 +588,19 @@ test('an unknown PORTFOLIO_ key is a warning', () => {
   assert.equal(result.ok, true);
   assert.deepEqual(findings(result, 'warning'), ['PORTFOLIO_ORGIN:unknown_key']);
   assertSilentAbout(result, 'typo.test');
+});
+
+test('a fixture flag set when the server starts, on a build made without it, warns once and changes nothing (#19, Slice 3)', () => {
+  const result = read({ ...BASE, APPEARANCE_FIXTURES: '1' });
+  assert.equal(result.ok, true);
+  // A build made with it has the fixtures already, and nothing to say.
+  const expected = builtWithFixtures('appearance') ? [] : ['APPEARANCE_FIXTURES:build_time_only'];
+  assert.deepEqual(findings(result, 'warning'), expected);
+  assert.deepEqual(findings(read({ ...BASE, APPEARANCE_FIXTURES: '' }), 'warning'), []);
+  // The deployment it reads is the one it reads without the flag.
+  const without = read(BASE);
+  assert.ok(result.ok && without.ok);
+  assert.deepEqual(result.config, without.config);
 });
 
 test('one read reports every problem', () => {

@@ -14,32 +14,33 @@ What each profile grants. `public` is anyone, `session` is a signed-in owner, an
 
 <!-- profile-matrix:start -->
 
-| Capability       | What it covers                               | `owner`   | `demo`   | `read-only` |
-| ---------------- | -------------------------------------------- | --------- | -------- | ----------- |
-| `catalog.read`   | The portfolio's pages and metadata routes    | `public`  | `public` | `public`    |
-| `feed.read`      | `/feed.xml`                                  | `public`  | `absent` | `public`    |
-| `sample.read`    | `/sample`, the bundled sample in any variant | `absent`  | `public` | `absent`    |
-| `reference.read` | The reference portfolio (not built yet)      | `absent`  | `public` | `absent`    |
-| `sandbox.view`   | The demo Studio (not built yet)              | `absent`  | `public` | `absent`    |
-| `health.read`    | `/api/health`                                | `public`  | `public` | `public`    |
-| `ready.read`     | `/api/ready`                                 | `public`  | `public` | `public`    |
-| `auth.session`   | Signing in and out                           | `public`  | `absent` | `absent`    |
-| `source.read`    | The portfolio's source document              | `session` | `absent` | `absent`    |
-| `draft.read`     | The draft                                    | `session` | `absent` | `absent`    |
-| `history.read`   | Published revisions                          | `session` | `absent` | `absent`    |
-| `draft.write`    | Draft edits, variant changes included        | `session` | `absent` | `absent`    |
-| `config.import`  | Importing a portfolio                        | `session` | `absent` | `absent`    |
-| `config.export`  | Exporting the portfolio                      | `session` | `absent` | `absent`    |
-| `studio.view`    | Studio's pages                               | `session` | `absent` | `absent`    |
-| `config.status`  | The redacted deployment summary              | `session` | `absent` | `absent`    |
-| `publish`        | Publishing the draft                         | `session` | `absent` | `absent`    |
-| `rollback`       | Going back to an earlier revision            | `session` | `absent` | `absent`    |
-| `asset.write`    | Uploading assets                             | `session` | `absent` | `absent`    |
-| `preview.grant`  | Preview frames, each by its own grant        | `session` | `absent` | `absent`    |
+| Capability            | What it covers                                             | `owner`   | `demo`   | `read-only` |
+| --------------------- | ---------------------------------------------------------- | --------- | -------- | ----------- |
+| `catalog.read`        | The portfolio's pages and metadata routes                  | `public`  | `public` | `public`    |
+| `feed.read`           | `/feed.xml`                                                | `public`  | `absent` | `public`    |
+| `sample.read`         | `/sample`, the bundled sample in any variant               | `absent`  | `public` | `absent`    |
+| `reference.read`      | The reference portfolio (not built yet)                    | `absent`  | `public` | `absent`    |
+| `sandbox.view`        | The demo Studio (not built yet)                            | `absent`  | `public` | `absent`    |
+| `health.read`         | `/api/health`                                              | `public`  | `public` | `public`    |
+| `ready.read`          | `/api/ready`                                               | `public`  | `public` | `public`    |
+| `auth.session`        | Signing in and out                                         | `public`  | `absent` | `absent`    |
+| `source.read`         | The portfolio's source document                            | `session` | `absent` | `absent`    |
+| `draft.read`          | The draft                                                  | `session` | `absent` | `absent`    |
+| `history.read`        | Published revisions                                        | `session` | `absent` | `absent`    |
+| `draft.write`         | Draft edits, variant changes included                      | `session` | `absent` | `absent`    |
+| `config.import`       | Importing a portfolio                                      | `session` | `absent` | `absent`    |
+| `config.export`       | Exporting the portfolio                                    | `session` | `absent` | `absent`    |
+| `studio.view`         | Studio's pages                                             | `session` | `absent` | `absent`    |
+| `config.status`       | The redacted deployment summary                            | `session` | `absent` | `absent`    |
+| `publish`             | Publishing the draft                                       | `session` | `absent` | `absent`    |
+| `rollback`            | Going back to an earlier revision                          | `session` | `absent` | `absent`    |
+| `asset.write`         | Uploading assets                                           | `session` | `absent` | `absent`    |
+| `preview.grant`       | Preview frames, each by its own grant                      | `session` | `absent` | `absent`    |
+| `appearance.fixtures` | `/_fixtures/appearance`, in `APPEARANCE_FIXTURES=1` builds | `public`  | `public` | `public`    |
 
 <!-- profile-matrix:end -->
 
-Every profile serves `/`, `/robots.txt`, `/sitemap.xml`, the share image at `/opengraph-image-12o0cb` (Next adds a suffix to a metadata route inside a route group, here the site's), `/api/health`, `/api/ready`, and `/api/studio/<operation>`. `owner` and `read-only` add `/feed.xml`, `/work/<slug>` (the 404 page until #10 resolves slugs), and the path views of the site's variant below `/` and below `/work/<slug>`. `owner` also serves `/preview/<grant>/` and `/preview-assets/<grant>/`, only to a frame whose preview grant is active ([Preview grants](#preview-grants)). `demo` adds `/sample` and the same routes below it. Every Studio operation goes through `/api/studio/<operation>`, and one the profile lacks answers with the 404 envelope, `{"error":{"code":"not_available_in_profile",...}}`. There is no image optimizer: images load as they are, and `/_next/image` answers with the 404 page in every profile.
+Every profile serves `/`, `/robots.txt`, `/sitemap.xml`, the share image at `/opengraph-image-12o0cb` (Next adds a suffix to a metadata route inside a route group, here the site's), `/api/health`, `/api/ready`, and `/api/studio/<operation>`. `owner` and `read-only` add `/feed.xml`, `/work/<slug>` (the 404 page until #10 resolves slugs), and the path views of the site's variant below `/` and below `/work/<slug>`. `owner` also serves `/preview/<grant>/` and `/preview-assets/<grant>/`, only to a frame whose preview grant is active ([Preview grants](#preview-grants)). `demo` adds `/sample` and the same routes below it. Every Studio operation goes through `/api/studio/<operation>`, and one the profile lacks answers with the 404 envelope, `{"error":{"code":"not_available_in_profile",...}}`. There is no image optimizer: images load as they are, and `/_next/image` answers with the 404 page in every profile. A build made with `APPEARANCE_FIXTURES=1`, which is for tests, adds `/_fixtures/appearance` to every profile, as the `appearance.fixtures` row shows. Any other build grants that capability in no profile, so the path answers as an unknown one does. Setting the variable when the server starts only logs a warning.
 
 ## Supported hosts
 
