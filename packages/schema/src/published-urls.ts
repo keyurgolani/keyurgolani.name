@@ -1,4 +1,5 @@
 import { isSectionId, workPath } from './ids';
+import { idReused } from './record-ids';
 import { isPlainObject } from './json';
 import { readSourceSnapshots, isSitePath, type UrlTable } from './snapshots';
 import type { Context, Diagnostic, UnitValidator } from './validate';
@@ -266,3 +267,9 @@ function shownPath(path: string): string {
     .filter((segment) => segment !== '');
   return segments.every((segment) => isSectionId(segment) || segment === 'work') ? path : 'A URL';
 }
+
+/**
+ * The checks #3 runs at publish and import, with `ctx.publication` set: the
+ * vanished URLs and an id the live revision gives another type.
+ */
+export const PUBLICATION_VALIDATORS: readonly UnitValidator[] = [urlsVanished, idReused];

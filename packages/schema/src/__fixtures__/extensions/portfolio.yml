@@ -16,14 +16,14 @@ identity:
         - Orchestra
       instrument: cello
 works:
-  - id: plates-2
+  - id: harbor-plates
     title: Plates
     medium: image-series
     media:
-      - asset: plates-2-image
+      - asset: harbor-at-dawn
         caption: Harbor
 media:
-  - id: plates-2-image
+  - id: harbor-at-dawn
     kind: image
     source: plates/harbor.jpg
     alt: A harbor at dawn
@@ -35,7 +35,7 @@ sections:
     id: plates
     title: Plates
     items:
-      - plates-2
+      - harbor-plates
   - kind: "@acme/portfolio-photography/exhibitions"
     id: exhibitions
     title: Exhibitions

@@ -6,7 +6,15 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineContentExtension } from './extensions';
 import { parsePortfolio, parseSite } from './load';
-import { findPair, loadPair, pairFileNames, readPair, type LoadPairResult } from './node';
+import {
+  findPair,
+  loadPair,
+  pairFileNames,
+  readPair,
+  readUnitFiles,
+  type LoadPairResult,
+} from './node';
+import { PUBLICATION_VALIDATORS } from './published-urls';
 import { canonicalize, serialize } from './serialize';
 import { parseSource } from './source';
 import {
@@ -124,6 +132,17 @@ test('the practices cover both directions and several locales, each selecting mi
 /** Codes no committed fixture can show: one would commit a secret-shaped string, one a broken build. */
 const BUILT_AT_RUN_TIME: readonly DiagnosticCode[] = ['secret.detected', 'validator.failed'];
 
+/** Codes about the snapshots and the media document beside the pair, which readUnitFiles raises. */
+const UNIT_FILE_CODES: readonly DiagnosticCode[] = [
+  'snapshot.syntax',
+  'snapshot.invalid',
+  'snapshot.ignored',
+  'media.syntax',
+  'media.invalid',
+];
+/** Codes the publication validators raise, with the live revision in `live/`. */
+const PUBLICATION_CODES: readonly DiagnosticCode[] = ['urls.vanished', 'id.reused'];
+
 test('every diagnostic code has an invalid pair, refused or loaded by its severity', () => {
   const all = Object.keys(DIAGNOSTIC_SEVERITIES) as DiagnosticCode[];
   assert.deepEqual(
@@ -131,6 +150,7 @@ test('every diagnostic code has an invalid pair, refused or loaded by its severi
     all.filter((code) => !BUILT_AT_RUN_TIME.includes(code)).sort(),
   );
   for (const code of fs.readdirSync(fixture('invalid')) as DiagnosticCode[]) {
+    if (UNIT_FILE_CODES.includes(code) || PUBLICATION_CODES.includes(code)) continue;
     const result = loadPair(fixture('invalid', code), INVALID_CONTEXT);
     assert.deepEqual([...new Set(codes(result))], [code], code);
     for (const diagnostic of result.diagnostics) {
@@ -153,6 +173,55 @@ test('every diagnostic code has an invalid pair, refused or loaded by its severi
   }
 });
 
+test('each snapshot and media document code has a pair with that file beside it', () => {
+  for (const code of UNIT_FILE_CODES) {
+    const dir = fixture('invalid', code);
+    // The pair itself is clean.
+    const pair = loadPair(dir, INVALID_CONTEXT);
+    assert.ok(pair.ok, code);
+    assert.deepEqual(codes(pair), [], code);
+    const unit = readUnitFiles(dir);
+    assert.deepEqual([...new Set(unit.diagnostics.map(({ code }) => code))], [code], code);
+    for (const diagnostic of unit.diagnostics) {
+      assert.equal(diagnostic.severity, DIAGNOSTIC_SEVERITIES[code], code);
+      assert.ok(diagnostic.remediation.length > 0, code);
+      assert.ok(diagnostic.file, code);
+      assert.equal(diagnostic.document, code.startsWith('media.') ? 'media' : 'snapshots', code);
+      if (code !== 'snapshot.ignored') {
+        assert.ok(Number.isInteger(diagnostic.line), `${code} has no position`);
+      }
+    }
+    // A file that doesn't read is left out, so the view never renders it as data.
+    assert.deepEqual(unit.snapshots, {}, code);
+    assert.equal(unit.media, undefined, code);
+  }
+});
+
+test('each publication code has a draft pair, refused against the live revision beside it', () => {
+  for (const code of PUBLICATION_CODES) {
+    const live = loadPair(fixture('invalid', code, 'live'), INVALID_CONTEXT);
+    assert.ok(live.ok, code);
+    if (!live.ok) continue;
+    const dir = fixture('invalid', code);
+    // Without the live revision there's nothing to compare, so the checks wait.
+    const alone = loadPair(dir, { ...INVALID_CONTEXT, validators: PUBLICATION_VALIDATORS });
+    assert.ok(alone.ok, code);
+    assert.deepEqual(codes(alone), [], code);
+    assert.ok(alone.notChecked.includes(code), code);
+    const result = loadPair(dir, {
+      ...INVALID_CONTEXT,
+      validators: PUBLICATION_VALIDATORS,
+      publication: { live: { pair: live.pair } },
+    });
+    assert.deepEqual([...new Set(codes(result))], [code], code);
+    assert.equal(result.ok, false, code);
+    for (const diagnostic of result.diagnostics) {
+      assert.equal(diagnostic.severity, DIAGNOSTIC_SEVERITIES[code], code);
+      assert.ok(Number.isInteger(diagnostic.line) && Number.isInteger(diagnostic.column), code);
+    }
+  }
+});
+
 test('a secret-shaped value refuses the pair without the value in any record', () => {
   // Built here, so no secret-shaped literal is ever committed.
   const token = ['ghp', '_', 'Q'.repeat(36)].join('');
@@ -165,7 +234,7 @@ test('a secret-shaped value refuses the pair without the value in any record', (
   assert.equal(result.ok, false);
   assert.deepEqual(
     result.diagnostics.map(({ code, pointer, line }) => [code, pointer, line]),
-    [['secret.detected', '/links/0/label', 16]],
+    [['secret.detected', '/links/0/label', 17]],
   );
   assert.doesNotMatch(JSON.stringify(result), /Q{20}/);
 });

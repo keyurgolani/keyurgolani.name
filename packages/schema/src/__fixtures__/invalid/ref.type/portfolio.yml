@@ -1,0 +1,19 @@
+# ref.type: a signature that names evidence, not a work.
+schemaVersion: 3
+locale: en
+direction: ltr
+identity:
+  name: Rowan Fixture
+links:
+  - url: https://rowan.name
+    label: Site
+signature: councils-adopted
+evidence:
+  - id: councils-adopted
+    type: metric
+    statement: councils adopted the atlas
+    metric: { key: councils-adopted, value: 14 }
+sections:
+  - kind: evidence
+    id: proof
+    items: [councils-adopted]

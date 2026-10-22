@@ -1,0 +1,21 @@
+# ref.private: a visible section lists a private work, which drops out.
+schemaVersion: 3
+locale: en
+direction: ltr
+identity:
+  name: Rowan Fixture
+links:
+  - url: https://rowan.name
+    label: Site
+works:
+  - id: tidewater-atlas
+    title: Tidewater Atlas
+    medium: interface
+  - id: salt-ledger
+    title: Salt Ledger
+    medium: research
+    visibility: private
+sections:
+  - kind: works
+    id: work
+    items: [tidewater-atlas, salt-ledger]

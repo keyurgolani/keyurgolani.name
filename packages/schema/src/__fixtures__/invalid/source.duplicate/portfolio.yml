@@ -1,5 +1,5 @@
 # source.duplicate: portfolio.json is the same document again.
-schemaVersion: 2
+schemaVersion: 3
 locale: en
 direction: ltr
 identity:
