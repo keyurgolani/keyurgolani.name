@@ -9,7 +9,7 @@ import type {
 import type { Rendering, UnitChecks } from '../catalog/unit';
 import { publicationUnitOf } from '../catalog/view';
 import { recordOwnerModule } from '../load-trace';
-import type { StoreLog } from './common';
+import { StoreError, type StoreLog } from './common';
 import type { ReadFs } from './fs-port';
 import { storePaths, type RevisionId, type Sha256 } from './layout';
 import { DamagedPointerError, readEvents, readLive, type LivePointer } from './pointer';
@@ -91,8 +91,10 @@ export function revisionCatalogReader({
   let decided: { readonly key: string; readonly decision: Promise<Decision> } | undefined;
   let lastState: CatalogStatus['state'] | undefined;
   let lastDrift: string | undefined;
-  // As the AssetStore finds one: a regular file under its hash, never a link.
-  const hasBlob = async (hash: Sha256) => (await fs.lstat(paths.blob(hash)))?.isFile === true;
+  // As the AssetStore finds one: a regular file under its hash, never a
+  // link. One that can't be looked at isn't there.
+  const hasBlob = async (hash: Sha256) =>
+    (await fs.lstat(paths.blob(hash)).catch(() => null))?.isFile === true;
 
   /**
    * Whether a kept unit still serves, as the pointer moves to it: no
@@ -155,12 +157,17 @@ export function revisionCatalogReader({
     return null;
   }
 
+  /** Where the live manifest's rendering differs from the build's: what the owner sees, so a failure here is none. */
   async function drift(pointer: LivePointer): Promise<readonly RenderDrift[] | null> {
     if (!renderDrift) return null;
-    const manifest = await readManifest(fs, paths, pointer.revisionId);
-    if (!manifest) return null;
-    const found = renderDrift(manifest.rendering);
-    return found.length > 0 ? found : null;
+    try {
+      const manifest = await readManifest(fs, paths, pointer.revisionId);
+      if (!manifest) return null;
+      const found = renderDrift(manifest.rendering);
+      return found.length > 0 ? found : null;
+    } catch {
+      return null;
+    }
   }
 
   async function decide(): Promise<Decision> {
@@ -266,21 +273,48 @@ export function revisionCatalogReader({
     }
   }
 
+  /**
+   * A decision that failed, such as for a directory that can't be listed:
+   * nothing serves, and its code says why, never the error, which can name
+   * a path.
+   */
+  function failure(error: unknown): Decision {
+    const reason = error instanceof StoreError ? error.code : 'storage_unavailable';
+    return {
+      live: { state: 'incompatible', ...NOTHING },
+      status: {
+        state: 'incompatible',
+        liveRevisionId: null,
+        seq: null,
+        unitHash: null,
+        servingRevisionId: null,
+        reason,
+        renderDrift: null,
+      },
+    };
+  }
+
+  /** live.json's stat, the key a decision is kept under, or the error that stopped it. */
+  async function pointerKey(): Promise<string> {
+    try {
+      const stats = await fs.stat(paths.live);
+      return stats ? `${stats.ino}:${stats.mtimeMs}:${stats.size}` : 'none';
+    } catch (error) {
+      return `unreadable:${String((error as NodeJS.ErrnoException)?.code)}`;
+    }
+  }
+
   async function current(): Promise<Decision> {
-    const stats = await fs.stat(paths.live);
-    const key = stats ? `${stats.ino}:${stats.mtimeMs}:${stats.size}` : 'none';
+    const key = await pointerKey();
     // An empty store asks whenEmpty every time, which keeps its own watch.
     if (decided?.key === key && key !== 'none') return decided.decision;
-    const decision = decide();
+    // A decision that throws is kept, as a failure: a broken store isn't
+    // decided again on every request, and no raw error reaches a render.
+    const decision = decide().catch(failure);
     decided = { key, decision };
-    try {
-      const done = await decision;
-      announce(done);
-      return done;
-    } catch (error) {
-      if (decided?.decision === decision) decided = undefined;
-      throw error;
-    }
+    const done = await decision;
+    announce(done);
+    return done;
   }
 
   return Object.freeze({

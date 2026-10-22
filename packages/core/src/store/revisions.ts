@@ -92,7 +92,8 @@ export interface Revision {
 }
 
 /** What's wrong with a revision's files. */
-export type RevisionDamage = 'missing' | 'hash_mismatch' | 'parse_failure';
+/** `unreadable`: a file or directory of it couldn't be read, such as for EACCES, EISDIR, or a link (ELOOP). */
+export type RevisionDamage = 'missing' | 'hash_mismatch' | 'parse_failure' | 'unreadable';
 
 export type RevisionRead =
   | { readonly ok: true; readonly revision: Revision }
@@ -148,13 +149,39 @@ export function manifestFor(
   });
 }
 
+/** An object, not null or an array, whose fields can be read. */
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  value !== null && typeof value === 'object' && !Array.isArray(value);
+
+/** A variant or pack as a manifest names one: string `id` and `version`. */
+const isVersioned = (value: unknown) =>
+  isRecord(value) && typeof value.id === 'string' && typeof value.version === 'string';
+
+/** A rendering every reader of it can walk: the variant, each pack, and every contract. */
+function isRendering(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    (value.variant === null || isVersioned(value.variant)) &&
+    Array.isArray(value.packs) &&
+    value.packs.every(isVersioned) &&
+    isRecord(value.contracts) &&
+    Object.values(value.contracts).every((version) => typeof version === 'string')
+  );
+}
+
 function asManifest(value: unknown, id: RevisionId): Manifest | null {
-  if (value === null || typeof value !== 'object') return null;
-  const manifest = value as Record<string, unknown>;
-  const documents = manifest.documents as Record<string, unknown> | undefined;
-  const snapshots = manifest.snapshots as Record<string, unknown> | undefined;
-  const source = manifest.source as Record<string, unknown> | undefined;
-  const rendering = manifest.rendering as Record<string, unknown> | undefined;
+  if (!isRecord(value)) return null;
+  const manifest = value;
+  if (
+    !isRecord(manifest.documents) ||
+    !isRecord(manifest.snapshots) ||
+    !isRecord(manifest.source)
+  ) {
+    return null;
+  }
+  const documents = manifest.documents;
+  const snapshots = manifest.snapshots;
+  const source = manifest.source;
   const documentOk = (entry: unknown, name: DocumentName) => {
     const document = entry as Record<string, unknown> | undefined;
     return (
@@ -194,22 +221,24 @@ function asManifest(value: unknown, id: RevisionId): Manifest | null {
         isSha256((entry as Record<string, unknown>)?.contentHash),
     ) &&
     isSha256(manifest.unitHash) &&
-    rendering !== undefined &&
-    Array.isArray(rendering.packs) &&
+    isRendering(manifest.rendering) &&
     Array.isArray(manifest.blobs) &&
     (manifest.blobs as unknown[]).every(isSha256);
   return ok ? (manifest as unknown as Manifest) : null;
 }
 
+/** A revision file that's there but can't be read: the revision is damaged, `unreadable`. */
+class UnreadableError extends Error {}
+
+/** The file's text, null when it isn't there, or an UnreadableError for any other failure. */
 async function readText(fs: ReadFs, file: string): Promise<string | null> {
   try {
     return (await fs.readFile(file)).toString('utf8');
   } catch (error) {
-    // A link where one of its files belongs is none of them: the store's
-    // reads never go through one (ELOOP), so the revision is damaged.
-    const code = (error as NodeJS.ErrnoException).code;
-    if (code === 'ENOENT' || code === 'ELOOP') return null;
-    throw error;
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
+    // EACCES, EISDIR, ENOTDIR, or a link in a file's place (ELOOP), since
+    // the store's reads never go through one.
+    throw new UnreadableError();
   }
 }
 
@@ -221,12 +250,24 @@ function parseJson(text: string): { ok: true; value: unknown } | { ok: false } {
   }
 }
 
-/** Reads and checks the revision in `dir`: every file there, and every hash right. */
+/**
+ * Reads and checks the revision in `dir`: every file there, and every hash
+ * right. A file that's there but can't be read leaves it `unreadable`.
+ */
 export async function readRevisionAt(
   fs: ReadFs,
   dir: string,
   id: RevisionId,
 ): Promise<RevisionRead> {
+  try {
+    return await readRevisionFiles(fs, dir, id);
+  } catch (error) {
+    if (error instanceof UnreadableError) return { ok: false, damage: 'unreadable' };
+    throw error;
+  }
+}
+
+async function readRevisionFiles(fs: ReadFs, dir: string, id: RevisionId): Promise<RevisionRead> {
   const manifestText = await readText(fs, path.join(dir, 'manifest.json'));
   if (manifestText === null) return { ok: false, damage: 'missing' };
   const parsed = parseJson(manifestText);
@@ -296,7 +337,13 @@ export async function readManifest(
   id: RevisionId,
 ): Promise<Manifest | null> {
   if (!isRevisionId(id)) return null;
-  const text = await readText(fs, path.join(paths.revision(id), 'manifest.json'));
+  let text: string | null;
+  try {
+    text = await readText(fs, path.join(paths.revision(id), 'manifest.json'));
+  } catch (error) {
+    if (error instanceof UnreadableError) return null;
+    throw error;
+  }
   if (text === null) return null;
   const parsed = parseJson(text);
   return parsed.ok ? asManifest(parsed.value, id) : null;

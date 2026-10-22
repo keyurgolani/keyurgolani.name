@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import {
+  chmodSync,
   copyFileSync,
+  mkdirSync,
   readFileSync,
   renameSync,
   rmSync,
@@ -442,4 +444,150 @@ test('the reader reads no file through a symbolic link: a linked document or blo
     assert.equal(live.state, 'degraded', linked);
     assert.equal(live.revisionId, first, linked);
   }
+});
+
+/** A renderDrift that walks every field of a rendering, as apps/web's does. */
+const walkingDrift = (rendering: Rendering): RenderDrift[] => [
+  ...(rendering.variant
+    ? [
+        {
+          kind: 'variant' as const,
+          id: rendering.variant.id,
+          revision: rendering.variant.version,
+          build: null,
+        },
+      ]
+    : []),
+  ...rendering.packs.map((pack) => ({
+    kind: 'pack' as const,
+    id: pack.id,
+    revision: pack.version,
+    build: null,
+  })),
+  ...Object.entries(rendering.contracts).map(([id, version]) => ({
+    kind: 'contract' as const,
+    id,
+    revision: version,
+    build: null,
+  })),
+];
+
+test("a live manifest whose rendering a reader can't walk is damaged, and the last known good serves, with no throw", async (t) => {
+  const odd: Array<[string, (rendering: Record<string, unknown>) => unknown]> = [
+    [
+      'no contracts',
+      (rendering) =>
+        Object.fromEntries(Object.entries(rendering).filter(([key]) => key !== 'contracts')),
+    ],
+    ['a null pack', (rendering) => ({ ...rendering, packs: [null] })],
+    ['a variant with no version', (rendering) => ({ ...rendering, variant: { id: 'x' } })],
+    ['a contract that is not a string', (rendering) => ({ ...rendering, contracts: { a: 1 } })],
+    ['no rendering at all', () => null],
+  ];
+  for (const [what, change] of odd) {
+    const store = await newStore(t);
+    const first = await publishInput(store, pairInput('engineering'));
+    const second = await publishInput(store, contentVariant(pairInput('engineering'), 'two'));
+    const file = path.join(store.paths.revision(second), 'manifest.json');
+    const manifest = JSON.parse(readFileSync(file, 'utf8')) as Record<string, unknown>;
+    writeFileSync(
+      file,
+      JSON.stringify({ ...manifest, rendering: change(manifest.rendering as never) }),
+    );
+    const { catalog } = reader(store, { renderDrift: walkingDrift });
+    const live = await catalog.getLive();
+    assert.equal(live.state, 'degraded', what);
+    assert.equal(live.revisionId, first, what);
+    assert.equal((await catalog.status()).reason, 'damaged:parse_failure', what);
+  }
+});
+
+test("a live file that's there but can't be read, for EACCES, EISDIR, or a link, is damaged:unreadable, and the last known good serves", async (t) => {
+  const cases: Array<[string, (file: string) => void]> = [
+    ['unreadable', (file) => chmodSync(file, 0o000)],
+    [
+      'a directory in its place',
+      (file) => {
+        rmSync(file);
+        mkdirSync(file);
+      },
+    ],
+    ['a link in its place', (file) => linkInPlace(t, file)],
+  ];
+  for (const [what, spoil] of cases) {
+    const store = await newStore(t);
+    const first = await publishInput(store, pairInput('engineering'));
+    const second = await publishInput(store, contentVariant(pairInput('engineering'), 'two'));
+    const file = path.join(store.paths.revision(second), 'documents', 'portfolio.yml');
+    spoil(file);
+    t.after(() => {
+      try {
+        chmodSync(file, 0o600);
+      } catch {
+        // Not a file any more.
+      }
+    });
+    const { catalog } = reader(store);
+    const live = await catalog.getLive();
+    assert.equal(live.state, 'degraded', what);
+    assert.equal(live.revisionId, first, what);
+    assert.equal((await catalog.status()).reason, 'damaged:unreadable', what);
+  }
+});
+
+test("an event file that can't be read is left out of the last known good's walk, as an unparseable one is", async (t) => {
+  const store = await newStore(t);
+  const first = await publishInput(store, pairInput('engineering'));
+  await publishInput(store, contentVariant(pairInput('engineering'), 'two'));
+  const third = await publishInput(store, contentVariant(pairInput('engineering'), 'three'));
+  writeFileSync(
+    path.join(store.paths.revision(third), 'documents', 'portfolio.yml'),
+    '# damaged\n',
+  );
+  // seq 2's own file, a link: the walk passes over it to seq 1.
+  linkInPlace(t, store.paths.event(2));
+  const live = await reader(store).catalog.getLive();
+  assert.equal(live.state, 'degraded');
+  assert.equal(live.revisionId, first);
+});
+
+test("a decision that fails is kept as nothing servable: requests over a log that can't be listed decide once, and never throw", async (t) => {
+  const store = await newStore(t);
+  await publishInput(store, pairInput('engineering'));
+  const second = await publishInput(store, contentVariant(pairInput('engineering'), 'two'));
+  writeFileSync(
+    path.join(store.paths.revision(second), 'documents', 'portfolio.yml'),
+    '# damaged\n',
+  );
+  let listings = 0;
+  const fs: ReadFs = {
+    ...nodeReadFs,
+    async readdir(dir) {
+      if (dir !== store.paths.events) return nodeReadFs.readdir(dir);
+      listings += 1;
+      throw Object.assign(new Error(`EACCES: ${dir}`), { code: 'EACCES' });
+    },
+  };
+  let validations = 0;
+  const checks = testChecks({
+    validateLive: (pair) => {
+      validations += 1;
+      return validatePublicationUnit(pair);
+    },
+  });
+  const { catalog, servable, logs } = reader(store, { fs, checks });
+  for (let request = 0; request < 5; request++) {
+    const live = await catalog.getLive();
+    assert.equal(live.state, 'incompatible');
+    assert.equal(live.unit, null);
+  }
+  // One decision for all five: the log listed once, and nothing validated,
+  // since the damaged live revision fails its hashes first.
+  assert.equal(listings, 1);
+  assert.equal(validations, 0);
+  assert.ok(servable.length > 0 && servable.every((value) => value === false));
+  assert.equal((await catalog.status()).reason, 'storage_unavailable');
+  // The log line says what, never where.
+  assert.ok(logs.every((entry) => !JSON.stringify(entry).includes(store.paths.root)));
+  assert.ok(logs.some((entry) => entry.event === 'store.catalog.incompatible'));
 });
