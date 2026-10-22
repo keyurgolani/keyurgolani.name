@@ -1,7 +1,7 @@
 import path from 'node:path';
 import type { DocumentFormat } from '@portfolio/schema';
 import { recordOwnerModule } from '../load-trace';
-import { isStoreActor, type StoreActor } from './common';
+import { isPermanentReadError, isStoreActor, type StoreActor } from './common';
 import type { ReadFs } from './fs-port';
 import {
   isDraftId,
@@ -91,13 +91,22 @@ export interface Revision {
   readonly unit: Unit;
 }
 
-/** What's wrong with a revision's files. */
-/** `unreadable`: a file or directory of it couldn't be read, such as for EACCES, EISDIR, or a link (ELOOP). */
+/**
+ * What's wrong with a revision's files. `unreadable`: a file or directory
+ * of it couldn't be read, for a link in its place, something that isn't a
+ * file or directory there, or a failure that may pass, such as EACCES or
+ * EMFILE.
+ */
 export type RevisionDamage = 'missing' | 'hash_mismatch' | 'parse_failure' | 'unreadable';
 
 export type RevisionRead =
   | { readonly ok: true; readonly revision: Revision }
-  | { readonly ok: false; readonly damage: RevisionDamage };
+  | {
+      readonly ok: false;
+      readonly damage: RevisionDamage;
+      /** Set when it may pass, such as for EACCES or EMFILE: a reader asks again soon. */
+      readonly transient?: true;
+    };
 
 /** The file a document's normalized model is in, under documents/. */
 export const modelFile = (name: DocumentName) => `${name}.model.json`;
@@ -227,8 +236,16 @@ function asManifest(value: unknown, id: RevisionId): Manifest | null {
   return ok ? (manifest as unknown as Manifest) : null;
 }
 
-/** A revision file that's there but can't be read: the revision is damaged, `unreadable`. */
-class UnreadableError extends Error {}
+/**
+ * A revision file that's there but can't be read: the revision is damaged,
+ * `unreadable`, for good when what's there is the reason, and for now when
+ * the failure may pass.
+ */
+class UnreadableError extends Error {
+  constructor(readonly transient: boolean) {
+    super("A revision file can't be read.");
+  }
+}
 
 /** The file's text, null when it isn't there, or an UnreadableError for any other failure. */
 async function readText(fs: ReadFs, file: string): Promise<string | null> {
@@ -236,9 +253,10 @@ async function readText(fs: ReadFs, file: string): Promise<string | null> {
     return (await fs.readFile(file)).toString('utf8');
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
-    // EACCES, EISDIR, ENOTDIR, or a link in a file's place (ELOOP), since
-    // the store's reads never go through one.
-    throw new UnreadableError();
+    // A link in a file's place (ELOOP), since the store's reads never go
+    // through one, or a directory or a FIFO there, stays so; EACCES or
+    // EMFILE may pass.
+    throw new UnreadableError(!isPermanentReadError(error));
   }
 }
 
@@ -254,7 +272,8 @@ function parseJson(text: string): { ok: true; value: unknown } | { ok: false } {
  * Whether each directory a revision's files are read through is one itself,
  * never a link to one: revisions/, the revision's own, documents/, and
  * snapshots/. A file's own read refuses a link only as its last component.
- * One that isn't there leaves its files missing, as their reads find.
+ * One that isn't there leaves its files missing, as their reads find. One
+ * that can't be looked at throws an UnreadableError that may pass.
  */
 async function throughDirectories(fs: ReadFs, dir: string): Promise<boolean> {
   for (const each of [
@@ -263,8 +282,13 @@ async function throughDirectories(fs: ReadFs, dir: string): Promise<boolean> {
     path.join(dir, 'documents'),
     path.join(dir, 'snapshots'),
   ]) {
-    const found = await fs.lstat(each).catch(() => undefined);
-    if (found !== null && found?.isDirectory !== true) return false;
+    let found;
+    try {
+      found = await fs.lstat(each);
+    } catch (error) {
+      throw new UnreadableError(!isPermanentReadError(error));
+    }
+    if (found !== null && !found.isDirectory) return false;
   }
   return true;
 }
@@ -272,7 +296,8 @@ async function throughDirectories(fs: ReadFs, dir: string): Promise<boolean> {
 /**
  * Reads and checks the revision in `dir`: every file there, and every hash
  * right. A file that's there but can't be read leaves it `unreadable`, and
- * so does a link in place of a directory it's read through.
+ * so does a link in place of a directory it's read through; `transient`
+ * when the failure may pass.
  */
 export async function readRevisionAt(
   fs: ReadFs,
@@ -283,8 +308,10 @@ export async function readRevisionAt(
     if (!(await throughDirectories(fs, dir))) return { ok: false, damage: 'unreadable' };
     return await readRevisionFiles(fs, dir, id);
   } catch (error) {
-    if (error instanceof UnreadableError) return { ok: false, damage: 'unreadable' };
-    throw error;
+    if (!(error instanceof UnreadableError)) throw error;
+    return error.transient
+      ? { ok: false, damage: 'unreadable', transient: true }
+      : { ok: false, damage: 'unreadable' };
   }
 }
 
@@ -399,7 +426,12 @@ export type RevisionHealth =
       /** The pair the validator passed: the stored text, as the running build parses it. */
       readonly served: { readonly portfolio: unknown; readonly site: unknown };
     }
-  | { readonly state: 'damaged'; readonly reason: string }
+  | {
+      readonly state: 'damaged';
+      readonly reason: string;
+      /** Set when it may pass: a read failure such as EACCES or EMFILE. Ask again soon. */
+      readonly transient?: true;
+    }
   | {
       readonly state: 'incompatible';
       readonly reason: string;
@@ -431,7 +463,11 @@ export async function revisionHealth(
 ): Promise<RevisionHealth> {
   if (await isTombstoned(fs, paths, id)) return { state: 'removed' };
   const read = await readRevision(fs, paths, id);
-  if (!read.ok) return { state: 'damaged', reason: read.damage };
+  if (!read.ok) {
+    return read.transient
+      ? { state: 'damaged', reason: read.damage, transient: true }
+      : { state: 'damaged', reason: read.damage };
+  }
   const { revision } = read;
   const pair = {
     portfolio: {

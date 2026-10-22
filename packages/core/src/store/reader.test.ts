@@ -21,7 +21,12 @@ import { nodeFs, type FsPort, type ReadFs } from './fs-port';
 import { newRevisionId, type StorePaths } from './layout';
 import { readLive } from './pointer';
 import { nodeReadFs } from './read-fs';
-import { revisionCatalogReader, UNIT_CACHE_SIZE, type RevisionCatalogOptions } from './reader';
+import {
+  revisionCatalogReader,
+  TRANSIENT_MS,
+  UNIT_CACHE_SIZE,
+  type RevisionCatalogOptions,
+} from './reader';
 import { openStore, type Store } from './store';
 import {
   contentVariant,
@@ -595,7 +600,7 @@ test("an event file that can't be read is left out of the last known good's walk
   assert.equal(live.revisionId, first);
 });
 
-test("a decision that fails is kept as nothing servable: requests over a log that can't be listed decide once, and never throw", async (t) => {
+test("a decision that fails is kept as nothing servable for TRANSIENT_MS: requests over a log that can't be listed decide once, never throw, and decide again after it", async (t) => {
   const store = await newStore(t);
   await publishInput(store, pairInput('engineering'));
   const second = await publishInput(store, contentVariant(pairInput('engineering'), 'two'));
@@ -619,7 +624,8 @@ test("a decision that fails is kept as nothing servable: requests over a log tha
       return validatePublicationUnit(pair);
     },
   });
-  const { catalog, servable, logs } = reader(store, { fs, checks });
+  let clock = 1_000_000;
+  const { catalog, servable, logs } = reader(store, { fs, checks, now: () => clock });
   for (let request = 0; request < 5; request++) {
     const live = await catalog.getLive();
     assert.equal(live.state, 'incompatible');
@@ -629,6 +635,14 @@ test("a decision that fails is kept as nothing servable: requests over a log tha
   // since the damaged live revision fails its hashes first.
   assert.equal(listings, 1);
   assert.equal(validations, 0);
+  // Kept until TRANSIENT_MS has passed, then decided again, once.
+  clock += TRANSIENT_MS - 1;
+  await catalog.getLive();
+  assert.equal(listings, 1);
+  clock += 1;
+  await catalog.getLive();
+  await catalog.getLive();
+  assert.equal(listings, 2);
   assert.ok(servable.length > 0 && servable.every((value) => value === false));
   assert.equal((await catalog.status()).reason, 'storage_unavailable');
   // The log line says what, never where.
@@ -918,4 +932,103 @@ test("a first publish that fails or dies before its pointer leaves the store emp
   assert.deepEqual([live.state, live.revisionId], ['live', published]);
   assert.deepEqual(flags(servable), [true]);
   assert.deepEqual(logs, []);
+});
+
+test("a blob that can't be looked at for now leaves its revision unservable for TRANSIENT_MS at most, and then it serves", async (t) => {
+  const store = await newStore(t);
+  const first = await publishInput(store, pairInput('engineering'));
+  const blob = await store.assets.put(Buffer.from('a blob'), 'text/plain');
+  const second = await publishInput(store, {
+    ...contentVariant(pairInput('engineering'), 'two'),
+    media: mediaDocument([blob.sha256]),
+  });
+  let clock = 1_000_000;
+  let failOnce = true;
+  const fs: ReadFs = {
+    ...nodeReadFs,
+    async lstat(target) {
+      if (failOnce && target === store.paths.blob(blob.sha256)) {
+        failOnce = false;
+        throw Object.assign(new Error('EMFILE: too many open files'), { code: 'EMFILE' });
+      }
+      return nodeReadFs.lstat(target);
+    },
+  };
+  const { catalog } = reader(store, { fs, now: () => clock });
+  const during = await catalog.getLive();
+  assert.deepEqual([during.state, during.revisionId], ['degraded', first]);
+  clock += TRANSIENT_MS;
+  const after = await catalog.getLive();
+  assert.deepEqual([after.state, after.revisionId], ['live', second]);
+});
+
+test("a read failure that may pass serves the last known good for at most TRANSIENT_MS, then the new revision; a link in a file's place is kept as long as the pointer", async (t) => {
+  const store = await newStore(t);
+  const first = await publishInput(store, pairInput('engineering'));
+  let clock = 1_000_000;
+  let failOnce: string | null = null;
+  let walks = 0;
+  const fs: ReadFs = {
+    ...nodeReadFs,
+    async readFile(file) {
+      if (failOnce && file.includes(failOnce)) {
+        failOnce = null;
+        throw Object.assign(new Error('EMFILE: too many open files'), { code: 'EMFILE' });
+      }
+      return nodeReadFs.readFile(file);
+    },
+    async readdir(dir) {
+      if (dir === store.paths.events) walks += 1;
+      return nodeReadFs.readdir(dir);
+    },
+  };
+  const { catalog } = reader(store, { fs, now: () => clock });
+  assert.equal((await catalog.getLive()).revisionId, first);
+
+  // One EMFILE while the new pointer is decided: the last known good serves.
+  const second = await publishInput(store, contentVariant(pairInput('engineering'), 'two'));
+  failOnce = second;
+  const during = await catalog.getLive();
+  assert.deepEqual([during.state, during.revisionId], ['degraded', first]);
+  assert.equal((await catalog.status()).reason, 'damaged:unreadable');
+  clock += TRANSIENT_MS - 1;
+  assert.equal((await catalog.getLive()).revisionId, first);
+  clock += 1;
+  const after = await catalog.getLive();
+  assert.deepEqual([after.state, after.revisionId], ['live', second]);
+
+  // EACCES, as a restore run as root leaves a file, the same: readable again, the next decision serves it.
+  const third = await publishInput(store, contentVariant(pairInput('engineering'), 'three'));
+  const file = path.join(store.paths.revision(third), 'documents', 'portfolio.yml');
+  chmodSync(file, 0o000);
+  // Put back if the test stops first; once it's done, the store is gone.
+  t.after(() => {
+    try {
+      chmodSync(file, 0o600);
+    } catch {
+      // Gone already.
+    }
+  });
+  assert.deepEqual(
+    [(await catalog.getLive()).state, (await catalog.status()).reason],
+    ['degraded', 'damaged:unreadable'],
+  );
+  chmodSync(file, 0o600);
+  clock += TRANSIENT_MS;
+  assert.deepEqual(
+    [(await catalog.getLive()).state, (await catalog.getLive()).revisionId],
+    ['live', third],
+  );
+
+  // A link in a file's place stays: no request decides it again.
+  const fourth = await publishInput(store, contentVariant(pairInput('engineering'), 'four'));
+  linkInPlace(t, path.join(store.paths.revision(fourth), 'documents', 'portfolio.yml'));
+  assert.deepEqual(
+    [(await catalog.getLive()).state, (await catalog.status()).reason],
+    ['degraded', 'damaged:unreadable'],
+  );
+  const walked = walks;
+  clock += 10 * TRANSIENT_MS;
+  assert.equal((await catalog.getLive()).state, 'degraded');
+  assert.equal(walks, walked);
 });

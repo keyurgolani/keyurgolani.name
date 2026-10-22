@@ -1,5 +1,5 @@
 import { recordOwnerModule } from '../load-trace';
-import { isStoreActor, type StoreActor } from './common';
+import { isPermanentReadError, isStoreActor, type StoreActor } from './common';
 import type { ReadFs } from './fs-port';
 import { isRevisionId, isSha256, type RevisionId, type Sha256, type StorePaths } from './layout';
 
@@ -112,13 +112,25 @@ export class DamagedPointerError extends Error {
   }
 }
 
-/** The published pointer, or null before the first revision goes live. */
+/**
+ * The published pointer, or null before the first revision goes live. One
+ * that doesn't parse, or what can't ever be read as one, such as a link or
+ * a directory in its place, is a DamagedPointerError; a read failure that
+ * may pass, such as EACCES or EMFILE, is thrown as it is.
+ */
 export async function readLive(fs: ReadFs, paths: StorePaths): Promise<LivePointer | null> {
   const stats = await fs.stat(paths.live);
   if (!stats) return null;
+  let text: string;
+  try {
+    text = (await fs.readFile(paths.live)).toString('utf8');
+  } catch (error) {
+    if (isPermanentReadError(error)) throw new DamagedPointerError();
+    throw error;
+  }
   let parsed: unknown;
   try {
-    parsed = JSON.parse((await fs.readFile(paths.live)).toString('utf8'));
+    parsed = JSON.parse(text);
   } catch {
     throw new DamagedPointerError();
   }

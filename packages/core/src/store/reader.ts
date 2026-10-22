@@ -34,12 +34,23 @@ import { isTombstoned, readManifest, readRevision, revisionHealth } from './revi
 // by revision ID; as the pointer moves to a kept one, its tombstone, its
 // files' hashes, and its blobs are checked again, and only the validator is
 // skipped. It tells the composition root whether anything is servable each
-// time it decides.
+// time it decides. An answer that met a read failure that may pass, such as
+// EACCES or EMFILE, or that failed outright, is worked out again once
+// TRANSIENT_MS has passed, whether the pointer moved or not.
 
 recordOwnerModule('core/store/reader');
 
 /** How many served units the reader keeps, by revision ID. */
 export const UNIT_CACHE_SIZE = 4;
+
+/**
+ * How long a decision that met a read failure that may pass, such as
+ * EACCES or EMFILE, or that failed outright, is kept: the next request
+ * after it decides again. A link, a directory, or a FIFO in a file's
+ * place, a hash that doesn't match, and a file that doesn't parse are
+ * kept as long as the pointer stays.
+ */
+export const TRANSIENT_MS = 5_000;
 
 export interface RevisionCatalogOptions {
   /** PORTFOLIO_DATA_DIR. */
@@ -58,6 +69,8 @@ export interface RevisionCatalogOptions {
   readonly log?: StoreLog;
   /** The reads. Tests pass their own. */
   readonly fs?: ReadFs;
+  /** The clock TRANSIENT_MS is counted by. Tests pass their own. */
+  readonly now?: () => number;
 }
 
 export interface RevisionCatalogReader extends CatalogReader {
@@ -68,6 +81,13 @@ export interface RevisionCatalogReader extends CatalogReader {
 interface Decision {
   readonly live: LiveRevision;
   readonly status: CatalogStatus;
+  /** It met a read failure that may pass, or it failed: kept for TRANSIENT_MS. */
+  readonly transient?: true;
+}
+
+/** What one decision met on its way: a read failure that may pass. */
+interface Seen {
+  transient: boolean;
 }
 
 const NOTHING = { revisionId: null, unitHash: null, unit: null } as const;
@@ -87,6 +107,7 @@ export function revisionCatalogReader({
   setServable = () => {},
   log = () => {},
   fs = nodeReadFs,
+  now = Date.now,
 }: RevisionCatalogOptions): RevisionCatalogReader {
   const paths = storePaths(dataDir);
   // Units that served, by revision ID, the most recently used last.
@@ -96,13 +117,21 @@ export function revisionCatalogReader({
   >();
   // The decision for the pointer as last stat'ed, or with none, for the
   // store's events/ and revisions/, shared by every request that finds the same.
-  let decided: { readonly key: string; readonly decision: Promise<Found> } | undefined;
+  // Until when it's kept: for good, unless it met a failure that may pass.
+  let decided:
+    { readonly key: string; readonly decision: Promise<Found>; until: number } | undefined;
   let lastState: CatalogStatus['state'] | undefined;
   let lastDrift: string | undefined;
   // As the AssetStore finds one: a regular file under its hash, never a
-  // link. One that can't be looked at isn't there.
-  const hasBlob = async (hash: Sha256) =>
-    (await fs.lstat(paths.blob(hash)).catch(() => null))?.isFile === true;
+  // link. One that can't be looked at isn't there, for now.
+  async function hasBlob(hash: Sha256, seen: Seen): Promise<boolean> {
+    try {
+      return (await fs.lstat(paths.blob(hash)))?.isFile === true;
+    } catch {
+      seen.transient = true;
+      return false;
+    }
+  }
 
   /**
    * Whether a kept unit still serves, as the pointer moves to it: no
@@ -113,16 +142,26 @@ export function revisionCatalogReader({
   async function stillServes(
     id: RevisionId,
     kept: { readonly unitHash: string },
+    seen: Seen,
   ): Promise<boolean> {
     if (await isTombstoned(fs, paths, id)) return false;
     const read = await readRevision(fs, paths, id);
-    if (!read.ok || read.revision.unit.unitHash !== kept.unitHash) return false;
-    for (const blob of read.revision.manifest.blobs) if (!(await hasBlob(blob))) return false;
+    if (!read.ok) {
+      if (read.transient) seen.transient = true;
+      return false;
+    }
+    if (read.revision.unit.unitHash !== kept.unitHash) return false;
+    for (const blob of read.revision.manifest.blobs) {
+      if (!(await hasBlob(blob, seen))) return false;
+    }
     return true;
   }
 
   /** The unit `id` serves, or why it can't. */
-  async function serve(id: RevisionId): Promise<
+  async function serve(
+    id: RevisionId,
+    seen: Seen,
+  ): Promise<
     | { readonly ok: true; readonly unit: PublicationUnit; readonly unitHash: string }
     | {
         readonly ok: false;
@@ -131,12 +170,20 @@ export function revisionCatalogReader({
   > {
     const kept = units.get(id);
     units.delete(id);
-    if (kept && (await stillServes(id, kept))) {
+    if (kept && (await stillServes(id, kept, seen))) {
       units.set(id, kept);
       return { ok: true, unit: kept.unit, unitHash: kept.unitHash };
     }
-    const health = await revisionHealth(fs, paths, id, checks, hasBlob, 'serve');
+    const health = await revisionHealth(
+      fs,
+      paths,
+      id,
+      checks,
+      (hash) => hasBlob(hash, seen),
+      'serve',
+    );
     if (health.state === 'removed') return { ok: false, reason: 'removed' };
+    if (health.state === 'damaged' && health.transient) seen.transient = true;
     if (health.state !== 'ok') return { ok: false, reason: `${health.state}:${health.reason}` };
     const { unit } = health.revision;
     // The models the validator passed: the stored text, as this build parses it.
@@ -152,14 +199,14 @@ export function revisionCatalogReader({
   }
 
   /** The last known good: the most recently live revision that serves, other than `skip`. */
-  async function lastKnownGood(skip: RevisionId | null) {
+  async function lastKnownGood(skip: RevisionId | null, seen: Seen) {
     const events = await readEvents(fs, paths);
     const tried = new Set<RevisionId>(skip ? [skip] : []);
     for (let index = events.length - 1; index >= 0; index--) {
       const id = events[index]!.revisionId;
       if (tried.has(id)) continue;
       tried.add(id);
-      const served = await serve(id);
+      const served = await serve(id, seen);
       if (served.ok) return { id, ...served };
     }
     return null;
@@ -195,6 +242,9 @@ export function revisionCatalogReader({
   }
 
   async function decide(): Promise<Found> {
+    const seen: Seen = { transient: false };
+    const done = (decision: Decision): Decision =>
+      seen.transient ? { ...decision, transient: true } : decision;
     let pointer: LivePointer | null;
     let reason: string | undefined;
     try {
@@ -218,9 +268,9 @@ export function revisionCatalogReader({
     };
     const drifted = pointer ? await drift(pointer) : null;
     if (pointer) {
-      const served = await serve(pointer.revisionId);
+      const served = await serve(pointer.revisionId, seen);
       if (served.ok) {
-        return {
+        return done({
           live: { state: 'live', revisionId: pointer.revisionId, ...served },
           status: {
             state: 'live',
@@ -228,13 +278,13 @@ export function revisionCatalogReader({
             servingRevisionId: pointer.revisionId,
             renderDrift: drifted,
           },
-        };
+        });
       }
       reason = served.reason;
     }
-    const good = await lastKnownGood(pointer?.revisionId ?? null);
+    const good = await lastKnownGood(pointer?.revisionId ?? null, seen);
     if (good) {
-      return {
+      return done({
         live: { state: 'degraded', revisionId: good.id, unit: good.unit, unitHash: good.unitHash },
         status: {
           state: 'degraded',
@@ -243,9 +293,9 @@ export function revisionCatalogReader({
           reason,
           renderDrift: drifted,
         },
-      };
+      });
     }
-    return {
+    return done({
       live: { state: 'incompatible', ...NOTHING },
       status: {
         state: 'incompatible',
@@ -254,7 +304,7 @@ export function revisionCatalogReader({
         reason,
         renderDrift: drifted,
       },
-    };
+    });
   }
 
   /** Logs what changed, and says whether anything serves. */
@@ -294,6 +344,7 @@ export function revisionCatalogReader({
   function failure(error: unknown): Decision {
     const reason = error instanceof StoreError ? error.code : 'storage_unavailable';
     return {
+      transient: true,
       live: { state: 'incompatible', ...NOTHING },
       status: {
         state: 'incompatible',
@@ -326,13 +377,19 @@ export function revisionCatalogReader({
   async function current(): Promise<Decision> {
     const key = await pointerKey();
     let decision: Promise<Found>;
-    if (decided?.key === key) {
+    if (decided?.key === key && now() < decided.until) {
       decision = decided.decision;
     } else {
       // A decision that throws is kept, as a failure: a broken store isn't
       // decided again on every request, and no raw error reaches a render.
       decision = decide().catch(failure);
-      decided = { key, decision };
+      const entry = { key, decision, until: Number.POSITIVE_INFINITY };
+      decided = entry;
+      // One that met a failure that may pass, or failed, is decided again
+      // by the first request once TRANSIENT_MS has passed.
+      void decision.then((found) => {
+        if (found !== EMPTY && found.transient) entry.until = now() + TRANSIENT_MS;
+      });
     }
     const found = await decision;
     // An empty store asks whenEmpty every time, which keeps its own watch.
