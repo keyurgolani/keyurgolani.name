@@ -27,38 +27,38 @@
   - Bad: "Welcome to my personal website where I share my work and writing."
   - Good: "Hello, I'm" — or omit entirely.
 
-- `experience.items[].description`: ≤160 chars.
+- A role's `description` (`chronology[]` of kind `role`): ≤160 chars.
   - Why: this is the line under the role, not the bullet list. Long descriptions push highlights out of the viewport.
   - Bad: "I joined the team in 2019 and have since worked on a wide variety of projects spanning rendering, pricing, and serving."
   - Good: "Owned the ad rendering path: 1.1T impressions/year across web and mobile."
 
-- `experience.items[].highlights[]`: each ≤140 chars; aim for 3–5 per role.
+- A role's `highlights[]`: each ≤140 chars; aim for 3–5 per role.
   - Why: highlights are scanned, not read. One verb, one number, one outcome.
   - Bad: "Was responsible for various improvements to the system over multiple quarters."
   - Good: "Cut P99 latency 9x (380ms → 42ms) by rewriting hot path in Rust."
 
-- `projects.items[].description`: ≤200 chars.
-  - Why: project cards live in grids; long descriptions break alignment.
+- A work's `description`: ≤200 chars, unless the work has no case study to hold the story.
+  - Why: work cards live in grids; long descriptions break alignment. The long version belongs in `caseStudy`.
   - Bad: a paragraph explaining the project's history, motivation, and roadmap.
   - Good: "Sub-millisecond key-value store with predictable tail latency. Used in three production services."
 
-- `projects.items[].summary`: ≤100 chars.
-  - Why: the summary is the sub-headline below the project name. Anything longer belongs in `description`.
+- A work's `summary`: ≤100 chars.
+  - Why: the summary is the sub-headline below the work's title. Anything longer belongs in `description`.
   - Bad: "An ambitious rewrite of our internal pricing engine to support millisecond-scale price discovery."
   - Good: "Sub-millisecond pricing engine."
 
-- `talks.items[].description`: ≤180 chars.
+- A talk's `description` (evidence of type `talk`): ≤180 chars.
   - Why: talk cards display a venue + date + one-liner. Abstracts go in `abstract`, not `description`.
   - Bad: a 4-sentence abstract teaser.
   - Good: "Why backpressure beats retries when the downstream is the bottleneck."
 
-- `services.items[].description`: ≤220 chars.
+- A service's `description` (`practice.services[].items[]`): ≤220 chars.
   - Why: services pages convert. A buyer scans the headline, the price, and one sentence — not three.
   - Bad: a marketing paragraph with three clauses.
   - Good: "Two-week reliability audit: traffic patterns, failure modes, capacity headroom. Written report + readout."
 
 - `now.body`: 30–120 words.
-  - Why: a `now` page is a snapshot, not a memoir. If it grows past 120 words, promote chunks into `focus` or `experience`.
+  - Why: a `now` page is a snapshot, not a memoir. If it grows past 120 words, promote chunks into `focus` or a chronology entry.
   - Bad: a list of every project with status updates.
   - Good: "Leading reliability for payments. Writing about partial failures. Off-hours: a slow rewrite of an old C++ project in Rust."
 
@@ -77,9 +77,9 @@
   - Bad: "The pricing service was rewritten and a 9x improvement in P99 was achieved."
   - Good: "Rewrote the pricing service. P99 dropped 9x."
 
-- **Show, don't tell.** Don't say "skilled communicator" — let `talks` and `writings` show it. Don't say "leader" — let `experience` describe what you led.
+- **Show, don't tell.** Don't say "skilled communicator": let talk evidence and writing works show it. Don't say "leader": let a role's highlights say what you led.
   - Bad: "Strong communicator and natural leader."
-  - Good: a `talks` entry at a conference + an `experience` highlight that says "Led a team of 6 through a quarter-long rewrite."
+  - Good: talk evidence from a conference + a role highlight that says "Led a team of 6 through a quarter-long rewrite."
 
 - **Outcomes over responsibilities.** Hiring managers buy outcomes; recruiters skim for them too.
   - Bad: "Responsible for owning and driving the reliability initiative."
@@ -110,8 +110,11 @@
 ## Section-specific rules
 
 - `hero.subtagline` should differ from `identity.tagline` — they appear back-to-back. If they say the same thing twice, drop one.
-- `experience.items[].highlights` should be outcome-bullets (built X, shipped Y, reduced Z by N%), not responsibility-bullets ("responsible for", "managed", "owned the process of"). If a highlight has no verb-result-number triple, it's probably filler.
-- `projects.items[].description` should answer "what is it?" before "why it's interesting." Don't make the reader infer the artifact from the prose.
-- `testimonials.items[].quote` should be ≤220 chars. Long quotes get truncated by variant renderers; pick the one tight sentence the quote leans on.
-- `stats.items[].value` should be a single token (a number, optionally with a suffix). "8B+", "$1.2B", "42ms" — not "approximately 8 billion."
+- A role's `highlights` should be outcome-bullets (built X, shipped Y, reduced Z by N%), not responsibility-bullets ("responsible for", "managed", "owned the process of"). If a highlight has no verb-result-number triple, it's probably filler.
+- A work's `description` should answer "what is it?" before "why it's interesting." Don't make the reader infer the artifact from the prose.
+- A testimonial's `statement` should be ≤220 chars. Long quotes get truncated by variant renderers; pick the one tight sentence the quote leans on. Its `source` names who said it, with their role.
+- A metric's `value` is a number, and its `unit` says what of: `{ key: requests-per-day, value: 10000000000 }` with the statement "Requests a day", not "approximately 10 billion." Give every metric a `key`, so the same figure stated twice is checked.
+- A case study's parts are prose, not bullets: one or two short paragraphs each, and only the parts the work has. `decisions` are the strongest part; give each a `rationale`.
+- Every image a visitor sees needs `alt` text that says what it shows, on the asset (or the placement, when this use differs), or `decorative: true`. A caption isn't alt text.
 - `focus.items[]` should be 1–3 word phrases, not full sentences. If you find yourself writing a sentence, you want `now`, not `focus`.
+- Leave out what isn't written. An empty string or an empty list is an error, and a field left out renders nothing: no placeholder, no default heading.

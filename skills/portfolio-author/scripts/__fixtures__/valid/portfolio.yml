@@ -1,4 +1,4 @@
-schemaVersion: 2
+schemaVersion: 3
 locale: en
 direction: ltr
 
@@ -9,11 +9,12 @@ identity:
   location: Bengaluru, India
   email: test@example.com
 
-links: []
-
 meta:
-  title: Test User — Portfolio
+  title: Test User's portfolio
   description: A minimal valid portfolio fixture.
+
+contact:
+  message: Email is best.
 
 sections:
   - kind: hero
