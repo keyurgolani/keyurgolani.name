@@ -39,7 +39,13 @@ export function ownerHandlers({
   variantHealth,
 }: OwnerInput): Readonly<Record<string, Handler>> {
   return Object.freeze({
-    'config.status': configStatus(config, catalog, variantHealth, () => store.reader.status()),
+    'config.status': configStatus(
+      config,
+      catalog,
+      variantHealth,
+      () => store.reader.status(),
+      () => store.writes(),
+    ),
     // #3's queries and commands, on the store as the owner.
     ...storeHandlers(store.studio),
   });

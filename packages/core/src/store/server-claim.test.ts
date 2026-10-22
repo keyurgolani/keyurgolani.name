@@ -160,7 +160,7 @@ test('a claim another server took over is lost at its next refresh: it stops, an
   );
   // It stopped refreshing, so the other server's claim stands.
   assert.equal(JSON.parse(readFileSync(store.paths.server, 'utf8')).nonce, 'theirs');
-  const refused = (error: unknown) => (error as StoreError).code === 'storage_unavailable';
+  const refused = (error: unknown) => (error as StoreError).code === 'data_dir_in_use';
   await assert.rejects(store.lock.acquire('publish'), refused);
   await assert.rejects(
     store.drafts.create({ documents: pairInput('engineering') }, 'owner'),
@@ -169,6 +169,65 @@ test('a claim another server took over is lost at its next refresh: it stops, an
   // Released, it leaves the other server's file alone.
   await claimed.claim.release();
   assert.equal(JSON.parse(readFileSync(store.paths.server, 'utf8')).nonce, 'theirs');
+});
+
+test('a second claim in this process gets the one that stands, and never writes a record over it', async (t) => {
+  const store = await newStore(t);
+  const first = await claimServer({ paths: store.paths, lock: store.lock, refreshMs: 20 });
+  if (!first.ok) return assert.fail();
+  t.after(() => first.claim.release());
+  const written = readFileSync(store.paths.server, 'utf8');
+  // As a composition built twice makes: one after the other, and two at once.
+  const again = await claimServer({ paths: store.paths, lock: store.lock });
+  const both = await Promise.all([
+    claimServer({ paths: store.paths, lock: store.lock }),
+    claimServer({ paths: store.paths, lock: store.lock }),
+  ]);
+  for (const result of [again, ...both]) assert.equal(result.ok && result.claim, first.claim);
+  assert.equal(readFileSync(store.paths.server, 'utf8'), written);
+  // Refreshes later, it's still this server's, and its writes go on.
+  await sleep(100);
+  assert.equal(first.claim.lost, false);
+  const created = await store.drafts.create({ documents: pairInput('engineering') }, 'owner');
+  assert.equal(created.kind, 'saved');
+});
+
+test('a lost claim stays lost while the other server runs, and a new claim, once the directory is free, lets this server write again', async (t) => {
+  const store = await newStore(t);
+  const claimed = await claimServer({ paths: store.paths, lock: store.lock, refreshMs: 20 });
+  if (!claimed.ok) return assert.fail();
+  const child = otherProcess(t);
+  await sleep(100);
+  const theirs = {
+    pid: child.pid,
+    startTime: processStartTime(child.pid!),
+    hostname: hostname(),
+    at: new Date().toISOString(),
+    nonce: 'theirs',
+  };
+  writeFileSync(store.paths.server, JSON.stringify(theirs));
+  await sleep(100);
+  assert.equal(claimed.claim.lost, true);
+  const file = readFileSync(store.paths.server, 'utf8');
+  // While theirs is fresh, a new claim is refused, and their file is left as it is.
+  const refused = await claimServer({ paths: store.paths, lock: store.lock });
+  assert.equal(!refused.ok && refused.code, 'data_dir_in_use');
+  assert.equal(!refused.ok && refused.holder.nonce, 'theirs');
+  assert.equal(readFileSync(store.paths.server, 'utf8'), file);
+  await assert.rejects(
+    store.drafts.create({ documents: pairInput('engineering') }, 'owner'),
+    (error: StoreError) => error.code === 'data_dir_in_use' && /Stop it/.test(error.message),
+  );
+  // The other server stopped refreshing: the next claim is this server's, and so are its writes.
+  const old = (Date.now() - SERVER_FRESH_MS - 5_000) / 1000;
+  utimesSync(store.paths.server, old, old);
+  const taken = await claimServer({ paths: store.paths, lock: store.lock });
+  if (!taken.ok) return assert.fail();
+  t.after(() => taken.claim.release());
+  assert.notEqual(taken.claim.record.nonce, claimed.claim.record.nonce);
+  assert.equal(taken.claim.held, true);
+  const created = await store.drafts.create({ documents: pairInput('engineering') }, 'owner');
+  assert.equal(created.kind, 'saved');
 });
 
 test("a server knows its claim by its nonce: release leaves a claim in its own pid's name that isn't this one", async (t) => {

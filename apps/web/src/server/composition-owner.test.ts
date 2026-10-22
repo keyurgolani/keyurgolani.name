@@ -302,6 +302,8 @@ test('config.status shows each secret as set and never a value or a path', async
     renderDrift: null,
   });
   assert.match(String((data.catalog as { servingRevisionId: unknown }).servingRevisionId), /^doc-/);
+  // This server holds the data directory, so owner writes go through.
+  assert.deepEqual(data.writes, { state: 'open' });
   assert.equal(data.origin, ORIGIN);
   // The owner's diagnostic (#5): the site example selects a variant this
   // build doesn't register yet, so the fallback composition renders.
@@ -428,6 +430,32 @@ test('every registered operation fails closed without a session and runs with on
   // The pointer moved three times through Studio: publish, rollback, recover.
   assert.equal((await side.publication.status()).seq, 5);
   assert.equal(await live(), revisions[1]);
+});
+
+test('a second composition in this process, as register() run again builds, shares the server claim, and owner writes go on', async () => {
+  const server = path.join(dataDir, 'publication', 'server.json');
+  const claimed = readFileSync(server, 'utf8');
+  const again = await compose(input());
+  assert.ok(again.ok, JSON.stringify(again.ok ? [] : again.issues));
+  // No second record over the first, which the first would read as another server's.
+  assert.equal(readFileSync(server, 'utf8'), claimed);
+  for (const deployment of [state, again.state]) {
+    const signedIn = { 'x-request-id': 'req-owner', 'x-test-session': 'owner' };
+    const working = await deployment.dispatch(
+      new Request(`${ORIGIN}/api/studio/draft.getWorking`, { headers: signedIn }),
+      'draft.getWorking',
+    );
+    const { data } = (await working.json()) as { data: { draft: { version: number } | null } };
+    const created = await deployment.dispatch(
+      new Request(`${ORIGIN}/api/studio/draft.create`, {
+        method: 'POST',
+        headers: { ...signedIn, origin: ORIGIN, 'content-type': 'application/json' },
+        body: JSON.stringify(data.draft ? { expectedVersion: data.draft.version } : {}),
+      }),
+      'draft.create',
+    );
+    assert.equal(created.status, 200, await created.clone().text());
+  }
 });
 
 test("the owner branch puts the provider's Studio page sessions in the deployment state, and none without them", async () => {

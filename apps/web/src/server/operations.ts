@@ -67,6 +67,11 @@ export const ERRORS = {
   lock_lost: { status: 503, message: 'Another publication took over. Try again shortly.' },
   storage_unavailable: { status: 503, message: "The data directory can't be used right now." },
   storage_full: { status: 507, message: 'The data directory is full.' },
+  // #3: this server's claim on the data directory went to another owner server.
+  data_dir_in_use: {
+    status: 503,
+    message: 'Another owner server holds the data directory. Stop it, or restart this one.',
+  },
   // #2: auth.login. Every credential failure answers this one, whatever was wrong.
   credentials_rejected: { status: 401, message: "That password didn't work." },
   // #2: auth.login, with Retry-After.
@@ -187,10 +192,31 @@ export const CatalogStatusSchema = z
   })
   .strict();
 
-/** What config.status answers: the summary, how the live site's variant renders, and what serves. */
+/**
+ * Whether owner writes go through (#3): `stopped`, with why, while another
+ * owner server holds the data directory (`data_dir_in_use`), while this one
+ * hasn't claimed it yet (`data_dir_unclaimed`), or while startup repair
+ * still fails (`store_repair_failed`). Visitors are served either way.
+ */
+export const WriteStateSchema = z.union([
+  z.object({ state: z.literal('open') }).strict(),
+  z
+    .object({
+      state: z.literal('stopped'),
+      code: z.enum(['data_dir_in_use', 'data_dir_unclaimed', 'store_repair_failed']),
+    })
+    .strict(),
+]);
+export type WriteState = z.infer<typeof WriteStateSchema>;
+
+/**
+ * What config.status answers: the summary, how the live site's variant
+ * renders, what serves, and whether owner writes go through.
+ */
 export const ConfigStatusSchema = ConfigSummarySchema.extend({
   variant: VariantHealthSchema,
   catalog: CatalogStatusSchema,
+  writes: WriteStateSchema,
 }).strict();
 export type ConfigStatus = z.infer<typeof ConfigStatusSchema>;
 
@@ -333,12 +359,14 @@ const NO_INPUT = z.object({}).strict();
 
 // #3's store entries (item 22). A store query can find the data directory
 // unreadable; a store write can also wait out the lock, lose it to another
-// holder before it moves anything, or find the disk full.
+// holder before it moves anything, find the disk full, or find another
+// owner server holding the directory.
 const STORE_FAILURES: readonly ErrorCode[] = [
   'lock_timeout',
   'lock_lost',
   'storage_unavailable',
   'storage_full',
+  'data_dir_in_use',
 ];
 /** Every outcome a draft command can return. */
 const DRAFT_OUTCOMES: readonly ErrorCode[] = [

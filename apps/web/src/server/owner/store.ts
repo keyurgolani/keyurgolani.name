@@ -38,6 +38,7 @@ import {
   type UnitInput,
 } from '@portfolio/core/owner';
 import type { ConfigIssue, DeploymentConfig } from '../config';
+import type { WriteState } from '../operations';
 import { recordOwnerModule } from '../load-trace';
 import { log } from '../log';
 
@@ -134,6 +135,8 @@ export interface OwnerStore {
   checkIntegrity(): Promise<readonly ConfigIssue[]>;
   /** Readiness's data-directory check: item 3's write, sync, and rename probe, run at most every 30 s. */
   probe(): Promise<boolean>;
+  /** Whether owner writes go through now, and why not, for config.status. */
+  writes(): WriteState;
   /** Lets publication/server.json go, at once, as the process exits. */
   release(): void;
 }
@@ -373,6 +376,12 @@ export function ownerStore({
       if (status.state === 'degraded') issues.push(finding('revision_damaged'));
       if (status.state === 'incompatible') issues.push(finding('revision_unservable'));
       return issues;
+    },
+    writes(): WriteState {
+      if (claim?.lost) return { state: 'stopped', code: 'data_dir_in_use' };
+      if (!claim?.held) return { state: 'stopped', code: 'data_dir_unclaimed' };
+      if (repairPending) return { state: 'stopped', code: 'store_repair_failed' };
+      return { state: 'open' };
     },
     probe() {
       const at = clock();
