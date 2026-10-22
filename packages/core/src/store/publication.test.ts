@@ -9,7 +9,7 @@ import { nodeFs, type FsPort } from './fs-port';
 import { newRevisionId, type RevisionId } from './layout';
 import { readEvents, readLive } from './pointer';
 import { IDEMPOTENCY_WINDOW, type HeldMove } from './publication';
-import { manifestFor, readManifest, writeRevision } from './revisions';
+import { manifestFor, readManifest, readRevision, writeRevision } from './revisions';
 import { openStore, type Store } from './store';
 import { checkUnit, sha256 } from './unit';
 import {
@@ -483,6 +483,25 @@ test('rollback checks the live revision, its target, and refuses one that is gon
     'owner',
   );
   assert.equal(damaged.kind === 'rejected' && damaged.code, 'revision_incompatible');
+  assert.equal(damaged.kind === 'rejected' && damaged.reason, 'damaged:hash_mismatch');
+  assert.equal((await readLive(nodeFs, store.paths))?.revisionId, second);
+});
+
+test('a revision whose manifest names another unitHash is damaged, though each document matches its own', async (t) => {
+  const store = await newStore(t);
+  const first = await publishInput(store, pairInput('engineering'));
+  const second = await publishInput(store, contentVariant(pairInput('engineering'), 'two'));
+  const file = path.join(store.paths.revision(first), 'manifest.json');
+  const manifest = JSON.parse(readFileSync(file, 'utf8'));
+  writeFileSync(file, JSON.stringify({ ...manifest, unitHash: sha256('another unit') }));
+  assert.deepEqual(await readRevision(nodeFs, store.paths, first), {
+    ok: false,
+    damage: 'hash_mismatch',
+  });
+  const damaged = await owned(store).rollback(
+    { targetRevisionId: first, expectedLiveRevisionId: second },
+    'owner',
+  );
   assert.equal(damaged.kind === 'rejected' && damaged.reason, 'damaged:hash_mismatch');
   assert.equal((await readLive(nodeFs, store.paths))?.revisionId, second);
 });

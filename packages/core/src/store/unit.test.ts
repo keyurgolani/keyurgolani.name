@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { canonicalize, validatePublicationUnit } from '@portfolio/schema';
-import { isSha256, storePaths } from './layout';
+import { isDraftId, isRevisionId, isSha256, storePaths } from './layout';
 import { checkUnit, contentHash, importSourceHash, oversize, plainModel, sha256 } from './unit';
 import {
   commentedVariant,
@@ -142,6 +142,15 @@ test('IDs are checked before they name a path, and a blob is stored under its fi
   const paths = storePaths('/data');
   assert.throws(() => paths.revision('rev_../../etc' as never), TypeError);
   assert.throws(() => paths.draft('drf_x' as never), TypeError);
+  // A whole ID with more after it, a path or a line end, is no ID.
+  const hex32 = '0'.repeat(32);
+  for (const suffix of ['/../../etc', '\n', 'x']) {
+    assert.throws(() => paths.revision(`rev_${hex32}${suffix}` as never), TypeError, suffix);
+    assert.throws(() => paths.staging(`rev_${hex32}${suffix}` as never), TypeError, suffix);
+    assert.throws(() => paths.draft(`drf_${hex32}${suffix}` as never), TypeError, suffix);
+    assert.equal(isRevisionId(`rev_${hex32}${suffix}`), false, suffix);
+    assert.equal(isDraftId(`drf_${hex32}${suffix}`), false, suffix);
+  }
   assert.throws(() => paths.blob('sha256:zz' as never), TypeError);
   assert.throws(() => paths.event(0), TypeError);
   const hex = 'ab'.padEnd(64, '0');

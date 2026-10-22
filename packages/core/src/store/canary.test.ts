@@ -119,8 +119,10 @@ test('seeded secret and session canaries appear in no file in the data directory
       assert.equal(text.includes(canary), false, `${file} holds a canary`);
     }
   }
+  // Drafts go back over HTTP, so they name no path either.
+  assert.ok(files.some((file) => file.startsWith('drafts/')));
   const paths = [dataDir, SCHEMA_FIXTURES, homedir(), process.cwd()];
-  for (const file of files.filter((name) => /^(revisions|publication|audit)\//.test(name))) {
+  for (const file of files.filter((name) => /^(revisions|publication|audit|drafts)\//.test(name))) {
     const text = readFileSync(path.join(dataDir, file), 'utf8');
     for (const where of paths) assert.equal(text.includes(where), false, `${file} names a path`);
   }

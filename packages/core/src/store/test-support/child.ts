@@ -21,6 +21,9 @@ import { ownerSession, testChecks } from './fixtures';
 
 export type Step =
   | { readonly op: 'publish'; readonly input: PublishInput }
+  /** A publish whose owner session ended before it began. */
+  | { readonly op: 'publishEnded'; readonly input: PublishInput }
+  | { readonly op: 'repair' }
   | { readonly op: 'rollback'; readonly input: RollbackInput }
   | { readonly op: 'recover'; readonly input: RecoverInput }
   | { readonly op: 'create'; readonly input: CreateDraftInput }
@@ -108,6 +111,17 @@ async function run(task: Extract<ChildTask, { kind: 'run' }>): Promise<StepResul
           outcome = await store.publication.publish(step.input, 'owner', {
             holdSession: owner.holdSession,
           });
+          break;
+        case 'publishEnded': {
+          const ended = await ownerSession();
+          await ended.sessions.end(ended.digest, 'logout');
+          outcome = await store.publication.publish(step.input, 'owner', {
+            holdSession: ended.holdSession,
+          });
+          break;
+        }
+        case 'repair':
+          outcome = await store.publication.repair();
           break;
         case 'rollback':
           outcome = await store.publication.rollback(step.input, 'owner', {

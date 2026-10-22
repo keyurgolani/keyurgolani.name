@@ -1,24 +1,31 @@
 // The crash criterion (#3, Slice 1, and Verification required): every write,
 // sync, and rename of a publish, a rollback, a draft save, and an asset put
-// has a named crash point. Each is hit twice, as a failed call in this
-// process and as a SIGKILL of a child process, and then one fresh process
-// repairs and checks every resulting data directory: the live revision is
-// the old or the new one, it validates, nothing staged remains, and no
-// acknowledged draft is lost. These are process crashes, not power loss.
+// has a named crash point, and so does each step of breaking a stale lock,
+// of moving aside event files live.json disagrees with, of removing a
+// revision that never went live, and of repair. Each is hit twice, as a
+// failed call in this process and as a SIGKILL of a child process, and then
+// one fresh process repairs and checks every resulting data directory: the
+// live revision is the old or the new one, it validates, nothing staged
+// remains, and no acknowledged draft is lost. These are process crashes,
+// not power loss. A crash point stops before its call, never inside it, so
+// the write discipline is checked on its own: no file the store keeps is
+// ever written in place, so a torn write is only ever a temporary file's.
 import assert from 'node:assert/strict';
-import { cpSync, mkdtempSync, rmSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test, type TestContext } from 'node:test';
-import type { DraftId, RevisionId } from './layout';
+import { newRevisionId, storePaths, type DraftId, type RevisionId } from './layout';
+import { thisProcess } from './lock';
 import { openStore, type Store } from './store';
 import { checkUnit, sha256, type UnitInput } from './unit';
 import type { CheckReport, ChildTask, Step } from './test-support/child';
-import { crashingFs, recordingFs, type PointHit } from './test-support/crash-fs';
+import { crashingFs, recordingFs, type FsCall, type PointHit } from './test-support/crash-fs';
 import {
   contentVariant,
   newStore,
   owned,
+  ownerSession,
   pairInput,
   publishInput,
   testChecks,
@@ -46,6 +53,8 @@ interface Scenario {
   verify(report: CheckReport, seeded: Seeded, label: string): 'old' | 'new';
   /** Points the operation must pass, by name. */
   readonly required: readonly string[];
+  /** The sides its crashes land on: both, unless it never moves the pointer. */
+  readonly sides?: readonly ('old' | 'new')[];
 }
 
 const range = (to: number) => Array.from({ length: to }, (_, index) => index + 1);
@@ -72,6 +81,65 @@ function verifyCommon(report: CheckReport, label: string) {
   assert.ok(report.liveEventRecorded, `${label}: the live event has its file`);
   assert.deepEqual(report.eventSeqs, range(report.live.seq), `${label}: events`);
   assert.equal(report.lockHeld, false, `${label}: lock`);
+}
+
+/** tempBeside()'s names, and the names event files are moved aside to. */
+const TEMP = /^\..+\.[0-9a-f]{12}\.tmp$/;
+const ASIDE = /^[1-9][0-9]*\.aside-[0-9a-f]{12}\.json$/;
+
+/**
+ * The write discipline, which crash points can't see: writeFile() only ever
+ * makes a temporary file, or a file in a revision's staging directory, and
+ * a file the store keeps, such as live.json, a draft, an event, or a blob,
+ * only ever appears whole, by a rename or a link from one of those.
+ */
+function assertWritesWhole(calls: readonly FsCall[], root: string, label: string) {
+  const paths = storePaths(root);
+  const shown = (file: string) => path.relative(root, file);
+  const made = (file: string) =>
+    TEMP.test(path.basename(file)) ||
+    path.relative(paths.revisions, file).split(path.sep)[0]!.startsWith('.staging-');
+  for (const call of calls) {
+    if (call.op === 'writeFile') {
+      assert.ok(made(call.target), `${label}: ${call.point} writes ${shown(call.target)} in place`);
+    }
+    if (call.op !== 'rename' && call.op !== 'link') continue;
+    // Moving a file out of the way, to a name nothing reads, keeps nothing.
+    if (TEMP.test(path.basename(call.target)) || ASIDE.test(path.basename(call.target))) continue;
+    assert.ok(
+      made(call.from!),
+      `${label}: ${call.point} puts ${shown(call.target)} in place from ${shown(call.from!)}`,
+    );
+  }
+}
+
+/** A lock this test's process took before a restart: stale to every process on this host. */
+const staleLock = () =>
+  JSON.stringify({
+    ...thisProcess(),
+    startTime: 'an earlier start',
+    holder: 'cli:backup',
+    at: new Date().toISOString(),
+    nonce: 'stale',
+  });
+
+/**
+ * Event files live.json disagrees with, as a second holder of the lock
+ * leaves them: another event at the live seq 1, and one past it.
+ */
+function strayEvents(root: string, live: RevisionId) {
+  const paths = storePaths(root);
+  const event = (seq: number, type: string) =>
+    JSON.stringify({
+      seq,
+      type,
+      revisionId: live,
+      previousRevisionId: live,
+      actor: 'operator',
+      at: new Date().toISOString(),
+    });
+  writeFileSync(paths.event(1), event(1, 'recover'));
+  writeFileSync(paths.event(2), event(2, 'rollback'));
 }
 
 const publishScenario: Scenario = {
@@ -266,6 +334,80 @@ const putScenario: Scenario = {
   },
 };
 
+const leftScenario: Scenario = {
+  ...publishScenario,
+  name: 'a publish over a stale lock and stray event files',
+  required: [
+    'lock.break.write',
+    'lock.break.link',
+    'lock.break.rename',
+    'lock.break.remove',
+    'lock.break.release',
+    'publish.repair.event.aside',
+    'publish.repair.event.aside.fsync',
+    'publish.repair.event.link',
+    'publish.live.rename',
+    'publish.event.link',
+  ],
+  async seed(t) {
+    const seeded = await publishScenario.seed(t);
+    writeFileSync(storePaths(seeded.template).lock, staleLock());
+    strayEvents(seeded.template, seeded.liveBefore!);
+    return seeded;
+  },
+};
+
+const endedScenario: Scenario = {
+  ...publishScenario,
+  name: 'a publish whose session ended',
+  required: ['publish.revision.rename', 'publish.unpublished.remove', 'publish.unpublished.fsync'],
+  sides: ['old'],
+  step: (seeded) => ({
+    op: 'publishEnded',
+    input: { draftId: seeded.draftId!, draftVersion: 1, expectedLiveRevisionId: seeded.liveBefore },
+  }),
+  async run(store, seeded) {
+    const ended = await ownerSession();
+    await ended.sessions.end(ended.digest, 'logout');
+    return store.publication.publish(
+      { draftId: seeded.draftId!, draftVersion: 1, expectedLiveRevisionId: seeded.liveBefore },
+      'owner',
+      { holdSession: ended.holdSession },
+    );
+  },
+};
+
+const repairScenario: Scenario = {
+  name: 'a repair',
+  required: [
+    'repair.staging.remove',
+    'repair.revisions.fsync',
+    'repair.temp.remove',
+    'repair.event.aside',
+    'repair.event.aside.fsync',
+    'repair.event.link',
+    'repair.events.fsync',
+  ],
+  sides: ['old'],
+  async seed(t) {
+    const store = await newStore(t);
+    const liveBefore = await publishInput(store, pairInput('engineering'));
+    // What a crash and a second holder of the lock leave behind.
+    mkdirSync(path.join(store.paths.staging(newRevisionId()), 'documents'), { recursive: true });
+    writeFileSync(path.join(store.paths.drafts, '.drf.json.0123456789ab.tmp'), '{"draft');
+    strayEvents(store.paths.root, liveBefore);
+    return { template: store.paths.root, liveBefore, seqBefore: 1 };
+  },
+  step: () => ({ op: 'repair' }),
+  run: (store) => store.publication.repair(),
+  verify(report, seeded, label) {
+    verifyCommon(report, label);
+    assert.equal(report.live!.revisionId, seeded.liveBefore, `${label}: repair moves no pointer`);
+    assert.equal(report.live!.seq, 1, label);
+    return 'old';
+  },
+};
+
 async function crashEveryPoint(t: TestContext, scenario: Scenario) {
   const seeded = await scenario.seed(t);
   const next = scratch(t);
@@ -275,16 +417,18 @@ async function crashEveryPoint(t: TestContext, scenario: Scenario) {
     return dir;
   };
 
-  // The points the operation passes, in order.
+  // The points the operation passes, in order, and the calls it makes there.
   const recording = recordingFs();
+  const recorded = copy();
   await scenario.run(
-    openStore({ dataDir: copy(), checks: testChecks(), fs: recording.fs }),
+    openStore({ dataDir: recorded, checks: testChecks(), fs: recording.fs }),
     seeded,
   );
   const hits = recording.hits;
   const names = new Set(hits.map((hit) => hit.point));
   for (const point of scenario.required)
     assert.ok(names.has(point), `${scenario.name} passes ${point}`);
+  assertWritesWhole(recording.calls, recorded, scenario.name);
 
   const checked: { dataDir: string; label: string }[] = [];
   const label = (hit: PointHit, mode: string) =>
@@ -331,11 +475,19 @@ async function crashEveryPoint(t: TestContext, scenario: Scenario) {
     sides.add(scenario.verify(report, seeded, checked[index]!.label));
   });
   // Points before the commit leave the old state, and points after it the new.
-  assert.deepEqual([...sides].sort(), ['new', 'old']);
+  assert.deepEqual([...sides].sort(), [...(scenario.sides ?? ['new', 'old'])].sort());
   return hits.length;
 }
 
-for (const scenario of [publishScenario, rollbackScenario, saveScenario, putScenario]) {
+for (const scenario of [
+  publishScenario,
+  rollbackScenario,
+  saveScenario,
+  putScenario,
+  leftScenario,
+  endedScenario,
+  repairScenario,
+]) {
   test(`${scenario.name} that crashes at any point leaves the old state or the new one`, async (t) => {
     const count = await crashEveryPoint(t, scenario);
     t.diagnostic(`${scenario.name}: ${count} crash points, each thrown and killed`);
