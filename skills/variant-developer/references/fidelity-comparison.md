@@ -138,10 +138,10 @@ present in the final variant:
 - [ ] 5 social profile cards in parallax orbit, draggable.
 - [ ] Multi-text typing animation cycling roles.
 - [ ] Animated counters in metric tiles.
-- [ ] SVG fork/merge timeline with per-kind colored branches.
+- [ ] SVG fork/merge timeline, its lanes the chronology's `thread`, `branchesFrom`, and `mergesInto`.
 - [ ] 3D mouse-tilt on expanded timeline cards with radial-gradient glow.
-- [ ] Project cards expand on click; show technologies as chips.
-- [ ] Project badges auto-derived from text (Hackathon / Published / Open Source).
+- [ ] Work cards expand on click; show the work's `tools` as chips.
+- [ ] Work badges from the work's own `tags` (Hackathon / Published / Open Source), never derived from its text.
 - [ ] Contact buttons ordered by preferred channel.
 
 Signature elements **intentionally dropped**:
