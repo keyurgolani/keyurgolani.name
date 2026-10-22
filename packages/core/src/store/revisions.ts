@@ -205,7 +205,10 @@ async function readText(fs: ReadFs, file: string): Promise<string | null> {
   try {
     return (await fs.readFile(file)).toString('utf8');
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
+    // A link where one of its files belongs is none of them: the store's
+    // reads never go through one (ELOOP), so the revision is damaged.
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === 'ENOENT' || code === 'ELOOP') return null;
     throw error;
   }
 }
