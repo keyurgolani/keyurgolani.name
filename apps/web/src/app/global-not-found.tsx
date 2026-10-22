@@ -2,11 +2,9 @@ import type { Metadata } from 'next';
 import { headers } from 'next/headers';
 import { getDeploymentConfig } from '~/server/config-store';
 import { NotFoundDocument } from './_chrome/not-found-document';
-import './globals.css';
 // The site's 404 renders inside its presentation boundary, so it gets the
-// stylesheets the site's layout imports.
-import '@portfolio/kit/sections/styles.css';
-import '~/lib/generated/registry.styles';
+// stylesheets the site's layout imports, and never host chrome (#7).
+import '~/lib/experience-styles';
 
 // A URL no route matches (#2). The site and Studio each have their own root
 // layout, so there is none to compose a 404 from: this page brings its own

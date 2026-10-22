@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import type { Site } from '@portfolio/schema';
-import { PresentationBoundary } from '~/lib/render-composition';
+import { PresentationBoundary } from '~/lib/experience-document';
 import { compositionFor } from '~/lib/variants';
 import { getDeploymentState } from '~/server/config-store';
 import { capabilityPolicy, type NavLink } from '~/server/policy';

@@ -1,0 +1,55 @@
+/* Host chrome (#7, Slice 1): the host's own error and not-found pages, which
+   only Studio's layout loads. No site or preview document loads this file.
+   The sentinel is how tests tell: a document that never loaded it has no
+   --studio-sentinel on its root. #8 moves the sentinel into Studio's own
+   stylesheet when it deletes this file. */
+
+:root {
+  --studio-sentinel: present;
+}
+
+.host-chrome {
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+  max-width: none;
+  margin: 0;
+  padding: 3rem clamp(1.5rem, 4vw, 4rem);
+  line-height: 1.6;
+}
+
+.host-chrome h1 {
+  font-size: 2rem;
+  margin: 0 0 0.5rem;
+  letter-spacing: -0.01em;
+}
+
+.host-chrome p {
+  margin: 0 0 1rem;
+}
+
+.host-chrome a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.host-chrome__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.host-chrome__reference {
+  font-size: 0.875rem;
+  color: #6b6863;
+}
+
+html[data-theme='dark'] .host-chrome__reference {
+  color: #a19c94;
+}

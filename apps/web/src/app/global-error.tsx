@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import './globals.css';
+import './experience-base.css';
 
 // Replaces the root layout when the layout itself fails, so it brings its own
 // <html> and <body>. Like error.tsx, it shows only the digest.
