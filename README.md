@@ -36,7 +36,7 @@ To run in Docker (production), with both documents in `config/` and `PORTFOLIO_O
 docker compose up --build
 ```
 
-That runs the `read-only` profile, which serves `config/` as it is. Under the `owner` profile (`deploy/compose.owner.yml`), the mounted files are import input: an edit goes live only through `portfolio-store import` or a Studio publish ([docs/deployment.md](docs/deployment.md#the-revision-store)).
+That runs the `read-only` profile, which serves `config/` as it is. Under the `owner` profile (`deploy/compose.owner.yml`), the first start imports the mounted files, and from then on they're import input: an edit goes live only through `portfolio-store import` or a Studio publish ([docs/deployment.md](docs/deployment.md#the-revision-store)).
 
 See [docs/getting-started.md](docs/getting-started.md) for the full walkthrough.
 
