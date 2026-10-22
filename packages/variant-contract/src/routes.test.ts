@@ -2,8 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import type { VariantManifest, ViewDeclaration } from './manifest-schema';
-import { dispatch, href, idFor, normalizeBasePath, type RouteTarget } from './routes';
-import { RESERVED_SEGMENTS } from './segments';
+import { dispatch, href, idFor, normalizeBasePath, routeHref, type RouteTarget } from './routes';
+import { matchPathView, PARAM_VALUE_MAX_LENGTH, RESERVED_SEGMENTS } from './segments';
 import { validateManifest } from './validate-manifest';
 
 // Routes (#5, Slice 1, item 3): dispatch() turns a path into home, work, or a
@@ -76,6 +76,42 @@ test('anything else is not found, including fragment views as paths and odd segm
   }
 });
 
+test('a placeholder value or a work slug is at most 64 characters, as a content id is', () => {
+  assert.equal(PARAM_VALUE_MAX_LENGTH, 64);
+  const longest = 'a'.repeat(PARAM_VALUE_MAX_LENGTH);
+  const over = `${longest}b`;
+  assert.deepEqual(go(['chapters', longest]), {
+    kind: 'render',
+    target: { route: 'view', view: CHAPTERS, params: { chapter: longest } },
+  });
+  for (const segments of [
+    ['chapters', over],
+    ['chapters', 'x'.repeat(8000)],
+    ['work', over],
+    ['work', over, 'notes'],
+    // Only acme-reef declares reels/{reel}: a long value redirects no more than it renders.
+    ['reels', over],
+  ]) {
+    assert.deepEqual(go(segments), { kind: 'not-found' }, `${segments[0]} ${segments[1]!.length}`);
+  }
+  // href writes no value dispatch wouldn't read back.
+  assert.throws(() => href({ route: 'work', slug: over }), TypeError);
+  assert.throws(
+    () => href({ route: 'view', view: CHAPTERS, params: { chapter: over } }),
+    TypeError,
+  );
+  assert.throws(() => href({ route: 'view', view: ANCHOR, params: { chapter: over } }), TypeError);
+});
+
+test('matchPathView reads a path view the way dispatch does, and a fragment view never', () => {
+  assert.deepEqual(matchPathView(CHAPTERS, 'home', ['chapters', 'three']), { chapter: 'three' });
+  assert.deepEqual(matchPathView(NOTES, 'work', ['notes']), {});
+  assert.equal(matchPathView(CHAPTERS, 'work', ['chapters', 'three']), null);
+  assert.equal(matchPathView(CHAPTERS, 'home', ['chapters']), null);
+  assert.equal(matchPathView(CHAPTERS, 'home', ['chapters', 'Three']), null);
+  assert.equal(matchPathView(ANCHOR, 'home', ['chapter-three']), null);
+});
+
 test("the site's toggles turn routes off, but never home", () => {
   const toggles = {
     home: { enabled: false },
@@ -102,6 +138,18 @@ test('a view only another installed variant declares redirects to its canonical 
       kind: 'redirect',
       location: '/sample/work/tide-tables?variant=acme-ocean',
     },
+  );
+  // Under #7's preview prefix, the redirect stays inside the grant.
+  assert.deepEqual(go(['reels', 'one'], { basePath: '/preview/g_7Hk-2' }), {
+    kind: 'redirect',
+    location: '/preview/g_7Hk-2',
+  });
+  assert.deepEqual(
+    go(['work', 'tide-tables', 'credits'], {
+      basePath: '/preview/g_7Hk-2',
+      query: { variant: 'acme-ocean' },
+    }),
+    { kind: 'redirect', location: '/preview/g_7Hk-2/work/tide-tables?variant=acme-ocean' },
   );
   // Without the other variant installed, it's just missing.
   assert.deepEqual(go(['reels', 'one'], { installed: [OCEAN] }), { kind: 'not-found' });
@@ -172,6 +220,27 @@ test('href keeps the query, before any fragment, in a stable order', () => {
   );
 });
 
+test('routeHref links from a render input: its base path, query, and id prefix', () => {
+  const sample = { basePath: '/sample', query: { variant: 'acme-ocean' }, ids: { prefix: 'pv-' } };
+  const preview = { basePath: '/preview/g_7Hk-2', query: {}, ids: { prefix: '' } };
+  const chapter: RouteTarget = { route: 'view', view: CHAPTERS, params: { chapter: 'three' } };
+  const anchor: RouteTarget = { route: 'view', view: ANCHOR, params: { chapter: 'three' } };
+  assert.equal(routeHref(sample, { route: 'home' }), '/sample?variant=acme-ocean');
+  assert.equal(routeHref(sample, chapter), '/sample/chapters/three?variant=acme-ocean');
+  assert.equal(routeHref(sample, anchor), '/sample?variant=acme-ocean#pv-chapter-three');
+  assert.equal(routeHref(preview, chapter), '/preview/g_7Hk-2/chapters/three');
+  assert.equal(
+    routeHref(preview, { route: 'view', view: NOTES, params: {}, slug: 'tide-tables' }),
+    '/preview/g_7Hk-2/work/tide-tables/notes',
+  );
+  // What it writes, dispatch reads back to the same target.
+  const segments = routeHref(preview, chapter).slice('/preview/g_7Hk-2/'.length).split('/');
+  assert.deepEqual(go(segments, { basePath: preview.basePath }), {
+    kind: 'render',
+    target: chapter,
+  });
+});
+
 test('href refuses what it could only write wrong', () => {
   assert.throws(() => href({ route: 'home' }, { basePath: 'sample' }), TypeError);
   assert.throws(() => href({ route: 'home' }, { basePath: '/sample/' }), TypeError);
@@ -183,6 +252,7 @@ test('href refuses what it could only write wrong', () => {
 });
 
 test('the reserved first segments include every host route and metadata file', () => {
+  // The host's own test checks its route table against the list too.
   for (const segment of [
     'studio',
     'api',
@@ -190,6 +260,8 @@ test('the reserved first segments include every host route and metadata file', (
     'sample',
     'preview',
     'work',
+    'admin',
+    'variants',
     'feed.xml',
     'robots.txt',
     'sitemap.xml',

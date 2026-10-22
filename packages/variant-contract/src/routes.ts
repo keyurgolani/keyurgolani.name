@@ -4,7 +4,13 @@
 
 import { isSectionId, type Site } from '@portfolio/schema';
 import type { VariantManifest, ViewDeclaration } from './manifest-schema';
-import { PARAM_VALUE, parseFragmentPattern, parsePathPattern, type PatternPart } from './segments';
+import {
+  isParamValue,
+  matchPathView,
+  parseFragmentPattern,
+  parsePathPattern,
+  type PatternPart,
+} from './segments';
 
 /** What a request renders. */
 export type RouteTarget =
@@ -50,7 +56,7 @@ export function dispatch(options: DispatchOptions): DispatchResult {
   let slug: string | undefined;
   if (segments[0] === 'work') {
     slug = segments[1];
-    if (slug === undefined || !PARAM_VALUE.test(slug) || !enabled('work')) {
+    if (slug === undefined || !isParamValue(slug) || !enabled('work')) {
       return { kind: 'not-found' };
     }
     if (segments.length === 2) return { kind: 'render', target: { route: 'work', slug } };
@@ -89,20 +95,13 @@ function matchView(
 ): { view: ViewDeclaration; params: Record<string, string> } | null {
   let best: { view: ViewDeclaration; params: Record<string, string>; shape: string } | null = null;
   for (const view of manifest.routes.views) {
-    if (view.type !== 'path' || view.under !== under) continue;
-    const pattern = parsePathPattern(view.segment);
-    if ('problem' in pattern || pattern.parts.length !== segments.length) continue;
-    const params: Record<string, string> = {};
-    const matches = pattern.parts.every((part, index) => {
-      const segment = segments[index]!;
-      if ('literal' in part) return part.literal === segment;
-      if (!PARAM_VALUE.test(segment)) return false;
-      params[part.param] = segment;
-      return true;
-    });
-    if (!matches) continue;
+    const params = matchPathView(view, under, segments);
+    if (params === null) continue;
     // L for a literal and P for a placeholder sort a literal first, segment by segment.
-    const shape = pattern.parts.map((part) => ('literal' in part ? 'L' : 'P')).join('');
+    const shape = view.segment
+      .split('/')
+      .map((piece) => (piece.startsWith('{') ? 'P' : 'L'))
+      .join('');
     if (!best || shape < best.shape) best = { view, params, shape };
   }
   return best && { view: best.view, params: best.params };
@@ -155,14 +154,37 @@ export function href(target: RouteTarget, options: HrefOptions = {}): string {
   }
 }
 
+/** What routeHref() reads from a variant's render input. */
+export interface LinkContext {
+  readonly basePath: string;
+  readonly query: Readonly<Record<string, string>>;
+  readonly ids: { readonly prefix: string };
+}
+
+/**
+ * The URL of a route, for a link a variant renders: below the render input's
+ * base path, keeping its query, with its id prefix on a fragment view. A
+ * variant's internal links go through it, so one render links right at the
+ * site root, under /sample, and under #7's preview prefix.
+ */
+export function routeHref(input: LinkContext, target: RouteTarget): string {
+  return href(target, {
+    basePath: input.basePath,
+    query: input.query,
+    idPrefix: input.ids.prefix,
+  });
+}
+
 function requireSlug(slug: string | undefined): string {
   if (slug === undefined) throw new TypeError('A view under work needs the work slug.');
   return slug;
 }
 
 function segmentValue(value: string): string {
-  if (!PARAM_VALUE.test(value)) {
-    throw new TypeError('A slug or placeholder value is lowercase words joined by hyphens.');
+  if (!isParamValue(value)) {
+    throw new TypeError(
+      'A slug or placeholder value is lowercase words joined by hyphens, at most 64 characters.',
+    );
   }
   return value;
 }
