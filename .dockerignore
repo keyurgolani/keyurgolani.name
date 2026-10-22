@@ -7,9 +7,12 @@
 **/playwright-report
 **/*.tsbuildinfo
 **/.cache
-# The appearance packs' compiled files (#19): the image build writes its own,
-# so a checkout's, fixture packs' files among them, never reach it.
+# The appearance packs' compiled files (#19), and the variants' compiled
+# stylesheets with the images they name (#6): the image build writes its own,
+# so a checkout's, fixtures' files among them, never reach it.
 apps/web/public/_portfolio/pack
+apps/web/public/_portfolio/variant
+apps/web/public/_portfolio/asset
 
 archive
 experiments

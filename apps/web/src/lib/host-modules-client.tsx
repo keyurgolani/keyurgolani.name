@@ -1,6 +1,8 @@
 'use client';
 
-import { registerHostModules } from '@portfolio/kit/sections';
+// Through its own subpath, not the sections barrel, so the page's client
+// chunk holds the registry and nothing else of the kit's (#6, Slice 2).
+import { registerHostModules } from '@portfolio/kit/host-modules';
 import { ENHANCEMENT_LOADERS } from './generated/registry.enhancements';
 import { EXTENSION_RENDERERS } from './generated/registry.renderers';
 

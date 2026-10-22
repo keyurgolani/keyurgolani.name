@@ -4,7 +4,8 @@ import Module from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { themeInitScript } from '@portfolio/kit';
+import { themeInitScript } from '@portfolio/kit/theme-init';
+import { variantStylesheet } from '~/lib/variants';
 import { PROFILES } from '~/server/capabilities';
 import { setDeploymentState } from '~/server/config-store';
 import { capabilityPolicy } from '~/server/policy';
@@ -97,9 +98,11 @@ test("the global 404's document is in the portfolio's language and direction, wi
     degraded: [],
   });
   const html = renderToStaticMarkup(await NotFoundDocument({ nonce: 'MVlEoQyHU2PoMq1Imu8oSA==' }));
+  // Inside the site's presentation boundary, with the stylesheet of the variant that renders (#6).
+  const stylesheet = `<link rel="stylesheet" href="${variantStylesheet('fallback')}" data-precedence="variant"/>`;
   assert.ok(
     html.startsWith(
-      `<html lang="ar" dir="rtl"><head><script nonce="MVlEoQyHU2PoMq1Imu8oSA==">${themeInitScript('dark')}</script></head><body>`,
+      `<html lang="ar" dir="rtl"><head>${stylesheet}<script nonce="MVlEoQyHU2PoMq1Imu8oSA==">${themeInitScript('dark')}</script></head><body>`,
     ),
     html,
   );
@@ -177,11 +180,16 @@ test("not-found.tsx renders inside the live site's presentation boundary, naming
   });
   const html = renderToStaticMarkup(await NotFound());
   // The fallback composition stands in for the unregistered variant, which
-  // only the boundary's data attribute names, for the owner and the tests.
+  // only the boundary's data attribute names, for the owner and the tests,
+  // and the boundary links the fallback's stylesheet and no other (#6).
   const marker = 'data-requested-variant="canary-variant"';
-  assert.match(
+  const stylesheet = `<link rel="stylesheet" href="${variantStylesheet('fallback')}" data-precedence="variant"/>`;
+  assert.ok(
+    html.startsWith(
+      `${stylesheet}<div data-variant="fallback" data-requested-variant="canary-variant" data-motion-policy="reduce"><main class="host-chrome">`,
+    ),
     html,
-    /^<div data-variant="fallback" data-requested-variant="canary-variant" data-motion-policy="reduce"><main class="host-chrome">/,
   );
-  assertGeneric(html.replace(marker, ''));
+  assert.equal(html.split('rel="stylesheet"').length, 2, 'one stylesheet');
+  assertGeneric(html.replace(marker, '').replace(stylesheet, ''));
 });

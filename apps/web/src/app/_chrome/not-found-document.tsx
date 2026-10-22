@@ -1,4 +1,4 @@
-import { themeInitScript } from '@portfolio/kit';
+import { themeInitScript } from '@portfolio/kit/theme-init';
 import { startingTheme } from '~/lib/starting-theme';
 import { getDeploymentState } from '~/server/config-store';
 import { getLive } from '~/server/live-revision';

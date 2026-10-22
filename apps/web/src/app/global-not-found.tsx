@@ -4,7 +4,8 @@ import { getDeploymentConfig } from '~/server/config-store';
 import { isPreviewPolicy } from '~/server/preview-headers';
 import { NotFoundDocument } from './_chrome/not-found-document';
 // The site's 404 renders inside its presentation boundary, so it gets the
-// stylesheets the site's layout imports, and never host chrome (#7).
+// stylesheets the site's layout imports, the boundary links its variant's
+// (#6), and it never gets host chrome (#7).
 import '~/lib/experience-styles';
 
 // A URL no route matches (#2). The site and Studio each have their own root

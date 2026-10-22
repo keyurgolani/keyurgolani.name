@@ -6,7 +6,9 @@
 //
 // Packs are checked and compiled by hooks the host passes in (#19, Slice 2),
 // @portfolio/appearance's validator and compiler, so this package depends on
-// nothing of #19's and there's no package cycle. A dependency marked
+// nothing of #19's and there's no package cycle. Each variant's stylesheet
+// compiles here, into #19's variant-layout layer, with the layer order the
+// host passes in the same way (#6, Slice 2). A dependency marked
 // `portfolio.fixture: true` registers only when the fixture gate the host
 // passes admits it (#7, item 10).
 
@@ -28,6 +30,11 @@ import {
   readJson,
   type PackageJson,
 } from './packages';
+import {
+  compileVariantStylesheet,
+  type ServedFile,
+  type StylesheetSource,
+} from './variant-stylesheet';
 
 /** The package kinds the registry reads, from `portfolio.kind` in package.json. */
 export const REGISTRY_KINDS = [
@@ -67,6 +74,7 @@ export const REGISTRY_CODES = {
   'registry.packs-missing': 'error',
   'registry.pack-id-mismatch': 'error',
   'registry.pack-compile': 'error',
+  'registry.stylesheet-compile': 'error',
   'registry.fixture-unmapped': 'error',
   'registry.fixture-unmarked': 'error',
   'registry.fixture-leak': 'error',
@@ -109,6 +117,14 @@ export interface VariantEntry {
     readonly specifier: string;
     readonly file: string;
   }[];
+  /** From a `portfolio.fixture: true` package its flag admitted. */
+  readonly fixture: boolean;
+  /** Its compiled stylesheet (#6, Slice 2), with stylesheet hooks; null without them. */
+  readonly stylesheet: ServedFile | null;
+  /** The images that stylesheet names, copied by content hash. */
+  readonly assets: readonly ServedFile[];
+  /** Every file the compiled stylesheet came from, as real paths: what a watcher watches. */
+  readonly stylesheetInputs: readonly string[];
 }
 
 /** A content extension generation registers. */
@@ -187,6 +203,19 @@ export interface PackHooks {
 }
 
 /**
+ * How each variant's stylesheet compiles (#6, Slice 2, item 2): #19's
+ * layer-order statement and the layer every rule goes in, which the host
+ * passes in as it does the pack checks, and the stylesheets each variant's
+ * starts with, such as the kit's shared renderers' layout. Without them a
+ * variant registers with no compiled stylesheet, as in the ./node tests.
+ */
+export interface StylesheetHooks {
+  readonly layerOrder: string;
+  readonly layer: string;
+  readonly shared: readonly StylesheetSource[];
+}
+
+/**
  * The fixture gate (#7, item 10): for a `portfolio.fixture: true` package in
  * `dir`, the flag its directory maps to and whether that flag admits it.
  */
@@ -245,6 +274,8 @@ export interface RegistryOptions {
   readonly hostDir: string;
   /** #19's pack checks. */
   readonly packs?: PackHooks;
+  /** How each variant's stylesheet compiles. */
+  readonly stylesheets?: StylesheetHooks;
   /** The fixture gate. Without it, every fixture package is unmapped, which fails generation. */
   readonly fixtures?: FixtureGate;
 }
@@ -453,9 +484,17 @@ async function readDependency(
     if (register)
       found.packs.push(...entries.map((entry) => ({ ...entry, fixture: gate !== undefined })));
   } else if (kind === 'variant') {
-    const entry = readVariant(name, version, dir, pkg, hostDir, found.diagnostics);
+    const entry = readVariant(
+      name,
+      version,
+      dir,
+      pkg,
+      hostDir,
+      found.diagnostics,
+      options.stylesheets,
+    );
     fixture(entry ? [entry.manifest.id] : []);
-    if (entry && register) found.variants.push(entry);
+    if (entry && register) found.variants.push({ ...entry, fixture: gate !== undefined });
   } else {
     const entry = await readExtension(name, version, dir, pkg, hostDir, found.diagnostics);
     fixture(entry ? [entry.namespace] : []);
@@ -752,7 +791,8 @@ function readVariant(
   pkg: PackageJson,
   hostDir: string,
   diagnostics: RegistryDiagnostic[],
-): VariantEntry | undefined {
+  stylesheets: StylesheetHooks | undefined,
+): Omit<VariantEntry, 'fixture'> | undefined {
   const at = (file: string) => posix(path.relative(hostDir, file));
   const packageFile = path.join(dir, 'package.json');
   const fail = reporter(diagnostics, name, version, at(packageFile));
@@ -837,6 +877,36 @@ function readVariant(
   }
   if (!checked.ok || !complete) return undefined;
   const { manifest } = checked;
+  let compiled: Pick<VariantEntry, 'stylesheet' | 'assets' | 'stylesheetInputs'> = {
+    stylesheet: null,
+    assets: [],
+    stylesheetInputs: [],
+  };
+  if (stylesheets) {
+    const result = compileVariantStylesheet({
+      id: manifest.id,
+      source: { dir, file: exportFile(dir, pkg, './styles.css')! },
+      shared: stylesheets.shared,
+      layerOrder: stylesheets.layerOrder,
+      layer: stylesheets.layer,
+    });
+    if (!result.ok) {
+      for (const problem of result.problems) {
+        reporter(diagnostics, name, version, at(problem.file))(
+          'registry.stylesheet-compile',
+          [],
+          `${path.basename(problem.file)}:${problem.line}:${problem.column} ${problem.message}`,
+          problem.remedy,
+        );
+      }
+      return undefined;
+    }
+    compiled = {
+      stylesheet: result.stylesheet,
+      assets: result.assets,
+      stylesheetInputs: result.inputs,
+    };
+  }
   return {
     kind: 'variant',
     packageName: name,
@@ -849,6 +919,7 @@ function readVariant(
       specifier: `${name}${item.export.slice(1)}`,
       file: posix(path.relative(dir, exportFile(dir, pkg, item.export)!)),
     })),
+    ...compiled,
   };
 }
 

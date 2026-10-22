@@ -258,6 +258,7 @@ test('the reserved first segments include every host route and metadata file', (
     'api',
     '_next',
     '_fixtures',
+    '_portfolio',
     'sample',
     'preview',
     'work',

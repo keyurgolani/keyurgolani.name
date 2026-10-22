@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import type { Metadata } from 'next';
 import type { PublicView } from '@portfolio/schema';
-import { themeInitScript } from '@portfolio/kit';
+import { themeInitScript } from '@portfolio/kit/theme-init';
 import { experienceHead } from '~/lib/experience-head';
 import { startingTheme } from '~/lib/starting-theme';
 import { requireDeploymentConfig } from '~/server/config-store';

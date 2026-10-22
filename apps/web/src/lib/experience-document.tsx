@@ -4,13 +4,15 @@ import { buildRenderInput, type RouteTarget } from '@portfolio/variant-contract'
 import { ClientHostModules } from './host-modules-client';
 import './host-modules';
 import type { EnvironmentAttributes } from './preview-environment';
-import { loadComposition, type Composition } from './variants';
+import { loadComposition, variantStylesheet, type Composition } from './variants';
 
 // The portfolio a document shows (#5, Slice 3, item 6, and #7, Slice 1, item
 // 2): a skip link to the variant's main, then the presentation boundary,
 // <div data-variant>, with the variant inside it. Public pages and previews
 // both render it, so a preview shows the same tree a visitor gets. #19's
-// tokens apply at the boundary, so the 404 page renders inside one too.
+// tokens apply at the boundary, so the 404 page renders inside one too. The
+// boundary links the stylesheet of the variant it renders and no other (#6,
+// Slice 2).
 
 /** Where a document's routes are mounted, which every internal link starts from. */
 export interface LinkBase {
@@ -74,9 +76,12 @@ export async function ExperienceDocument(props: ExperienceDocumentProps) {
 }
 
 /**
- * `<div data-variant="<id>">` around what renders. When the fallback
- * composition stands in, `data-requested-variant` says which variant the site
- * selected, for the owner and the tests; visitors see no label. A preview's
+ * `<div data-variant="<id>">` around what renders, after the compiled
+ * stylesheet of the variant that renders (#6, Slice 2), which React hoists
+ * into the head as a stylesheet resource: once, however many boundaries
+ * share it, and shown only once it has loaded. When the fallback composition
+ * stands in, `data-requested-variant` says which variant the site selected,
+ * for the owner and the tests; visitors see no label. A preview's
  * environment goes on it too.
  */
 export function PresentationBoundary({
@@ -90,15 +95,19 @@ export function PresentationBoundary({
   environment?: EnvironmentAttributes;
   children: ReactNode;
 }) {
+  const stylesheet = variantStylesheet(composition.rendered.manifest.id);
   return (
-    <div
-      data-variant={composition.rendered.manifest.id}
-      data-requested-variant={composition.fallback ? composition.requested : undefined}
-      data-motion-policy={motionPolicy}
-      {...environment}
-    >
-      {children}
-    </div>
+    <>
+      {stylesheet ? <link rel="stylesheet" href={stylesheet} precedence="variant" /> : null}
+      <div
+        data-variant={composition.rendered.manifest.id}
+        data-requested-variant={composition.fallback ? composition.requested : undefined}
+        data-motion-policy={motionPolicy}
+        {...environment}
+      >
+        {children}
+      </div>
+    </>
   );
 }
 

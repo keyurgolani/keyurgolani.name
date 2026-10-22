@@ -90,6 +90,16 @@ export {
 } from './controls-migration';
 export { findVariant, type RegisteredVariant, type VariantRegistry } from './registry';
 export {
+  findUnit,
+  UNIT_KINDS,
+  type AssetFileRef,
+  type AssetManifest,
+  type AssetUnit,
+  type StylesheetRef,
+  type UnitEnhancement,
+  type UnitKind,
+} from './asset-manifest';
+export {
   compatibilityFor,
   evaluateCompatibility,
   REPORT_VERSION,

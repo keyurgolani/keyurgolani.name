@@ -13,13 +13,16 @@ import { SECTION_ID_MAX_LENGTH } from '@portfolio/schema/ids';
  * Compose files mount an owner's assets into public/, whose files win over
  * any view. `_fixtures` is #19's test fixture pages, which only a build made
  * with APPEARANCE_FIXTURES=1 serves. `preview` and `preview-assets` are #7's
- * preview documents and the media they load.
+ * preview documents and the media they load. `_portfolio` is where the host
+ * serves the files registry generation compiles: #19's packs, and #6's
+ * variant stylesheets and the images they name.
  */
 export const RESERVED_SEGMENTS: readonly string[] = [
   'studio',
   'api',
   '_next',
   '_fixtures',
+  '_portfolio',
   'sample',
   'reference',
   'preview',

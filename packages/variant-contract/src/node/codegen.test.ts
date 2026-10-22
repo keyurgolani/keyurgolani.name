@@ -4,14 +4,19 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {
+  assetFiles,
   GENERATED_FILES,
   packFiles,
   registryMeta,
   renderRegistry,
+  variantFiles,
   writePackFiles,
   writeRegistry,
+  writeServedFiles,
+  type AssetManifestFile,
+  type TraceMatrixFile,
 } from './codegen';
-import { readRegistry } from './registry';
+import { readRegistry, type StylesheetHooks } from './registry';
 import {
   extensionPackage,
   FALLBACK,
@@ -75,16 +80,14 @@ test('the meta file inlines each manifest, sorted by id, and lists the extension
   assert.match(meta, /"packageName": "@acme\/portfolio-notes",\n {4}"version": "2\.0\.0"/);
 });
 
-test('loaders, styles, extensions, and enhancements name each package once, sorted', async () => {
+test('loaders, extensions, and enhancements name each package once, sorted', async () => {
   const generated = await files();
   assert.match(
     generated.get('registry.loaders.ts')!,
     /= \{\n {2}"acme-ocean": \(\) => import\("@acme\/ocean"\),\n {2}"fallback": \(\) => import\("@portfolio\/fallback-composition"\),\n\};/,
   );
-  assert.match(
-    generated.get('registry.styles.ts')!,
-    /import "@acme\/ocean\/styles\.css";\nimport "@portfolio\/fallback-composition\/styles\.css";\n/,
-  );
+  // No module imports a stylesheet: each variant's is compiled and linked on its own pages (#6).
+  for (const [name, text] of generated) assert.doesNotMatch(text, /\.css["']/, name);
   // Definitions and renderers are separate modules, so a Node tool loads no renderer.
   const extensions = generated.get('registry.extensions.ts')!;
   assert.match(
@@ -156,16 +159,20 @@ test('it writes through a temporary file, and leaves a file that already has the
     assert.deepEqual(again, { written: [], unchanged: [...GENERATED_FILES] });
     assert.equal(fs.statSync(path.join(target, 'registry.meta.ts')).mtimeMs, stamp);
     // A stale file is replaced whole, and no temporary file stays behind.
-    fs.writeFileSync(path.join(target, 'registry.styles.ts'), 'stale');
-    assert.deepEqual(writeRegistry(target, generated).written, ['registry.styles.ts']);
+    fs.writeFileSync(path.join(target, 'registry.loaders.ts'), 'stale');
+    assert.deepEqual(writeRegistry(target, generated).written, ['registry.loaders.ts']);
     assert.equal(
-      fs.readFileSync(path.join(target, 'registry.styles.ts'), 'utf8'),
-      generated.get('registry.styles.ts'),
+      fs.readFileSync(path.join(target, 'registry.loaders.ts'), 'utf8'),
+      generated.get('registry.loaders.ts'),
     );
     assert.deepEqual(
       fs.readdirSync(target).filter((name) => name.endsWith('.tmp')),
       [],
     );
+    // The all-variant styles module an earlier generation wrote goes (#6, Slice 2).
+    fs.writeFileSync(path.join(target, 'registry.styles.ts'), 'import "x/styles.css";\n');
+    writeRegistry(target, generated);
+    assert.deepEqual(fs.readdirSync(target).sort(), [...GENERATED_FILES].sort());
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -200,7 +207,11 @@ test('the meta file lists each pack with its files, the platform stylesheet, and
     /export const PACKS: readonly MetaPack\[\] = \[\n {2}\{\n {4}"kind": "color-scheme",\n {4}"packageName": "@portfolio\/test-schemes",\n {4}"version": "1\.0\.0",\n {4}"fixture": false,\n {4}"manifest": \{\n {6}"id": "test-scheme"\n {4}\},\n {4}"stylesheet": \{\n {6}"url": "\/_portfolio\/pack\/test-scheme\.[0-9a-f]{12}\.css",\n {6}"sha256": "[0-9a-f]{64}"\n {4}\}\n {2}\},/,
   );
   // Only a pack with fonts lists them.
-  assert.equal(meta.match(/"fonts": \[/g)?.length, 1);
+  const packs = meta.slice(
+    meta.indexOf('export const PACKS'),
+    meta.indexOf('export const PLATFORM_STYLESHEET'),
+  );
+  assert.equal(packs.match(/"fonts": \[/g)?.length, 1);
   assert.match(
     meta,
     /"fonts": \[\n {6}\{\n {8}"url": "\/_portfolio\/pack\/acme-serif\.[0-9a-f]{12}\.woff2"/,
@@ -316,6 +327,229 @@ test('writePackFiles() writes nothing into a directory holding a file no pack wr
     } finally {
       fs.rmSync(empty, { recursive: true, force: true });
     }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// The metadata module is the server's (#6, Slice 2, item 1), and the units'
+// files are listed beside it (item 4): ASSET_MANIFEST in it, and
+// asset-manifest.json and trace-matrix.json for the Node tools that can't
+// import it.
+
+test('the meta file is server-only', async () => {
+  const meta = (await files()).get('registry.meta.ts')!;
+  const firstImport = meta.split('\n').find((line) => line.startsWith('import'));
+  assert.equal(firstImport, "import 'server-only';");
+});
+
+const LAYERS: StylesheetHooks = {
+  layerOrder:
+    '@layer reset, scheme, language, typography, variant-layout, utilities, accessibility;',
+  layer: 'variant-layout',
+  shared: [],
+};
+
+const PNG = '\u0089PNG\r\n\u001a\n-acme-tile';
+const TILED = variantPackage('@acme/tiles', 'acme-tiles', {
+  manifest: manifestFor('acme-tiles', {
+    performanceTier: 'medium',
+    enhancements: [{ id: 'glint', export: './enhancements/glint', requires: ['webgl2'] }],
+  }),
+  packageJson: {
+    exports: {
+      '.': './index.js',
+      './styles.css': './styles.css',
+      './enhancements/glint': './glint.js',
+    },
+  },
+  files: {
+    'styles.css': "[data-variant='acme-tiles'] { background: url(./tile.png); }\n",
+    'tile.png': PNG,
+    'glint.js': 'export default () => null;\n',
+  },
+});
+
+async function withStylesheets() {
+  const result = await readRegistry({
+    hostDir: testHost([FALLBACK, TILED, ...TEST_FALLBACK_PACKS, SERIF]),
+    packs: TEST_PACK_HOOKS,
+    stylesheets: LAYERS,
+  });
+  assert.ok(result.ok, JSON.stringify(result.diagnostics));
+  return result;
+}
+
+test('ASSET_MANIFEST lists each unit with its files, variants first, then packs by kind and id', async () => {
+  const result = await withStylesheets();
+  const { ASSET_MANIFEST } = registryMeta(result);
+  assert.deepEqual(
+    ASSET_MANIFEST.map(({ kind, id }) => `${kind}:${id}`),
+    [
+      'variant:acme-tiles',
+      'variant:fallback',
+      'color-scheme:test-scheme',
+      'design-language:test-language',
+      'typography:acme-serif',
+      'typography:test-type',
+    ],
+  );
+  const tiles = ASSET_MANIFEST[0]!;
+  const variant = result.variants.find(({ manifest }) => manifest.id === 'acme-tiles')!;
+  assert.deepEqual(tiles, {
+    kind: 'variant',
+    id: 'acme-tiles',
+    packageName: '@acme/tiles',
+    version: '1.0.0',
+    fixture: false,
+    performanceTier: 'medium',
+    stylesheet: {
+      url: variant.stylesheet!.url,
+      bytes: variant.stylesheet!.bytes.byteLength,
+      sha256: variant.stylesheet!.sha256,
+      gzipBytes: tiles.stylesheet!.gzipBytes,
+    },
+    fonts: [],
+    images: [
+      {
+        url: variant.assets[0]!.url,
+        bytes: Buffer.byteLength(PNG),
+        sha256: variant.assets[0]!.sha256,
+      },
+    ],
+    stills: [],
+    enhancements: [{ id: 'glint', requires: ['webgl2'] }],
+  });
+  assert.match(tiles.stylesheet!.url, /^\/_portfolio\/variant\/acme-tiles\.[0-9a-f]{12}\.css$/);
+  assert.ok(
+    tiles.stylesheet!.gzipBytes > 0 && tiles.stylesheet!.gzipBytes < tiles.stylesheet!.bytes + 64,
+  );
+  const serif = ASSET_MANIFEST.find(({ id }) => id === 'acme-serif')!;
+  assert.equal(serif.performanceTier, undefined);
+  assert.equal(serif.fonts.length, 1);
+  assert.match(serif.fonts[0]!.url, /^\/_portfolio\/pack\/acme-serif\.[0-9a-f]{12}\.woff2$/);
+  assert.match(serif.stylesheet!.url, /^\/_portfolio\/pack\/acme-serif\.[0-9a-f]{12}\.css$/);
+
+  const generated = renderRegistry(result);
+  assert.match(
+    generated.get('registry.meta.ts')!,
+    /^export const ASSET_MANIFEST: AssetManifest = \[\n {2}\{\n {4}"kind": "variant",\n {4}"id": "acme-tiles",/m,
+  );
+  const file = JSON.parse(generated.get('asset-manifest.json')!) as AssetManifestFile;
+  assert.equal(file.version, 1);
+  assert.deepEqual(file.units, ASSET_MANIFEST);
+  assert.match(file.platform!.url, /^\/_portfolio\/pack\/_platform\.[0-9a-f]{12}\.css$/);
+});
+
+test('trace-matrix.json lists one selection per registered variant', async () => {
+  const matrix = JSON.parse(
+    renderRegistry(await withStylesheets()).get('trace-matrix.json')!,
+  ) as TraceMatrixFile;
+  assert.deepEqual(matrix, {
+    version: 1,
+    entries: [
+      {
+        kind: 'variant',
+        id: 'acme-tiles',
+        packageName: '@acme/tiles',
+        fixture: false,
+        performanceTier: 'medium',
+        selection: { variant: 'acme-tiles' },
+      },
+      {
+        kind: 'variant',
+        id: 'fallback',
+        packageName: '@portfolio/fallback-composition',
+        fixture: false,
+        performanceTier: 'light',
+        selection: { variant: 'fallback' },
+      },
+    ],
+  });
+});
+
+test('a fixture variant its flag admits is a fixture in both lists', async () => {
+  const fixture = variantPackage('@portfolio/fixture-tiles', 'fixture-tiles', {
+    packageJson: { portfolio: { kind: 'variant', manifest: './manifest.json', fixture: true } },
+  });
+  const result = await readRegistry({
+    hostDir: testHost([FALLBACK, fixture]),
+    stylesheets: LAYERS,
+    fixtures: ({ name }) =>
+      name === '@portfolio/fixture-tiles'
+        ? { mapped: true, flag: 'BUDGET_FIXTURES', admitted: true }
+        : { mapped: false },
+  });
+  assert.ok(result.ok, JSON.stringify(result.diagnostics));
+  const generated = renderRegistry(result);
+  const units = (JSON.parse(generated.get('asset-manifest.json')!) as AssetManifestFile).units;
+  assert.deepEqual(
+    units.map(({ id, fixture: marked }) => [id, marked]),
+    [
+      ['fallback', false],
+      ['fixture-tiles', true],
+    ],
+  );
+  const entries = (JSON.parse(generated.get('trace-matrix.json')!) as TraceMatrixFile).entries;
+  assert.deepEqual(
+    entries.map(({ id, fixture: marked }) => [id, marked]),
+    [
+      ['fallback', false],
+      ['fixture-tiles', true],
+    ],
+  );
+});
+
+test('without stylesheet hooks, a variant lists no stylesheet and no images', async () => {
+  const { ASSET_MANIFEST } = registryMeta(
+    await readRegistry({ hostDir: testHost([FALLBACK, TILED]) }),
+  );
+  for (const unit of ASSET_MANIFEST) {
+    assert.equal(unit.stylesheet, null, unit.id);
+    assert.deepEqual(unit.images, [], unit.id);
+  }
+});
+
+test('variantFiles() and assetFiles() list each compiled file once, sorted, for its own directory', async () => {
+  const result = await withStylesheets();
+  assert.deepEqual(
+    variantFiles(result).map(({ name }) => name.replace(/[0-9a-f]{12}/, '<hash>')),
+    ['acme-tiles.<hash>.css', 'fallback.<hash>.css'],
+  );
+  const assets = assetFiles(result);
+  assert.equal(assets.length, 1);
+  assert.match(assets[0]!.name, /^[0-9a-f]{12}\.png$/);
+
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'portfolio-served-'));
+  try {
+    const variants = path.join(dir, 'variant');
+    const names = variantFiles(result).map(({ name }) => name);
+    assert.deepEqual(writeServedFiles(variants, variantFiles(result), 'variant'), {
+      written: names,
+      unchanged: [],
+      removed: [],
+    });
+    // A pack file isn't a variant file, and a directory holding one is someone else's.
+    const packs = path.join(dir, 'pack');
+    writePackFiles(packs, packFiles(result));
+    assert.throws(
+      () => writeServedFiles(packs, variantFiles(result), 'variant'),
+      /which no variant wrote, so nothing was written there/,
+    );
+    assert.throws(
+      () => writeServedFiles(path.join(dir, 'asset'), variantFiles(result), 'asset'),
+      /isn't an asset file's name/,
+    );
+    const images = path.join(dir, 'asset');
+    assert.deepEqual(writeServedFiles(images, assets, 'asset').written, [assets[0]!.name]);
+    // A stylesheet from a build that registered more goes, and so does a leftover temporary file.
+    fs.writeFileSync(path.join(variants, 'fixture-gone.0123456789ab.css'), 'old');
+    fs.writeFileSync(path.join(variants, `${names[0]}.42.tmp`), 'partial');
+    assert.deepEqual(writeServedFiles(variants, variantFiles(result), 'variant').removed, [
+      `${names[0]}.42.tmp`,
+      'fixture-gone.0123456789ab.css',
+    ]);
+    assert.deepEqual(fs.readdirSync(variants).sort(), [...names].sort());
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

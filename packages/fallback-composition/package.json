@@ -6,6 +6,7 @@
   "description": "The host's stand-in composition: every section through the kit's shared renderers.",
   "main": "./src/index.tsx",
   "types": "./src/index.tsx",
+  "sideEffects": false,
   "exports": {
     ".": "./src/index.tsx",
     "./manifest": "./manifest.json",

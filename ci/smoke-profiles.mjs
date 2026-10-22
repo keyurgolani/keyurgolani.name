@@ -45,6 +45,8 @@
 //   SMOKE_IMAGE       test this image reference instead of building one (kept)
 //   CONTAINER_PREFIX  container, network, and volume name prefix (default portfolio-ci-)
 //   SMOKE_TIMEOUT_MS  how long to wait for /api/health (default 90000)
+// First: the route table below reads the server-only variant registry (#6).
+import '../apps/web/scripts/server-only.cjs';
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';

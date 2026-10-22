@@ -391,15 +391,7 @@ export function spellsRouteFile(pathname: string): boolean {
   }
 }
 
-/**
- * The request header proxy.ts sets to the route table's decision on every
- * request it passes to Next. next.config.ts rewrites one marked `missing`
- * to Next's /_not-found route, which renders the app's 404 page from the
- * server with its 404 status. A page can't: in Next 16 its notFound()
- * answers with an empty document that only JavaScript fills in. The rewrite
- * runs after Next looks in public/, so a file there is still served.
- */
-export const ROUTE_HEADER = 'x-portfolio-route';
+export { ROUTE_HEADER } from './route-header';
 
 /**
  * Every static first segment of an entry other than the views catch-all,

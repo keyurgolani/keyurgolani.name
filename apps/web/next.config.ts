@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import type { NextConfig } from 'next';
-import { ROUTE_HEADER } from './src/server/routes';
+import { ROUTE_HEADER } from './src/server/route-header';
 
 /**
  * The registered variant and content extension packages, which
@@ -114,7 +114,7 @@ const config: NextConfig = {
         },
       ],
       // A path the route table calls missing (#5, Slice 4): proxy.ts marks it
-      // in the x-portfolio-route header (server/routes.ts ROUTE_HEADER), and
+      // in the x-portfolio-route header (server/route-header.ts), and
       // this renders the 404 page through the same /_not-found route, from
       // the server and with its 404 status. As an afterFiles rewrite it runs
       // once Next has looked in public/, so a file there is still served, and
