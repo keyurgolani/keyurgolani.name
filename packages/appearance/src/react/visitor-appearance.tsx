@@ -138,8 +138,11 @@ export function VisitorAppearance({
     }
   };
 
+  // Every handler is there from the first render and checks `live` when it
+  // runs, so no control changes element when the page hydrates and the
+  // control goes live: focus and the nodes stay where they were.
   const change = (control: VisitorAxisControl, value: string) => {
-    if (!form.current) return;
+    if (!live || !form.current) return;
     const stylesheet = control.groups
       .flatMap((group) => group.choices)
       .find((choice) => choice.value === value)?.stylesheet;
@@ -166,13 +169,15 @@ export function VisitorAppearance({
           method="post"
           action={action}
           aria-busy={saving || pending || undefined}
+          // A plate never goes live, and its form takes no handler at all.
           onSubmit={
-            live
-              ? (event) => {
+            plate
+              ? undefined
+              : (event) => {
+                  if (!live) return;
                   event.preventDefault();
                   void run(formValues(event.currentTarget), []);
                 }
-              : undefined
           }
         >
           <input type="hidden" name="return" value={returnTo} />
@@ -186,7 +191,7 @@ export function VisitorAppearance({
                 description={control.note}
                 options={control.groups.flatMap((group) => group.choices)}
                 defaultValue={control.value}
-                onChange={live ? (value) => change(control, value) : undefined}
+                onChange={(value) => change(control, value)}
               />
             ) : (
               <Select
@@ -199,7 +204,7 @@ export function VisitorAppearance({
                   choices: group.choices,
                 }))}
                 defaultValue={control.value}
-                onChange={live ? (value) => change(control, value) : undefined}
+                onChange={(value) => change(control, value)}
               />
             ),
           )}
@@ -211,14 +216,11 @@ export function VisitorAppearance({
               type="submit"
               name="reset"
               value="1"
-              onClick={
-                live
-                  ? (event) => {
-                      event.preventDefault();
-                      void run({ reset: true }, []);
-                    }
-                  : undefined
-              }
+              onClick={(event) => {
+                if (!live) return;
+                event.preventDefault();
+                void run({ reset: true }, []);
+              }}
             >
               Reset to site default
             </Action>

@@ -1,11 +1,12 @@
 'use client';
 
 // Action's client half (#19, Slice 3, item 2): the one place an action
-// takes a click handler. It reads its boundary, so in a plate it attaches
-// none at all, whatever the caller passed. Elsewhere a click on an action
-// that isn't available does nothing: the caller's onClick doesn't run, and
-// a loading submit button doesn't submit its form, by a click or by Enter
-// in one of the form's fields.
+// takes a click handler, and every submit or reset button's, loading or
+// not. It reads its boundary, so in a plate it attaches none at all,
+// whatever the caller passed. Elsewhere a click on an action that isn't
+// available does nothing: the caller's onClick doesn't run, and a loading
+// submit button doesn't submit its form, by a click or by Enter in one of
+// the form's fields.
 
 import type { MouseEvent } from 'react';
 import { useBoundary } from '../react/boundary-root';

@@ -1,11 +1,12 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from '../harness/fixtures';
-import { DOCUMENT, FIXTURE_APP, openFixtures, ROUTE } from './fixture-page';
+import { DOCUMENT, FIXTURE_APP, openFixtures, PLATE, ROUTE } from './fixture-page';
 
 // The primitives by keyboard alone (#19, Slice 3): the skip link, a tab
 // order that reaches every control in the document and none in a plate,
 // and each composite's keys: tabs, the dialog, the tooltip, disclosures,
-// radios, and toasts.
+// radios, and toasts. A control keeps its element, and so its focus, when
+// its loading or its caller's handlers change: through hydration too.
 
 test.use({ appOptions: FIXTURE_APP });
 
@@ -306,5 +307,64 @@ test(
     await expect(region.locator('[data-ui-slot="toast"]')).toHaveText(/Revision 17 is back\./);
     await region.getByRole('button', { name: 'Dismiss' }).click();
     await expect(region.locator('[data-ui-slot="toast"]')).toHaveCount(0);
+  },
+);
+
+/** Whether `element` is still in the page and has its focus. */
+const keepsFocus = (element: Element) => element.isConnected && document.activeElement === element;
+
+test(
+  'a focused submit button keeps its element and its focus while its loading comes and goes',
+  INTERACTION,
+  async ({ page }) => {
+    await openFixtures(page);
+    const save = page
+      .locator(`[data-fixture="live-save"]:not(${PLATE} *)`)
+      .getByRole('button', { name: 'Save the live note' });
+    await save.focus();
+    const node = (await save.elementHandle())!;
+    await page.keyboard.press('Enter');
+    await expect(save).toHaveAttribute('aria-busy', 'true');
+    expect(await node.evaluate(keepsFocus), 'the same button, focused, once loading').toBe(true);
+    await expect(save).not.toHaveAttribute('aria-busy');
+    expect(await node.evaluate(keepsFocus), 'the same button, focused, once done').toBe(true);
+  },
+);
+
+test(
+  'the visitor control keeps every element through hydration, as it goes live',
+  INTERACTION,
+  async ({ page }) => {
+    // Every element removed from inside the control, or the control itself, from the first byte on.
+    await page.addInitScript(() => {
+      const CONTROL = '[data-ui-slot="appearance-control"]';
+      const removed: string[] = [];
+      Object.defineProperty(window, '__controlRemovals', { value: removed });
+      new MutationObserver((records) => {
+        for (const record of records) {
+          const inside = record.target instanceof Element && record.target.closest(CONTROL);
+          for (const node of record.removedNodes) {
+            if (!(node instanceof Element)) continue;
+            if (inside || node.matches(CONTROL) || node.querySelector(CONTROL)) {
+              removed.push(`${node.tagName.toLowerCase()}#${node.id}`);
+            }
+          }
+        }
+      }).observe(document, { childList: true, subtree: true });
+    });
+    await openFixtures(page);
+    // Live: the page hydrated and the control has a refresh to call, so Apply
+    // takes the hidden attribute (its closed disclosure hides it either way).
+    const control = page.locator(`${DOCUMENT} [data-ui-slot="appearance-control"]`);
+    await expect(control).toHaveCount(1);
+    await expect(control.locator('button[type="submit"]:not([name])')).toHaveAttribute(
+      'hidden',
+      '',
+    );
+    await expect(control.locator('button[name="reset"]')).toHaveCount(1);
+    const removed = await page.evaluate(
+      () => (window as unknown as { __controlRemovals: string[] }).__controlRemovals,
+    );
+    expect(removed).toEqual([]);
   },
 );

@@ -1,14 +1,19 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Action, Checkbox, Field, Radio, Select } from '@portfolio/appearance/primitives';
-import { useBoundaryId } from '@portfolio/appearance/react';
+import { useBoundary, useBoundaryId } from '@portfolio/appearance/react';
 
 // The appearance fixtures' live form (#19, Slice 3): a Field, Checkbox,
-// Radio, Select, and Action, each given a handler. In the page's boundary
-// they answer; in a plate none of them attaches its handler, which
-// tests/appearance checks on every element there. Its names contain no name
-// the specs find the forms section's other controls by.
+// Radio, Select, and Action, each given a handler, and a submit button whose
+// loading comes and goes, so a test can see it keep its element and its
+// focus. In the page's boundary they answer; in a plate none of them
+// attaches its handler, which tests/appearance checks on every element
+// there. Its names contain no name the specs find the forms section's other
+// controls by.
+
+/** How long the live save shows as loading. */
+const SAVE_MS = 600;
 
 const DEPTHS = [
   { value: 'airy', label: 'Airy' },
@@ -23,6 +28,13 @@ export function FormHarness() {
   const noteId = useBoundaryId('live-note');
   const trackId = useBoundaryId('live-track');
   const depthId = useBoundaryId('live-depth');
+  const { plate } = useBoundary();
+  const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    if (!saving) return;
+    const timer = window.setTimeout(() => setSaving(false), SAVE_MS);
+    return () => window.clearTimeout(timer);
+  }, [saving]);
   return (
     <div className="fixtures-stack" data-fixture="live-form">
       <Field
@@ -61,6 +73,21 @@ export function FormHarness() {
         ]}
       />
       <Action onClick={() => setNote('')}>Clear the note</Action>
+      <form
+        data-fixture="live-save"
+        onSubmit={
+          plate
+            ? undefined
+            : (event) => {
+                event.preventDefault();
+                setSaving(true);
+              }
+        }
+      >
+        <Action type="submit" loading={saving}>
+          Save the live note
+        </Action>
+      </form>
       <p data-type-role="caption" data-fixture="live-form-state">
         {`${note || 'No note'}, ${tracked ? 'tracked' : 'not tracked'}, ${depth}, ${river}`}
       </p>

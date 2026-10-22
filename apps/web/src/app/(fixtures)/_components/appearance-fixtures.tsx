@@ -23,12 +23,9 @@ import {
   Region,
   type DataRow,
 } from '@portfolio/appearance/primitives';
-import {
-  AppearanceDiagnostics,
-  PresentationBoundary,
-  VisitorAppearance,
-} from '@portfolio/appearance/react';
+import { AppearanceDiagnostics, PresentationBoundary } from '@portfolio/appearance/react';
 import { PACKS, PLATFORM_STYLESHEET, VARIANTS } from '~/lib/generated/registry.meta';
+import { LiveAppearance } from './live-appearance';
 import { DocumentSpecimen, PlateSpecimen } from './specimen';
 
 // The appearance fixtures (#19, Slice 3): the page's document boundary,
@@ -164,7 +161,7 @@ export function AppearanceFixtures({ profile, query }: AppearanceFixturesProps) 
           }))}
         />
         <AppearanceDiagnostics diagnostics={page.diagnostics} id="page-diagnostics" />
-        <VisitorAppearance model={model} returnTo={RETURN_TO} />
+        <LiveAppearance model={model} returnTo={RETURN_TO} />
       </Header>
       <DocumentSpecimen ids={DOCUMENT_IDS}>
         <Region labelledBy="packs-title" className="fixtures-section" id="packs">

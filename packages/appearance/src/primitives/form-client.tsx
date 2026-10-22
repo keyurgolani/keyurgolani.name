@@ -1,10 +1,11 @@
 'use client';
 
-// The client half of Field, Checkbox, and Radio (#19, Slice 3, item 2): the
-// one place they take a change handler. Each reads its boundary, and in a
-// plate attaches none, whatever its caller passed. A controlled value there
-// becomes the control's first value, as the server rendered it, so the
-// control is a still preview and React has no handler to want.
+// The client half of Field, Checkbox, and Radio (#19, Slice 3, item 2),
+// which form.tsx always renders: the one place they take a change handler.
+// Each reads its boundary, and in a plate attaches none, whatever its
+// caller passed. A controlled value there becomes the control's first
+// value, as the server rendered it, so the control is a still preview and
+// React has no handler to want.
 
 import { useBoundary } from '../react/boundary-root';
 import {

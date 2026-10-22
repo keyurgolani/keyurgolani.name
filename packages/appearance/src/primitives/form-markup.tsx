@@ -8,7 +8,7 @@ import { partId } from '../ids';
 // radio's reason is text its input names in aria-describedby. Each takes its
 // full id, which server code builds with boundaryId(input.ids, local), and
 // names its parts from it, so ids in a plate carry the plate's prefix.
-// form.tsx renders them, and form-client.tsx does when one has a handler.
+// form-client.tsx renders them, for form.tsx.
 
 /** The ids of a control's description and error, those it has, for aria-describedby. */
 function describedBy(id: string, description: unknown, error: unknown): string | undefined {
