@@ -52,8 +52,8 @@
   margin-block-start: 2rem;
 }
 
-/* The evidence a work or a custom item cites, a step closer than the records around it. */
-:where([data-variant] [data-renderer='shared'] .pf-evidence > li + li) {
+/* The evidence a work or a custom item cites, a step closer than an evidence section's own. */
+:where([data-variant] [data-renderer='shared'] .pf-evidence:not(.pf-list) > li + li) {
   margin-block-start: 1rem;
 }
 
