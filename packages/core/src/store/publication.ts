@@ -367,12 +367,15 @@ export function filesystemPublicationService({
    * Step 1's start: the pointer, with the log made to agree with it, since
    * live.json wins. The live event's own file is written if a crash left it
    * out, and an event file that disagrees, at the live seq or above it, is
-   * moved aside first.
+   * moved aside first, while the lock is still this operation's.
    */
   async function livePointer(operation: string): Promise<LivePointer | null> {
     const pointer = await readPointer();
     if (!pointer) return null;
-    logReconciled(pointer, await reconcileEvents(fs, paths, pointer, `${operation}.repair`));
+    const reconciled = await reconcileEvents(fs, paths, pointer, `${operation}.repair`, () =>
+      lock.fence(),
+    );
+    logReconciled(pointer, reconciled);
     return pointer;
   }
 
@@ -417,9 +420,13 @@ export function filesystemPublicationService({
     };
   }
 
-  /** Removes the revision a publish wrote for a pointer move that never ran: it was never live. */
+  /**
+   * Removes the revision a publish wrote for a pointer move that never ran:
+   * it was never live. Only while the lock is still this publish's.
+   */
   async function dropUnpublished(id: RevisionId): Promise<void> {
     try {
+      await lock.fence();
       await fs.remove(paths.revision(id), 'publish.unpublished.remove');
       await fs.fsync(paths.revisions, 'publish.unpublished.fsync');
     } catch {
@@ -568,11 +575,18 @@ export function filesystemPublicationService({
     let stage = 'lock';
     const durationMs = () => Math.round(performance.now() - started);
     try {
-      const outcome = await lock.withLock(operation, () => {
+      const outcome = await lock.withLock(operation, async () => {
         stage = 'check';
-        return body((name) => {
-          stage = name;
-        });
+        try {
+          return await body((name) => {
+            stage = name;
+          });
+        } catch (error) {
+          if (!(error instanceof LockLostError)) throw error;
+          // Broken and retaken before this moved anything, as step 1 found.
+          log({ level: 'error', event: 'store.lock.lost', stage, code: 'lock_lost' });
+          return rejected('lock_lost');
+        }
       });
       if (outcome.kind === 'committed') {
         log({
@@ -1026,7 +1040,7 @@ export function filesystemPublicationService({
           // The log agrees with live.json, which wins.
           const pointer = await readPointer();
           const reconciled = pointer
-            ? await reconcileEvents(fs, paths, pointer, 'repair')
+            ? await reconcileEvents(fs, paths, pointer, 'repair', () => lock.fence())
             : { aside: [], written: false };
           if (pointer) logReconciled(pointer, reconciled);
           const eventWritten = reconciled.written;
@@ -1043,6 +1057,15 @@ export function filesystemPublicationService({
           }
           return { stagingRemoved, tempsRemoved, eventWritten, eventsAside, draftRemoved };
         } catch (error) {
+          if (error instanceof LockLostError) {
+            // Another holder took the lock: the log is theirs to make agree now.
+            log({ level: 'error', event: 'store.lock.lost', stage: 'repair', code: 'lock_lost' });
+            throw new StoreError(
+              'storage_unavailable',
+              'Another holder took the publication lock during repair, so it stopped.',
+              { cause: error },
+            );
+          }
           throw storageError(error);
         }
       });

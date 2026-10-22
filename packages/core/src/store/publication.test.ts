@@ -1209,6 +1209,93 @@ test('a commit whose lock was broken and retaken moves nothing and answers lock_
   assert.equal((await owned(store).publish(publish, 'owner')).kind, 'committed');
 });
 
+test('a repair or a publish that read live.json before another holder took the lock moves no committed event aside', async (t) => {
+  const logs: StoreLogEntry[] = [];
+  const log = (entry: StoreLogEntry) => logs.push(entry);
+  const store = await newStore(t, { log });
+  await publishInput(store, pairInput('engineering'));
+  const second = await publishInput(store, contentVariant(pairInput('engineering'), 'two'));
+  // What a holder that stalls reads: live.json at seq 2.
+  const stale = readFileSync(store.paths.live);
+  await publishInput(store, contentVariant(pairInput('engineering'), 'three'));
+  const live = readFileSync(store.paths.live, 'utf8');
+  // It reads that pointer, and meanwhile another process breaks its lock,
+  // takes it, and commits seq 3.
+  const stalled = () => {
+    let read = false;
+    return openStore({
+      dataDir: store.paths.root,
+      checks: testChecks(),
+      log,
+      fs: {
+        ...nodeFs,
+        async readFile(file) {
+          if (file !== store.paths.live || read) return nodeFs.readFile(file);
+          read = true;
+          writeFileSync(store.paths.lock, theirLock());
+          return stale;
+        },
+      },
+    });
+  };
+  await assert.rejects(stalled().publication.repair(), (error: StoreError) => {
+    assert.equal(error.code, 'storage_unavailable');
+    return true;
+  });
+  assert.ok(await store.lock.forceUnlock());
+  const draft = await draftOf(store, contentVariant(pairInput('engineering'), 'four'));
+  const lost = await owned(stalled()).publish(
+    { draftId: draft.draftId, draftVersion: draft.version, expectedLiveRevisionId: second },
+    'owner',
+  );
+  assert.equal(lost.kind === 'rejected' && lost.code, 'lock_lost');
+  assert.ok(await store.lock.forceUnlock());
+  // Seq 3 is still in the log, and nothing was moved aside or rewritten.
+  assert.deepEqual(
+    (await readEvents(nodeFs, store.paths)).map((event) => event.seq),
+    [1, 2, 3],
+  );
+  assert.deepEqual(
+    (await nodeFs.readdir(store.paths.events)).filter((name) => name.includes('.aside-')),
+    [],
+  );
+  assert.equal(readFileSync(store.paths.live, 'utf8'), live);
+  assert.equal(logs.filter((entry) => entry.event === 'store.lock.lost').length, 2);
+});
+
+test('a publish whose session ended removes its never-live revision only while the lock is still its own', async (t) => {
+  const logs: StoreLogEntry[] = [];
+  const log = (entry: StoreLogEntry) => logs.push(entry);
+  const store = await newStore(t, { log });
+  const first = await publishInput(store, pairInput('engineering'));
+  const draft = await draftOf(store, contentVariant(pairInput('engineering'), 'two'));
+  const ended = await ownerSession();
+  await ended.sessions.end(ended.digest, 'logout');
+  // Another process takes the lock once the revision is in place.
+  const breaking = openStore({
+    dataDir: store.paths.root,
+    checks: testChecks(),
+    log,
+    fs: {
+      ...nodeFs,
+      async rename(from, to, point) {
+        await nodeFs.rename(from, to, point);
+        if (point === 'publish.revision.rename') writeFileSync(store.paths.lock, theirLock());
+      },
+    },
+  });
+  const outcome = await breaking.publication.publish(
+    { draftId: draft.draftId, draftVersion: draft.version, expectedLiveRevisionId: first },
+    'owner',
+    { holdSession: ended.holdSession },
+  );
+  assert.equal(outcome.kind === 'rejected' && outcome.code, 'session_ended');
+  assert.ok(await store.lock.forceUnlock());
+  // The revision it wrote stays, and says so.
+  assert.equal((await nodeFs.readdir(store.paths.revisions)).length, 2);
+  assert.ok(logs.some((entry) => entry.event === 'store.publish.unpublished_left'));
+});
+
 /** An event that disagrees with live.json's, as a second holder of the lock writes one. */
 function anotherEvent(seq: number, revisionId: RevisionId, previousRevisionId: RevisionId) {
   return JSON.stringify({
