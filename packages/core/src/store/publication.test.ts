@@ -3,11 +3,12 @@ import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { memoryAuditSink } from '../audit/sink';
-import { onStoreEvent, type StoreEvent, type StoreLogEntry } from './common';
+import type { SessionHold } from '../auth/sessions';
+import { onStoreEvent, type StoreError, type StoreEvent, type StoreLogEntry } from './common';
 import { nodeFs, type FsPort } from './fs-port';
 import { newRevisionId, type RevisionId } from './layout';
 import { readEvents, readLive } from './pointer';
-import { IDEMPOTENCY_WINDOW } from './publication';
+import { IDEMPOTENCY_WINDOW, type HeldMove } from './publication';
 import { manifestFor, readManifest, writeRevision } from './revisions';
 import { openStore, type Store } from './store';
 import { checkUnit, sha256 } from './unit';
@@ -281,6 +282,8 @@ test('a repeated idempotency key returns the original outcome, within the last 1
   const rolled = await owned(store).rollback(rollback, 'owner');
   assert.equal(rolled.kind, 'committed');
   assert.deepEqual(await owned(store).rollback(rollback, 'owner'), rolled);
+  // With another event since, the retry still finds its own, further back.
+  assert.deepEqual(await owned(store).publish(input, 'owner'), outcome);
   assert.equal((await readEvents(nodeFs, store.paths)).length, 3);
   assert.throws(
     () => store.publication.rollback({ ...rollback, idempotencyKey: 'not a key' }, 'operator'),
@@ -301,6 +304,78 @@ test('a repeated idempotency key returns the original outcome, within the last 1
   }
   const late = await owned(store).publish(input, 'owner');
   assert.equal(late.kind === 'rejected' && late.code, 'not_found');
+});
+
+test("a key on another request's event is idempotency_conflict, and nothing moves", async (t) => {
+  const store = await newStore(t);
+  const first = await publishInput(store, pairInput('engineering'));
+  const draft = await draftOf(store, contentVariant(pairInput('engineering'), 'two'));
+  const published = await owned(store).publish(
+    {
+      draftId: draft.draftId,
+      draftVersion: draft.version,
+      expectedLiveRevisionId: first,
+      idempotencyKey: 'publish-1',
+    },
+    'owner',
+  );
+  const second = published.kind === 'committed' ? published.revisionId : assert.fail();
+  const rolled = await owned(store).rollback(
+    { targetRevisionId: first, expectedLiveRevisionId: second, idempotencyKey: 'rollback-1' },
+    'owner',
+  );
+  assert.equal(rolled.kind, 'committed');
+  const next = await draftOf(store, contentVariant(pairInput('engineering'), 'three'));
+  const live = readFileSync(store.paths.live, 'utf8');
+  const revisions = await nodeFs.readdir(store.paths.revisions);
+  const publishNext = { draftId: next.draftId, draftVersion: next.version };
+  const others = {
+    "a publish with a rollback's key": () =>
+      owned(store).publish(
+        { ...publishNext, expectedLiveRevisionId: first, idempotencyKey: 'rollback-1' },
+        'owner',
+      ),
+    'a publish of another draft': () =>
+      owned(store).publish(
+        { ...publishNext, expectedLiveRevisionId: first, idempotencyKey: 'publish-1' },
+        'owner',
+      ),
+    'a rollback to another target': () =>
+      owned(store).rollback(
+        { targetRevisionId: second, expectedLiveRevisionId: first, idempotencyKey: 'rollback-1' },
+        'owner',
+      ),
+    'a rollback from another revision': () =>
+      owned(store).rollback(
+        { targetRevisionId: first, expectedLiveRevisionId: first, idempotencyKey: 'rollback-1' },
+        'owner',
+      ),
+    "a recover with a rollback's key": () =>
+      owned(store).recover(
+        { expectedLiveRevisionId: first, idempotencyKey: 'rollback-1' },
+        'owner',
+      ),
+    "a rollback with a publish's key": () =>
+      owned(store).rollback(
+        { targetRevisionId: second, expectedLiveRevisionId: first, idempotencyKey: 'publish-1' },
+        'operator',
+      ),
+  };
+  for (const [what, request] of Object.entries(others)) {
+    const outcome = await request();
+    assert.equal(outcome.kind === 'rejected' && outcome.code, 'idempotency_conflict', what);
+  }
+  // Nothing moved, nothing was written, and the draft is still there.
+  assert.equal(readFileSync(store.paths.live, 'utf8'), live);
+  assert.equal((await readEvents(nodeFs, store.paths)).length, 3);
+  assert.deepEqual(await nodeFs.readdir(store.paths.revisions), revisions);
+  assert.equal((await store.drafts.getWorking())?.version, next.version);
+  // The same request with a key of its own commits.
+  const own = await owned(store).publish(
+    { ...publishNext, expectedLiveRevisionId: first, idempotencyKey: 'publish-2' },
+    'owner',
+  );
+  assert.equal(own.kind, 'committed');
 });
 
 test('rollback moves the pointer to an existing revision through the same commit point, keeps the replaced one, and leaves every draft unchanged', async (t) => {
@@ -629,6 +704,8 @@ test('a publish whose session ends before the pointer moves leaves the live revi
   const unchanged = async (what: string) => {
     assert.equal((await readLive(nodeFs, store.paths))?.revisionId, first, what);
     assert.equal((await store.drafts.getWorking())?.version, draft.version, what);
+    // The revision written for the move never went live, so it's gone again.
+    assert.deepEqual(await nodeFs.readdir(store.paths.revisions), [first], what);
   };
 
   // Ended before the publish began.
@@ -729,7 +806,16 @@ test("the owner's rollback and recover hold the session for the move too, and th
     { holdSession: ended.holdSession },
   );
   assert.equal(refused.kind === 'rejected' && refused.code, 'session_ended');
+  const refusedRecover = await store.publication.recover(
+    { targetRevisionId: first, expectedLiveRevisionId: second },
+    'owner',
+    { holdSession: ended.holdSession },
+  );
+  assert.equal(refusedRecover.kind === 'rejected' && refusedRecover.code, 'session_ended');
   assert.equal((await readLive(nodeFs, store.paths))?.revisionId, second);
+  assert.equal((await readEvents(nodeFs, store.paths)).length, 2);
+  // Their target is a revision that was live, and stays.
+  assert.deepEqual((await nodeFs.readdir(store.paths.revisions)).sort(), [first, second].sort());
   const byOperator = await store.publication.rollback(
     { targetRevisionId: first, expectedLiveRevisionId: second },
     'operator',
@@ -737,6 +823,87 @@ test("the owner's rollback and recover hold the session for the move too, and th
   assert.equal(byOperator.kind, 'committed');
   const [, , event] = await readEvents(nodeFs, store.paths);
   assert.equal(event?.actor, 'operator');
+});
+
+test("what the pointer move did decides the outcome, not holdSession()'s answer", async (t) => {
+  const store = await newStore(t);
+  const first = await publishInput(store, pairInput('engineering'));
+  const second = await publishInput(store, contentVariant(pairInput('engineering'), 'two'));
+  const draft = await draftOf(store, contentVariant(pairInput('engineering'), 'three'));
+  const input = {
+    draftId: draft.draftId,
+    draftVersion: draft.version,
+    expectedLiveRevisionId: second,
+  };
+  const live = readFileSync(store.paths.live, 'utf8');
+  const revisions = (await nodeFs.readdir(store.paths.revisions)).sort();
+  const unchanged = async (what: string) => {
+    assert.equal(readFileSync(store.paths.live, 'utf8'), live, what);
+    assert.deepEqual(
+      (await readEvents(nodeFs, store.paths)).map((event) => event.seq),
+      [1, 2],
+      what,
+    );
+    assert.equal((await store.drafts.getWorking())?.version, draft.version, what);
+  };
+
+  // An ok for a move that never ran is a wiring error: nothing is written,
+  // and the revision a publish wrote for the move is gone again.
+  const skipping = async <T>(): Promise<HeldMove<T>> => ({ ok: true, value: undefined as T });
+  await assert.rejects(
+    async () => store.publication.publish(input, 'owner', { holdSession: skipping }),
+    /answered ok without running the pointer move/,
+  );
+  await unchanged('a publish answered ok');
+  assert.deepEqual((await nodeFs.readdir(store.paths.revisions)).sort(), revisions);
+  await assert.rejects(
+    async () =>
+      store.publication.recover(
+        { targetRevisionId: first, expectedLiveRevisionId: second },
+        'owner',
+        { holdSession: skipping },
+      ),
+    /answered ok without running the pointer move/,
+  );
+  await unchanged('a recover answered ok');
+  // A recover's target was live before, and stays.
+  assert.deepEqual((await nodeFs.readdir(store.paths.revisions)).sort(), revisions);
+
+  // A failure in the move stands, even where holdSession() swallows it.
+  const session = await ownerSession();
+  const swallowing = async <T>(move: (hold: SessionHold) => Promise<T>): Promise<HeldMove<T>> => {
+    await session.holdSession(move).catch(() => {});
+    return { ok: false };
+  };
+  const failing = openStore({
+    dataDir: store.paths.root,
+    checks: testChecks(),
+    fs: {
+      ...nodeFs,
+      async rename(from, to, point) {
+        if (point === 'publish.live.rename') throw Object.assign(new Error('EIO'), { code: 'EIO' });
+        return nodeFs.rename(from, to, point);
+      },
+    },
+  });
+  await assert.rejects(
+    async () => failing.publication.publish(input, 'owner', { holdSession: swallowing }),
+    (error: unknown) => (error as StoreError).code === 'storage_unavailable',
+  );
+  await unchanged('a failed move answered not ok');
+
+  // A move that ran is committed, step 5 and all, even when the answer is not ok.
+  const late = async <T>(move: (hold: SessionHold) => Promise<T>): Promise<HeldMove<T>> => {
+    await session.holdSession(move);
+    return { ok: false };
+  };
+  const committed = await store.publication.publish(input, 'owner', { holdSession: late });
+  assert.equal(committed.kind, 'committed');
+  assert.deepEqual(
+    (await readEvents(nodeFs, store.paths)).map((event) => event.seq),
+    [1, 2, 3],
+  );
+  assert.equal(await store.drafts.getWorking(), null);
 });
 
 test("a staged revision that doesn't read back as written never goes live", async (t) => {

@@ -68,17 +68,20 @@ import {
 // published pointer. Publish, rollback, and recover each run under the
 // publication lock and commit by renaming a new live.json over the old one.
 //
-// Publish: (1) read live.json, writing its event's own file if a crash left
-// it out, and check the caller's expectations; (2) validate the draft; (3)
-// write the revision through its staging directory; (4) move the pointer, the
-// commit point; (5) write the event file, append the audit line, delete the
-// draft, and tell the process. Rollback and recover run step 1, check the
-// target, then steps 4 and 5 without the draft delete. Nothing after the
+// Publish: (1) read live.json, making the log agree with it, and check the
+// idempotency key and the caller's expectations; (2) validate the draft; (3)
+// write the revision through its staging directory; (4) move the pointer,
+// the commit point; (5) write the event file, append the audit line, delete
+// the draft, and tell the process. Rollback and recover run step 1, check
+// the target, then steps 4 and 5 without the draft delete. Nothing after the
 // commit undoes it: a failure there is logged, and startup repair finishes
 // the step. For the owner, the pointer move alone runs inside #2's
 // commitWithSession(), through the holdSession() the caller passes, so a
-// session that ended first never moves the pointer and a logout waits only
-// for the move.
+// session that ended first never moves the pointer, and a logout waits only
+// for the move. What the move did decides the outcome, not what
+// holdSession() answers, and a publish whose move never ran removes the
+// revision it wrote. A key names one request: on another request's event it
+// is idempotency_conflict.
 
 recordOwnerModule('core/store/publication');
 
@@ -94,8 +97,16 @@ export type PublicationRejectionCode =
   | 'nothing_to_publish'
   | 'revision_incompatible'
   | 'not_found'
-  /** The owner's session ended before the pointer could move; nothing did. */
+  /**
+   * The owner's session ended before the pointer could move; nothing did,
+   * and a publish's new revision is gone again.
+   */
   | 'session_ended'
+  /**
+   * The idempotency key is on one of the last IDEMPOTENCY_WINDOW events, one
+   * another request made; this one did nothing. 422: a retry won't help.
+   */
+  | 'idempotency_conflict'
   /**
    * The publication lock was broken and retaken while this operation held
    * it, as after a stall past 2 minutes; the pointer didn't move. A retry is
@@ -344,16 +355,22 @@ export function filesystemPublicationService({
     return pointer;
   }
 
-  /** The committed outcome a key already had, among the last IDEMPOTENCY_WINDOW events. */
+  /**
+   * The committed outcome a key already had, among the last
+   * IDEMPOTENCY_WINDOW events, when `same` finds the event it's on was for
+   * this very request, and idempotency_conflict when it was for another.
+   */
   async function seenKey(
     pointer: LivePointer | null,
     key: string | undefined,
+    same: (event: PublicationEvent) => Promise<boolean>,
   ): Promise<PublicationOutcome | null> {
     if (!pointer || key === undefined) return null;
     const oldest = Math.max(1, pointer.seq - IDEMPOTENCY_WINDOW + 1);
     for (let seq = pointer.seq; seq >= oldest; seq--) {
       const event = seq === pointer.seq ? pointer.event : await readEvent(fs, paths, seq);
       if (event?.idempotencyKey === key) {
+        if (!(await same(event))) return rejected('idempotency_conflict');
         return { kind: 'committed', revisionId: event.revisionId, seq: event.seq };
       }
     }
@@ -379,7 +396,20 @@ export function filesystemPublicationService({
     };
   }
 
-  /** Steps 4 and 5: the commit point, then what follows it. */
+  /** Removes the revision a publish wrote for a pointer move that never ran: it was never live. */
+  async function dropUnpublished(id: RevisionId): Promise<void> {
+    try {
+      await fs.remove(paths.revision(id), 'publish.unpublished.remove');
+      await fs.fsync(paths.revisions, 'publish.unpublished.fsync');
+    } catch {
+      log({ level: 'warn', event: 'store.publish.unpublished_left', revisionId: id });
+    }
+  }
+
+  /**
+   * Steps 4 and 5: the commit point, then what follows it. A publish passes
+   * its draft, and its event names the revision it wrote just now.
+   */
   async function commit(
     operation: string,
     event: PublicationEvent,
@@ -387,9 +417,14 @@ export function filesystemPublicationService({
     context: PublicationContext,
     draft?: { readonly draftId: DraftId; readonly version: number },
   ): Promise<PublicationOutcome> {
-    // The lock must still be this operation's as the pointer moves.
-    let lockLost = false;
+    // What the move did decides the outcome, whatever holdSession() answers:
+    // whether it ran, and then whether it moved the pointer or found the
+    // lock someone else's. The lock must still be this operation's as the
+    // pointer moves.
+    let ran = false;
+    let moved = false;
     const move = async () => {
+      ran = true;
       try {
         await writeLive(
           fs,
@@ -398,9 +433,9 @@ export function filesystemPublicationService({
           operation,
           () => lock.fence(),
         );
+        moved = true;
       } catch (error) {
         if (!(error instanceof LockLostError)) throw error;
-        lockLost = true;
       }
     };
     if (event.actor === 'operator') {
@@ -408,19 +443,41 @@ export function filesystemPublicationService({
     } else {
       // The owner's session holds through the move and nothing else.
       requireHold(event.actor, context);
-      const held = await context.holdSession!(async (hold) => {
-        if (!isSessionHeld(hold)) {
-          throw new TypeError("The owner's session isn't held through the pointer move.");
+      // What failed inside the hold stands, even where holdSession() swallowed it.
+      const thrown: unknown[] = [];
+      let held: HeldMove<void>;
+      try {
+        held = await context.holdSession!(async (hold) => {
+          try {
+            if (!isSessionHeld(hold)) {
+              throw new TypeError("The owner's session isn't held through the pointer move.");
+            }
+            await move();
+          } catch (error) {
+            thrown.push(error);
+            throw error;
+          }
+        });
+      } finally {
+        // No move ran, so the revision a publish wrote for it never went live.
+        if (!ran && draft) await dropUnpublished(event.revisionId);
+      }
+      if (thrown.length > 0) throw thrown[0];
+      if (!ran) {
+        // An ok for a move that never ran is a wiring error, and nothing more is written.
+        if (held.ok) {
+          throw new TypeError('holdSession() answered ok without running the pointer move.');
         }
-        await move();
-      });
-      if (!held.ok) return rejected('session_ended');
+        return rejected('session_ended');
+      }
     }
-    if (lockLost) {
+    if (!moved) {
+      // The move ran and found the lock someone else's.
       log({ level: 'error', event: 'store.lock.lost', seq: event.seq, code: 'lock_lost' });
       return rejected('lock_lost');
     }
-    // Committed. What follows finishes the step, and repair does what a
+    // The pointer moved, so this is committed, whatever holdSession()
+    // answered. What follows finishes the step, and repair does what a
     // failure here leaves undone.
     try {
       await fs.fsync(paths.publication, `${operation}.publication.fsync`);
@@ -545,7 +602,16 @@ export function filesystemPublicationService({
     }
     return run(operation, async (stage) => {
       const pointer = await livePointer(operation);
-      const seen = await seenKey(pointer, input.idempotencyKey);
+      // The key's event is this request's when it was this operation, to
+      // this target, from the revision this request expects.
+      const seen = await seenKey(
+        pointer,
+        input.idempotencyKey,
+        async (event) =>
+          event.type === operation &&
+          event.previousRevisionId === expected &&
+          (input.targetRevisionId === undefined || event.revisionId === input.targetRevisionId),
+      );
       if (seen) return seen;
       if ((pointer?.revisionId ?? null) !== expected) return liveConflict(pointer, expected);
       stage('target');
@@ -665,7 +731,17 @@ export function filesystemPublicationService({
       const expected = expectation(input.expectedLiveRevisionId);
       return run('publish', async (stage) => {
         const pointer = await livePointer('publish');
-        const seen = await seenKey(pointer, input.idempotencyKey);
+        // The key's event is this request's when it published this draft
+        // version, from the revision this request expects.
+        const seen = await seenKey(pointer, input.idempotencyKey, async (event) => {
+          if (event.type !== 'publish' || event.previousRevisionId !== expected) return false;
+          const source = (await readManifest(fs, paths, event.revisionId))?.source;
+          return (
+            source?.kind === 'draft' &&
+            source.draftId === input.draftId &&
+            source.draftVersion === input.draftVersion
+          );
+        });
         if (seen) return seen;
         const live = pointer?.revisionId ?? null;
         const found = await readDraft(fs, paths, input.draftId, log);
