@@ -5,28 +5,31 @@ import * as React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
   composeSchemas,
-  IdentitySchema,
   isPlainObject,
-  toPublicView,
+  resolvePortfolioView,
   type ParsedPair,
   type Section,
   type SectionKind,
+  type UnitInput,
 } from '@portfolio/schema';
 import {
   buildRenderInput,
   validateManifest,
   type VariantRenderInput,
 } from '@portfolio/variant-contract';
-import { formatDate, formatEpisodeDuration, formatStatValue, formatTrackDuration } from '../format';
-import { unescapeHtml } from '../html-escape';
-import { doiLink } from './renderers/dated-entries';
-import { hrefFor } from './primitives';
+import { formatDate, formatEpisodeDuration, formatTrackDuration } from '../format';
 import { withoutClock } from '../test-support/clock';
+import { COMPLETE, GITHUB, MEDIA } from './__fixtures__/complete';
+import { formatUrl } from './primitives';
+import { doiLink } from './renderers/evidence';
+import { unescapeHtml } from '../html-escape';
+import { hrefFor } from './primitives';
 import { corpus } from '../test-support/markdown-corpus';
 import { htmlProblems } from '../test-support/strict-html';
-import { COMPLETE } from './__fixtures__/complete';
 import {
+  CaseStudy,
   registerHostModules,
+  renderContext,
   renderSection,
   RichText,
   seededRandom,
@@ -35,15 +38,19 @@ import {
   type BespokeRenderers,
 } from '.';
 
-// @portfolio/kit/sections (#5, Slice 2): one shared renderer per core kind,
-// each rendering every field, at the heading level its caller gives, with no
-// inline style, and renderSection() choosing between them and a variant's own.
+// @portfolio/kit/sections (#5, Slice 2; #10, slice 1, item 7): one shared
+// renderer per core kind, rendering every field of the published view at the
+// heading level its caller gives; every text node the owner's, formatted from
+// the owner's data, a dated snapshot value, or a fixed label; images from
+// derived data, unavailable ones keeping their box; and renderSection()
+// choosing between the shared renderer and a variant's own.
 
 // tsx compiles the kit's JSX (tsconfig `jsx: preserve`) to React.createElement
 // calls, which Next's compiler never does, so the test supplies React itself.
 Object.assign(globalThis, { React });
 
-const { PortfolioSchema, coreSections } = composeSchemas();
+const SCHEMAS = composeSchemas();
+const { PortfolioSchema, SiteSchema } = SCHEMAS;
 
 const SITE = {
   schemaVersion: 2,
@@ -95,18 +102,28 @@ function manifest(extra: Record<string, unknown> = {}) {
   return result.manifest;
 }
 
-function inputFor(
-  portfolio: unknown = COMPLETE,
-  options: {
-    manifest?: Record<string, unknown>;
-    idPrefix?: string;
-    basePath?: string;
-    query?: Record<string, string>;
-  } = {},
-): VariantRenderInput {
-  const pair = { portfolio: PortfolioSchema.parse(portfolio), site: SITE } as unknown as ParsedPair;
+interface InputOptions {
+  manifest?: Record<string, unknown>;
+  idPrefix?: string;
+  basePath?: string;
+  query?: Record<string, string>;
+  unit?: UnitInput;
+  /** The site document's sections setting, to hide some. */
+  hidden?: readonly string[];
+}
+
+function inputFor(portfolio: unknown = COMPLETE, options: InputOptions = {}): VariantRenderInput {
+  const parsed = PortfolioSchema.safeParse(portfolio);
+  assert.ok(parsed.success, JSON.stringify(parsed.error?.issues, null, 2));
+  const site = SiteSchema.parse({
+    ...SITE,
+    ...(options.hidden
+      ? { sections: Object.fromEntries(options.hidden.map((id) => [id, { hidden: true }])) }
+      : {}),
+  });
+  const pair = { portfolio: parsed.data, site } as ParsedPair;
   return buildRenderInput({
-    view: toPublicView(pair),
+    view: resolvePortfolioView(pair, options.unit ?? {}, { mediaBase: '/media' }),
     manifest: manifest(options.manifest),
     route: { route: 'home' },
     basePath: options.basePath ?? '',
@@ -117,14 +134,25 @@ function inputFor(
   });
 }
 
+/** The slice 1 runtime: no media document and no snapshot, so every image is unavailable. */
 const INPUT = inputFor();
-const html = (node: React.ReactNode) => renderToStaticMarkup(<>{node}</>);
-const sectionOf = (input: VariantRenderInput, kind: string) =>
-  input.portfolio.sections.find((section) => section.kind === kind)!;
-const render = (kind: string, input = INPUT, level?: 1 | 2 | 3 | 4 | 5 | 6) =>
-  html(renderSection(sectionOf(input, kind), input, {}, { level }));
+/** With a media document and a GitHub snapshot, as slices 2 and 3 publish them. */
+const READY = inputFor(COMPLETE, { unit: { media: MEDIA, snapshots: { github: GITHUB } } });
 
-// The fixture has to have every field for the next test to mean anything.
+const html = (node: React.ReactNode) => renderToStaticMarkup(<>{node}</>);
+const sectionOf = (input: VariantRenderInput, id: string) =>
+  input.portfolio.sections.find((section) => section.id === id)!;
+const render = (id: string, input = INPUT, level?: 1 | 2 | 3 | 4 | 5 | 6) =>
+  html(renderSection(sectionOf(input, id), input, {}, { level }));
+/** Every visible section, the hero's heading at 1, the rest at 2. */
+const page = (input: VariantRenderInput) =>
+  html(
+    input.portfolio.sections.map((section) =>
+      renderSection(section, input, {}, { level: section.kind === 'hero' ? 1 : 2 }),
+    ),
+  );
+
+// The fixture has to have every field for the next tests to mean anything.
 
 /** What a zod schema's definition holds, read without importing zod. */
 interface Schema {
@@ -178,22 +206,73 @@ function missingFields(schema: Schema, value: unknown, path: string): string[] {
   return [];
 }
 
-test('the fixture has every core kind and identity field, each with every field its schema defines', () => {
+/** Every placement in the fixture: identity, meta, works, sources, chronology, and custom items. */
+function placements(): unknown[] {
+  const out: unknown[] = [];
+  const walk = (value: unknown, key = '') => {
+    if (Array.isArray(value)) value.forEach((item) => walk(item, key));
+    else if (isPlainObject(value)) {
+      if (
+        ['avatar', 'ogImage', 'cover', 'logo'].includes(key) ||
+        (key === 'media' && 'asset' in value)
+      ) {
+        out.push(value);
+      }
+      for (const [child, inner] of Object.entries(value)) walk(inner, child);
+    }
+  };
+  walk(COMPLETE);
+  return out;
+}
+
+test('the fixture has every core kind, and every field each section, record, and placement defines', () => {
+  const schema = (value: unknown) => value as unknown as Schema;
+  const portfolio = schema(SCHEMAS.PortfolioSchema);
+  // The document's own fields; each part is checked against its own schema below.
   assert.deepEqual(
-    missingFields(IdentitySchema as unknown as Schema, COMPLETE.identity, 'identity'),
+    Object.keys(unwrap(portfolio).shape!)
+      .filter((key) => key !== 'extensions')
+      .filter((key) => !Object.hasOwn(COMPLETE, key)),
     [],
   );
+  const checks: Array<[string, unknown, unknown]> = [
+    ['identity', SCHEMAS.IdentitySchema, COMPLETE.identity],
+    ['meta', SCHEMAS.MetaSchema, COMPLETE.meta],
+    ['practice', SCHEMAS.PracticeSchema, COMPLETE.practice],
+    ['contact', SCHEMAS.ContactSchema, COMPLETE.contact],
+    ['case study', SCHEMAS.CaseStudySchema, COMPLETE.works[0].caseStudy],
+  ];
+  for (const [name, part, value] of checks) {
+    assert.deepEqual(missingFields(schema(part), value, name), [], name);
+  }
+  const lists: Array<[string, unknown, readonly unknown[]]> = [
+    ['works', SCHEMAS.WorkSchema, COMPLETE.works],
+    ['evidence', SCHEMAS.EvidenceSchema, COMPLETE.evidence],
+    ['chronology', SCHEMAS.ChronologyEntrySchema, COMPLETE.chronology],
+    ['media', SCHEMAS.MediaAssetSchema, COMPLETE.media],
+    ['placements', SCHEMAS.parts.Placement, placements()],
+  ];
+  for (const [name, item, values] of lists) {
+    const missing = missingFields(
+      { _def: { typeName: 'ZodArray', type: schema(item) } },
+      values,
+      name,
+    );
+    assert.deepEqual(missing, [], name);
+  }
   const kinds = COMPLETE.sections.map((section) => section.kind);
-  assert.deepEqual([...kinds].sort(), Object.keys(SHARED_RENDERERS).sort());
-  for (const schema of coreSections as unknown as Schema[]) {
-    const kind = String(schema.shape!.kind!._def.value);
-    const section = COMPLETE.sections.find((candidate) => candidate.kind === kind);
-    const missing = missingFields(schema, section, kind).filter((path) => path !== `${kind}/lang`);
+  assert.deepEqual([...new Set(kinds)].sort(), Object.keys(SHARED_RENDERERS).sort());
+  for (const core of SCHEMAS.coreSections as unknown as Schema[]) {
+    const kind = String(core.shape!.kind!._def.value);
+    const sections = COMPLETE.sections.filter((candidate) => candidate.kind === kind);
+    const missing = missingFields({ _def: { typeName: 'ZodArray', type: core } }, sections, kind)
+      // A section's language is checked on the hero alone.
+      .filter((path) => path !== `${kind}/*/lang` || kind === 'hero');
     assert.deepEqual(missing, [], kind);
   }
 });
 
-// Every value the fixture sets, and what of it the markup must show.
+// What the markup must show of every value the fixture sets.
 
 const escape = (text: string) =>
   text
@@ -208,147 +287,604 @@ const DATE_FIELDS = new Set([
   'end',
   'asOf',
   'publishedAt',
+  'releasedAt',
   'presentedAt',
   'receivedAt',
   'filedAt',
   'grantedAt',
-  'releasedAt',
   'takenAt',
 ]);
 
-/** What the markup shows for one field's value, or null for a field that shows nothing yet. */
-function shown(kind: string, key: string, value: unknown): string[] | null {
-  if (kind === 'github' && key !== 'username' && key !== 'title' && key !== 'subtitle') {
-    // Configuration for GitHub data no render input carries until #10.
-    return null;
-  }
+/** Fields that are references, routing, or the asset's own file, which no page shows. */
+const NOT_SHOWN = new Set([
+  'id',
+  'kind',
+  'lang',
+  'extensions',
+  'visibility',
+  'slug',
+  'caseStudy',
+  'source',
+  'items',
+  'part',
+  'asset',
+  'evidence',
+  'works',
+  'decorative',
+]);
+
+const names = (values: readonly string[]) =>
+  new Intl.ListFormat('en', { style: 'long', type: 'conjunction' }).format(values);
+
+/** What the markup shows for one field's value. */
+function shown(key: string, value: unknown, record: Record<string, unknown>): string[] {
   if (DATE_FIELDS.has(key)) return [escape(formatDate(String(value)))];
   switch (key) {
-    case 'width':
-    case 'height':
-      return [`${key}="${value}"`];
     case 'x':
+      return [`--focal-x:${value}`];
     case 'y':
-      return [`data-focal-${key}="${value}"`];
+      return [`--focal-y:${value}`];
+    case 'alt':
+      return [`alt="${escape(String(value))}"`];
     case 'readingTimeMinutes':
-      return [`${value} min read`];
+      return [`${value} min`];
     case 'durationMinutes':
       return [formatEpisodeDuration(Number(value))];
     case 'durationSeconds':
       return [formatTrackDuration(Number(value))];
-    case 'number':
-      return kind === 'episodes' ? [`#${value}`] : [escape(String(value))];
-    case 'years':
-      return [`${formatStatValue(Number(value), 'en')}+`];
     case 'value':
-      return [escape(formatStatValue(value as string | number, 'en'))];
-    case 'type':
-      return ['Keynote', 'data-talk-type="keynote"'];
+      return [new Intl.NumberFormat('en').format(Number(value))];
+    case 'format':
+      return ['Keynote'];
     case 'status':
-      return ['Granted', 'data-patent-status="granted"'];
-    case 'layout':
-      return [`data-layout="${value}"`];
+      return ['Granted'];
     case 'iconName':
       return [`data-icon="${value}"`];
-    case 'metric':
+    case 'key':
       return [`data-metric="${value}"`];
+    case 'thread':
+      return [`data-thread="${value}"`];
+    case 'branchesFrom':
+      return [`data-branches-from="${value}"`];
+    case 'mergesInto':
+      return [`data-merges-into="${value}"`];
+    case 'medium':
+      return [`data-medium="${value}"`];
     case 'platform':
       return [`data-platform="${value}"`];
     case 'showAvailability':
-      return ['Available for new work'];
+      return ['data-availability="open"'];
     case 'doi':
       return [escape(String(value)), `href="${escape(doiLink(String(value))!.url)}"`];
+    case 'audioUrl':
+    case 'videoUrl':
+    case 'pdfUrl':
+    case 'slidesUrl':
+      return [`href="${escape(String(value))}"`, escape(formatUrl(String(value)))];
+    case 'url':
+    case 'organizationUrl':
+    case 'sourceUrl':
+      return [`href="${escape(String(value))}"`];
+    case 'email':
+      return [`href="mailto:${value}"`];
+    case 'guests':
+    case 'authors':
+    case 'inventors':
+      return [escape(names(value as string[]))];
+    case 'number':
+      return [escape(typeof value === 'number' ? String(value) : String(value))];
     case 'username':
-      return [`@${value}`, `href="https://github.com/${value}"`];
+      return [`href="https://github.com/${value}"`, `>${value}</a>`];
     default:
+      void record;
       return typeof value === 'string' ? [escape(value)] : [String(value)];
   }
 }
 
-/** Every leaf the section sets, as `[key, value]`, skipping what's an attribute of the section itself. */
-function leaves(value: unknown, key = ''): Array<[string, unknown]> {
-  if (Array.isArray(value)) return value.flatMap((item) => leaves(item, key));
-  if (isPlainObject(value)) {
-    return Object.entries(value).flatMap(([child, inner]) =>
-      ['id', 'kind', 'lang', 'extensions'].includes(child) ? [] : leaves(inner, child),
-    );
+/** Every leaf the value sets, as `[key, value, holder]`, skipping what no page shows. */
+function leaves(
+  value: unknown,
+  key = '',
+  holder: Record<string, unknown> = {},
+): Array<[string, unknown, Record<string, unknown>]> {
+  if (NOT_SHOWN.has(key)) return [];
+  if (Array.isArray(value)) {
+    // A list of strings joins into one formatted value.
+    if (['guests', 'authors', 'inventors'].includes(key)) return [[key, value, holder]];
+    return value.flatMap((item) => leaves(item, key, holder));
   }
-  return [[key, value]];
+  if (isPlainObject(value)) {
+    return Object.entries(value).flatMap(([child, inner]) => leaves(inner, child, value));
+  }
+  return [[key, value, holder]];
 }
 
-test('each shared renderer renders every field of its kind', () => {
-  for (const raw of COMPLETE.sections) {
-    const markup = render(raw.kind);
-    for (const [key, value] of leaves(raw)) {
-      for (const text of shown(raw.kind, key, value) ?? []) {
-        assert.ok(markup.includes(text), `${raw.kind}: ${key} shows ${text}\n${markup}`);
+/** The github section's configuration: what to show of a snapshot, not text of its own. */
+const GITHUB_CONFIG = new Set([
+  'showContributionGraph',
+  'showPinnedRepos',
+  'showTotalStars',
+  'showLanguageBreakdown',
+  'showRecentlyActive',
+  'recentlyActiveLimit',
+  'featuredRepos',
+  'excludeRepos',
+]);
+
+test('the shared renderers show every field of every visible record, section, and placement', () => {
+  const markup = page(READY);
+  const visible = (id: string) => !id.startsWith('secret-');
+  const parts: Array<[string, unknown]> = [
+    ['identity', COMPLETE.identity],
+    ['practice', COMPLETE.practice],
+    ['contact', COMPLETE.contact],
+    ...COMPLETE.works
+      .filter(({ id }) => visible(id))
+      .map((work) => [work.id, work] as [string, unknown]),
+    ...COMPLETE.evidence
+      .filter(({ id }) => visible(id))
+      .map((entry) => [entry.id, entry] as [string, unknown]),
+    ...COMPLETE.chronology.map((entry) => [entry.id, entry] as [string, unknown]),
+    ...COMPLETE.media
+      .filter(({ id }) => !['og-image'].includes(id))
+      .map((entry) => [entry.id, entry] as [string, unknown]),
+    ...COMPLETE.sections.map((section) => [section.id, section] as [string, unknown]),
+  ];
+  for (const [name, value] of parts) {
+    for (const [key, leaf, holder] of leaves(value)) {
+      if (GITHUB_CONFIG.has(key)) continue;
+      // An asset's alt shows where a placement doesn't override it; one is checked there.
+      if (name === 'atlas-plate' && key === 'alt') continue;
+      for (const text of shown(key, leaf, holder)) {
+        assert.ok(markup.includes(text), `${name}: ${key} shows ${text}`);
       }
     }
   }
 });
 
-test('every identity field shows: the hero shows the name, tagline, avatar, pronouns, and location, and contact the email', () => {
-  const input = inputFor({
-    ...COMPLETE,
-    sections: [
-      { kind: 'hero', id: 'top' },
-      { kind: 'contact', id: 'contact', links: [] },
-    ],
-  });
-  const markup = html(input.portfolio.sections.map((section) => renderSection(section, input, {})));
-  for (const [key, value] of leaves(COMPLETE.identity)) {
-    const expected =
-      key === 'email' ? [`href="mailto:${value}"`, String(value)] : shown('identity', key, value);
-    for (const text of expected ?? []) {
-      assert.ok(markup.includes(text), `identity: ${key} shows ${text}\n${markup}`);
+/** The labels the shared renderers may add (#10, slice 1, item 7), as the markup has them. */
+const FIXED_LABELS = new Set([
+  'Image unavailable',
+  'Case study',
+  'Archive',
+  'As of',
+  'Challenge',
+  'Context',
+  'Role',
+  'Constraints',
+  'Decisions',
+  'Rationale',
+  'Alternatives',
+  'Evidence',
+  'Outcomes',
+  'Reflection',
+  'Repositories',
+  'Stars received',
+  'Contributions in the last year',
+]);
+
+const decode = (text: string) =>
+  text
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#x27;/g, "'")
+    .replace(/&amp;/g, '&');
+
+/** The text nodes of static markup, each trimmed, blank ones left out. */
+function textNodes(markup: string): string[] {
+  return markup
+    .split(/<[^>]*>/)
+    .map((text) => decode(text).trim())
+    .filter((text) => text !== '');
+}
+
+/** Every string the fixture and its snapshot hold, and each one formatted as a renderer formats it. */
+function allowedTexts(): Set<string> {
+  const allowed = new Set<string>();
+  const add = (key: string, value: unknown) => {
+    if (typeof value === 'string') allowed.add(value);
+    if (DATE_FIELDS.has(key) && typeof value === 'string') allowed.add(formatDate(value));
+    if (typeof value === 'number') {
+      allowed.add(new Intl.NumberFormat('en').format(value));
+      allowed.add(`${value} min`);
+      allowed.add(formatEpisodeDuration(value));
+      allowed.add(formatTrackDuration(value));
     }
+    if (typeof value === 'string' && /^(?:https?|mailto):/.test(value))
+      allowed.add(formatUrl(value));
+  };
+  const walk = (value: unknown, key = '') => {
+    if (Array.isArray(value)) {
+      if (value.every((item) => typeof item === 'string') && value.length > 1) {
+        allowed.add(names(value as string[]));
+      }
+      value.forEach((item) => walk(item, key));
+    } else if (isPlainObject(value)) {
+      for (const [child, inner] of Object.entries(value)) walk(inner, child);
+    } else {
+      add(key, value);
+    }
+  };
+  walk(COMPLETE);
+  walk(GITHUB);
+  // An entry with no end runs to the present, which the period shows.
+  allowed.add('Present');
+  // The snapshot's date, as As of shows it.
+  allowed.add('October 2, 2026');
+  // The formatted forms of the enums the renderers turn into words.
+  allowed.add('Keynote');
+  allowed.add('Granted');
+  return allowed;
+}
+
+test('every text node is the owner’s, formatted from the owner’s data, a dated snapshot value, or a fixed label', () => {
+  const allowed = allowedTexts();
+  const caseStudy = html(
+    <CaseStudy
+      work={READY.portfolio.works.find(({ id }) => id === 'tide-atlas') as never}
+      ctx={renderContext(READY, { id: 'case', lang: undefined, title: undefined }, 1)}
+    />,
+  );
+  for (const [name, markup] of [
+    ['ready', page(READY)],
+    ['unavailable', page(INPUT)],
+    ['case study', caseStudy],
+  ] as const) {
+    const strays = textNodes(markup).filter(
+      (text) => !allowed.has(text) && !FIXED_LABELS.has(text) && !/^[·–\s]+$/.test(text),
+    );
+    assert.deepEqual(strays, [], name);
   }
-  // The avatar sits beside the name, so it loads with the first section, at once.
-  assert.match(
-    markup,
-    /<img class="pf-avatar" src="\/media\/avatar\.png" alt="Alt avatar"[^>]* loading="eager"/,
-  );
-  // With no links anywhere, the email is still a way to get in touch.
-  const bare = inputFor({
-    ...COMPLETE,
-    links: [],
-    sections: [{ kind: 'contact', id: 'contact', links: [] }],
-  });
-  assert.match(
-    render('contact', bare),
-    /<ul class="pf-links" role="list"><li><a href="mailto:rowan@rowan\.test" data-platform="email">rowan@rowan\.test<\/a><\/li><\/ul>/,
-  );
-  // A link to the same address isn't listed twice.
-  const linked = inputFor({
+});
+
+test('no section takes a default heading: an untitled one has none, and its items take its level', () => {
+  const untitled = inputFor({
     ...COMPLETE,
     sections: [
-      {
-        kind: 'contact',
-        id: 'contact',
-        links: [{ url: 'mailto:Rowan@rowan.test', label: 'Write' }],
-      },
+      { kind: 'works', id: 'work', items: ['tide-atlas'] },
+      { kind: 'contact', id: 'reach' },
+      { kind: 'focus', id: 'focus', items: ['Tides'] },
     ],
   });
-  assert.equal(render('contact', linked).match(/mailto:/gi)?.length, 1);
+  const works = render('work', untitled);
+  assert.doesNotMatch(works, /pf-section__title/);
+  assert.match(
+    works,
+    /<h2 class="pf-item__title"><a href="https:\/\/atlas\.rowan\.test">Work title<\/a><\/h2>/,
+  );
+  assert.doesNotMatch(render('reach', untitled), /<h2/);
+  assert.doesNotMatch(render('focus', untitled), /<h2/);
 });
 
 test('a section takes its heading level from the caller, and its items go one deeper', () => {
   assert.match(
-    render('experience', INPUT, 3),
-    /<h3 class="pf-section__title">Experience title<\/h3>/,
+    render('timeline', INPUT, 3),
+    /<h3 class="pf-section__title">Chronology section title<\/h3>/,
   );
-  assert.match(render('experience', INPUT, 3), /<h4 class="pf-item__title">Experience role<\/h4>/);
-  assert.match(render('experience', INPUT, 6), /<h6 class="pf-item__title">Experience role<\/h6>/);
-  assert.match(render('hero', INPUT, 1), /<h1 class="pf-hero__name">Hero name<\/h1>/);
-  assert.match(render('lede'), /<h2 class="pf-section__title">Lede title<\/h2>/);
+  assert.match(render('timeline', INPUT, 3), /<h4 class="pf-item__title">Chronology title<\/h4>/);
+  assert.match(render('timeline', INPUT, 6), /<h6 class="pf-item__title">Chronology title<\/h6>/);
+  assert.match(render('top', INPUT, 1), /<h1 class="pf-hero__name">Hero name<\/h1>/);
+  assert.match(render('about'), /<h2 class="pf-section__title">Lede title<\/h2>/);
+  // A work's own evidence sits below the work's heading.
+  assert.match(
+    render('selected-work'),
+    /<h4 class="pf-item__title"><a href="https:\/\/evidence\.rowan\.test">Evidence title<\/a><\/h4>/,
+  );
 });
 
-test('no shared renderer sets an inline style', () => {
-  for (const { kind } of COMPLETE.sections) assert.doesNotMatch(render(kind), /\sstyle=/, kind);
+test('the one inline style a shared renderer sets is an image’s focal point', () => {
+  const styles = [...page(READY).matchAll(/<([a-z]+)\b[^>]*\sstyle="([^"]*)"/g)];
+  assert.ok(styles.length > 0);
+  for (const [, tag, style] of styles) {
+    assert.equal(tag, 'img', style);
+    assert.match(style!, /^--focal-x:[\d.]+;--focal-y:[\d.]+$/);
+  }
+  assert.doesNotMatch(page(INPUT), /\sstyle=/);
+});
+
+test('a ready image takes its srcset, sizes, width, and height from derived data, and loads lazily unless it is the signature cover', () => {
+  const works = render('selected-work', READY);
+  const cover =
+    /<figure class="pf-figure" data-media-asset="atlas-cover"><picture>([\s\S]*?)<\/picture>/.exec(
+      works,
+    )?.[1];
+  assert.ok(cover, works);
+  assert.match(
+    cover,
+    /<source type="image\/webp" srcSet="\/media\/atlas-cover\/c{64}\/w480-a1\.webp 480w, \/media\/atlas-cover\/c{64}\/w960-a1\.webp 960w" sizes="100vw"\/>/,
+  );
+  // The signature work's cover is the one image that loads at once.
+  assert.match(
+    cover,
+    /<img class="pf-cover" src="\/media\/atlas-cover\/c{64}\/w960-a1-jpg\.jpg" srcSet="[^"]*w480-a1-jpg\.jpg 480w, [^"]*w960-a1-jpg\.jpg 960w" sizes="100vw" width="1600" height="1200" alt="Alt atlas-cover" decoding="async" style="--focal-x:0.25;--focal-y:0.75"\/>/,
+  );
+  for (const [img] of page(READY).matchAll(/<img\b[^>]*>/g)) {
+    if (img.includes('/atlas-cover/')) assert.doesNotMatch(img, /loading=/);
+    else assert.match(img, /loading="lazy"/, img);
+  }
+  // The placement's own alt and focal point win over its asset's.
+  assert.match(
+    works,
+    /src="[^"]*\/atlas-plate\/[^"]*" [^>]*alt="Placement alt"[^>]*style="--focal-x:0.5;--focal-y:0.125"/,
+  );
+  // Decoration has an empty alt, and no image takes its alt from a title or a caption.
+  assert.match(works, /src="[^"]*\/ornament\/[^"]*" [^>]*alt=""/);
+  assert.doesNotMatch(page(READY), /alt="(?:Work title|Placement caption|Custom caption)"/);
+});
+
+test('an unavailable image keeps its box, caption, and credit with Image unavailable, and decoration renders nothing', () => {
+  const markup = page(INPUT);
+  assert.doesNotMatch(markup, /<img\b/);
+  const works = render('selected-work');
+  assert.match(
+    works,
+    /<figure class="pf-figure pf-figure--unavailable" data-media-asset="atlas-cover"><span class="pf-media-box" data-media-state="unavailable" data-media-reason="processing"><span class="pf-media-box__label">Image unavailable<\/span><\/span><figcaption><small class="pf-credit">Credit atlas-cover<\/small><\/figcaption><\/figure>/,
+  );
+  assert.match(
+    works,
+    /data-media-asset="atlas-plate">[\s\S]*?Image unavailable[\s\S]*?<p class="pf-caption">Placement caption<\/p>/,
+  );
+  // The decorative ornament, and the logo its placement marks decorative, leave nothing.
+  assert.doesNotMatch(markup, /ornament|lab-logo/);
+  // Every non-decorative placement on the page says so, once.
+  const visiblePlacements = [
+    'avatar',
+    'atlas-cover',
+    'atlas-plate',
+    'source-avatar',
+    'atlas-plate',
+  ];
+  assert.equal(markup.match(/Image unavailable/g)?.length, visiblePlacements.length);
+});
+
+test('the github section shows its snapshot’s values with their date, else the profile link alone', () => {
+  const bare = render('on-github');
+  assert.match(
+    bare,
+    /<p class="pf-github"><a href="https:\/\/github\.com\/rowan-vale">rowan-vale<\/a><\/p>/,
+  );
+  assert.doesNotMatch(bare, /Repositories|As of/);
+  const ready = render('on-github', READY);
+  assert.match(ready, /<dt>Repositories<\/dt><dd>31<\/dd>/);
+  assert.match(ready, /<dt>Stars received<\/dt><dd>1,543<\/dd>/);
+  assert.match(ready, /<dt>Contributions in the last year<\/dt><dd>987<\/dd>/);
+  assert.match(ready, /As of <time dateTime="2026-10-02">October 2, 2026<\/time>/);
+  assert.match(ready, /<a href="https:\/\/github\.com\/rowan-vale\/tide-tables">tide-tables<\/a>/);
+  assert.match(ready, /Pinned description/);
+  // The section's excludeRepos leaves one out.
+  assert.doesNotMatch(ready, /scratch|Excluded description/);
+  // A snapshot that doesn't check is no snapshot: the profile link alone.
+  const failed = inputFor(COMPLETE, { unit: { snapshots: { github: { records: 'nope' } } } });
+  assert.equal(render('on-github', failed), bare);
+  // Without showTotalStars, the stars received stay out.
+  const quiet = inputFor(
+    {
+      ...COMPLETE,
+      sections: COMPLETE.sections.map((section) =>
+        section.kind === 'github' ? { ...section, showTotalStars: false } : section,
+      ),
+    },
+    { unit: { snapshots: { github: GITHUB } } },
+  );
+  assert.doesNotMatch(render('on-github', quiet), /Stars received/);
+});
+
+test('a work in the archive says so, with the fixed label Archive, and no other does', () => {
+  const works = render('selected-work');
+  const entries = [
+    ...works.matchAll(/<li id="([^"]+)" class="pf-item pf-work"[\s\S]*?(?=<li id="|<\/ul>$)/g),
+  ];
+  const archived = entries.filter(([entry]) => entry.includes('data-label="archive"'));
+  assert.deepEqual(
+    archived.map(([, id]) => id),
+    ['early-sketches'],
+  );
+  assert.match(works, /<p class="pf-label" data-label="archive">Archive<\/p>/);
+});
+
+test('a record’s anchor is its id, on the first visible section that lists it, so no id repeats', () => {
+  const twice = inputFor(
+    {
+      ...COMPLETE,
+      sections: [
+        ...COMPLETE.sections,
+        { kind: 'works', id: 'again', title: 'Again', items: ['tide-atlas'] },
+      ],
+    },
+    { idPrefix: 'pv-' },
+  );
+  const markup = page(twice);
+  assert.equal(markup.match(/ id="pv-tide-atlas"/g)?.length, 1);
+  assert.match(render('selected-work', twice), / id="pv-tide-atlas"/);
+  assert.doesNotMatch(render('again', twice), / id="pv-tide-atlas"/);
+  // A chronology entry's work links to that anchor, prefix and all.
+  assert.match(render('timeline', twice), /<a href="#pv-tide-atlas">Work title<\/a>/);
+  // Evidence the proof strip lists and a custom item cites anchors in the strip.
+  assert.match(render('proof-strip', twice), / id="pv-readers"/);
+  assert.doesNotMatch(render('residencies', twice), / id="pv-readers"/);
+});
+
+test('private records, and what only hidden sections reach, never render or reach the input', () => {
+  for (const input of [INPUT, READY]) {
+    const markup = page(input);
+    for (const text of ['Private title', 'Private evidence', 'secret-work', 'secret-proof']) {
+      assert.ok(!markup.includes(text), text);
+      assert.ok(!JSON.stringify(input).includes(text), text);
+    }
+  }
+  const hidden = inputFor(COMPLETE, { hidden: ['selected-work'] });
+  // tide-atlas is still the signature, and harbor-notes featured; the archived work goes.
+  assert.deepEqual(
+    hidden.portfolio.works.map(({ id }) => id),
+    ['tide-atlas', 'harbor-notes', 'early-sketches'],
+  );
+  const onlyHidden = inputFor(
+    { ...COMPLETE, signature: undefined, featured: undefined, archive: undefined },
+    { hidden: ['selected-work'] },
+  );
+  // Only the chronology entry still names tide-atlas, and that doesn't reach it.
+  assert.deepEqual(
+    onlyHidden.portfolio.works.map(({ id }) => id),
+    [],
+  );
+  assert.doesNotMatch(page(onlyHidden), /Work title/);
+});
+
+test('a section with nothing public leaves the page, and renderSection renders nothing for one', () => {
+  const lonely = inputFor({
+    ...COMPLETE,
+    sections: [
+      { kind: 'lede', id: 'about', body: 'Hi.' },
+      { kind: 'works', id: 'drafts', title: 'Drafts', items: ['secret-work'] },
+    ],
+  });
+  assert.deepEqual(
+    lonely.portfolio.sections.map(({ id }) => id),
+    ['about'],
+  );
+  const stray = { kind: 'works', id: 'stray', title: 'Stray', items: ['secret-work'] } as Section;
+  assert.equal(renderSection(stray, lonely, {}), null);
+  const noPart = { kind: 'practice', id: 'gone', part: 'services' } as Section;
+  assert.equal(
+    renderSection(noPart, inputFor({ ...COMPLETE, practice: { thesis: 'Only this.' } }), {}),
+    null,
+  );
+});
+
+test('a chronology section without items lists every public entry, newest first', () => {
+  const ids = [
+    ...render('everything-since').matchAll(
+      /data-chronology-kind="[^"]+"[^>]*>[\s\S]*?class="pf-item__title">([^<]+)</g,
+    ),
+  ].map(([, title]) => title);
+  assert.deepEqual(ids, ['Current title', 'Chronology title', 'Study title']);
+});
+
+test('contact shows the contact record, the identity’s email first, and says availability on a data attribute', () => {
+  const contact = render('get-in-touch');
+  assert.match(
+    contact,
+    /<div class="pf-contact" data-availability="open"><p class="pf-message">Contact message<\/p>/,
+  );
+  assert.match(
+    contact,
+    /<ul class="pf-links" role="list"><li><a href="mailto:rowan@rowan\.test" data-platform="email">rowan@rowan\.test<\/a><\/li><li><a href="mailto:hello@rowan\.test" data-platform="email">Contact link<\/a><\/li><\/ul>/,
+  );
+  assert.doesNotMatch(contact, /Available/);
+  // A link to the same address isn't listed twice.
+  const linked = inputFor({
+    ...COMPLETE,
+    contact: { links: [{ url: 'mailto:Rowan@rowan.test', label: 'Write' }] },
+  });
+  assert.equal(render('get-in-touch', linked).match(/mailto:/gi)?.length, 1);
+});
+
+test('each practice section shows its part, groups in order, an unnamed group straight under the section', () => {
+  assert.match(render('thesis'), /<div class="pf-rich-text pf-thesis"><p>Practice thesis\.<\/p>/);
+  assert.match(
+    render('skills'),
+    /<h3 class="pf-group__title">Skill group<\/h3><p>Skill group description<\/p><ul class="pf-tags" role="list"><li>Skill item<\/li><\/ul>/,
+  );
+  assert.match(
+    render('tools'),
+    /<a href="https:\/\/tool\.rowan\.test">Tool name<\/a> <span class="pf-version">Tool version<\/span>/,
+  );
+  assert.match(
+    render('services'),
+    /<h4 class="pf-item__title"><a href="https:\/\/service\.rowan\.test">Service name<\/a><\/h4>/,
+  );
+  const unnamed = inputFor({
+    ...COMPLETE,
+    practice: { services: [{ items: [{ name: 'Audit' }] }] },
+    sections: [{ kind: 'practice', id: 'services', title: 'Services', part: 'services' }],
+  });
+  assert.match(render('services', unnamed), /<h3 class="pf-item__title">Audit<\/h3>/);
+});
+
+test('a custom section shows its title, body, and items with their media, evidence, and links', () => {
+  const custom = render('residencies', READY);
+  assert.match(custom, /<h2 class="pf-section__title">Custom title<\/h2>/);
+  assert.match(custom, /<div class="pf-rich-text pf-prose"><p>Custom body\.<\/p>/);
+  assert.match(custom, /<h3 class="pf-item__title">Custom item title<\/h3>/);
+  assert.match(custom, /alt="Alt atlas-plate"/);
+  assert.match(custom, /<p class="pf-caption">Custom caption<\/p>/);
+  assert.match(custom, /<h4 class="pf-item__title">[\s\S]*?<\/h4>|1,200/);
+  assert.match(custom, /<a href="https:\/\/custom\.rowan\.test">Custom link<\/a>/);
+});
+
+test('evidence shows a metric’s value with its unit and nothing around it, and a testimonial as a quote', () => {
+  const strip = render('proof-strip', READY);
+  assert.match(
+    strip,
+    /<p class="pf-metric"><data class="pf-metric__value" value="1200">1,200<\/data> <span class="pf-metric__unit">Metric unit<\/span><\/p>/,
+  );
+  assert.match(strip, /data-metric="readers"/);
+  assert.doesNotMatch(strip, /1,200\+|#1,200/);
+  assert.match(
+    strip,
+    /<figure class="pf-quote"><blockquote cite="https:\/\/praise\.rowan\.test"><div class="pf-rich-text"><p>Testimonial statement\.<\/p>/,
+  );
+  assert.match(strip, /<a href="https:\/\/praise\.rowan\.test">Testimonial source<\/a>/);
+  assert.match(strip, /As of <time class="pf-date" dateTime="2024-03">March 2024<\/time>/);
+  assert.match(
+    strip,
+    /<a class="pf-action" href="https:\/\/evidence\.rowan\.test">Evidence button<\/a>/,
+  );
+  assert.match(
+    strip,
+    /<a href="https:\/\/slides\.rowan\.test\/tide" data-field="slidesUrl">slides\.rowan\.test\/tide<\/a>/,
+  );
+  assert.match(
+    strip,
+    /<time class="pf-date" dateTime="2020-04" data-field="filedAt">April 2020<\/time>/,
+  );
+});
+
+test('the case study heads its page, labels each authored field, and leaves the rest out', () => {
+  const work = READY.portfolio.works.find(({ id }) => id === 'tide-atlas')!;
+  const ctx = renderContext(READY, { id: 'case', lang: undefined, title: undefined }, 1);
+  const markup = html(<CaseStudy work={work as never} ctx={ctx} />);
+  assert.equal(markup.match(/<h1\b/g)?.length, 1);
+  assert.match(
+    markup,
+    /<p class="pf-case-study__label">Case study<\/p><h1 class="pf-case-study__title">Work title<\/h1>/,
+  );
+  const headings = [
+    ...markup.matchAll(/<h([23]) class="pf-(?:case-study__heading|decision__label)">([^<]+)</g),
+  ].map(([, level, text]) => `h${level} ${text}`);
+  assert.deepEqual(headings, [
+    'h2 Challenge',
+    'h2 Context',
+    'h2 Role',
+    'h2 Constraints',
+    'h2 Decisions',
+    'h3 Rationale',
+    'h3 Alternatives',
+    'h2 Evidence',
+    'h2 Outcomes',
+    'h2 Reflection',
+  ]);
+  // The work's evidence records sit under Evidence, below its heading.
+  assert.match(
+    markup,
+    /<h3 class="pf-item__title"><a href="https:\/\/evidence\.rowan\.test">Evidence title<\/a><\/h3>/,
+  );
+  const sparse = html(
+    <CaseStudy
+      work={{ ...work, evidence: undefined, caseStudy: { outcomes: 'Only outcomes.' } } as never}
+      ctx={ctx}
+    />,
+  );
+  assert.deepEqual(
+    [...sparse.matchAll(/<h2[^>]*>([^<]+)</g)].map(([, text]) => text),
+    ['Outcomes'],
+  );
 });
 
 /** The only properties the shared stylesheet may set: layout, never appearance. */
 const LAYOUT_PROPERTIES = new Set([
+  'aspect-ratio',
   'block-size',
   'break-inside',
   'column-gap',
@@ -365,10 +901,13 @@ const LAYOUT_PROPERTIES = new Set([
   'margin-inline',
   'max-inline-size',
   'object-fit',
+  // Where a crop centers: the owner's focal point.
+  'object-position',
   // Where a line breaks, so a long word never widens the page.
   'overflow-wrap',
   'padding-inline',
   'padding-inline-start',
+  'place-items',
 ]);
 
 test('the shared stylesheet sets layout alone, under [data-variant], with no weight a variant must beat', () => {
@@ -402,42 +941,41 @@ test('the shared stylesheet sets layout alone, under [data-variant], with no wei
 
 test('renderSection stamps the section element and dispatches by kind', () => {
   const input = inputFor(COMPLETE, { idPrefix: 'pv-' });
-  const markup = html(renderSection(sectionOf(input, 'lede'), input, {}));
+  const markup = html(renderSection(sectionOf(input, 'about'), input, {}));
   assert.match(
     markup,
     /^<section id="pv-about" data-section-id="about" data-kind="lede" data-renderer="shared">/,
   );
   // The hero's own language rides on its section, and it runs the portfolio's way.
-  // (React preloads the first section's eager images ahead of it.)
   assert.match(
-    html(renderSection(sectionOf(input, 'hero'), input, {})),
-    /^(?:<link rel="preload"[^>]*>)*<section[^>]* lang="en-GB">/,
+    html(renderSection(sectionOf(input, 'top'), input, {})),
+    /^<section[^>]* lang="en-GB">/,
   );
 });
 
 test('a section in a language that runs the other way says so with dir', () => {
-  const page = (direction: 'ltr' | 'rtl', lang: string) => {
+  const section = (direction: 'ltr' | 'rtl', lang: string) => {
     const input = inputFor({
       ...COMPLETE,
       locale: direction === 'rtl' ? 'ar' : 'en',
       direction,
       sections: [{ kind: 'lede', id: 'about', lang, body: 'Hi.' }],
     });
-    return /^<section[^>]*>/.exec(render('lede', input))![0];
+    return /^<section[^>]*>/.exec(render('about', input))![0];
   };
-  assert.match(page('ltr', 'ar'), / lang="ar" dir="rtl">$/);
-  assert.match(page('ltr', 'he-IL'), / dir="rtl">$/);
-  assert.match(page('rtl', 'en'), / lang="en" dir="ltr">$/);
+  assert.match(section('ltr', 'ar'), / lang="ar" dir="rtl">$/);
+  assert.match(section('ltr', 'he-IL'), / dir="rtl">$/);
+  assert.match(section('rtl', 'en'), / lang="en" dir="ltr">$/);
   // The script subtag decides when there is one, and the same direction needs no dir.
-  assert.match(page('ltr', 'sd-Deva'), / lang="sd-Deva">$/);
-  assert.match(page('ltr', 'az-Arab'), / dir="rtl">$/);
-  assert.match(page('rtl', 'fa'), / lang="fa">$/);
+  assert.match(section('ltr', 'sd-Deva'), / lang="sd-Deva">$/);
+  assert.match(section('ltr', 'az-Arab'), / dir="rtl">$/);
+  assert.match(section('rtl', 'fa'), / lang="fa">$/);
 });
 
 test('a bespoke renderer for a kind the variant skips is still the mistake it is', () => {
   const skipped = inputFor(COMPLETE, { manifest: { unsupportedKinds: ['github'] } });
   assert.throws(
-    () => renderSection(sectionOf(skipped, 'github'), skipped, { github: () => <p>own</p> }),
+    () => renderSection(sectionOf(skipped, 'on-github'), skipped, { github: () => <p>own</p> }),
     /kit-shared passes a renderer for github, which its renderedKinds doesn't list/,
   );
 });
@@ -453,9 +991,9 @@ test("a kind the variant renders bespoke uses its renderer, and the manifest's u
     html(renderSection(sectionOf(input, 'quote'), input, bespoke, { level: 3 })),
     '<section id="quote" data-section-id="quote" data-kind="quote" data-renderer="bespoke"><p data-own="3">Quote text</p></section>',
   );
-  assert.equal(renderSection(sectionOf(input, 'github'), input, bespoke), null);
+  assert.equal(renderSection(sectionOf(input, 'on-github'), input, bespoke), null);
   assert.match(
-    html(renderSection(sectionOf(input, 'lede'), input, bespoke)),
+    html(renderSection(sectionOf(input, 'about'), input, bespoke)),
     /data-renderer="shared"/,
   );
 });
@@ -468,22 +1006,21 @@ test('a bespoke map that disagrees with renderedKinds is the variant mistake it 
   );
   const undeclared: BespokeRenderers = { lede: () => <p>own</p> };
   assert.throws(
-    () => renderSection(sectionOf(INPUT, 'lede'), INPUT, undeclared),
+    () => renderSection(sectionOf(INPUT, 'about'), INPUT, undeclared),
     /kit-shared passes a renderer for lede, which its renderedKinds doesn't list/,
   );
 });
 
 test("an extension's section renders through the renderer the host registered, else nothing", () => {
-  // A registered extension's section, as the public view keeps it.
+  // A registered extension's section, as the published view keeps it.
   const section = {
     kind: '@acme/portfolio-photography/exhibitions',
     id: 'shows',
     data: { items: [] },
   } as Section;
-  const input = INPUT;
   registerHostModules({});
   try {
-    assert.equal(renderSection(section, input, {}), null);
+    assert.equal(renderSection(section, INPUT, {}), null);
     registerHostModules({
       extensionRenderers: {
         '@acme/portfolio-photography/exhibitions': ({ section: own, level }) => (
@@ -492,7 +1029,7 @@ test("an extension's section renders through the renderer the host registered, e
       },
     });
     assert.equal(
-      html(renderSection(section, input, {})),
+      html(renderSection(section, INPUT, {})),
       '<section id="shows" data-section-id="shows" data-kind="@acme/portfolio-photography/exhibitions" data-renderer="shared"><p data-level="2">shows</p></section>',
     );
     assert.throws(
@@ -511,37 +1048,16 @@ test("an extension's section renders through the renderer the host registered, e
   }
 });
 
-test("an untitled section gets its kind's heading, marked English inside other content", () => {
-  const untitled = {
-    ...COMPLETE,
-    locale: 'pt-BR',
-    sections: [
-      { kind: 'experience', id: 'work', items: [] },
-      { kind: 'lede', id: 'about', body: 'Olá.' },
-      { kind: 'contact', id: 'contact', links: [] },
-    ],
-  };
-  const input = inputFor(untitled);
-  assert.match(
-    render('experience', input),
-    /<h2 class="pf-section__title" lang="en">Experience<\/h2>/,
-  );
-  assert.doesNotMatch(render('lede', input), /<h2/);
-  // A contact section with no links of its own lists the portfolio's.
-  assert.match(render('contact', input), /href="https:\/\/social\.rowan\.test\/@rowan"/);
-  assert.match(render('contact', INPUT), /<h2 class="pf-section__title">Contact title<\/h2>/);
-});
-
 test("a hero without its own name and tagline shows the identity's", () => {
   const input = inputFor({ ...COMPLETE, sections: [{ kind: 'hero', id: 'top' }] });
-  const markup = render('hero', input, 1);
+  const markup = render('top', input, 1);
   assert.match(markup, /<h1 class="pf-hero__name">Rowan Vale<\/h1>/);
   assert.match(markup, /Identity tagline/);
 });
 
 test("a #fragment link takes the render's id prefix, so it still lands on its section", () => {
   const input = inputFor(COMPLETE, { idPrefix: 'pv-' });
-  assert.match(render('hero', input), /href="#pv-contact"/);
+  assert.match(render('top', input), /href="#pv-get-in-touch"/);
   assert.match(render('cta', input), /href="#pv-services"/);
   assert.match(render('cta', input), /href="mailto:hire@rowan\.test"/);
   // /#id is the home page's section, where the routes are mounted.
@@ -549,13 +1065,13 @@ test("a #fragment link takes the render's id prefix, so it still lands on its se
     {
       ...COMPLETE,
       sections: [
-        { kind: 'cta', id: 'cta', primaryAction: { url: '/#contact', label: 'Contact' } },
-        { kind: 'contact', id: 'contact' },
+        { kind: 'cta', id: 'cta', primaryAction: { url: '/#about', label: 'About' } },
+        { kind: 'lede', id: 'about', body: 'Hi.' },
       ],
     },
     { idPrefix: 'pv-' },
   );
-  assert.match(render('cta', home), /href="\/#pv-contact"/);
+  assert.match(render('cta', home), /href="\/#pv-about"/);
   // Markdown links take it too.
   const prose = inputFor(
     {
@@ -564,171 +1080,86 @@ test("a #fragment link takes the render's id prefix, so it still lands on its se
         {
           kind: 'lede',
           id: 'about',
-          body: 'See [contact](#contact), [home](/#contact), or [docs](https://rowan.test/#a).',
+          body: 'See [work](#tide-atlas), [home](/#about), or [docs](https://rowan.test/#a).',
         },
-        { kind: 'contact', id: 'contact' },
+        { kind: 'works', id: 'selected-work', items: ['tide-atlas'] },
       ],
     },
     { idPrefix: 'pv-' },
   );
-  const lede = render('lede', prose);
-  assert.match(lede, /<a href="#pv-contact">contact<\/a>/);
-  assert.match(lede, /<a href="\/#pv-contact">home<\/a>/);
+  const lede = render('about', prose);
+  assert.match(lede, /<a href="#pv-tide-atlas">work<\/a>/);
+  assert.match(lede, /<a href="\/#pv-about">home<\/a>/);
   assert.match(lede, /<a href="https:\/\/rowan\.test\/#a">docs<\/a>/);
 });
 
 test("a /#id link under /sample keeps the render's query, so it stays in the variant it names (#5, Slice 4)", () => {
   const sections = [
-    { kind: 'cta', id: 'cta', primaryAction: { url: '/#contact', label: 'Contact' } },
-    { kind: 'lede', id: 'about', body: 'See [home](/#contact) or [here](#contact).' },
-    { kind: 'contact', id: 'contact' },
+    { kind: 'cta', id: 'cta', primaryAction: { url: '/#about', label: 'About' } },
+    { kind: 'lede', id: 'about', body: 'See [home](/#about) or [here](#about).' },
   ];
   const sample = inputFor(
     { ...COMPLETE, sections },
     { basePath: '/sample', query: { variant: 'acme-ocean' }, idPrefix: 'pv-' },
   );
-  assert.match(render('cta', sample), /href="\/sample\?variant=acme-ocean#pv-contact"/);
-  const lede = render('lede', sample);
-  assert.match(lede, /<a href="\/sample\?variant=acme-ocean#pv-contact">home<\/a>/);
+  assert.match(render('cta', sample), /href="\/sample\?variant=acme-ocean#pv-about"/);
+  const lede = render('about', sample);
+  assert.match(lede, /<a href="\/sample\?variant=acme-ocean#pv-about">home<\/a>/);
   // A fragment alone stays on this page, whatever its query.
-  assert.match(lede, /<a href="#pv-contact">here<\/a>/);
+  assert.match(lede, /<a href="#pv-about">here<\/a>/);
   // With no query, under a preview grant's base path.
   const preview = inputFor({ ...COMPLETE, sections }, { basePath: '/preview/g_7Hk-2' });
-  assert.match(render('cta', preview), /href="\/preview\/g_7Hk-2#contact"/);
+  assert.match(render('cta', preview), /href="\/preview\/g_7Hk-2#about"/);
 });
 
 test("words and dates the renderers add are marked English in other content, and numbers use the content's locale", () => {
   const french = inputFor({
     ...COMPLETE,
     locale: 'fr',
-    sections: [
+    chronology: [
       {
-        kind: 'experience',
-        id: 'work',
-        items: [{ role: 'Ingénieure', organization: 'Acme', period: { start: '2019-06' } }],
+        id: 'acme',
+        kind: 'role',
+        title: 'Ingénieure',
+        organization: 'Acme',
+        period: { start: '2019-06' },
       },
-      { kind: 'stats', id: 'figures', items: [{ value: 1200, label: 'Lecteurs' }] },
+    ],
+    evidence: [{ id: 'lecteurs', type: 'metric', statement: 'Lecteurs', metric: { value: 1200 } }],
+    sections: [
+      { kind: 'chronology', id: 'work', items: ['acme'] },
+      { kind: 'evidence', id: 'figures', items: ['lecteurs'] },
     ],
   });
-  const work = render('experience', french);
+  const work = render('work', french);
   assert.match(work, /<time class="pf-date" dateTime="2019-06" lang="en">June 2019<\/time>/);
   assert.match(work, /<span lang="en">Present<\/span>/);
-  assert.match(render('stats', french), /1\u202f200/);
+  assert.match(render('figures', french), /1 200/);
   // A tag the runtime has no data for formats in English, not the runtime's default.
   const klingon = inputFor({
     ...COMPLETE,
     locale: 'tlh',
+    evidence: [
+      { id: 'readers', type: 'metric', statement: 'Readers', metric: { value: 1200 } },
+      { id: 'tide', type: 'publication', title: 'Tide', authors: ['A', 'B', 'C'] },
+    ],
     sections: [
-      { kind: 'stats', id: 'figures', items: [{ value: 1200, label: 'Readers' }] },
-      { kind: 'publications', id: 'papers', items: [{ title: 'Tide', authors: ['A', 'B', 'C'] }] },
+      { kind: 'evidence', id: 'figures', items: ['readers'] },
+      { kind: 'evidence', id: 'papers', items: ['tide'] },
     ],
   });
-  assert.match(render('stats', klingon), /1,200/);
-  assert.match(render('publications', klingon), /A, B, and C/);
-});
-
-test('blank text is absent: no empty heading, label, or separator', () => {
-  const input = inputFor({
-    ...COMPLETE,
-    sections: [
-      {
-        kind: 'experience',
-        id: 'work',
-        items: [
-          {
-            role: ' ',
-            organization: 'Acme',
-            location: '',
-            period: { start: '2020' },
-            highlights: ['', 'Shipped'],
-          },
-        ],
-      },
-      {
-        kind: 'external-portfolios',
-        id: 'elsewhere',
-        items: [{ url: 'https://shop.rowan.test', brandName: 'Shop', buttonText: ' ' }],
-      },
-    ],
-  });
-  const work = render('experience', input);
-  assert.doesNotMatch(work, /<h3/);
-  assert.doesNotMatch(work, /<li><\/li>/);
-  assert.equal(work.match(/pf-sep/g)?.length, 1);
-  assert.match(
-    render('external-portfolios', input),
-    /<a class="pf-action" href="https:\/\/shop\.rowan\.test">Shop<\/a>/,
-  );
-});
-
-test('an image without alt text is decorative only beside text that names it', () => {
-  const noAlt = (name: string) => ({ src: `/media/${name}.png` });
-  const input = inputFor({
-    ...COMPLETE,
-    sections: [
-      { kind: 'lede', id: 'about', body: 'Hi.' },
-      {
-        kind: 'gallery',
-        id: 'plates',
-        items: [
-          { image: noAlt('captioned'), caption: 'The harbor at dawn' },
-          { image: noAlt('bare') },
-          { image: { src: '/media/ornament.png', alt: '' }, caption: 'An ornament' },
-        ],
-      },
-      {
-        kind: 'projects',
-        id: 'work',
-        items: [{ name: 'Tide', image: noAlt('cover'), images: [noAlt('shot')] }],
-      },
-      {
-        kind: 'experience',
-        id: 'jobs',
-        items: [
-          {
-            role: 'Engineer',
-            organization: 'Acme',
-            logo: noAlt('logo'),
-            period: { start: '2020' },
-          },
-        ],
-      },
-    ],
-  });
-  const gallery = render('gallery', input);
-  assert.match(gallery, /src="\/media\/captioned\.png" alt="The harbor at dawn"/);
-  // Nothing says what this one shows, so it has no alt, and an audit finds it.
-  assert.match(gallery, /<img src="\/media\/bare\.png" loading="lazy"/);
-  assert.match(gallery, /src="\/media\/ornament\.png" alt=""/);
-  const projects = render('projects', input);
-  assert.match(projects, /src="\/media\/cover\.png" alt=""/);
-  assert.match(projects, /<img src="\/media\/shot\.png" loading="lazy"/);
-  assert.match(render('experience', input), /src="\/media\/logo\.png" alt=""/);
+  assert.match(render('figures', klingon), /1,200/);
+  assert.match(render('papers', klingon), /A, B, and C/);
 });
 
 test('lists the stylesheet strips of bullets still say they are lists', () => {
-  for (const { kind } of COMPLETE.sections) {
-    const markup = render(kind);
+  for (const { id } of READY.portfolio.sections) {
+    const markup = render(id, READY);
     for (const [list] of markup.matchAll(/<ul[^>]*>/g)) {
-      if (/pf-highlights|pf-short-list/.test(list)) assert.doesNotMatch(list, /role=/, kind);
-      else assert.match(list, /role="list"/, `${kind}: ${list}`);
+      if (/pf-highlights|pf-short-list/.test(list)) assert.doesNotMatch(list, /role=/, id);
+      else assert.match(list, /role="list"/, `${id}: ${list}`);
     }
   }
-});
-
-test("the first section's images load at once, and the rest lazily", () => {
-  const input = inputFor({
-    ...COMPLETE,
-    sections: [
-      { kind: 'gallery', id: 'first', items: [{ image: { src: '/a.png', alt: 'A' } }] },
-      { kind: 'gallery', id: 'second', items: [{ image: { src: '/b.png', alt: 'B' } }] },
-    ],
-  });
-  const [first, second] = input.portfolio.sections.map((section) =>
-    html(renderSection(section, input, {})),
-  );
-  assert.match(first!, /loading="eager"/);
-  assert.match(second!, /loading="lazy"/);
 });
 
 test('a DOI links to doi.org whatever prefix it was written with, each part encoded', () => {
@@ -753,8 +1184,8 @@ test('a DOI links to doi.org whatever prefix it was written with, each part enco
 });
 
 test('nothing reads the clock or Math.random(), so every render of the same input is the same', () => {
-  const first = COMPLETE.sections.map(({ kind }) => render(kind));
-  const again = withoutClock(() => COMPLETE.sections.map(({ kind }) => render(kind)));
+  const first = [page(READY), page(INPUT)];
+  const again = withoutClock(() => [page(READY), page(INPUT)]);
   assert.deepEqual(again, first);
 });
 
@@ -850,7 +1281,7 @@ test('the visitor control slot is one empty marked element', () => {
   assert.equal(html(<VisitorControlSlot />), '<div data-visitor-control-slot=""></div>');
 });
 
-test('each kind name in SHARED_RENDERERS is a core kind', () => {
+test('SHARED_RENDERERS has one renderer for each of the 14 core kinds', () => {
   const kinds: readonly SectionKind[] = Object.keys(SHARED_RENDERERS) as SectionKind[];
-  assert.equal(kinds.length, 28);
+  assert.equal(kinds.length, 14);
 });
