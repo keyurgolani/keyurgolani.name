@@ -37,7 +37,7 @@ The fallback composition's, `packages/fallback-composition/manifest.json`, which
   "description": "The host's stand-in. ...",
   "contract": "2.0",
   "schemas": { "portfolio": { "min": 2, "max": 2 }, "site": { "min": 2, "max": 2 } },
-  "tokenContract": 0,
+  "tokenContract": 1,
   "compositionFamily": "document",
   "motionIntent": "still",
   "performanceTier": "light",
@@ -68,7 +68,7 @@ Text fields are plain text on one line: no `<` or `>`, no control characters, no
 
 - **`contract`** (required): `"2.0"`. A host reads its own major and any minor up to its own; a newer minor or another major is refused, with the upgrade or pin that fixes it.
 - **`schemas`** (required): `{ "portfolio": { "min", "max" }, "site": { "min", "max" } }`, the document versions the variant reads. Each range must include the host's, version 2.
-- **`tokenContract`** (required): the appearance token contract the variant reads. `0` until #19 ships tokens; it must equal the host's.
+- **`tokenContract`** (required): the appearance token contract the variant reads: `1`, the one `@portfolio/appearance` defines (#19). It must equal the host's.
 
 ## Character
 

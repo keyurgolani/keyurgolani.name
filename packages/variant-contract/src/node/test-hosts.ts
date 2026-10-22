@@ -65,7 +65,7 @@ export function manifestFor(
     description: 'It renders nothing of its own.',
     contract: '2.0',
     schemas: { portfolio: { min: 2, max: 2 }, site: { min: 2, max: 2 } },
-    tokenContract: 0,
+    tokenContract: 1,
     compositionFamily: 'document',
     motionIntent: 'still',
     performanceTier: 'light',

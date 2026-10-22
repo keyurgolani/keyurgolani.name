@@ -10,7 +10,7 @@ export const CONTRACT_MINOR = 0;
  * The appearance token contract a variant builds against. It stays 0 until
  * #19 (appearance axes) ships the tokens and sets 1.
  */
-export const TOKEN_CONTRACT_VERSION = 0;
+export const TOKEN_CONTRACT_VERSION = 1;
 
 /** `major.minor`, or null when the text isn't one. */
 export function parseContractVersion(value: string): { major: number; minor: number } | null {
