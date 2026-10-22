@@ -35,7 +35,7 @@ test('two renders of the same page match', () => {
 
 test('each difference names its element, what differs, and both sides', () => {
   const main = (copy: { children: ParityNode[] }) =>
-    copy.children[0] as unknown as { children: Record<string, unknown>[] };
+    copy.children[0] as unknown as { id?: string; children: Record<string, unknown>[] };
   assert.deepEqual(
     compareSnapshots(
       page,
@@ -69,6 +69,26 @@ test('each difference names its element, what differs, and both sides', () => {
       }),
     ),
     [{ path: 'div > main#main > ul', what: 'role', expected: 'list', actual: '(none)' }],
+  );
+  // An id another render names differently, or one it adds, breaks every
+  // link and the skip link that points at it.
+  assert.deepEqual(
+    compareSnapshots(
+      page,
+      changed((copy) => {
+        main(copy).id = 'content';
+      }),
+    ),
+    [{ path: 'div > main#main', what: 'id', expected: 'main', actual: 'content' }],
+  );
+  assert.deepEqual(
+    compareSnapshots(
+      page,
+      changed((copy) => {
+        main(copy).children[0]!.id = 'name';
+      }),
+    ),
+    [{ path: 'div > main#main > h1', what: 'id', expected: '(none)', actual: 'name' }],
   );
   assert.deepEqual(
     compareSnapshots(
