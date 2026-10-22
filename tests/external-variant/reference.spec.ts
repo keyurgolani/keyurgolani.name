@@ -54,6 +54,8 @@ test(
       await expect(section.locator('dl.acme-ledger')).toHaveCount(1);
       // Each term says something: a statement, as markdown through the kit, or a title.
       await expect(section.locator('dt:empty')).toHaveCount(0);
+      // And each pair is whole, a term with its figure or source: no dt without its dd.
+      await expect(section.locator('dl.acme-ledger > div:not(:has(> dt + dd))')).toHaveCount(0);
     }
     expect(await page.locator('dl.acme-ledger dt > .pf-rich-text').count()).toBeGreaterThan(0);
     await expect(page.locator('[data-kind="fun-facts"]')).toHaveCount(0);

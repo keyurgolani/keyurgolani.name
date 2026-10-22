@@ -27,7 +27,8 @@ type Props = { readonly input: VariantRenderInput };
 
 /**
  * Evidence as a ledger: each statement, through the kit's rich text, or its
- * title when it has none, then its figure, or else its source.
+ * title when it has none, then its figure, or else its source. A line needs
+ * both, so evidence with no figure and no source isn't one.
  */
 function EvidenceLedger({
   section,
@@ -40,25 +41,24 @@ function EvidenceLedger({
       {section.title ? <Heading>{section.title}</Heading> : null}
       {section.subtitle ? <p>{section.subtitle}</p> : null}
       <dl className="acme-ledger">
-        {evidenceOf(section, input).map((entry) => (
-          <div key={entry.id} data-evidence-type={entry.type} data-metric={entry.metric?.key}>
-            {entry.statement ? (
-              <dt>
-                <RichText source={entry.statement} inline input={input} />
-              </dt>
-            ) : entry.title ? (
-              <dt>{entry.title}</dt>
-            ) : null}
-            {entry.metric?.value !== undefined ? (
-              <dd>
-                {String(entry.metric.value)}
-                {entry.metric.unit ? ` ${entry.metric.unit}` : ''}
-              </dd>
-            ) : entry.source ? (
-              <dd>{entry.source.name}</dd>
-            ) : null}
-          </div>
-        ))}
+        {evidenceOf(section, input).map((entry) => {
+          const term = entry.statement ? (
+            <RichText source={entry.statement} inline input={input} />
+          ) : (
+            entry.title || null
+          );
+          const figure =
+            entry.metric?.value !== undefined
+              ? `${String(entry.metric.value)}${entry.metric.unit ? ` ${entry.metric.unit}` : ''}`
+              : entry.source?.name;
+          if (term === null || !figure) return null;
+          return (
+            <div key={entry.id} data-evidence-type={entry.type} data-metric={entry.metric?.key}>
+              <dt>{term}</dt>
+              <dd>{figure}</dd>
+            </div>
+          );
+        })}
       </dl>
     </>
   );
