@@ -555,7 +555,10 @@ test('a variant id that names an Object property reads only an entry the site st
     compatibilityFor(pair(siteText), { registry })
       .diagnostics.map(({ code }) => code)
       .filter((code) => code.startsWith('controls.'));
-  // Object.prototype.constructor is no stored entry, so nothing is stale.
+  // The site stores Ocean's values alone. Object.prototype.constructor is no
+  // entry of its own, so nothing of constructor's is stale.
+  const ocean = 'variantControls:\n  acme-ocean:\n    version: 2\n    values: {}\n';
+  assert.deepEqual(codes(site('constructor', ocean)), []);
   assert.deepEqual(codes(site('constructor')), []);
   const stored = 'variantControls:\n  constructor:\n    version: 1\n    values: {}\n';
   assert.deepEqual(codes(site('constructor', stored)), ['controls.stale']);

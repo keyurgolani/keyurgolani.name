@@ -183,9 +183,11 @@ test("stored controls are the site's own entry, never one Object.prototype lends
   assert.ok(checked.ok, JSON.stringify(checked.diagnostics));
   const defaults = buildRenderInput(args()).controls;
   assert.equal(defaults.heroLayout, 'wide');
-  // Object.prototype.constructor is no entry, so every control renders its default.
+  // With Ocean's values stored alone, Object.prototype.constructor is no
+  // entry, so every control renders its default.
+  const ocean = pair('variantControls:\n  acme-ocean:\n    version: 2\n    values: {}\n');
   assert.deepEqual(
-    buildRenderInput(args(pair(), { manifest: checked.manifest })).controls,
+    buildRenderInput(args(ocean, { manifest: checked.manifest })).controls,
     defaults,
   );
   // Nor is an entry a polluted Object.prototype holds, beside the site's own for another variant.
