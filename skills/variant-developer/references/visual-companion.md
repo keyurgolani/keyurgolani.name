@@ -150,25 +150,17 @@ skills/variant-developer/scripts/visual-companion/start.sh \
 
 This runs `pnpm --filter @portfolio/web dev` with `PORTFOLIO_PROFILE=demo`, which renders the bundled sample in any registered variant. Once the dev server is up, tell the user to visit `http://127.0.0.1:3000/sample?variant=<id>`. An id the build doesn't register, and `fallback`, are a 404; `pnpm check:variants --package @portfolio/variant-<id>` says why it isn't registered.
 
-### Matrix screenshots (optional)
+### Screenshots in every mode
+
+The variant specs replace the old matrix script. They boot the production build on every contract fixture and on the bundled sample, and check the variant in six modes (desktop, mobile, no JavaScript, print, failed enhancement, reduced motion), with a screenshot of each fixture at desktop and mobile:
 
 ```bash
-skills/variant-developer/scripts/visual-companion/start.sh \
-  --mode preview --variant <id> --matrix
+pnpm exec playwright install chromium   # once
+pnpm build
+PORTFOLIO_VARIANTS_ONLY=<id> pnpm test:variants
 ```
 
-This launches the dev server and, once `/api/health` answers, runs `preview-matrix.mjs` to capture `/sample?variant=<id>` in light and dark at a desktop and a phone viewport, into `<repo-root>/.variant-preview/<id>/`. An unregistered id is a 404: the script says so and exits 1, as it does when the page renders another variant or a capture fails. Run it again against the running server with `node skills/variant-developer/scripts/visual-companion/preview-matrix.mjs <id>`.
-
-**Requires Playwright.** If Playwright isn't installed, the script prints the install commands and exits gracefully — the rest of preview-mode still works.
-
-To enable Playwright:
-
-```bash
-pnpm add -Dw playwright
-pnpm exec playwright install chromium
-```
-
-The agent reads the captured PNGs (if its harness supports image input) to inspect rendering. Otherwise, ask the user to look at the screenshots and report back.
+The screenshots are attached to the report in `reports/variants/html/`. The agent reads them (if its harness supports image input) to inspect rendering; otherwise, ask the user to open the report and look. They're compared against baselines only for the platform's own packages, in CI's pinned Playwright image. See [docs/variants.md](../../../docs/variants.md#testing-a-variant).
 
 ## Events file format
 
@@ -216,4 +208,4 @@ Files in `screen_dir` persist (they live under `<project-dir>/.skills/variant-co
 - Server (HTTP + watcher): `scripts/visual-companion/server.cjs`
 - Launcher: `scripts/visual-companion/start.sh`
 - Shutdown: `scripts/visual-companion/stop.sh`
-- Matrix screenshots: `scripts/visual-companion/preview-matrix.mjs`
+- Screenshots in every mode: `pnpm test:variants`, in `tests/variants/`

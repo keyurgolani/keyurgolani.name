@@ -172,6 +172,7 @@ Run `references/audit-checklist.md` for the scripted gates and `references/quali
 6. `node skills/variant-developer/scripts/kit-dedup.mjs packages/variant-<id>`: every candidate hoisted or marked `// LOCAL: <reason>`.
 7. `pnpm --filter @portfolio/kit test`, if you hoisted.
 8. `node skills/scripts/sync-checks.mjs`: kit-catalog and schema parity.
+9. `PORTFOLIO_VARIANTS_ONLY=<id> pnpm test:variants` passes, after `pnpm build`: every contract fixture and the bundled sample in six modes (desktop, mobile, no JavaScript, print, failed enhancement, reduced motion), the hidden canary, and render parity. Screenshots of each fixture at desktop and mobile are in `reports/variants/html/`.
 
 The source audit's rules, each with its own code:
 
@@ -231,7 +232,7 @@ Would the user understand this better by seeing it than reading it? Layout compa
 ### Modes
 
 - **Mockup-mode** (Phase 1, before code). `scripts/visual-companion/start.sh --mode mockup --project-dir <repo-root>`. You write HTML fragments to the watched directory; the user's clicks land in `state_dir/events`.
-- **Preview-mode** (Phases 2 and 3). `scripts/visual-companion/start.sh --mode preview --variant <id>` runs the dev server under `PORTFOLIO_PROFILE=demo`, at `/sample?variant=<id>`. `--matrix` also captures screenshots in light and dark (requires Playwright).
+- **Preview-mode** (Phases 2 and 3). `scripts/visual-companion/start.sh --mode preview --variant <id>` runs the dev server under `PORTFOLIO_PROFILE=demo`, at `/sample?variant=<id>`. For screenshots in every mode, run `PORTFOLIO_VARIANTS_ONLY=<id> pnpm test:variants`.
 
 See `references/visual-companion.md`.
 
