@@ -15,11 +15,11 @@
         "packages": "ce7ba912f101098d9c9cfe907260763975d96187"
       },
       "tracer": {
-        "tests": "08a030a5b94a59f041cfb2555cb48f8b09b0af3d"
+        "tests": "25de9ce4dcaf1c8feb40721e01052568dc413a4c"
       },
       "date": "2026-10-22",
       "command": "pnpm test:trace:baseline",
-      "trace": "pnpm test:trace --base-url http://127.0.0.1:64966 --allow-third-party --selection editorial",
+      "trace": "pnpm test:trace --base-url http://127.0.0.1:50732 --allow-third-party --selection editorial",
       "route": "/",
       "selection": "editorial",
       "composition": null,
@@ -34,65 +34,68 @@
         "sockets": {
           "build": {
             "lsof": true,
-            "samples": 39,
+            "samples": 38,
             "sockets": [],
             "listeners": [],
             "outsideLoopback": []
           },
           "server": {
             "lsof": true,
-            "samples": 78,
+            "samples": 76,
             "sockets": [
-              "node TCP 127.0.0.1:64966 (LISTEN)",
-              "node TCP 127.0.0.1:64966->127.0.0.1:65127 (ESTABLISHED)",
-              "node TCP 127.0.0.1:64966->127.0.0.1:65128 (ESTABLISHED)",
-              "node TCP 127.0.0.1:64966->127.0.0.1:65131 (ESTABLISHED)",
-              "node TCP 127.0.0.1:64966->127.0.0.1:65129 (ESTABLISHED)",
-              "node TCP 127.0.0.1:64966->127.0.0.1:65130 (ESTABLISHED)",
-              "node TCP 127.0.0.1:64966->127.0.0.1:65328 (ESTABLISHED)",
-              "node TCP 127.0.0.1:64966->127.0.0.1:65329 (ESTABLISHED)",
-              "node TCP 127.0.0.1:64966->127.0.0.1:65330 (ESTABLISHED)",
-              "node TCP 127.0.0.1:64966->127.0.0.1:65331 (ESTABLISHED)",
-              "node TCP 127.0.0.1:64966->127.0.0.1:65332 (ESTABLISHED)",
-              "node TCP 127.0.0.1:64966->127.0.0.1:65333 (ESTABLISHED)"
+              "node TCP 127.0.0.1:50732 (LISTEN)",
+              "node TCP 127.0.0.1:50732->127.0.0.1:50785 (ESTABLISHED)",
+              "node TCP 127.0.0.1:50732->127.0.0.1:50788 (ESTABLISHED)",
+              "node TCP 127.0.0.1:50732->127.0.0.1:50790 (ESTABLISHED)",
+              "node TCP 127.0.0.1:50732->127.0.0.1:50791 (ESTABLISHED)",
+              "node TCP 127.0.0.1:50732->127.0.0.1:50792 (ESTABLISHED)",
+              "node TCP 127.0.0.1:50732->127.0.0.1:50793 (ESTABLISHED)",
+              "node TCP 127.0.0.1:50732->127.0.0.1:50856 (ESTABLISHED)",
+              "node TCP 127.0.0.1:50732->127.0.0.1:50857 (ESTABLISHED)",
+              "node TCP 127.0.0.1:50732->127.0.0.1:50858 (ESTABLISHED)",
+              "node TCP 127.0.0.1:50732->127.0.0.1:50859 (ESTABLISHED)",
+              "node TCP 127.0.0.1:50732->127.0.0.1:50860 (ESTABLISHED)",
+              "node TCP 127.0.0.1:50732->127.0.0.1:50861 (ESTABLISHED)"
             ],
-            "listeners": ["127.0.0.1:64966"],
+            "listeners": ["127.0.0.1:50732"],
             "outsideLoopback": []
           },
           "trace": {
             "lsof": true,
-            "samples": 77,
+            "samples": 75,
             "sockets": [
-              "node TCP [::1]:64997 (LISTEN)",
-              "node TCP 127.0.0.1:64998 (LISTEN)",
-              "node TCP 127.0.0.1:64998->127.0.0.1:65010 (ESTABLISHED)",
-              "node TCP 127.0.0.1:64998->127.0.0.1:65011 (ESTABLISHED)",
-              "chrome-he TCP 127.0.0.1:65010->127.0.0.1:64998 (ESTABLISHED)",
-              "chrome-he TCP 127.0.0.1:65011->127.0.0.1:64998 (ESTABLISHED)",
-              "chrome-he TCP 127.0.0.1:65127->127.0.0.1:64966 (ESTABLISHED)",
-              "chrome-he TCP 127.0.0.1:65128->127.0.0.1:64966 (ESTABLISHED)",
-              "chrome-he TCP 127.0.0.1:65129->127.0.0.1:64966 (ESTABLISHED)",
-              "chrome-he TCP 127.0.0.1:65130->127.0.0.1:64966 (ESTABLISHED)",
-              "chrome-he TCP 127.0.0.1:65131->127.0.0.1:64966 (ESTABLISHED)",
-              "chrome-he TCP 127.0.0.1:65127->127.0.0.1:64966 (CLOSE_WAIT)",
-              "chrome-he TCP 127.0.0.1:65128->127.0.0.1:64966 (CLOSE_WAIT)",
-              "chrome-he TCP 127.0.0.1:65129->127.0.0.1:64966 (CLOSE_WAIT)",
-              "chrome-he TCP 127.0.0.1:65130->127.0.0.1:64966 (CLOSE_WAIT)",
-              "chrome-he TCP 127.0.0.1:65131->127.0.0.1:64966 (CLOSE_WAIT)",
-              "chrome-he TCP 127.0.0.1:65328->127.0.0.1:64966 (ESTABLISHED)",
-              "chrome-he TCP 127.0.0.1:65329->127.0.0.1:64966 (ESTABLISHED)",
-              "chrome-he TCP 127.0.0.1:65330->127.0.0.1:64966 (ESTABLISHED)",
-              "chrome-he TCP 127.0.0.1:65331->127.0.0.1:64966 (ESTABLISHED)",
-              "chrome-he TCP 127.0.0.1:65332->127.0.0.1:64966 (ESTABLISHED)",
-              "chrome-he TCP 127.0.0.1:65333->127.0.0.1:64966 (ESTABLISHED)",
-              "chrome-he TCP 127.0.0.1:65328->127.0.0.1:64966 (CLOSE_WAIT)",
-              "chrome-he TCP 127.0.0.1:65329->127.0.0.1:64966 (CLOSE_WAIT)",
-              "chrome-he TCP 127.0.0.1:65330->127.0.0.1:64966 (CLOSE_WAIT)",
-              "chrome-he TCP 127.0.0.1:65331->127.0.0.1:64966 (CLOSE_WAIT)",
-              "chrome-he TCP 127.0.0.1:65332->127.0.0.1:64966 (CLOSE_WAIT)",
-              "chrome-he TCP 127.0.0.1:65333->127.0.0.1:64966 (CLOSE_WAIT)"
+              "node TCP [::1]:50771 (LISTEN)",
+              "node TCP 127.0.0.1:50772 (LISTEN)",
+              "node TCP 127.0.0.1:50772->127.0.0.1:50777 (ESTABLISHED)",
+              "node TCP 127.0.0.1:50772->127.0.0.1:50778 (ESTABLISHED)",
+              "chrome-he TCP 127.0.0.1:50777->127.0.0.1:50772 (ESTABLISHED)",
+              "chrome-he TCP 127.0.0.1:50778->127.0.0.1:50772 (ESTABLISHED)",
+              "chrome-he TCP 127.0.0.1:50785->127.0.0.1:50732 (ESTABLISHED)",
+              "chrome-he TCP 127.0.0.1:50788->127.0.0.1:50732 (ESTABLISHED)",
+              "chrome-he TCP 127.0.0.1:50790->127.0.0.1:50732 (ESTABLISHED)",
+              "chrome-he TCP 127.0.0.1:50791->127.0.0.1:50732 (ESTABLISHED)",
+              "chrome-he TCP 127.0.0.1:50792->127.0.0.1:50732 (ESTABLISHED)",
+              "chrome-he TCP 127.0.0.1:50793->127.0.0.1:50732 (ESTABLISHED)",
+              "chrome-he TCP 127.0.0.1:50785->127.0.0.1:50732 (CLOSE_WAIT)",
+              "chrome-he TCP 127.0.0.1:50788->127.0.0.1:50732 (CLOSE_WAIT)",
+              "chrome-he TCP 127.0.0.1:50790->127.0.0.1:50732 (CLOSE_WAIT)",
+              "chrome-he TCP 127.0.0.1:50791->127.0.0.1:50732 (CLOSE_WAIT)",
+              "chrome-he TCP 127.0.0.1:50792->127.0.0.1:50732 (CLOSE_WAIT)",
+              "chrome-he TCP 127.0.0.1:50793->127.0.0.1:50732 (CLOSE_WAIT)",
+              "chrome-he TCP 127.0.0.1:50856->127.0.0.1:50732 (ESTABLISHED)",
+              "chrome-he TCP 127.0.0.1:50857->127.0.0.1:50732 (ESTABLISHED)",
+              "chrome-he TCP 127.0.0.1:50858->127.0.0.1:50732 (ESTABLISHED)",
+              "chrome-he TCP 127.0.0.1:50859->127.0.0.1:50732 (ESTABLISHED)",
+              "chrome-he TCP 127.0.0.1:50860->127.0.0.1:50732 (ESTABLISHED)",
+              "chrome-he TCP 127.0.0.1:50861->127.0.0.1:50732 (ESTABLISHED)",
+              "chrome-he TCP 127.0.0.1:50856->127.0.0.1:50732 (CLOSE_WAIT)",
+              "chrome-he TCP 127.0.0.1:50857->127.0.0.1:50732 (CLOSE_WAIT)",
+              "chrome-he TCP 127.0.0.1:50858->127.0.0.1:50732 (CLOSE_WAIT)",
+              "chrome-he TCP 127.0.0.1:50859->127.0.0.1:50732 (CLOSE_WAIT)",
+              "chrome-he TCP 127.0.0.1:50860->127.0.0.1:50732 (CLOSE_WAIT)",
+              "chrome-he TCP 127.0.0.1:50861->127.0.0.1:50732 (CLOSE_WAIT)"
             ],
-            "listeners": ["[::1]:64997", "127.0.0.1:64998"],
+            "listeners": ["[::1]:50771", "127.0.0.1:50772"],
             "outsideLoopback": []
           }
         }
@@ -114,7 +117,7 @@
               "webgl2": false
             },
             "cpuThrottling": 4,
-            "loadAverage": 39.4,
+            "loadAverage": 34.5,
             "cpus": 18
           },
           "requests": {
@@ -126,7 +129,7 @@
             "byType": {
               "document": {
                 "count": 1,
-                "transferBytes": 34738,
+                "transferBytes": 34597,
                 "fileBytes": 131065,
                 "unknownBytes": 0
               },
@@ -202,23 +205,23 @@
           "longTasks": {
             "supported": true,
             "cpuThrottling": 4,
-            "loadEventEndMs": 648,
+            "loadEventEndMs": 586.3,
             "windowMs": 5000,
             "count": 2,
             "over50ms": 2,
-            "totalMs": 381,
-            "maxMs": 307,
-            "durationsMs": [307, 74]
+            "totalMs": 317,
+            "maxMs": 246,
+            "durationsMs": [246, 71]
           },
           "idle": {
-            "windowS": 2.001677,
-            "taskDurationS": 0.000064,
+            "windowS": 2.002227,
+            "taskDurationS": 0.000057,
             "scriptDurationS": 0,
             "layoutDurationS": 0,
             "recalcStyleDurationS": 0,
             "layoutCount": 0,
             "recalcStyleCount": 0,
-            "jsHeapUsedBytes": 3322220,
+            "jsHeapUsedBytes": 3316104,
             "nodes": 1484,
             "visibility": "visible",
             "networkIdle": true
@@ -247,7 +250,7 @@
               "webgl2": false
             },
             "cpuThrottling": 4,
-            "loadAverage": 36.9,
+            "loadAverage": 36.2,
             "cpus": 18
           },
           "requests": {
@@ -259,7 +262,7 @@
             "byType": {
               "document": {
                 "count": 1,
-                "transferBytes": 34742,
+                "transferBytes": 34676,
                 "fileBytes": 131065,
                 "unknownBytes": 0
               },
@@ -329,23 +332,23 @@
           "longTasks": {
             "supported": true,
             "cpuThrottling": 4,
-            "loadEventEndMs": 490.5,
+            "loadEventEndMs": 442.8,
             "windowMs": 5000,
             "count": 2,
             "over50ms": 2,
-            "totalMs": 293,
-            "maxMs": 211,
-            "durationsMs": [211, 82]
+            "totalMs": 283,
+            "maxMs": 202,
+            "durationsMs": [202, 81]
           },
           "idle": {
-            "windowS": 2.001909,
-            "taskDurationS": 0.000052,
+            "windowS": 2.004531,
+            "taskDurationS": 0.000067,
             "scriptDurationS": 0,
             "layoutDurationS": 0,
             "recalcStyleDurationS": 0,
             "layoutCount": 0,
             "recalcStyleCount": 0,
-            "jsHeapUsedBytes": 3369360,
+            "jsHeapUsedBytes": 3366844,
             "nodes": 1479,
             "visibility": "visible",
             "networkIdle": true
@@ -365,13 +368,13 @@
       }
     },
     "fallback-route": {
-      "base": "a434cd1178c4f198e147863d6cda6b204405d890",
+      "base": "a0cc2471604aaaa56b47963508e8ac7011584a42",
       "trees": {
-        "apps": "914043b3682994d91ad2ffd064865f5ae2820527",
-        "packages": "5d78d23bc0925247046da710ba6d09133534fce3"
+        "apps": "dbb39eb99ac1017b59dc03a036cdf567a225beb5",
+        "packages": "25f2c2156b8a59a4e0ea18196f4a75596a4b1398"
       },
       "tracer": {
-        "tests": "08a030a5b94a59f041cfb2555cb48f8b09b0af3d"
+        "tests": "25de9ce4dcaf1c8feb40721e01052568dc413a4c"
       },
       "date": "2026-10-22",
       "command": "PORTFOLIO_ANALYZE=1 pnpm build && pnpm test:trace",
@@ -384,7 +387,7 @@
       "browser": "chromium 145.0.7632.6",
       "egress": null,
       "notes": {
-        "rerun": "Traced on #5 slice 6's head, a434cd1, before it reached next. Trace it again on next once it lands, from a clean checkout, and replace this entry."
+        "rerun": "Traced on #5 slice 6's head, a0cc247, before it reached next. Trace it again on next once it lands, from a clean checkout, and replace this entry."
       },
       "viewports": {
         "1440x900": {
@@ -399,7 +402,7 @@
               "webgl2": false
             },
             "cpuThrottling": 4,
-            "loadAverage": 31.3,
+            "loadAverage": 42.1,
             "cpus": 18
           },
           "requests": {
@@ -411,16 +414,16 @@
             "byType": {
               "document": {
                 "count": 1,
-                "transferBytes": 21945,
+                "transferBytes": 21944,
                 "fileBytes": 89525,
                 "unknownBytes": 0
               },
               "script": {
                 "count": 12,
-                "transferBytes": 247658,
+                "transferBytes": 247659,
                 "fileBytes": 823276,
                 "unknownBytes": 0,
-                "gzipBytes": 240031
+                "gzipBytes": 240032
               },
               "stylesheet": {
                 "count": 2,
@@ -434,7 +437,7 @@
           "js": {
             "files": 12,
             "bytes": 823276,
-            "gzipBytes": 240031
+            "gzipBytes": 240032
           },
           "css": {
             "files": 2,
@@ -477,7 +480,7 @@
                 {
                   "package": "yaml",
                   "bytes": 102929,
-                  "gzipBytes": 29248
+                  "gzipBytes": 29249
                 },
                 {
                   "package": "zod",
@@ -562,23 +565,23 @@
           "longTasks": {
             "supported": true,
             "cpuThrottling": 4,
-            "loadEventEndMs": 287.3,
+            "loadEventEndMs": 443.8,
             "windowMs": 5000,
-            "count": 2,
-            "over50ms": 2,
-            "totalMs": 124,
-            "maxMs": 64,
-            "durationsMs": [64, 60]
+            "count": 3,
+            "over50ms": 3,
+            "totalMs": 285,
+            "maxMs": 114,
+            "durationsMs": [114, 95, 76]
           },
           "idle": {
-            "windowS": 2.003304,
-            "taskDurationS": 0.00016,
+            "windowS": 2.0029,
+            "taskDurationS": 0.000203,
             "scriptDurationS": 0,
             "layoutDurationS": 0,
             "recalcStyleDurationS": 0,
             "layoutCount": 0,
             "recalcStyleCount": 0,
-            "jsHeapUsedBytes": 4769796,
+            "jsHeapUsedBytes": 4779576,
             "nodes": 1115,
             "visibility": "visible",
             "networkIdle": true
@@ -609,7 +612,7 @@
               "webgl2": false
             },
             "cpuThrottling": 4,
-            "loadAverage": 30.4,
+            "loadAverage": 39.9,
             "cpus": 18
           },
           "requests": {
@@ -621,16 +624,16 @@
             "byType": {
               "document": {
                 "count": 1,
-                "transferBytes": 21945,
+                "transferBytes": 21944,
                 "fileBytes": 89525,
                 "unknownBytes": 0
               },
               "script": {
                 "count": 12,
-                "transferBytes": 247658,
+                "transferBytes": 247659,
                 "fileBytes": 823276,
                 "unknownBytes": 0,
-                "gzipBytes": 240031
+                "gzipBytes": 240032
               },
               "stylesheet": {
                 "count": 2,
@@ -644,7 +647,7 @@
           "js": {
             "files": 12,
             "bytes": 823276,
-            "gzipBytes": 240031
+            "gzipBytes": 240032
           },
           "css": {
             "files": 2,
@@ -687,7 +690,7 @@
                 {
                   "package": "yaml",
                   "bytes": 102929,
-                  "gzipBytes": 29248
+                  "gzipBytes": 29249
                 },
                 {
                   "package": "zod",
@@ -772,23 +775,23 @@
           "longTasks": {
             "supported": true,
             "cpuThrottling": 4,
-            "loadEventEndMs": 251.5,
+            "loadEventEndMs": 238.9,
             "windowMs": 5000,
-            "count": 3,
-            "over50ms": 3,
-            "totalMs": 217,
-            "maxMs": 88,
-            "durationsMs": [88, 78, 51]
+            "count": 2,
+            "over50ms": 2,
+            "totalMs": 151,
+            "maxMs": 77,
+            "durationsMs": [77, 74]
           },
           "idle": {
-            "windowS": 2.004274,
-            "taskDurationS": 0.000179,
+            "windowS": 2.004288,
+            "taskDurationS": 0.000191,
             "scriptDurationS": 0,
             "layoutDurationS": 0,
             "recalcStyleDurationS": 0,
             "layoutCount": 0,
             "recalcStyleCount": 0,
-            "jsHeapUsedBytes": 4802804,
+            "jsHeapUsedBytes": 4830876,
             "nodes": 1115,
             "visibility": "visible",
             "networkIdle": true
