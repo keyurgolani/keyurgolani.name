@@ -3,13 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Server-only owner code: the auth provider, and later the session store and audit sink.",
+  "description": "Server-only owner code: the auth provider, the session store, the audit sink, and the revision store.",
   "exports": {
     "./owner": "./src/owner.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "tsx --test 'src/**/*.test.ts'"
+  },
+  "dependencies": {
+    "@portfolio/schema": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.7.2"

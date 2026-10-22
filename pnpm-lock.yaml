@@ -5,6 +5,7 @@ settings:
   excludeLinksFromLockfile: false
 
 importers:
+
   .:
     devDependencies:
       '@playwright/test':
@@ -110,6 +111,10 @@ importers:
         version: 5.9.3
 
   packages/core:
+    dependencies:
+      '@portfolio/schema':
+        specifier: workspace:*
+        version: link:../schema
     devDependencies:
       typescript:
         specifier: ^5.7.2
