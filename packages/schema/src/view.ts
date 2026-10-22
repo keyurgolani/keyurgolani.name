@@ -37,7 +37,9 @@ import { parseSnapshot, type GitHubData, type GitHubSnapshot } from './snapshots
 // Hidden means gone: a record stays only when something visible reaches it.
 // The roots are the visible sections, the curation lists, and the identity
 // and meta. A kept work reaches its evidence and its media; nothing else
-// reaches further, and every reference left in the view resolves.
+// reaches further, and every reference left in the view resolves. The site
+// document keeps the settings of the sections the view keeps, so not even a
+// hidden section's id is in it.
 
 /** A portfolio and site document that both parsed. */
 export interface ParsedPair {
@@ -294,7 +296,7 @@ export function resolvePortfolioView(
 
   return {
     portfolio: withoutUnregistered(view, registry) as PublicPortfolio,
-    site: withoutUnregistered(pair.site, registry) as Public<Site>,
+    site: withoutUnregistered(keptSettings(pair.site, reached.sections), registry) as Public<Site>,
     media: viewMedia(portfolio.media ?? [], reached.media, unit.media, base, registry),
     derived: viewDerived(reached.sections, unit.snapshots),
   };
@@ -536,6 +538,18 @@ function viewDerived(
     });
   }
   return out;
+}
+
+/**
+ * The site document with the settings of the sections the view keeps only,
+ * so a hidden section's id stays out of the view as well.
+ */
+function keptSettings(site: Site, sections: readonly Section[]): Site {
+  if (site.sections === undefined) return site;
+  const kept = new Set(sections.map(({ id }) => id));
+  const { sections: settings, ...rest } = site;
+  const entries = Object.entries(settings).filter(([id]) => kept.has(id));
+  return entries.length > 0 ? { ...rest, sections: Object.fromEntries(entries) } : rest;
 }
 
 /** The list, or undefined when it's empty or missing. */
