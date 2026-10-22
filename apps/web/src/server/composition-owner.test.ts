@@ -260,6 +260,7 @@ test('owner loads its modules only through the composition root', () => {
     'core/store/common',
     'core/store/drafts',
     'core/store/fs-port',
+    'core/store/health-cache',
     'core/store/layout',
     'core/store/lock',
     'core/store/pointer',

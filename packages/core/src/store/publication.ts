@@ -37,6 +37,7 @@ import {
   writeRevision,
   type Reconciled,
 } from './commit';
+import { healthCache, type HealthVerdict } from './health-cache';
 import { LOCK_STALE_MS, LockLostError, type PublicationLock } from './lock';
 import {
   DamagedPointerError,
@@ -48,16 +49,7 @@ import {
   type LivePointer,
   type PublicationEvent,
 } from './pointer';
-import {
-  manifestFor,
-  readManifest,
-  readRevision,
-  revisionHealth,
-  revisionIds,
-  type HealthPurpose,
-  type Manifest,
-  type RevisionHealth,
-} from './revisions';
+import { manifestFor, readManifest, readRevision, revisionIds, type Manifest } from './revisions';
 import {
   checkUnit,
   DOCUMENT_NAMES,
@@ -344,8 +336,7 @@ export function filesystemPublicationService({
 }: PublicationOptions): PublicationService {
   const stamp = () => new Date(now()).toISOString();
   const hasBlob = (hash: Sha256) => assets.has(hash);
-  const health = (id: RevisionId, purpose: HealthPurpose) =>
-    revisionHealth(fs, paths, id, checks, hasBlob, purpose);
+  const health = healthCache({ fs, paths, checks, hasBlob });
 
   async function readPointer(): Promise<LivePointer | null> {
     try {
@@ -616,7 +607,7 @@ export function filesystemPublicationService({
   }
 
   /** Whether `health` lets a rollback or recover make its revision live, and if not, why. */
-  function targetProblem(id: RevisionId, found: RevisionHealth): PublicationRejection | null {
+  function targetProblem(id: RevisionId, found: HealthVerdict): PublicationRejection | null {
     switch (found.state) {
       case 'ok':
         return null;
@@ -666,7 +657,7 @@ export function filesystemPublicationService({
       const found = await health(target, 'publish');
       const problem = targetProblem(target, found);
       if (problem) return problem;
-      const unitHash = found.state === 'ok' ? found.revision.unit.unitHash : null;
+      const unitHash = found.state === 'ok' ? found.unitHash : null;
       if (!unitHash) return rejected('revision_incompatible');
       stage('commit');
       const event: PublicationEvent = {
@@ -924,11 +915,12 @@ export function filesystemPublicationService({
     },
 
     async history(page) {
+      const bounds = page ? pageOf(page) : undefined;
       try {
         const pointer = await readPointer();
-        if (page) {
+        if (bounds) {
           // Seqs run from 1 to the pointer's, so a page reads its own range.
-          const { offset, limit } = pageOf(page);
+          const { offset, limit } = bounds;
           const last = Math.min(pointer?.seq ?? 0, offset + limit);
           const events: PublicationEvent[] = [];
           for (let seq = offset + 1; seq <= last; seq++) {
@@ -948,6 +940,7 @@ export function filesystemPublicationService({
     },
 
     async revisions(page) {
+      const { offset, limit } = pageOf(page ?? {});
       try {
         const seqs = await latestSeqs();
         const ids = await revisionIds(fs, paths);
@@ -959,7 +952,6 @@ export function filesystemPublicationService({
             created.get(b)!.localeCompare(created.get(a)!) ||
             a.localeCompare(b),
         );
-        const { offset, limit } = pageOf(page ?? {});
         const list: RevisionSummary[] = [];
         for (const id of ids.slice(offset, page ? offset + limit : undefined)) {
           list.push((await summary(id, seqs)).result);

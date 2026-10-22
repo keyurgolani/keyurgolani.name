@@ -70,9 +70,10 @@ test('no code outside PublicationService moves the published pointer', async (t)
     ['packages/core/src/store/commit.ts'],
   );
   // The pointer's file, by the store's paths: commit.ts writes it, and
-  // pointer.ts and the reader only read it. No other module names it, or
-  // names live.json at all; the service's repair finds a temporary one a
-  // crash left by its name pattern.
+  // pointer.ts, the reader, and the health cache, which stats it to tell
+  // when it moved, only read it. No other module names it, or names
+  // live.json at all; the service's repair finds a temporary one a crash
+  // left by its name pattern.
   assert.deepEqual(
     files
       .filter((file) => /\bpaths\.(?:live|liveTemp)\b/.test(code(file)))
@@ -80,10 +81,21 @@ test('no code outside PublicationService moves the published pointer', async (t)
       .sort(),
     [
       'packages/core/src/store/commit.ts',
+      'packages/core/src/store/health-cache.ts',
       'packages/core/src/store/pointer.ts',
       'packages/core/src/store/reader.ts',
     ],
   );
+  // The health cache and the reader only read: they import nothing that writes.
+  for (const reader of ['health-cache.ts', 'reader.ts']) {
+    const imports = relativeImports(path.join(STORE, reader)).map(relativeTo);
+    for (const writer of ['commit.ts', 'publication.ts', 'drafts.ts', 'assets.ts', 'lock.ts']) {
+      assert.ok(
+        !imports.includes(`packages/core/src/store/${writer}`),
+        `${reader} imports ${writer}`,
+      );
+    }
+  }
   assert.deepEqual(
     files.filter((file) => /['"`]live\.json(?:\.tmp)?['"`]/.test(code(file))).map(relativeTo),
     ['packages/core/src/store/layout.ts'],
