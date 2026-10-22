@@ -69,7 +69,7 @@ test('a registered extension checks its fields and section data, in YAML and its
     camera: 'Leica M6',
     film: true,
   });
-  const exhibitions = yaml.value.sections[1];
+  const exhibitions = yaml.value.sections?.[1];
   assert.equal(exhibitions?.kind, '@acme/portfolio-photography/exhibitions');
   assert.deepEqual(exhibitions && 'data' in exhibitions ? exhibitions.data : undefined, {
     items: [
@@ -298,7 +298,7 @@ test('an extension section has the base section fields plus data, and nothing el
   const kept = valid(
     unregistered('    id: y\n    title: T\n    lang: hi\n    data: [1, two, {three: 3}]\n'),
   );
-  assert.deepEqual(kept.value.sections[0], {
+  assert.deepEqual(kept.value.sections?.[0], {
     kind: '@other/x/y',
     id: 'y',
     title: 'T',
