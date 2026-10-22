@@ -77,9 +77,13 @@ function baseEnv(home, port) {
   };
 }
 
-/** Whether a server's output says another process took its port first. */
+/**
+ * Whether a server's output says another process took its port first: Node's
+ * `listen EADDRINUSE`, in a line of its own. A JSON line is the app's log,
+ * whose message can quote any error, so it never counts.
+ */
 function lostPort(lines) {
-  return lines.some((line) => line.includes('EADDRINUSE'));
+  return lines.some((line) => !line.startsWith('{') && line.includes('listen EADDRINUSE'));
 }
 
 /**
@@ -397,11 +401,15 @@ export async function runAppToExit({
     return { exited: signal === null, code, output: text, lostPort: lostPort(text.split('\n')) };
   }
 
+  let result;
   try {
-    const { exited, code, output } = await onFreePort(run, firstPort);
-    return { exited, code, output, egress: trap.attempts() };
+    result = await onFreePort(run, firstPort);
   } finally {
     await trap.close();
     rmSync(home, { recursive: true, force: true });
   }
+  const { exited, code, output } = result;
+  // Read once the trap has closed, which waits for every connection it took
+  // to end: an attempt still on its way in as the server exited is listed.
+  return { exited, code, output, egress: trap.attempts() };
 }
