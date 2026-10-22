@@ -168,7 +168,7 @@ test(
       'input#live-note onChange',
       'input#live-track onChange',
       'input#live-depth--option-1 onChange',
-      'select#live-basin onChange',
+      'select#live-river onChange',
     ]) {
       expect(live, handler).toContain(handler);
     }
@@ -181,14 +181,14 @@ test(
     const form = page.locator('#forms [data-fixture="live-form"]');
     await form.getByRole('textbox', { name: 'Live note' }).fill('Signal');
     await form.getByRole('checkbox', { name: 'Track the note' }).uncheck();
-    await form.getByRole('radio', { name: 'Comfortable' }).check();
-    await form.getByRole('combobox', { name: 'Live basin' }).selectOption('delta');
+    await form.getByRole('radio', { name: 'Airy' }).check();
+    await form.getByRole('combobox', { name: 'Live river' }).selectOption('delta');
     await expect(form.locator('[data-fixture="live-form-state"]')).toHaveText(
-      'Signal, not tracked, comfortable, delta',
+      'Signal, not tracked, airy, delta',
     );
     await form.getByRole('button', { name: 'Clear the note' }).click();
     await expect(form.locator('[data-fixture="live-form-state"]')).toHaveText(
-      'No note, not tracked, comfortable, delta',
+      'No note, not tracked, airy, delta',
     );
   },
 );
