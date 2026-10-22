@@ -20,6 +20,8 @@ import { PresentationBoundary, saveAppearance, VisitorAppearance, type SaveDeps 
 // browser behavior is tests/appearance's.
 
 const registry = testRegistry();
+/** The dark-only fixture scheme's name, as the control says it. */
+const DARK_ONLY = registry.packs.colorScheme.get('fixture-dark-only')!.manifest.name;
 const PUBLISHED: AppearanceSelection = { ...PLATFORM_DEFAULTS, variant: 'acme-gallery' };
 const ALL_SELECTABLE: VisitorControls = {
   variant: 'selectable',
@@ -123,12 +125,12 @@ test('a choice the current selection cannot take is disabled with the reason', (
     mode.groups[0]!.choices.map((choice) => [choice.value, choice.unavailable]),
     [
       ['system', undefined],
-      ['light', 'fixture-dark-only has no light mode'],
+      ['light', `${DARK_ONLY} has no light mode`],
       ['dark', undefined],
       ['high-contrast', undefined],
     ],
   );
-  assert.equal(mode.note, 'fixture-dark-only has only a dark mode, so it shows dark.');
+  assert.equal(mode.note, `${DARK_ONLY} has only a dark mode, so it shows dark.`);
 });
 
 test('what renders shows as the current value even when a visitor could not pick it', () => {
@@ -213,7 +215,7 @@ test('the select groups its packs by tier and says why an option is unavailable'
     options.find((option) => option.attributes.value === 'fixture-dark-only')!.attributes.disabled,
     '',
   );
-  assert.match(text(markup), /fixture-dark-only \(no light mode\)/);
+  assert.ok(text(markup).includes(`${DARK_ONLY} (no light mode)`), text(markup));
   const light2 = slotted(markup, 'radio.control').find(
     (radio) => radio.attributes.value === 'light',
   )!;
