@@ -18,6 +18,8 @@ import { parse } from 'yaml';
 import type * as Capabilities from '../../apps/web/src/server/capabilities';
 import type * as Operations from '../../apps/web/src/server/operations';
 import type * as Routes from '../../apps/web/src/server/routes';
+// The key the site's theme script reads, which only its text holds.
+import { THEME_STORAGE_KEY as THEME_KEY } from '../../packages/kit/src/theme-init';
 import {
   CANARY_BODY,
   CANARY_DATA,
@@ -674,9 +676,19 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
       // With a session cookie and a preference: proxy.ts drops both before
       // Next routes the request, so the answer is the same without them.
       const cookie = `__Host-studio_session=${'x'.repeat(43)}; theme=dark`;
-      // As a path no route matches: the same status, type, and page, but for
-      // the path Next's payload names, and the nonce the preview's scripts
-      // and styles carry.
+      // What a preview path no route matches answers, with no cookie: the
+      // app's 404 page from the server, but without the site's theme script,
+      // which the site's own 404 runs (#7).
+      const unmatched = '/preview/no-such-page';
+      const reference = await request.get(unmatched, { maxRedirects: 0 });
+      expect(reference.status()).toBe(404);
+      const referenceText = await reference.text();
+      expect(referenceText).toMatch(/<h1>Page not found<\/h1>/);
+      expect(referenceText, "the preview's 404: the theme script").not.toContain(THEME_KEY);
+      const site = await (await request.get('/no-such-page', { maxRedirects: 0 })).text();
+      expect(site, "the site's 404: the theme script").toContain(THEME_KEY);
+      // As that path: the same status, type, and page, but for the path Next's
+      // payload names, and the nonce the preview's scripts and styles carry.
       const shape = async (response: APIResponse, target: string) => {
         const text = await response.text();
         const type = response.headers()['content-type'] ?? '';
@@ -696,11 +708,11 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
           const what = `${method} ${target}`;
           const options = { method, maxRedirects: 0, headers: { cookie } };
           const response = await request.fetch(target, options);
-          const unknown = await request.fetch(`/no-such-page${query}`, { method, maxRedirects: 0 });
+          const unknown = await request.fetch(`${unmatched}${query}`, { method, maxRedirects: 0 });
           expect(response.status(), what).toBe(404);
           expectProfileHeaders(profile, response, what);
           expect(await shape(response, target), what).toEqual(
-            await shape(unknown, `/no-such-page${query}`),
+            await shape(unknown, `${unmatched}${query}`),
           );
         }
         // With Next's router prefetch header and no RSC header, next.config.ts
@@ -714,14 +726,14 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
             ...options,
             headers: { cookie, ...prefetch },
           });
-          const unknown = await request.fetch(`/no-such-page${query}`, {
+          const unknown = await request.fetch(`${unmatched}${query}`, {
             ...options,
             headers: prefetch,
           });
           expect(response.status(), what).toBe(404);
           expectProfileHeaders(profile, response, what);
           expect(await shape(response, target), what).toEqual(
-            await shape(unknown, `/no-such-page${query}`),
+            await shape(unknown, `${unmatched}${query}`),
           );
         }
       }
