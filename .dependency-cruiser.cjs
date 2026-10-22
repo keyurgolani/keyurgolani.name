@@ -191,6 +191,42 @@ module.exports = {
       to: { path: ['^apps/web/src/app/\\(studio\\)/', 'host-chrome\\.css$'] },
     },
     {
+      name: 'preview-protocol-imports-zod-and-ids-only',
+      severity: 'error',
+      comment:
+        "The preview's message protocol (#7, Slice 3) is read by both sides and by Node tests, " +
+        'so it imports zod and the browser-safe @portfolio/schema/ids and nothing else: no ' +
+        'React, no Next, no server code.',
+      from: { path: '^apps/web/src/preview/protocol\\.ts$' },
+      to: {
+        pathNot: ['^node_modules/(\\.pnpm/zod@|zod/)', '^packages/schema/src/ids\\.ts$'],
+      },
+    },
+    {
+      name: 'preview-studio-channel-imports-protocol-only',
+      severity: 'error',
+      comment:
+        "Studio's half of the preview channel (#7, Slice 3) imports the protocol and nothing " +
+        "else, so nothing a frame sends can reach Studio's transport through it (threat " +
+        'preview-3), and Slice 4 wraps it without its UI. depcruise resolves relative and ' +
+        "package imports, not ~/ ones: protocol.test.ts walks those, and the browser spec's " +
+        'chunk check covers what reaches a page.',
+      from: { path: '^apps/web/src/preview/studio-channel\\.ts$' },
+      to: { pathNot: '^apps/web/src/preview/protocol\\.ts$' },
+    },
+    {
+      name: 'preview-frame-imports-no-studio-channel',
+      severity: 'error',
+      comment:
+        "Studio's half of the preview channel (#7, Slice 3) never ships in a preview document: " +
+        'nothing in app/(preview) or src/preview but it and its tests imports it.',
+      from: {
+        path: '^apps/web/src/(?:app/\\(preview\\)/|preview/)',
+        pathNot: ['\\.test\\.tsx?$', '^apps/web/src/preview/studio-channel\\.ts$'],
+      },
+      to: { path: '^apps/web/src/preview/studio-channel\\.ts$' },
+    },
+    {
       name: 'store-test-support-only-from-tests',
       severity: 'error',
       comment:

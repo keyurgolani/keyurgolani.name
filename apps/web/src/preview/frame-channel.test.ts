@@ -218,7 +218,9 @@ test('the agent says hello to Studio’s origin alone, after its own load, with 
   const again = new FakeFrame(`${STUDIO}${BASE}`);
   const stop = startFrameChannel(again as unknown as Window, SERVER);
   await wait(5);
-  const [second] = again.parent.posted as unknown as [{ message: { payload: { instance: string } } }];
+  const [second] = again.parent.posted as unknown as [
+    { message: { payload: { instance: string } } },
+  ];
   assert.equal(second.message.payload.instance, message.payload.instance);
   stop?.();
 });
@@ -361,7 +363,9 @@ test('a local frame takes documents and assets up to their limits and 100 MiB in
   // The fragment's nonce leaves the URL once read; the query's never counted.
   assert.deepEqual(win.replaced, [`/preview/local?nonce=${'Q'.repeat(22)}`]);
   await wait(5);
-  const [{ message }] = win.parent.posted as unknown as [{ message: { payload: { nonce: string } } }];
+  const [{ message }] = win.parent.posted as unknown as [
+    { message: { payload: { nonce: string } } },
+  ];
   assert.equal(message.payload.nonce, NONCE);
   // A port that hands the frame Studio's messages as they are, since a
   // structured clone would copy the stand-in blobs' bytes, which they don't hold.

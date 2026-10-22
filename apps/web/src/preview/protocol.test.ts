@@ -1,5 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { existsSync, readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { ZodTypeAny } from 'zod';
 import { DisplayModeSchema } from '@portfolio/schema';
 import { PreviewEnvironmentSchema } from '~/server/operations';
@@ -250,4 +253,55 @@ test("the environment message takes exactly the values a grant's environment doe
     assert.deepEqual(shape[key].options, grant[key].options, key);
   }
   assert.deepEqual(shape.displayMode.options, DisplayModeSchema.options);
+});
+
+const SRC = fileURLToPath(new URL('../', import.meta.url));
+
+/** The app modules `file` imports at run time, `~/` and relative alike; type-only imports bring no code. */
+function runtimeImports(file: string): string[] {
+  const text = readFileSync(file, 'utf8');
+  const specifiers = [
+    ...text.matchAll(/^\s*(?:import|export)\s+(?!type\b)(?:[^'";]*?\sfrom\s*)?['"]([^'"]+)['"]/gm),
+    ...text.matchAll(/\bimport\(\s*['"]([^'"]+)['"]\s*\)/g),
+  ].map(([, specifier]) => specifier!);
+  const found: string[] = [];
+  for (const specifier of specifiers) {
+    const base = specifier.startsWith('~/')
+      ? path.join(SRC, specifier.slice(2))
+      : specifier.startsWith('.')
+        ? path.resolve(path.dirname(file), specifier)
+        : null;
+    if (!base) continue;
+    const resolved = ['', '.ts', '.tsx', '/index.ts', '/index.tsx']
+      .map((suffix) => `${base}${suffix}`)
+      .find((candidate) => /\.tsx?$/.test(candidate) && existsSync(candidate));
+    if (resolved) found.push(resolved);
+  }
+  return found;
+}
+
+/** Every app module `entry` loads at run time, itself included. */
+function reached(entry: string): Set<string> {
+  const seen = new Set<string>();
+  const queue = [entry];
+  while (queue.length > 0) {
+    const file = queue.pop()!;
+    if (seen.has(file)) continue;
+    seen.add(file);
+    queue.push(...runtimeImports(file));
+  }
+  return seen;
+}
+
+test("neither proxy.ts nor the route table loads the protocol or either channel, through ~/ imports too, so the proxy's bundle never carries them (#7, Slice 3)", () => {
+  const kept = ['preview/protocol.ts', 'preview/studio-channel.ts', 'preview/frame-channel.ts'];
+  for (const entry of ['proxy.ts', 'server/routes.ts']) {
+    const seen = reached(path.join(SRC, entry));
+    assert.ok(seen.size > 1, `${entry} reaches the app's other modules`);
+    for (const file of kept) assert.ok(!seen.has(path.join(SRC, file)), `${entry} loads ${file}`);
+  }
+  // The walk does follow ~/ imports: the grant layout reaches the agent's channel through one.
+  const layout = reached(path.join(SRC, 'app/(preview)/preview/[grant]/layout.tsx'));
+  assert.ok(layout.has(path.join(SRC, 'preview/frame-channel.ts')));
+  assert.ok(!layout.has(path.join(SRC, 'preview/studio-channel.ts')));
 });
