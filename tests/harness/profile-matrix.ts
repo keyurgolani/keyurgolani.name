@@ -15,6 +15,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { APIRequestContext, APIResponse } from '@playwright/test';
 import { parse } from 'yaml';
+import type * as PreviewStatus from '../../apps/web/src/preview/status';
 import type * as Capabilities from '../../apps/web/src/server/capabilities';
 import type * as Operations from '../../apps/web/src/server/operations';
 import type * as Routes from '../../apps/web/src/server/routes';
@@ -44,6 +45,8 @@ const { accessIn, CAPABILITIES, INDEXABLE } =
 const { listOperations } = require('../../apps/web/src/server/operations.ts') as typeof Operations;
 const { listRoutes, RETIRED_PATTERNS, routeAccess } =
   require('../../apps/web/src/server/routes.ts') as typeof Routes;
+const { PREVIEW_STATUS_DOCUMENT, PREVIEW_STATUS_TYPE } =
+  require('../../apps/web/src/preview/status.ts') as typeof PreviewStatus;
 type Profile = Capabilities.Profile;
 type Operation = Operations.Operation;
 
@@ -121,9 +124,12 @@ const STUDIO_SPELLINGS = [
 /**
  * Preview paths in every spelling a request may use (#7): /preview and
  * /preview-assets and below, with a query, in another case, percent-encoded,
- * and with the slash encoded. No preview route serves any of them in a
- * production build, the dev fixture route included, so each answers every
- * method as /no-such-page does, under the preview's headers in every profile.
+ * and with the slash encoded. No preview route but a grant's serves any of
+ * them in a production build, the dev fixture route included. Under a
+ * profile with no grant route, each answers every method as a preview path
+ * no route matches does, under the preview's headers. Under one with grant
+ * routes (owner, Slice 2), no grant is active in the matrix, so each one
+ * gets the status document.
  */
 const PREVIEW_SPELLINGS = [
   '/preview',
@@ -186,10 +192,11 @@ function routeFileSpellings(): string[] {
  * variant declares a view at /probe, and no slug names a work until #10
  * (#5, Slice 4). The route table calls it missing in every profile, so a
  * GET gets the app's 404 page, rendered from the server, and any other
- * method the proxy's plain 404, as an absent route does.
+ * method the proxy's plain 404, as an absent route does. A grant page's
+ * /preview/probe is a grant, never a view (#7).
  */
 const namesNothing = (entry: Routes.RouteEntry) =>
-  entry.kind === 'page' && concrete(entry.pattern).includes('probe');
+  entry.kind === 'page' && entry.grant === undefined && concrete(entry.pattern).includes('probe');
 
 /** What the transport answers a visitor with no session, by the registry and the matrix. */
 function expected(
@@ -255,6 +262,34 @@ const hasStudio = (profile: Profile) =>
       isStudioPath(entry.pattern) &&
       routeAccess(profile, entry) !== 'absent',
   );
+
+/**
+ * Whether `profile` serves a grant route, as owner does (#7, Slice 2): there
+ * proxy.ts checks the grant of every request under the preview prefixes,
+ * and gives each one it turns away the status document.
+ */
+const hasGrantRoutes = (profile: Profile) =>
+  listRoutes().some(
+    (entry) => entry.grant !== undefined && routeAccess(profile, entry) !== 'absent',
+  );
+
+/**
+ * Expects the preview's status document (#7, Slice 2): 404, its own static
+ * page, the same whatever the reason, under the preview's headers. A HEAD
+ * gets the headers alone.
+ */
+async function expectStatusDocument(
+  profile: Profile,
+  response: APIResponse,
+  what: string,
+  method = 'GET',
+) {
+  expect(response.status(), what).toBe(404);
+  expect(response.headers()['content-type'], what).toBe(PREVIEW_STATUS_TYPE);
+  expect(await response.text(), what).toBe(method === 'HEAD' ? '' : PREVIEW_STATUS_DOCUMENT);
+  expect(response.headers()['x-request-id'], what).toMatch(UUID);
+  expectProfileHeaders(profile, response, what);
+}
 
 /**
  * The headers its path gets (route-headers.mjs): the baseline ones, Studio's
@@ -360,19 +395,42 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
   for (const entry of listRoutes().filter((route) => route.capability !== 'operations')) {
     const access = routeAccess(profile, entry);
     const served = access !== 'absent';
-    const gated = entry.kind === 'page' && access === 'session';
+    // A grant's authority is the grant in its path, never a session (#7).
+    const grant = served && entry.grant !== undefined;
+    // Under a profile with grant routes, every preview path no active grant
+    // admits gets the status document: a grant route's own, and a preview
+    // route the build doesn't serve, such as the dev fixture route outside
+    // `next dev` (#7).
+    const statusDocument = !served && hasGrantRoutes(profile) && isPreviewPath(entry.pattern);
+    const gated = entry.kind === 'page' && access === 'session' && !grant;
     const missing = namesNothing(entry);
-    const state = missing
-      ? 'missing there, the 404 page'
-      : served
-        ? gated
-          ? 'served to a session, and sends a visitor to sign-in'
-          : 'served'
-        : 'absent, 404 for every method';
+    const state = grant
+      ? 'served only to an active grant, and the status document to anything else'
+      : statusDocument
+        ? 'the status document to every method, as every preview path no grant admits'
+        : missing
+          ? 'missing there, the 404 page'
+          : served
+            ? gated
+              ? 'served to a session, and sends a visitor to sign-in'
+              : 'served'
+            : 'absent, 404 for every method';
     test(
       `${entry.pattern} is ${state}`,
       { annotation: [{ type: 'route', description: entry.pattern }, annotation] },
       async ({ app, request }) => {
+        if (grant || statusDocument) {
+          // No grant is active here, so every method gets the status
+          // document, and none goes to sign-in.
+          for (const method of METHODS) {
+            const response = await request.fetch(concrete(entry.pattern), {
+              method,
+              maxRedirects: 0,
+            });
+            await expectStatusDocument(profile, response, method, method);
+          }
+          return;
+        }
         if (missing) {
           const page = await request.get(concrete(entry.pattern), { maxRedirects: 0 });
           expect(page.status()).toBe(404);
@@ -414,9 +472,11 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
           });
           expect(response.status(), method).toBe(404);
           // The proxy's plain answer, before Next routes it, but for a GET
-          // of a Studio page under a profile with none, which answers as an
-          // unknown path does, with the 404 page (#2).
-          const page = method === 'GET' && isStudioPath(entry.pattern);
+          // of a Studio page under a profile with none, or of a preview path
+          // under one with no grant route, which answer as an unknown path
+          // does, with the 404 page (#2, #7).
+          const page =
+            method === 'GET' && (isStudioPath(entry.pattern) || isPreviewPath(entry.pattern));
           expect(response.headers()['content-type'], method).toMatch(
             page ? /^text\/html/ : /^text\/plain/,
           );
@@ -615,13 +675,34 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
       let spellings = 0;
       for (const entry of listRoutes()) {
         const access = routeAccess(profile, entry);
+        // A grant route takes no other spelling, whatever its grant, and
+        // under a profile with grant routes no preview path gets past the
+        // grant check without one (#7).
+        const grant =
+          access !== 'absent'
+            ? entry.grant !== undefined
+            : hasGrantRoutes(profile) && isPreviewPath(entry.pattern);
         for (const target of encodedSpellings(entry.pattern)) {
           spellings += 1;
           const page = await request.get(target, { maxRedirects: 0 });
+          if (grant) {
+            await expectStatusDocument(profile, page, `GET ${target}`);
+            await expectStatusDocument(
+              profile,
+              await request.post(target, { maxRedirects: 0 }),
+              `POST ${target}`,
+            );
+            continue;
+          }
           if (entry.kind === 'page' && access === 'session') {
             // No session cookie: sign-in comes first, as for the route's own spelling.
             expect(page.status(), target).toBe(303);
-          } else if (access === 'absent' && !namesNothing(entry) && !isStudioPath(entry.pattern)) {
+          } else if (
+            access === 'absent' &&
+            !namesNothing(entry) &&
+            !isStudioPath(entry.pattern) &&
+            !isPreviewPath(entry.pattern)
+          ) {
             // A route the profile doesn't serve: its plain 404, in any spelling.
             expect(page.status(), target).toBe(404);
             expect(page.headers()['content-type'], target).toMatch(/^text\/plain/);
@@ -654,6 +735,16 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
       expect(spellings.length, 'spellings checked').toBeGreaterThan(5);
       for (const target of spellings) {
         const page = await request.get(target, { maxRedirects: 0 });
+        // A grant route's own file path, as a grant: the status document (#7).
+        if (hasGrantRoutes(profile) && isPreviewPath(target)) {
+          await expectStatusDocument(profile, page, `GET ${target}`);
+          await expectStatusDocument(
+            profile,
+            await request.post(target, { maxRedirects: 0 }),
+            `POST ${target}`,
+          );
+          continue;
+        }
         expect(page.status(), target).toBe(404);
         expect(page.headers()['content-type'], target).toMatch(/^text\/html/);
         expect(await page.text(), target).toMatch(/<h1>Page not found<\/h1>/);
@@ -666,82 +757,129 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
     },
   );
 
-  test(
-    'every preview path, in any spelling and to any method, answers as a path no route matches, under the preview headers, the same with a session cookie as without (#7)',
-    {
-      annotation: [
-        { type: 'route', description: '/preview' },
-        { type: 'route', description: '/preview-assets' },
-        annotation,
-      ],
-    },
-    async ({ request }) => {
-      // With a session cookie and a preference: proxy.ts drops both before
-      // Next routes the request, so the answer is the same without them.
-      const cookie = `__Host-studio_session=${'x'.repeat(43)}; theme=dark`;
-      // What a preview path no route matches answers, with no cookie: the
-      // app's 404 page from the server, but without the site's theme script,
-      // which the site's own 404 runs (#7).
-      const unmatched = '/preview/no-such-page';
-      const reference = await request.get(unmatched, { maxRedirects: 0 });
-      expect(reference.status()).toBe(404);
-      const referenceText = await reference.text();
-      expect(referenceText).toMatch(/<h1>Page not found<\/h1>/);
-      expect(referenceText, "the preview's 404: the theme script").not.toContain(THEME_KEY);
-      const site = await (await request.get('/no-such-page', { maxRedirects: 0 })).text();
-      expect(site, "the site's 404: the theme script").toContain(THEME_KEY);
-      // As that path: the same status, type, and page, but for the path Next's
-      // payload names, and the nonce the preview's scripts and styles carry.
-      const shape = async (response: APIResponse, target: string) => {
-        const text = await response.text();
-        const type = response.headers()['content-type'] ?? '';
-        const page = /^text\/html/.test(type) && text !== '';
-        const nonce = /'nonce-([A-Za-z0-9+/=]+)'/.exec(
-          response.headers()['content-security-policy'] ?? '',
-        )?.[1];
-        return {
-          status: response.status(),
-          type,
-          body: page ? withoutOwnPath(withoutNonce(text, nonce), target) : text,
+  const previewAnnotation = {
+    annotation: [
+      { type: 'route', description: '/preview' },
+      { type: 'route', description: '/preview-assets' },
+      annotation,
+    ],
+  };
+  if (hasGrantRoutes(profile)) {
+    test(
+      'every preview path no active grant admits, in any spelling, to any method, and from any destination, gets the status document, under the preview headers and with no cookie read (#7)',
+      previewAnnotation,
+      async ({ request }) => {
+        // With a session cookie and a preference, which proxy.ts never reads
+        // there; as a frame's document or an image, the loads a grant route
+        // takes; and with Next's router prefetch header and no RSC header,
+        // which next.config.ts would send to the 404 page (#1). No grant is
+        // active in the matrix, so each one gets the status document.
+        const cookie = `__Host-studio_session=${'x'.repeat(43)}; theme=dark`;
+        const sent: Record<string, string>[] = [
+          {},
+          { cookie },
+          { cookie, 'sec-fetch-dest': 'iframe' },
+          { 'sec-fetch-dest': 'image' },
+          { 'next-router-prefetch': '1' },
+        ];
+        // A token of the grant's own shape that no mint made.
+        const unknown = 'A'.repeat(22);
+        for (const target of [
+          ...PREVIEW_SPELLINGS,
+          `/preview/${unknown}`,
+          `/preview/${unknown}/work/tide-tables`,
+          `/preview-assets/${unknown}/a1/${'0'.repeat(64)}/large.webp`,
+        ]) {
+          for (const method of EVERY_METHOD) {
+            for (const headers of sent) {
+              const what = `${method} ${target} with ${Object.keys(headers).join(', ') || 'nothing'}`;
+              const response = await request.fetch(target, {
+                method,
+                maxRedirects: 0,
+                headers,
+                timeout: 5_000,
+              });
+              await expectStatusDocument(profile, response, what, method);
+            }
+          }
+        }
+      },
+    );
+  } else {
+    test(
+      'every preview path, in any spelling and to any method, answers as a path no route matches, under the preview headers, the same with a session cookie as without (#7)',
+      previewAnnotation,
+      async ({ request }) => {
+        // With a session cookie and a preference: proxy.ts drops both before
+        // Next routes the request, so the answer is the same without them.
+        const cookie = `__Host-studio_session=${'x'.repeat(43)}; theme=dark`;
+        // What a preview path no route matches answers, with no cookie: the
+        // app's 404 page from the server, but without the site's theme script,
+        // which the site's own 404 runs (#7).
+        const unmatched = '/preview/no-such-page';
+        const reference = await request.get(unmatched, { maxRedirects: 0 });
+        expect(reference.status()).toBe(404);
+        const referenceText = await reference.text();
+        expect(referenceText).toMatch(/<h1>Page not found<\/h1>/);
+        expect(referenceText, "the preview's 404: the theme script").not.toContain(THEME_KEY);
+        const site = await (await request.get('/no-such-page', { maxRedirects: 0 })).text();
+        expect(site, "the site's 404: the theme script").toContain(THEME_KEY);
+        // As that path: the same status, type, and page, but for the path Next's
+        // payload names, and the nonce the preview's scripts and styles carry.
+        const shape = async (response: APIResponse, target: string) => {
+          const text = await response.text();
+          const type = response.headers()['content-type'] ?? '';
+          const page = /^text\/html/.test(type) && text !== '';
+          const nonce = /'nonce-([A-Za-z0-9+/=]+)'/.exec(
+            response.headers()['content-security-policy'] ?? '',
+          )?.[1];
+          return {
+            status: response.status(),
+            type,
+            body: page ? withoutOwnPath(withoutNonce(text, nonce), target) : text,
+          };
         };
-      };
-      for (const target of PREVIEW_SPELLINGS) {
-        const query = target.includes('?') ? target.slice(target.indexOf('?')) : '';
-        for (const method of EVERY_METHOD) {
-          const what = `${method} ${target}`;
-          const options = { method, maxRedirects: 0, headers: { cookie } };
-          const response = await request.fetch(target, options);
-          const unknown = await request.fetch(`${unmatched}${query}`, { method, maxRedirects: 0 });
-          expect(response.status(), what).toBe(404);
-          expectProfileHeaders(profile, response, what);
-          expect(await shape(response, target), what).toEqual(
-            await shape(unknown, `${unmatched}${query}`),
-          );
+        for (const target of PREVIEW_SPELLINGS) {
+          const query = target.includes('?') ? target.slice(target.indexOf('?')) : '';
+          for (const method of EVERY_METHOD) {
+            const what = `${method} ${target}`;
+            const options = { method, maxRedirects: 0, headers: { cookie } };
+            const response = await request.fetch(target, options);
+            const unknown = await request.fetch(`${unmatched}${query}`, {
+              method,
+              maxRedirects: 0,
+            });
+            expect(response.status(), what).toBe(404);
+            expectProfileHeaders(profile, response, what);
+            expect(await shape(response, target), what).toEqual(
+              await shape(unknown, `${unmatched}${query}`),
+            );
+          }
+          // With Next's router prefetch header and no RSC header, next.config.ts
+          // sends the request to the 404 page (#1), and the preview's headers
+          // still go on it.
+          for (const method of ['GET', 'HEAD'] as const) {
+            const what = `${method} ${target}, prefetch without RSC`;
+            const prefetch = { 'next-router-prefetch': '1' };
+            const options = { method, maxRedirects: 0, timeout: 5_000 };
+            const response = await request.fetch(target, {
+              ...options,
+              headers: { cookie, ...prefetch },
+            });
+            const unknown = await request.fetch(`${unmatched}${query}`, {
+              ...options,
+              headers: prefetch,
+            });
+            expect(response.status(), what).toBe(404);
+            expectProfileHeaders(profile, response, what);
+            expect(await shape(response, target), what).toEqual(
+              await shape(unknown, `${unmatched}${query}`),
+            );
+          }
         }
-        // With Next's router prefetch header and no RSC header, next.config.ts
-        // sends the request to the 404 page (#1), and the preview's headers
-        // still go on it.
-        for (const method of ['GET', 'HEAD'] as const) {
-          const what = `${method} ${target}, prefetch without RSC`;
-          const prefetch = { 'next-router-prefetch': '1' };
-          const options = { method, maxRedirects: 0, timeout: 5_000 };
-          const response = await request.fetch(target, {
-            ...options,
-            headers: { cookie, ...prefetch },
-          });
-          const unknown = await request.fetch(`${unmatched}${query}`, {
-            ...options,
-            headers: prefetch,
-          });
-          expect(response.status(), what).toBe(404);
-          expectProfileHeaders(profile, response, what);
-          expect(await shape(response, target), what).toEqual(
-            await shape(unknown, `${unmatched}${query}`),
-          );
-        }
-      }
-    },
-  );
+      },
+    );
+  }
 
   test(
     'a build asset and a compiled pack allow any origin, and every other method or spelling there is the plain 404 (#7)',
@@ -833,25 +971,36 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
     'a trailing or repeated slash is a 308 to the path without it, whose body is only that path',
     { annotation: [{ type: 'route', description: 'every route' }, annotation] },
     async ({ app, request }) => {
-      // Next answers these itself, before proxy.ts and the next.config.ts
-      // headers, so they carry none of the baseline headers, and under
-      // /preview none of the preview's (#7). The target is the canonical
-      // path, and the body holds it and nothing else (docs/deployment.md).
+      // proxy.ts sends the 308 for a trailing slash, under the headers its
+      // path gets, so a preview path's is private, no-store whatever its
+      // grant (#7). Next answers a repeated slash itself, before proxy.ts
+      // and the next.config.ts headers, so that one carries none of them,
+      // under /preview none of the preview's either. The target is the
+      // canonical path, and the body holds it and nothing else
+      // (docs/deployment.md).
       const targets = [
         ...listRoutes()
           .filter((route) => route.pattern !== '/' && routeAccess(profile, route) !== 'absent')
           .map((route) => concrete(route.pattern)),
+        // Preview paths in every profile, grant routes or none.
         '/preview/x',
+        '/preview/editorial',
+        '/preview-assets/probe/asset',
       ];
-      expect(targets.length).toBeGreaterThan(0);
+      expect(targets.length).toBeGreaterThan(3);
       for (const target of targets) {
+        const slash = await request.get(`${target}/`, { maxRedirects: 0 });
+        expect(slash.status(), `${target}/`).toBe(308);
+        expect(slash.headers()['location'], `${target}/`).toBe(target);
+        expect(await slash.text(), `${target}/`).toBe(target);
+        expectProfileHeaders(profile, slash, `${target}/`);
         // The repeated slash goes whole, so no one reads it as a host.
-        for (const sent of [`${target}/`, `${app.origin}/${target}`]) {
-          const response = await request.get(sent, { maxRedirects: 0 });
-          expect(response.status(), sent).toBe(308);
-          expect(response.headers()['location'], sent).toBe(target);
-          expect(await response.text(), sent).toBe(target);
-        }
+        const sent = `${app.origin}/${target}`;
+        const repeated = await request.get(sent, { maxRedirects: 0 });
+        expect(repeated.status(), sent).toBe(308);
+        expect(repeated.headers()['location'], sent).toBe(target);
+        expect(await repeated.text(), sent).toBe(target);
+        expect(repeated.headers()['content-security-policy'], sent).toBeUndefined();
       }
     },
   );
@@ -862,8 +1011,9 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
     async ({ request }) => {
       // Next's router sends it only beside RSC: 1. next.config.ts sends a
       // request without one to the 404 page; a redirect proxy.ts answers
-      // itself, such as sign-in for a Studio page, stays as it is. A build
-      // file is still served.
+      // itself, such as sign-in for a Studio page, stays as it is, and so
+      // does a grant page's status document (#7). A build file is still
+      // served.
       const prefetch = { 'next-router-prefetch': '1', 'next-router-segment-prefetch': '/_tree' };
       const notFound = await request.get('/no-such-page');
       const asset = (await notFound.text()).match(/\/_next\/static\/[^"'?\s]+\.js/)?.[0];
@@ -897,7 +1047,9 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
           }
           expect(prefetched.headers()['content-type'], what).toMatch(/^text\/html/);
           expect(prefetched.headers()['cache-control'], what).toMatch(/(?:^|,)\s*no-store/);
-          if (method === 'GET') {
+          if (hasGrantRoutes(profile) && isPreviewPath(target)) {
+            await expectStatusDocument(profile, prefetched, what, method);
+          } else if (method === 'GET') {
             expect(await prefetched.text(), what).toMatch(/<h1>Page not found<\/h1>/);
           }
         }

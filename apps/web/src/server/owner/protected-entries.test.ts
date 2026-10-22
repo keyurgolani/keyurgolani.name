@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
-import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -20,7 +20,7 @@ import { setDeploymentState, type DeploymentState } from '../config-store';
 import type { Handler, HandlerContext } from '../dispatcher';
 import { listOperations, type Operation } from '../operations';
 import { provider } from './auth';
-import { ownerHandlers } from './index';
+import { ownerHandlers, ownerPreviews } from './index';
 import { mintSession } from './session-mint';
 
 // studio-3 and publish-1 (#2): every protected entry in the registry, read
@@ -42,8 +42,27 @@ const COOKIE = '__Host-studio_session';
 const base64 = (bytes: Buffer) => bytes.toString('base64').replace(/=+$/, '');
 // Nothing here signs in with a password, so a hash of the right shape will do.
 const HASH = `$scrypt$ln=17,r=8,p=1$${base64(randomBytes(16))}$${base64(randomBytes(32))}`;
+const PORTFOLIO =
+  'schemaVersion: 3\nlocale: en\ndirection: ltr\nidentity:\n  name: Rowan Test\nsections:\n  - kind: lede\n    id: about\n    body: Hi.\n';
+/** #5's fixture a fixture grant renders (#7): the test pair. */
+const FIXTURE = {
+  portfolio: { format: 'yaml', sourceText: PORTFOLIO },
+  site: { format: 'yaml', sourceText: readFileSync(EXAMPLES.site, 'utf8') },
+} as const;
+const ENVIRONMENT = {
+  displayMode: 'system',
+  contrast: 'system',
+  motion: 'system',
+  enhancement: 'on',
+};
 /** A body each command's input schema takes, where `{}` isn't one. */
-const INPUT: Record<string, unknown> = { 'auth.sessions.revoke': { ref: '0123abcd' } };
+const INPUT: Record<string, unknown> = {
+  'auth.sessions.revoke': { ref: '0123abcd' },
+  'preview.grant.mint': { subject: { fixture: 'complete' }, environment: ENVIRONMENT },
+  'preview.grant.renew': { grant: 'A'.repeat(22) },
+  'preview.grant.revoke': { grant: 'A'.repeat(22) },
+  'preview.grant.status': { grant: 'A'.repeat(22) },
+};
 
 const protectedEntries = () =>
   listOperations().filter((operation) => operation.session || operation.kind === 'command');
@@ -68,6 +87,7 @@ async function deploy(profile: Profile, env: Env): Promise<void> {
     examples: EXAMPLES,
     report: () => {},
     authProviders: [OWNER_PASSWORD_PROVIDER],
+    previewFixtures: (id) => (id === 'complete' ? FIXTURE : null),
   });
   assert.ok(composed.ok, JSON.stringify(composed.issues));
   deployed.set(profile, { config: read.config, state: composed.state });
@@ -87,10 +107,7 @@ test.before(async () => {
   dataDir = path.join(root, 'data');
   mkdirSync(sourceDir);
   mkdirSync(dataDir, { mode: 0o700 });
-  writeFileSync(
-    path.join(sourceDir, 'portfolio.yml'),
-    'schemaVersion: 3\nlocale: en\ndirection: ltr\nidentity:\n  name: Rowan Test\nsections:\n  - kind: lede\n    id: about\n    body: Hi.\n',
-  );
+  writeFileSync(path.join(sourceDir, 'portfolio.yml'), PORTFOLIO);
   copyFileSync(EXAMPLES.site, path.join(sourceDir, 'site.yml'));
   await deploy('owner', {
     PORTFOLIO_ORIGIN: ORIGIN,
@@ -248,14 +265,18 @@ test('every protected registry entry is denied without a session, the origin, th
 
   // As a service: the handler the owner branch binds for each entry.
   const { config } = serve('owner');
+  const auth = await provider({ config, mintSession });
+  const previews = ownerPreviews({ config, sessions: auth.grantSessions });
   const handlers: Readonly<Record<string, Handler>> = {
     ...ownerHandlers({
       config,
       catalog: 'documents',
       variantHealth: async () => ({ status: 'ok', requested: 'any', rendered: 'any' }),
     }),
-    ...(await provider({ config, mintSession })).handlers,
+    ...auth.handlers,
+    ...previews.handlers,
   };
+  previews.close();
   assert.deepEqual(
     Object.keys(handlers).sort(),
     listOperations()

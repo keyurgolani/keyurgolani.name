@@ -10,6 +10,7 @@ import { configSummary, type CatalogAdapter } from './config-summary';
 import type { DeploymentState } from './config-store';
 import { createDispatcher, NO_BINDINGS, type Handler, type StudioBindings } from './dispatcher';
 import { listOperations, type ConfigSummary } from './operations';
+import type { GrantSessionPort, PreviewFixture, PreviewGrantsPort } from './preview-port';
 import type { Session } from './session';
 import type { StudioPages } from './studio-port';
 import { liveVariantHealth } from './variant-health';
@@ -48,6 +49,11 @@ export interface AuthBindings {
   readonly handlers?: Readonly<Record<string, Handler>>;
   /** How Studio pages find their session, for requireOwnerPage. Without it, every one is refused. */
   readonly pages?: StudioPages;
+  /**
+   * The provider's sessions by digest, for #7's preview grants. Without it,
+   * no grant is minted and no grant path is served.
+   */
+  readonly grantSessions?: GrantSessionPort;
 }
 
 /** What the owner branch hands a provider as it loads it. */
@@ -244,6 +250,11 @@ export interface CompositionInput {
   readonly authProviders?: readonly AuthProviderFactory[];
   /** Defaults to STARTUP_REQUIREMENTS. Tests pass their own. */
   readonly requirements?: readonly StartupRequirement[];
+  /**
+   * #5's contract fixtures by id, which owner's fixture grants render (#7).
+   * None until #5's fixtures ship with the build; tests pass their own.
+   */
+  readonly previewFixtures?: (id: string) => PreviewFixture | null;
 }
 
 export type Composition =
@@ -308,6 +319,18 @@ export async function compose(input: CompositionInput): Promise<Composition> {
       const factory = authProviders[0];
       if (!factory) throw new Error('The owner profile has no authentication provider.');
       const provider = await factory.load({ config, mintSession: owner.mintSession });
+      // #7's preview grants, bound to the provider's sessions by digest, and
+      // checked against what startup checks the live pair against.
+      const previews = provider.grantSessions
+        ? owner.ownerPreviews({
+            config,
+            sessions: provider.grantSessions,
+            ...(input.catalog ? { catalog: input.catalog } : {}),
+            ...(input.extensions ? { extensions: input.extensions } : {}),
+            ...(input.validators ? { validators: input.validators } : {}),
+            ...(input.previewFixtures ? { fixtures: input.previewFixtures } : {}),
+          })
+        : undefined;
       const catalog: CatalogAdapter = 'documents';
       const reader = documents.reader;
       const bindings: StudioBindings = {
@@ -320,6 +343,7 @@ export async function compose(input: CompositionInput): Promise<Composition> {
               liveVariantHealth(async () => (await reader.getLive()).unit.site.appearance.variant),
           }),
           ...provider.handlers,
+          ...previews?.handlers,
         },
         resolveSession: (context) => provider.resolveSession(context),
         checkOrigin: (context) => provider.checkOrigin(context),
@@ -346,6 +370,7 @@ export async function compose(input: CompositionInput): Promise<Composition> {
         issues,
         degraded: [...early.degraded, ...late.degraded],
         pages: provider.pages,
+        ...(previews ? { previews: previews.port } : {}),
       });
     }
   }
@@ -384,6 +409,8 @@ interface Built {
   readonly degraded: readonly string[];
   /** Owner only: the provider's Studio page sessions. */
   readonly pages?: StudioPages;
+  /** Owner only: the preview grants proxy.ts and the preview routes check (#7). */
+  readonly previews?: PreviewGrantsPort;
 }
 
 function built(config: DeploymentConfig, parts: Built): Composition {
@@ -395,6 +422,7 @@ function built(config: DeploymentConfig, parts: Built): Composition {
     dispatch,
     degraded: Object.freeze([...parts.degraded]),
     ...(parts.pages ? { pages: parts.pages } : {}),
+    ...(parts.previews ? { previews: parts.previews } : {}),
   });
   return { ok: true, state, issues: parts.issues, summary: configSummary(config, parts.adapter) };
 }

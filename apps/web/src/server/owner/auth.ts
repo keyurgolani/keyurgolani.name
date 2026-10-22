@@ -22,6 +22,7 @@ import type { Handler, StudioBindings } from '../dispatcher';
 import { recordOwnerModule } from '../load-trace';
 import { log } from '../log';
 import { listOperations, type Operation } from '../operations';
+import type { GrantSessionPort } from '../preview-port';
 import { signInLocation } from '../return-to';
 import type { Session } from '../session';
 import type { PageResolution, StudioPages } from '../studio-port';
@@ -56,6 +57,8 @@ export type OwnerAuthBindings = Pick<
   readonly handlers: Readonly<Record<string, Handler>>;
   /** The sessions of Studio pages, for requireOwnerPage. */
   readonly pages: StudioPages;
+  /** What #7's preview grants need of the sessions: by digest, never a token. */
+  readonly grantSessions: GrantSessionPort;
 };
 
 export interface OwnerAuthTools {
@@ -76,8 +79,12 @@ export interface OwnerAuthOptions {
   readonly limits?: LoginLimits;
 }
 
-/** Commands that pass every check yet never slide the session: #7's grant renewal. */
-const NEVER_SLIDE = new Set(['preview.grant.renew']);
+/**
+ * Commands that pass every check yet never slide the session: #7's grant
+ * renewal and status, which Studio sends on its own, as a heartbeat and when
+ * a frame doesn't load, so an open tab can't keep a session alive.
+ */
+const NEVER_SLIDE = new Set(['preview.grant.renew', 'preview.grant.status']);
 
 /** Sign-in: the one command without a CSRF token, as it has no session to take one from yet. */
 const SIGN_IN = 'auth.login';
@@ -167,6 +174,22 @@ export async function provider(
     audit,
     cookie,
     handlers,
+
+    // #7's grants bind to the session record a mint came with, by digest,
+    // and check it by digest on every preview request. A preview request
+    // carries no cookie, and reading the record by digest never slides it.
+    grantSessions: {
+      of(session) {
+        const entry = session ? held.get(session) : undefined;
+        if (!entry) return null;
+        return {
+          digest: entry.record.digest,
+          absoluteExpiresAt: sessions.expiry(entry.record).absoluteExpiresAt,
+        };
+      },
+      resolveDigest: (digest) => sessions.resolveDigest(digest),
+      onSessionEnded: (listener) => sessions.onSessionEnded(listener),
+    },
 
     async resolveSession({ request, operation }) {
       const sent = readCookies(request, cookie.name);

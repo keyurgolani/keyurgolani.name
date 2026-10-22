@@ -304,6 +304,61 @@ test('owner session lifetimes default to 60 idle minutes and 12 hours, and take 
   }
 });
 
+test('owner preview grant lifetimes default to 900 idle seconds and 7200 in all, take whole numbers in range, and keep idle under the cap (#7)', () => {
+  const owner = { ...BASE, PORTFOLIO_PROFILE: 'owner' };
+  const defaults = read(owner);
+  assert.ok(defaults.ok);
+  assert.deepEqual(defaults.config.previewGrantLifetime, { idleSeconds: 900, maxSeconds: 7200 });
+  const set = read(
+    {
+      ...owner,
+      PORTFOLIO_PREVIEW_GRANT_IDLE_TTL_SECONDS: '60',
+      PORTFOLIO_PREVIEW_GRANT_MAX_TTL_SECONDS_FILE: '/run/grant-max',
+    },
+    { '/run/grant-max': '43200\n' },
+  );
+  assert.ok(set.ok);
+  assert.deepEqual(set.config.previewGrantLifetime, { idleSeconds: 60, maxSeconds: 43200 });
+  const readOnly = read({ ...BASE });
+  assert.ok(readOnly.ok);
+  assert.equal(readOnly.config.previewGrantLifetime, undefined);
+
+  const IDLE = 'PORTFOLIO_PREVIEW_GRANT_IDLE_TTL_SECONDS';
+  const MAX = 'PORTFOLIO_PREVIEW_GRANT_MAX_TTL_SECONDS';
+  const cases: [Env, string[]][] = [
+    [{ [IDLE]: '59' }, [`${IDLE}:out_of_range`]],
+    [{ [IDLE]: '3601' }, [`${IDLE}:out_of_range`]],
+    [{ [MAX]: '299' }, [`${MAX}:out_of_range`]],
+    [{ [MAX]: '43201' }, [`${MAX}:out_of_range`]],
+    [{ [IDLE]: '90.5' }, [`${IDLE}:invalid`]],
+    [{ [MAX]: ' 7200' }, [`${MAX}:invalid`]],
+    [{ [IDLE]: '1800', [MAX]: '600' }, [`${IDLE}:exceeds_max`]],
+    [{ [IDLE]: 'fifteen', [MAX]: '120' }, [`${IDLE}:invalid`, `${MAX}:out_of_range`]],
+  ];
+  for (const [extra, expected] of cases) {
+    const result = read({ ...owner, ...extra });
+    assert.equal(result.ok, false, JSON.stringify(extra));
+    assert.deepEqual(findings(result), expected, JSON.stringify(extra));
+    assertSilentAbout(
+      result,
+      ...Object.values(extra).filter(
+        (value): value is string => value !== undefined && value.trim().length > 2,
+      ),
+    );
+  }
+  // Outside owner either key stops production, as every owner row does.
+  for (const profile of ['read-only', 'demo']) {
+    const result = read({
+      ...BASE,
+      PORTFOLIO_PROFILE: profile,
+      ...(profile === 'demo' ? { PORTFOLIO_SOURCE_DIR: '' } : {}),
+      [IDLE]: '900',
+    });
+    assert.equal(result.ok, false, profile);
+    assert.deepEqual(findings(result), [`${IDLE}:not_in_profile`], profile);
+  }
+});
+
 test('the config records which variable supplied the password hash', () => {
   const owner = { ...BASE, PORTFOLIO_PROFILE: 'owner' };
   const direct = read({ ...owner, PORTFOLIO_AUTH_PASSWORD_HASH: 'h' });

@@ -66,6 +66,12 @@ const config: NextConfig = {
   // app/global-not-found.tsx, which brings its own document. Without the
   // flag, next build exits.
   experimental: { globalNotFound: true },
+  // Next's own 308 for a trailing slash goes out before proxy.ts and these
+  // headers, with none of them, so a preview grant path would get a
+  // cacheable answer (#7, Slice 2). proxy.ts sends the same 308 instead,
+  // with the headers the path gets. Next still answers a repeated slash or
+  // a backslash itself, before anything here (docs/deployment.md).
+  skipTrailingSlashRedirect: true,
   async rewrites() {
     return {
       // A path the route table lists that proxy.ts answers as one it

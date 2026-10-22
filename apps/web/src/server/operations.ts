@@ -28,6 +28,8 @@ export const ERRORS = {
   rate_limited: { status: 429, message: 'Too many attempts. Try again later.' },
   // #2: auth.login when the session store can't be written. No cookie goes with it.
   unavailable: { status: 503, message: "That can't be done right now. Try again soon." },
+  // #7: preview.grant.mint for a draft, revision, or fixture the store doesn't hold.
+  not_found: { status: 404, message: "That draft, revision, or fixture doesn't exist." },
   internal_error: {
     status: 500,
     message: 'The operation failed. Quote the request ID when you report it.',
@@ -156,6 +158,85 @@ export const SessionSummarySchema = z
  */
 export const LoginInputSchema = z.object({ password: z.unknown().optional() }).passthrough();
 
+/**
+ * A preview grant (#7, Slice 2): 128 bits in base64url, which only a frame's
+ * URL carries, in its grant path. Studio sends it to the grant commands in
+ * the body, never a query, so it reaches no URL but the grant path.
+ */
+export const GrantTokenSchema = z.string().regex(/^[A-Za-z0-9_-]{22}$/);
+
+/** What a grant is now: preview.grant.status, and why a frame renders nothing. */
+export const GrantStatusSchema = z.enum([
+  'active',
+  'superseded',
+  'expired',
+  'unknown',
+  'session_ended',
+]);
+
+/** The environment a frame starts in, from Slice 4's controls, which its grant fixes for first paint. */
+export const PreviewEnvironmentSchema = z
+  .object({
+    displayMode: z.enum(['system', 'light', 'dark', 'high-contrast']),
+    contrast: z.enum(['system', 'more']),
+    motion: z.enum(['system', 'reduce']),
+    enhancement: z.enum(['on', 'off']),
+  })
+  .strict();
+
+/** What a grant renders: a draft's version, a published revision, or one of #5's fixtures. */
+export const GrantSubjectSchema = z.union([
+  z
+    .object({
+      draft: z.string().regex(/^drf_[0-9a-f]{32}$/),
+      version: z.number().int().positive(),
+    })
+    .strict(),
+  z.object({ revision: z.string().regex(/^rev_[0-9a-f]{32}$/) }).strict(),
+  z.object({ fixture: z.string().regex(/^[a-z][a-z0-9-]{0,63}$/) }).strict(),
+]);
+
+/**
+ * preview.grant.mint's input. The appearance override is a selection in the
+ * site document's own shape, which the handler checks with #4's schema and
+ * this build's registries; it never reaches the draft or a URL.
+ */
+export const GrantMintInputSchema = z
+  .object({
+    subject: GrantSubjectSchema,
+    appearance: z.record(z.string(), z.unknown()).optional(),
+    environment: PreviewEnvironmentSchema,
+  })
+  .strict();
+
+const GrantExpiry = { idleExpiresAt: Instant, absoluteExpiresAt: Instant };
+
+/**
+ * A new grant, or `preview_blocked` with how many #4 `blocks-preview`
+ * diagnostics the version has, for which no grant is minted. The frame keeps
+ * the grant it has (Slice 2, item 6).
+ */
+export const GrantMintOutputSchema = z.union([
+  z
+    .object({
+      status: z.literal('active'),
+      grant: GrantTokenSchema,
+      /** The channel nonce the frame's agent says back (Slice 3). */
+      nonce: z.string().regex(/^[A-Za-z0-9_-]{22}$/),
+      ...GrantExpiry,
+    })
+    .strict(),
+  z
+    .object({ status: z.literal('preview_blocked'), diagnostics: z.number().int().positive() })
+    .strict(),
+]);
+
+/** preview.grant.renew's answer: the new limits, or why the grant renders nothing now. */
+export const GrantRenewOutputSchema = z.union([
+  z.object({ status: z.literal('active'), ...GrantExpiry }).strict(),
+  z.object({ status: GrantStatusSchema.exclude(['active']) }).strict(),
+]);
+
 /** The codes every entry can get from the dispatcher's own steps. */
 const BASE_ERRORS = ['not_available_in_profile', 'method_not_allowed'] as const;
 const SESSION_QUERY_ERRORS: readonly ErrorCode[] = [
@@ -281,6 +362,49 @@ const OPERATIONS: readonly Operation[] = [
     capability: 'studio.view',
     input: NO_INPUT,
     output: z.object({ revoked: z.number().int().nonnegative() }).strict(),
+    session: true,
+    originCheck: true,
+    errors: SESSION_COMMAND_ERRORS,
+  },
+  // #7's preview grants, each Studio's own: commands, so a grant travels in
+  // a body Studio's session sends, never in a URL. renew and status never
+  // slide the session (owner/auth.ts), so a heartbeat can't keep it alive.
+  {
+    name: 'preview.grant.mint',
+    kind: 'command',
+    capability: 'preview.grant',
+    input: GrantMintInputSchema,
+    output: GrantMintOutputSchema,
+    session: true,
+    originCheck: true,
+    errors: [...SESSION_COMMAND_ERRORS, 'not_found', 'version_conflict'],
+  },
+  {
+    name: 'preview.grant.renew',
+    kind: 'command',
+    capability: 'preview.grant',
+    input: z.object({ grant: GrantTokenSchema }).strict(),
+    output: GrantRenewOutputSchema,
+    session: true,
+    originCheck: true,
+    errors: SESSION_COMMAND_ERRORS,
+  },
+  {
+    name: 'preview.grant.revoke',
+    kind: 'command',
+    capability: 'preview.grant',
+    input: z.object({ grant: GrantTokenSchema }).strict(),
+    output: z.object({ revoked: z.boolean() }).strict(),
+    session: true,
+    originCheck: true,
+    errors: SESSION_COMMAND_ERRORS,
+  },
+  {
+    name: 'preview.grant.status',
+    kind: 'command',
+    capability: 'preview.grant',
+    input: z.object({ grant: GrantTokenSchema }).strict(),
+    output: z.object({ status: GrantStatusSchema }).strict(),
     session: true,
     originCheck: true,
     errors: SESSION_COMMAND_ERRORS,

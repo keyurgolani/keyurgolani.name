@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomBytes, scryptSync } from 'node:crypto';
-import { copyFileSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -68,8 +68,24 @@ const AUTH_OUTPUT: Record<string, unknown> = {
   'auth.sessions.revoke': { revoked: false },
   'auth.sessions.revokeAll': { revoked: 0 },
 };
+const ENVIRONMENT = {
+  displayMode: 'system',
+  contrast: 'system',
+  motion: 'system',
+  enhancement: 'on',
+};
 /** A body each command's input schema takes, where `{}` isn't one. */
-const INPUT: Record<string, unknown> = { 'auth.sessions.revoke': { ref: '0123abcd' } };
+const INPUT: Record<string, unknown> = {
+  'auth.sessions.revoke': { ref: '0123abcd' },
+  'preview.grant.mint': { subject: { fixture: 'complete' }, environment: ENVIRONMENT },
+  'preview.grant.renew': { grant: 'A'.repeat(22) },
+  'preview.grant.revoke': { grant: 'A'.repeat(22) },
+  'preview.grant.status': { grant: 'A'.repeat(22) },
+};
+const PORTFOLIO =
+  'schemaVersion: 3\nlocale: en\ndirection: ltr\nidentity:\n  name: Rowan Test\nsections:\n  - kind: lede\n    id: about\n    body: Hi.\n';
+/** The digest the double's one session has, as #7's grants bind to it. */
+const SESSION_DIGEST = 'a'.repeat(64);
 
 const PROVIDER: AuthProviderFactory = {
   name: 'test-double',
@@ -84,6 +100,16 @@ const PROVIDER: AuthProviderFactory = {
       handlers: Object.fromEntries(
         Object.entries(AUTH_OUTPUT).map(([name, output]) => [name, () => output]),
       ),
+      grantSessions: {
+        of: (given) =>
+          given === session
+            ? { digest: SESSION_DIGEST, absoluteExpiresAt: Date.now() + 3_600_000 }
+            : null,
+        resolveDigest: async (digest) => ({
+          status: digest === SESSION_DIGEST ? ('valid' as const) : ('ended' as const),
+        }),
+        onSessionEnded: () => () => {},
+      },
     };
   },
 };
@@ -99,6 +125,14 @@ function input(overrides: Partial<CompositionInput> = {}): CompositionInput {
     examples: EXAMPLES,
     report: () => {},
     authProviders: [PROVIDER],
+    // #5's fixture a fixture grant renders (#7): the test pair.
+    previewFixtures: (id) =>
+      id === 'complete'
+        ? {
+            portfolio: { format: 'yaml', sourceText: PORTFOLIO },
+            site: { format: 'yaml', sourceText: readFileSync(EXAMPLES.site, 'utf8') },
+          }
+        : null,
     ...overrides,
   };
 }
@@ -106,10 +140,7 @@ function input(overrides: Partial<CompositionInput> = {}): CompositionInput {
 test.before(async () => {
   sourceDir = mkdtempSync(path.join(tmpdir(), 'composition-owner-'));
   dataDir = mkdtempSync(path.join(tmpdir(), 'composition-owner-data-'));
-  writeFileSync(
-    path.join(sourceDir, 'portfolio.yml'),
-    'schemaVersion: 3\nlocale: en\ndirection: ltr\nidentity:\n  name: Rowan Test\nsections:\n  - kind: lede\n    id: about\n    body: Hi.\n',
-  );
+  writeFileSync(path.join(sourceDir, 'portfolio.yml'), PORTFOLIO);
   copyFileSync(EXAMPLES.site, path.join(sourceDir, 'site.yml'));
   const read = readDeploymentConfig(
     {
@@ -162,6 +193,9 @@ test('owner loads its modules only through the composition root', () => {
     'core/auth/token',
     'core/data/layout',
     'core/owner',
+    'core/preview/grant-store',
+    'core/preview/grants',
+    'core/preview/token',
     'core/store/assets',
     'core/store/common',
     'core/store/drafts',
@@ -179,6 +213,7 @@ test('owner loads its modules only through the composition root', () => {
     'server/owner/config-status',
     'server/owner/data-directory',
     'server/owner/index',
+    'server/owner/preview',
     'server/owner/session-mint',
   ]);
   assert.deepEqual(state.degraded, []);
@@ -312,9 +347,11 @@ test('the owner route matrix: each route as its capability says, and retired one
     pattern.replace(/\/\[\[\.\.\.[^\]]+\]\]/g, '').replace(/\[\.{0,3}[^\]]+\]/g, 'probe') || '/';
   for (const entry of listRoutes()) {
     const pathname = concrete(entry.pattern);
-    // No installed variant declares a view at /probe, and no slug names a work until #10.
+    // No installed variant declares a view at /probe, and no slug names a
+    // work until #10. A grant route's probe is its grant, and the route's
+    // home is served (#7): proxy.ts checks the grant itself.
     const expected =
-      entry.kind === 'page' && pathname.includes('probe')
+      entry.kind === 'page' && pathname.includes('probe') && !entry.grant
         ? 'missing'
         : routeAccess('owner', entry) === 'absent'
           ? 'absent'

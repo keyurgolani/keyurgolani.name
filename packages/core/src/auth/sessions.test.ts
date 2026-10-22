@@ -639,6 +639,45 @@ test('no cookie is no session, and a cookie that is not a token is an ended one'
   );
 });
 
+test("a session's digest resolves as its token does, never slides it, and ends it the same way (#7)", async (t) => {
+  const dir = await dataDir(t);
+  const store = filesystemSessionStore(dir);
+  const { time, sessions, ended } = setup({ store });
+  const digestStatus = async (digest: string) => {
+    const resolution = await sessions.resolveDigest(digest);
+    return resolution.status === 'ended' ? `ended:${resolution.reason}` : resolution.status;
+  };
+  const issued = await sessions.issue({ uaFamily: 'firefox' });
+  const { digest } = issued.record;
+  const valid = await sessions.resolveDigest(digest);
+  assert.ok(valid.status === 'valid');
+  assert.deepEqual(valid.record, issued.record);
+  assert.ok(!('token' in valid), 'a digest resolves to no token');
+  // Reading it never slides it: it ends 60 minutes after sign-in all the same.
+  time.advance(30 * MINUTE);
+  assert.equal(await digestStatus(digest), 'valid');
+  assert.equal((await store.get(digest))?.lastSeenAt, issued.record.lastSeenAt);
+  time.advance(30 * MINUTE);
+  assert.equal(await digestStatus(digest), 'ended:expired');
+  assert.deepEqual(ended, [digest]);
+  assert.equal(await store.get(digest), null);
+  assert.equal(await digestStatus(digest), 'ended:unknown');
+
+  // Ended out of process, as owner.mjs revoke-sessions does, and written
+  // back afterwards: refused at the next read all the same.
+  const other = await sessions.issue({ uaFamily: 'firefox' });
+  time.advance(MINUTE);
+  await revokeAllSessionFiles(dir, time.now());
+  await writeSessionFile(dir, other.record);
+  assert.equal(await digestStatus(other.record.digest), 'ended:revoked');
+
+  // Anything but a lowercase hex digest names no session, the token included.
+  const token = newSessionToken();
+  for (const value of ['', 'x'.repeat(64), token, sessionDigest(token).toUpperCase()]) {
+    assert.equal(await digestStatus(value), 'ended:malformed', value);
+  }
+});
+
 test('a session list shows a coarse browser family, never the user agent', () => {
   const cases: [string | null, string][] = [
     ['Mozilla/5.0 (X11; Linux x86_64; rv:131.0) Gecko/20100101 Firefox/131.0', 'firefox'],

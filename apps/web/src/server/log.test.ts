@@ -103,6 +103,28 @@ test('deployment.config adds the redacted summary, and only it does', () => {
   ]);
 });
 
+test("a preview grant's events add its ref, its session's, and a count, and no other event carries them (#7)", () => {
+  const fields = { grantRef: '0123abcd', sessionRef: '89abcdef', count: 2 };
+  for (const event of [
+    'preview.grant.minted',
+    'preview.grant.superseded',
+    'preview.grant.session_ended',
+    'preview.grant.mark_failed',
+    'preview.grant.read_failed',
+    'preview.render_failed',
+  ]) {
+    const line = parse(
+      logLine({ level: 'info', event, ...fields, token: 'canary-token', url: '/preview/x' }, NOW),
+    );
+    assert.deepEqual(line, { ts: line.ts, level: 'info', event, ...fields }, event);
+  }
+  assert.deepEqual(Object.keys(parse(logLine({ level: 'info', event: 'other', ...fields }))), [
+    'ts',
+    'level',
+    'event',
+  ]);
+});
+
 test('an empty field is left out', () => {
   assert.deepEqual(
     Object.keys(parse(logLine({ level: 'warn', event: 'x', requestId: undefined, code: 'c' }))),

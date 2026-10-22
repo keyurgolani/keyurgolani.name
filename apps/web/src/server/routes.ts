@@ -66,6 +66,15 @@ export interface RouteEntry {
    * page. An entry without it names every path it matches.
    */
   readonly names?: (path: RoutePath, installed: Installed) => boolean;
+  /**
+   * A route a preview grant authorizes, by what it serves (#7, Slice 2): a
+   * frame's `document`, or a draft-only `asset`. The grant in the path is
+   * the authority, never a cookie: proxy.ts admits a request only as that
+   * destination and for an active grant, answers everything else under the
+   * preview prefixes with one status document, and never sends a grant path
+   * to sign-in.
+   */
+  readonly grant?: 'document' | 'asset';
 }
 
 // What visitors read the site through at its root, which the demo profile
@@ -179,6 +188,24 @@ const ROUTES = [
   // The preview's dev fixture route (#7). It renders fixtures, never the
   // published site, so it isn't a visitor route either.
   devPreviewRoute(PREVIEW_DEV),
+  // Preview grants (#7, Slice 2): a frame's document, with the route inside
+  // it below the grant, as a variant's views sit below the site root, and
+  // the draft-only assets it loads, which #10 serves. Neither reads the
+  // published site. /preview/dev/<variant>/<fixture> is the dev route's, on
+  // or off: its fixed segment outranks the grant segment.
+  {
+    pattern: '/preview/[grant]/[[...route]]',
+    kind: 'page',
+    capability: 'preview.grant',
+    grant: 'document',
+    names: ({ segments }, installed) => namesPage(installed, segments.slice(2)),
+  },
+  {
+    pattern: '/preview-assets/[grant]/[...path]',
+    kind: 'handler',
+    capability: 'preview.grant',
+    grant: 'asset',
+  },
   { pattern: '/robots.txt', kind: 'metadata', capability: 'catalog.read', visitor: true },
   { pattern: '/sitemap.xml', kind: 'metadata', capability: 'catalog.read', visitor: true },
   // The site's share image, app/(site)/opengraph-image.tsx: Next gives a
@@ -219,8 +246,9 @@ export function patternOfRoutePath(routePath: string): string {
  * screenshots that lived there moved to legacy/public/ with their variants
  * (#5), and the contract reserves each first segment, so no view can sit
  * here. The old /preview/[slug] is no longer one: /preview belongs to #7's
- * preview routes, and a path under it that none of them serves answers as a
- * path no route matches.
+ * grant routes. Under owner, a path under it that no active grant admits
+ * gets the preview's status document, and under the other profiles it
+ * answers as a path no route matches.
  */
 export const RETIRED_PATTERNS = [
   '/admin',

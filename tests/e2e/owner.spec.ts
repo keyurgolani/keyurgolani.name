@@ -55,9 +55,29 @@ test(
       expect(body.error.code).toBe('authentication_required');
       clean(JSON.stringify(body), operation.name);
     }
-    const pages = listRoutes().filter(
+    const sessionPages = listRoutes().filter(
       (entry) => entry.kind === 'page' && routeAccess('owner', entry) === 'session',
     );
+    // A grant page's authority is its grant, never the cookie, so it never
+    // sends anyone to sign-in: without an active grant it gets the preview's
+    // status document (#7).
+    const grantPages = sessionPages.filter((entry) => entry.grant !== undefined);
+    expect(grantPages.length).toBeGreaterThan(0);
+    for (const entry of grantPages) {
+      for (const cookie of [undefined, `studio_session=${'x'.repeat(43)}`]) {
+        const response = await request.get(entry.pattern, {
+          maxRedirects: 0,
+          headers: cookie ? { cookie } : {},
+        });
+        const what = `${entry.pattern} ${cookie ? 'with' : 'without'} a cookie`;
+        expect(response.status(), what).toBe(404);
+        expect(response.headers()['location'], what).toBeUndefined();
+        const text = await response.text();
+        expect(text, what).toContain('This preview is not available.');
+        clean(text, what);
+      }
+    }
+    const pages = sessionPages.filter((entry) => entry.grant === undefined);
     expect(pages.length).toBeGreaterThan(0);
     for (const entry of pages) {
       // No cookie at all, and a cookie that names no session.

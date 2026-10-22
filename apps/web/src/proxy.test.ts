@@ -5,8 +5,10 @@ import { proxy } from './proxy';
 import type { Profile } from './server/capabilities';
 import { readDeploymentConfig } from './server/config';
 import { setDeploymentState, setServable } from './server/config-store';
+import type { PreviewGrantsPort } from './server/preview-port';
 import { readiness } from './server/readiness';
 import { ROUTE_HEADER } from './server/routes';
+import { PREVIEW_STATUS_DOCUMENT } from './preview/status';
 
 // proxy.ts: 404 early for what the profile doesn't serve, a fresh request ID
 // on everything else, noindex on every demo response, 503 before register()
@@ -15,7 +17,7 @@ import { ROUTE_HEADER } from './server/routes';
 // the route table's decision on every request it passes on, so next.config.ts
 // sends a path no route renders to the app's 404 page (#5, Slice 4).
 
-function deploy(t: TestContext, profile: Profile): void {
+function deploy(t: TestContext, profile: Profile, previews?: PreviewGrantsPort): void {
   const read = readDeploymentConfig(
     {
       NODE_ENV: 'production',
@@ -31,8 +33,26 @@ function deploy(t: TestContext, profile: Profile): void {
     catalog: { getLive: () => assert.fail('the proxy reads no catalog') },
     dispatch: () => assert.fail('the proxy runs no operation'),
     degraded: [],
+    ...(previews ? { previews } : {}),
   });
   t.after(() => setDeploymentState(undefined));
+}
+
+/** A grant the fake owner port finds active, and one it never minted (#7). */
+const ACTIVE = 'AAAAAAAAAAAAAAAAAAAAAA';
+const ENDED = 'BBBBBBBBBBBBBBBBBBBBBB';
+
+/** The owner composition's grant port, as proxy.ts sees it: it admits ACTIVE alone, and counts each check. */
+function grantsPort(admitted = new Set([ACTIVE])) {
+  const checked: string[] = [];
+  const port: PreviewGrantsPort = {
+    admit: async (grant) => {
+      checked.push(grant);
+      return admitted.has(grant);
+    },
+    open: () => assert.fail('proxy.ts opens no grant'),
+  };
+  return { port, checked };
 }
 
 function request(path: string, method = 'GET'): NextRequest {
@@ -52,7 +72,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 test('before register() stores the deployment, every request is 503', async () => {
   setDeploymentState(undefined);
-  const response = proxy(request('/'));
+  const response = await proxy(request('/'));
   assert.equal(response.status, 503);
   assert.equal(response.headers.get('cache-control'), 'no-store');
   assert.match(response.headers.get('x-request-id') ?? '', UUID);
@@ -60,7 +80,7 @@ test('before register() stores the deployment, every request is 503', async () =
 
 test('before startup, /api/ready answers with the starting body readiness documents', async () => {
   setDeploymentState(undefined);
-  const response = proxy(request('/api/ready'));
+  const response = await proxy(request('/api/ready'));
   assert.equal(response.status, 503);
   assert.equal(response.headers.get('cache-control'), 'no-store');
   assert.match(response.headers.get('x-request-id') ?? '', UUID);
@@ -71,10 +91,10 @@ test('before startup, /api/ready answers with the starting body readiness docume
   assert.deepEqual(await response.json(), starting.body);
 });
 
-test('a served path passes through with a fresh request ID, whatever the client sent', (t) => {
+test('a served path passes through with a fresh request ID, whatever the client sent', async (t) => {
   deploy(t, 'read-only');
   for (const path of ['/', '/feed.xml', '/api/studio/config.status', '/_next/static/a.js']) {
-    const response = proxy(request(path));
+    const response = await proxy(request(path));
     assert.equal(response.headers.get('x-middleware-next'), '1', path);
     const id = response.headers.get('x-request-id') ?? '';
     assert.match(id, UUID, path);
@@ -84,8 +104,8 @@ test('a served path passes through with a fresh request ID, whatever the client 
     // So is the table's decision, in place of the one the client sent.
     assert.equal(decision(response), path.startsWith('/_next/') ? 'unlisted' : 'served', path);
   }
-  const first = proxy(request('/')).headers.get('x-request-id');
-  const second = proxy(request('/')).headers.get('x-request-id');
+  const first = (await proxy(request('/'))).headers.get('x-request-id');
+  const second = (await proxy(request('/'))).headers.get('x-request-id');
   assert.notEqual(first, second);
 });
 
@@ -93,14 +113,14 @@ test('retired routes are 404 in every profile, and only their exact paths', asyn
   for (const profile of ['owner', 'demo', 'read-only'] as const) {
     deploy(t, profile);
     for (const path of ['/admin', '/variants', '/api/portfolio']) {
-      const response = proxy(request(path));
+      const response = await proxy(request(path));
       assert.equal(response.status, 404, `${profile} ${path}`);
       assert.equal(await response.text(), 'Not found.');
       assert.equal(response.headers.get('cache-control'), 'no-store');
       assert.match(response.headers.get('x-request-id') ?? '', UUID);
     }
     // A path below one names nothing: a file in public/, or else the app's 404 page.
-    assert.equal(decision(proxy(request('/variants/kinetic-cosmos/a.png'))), 'missing');
+    assert.equal(decision(await proxy(request('/variants/kinetic-cosmos/a.png'))), 'missing');
   }
 });
 
@@ -132,7 +152,7 @@ test('a path no route renders goes on marked missing for GET and HEAD, in every 
       '/robots.txt/x',
     ]) {
       for (const method of ['GET', 'HEAD']) {
-        const response = proxy(request(path, method));
+        const response = await proxy(request(path, method));
         const what = `${profile} ${method} ${path.slice(0, 40)}`;
         assert.equal(decision(response), 'missing', what);
         const id = response.headers.get('x-request-id') ?? '';
@@ -147,7 +167,7 @@ test('a path no route renders goes on marked missing for GET and HEAD, in every 
       }
       // Only a page load gets the page. Anything else is the plain 404.
       for (const method of ['POST', 'PUT', 'DELETE']) {
-        const response = proxy(request(path, method));
+        const response = await proxy(request(path, method));
         assert.equal(response.status, 404, `${profile} ${method} ${path.slice(0, 40)}`);
         assert.equal(decision(response), null);
         assert.equal(await response.text(), 'Not found.');
@@ -156,7 +176,7 @@ test('a path no route renders goes on marked missing for GET and HEAD, in every 
   }
 });
 
-test('under demo, a /sample path or ?variant= that names nothing is missing too', (t) => {
+test('under demo, a /sample path or ?variant= that names nothing is missing too', async (t) => {
   deploy(t, 'demo');
   for (const path of [
     '/sample?variant=fallback',
@@ -165,24 +185,24 @@ test('under demo, a /sample path or ?variant= that names nothing is missing too'
     '/sample/nowhere',
     '/sample/work/x',
   ]) {
-    assert.equal(decision(proxy(request(path))), 'missing', path);
+    assert.equal(decision(await proxy(request(path))), 'missing', path);
   }
-  assert.equal(decision(proxy(request('/sample'))), 'served');
+  assert.equal(decision(await proxy(request('/sample'))), 'served');
 });
 
-test("a route outside the profile's matrix is 404 early", (t) => {
+test("a route outside the profile's matrix is 404 early", async (t) => {
   deploy(t, 'demo');
-  assert.equal(proxy(request('/feed.xml')).status, 404);
-  assert.equal(proxy(request('/')).headers.get('x-middleware-next'), '1');
+  assert.equal((await proxy(request('/feed.xml'))).status, 404);
+  assert.equal((await proxy(request('/'))).headers.get('x-middleware-next'), '1');
 });
 
 test('under demo every response asks crawlers not to index it, and elsewhere none does', async (t) => {
   const paths = ['/', '/sample', '/feed.xml', '/admin', '/_next/static/chunks/app.js', '/nowhere'];
   for (const profile of ['owner', 'demo', 'read-only'] as const) {
-    await t.test(profile, (t) => {
+    await t.test(profile, async (t) => {
       deploy(t, profile);
       for (const path of paths) {
-        const tag = proxy(request(path)).headers.get('x-robots-tag');
+        const tag = (await proxy(request(path))).headers.get('x-robots-tag');
         assert.equal(tag, profile === 'demo' ? 'noindex' : null, `${profile} ${path}`);
       }
     });
@@ -194,7 +214,7 @@ test("while the catalog can't serve, visitor pages are a static 503 page, and th
   setServable(false);
   t.after(() => setServable(true));
   for (const path of ['/', '/feed.xml', '/sitemap.xml', '/robots.txt', '/opengraph-image-12o0cb']) {
-    const response = proxy(request(path));
+    const response = await proxy(request(path));
     assert.equal(response.status, 503, path);
     assert.equal(response.headers.get('retry-after'), '120', path);
     assert.equal(response.headers.get('x-robots-tag'), 'noindex', path);
@@ -213,22 +233,22 @@ test("while the catalog can't serve, visitor pages are a static 503 page, and th
     '/api/studio/config.status',
     '/_next/static/a.js',
   ]) {
-    assert.equal(proxy(request(path)).headers.get('x-middleware-next'), '1', path);
+    assert.equal((await proxy(request(path))).headers.get('x-middleware-next'), '1', path);
   }
-  assert.equal(proxy(request('/admin')).status, 404);
+  assert.equal((await proxy(request('/admin'))).status, 404);
   // A path no route renders is the 404 page, whatever the catalog's state.
-  assert.equal(decision(proxy(request('/nowhere'))), 'missing');
+  assert.equal(decision(await proxy(request('/nowhere'))), 'missing');
   // Servable again, the page passes through.
   setServable(true);
-  assert.equal(proxy(request('/')).headers.get('x-middleware-next'), '1');
+  assert.equal((await proxy(request('/'))).headers.get('x-middleware-next'), '1');
 });
 
-test('demo serves /sample, a visitor page, under the same rule', (t) => {
+test('demo serves /sample, a visitor page, under the same rule', async (t) => {
   deploy(t, 'demo');
   setServable(false);
   t.after(() => setServable(true));
-  assert.equal(proxy(request('/sample')).status, 503);
-  assert.equal(proxy(request('/sample')).headers.get('x-robots-tag'), 'noindex');
+  assert.equal((await proxy(request('/sample'))).status, 503);
+  assert.equal((await proxy(request('/sample'))).headers.get('x-robots-tag'), 'noindex');
 });
 
 test('build assets and optimized images go through the proxy too', async () => {
@@ -245,11 +265,11 @@ function studio(path: string, headers: Record<string, string> = {}, method = 'GE
   return new NextRequest(`https://rowan.test${path}`, { method, headers });
 }
 
-test('every /studio response gets a nonce CSP of its own, which the page Next renders reads too', (t) => {
+test('every /studio response gets a nonce CSP of its own, which the page Next renders reads too', async (t) => {
   deploy(t, 'owner');
   const nonces = new Set<string>();
   for (const path of ['/studio/sign-in', '/studio/sign-in', '/studio/sign-in?state=failed']) {
-    const response = proxy(studio(path));
+    const response = await proxy(studio(path));
     assert.equal(response.headers.get('x-middleware-next'), '1', path);
     const csp = response.headers.get('content-security-policy') ?? '';
     const nonce = STUDIO_CSP.exec(csp)?.[1];
@@ -260,11 +280,11 @@ test('every /studio response gets a nonce CSP of its own, which the page Next re
   assert.equal(nonces.size, 3, 'a nonce came twice');
   // Only /studio: its transport, and a path that only starts the same, get none.
   for (const path of ['/', '/api/studio/auth.session', '/studios', '/sample']) {
-    assert.equal(proxy(studio(path)).headers.get('content-security-policy'), null, path);
+    assert.equal((await proxy(studio(path))).headers.get('content-security-policy'), null, path);
   }
 });
 
-test("under owner every /studio response, in any case or percent-encoding, gets Studio's CSP, Referrer-Policy, and Cross-Origin-Resource-Policy, redirects and 404s included", (t) => {
+test("under owner every /studio response, in any case or percent-encoding, gets Studio's CSP, Referrer-Policy, and Cross-Origin-Resource-Policy, redirects and 404s included", async (t) => {
   deploy(t, 'owner');
   for (const path of [
     '/studio',
@@ -276,26 +296,26 @@ test("under owner every /studio response, in any case or percent-encoding, gets 
     '/%73tudio',
     '/%53TUDIO/sign-in',
   ]) {
-    const response = proxy(studio(path));
+    const response = await proxy(studio(path));
     assert.match(response.headers.get('content-security-policy') ?? '', STUDIO_CSP, path);
     assert.equal(response.headers.get('referrer-policy'), 'same-origin', path);
     assert.equal(response.headers.get('cross-origin-resource-policy'), 'same-origin', path);
   }
   // /studio with no session cookie is proxy.ts's own 303.
-  assert.equal(proxy(studio('/studio')).status, 303);
-  assert.equal(proxy(studio('/%73tudio')).status, 303);
+  assert.equal((await proxy(studio('/studio'))).status, 303);
+  assert.equal((await proxy(studio('/%73tudio'))).status, 303);
   // Outside /studio, none of them.
   for (const path of ['/', '/studios', '/sample', '/api/studio/auth.session']) {
-    const response = proxy(studio(path));
+    const response = await proxy(studio(path));
     assert.equal(response.headers.get('referrer-policy'), null, path);
     assert.equal(response.headers.get('cross-origin-resource-policy'), null, path);
   }
 });
 
-test("under owner the plain 404 for a missing /studio path, to a method but GET or HEAD, keeps Studio's headers (#5, Slice 4)", (t) => {
+test("under owner the plain 404 for a missing /studio path, to a method but GET or HEAD, keeps Studio's headers (#5, Slice 4)", async (t) => {
   deploy(t, 'owner');
   for (const method of ['POST', 'PUT', 'DELETE', 'OPTIONS']) {
-    const response = proxy(studio('/studio/nowhere', {}, method));
+    const response = await proxy(studio('/studio/nowhere', {}, method));
     assert.equal(response.status, 404, method);
     assert.equal(response.headers.get('content-type'), 'text/plain; charset=utf-8', method);
     assert.match(response.headers.get('content-security-policy') ?? '', STUDIO_CSP, method);
@@ -345,7 +365,7 @@ test("under a profile with no Studio page, every Studio path is as unknown as an
     deploy(t, profile);
     for (const method of ['GET', 'HEAD']) {
       for (const path of LISTED_STUDIO_PATHS) {
-        const response = proxy(studio(path, {}, method));
+        const response = await proxy(studio(path, {}, method));
         const what = `${profile} ${method} ${path}`;
         // On to Next, marked for next.config.ts's rewrite to the 404 page.
         assert.equal(response.headers.get('x-middleware-next'), '1', what);
@@ -357,7 +377,7 @@ test("under a profile with no Studio page, every Studio path is as unknown as an
       // The rest go on marked missing, as any unknown path does, and get
       // its Cache-Control in place of next.config.ts's no-store for Studio.
       for (const path of UNLISTED_STUDIO_PATHS) {
-        const response = proxy(studio(path, {}, method));
+        const response = await proxy(studio(path, {}, method));
         const what = `${profile} ${method} ${path}`;
         assert.equal(decision(response), 'missing', what);
         assert.equal(
@@ -371,9 +391,9 @@ test("under a profile with no Studio page, every Studio path is as unknown as an
     }
     // Any other method gets the plain 404 /no-such-page gets.
     for (const method of ['POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS']) {
-      const unknown = proxy(studio('/no-such-page', {}, method));
+      const unknown = await proxy(studio('/no-such-page', {}, method));
       for (const path of [...LISTED_STUDIO_PATHS, ...UNLISTED_STUDIO_PATHS]) {
-        const response = proxy(studio(path, {}, method));
+        const response = await proxy(studio(path, {}, method));
         const what = `${profile} ${method} ${path}`;
         assert.equal(response.status, 404, what);
         assert.equal(await response.text(), 'Not found.', what);
@@ -408,7 +428,7 @@ test('a route spelled with a fixed segment percent-encoded is a path no route ma
     deploy(t, profile);
     for (const path of paths) {
       for (const method of ['GET', 'HEAD']) {
-        const response = proxy(request(path, method));
+        const response = await proxy(request(path, method));
         const what = `${profile} ${method} ${path}`;
         assert.equal(response.headers.get('x-middleware-next'), '1', what);
         assert.equal(response.headers.get('x-middleware-request-x-portfolio-not-found'), '1', what);
@@ -422,7 +442,7 @@ test('a route spelled with a fixed segment percent-encoded is a path no route ma
         );
       }
       for (const method of ['POST', 'PUT', 'DELETE']) {
-        const response = proxy(request(path, method));
+        const response = await proxy(request(path, method));
         assert.equal(response.status, 404, `${profile} ${method} ${path}`);
         assert.equal(await response.text(), 'Not found.');
       }
@@ -431,16 +451,16 @@ test('a route spelled with a fixed segment percent-encoded is a path no route ma
   // A route the profile doesn't serve is its plain 404 in either spelling.
   deploy(t, 'demo');
   for (const path of ['/feed.xml', '/%66eed.xml']) {
-    const response = proxy(request(path));
+    const response = await proxy(request(path));
     assert.equal(response.status, 404, path);
     assert.equal(await response.text(), 'Not found.', path);
   }
   // A dynamic segment spelled encoded is still the route's: Next decodes it.
   deploy(t, 'read-only');
-  assert.equal(decision(proxy(request('/api/studio/%63onfig.status'))), 'served');
+  assert.equal(decision(await proxy(request('/api/studio/%63onfig.status'))), 'served');
 });
 
-test("under owner a Studio page spelled with a fixed segment percent-encoded is the 404 page with Studio's headers, its request carrying the policy for the page's nonce", (t) => {
+test("under owner a Studio page spelled with a fixed segment percent-encoded is the 404 page with Studio's headers, its request carrying the policy for the page's nonce", async (t) => {
   deploy(t, 'owner');
   const cookie = { cookie: '__Host-studio_session=anything' };
   for (const [path, headers] of [
@@ -448,7 +468,7 @@ test("under owner a Studio page spelled with a fixed segment percent-encoded is 
     ['/studio/%73ign-in', {}],
     ['/%73tudio', cookie],
   ] as const) {
-    const response = proxy(studio(path, headers));
+    const response = await proxy(studio(path, headers));
     assert.equal(response.headers.get('x-middleware-request-x-portfolio-not-found'), '1', path);
     const csp = response.headers.get('content-security-policy') ?? '';
     assert.match(csp, STUDIO_CSP, path);
@@ -458,9 +478,9 @@ test("under owner a Studio page spelled with a fixed segment percent-encoded is 
     assert.equal(response.headers.get('x-middleware-request-x-studio-path'), null, path);
   }
   // A page for a session, asked for with no session cookie, is the 303 first.
-  assert.equal(proxy(studio('/%73tudio')).status, 303);
+  assert.equal((await proxy(studio('/%73tudio'))).status, 303);
   // Any other method is the plain 404, which keeps Studio's headers.
-  const posted = proxy(studio('/%73tudio/sign-in', {}, 'POST'));
+  const posted = await proxy(studio('/%73tudio/sign-in', {}, 'POST'));
   assert.equal(posted.status, 404);
   assert.match(posted.headers.get('content-security-policy') ?? '', STUDIO_CSP);
 });
@@ -479,42 +499,42 @@ test("a missing path that is a route file's own, as sent or decoded whole, goes 
       '/%5Fnot-found',
     ]) {
       for (const method of ['GET', 'HEAD']) {
-        const response = proxy(request(path, method));
+        const response = await proxy(request(path, method));
         const what = `${profile} ${method} ${path}`;
         assert.equal(response.headers.get('x-middleware-request-x-portfolio-not-found'), '1', what);
         assert.equal(decision(response), null, what);
         assert.equal(response.headers.get('cache-control'), UNKNOWN_PATH_CACHE_CONTROL, what);
       }
-      const posted = proxy(request(path, 'POST'));
+      const posted = await proxy(request(path, 'POST'));
       assert.equal(posted.status, 404, `${profile} POST ${path}`);
       assert.equal(await posted.text(), 'Not found.');
     }
   }
   // Under owner, a Studio one carries Studio's policy on the request, for the page's nonce.
   deploy(t, 'owner');
-  const page = proxy(studio('/studio%2Fsign-in'));
+  const page = await proxy(studio('/studio%2Fsign-in'));
   const csp = page.headers.get('content-security-policy') ?? '';
   assert.match(csp, STUDIO_CSP);
   assert.equal(page.headers.get('x-middleware-request-content-security-policy'), csp);
   // A path that names nothing and no route file goes on marked missing, for the afterFiles rewrite.
-  assert.equal(decision(proxy(request('/work%2Fx'))), 'missing');
+  assert.equal(decision(await proxy(request('/work%2Fx'))), 'missing');
 });
 
-test('a Studio page learns the path asked for from proxy.ts alone, never from the client', (t) => {
+test('a Studio page learns the path asked for from proxy.ts alone, never from the client', async (t) => {
   deploy(t, 'owner');
   const forged = { 'x-studio-path': '/studio/elsewhere' };
-  const asked = proxy(studio('/studio/sign-in?returnTo=%2Fstudio', forged));
+  const asked = await proxy(studio('/studio/sign-in?returnTo=%2Fstudio', forged));
   assert.equal(
     asked.headers.get('x-middleware-request-x-studio-path'),
     '/studio/sign-in?returnTo=%2Fstudio',
   );
   // Outside /studio a client's header is dropped before the route sees it.
-  const outside = proxy(studio('/', forged));
+  const outside = await proxy(studio('/', forged));
   assert.equal(outside.headers.get('x-middleware-request-x-studio-path'), null);
   assert.doesNotMatch(outside.headers.get('x-middleware-override-headers') ?? '', /x-studio-path/);
   // So is a client's 404 mark, on every path it reaches the app on.
   for (const path of ['/', '/studio/sign-in']) {
-    const marked = proxy(studio(path, { 'x-portfolio-not-found': '1' }));
+    const marked = await proxy(studio(path, { 'x-portfolio-not-found': '1' }));
     assert.equal(marked.headers.get('x-middleware-request-x-portfolio-not-found'), null, path);
     assert.doesNotMatch(
       marked.headers.get('x-middleware-override-headers') ?? '',
@@ -524,10 +544,10 @@ test('a Studio page learns the path asked for from proxy.ts alone, never from th
   }
 });
 
-test('under owner a Studio page for a session, asked for with no session cookie, is a 303 to sign-in, kept to GET and HEAD', (t) => {
+test('under owner a Studio page for a session, asked for with no session cookie, is a 303 to sign-in, kept to GET and HEAD', async (t) => {
   deploy(t, 'owner');
   for (const method of ['GET', 'HEAD']) {
-    const response = proxy(studio('/studio', {}, method));
+    const response = await proxy(studio('/studio', {}, method));
     assert.equal(response.status, 303, method);
     assert.equal(response.headers.get('location'), 'https://rowan.test/studio/sign-in', method);
     assert.equal(response.headers.get('cache-control'), 'no-store');
@@ -535,23 +555,23 @@ test('under owner a Studio page for a session, asked for with no session cookie,
     assert.match(response.headers.get('x-request-id') ?? '', UUID);
   }
   // Where the owner was going comes along, made safe, on the canonical origin.
-  const deep = proxy(studio('/studio?tab=drafts', { host: 'attacker.test' }));
+  const deep = await proxy(studio('/studio?tab=drafts', { host: 'attacker.test' }));
   assert.equal(
     deep.headers.get('location'),
     'https://rowan.test/studio/sign-in?returnTo=%2Fstudio%3Ftab%3Ddrafts',
   );
   // With any cookie of the session's name, or for sign-in itself, the page decides.
   assert.equal(
-    proxy(studio('/studio', { cookie: '__Host-studio_session=anything' })).headers.get(
+    (await proxy(studio('/studio', { cookie: '__Host-studio_session=anything' }))).headers.get(
       'x-middleware-next',
     ),
     '1',
   );
-  assert.equal(proxy(studio('/studio/sign-in')).headers.get('x-middleware-next'), '1');
+  assert.equal((await proxy(studio('/studio/sign-in'))).headers.get('x-middleware-next'), '1');
   // A cookie of another name is no session cookie.
-  assert.equal(proxy(studio('/studio', { cookie: 'studio_session=anything' })).status, 303);
+  assert.equal((await proxy(studio('/studio', { cookie: 'studio_session=anything' }))).status, 303);
   // Another method goes on to the page, which answers it.
-  assert.equal(proxy(studio('/studio', {}, 'POST')).headers.get('x-middleware-next'), '1');
+  assert.equal((await proxy(studio('/studio', {}, 'POST'))).headers.get('x-middleware-next'), '1');
 });
 
 const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -595,44 +615,54 @@ function previewHeaderProblems(response: Response): string[] {
 
 test("every preview response, in any case or percent-encoding, gets the preview's CSP with a nonce of its own, noindex, no-referrer, and private, no-store, 404s included (#7)", async (t) => {
   for (const profile of ['owner', 'demo', 'read-only'] as const) {
-    deploy(t, profile);
+    deploy(t, profile, profile === 'owner' ? grantsPort().port : undefined);
     const nonces = new Set<string>();
     for (const path of PREVIEW_PATHS) {
-      // No preview route serves anything in this build, so each is a path no
-      // route matches: on to Next's 404 page for GET and HEAD, under these
-      // headers. The dev fixture route, which the table lists and only `next
-      // dev` serves, goes there through the beforeFiles rewrite.
+      // Under demo and read-only no grant route is served, so each is a path
+      // no route matches: on to Next's 404 page for GET and HEAD. The dev
+      // fixture route, which the table lists and only `next dev` serves, goes
+      // there through the beforeFiles rewrite. Under owner, with no grant
+      // active, each is the status document (Slice 2).
       for (const method of ['GET', 'HEAD']) {
-        const response = proxy(request(path, method));
+        const response = await proxy(request(path, method));
         const what = `${profile} ${method} ${path}`;
-        if (path === '/preview/dev/fallback/complete') {
-          assert.equal(
-            response.headers.get('x-middleware-request-x-portfolio-not-found'),
-            '1',
-            what,
-          );
-        } else {
-          assert.equal(decision(response), 'missing', what);
-        }
         const csp = response.headers.get('content-security-policy') ?? '';
         const nonce = previewPolicy('https://rowan.test').exec(csp)?.[1];
         assert.ok(nonce, `${what}: ${csp}`);
         nonces.add(nonce);
+        assert.deepEqual(previewHeaderProblems(response), [], what);
+        assert.equal(response.headers.get('x-middleware-request-x-studio-path'), null, what);
+        if (profile === 'owner') {
+          assert.equal(response.status, 404, what);
+          assert.equal(decision(response), null, what);
+          assert.equal(await response.text(), PREVIEW_STATUS_DOCUMENT, what);
+          continue;
+        }
+        // A path the table calls missing, or a grant route the profile
+        // doesn't serve, marked for the 404 page as Studio's are (#2).
+        assert.ok(
+          decision(response) === 'missing' ||
+            response.headers.get('x-middleware-request-x-portfolio-not-found') === '1',
+          what,
+        );
         // On the request too, so Next puts the nonce on the page's scripts and styles.
         assert.equal(
           response.headers.get('x-middleware-request-content-security-policy'),
           csp,
           what,
         );
-        assert.deepEqual(previewHeaderProblems(response), [], what);
-        assert.equal(response.headers.get('x-middleware-request-x-studio-path'), null, what);
       }
-      // Any other method is the plain 404, under the same headers.
+      // Any other method is the plain 404, or under owner the status
+      // document, under the same headers.
       for (const method of ['POST', 'PUT', 'DELETE', 'OPTIONS']) {
-        const response = proxy(request(path, method));
+        const response = await proxy(request(path, method));
         const what = `${profile} ${method} ${path}`;
         assert.equal(response.status, 404, what);
-        assert.equal(await response.text(), 'Not found.', what);
+        assert.equal(
+          await response.text(),
+          profile === 'owner' ? PREVIEW_STATUS_DOCUMENT : 'Not found.',
+          what,
+        );
         const csp = response.headers.get('content-security-policy') ?? '';
         const nonce = previewPolicy('https://rowan.test').exec(csp)?.[1];
         assert.ok(nonce, `${what}: ${csp}`);
@@ -644,12 +674,22 @@ test("every preview response, in any case or percent-encoding, gets the preview'
   }
 });
 
-test('a preview request reaches Next without its Cookie header, so no preview route reads a session or a preference (#7)', (t) => {
+test('a preview request reaches Next without its Cookie header, so no preview route reads a session or a preference (#7)', async (t) => {
   const cookie = '__Host-studio_session=anything; studio_session=anything; theme=dark';
   for (const profile of ['owner', 'demo', 'read-only'] as const) {
-    deploy(t, profile);
-    for (const path of PREVIEW_PATHS) {
-      const response = proxy(new NextRequest(`https://rowan.test${path}`, { headers: { cookie } }));
+    deploy(t, profile, profile === 'owner' ? grantsPort().port : undefined);
+    // Under owner only an active grant's frame load goes on to Next; every
+    // other preview request is answered here, and never reaches a route.
+    const paths =
+      profile === 'owner'
+        ? [`/preview/${ACTIVE}`, `/preview/${ACTIVE}?displayMode=dark`]
+        : PREVIEW_PATHS;
+    for (const path of paths) {
+      const response = await proxy(
+        new NextRequest(`https://rowan.test${path}`, {
+          headers: { cookie, 'sec-fetch-dest': 'iframe' },
+        }),
+      );
       const what = `${profile} ${path}`;
       assert.equal(response.headers.get('x-middleware-next'), '1', what);
       // Next drops every request header the override list leaves out.
@@ -662,7 +702,9 @@ test('a preview request reaches Next without its Cookie header, so no preview ro
     }
     // Any other path keeps the cookies it came with.
     for (const path of ['/', '/previews', '/no-such-page']) {
-      const response = proxy(new NextRequest(`https://rowan.test${path}`, { headers: { cookie } }));
+      const response = await proxy(
+        new NextRequest(`https://rowan.test${path}`, { headers: { cookie } }),
+      );
       assert.equal(
         response.headers.get('x-middleware-request-cookie'),
         cookie,
@@ -672,24 +714,177 @@ test('a preview request reaches Next without its Cookie header, so no preview ro
   }
 });
 
-test("before startup a preview path's 503 keeps the preview's headers, and nothing may frame it (#7)", () => {
+/** A request with Fetch Metadata's destination, as a browser sends it, and a session cookie. */
+function loaded(path: string, destination: string | null, method = 'GET'): NextRequest {
+  return new NextRequest(`https://rowan.test${path}`, {
+    method,
+    headers: {
+      cookie: 'studio_session=anything',
+      ...(destination === null ? {} : { 'sec-fetch-dest': destination }),
+    },
+  });
+}
+
+/** What proxy.ts answers for itself with the status document: never on to Next. */
+async function assertStatusDocument(response: Response, what: string) {
+  assert.equal(response.status, 404, what);
+  assert.equal(response.headers.get('x-middleware-next'), null, what);
+  assert.equal(response.headers.get('content-type'), 'text/html; charset=utf-8', what);
+  assert.equal(response.headers.get('set-cookie'), null, what);
+  assert.match(
+    response.headers.get('content-security-policy') ?? '',
+    previewPolicy('https://rowan.test'),
+    what,
+  );
+  assert.deepEqual(previewHeaderProblems(response), [], what);
+  assert.equal(await response.text(), PREVIEW_STATUS_DOCUMENT, what);
+}
+
+test('under owner a grant path goes on to Next only as an iframe document load, or an asset load of an image, video, audio, track, or font, for a grant the owner composition finds active (#7)', async (t) => {
+  const { port, checked } = grantsPort();
+  deploy(t, 'owner', port);
+  const asset = (grant: string) => `/preview-assets/${grant}/a1/${'0'.repeat(64)}/large.webp`;
+  const admitted: [string, string, string][] = [
+    [`/preview/${ACTIVE}`, 'iframe', 'GET'],
+    [`/preview/${ACTIVE}`, 'iframe', 'HEAD'],
+    ...['image', 'video', 'audio', 'track', 'font'].map(
+      (destination) => [asset(ACTIVE), destination, 'GET'] as [string, string, string],
+    ),
+  ];
+  for (const [path, destination, method] of admitted) {
+    const response = await proxy(loaded(path, destination, method));
+    const what = `${method} ${path} as ${destination}`;
+    assert.equal(decision(response), 'served', what);
+    // Without its cookie, and with the CSP's nonce on the request.
+    assert.equal(response.headers.get('x-middleware-request-cookie'), null, what);
+    assert.equal(
+      response.headers.get('x-middleware-request-content-security-policy'),
+      response.headers.get('content-security-policy'),
+      what,
+    );
+    assert.deepEqual(previewHeaderProblems(response), [], what);
+  }
+  checked.length = 0;
+
+  // A top-level load, a wrong destination, or no Fetch Metadata at all:
+  // turned away before the grant is even read.
+  const misdirected: [string, string | null][] = [
+    ...[null, 'document', 'empty', 'image', 'script', 'style', 'object', 'embed', 'frame'].map(
+      (destination) => [`/preview/${ACTIVE}`, destination] as [string, string | null],
+    ),
+    ...[null, 'document', 'iframe', 'empty', 'script', 'style'].map(
+      (destination) => [asset(ACTIVE), destination] as [string, string | null],
+    ),
+  ];
+  for (const [path, destination] of misdirected) {
+    await assertStatusDocument(await proxy(loaded(path, destination)), `${path} as ${destination}`);
+  }
+  for (const method of ['POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS']) {
+    await assertStatusDocument(await proxy(loaded(`/preview/${ACTIVE}`, 'iframe', method)), method);
+  }
+  // Spelled so Next routes it elsewhere: not a grant path to Next.
+  await assertStatusDocument(await proxy(loaded(`/%70review/${ACTIVE}`, 'iframe')), 'encoded');
+  assert.deepEqual(checked, [], 'none of those asked about the grant');
+
+  // A grant that isn't active, or that names none.
+  for (const grant of [ENDED, 'local', 'x', `${ACTIVE}x`]) {
+    await assertStatusDocument(await proxy(loaded(`/preview/${grant}`, 'iframe')), grant);
+    await assertStatusDocument(await proxy(loaded(asset(grant), 'image')), `${grant} asset`);
+  }
+  assert.deepEqual(checked, [ENDED, ENDED, 'local', 'local', 'x', 'x', `${ACTIVE}x`, `${ACTIVE}x`]);
+});
+
+test('a grant path never goes to sign-in, and the status document is the one answer for every reason it turns a request away (#7)', async (t) => {
+  deploy(t, 'owner', grantsPort().port);
+  const shape = async (response: Response) => ({
+    status: response.status,
+    location: response.headers.get('location'),
+    type: response.headers.get('content-type'),
+    cache: response.headers.get('cache-control'),
+    body: await response.text(),
+  });
+  const reasons = [
+    loaded(`/preview/${ENDED}`, 'iframe'),
+    loaded(`/preview/${ACTIVE}`, 'document'),
+    loaded(`/preview/${ACTIVE}`, null),
+    loaded(`/preview/${ACTIVE}`, 'iframe', 'POST'),
+    loaded(`/preview/${ACTIVE}/no-such-view`, 'iframe'),
+    loaded('/preview', 'iframe'),
+    loaded(`/preview-assets/${ENDED}/x`, 'image'),
+    new NextRequest(`https://rowan.test/preview/${ENDED}`),
+  ];
+  const answers = await Promise.all(reasons.map(async (each) => shape(await proxy(each))));
+  for (const answer of answers) assert.deepEqual(answer, answers[0]);
+  assert.equal(answers[0]!.status, 404);
+  assert.equal(answers[0]!.location, null);
+  assert.equal(answers[0]!.cache, 'private, no-store');
+});
+
+test('a port that fails to check a grant admits nothing (#7)', async (t) => {
+  deploy(t, 'owner', {
+    admit: () => Promise.reject(new Error('the data directory is gone')),
+    open: () => assert.fail('proxy.ts opens no grant'),
+  });
+  await assertStatusDocument(await proxy(loaded(`/preview/${ACTIVE}`, 'iframe')), 'failed check');
+});
+
+test('a trailing slash is a 308 to the path without it, under the headers its path gets: a preview path, grant or not, gets private, no-store (#7)', async (t) => {
+  const { port, checked } = grantsPort();
+  deploy(t, 'owner', port);
+  const redirect = async (path: string, to: string) => {
+    const response = await proxy(loaded(path, 'iframe'));
+    assert.equal(response.status, 308, path);
+    assert.equal(response.headers.get('location'), `https://rowan.test${to}`, path);
+    assert.equal(response.headers.get('x-middleware-next'), null, path);
+    assert.match(response.headers.get('x-request-id') ?? '', UUID, path);
+    return response;
+  };
+  for (const [path, to] of [
+    [`/preview/${ACTIVE}/`, `/preview/${ACTIVE}`],
+    [`/preview/${ENDED}/`, `/preview/${ENDED}`],
+    [`/preview/${ACTIVE}/work/x/?displayMode=dark`, `/preview/${ACTIVE}/work/x?displayMode=dark`],
+    [`/preview-assets/${ACTIVE}/a/b/`, `/preview-assets/${ACTIVE}/a/b`],
+    ['/preview/', '/preview'],
+  ]) {
+    const response = await redirect(path!, to!);
+    assert.deepEqual(previewHeaderProblems(response), [], path);
+    assert.match(
+      response.headers.get('content-security-policy') ?? '',
+      previewPolicy('https://rowan.test'),
+    );
+  }
+  assert.deepEqual(checked, [], 'the 308 never depends on a grant');
+  // Elsewhere, the 308 Next sent, with that path's own headers.
+  const work = await redirect('/work/x/?a=1', '/work/x?a=1');
+  assert.equal(work.headers.get('cache-control'), null);
+  assert.equal(work.headers.get('content-security-policy'), null);
+  const studio = await redirect('/studio/', '/studio');
+  assert.match(studio.headers.get('content-security-policy') ?? '', STUDIO_CSP);
+  assert.equal((await proxy(request('/'))).headers.get('x-middleware-next'), '1');
+  // Under a profile with no grant route, a preview path's 308 is the same.
+  deploy(t, 'demo');
+  const demo = await redirect('/preview/x/', '/preview/x');
+  assert.deepEqual(previewHeaderProblems(demo), [], 'demo');
+});
+
+test("before startup a preview path's 503 keeps the preview's headers, and nothing may frame it (#7)", async () => {
   setDeploymentState(undefined);
   for (const path of ['/preview/editorial', '/preview-assets/g/x.png', '/%70review']) {
-    const response = proxy(request(path));
+    const response = await proxy(request(path));
     assert.equal(response.status, 503, path);
     assert.match(response.headers.get('content-security-policy') ?? '', previewPolicy("'none'"));
     assert.deepEqual(previewHeaderProblems(response), [], path);
   }
-  const other = proxy(request('/'));
+  const other = await proxy(request('/'));
   assert.equal(other.headers.get('content-security-policy'), null);
   assert.equal(other.headers.get('cache-control'), 'no-store');
 });
 
-test("no response outside /preview and /preview-assets gets the preview's headers, and Studio's stay Studio's (#7)", (t) => {
+test("no response outside /preview and /preview-assets gets the preview's headers, and Studio's stay Studio's (#7)", async (t) => {
   for (const profile of ['owner', 'demo', 'read-only'] as const) {
     deploy(t, profile);
     for (const path of ['/', '/sample', '/previews', '/preview-asset', '/api/health', '/nowhere']) {
-      const response = proxy(request(path));
+      const response = await proxy(request(path));
       const what = `${profile} ${path}`;
       assert.doesNotMatch(
         response.headers.get('content-security-policy') ?? '',
@@ -703,7 +898,7 @@ test("no response outside /preview and /preview-assets gets the preview's header
   }
   deploy(t, 'owner');
   assert.match(
-    proxy(studio('/studio/sign-in')).headers.get('content-security-policy') ?? '',
+    (await proxy(studio('/studio/sign-in'))).headers.get('content-security-policy') ?? '',
     STUDIO_CSP,
   );
 });
@@ -712,12 +907,12 @@ test('under the prefixes next.config.ts lets any origin read, only a GET or HEAD
   for (const profile of ['owner', 'demo', 'read-only'] as const) {
     deploy(t, profile);
     for (const method of ['GET', 'HEAD']) {
-      const asset = proxy(request('/_next/static/chunks/app.js', method));
+      const asset = await proxy(request('/_next/static/chunks/app.js', method));
       assert.equal(asset.headers.get('x-middleware-next'), '1', `${profile} ${method}`);
       assert.equal(decision(asset), 'unlisted', `${profile} ${method}`);
       // #19's compiled packs, which the registry writes into public/_portfolio/pack/.
       // Marked missing, so one that isn't there gets the 404 page after Next looks in public/.
-      const pack = proxy(request('/_portfolio/pack/0123456789ab.css', method));
+      const pack = await proxy(request('/_portfolio/pack/0123456789ab.css', method));
       assert.equal(pack.headers.get('x-middleware-next'), '1', `${profile} ${method}`);
       assert.equal(decision(pack), 'missing', `${profile} ${method}`);
     }
@@ -737,14 +932,14 @@ test('under the prefixes next.config.ts lets any origin read, only a GET or HEAD
       ['/_portfolio/pack/0123456789ab.css', 'POST'],
       ['/_portfolio/pack/0123456789ab.css', 'OPTIONS'],
     ] as const) {
-      const response = proxy(request(path, method));
+      const response = await proxy(request(path, method));
       const what = `${profile} ${method} ${path}`;
       assert.equal(response.status, 404, what);
       assert.equal(response.headers.get('content-type'), 'text/plain; charset=utf-8', what);
       assert.equal(await response.text(), 'Not found.', what);
     }
     // A path that only starts the same is any other path.
-    assert.equal(decision(proxy(request('/_portfolios/x'))), 'missing', profile);
-    assert.equal(decision(proxy(request('/_next/statics/x'))), 'unlisted', profile);
+    assert.equal(decision(await proxy(request('/_portfolios/x'))), 'missing', profile);
+    assert.equal(decision(await proxy(request('/_next/statics/x'))), 'unlisted', profile);
   }
 });

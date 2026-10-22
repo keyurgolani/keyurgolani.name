@@ -29,6 +29,8 @@ export const DEPLOYMENT_KEYS = {
   PORTFOLIO_AUTH_PASSWORD_HASH: ['owner'],
   PORTFOLIO_AUTH_SESSION_IDLE_MINUTES: ['owner'],
   PORTFOLIO_AUTH_SESSION_MAX_HOURS: ['owner'],
+  PORTFOLIO_PREVIEW_GRANT_IDLE_TTL_SECONDS: ['owner'],
+  PORTFOLIO_PREVIEW_GRANT_MAX_TTL_SECONDS: ['owner'],
   GITHUB_TOKEN: ['owner'],
 } as const satisfies Record<string, readonly Profile[]>;
 export type DeploymentKey = keyof typeof DEPLOYMENT_KEYS;
@@ -55,6 +57,29 @@ export const SESSION_LIFETIME_KEYS = {
   },
 } as const;
 
+/**
+ * The preview grant lifetimes (#7, Slice 2): each setting's default and the
+ * whole numbers it may be set to, and the idle limit may not pass the cap.
+ * @portfolio/core's GRANT_LIFETIME and GRANT_LIFETIME_RANGE hold the same
+ * numbers, which a test checks.
+ */
+export const PREVIEW_GRANT_LIFETIME_KEYS = {
+  PORTFOLIO_PREVIEW_GRANT_IDLE_TTL_SECONDS: {
+    field: 'idleSeconds',
+    unit: 'seconds',
+    default: 900,
+    min: 60,
+    max: 3600,
+  },
+  PORTFOLIO_PREVIEW_GRANT_MAX_TTL_SECONDS: {
+    field: 'maxSeconds',
+    unit: 'seconds',
+    default: 7200,
+    min: 300,
+    max: 43200,
+  },
+} as const;
+
 /** Removed settings, each with the key that replaced it. Setting one is fatal. */
 export const REPLACED_KEYS = {
   PORTFOLIO_PATH: 'PORTFOLIO_SOURCE_DIR',
@@ -76,6 +101,8 @@ export interface DeploymentConfig {
   readonly dataDir?: string;
   /** How long an owner session lasts (`owner`): idle, and at most. */
   readonly sessionLifetime?: Readonly<{ idleMinutes: number; maxHours: number }>;
+  /** How long a preview grant lasts (`owner`): idle, and at most (#7). */
+  readonly previewGrantLifetime?: Readonly<{ idleSeconds: number; maxSeconds: number }>;
   readonly secrets: Readonly<{ authPasswordHash?: string; githubToken?: string }>;
   /** The variable each set secret came from, for a diagnostic that names it. */
   readonly secretKeys?: Readonly<{ authPasswordHash?: string }>;
@@ -377,6 +404,35 @@ export function readDeploymentConfig(env: Env, options: ReadConfigOptions): Read
       lifetime[setting.field] = Number(resolved.value);
     }
   }
+  const grantLifetime = {
+    idleSeconds: PREVIEW_GRANT_LIFETIME_KEYS.PORTFOLIO_PREVIEW_GRANT_IDLE_TTL_SECONDS
+      .default as number,
+    maxSeconds: PREVIEW_GRANT_LIFETIME_KEYS.PORTFOLIO_PREVIEW_GRANT_MAX_TTL_SECONDS
+      .default as number,
+  };
+  let grantLifetimeRead = true;
+  for (const [key, setting] of Object.entries(PREVIEW_GRANT_LIFETIME_KEYS)) {
+    const resolved = resolveFor(key as keyof typeof PREVIEW_GRANT_LIFETIME_KEYS);
+    if (resolved.state === 'invalid') grantLifetimeRead = false;
+    if (resolved.state !== 'set') continue;
+    const range = `${setting.min} to ${setting.max} ${setting.unit}`;
+    if (!/^\d+$/.test(resolved.value)) {
+      fatal(key, 'invalid', `${key} must be a whole number of ${setting.unit}: ${range}.`);
+      grantLifetimeRead = false;
+    } else if (Number(resolved.value) < setting.min || Number(resolved.value) > setting.max) {
+      fatal(key, 'out_of_range', `${key} must be ${range}.`);
+      grantLifetimeRead = false;
+    } else {
+      grantLifetime[setting.field] = Number(resolved.value);
+    }
+  }
+  if (grantLifetimeRead && grantLifetime.idleSeconds > grantLifetime.maxSeconds) {
+    fatal(
+      'PORTFOLIO_PREVIEW_GRANT_IDLE_TTL_SECONDS',
+      'exceeds_max',
+      'PORTFOLIO_PREVIEW_GRANT_IDLE_TTL_SECONDS may not exceed PORTFOLIO_PREVIEW_GRANT_MAX_TTL_SECONDS.',
+    );
+  }
   const hashValue = resolveFor('PORTFOLIO_AUTH_PASSWORD_HASH');
   const authPasswordHash = valueOf(hashValue);
   const githubToken = valueOf(resolveFor('GITHUB_TOKEN'));
@@ -404,7 +460,12 @@ export function readDeploymentConfig(env: Env, options: ReadConfigOptions): Read
     ...(dataDir !== undefined
       ? { dataDir: path.resolve(/*turbopackIgnore: true*/ options.cwd, dataDir) }
       : {}),
-    ...(profile === 'owner' ? { sessionLifetime: Object.freeze(lifetime) } : {}),
+    ...(profile === 'owner'
+      ? {
+          sessionLifetime: Object.freeze(lifetime),
+          previewGrantLifetime: Object.freeze(grantLifetime),
+        }
+      : {}),
     secrets: Object.freeze({
       ...(authPasswordHash !== undefined ? { authPasswordHash } : {}),
       ...(githubToken !== undefined ? { githubToken } : {}),

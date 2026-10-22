@@ -1061,7 +1061,12 @@ test("what every profile serves, with #2's Studio pages under owner alone", () =
   ];
   // The site's own routes (#5, Slice 4): a variant's path views, and work.
   const site = ['/[...view]', '/feed.xml', '/work/[slug]', '/work/[slug]/[...view]'];
-  assert.deepEqual(served('owner'), [...everywhere, ...site, '/studio', '/studio/sign-in'].sort());
+  // A preview grant's frame and its draft-only assets (#7, Slice 2): owner alone mints grants.
+  const grants = ['/preview/[grant]/[[...route]]', '/preview-assets/[grant]/[...path]'];
+  assert.deepEqual(
+    served('owner'),
+    [...everywhere, ...site, '/studio', '/studio/sign-in', ...grants].sort(),
+  );
   assert.deepEqual(served('read-only'), [...everywhere, ...site].sort());
   // The bundled sample, and every route under it.
   assert.deepEqual(served('demo'), [...everywhere, '/sample/[[...path]]'].sort());

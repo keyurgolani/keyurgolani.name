@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import { PREVIEW_STATUS, PREVIEW_STATUS_DOCUMENT, PREVIEW_STATUS_TYPE } from './preview/status';
 import { INDEXABLE, type Profile } from './server/capabilities';
-import { getDeploymentConfig, isServable } from './server/config-store';
+import { getDeploymentConfig, getDeploymentState, isServable } from './server/config-store';
 import { isPreviewPath, previewCsp, previewHeaders } from './server/preview-headers';
 import { READY_PATH, STARTING, STARTING_HEADERS } from './server/ready-starting';
 import { safeReturnTo, signInLocation } from './server/return-to';
@@ -11,6 +12,8 @@ import {
   ROUTE_HEADER,
   routeAccess,
   spellsRouteFile,
+  type RouteDecision,
+  type RouteEntry,
 } from './server/routes';
 import { readCookies, sessionCookieName } from './server/session-cookie';
 import {
@@ -45,13 +48,29 @@ import {
 // on the request too, for the scripts and styles Next renders, and its
 // noindex, no-referrer, and private, no-store headers, before startup
 // included. Those requests reach Next without their Cookie header, so no
-// preview route reads a session or a visitor's preference. A preview route
-// this build doesn't serve, such as the dev fixture route outside `next
-// dev`, answers as a path no route matches, in any spelling. Under the
-// prefixes next.config.ts serves with Access-Control-Allow-Origin: *, only
-// a GET or HEAD of a file there, the build's assets and public/_portfolio/'s,
-// spelled as Next serves them, and a route the table serves get past here;
-// anything else there is the plain 404.
+// preview route reads a session or a visitor's preference. Under a profile
+// with no grant route, a preview route this build doesn't serve, such as the
+// dev fixture route outside `next dev`, answers as a path no route matches,
+// in any spelling. Under the prefixes next.config.ts serves with
+// Access-Control-Allow-Origin: *, only a GET or HEAD of a file there, the
+// build's assets and public/_portfolio/'s, spelled as Next serves them, and a
+// route the table serves get past here; anything else there is the plain 404.
+//
+// Under a profile that serves grant routes (owner, #7 Slice 2), this is
+// where a grant path is checked, every request: only a GET or HEAD of a
+// frame's document with Sec-Fetch-Dest: iframe, or of a draft-only asset
+// with an image, video, audio, track, or font destination, for a grant the
+// owner composition finds active, goes on to Next. Every other request under
+// the preview prefixes, a path no grant route serves included, gets one
+// status document, 404, under the preview's headers, whatever the reason,
+// and a grant path never goes to sign-in: its grant is its authority, never
+// a cookie. A preview route that isn't a grant's, the dev fixture route
+// under `next dev`, goes on as any route does.
+//
+// A path with a trailing slash gets a 308 to the path without it, as Next
+// sent before next.config.ts turned its own off (#7): this one carries the
+// headers its path gets, so a preview path's is private, no-store, and its
+// answer never depends on a grant.
 //
 // For Studio (#2), under a profile with a Studio page, it sends the nonce
 // CSP, Referrer-Policy: same-origin, and Cross-Origin-Resource-Policy:
@@ -64,7 +83,7 @@ import {
 // every Studio path, in any case or spelling and to any method, answers as
 // /no-such-page does: none of Studio's headers, Next's 404 page for GET and
 // HEAD, and the plain 404 for the rest.
-export function proxy(request: NextRequest): NextResponse {
+export async function proxy(request: NextRequest): Promise<NextResponse> {
   const requestId = crypto.randomUUID();
   const deployment = getDeploymentConfig();
   if (!deployment) {
@@ -98,6 +117,10 @@ export function proxy(request: NextRequest): NextResponse {
   }
   if (preview && csp) Object.assign(extra, previewHeaders(csp));
 
+  // The 308 Next sent itself for a trailing slash, now with the path's headers.
+  const sent = sentPath(request);
+  if (sent.length > 1 && sent.endsWith('/')) return trailingSlash(request, sent, requestId, extra);
+
   // Only GET and HEAD load a page: any other method to a path no route
   // answers is the plain 404.
   const pageLoad = request.method === 'GET' || request.method === 'HEAD';
@@ -115,10 +138,17 @@ export function proxy(request: NextRequest): NextResponse {
   ) {
     return plain(404, 'Not found.', requestId, extra);
   }
+  // A grant path, and everything else under the preview prefixes, under a
+  // profile with grant routes: admitted on to Next, or the status document.
+  if (preview && hasGrants(deployment.profile)) {
+    const gated = await previewGate(request, decision, { pathname, requestId, extra, csp });
+    if (gated) return gated;
+  }
   if (decision.status === 'absent') {
     // A Studio page under a profile with none, and a preview route this
     // build doesn't serve, such as the dev fixture route outside `next dev`,
-    // answer as a path no route matches.
+    // under a profile with no grant route, answer as a path no route
+    // matches. Under one with grant routes, the gate above has answered.
     if ((preview || (studioPath && !studio)) && pageLoad) {
       return unknownPath(request, requestId, extra, { csp, preview });
     }
@@ -187,6 +217,125 @@ function hasStudio(profile: Profile): boolean {
     studioProfiles.set(profile, known);
   }
   return known;
+}
+
+/** Whether `profile` serves a route a preview grant authorizes, by the route table. */
+const grantProfiles = new Map<Profile, boolean>();
+function hasGrants(profile: Profile): boolean {
+  let known = grantProfiles.get(profile);
+  if (known === undefined) {
+    known = listRoutes().some(
+      (entry) => entry.grant !== undefined && routeAccess(profile, entry) !== 'absent',
+    );
+    grantProfiles.set(profile, known);
+  }
+  return known;
+}
+
+/** What each kind of grant route may be loaded as, by Sec-Fetch-Dest (#7, Slice 2, item 8). */
+const GRANT_DESTINATIONS: Readonly<Record<NonNullable<RouteEntry['grant']>, ReadonlySet<string>>> =
+  {
+    document: new Set(['iframe']),
+    asset: new Set(['image', 'video', 'audio', 'track', 'font']),
+  };
+
+interface Gate {
+  readonly pathname: string;
+  readonly requestId: string;
+  readonly extra: Record<string, string>;
+  readonly csp?: string;
+}
+
+/**
+ * A request under the preview prefixes, under a profile with grant routes:
+ * on to Next when the grant route admits it, or the status document. A
+ * preview route that isn't a grant's gets null, and is answered as any
+ * route is.
+ */
+async function previewGate(
+  request: NextRequest,
+  decision: RouteDecision,
+  { pathname, requestId, extra, csp }: Gate,
+): Promise<NextResponse | null> {
+  const entry = decision.status === 'served' ? decision.entry : undefined;
+  if (entry && entry.grant === undefined) return null;
+  if (!entry || !(await admits(request, entry, pathname))) return statusDocument(requestId, extra);
+  const headers = forwarded(request, requestId, { csp, preview: true });
+  headers.set(ROUTE_HEADER, decision.status);
+  const response = NextResponse.next({ request: { headers } });
+  response.headers.set('x-request-id', requestId);
+  for (const [name, value] of Object.entries(extra)) response.headers.set(name, value);
+  return response;
+}
+
+/**
+ * Whether a grant route takes the request: a GET or HEAD, spelled as Next
+ * routes it there, from the destination the route serves, for a grant the
+ * owner composition finds active now. The check reads the grant and the
+ * session it's bound to by digest, never a cookie, and never throws.
+ */
+async function admits(request: NextRequest, entry: RouteEntry, pathname: string): Promise<boolean> {
+  if (request.method !== 'GET' && request.method !== 'HEAD') return false;
+  if (!entry.grant || encodesFixedSegment(entry.pattern, pathname)) return false;
+  const destination = request.headers.get('sec-fetch-dest');
+  if (destination === null || !GRANT_DESTINATIONS[entry.grant].has(destination)) return false;
+  const grant = grantSegment(pathname);
+  const previews = getDeploymentState()?.previews;
+  if (grant === null || !previews) return false;
+  // The port never throws; if it ever did, nothing is admitted.
+  return previews.admit(grant).catch(() => false);
+}
+
+/** The grant a grant path names: its second segment, decoded as the route table reads it. */
+function grantSegment(pathname: string): string | null {
+  const segment = pathname.split('/').filter((part) => part !== '')[1];
+  if (segment === undefined) return null;
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    return null;
+  }
+}
+
+/** The status document (#7, Slice 2, item 8), under the preview's headers in `extra`. */
+function statusDocument(requestId: string, extra: Record<string, string>): NextResponse {
+  return new NextResponse(PREVIEW_STATUS_DOCUMENT, {
+    status: PREVIEW_STATUS,
+    headers: { 'content-type': PREVIEW_STATUS_TYPE, 'x-request-id': requestId, ...extra },
+  });
+}
+
+/**
+ * The path as the request sent it, before anything normalizes it, for the
+ * trailing slash. Next answers a repeated slash or a backslash with its own
+ * 308 before anything here runs.
+ */
+function sentPath(request: NextRequest): string {
+  try {
+    return new URL(request.url).pathname;
+  } catch {
+    return request.nextUrl.pathname;
+  }
+}
+
+/**
+ * The 308 to the path without its trailing slash, with the query, as Next
+ * sent before next.config.ts turned its own off. Next writes the Location
+ * on the request's own host as a path, and makes the body that path.
+ */
+function trailingSlash(
+  request: NextRequest,
+  sent: string,
+  requestId: string,
+  extra: Record<string, string>,
+): NextResponse {
+  const response = NextResponse.redirect(
+    new URL(`${sent.slice(0, -1)}${request.nextUrl.search}`, request.url),
+    308,
+  );
+  response.headers.set('x-request-id', requestId);
+  for (const [name, value] of Object.entries(extra)) response.headers.set(name, value);
+  return response;
 }
 
 /**

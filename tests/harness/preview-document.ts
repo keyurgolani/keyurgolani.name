@@ -2,7 +2,7 @@
 // preview (#7, AC1): the sentinel custom property only host-chrome.css
 // defines, every selector of every stylesheet the document loaded, its
 // scripts, and its markup, plus every CSP violation the page raised (AC6).
-import type { Page } from '@playwright/test';
+import type { Frame, Page } from '@playwright/test';
 
 /** The custom property host-chrome.css defines on :root, and nothing else does. */
 export const STUDIO_SENTINEL = '--studio-sentinel';
@@ -28,16 +28,22 @@ export async function recordViolations(page: Page): Promise<void> {
   });
 }
 
-/** The violations recordViolations saw so far. */
-export const violations = (page: Page): Promise<string[]> =>
+/** The violations recordViolations saw so far, in the page or in one of its frames. */
+export const violations = (page: Page | Frame): Promise<string[]> =>
   page.evaluate(() => window.__cspViolations ?? []);
 
 /** What a loaded document holds, as AC1's inventory reads it. */
 export interface DocumentInventory {
   /** The sentinel's value on the root element: empty unless host-chrome.css loaded. */
   readonly sentinel: string;
-  /** Every selector of every rule in every stylesheet, inside at-rules too. */
+  /** Every selector of every rule in every stylesheet it may read, inside at-rules too. */
   readonly selectors: readonly string[];
+  /**
+   * The path of every stylesheet it loaded. A preview frame's opaque origin
+   * can't read the rules of the ones it loads from the app, so these name
+   * them for the caller to compare.
+   */
+  readonly stylesheets: readonly string[];
   /** The src of every script element. */
   readonly scripts: readonly string[];
   /** Inline scripts that run (not JSON-LD) without the response's nonce. */
@@ -48,18 +54,28 @@ export interface DocumentInventory {
   readonly passwordFields: number;
 }
 
-/** Reads the inventory of the page's current document, whose CSP nonce is `nonce`. */
-export function inventory(page: Page, nonce: string): Promise<DocumentInventory> {
+/** Reads the inventory of the page's or the frame's current document, whose CSP nonce is `nonce`. */
+export function inventory(page: Page | Frame, nonce: string): Promise<DocumentInventory> {
   return page.evaluate(
     ({ sentinel, nonce: expected }) => {
       const selectors: string[] = [];
+      const stylesheets: string[] = [];
       const walk = (rules: CSSRuleList) => {
         for (const rule of Array.from(rules)) {
           if (rule instanceof CSSStyleRule) selectors.push(rule.selectorText);
           if ('cssRules' in rule && rule.cssRules) walk(rule.cssRules as CSSRuleList);
         }
       };
-      for (const sheet of Array.from(document.styleSheets)) walk(sheet.cssRules);
+      for (const sheet of Array.from(document.styleSheets)) {
+        if (sheet.href) stylesheets.push(new URL(sheet.href).pathname);
+        let rules: CSSRuleList | null = null;
+        try {
+          rules = sheet.cssRules;
+        } catch {
+          // Another origin's sheet, as every one is to an opaque frame.
+        }
+        if (rules) walk(rules);
+      }
       const scripts = Array.from(document.scripts);
       const classes = new Set<string>();
       for (const element of Array.from(document.body.querySelectorAll('[class]'))) {
@@ -69,6 +85,7 @@ export function inventory(page: Page, nonce: string): Promise<DocumentInventory>
       return {
         sentinel: getComputedStyle(document.documentElement).getPropertyValue(sentinel).trim(),
         selectors,
+        stylesheets,
         scripts: scripts.flatMap((script) => (script.src ? [new URL(script.src).pathname] : [])),
         unnoncedInline: scripts.filter(
           (script) =>

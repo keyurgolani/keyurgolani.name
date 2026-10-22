@@ -1,5 +1,6 @@
 import type { CatalogReader } from './catalog-port';
 import type { DeploymentConfig } from './config';
+import type { PreviewGrantsPort } from './preview-port';
 import type { Dispatch, StudioPages } from './studio-port';
 
 // Holds what instrumentation register() validated and built, frozen, on a
@@ -17,6 +18,8 @@ export interface DeploymentState {
   readonly degraded: readonly string[];
   /** How Studio pages find their session (#2). Only owner's composition binds it. */
   readonly pages?: StudioPages;
+  /** How grant paths are checked and what they render (#7). Only owner's composition binds it. */
+  readonly previews?: PreviewGrantsPort;
 }
 
 export const NOT_LOADED =

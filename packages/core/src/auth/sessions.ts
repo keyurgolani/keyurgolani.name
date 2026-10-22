@@ -1,5 +1,6 @@
 import type { AuditSink, OwnerLog } from '../audit/sink';
 import { recordOwnerModule } from '../load-trace';
+import { DIGEST } from './session-files.mjs';
 import type { SessionRecord, SessionStore, UaFamily } from './session-store';
 import { isSessionToken, newSessionToken, sessionDigest, sessionRef } from './token';
 
@@ -102,6 +103,12 @@ export type Resolution =
   | { readonly status: 'unavailable' }
   | { readonly status: 'valid'; readonly token: string; readonly record: SessionRecord };
 
+/** What a session's digest comes to: resolve()'s answers, with no token, which only the cookie holds. */
+export type DigestResolution =
+  | { readonly status: 'ended'; readonly reason: EndedReason }
+  | { readonly status: 'unavailable' }
+  | { readonly status: 'valid'; readonly record: SessionRecord };
+
 /** What an audit record may say about the request behind an event. */
 export interface AuditContext {
   readonly requestId?: string;
@@ -161,6 +168,13 @@ export interface Sessions {
   }): Promise<Issued>;
   /** The session a cookie's token carries. One that no longer counts is deleted. */
   resolve(token: string | null | undefined): Promise<Resolution>;
+  /**
+   * The session `digest` names, read as resolve() reads a token's, and
+   * deleted the same way once it no longer counts. It never slides the
+   * session. #7's preview grants keep the digest of the session they were
+   * minted under, never its token, and check it on every request.
+   */
+  resolveDigest(digest: string): Promise<DigestResolution>;
   /**
    * A command's commit point: reads the session again under its lock and,
    * while it still counts, runs `commit` without letting go, so a logout, a
@@ -341,6 +355,25 @@ export function createSessions({
             return ended(reason);
           }
           return Object.freeze({ status: 'valid' as const, token, record });
+        } catch {
+          log({ level: 'error', event: 'session.read_failed' });
+          return UNAVAILABLE;
+        }
+      });
+    },
+
+    async resolveDigest(digest) {
+      if (typeof digest !== 'string' || !DIGEST.test(digest)) return ended('malformed');
+      return run(digest, async (): Promise<DigestResolution> => {
+        try {
+          const record = await store.get(digest);
+          if (!record) return ended('unknown');
+          const reason = problem(record, await store.revokedBefore(), now());
+          if (reason) {
+            await dropHeld(digest);
+            return ended(reason);
+          }
+          return Object.freeze({ status: 'valid' as const, record });
         } catch {
           log({ level: 'error', event: 'session.read_failed' });
           return UNAVAILABLE;
