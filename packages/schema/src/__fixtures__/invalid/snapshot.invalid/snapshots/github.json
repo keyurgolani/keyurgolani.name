@@ -1,0 +1,12 @@
+{
+  "records": [
+    {
+      "adapter": "github",
+      "sectionId": "on-github",
+      "data": {
+        "username": "rowan"
+      },
+      "fetchedAt": "2026-10-17T09:00:00Z"
+    }
+  ]
+}

@@ -1,5 +1,5 @@
 # id.duplicate: two sections share the id about.
-schemaVersion: 2
+schemaVersion: 3
 locale: en
 direction: ltr
 identity:

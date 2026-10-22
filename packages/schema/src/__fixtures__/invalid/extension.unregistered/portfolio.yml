@@ -1,10 +1,12 @@
 # extension.unregistered (a warning): data from an extension this build does not register.
-schemaVersion: 2
+schemaVersion: 3
 locale: en
 direction: ltr
 identity:
   name: Rowan Fixture
-  extensions: { '@other/portfolio-music': { instrument: cello } }
+  extensions:
+    "@other/portfolio-music":
+      instrument: cello
 links:
   - url: https://rowan.name
     label: Site

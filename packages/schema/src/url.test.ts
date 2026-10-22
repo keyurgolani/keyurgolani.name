@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parsePortfolio } from './load';
+import { isMediaSource } from './media-source';
 import { isAllowedUrl } from './url';
 
 // Item 12: one rule for every url, src, and *Url field.
@@ -80,32 +81,35 @@ test('only an image source may be a raster data:image URL', () => {
   }
 });
 
-test('the URL rule covers url, src, and *Url fields, located and without quoting the value', () => {
+test('the URL rule covers url and *Url fields, and media sources keep to the media root, located and without quoting the value', () => {
   const document = [
-    'schemaVersion: 2',
+    'schemaVersion: 3',
     'locale: en',
     'direction: ltr',
     'identity:',
     '  name: Rowan Test',
-    '  avatar: { src: "data:image/svg+xml;base64,PHN2Zz4=" }',
     'links:',
     '  - url: "JAVASCRIPT:canary()"',
+    'chronology:',
+    '  - id: engineer-acme',
+    '    kind: role',
+    '    title: Engineer',
+    '    organization: Acme',
+    '    period: { start: "2020" }',
+    '    organizationUrl: "//canary.test"',
+    'media:',
+    '  - id: avatar',
+    '    kind: image',
+    '    source: "data:image/png;base64,AAAA"',
+    '  - id: plate',
+    '    kind: image',
+    '    source: "../canary/plate.png"',
+    'contact:',
+    '  links:',
+    '    - url: "data:image/png;base64,AAAA"',
     'sections:',
-    '  - kind: experience',
-    '    id: work',
-    '    items:',
-    '      - role: Engineer',
-    '        organization: Acme',
-    '        organizationUrl: "//canary.test"',
-    "        period: { start: '2020' }",
-    '  - kind: gallery',
-    '    id: plates',
-    '    items:',
-    '      - image: { src: "data:image/png;base64,AAAA", alt: A plate }',
     '  - kind: contact',
     '    id: contact',
-    '    links:',
-    '      - url: "data:image/png;base64,AAAA"',
     '',
   ].join('\n');
   const result = parsePortfolio(document, 'yaml');
@@ -118,14 +122,49 @@ test('the URL rule covers url, src, and *Url fields, located and without quoting
       message.includes('canary'),
     ]),
     [
-      ['/identity/avatar/src', 6, false],
-      ['/links/0/url', 8, false],
-      ['/sections/0/items/0/organizationUrl', 15, false],
-      ['/sections/2/links/0/url', 24, false],
+      ['/links/0/url', 7, false],
+      ['/chronology/0/organizationUrl', 14, false],
+      ['/media/0/source', 18, false],
+      ['/media/1/source', 21, false],
+      ['/contact/links/0/url', 24, false],
     ],
   );
   assert.equal(
-    result.problems[1]?.message,
+    result.problems[0]?.message,
     '/links/0/url must be an https, http, mailto, or tel URL, a relative path, or a #fragment.',
   );
+});
+
+test('a media source is a path under the media root or an https URL', () => {
+  for (const source of [
+    'atlas/cover.jpg',
+    'cover.png',
+    'a/b/c d.webp',
+    'https://images.rowan.test/cover.png',
+    'HTTPS://IMAGES.ROWAN.TEST/x.png',
+  ]) {
+    assert.equal(isMediaSource(source), true, source);
+  }
+  for (const source of [
+    '',
+    '/assets/cover.jpg',
+    '../cover.jpg',
+    'a/../b.png',
+    'a/./b.png',
+    'a//b.png',
+    'a/',
+    'a\\b.png',
+    'c:cover.png',
+    'cover.png?v=2',
+    'cover.png#frag',
+    'http://images.rowan.test/cover.png',
+    'https://',
+    '//images.rowan.test/cover.png',
+    'data:image/png;base64,AAAA',
+    'javascript:alert(1)',
+    'a\tb.png',
+    'x'.repeat(1025),
+  ]) {
+    assert.equal(isMediaSource(source), false, JSON.stringify(source));
+  }
 });

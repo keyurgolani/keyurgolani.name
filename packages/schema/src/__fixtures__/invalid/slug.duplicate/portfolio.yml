@@ -1,0 +1,24 @@
+# slug.duplicate: two case studies with one route.
+schemaVersion: 3
+locale: en
+direction: ltr
+identity:
+  name: Rowan Fixture
+links:
+  - url: https://rowan.name
+    label: Site
+works:
+  - id: tidewater-atlas
+    slug: atlas
+    title: Tidewater Atlas
+    medium: interface
+    caseStudy: { challenge: Maps nobody trusted. }
+  - id: salt-ledger
+    slug: atlas
+    title: Salt Ledger
+    medium: research
+    caseStudy: { challenge: Records nobody kept. }
+sections:
+  - kind: works
+    id: work
+    items: [tidewater-atlas, salt-ledger]

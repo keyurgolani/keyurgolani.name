@@ -40,7 +40,8 @@ const MINT_KIND: Readonly<Record<IdOwner, IdKind>> = {
 type Rec = Record<string, unknown>;
 type Path = readonly (string | number)[];
 
-const text = (value: unknown) => (typeof value === 'string' && value.trim() !== '' ? value : undefined);
+const text = (value: unknown) =>
+  typeof value === 'string' && value.trim() !== '' ? value : undefined;
 
 /** What an entry's id is minted from: its title, or what stands for one. */
 function titleOf(owner: IdOwner, entry: Rec): string | undefined {
@@ -71,7 +72,8 @@ function references(portfolio: Rec): Array<{ path: Path; value: unknown; target:
   const found: Array<{ path: Path; value: unknown; target: IdOwner }> = [];
   const at = (path: Path, value: unknown, target: IdOwner) => found.push({ path, value, target });
   const list = (path: Path, values: unknown, target: IdOwner) => {
-    if (Array.isArray(values)) values.forEach((value, index) => at([...path, index], value, target));
+    if (Array.isArray(values))
+      values.forEach((value, index) => at([...path, index], value, target));
   };
   const placement = (path: Path, value: unknown) => {
     if (isPlainObject(value)) at([...path, 'asset'], value.asset, 'media');
@@ -79,12 +81,14 @@ function references(portfolio: Rec): Array<{ path: Path; value: unknown; target:
   const placements = (path: Path, values: unknown) => {
     if (Array.isArray(values)) values.forEach((value, index) => placement([...path, index], value));
   };
-  const lists = (key: string) => (Array.isArray(portfolio[key]) ? (portfolio[key] as unknown[]) : []);
+  const lists = (key: string) =>
+    Array.isArray(portfolio[key]) ? (portfolio[key] as unknown[]) : [];
   at(['signature'], portfolio.signature, 'work');
   list(['featured'], portfolio.featured, 'work');
   list(['proof'], portfolio.proof, 'evidence');
   list(['archive'], portfolio.archive, 'work');
-  if (isPlainObject(portfolio.identity)) placement(['identity', 'avatar'], portfolio.identity.avatar);
+  if (isPlainObject(portfolio.identity))
+    placement(['identity', 'avatar'], portfolio.identity.avatar);
   if (isPlainObject(portfolio.meta)) placement(['meta', 'ogImage'], portfolio.meta.ogImage);
   lists('works').forEach((work, index) => {
     if (!isPlainObject(work)) return;
@@ -127,7 +131,10 @@ function references(portfolio: Rec): Array<{ path: Path; value: unknown; target:
  * references, wherever the document names that record type, follow it; a
  * repeated id's references keep naming the first entry.
  */
-export function fixIds(source: { readonly text: string; readonly format: DocumentFormat }): IdsFixResult {
+export function fixIds(source: {
+  readonly text: string;
+  readonly format: DocumentFormat;
+}): IdsFixResult {
   const parsed = parseSource(source.text, source.format);
   if (!parsed.ok) {
     return {
@@ -172,8 +179,13 @@ export function fixIds(source: { readonly text: string; readonly format: Documen
     const record = valueAt(data, entry.path);
     if (!isPlainObject(record)) return;
     const reason: IdFix['reason'] =
-      entry.id === undefined ? 'missing' : typeof entry.id === 'string' && isSectionId(entry.id) ? 'repeated' : 'invalid';
-    const fromId = reason === 'invalid' && typeof entry.id === 'string' ? slugifyTitle(entry.id) : '';
+      entry.id === undefined
+        ? 'missing'
+        : typeof entry.id === 'string' && isSectionId(entry.id)
+          ? 'repeated'
+          : 'invalid';
+    const fromId =
+      reason === 'invalid' && typeof entry.id === 'string' ? slugifyTitle(entry.id) : '';
     const id = mintId(MINT_KIND[entry.owner], fromId || titleOf(entry.owner, record), taken);
     taken.add(id);
     const pointer = toPointer([...entry.path, 'id']);

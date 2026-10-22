@@ -78,8 +78,15 @@ for (const [label, schemas] of [
     for (const path of [
       '',
       '/identity/avatar/focalPoint',
-      '/sections/*<experience>/items/*/period',
-      '/sections/*<discography>/items/*/tracks/*',
+      '/works/*/period',
+      '/works/*/tracks/*',
+      '/works/*/caseStudy/decisions/*',
+      '/evidence/*/source',
+      '/evidence/*/metric',
+      '/chronology/*',
+      '/media/*',
+      '/practice/services/*/items/*',
+      '/sections/*<custom>/items/*',
       '/sections/*<@other/x/y>',
       '/appearance',
       '/variantControls/*',
@@ -94,7 +101,7 @@ for (const [label, schemas] of [
   });
 }
 
-const HEAD = 'schemaVersion: 2\nlocale: en\ndirection: ltr\n';
+const HEAD = 'schemaVersion: 3\nlocale: en\ndirection: ltr\n';
 const SITE = [
   'schemaVersion: 2',
   'appearance:',
@@ -123,7 +130,7 @@ function unknownKeys(result: ReturnType<typeof parsePortfolio> | ReturnType<type
 
 test('an unknown key anywhere in the portfolio fails at the key, with a did-you-mean hint', () => {
   const portfolio = [
-    'schemaVersion: 2',
+    'schemaVersion: 3',
     'locale: en',
     'direction: ltr',
     'identty:',
@@ -132,18 +139,21 @@ test('an unknown key anywhere in the portfolio fails at the key, with a did-you-
     '  name: Rowan Test',
     '  tagine: Builds things',
     '  avatar:',
-    '    src: /me.jpg',
+    '    asset: portrait',
     '    atl: Me',
     '    focalPoint: { x: 0.5, y: 0.5, z: 1 }',
+    'chronology:',
+    '  - id: engineer-acme',
+    '    kind: role',
+    '    titel: Engineer',
+    '    title: Engineer',
+    '    organisation: Acme',
+    '    organization: Acme',
+    "    period: { start: '2020', edn: '2021' }",
     'sections:',
-    '  - kind: experience',
+    '  - kind: chronology',
     '    id: work',
     '    titel: Work',
-    '    items:',
-    '      - role: Engineer',
-    '        organisation: Acme',
-    '        organization: Acme',
-    "        period: { start: '2020', edn: '2021' }",
     '',
   ].join('\n');
   const custom = 'Custom data goes under extensions, keyed by an npm package name.';
@@ -153,14 +163,10 @@ test('an unknown key anywhere in the portfolio fails at the key, with a did-you-
     ['unrecognized_keys', `/identity/avatar/focalPoint/z isn't a field here. ${custom}`, 12, 35],
     ['unrecognized_keys', "/identity/avatar/atl isn't a field here. Did you mean alt?", 11, 5],
     ['unrecognized_keys', "/identity/tagine isn't a field here. Did you mean tagline?", 8, 3],
-    [
-      'unrecognized_keys',
-      "/sections/0/items/0/period/edn isn't a field here. Did you mean end?",
-      21,
-      34,
-    ],
-    ['unrecognized_keys', `/sections/0/items/0/organisation isn't a field here. ${custom}`, 19, 9],
-    ['unrecognized_keys', "/sections/0/titel isn't a field here. Did you mean title?", 16, 5],
+    ['unrecognized_keys', "/chronology/0/period/edn isn't a field here. Did you mean end?", 20, 30],
+    ['unrecognized_keys', `/chronology/0/titel isn't a field here. ${custom}`, 16, 5],
+    ['unrecognized_keys', `/chronology/0/organisation isn't a field here. ${custom}`, 18, 5],
+    ['unrecognized_keys', "/sections/0/titel isn't a field here. Did you mean title?", 24, 5],
     ['unrecognized_keys', `/identty isn't a field here. ${custom}`, 4, 1],
   ]);
 });
@@ -256,7 +262,7 @@ test('a word longer than any key or kind gets no hint, and costs no time', () =>
   // stop at 1,024 characters, so the long key is JSON's.)
   const million = (char: string) => char.repeat(1_000_000);
   const json = (identity: object) =>
-    JSON.stringify({ schemaVersion: 2, locale: 'en', direction: 'ltr', identity });
+    JSON.stringify({ schemaVersion: 3, locale: 'en', direction: 'ltr', identity });
   const yaml = (section: string) =>
     `${HEAD}identity:\n  name: Rowan Test\nsections:\n  - ${section}\n    id: x\n`;
   const longKey = json({ name: 'Rowan Test', [million('t')]: 1 });

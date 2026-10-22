@@ -1,5 +1,5 @@
 # image.alt-missing (a warning): a gallery image with no alt text or caption.
-schemaVersion: 2
+schemaVersion: 3
 locale: en
 direction: ltr
 identity:
@@ -7,17 +7,26 @@ identity:
 links:
   - url: https://rowan.name
     label: Site
+works:
+  - id: plates-2
+    title: Plates
+    medium: image-series
+    media:
+      - asset: plates-2-image
+media:
+  - id: plates-2-image
+    kind: image
+    source: plates/harbor.jpg
 sections:
   - kind: lede
     id: about
     title: About
     body: Builds calm software.
-  - kind: gallery
+  - kind: works
     id: plates
     title: Plates
     items:
-      - image:
-          src: /plates/harbor.jpg
+      - plates-2
   - kind: contact
     id: contact
     title: Contact

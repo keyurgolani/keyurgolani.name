@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { duplicateSectionIds, parsePortfolio, parseSite, type DocumentResult } from './load';
 
-const HEAD = 'schemaVersion: 2\nlocale: en\ndirection: ltr\nidentity:\n  name: Rowan Test\n';
+const HEAD = 'schemaVersion: 3\nlocale: en\ndirection: ltr\nidentity:\n  name: Rowan Test\n';
 
 function problems<T>(result: DocumentResult<T>) {
   assert.equal(result.ok, false, 'expected the document to be refused');
@@ -23,7 +23,7 @@ test('a valid portfolio parses into its model', () => {
   );
   assert.equal(result.ok, true);
   if (!result.ok) return;
-  assert.equal(result.value.sections[0]?.id, 'about');
+  assert.equal(result.value.sections?.[0]?.id, 'about');
   assert.deepEqual(result.locate(['sections', 0, 'body']), { line: 9, column: 11 });
 });
 
@@ -34,7 +34,7 @@ test('YAML and its JSON twin parse to the same model', () => {
   );
   const json = parsePortfolio(
     JSON.stringify({
-      schemaVersion: 2,
+      schemaVersion: 3,
       locale: 'en',
       direction: 'ltr',
       identity: { name: 'Rowan Test' },
@@ -46,7 +46,7 @@ test('YAML and its JSON twin parse to the same model', () => {
   if (yaml.ok && json.ok) assert.deepEqual(json.value, yaml.value);
 });
 
-test('an old-format document, or one without schemaVersion 2, reports only that', () => {
+test('an old-format document, a version 2 portfolio, or one without schemaVersion 3, reports only that', () => {
   // The baseline shape: unversioned, with presentation fields and no ids. Its
   // one problem sits at the first old field.
   const legacy = 'identity:\n  name: Rowan Test\nvariant: editorial\nsections:\n  - kind: hero\n';
@@ -78,7 +78,26 @@ test('an old-format document, or one without schemaVersion 2, reports only that'
     { kind: 'version', code: 'invalid_literal', pointer: '/schemaVersion', line: 1, column: 16 },
   ]);
   assert.equal(wrong.ok, false);
-  if (!wrong.ok) assert.match(wrong.problems[0]!.message, /must be 2/);
+  if (!wrong.ok) assert.match(wrong.problems[0]!.message, /must be 3/);
+  // A version 2 portfolio, which the migration converts, says how.
+  const outdated = parsePortfolio(
+    'schemaVersion: 2\nlocale: en\ndirection: ltr\nidentity:\n  name: Rowan Test\nsections:\n  - kind: projects\n',
+    'yaml',
+    { name: 'config/portfolio.yml' },
+  );
+  assert.deepEqual(problems(outdated), [
+    { kind: 'outdated', code: 'outdated_version', pointer: '/schemaVersion', line: 1, column: 16 },
+  ]);
+  if (!outdated.ok) {
+    assert.equal(
+      outdated.problems[0]!.message,
+      'config/portfolio.yml is a schemaVersion 2 portfolio document. This release reads schemaVersion 3: run pnpm config:migrate config/portfolio.yml to convert it.',
+    );
+  }
+  // The site document stays at 2.
+  assert.deepEqual(problems(parseSite('schemaVersion: 3\nappearance: {}\n', 'yaml')), [
+    { kind: 'version', code: 'invalid_literal', pointer: '/schemaVersion', line: 1, column: 16 },
+  ]);
 });
 
 test('schema problems carry the pointer, line, and column, in YAML and JSON', () => {
@@ -87,7 +106,7 @@ test('schema problems carry the pointer, line, and column, in YAML and JSON', ()
     [{ kind: 'schema', code: 'invalid_type', pointer: '/sections/0/id', line: 7, column: 5 }],
   );
   const json =
-    '{\n  "schemaVersion": 2,\n  "locale": "en",\n  "direction": "ltr",\n  "identity": { "name": 7 }\n}\n';
+    '{\n  "schemaVersion": 3,\n  "locale": "en",\n  "direction": "ltr",\n  "identity": { "name": 7 }\n}\n';
   assert.deepEqual(problems(parsePortfolio(json, 'json')), [
     { kind: 'schema', code: 'invalid_type', pointer: '/identity/name', line: 5, column: 25 },
   ]);
@@ -124,6 +143,38 @@ test('a repeated id is reported alongside schema problems elsewhere in the docum
   ]);
 });
 
+test('sections, records, and media share one set of ids', () => {
+  const source = [
+    HEAD.trimEnd(),
+    'works:',
+    '  - { id: atlas, title: Atlas, medium: interface }',
+    '  - { id: about, title: About, medium: writing }',
+    'media:',
+    '  - { id: atlas, kind: image, source: atlas.png }',
+    'sections:',
+    '  - kind: lede',
+    '    id: about',
+    '    body: A',
+    '',
+  ].join('\n');
+  // Sections claim their ids first, then works, evidence, chronology, and media.
+  const result = parsePortfolio(source, 'yaml');
+  assert.deepEqual(problems(result), [
+    { kind: 'duplicate-id', code: 'duplicate_id', pointer: '/works/1/id', line: 8, column: 11 },
+    { kind: 'duplicate-id', code: 'duplicate_id', pointer: '/media/0/id', line: 10, column: 11 },
+  ]);
+  if (!result.ok) {
+    assert.equal(
+      result.problems[0]!.message,
+      '/works/1/id repeats the id of /sections/0, which is a section. Every id is unique in the document: sections, records, and media assets share one set.',
+    );
+    assert.equal(
+      result.problems[1]!.message,
+      '/media/0/id repeats the id of /works/0, which is a work. Every id is unique in the document: sections, records, and media assets share one set.',
+    );
+  }
+});
+
 test('duplicateSectionIds names every repeat and its first use', () => {
   assert.deepEqual(duplicateSectionIds([{ id: 'a' }, { id: 'b' }, { id: 'a' }, { id: 'a' }]), [
     { index: 2, firstIndex: 0 },
@@ -137,7 +188,9 @@ test('no problem message quotes a value from the document', () => {
   const sources = [
     `${HEAD}sections:\n  - kind: ${canary}\n    id: x\n`,
     `${HEAD}sections:\n  - kind: lede\n    id: ${canary.toUpperCase()}\n    body: x\n`,
-    `${HEAD}sections:\n  - kind: talks\n    id: talks\n    items:\n      - title: t\n        type: ${canary}\n`,
+    `${HEAD}evidence:\n  - id: talk\n    type: talk\n    title: t\n    format: ${canary}\n`,
+    `${HEAD}works:\n  - id: w\n    title: t\n    medium: ${canary}\n`,
+    `${HEAD}media:\n  - id: m\n    kind: image\n    source: ../${canary}.png\n`,
     `${HEAD}sections:\n  - kind: now\n    id: now\n    asOf: ${canary}\n    body: x\n`,
     `schemaVersion: ${canary}\n`,
     `${HEAD.replace('locale: en', `locale: ${canary}-x_y`)}`,
@@ -167,7 +220,11 @@ test('messages say what is wrong for the common schema problems', () => {
   );
   assert.equal(
     message(`${HEAD}sections:\n  - kind: focus\n    id: focus\n    items: []\n`),
-    '/sections/0/items must have at least 1 item.',
+    '/sections/0/items is empty. It needs at least one item.',
+  );
+  assert.equal(
+    message(`${HEAD}links: []\n`),
+    "/links is empty. Leave it out instead: a list that's left out isn't authored.",
   );
   assert.equal(
     message(HEAD.replace('direction: ltr', 'direction: up')),
@@ -178,8 +235,8 @@ test('messages say what is wrong for the common schema problems', () => {
     '/sections/0/kind is not a known section kind. A section kind from an extension is <npm package name>/<name>.',
   );
   assert.equal(
-    message(`${HEAD}sections:\n  - kind: tenure\n    id: tenure\n    years: .inf\n`),
-    '/sections/0/years must be a finite number, not .inf or .nan.',
+    message(`${HEAD}evidence:\n  - id: tenure\n    type: metric\n    metric: { value: .inf }\n`),
+    '/evidence/0/metric/value must be a finite number, not .inf or .nan.',
   );
 });
 

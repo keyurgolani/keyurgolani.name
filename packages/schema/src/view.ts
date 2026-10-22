@@ -369,7 +369,8 @@ export function reachRecords(pair: ParsedPair, registry: ExtensionRegistry): Rea
       case 'contact': {
         // The contact record, and the ways to reach the author it adds to.
         if (portfolio.contact !== undefined) contact = true;
-        else if (portfolio.identity.email === undefined && (portfolio.links ?? []).length === 0) break;
+        else if (portfolio.identity.email === undefined && (portfolio.links ?? []).length === 0)
+          break;
         sections.push(section);
         break;
       }
