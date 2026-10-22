@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { getDefaults, marked } from 'marked';
+import { getDefaults, Marked, marked } from 'marked';
 import { isAllowedUrl } from '@portfolio/schema';
 import { escapeHtml } from './html-escape';
 import { renderInlineMarkdown, renderMarkdown } from './markdown';
@@ -319,8 +319,36 @@ const DOCUMENTED: ReadonlyArray<readonly [string, string, string]> = [
     '<p><a href="https://x.test">x</a></p>\n',
     '<a href="https://x.test">x</a>',
   ],
-  // A destination with a space is refused, even in angle brackets.
+  // Without its semicolon, a legacy name such as amp or lt decodes as it does
+  // in a browser's attribute value, except before `=`.
+  [
+    '[x](https://x.test/?a&amp=b)',
+    '<p><a href="https://x.test/?a&amp;amp=b">x</a></p>\n',
+    '<a href="https://x.test/?a&amp;amp=b">x</a>',
+  ],
+  [
+    '[x](https://x.test/?a&lt)',
+    '<p><a href="https://x.test/?a%3C">x</a></p>\n',
+    '<a href="https://x.test/?a%3C">x</a>',
+  ],
+  [
+    '[x](https://x.test/?a&amp;b=c)',
+    '<p><a href="https://x.test/?a&amp;b=c">x</a></p>\n',
+    '<a href="https://x.test/?a&amp;b=c">x</a>',
+  ],
+  // A destination with a space, which only angle brackets allow, is refused.
+  // Without them, a raw space means no link at all, and %20 is the way to write one.
   ['[x](<https://x.test/a b>)', '<p>x</p>\n', 'x'],
+  [
+    '[x](https://x.test/a b)',
+    '<p>[x](<a href="https://x.test/a">https://x.test/a</a> b)</p>\n',
+    '[x](<a href="https://x.test/a">https://x.test/a</a> b)',
+  ],
+  [
+    '[x](https://x.test/a%20b)',
+    '<p><a href="https://x.test/a%20b">x</a></p>\n',
+    '<a href="https://x.test/a%20b">x</a>',
+  ],
   // A table is a paragraph per row and a line per cell.
   [
     '| x | y |\n| - | - |\n| z | w |',
@@ -344,4 +372,43 @@ test('representative inputs render exactly as documented: raw HTML as text, comm
     assert.equal(renderMarkdown(source), block, source);
     assert.equal(renderInlineMarkdown(source), inline, source);
   }
+});
+
+test('source nested deeper than marked can take renders as escaped text instead of throwing, a paragraph per run of lines, and the strict reader accepts it', () => {
+  // marked recurses once per level of nesting. Where it runs out of stack
+  // depends on the runtime and how warm it is: around 2,000 to 3,000 levels of
+  // quote, or 4,000 to 7,000 emphasis markers. Near there, either way out is
+  // safe; well past it, the fallback is exact.
+  const quote = (depth: number) => `${'> '.repeat(depth)}x`;
+  const emphasis = (count: number) => `${'*'.repeat(count)}x${'*'.repeat(count)}`;
+  for (const source of [quote(2000), emphasis(5000)]) {
+    for (const mode of MODES) {
+      assert.deepEqual(htmlProblems(RENDER[mode](source), mode), [], `${source.length} chars`);
+    }
+  }
+  const before = renderMarkdown('# x\n\n> *x*');
+  const deepQuote = `${'>'.repeat(20000)} x`;
+  const deepEmphasis = emphasis(10000);
+  assert.throws(() => new Marked().lexer(deepQuote), RangeError);
+  assert.throws(() => new Marked().lexer(deepEmphasis), RangeError);
+  const quoted = `${'&gt;'.repeat(20000)} x`;
+  const mixed = `x <b>x</b>\n\n${deepEmphasis}\n \n"&amp;"`;
+  const cases: ReadonlyArray<readonly [string, string, string, string]> = [
+    ['a 20,000-deep quote', deepQuote, `<p>${quoted}</p>\n`, quoted],
+    ['10,000 emphasis markers a side', deepEmphasis, `<p>${deepEmphasis}</p>\n`, deepEmphasis],
+    [
+      'paragraphs around them',
+      mixed,
+      `<p>x &lt;b&gt;x&lt;/b&gt;</p>\n<p>${deepEmphasis}</p>\n<p>&quot;&amp;amp;&quot;</p>\n`,
+      `x &lt;b&gt;x&lt;/b&gt;\n\n${deepEmphasis}\n \n&quot;&amp;amp;&quot;`,
+    ],
+  ];
+  for (const [name, source, block, inline] of cases) {
+    assert.ok(renderMarkdown(source) === block, `${name}, as blocks`);
+    assert.ok(renderInlineMarkdown(source) === inline, `${name}, inline`);
+    assert.deepEqual(htmlProblems(block, 'block'), [], name);
+    assert.deepEqual(htmlProblems(inline, 'inline'), [], name);
+  }
+  // The next render goes on as before.
+  assert.equal(renderMarkdown('# x\n\n> *x*'), before);
 });

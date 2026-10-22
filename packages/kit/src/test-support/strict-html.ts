@@ -218,6 +218,9 @@ export function hrefProblems(value: string): string[] {
   if (!/^[\x21-\x7e]+$/.test(href))
     problems.push(`an href that isn't printable ASCII: ${JSON.stringify(href)}`);
   if (!isAllowedUrl(href)) problems.push(`an href the link rule refuses: ${JSON.stringify(href)}`);
+  // Only the resolved URL's scheme and origin decide. Node's URL and
+  // Chromium's differ on some path details, such as whether %2E inside a
+  // segment counts as a dot, and none of those changes the scheme or origin.
   let resolved: URL;
   try {
     resolved = new URL(href, PAGE);

@@ -18,6 +18,10 @@ import { escapeHtml } from './html-escape';
 // - Anything else keeps its text and loses its markup: tables, strikethrough,
 //   task-list checkboxes, a code block's language, a list's start number, and
 //   link titles.
+// - Source marked can't take renders as escaped text: a paragraph per run of
+//   lines, or the phrase inline. marked recurses once per level of nesting, so
+//   a deep enough quote or run of emphasis runs it out of stack, and that
+//   mustn't take the page's render down with it.
 //
 // No Node API and no DOM: #7's preview frame and #9's browser render call it.
 
@@ -26,17 +30,34 @@ const markdown = new Marked({ async: false, breaks: false, gfm: true, pedantic: 
 
 export function renderMarkdown(source: string | undefined | null): string {
   if (!source) return '';
-  // A copy of the options per call: the lexer keeps its tokenizer on them.
-  return blocks(markdown.lexer(withoutNul(source), { ...markdown.defaults }), true);
+  try {
+    // A copy of the options per call: the lexer keeps its tokenizer on them.
+    return blocks(markdown.lexer(withoutNul(source), { ...markdown.defaults }), true);
+  } catch {
+    return paragraphsOf(source);
+  }
 }
 
 export function renderInlineMarkdown(source: string | undefined | null): string {
   if (!source) return '';
-  return inlines(markdown.Lexer.lexInline(withoutNul(source), { ...markdown.defaults }), false);
+  try {
+    return inlines(markdown.Lexer.lexInline(withoutNul(source), { ...markdown.defaults }), false);
+  } catch {
+    return escapeHtml(withoutNul(source));
+  }
 }
 
 /** CommonMark replaces U+0000 before it parses. */
 const withoutNul = (source: string) => source.replaceAll('\0', '\uFFFD');
+
+/** The source as escaped text, a paragraph for each run of lines between blank ones. */
+const paragraphsOf = (source: string) =>
+  withoutNul(source)
+    .split(/(?:\r\n?|\n)[ \t]*(?:\r\n?|\n)/)
+    .map((paragraph) => paragraph.trim())
+    .filter((paragraph) => paragraph !== '')
+    .map((paragraph) => `<p>${escapeHtml(paragraph)}</p>\n`)
+    .join('');
 
 /**
  * Block tokens, as marked's own parser walks them: `top` is false inside a
