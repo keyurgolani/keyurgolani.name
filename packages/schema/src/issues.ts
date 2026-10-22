@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { redactedPointer } from './secrets';
 
 // Issues from a parse inside a parse: the section router and the extensions
 // field each run a schema of their own with safeParse(), then report what it
@@ -34,4 +35,51 @@ function underBase(issue: z.ZodIssue, base: readonly (string | number)[]): z.Zod
         ),
     ),
   };
+}
+
+/** What a schema issue says is wrong, without quoting any value from the document. */
+export function describeIssue(issue: z.ZodIssue): string {
+  const where = redactedPointer(issue.path) || 'The document';
+  switch (issue.code) {
+    case 'invalid_type':
+      return issue.received === 'undefined'
+        ? `${where} is required.`
+        : `${where} should be ${issue.expected}, not ${issue.received}.`;
+    case 'invalid_literal':
+      return issue.received === undefined
+        ? `${where} is required.`
+        : `${where} must be ${JSON.stringify(issue.expected)}.`;
+    case 'invalid_union_discriminator':
+      return `${where} is not a known section kind.`;
+    case 'invalid_union':
+      return `${where} doesn't match any of the shapes it allows.`;
+    case 'invalid_enum_value':
+      return `${where} should be one of: ${issue.options.join(', ')}.`;
+    case 'unrecognized_keys':
+      return `${where} has fields that aren't allowed here.`;
+    case 'too_small':
+      return `${where} ${boundPhrase(issue.type, issue.inclusive ? 'at least' : 'more than', Number(issue.minimum))}.`;
+    case 'too_big':
+      return `${where} ${boundPhrase(issue.type, issue.inclusive ? 'at most' : 'less than', Number(issue.maximum))}.`;
+    case 'invalid_string':
+    case 'custom':
+      // Every regex and refinement in the schemas carries its own value-free message.
+      return `${where} ${issue.message}`;
+    case 'not_finite':
+      return `${where} must be a finite number, not .inf or .nan.`;
+    default:
+      return `${where} doesn't match the schema (${issue.code}).`;
+  }
+}
+
+function boundPhrase(type: string, bound: string, limit: number): string {
+  switch (type) {
+    case 'string':
+      return `must be ${bound} ${limit} character${limit === 1 ? '' : 's'} long`;
+    case 'array':
+    case 'set':
+      return `must have ${bound} ${limit} item${limit === 1 ? '' : 's'}`;
+    default:
+      return `must be ${bound} ${limit}`;
+  }
 }

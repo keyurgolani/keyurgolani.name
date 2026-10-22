@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { isSectionId } from './ids';
 import { isPlainObject, plainJsonProblem } from './json';
-import { describeIssue } from './load';
+import { describeIssue } from './issues';
 import { TimestampSchema } from './timestamp';
 import { redactedPointer, redactSecrets } from './secrets';
 import { parseSource } from './source';

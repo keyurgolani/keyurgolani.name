@@ -49,7 +49,9 @@ function pair(works: string[], listed: string[], site = SITE): ParsedPair {
       ...(works.length > 0 ? ['works:', ...works] : []),
       'sections:',
       '  - { kind: lede, id: about, body: Hi. }',
-      ...(listed.length > 0 ? [`  - { kind: works, id: work, items: [${listed.join(', ')}] }`] : []),
+      ...(listed.length > 0
+        ? [`  - { kind: works, id: work, items: [${listed.join(', ')}] }`]
+        : []),
     ),
     'yaml',
   );
@@ -82,7 +84,9 @@ test('a revision serves its home page, each public case study, and the view path
   );
   assert.deepEqual(listCanonicalUrls(viewOf(value)), ['/', '/work/tide']);
   assert.deepEqual(
-    listCanonicalUrls(viewOf(value), { viewPaths: ['/about', '/', 'about', '/x?y', '//cdn.test/a'] }),
+    listCanonicalUrls(viewOf(value), {
+      viewPaths: ['/about', '/', 'about', '/x?y', '//cdn.test/a'],
+    }),
     ['/', '/about', '/work/tide'],
   );
   assert.deepEqual(privateWorkIds(value), ['notes']);

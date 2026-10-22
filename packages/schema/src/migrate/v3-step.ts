@@ -2,7 +2,7 @@ import { mintId, type IdKind } from '../ids';
 import { isJsonEqual, isPlainObject } from '../json';
 import { toPointer } from '../pointer';
 import { PORTFOLIO_SCHEMA_VERSION } from '../versions';
-import type { Change, Need } from './types';
+import type { Change, MintedId, Need } from './types';
 
 // The 2-to-3 step (#10, items 2 and 6): a version 2 portfolio document to the
 // version 3 content model. Section ids stay byte for byte; each baseline
@@ -13,16 +13,6 @@ import type { Change, Need } from './types';
 
 type Rec = Record<string, unknown>;
 type Path = readonly (string | number)[];
-
-/** An id the step minted: a record's or a media asset's. */
-export interface MintedId {
-  readonly id: string;
-  readonly owner: 'work' | 'evidence' | 'chronology' | 'media';
-  /** Where it is in the new portfolio. */
-  readonly pointer: string;
-  /** What it came from in the old one. */
-  readonly from: string;
-}
 
 export interface V3StepResult {
   readonly portfolio: Rec;

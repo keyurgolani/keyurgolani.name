@@ -1,7 +1,7 @@
 import { isSectionId } from './ids';
 import { isPlainObject } from './json';
 import { redactedPointer } from './secrets';
-import type { Context, Diagnostic, UnitValidator } from './validate';
+import type { Context, Diagnostic, UnitValidator } from './diagnostics';
 
 // Every id a portfolio document holds (#10, item 3): its sections', records',
 // and media assets', in one namespace. Read from the data as written, so a

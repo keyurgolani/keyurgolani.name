@@ -2,7 +2,7 @@ import { isSectionId, workPath } from './ids';
 import { idReused } from './record-ids';
 import { isPlainObject } from './json';
 import { readSourceSnapshots, isSitePath, type UrlTable } from './snapshots';
-import type { Context, Diagnostic, UnitValidator } from './validate';
+import type { Context, Diagnostic, UnitValidator } from './diagnostics';
 import { resolvePortfolioView, type ParsedPair, type PublicView } from './view';
 
 // Published URLs (#10, item 4, the schema half): which URLs a revision serves,

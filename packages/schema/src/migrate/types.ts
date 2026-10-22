@@ -2,9 +2,16 @@ import type { SecretKind } from '../secrets';
 import type { DocumentFormat } from '../source';
 import type { Diagnostic } from '../validate';
 import type { AssignedId } from './section-ids';
-import type { MintedId } from './v3-step';
 
-export type { MintedId } from './v3-step';
+/** An id the step minted: a record's or a media asset's. */
+export interface MintedId {
+  readonly id: string;
+  readonly owner: 'work' | 'evidence' | 'chronology' | 'media';
+  /** Where it is in the new portfolio. */
+  readonly pointer: string;
+  /** What it came from in the old one. */
+  readonly from: string;
+}
 
 /** Where a value went: a JSON pointer into the new portfolio or site document. */
 export interface Target {

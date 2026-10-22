@@ -686,7 +686,11 @@ test('unregistered extension data warns in either document', () => {
 test('diagnostics sort by document, pointer with indexes in number order, and code', () => {
   const portfolio = PORTFOLIO.concat(
     Array.from({ length: 10 }, (_, index) =>
-      lines(`  - kind: cta`, `    id: c${index}`, `    primaryAction: { url: "#x${index}", label: Go }`),
+      lines(
+        `  - kind: cta`,
+        `    id: c${index}`,
+        `    primaryAction: { url: "#x${index}", label: Go }`,
+      ),
     ).join(''),
   );
   const pointers = validate(portfolio).diagnostics.map(({ pointer }) => pointer);
@@ -979,7 +983,10 @@ test('every diagnostic code comes with a line and column, in YAML and JSON', () 
   // At publish: the live revision listed a case study, and gave atlas to a work.
   const live = validate(
     withRecords(
-      ['works:', '  - { id: atlas, slug: tide, title: Atlas, medium: system, caseStudy: { role: Lead } }'],
+      [
+        'works:',
+        '  - { id: atlas, slug: tide, title: Atlas, medium: system, caseStudy: { role: Lead } }',
+      ],
       ['  - kind: works', '    id: work', '    items: [atlas]'],
     ),
   ).pair!;
@@ -999,7 +1006,10 @@ test('every diagnostic code comes with a line and column, in YAML and JSON', () 
     { site: `${SITE}origin: x\n` },
     { site: SITE.replace('colorScheme: warm', 'colorScheme: neon') },
     { portfolio: PORTFOLIO.replace('    id: contact', '    id: about') },
-    { portfolio: PORTFOLIO.concat(lines('  - kind: lede', '    id: atlas', '    body: Hi')), ctx: publishing },
+    {
+      portfolio: PORTFOLIO.concat(lines('  - kind: lede', '    id: atlas', '    body: Hi')),
+      ctx: publishing,
+    },
     { site: `${SITE}sections:\n  gone: { hidden: true }\n` },
     {
       portfolio: withRecords(

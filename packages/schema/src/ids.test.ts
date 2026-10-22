@@ -21,7 +21,10 @@ test('isLanguageTag accepts what Intl.getCanonicalLocales accepts', () => {
 });
 
 test('slugifyTitle keeps lowercase letters and digits, folds accents, and joins the rest with hyphens', () => {
-  assert.equal(slugifyTitle('  Tidewater Atlas: A Field Guide!  '), 'tidewater-atlas-a-field-guide');
+  assert.equal(
+    slugifyTitle('  Tidewater Atlas: A Field Guide!  '),
+    'tidewater-atlas-a-field-guide',
+  );
   assert.equal(slugifyTitle('Écoute à Paris'), 'ecoute-a-paris');
   assert.equal(slugifyTitle('Ｆｕｌｌｗｉｄｔｈ 2024'), 'fullwidth-2024');
   assert.equal(slugifyTitle('日本語'), '');

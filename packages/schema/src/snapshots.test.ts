@@ -33,7 +33,8 @@ test('a snapshot kind is lowercase letters, digits, and hyphens, starting with a
       {
         kind: 'schema',
         code: 'invalid_kind',
-        message: 'The snapshot kind must be lowercase letters, digits, and hyphens, such as github.',
+        message:
+          'The snapshot kind must be lowercase letters, digits, and hyphens, such as github.',
       },
     ],
   });
