@@ -6,6 +6,7 @@ import { parsePortfolio, parseSite } from './load';
 import {
   isPublic,
   newestFirst,
+  publicSectionIndexes,
   resolvePortfolioView,
   type ParsedPair,
   type PublicPortfolio,
@@ -546,6 +547,45 @@ test('hidden sections and unregistered extension data stay out of the public vie
   assert.deepEqual(published.site.variantControls?.editorial?.values, {
     extensions: { '@other/portfolio-music': 'kept' },
   });
+});
+
+test("publicSectionIndexes says where each of the view's sections sits in the document", () => {
+  const input = extensionsPair();
+  const extensions = [acmePortfolioPhotography];
+  // plates (0) is hidden and releases (2) is unregistered, so the view keeps exhibitions alone.
+  assert.deepEqual(publicSectionIndexes(input, { extensions }), [1]);
+  assert.deepEqual(publicSectionIndexes(input), []);
+  // Matched by position, not by id: the repeat of a dropped section's id is still its own section.
+  const [plates, exhibitions, releases] = input.portfolio.sections!;
+  const repeated: ParsedPair = {
+    ...input,
+    portfolio: {
+      ...input.portfolio,
+      sections: [releases!, { ...exhibitions!, id: releases!.id }, plates!],
+    },
+  };
+  const indexes = publicSectionIndexes(repeated, { extensions });
+  assert.deepEqual(indexes, [1]);
+  assert.deepEqual(
+    view(repeated).portfolio.sections.map(({ kind }) => kind),
+    indexes.map((index) => repeated.portfolio.sections![index]!.kind),
+  );
+  // A section with nothing public leaves the view, and its position with it (#10).
+  const lonely = parsed(
+    lines(
+      'schemaVersion: 3',
+      'locale: en',
+      'direction: ltr',
+      'identity:',
+      '  name: Rowan Fixture',
+      'works:',
+      '  - { id: secret, title: Secret, medium: writing, visibility: private }',
+      'sections:',
+      '  - { kind: works, id: drafts, items: [secret] }',
+      '  - { kind: lede, id: about, body: Hello. }',
+    ),
+  );
+  assert.deepEqual(publicSectionIndexes(lonely), [1]);
 });
 
 test('with nothing registered, every extension section and extensions entry is dropped', () => {

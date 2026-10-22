@@ -5,7 +5,7 @@
 // variant is registered stays #5's validateSelection to say.
 
 import {
-  toPublicView,
+  resolvePortfolioView,
   type ContentExtension,
   type Diagnostic,
   type DiagnosticSeverity,
@@ -176,7 +176,11 @@ function checkInputs(
   }
 }
 
-/** A warning for the locale, and each visible section's lang, written in a script the profile lacks. */
+/**
+ * A warning for the locale, and for the lang of each visible section and of
+ * each work, evidence entry, and chronology entry the published view keeps
+ * (#10), written in a script the profile lacks.
+ */
 function checkScripts(
   registry: AppearanceRegistry,
   pair: ParsedPair,
@@ -187,8 +191,12 @@ function checkScripts(
     findPack(registry, 'typography', pair.site.appearance.typography) ??
     findPack(registry, 'typography', PLATFORM_DEFAULTS.typography)!;
   const { id, scripts } = typography.manifest;
+  // The published view keeps only what a visitor reads, whose ids are unique in the document.
+  const view = resolvePortfolioView(pair, {}, { mediaBase: '/media', extensions }).portfolio;
   const visible = new Set(
-    toPublicView(pair, { extensions }).portfolio.sections.map((section) => section.id),
+    [view.sections, view.works, view.evidence, view.chronology].flatMap((list) =>
+      list.map(({ id }) => id),
+    ),
   );
   const check = (path: readonly (string | number)[], tag: unknown) => {
     if (typeof tag !== 'string') return;
@@ -207,8 +215,15 @@ function checkScripts(
     });
   };
   check(['locale'], pair.portfolio.locale);
-  pair.portfolio.sections.forEach((section, index) => {
-    if (visible.has(section.id))
-      check(['sections', index, 'lang'], (section as { lang?: unknown }).lang);
-  });
+  const { portfolio } = pair;
+  for (const [list, items] of [
+    ['sections', portfolio.sections],
+    ['works', portfolio.works],
+    ['evidence', portfolio.evidence],
+    ['chronology', portfolio.chronology],
+  ] as const) {
+    (items ?? []).forEach((item: { readonly id: string; readonly lang?: unknown }, index) => {
+      if (visible.has(item.id)) check([list, index, 'lang'], item.lang);
+    });
+  }
 }

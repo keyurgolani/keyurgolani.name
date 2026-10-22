@@ -166,10 +166,7 @@ test('the report says how each kind renders, how full each slot is, and what to 
   assert.deepEqual(report.notChecked, ['variant.recommendedAppearance']);
   // With its one works section hidden, the required slot is empty, which blocks publishing.
   const HIDE_WORK = 'sections:\n  work:\n    hidden: true\n';
-  const hidden = compatibilityFor(
-    pair(site('acme-ocean', HIDE_WORK)),
-    { registry: REGISTRY },
-  );
+  const hidden = compatibilityFor(pair(site('acme-ocean', HIDE_WORK)), { registry: REGISTRY });
   assert.deepEqual(
     hidden.slots.find(({ id }) => id === 'essays'),
     {
@@ -353,11 +350,11 @@ test('a section in a language that runs right to left is direction.unsupported a
   assert.ok(!ocean.diagnostics.some(({ code }) => code === 'direction.unsupported'));
 });
 
-test('a finding about a section points at its index in the document, past hidden and dropped sections', () => {
+test('a finding points at its index in the document, past hidden sections and dropped records', () => {
   const pictured = manifest((raw) => {
     raw.id = 'acme-pictured';
     const slots = raw.contentSlots as Record<string, unknown>[];
-    slots.find((slot) => slot.id === 'project-images')!.max = 1;
+    slots.find((slot) => slot.id === 'covers')!.max = 1;
   });
   const registry: VariantRegistry = [
     ...REGISTRY,
@@ -368,16 +365,33 @@ test('a finding about a section points at its index in the document, past hidden
     id: aside
     body: Hidden from visitors.
 `;
+  const CODE = `
+  - kind: github
+    id: code
+    username: ines
+`;
   const SHOTS = `
-  - kind: projects
+  - kind: works
     id: shots
     title: Shots
-    items:
-      - { name: Harbor, image: { src: /harbor.jpg, alt: A harbor } }
-      - { name: Dunes, image: { src: /dunes.jpg, alt: Dunes } }
+    items: [harbor, dunes]
 `;
-  // aside (8) is hidden, so the github section (9) and the shots (10) are 8 and 9 in the view.
-  const portfolio = withSections(ASIDE, GITHUB, SHOTS);
+  // A private work comes first, so the view lists harbor and dunes one place earlier than the
+  // document does.
+  const WORKS = `works:
+  - { id: secret, title: Secret, medium: photography, visibility: private, cover: { asset: dunes-shot } }
+  - { id: harbor, title: Harbor, medium: photography, cover: { asset: harbor-shot } }
+  - { id: dunes, title: Dunes, medium: photography, cover: { asset: dunes-shot } }
+`;
+  const MEDIA = `media:
+  - { id: harbor-shot, kind: image, source: shots/harbor.jpg, alt: A harbor }
+  - { id: dunes-shot, kind: image, source: shots/dunes.jpg, alt: Dunes }
+`;
+  // aside (9) is hidden, so the second github section (10) and the shots (11) are 9 and 10
+  // in the view.
+  const portfolio = withSections(ASIDE, CODE, SHOTS)
+    .replace('\nworks:\n', `\n${WORKS}`)
+    .replace('\nsections:\n', `\n${MEDIA}sections:\n`);
   const unit = pair(site('acme-pictured', 'sections:\n  aside: { hidden: true }\n'), portfolio);
   const report = compatibilityFor(unit, { registry });
   assert.deepEqual(
@@ -385,18 +399,23 @@ test('a finding about a section points at its index in the document, past hidden
       ([code]) => code === 'kind.unsupported' || code === 'slot.overflow',
     ),
     [
-      ['kind.unsupported', 'warning', 'portfolio', '/sections/9'],
-      ['slot.overflow', 'warning', 'portfolio', '/sections/10/items/1/image'],
+      ['kind.unsupported', 'warning', 'portfolio', '/sections/7'],
+      ['kind.unsupported', 'warning', 'portfolio', '/sections/10'],
+      // The dunes cover, the view's second and the document's third work.
+      ['slot.overflow', 'warning', 'portfolio', '/works/2/cover'],
     ],
   );
-  // A dropped section's id, repeated by a later one, doesn't take its place:
-  // the unregistered extension section (8) is dropped, and the github section
-  // (9) is its own.
-  const repeated = withSections(SHOWS.replace('id: shows', 'id: code'), GITHUB);
+  // A dropped section's id, repeated by a later one, doesn't take its place: the
+  // unregistered extension section (9) is dropped, and the github section (10) is its own.
+  // The repeat is id.duplicate, which blocks publishing, but the pair still previews.
+  const repeated = withSections(SHOWS.replace('id: shows', 'id: code'), CODE);
   const dropped = compatibilityFor(pair(site('acme-ocean'), repeated), { registry: REGISTRY });
   assert.deepEqual(
     where(dropped.diagnostics).filter(([code]) => code === 'kind.unsupported'),
-    [['kind.unsupported', 'warning', 'portfolio', '/sections/9']],
+    [
+      ['kind.unsupported', 'warning', 'portfolio', '/sections/7'],
+      ['kind.unsupported', 'warning', 'portfolio', '/sections/10'],
+    ],
   );
 });
 
@@ -555,7 +574,7 @@ test("a candidate is evaluated on its own selection, whatever the site's is", ()
     version: '1.0.0',
   });
   assert.deepEqual(where(candidate.diagnostics), [
-    ['slot.required-empty', 'blocks-publish', 'portfolio', '/sections'],
+    ['kind.unsupported', 'warning', 'portfolio', '/sections/7'],
     ['route.unknown', 'warning', 'site', '/routes/reels'],
     ['slot.recommended-empty', 'warning', 'site', '/variantControls/acme-ocean/values/leadSection'],
   ]);

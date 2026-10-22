@@ -186,6 +186,8 @@ export interface ViewOptions {
 /** The records the view keeps, by id, and the parts of the practice and the contact record. */
 export interface ReachedRecords {
   readonly sections: readonly Section[];
+  /** Where each of `sections` sits in the portfolio document, in the same order. */
+  readonly sectionIndexes: readonly number[];
   readonly works: ReadonlySet<string>;
   readonly evidence: ReadonlySet<string>;
   readonly chronology: ReadonlySet<string>;
@@ -302,6 +304,19 @@ export function resolvePortfolioView(
   };
 }
 
+/**
+ * Where each section of the published view sits in the portfolio document, in
+ * the view's order: the view's section `i` is the document's
+ * `/sections/<indexes[i]>`, so a finding about it points where the owner
+ * edits it, even when an id repeats.
+ */
+export function publicSectionIndexes(
+  pair: ParsedPair,
+  options: Pick<ViewOptions, 'extensions'> = {},
+): number[] {
+  return [...reachRecords(pair, createExtensionRegistry(options.extensions ?? [])).sectionIndexes];
+}
+
 /** Whether a record is public: one left without `visibility` is. */
 export function isPublic(record: { readonly visibility?: string }): boolean {
   return record.visibility !== 'private';
@@ -333,14 +348,18 @@ export function reachRecords(pair: ParsedPair, registry: ExtensionRegistry): Rea
     if (value !== undefined && media.has(value.asset)) keptMedia.add(value.asset);
   };
 
-  const visible = (portfolio.sections ?? []).filter((section) => {
-    if (site.sections?.[section.id]?.hidden === true) return false;
+  const visible = (portfolio.sections ?? []).flatMap((section, index) => {
+    if (site.sections?.[section.id]?.hidden === true) return [];
     const extension = parseExtensionKind(section.kind);
-    return !extension || registry.extension(extension.namespace) !== undefined;
+    return !extension || registry.extension(extension.namespace) !== undefined
+      ? [{ section, index }]
+      : [];
   });
 
   const sections: Section[] = [];
-  for (const section of visible) {
+  const sectionIndexes: number[] = [];
+  for (const { section, index } of visible) {
+    const kept = sections.length;
     switch (section.kind) {
       case 'works': {
         const items = section.items.filter((id) => works.has(id));
@@ -394,6 +413,7 @@ export function reachRecords(pair: ParsedPair, registry: ExtensionRegistry): Rea
       default:
         sections.push(section);
     }
+    if (sections.length > kept) sectionIndexes.push(index);
   }
 
   for (const id of [
@@ -420,6 +440,7 @@ export function reachRecords(pair: ParsedPair, registry: ExtensionRegistry): Rea
 
   return {
     sections,
+    sectionIndexes,
     works: keptWorks,
     evidence: keptEvidence,
     chronology: keptChronology,
