@@ -92,6 +92,15 @@ const SLICE_1 = new Set([
 const ours = (diagnostics: readonly Diagnostic[]) =>
   diagnostics.filter(({ code }) => SLICE_1.has(code));
 
+/** Each of ours as its code, severity, document, and pointer. */
+const where = (diagnostics: readonly Diagnostic[]) =>
+  ours(diagnostics).map(({ code, severity, document, pointer }) => [
+    code,
+    severity,
+    document,
+    pointer,
+  ]);
+
 test('a registered selection with no stored controls or toggles has nothing to report', () => {
   const result = check(site('acme-ocean'));
   assert.deepEqual(ours(result.diagnostics), []);
@@ -167,19 +176,37 @@ sections:
 test("the selected variant's controls are checked at their pointers; another variant's are kept unchecked", () => {
   const result = check(site('acme-ocean', CONTROLS));
   assert.deepEqual(
-    ours(result.diagnostics).map(({ code, pointer, line }) => [code, pointer, line]),
+    where(result.diagnostics),
     // Sorted by pointer, as #4 sorts every record.
     [
-      ['controls.dangling-ref', '/variantControls/acme-ocean/values/featured/0', 25],
-      ['controls.invalid', '/variantControls/acme-ocean/values/heroLayout', 22],
-      ['controls.dangling-ref', '/variantControls/acme-ocean/values/leadSection', 24],
-      ['controls.invalid', '/variantControls/acme-ocean/values/sparkle', 26],
+      [
+        'controls.dangling-ref',
+        'blocks-publish',
+        'site',
+        '/variantControls/acme-ocean/values/featured/0',
+      ],
+      [
+        'controls.invalid',
+        'blocks-publish',
+        'site',
+        '/variantControls/acme-ocean/values/heroLayout',
+      ],
+      [
+        'controls.dangling-ref',
+        'blocks-publish',
+        'site',
+        '/variantControls/acme-ocean/values/leadSection',
+      ],
+      ['controls.invalid', 'blocks-publish', 'site', '/variantControls/acme-ocean/values/sparkle'],
     ],
+  );
+  assert.deepEqual(
+    ours(result.diagnostics).map(({ line }) => line),
+    [25, 22, 24, 26],
   );
   assert.ok(result.notChecked.includes('site.variantControls.acme-reef'));
   assert.ok(!result.notChecked.includes('site.variantControls.acme-ocean'));
   for (const record of ours(result.diagnostics)) {
-    assert.equal(record.severity, 'blocks-publish');
     assert.ok(record.message.startsWith(record.pointer), record.message);
   }
   // A declared control's bad value renders its default; a key no control declares is read by nothing.
@@ -197,10 +224,9 @@ test("the selected variant's controls are checked at their pointers; another var
 
 test('a stored version other than the manifest is controls.stale, reported once', () => {
   const stale = CONTROLS.replace('version: 2', 'version: 1');
-  assert.deepEqual(
-    ours(check(site('acme-ocean', stale)).diagnostics).map(({ code, pointer }) => [code, pointer]),
-    [['controls.stale', '/variantControls/acme-ocean/version']],
-  );
+  assert.deepEqual(where(check(site('acme-ocean', stale)).diagnostics), [
+    ['controls.stale', 'blocks-publish', 'site', '/variantControls/acme-ocean/version'],
+  ]);
 });
 
 test('with the selection unavailable, every stored entry is kept unchecked', () => {
@@ -225,13 +251,10 @@ const ROUTES = `routes:
 
 test("route toggles for routes the variant doesn't have warn, and home can't be turned off", () => {
   const result = check(site('acme-ocean', ROUTES));
-  assert.deepEqual(
-    ours(result.diagnostics).map(({ code, severity, pointer }) => [code, severity, pointer]),
-    [
-      ['route.required', 'warning', '/routes/home/enabled'],
-      ['route.unknown', 'warning', '/routes/reels'],
-    ],
-  );
+  assert.deepEqual(where(result.diagnostics), [
+    ['route.required', 'warning', 'site', '/routes/home/enabled'],
+    ['route.unknown', 'warning', 'site', '/routes/reels'],
+  ]);
   assert.ok(!result.notChecked.some((entry) => entry.startsWith('site.routes.')));
   // With the selection unavailable, the toggles stay unchecked, with or
   // without a fallback composition to render in its place: they're about the
@@ -250,29 +273,22 @@ test("route toggles for routes the variant doesn't have warn, and home can't be 
 
 test('live, the records that fall back only warn, and the rest keep their severity', () => {
   const unavailable = check(site('editorial', ROUTES), REGISTRY, { live: true });
-  assert.deepEqual(
-    ours(unavailable.diagnostics).map(({ code, severity }) => [code, severity]),
-    [['variant.unavailable', 'warning']],
-  );
+  assert.deepEqual(where(unavailable.diagnostics), [
+    ['variant.unavailable', 'warning', 'site', '/appearance/variant'],
+  ]);
   const controls = check(site('acme-ocean', `${CONTROLS}${ROUTES}`), REGISTRY, { live: true });
-  assert.deepEqual(
-    ours(controls.diagnostics).map(({ code, severity, pointer }) => [code, severity, pointer]),
-    [
-      ['route.required', 'warning', '/routes/home/enabled'],
-      ['route.unknown', 'warning', '/routes/reels'],
-      ['controls.dangling-ref', 'warning', '/variantControls/acme-ocean/values/featured/0'],
-      ['controls.invalid', 'warning', '/variantControls/acme-ocean/values/heroLayout'],
-      ['controls.dangling-ref', 'warning', '/variantControls/acme-ocean/values/leadSection'],
-      ['controls.invalid', 'warning', '/variantControls/acme-ocean/values/sparkle'],
-    ],
-  );
+  assert.deepEqual(where(controls.diagnostics), [
+    ['route.required', 'warning', 'site', '/routes/home/enabled'],
+    ['route.unknown', 'warning', 'site', '/routes/reels'],
+    ['controls.dangling-ref', 'warning', 'site', '/variantControls/acme-ocean/values/featured/0'],
+    ['controls.invalid', 'warning', 'site', '/variantControls/acme-ocean/values/heroLayout'],
+    ['controls.dangling-ref', 'warning', 'site', '/variantControls/acme-ocean/values/leadSection'],
+    ['controls.invalid', 'warning', 'site', '/variantControls/acme-ocean/values/sparkle'],
+  ]);
   const stale = CONTROLS.replace('version: 2', 'version: 1');
-  assert.deepEqual(
-    ours(check(site('acme-ocean', stale), REGISTRY, { live: true }).diagnostics).map(
-      ({ code, severity }) => [code, severity],
-    ),
-    [['controls.stale', 'warning']],
-  );
+  assert.deepEqual(where(check(site('acme-ocean', stale), REGISTRY, { live: true }).diagnostics), [
+    ['controls.stale', 'warning', 'site', '/variantControls/acme-ocean/version'],
+  ]);
   // Not live, as #3's publish checks, every one of them blocks publishing.
   const published = ours(check(site('acme-ocean', CONTROLS)).diagnostics);
   assert.deepEqual([...new Set(published.map(({ severity }) => severity))], ['blocks-publish']);
