@@ -1,0 +1,24 @@
+{
+  "id": "fixture-notes",
+  "name": "Notes (route fixture)",
+  "promise": "Every section, and a notes page listing them, for the route tests.",
+  "description": "A test fixture the route tests install in a copy of the repository, never in a release. The home page renders every section, and notes lists their titles.",
+  "contract": "2.0",
+  "schemas": { "portfolio": { "min": 2, "max": 2 }, "site": { "min": 2, "max": 2 } },
+  "tokenContract": 0,
+  "compositionFamily": "custom",
+  "motionIntent": "still",
+  "performanceTier": "light",
+  "renderedKinds": [],
+  "unsupportedKinds": [],
+  "contentSlots": [],
+  "routes": {
+    "home": "shared",
+    "work": "shared",
+    "views": [{ "id": "notes", "under": "home", "type": "path", "segment": "notes" }]
+  },
+  "controls": { "version": 1, "items": [], "migrations": [] },
+  "visitorControl": { "placement": "header" },
+  "textDirection": ["ltr"],
+  "provenance": { "provisional": false, "sources": [] }
+}

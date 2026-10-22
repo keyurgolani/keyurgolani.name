@@ -1,0 +1,27 @@
+{
+  "id": "fixture-chapters",
+  "name": "Chapters (route fixture)",
+  "promise": "Each titled section on its own page, for the route tests.",
+  "description": "A test fixture the route tests install in a copy of the repository, never in a release. The home page lists the titled sections, chapters/{chapter} renders one, and a work has a credits view.",
+  "contract": "2.0",
+  "schemas": { "portfolio": { "min": 2, "max": 2 }, "site": { "min": 2, "max": 2 } },
+  "tokenContract": 0,
+  "compositionFamily": "custom",
+  "motionIntent": "still",
+  "performanceTier": "light",
+  "renderedKinds": [],
+  "unsupportedKinds": [],
+  "contentSlots": [],
+  "routes": {
+    "home": "shared",
+    "work": "shared",
+    "views": [
+      { "id": "chapters", "under": "home", "type": "path", "segment": "chapters/{chapter}" },
+      { "id": "credits", "under": "work", "type": "path", "segment": "credits" }
+    ]
+  },
+  "controls": { "version": 1, "items": [], "migrations": [] },
+  "visitorControl": { "placement": "header" },
+  "textDirection": ["ltr"],
+  "provenance": { "provisional": false, "sources": [] }
+}

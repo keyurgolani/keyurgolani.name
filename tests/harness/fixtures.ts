@@ -12,6 +12,7 @@
 import path from 'node:path';
 import { test as base } from '@playwright/test';
 import { startApp } from './app-server.mjs';
+import { fixtureHostWeb } from './fixture-host.mjs';
 
 export { expect } from '@playwright/test';
 
@@ -46,6 +47,11 @@ export interface AppOptions {
   envFiles?: Record<string, { path: string; text: string }>;
   /** A data directory made under the app's root, mode 0700, as PORTFOLIO_DATA_DIR. */
   dataName?: string;
+  /**
+   * Run the fixture host's build (fixture-host.mjs), which registers the test
+   * variants, in place of this checkout's. Only the route specs build one.
+   */
+  fixtureHost?: boolean;
 }
 
 export interface App {
@@ -87,7 +93,10 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
         workerInfo.project.outputDir,
         `app-server-worker-${workerInfo.workerIndex}.log`,
       );
-      const app = await startApp({ ...appOptions, logFile });
+      const { fixtureHost, ...options } = appOptions;
+      // The global setup that built it ran before this worker started.
+      const web = fixtureHost ? fixtureHostWeb() : undefined;
+      const app = await startApp({ ...options, web, logFile });
       await provide(app);
       await app.stop();
     },
