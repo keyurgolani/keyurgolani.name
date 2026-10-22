@@ -1,0 +1,19 @@
+{
+  "kind": "color-scheme",
+  "base": "warm-parchment",
+  "description": "warm-parchment with a light data-categorical-2 at 3.24:1 on the canvas and 2.9:1 on surface-default, where categorical data is checked.",
+  "patch": {
+    "light": {
+      "data-categorical-2": "#778969"
+    }
+  },
+  "expect": [
+    {
+      "pair": {
+        "set": "light",
+        "foreground": "data-categorical-2",
+        "ground": "surface-default"
+      }
+    }
+  ]
+}

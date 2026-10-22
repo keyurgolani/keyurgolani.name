@@ -1,0 +1,13 @@
+{
+  "kind": "design-language",
+  "base": "platform-neutral",
+  "description": "platform-neutral with a part taken out of the flow, where it could cover the page.",
+  "patch": {
+    "stylesheet": "./styles.css"
+  },
+  "expect": [
+    {
+      "problem": "position: absolute takes the part out of the flow"
+    }
+  ]
+}

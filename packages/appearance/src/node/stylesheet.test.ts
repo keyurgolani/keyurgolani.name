@@ -100,44 +100,47 @@ test('each refusal the refined body lists', () => {
   refuses(`${slot} { background: rgb(0 0 0); }`, /can't make a color with rgb\(\)/);
   refuses(`@import "elsewhere.css";`, /@import can't import another stylesheet/);
   refuses(`@font-face { font-family: Hijack; }`, /@font-face can't declare a font/);
-  refuses(`:root { opacity: 0.5; }`, /uses :root/);
-  refuses(`html ${slot} { opacity: 0.5; }`, /uses html, outside every boundary/);
-  refuses(`body > ${slot} { opacity: 0.5; }`, /uses body, outside every boundary/);
-  refuses(`${slot} { opacity: 1 !important; }`, /can't use !important/);
+  refuses(`:root { border-radius: 0; }`, /uses :root/);
+  refuses(`html ${slot} { border-radius: 0; }`, /uses html, outside every boundary/);
+  refuses(`body > ${slot} { border-radius: 0; }`, /uses body, outside every boundary/);
+  refuses(`${slot} { border-radius: 0 !important; }`, /can't use !important/);
 });
 
 test('selectors target only [data-ui-slot] parts and state attributes', () => {
-  refuses('.card { opacity: 0.5; }', /uses a class/);
-  refuses('#main { opacity: 0.5; }', /uses an id/);
-  refuses('div { opacity: 0.5; }', /uses the element div/);
-  refuses('* { opacity: 0.5; }', /uses \*/);
+  refuses('.card { border-radius: 0; }', /uses a class/);
+  refuses('#main { border-radius: 0; }', /uses an id/);
+  refuses('div { border-radius: 0; }', /uses the element div/);
+  refuses('* { border-radius: 0; }', /uses \*/);
   refuses(
-    '[data-state="open"] { opacity: 0.5; }',
+    '[data-state="open"] { border-radius: 0; }',
     /every part of a language's selector is a \[data-ui-slot\] part/,
   );
-  refuses('[data-ui-slot] [data-state="open"] { opacity: 0.5; }', /every part/);
-  refuses(':hover > [data-ui-slot] { opacity: 0.5; }', /every part/);
-  refuses('[data-variant="x"] [data-ui-slot] { opacity: 0.5; }', /tests \[data-variant\]/);
-  refuses('[data-ui-slot^="tabs"] { opacity: 0.5; }', /can't use "\^"/);
-  refuses('[data-ui-slot="tabs" i] { opacity: 0.5; }', /an attribute test is/);
-  refuses('[data-ui-slot="Tabs"] { opacity: 0.5; }', /lowercase value/);
-  refuses('[data-ui-slot]:scope { opacity: 0.5; }', /uses :scope/);
-  refuses('[data-ui-slot]:visited { opacity: 0.5; }', /isn't a state pseudo-class/);
-  refuses('[data-ui-slot]::selection { opacity: 0.5; }', /uses ::selection/);
+  refuses('[data-ui-slot] [data-state="open"] { border-radius: 0; }', /every part/);
+  refuses(':hover > [data-ui-slot] { border-radius: 0; }', /every part/);
+  refuses('[data-variant="x"] [data-ui-slot] { border-radius: 0; }', /tests \[data-variant\]/);
+  refuses('[data-ui-slot^="tabs"] { border-radius: 0; }', /can't use "\^"/);
+  refuses('[data-ui-slot="tabs" i] { border-radius: 0; }', /an attribute test is/);
+  refuses('[data-ui-slot="Tabs"] { border-radius: 0; }', /lowercase value/);
+  refuses('[data-ui-slot]:scope { border-radius: 0; }', /uses :scope/);
+  refuses('[data-ui-slot]:visited { border-radius: 0; }', /isn't a state pseudo-class/);
+  refuses('[data-ui-slot]::selection { border-radius: 0; }', /uses ::selection/);
   refuses(
-    '[data-ui-slot]::before [data-ui-slot] { opacity: 0.5; }',
+    '[data-ui-slot]::before [data-ui-slot] { border-radius: 0; }',
     /pseudo-element before the end/,
   );
   refuses(
-    '[data-ui-slot]:not([data-ui-slot] [data-state]) { opacity: 0.5; }',
+    '[data-ui-slot]:not([data-ui-slot] [data-state]) { border-radius: 0; }',
     /combinator inside :not/,
   );
-  refuses('[data-ui-slot]:not(:is([data-state])) { opacity: 0.5; }', /nests :is\(\)/);
-  refuses('[data-ui-slot]:nth-child(2n of [data-ui-slot]) { opacity: 0.5; }', /takes :nth-child/);
-  refuses('[data-ui-slot]:has(> [data-state="open"]) { opacity: 0.5; }', /every part/);
+  refuses('[data-ui-slot]:not(:is([data-state])) { border-radius: 0; }', /nests :is\(\)/);
+  refuses(
+    '[data-ui-slot]:nth-child(2n of [data-ui-slot]) { border-radius: 0; }',
+    /takes :nth-child/,
+  );
+  refuses('[data-ui-slot]:has(> [data-state="open"]) { border-radius: 0; }', /every part/);
   // :is() counts as a slot when every alternative is one.
-  assert.ok(read(':is([data-ui-slot="a"], [data-ui-slot="b"]) { opacity: 0.5; }').ok);
-  refuses(':is([data-ui-slot="a"], [data-state="b"]) { opacity: 0.5; }', /every part/);
+  assert.ok(read(':is([data-ui-slot="a"], [data-ui-slot="b"]) { border-radius: 0; }').ok);
+  refuses(':is([data-ui-slot="a"], [data-state="b"]) { border-radius: 0; }', /every part/);
 });
 
 test('declarations can only use tokens for type, motion, and color', () => {
@@ -186,8 +189,74 @@ test('declarations can only use tokens for type, motion, and color', () => {
   );
 });
 
+test('display, visibility, content-visibility, and position take a listed keyword, never a token', () => {
+  const slot = '[data-ui-slot="surface"]';
+  // A token's value lands at compute time, where nothing reads it first.
+  refuses(`${slot} { display: var(--ui-texture); }`, /display: var\(--ui-texture\) isn't a value/);
+  refuses(`${slot} { display: var(--ui-texture); }`, /written out, never through a token/);
+  refuses(`${slot} { visibility: var(--ui-motion-exit); }`, /never through a token/);
+  refuses(`${slot} { position: var(--ui-motion-enter); }`, /never through a token/);
+  refuses(`${slot} { content-visibility: var(--ui-motion-exit); }`, /never through a token/);
+  refuses(`${slot} { visibility: collapse; }`, /visibility: collapse hides the part/);
+  refuses(`${slot} { content-visibility: hidden; }`, /skips rendering the part's contents/);
+  refuses(`${slot} { position: absolute; inset: 0; }`, /takes the part out of the flow/);
+  refuses(`${slot} { display: table; }`, /it takes block, inline, inline-block, flex/);
+  refuses(`${slot} { display: block flex; }`, /isn't a value a language may give display/);
+  refuses(`${slot} { position: revert-layer; }`, /it takes static or relative/);
+  const kept = read(`${slot} {
+    display: Flex;
+    visibility: visible;
+    content-visibility: auto;
+    position: relative;
+  }`);
+  assert.ok(kept.ok);
+  assert.deepEqual(kept.ok && kept.nodes[0]!.type === 'rule' ? kept.nodes[0].declarations : [], [
+    { property: 'display', value: 'flex' },
+    { property: 'visibility', value: 'visible' },
+    { property: 'content-visibility', value: 'auto' },
+    { property: 'position', value: 'relative' },
+  ]);
+});
+
+test('motion, blur, opacity, and filters go only through the tokens the accessibility layer overrides', () => {
+  const slot = '[data-ui-slot="action"]';
+  refuses(
+    `${slot}:hover { transform: translateY(-12px) rotate(8deg); transition: transform var(--ui-motion-slow); }`,
+    /moves the part outside the tokens/,
+  );
+  refuses(`${slot} { translate: 0 -12px; }`, /translate: 0 -12px moves the part/);
+  refuses(`${slot} { scale: 1.5; }`, /scale: 1\.5 moves the part/);
+  refuses(`${slot} { rotate: 8deg; }`, /rotate: 8deg moves the part/);
+  refuses(
+    `${slot} { transform: var(--ui-radius-card); }`,
+    /it takes none, var\(--ui-state-hover-transform\)/,
+  );
+  refuses(`${slot} { backdrop-filter: blur(24px); }`, /blurs outside the tokens/);
+  refuses(`${slot} { -webkit-backdrop-filter: blur(24px); }`, /blurs outside the tokens/);
+  refuses(`${slot} { backdrop-filter: blur(var(--ui-radius-card)); }`, /blurs outside the tokens/);
+  refuses(`${slot} { opacity: 0.6; }`, /sets opacity outside the tokens/);
+  refuses(`${slot} { opacity: var(--ui-texture); }`, /sets opacity outside the tokens/);
+  refuses(`${slot} { filter: opacity(0); }`, /filters the part/);
+  refuses(`${slot} { filter: blur(24px); }`, /filters the part/);
+  assert.ok(
+    read(`${slot}:hover {
+      transform: var(--ui-state-hover-transform);
+      translate: none;
+      transition: transform var(--ui-motion-fast) var(--ui-motion-easing);
+    }
+    ${slot}:active { scale: var(--ui-state-active-transform); }
+    [data-ui-slot="surface"] {
+      opacity: var(--ui-surface-opacity);
+      backdrop-filter: blur(var(--ui-backdrop-blur));
+      -webkit-backdrop-filter: none;
+      filter: none;
+    }
+    ${slot}[aria-busy="true"] { opacity: var(--ui-state-loading-opacity); }`).ok,
+  );
+});
+
 test('at-rules a language can use, and the ones it cannot', () => {
-  const rule = '[data-ui-slot="action"] { opacity: 0.5; }';
+  const rule = '[data-ui-slot="action"] { border-radius: 0; }';
   refuses(`@layer language { ${rule} }`, /@layer can't declare a layer/);
   refuses('@layer reset, language;', /@layer can't declare a layer/);
   refuses(`@scope ([data-x]) { ${rule} }`, /@scope can't open a scope/);
@@ -195,7 +264,7 @@ test('at-rules a language can use, and the ones it cannot', () => {
     '@keyframes spin { to { transform: rotate(1turn); } }',
     /@keyframes can't declare keyframes/,
   );
-  refuses('@-webkit-keyframes spin { to { opacity: 1; } }', /can't declare keyframes/);
+  refuses('@-webkit-keyframes spin { to { border-radius: 0; } }', /can't declare keyframes/);
   refuses(`@page { margin: 0; }`, /isn't an at-rule a language can use/);
   refuses('@charset "utf-8";', /isn't an at-rule a language can use/);
   refuses(
@@ -218,34 +287,37 @@ test('at-rules a language can use, and the ones it cannot', () => {
 
 test('nothing reaches past the scope: nesting, stray braces, escapes, and unclosed text', () => {
   const slot = '[data-ui-slot="action"]';
-  refuses(`${slot} { opacity: 1; } } :root { opacity: 0; }`, /closes a block it never opened/);
   refuses(
-    `${slot} { opacity: 1; [data-ui-slot="x"] { opacity: 0; } }`,
+    `${slot} { border-radius: 0; } } :root { border-radius: 0; }`,
+    /closes a block it never opened/,
+  );
+  refuses(
+    `${slot} { border-radius: 0; [data-ui-slot="x"] { border-radius: 0; } }`,
     /nests a rule inside a rule/,
   );
-  refuses(`${slot} { &:hover { opacity: 0; } }`, /can't nest rules with &/);
-  refuses(`${slot} { opacity: 1;`, /opens a block it never closes/);
-  refuses(`${slot} { opacity: 1; } /* never closed`, /opens a comment it never closes/);
-  refuses(`[data-ui-slot="a] { opacity: 1; }`, /opens a string it never closes/);
+  refuses(`${slot} { &:hover { border-radius: 0; } }`, /can't nest rules with &/);
+  refuses(`${slot} { border-radius: 0;`, /opens a block it never closes/);
+  refuses(`${slot} { border-radius: 0; } /* never closed`, /opens a comment it never closes/);
+  refuses(`[data-ui-slot="a] { border-radius: 0; }`, /opens a string it never closes/);
   refuses(`${slot} { dis\\play: none; }`, /can't use a backslash/);
-  refuses(`[data-ui-slot="\\61"] { opacity: 1; }`, /can't use a backslash/);
-  refuses(`${slot} { opacity: 1; }\u00a0`, /plain ASCII/);
+  refuses(`[data-ui-slot="\\61"] { border-radius: 0; }`, /can't use a backslash/);
+  refuses(`${slot} { border-radius: 0; }\u00a0`, /plain ASCII/);
   // A Cyrillic a, which looks like the Latin one.
-  refuses(`[data-ui-slot="\u0430ction"] { opacity: 1; }`, /plain ASCII/);
+  refuses(`[data-ui-slot="\u0430ction"] { border-radius: 0; }`, /plain ASCII/);
   refuses(`${slot} { opacity: calc(1 + (2); }`, /leaves a parenthesis open/);
-  refuses(`${slot} { opacity: 1; } trailing`, /isn't a rule/);
-  refuses(`opacity: 1;`, /declaration outside any rule/);
+  refuses(`${slot} { border-radius: 0; } trailing`, /isn't a rule/);
+  refuses(`border-radius: 0;`, /declaration outside any rule/);
   refuses(
-    `${slot} { background: var(--color-accent); } @media (min-width: 1px) { :root { opacity: 0 } }`,
+    `${slot} { background: var(--color-accent); } @media (min-width: 1px) { :root { border-radius: 0 } }`,
     /uses :root/,
   );
   // A brace inside a string never closes anything.
-  refuses(`[data-ui-slot="}"] { opacity: 1; }`, /an attribute test is/);
+  refuses(`[data-ui-slot="}"] { border-radius: 0; }`, /an attribute test is/);
   refuses(`${slot}::before { content: "}"; }`, /adds text/);
 });
 
 test('problems carry their line and column, and the reader never throws', () => {
-  const result = read('[data-ui-slot="a"] {\n  opacity: 1;\n  display: none;\n}\n');
+  const result = read('[data-ui-slot="a"] {\n  border-radius: 0;\n  display: none;\n}\n');
   assert.equal(result.ok, false);
   assert.deepEqual(result.ok ? null : result.problems[0]!, {
     line: 3,
@@ -277,7 +349,7 @@ test('problems carry their line and column, and the reader never throws', () => 
   }
   assert.ok(read('').ok, 'an empty stylesheet reads as no rules');
   refuses(
-    `[data-ui-slot] { opacity: 1; }\n${' '.repeat(MAX_STYLESHEET_BYTES)}`,
+    `[data-ui-slot] { border-radius: 0; }\n${' '.repeat(MAX_STYLESHEET_BYTES)}`,
     /larger than 32 KB/,
   );
 });

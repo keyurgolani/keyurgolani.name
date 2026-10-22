@@ -1,7 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { contrast, deltaE, isHex, mix } from './color';
-import { anchorV1, DISTINCT_DELTA, DISTINCT_PAIRS, highContrastV1, type Anchors } from './derive';
+import {
+  ACCENT_DELTA,
+  anchorV1,
+  DISTINCT_PAIRS,
+  highContrastV1,
+  QUIET_TEXT_DELTA,
+  type Anchors,
+} from './derive';
 import { COLOR_ROLES, type ColorTokens } from './tokens';
 import { WARM_PARCHMENT, pick, randomHex, seeded } from './test-support/packs';
 import { anchorStops, assertStops, highContrastStops } from './test-support/stops';
@@ -95,13 +102,14 @@ test('warm-parchment passes every pair anchor-v1 solves, moving only what failed
   assertGate(light, 'light');
   assertGate(dark, 'dark');
   // text-muted's 44% fails on surface-prominent and moves toward text, onto
-  // text-secondary's 28% mix; text-secondary then moves further toward text
-  // to keep the two apart (Slice 2).
+  // text-secondary's 28% mix, and stays at its contrast limit; text-secondary
+  // then moves further toward text, until it's QUIET_TEXT_DELTA away (Slice 2).
   assert.notEqual(light['text-muted'], mix(LIGHT.text, LIGHT.canvas, 44));
   assert.ok(worst(light, 'text-muted') >= 4.6);
   assert.equal(light['text-muted'], mix(LIGHT.text, LIGHT.canvas, 28));
   assert.notEqual(light['text-secondary'], mix(LIGHT.text, LIGHT.canvas, 28));
-  assert.ok(deltaE(light['text-secondary'], light['text-muted']) >= DISTINCT_DELTA);
+  assert.ok(deltaE(light['text-secondary'], light['text-muted']) >= QUIET_TEXT_DELTA);
+  assert.ok(deltaE(dark['text-secondary'], dark['text-muted']) >= QUIET_TEXT_DELTA);
   assert.ok(
     contrast(light['text-secondary'], LIGHT.canvas) > contrast(light['text-muted'], LIGHT.canvas),
   );
@@ -161,15 +169,15 @@ test('property: for any anchors whose text passes, every role anchor-v1 solves p
 });
 
 /**
- * The hierarchy holds: each pair DISTINCT_PAIRS names is DISTINCT_DELTA
+ * The hierarchy holds: each pair DISTINCT_PAIRS names is its least distance
  * apart, unless the role that moves to make room has nowhere left to go
  * (text-secondary became the text color, or a state became black or white).
  */
 function assertDistinct(set: ColorTokens, label: string) {
   const away = set['on-accent'] === '#000000' ? '#ffffff' : '#000000';
-  for (const [first, second] of DISTINCT_PAIRS) {
+  for (const [first, second, least] of DISTINCT_PAIRS) {
     const distance = deltaE(set[first], set[second]);
-    if (distance >= DISTINCT_DELTA) continue;
+    if (distance >= least) continue;
     const saturated =
       second === 'text-muted'
         ? set['text-secondary'] === set['text-primary']
@@ -178,14 +186,48 @@ function assertDistinct(set: ColorTokens, label: string) {
   }
 }
 
+test("each threshold sits under the prototype's own closest pair, and secondary keeps clear of muted", () => {
+  // The prototype's formulas (appearance-catalog.js, deriveColorTokens): the
+  // states mix the accent 12% and 22% toward text, and secondary and muted
+  // mix text 28% and, in dark, 34% toward canvas.
+  const prototype = (canvas: string, text: string, accent: string) => ({
+    hover: mix(accent, text, 12),
+    active: mix(accent, text, 22),
+    secondary: mix(text, canvas, 28),
+    muted: mix(text, canvas, 34),
+  });
+  // Its closest accent states: material-hct's, generated, and oled-black's, single-mode.
+  for (const [canvas, text, accent] of [
+    ['#1c1b1f', '#e6e1e5', '#d0bcff'],
+    ['#000000', '#f5f5f2', '#67e8f9'],
+  ] as const) {
+    const states = prototype(canvas, text, accent);
+    assert.ok(deltaE(states.hover, states.active) >= ACCENT_DELTA, accent);
+    // Slice 2's first single threshold, 0.015, refused the prototype's own states.
+    assert.ok(deltaE(states.hover, states.active) < 0.015, accent);
+  }
+  // Its closest quieter text roles: low-stimulus-warm's dark.
+  const quiet = prototype('#26231f', '#e8e0d4', '#b89c86');
+  assert.ok(deltaE(quiet.secondary, quiet.muted) >= QUIET_TEXT_DELTA);
+  // warm-parchment's secondary moves toward text until it clears muted, which stays put.
+  for (const [anchors, mode] of [
+    [LIGHT, 'light'],
+    [DARK, 'dark'],
+  ] as const) {
+    const set = anchorV1(anchors, mode);
+    assert.ok(deltaE(set['text-secondary'], set['text-muted']) >= QUIET_TEXT_DELTA, mode);
+    assert.ok(worst(set, 'text-muted') < 4.6 + 0.2, `${mode}: muted sits at its contrast limit`);
+  }
+});
+
 test('anchor-v1 keeps the accent states and the two quieter text roles apart', () => {
   for (const [anchors, mode] of [
     [LIGHT, 'light'],
     [DARK, 'dark'],
   ] as const) {
     const set = anchorV1(anchors, mode);
-    for (const [first, second] of DISTINCT_PAIRS) {
-      assert.ok(deltaE(set[first], set[second]) >= DISTINCT_DELTA, `${mode} ${first} ${second}`);
+    for (const [first, second, least] of DISTINCT_PAIRS) {
+      assert.ok(deltaE(set[first], set[second]) >= least, `${mode} ${first} ${second}`);
     }
   }
   // A white on-accent darkens the states: away from white is toward black.

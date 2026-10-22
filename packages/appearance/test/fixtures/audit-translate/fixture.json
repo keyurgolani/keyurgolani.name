@@ -1,0 +1,13 @@
+{
+  "kind": "design-language",
+  "base": "platform-neutral",
+  "description": "platform-neutral with a literal translate, which reduced motion can't turn off.",
+  "patch": {
+    "stylesheet": "./styles.css"
+  },
+  "expect": [
+    {
+      "problem": "translate: 0 -12px moves the part outside the tokens"
+    }
+  ]
+}

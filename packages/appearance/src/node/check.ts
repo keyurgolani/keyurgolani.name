@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url';
 import type { DisplayMode } from '@portfolio/schema';
 import { PACK_AXES, PACK_KIND_BY_AXIS, type PackAxis, type PackKind } from '../axes';
 import { deltaE } from '../color';
-import { DISTINCT_DELTA, DISTINCT_PAIRS } from '../derive';
+import { DISTINCT_PAIRS } from '../derive';
 import { gateLanguage, gateSet, gateTypography, type GatePair } from '../gate';
 import { startsWithLayerOrder } from '../layers';
 import {
@@ -24,6 +24,7 @@ import {
 } from '../registry';
 import { validatePackManifest } from '../validate-pack';
 import { compilePack } from './compile';
+import { readLanguageStylesheet } from './stylesheet';
 import {
   COLOR_SET_NAMES,
   isHighContrastSet,
@@ -43,7 +44,7 @@ export interface GateFailure {
   readonly pair: GatePair;
 }
 
-/** Two roles a scheme's set holds closer than DISTINCT_DELTA. */
+/** Two roles a scheme's set holds closer than the least distance their pair keeps. */
 export interface HierarchyFailure {
   readonly scheme: string;
   readonly set: ColorSetName;
@@ -119,16 +120,20 @@ export function setsForMode(sets: SchemeSets, mode: DisplayMode): ColorSetName[]
   return COLOR_SET_NAMES.filter((name) => own.includes(name) || print.includes(name));
 }
 
-/** The pairs a scheme's set keeps apart that sit closer than DISTINCT_DELTA. */
+/**
+ * The pairs a scheme's set keeps apart that sit closer than their least
+ * distance: ACCENT_DELTA for the accent states, QUIET_TEXT_DELTA for
+ * text-secondary and text-muted.
+ */
 export function hierarchyFailures(scheme: string, sets: SchemeSets): HierarchyFailure[] {
   const failures: HierarchyFailure[] = [];
   for (const name of COLOR_SET_NAMES) {
     const set = sets[name];
     if (!set) continue;
     // A high-contrast set's text roles are all the text color, by high-contrast-v1.
-    for (const [first, second] of isHighContrastSet(name) ? ACCENT_PAIRS : DISTINCT_PAIRS) {
+    for (const [first, second, least] of isHighContrastSet(name) ? ACCENT_PAIRS : DISTINCT_PAIRS) {
       const distance = deltaE(set[first], set[second]);
-      if (distance < DISTINCT_DELTA) {
+      if (distance < least) {
         failures.push({
           scheme,
           set: name,
@@ -461,7 +466,25 @@ export function runKnownBad(fixture: KnownBadFixture, meta: AppearanceMeta): Kno
     kind: fixture.kind,
     packageName: '@portfolio/appearance',
   });
-  if (!validated.ok) return { problems: validated.diagnostics.map(({ message }) => message) };
+  if (!validated.ok) {
+    // A language whose manifest fails still has its stylesheet read, so an
+    // input fails for every reason it has, not only the first one.
+    const sheet = fixture.manifest.stylesheet;
+    const stylesheet =
+      fixture.kind === 'design-language' && typeof sheet === 'string'
+        ? readLanguageStylesheet(fs.readFileSync(path.join(fixture.dir, sheet), 'utf8'))
+        : null;
+    return {
+      problems: [
+        ...validated.diagnostics.map(({ message }) => message),
+        ...(stylesheet && !stylesheet.ok
+          ? stylesheet.problems.map(
+              ({ line, column, message }) => `${sheet}:${line}:${column} ${message}`,
+            )
+          : []),
+      ],
+    };
+  }
   const compiled = compilePack({
     kind: fixture.kind,
     manifest: validated.manifest,

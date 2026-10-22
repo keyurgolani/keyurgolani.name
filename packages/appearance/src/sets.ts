@@ -4,7 +4,7 @@
 
 import type { BaseMode } from './axes';
 import { highContrastV1 } from './derive';
-import type { ColorTokens } from './tokens';
+import type { ColorTokens } from './roles';
 
 /** A rendered set's name: a base mode, or the high-contrast set of one polarity. */
 export type ColorSetName = 'light' | 'dark' | 'high-contrast-light' | 'high-contrast-dark';

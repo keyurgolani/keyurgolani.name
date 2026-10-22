@@ -1,0 +1,4 @@
+[data-ui-slot='action']:hover {
+  translate: 0 -12px;
+  transition: translate var(--ui-motion-slow);
+}

@@ -1,8 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { LAYER_ORDER } from '../layers';
-import { COLOR_ROLES } from '../tokens';
+import { COLOR_ROLES, LANGUAGE_KEYS } from '../tokens';
 import { compilePlatform, platformStylesheet } from './platform';
+import { readLanguageStylesheet } from './stylesheet';
 
 // The platform stylesheet (#19, Slice 2, item 3): the reset, utilities, and
 // accessibility layers, where accessibility rules override tokens, not rules.
@@ -110,6 +111,53 @@ test('high contrast makes the signature fill solid text-primary and drops the gl
   for (const block of [explicit, preferred]) {
     assert.equal(block.get('--ui-signature-fill'), solid);
     assert.equal(block.get('--ui-emphasis-glow'), 'none');
+  }
+});
+
+test('every token a language may move, blur, or fade a part through is one the accessibility layer sets', () => {
+  // Which --ui-* tokens the stylesheet reader lets each effect read.
+  const accepted = (declaration: (token: string) => string) =>
+    LANGUAGE_KEYS.map((key) => `--ui-${key}`).filter(
+      (token) => readLanguageStylesheet(`[data-ui-slot="a"] { ${declaration(token)}; }`).ok,
+    );
+  const moves = [
+    ...new Set(
+      ['transform', 'translate', 'scale', 'rotate'].flatMap((property) =>
+        accepted((token) => `${property}: var(${token})`),
+      ),
+    ),
+  ];
+  const blurs = accepted((token) => `backdrop-filter: blur(var(${token}))`);
+  const fades = accepted((token) => `opacity: var(${token})`);
+  assert.deepEqual(moves, ['--ui-state-hover-transform', '--ui-state-active-transform']);
+  assert.deepEqual(blurs, ['--ui-backdrop-blur']);
+  assert.deepEqual(fades, [
+    '--ui-surface-opacity',
+    '--ui-state-disabled-opacity',
+    '--ui-state-loading-opacity',
+  ]);
+  // Reduced motion, a paused boundary, and print stop every move.
+  for (const [selector, within] of [
+    ['    [data-appearance-boundary]', '@media (prefers-reduced-motion: reduce)'],
+    ['  [data-appearance-boundary][data-motion="reduced"]', '@layer accessibility'],
+    ['  [data-appearance-boundary][data-motion="static"]', '@layer accessibility'],
+    ['    [data-appearance-boundary]', '@media print'],
+  ] as const) {
+    const block = declarations(selector, within);
+    for (const token of moves) assert.equal(block.get(token), 'none', `${within} ${token}`);
+  }
+  // Reduced transparency, a browser without backdrop-filter, forced colors, and print drop the
+  // blur and make surfaces opaque. The two state opacities dim a disabled or loading part,
+  // which every setting still shows.
+  for (const within of [
+    '@media (prefers-reduced-transparency: reduce)',
+    '@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)))',
+    '@media (forced-colors: active)',
+    '@media print',
+  ]) {
+    const block = declarations('    [data-appearance-boundary]', within);
+    for (const token of blurs) assert.equal(block.get(token), '0px', `${within} ${token}`);
+    assert.equal(block.get('--ui-surface-opacity'), '100%', within);
   }
 });
 

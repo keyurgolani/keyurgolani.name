@@ -1,0 +1,13 @@
+{
+  "kind": "design-language",
+  "base": "platform-neutral",
+  "description": "platform-neutral with a part stuck to the viewport.",
+  "patch": {
+    "stylesheet": "./styles.css"
+  },
+  "expect": [
+    {
+      "problem": "position: sticky pins the part to the viewport"
+    }
+  ]
+}

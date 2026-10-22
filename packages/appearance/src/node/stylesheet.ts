@@ -2,13 +2,17 @@
 // language styles the shared primitives' `[data-ui-slot]` parts and their
 // state attributes, and nothing else: no display: none, visibility: hidden,
 // non-empty content, order, grid placement, fixed or sticky position, color
-// literal, @import, @font-face, :root, html, body, or !important.
+// literal, @import, @font-face, :root, html, body, or !important. display,
+// visibility, content-visibility, and position take only a literal keyword
+// from a short list, and transforms, backdrop blur, and opacity go only
+// through the tokens the accessibility layer overrides.
 //
 // The reader takes a small, explicit subset of CSS and refuses the rest. The
 // compiler writes the rules back out from what it read, never the source
 // text, so nothing an author writes can close the language's @scope or its
 // layer, or reach the page outside them.
 
+import { LANGUAGE_KEYS } from '../tokens';
 import { stylesheetValueProblem } from '../values';
 
 export interface StylesheetProblem {
@@ -144,6 +148,101 @@ const ORDER_PROPERTIES: ReadonlySet<string> = new Set([
   'writing-mode',
   'unicode-bidi',
 ]);
+
+/**
+ * Properties a language may set only to a literal keyword from a short list,
+ * never through a token: a token, or a word off the list, could take the part
+ * off the page, out of the reading order, or over the rest of it.
+ */
+const KEYWORD_PROPERTIES: Readonly<
+  Record<
+    string,
+    { readonly allowed: readonly string[]; readonly refused: Readonly<Record<string, string>> }
+  >
+> = {
+  display: {
+    allowed: [
+      'block',
+      'inline',
+      'inline-block',
+      'flex',
+      'inline-flex',
+      'grid',
+      'inline-grid',
+      'flow-root',
+    ],
+    refused: {
+      none: 'removes the part from the page or its semantics: languages style parts, never hide them.',
+      contents:
+        'removes the part from the page or its semantics: languages style parts, never hide them.',
+    },
+  },
+  visibility: {
+    allowed: ['visible'],
+    refused: {
+      hidden: 'hides the part from assistive technology too.',
+      collapse: 'hides the part from assistive technology too.',
+    },
+  },
+  'content-visibility': {
+    allowed: ['visible', 'auto'],
+    refused: { hidden: "skips rendering the part's contents, which hides them." },
+  },
+  position: {
+    allowed: ['static', 'relative'],
+    refused: {
+      fixed: "pins the part to the viewport, which is the variant's layout to decide.",
+      sticky: "pins the part to the viewport, which is the variant's layout to decide.",
+      absolute:
+        'takes the part out of the flow, where it could cover the page: a language positions parts static or relative.',
+    },
+  },
+};
+
+const STATE_TRANSFORMS = LANGUAGE_KEYS.filter((key) => /^state-[a-z]+-transform$/.test(key)).map(
+  (key) => `var(--ui-${key})`,
+);
+const MOVES = {
+  allowed: ['none', ...STATE_TRANSFORMS],
+  message: `moves the part outside the tokens: it takes none, ${STATE_TRANSFORMS.join(', or ')}, which reduced motion turns off.`,
+};
+
+/**
+ * Effects a language may apply only through the tokens the accessibility
+ * layer overrides: reduced motion stops the state transforms, and reduced
+ * transparency, a browser without backdrop-filter, forced colors, and print
+ * make surfaces opaque and the blur 0.
+ */
+const TOKEN_ONLY_PROPERTIES: Readonly<
+  Record<string, { readonly allowed: readonly string[]; readonly message: string }>
+> = {
+  transform: MOVES,
+  translate: MOVES,
+  scale: MOVES,
+  rotate: MOVES,
+  'backdrop-filter': {
+    allowed: ['none', 'blur(var(--ui-backdrop-blur))'],
+    message:
+      'blurs outside the tokens: it takes none or blur(var(--ui-backdrop-blur)), which reduced transparency sets to 0.',
+  },
+  opacity: {
+    allowed: [
+      'var(--ui-surface-opacity)',
+      'var(--ui-state-disabled-opacity)',
+      'var(--ui-state-loading-opacity)',
+    ],
+    message:
+      'sets opacity outside the tokens: it takes var(--ui-surface-opacity), which reduced transparency makes 1, var(--ui-state-disabled-opacity), or var(--ui-state-loading-opacity).',
+  },
+  filter: {
+    allowed: ['none'],
+    message:
+      'filters the part, which no accessibility setting undoes: filter takes only none, and blur goes through backdrop-filter and --ui-backdrop-blur.',
+  },
+};
+
+const list = (words: readonly string[]) =>
+  words.length < 3 ? words.join(' or ') : `${words.slice(0, -1).join(', ')}, or ${words.at(-1)}`;
 
 /** Media features a language may branch on: the viewport and the input, never a preference. */
 const MEDIA_FEATURES: ReadonlySet<string> = new Set([
@@ -752,16 +851,22 @@ function readDeclaration(piece: string): StyleDeclaration | { readonly message: 
   ) {
     return refuse('reverses the content order, which a language must not.');
   }
-  if (base === 'display' && (words.includes('none') || words.includes('contents'))) {
-    return refuse(
-      'removes the part from the page or its semantics: languages style parts, never hide them.',
-    );
+  const keywords = KEYWORD_PROPERTIES[base];
+  if (keywords) {
+    const word = value.toLowerCase();
+    const reason = keywords.refused[word];
+    if (reason) return refuse(reason);
+    if (!keywords.allowed.includes(word)) {
+      return refuse(
+        `isn't a value a language may give ${base}: it takes ${list(keywords.allowed)}, written out, never through a token.`,
+      );
+    }
+    return { property, value: word };
   }
-  if (base === 'visibility' && (words.includes('hidden') || words.includes('collapse'))) {
-    return refuse('hides the part from assistive technology too.');
-  }
-  if (base === 'position' && (words.includes('fixed') || words.includes('sticky'))) {
-    return refuse("pins the part to the viewport, which is the variant's layout to decide.");
+  const tokens = TOKEN_ONLY_PROPERTIES[base];
+  if (tokens) {
+    if (tokens.allowed.includes(value)) return { property, value };
+    return refuse(tokens.message);
   }
   if (base === 'animation' || base === 'animation-name') {
     return refuse(

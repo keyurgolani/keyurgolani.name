@@ -1,0 +1,13 @@
+{
+  "kind": "design-language",
+  "base": "platform-neutral",
+  "description": "platform-neutral with a part whose visibility comes from a token, which could carry hidden.",
+  "patch": {
+    "stylesheet": "./styles.css"
+  },
+  "expect": [
+    {
+      "problem": "visibility: var(--ui-motion-exit) isn't a value"
+    }
+  ]
+}

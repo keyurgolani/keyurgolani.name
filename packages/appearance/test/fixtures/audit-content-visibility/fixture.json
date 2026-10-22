@@ -1,0 +1,13 @@
+{
+  "kind": "design-language",
+  "base": "platform-neutral",
+  "description": "platform-neutral with a part's contents skipped, which hides them.",
+  "patch": {
+    "stylesheet": "./styles.css"
+  },
+  "expect": [
+    {
+      "problem": "content-visibility: hidden skips rendering"
+    }
+  ]
+}

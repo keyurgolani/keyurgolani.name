@@ -1,7 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { deltaE, isHex } from '../color';
-import { DISTINCT_DELTA, DISTINCT_PAIRS } from '../derive';
+import { DISTINCT_PAIRS } from '../derive';
 import { COLOR_ROLES } from '../tokens';
 import { randomHex, seeded } from '../test-support/packs';
 import { FIXTURE_SEED, GENERATORS, runGenerator } from './index';
@@ -10,6 +13,50 @@ import { FIXTURE_SEED, GENERATORS, runGenerator } from './index';
 // returning tokens and a contrast report, with a deterministic fixture-seed.
 
 const DECLARED = { id: 'fixture-seed', version: 1, input: 'seed-color' } as const;
+
+/** Every module ./generators loads at run time, and every package specifier among them. */
+function runtimeImports(entry: string): { modules: string[]; packages: string[] } {
+  const modules = new Set<string>();
+  const packages = new Set<string>();
+  const visit = (file: string) => {
+    if (modules.has(file)) return;
+    modules.add(file);
+    const source = fs.readFileSync(file, 'utf8');
+    // import and export statements, with or without names, but not import type or export type.
+    for (const match of source.matchAll(
+      /^\s*(?:import|export)\s+(?!type\b)(?:[^'";]*?\sfrom\s+)?['"]([^'"]+)['"]/gm,
+    )) {
+      const specifier = match[1]!;
+      if (!specifier.startsWith('.')) {
+        packages.add(specifier);
+        continue;
+      }
+      const base = path.resolve(path.dirname(file), specifier);
+      visit(fs.existsSync(`${base}.ts`) ? `${base}.ts` : path.join(base, 'index.ts'));
+    }
+  };
+  visit(entry);
+  return {
+    modules: [...modules].map((file) => path.basename(file)).sort(),
+    packages: [...packages],
+  };
+}
+
+test('./generators loads none of the packages manifests need, so its bundle stays small', () => {
+  const { modules, packages } = runtimeImports(
+    fileURLToPath(new URL('./index.ts', import.meta.url)),
+  );
+  // TOKEN_CONTRACT_VERSION would bring @portfolio/variant-contract, @portfolio/schema, and yaml.
+  assert.deepEqual(packages, []);
+  assert.deepEqual(modules, [
+    'color.ts',
+    'derive.ts',
+    'gate.ts',
+    'index.ts',
+    'roles.ts',
+    'sets.ts',
+  ]);
+});
 
 test('generators are keyed by their id', () => {
   assert.deepEqual(Object.keys(GENERATORS), ['fixture-seed']);
@@ -47,9 +94,9 @@ test('property: every seed generates a scheme that passes its contrast report an
     );
     for (const mode of ['light', 'dark'] as const) {
       const set = run.result.tokens[mode];
-      for (const [first, second] of DISTINCT_PAIRS) {
+      for (const [first, second, least] of DISTINCT_PAIRS) {
         assert.ok(
-          deltaE(set[first], set[second]) >= DISTINCT_DELTA,
+          deltaE(set[first], set[second]) >= least,
           `${seedColor} ${mode}: ${first} and ${second}`,
         );
       }

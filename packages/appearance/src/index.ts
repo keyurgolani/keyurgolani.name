@@ -50,7 +50,14 @@ export {
 } from './tokens';
 export { fontStackProblem, languageValueProblem, stylesheetValueProblem } from './values';
 export { composite, contrast, deltaE, isHex, luminance, mix } from './color';
-export { anchorV1, DISTINCT_DELTA, DISTINCT_PAIRS, highContrastV1, type Anchors } from './derive';
+export {
+  ACCENT_DELTA,
+  anchorV1,
+  DISTINCT_PAIRS,
+  highContrastV1,
+  QUIET_TEXT_DELTA,
+  type Anchors,
+} from './derive';
 export {
   APPEARANCE_LAYERS,
   LAYER_ORDER,

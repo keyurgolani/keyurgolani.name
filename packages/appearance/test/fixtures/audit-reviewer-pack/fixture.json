@@ -1,0 +1,32 @@
+{
+  "kind": "design-language",
+  "base": "platform-neutral",
+  "description": "The scratch pack the review of PR #57 compiled: fixed and hidden in motion tokens, and display, position, and visibility read from them.",
+  "patch": {
+    "tokens": {
+      "motion-enter": "fixed",
+      "motion-exit": "hidden"
+    },
+    "stylesheet": "./styles.css"
+  },
+  "expect": [
+    {
+      "problem": "/tokens/motion-enter must be one of the platform's motion recipes"
+    },
+    {
+      "problem": "/tokens/motion-exit must be one of the platform's motion recipes"
+    },
+    {
+      "problem": "display: var(--ui-texture) isn't a value"
+    },
+    {
+      "problem": "position: var(--ui-motion-enter) isn't a value"
+    },
+    {
+      "problem": "visibility: var(--ui-motion-exit) isn't a value"
+    },
+    {
+      "problem": "content-visibility: hidden skips rendering"
+    }
+  ]
+}

@@ -9,8 +9,9 @@ import type { Anchors } from '../derive';
 import type { ColorTokens } from '../tokens';
 
 const HEADROOM = 0.1;
-/** The hierarchy's least OKLab distance (Slice 2), this file's own copy. */
-const DISTINCT = 0.015;
+/** The hierarchy's least OKLab distances (Slice 2), this file's own copies. */
+const ACCENT_DISTINCT = 0.011;
+const QUIET_TEXT_DISTINCT = 0.036;
 
 /**
  * How a role is solved: mixed toward a color in whole-percent steps,
@@ -41,8 +42,8 @@ export type Stop =
       readonly rule: string;
     };
 
-const apart = (color: string, others: readonly string[]) =>
-  others.every((other) => deltaE(color, other) >= DISTINCT);
+const apart = (color: string, others: readonly string[], least: number) =>
+  others.every((other) => deltaE(color, other) >= least);
 
 /** The mix rule: `start` if it passes, else its first whole-percent step toward `toward` that reaches the limit plus 0.1. */
 function solvedMix(
@@ -62,10 +63,10 @@ function solvedMix(
 
 /** text-secondary's last move: 2% steps toward text until it's apart from text-muted. */
 function apartToward(color: string, toward: string, others: readonly string[]) {
-  if (apart(color, others)) return color;
+  if (apart(color, others, QUIET_TEXT_DISTINCT)) return color;
   for (let percent = 2; percent <= 100; percent += 2) {
     const candidate = mix(color, toward, percent);
-    if (apart(candidate, others)) return candidate;
+    if (apart(candidate, others, QUIET_TEXT_DISTINCT)) return candidate;
   }
   return toward;
 }
@@ -81,7 +82,8 @@ function accentState(
   const away = contrast(on, WHITE) >= contrast(on, BLACK) ? WHITE : BLACK;
   for (let percent = start; percent <= 100; percent += 2) {
     const candidate = mix(accent, away, percent);
-    if (contrast(on, candidate) >= limit && apart(candidate, others)) return candidate;
+    if (contrast(on, candidate) >= limit && apart(candidate, others, ACCENT_DISTINCT))
+      return candidate;
   }
   return away;
 }

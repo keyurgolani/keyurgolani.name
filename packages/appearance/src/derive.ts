@@ -11,13 +11,14 @@
 //
 // Slice 2 keeps the reviewed prototype's hierarchy (#19, the owner's lead):
 // accent-hover and accent-active mix 12% and 22% away from on-accent, so
-// they stay apart from the accent and each other and only gain contrast, and
-// text-muted never collapses onto text-secondary: when the two land closer
-// than DISTINCT_DELTA, text-secondary moves further toward text.
+// they stay apart from the accent and each other and only gain contrast,
+// and text-secondary keeps clear of text-muted, which stays at its contrast
+// limit: when the two land closer than QUIET_TEXT_DELTA, text-secondary
+// moves further toward text.
 
 import { BLACK, contrast, deltaE, lightness, luminance, mix, WHITE, withLightness } from './color';
 import type { BaseMode } from './axes';
-import type { ColorTokens } from './tokens';
+import type { ColorRole, ColorTokens } from './roles';
 
 /** The colors an `anchor-v1` mode is derived from. */
 export interface Anchors {
@@ -33,24 +34,32 @@ const HIGH_CONTRAST_TEXT = 7;
 const HEADROOM = 0.1;
 
 /**
- * The least OKLab distance between roles the hierarchy keeps apart: accent,
- * accent-hover, and accent-active, and text-secondary and text-muted. The
- * reviewed prototype's own output clears it in every mode of its 22
- * non-Research schemes with both modes; its closest pair is 0.0178,
- * arctic-aurora's dark accent-hover and accent-active.
+ * The least OKLab distance between accent, accent-hover, and accent-active.
+ * Every non-Research scheme in the reviewed prototype clears it in every
+ * mode it has, generated and single-mode schemes included. The closest is
+ * material-hct's dark accent-hover and accent-active, 0.0128 with its
+ * color-mix() values rounded to hex and 0.0119 at full precision.
  */
-export const DISTINCT_DELTA = 0.015;
+export const ACCENT_DELTA = 0.011;
 
-/** The pairs of roles a solved set keeps DISTINCT_DELTA apart. */
+/**
+ * The least OKLab distance between text-secondary and text-muted: the
+ * prototype's own closest pair, low-stimulus-warm's dark, at 0.0363 rounded
+ * to hex (0.0367 at full precision). No non-Research prototype scheme falls
+ * below it.
+ */
+export const QUIET_TEXT_DELTA = 0.036;
+
+/** The pairs of roles a solved set keeps apart, each with the least distance it holds them. */
 export const DISTINCT_PAIRS = [
-  ['accent', 'accent-hover'],
-  ['accent', 'accent-active'],
-  ['accent-hover', 'accent-active'],
-  ['text-secondary', 'text-muted'],
-] as const;
+  ['accent', 'accent-hover', ACCENT_DELTA],
+  ['accent', 'accent-active', ACCENT_DELTA],
+  ['accent-hover', 'accent-active', ACCENT_DELTA],
+  ['text-secondary', 'text-muted', QUIET_TEXT_DELTA],
+] as const satisfies readonly (readonly [ColorRole, ColorRole, number])[];
 
-const apart = (color: string, others: readonly string[]) =>
-  others.every((other) => deltaE(color, other) >= DISTINCT_DELTA);
+const apart = (color: string, others: readonly string[], least: number) =>
+  others.every((other) => deltaE(color, other) >= least);
 
 /** The percentages and starting colors `anchor-v1` uses, by mode. */
 const ANCHOR_V1 = {
@@ -121,8 +130,8 @@ function onColor(color: string): string {
 /**
  * An accent state: `accent` mixed `start` percent away from `on`, toward
  * white under a black `on` and black under a white one, then 2% further at
- * a time until it's DISTINCT_DELTA from each of `others` and `on` reads on
- * it at `limit`. Moving away from `on` only adds contrast, so a state never
+ * a time until it's ACCENT_DELTA from each of `others` and `on` reads on it
+ * at `limit`. Moving away from `on` only adds contrast, so a state never
  * falls below the accent's.
  */
 function accentState(
@@ -135,17 +144,22 @@ function accentState(
   const away = contrast(on, WHITE) >= contrast(on, BLACK) ? WHITE : BLACK;
   for (let percent = start; percent <= 100; percent += 2) {
     const candidate = mix(accent, away, percent);
-    if (contrast(on, candidate) >= limit && apart(candidate, others)) return candidate;
+    if (contrast(on, candidate) >= limit && apart(candidate, others, ACCENT_DELTA))
+      return candidate;
   }
   return away;
 }
 
-/** `color`, or the first 2% step of it toward `text` that's DISTINCT_DELTA from each of `others`. */
-function apartTowardText(color: string, text: string, others: readonly string[]): string {
-  if (apart(color, others)) return color;
+/**
+ * text-secondary: `color`, or the first 2% step of it toward `text` that's
+ * QUIET_TEXT_DELTA from `muted`. Toward text only adds contrast, so it still
+ * passes, and text-muted keeps its place at its contrast limit.
+ */
+function apartTowardText(color: string, text: string, muted: string): string {
+  if (apart(color, [muted], QUIET_TEXT_DELTA)) return color;
   for (let percent = 2; percent <= 100; percent += 2) {
     const candidate = mix(color, text, percent);
-    if (apart(candidate, others)) return candidate;
+    if (apart(candidate, [muted], QUIET_TEXT_DELTA)) return candidate;
   }
   return text;
 }
@@ -177,7 +191,7 @@ export function anchorV1(anchors: Anchors, mode: BaseMode): ColorTokens {
   const textSecondary = apartTowardText(
     towardText(mix(text, canvas, 28), text, grounds, TEXT, 2),
     text,
-    [textMuted],
+    textMuted,
   );
   const accentHover = accentState(accent, onAccent, 12, [accent], TEXT);
   const accentActive = accentState(accent, onAccent, 22, [accent, accentHover], TEXT);

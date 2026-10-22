@@ -11,7 +11,7 @@ import { anchorV1 } from '../derive';
 import { contrastReport, GROUND_ROLES, type ContrastReport } from '../gate';
 import type { GeneratedScheme } from '../resolve-tokens';
 import { schemeSets } from '../sets';
-import type { ColorTokens } from '../tokens';
+import type { ColorTokens } from '../roles';
 
 /** What a generator reads: a site's appearanceInputs entry for its scheme. */
 export type GeneratorInput = { readonly seedColor: string } | { readonly sourceAsset: string };

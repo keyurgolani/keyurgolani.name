@@ -21,7 +21,7 @@ import {
   type LanguageTokens,
   type TypeRole,
   type TypographyRoles,
-} from './tokens';
+} from './roles';
 
 export const GATE_TARGETS = Object.freeze({
   text: 4.5,
