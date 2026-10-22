@@ -123,6 +123,8 @@ async function onFreePort(attempt, firstPort) {
  *   test can hold it and check that a start on a taken port moves to another
  * @param {string} [options.web] the apps/web whose build runs: this checkout's, or a
  *   fixture host's (fixture-host.mjs)
+ * @param {Record<string, string | Uint8Array>} [options.publicFiles] files to add to the
+ *   copy's public/, by their path there, as an owner adds assets their portfolio names
  */
 export async function startApp({
   env = {},
@@ -135,6 +137,7 @@ export async function startApp({
   logFile,
   port: firstPort,
   web = WEB,
+  publicFiles = {},
 } = {}) {
   const standalone = path.join(web, '.next', 'standalone');
   const serverJs = path.join(standalone, 'apps', 'web', 'server.js');
@@ -148,6 +151,14 @@ export async function startApp({
     recursive: true,
   });
   cpSync(path.join(web, 'public'), path.join(appDir, 'apps', 'web', 'public'), { recursive: true });
+  for (const [file, content] of Object.entries(publicFiles)) {
+    const target = path.join(appDir, 'apps', 'web', 'public', file);
+    if (!target.startsWith(path.join(appDir, 'apps', 'web', 'public') + path.sep)) {
+      throw new Error(`A public file stays inside public/: ${file}`);
+    }
+    mkdirSync(path.dirname(target), { recursive: true });
+    writeFileSync(target, content);
+  }
   mkdirSync(sourceDir);
   if (portfolio) cpSync(portfolio, path.join(sourceDir, `portfolio${path.extname(portfolio)}`));
   if (siteText !== undefined) writeFileSync(path.join(sourceDir, 'site.yml'), siteText);

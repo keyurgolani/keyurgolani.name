@@ -85,8 +85,17 @@ import {
 // The route table, the registry, and the capability matrix are TypeScript;
 // the script runs under tsx (`node --import tsx`) to read them. The route
 // table imports the generated registry, and nothing here builds the app, so
-// the registry is written first (ci/lib/registry.mjs).
-console.log(buildRegistry());
+// the registry is written first (ci/lib/registry.mjs). One that doesn't
+// build is the run's one failure, reported as the end of the run reports one.
+try {
+  console.log(buildRegistry());
+} catch (error) {
+  console.log(`[profiles] FAIL smoke:profiles: ${error.message}`);
+  reportError('smoke:profiles: 1 failure(s)', { title: 'smoke:profiles' });
+  const gate = currentGate();
+  if (gate) writeFailureRecord({ ...gate, test: 'smoke:profiles', actual: error.message });
+  process.exit(1);
+}
 const require = createRequire(import.meta.url);
 const { accessIn, CAPABILITIES, INDEXABLE } = require('../apps/web/src/server/capabilities.ts');
 const { listOperations } = require('../apps/web/src/server/operations.ts');

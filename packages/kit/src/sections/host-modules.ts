@@ -7,8 +7,10 @@ import type { SectionRenderer } from './types';
 // The kit can't import the host, so the host hands it the package code it
 // reaches: content extensions' renderers and variants' enhancement modules
 // (#5, Slice 2). The host, #7's frame, and the parity renders each call
-// registerHostModules() once from a server module and once from a client
-// module (Slice 3); a second call replaces the first.
+// registerHostModules() once from a server module, with the renderers, and
+// once from a client module, with both (Slices 3 and 6): <Enhancement> loads
+// nothing on the server, and a server module that named the loaders would
+// ship every enhancement with the page. A second call replaces the first.
 
 /** What an enhancement module default-exports. */
 export type EnhancementComponent = ComponentType<{ readonly input: VariantRenderInput }>;

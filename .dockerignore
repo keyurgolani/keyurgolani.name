@@ -10,7 +10,6 @@
 
 archive
 experiments
-.variant-preview
 # The retired v1 variants (#5), outside the workspace: nothing builds them.
 legacy
 .git

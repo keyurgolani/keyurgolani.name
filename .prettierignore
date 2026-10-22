@@ -8,5 +8,7 @@ apps/web/public/
 assets/
 docs/screenshots/
 
-# Test inputs whose exact bytes are the point
+# Test inputs whose exact bytes are the point, such as the contract fixtures'
+# copies of #4's pairs
 **/__fixtures__/
+packages/variant-contract/fixtures/

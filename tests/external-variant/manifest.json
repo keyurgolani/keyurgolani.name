@@ -1,0 +1,50 @@
+{
+  "id": "acme-reference",
+  "name": "Reference (external)",
+  "promise": "Every section in one column, its figures as a ledger, and a colophon page.",
+  "description": "The third-party reference variant, which pnpm test:external-variant installs from its tarball in a temporary worktree, never in a release. It renders stats bespoke, leaves fun facts out, recommends a projects section, has a colophon view and a compact control, and lazy-loads one enhancement.",
+  "author": "Acme Test Studio",
+  "contract": "2.0",
+  "schemas": { "portfolio": { "min": 2, "max": 2 }, "site": { "min": 2, "max": 2 } },
+  "tokenContract": 1,
+  "compositionFamily": "document",
+  "motionIntent": "still",
+  "performanceTier": "light",
+  "renderedKinds": ["stats"],
+  "unsupportedKinds": ["fun-facts"],
+  "contentSlots": [
+    {
+      "id": "projects",
+      "label": "Projects",
+      "select": { "kind": "projects" },
+      "level": "recommended",
+      "min": 1,
+      "whenEmpty": {
+        "mode": "omit",
+        "note": "The page goes from the introduction straight to the other sections."
+      }
+    }
+  ],
+  "routes": {
+    "home": "shared",
+    "work": "shared",
+    "views": [{ "id": "colophon", "under": "home", "type": "path", "segment": "colophon" }]
+  },
+  "controls": {
+    "version": 1,
+    "items": [
+      {
+        "type": "boolean",
+        "id": "compact",
+        "label": "Compact",
+        "description": "Tightens the space between sections.",
+        "default": false
+      }
+    ],
+    "migrations": []
+  },
+  "enhancements": [{ "id": "badge", "export": "./enhancements/badge", "requires": [] }],
+  "visitorControl": { "placement": "header" },
+  "textDirection": ["ltr"],
+  "provenance": { "provisional": false, "sources": [] }
+}

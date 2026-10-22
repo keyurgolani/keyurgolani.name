@@ -72,8 +72,5 @@ yarn-error.log*
 # variant experiments — gitignored holding pen for non-curated variant candidates
 /experiments/
 
-# visual companion preview screenshots — generated locally by skills/variant-developer
-/.variant-preview/
-
 # archive of the prior single-app project state — local reference only
 /archive/

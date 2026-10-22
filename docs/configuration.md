@@ -182,7 +182,7 @@ A profession package adds semantic content without changes to the schemas, the v
    Every object schema in it must call `.strict()`, so a mistyped key is reported instead of dropped. `defineContentExtension` throws otherwise, and when the namespace isn't an npm package name.
 
 2. Use its namespace in the documents. They validate before any build registers the package, with a warning at each use.
-3. Install it as a dependency of `@portfolio/web` (`pnpm --filter @portfolio/web add <package>`), since the workspace doesn't hoist packages (`shamefully-hoist=false`). That registers it: its `package.json` declares `"portfolio": { "kind": "content-extension" }`, its `.` export default-exports the `defineContentExtension` result, whose namespace is the package's name, and an optional `./renderers` export maps each `<namespace>/<name>` kind to its renderer. The build checks all of it and refuses a package that doesn't fit, naming the package and the fix.
+3. Install it as a dependency of `@portfolio/web` (`pnpm --filter @portfolio/web add <package>`), since the workspace doesn't hoist packages (`shamefully-hoist=false`). That registers it: its `package.json` declares `"portfolio": { "kind": "content-extension" }`, its `.` export default-exports the `defineContentExtension` result, whose namespace is the package's name, and an optional `./renderers` export maps each `<namespace>/<name>` kind to its renderer. The host registers those renderers in the browser too, on every page, so `./renderers` must be client-safe: a server-only import there, such as `node:fs` or the `server-only` package, breaks `next build`. The build checks all of it and refuses a package that doesn't fit, naming the package and the fix.
 
 ## Validation
 

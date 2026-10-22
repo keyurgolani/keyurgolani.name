@@ -1,0 +1,14 @@
+# Contract fixture (#5, Slice 6): the least a portfolio can be and still go live. The
+# identity carries everything, and one bare hero, whose fields all fall back to it, is the
+# only section: with none, content.empty would refuse the pair.
+schemaVersion: 2
+locale: en
+direction: ltr
+
+identity:
+  name: Sam Only
+  tagline: Says just enough
+
+sections:
+  - kind: hero
+    id: top

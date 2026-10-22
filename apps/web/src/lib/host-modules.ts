@@ -1,14 +1,15 @@
 import { registerHostModules } from '@portfolio/kit/sections';
-import { ENHANCEMENT_LOADERS } from './generated/registry.enhancements';
 import { EXTENSION_RENDERERS } from './generated/registry.renderers';
 
-// The package code the kit reaches, registered on the server (#5, Slice 3):
-// each content extension's section renderers and each variant's enhancement
-// loaders. Importing this module registers them; render-composition.tsx does,
-// before any variant renders. host-modules-client.tsx registers the
-// enhancement loaders in the browser, which renders no section itself.
+// The package code the kit reaches on the server (#5, Slice 3): each content
+// extension's section renderers. Importing this module registers them;
+// render-composition.tsx does, before any variant renders, and so does
+// render parity's react-dom/server render (Slice 6).
+//
+// The enhancement loaders are host-modules-client.tsx's alone. <Enhancement>
+// renders nothing on the server, so it never loads one there, and a server
+// module that imported them would make each enhancement a client reference
+// of the page, whose chunk the page then names and loads at once instead of
+// once the page has hydrated (Slice 6, which test:external-variant checks).
 
-registerHostModules({
-  extensionRenderers: EXTENSION_RENDERERS,
-  enhancementLoaders: ENHANCEMENT_LOADERS,
-});
+registerHostModules({ extensionRenderers: EXTENSION_RENDERERS });

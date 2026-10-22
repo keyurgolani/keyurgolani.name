@@ -4,7 +4,22 @@
     "noEmit": true,
     "incremental": false,
     "allowJs": true,
-    "types": ["node"]
+    "types": ["node"],
+    // Render parity's two entries read the build's apps/web as bundles.ts has
+    // esbuild read it: its source as @host and @host-server, and React and the
+    // workspace packages from its node_modules.
+    "jsx": "react-jsx",
+    "paths": {
+      "@host/*": ["../apps/web/src/lib/*"],
+      "@host-server/*": ["../apps/web/src/server/*"],
+      "@portfolio/schema": ["../packages/schema/src/index.ts"],
+      "@portfolio/schema/node": ["../packages/schema/src/node.ts"],
+      "@portfolio/variant-contract": ["../packages/variant-contract/src/index.ts"],
+      "react": ["../apps/web/node_modules/@types/react"],
+      "react/*": ["../apps/web/node_modules/@types/react/*"],
+      "react-dom": ["../apps/web/node_modules/@types/react-dom"],
+      "react-dom/*": ["../apps/web/node_modules/@types/react-dom/*"]
+    }
   },
-  "include": ["**/*.ts", "**/*.mjs", "../playwright.config.ts"]
+  "include": ["**/*.ts", "**/*.mjs", "variants/parity/*.tsx", "../playwright.config.ts"]
 }

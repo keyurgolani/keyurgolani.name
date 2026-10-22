@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // The variant registry's check (#5, Slice 3): generation succeeds with no
-// diagnostic, two runs write the same bytes, git tracks none of what it
-// writes, and every registered variant passes the source audit
-// (`pnpm check:variants`). Slice 6 gives check:variants a job of its own.
+// diagnostic, two runs write the same bytes, and git tracks none of what it
+// writes. The source audit, `pnpm check:variants`, is CI's check-variants
+// job (Slice 6).
 import { spawnSync } from 'node:child_process';
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -56,9 +56,6 @@ if (tracked.status !== 0 || tracked.stdout.trim() !== '') {
   });
 }
 
-if (run('pnpm', ['--filter', '@portfolio/web', 'check:variants']) !== 0) {
-  fail('the variant source audit found something', { test: 'pnpm check:variants passes' });
-}
 console.log(
-  `[registry] ${Object.keys(first).length} generated files, the same on two runs, none tracked; the audit passes`,
+  `[registry] ${Object.keys(first).length} generated files, the same on two runs, none tracked`,
 );

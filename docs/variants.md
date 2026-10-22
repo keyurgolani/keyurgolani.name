@@ -185,7 +185,41 @@ The audit is a lint over code the host already trusts, not a sandbox: a variant 
 
 The audit refuses `async` components (by name, as a default export, or wrapped in `memo()`; an async event handler is fine); Node built-ins, `server-only`, `next`, `@portfolio/core`, and an import from a URL; `process`, `process.getBuiltinModule()` included; the kit's `fetchGitHubData`; `fetch`, `XMLHttpRequest`, `WebSocket`, `EventSource`, and `navigator.sendBeacon`; cookies, Web Storage, `indexedDB`, and the Cache API; `Date.now()`, `Date()`, argument-less `new Date()`, `performance.now()`, and a date format's `format()` with no date; `Math.random()`, `crypto.getRandomValues()`, and `crypto.randomUUID()`; `eval`, `Function`, and a timer given a string; `import()` and `require()` of anything but a literal; `dangerouslySetInnerHTML`, `innerHTML`, and `document.write()`; a `<style>`, `<link>`, or `<script>`; CSS imported from a module; a `'use client'` component that takes the whole render input or a prop named `input`, other than a declared enhancement (a `Pick<>` of it, or one field such as `VariantRenderInput['env']`, is fine); a selector or page-wide at-rule outside `[data-variant='<id>']`, or one that reaches a sibling of it; keyframes not named after the id; a remote `@import` or `url()`, or an `@import` of another package; a raw color, font, radius, or shadow; and, in a variant that declares `rtl`, physical properties and shorthands, keyframes included.
 
-CI runs it in `pnpm check:registry`, with two registry builds that must match and a check that nothing generated is committed.
+CI runs it in a job of its own, `check-variants`. `pnpm check:registry` checks that two registry builds match and that nothing generated is committed.
+
+## Testing a variant
+
+```sh
+pnpm exec playwright install chromium   # once
+pnpm build
+pnpm test:variants                                 # every registered variant
+PORTFOLIO_VARIANTS_ONLY=my-id pnpm test:variants   # one, or a comma-separated list
+```
+
+The variant specs in `tests/variants/` start the production build once for each registered composition on each contract fixture, under `read-only`, and once on the bundled sample at `/sample`, under `demo`. The fixtures are in `packages/variant-contract/fixtures/`, and `@portfolio/variant-contract/node` exports them as `CONTRACT_FIXTURES`: #4's profession pairs, plus `complete` (every core kind, its images bundled), `identity-only`, `sparse`, `large` (100 items), `long-text` (long, non-Latin, and duplicate titles), `missing-media`, `rtl`, and `hidden-canary`. They carry no GitHub data, so the shared `github` renderer shows the profile link alone. Each selects `missing-variant`, and the specs select the variant under test. The server's clock starts at 2026-01-01T00:00:00Z and keeps running, from a `NODE_OPTIONS=--import` preload, `tests/harness/fixed-clock.mjs`, and each fixture's sitemap, modified per request, shows that date.
+
+Each fixture runs in six modes: desktop (1440x900), mobile (390x844), no JavaScript, print, failed enhancement, and reduced motion. In every mode the page has one presentation boundary, the variant under test's, and one `h1`, one `main`, and one visitor-control slot; the skip link moves focus to `main`; nothing is wider than the window; every internal link answers; each section's `data-renderer` matches `renderedKinds`, and none is of a kind in `unsupportedKinds`; and the console shows no error. Without JavaScript, in print, and with the enhancements failing (every script chunk blocked while the stylesheets load, then the kit's throw switch, which must fail an enhancement when the composition has one), the `h1`, the navigation, and each section's heading have a box, opacity, and visibility. Print also has nothing fixed or sticky, and under reduced motion nothing runs once the page settles.
+
+`hidden-canary` hides sections that carry a marker, which reaches neither the HTML, the RSC payload, nor the feed. Render parity compares the boundary in the host's server HTML with a `react-dom/server` render outside Next and a `createRoot` render in a test page, all from one render input at the fixed time, as the tags, text, roles, links, and ids inside it. `snapshotBoundary` and `compareSnapshots`, in `@portfolio/variant-contract/node`, do the comparing.
+
+Desktop and mobile each take a screenshot of the whole page, attached to the report in `reports/variants/html/`. CI compares them against the baselines in `tests/variants/__screenshots__/`, pixel for pixel, and only in the pinned Playwright image (`PORTFOLIO_SCREENSHOTS=compare`) and for the platform's own `@portfolio/*` packages; a third-party variant gets the assertions alone. #11 sets the thresholds. Baselines come from CI's own run, not from a local one: when one is missing, the variants job writes it, fails, and uploads `tests/variants/__screenshots__/` as the `variants-screenshots` artifact, and the new file is committed from there. A change that moves a first-party screenshot deletes its baseline and commits the one that run writes.
+
+## A variant from outside this repository
+
+A variant published on its own ships in this format, which [`tests/external-variant/`](../tests/external-variant/) follows:
+
+- Compiled ESM, its `.d.ts`, `styles.css`, and `manifest.json`. No TypeScript source, no install script, and no file for the host's `public/`.
+- `"portfolio": { "kind": "variant", "manifest": "./manifest.json" }` in `package.json`, and exports `.`, `./manifest`, `./styles.css`, `./package.json`, and one subpath per declared enhancement, such as `./enhancements/badge`.
+- Peer dependencies on `react`, `react-dom`, `@portfolio/schema`, `@portfolio/variant-contract`, and `@portfolio/kit` (#19 adds `@portfolio/appearance`), so it renders with the host's copies.
+- An id that starts with its npm scope: `@acme/reference` is `acme-reference`.
+
+An enhancement module is a client module (`'use client'`) whose default export takes `{ input }`. Only the host's browser registry names it, through its own `import()`, so its chunk loads once a page that renders `<Enhancement id>` has hydrated, never with the page.
+
+Install one with `pnpm --filter @portfolio/web add <package or tarball>` and remove it with `pnpm --filter @portfolio/web remove <package>`. Neither changes anything but `apps/web/package.json` and `pnpm-lock.yaml`. A site that still selects a removed variant renders the fallback composition, with `variant.unavailable`, until the owner selects another.
+
+A content extension package sets `"portfolio": { "kind": "content-extension" }` and default-exports its `defineContentExtension(...)` result from `.`, with its renderers, if any, in `./renderers`. Every page loads `./renderers` in the browser too, so it must be client-safe: a server-only import there breaks `next build`. See [configuration.md](configuration.md).
+
+`pnpm test:external-variant` checks the format end to end, without touching the checkout. It makes a temporary `git worktree` of HEAD, so commit first, and installs it from this checkout's pnpm store; the add and the remove may read package metadata from the registry, which a frozen install never needs. It builds `tests/external-variant/` (`@acme/reference`: stats rendered bespoke, fun facts unsupported, a recommended projects slot, a `colophon` path view, a `compact` boolean control, and a `badge` enhancement), packs it, and adds the tarball, after which `git status` shows the dependency and the lockfile alone. After `pnpm build`, registry generation lists it and `check:variants` audits it; the compatibility test runs every registered composition on every contract fixture, and `pnpm config:validate` reports what the manifest earns (`kind.unsupported`, `slot.recommended-empty`, and `direction.unsupported`); the variant specs run for it alone; and its own checks cover the view, the control, and the enhancement's lazy load. Then it removes the package, after which `git status` is clean, rebuilds, and checks that a site selecting it gets the fallback composition, `variant.unavailable`, and degraded readiness. It needs `pnpm install` and Chromium, not a build of the checkout.
 
 ## The fallback composition
 
@@ -200,14 +234,14 @@ CI runs it in `pnpm check:registry`, with two registry builds that must match an
 The variant-developer skill ships a visual companion at `skills/variant-developer/scripts/visual-companion/`:
 
 - **Mockup mode** (an HTTP server and a file watcher) for layout boards and section sketches before code exists.
-- **Preview mode** runs the dev server under `PORTFOLIO_PROFILE=demo` for `/sample?variant=<id>`, and with `--matrix` captures it in light and dark at a desktop and a phone viewport.
+- **Preview mode** runs the dev server under `PORTFOLIO_PROFILE=demo` for `/sample?variant=<id>`.
 
 ```sh
 bash skills/variant-developer/scripts/visual-companion/start.sh
-bash skills/variant-developer/scripts/visual-companion/start.sh --mode preview --variant <id> --matrix
+bash skills/variant-developer/scripts/visual-companion/start.sh --mode preview --variant <id>
 ```
 
-Output lands in `.variant-preview/<id>/` (gitignored).
+For screenshots, run the variant specs, as in [Testing a variant](#testing-a-variant).
 
 ## What to read next
 

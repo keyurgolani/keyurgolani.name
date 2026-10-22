@@ -1,0 +1,61 @@
+# Contract fixture (#5, Slice 6): a right-to-left portfolio in Hebrew, with one section in
+# English inside it, so a composition that declares rtl lays out from the right and keeps the
+# English section left to right. #4's mixed pair is right to left too, in Arabic.
+schemaVersion: 2
+locale: he
+direction: rtl
+
+identity:
+  name: נועה לוי
+  tagline: מעצבת ומפתחת ממשקים
+  location: חיפה, ישראל
+
+links:
+  - platform: website
+    url: https://levi.test
+    label: levi.test
+
+sections:
+  - kind: hero
+    id: top
+    greeting: שלום, אני
+    tagline: אני מעצבת ממשקים שנקראים מימין לשמאל, כמו שצריך.
+
+  - kind: lede
+    id: about
+    title: עליי
+    body: |
+      אני מעצבת ממשקים בעברית כבר עשר שנים, ואכפת לי מגופנים, מכיווניות ומהפרטים הקטנים.
+
+  - kind: experience
+    id: experience
+    title: ניסיון
+    items:
+      - role: מעצבת ממשקים
+        organization: סטודיו העיר
+        period: { start: '2019-03' }
+        highlights:
+          - הובלתי עיצוב מחדש של אפליקציה לתחבורה ציבורית
+      - role: מפתחת ממשקים
+        organization: חברת האופק
+        period: { start: '2015-09', end: '2019-02' }
+
+  - kind: lede
+    id: english
+    title: In English
+    lang: en
+    body: One section in English, left to right inside a right-to-left page.
+
+  - kind: skills
+    id: skills
+    title: כישורים
+    items: [טיפוגרפיה עברית, עיצוב רספונסיבי, נגישות]
+
+  - kind: contact
+    id: contact
+    title: יצירת קשר
+    message: אשמח לשמוע ממך.
+    links:
+      - platform: email
+        url: mailto:noa@levi.test
+        label: noa@levi.test

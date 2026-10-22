@@ -38,7 +38,7 @@ The structure gate. The bundled sample is curated; a composition has to hold for
 | A dense pair, such as `packages/schema/src/__fixtures__/pairs/*/` | Long lists, many sections, nested items stay readable     |
 | `pairs/mixed`, which is Arabic and right to left                  | The composition mirrors; nothing is pinned to the left    |
 
-To render a pair of your own under `pnpm dev`, put it in `config/` with `appearance.variant: <id>`, or point `PORTFOLIO_SOURCE_DIR` at its directory.
+`PORTFOLIO_VARIANTS_ONLY=<id> pnpm test:variants` renders every contract fixture in `packages/variant-contract/fixtures/`, the sparse, identity-only, large, long-text, missing-media, and right-to-left ones among them, and attaches a desktop and a mobile screenshot of each to `reports/variants/html/`. Look at those too. To render a pair of your own under `pnpm dev`, put it in `config/` with `appearance.variant: <id>`, or point `PORTFOLIO_SOURCE_DIR` at its directory.
 
 What "holds" means:
 

@@ -1,0 +1,65 @@
+# Contract fixture (#5, Slice 6): images that never arrive. Every image points at a path
+# this app has no file for, so each answers 404, and some items carry no image at all, so a
+# composition shows its alt text and keeps its layout either way.
+schemaVersion: 2
+locale: en
+direction: ltr
+
+identity:
+  name: Mira Missing
+  tagline: The pictures are somewhere else
+  avatar:
+    src: /media/missing-avatar.png
+    alt: Mira, smiling, in a missing photo
+    width: 400
+    height: 400
+
+sections:
+  - kind: hero
+    id: top
+    tagline: Every picture here is lost.
+
+  - kind: gallery
+    id: gallery
+    title: Gallery
+    items:
+      - image:
+          src: /media/missing-harbor.png
+          alt: A harbor at dusk that didn't load
+          width: 1200
+          height: 800
+        caption: The harbor
+      - image:
+          src: /media/missing-hills.jpg
+          alt: Green hills under rain that didn't load
+          width: 800
+          height: 1200
+        caption: The hills
+
+  - kind: projects
+    id: projects
+    title: Projects
+    items:
+      - name: A project with a missing picture
+        summary: Its screenshot answers 404.
+        image:
+          src: /media/missing-project.png
+          alt: The project's main screen, missing
+          width: 1280
+          height: 720
+      - name: A project with no picture
+        summary: It never had one.
+
+  - kind: testimonials
+    id: testimonials
+    title: What people say
+    items:
+      - quote: The photos were great, when they loaded.
+        author: Pat Absent
+        authorAvatar:
+          src: /media/missing-pat.png
+          alt: Pat, missing
+          width: 96
+          height: 96
+      - quote: No photo of me, please.
+        author: Lee Unpictured
