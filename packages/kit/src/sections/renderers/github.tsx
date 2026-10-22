@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import type { Github } from '@portfolio/schema';
+import type { GitHubData, Github, SectionDerived } from '@portfolio/schema';
 import {
   formatFigure,
   Heading,
@@ -17,25 +17,11 @@ import { githubSnapshot } from '../view';
 // fetches at render time. Without a snapshot, the profile link alone shows,
 // labeled with the authored username.
 
-/** One repository as the snapshot lists it. */
-export interface SnapshotRepository {
-  readonly name: string;
-  readonly url: string;
-  readonly description?: string | null;
-}
-
 /** What the renderer reads of a GitHub snapshot's data. */
-export interface GithubSnapshotData {
-  readonly totalRepos: number;
-  readonly totalStarsReceived: number;
-  readonly contributionsLastYear: number | null;
-  readonly pinnedRepos: readonly SnapshotRepository[];
-}
-
-/** The section's snapshot: ready, with when it was taken, or not there. */
-export type GithubSnapshotState =
-  | { readonly state: 'ready'; readonly value: GithubSnapshotData; readonly derivedAt: string }
-  | { readonly state: 'unavailable'; readonly reason: string };
+type GithubSnapshotData = Pick<
+  GitHubData,
+  'totalRepos' | 'totalStarsReceived' | 'contributionsLastYear' | 'pinnedRepos'
+>;
 
 /** What the section's authored fields ask for. */
 export interface GithubSectionFields {
@@ -154,7 +140,7 @@ export function GithubBody({
   ctx,
 }: {
   fields: GithubSectionFields;
-  snapshot: GithubSnapshotState | undefined;
+  snapshot: SectionDerived | undefined;
   ctx: RenderContext;
 }) {
   const ready = snapshot?.state === 'ready' ? snapshot : undefined;

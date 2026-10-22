@@ -21,11 +21,18 @@ export function ContactSection({
     mailto !== undefined && !links.some((link) => link.url.toLowerCase() === mailto.toLowerCase())
       ? [{ platform: 'email', url: mailto, label: email }, ...links]
       : links;
+  // Whether the owner is open to work goes on a data attribute: no words of
+  // the renderer's own say it.
   return (
     <>
       <SectionHeader section={section} ctx={ctx} />
-      {present(contact?.message) ? <p className="pf-message">{contact.message}</p> : null}
-      <LinkList links={listed} ctx={ctx} />
+      <div
+        className="pf-contact"
+        data-availability={contact?.showAvailability === true ? 'open' : undefined}
+      >
+        {present(contact?.message) ? <p className="pf-message">{contact.message}</p> : null}
+        <LinkList links={listed} ctx={ctx} />
+      </div>
     </>
   );
 }

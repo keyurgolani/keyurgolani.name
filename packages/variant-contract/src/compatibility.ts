@@ -12,8 +12,7 @@ import {
   isPlainObject,
   languageDirection,
   parseExtensionKind,
-  publicSectionIndexes,
-  toPublicView,
+  resolvePortfolioView,
   type ContentExtension,
   type Diagnostic,
   type DiagnosticSeverity,
@@ -280,10 +279,15 @@ function evaluate(
   selected: boolean,
 ): Composition {
   const findings = new Findings(options.live ?? false);
-  const context = { extensions: options.extensions };
-  const view = toPublicView(unit, context);
-  // Where each visible section sits in the document, by the filter the view used.
-  const sections = publicSectionIndexes(unit, context);
+  // Kinds, slots, and controls read the authored content alone, so the
+  // unit's derived inputs don't change the report.
+  const view = resolvePortfolioView(
+    unit,
+    {},
+    { mediaBase: '/media', extensions: options.extensions },
+  );
+  // Where each visible section sits in the document.
+  const sections = documentIndexes(unit, view.portfolio);
   const kinds = kindReports(manifest, view.portfolio, sections, options, findings);
 
   const content = contentIndex(view.portfolio);
@@ -431,6 +435,26 @@ function controlConsequence(problem: ControlProblem, manifest: VariantManifest):
   return manifest.controls.items.some((control) => control.id === key)
     ? ' The control renders its default.'
     : ' Nothing reads it.';
+}
+
+/**
+ * Each visible section's index in the portfolio document, so a finding
+ * points where the owner edits. The published view keeps the document's
+ * order and drops sections, and an id is unique in a version 3 document,
+ * so the view's sections match the document's in order by id.
+ */
+function documentIndexes(unit: ParsedPair, portfolio: PublicPortfolio): number[] {
+  const authored = unit.portfolio.sections ?? [];
+  const indexes: number[] = [];
+  let next = 0;
+  for (const section of portfolio.sections) {
+    while (next < authored.length && authored[next]!.id !== section.id) {
+      next++;
+    }
+    indexes.push(next);
+    next++;
+  }
+  return indexes;
 }
 
 function kindReports(

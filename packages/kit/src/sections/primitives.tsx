@@ -264,6 +264,48 @@ export function LinkList({
   );
 }
 
+/**
+ * An address as its own link text, without its scheme, a leading www., or a
+ * trailing slash: a link the owner gave no label for, such as a talk's
+ * slides, shows where it goes, never a word the renderer makes up.
+ */
+export function formatUrl(url: string): string {
+  return url.replace(/^(?:https?:\/\/(?:www\.)?|mailto:|tel:)/i, '').replace(/\/$/, '');
+}
+
+/** Links the owner gave no label for, each showing its own address. Absent ones are left out. */
+export function UrlLinks({
+  urls,
+  ctx,
+}: {
+  urls: ReadonlyArray<readonly [field: string, url: string | undefined]>;
+  ctx: RenderContext;
+}) {
+  const shown = urls.filter((entry): entry is readonly [string, string] => present(entry[1]));
+  if (shown.length === 0) return null;
+  return (
+    <ul className="pf-links" role="list">
+      {shown.map(([field, url]) => (
+        <li key={field}>
+          <a href={hrefFor(url, ctx.input)} data-field={field}>
+            {formatUrl(url)}
+          </a>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** A count of minutes as the content's language writes it, such as 8 min. */
+export function formatMinutes(minutes: number, ctx: RenderContext): string {
+  return new Intl.NumberFormat(ctx.formatLocale, {
+    style: 'unit',
+    unit: 'minute',
+    unitDisplay: 'short',
+    maximumFractionDigits: 0,
+  }).format(minutes);
+}
+
 /** Text that links to `url` when there is one. */
 export function MaybeLink({
   url,
@@ -312,25 +354,26 @@ function dateTimeOf(raw: string, ctx: RenderContext): string | undefined {
 /**
  * A loose date: `<time>` when it names a day, month, or year, else Present.
  * Month names are English, so the date is marked English inside content that
- * isn't.
+ * isn't. `field` names which date it is, such as filedAt, for a composition
+ * that labels it; the shared renderers add no word of their own.
  */
-export function DateText({ raw, ctx }: { raw: string; ctx: RenderContext }) {
+export function DateText({ raw, ctx, field }: { raw: string; ctx: RenderContext; field?: string }) {
   const dateTime = dateTimeOf(raw, ctx);
   if (dateTime === undefined && parseLooseDate(raw, ctx.input.env.now)?.isPresent) {
     return (
-      <span className="pf-date">
+      <span className="pf-date" data-field={field}>
         <Ui ctx={ctx}>Present</Ui>
       </span>
     );
   }
   return (
-    <time className="pf-date" dateTime={dateTime} lang={ctx.uiLang}>
+    <time className="pf-date" dateTime={dateTime} lang={ctx.uiLang} data-field={field}>
       {formatDate(raw)}
     </time>
   );
 }
 
-/** A date with words before it, such as Filed. */
+/** A date after a fixed label: As of, the one the shared renderers use. */
 export function LabeledDate({
   label,
   raw,

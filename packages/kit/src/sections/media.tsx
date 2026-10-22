@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactNode } from 'react';
+import type { Derived, ViewMediaValue, ViewRendition } from '@portfolio/schema';
 import { cn } from '../cn';
 import { present, Ui, type RenderContext } from './primitives';
 
@@ -11,27 +12,14 @@ import { present, Ui, type RenderContext } from './primitives';
 // inline style a shared renderer sets: two custom properties, which the
 // stylesheet's object-position reads.
 
-/** One rendition of an image, as derived data lists it. */
-export interface ImageRendition {
-  /** Under the view's media base, as `<mediaBase>/<assetId>/<sha256>/<rendition>.<ext>`. */
-  readonly url: string;
-  /** Its width in pixels. */
-  readonly width: number;
-  /** Its type, such as image/webp. */
-  readonly mime: string;
-}
+/** One rendition of an image, as the view lists it, its URL under the view's media base. */
+export type ImageRendition = ViewRendition;
 
 /** What derivation knows about a picture: its size and renditions. */
-export interface DerivedImage {
-  readonly width: number;
-  readonly height: number;
-  readonly renditions: readonly ImageRendition[];
-}
+export type DerivedImage = ViewMediaValue;
 
-/** An image ready to render, or why it isn't. */
-export type ImageState =
-  | { readonly state: 'ready'; readonly value: DerivedImage }
-  | { readonly state: 'unavailable'; readonly reason: string };
+/** An image's derived value: ready, or why it isn't (#10's Derived). */
+export type ImageState = Derived<ViewMediaValue>;
 
 /** A placement, its overrides applied: what the figure renders. */
 export interface PlacedImage {
@@ -56,21 +44,27 @@ export function focalStyle(focalPoint: PlacedImage['focalPoint']): CSSProperties
   return { '--focal-x': focalPoint.x, '--focal-y': focalPoint.y } as CSSProperties;
 }
 
-/** The renditions of one type, narrowest first, as a srcset. */
-function srcset(renditions: readonly ImageRendition[]): string {
-  return [...renditions]
-    .sort((a, b) => a.width - b.width)
-    .map((rendition) => `${rendition.url} ${rendition.width}w`)
-    .join(', ');
+/** The renditions of one type that say how wide they are, narrowest first, as a srcset. */
+function srcset(renditions: readonly ImageRendition[]): string | undefined {
+  const sized = renditions
+    .filter(
+      (rendition): rendition is ImageRendition & { width: number } => rendition.width !== undefined,
+    )
+    .sort((a, b) => a.width - b.width);
+  return sized.length > 0
+    ? sized.map((rendition) => `${rendition.url} ${rendition.width}w`).join(', ')
+    : undefined;
 }
 
 /**
  * The rendition an `<img>` falls back to without srcset: the widest at or
- * under 960 pixels, else the narrowest.
+ * under 960 pixels, else the narrowest, else the first one listed.
  */
 function fallbackRendition(renditions: readonly ImageRendition[]): ImageRendition {
-  const sorted = [...renditions].sort((a, b) => a.width - b.width);
-  return sorted.filter((rendition) => rendition.width <= 960).at(-1) ?? sorted[0]!;
+  const sized = renditions
+    .filter((rendition) => rendition.width !== undefined)
+    .sort((a, b) => a.width! - b.width!);
+  return sized.filter((rendition) => rendition.width! <= 960).at(-1) ?? sized[0] ?? renditions[0]!;
 }
 
 /** WebP, AVIF, and other modern types go in a `<source>`; JPEG or PNG is the `<img>`'s own. */
@@ -94,7 +88,7 @@ function Picture({
   sizes: string;
 }) {
   const byType = new Map<string, ImageRendition[]>();
-  for (const rendition of image.renditions) {
+  for (const rendition of image.renditions.filter(({ mime }) => mime.startsWith('image/'))) {
     const list = byType.get(rendition.mime) ?? [];
     list.push(rendition);
     byType.set(rendition.mime, list);
@@ -107,13 +101,14 @@ function Picture({
   // alt="" is decoration. Without the owner's alt text the image has none
   // at all, so an accessibility audit finds it; #10's publish gate refuses it.
   const alt = placed.decorative ? '' : present(placed.alt) ? placed.alt.trim() : undefined;
+  const set = srcset(imgRenditions);
   const img = (
     // eslint-disable-next-line @next/next/no-img-element -- renditions are already sized; next/image would proxy them through /_next/image
     <img
       className={className}
       src={fallbackRendition(imgRenditions).url}
-      srcSet={srcset(imgRenditions)}
-      sizes={sizes}
+      srcSet={set}
+      sizes={set === undefined ? undefined : sizes}
       width={image.width}
       height={image.height}
       alt={alt}
@@ -125,9 +120,10 @@ function Picture({
   if (sources.length === 0) return img;
   return (
     <picture>
-      {sources.map(([mime, renditions]) => (
-        <source key={mime} type={mime} srcSet={srcset(renditions)} sizes={sizes} />
-      ))}
+      {sources.map(([mime, renditions]) => {
+        const sourceSet = srcset(renditions) ?? fallbackRendition(renditions).url;
+        return <source key={mime} type={mime} srcSet={sourceSet} sizes={sizes} />;
+      })}
       {img}
     </picture>
   );
@@ -181,9 +177,10 @@ export function MediaFigure({
   sizes = '100vw',
   inline = false,
 }: MediaFigureProps) {
-  // A ready value with no rendition has nothing to point an <img> at.
+  // A ready value with no image rendition has nothing to point an <img> at.
   const image =
-    placed.image.state === 'ready' && placed.image.value.renditions.length > 0
+    placed.image.state === 'ready' &&
+    placed.image.value.renditions.some(({ mime }) => mime.startsWith('image/'))
       ? placed.image.value
       : undefined;
   const ready = image !== undefined;

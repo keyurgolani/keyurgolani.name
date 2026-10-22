@@ -1,14 +1,15 @@
-// @portfolio/kit/sections (#5, Slice 2): the shared, accessible renderer of
-// every core section kind, and what a variant needs around them. None of it is
-// a client module, nothing in it reads the clock, randomness, or the network,
-// and it imports no Node module, so the host's server render, #7's preview
-// frame, and #9's render in the browser give the same markup.
+// @portfolio/kit/sections (#5, Slice 2; #10, slice 1): the shared, accessible
+// renderer of every core section kind, the record and media pieces they are
+// built from, and what a variant needs around them. None of it is a client
+// module, nothing in it reads the clock, randomness, or the network, and it
+// imports no Node module, so the host's server render, #7's preview frame,
+// and #9's render in the browser give the same markup.
 
 export { renderSection } from './render-section';
 export type { RenderSectionOptions } from './render-section';
 export { SHARED_RENDERERS } from './renderers';
 export { CaseStudy } from './renderers/case-study';
-export type { CaseStudyDecision, CaseStudyFields, CaseStudyProps } from './renderers/case-study';
+export type { CaseStudyProps } from './renderers/case-study';
 export { EvidenceEntry } from './renderers/evidence';
 export { WorkEntry } from './renderers/works';
 export { MediaFigure, focalStyle } from './media';
@@ -26,6 +27,7 @@ export {
   githubSnapshot,
   isArchived,
   isSignature,
+  anchorSection,
   placedImage,
   recordAnchor,
   sectionShows,

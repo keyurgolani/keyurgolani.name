@@ -3,7 +3,7 @@
 // something else. Then the shape, then the rules the shape can't state.
 
 import { z } from 'zod';
-import { closestWord, isPlainObject, SCHEMA_VERSION } from '@portfolio/schema';
+import { closestWord, isPlainObject, SCHEMA_VERSIONS } from '@portfolio/schema';
 import {
   MANIFEST_CODES,
   toPointer,
@@ -343,6 +343,8 @@ function checkRules(
 
   for (const document of ['portfolio', 'site'] as const) {
     const range = manifest.schemas[document];
+    // Each document has its own version: the portfolio's is 3 and the site's 2 (#10).
+    const version = SCHEMA_VERSIONS[document];
     if (range.min > range.max) {
       report(
         'manifest.invalid',
@@ -351,13 +353,13 @@ function checkRules(
         'Set max to the newest version the variant reads, and min to the oldest.',
         { expected: `>= ${range.min}`, actual: String(range.max) },
       );
-    } else if (SCHEMA_VERSION < range.min || SCHEMA_VERSION > range.max) {
+    } else if (version < range.min || version > range.max) {
       report(
         'manifest.schemas-unsupported',
         ['schemas', document],
-        `reads ${document} versions ${range.min} to ${range.max}, and this host's ${document} documents are version ${SCHEMA_VERSION}.`,
-        `Upgrade the package to a release that reads version ${SCHEMA_VERSION}, or pin a host whose version it reads.`,
-        { expected: `a range including ${SCHEMA_VERSION}`, actual: `${range.min} to ${range.max}` },
+        `reads ${document} versions ${range.min} to ${range.max}, and this host's ${document} documents are version ${version}.`,
+        `Upgrade the package to a release that reads version ${version}, or pin a host whose version it reads.`,
+        { expected: `a range including ${version}`, actual: `${range.min} to ${range.max}` },
       );
     }
   }

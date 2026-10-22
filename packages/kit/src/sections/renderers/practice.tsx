@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react';
+import type { Practice } from '@portfolio/schema';
 import {
   deeper,
   ItemTitle,
@@ -16,9 +18,6 @@ import type { SectionOf, SectionRendererProps } from '../types';
 // `part` names. A group's name is its heading when it has one; an unnamed
 // group's items sit straight under the section.
 
-type Practice = NonNullable<
-  SectionRendererProps<SectionOf<'practice'>>['input']['portfolio']['practice']
->;
 type Skills = NonNullable<Practice['skills']>;
 type Tools = NonNullable<Practice['tools']>;
 type Services = NonNullable<Practice['services']>;
@@ -33,7 +32,7 @@ function Group({
   name?: string;
   description?: string;
   ctx: RenderContext;
-  children: (inner: RenderContext) => React.ReactNode;
+  children: (inner: RenderContext) => ReactNode;
 }) {
   const named = present(name);
   const inner: RenderContext = named ? { ...ctx, itemLevel: deeper(ctx.itemLevel) } : ctx;

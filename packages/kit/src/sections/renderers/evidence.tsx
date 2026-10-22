@@ -1,5 +1,7 @@
-import type { VariantRenderInput } from '@portfolio/variant-contract';
+import type { Evidence } from '@portfolio/schema';
+import { MediaFigure } from '../media';
 import {
+  DateText,
   formatFigure,
   formatNames,
   hrefFor,
@@ -11,19 +13,34 @@ import {
   present,
   renderContext,
   SectionHeader,
+  TagList,
+  Ui,
+  UrlLinks,
   type RenderContext,
 } from '../primitives';
 import { RichText } from '../rich-text';
 import type { SectionOf, SectionRendererProps } from '../types';
-import { evidenceOf, recordAnchor } from '../view';
+import { evidenceOf, placedImage, recordAnchor } from '../view';
 
-// Evidence (#10, slice 1, item 7): typed, attributable facts. Each shows its
-// statement as the owner wrote it, its source by the owner's name for it,
-// and its date as As of. A metric shows its value formatted in the content's
+// Evidence (#10, slice 1, item 7): typed, attributable facts. Each shows the
+// owner's words, its source by the owner's name for it, and when it was
+// true, as As of. A metric shows its value formatted in the content's
 // language, with its unit, and nothing around it: no plus, no counter. A
-// testimonial is a quote, and its source the person who said it.
+// testimonial is a quote, captioned with who said it. A field's own name is
+// never shown: a talk's format and a patent's status show as their values,
+// and a date or a link the owner gave no label for carries its field name
+// on a data attribute, for a composition that labels it.
 
-type Evidence = NonNullable<VariantRenderInput['portfolio']['evidence']>[number];
+const TALK_FORMATS = {
+  keynote: 'Keynote',
+  workshop: 'Workshop',
+  panel: 'Panel',
+  lightning: 'Lightning talk',
+  session: 'Session',
+  interview: 'Interview',
+} as const;
+
+const PATENT_STATUSES = { granted: 'Granted', pending: 'Pending', expired: 'Expired' } as const;
 
 /** A DOI as written, without a `doi:` or resolver prefix, and its doi.org link, each part encoded. */
 export function doiLink(raw: string): { text: string; url: string } | undefined {
@@ -32,10 +49,10 @@ export function doiLink(raw: string): { text: string; url: string } | undefined 
   return { text, url: `https://doi.org/${text.split('/').map(encodeURIComponent).join('/')}` };
 }
 
-/** The source, by the owner's name for it, linked when it has an address. */
-function Source({ entry, ctx }: { entry: Evidence; ctx: RenderContext }) {
-  const source = entry.source;
-  if (!source || !present(source.name)) return null;
+/** The source by the owner's name for it, linked when it has an address. */
+function SourceName({ entry, ctx }: { entry: Evidence; ctx: RenderContext }) {
+  const { source } = entry;
+  if (!source) return null;
   return (
     <MaybeLink url={source.url} ctx={ctx}>
       {source.name}
@@ -43,13 +60,13 @@ function Source({ entry, ctx }: { entry: Evidence; ctx: RenderContext }) {
   );
 }
 
-/** A metric's value and unit, or nothing when the metric is a statement alone. */
+/** A metric's value and unit, or nothing when the metric names what it counts alone. */
 function MetricValue({ entry, ctx }: { entry: Evidence; ctx: RenderContext }) {
-  const metric = entry.metric;
-  if (!metric || metric.value === undefined) return null;
+  const { metric } = entry;
+  if (metric?.value === undefined) return null;
   return (
-    <p className="pf-metric" data-metric={metric.key}>
-      <data className="pf-metric__value" value={String(metric.value)}>
+    <p className="pf-metric">
+      <data className="pf-metric__value" value={metric.value}>
         {formatFigure(metric.value, ctx)}
       </data>
       {present(metric.unit) ? (
@@ -62,7 +79,145 @@ function MetricValue({ entry, ctx }: { entry: Evidence; ctx: RenderContext }) {
   );
 }
 
-/** One piece of evidence, as a list item whose id is the record's when this section lists it first. */
+/** A testimonial: the words, then who said them, with their role, organization, and portrait. */
+function Testimonial({ entry, ctx }: { entry: Evidence; ctx: RenderContext }) {
+  const { input } = ctx;
+  const avatar = placedImage(entry.source?.avatar, input);
+  return (
+    <figure className="pf-quote">
+      <blockquote
+        cite={entry.source?.url !== undefined ? hrefFor(entry.source.url, input) : undefined}
+      >
+        {present(entry.statement) ? <RichText source={entry.statement} input={input} /> : null}
+      </blockquote>
+      <figcaption>
+        {avatar ? (
+          <MediaFigure placed={avatar} ctx={ctx} className="pf-avatar" sizes="3rem" inline />
+        ) : null}
+        <Meta
+          parts={[
+            <SourceName key="source" entry={entry} ctx={ctx} />,
+            entry.source?.role,
+            entry.source?.organization,
+            entry.asOf !== undefined && (
+              <LabeledDate key="as-of" label="As of" raw={entry.asOf} ctx={ctx} />
+            ),
+          ]}
+        />
+      </figcaption>
+    </figure>
+  );
+}
+
+/** Any other evidence: its title, figure, words, and every fact the owner gave about it. */
+function Fact({ entry, ctx }: { entry: Evidence; ctx: RenderContext }) {
+  const { input } = ctx;
+  const doi = entry.doi !== undefined ? doiLink(entry.doi) : undefined;
+  const action = [entry.buttonText, entry.urlLabel].find(present);
+  return (
+    <>
+      <ItemTitle text={entry.title} url={entry.url} ctx={ctx} />
+      <MetricValue entry={entry} ctx={ctx} />
+      {present(entry.statement) ? (
+        <RichText source={entry.statement} className="pf-statement" input={input} />
+      ) : null}
+      {entry.authors?.length ? (
+        <p className="pf-authors">{formatNames(entry.authors, ctx)}</p>
+      ) : null}
+      {entry.inventors?.length ? (
+        <p className="pf-authors" data-field="inventors">
+          {formatNames(entry.inventors, ctx)}
+        </p>
+      ) : null}
+      <Meta
+        parts={[
+          entry.format !== undefined && (
+            <Ui key="format" ctx={ctx}>
+              {TALK_FORMATS[entry.format]}
+            </Ui>
+          ),
+          <SourceName key="source" entry={entry} ctx={ctx} />,
+          entry.venue,
+          entry.publication,
+          entry.author,
+          entry.organization,
+          entry.assignee,
+          entry.location,
+          entry.locationLabel,
+          entry.number,
+          entry.status !== undefined && (
+            <Ui key="status" ctx={ctx}>
+              {PATENT_STATUSES[entry.status]}
+            </Ui>
+          ),
+          entry.publishedAt !== undefined && (
+            <DateText key="published" raw={entry.publishedAt} ctx={ctx} field="publishedAt" />
+          ),
+          entry.presentedAt !== undefined && (
+            <DateText key="presented" raw={entry.presentedAt} ctx={ctx} field="presentedAt" />
+          ),
+          entry.receivedAt !== undefined && (
+            <DateText key="received" raw={entry.receivedAt} ctx={ctx} field="receivedAt" />
+          ),
+          entry.filedAt !== undefined && (
+            <DateText key="filed" raw={entry.filedAt} ctx={ctx} field="filedAt" />
+          ),
+          entry.grantedAt !== undefined && (
+            <DateText key="granted" raw={entry.grantedAt} ctx={ctx} field="grantedAt" />
+          ),
+          entry.asOf !== undefined && (
+            <LabeledDate key="as-of" label="As of" raw={entry.asOf} ctx={ctx} />
+          ),
+        ]}
+      />
+      {present(entry.abstract) ? (
+        <RichText source={entry.abstract} className="pf-abstract" input={input} />
+      ) : null}
+      {present(entry.excerpt) ? (
+        <blockquote className="pf-excerpt">
+          <RichText source={entry.excerpt} input={input} />
+        </blockquote>
+      ) : null}
+      {present(entry.description) ? <RichText source={entry.description} input={input} /> : null}
+      {present(entry.citation) ? <p className="pf-citation">{entry.citation}</p> : null}
+      <TagList items={entry.awards} className="pf-highlights" />
+      <TagList items={entry.categories} />
+      {entry.highlights?.length ? (
+        <dl className="pf-facts">
+          {entry.highlights.map((highlight, index) => (
+            <div key={index}>
+              <dt>{highlight.label}</dt>
+              <dd>{highlight.sub}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : null}
+      {doi ? (
+        <p className="pf-doi">
+          <a href={doi.url}>{doi.text}</a>
+        </p>
+      ) : null}
+      {action !== undefined && entry.url !== undefined ? (
+        <p className="pf-external-link">
+          <a className="pf-action" href={hrefFor(entry.url, input)}>
+            {action}
+          </a>
+        </p>
+      ) : null}
+      <UrlLinks
+        urls={[
+          ['pdfUrl', entry.pdfUrl],
+          ['slidesUrl', entry.slidesUrl],
+          ['videoUrl', entry.videoUrl],
+        ]}
+        ctx={ctx}
+      />
+      <LinkList links={entry.links} ctx={ctx} />
+    </>
+  );
+}
+
+/** One piece of evidence, as a list item whose id is the record's on the first section that lists it. */
 export function EvidenceEntry({
   entry,
   ctx,
@@ -72,54 +227,20 @@ export function EvidenceEntry({
   ctx: RenderContext;
   anchor?: string;
 }) {
-  const { input } = ctx;
-  const asOf = entry.asOf !== undefined && (
-    <LabeledDate key="as-of" label="As of" raw={entry.asOf} ctx={ctx} />
-  );
-  if (entry.type === 'testimonial') {
-    return (
-      <li id={anchor} className="pf-item" data-evidence-type={entry.type}>
-        <figure className="pf-quote">
-          <blockquote
-            cite={entry.source?.url !== undefined ? hrefFor(entry.source.url, input) : undefined}
-          >
-            <p>{entry.statement}</p>
-          </blockquote>
-          <figcaption>
-            <Meta parts={[<Source key="source" entry={entry} ctx={ctx} />, asOf]} />
-          </figcaption>
-        </figure>
-      </li>
-    );
-  }
-  const doi = entry.doi !== undefined ? doiLink(entry.doi) : undefined;
   return (
     <li
       id={anchor}
       className="pf-item"
       data-evidence-type={entry.type}
       data-metric={entry.metric?.key}
+      data-icon={entry.iconName}
+      lang={entry.lang}
     >
-      <ItemTitle text={entry.title} url={entry.url} ctx={ctx} />
-      <MetricValue entry={entry} ctx={ctx} />
-      {present(entry.statement) ? <p className="pf-statement">{entry.statement}</p> : null}
-      {entry.authors?.some(present) ? (
-        <p className="pf-authors">{formatNames(entry.authors, ctx)}</p>
-      ) : null}
-      <Meta
-        parts={[
-          <Source key="source" entry={entry} ctx={ctx} />,
-          entry.venue,
-          asOf,
-          doi && (
-            <a key="doi" className="pf-doi" href={doi.url}>
-              {doi.text}
-            </a>
-          ),
-        ]}
-      />
-      {present(entry.description) ? <RichText source={entry.description} input={input} /> : null}
-      <LinkList links={entry.links} ctx={ctx} />
+      {entry.type === 'testimonial' ? (
+        <Testimonial entry={entry} ctx={ctx} />
+      ) : (
+        <Fact entry={entry} ctx={ctx} />
+      )}
     </li>
   );
 }
