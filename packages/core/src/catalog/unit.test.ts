@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { canonicalize, PORTFOLIO_SCHEMA_VERSION, validatePublicationUnit } from '@portfolio/schema';
-import { isDraftId, isRevisionId, isSha256, storePaths } from './layout';
+import { isDraftId, isRevisionId, isSha256, storePaths } from '../store/layout';
 import { checkUnit, contentHash, importSourceHash, oversize, plainModel, sha256 } from './unit';
 import {
   commentedVariant,
@@ -10,7 +10,7 @@ import {
   pairInput,
   PAIR_NAMES,
   testChecks,
-} from './test-support/fixtures';
+} from '../store/test-support/fixtures';
 
 test('YAML and JSON with equal content get the same contentHash and unitHash, and their own sourceHash', () => {
   const checks = testChecks();

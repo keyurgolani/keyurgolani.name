@@ -33,7 +33,7 @@ import {
   type UnitChecks,
   type UnitDiagnostic,
   type UnitInput,
-} from './unit';
+} from '../catalog/unit';
 
 // The DraftStore (#3, items 15 and 16): the owner's working copy, in
 // drafts/<draftId>.json. A draft holds each document's text as the owner

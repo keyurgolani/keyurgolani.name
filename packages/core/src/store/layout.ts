@@ -1,6 +1,10 @@
 import { randomBytes } from 'node:crypto';
 import path from 'node:path';
+import { isSha256, type Sha256 } from '../catalog/unit';
 import { recordOwnerModule } from '../load-trace';
+
+// The digest form lives with the unit, which read-only shares.
+export { isSha256, type Sha256 };
 
 // Where the revision store keeps what (#3, item 2), under PORTFOLIO_DATA_DIR,
 // and the IDs it names things by (item 7). Everything survives a restart and
@@ -31,19 +35,14 @@ export const STORE_LAYOUT = 1;
 
 const REVISION_ID = /^rev_[0-9a-f]{32}$/;
 const DRAFT_ID = /^drf_[0-9a-f]{32}$/;
-const SHA256 = /^sha256:[0-9a-f]{64}$/;
 
 export type RevisionId = `rev_${string}`;
 export type DraftId = `drf_${string}`;
-/** A SHA-256 digest as the store writes one: `sha256:` and 64 hex digits. */
-export type Sha256 = `sha256:${string}`;
 
 export const isRevisionId = (value: unknown): value is RevisionId =>
   typeof value === 'string' && REVISION_ID.test(value);
 export const isDraftId = (value: unknown): value is DraftId =>
   typeof value === 'string' && DRAFT_ID.test(value);
-export const isSha256 = (value: unknown): value is Sha256 =>
-  typeof value === 'string' && SHA256.test(value);
 
 export const newRevisionId = (): RevisionId => `rev_${randomBytes(16).toString('hex')}`;
 export const newDraftId = (): DraftId => `drf_${randomBytes(16).toString('hex')}`;

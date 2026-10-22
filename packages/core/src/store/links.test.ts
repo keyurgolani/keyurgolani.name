@@ -16,7 +16,7 @@ import {
 import path from 'node:path';
 import { test } from 'node:test';
 import { nodeFs } from './fs-port';
-import { sha256 } from './unit';
+import { sha256 } from '../catalog/unit';
 import {
   contentVariant,
   newStore,

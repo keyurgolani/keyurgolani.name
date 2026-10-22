@@ -4,7 +4,7 @@ import { recordOwnerModule } from '../load-trace';
 import { storageError } from './common';
 import type { CrashPoint, FsPort } from './fs-port';
 import { isSha256, tempBeside, type Sha256, type StorePaths } from './layout';
-import { sha256 } from './unit';
+import { sha256 } from '../catalog/unit';
 
 // The AssetStore (#3, item 17): content-addressed blobs under
 // assets/sha256/<aa>/<hash>. A blob is written to a temporary file beside its
