@@ -53,12 +53,16 @@ const BASELINE = ['site.appearance.colorScheme=warm', 'site.appearance.typograph
   parseSet,
 );
 
-function plan(migration: Migration): MigrationPlan {
+/** An old-format file's plan, which writes the site document too. */
+type LegacyPlan = MigrationPlan & { readonly site: NonNullable<MigrationPlan['site']> };
+
+function plan(migration: Migration): LegacyPlan {
   assert.ok(
     migration.status === 'ready' || migration.status === 'blocked',
     JSON.stringify(migration),
   );
-  return migration;
+  assert.ok(migration.site, 'an old-format file migrates to both documents');
+  return migration as LegacyPlan;
 }
 const needs = (migration: Migration) =>
   plan(migration).needs.map(({ path, reason, was, accepts }) => ({
@@ -72,21 +76,37 @@ const changes = (migration: Migration, code: string) =>
     .changes.filter((change) => change.code === code)
     .map(({ from, to, value, note }) => [from, to && `${to.document}:${to.pointer}`, value, note]);
 
-test('content keeps its pointers in the portfolio document', () => {
+test('content keeps its place in the portfolio document, and each image is a media asset', () => {
   const migration = plan(run('content.yml', { set: BASELINE }));
   assert.equal(migration.status, 'ready');
   const old = parseSource(read('content.yml'), 'yaml');
   assert.ok(old.ok);
-  const { identity, links, meta, sections } = old.data as Record<string, unknown>;
+  const { links, sections } = old.data as Record<string, unknown>;
   assert.deepEqual(migration.portfolio.data, {
-    schemaVersion: 2,
+    schemaVersion: 3,
     locale: 'en',
     direction: 'ltr',
-    identity,
+    identity: { name: 'Rowan Content', avatar: { asset: 'avatar' } },
     links,
-    meta,
+    meta: {
+      title: 'Rowan Content',
+      description: 'Content that keeps its place.',
+      ogImage: { asset: 'og-image' },
+    },
+    // Its source is a path under the media root, and its alt text the asset's.
+    media: [
+      { id: 'avatar', kind: 'image', source: 'me.jpg', alt: 'Rowan at the desk' },
+      { id: 'og-image', kind: 'image', source: 'card.png', alt: "Rowan's card" },
+    ],
     sections,
   });
+  assert.deepEqual(
+    migration.minted.map(({ id, owner, pointer, from }) => [id, owner, pointer, from]),
+    [
+      ['avatar', 'media', '/media/0', '/identity/avatar'],
+      ['og-image', 'media', '/media/1', '/meta/ogImage'],
+    ],
+  );
   assert.deepEqual(migration.diagnostics, []);
 });
 
@@ -496,16 +516,20 @@ test('a summary leaves out every value the documents hold', () => {
     'code.rowan.test',
     'Write any time',
     'Calm systems',
-    'talks',
+    'calm-systems',
+    // The talks section's id; "the talks section", its old kind, isn't a value.
+    '/sections/talks',
+    'is talks',
     '=warm',
   ]) {
     assert.ok(!summary.includes(value), value);
   }
+  assert.ok(summary.includes('The talks section is an evidence section'));
   // It still says what the migration does.
   assert.ok(summary.includes('/sections/3/hidden to site.yml /sections/<its id>/hidden.'));
   assert.ok(summary.includes('--set site.appearance.colorScheme=<value>'));
   const full = formatMigration(migration, { file: 'owner.yml' });
-  assert.ok(full.includes('Rowan Owner') && full.includes('talks'));
+  assert.ok(full.includes('Rowan Owner') && full.includes('/sections/talks'));
   // Nor the old values a need was given.
   for (const [name, old] of [
     ['variant-unregistered.yml', 'canvas'],
@@ -535,16 +559,18 @@ test('the dry run shows a diff of the portfolio and the whole site document', ()
   );
 });
 
-test('files that are not the old format are current or refused', () => {
-  const current = migrate({ text: 'schemaVersion: 2\nidentity:\n  name: Rowan\n', format: 'yaml' });
+test('files that are not the old format or version 2 are current or refused', () => {
+  const current = migrate({ text: 'schemaVersion: 3\nidentity:\n  name: Rowan\n', format: 'yaml' });
   assert.deepEqual(current, { status: 'current', document: 'portfolio' });
   assert.equal(
     formatMigration(current, { file: 'p.yml' }),
-    'p.yml is already a schemaVersion 2 portfolio document. Nothing to migrate.\n',
+    'p.yml is already a schemaVersion 3 portfolio document. Nothing to migrate.\n',
   );
+  const site = migrate({ text: read('../../../../../site.example.yml'), format: 'yaml' });
+  assert.deepEqual(site, { status: 'current', document: 'site' });
   for (const [text, reason] of [
-    ['schemaVersion: 3\nidentity: {}\n', /declares schemaVersion 3, which no migration step reads/],
-    ['links: []\n', /neither the old one-file format nor a schemaVersion 2 document/],
+    ['schemaVersion: 4\nidentity: {}\n', /declares schemaVersion 4, which no migration step reads/],
+    ['links: []\n', /neither the old one-file format, a schemaVersion 2 portfolio document, nor/],
     ['identity: [\n', /^Line \d+, column \d+: /],
   ] as const) {
     const failed = migrate({ text, format: 'yaml' });
@@ -821,17 +847,17 @@ test('a summary masks the ids in --set paths, and a failure shows no schemaVersi
     }),
   );
   const summary = formatMigration(migration, { file: 'owner.yml', summary: true });
-  assert.ok(!summary.includes('talks'), summary);
+  assert.ok(!summary.includes('sections.talks') && !summary.includes('/sections/talks'), summary);
   assert.ok(summary.includes(' --set site.sections.<its id>.hidden=<value> '), summary);
   for (const [text, shown] of [
-    ['schemaVersion: 3\nidentity: {}\n', 'schemaVersion 3'],
+    ['schemaVersion: 4\nidentity: {}\n', 'schemaVersion 4'],
     [`schemaVersion: "${KEY_BODY}"\nidentity: {}\n`, "a schemaVersion that isn't a number"],
   ] as const) {
     const failed = migrate({ text, format: 'yaml' });
     assert.ok(formatMigration(failed, { file: 'p.yml' }).includes(`declares ${shown},`), text);
     const logged = formatMigration(failed, { file: 'p.yml', summary: true });
     assert.ok(logged.includes('declares a schemaVersion, which'), logged);
-    assert.ok(!logged.includes('3') && !logged.includes('canaryKeyBody'), logged);
+    assert.ok(!logged.includes('4') && !logged.includes('canaryKeyBody'), logged);
   }
 });
 

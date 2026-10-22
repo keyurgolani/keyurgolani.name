@@ -30,6 +30,11 @@ export interface V3StepResult {
   readonly minted: MintedId[];
   /** Values only the owner can give, by `--set` path. */
   readonly needs: Need[];
+  /**
+   * The list sections that listed nothing, which version 3 has no section
+   * for: each one's id and index in the version 2 document.
+   */
+  readonly dropped: ReadonlyArray<{ readonly id: string; readonly index: number }>;
 }
 
 export interface V3StepOptions {
@@ -505,7 +510,7 @@ export function v3Step(v2: Rec, options: V3StepOptions = {}): V3StepResult {
     contactSections[0];
   let contact: Rec | undefined;
 
-  const v3Sections = sections.map((section, index): unknown => {
+  const v3Sections = sections.map((section, index): unknown | typeof DROPPED => {
     if (!isPlainObject(section) || typeof section.kind !== 'string') return section;
     const at: Path = ['sections', index];
     const from = toPointer(at);
@@ -699,13 +704,21 @@ export function v3Step(v2: Rec, options: V3StepOptions = {}): V3StepResult {
         return entry.id as string;
       });
       const kept = ids.filter((id): id is string => id !== undefined);
+      if (kept.length === 0) {
+        // A chronology section without items lists every entry, which this one never did.
+        removed(
+          from,
+          `The ${kind} section lists nothing, and a version 3 chronology section without items lists every entry, so it goes, and its id with it.`,
+        );
+        return DROPPED;
+      }
       changes.push({
         code: 'mapped',
         from,
         to: { document: 'portfolio', pointer: from },
         note: `The ${kind} section is a chronology section listing its entries in the same order.`,
       });
-      return { ...base, kind: 'chronology', ...(kept.length > 0 ? { items: kept } : {}) };
+      return { ...base, kind: 'chronology', items: kept };
     }
 
     const part = PRACTICE_KINDS[kind];
@@ -787,9 +800,48 @@ export function v3Step(v2: Rec, options: V3StepOptions = {}): V3StepResult {
   if (chronology.length > 0) portfolio.chronology = chronology;
   if (media.length > 0) portfolio.media = media;
   if (contact) portfolio.contact = contact;
-  if ('sections' in data) portfolio.sections = v3Sections;
-
-  return { portfolio, changes, minted, needs };
+  // A section that goes moves the ones after it up, in the changes and needs too.
+  const dropped: Array<{ id: string; index: number }> = [];
+  const moved = new Map<number, number>();
+  const kept: unknown[] = [];
+  v3Sections.forEach((section, index) => {
+    if (section === DROPPED) {
+      const { id } = sections[index] as Rec;
+      if (typeof id === 'string') dropped.push({ id, index });
+      return;
+    }
+    moved.set(index, kept.length);
+    kept.push(section);
+  });
+  if ('sections' in data && (kept.length > 0 || dropped.length === 0)) portfolio.sections = kept;
+  if (dropped.length === 0) return { portfolio, changes, minted, needs, dropped };
+  const shift = (index: string) => String(moved.get(Number(index)) ?? index);
+  return {
+    portfolio,
+    changes: changes.map((change) =>
+      change.to?.document === 'portfolio'
+        ? {
+            ...change,
+            to: {
+              ...change.to,
+              pointer: change.to.pointer.replace(
+                /^\/sections\/(\d+)/,
+                (_, n: string) => `/sections/${shift(n)}`,
+              ),
+            },
+          }
+        : change,
+    ),
+    minted,
+    needs: needs.map((need) => ({
+      ...need,
+      path: need.path.replace(
+        /^portfolio\.sections\.(\d+)\./,
+        (_, n: string) => `portfolio.sections.${shift(n)}.`,
+      ),
+    })),
+    dropped,
+  };
 }
 
 /** A section's own fields, which carry over as they are. */
@@ -807,15 +859,16 @@ function worksSection(
   kind: string,
   from: string,
   changes: Change[],
-): Rec {
+): Rec | typeof DROPPED {
   const items = ids.filter((id): id is string => id !== undefined);
+  if (items.length === 0) return listedNothing(kind, 'works', from, changes);
   changes.push({
     code: 'mapped',
     from,
     to: { document: 'portfolio', pointer: from },
     note: `The ${kind} section is a works section listing its works in the same order.`,
   });
-  return { ...base, kind: 'works', ...(items.length > 0 ? { items } : {}) };
+  return { ...base, kind: 'works', items };
 }
 
 function evidenceSection(
@@ -824,15 +877,31 @@ function evidenceSection(
   kind: string,
   from: string,
   changes: Change[],
-): Rec {
+): Rec | typeof DROPPED {
   const items = ids.filter((id): id is string => id !== undefined);
+  if (items.length === 0) return listedNothing(kind, 'evidence', from, changes);
   changes.push({
     code: 'mapped',
     from,
     to: { document: 'portfolio', pointer: from },
     note: `The ${kind} section is an evidence section listing its evidence in the same order.`,
   });
-  return { ...base, kind: 'evidence', ...(items.length > 0 ? { items } : {}) };
+  return { ...base, kind: 'evidence', items };
+}
+
+/** A list section with nothing in it: a version 3 one lists at least one record. */
+function listedNothing(
+  kind: string,
+  type: 'works' | 'evidence',
+  from: string,
+  changes: Change[],
+): typeof DROPPED {
+  changes.push({
+    code: 'removed',
+    from,
+    note: `The ${kind} section lists nothing, and a version 3 ${type} section lists at least one record, so it goes, and its id with it.`,
+  });
+  return DROPPED;
 }
 
 /**
@@ -1001,3 +1070,5 @@ function withoutBlanks(data: Rec, changes: Change[]): Rec {
 }
 
 const BLANK = Symbol('blank');
+/** A section the step leaves out. */
+const DROPPED = Symbol('dropped');

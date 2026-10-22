@@ -29,7 +29,7 @@ import type {
   UnitMigration,
 } from './types';
 import { V2_SCHEMA_VERSION } from './v2/schema';
-import { v3Step } from './v3-step';
+import { v3Step, type V3StepResult } from './v3-step';
 
 // `@portfolio/schema/migrate`: converts old documents to this release's
 // (#4, item 19; #10, item 6). Pure: text in, documents and a report out.
@@ -91,6 +91,43 @@ function hiddenSections(site: unknown): Set<string> {
       .filter(([, settings]) => isPlainObject(settings) && settings.hidden === true)
       .map(([id]) => id),
   );
+}
+
+/**
+ * The site document without the entries of the sections the 2-to-3 step
+ * dropped, each reported: for the old format, whose site document the
+ * migration writes.
+ */
+function withoutDropped(site: Rec, dropped: V3StepResult['dropped'], changes: Change[]): Rec {
+  if (!isPlainObject(site.sections)) return site;
+  const sections: Rec = { ...site.sections };
+  for (const { id, index } of dropped) {
+    if (!Object.hasOwn(sections, id)) continue;
+    delete sections[id];
+    changes.push({
+      code: 'removed',
+      from: `/sections/${index}/hidden`,
+      note: "Its section goes, so the site document doesn't hide it.",
+    });
+  }
+  const { sections: _sections, ...rest } = site;
+  return Object.keys(sections).length > 0 ? { ...rest, sections } : rest;
+}
+
+/**
+ * For a site document the migration keeps as it is: each dropped section it
+ * still names, reported, since its entry there now names nothing.
+ */
+function droppedNamed(site: unknown, dropped: V3StepResult['dropped'], changes: Change[]): void {
+  const sections = isPlainObject(site) && isPlainObject(site.sections) ? site.sections : {};
+  for (const { id, index } of dropped) {
+    if (!Object.hasOwn(sections, id)) continue;
+    changes.push({
+      code: 'warned',
+      from: `/sections/${index}`,
+      note: "The site document's sections still name it: remove that entry, since its id is gone.",
+    });
+  }
 }
 
 /** What a version says, without the value itself when it isn't a number. */
@@ -162,9 +199,8 @@ function migrateLegacy(
   const first = legacyStep(legacy, { locate, presetIds });
   const second = v3Step(first.portfolio, { hidden: hiddenSections(first.site) });
   const portfolio = second.portfolio;
-  const site = first.site;
-
   const changes: Change[] = [...first.changes, ...second.changes];
+  const site = withoutDropped(first.site, second.dropped, changes);
   const setPaths = new Set<string>();
   for (const { path, value } of sets) {
     const [document, ...segments] = path.split('.') as ['portfolio' | 'site', ...string[]];
@@ -258,6 +294,7 @@ function migrateV2Portfolio(
   const step = v3Step(data, { hidden: hiddenSections(siteData) });
   const portfolio = step.portfolio;
   const changes: Change[] = [...step.changes];
+  droppedNamed(siteData, step.dropped, changes);
   for (const { path, value } of sets) {
     const segments = path.split('.').slice(1);
     const problem = setAt(portfolio, segments, coerce(value));
@@ -363,6 +400,7 @@ export function migrateDocuments(unit: StoredUnit, options: MigrateOptions = {})
   const step = v3Step(portfolioRead.data as Rec, { hidden: hiddenSections(siteRead.data) });
   const portfolio = step.portfolio;
   const changes: Change[] = [...step.changes];
+  droppedNamed(siteRead.data, step.dropped, changes);
   let siteText = unit.site.text;
   let site = siteRead.data as Rec;
   for (const { path, value } of sets) {
