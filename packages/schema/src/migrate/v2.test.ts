@@ -243,6 +243,72 @@ test('an image is a media asset, made at its first use, with its source under th
   assert.equal((data(mixed).works as Rec[])[1]!.series, 'خرائط');
 });
 
+test("an image's later use keeps its own alt text and focal point, and a logo or an avatar is decoration", () => {
+  const migration = v2(
+    V2(
+      '  - kind: projects',
+      '    id: work',
+      '    items:',
+      '      - name: Harbor',
+      '        image:',
+      '          { src: /images/harbor.jpg, alt: The harbor at dawn, credit: Ana Ruiz, focalPoint: { x: 0.2, y: 0.4 } }',
+      '      - name: Dusk',
+      '        image:',
+      '          { src: /images/harbor.jpg, alt: The harbor at dusk, credit: Bo Lind, focalPoint: { x: 0.8, y: 0.5 } }',
+      '  - kind: experience',
+      '    id: roles',
+      '    items:',
+      '      - role: Lead',
+      '        organization: Tide',
+      '        period: { start: 2020-01 }',
+      '        logo: { src: /images/tide.png, alt: Tide }',
+      '  - kind: testimonials',
+      '    id: words',
+      '    items:',
+      '      - quote: Steady and kind.',
+      '        author: Sam Ng',
+      '        authorAvatar: { src: /images/sam.jpg, alt: Sam Ng }',
+    ),
+  );
+  const portfolio = data(migration) as {
+    media: Rec[];
+    works: Rec[];
+    chronology: Rec[];
+    evidence: Rec[];
+  };
+  // The first use makes the asset, with its alt text, credit, and focal point.
+  assert.deepEqual(portfolio.media[0], {
+    id: 'harbor-cover',
+    kind: 'image',
+    source: 'images/harbor.jpg',
+    alt: 'The harbor at dawn',
+    credit: 'Ana Ruiz',
+    focalPoint: { x: 0.2, y: 0.4 },
+  });
+  // A later use keeps its own alt text and focal point on its placement.
+  assert.deepEqual(
+    portfolio.works.map(({ cover }) => cover),
+    [
+      { asset: 'harbor-cover' },
+      { asset: 'harbor-cover', alt: 'The harbor at dusk', focalPoint: { x: 0.8, y: 0.5 } },
+    ],
+  );
+  // Credit belongs to the asset, which keeps the first, so the later one is reported.
+  assert.deepEqual(notes(migration, 'warned'), [
+    [
+      '/sections/0/items/1/image/credit',
+      undefined,
+      "Its credit differs from the first use of the same image, and the media asset harbor-cover keeps the first one's. Credit belongs to the asset.",
+    ],
+  ]);
+  // A logo and an author's avatar are decoration, alt text or not.
+  assert.deepEqual(portfolio.chronology[0]!.logo, { asset: 'lead-tide-logo', decorative: true });
+  assert.deepEqual((portfolio.evidence[0]!.source as Rec).avatar, {
+    asset: 'sam-ng-avatar',
+    decorative: true,
+  });
+});
+
 test('a stat is metric evidence: a number is its value, anything else its statement', () => {
   const migration = v2(
     V2(
@@ -360,6 +426,12 @@ test('a list section that lists nothing goes, and the sections after it move up'
     "  - { kind: cta, id: next, primaryAction: { url: '#about' } }",
   );
   const migration = v2(text, SITE('drafts'));
+  // Blocked by the label it needs, and by nothing else.
+  assert.equal(migration.status, 'blocked');
+  assert.deepEqual(
+    migration.diagnostics.filter(({ severity }) => severity !== 'warning'),
+    [],
+  );
   assert.deepEqual(
     (data(migration).sections as Rec[]).map(({ id }) => id),
     ['about', 'next'],
@@ -371,6 +443,7 @@ test('a list section that lists nothing goes, and the sections after it move up'
       undefined,
       'The projects section lists nothing, and a version 3 works section lists at least one record, so it goes, and its id with it.',
     ],
+    ['/sections/0', undefined, "Its section goes, so the site document's entry for it goes too."],
     ['/sections/0/items', undefined, empty],
     [
       '/sections/1',
@@ -379,19 +452,97 @@ test('a list section that lists nothing goes, and the sections after it move up'
     ],
     ['/sections/1/items', undefined, empty],
   ]);
-  // The site document stays as it is, so its entry for the section is reported.
-  assert.deepEqual(notes(migration, 'warned'), [
-    [
-      '/sections/0',
-      undefined,
-      "The site document's sections still name it: remove that entry, since its id is gone.",
-    ],
-  ]);
+  // The site document loses its entry, by an edit that keeps every other byte.
+  assert.equal(migration.site?.text, SITE());
+  assert.equal(migration.siteFormat, 'yaml');
   // The need for the label is at the section's new place.
   assert.deepEqual(
     migration.needs.map(({ path }) => path),
     ['portfolio.sections.1.primaryAction.label'],
   );
+  // With the label, nothing stops it, and the store's migration of the pair agrees.
+  const set = ['portfolio.sections.1.primaryAction.label=Next'];
+  const ready = v2(text, SITE('drafts'), set);
+  assert.equal(ready.status, 'ready', JSON.stringify(ready.diagnostics));
+  const stored = unitPlan(
+    migrateDocuments(
+      { portfolio: { text, format: 'yaml' }, site: { text: SITE('drafts'), format: 'yaml' } },
+      { set: set.map(parseSet) },
+    ),
+  );
+  assert.equal(stored.status, 'ready', JSON.stringify(stored.diagnostics));
+  assert.equal(stored.documents.portfolio.text, ready.portfolio.text);
+  assert.equal(stored.documents.site.text, ready.site?.text);
+  assert.deepEqual(stored.changes, ready.changes);
+  assert.deepEqual(stored.diagnostics, ready.diagnostics);
+  // An entry that never named a section blocks both, with the same record.
+  const ghost = v2(text, SITE('drafts', 'ghost'), set);
+  const storedGhost = unitPlan(
+    migrateDocuments(
+      {
+        portfolio: { text, format: 'yaml' },
+        site: { text: SITE('drafts', 'ghost'), format: 'yaml' },
+      },
+      { set: set.map(parseSet) },
+    ),
+  );
+  assert.equal(ghost.status, 'blocked');
+  assert.deepEqual(
+    ghost.diagnostics.map(({ code, document, pointer }) => [code, document, pointer]),
+    [['ref.missing', 'site', '/sections/ghost']],
+  );
+  assert.deepEqual(storedGhost, { ...storedGhost, status: 'blocked', diagnostics: ghost.diagnostics });
+});
+
+test("a stored unit's site document loses a dropped section's entry and keeps every other byte", () => {
+  const portfolio = {
+    text: V2(
+      '  - { kind: lede, id: intro, title: Intro, body: Hello. }',
+      '  - { kind: lede, id: about, title: About, body: Hi. }',
+      '  - { kind: talks, id: talks, title: Talks, items: [] }',
+    ),
+    format: 'yaml',
+  } as const;
+  const site = SITE('about', 'talks').replace('sections:\n', 'sections:\n  # Kept for later.\n');
+  const migration = unitPlan(migrateDocuments({ portfolio, site: { text: site, format: 'yaml' } }));
+  // Its entry would name no section, which blocks the unit with no value to give.
+  assert.equal(migration.status, 'ready', JSON.stringify(migration.diagnostics));
+  assert.deepEqual(migration.needs, []);
+  assert.equal(migration.documents.site.text, site.replace('  talks: { hidden: true }\n', ''));
+  assert.ok(
+    migration.changes.some(
+      ({ code, from, note }) =>
+        code === 'removed' &&
+        from === '/sections/2' &&
+        note === "Its section goes, so the site document's entry for it goes too.",
+    ),
+  );
+  assert.deepEqual(
+    migrateDocuments({ portfolio: migration.documents.portfolio, site: migration.documents.site }),
+    { status: 'current' },
+  );
+  // A JSON site document keeps its indent.
+  const json = (value: unknown) => `${JSON.stringify(value, null, 4)}\n`;
+  const fromJson = unitPlan(
+    migrateDocuments({ portfolio, site: { text: json(parseYaml(site)), format: 'json' } }),
+  );
+  assert.equal(fromJson.status, 'ready', JSON.stringify(fromJson.diagnostics));
+  assert.equal(fromJson.documents.site.text, json(parseYaml(migration.documents.site.text)));
+  // An id a kept section still has keeps its entry, so that section stays hidden.
+  const repeated = unitPlan(
+    migrateDocuments({
+      portfolio: {
+        text: V2(
+          '  - { kind: talks, id: talks, title: Talks, items: [] }',
+          '  - { kind: lede, id: talks, title: About, body: Hi. }',
+        ),
+        format: 'yaml',
+      },
+      site: { text: SITE('talks'), format: 'yaml' },
+    }),
+  );
+  assert.equal(repeated.documents.site.text, SITE('talks'));
+  assert.ok(repeated.changes.every(({ note }) => !note.includes("site document's entry")));
 });
 
 test('in the old format, a list section that lists nothing goes, and so does its site entry', () => {
@@ -454,7 +605,7 @@ test('a stored unit migrates: the portfolio to 3, the site byte for byte, the me
   // The same documents, and ids, as pnpm config:migrate.
   const cli = v2(UNIT.portfolio.text, UNIT.site.text);
   assert.equal(migration.documents.portfolio.text, cli.portfolio.text);
-  assert.deepEqual(migration.minted, cli.minted);
+  assert.deepEqual(migration.ids, cli.minted);
   // Deterministic, and idempotent: its own output is current.
   assert.deepEqual(migrateDocuments(UNIT), migration);
   assert.deepEqual(migrateDocuments({ ...UNIT, portfolio: migration.documents.portfolio }), {

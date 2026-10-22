@@ -345,9 +345,9 @@ Startup treats the mounted pair as live, so both blocking severities stop it, ex
 
 The version 2 portfolio was a list of sections that held their items. Version 3 makes the items records with ids, which sections list. The server refuses a version 2 portfolio with one `schema.outdated` record. Convert it once:
 
-1. Run `pnpm config:migrate config/portfolio.yml`. It's a dry run: it reads the `site.yml` beside it, if there is one, for which sections are hidden, and prints each field it moves or maps, the record and media ids it mints, what to look at, the comments it can't keep, the new document's diagnostics, and a diff. It never changes the old file or writes over another, and the site document doesn't change.
+1. Run `pnpm config:migrate config/portfolio.yml`. It's a dry run: it reads the `site.yml` beside it, if there is one, for which sections are hidden, and prints each field it moves or maps, the record and media ids it mints, what to look at, the comments it can't keep, the new document's diagnostics, and a diff. It never changes the old file or writes over another. The site document doesn't change, unless it names a list section that lists nothing: that section goes, so the migration writes the site document without its entry, and keeps every other byte.
 2. Give each value it asks for with `--set`, such as `--set portfolio.sections.4.primaryAction.label=Write`: a call to action's label, or a title for a gallery's work, which no renderer makes up.
-3. Add `--write --out config/new`, and move the new `portfolio.yml` into `config/`.
+3. Add `--write --out config/new`, and move the new `portfolio.yml` into `config/`, and the new `site.yml` too when it writes one.
 4. Run `pnpm config:validate config`, then start the server. Running the migration on its own output changes nothing.
 
 Each section keeps its place, its id, its title, and its subtitle. Its items become records with ids minted once from their titles, in document order, so the same file always gets the same ids:
@@ -362,7 +362,7 @@ Each section keeps its place, its id, its title, and its subtitle. Its items bec
 | `skills`, `stack`, `services`                                                                | `practice.skills`, `practice.tools`, and `practice.services`, and a `practice` section for each. A hidden section's groups don't join a part a visible section shows. |
 | `contact`                                                                                    | A `contact` section, with the first visible one's `message` and `links` as the contact record. `showAvailability` is removed.                                         |
 | An image (`{ src, alt, ... }`)                                                               | A media asset, made at its source's first use, and a placement. A `/` path becomes a path under the media root.                                                       |
-| A blank string or an empty list                                                              | Left out. A list section that lists nothing goes.                                                                                                                     |
+| A blank string or an empty list                                                              | Left out. A list section that lists nothing goes, and its site entry with it.                                                                                                                   |
 
 ### Migrating from the one-file format
 

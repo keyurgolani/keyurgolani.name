@@ -64,8 +64,13 @@ export interface PlanUrlsInput {
   readonly view: PublicView;
   /** The draft's acknowledgements: derived.urlAcknowledgements. */
   readonly acknowledgements: readonly UrlAcknowledgement[];
-  /** Ids of the works the next document keeps private (privateWorkIds()). Their old URLs answer 404, never 410. */
-  readonly privateWorks?: readonly string[];
+  /**
+   * Ids of the works the next document keeps private: privateWorkIds() of
+   * the next pair, [] when it keeps none. Their old URLs answer 404, never
+   * 410, which would say a private work was there. Required, so no caller
+   * can leave them out.
+   */
+  readonly privateWorks: readonly string[];
   /** The view paths each side's variant serves. */
   readonly viewPaths?: { readonly live?: readonly string[]; readonly next?: readonly string[] };
 }
@@ -85,9 +90,15 @@ export interface UrlPlan {
  * turned private, which is simply dropped (404). Every redirect is one hop:
  * an older one that pointed at a moved URL points at its new home, and one
  * that pointed at a gone URL is gone too. A URL the next revision serves is
- * never in the table.
+ * never in the table. Throws without `privateWorks`, rather than plan a 410
+ * for a private work's slug.
  */
 export function planUrls(input: PlanUrlsInput): UrlPlan {
+  if (!Array.isArray(input.privateWorks)) {
+    throw new TypeError(
+      "planUrls() needs privateWorks, privateWorkIds() of the next pair, so a private work's URL never answers 410.",
+    );
+  }
   const next = new Set(listCanonicalUrls(input.view, { viewPaths: input.viewPaths?.next }));
   const liveUrls = input.live
     ? listCanonicalUrls(input.live, { viewPaths: input.viewPaths?.live })
@@ -112,7 +123,7 @@ export function planUrls(input: PlanUrlsInput): UrlPlan {
   const acknowledged = new Map(
     input.acknowledgements.filter(isAcknowledgement).map((ack) => [ack.url, ack]),
   );
-  const privateWorks = new Set(input.privateWorks ?? []);
+  const privateWorks = new Set(input.privateWorks);
   const privatePaths = new Set(
     [...liveRoutes].filter(([id]) => privateWorks.has(id)).map(([, path]) => path),
   );

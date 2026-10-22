@@ -33,8 +33,10 @@
  * ids this build accepts, the section ids it gives, the record and media ids
  * it mints, what to look at, the comments it can't keep, the new pair's
  * diagnostics, a diff of the portfolio document, and the whole site document.
- * A version 2 portfolio's site document doesn't change; the site.yml beside
- * it, if there is one, tells which sections it hides. A file already at this
+ * For a version 2 portfolio, the site.yml beside it, if there is one, tells
+ * which sections it hides, and the new pair is checked with it. It doesn't
+ * change, unless it names a list section that lists nothing, which goes: then
+ * the migration writes it too, without that entry. A file already at this
  * release's version is current, and nothing changes. It writes nothing without
  * --write, never over a file that exists, and never to the old file. While
  * the old file holds secret-shaped text, it shows where, and no value, diff,
@@ -270,9 +272,11 @@ async function migrateCommand(args) {
   };
   const out = path.resolve(base, values.out);
   const extension = format === 'json' ? 'json' : 'yml';
+  // A version 2 portfolio's site document keeps its own format.
+  const siteExtension = (migration.siteFormat ?? format) === 'json' ? 'json' : 'yml';
   const targets = [
     [path.join(out, `portfolio.${extension}`), migration.portfolio.text],
-    ...(migration.site ? [[path.join(out, `site.${extension}`), migration.site.text]] : []),
+    ...(migration.site ? [[path.join(out, `site.${siteExtension}`), migration.site.text]] : []),
   ];
   try {
     for (const [target] of targets) {

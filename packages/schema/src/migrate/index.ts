@@ -1,4 +1,4 @@
-import { applyEdits } from '../edit';
+import { applyEdits, jsonIndent, type Edit } from '../edit';
 import type { ContentExtension } from '../extensions';
 import { isPlainObject } from '../json';
 import { detectDocument, SITE_DEFAULTS } from '../legacy';
@@ -115,19 +115,45 @@ function withoutDropped(site: Rec, dropped: V3StepResult['dropped'], changes: Ch
 }
 
 /**
- * For a site document the migration keeps as it is: each dropped section it
- * still names, reported, since its entry there now names nothing.
+ * A stored site document's text without the entries of the sections the
+ * 2-to-3 step dropped, each reported: for a version 2 portfolio's site
+ * document, which the migration edits in place, so it keeps its comments and
+ * every other byte. Its `sections` go too once they name nothing. An id a
+ * kept section still has keeps its entry. The same text when there's no
+ * entry to remove.
  */
-function droppedNamed(site: unknown, dropped: V3StepResult['dropped'], changes: Change[]): void {
-  const sections = isPlainObject(site) && isPlainObject(site.sections) ? site.sections : {};
-  for (const { id, index } of dropped) {
-    if (!Object.hasOwn(sections, id)) continue;
+function siteWithoutDropped(
+  site: StoredDocument,
+  data: unknown,
+  portfolio: Rec,
+  dropped: V3StepResult['dropped'],
+  changes: Change[],
+): string {
+  const sections = isPlainObject(data) && isPlainObject(data.sections) ? data.sections : {};
+  const kept = new Set(
+    (Array.isArray(portfolio.sections) ? portfolio.sections : []).map((section: unknown) =>
+      isPlainObject(section) ? section.id : undefined,
+    ),
+  );
+  const named = dropped.filter(({ id }) => Object.hasOwn(sections, id) && !kept.has(id));
+  if (named.length === 0) return site.text;
+  for (const { index } of named) {
     changes.push({
-      code: 'warned',
+      code: 'removed',
       from: `/sections/${index}`,
-      note: "The site document's sections still name it: remove that entry, since its id is gone.",
+      note: "Its section goes, so the site document's entry for it goes too.",
     });
   }
+  const ids = new Set(named.map(({ id }) => id));
+  const edits: Edit[] = Object.keys(sections).every((id) => ids.has(id))
+    ? [{ op: 'delete', pointer: '/sections' }]
+    : [...ids].map((id) => ({ op: 'delete', pointer: toPointer(['sections', id]) }));
+  return applyEdits(
+    site.text,
+    site.format,
+    edits,
+    site.format === 'json' ? { indent: jsonIndent(site.text) } : {},
+  );
 }
 
 /** What a version says, without the value itself when it isn't a number. */
@@ -294,7 +320,16 @@ function migrateV2Portfolio(
   const step = v3Step(data, { hidden: hiddenSections(siteData) });
   const portfolio = step.portfolio;
   const changes: Change[] = [...step.changes];
-  droppedNamed(siteData, step.dropped, changes);
+  // The site document given with it, edited as migrateDocuments() edits a stored one.
+  const given = options.site && isPlainObject(siteData) ? options.site : undefined;
+  let siteText: string | undefined;
+  if (given) {
+    try {
+      siteText = siteWithoutDropped(given, siteData, portfolio, step.dropped, changes);
+    } catch {
+      return failed("The site document's entries for the sections that go can't be removed.");
+    }
+  }
   for (const { path, value } of sets) {
     const segments = path.split('.').slice(1);
     const problem = setAt(portfolio, segments, coerce(value));
@@ -313,17 +348,25 @@ function migrateV2Portfolio(
   } catch (error) {
     return failed(`The new document can't be written: ${(error as Error).message}`);
   }
-  const site = isPlainObject(siteData) ? siteData : placeholderSite();
-  const checked = checkNew(portfolio, site, source.format, needs, options);
-  // Only the portfolio changes, so only its records are the migration's.
-  const diagnostics = checked.diagnostics.filter(({ document }) => document === 'portfolio');
+  // With its site document, the pair is checked as migrateDocuments() checks
+  // a stored one, the site's records included. Without one, a placeholder
+  // stands in, and only the portfolio's records are the migration's.
+  const checked = given
+    ? checkStored(portfolio, text, source.format, { ...given, text: siteText! }, needs, options)
+    : checkNew(portfolio, placeholderSite(), source.format, needs, options);
+  const diagnostics = given
+    ? checked.diagnostics
+    : checked.diagnostics.filter(({ document }) => document === 'portfolio');
   const blocked = needs.length > 0 || diagnostics.some(({ severity }) => severity !== 'warning');
+  const siteChanged = given !== undefined && siteText !== given.text;
   return {
     status: blocked ? 'blocked' : 'ready',
     from: V2_SCHEMA_VERSION,
     to: PORTFOLIO_SCHEMA_VERSION,
     format: source.format,
     portfolio: { data: portfolio, text },
+    ...(given ? { siteFormat: given.format } : {}),
+    ...(siteChanged ? { site: { data: reread(siteText!, given.format), text: siteText! } } : {}),
     source: source.text,
     changes: located(changes, locate),
     ids: [],
@@ -340,9 +383,10 @@ function migrateV2Portfolio(
 
 /**
  * Migrates a stored unit (#3's `migrate-store`, and CLI `rollback --to`):
- * the version 2 portfolio to 3, the site document as it is. Each document
- * keeps its format; one no step changes comes back byte for byte, and the
- * media document always does. Deterministic, so a dry run and the real run
+ * the version 2 portfolio to 3, and the site document without the entries of
+ * the sections that go, edited in place. Each document keeps its format; one
+ * no step changes comes back byte for byte, and the media document always
+ * does. Deterministic, so a dry run and the real run
  * mint the same ids, and idempotent: its own output answers `current`. A
  * version no step reads, version 1 included, is `failed`, with a summary
  * that holds no value from the documents.
@@ -400,9 +444,14 @@ export function migrateDocuments(unit: StoredUnit, options: MigrateOptions = {})
   const step = v3Step(portfolioRead.data as Rec, { hidden: hiddenSections(siteRead.data) });
   const portfolio = step.portfolio;
   const changes: Change[] = [...step.changes];
-  droppedNamed(siteRead.data, step.dropped, changes);
-  let siteText = unit.site.text;
-  let site = siteRead.data as Rec;
+  let siteText: string;
+  try {
+    siteText = siteWithoutDropped(unit.site, siteRead.data, portfolio, step.dropped, changes);
+  } catch {
+    const why = "The site document's entries for the sections that go can't be removed.";
+    return failed([why], [why]);
+  }
+  let site = reread(siteText, unit.site.format) ?? (siteRead.data as Rec);
   for (const { path, value } of sets) {
     const [document, ...segments] = path.split('.') as ['portfolio' | 'site', ...string[]];
     if (document === 'portfolio') {
@@ -421,8 +470,7 @@ export function migrateDocuments(unit: StoredUnit, options: MigrateOptions = {})
           ['A --set value has no place to go.'],
         );
       }
-      const reread = parseSource(siteText, unit.site.format);
-      if (reread.ok && isPlainObject(reread.data)) site = reread.data;
+      site = reread(siteText, unit.site.format) ?? site;
     }
     changes.push({
       code: 'set',
@@ -439,28 +487,13 @@ export function migrateDocuments(unit: StoredUnit, options: MigrateOptions = {})
     const why = `The new portfolio document can't be written: ${(error as Error).message}`;
     return failed([why], ["The new portfolio document can't be written."]);
   }
-  const checked = validatePublicationUnit(
-    {
-      portfolio: {
-        text: withPlaceholders(portfolio, needs, unit.portfolio.format) ?? portfolioText,
-        format: unit.portfolio.format,
-        name: `portfolio.${extensionOf(unit.portfolio.format)}`,
-      },
-      site: {
-        text: siteText,
-        format: unit.site.format,
-        name: `site.${extensionOf(unit.site.format)}`,
-      },
-    },
-    {
-      catalog: options.catalog,
-      extensions: options.extensions,
-      ...(options.origin ? { canonicalOrigin: options.origin } : {}),
-    },
-  );
-  const skipped = needPointers(needs);
-  const diagnostics = checked.diagnostics.filter(
-    ({ document, pointer }) => !skipped.has(`${document}:${pointer}`),
+  const { diagnostics, notChecked } = checkStored(
+    portfolio,
+    portfolioText,
+    unit.portfolio.format,
+    { text: siteText, format: unit.site.format },
+    needs,
+    options,
   );
   const blocked = needs.length > 0 || diagnostics.some(({ severity }) => severity !== 'warning');
   return {
@@ -473,10 +506,10 @@ export function migrateDocuments(unit: StoredUnit, options: MigrateOptions = {})
       ...(unit.media ? { media: unit.media } : {}),
     },
     changes: located(changes, portfolioRead.locate),
-    minted: step.minted,
+    ids: step.minted,
     needs,
     diagnostics,
-    notChecked: checked.notChecked,
+    notChecked,
     comments: unit.portfolio.format === 'yaml' ? commentLines(unit.portfolio.text) : [],
     secrets: secretsIn(
       [
@@ -494,6 +527,49 @@ export function migrateDocuments(unit: StoredUnit, options: MigrateOptions = {})
 
 function extensionOf(format: DocumentFormat): string {
   return format === 'json' ? 'json' : 'yml';
+}
+
+/** A document's data, when its text parses to a mapping. */
+function reread(text: string, format: DocumentFormat): Rec | undefined {
+  const read = parseSource(text, format);
+  return read.ok && isPlainObject(read.data) ? read.data : undefined;
+}
+
+/**
+ * The new pair's diagnostics, with the site document as it's written: its
+ * own text and format. Placeholders stand in for the portfolio values still
+ * needed, and the records at their pointers are left out.
+ */
+function checkStored(
+  portfolio: Rec,
+  portfolioText: string,
+  format: DocumentFormat,
+  site: StoredDocument,
+  needs: readonly Need[],
+  options: MigrateOptions,
+): { diagnostics: Diagnostic[]; notChecked: readonly string[] } {
+  const checked = validatePublicationUnit(
+    {
+      portfolio: {
+        text: withPlaceholders(portfolio, needs, format) ?? portfolioText,
+        format,
+        name: `portfolio.${extensionOf(format)}`,
+      },
+      site: { text: site.text, format: site.format, name: `site.${extensionOf(site.format)}` },
+    },
+    {
+      catalog: options.catalog,
+      extensions: options.extensions,
+      ...(options.origin ? { canonicalOrigin: options.origin } : {}),
+    },
+  );
+  const skipped = needPointers(needs);
+  return {
+    diagnostics: checked.diagnostics.filter(
+      ({ document, pointer }) => !skipped.has(`${document}:${pointer}`),
+    ),
+    notChecked: checked.notChecked,
+  };
 }
 
 function pointerOf(segments: readonly string[]): string {

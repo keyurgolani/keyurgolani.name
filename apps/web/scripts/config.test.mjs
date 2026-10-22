@@ -148,6 +148,44 @@ test('a JSON file is written as JSON, and a summary leaves its values out', (t) 
   }
 });
 
+test("a version 2 portfolio's site document is written too, in its own format, when a section it names goes", (t) => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'config-migrate-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const root = fileURLToPath(new URL('../../../', import.meta.url));
+  const portfolio = {
+    schemaVersion: 2,
+    locale: 'en',
+    direction: 'ltr',
+    identity: { name: 'Rowan Two' },
+    sections: [
+      { kind: 'lede', id: 'about', title: 'About', body: 'Hi.' },
+      { kind: 'lede', id: 'later', title: 'Later', body: 'Soon.' },
+      { kind: 'talks', id: 'talks', title: 'Talks', items: [] },
+    ],
+  };
+  writeFileSync(path.join(dir, 'portfolio.json'), `${JSON.stringify(portfolio, null, 2)}\n`);
+  const site = `${readFileSync(path.join(root, 'site.example.yml'), 'utf8')}sections:\n  # Not yet.\n  later: { hidden: true }\n  talks: { hidden: true }\n`;
+  writeFileSync(path.join(dir, 'site.yml'), site);
+  const run = migrate(dir, 'portfolio.json', '--write', '--out', 'new');
+  assert.equal(run.code, 0, run.stdout + run.stderr);
+  assert.match(
+    run.stdout,
+    /^portfolio\.json is a schemaVersion 2 portfolio document\. Migrating it writes portfolio\.json at schemaVersion 3, and site\.yml without the entries of the sections that go\.\n/,
+  );
+  assert.match(run.stdout, /\nWrote new\/portfolio\.json and new\/site\.yml\.\n$/);
+  // The site keeps its comments and every other byte, and stays YAML.
+  assert.equal(
+    readFileSync(path.join(dir, 'new', 'site.yml'), 'utf8'),
+    site.replace('  talks: { hidden: true }\n', ''),
+  );
+  const written = JSON.parse(readFileSync(path.join(dir, 'new', 'portfolio.json'), 'utf8'));
+  assert.deepEqual(
+    written.sections.map(({ id }) => id),
+    ['about', 'later'],
+  );
+  assert.equal(readFileSync(path.join(dir, 'site.yml'), 'utf8'), site);
+});
+
 test('bad arguments, a TOML file, and a file it cannot read exit 1', (t) => {
   const dir = scratch(t);
   for (const [args, message] of [

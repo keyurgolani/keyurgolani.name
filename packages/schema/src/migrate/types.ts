@@ -89,10 +89,17 @@ export interface MigrationPlan {
   readonly format: DocumentFormat;
   readonly portfolio: { readonly data: unknown; readonly text: string };
   /**
-   * The site document, for the old one-file format. A version 2 portfolio
-   * document's site document doesn't change, so a plan for one has none.
+   * The new site document. For the old one-file format, always. For a
+   * version 2 portfolio document, only when the migration edits the site
+   * document given with it, to remove the entries of the sections that go;
+   * every other byte stays.
    */
   readonly site?: { readonly data: unknown; readonly text: string };
+  /**
+   * For a version 2 portfolio document given with its site document, that
+   * document's format, which `site` keeps. Otherwise the site's is `format`.
+   */
+  readonly siteFormat?: DocumentFormat;
   /** The old file's text, for the diff. */
   readonly source: string;
   readonly changes: readonly Change[];
@@ -158,14 +165,23 @@ export interface UnitMigrationPlan {
   readonly status: 'ready' | 'blocked';
   readonly from: { readonly portfolio: number; readonly site: number };
   readonly to: { readonly portfolio: number; readonly site: number };
-  /** Every document in its own format. One no step changes comes back byte for byte. */
+  /**
+   * Every document in its own format. One no step changes comes back byte
+   * for byte. The site document changes only to lose the entries of the
+   * sections that go, by edits that keep every other byte.
+   */
   readonly documents: {
     readonly portfolio: StoredDocument;
     readonly site: StoredDocument;
     readonly media?: StoredDocument;
   };
   readonly changes: readonly Change[];
-  readonly minted: readonly MintedId[];
+  /**
+   * The record and media ids the 2-to-3 step minted, once, in document
+   * order, each with its owner, its new pointer, and what it came from. A
+   * stored unit's section ids are #4's and stay, so there's no AssignedId.
+   */
+  readonly ids: readonly MintedId[];
   readonly needs: readonly Need[];
   readonly diagnostics: readonly Diagnostic[];
   readonly notChecked: readonly string[];

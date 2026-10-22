@@ -42,19 +42,24 @@ function formatPlan(plan: MigrationPlan, options: FormatOptions): string {
   const withheld = plan.secrets.length > 0;
   const summary = (options.summary ?? false) || withheld;
   const extension = plan.format === 'json' ? 'json' : 'yml';
+  const siteFile = `site.${(plan.siteFormat ?? plan.format) === 'json' ? 'json' : 'yml'}`;
+  const fileOf = (document: string) =>
+    document === 'site' ? siteFile : `${document}.${extension}`;
   // A site section key is an id, which a summary leaves out like any value.
   const masked = (document: string, pointer: string) =>
     summary && document === 'site'
       ? pointer.replace(/^\/sections\/[^/]+/, '/sections/<its id>')
       : pointer;
   const where = ({ document, pointer }: Target) =>
-    `${document}.${extension} ${masked(document, pointer) || '/'}`;
+    `${fileOf(document)} ${masked(document, pointer) || '/'}`;
   const valued = (text: string, value: string | undefined) =>
     summary || value === undefined ? text : `${text}: ${value}`;
   const out: string[] = [
-    plan.site
-      ? `${file} is in the old one-file format (version ${plan.from}). Migrating it writes portfolio.${extension} at schemaVersion ${plan.to} and site.${extension} at schemaVersion ${SITE_SCHEMA_VERSION}.`
-      : `${file} is a schemaVersion ${plan.from} portfolio document. Migrating it writes portfolio.${extension} at schemaVersion ${plan.to}; the site document doesn't change.`,
+    plan.from === 1
+      ? `${file} is in the old one-file format (version ${plan.from}). Migrating it writes portfolio.${extension} at schemaVersion ${plan.to} and ${siteFile} at schemaVersion ${SITE_SCHEMA_VERSION}.`
+      : plan.site
+        ? `${file} is a schemaVersion ${plan.from} portfolio document. Migrating it writes portfolio.${extension} at schemaVersion ${plan.to}, and ${siteFile} without the entries of the sections that go.`
+        : `${file} is a schemaVersion ${plan.from} portfolio document. Migrating it writes portfolio.${extension} at schemaVersion ${plan.to}; the site document doesn't change.`,
   ];
   const block = (title: string, lines: readonly string[]) => {
     if (lines.length > 0) out.push('', title, ...lines.map((line) => `  ${line}`));
@@ -145,7 +150,7 @@ function formatPlan(plan: MigrationPlan, options: FormatOptions): string {
       : 'Diagnostics in the new documents:',
     plan.diagnostics.map(
       (d) =>
-        `${d.severity} ${d.code} ${d.document}.${extension} ${masked(d.document, d.pointer) || '/'}${d.line === undefined ? '' : `, line ${d.line}, column ${d.column}`}. ${d.message} ${d.remediation.split('\n')[0]}`,
+        `${d.severity} ${d.code} ${fileOf(d.document)} ${masked(d.document, d.pointer) || '/'}${d.line === undefined ? '' : `, line ${d.line}, column ${d.column}`}. ${d.message} ${d.remediation.split('\n')[0]}`,
     ),
   );
   if (plan.notChecked.length > 0) {
@@ -178,7 +183,7 @@ function formatPlan(plan: MigrationPlan, options: FormatOptions): string {
       diff === null
         ? `portfolio.${extension}, which differs from ${file} on too many lines to show as a diff:\n${plan.portfolio.text}`
         : `portfolio.${extension}, as a diff from ${file}:\n${diff}`,
-      ...(plan.site ? [`site.${extension}:\n${plan.site.text}`] : []),
+      ...(plan.site ? [`${siteFile}:\n${plan.site.text}`] : []),
     );
   }
   return `${out.join('\n').replace(/\n+$/, '')}\n`;

@@ -134,6 +134,15 @@ test('any other URL that vanishes waits for an acknowledgement: gone, or a redir
 test('a slug whose work turned private is never gone: once acknowledged, it answers 404', () => {
   const live = pair([work('atlas', 'tide')], ['atlas']);
   const next = pair([work('atlas', 'tide', ', visibility: private')], ['atlas']);
+  // Without the private works, there's no plan, rather than a 410 for the slug.
+  const unknown = {
+    live: viewOf(live),
+    liveTable: null,
+    view: viewOf(next),
+    acknowledgements: [{ url: '/work/tide' }],
+  };
+  // @ts-expect-error privateWorks is required.
+  assert.throws(() => planUrls(unknown), /needs privateWorks/);
   assert.deepEqual(plan(live, next).vanished, ['/work/tide']);
   assert.deepEqual(plan(live, next, { acknowledgements: [{ url: '/work/tide' }] }), {
     table: { redirects: {}, gone: [] },
