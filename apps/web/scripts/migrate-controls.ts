@@ -2,14 +2,18 @@
 // item 3). It steps each variant's stored control values in a site document
 // to the controls version its manifest declares, by the manifest's own
 // migrations, and prints what changes and a diff of the document. It writes
-// the file only with --write, in place, keeping every line it doesn't
-// change. A second run finds every entry current and changes nothing.
-// Values for a variant this build doesn't register, or from a newer release
-// of one, stay as they are.
+// the file only with --write, in place, and through a symbolic link to the
+// file the link names. A YAML document keeps every line it doesn't change,
+// comments included; a JSON document is written whole, in its own indent.
+// Once it has written, a second run finds every entry current and changes
+// nothing. Values for a variant this build doesn't register, or from a newer
+// release of one, stay as they are.
 //
 // Exit status: 0 once it has printed the plan (with --write, once the file
-// is written); 1 for a wrong argument, a file it can't read or write, or a
-// document that isn't a site document this release reads.
+// is written); 1 for a wrong argument, a file it can't read or write, a
+// document that isn't a site document this release reads, or one whose text
+// the edits can't be made in, such as YAML with a complex key (`? key`),
+// which it leaves as it is.
 //
 // Relative paths are taken from the directory pnpm ran in (INIT_CWD).
 
@@ -22,6 +26,7 @@ import {
   applyEdits,
   detectFormat,
   DOCUMENT_MAX_BYTES,
+  jsonIndent,
   readSite,
   redactSecrets,
   type DocumentFormat,
@@ -117,7 +122,22 @@ function run(args: readonly string[], registry: VariantRegistry, io: CommandIo):
     io.out(redactSecrets(`${lines.join('')}Nothing to migrate in ${given}.\n`));
     return 0;
   }
-  const after = applyEdits(text, format, plan.edits);
+  let after: string;
+  try {
+    // A JSON document is written whole, so it keeps its own indent.
+    after = applyEdits(
+      text,
+      format,
+      plan.edits,
+      format === 'json' ? { indent: jsonIndent(text) } : {},
+    );
+  } catch {
+    io.out(redactSecrets(lines.join('')));
+    io.err(
+      `${given} has text the migration can't edit in place, such as a YAML complex key (? key), so it's left as it is. Make the changes above by hand, or write that entry as plain key: value lines and run it again.\n`,
+    );
+    return 1;
+  }
   const diff = unifiedDiff(text, after, { before: given, after: given });
   io.out(redactSecrets(`${lines.join('')}\n${diff ?? `${after}\n`}`));
   if (!values.write) {
@@ -168,13 +188,18 @@ function describeChange(change: ControlChange): string {
   }
 }
 
-/** Replaces `file` with `text` in one rename, so a reader sees the old document or the new one. */
+/**
+ * Replaces `file` with `text` in one rename, so a reader sees the old
+ * document or the new one. A symbolic link stays a link: the file it names
+ * is the one replaced, from a temp file beside it, in its own mode.
+ */
 function replace(file: string, text: string): void {
+  const target = fs.realpathSync(file);
   const temp = path.join(
-    path.dirname(file),
-    `.${path.basename(file)}.${process.pid}.${randomBytes(6).toString('hex')}.tmp`,
+    path.dirname(target),
+    `.${path.basename(target)}.${process.pid}.${randomBytes(6).toString('hex')}.tmp`,
   );
-  const fd = fs.openSync(temp, 'wx', fs.statSync(file).mode & 0o777);
+  const fd = fs.openSync(temp, 'wx', fs.statSync(target).mode & 0o777);
   try {
     fs.writeFileSync(fd, text);
     fs.fsyncSync(fd);
@@ -182,7 +207,7 @@ function replace(file: string, text: string): void {
     fs.closeSync(fd);
   }
   try {
-    fs.renameSync(temp, file);
+    fs.renameSync(temp, target);
   } catch (error) {
     fs.rmSync(temp, { force: true });
     throw error;

@@ -1,6 +1,9 @@
 // Migrating a site document's stored control values (#5, Slice 5, item 3):
 // each registered variant's entry stepped to its manifest's controls
-// version, as the edits that make the change in the document's own text.
+// version, as #4 edits (applyEdits()) that change only the values that
+// migrate and the version. In YAML every other line stays as written; a
+// renamed control moves to the end of its `values` mapping, and a key or
+// value an edit writes is plain, or double-quoted when it must be.
 // `pnpm variants:migrate-controls` prints and applies them, and #8's Studio
 // offers them as a draft action. An entry already current changes nothing,
 // so a second run is a no-op. Nothing reads an entry of another version, so
@@ -77,14 +80,16 @@ export function planControlsMigration(
     const at = ['variantControls', variant] as const;
     const before = entry.values;
     const after = result.entry.values;
-    for (const key of Object.keys(before)) {
-      if (!Object.hasOwn(after, key)) {
-        edits.push({ pointer: toPointer([...at, 'values', key]), op: 'delete' });
-      }
-    }
+    // Sets before deletes: a renamed control is added before its old name
+    // goes, so a block mapping never empties into `{}` on the way.
     for (const [key, value] of Object.entries(after)) {
       if (!Object.hasOwn(before, key) || !isJsonEqual(before[key], value)) {
         edits.push({ pointer: toPointer([...at, 'values', key]), op: 'set', value });
+      }
+    }
+    for (const key of Object.keys(before)) {
+      if (!Object.hasOwn(after, key)) {
+        edits.push({ pointer: toPointer([...at, 'values', key]), op: 'delete' });
       }
     }
     edits.push({ pointer: toPointer([...at, 'version']), op: 'set', value: target });

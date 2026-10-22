@@ -1,11 +1,25 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  readlinkSync,
+  renameSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parse } from 'yaml';
 import { validateManifest, type VariantRegistry } from '@portfolio/variant-contract';
 import { migrateControlsCommand } from './migrate-controls';
 
@@ -46,10 +60,10 @@ const STORED = `variantControls:
     values: {}
 `;
 
-function scratch(t: test.TestContext, text = `${SITE}${STORED}`) {
+function scratch(t: test.TestContext, text = `${SITE}${STORED}`, name = 'site.yml') {
   const dir = mkdtempSync(path.join(tmpdir(), 'migrate-controls-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
-  writeFileSync(path.join(dir, 'site.yml'), text);
+  writeFileSync(path.join(dir, name), text);
   return dir;
 }
 
@@ -106,6 +120,90 @@ test('--write writes the migrated document, and a second run changes nothing', (
     ].join('\n'),
   );
   assert.equal(readFileSync(path.join(dir, 'site.yml'), 'utf8'), after);
+});
+
+test('through a symbolic link, --write migrates the file the link names and keeps the link', (t) => {
+  const dir = scratch(t);
+  const real = path.join(dir, 'real');
+  mkdirSync(real);
+  renameSync(path.join(dir, 'site.yml'), path.join(real, 'site.yml'));
+  chmodSync(path.join(real, 'site.yml'), 0o640);
+  symlinkSync(path.join('real', 'site.yml'), path.join(dir, 'site.yml'));
+  const written = run(dir, '--site', 'site.yml', '--write');
+  assert.equal(written.code, 0, written.err);
+  assert.match(written.out, /\nWrote site\.yml\.\n$/);
+  assert.ok(lstatSync(path.join(dir, 'site.yml')).isSymbolicLink());
+  assert.equal(readlinkSync(path.join(dir, 'site.yml')), path.join('real', 'site.yml'));
+  const after = readFileSync(path.join(real, 'site.yml'), 'utf8');
+  assert.match(after, /acme-ocean:\n {4}version: 2\n/);
+  assert.equal(statSync(path.join(real, 'site.yml')).mode & 0o777, 0o640);
+  // Nothing is left beside the link or the file.
+  assert.deepEqual(readdirSync(dir).sort(), ['real', 'site.yml']);
+  assert.deepEqual(readdirSync(real), ['site.yml']);
+  assert.match(run(dir, '--site', 'site.yml').out, /Nothing to migrate in site\.yml\.\n$/);
+});
+
+test('a JSON document is written in its own indent', (t) => {
+  const data = parse(`${SITE}${STORED}`) as Record<string, unknown>;
+  const text = `${JSON.stringify(data, null, 4)}\n`;
+  const dir = scratch(t, text, 'site.json');
+  const written = run(dir, '--site', 'site.json', '--write');
+  assert.equal(written.code, 0, written.err);
+  const controls = data.variantControls as Record<string, unknown>;
+  const migrated = {
+    ...data,
+    variantControls: {
+      ...controls,
+      'acme-ocean': { version: 2, values: { columns: 4, heroLayout: 'wide' } },
+    },
+  };
+  assert.equal(
+    readFileSync(path.join(dir, 'site.json'), 'utf8'),
+    `${JSON.stringify(migrated, null, 4)}\n`,
+  );
+  // So the diff shows only the entry that migrates.
+  const diff = run(scratch(t, text, 'site.json'), '--site', 'site.json').out;
+  assert.deepEqual(
+    diff.split('\n').filter((line) => /^[-+] /.test(line)),
+    [
+      '-            "version": 1,',
+      '+            "version": 2,',
+      '-                "layout": "full",',
+      '-                "columns": 9',
+      '+                "columns": 4,',
+      '+                "heroLayout": "wide"',
+    ],
+  );
+});
+
+test("an edit the document's text can't take exits 1 and leaves the file as it is", (t) => {
+  // A YAML complex key, which the edits can't change in place.
+  const complex = STORED.replace('      layout: full\n', '      ? layout\n      : full\n');
+  assert.notEqual(complex, STORED);
+  const dir = scratch(t, `${SITE}${complex}`);
+  const before = readFileSync(path.join(dir, 'site.yml'), 'utf8');
+  const result = run(dir, '--site', 'site.yml', '--write');
+  assert.equal(result.code, 1);
+  assert.equal(
+    result.err,
+    "site.yml has text the migration can't edit in place, such as a YAML complex key (? key), so it's left as it is. Make the changes above by hand, or write that entry as plain key: value lines and run it again.\n",
+  );
+  // What to change by hand is still printed.
+  assert.match(result.out, /^site\.yml: acme-ocean's controls migrate from version 1 to 2:\n/);
+  assert.doesNotMatch(result.out, /Wrote/);
+  assert.equal(readFileSync(path.join(dir, 'site.yml'), 'utf8'), before);
+  assert.deepEqual(readdirSync(dir), ['site.yml']);
+});
+
+test('the printed diff redacts anything secret-shaped, and the file keeps it', (t) => {
+  const token = `ghp_${'x'.repeat(36)}`;
+  const text = `${SITE}# pasted by mistake: ${token}\n${STORED}`;
+  const dir = scratch(t, text);
+  const result = run(dir, '--site', 'site.yml', '--write');
+  assert.equal(result.code, 0, result.err);
+  assert.ok(!result.out.includes(token));
+  assert.match(result.out, /^ # pasted by mistake: \[secret\]$/m);
+  assert.ok(readFileSync(path.join(dir, 'site.yml'), 'utf8').includes(token));
 });
 
 test('a wrong argument, a missing file, and a document it cannot read exit 1', (t) => {

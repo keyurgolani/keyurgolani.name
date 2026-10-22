@@ -17,8 +17,9 @@ import { parseSource, type DocumentFormat } from './source';
 // Editing a document by JSON pointer (#4, item 17). A YAML edit changes only
 // the text of the value it sets or the entry it deletes, in the document's
 // own line breaks, so comments and every untouched byte stay as written. A
-// JSON edit re-serializes the whole document with two-space indent, keeping
-// its key order.
+// JSON edit re-serializes the whole document, keeping its key order, with
+// two-space indent or the indent the caller passes, such as the one
+// jsonIndent() reads from the document.
 
 export interface Edit {
   /** RFC 6901 pointer. In an array, `-` appends. */
@@ -28,6 +29,28 @@ export interface Edit {
   readonly value?: unknown;
 }
 
+export interface EditOptions {
+  /**
+   * The indent a JSON document is written with: 1 to 10 spaces, or 1 to 10
+   * tabs. Two spaces when it's left out. A YAML edit keeps the document's
+   * own layout and ignores it.
+   */
+  readonly indent?: string;
+}
+
+/** What JSON.stringify() takes as an indent: up to 10 characters, here spaces or tabs. */
+const JSON_INDENT = /^(?: {1,10}|\t{1,10})$/;
+
+/**
+ * The indent a JSON document's lines step by: the leading spaces or tabs of
+ * its first indented line, or two spaces when no line is indented, as in a
+ * document written on one line. Pass it to applyEdits() to keep it.
+ */
+export function jsonIndent(text: string): string {
+  const indent = /\n([ \t]+)\S/.exec(text)?.[1];
+  return indent !== undefined && JSON_INDENT.test(indent) ? indent : '  ';
+}
+
 /**
  * Applies the edits in order and returns the new text. A `set` adds any
  * mapping the path is missing, and a scalar in its way becomes the mapping
@@ -35,10 +58,21 @@ export interface Edit {
  * document lacks changes nothing. Throws when the text isn't a plain
  * document or an edit can't apply, such as an array index past the end.
  */
-export function applyEdits(text: string, format: DocumentFormat, edits: readonly Edit[]): string {
+export function applyEdits(
+  text: string,
+  format: DocumentFormat,
+  edits: readonly Edit[],
+  options: EditOptions = {},
+): string {
   const parsed = parseSource(text, format);
   if (!parsed.ok) throw new Error('applyEdits() needs a document that parses.');
-  if (format === 'json') return editJson(text, parsed.data, edits);
+  if (format === 'json') {
+    const indent = options.indent ?? '  ';
+    if (!JSON_INDENT.test(indent)) {
+      throw new Error('applyEdits() indents JSON with 1 to 10 spaces or 1 to 10 tabs.');
+    }
+    return editJson(text, parsed.data, edits, indent);
+  }
   let current = text;
   let expected = parsed.data;
   for (const edit of edits) {
@@ -175,7 +209,7 @@ function parse(text: string): Document {
 
 // --- JSON ---------------------------------------------------------------
 
-function editJson(text: string, data: unknown, edits: readonly Edit[]): string {
+function editJson(text: string, data: unknown, edits: readonly Edit[], indent: string): string {
   const doc = parse(text);
   let expected = data;
   for (const edit of edits) {
@@ -183,7 +217,7 @@ function editJson(text: string, data: unknown, edits: readonly Edit[]): string {
     editTree(doc, segments(edit.pointer), edit);
     if (!isJsonEqual(doc.toJS(), expected)) failed(edit);
   }
-  const written = `${json(doc.contents, '')}\n`;
+  const written = `${json(doc.contents, '', indent)}\n`;
   if (!isJsonEqual(JSON.parse(written), expected)) {
     throw new Error("applyEdits() couldn't write the edited document.");
   }
@@ -239,19 +273,20 @@ function editTree(doc: Document, path: readonly string[], edit: Edit): void {
     );
 }
 
-/** JSON.stringify(value, null, 2) for a node tree, in the tree's own key order. */
-function json(node: unknown, indent: string): string {
-  const inner = `${indent}  `;
+/** JSON.stringify(value, null, step) for a node tree, in the tree's own key order. */
+function json(node: unknown, indent: string, step: string): string {
+  const inner = `${indent}${step}`;
   if (isMap(node)) {
     if (node.items.length === 0) return '{}';
     const entries = node.items.map(
-      (pair) => `${inner}${JSON.stringify(keyOf(pair))}: ${json(pair.value, inner)}`,
+      (pair) => `${inner}${JSON.stringify(keyOf(pair))}: ${json(pair.value, inner, step)}`,
     );
     return `{\n${entries.join(',\n')}\n${indent}}`;
   }
   if (isSeq(node)) {
     if (node.items.length === 0) return '[]';
-    return `[\n${node.items.map((item) => `${inner}${json(item, inner)}`).join(',\n')}\n${indent}]`;
+    const items = node.items.map((item) => `${inner}${json(item, inner, step)}`);
+    return `[\n${items.join(',\n')}\n${indent}]`;
   }
   const value = isScalar(node) ? node.value : node;
   if (typeof value === 'number' && !Number.isFinite(value)) {

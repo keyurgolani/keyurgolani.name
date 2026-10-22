@@ -112,6 +112,56 @@ test('an entry from a newer release, or for a variant this build lacks, stays as
   assert.deepEqual(planControlsMigration(site(SITE), REGISTRY), { entries: [], edits: [] });
 });
 
+test('entries come out in variant id order, whatever order the document keeps them in', () => {
+  const reordered = `variantControls:
+  acme-tide:
+    version: 4
+    values: {}
+  acme-reef:
+    version: 1
+    values: {}
+  acme-ocean:
+    version: 1
+    values: { layout: full }
+`;
+  const plan = planControlsMigration(site(`${SITE}${reordered}`), REGISTRY);
+  assert.deepEqual(
+    plan.entries.map(({ variant }) => variant),
+    ['acme-ocean', 'acme-reef', 'acme-tide'],
+  );
+});
+
+test('renaming the only control of a block mapping keeps the block, and the rename lands at its end', () => {
+  const text = `${SITE}variantControls:
+  acme-ocean:
+    version: 1
+    values:
+      layout: full
+`;
+  const plan = planControlsMigration(site(text), REGISTRY);
+  const migrated = applyEdits(text, 'yaml', plan.edits);
+  assert.equal(
+    migrated,
+    `${SITE}variantControls:
+  acme-ocean:
+    version: 2
+    values:
+      heroLayout: wide
+`,
+  );
+  const two = text.replace('      layout: full\n', "      layout: full\n      'columns': 9\n");
+  assert.equal(
+    applyEdits(two, 'yaml', planControlsMigration(site(two), REGISTRY).edits),
+    `${SITE}variantControls:
+  acme-ocean:
+    version: 2
+    values:
+      'columns': 4
+      heroLayout: wide
+`,
+  );
+});
+
 test('a JSON site document migrates the same way', () => {
   const data = JSON.parse(JSON.stringify(site(`${SITE}${STORED}`)));
   const text = `${JSON.stringify(data, null, 2)}\n`;
