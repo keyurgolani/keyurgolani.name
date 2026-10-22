@@ -2,7 +2,7 @@ import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import type { AuditType } from '../audit/record.mjs';
 import type { AuditSink } from '../audit/sink';
-import { isSessionHeld, type SessionHold } from '../auth/sessions';
+import { enterCommitPoint, isSessionHeld, type SessionHold } from '../auth/sessions';
 import { recordOwnerModule } from '../load-trace';
 import type { AssetStore } from './assets';
 import {
@@ -78,10 +78,13 @@ import {
 // the step. For the owner, the pointer move alone runs inside #2's
 // commitWithSession(), through the holdSession() the caller passes, so a
 // session that ended first never moves the pointer, and a logout waits only
-// for the move. What the move did decides the outcome, not what
-// holdSession() answers, and a publish whose move never ran removes the
-// revision it wrote. A key names one request: on another request's event it
-// is idempotency_conflict.
+// for the move. The hold is checked once more just before the rename
+// (enterCommitPoint()), so a move whose hold ran out of time renames
+// nothing, and one past that check finishes before a logout lands. What the
+// move did decides the outcome, not what holdSession() answers, and a
+// publish whose move never ran, or ran out of time before its commit point,
+// removes the revision it wrote. A key names one request: on another
+// request's event it is idempotency_conflict.
 
 recordOwnerModule('core/store/publication');
 
@@ -420,10 +423,12 @@ export function filesystemPublicationService({
     // What the move did decides the outcome, whatever holdSession() answers:
     // whether it ran, and then whether it moved the pointer or found the
     // lock someone else's. The lock must still be this operation's as the
-    // pointer moves.
+    // pointer moves, and for the owner, the session's hold too.
     let ran = false;
     let moved = false;
-    const move = async () => {
+    // The hold ran out of time before the commit point: the rename never started.
+    let missed = false;
+    const move = async (beforeCommit?: () => void) => {
       ran = true;
       try {
         await writeLive(
@@ -432,6 +437,7 @@ export function filesystemPublicationService({
           { seq: event.seq, revisionId: event.revisionId, unitHash, event },
           operation,
           () => lock.fence(),
+          beforeCommit,
         );
         moved = true;
       } catch (error) {
@@ -441,7 +447,10 @@ export function filesystemPublicationService({
     if (event.actor === 'operator') {
       await move();
     } else {
-      // The owner's session holds through the move and nothing else.
+      // The owner's session holds through the move and nothing else, and is
+      // checked once more just before the rename: a hold whose time ran out
+      // meanwhile moves nothing, and one that passes keeps the session's
+      // lock until the rename is done.
       requireHold(event.actor, context);
       // What failed inside the hold stands, even where holdSession() swallowed it.
       const thrown: unknown[] = [];
@@ -452,15 +461,24 @@ export function filesystemPublicationService({
             if (!isSessionHeld(hold)) {
               throw new TypeError("The owner's session isn't held through the pointer move.");
             }
-            await move();
+            await move(() => {
+              if (!enterCommitPoint(hold)) {
+                missed = true;
+                throw new StoreError(
+                  'storage_unavailable',
+                  'The pointer move ran out of time before its commit point, so nothing moved.',
+                );
+              }
+            });
           } catch (error) {
             thrown.push(error);
             throw error;
           }
         });
       } finally {
-        // No move ran, so the revision a publish wrote for it never went live.
-        if (!ran && draft) await dropUnpublished(event.revisionId);
+        // No move ran, or none got to its rename, so the revision a publish
+        // wrote for it never went live.
+        if ((!ran || missed) && draft) await dropUnpublished(event.revisionId);
       }
       if (thrown.length > 0) throw thrown[0];
       if (!ran) {

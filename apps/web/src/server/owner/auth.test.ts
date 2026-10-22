@@ -1,5 +1,6 @@
 import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
+import { AsyncResource } from 'node:async_hooks';
 import { randomBytes } from 'node:crypto';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -461,8 +462,10 @@ test('a logout after the recheck but before the commit stops the commit, and one
   afterRecheck = async () => {};
   let logout: Promise<boolean> | undefined;
   let loggedOut = false;
+  // The logout comes from outside the commit, as the other tab's request does.
+  const elsewhere = AsyncResource.bind((ask: () => Promise<boolean>) => ask());
   duringCommit = async () => {
-    logout = auth.sessions.end(sessionDigest(second), 'logout').then((ended) => {
+    logout = elsewhere(() => auth.sessions.end(sessionDigest(second), 'logout')).then((ended) => {
       loggedOut = true;
       return ended;
     });

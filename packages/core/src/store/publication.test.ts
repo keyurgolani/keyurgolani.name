@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { AsyncResource } from 'node:async_hooks';
 import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -781,11 +782,13 @@ test('a publish whose session ends before the pointer moves leaves the live revi
   const held = await ownerSession();
   const order: string[] = [];
   let logout: Promise<boolean> | undefined;
+  // The logout comes from outside the move, as another request's does.
+  const elsewhere = AsyncResource.bind((ask: () => Promise<boolean>) => ask());
   const watching: FsPort = {
     ...nodeFs,
     async rename(from, to, point) {
       if (point === 'publish.live.rename') {
-        logout = held.sessions.end(held.digest, 'logout').then((existed) => {
+        logout = elsewhere(() => held.sessions.end(held.digest, 'logout')).then((existed) => {
           order.push('logout');
           return existed;
         });
@@ -803,6 +806,110 @@ test('a publish whose session ends before the pointer moves leaves the live revi
   assert.equal(await logout, true);
   assert.deepEqual(order, ['moved', 'logout']);
   assert.notEqual((await readLive(nodeFs, store.paths))?.revisionId, first);
+});
+
+/** A promise and the function that resolves it. */
+function deferred() {
+  let resolve!: () => void;
+  const promise = new Promise<void>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
+test('a publish whose session hold runs out of time before its commit point moves nothing, and the lock goes to a logout', async (t) => {
+  const store = await newStore(t);
+  const first = await publishInput(store, pairInput('engineering'));
+  const draft = await draftOf(store, contentVariant(pairInput('engineering'), 'two'));
+  const events = await readEvents(nodeFs, store.paths);
+  const held = await ownerSession({ commitTimeoutMs: 30 });
+  const reached = deferred();
+  const gate = deferred();
+  const order: string[] = [];
+  // The move stalls in its sync, before the final check, past the hold's 30 ms.
+  const stalling: FsPort = {
+    ...nodeFs,
+    async fsync(target, point) {
+      if (point === 'publish.live.fsync') {
+        reached.resolve();
+        await gate.promise;
+      }
+      return nodeFs.fsync(target, point);
+    },
+    async rename(from, to, point) {
+      if (point === 'publish.live.rename') order.push('renamed');
+      return nodeFs.rename(from, to, point);
+    },
+  };
+  const stalled = openStore({ dataDir: store.paths.root, checks: testChecks(), fs: stalling });
+  const publish = stalled.publication.publish(
+    { draftId: draft.draftId, draftVersion: draft.version, expectedLiveRevisionId: first },
+    'owner',
+    { holdSession: held.holdSession },
+  );
+  const failed = assert.rejects(publish, (error: Error & { code?: string }) => {
+    assert.equal(error.code, 'storage_unavailable');
+    return true;
+  });
+  await reached.promise;
+  // The logout gets the session's lock once the hold's time runs out, while
+  // the move is still stalled.
+  const logout = held.sessions.end(held.digest, 'logout').then((existed) => {
+    order.push('logout');
+    return existed;
+  });
+  assert.equal(await logout, true);
+  gate.resolve();
+  await failed;
+  assert.deepEqual(order, ['logout']);
+  assert.equal((await readLive(nodeFs, store.paths))?.revisionId, first);
+  assert.deepEqual(await readEvents(nodeFs, store.paths), events);
+  assert.equal((await store.drafts.getWorking())?.version, draft.version);
+  // The revision written for the move never went live, so it's gone again.
+  assert.deepEqual(await nodeFs.readdir(store.paths.revisions), [first]);
+});
+
+test('a logout queued behind a commit runs after it, never between its final check and the rename, even past the hold time', async (t) => {
+  const store = await newStore(t);
+  const first = await publishInput(store, pairInput('engineering'));
+  const draft = await draftOf(store, contentVariant(pairInput('engineering'), 'two'));
+  // Long enough to reach the final check on a loaded machine; the rename
+  // then outlasts the whole hold, however long that took.
+  const HOLD_MS = 1_000;
+  const held = await ownerSession({ commitTimeoutMs: HOLD_MS });
+  const order: string[] = [];
+  let logout: Promise<boolean> | undefined;
+  // The logout comes from outside the move, as another request's does.
+  const elsewhere = AsyncResource.bind((ask: () => Promise<boolean>) => ask());
+  const slow: FsPort = {
+    ...nodeFs,
+    async rename(from, to, point) {
+      if (point === 'publish.live.rename') {
+        // Past the final check: the logout queues, and the rename takes
+        // longer than the hold.
+        logout = elsewhere(() => held.sessions.end(held.digest, 'logout')).then((existed) => {
+          order.push('logout');
+          return existed;
+        });
+        await new Promise((resolve) => setTimeout(resolve, HOLD_MS + 50));
+      }
+      await nodeFs.rename(from, to, point);
+      if (point === 'publish.live.rename') order.push('renamed');
+    },
+  };
+  const watched = openStore({ dataDir: store.paths.root, checks: testChecks(), fs: slow });
+  const outcome = await watched.publication.publish(
+    { draftId: draft.draftId, draftVersion: draft.version, expectedLiveRevisionId: first },
+    'owner',
+    { holdSession: held.holdSession },
+  );
+  assert.equal(outcome.kind, 'committed');
+  assert.equal(await logout, true);
+  assert.deepEqual(order, ['renamed', 'logout']);
+  assert.equal(
+    (await readLive(nodeFs, store.paths))?.revisionId,
+    outcome.kind === 'committed' ? outcome.revisionId : undefined,
+  );
 });
 
 test("the owner's rollback and recover hold the session for the move too, and the operator's CLI needs none", async (t) => {
