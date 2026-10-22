@@ -82,9 +82,12 @@ import {
 // page's own requireOwnerPage decides. Under a profile with no Studio page,
 // every Studio path, in any case or spelling and to any method, answers as
 // /no-such-page does: none of Studio's headers, Next's 404 page for GET and
-// HEAD, and the plain 404 for the rest. So does a route no profile of this
-// build serves, such as /_fixtures/appearance in a build without
-// APPEARANCE_FIXTURES=1 (#19, Slice 3), in every profile.
+// HEAD, and the plain 404 for the rest.
+//
+// A route no profile of this build serves, such as /_fixtures/appearance in
+// a build without APPEARANCE_FIXTURES=1 (#19, Slice 3), answers as
+// /no-such-page does too, in every profile: Next's 404 page for GET and
+// HEAD, and the plain 404 for the rest.
 export async function proxy(request: NextRequest): Promise<NextResponse> {
   const requestId = crypto.randomUUID();
   const deployment = getDeploymentConfig();
@@ -146,13 +149,19 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
     const gated = await previewGate(request, decision, { pathname, requestId, extra, csp });
     if (gated) return gated;
   }
+  // A route no profile of this build serves, as the route table marks it
+  // (#19, Slice 3): a page load goes to the 404 page ahead of Next's file
+  // check, and any other method gets the plain 404 below. A preview path's
+  // gate above answers first under a profile with grant routes (#7).
+  if (decision.status === 'absent' && decision.unknown && pageLoad) {
+    return unknownPath(request, requestId, extra, { csp, preview });
+  }
   if (decision.status === 'absent') {
-    // A Studio page under a profile with none, a route no profile of this
-    // build serves, and a preview route this build doesn't serve, such as
-    // the dev fixture route outside `next dev`, under a profile with no
-    // grant route, answer as a path no route matches. Under one with grant
-    // routes, the gate above has answered.
-    if (pageLoad && (decision.unknown || preview || (studioPath && !studio))) {
+    // A Studio page under a profile with none, and a preview route this
+    // build doesn't serve, such as the dev fixture route outside `next dev`,
+    // under a profile with no grant route, answer as a path no route
+    // matches. Under one with grant routes, the gate above has answered.
+    if ((preview || (studioPath && !studio)) && pageLoad) {
       return unknownPath(request, requestId, extra, { csp, preview });
     }
     return plain(404, 'Not found.', requestId, extra);
