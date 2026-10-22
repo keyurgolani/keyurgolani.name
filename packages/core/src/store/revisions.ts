@@ -1,8 +1,8 @@
 import path from 'node:path';
-import { canonicalize, type DocumentFormat } from '@portfolio/schema';
+import type { DocumentFormat } from '@portfolio/schema';
 import { recordOwnerModule } from '../load-trace';
 import { isStoreActor, type StoreActor } from './common';
-import type { CrashPoint, FsPort } from './fs-port';
+import type { ReadFs } from './fs-port';
 import {
   isDraftId,
   isRevisionId,
@@ -26,15 +26,16 @@ import {
   type UnitChecks,
   type UnitDiagnostic,
   type UnitDocument,
-} from './unit';
+} from '../catalog/unit';
 
 // The RevisionStore (#3, items 8, 11, 13, and 14): immutable catalog
 // revisions under revisions/<revisionId>/. Each holds its documents' text as
 // written and their normalized models, the snapshots derived at publish, and
 // manifest.json, written last. A revision is staged in
 // revisions/.staging-<id>/, each file and directory synced, read back and
-// checked against its hashes, then renamed into place; nothing changes it
-// after that. Reading a revision checks every hash again.
+// checked against its hashes, then renamed into place (commit.ts writes it);
+// nothing changes it after that. This module only reads, and reading a
+// revision checks every hash again.
 
 recordOwnerModule('core/store/revisions');
 
@@ -96,8 +97,10 @@ export type RevisionRead =
   | { readonly ok: true; readonly revision: Revision }
   | { readonly ok: false; readonly damage: RevisionDamage };
 
-const modelFile = (name: DocumentName) => `${name}.model.json`;
-const snapshotFile = (kind: string) => `${kind}.json`;
+/** The file a document's normalized model is in, under documents/. */
+export const modelFile = (name: DocumentName) => `${name}.model.json`;
+/** The file a snapshot is in, under snapshots/. */
+export const snapshotFile = (kind: string) => `${kind}.json`;
 
 /** The manifest for `unit`, from what the caller knows about how it came to be. */
 export function manifestFor(
@@ -142,70 +145,6 @@ export function manifestFor(
     rendering,
     blobs: blobsOf(unit, checks),
   });
-}
-
-async function writeSynced(
-  fs: FsPort,
-  file: string,
-  text: string,
-  point: CrashPoint,
-): Promise<void> {
-  await fs.writeFile(file, text, `${point}.write`);
-  await fs.fsync(file, `${point}.fsync`);
-}
-
-/**
- * Writes `revision` as revisions/<id>/: staged, each file and directory
- * synced, the manifest last, read back and checked, renamed into place, and
- * revisions/ synced. The caller holds the publication lock.
- */
-export async function writeRevision(
-  fs: FsPort,
-  paths: StorePaths,
-  revision: Revision,
-  operation: string,
-): Promise<void> {
-  const { manifest, unit } = revision;
-  const id = manifest.revisionId;
-  const staging = paths.staging(id);
-  const point = (step: string): CrashPoint => `${operation}.staging.${step}`;
-  const documents = path.join(staging, 'documents');
-  const snapshots = path.join(staging, 'snapshots');
-  await fs.mkdir(documents, point('mkdir'));
-  await fs.mkdir(snapshots, point('mkdir'));
-  for (const name of DOCUMENT_NAMES) {
-    const document = unit[name];
-    const entry = manifest.documents[name];
-    if (!document || !entry) continue;
-    await writeSynced(fs, path.join(documents, entry.file), document.sourceText, point(name));
-    await writeSynced(
-      fs,
-      path.join(documents, modelFile(name)),
-      canonicalize(document.model),
-      point(`${name}-model`),
-    );
-  }
-  for (const [kind, value] of Object.entries(unit.snapshots)) {
-    await writeSynced(
-      fs,
-      path.join(snapshots, snapshotFile(kind)),
-      canonicalize(value),
-      point(kind),
-    );
-  }
-  await fs.fsync(documents, point('documents.fsync'));
-  await fs.fsync(snapshots, point('snapshots.fsync'));
-  await writeSynced(
-    fs,
-    path.join(staging, 'manifest.json'),
-    `${JSON.stringify(manifest, null, 2)}\n`,
-    point('manifest'),
-  );
-  await fs.fsync(staging, point('dir.fsync'));
-  const check = await readRevisionAt(fs, staging, id);
-  if (!check.ok) throw new Error(`A staged revision failed its own check: ${check.damage}.`);
-  await fs.rename(staging, paths.revision(id), `${operation}.revision.rename`);
-  await fs.fsync(paths.revisions, `${operation}.revisions.fsync`);
 }
 
 function asManifest(value: unknown, id: RevisionId): Manifest | null {
@@ -261,7 +200,7 @@ function asManifest(value: unknown, id: RevisionId): Manifest | null {
   return ok ? (manifest as unknown as Manifest) : null;
 }
 
-async function readText(fs: FsPort, file: string): Promise<string | null> {
+async function readText(fs: ReadFs, file: string): Promise<string | null> {
   try {
     return (await fs.readFile(file)).toString('utf8');
   } catch (error) {
@@ -280,7 +219,7 @@ function parseJson(text: string): { ok: true; value: unknown } | { ok: false } {
 
 /** Reads and checks the revision in `dir`: every file there, and every hash right. */
 export async function readRevisionAt(
-  fs: FsPort,
+  fs: ReadFs,
   dir: string,
   id: RevisionId,
 ): Promise<RevisionRead> {
@@ -339,7 +278,7 @@ export async function readRevisionAt(
 }
 
 /** Reads and checks revisions/<id>/. */
-export function readRevision(fs: FsPort, paths: StorePaths, id: RevisionId): Promise<RevisionRead> {
+export function readRevision(fs: ReadFs, paths: StorePaths, id: RevisionId): Promise<RevisionRead> {
   return readRevisionAt(fs, paths.revision(id), id);
 }
 
@@ -348,7 +287,7 @@ export function readRevision(fs: FsPort, paths: StorePaths, id: RevisionId): Pro
  * one. Its files go unchecked: for a hash in a conflict, not for serving.
  */
 export async function readManifest(
-  fs: FsPort,
+  fs: ReadFs,
   paths: StorePaths,
   id: RevisionId,
 ): Promise<Manifest | null> {
@@ -360,11 +299,11 @@ export async function readManifest(
 }
 
 /** Every revision ID with a directory, staging and tombstones aside. */
-export async function revisionIds(fs: FsPort, paths: StorePaths): Promise<RevisionId[]> {
+export async function revisionIds(fs: ReadFs, paths: StorePaths): Promise<RevisionId[]> {
   return (await fs.readdir(paths.revisions)).filter(isRevisionId);
 }
 
-export async function isTombstoned(fs: FsPort, paths: StorePaths, id: RevisionId) {
+export async function isTombstoned(fs: ReadFs, paths: StorePaths, id: RevisionId) {
   return (await fs.stat(paths.tombstone(id))) !== null;
 }
 
@@ -400,7 +339,7 @@ const blocking = (diagnostic: { readonly severity: string }) =>
 export type HealthPurpose = 'serve' | 'publish';
 
 export async function revisionHealth(
-  fs: FsPort,
+  fs: ReadFs,
   paths: StorePaths,
   id: RevisionId,
   checks: UnitChecks,
@@ -469,7 +408,7 @@ export function filesystemRevisionStore({
   checks,
   hasBlob,
 }: {
-  readonly fs: FsPort;
+  readonly fs: ReadFs;
   readonly paths: StorePaths;
   readonly checks: UnitChecks;
   readonly hasBlob: (hash: Sha256) => Promise<boolean>;

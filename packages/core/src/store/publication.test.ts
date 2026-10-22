@@ -11,9 +11,10 @@ import { nodeFs, type FsPort } from './fs-port';
 import { newRevisionId, type RevisionId } from './layout';
 import { readEvents, readLive } from './pointer';
 import { IDEMPOTENCY_WINDOW, type HeldMove } from './publication';
-import { manifestFor, readManifest, readRevision, writeRevision } from './revisions';
+import { writeRevision } from './commit';
+import { manifestFor, readManifest, readRevision } from './revisions';
 import { openStore, type Store } from './store';
-import { checkUnit, sha256 } from './unit';
+import { checkUnit, sha256 } from '../catalog/unit';
 import {
   commentedVariant,
   contentVariant,

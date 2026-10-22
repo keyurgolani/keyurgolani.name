@@ -7,7 +7,7 @@ import { asDraft } from './drafts';
 import { nodeFs } from './fs-port';
 import { readLive } from './pointer';
 import { openStore } from './store';
-import { sha256 } from './unit';
+import { sha256 } from '../catalog/unit';
 import {
   contentVariant,
   invalidInput,

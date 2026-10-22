@@ -40,6 +40,8 @@ export interface FileStats {
   readonly mode: number;
   /** The owner's uid. */
   readonly uid: number;
+  /** The inode, which a rename over the file changes. */
+  readonly ino: number;
 }
 
 export interface FsPort {
@@ -81,6 +83,9 @@ export interface FsPort {
   touch(file: string, point: CrashPoint): Promise<void>;
 }
 
+/** The reads alone: what reading revisions and the pointer needs, and all the reader gets. */
+export type ReadFs = Pick<FsPort, 'readFile' | 'readdir' | 'stat' | 'lstat'>;
+
 const missing = (error: unknown) => (error as NodeJS.ErrnoException)?.code === 'ENOENT';
 
 const NO_FOLLOW = constants.O_NOFOLLOW;
@@ -94,6 +99,7 @@ function statsOf(found: Stats): FileStats {
     mtimeMs: found.mtimeMs,
     mode: found.mode & 0o777,
     uid: found.uid,
+    ino: found.ino,
   };
 }
 

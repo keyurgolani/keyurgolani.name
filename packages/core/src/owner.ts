@@ -1,6 +1,9 @@
-// @portfolio/core/owner: the package's only entry, and all of it owner code
-// (#1, item 14). Only the web app's server/owner/ modules import it, which
-// check:deps enforces, so demo and read-only never load it.
+// @portfolio/core/owner: the owner code (#1, item 14). Only the web app's
+// server/owner/ modules and the composition root's owner branch import it,
+// which check:deps enforces, so demo and read-only never load it. What every
+// profile may load is @portfolio/core, src/index.ts. Unlike that entry, this
+// one doesn't import server-only: the browser suite's harness opens a store
+// through it, in Node, outside Next.
 import { recordOwnerModule } from './load-trace';
 
 recordOwnerModule('core/owner');
@@ -127,9 +130,17 @@ export {
   type Renewal,
 } from './preview/grants';
 
-// The revision store (#3, Slice 1). Nothing wires it yet: owner reads the
-// documents adapter until Slice 3's first-start import.
+// The revision store (#3). Owner serves it through RevisionCatalogReader
+// once it holds a published revision; until Slice 3's first-start import, an
+// empty one serves the mounted documents.
 export { openStore, type Store, type StoreOptions } from './store/store';
+export {
+  revisionCatalogReader,
+  UNIT_CACHE_SIZE,
+  type RevisionCatalogOptions,
+  type RevisionCatalogReader,
+} from './store/reader';
+export { nodeReadFs } from './store/read-fs';
 export {
   onStoreEvent,
   StoreError,
@@ -142,7 +153,7 @@ export {
 } from './store/common';
 // The port's types only: openStore() defaults to node:fs, and apps/web gets
 // no port it could write files through.
-export { type CrashPoint, type FileStats, type FsPort } from './store/fs-port';
+export { type CrashPoint, type FileStats, type FsPort, type ReadFs } from './store/fs-port';
 export {
   isDraftId,
   isRevisionId,
@@ -186,8 +197,9 @@ export {
   type UnitDocument,
   type UnitInput,
   type Versioned,
-} from './store/unit';
+} from './catalog/unit';
 export {
+  type HealthPurpose,
   type Manifest,
   type ManifestDocument,
   type RevisionHealth,

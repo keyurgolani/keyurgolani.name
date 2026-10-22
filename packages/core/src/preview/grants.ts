@@ -1,7 +1,7 @@
 import { recordOwnerModule } from '../load-trace';
 import { sessionRef } from '../auth/token';
 import type { DraftId } from '../store/layout';
-import type { UnitInput } from '../store/unit';
+import type { UnitInput } from '../catalog/unit';
 import {
   DAMAGED_MARK,
   type GrantEnvironment,

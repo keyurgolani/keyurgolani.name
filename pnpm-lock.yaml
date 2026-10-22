@@ -163,6 +163,9 @@ importers:
       '@portfolio/schema':
         specifier: workspace:*
         version: link:../schema
+      server-only:
+        specifier: 0.0.1
+        version: 0.0.1
     devDependencies:
       typescript:
         specifier: ^5.7.2

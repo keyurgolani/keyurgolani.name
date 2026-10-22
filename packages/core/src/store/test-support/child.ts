@@ -15,7 +15,7 @@ import type { PublishInput, RecoverInput, RollbackInput } from '../publication';
 import { readRevision } from '../revisions';
 import { claimServer } from '../server-claim';
 import { openStore } from '../store';
-import { sha256, type UnitInput } from '../unit';
+import { sha256, type UnitInput } from '../../catalog/unit';
 import { crashingFs, type PointHit } from './crash-fs';
 import { ownerSession, testChecks } from './fixtures';
 

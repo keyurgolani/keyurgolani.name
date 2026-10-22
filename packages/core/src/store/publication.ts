@@ -30,6 +30,13 @@ import {
   type Sha256,
   type StorePaths,
 } from './layout';
+import {
+  reconcileEvents,
+  writeLive,
+  writeLiveEvent,
+  writeRevision,
+  type Reconciled,
+} from './commit';
 import { LOCK_STALE_MS, LockLostError, type PublicationLock } from './lock';
 import {
   DamagedPointerError,
@@ -37,13 +44,9 @@ import {
   readEvent,
   readEvents,
   readLive,
-  reconcileEvents,
-  writeLive,
-  writeLiveEvent,
   type EventType,
   type LivePointer,
   type PublicationEvent,
-  type Reconciled,
 } from './pointer';
 import {
   manifestFor,
@@ -51,7 +54,6 @@ import {
   readRevision,
   revisionHealth,
   revisionIds,
-  writeRevision,
   type HealthPurpose,
   type Manifest,
   type RevisionHealth,
@@ -63,7 +65,7 @@ import {
   type Unit,
   type UnitChecks,
   type UnitDiagnostic,
-} from './unit';
+} from '../catalog/unit';
 
 // The PublicationService (#3, items 11 to 14): the only code that moves the
 // published pointer. Publish, rollback, and recover each run under the

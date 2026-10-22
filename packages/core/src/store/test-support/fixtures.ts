@@ -18,7 +18,7 @@ import { preflight } from '../preflight';
 import type { HeldMove, PublicationOutcome, PublicationService } from '../publication';
 import { openStore, type Store, type StoreOptions } from '../store';
 import { isSha256, type Sha256 } from '../layout';
-import type { UnitChecks, UnitInput } from '../unit';
+import type { UnitChecks, UnitInput } from '../../catalog/unit';
 import { recordOwnerModule } from '../../load-trace';
 
 recordOwnerModule('core/store/test-support/fixtures');
