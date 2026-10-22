@@ -22,6 +22,10 @@ import { packFile, type PackFile } from './compile';
 
 const BOUNDARY = '[data-appearance-boundary]';
 
+/** What can take focus: links, form controls, summaries, frames, and anything with a tabindex. */
+const FOCUSABLE =
+  'a[href], area[href], button, input, select, textarea, summary, iframe, [tabindex], [contenteditable]';
+
 /** Each role in forced colors: actions as buttons, focus and selection as highlights, the rest as canvas and text. */
 const FORCED_COLORS: Readonly<Record<ColorRole, string>> = {
   canvas: 'Canvas',
@@ -149,6 +153,12 @@ export function platformStylesheet(): string {
     block([`${BOUNDARY} ::selection`], {
       color: 'var(--color-text-primary)',
       'background-color': 'var(--color-selection)',
+    }),
+    // A variant with sticky chrome sets --layout-sticky-offset, so whatever a
+    // fragment link or focus brings into view lands below the chrome (#19,
+    // Slice 3).
+    block([`${BOUNDARY} :is([id], ${FOCUSABLE})`], {
+      'scroll-margin-top': 'var(--layout-sticky-offset, 0px)',
     }),
   ].join('');
   // Hidden stays hidden whatever display a variant or language gives the element.

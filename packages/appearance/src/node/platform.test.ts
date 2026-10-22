@@ -42,6 +42,16 @@ test('the reset paints each boundary from its tokens', () => {
   assert.equal(reset.get('line-height'), 'var(--type-body-line-height)');
 });
 
+test("the reset puts every id and focusable element below a variant's sticky chrome (Slice 3)", () => {
+  const offset = declarations(
+    '  [data-appearance-boundary] :is([id], a[href], area[href], button, input, select, textarea, summary, iframe, [tabindex], [contenteditable])',
+    '@layer reset',
+  );
+  assert.deepEqual(Object.fromEntries(offset), {
+    'scroll-margin-top': 'var(--layout-sticky-offset, 0px)',
+  });
+});
+
 test('reduced motion keeps motion-fast feedback and stops or fades the rest', () => {
   for (const [selector, within] of [
     ['    [data-appearance-boundary]', '@media (prefers-reduced-motion: reduce)'],
