@@ -1,5 +1,6 @@
 import type { Hero, Lede, Now } from '@portfolio/schema';
-import { MediaFigure, placedMedia } from '../media';
+import { MediaFigure } from '../media';
+import { placedMedia } from '../placement';
 import {
   Heading,
   LabeledDate,
@@ -11,7 +12,6 @@ import {
 } from '../primitives';
 import { RichText } from '../rich-text';
 import type { SectionRendererProps } from '../types';
-
 
 /**
  * The opening. Its heading is the name, at the level the caller gives, which

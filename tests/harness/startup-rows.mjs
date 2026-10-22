@@ -88,6 +88,7 @@ const PAIR = 'the pair';
 const DOCUMENT = 'the document';
 const OWNER = 'what owner needs';
 const SNAPSHOTS = 'the snapshots beside the pair';
+const MEDIA = 'the media document beside the pair';
 /** A portfolio with a github section, which a snapshot is for. */
 const WITH_GITHUB = `${HEAD}identity:\n  name: Rowan Fixture\nsections:\n  - kind: github\n    id: on-github\n    username: rowan-fixture\n`;
 
@@ -527,6 +528,29 @@ export const STARTUP_ROWS = [
     env: (paths) => readOnly(paths),
     never: ['canary-snapshot'],
     fatal: [{ code: 'snapshot.invalid', file: 'snapshots/github.json', document: 'snapshots' }],
+  },
+  {
+    // #10: so would a media document that doesn't read, every image unavailable.
+    group: MEDIA,
+    name: 'a media document that does not parse, refused by its file without quoting it',
+    documents: withSite({
+      'portfolio.yml': FIXTURE,
+      'media/media.json': '{ "assets": [canary-media',
+    }),
+    env: (paths) => readOnly(paths),
+    never: ['canary-media'],
+    fatal: [{ code: 'media.syntax', file: 'media/media.json', document: 'media' }],
+  },
+  {
+    group: MEDIA,
+    name: 'a media document that fails its schema, refused by its file without quoting it',
+    documents: withSite({
+      'portfolio.yml': FIXTURE,
+      'media/media.json': '{ "assets": "canary-media" }',
+    }),
+    env: (paths) => readOnly(paths),
+    never: ['canary-media'],
+    fatal: [{ code: 'media.invalid', file: 'media/media.json', document: 'media' }],
   },
   {
     group: OWNER,

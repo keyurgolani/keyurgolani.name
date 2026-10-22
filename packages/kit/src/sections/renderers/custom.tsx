@@ -1,4 +1,5 @@
-import { MediaFigure, placedMedia } from '../media';
+import { MediaFigure } from '../media';
+import { placedMedia } from '../placement';
 import { deeper, ItemTitle, LinkList, present, renderContext, SectionHeader } from '../primitives';
 import { RichText } from '../rich-text';
 import type { SectionOf, SectionRendererProps } from '../types';

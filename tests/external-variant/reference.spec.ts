@@ -52,7 +52,10 @@ test(
     for (const section of await evidence.all()) {
       await expect(section).toHaveAttribute('data-renderer', 'bespoke');
       await expect(section.locator('dl.acme-ledger')).toHaveCount(1);
+      // Each term says something: a statement, as markdown through the kit, or a title.
+      await expect(section.locator('dt:empty')).toHaveCount(0);
     }
+    expect(await page.locator('dl.acme-ledger dt > .pf-rich-text').count()).toBeGreaterThan(0);
     await expect(page.locator('[data-kind="fun-facts"]')).toHaveCount(0);
   },
 );

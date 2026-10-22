@@ -85,9 +85,10 @@ test('the fixtures directory holds exactly the fixtures the module lists', () =>
   }
   // Only the hidden canary has a snapshot.
   assert.deepEqual(
-    CONTRACT_FIXTURES.filter(({ unitFiles }) => unitFiles.length > 0).map(
-      ({ name, unitFiles }) => [name, unitFiles],
-    ),
+    CONTRACT_FIXTURES.filter(({ unitFiles }) => unitFiles.length > 0).map(({ name, unitFiles }) => [
+      name,
+      unitFiles,
+    ]),
     [['hidden-canary', ['snapshots/github.json']]],
   );
   assert.throws(() => contractFixture('no-such-fixture'), /No contract fixture/);

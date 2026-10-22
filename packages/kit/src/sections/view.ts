@@ -23,7 +23,9 @@ type Section = VariantRenderInput['portfolio']['sections'][number];
 export type ViewSource = Pick<VariantRenderInput, 'portfolio'>;
 
 /** A view source with the composition's capabilities, when it's a render input. */
-type RenderedSource = ViewSource & Partial<Pick<VariantRenderInput, 'capabilities'>>;
+type RenderedSource = ViewSource & {
+  readonly capabilities?: Pick<VariantRenderInput['capabilities'], 'unsupportedKinds'>;
+};
 
 /** Whether the composition renders the section's kind: its manifest's unsupportedKinds don't. */
 export function rendersKind(section: Section, input: RenderedSource): boolean {

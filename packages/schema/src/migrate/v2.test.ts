@@ -494,7 +494,11 @@ test('a list section that lists nothing goes, and the sections after it move up'
     ghost.diagnostics.map(({ code, document, pointer }) => [code, document, pointer]),
     [['ref.missing', 'site', '/sections/ghost']],
   );
-  assert.deepEqual(storedGhost, { ...storedGhost, status: 'blocked', diagnostics: ghost.diagnostics });
+  assert.deepEqual(storedGhost, {
+    ...storedGhost,
+    status: 'blocked',
+    diagnostics: ghost.diagnostics,
+  });
 });
 
 test("a stored unit's site document loses a dropped section's entry and keeps every other byte", () => {

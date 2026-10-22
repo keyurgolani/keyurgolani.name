@@ -362,7 +362,7 @@ Each section keeps its place, its id, its title, and its subtitle. Its items bec
 | `skills`, `stack`, `services`                                                                | `practice.skills`, `practice.tools`, and `practice.services`, and a `practice` section for each. A hidden section's groups don't join a part a visible section shows. |
 | `contact`                                                                                    | A `contact` section, with the first visible one's `message` and `links` as the contact record. `showAvailability` is removed.                                         |
 | An image (`{ src, alt, ... }`)                                                               | A media asset, made at its source's first use, and a placement. A `/` path becomes a path under the media root.                                                       |
-| A blank string or an empty list                                                              | Left out. A list section that lists nothing goes, and its site entry with it.                                                                                                                   |
+| A blank string or an empty list                                                              | Left out. A list section that lists nothing goes, and its site entry with it.                                                                                         |
 
 ### Migrating from the one-file format
 

@@ -89,19 +89,30 @@ test('it keeps every section, and hands on the snapshots bundled beside the exam
   assert.equal(unit.media, undefined);
 });
 
-test('a bundled snapshot that does not read refuses demo, naming its file', (t) => {
-  const dir = scratch(t);
-  const portfolio = path.join(dir, 'portfolio.example.yml');
-  writeFileSync(portfolio, readFileSync(EXAMPLES.portfolio, 'utf8'));
-  mkdirSync(path.join(dir, 'snapshots'));
-  writeFileSync(path.join(dir, 'snapshots', 'github.json'), '{ "records": [canary-snapshot] }');
-  const opened = openSampleCatalog({ examples: { portfolio, site: EXAMPLES.site } });
-  assert.equal(opened.ok, false);
-  assert.deepEqual(
-    opened.issues.map((issue) => `${issue.severity} ${issue.key}:${issue.code} ${issue.file}`),
-    ['fatal PORTFOLIO_PROFILE:sample_invalid snapshots/github.json'],
-  );
-  assert.ok(!JSON.stringify(opened.issues).includes('canary'));
+test('a bundled snapshot or media document that does not read refuses demo, naming its file', (t) => {
+  for (const [file, text] of [
+    ['snapshots/github.json', '{ "records": [canary-snapshot] }'],
+    ['media/media.json', '{ "assets": [canary-media'],
+    ['media/media.json', '{ "assets": "canary-media" }'],
+  ] as const) {
+    const dir = scratch(t);
+    const portfolio = path.join(dir, 'portfolio.example.yml');
+    writeFileSync(portfolio, readFileSync(EXAMPLES.portfolio, 'utf8'));
+    mkdirSync(path.join(dir, path.dirname(file)));
+    writeFileSync(path.join(dir, file), text);
+    const opened = openSampleCatalog({ examples: { portfolio, site: EXAMPLES.site } });
+    assert.equal(opened.ok, false, file);
+    assert.deepEqual(
+      opened.issues.map((issue) => `${issue.severity} ${issue.key}:${issue.code} ${issue.file}`),
+      [`fatal PORTFOLIO_PROFILE:sample_invalid ${file}`],
+    );
+    // The message names the file that doesn't read, whichever it is.
+    assert.deepEqual(
+      opened.issues.map(({ message }) => message),
+      [`The bundled sample's ${file} doesn't read, so this build is broken.`],
+    );
+    assert.ok(!JSON.stringify(opened.issues).includes('canary'), file);
+  }
 });
 
 test('extension data the build does not register loads as written, with a warning', async (t) => {

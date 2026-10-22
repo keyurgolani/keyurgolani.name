@@ -1,6 +1,7 @@
 import type { Work } from '@portfolio/schema';
 import { formatEpisodeDuration, formatTrackDuration } from '../../format';
-import { MediaFigure, placedMedia } from '../media';
+import { MediaFigure } from '../media';
+import { placedMedia } from '../placement';
 import {
   DateText,
   deeper,

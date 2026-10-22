@@ -605,10 +605,7 @@ function shownSection(section: Section): Section {
  * figure. The view crosses to the browser, so what the section doesn't show
  * never reaches it.
  */
-function shownGitHub(
-  section: Github,
-  data: GitHubSnapshotData,
-): Omit<ViewGitHubData, 'fetchedAt'> {
+function shownGitHub(section: Github, data: GitHubSnapshotData): Omit<ViewGitHubData, 'fetchedAt'> {
   const excluded = new Set(section.excludeRepos ?? []);
   const kept = <T extends { readonly name: string }>(repos: readonly T[]) =>
     repos.filter(({ name }) => !excluded.has(name));

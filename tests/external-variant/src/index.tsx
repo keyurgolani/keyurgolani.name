@@ -3,6 +3,7 @@ import { Enhancement } from '@portfolio/kit/enhancements';
 import {
   evidenceOf,
   renderSection,
+  RichText,
   VisitorControlSlot,
   type BespokeRenderers,
   type SectionOf,
@@ -24,7 +25,10 @@ import {
 
 type Props = { readonly input: VariantRenderInput };
 
-/** Evidence as a ledger: each statement, then its figure, or else its source. */
+/**
+ * Evidence as a ledger: each statement, through the kit's rich text, or its
+ * title when it has none, then its figure, or else its source.
+ */
 function EvidenceLedger({
   section,
   input,
@@ -38,7 +42,13 @@ function EvidenceLedger({
       <dl className="acme-ledger">
         {evidenceOf(section, input).map((entry) => (
           <div key={entry.id} data-evidence-type={entry.type} data-metric={entry.metric?.key}>
-            <dt>{entry.statement}</dt>
+            {entry.statement ? (
+              <dt>
+                <RichText source={entry.statement} inline input={input} />
+              </dt>
+            ) : entry.title ? (
+              <dt>{entry.title}</dt>
+            ) : null}
             {entry.metric?.value !== undefined ? (
               <dd>
                 {String(entry.metric.value)}

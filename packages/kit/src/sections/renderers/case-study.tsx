@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import type { CaseStudy as CaseStudyFields, Work } from '@portfolio/schema';
-import { MediaFigure, placedMedia } from '../media';
+import { MediaFigure } from '../media';
+import { placedMedia } from '../placement';
 import { deeper, Heading, present, Ui, type RenderContext } from '../primitives';
 import type { HeadingLevel } from '../types';
 import { RichText } from '../rich-text';

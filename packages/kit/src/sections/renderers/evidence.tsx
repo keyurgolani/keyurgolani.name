@@ -1,5 +1,6 @@
 import type { Evidence } from '@portfolio/schema';
-import { MediaFigure, placedMedia } from '../media';
+import { MediaFigure } from '../media';
+import { placedMedia } from '../placement';
 import {
   DateText,
   formatFigure,

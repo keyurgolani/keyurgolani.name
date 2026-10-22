@@ -279,7 +279,11 @@ function readWith<T>(
     ({ path, use }): DocumentWarning => {
       const pointer = redactedPointer(path);
       const what =
-        use === 'section' ? 'is a section from' : use === 'medium' ? 'is a medium from' : 'belongs to';
+        use === 'section'
+          ? 'is a section from'
+          : use === 'medium'
+            ? 'is a medium from'
+            : 'belongs to';
       const kept = use === 'medium' ? 'Its work is' : "It's";
       return {
         code: 'extension_unregistered',

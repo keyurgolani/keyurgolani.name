@@ -78,13 +78,14 @@ export function openSampleCatalog({
   const unitFiles = readUnitFiles(path.dirname(examples.portfolio));
   const broken = unitFiles.diagnostics.find(({ severity }) => severity !== 'warning');
   if (broken) {
-    // The bundled snapshots are the build's: one that doesn't read is a broken build.
+    // The files bundled beside the sample are the build's, a snapshot or the
+    // media document: one that doesn't read is a broken build.
     return {
       ok: false,
       issues: [
         fatal(
           'sample_invalid',
-          "The bundled sample's snapshots don't read, so this build is broken.",
+          `The bundled sample's ${broken.file ?? 'unit files'} doesn't read, so this build is broken.`,
           broken.file ?? 'snapshots',
         ),
       ],

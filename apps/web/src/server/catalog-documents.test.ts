@@ -453,6 +453,26 @@ test('a snapshot that does not read stops startup, naming its file and never quo
   }
 });
 
+test('a media document that does not read stops startup, naming its file and never quoting it (#10)', (t) => {
+  for (const [text, code] of [
+    ['{ "assets": [canary-media', 'media.syntax'],
+    ['{ "assets": "canary-media" }', 'media.invalid'],
+  ] as const) {
+    for (const mode of ['production', 'development'] as const) {
+      const dir = tempDir(t, pair());
+      mkdirSync(path.join(dir, 'media'));
+      writeFileSync(path.join(dir, 'media', 'media.json'), text);
+      const issues = fatal(open(dir, mode));
+      assert.deepEqual(
+        issues.map((issue) => [issue.key, issue.code, issue.file, issue.document]),
+        [['PORTFOLIO_SOURCE_DIR', code, 'media/media.json', 'media']],
+        `${code} ${mode}`,
+      );
+      assert.ok(!JSON.stringify(issues).includes('canary'), code);
+    }
+  }
+});
+
 test('a file in snapshots/ that is no snapshot only warns, and the pair serves (#10)', async (t) => {
   const result = open(withSnapshot(t, 'notes.txt', 'canary-notes'), 'production');
   assert.ok(result.ok, JSON.stringify(result.issues));

@@ -12,7 +12,8 @@ export { CaseStudy } from './renderers/case-study';
 export type { CaseStudyProps } from './renderers/case-study';
 export { EvidenceEntry } from './renderers/evidence';
 export { WorkEntry } from './renderers/works';
-export { MediaFigure, focalStyle, placedMedia } from './media';
+export { MediaFigure, focalStyle } from './media';
+export { placedMedia } from './placement';
 export type {
   DerivedImage,
   ImageRendition,
