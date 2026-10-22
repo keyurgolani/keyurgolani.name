@@ -2,7 +2,8 @@
 // share. Every mode: one h1 and one main, the skip link moves focus to main,
 // one visitor-control slot, nothing wider than the window, every internal
 // link resolves, each section's data-renderer matches the manifest's
-// renderedKinds, and no console error. Desktop and mobile take a screenshot.
+// renderedKinds, and no console error. Desktop and mobile take a screenshot
+// of the whole page.
 // Without JavaScript, in print, and with its enhancements failing, the page
 // stays readable: the h1, the navigation, and each visible section's heading
 // have a box, opacity, and visibility. Print also has nothing fixed or
@@ -249,8 +250,8 @@ export async function expectStill(page: Page): Promise<void> {
 }
 
 /**
- * The page's screenshot, attached to the report, and compared against its
- * baseline for the platform's own variants in the pinned image.
+ * The whole page's screenshot, attached to the report, and compared against
+ * its baseline for the platform's own variants in the pinned image.
  */
 async function screenshot(
   page: Page,
@@ -258,7 +259,7 @@ async function screenshot(
   variant: RegisteredVariant,
   name: string,
 ): Promise<void> {
-  const options = { animations: 'disabled', caret: 'hide' } as const;
+  const options = { animations: 'disabled', caret: 'hide', fullPage: true } as const;
   await testInfo.attach(`${name}.png`, {
     body: await page.screenshot(options),
     contentType: 'image/png',
