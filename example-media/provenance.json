@@ -1,7 +1,7 @@
 {
-  "about": "The bundled example images, each drawn by example-media/generate.mjs from code alone: no photograph, font, or third-party file. They are the project own work, dedicated to the public domain under CC0 1.0. Nothing was fetched or downloaded.",
+  "about": "The bundled example images, each drawn by example-media/generate.mjs from code alone: no photograph, font, or third-party file. They are the project's own work, under the repository's MIT license. Nothing was fetched or downloaded.",
   "generator": "example-media/generate.mjs",
-  "license": "CC0-1.0",
+  "license": "MIT",
   "images": [
     {
       "file": "anamika/portrait.png",

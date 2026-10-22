@@ -2,8 +2,8 @@
 /**
  * generate.mjs: draws the bundled example's images (#10, item 10). Every
  * image is made here, from code alone: no photograph, font, or file from
- * anywhere else, so each is the project's own work, dedicated to the public
- * domain (CC0 1.0). Nothing is fetched or downloaded.
+ * anywhere else, so each is the project's own work, under the repository's
+ * MIT license. Nothing is fetched or downloaded.
  *
  *   node example-media/generate.mjs           Write the images and provenance.json.
  *   node example-media/generate.mjs --check   Exit 1 unless every image's pixels
@@ -400,9 +400,9 @@ if (check) {
   if (total > MAX_TOTAL_BYTES) throw new Error(`The images total ${total} bytes, over 3 MB.`);
   const provenance = {
     about:
-      'The bundled example images, each drawn by example-media/generate.mjs from code alone: no photograph, font, or third-party file. They are the project own work, dedicated to the public domain under CC0 1.0. Nothing was fetched or downloaded.',
+      "The bundled example images, each drawn by example-media/generate.mjs from code alone: no photograph, font, or third-party file. They are the project's own work, under the repository's MIT license. Nothing was fetched or downloaded.",
     generator: 'example-media/generate.mjs',
-    license: 'CC0-1.0',
+    license: 'MIT',
     images: entries,
   };
   fs.writeFileSync(path.join(HERE, 'provenance.json'), `${JSON.stringify(provenance, null, 2)}\n`);
