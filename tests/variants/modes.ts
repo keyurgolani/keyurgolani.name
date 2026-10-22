@@ -48,7 +48,11 @@ export const MODES: readonly Mode[] = [
   { name: 'reduced-motion', context: { viewport: DESKTOP, reducedMotion: 'reduce' } },
 ];
 
-/** The app's script chunks, which the first failed-enhancement run blocks. */
+/**
+ * The app's chunks. The first failed-enhancement run fails every script
+ * among them. Next serves the stylesheets from there too, and those load,
+ * as they do for a visitor whose scripts fail.
+ */
 const CHUNKS = '**/_next/static/chunks/**';
 
 /** How a failed-enhancement run fails them. */
@@ -202,6 +206,29 @@ export async function expectReadable(page: Page): Promise<void> {
   expect(unreadable, 'unreadable headings and navigation').toEqual([]);
 }
 
+/** The page's stylesheet requests, as the network saw them, read when called. */
+function stylesheets(page: Page): () => { loaded: number; failed: string[] } {
+  let loaded = 0;
+  const failed: string[] = [];
+  page.on('requestfinished', (request) => {
+    if (request.resourceType() === 'stylesheet') loaded += 1;
+  });
+  page.on('requestfailed', (request) => {
+    if (request.resourceType() === 'stylesheet') failed.push(request.url());
+  });
+  return () => ({ loaded, failed: [...failed] });
+}
+
+/**
+ * The blocked-chunks run failed scripts, `blocked` of them, and nothing
+ * else: every stylesheet the page asked for loaded.
+ */
+function expectScriptsAlone(blocked: number, sheets: { loaded: number; failed: string[] }): void {
+  expect(blocked, 'script chunks the run failed').toBeGreaterThan(0);
+  expect(sheets.failed, 'stylesheets that failed to load').toEqual([]);
+  expect(sheets.loaded, 'stylesheets that loaded').toBeGreaterThan(0);
+}
+
 /** Nothing fixed or sticky in print, which would repeat on every page or cover the text. */
 export async function expectNothingFixed(page: Page): Promise<void> {
   const pinned = await page.evaluate(() =>
@@ -274,9 +301,15 @@ async function checkPage(check: ModeCheck, page: Page, run?: FailedRun): Promise
     run === 'throw-switch',
   );
   if (mode === 'print') await page.emulateMedia({ media: 'print' });
+  const sheets = stylesheets(page);
+  let blocked = 0;
   if (run === 'blocked-chunks') {
     // Registered after the harness's route, so it answers the app's own chunks.
-    await context.route(CHUNKS, (route) => route.abort('failed'));
+    await context.route(CHUNKS, (route) => {
+      if (route.request().resourceType() !== 'script') return route.fallback();
+      blocked += 1;
+      return route.abort('failed');
+    });
   }
   if (run === 'throw-switch') {
     await page.addInitScript(() => {
@@ -292,6 +325,7 @@ async function checkPage(check: ModeCheck, page: Page, run?: FailedRun): Promise
       await screenshot(page, check.testInfo, check.variant, check.shot);
     }
     await expectEveryMode(page, check.request, check.variant, errors);
+    if (run === 'blocked-chunks') expectScriptsAlone(blocked, sheets());
     if (mode === 'no-javascript' || mode === 'print' || mode === 'failed-enhancement') {
       await expectReadable(page);
     }
