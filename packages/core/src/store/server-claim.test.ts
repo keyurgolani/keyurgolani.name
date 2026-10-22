@@ -1,6 +1,14 @@
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, readFileSync, statSync, utimesSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  lstatSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  utimesSync,
+  writeFileSync,
+} from 'node:fs';
 import { hostname } from 'node:os';
 import { test } from 'node:test';
 import type { StoreError, StoreLogEntry } from './common';
@@ -9,7 +17,7 @@ import { storePaths } from './layout';
 import { processStartTime } from './lock';
 import { preflight } from './preflight';
 import { claimServer, SERVER_FRESH_MS } from './server-claim';
-import { newStore, pairInput, tempDir } from './test-support/fixtures';
+import { fifoAt, newStore, pairInput, tempDir, within } from './test-support/fixtures';
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -265,4 +273,36 @@ test("releaseSync lets this server's claim go at once, stops its refresh, and le
   writeFileSync(paths.server, JSON.stringify(other));
   again.claim.releaseSync();
   assert.deepEqual(JSON.parse(readFileSync(paths.server, 'utf8')), other);
+});
+
+test("a FIFO at server.json holds up neither release nor the exit's releaseSync: each leaves it as it is, at once", async (t) => {
+  const paths = await pathsIn(t);
+  const claimed = await claimServer({ fs: nodeFs, paths });
+  if (!claimed.ok) return assert.fail();
+  rmSync(paths.server);
+  const release = fifoAt(paths.server);
+  // Nothing on this thread can end a releaseSync that waits on the FIFO,
+  // so another process opens it to write a second from now, which lets
+  // such a read go: late, and so a failure rather than a hang.
+  const fifo = JSON.stringify(paths.server);
+  const writer = spawn(
+    process.execPath,
+    [
+      '-e',
+      `setTimeout(() => { const fs = require('node:fs'); try { fs.closeSync(fs.openSync(${fifo}, fs.constants.O_WRONLY | fs.constants.O_NONBLOCK)); } catch {} }, 1000)`,
+    ],
+    { stdio: 'ignore' },
+  );
+  t.after(() => writer.kill('SIGKILL'));
+  try {
+    let started = Date.now();
+    claimed.claim.releaseSync();
+    assert.ok(Date.now() - started < 500, 'releaseSync waited for a writer');
+    started = Date.now();
+    await within(2_000, claimed.claim.release());
+    assert.ok(Date.now() - started < 500, 'release waited for a writer');
+    assert.ok(lstatSync(paths.server).isFIFO(), 'left as it is');
+  } finally {
+    release();
+  }
 });

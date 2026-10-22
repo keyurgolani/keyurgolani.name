@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { closeSync, constants, openSync, readFileSync, rmSync } from 'node:fs';
+import { closeSync, constants, fstatSync, openSync, readFileSync, rmSync } from 'node:fs';
 import { recordOwnerModule } from '../load-trace';
 import { storageError, type StoreLog } from './common';
 import { nodeFs, type FsPort } from './fs-port';
@@ -248,10 +248,15 @@ async function claimAnew({
         released = true;
         clearInterval(timer);
         try {
-          // Never through a link, as the store's own reads.
-          const fd = openSync(paths.server, constants.O_RDONLY | constants.O_NOFOLLOW);
+          // Never through a link, nor from a FIFO, which would hold the exit
+          // until a writer came: as the store's own reads.
+          const fd = openSync(
+            paths.server,
+            constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
+          );
           let text: string;
           try {
+            if (!fstatSync(fd).isFile()) return;
             text = readFileSync(fd, 'utf8');
           } finally {
             closeSync(fd);

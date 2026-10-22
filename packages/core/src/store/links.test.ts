@@ -1,6 +1,7 @@
 // Symbolic links planted in the data directory (#3, from #50's review): the
 // store never writes, reads, chmods, or deletes through one, so nothing
-// outside the store is created, changed, or removed.
+// outside the store is created, changed, or removed. Nor does it read a FIFO
+// planted there (from #60's), which would wait for a writer.
 import assert from 'node:assert/strict';
 import {
   existsSync,
@@ -16,14 +17,17 @@ import {
 import path from 'node:path';
 import { test } from 'node:test';
 import { nodeFs } from './fs-port';
+import { nodeReadFs } from './read-fs';
 import { sha256 } from '../catalog/unit';
 import {
   contentVariant,
+  fifoAt,
   newStore,
   owned,
   pairInput,
   publishInput,
   tempDir,
+  within,
 } from './test-support/fixtures';
 
 const loop = (error: unknown) => (error as NodeJS.ErrnoException).code === 'ELOOP';
@@ -66,6 +70,34 @@ test('the FsPort writes, reads, and chmods nothing through a symbolic link', asy
   assert.ok(Date.now() - statSync(kept).mtimeMs > 30 * 60_000);
   assert.equal((await nodeFs.lstat(toKept))?.isSymbolicLink, true);
   assert.equal((await nodeFs.stat(toKept))?.isSymbolicLink, false);
+});
+
+test('the read ports read a regular file alone: a FIFO fails at once with EFTYPE, never waiting for a writer, and a directory with EISDIR', async (t) => {
+  const root = tempDir(t);
+  const fifo = path.join(root, 'fifo');
+  const release = fifoAt(fifo);
+  const code = (expected: string) => (error: unknown) =>
+    (error as NodeJS.ErrnoException).code === expected;
+  try {
+    for (const port of [nodeFs, nodeReadFs]) {
+      await within(2_000, assert.rejects(port.readFile(fifo), code('EFTYPE')));
+      await assert.rejects(port.readFile(root), code('EISDIR'));
+    }
+    // A blob's stream opens a FIFO swapped in after its lstat at once, and ends or fails at once.
+    await within(
+      2_000,
+      new Promise((resolve) => {
+        nodeFs.createReadStream(fifo).on('error', resolve).on('end', resolve).resume();
+      }),
+    );
+  } finally {
+    release();
+  }
+  const file = path.join(root, 'regular');
+  writeFileSync(file, 'bytes\n');
+  for (const port of [nodeFs, nodeReadFs]) {
+    assert.equal((await port.readFile(file)).toString('utf8'), 'bytes\n');
+  }
 });
 
 test('a link planted where publish writes live.json never sends a write outside the store', async (t) => {

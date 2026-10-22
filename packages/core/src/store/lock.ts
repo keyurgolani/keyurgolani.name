@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { hostname } from 'node:os';
+import path from 'node:path';
 import { recordOwnerModule } from '../load-trace';
 import { sleep, StoreError, storageError, type StoreLog } from './common';
 import type { FsPort } from './fs-port';
@@ -262,11 +263,22 @@ export function publicationLock({
   // acquirers in this process take turns.
   let current: LockRecord | null = null;
 
-  /** The file's text and its age, or null when it isn't there. */
+  /**
+   * The file's text and its age, or null when it isn't there. Anything at
+   * its name that no holder writes, such as a link or a FIFO, is
+   * storage_unavailable: no wait ends it, and a FIFO's read would wait for
+   * a writer.
+   */
   async function read(file = lockFile): Promise<Found | null> {
     try {
-      const stats = await fs.stat(file);
+      const stats = await fs.lstat(file);
       if (!stats) return null;
+      if (!stats.isFile) {
+        throw new StoreError(
+          'storage_unavailable',
+          `${path.relative(paths.root, file)} isn't a regular file.`,
+        );
+      }
       return { text: (await fs.readFile(file)).toString('utf8'), mtimeMs: stats.mtimeMs };
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
@@ -421,14 +433,9 @@ export function publicationLock({
           held().delete(record.nonce);
           if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
         }
+        // A link or a FIFO at the name fails here, rather than spin or wait.
         const found = await read();
         if (found && stale(found) && (await breakStale(found))) continue;
-        if (!found && (await fs.lstat(lockFile))?.isFile === false) {
-          // Something no holder writes stands at the name, such as a link
-          // that leads nowhere: no wait ends it, and trying again at once
-          // would spin.
-          throw new StoreError('storage_unavailable', "publication/lock isn't a regular file.");
-        }
         // Held, or let go just now: try again within the wait.
         if (now() >= deadline) {
           throw new StoreError('lock_timeout', 'Another publication is in progress.');

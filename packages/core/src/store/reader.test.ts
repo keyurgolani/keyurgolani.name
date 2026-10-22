@@ -30,6 +30,7 @@ import {
 import { openStore, type Store } from './store';
 import {
   contentVariant,
+  fifoAt,
   newStore,
   owned,
   pairInput,
@@ -38,6 +39,7 @@ import {
   registryChecks,
   tempDir,
   testChecks,
+  within,
 } from './test-support/fixtures';
 import { bareImports, closure } from './test-support/imports';
 import { runChild } from './test-support/spawn';
@@ -62,25 +64,31 @@ test('the reader imports nothing that writes, and gets the reads of node:fs alon
     assert.ok(!names.includes(writer), `the reader reaches ${writer}`);
   }
   assert.ok(names.includes('read-fs.ts') && names.includes('revisions.ts'), names.join(', '));
-  // constants gives readFile() its O_NOFOLLOW.
-  const READS = new Set(['readFile', 'readdir', 'stat', 'lstat', 'constants']);
+  // constants gives the reads their flags. open() can write, so it takes
+  // read-fs.ts's READ_FLAGS alone, which are O_RDONLY, O_NOFOLLOW, and
+  // O_NONBLOCK.
+  const READS = new Set(['open', 'readFile', 'readdir', 'stat', 'lstat', 'constants']);
   for (const file of reached) {
+    const name = path.relative(here, file);
     for (const { specifier, names: imported } of bareImports(file)) {
       if (!/^(?:node:)?fs(?:\/promises)?$/.test(specifier)) continue;
-      for (const name of imported) {
-        assert.ok(
-          READS.has(name),
-          `${path.relative(here, file)} imports ${name} from ${specifier}`,
-        );
+      for (const binding of imported) {
+        assert.ok(READS.has(binding), `${name} imports ${binding} from ${specifier}`);
       }
     }
+    const source = readFileSync(file, 'utf8');
     // Nor does any of them call a write on whatever port it's handed.
-    assert.doesNotMatch(
-      readFileSync(file, 'utf8'),
-      /\bfs\.(?:writeFile|rename|link|remove|mkdir|fsync|touch)\(/,
-      path.relative(here, file),
-    );
+    assert.doesNotMatch(source, /\bfs\.(?:writeFile|rename|link|remove|mkdir|fsync|touch)\(/, name);
+    // Nor open a file to write.
+    assert.doesNotMatch(source, /\bO_(?:WRONLY|RDWR|CREAT|TRUNC|APPEND|EXCL)\b/, name);
+    for (const [, args] of source.matchAll(/(?<![\w.])open\(([^)]*)\)/g)) {
+      assert.match(args!, /^\w+, READ_FLAGS$/, `${name} opens with ${args}`);
+    }
   }
+  assert.match(
+    readFileSync(path.join(here, 'read-fs.ts'), 'utf8'),
+    /\bREAD_FLAGS = constants\.O_RDONLY \| constants\.O_NOFOLLOW \| constants\.O_NONBLOCK;/,
+  );
 });
 
 function reader(store: Store, options: Partial<RevisionCatalogOptions> = {}) {
@@ -581,6 +589,34 @@ test("a live file that's there but can't be read, for EACCES, EISDIR, or a link,
     assert.equal(live.state, 'degraded', what);
     assert.equal(live.revisionId, first, what);
     assert.equal((await catalog.status()).reason, 'damaged:unreadable', what);
+  }
+});
+
+test("a FIFO in a live document's place is damaged:unreadable at once, never waited on: every request is served the last known good", async (t) => {
+  const store = await newStore(t);
+  const first = await publishInput(store, pairInput('engineering'));
+  const second = await publishInput(store, contentVariant(pairInput('engineering'), 'two'));
+  const file = path.join(store.paths.revision(second), 'documents', 'portfolio.yml');
+  rmSync(file);
+  const release = fifoAt(file);
+  try {
+    const { catalog } = reader(store);
+    const lives = await within(
+      2_000,
+      Promise.all([catalog.getLive(), catalog.getLive(), catalog.getLive()]),
+    );
+    for (const live of lives) {
+      assert.equal(live.state, 'degraded');
+      assert.equal(live.revisionId, first);
+    }
+    assert.equal((await within(2_000, catalog.status())).reason, 'damaged:unreadable');
+    // Nor do the store's own reads, as Studio's list of revisions makes them.
+    const listed = await within(2_000, store.publication.revisions());
+    const health = listed.find((entry) => entry.revisionId === second);
+    assert.equal(health?.compatible, false);
+    assert.equal(health?.reason, 'damaged:unreadable');
+  } finally {
+    release();
   }
 });
 
