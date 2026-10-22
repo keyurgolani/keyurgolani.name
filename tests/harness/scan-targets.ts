@@ -32,7 +32,8 @@ export function scanTargets(): string[] {
     '/api/studio/no.such.operation',
     '/no-such-page',
     '/api/no-such-route',
-    // What no preview route serves (#7): the preview's 404s.
+    // Preview paths no grant admits (#7): the status document under owner,
+    // and the preview's 404s under the other profiles.
     '/preview/probe',
     '/preview-assets/probe/asset',
     IMAGE_PROBE,

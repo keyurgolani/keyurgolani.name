@@ -81,7 +81,7 @@ test("a grant record keeps its times in ISO 8601 and no digest, which is its fil
   assert.match(text, /"createdAt":"2026-10-22T12:00:00\.000Z"/);
   assert.deepEqual(parseGrant(written.digest, text), written);
   // An ended grant drops its documents, and one with no override has none.
-  const bare: Partial<GrantRecord> = { ...record() };
+  const bare: { -readonly [K in keyof GrantRecord]?: GrantRecord[K] } = { ...record() };
   delete bare.documents;
   delete bare.appearance;
   const ended = { ...(bare as GrantRecord), state: 'session_ended' as const };

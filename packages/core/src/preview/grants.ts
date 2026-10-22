@@ -181,7 +181,7 @@ function serializer() {
 /** A record without the copy of a draft it no longer renders. */
 function withoutDocuments(record: GrantRecord): GrantRecord {
   if (!record.documents) return record;
-  const copy: Partial<GrantRecord> = { ...record };
+  const copy: { -readonly [K in keyof GrantRecord]?: GrantRecord[K] } = { ...record };
   delete copy.documents;
   return Object.freeze(copy as GrantRecord);
 }
