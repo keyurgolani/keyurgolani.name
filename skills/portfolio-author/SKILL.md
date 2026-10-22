@@ -117,6 +117,7 @@ Loading the wrong reference at the wrong time wastes context. Loading none and g
 Where the documents land and how:
 
 - **Write to `config/portfolio.yml` and `config/site.yml`.** Not in `apps/web/`, not at the repo root. `pnpm dev` and the Docker Compose example read them from `config/`, which must hold exactly one portfolio document and one site document (`.yml`, `.yaml`, or `.json`; a `.bak.<timestamp>` copy doesn't count).
+- **Under `owner`, writing isn't publishing.** With the owner profile (`deploy/compose.owner.yml`), the files in `config/` are import input: what you write goes live only through `portfolio-store import` or a Studio publish. After validation, tell the user it isn't live until they import it or publish it in Studio.
 - **Backup before overwrite.** If a document already exists, FIRST copy it to `config/<name>.bak.<unix-timestamp>` (e.g. `config/portfolio.yml.bak.1714752000`). THEN write the new file. Never silently overwrite. The user's previous draft must always be recoverable.
 - **Preserve the top-of-file comment blocks from the examples.** Each header documents its format for humans who open the file. Keep it intact at the top of each document you write. If you've changed format conventions, update the header; don't drop it.
 - **No interview transcript persisted.** The conversation that produced the documents is not archived. Only the two documents land on disk. The user's words belong to the user.

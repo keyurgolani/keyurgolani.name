@@ -6,7 +6,7 @@ The server runs one deployment profile, chosen by `PORTFOLIO_PROFILE` at startup
 - `demo` serves the bundled sample pair, for a product demo, and asks crawlers to index nothing.
 - `owner` adds Studio, drafts, and revisions to your portfolio, behind a sign-in with your password. It starts once the password's hash and a data directory pass their checks ([Owner authentication](#owner-authentication)).
 
-Run it in a container (recommended) or on Node. The browser editor, the variant gallery, the variant preview pages, and their write APIs are gone in every profile, `pnpm dev` included. Edit `config/portfolio.yml` and `config/site.yml` instead: `pnpm dev` picks up each save, and a production server picks them up when it restarts. While `config/` holds neither, `pnpm dev` renders the bundled examples; a production server refuses to start. `pnpm dev` and `pnpm start` listen on `127.0.0.1` only.
+Run it in a container (recommended) or on Node. The browser editor, the variant gallery, the variant preview pages, and their write APIs are gone in every profile, `pnpm dev` included. Edit `config/portfolio.yml` and `config/site.yml` instead: `pnpm dev` picks up each save, and a `read-only` server picks them up when it restarts. Under `owner` the mounted files are import input: an edit goes live only through `portfolio-store import` or a Studio publish ([The revision store](#the-revision-store)). While `config/` holds neither, `pnpm dev` renders the bundled examples; a production server refuses to start. `pnpm dev` and `pnpm start` listen on `127.0.0.1` only.
 
 ## Profiles
 
@@ -83,7 +83,9 @@ docker compose -f compose.demo.yml up --build
 
 ### `owner`
 
-`deploy/compose.owner.yml` mounts `../config` and `../assets` as `read-only` does, on the same read-only root and cache tmpfs, and keeps drafts and revisions in the `portfolio-data` volume at `/var/lib/portfolio` (`PORTFOLIO_DATA_DIR`). The image creates that directory for the server's user (uid 1001, mode `0700`), so a new volume starts out writable by the server and no one else. Run one server per volume: the fixed container name stops `docker compose up --scale`. Back the volume up.
+`deploy/compose.owner.yml` mounts `../config` and `../assets` as `read-only` does, on the same read-only root and cache tmpfs, and keeps drafts and revisions in the `portfolio-data` volume at `/var/lib/portfolio` (`PORTFOLIO_DATA_DIR`). The image creates that directory for the server's user (uid 1001, mode `0700`), so a new volume starts out writable by the server and no one else. A host directory mounted there instead needs `sudo chown 1001:1001` and `chmod 0700` first: the store refuses one another user owns, or that its group or anyone else may write (`data_dir_not_private`). Run one server per volume: the fixed container name stops `docker compose up --scale`. Back the volume up with `portfolio-store backup` ([Backups](#backups)).
+
+Once the store has a live revision, the data directory is what visitors see, and `../config` is import input: an edit there changes nothing live until `portfolio-store import` or a Studio publish. The image ships the store's command line as `/app/bin/portfolio-store.mjs` ([The revision store](#the-revision-store)).
 
 It needs the owner password's hash before it starts ([Owner authentication](#owner-authentication)). Set `PORTFOLIO_TRUSTED_PROXY_HOPS` in `deploy/.env` to the number of proxies in front that append to `X-Forwarded-For`, usually `1`: `compose.owner.yml` passes it through, and leaves it at `0` when it's unset, which gives sign-in only its global limits ([Signing in](#signing-in)).
 
@@ -98,7 +100,15 @@ It needs the owner password's hash before it starts ([Owner authentication](#own
 
 ### Updating the portfolio
 
-The server reads `config/portfolio.yml` and `config/site.yml` once, at startup. After you edit either, restart the container:
+Under `owner`, edit the files in `config/`, then import them from `deploy/`. Nothing restarts:
+
+```sh
+docker compose -f compose.owner.yml exec web node bin/portfolio-store.mjs import
+```
+
+A Studio publish goes live the same way, and a draft never does ([Importing](#importing)).
+
+Under `read-only`, the server reads `config/portfolio.yml` and `config/site.yml` once, at startup. After you edit either, restart the container:
 
 ```sh
 docker compose restart web
@@ -190,9 +200,9 @@ The server reads the hash from the file `PORTFOLIO_AUTH_PASSWORD_HASH_FILE` name
 
 ### The data directory
 
-`owner` keeps its sessions, its preview grants, and its audit log in `PORTFOLIO_DATA_DIR`, the `portfolio-data` volume at `/var/lib/portfolio` in `compose.owner.yml`. At startup it creates `ephemeral/auth/sessions/` and `audit/` there with mode `0700`, and checks that it can write, sync, and rename a file, the way it writes session records. It refuses to start when the variable is unset, names no directory, or names one the server's user (uid 1001) can't reach or write, that another user owns or others can write, or where a store directory such as `drafts/` is a symbolic link. It makes `ephemeral/preview/` the same way the first time Studio opens a preview. Run one server per data directory: the running one holds `publication/server.json`, and lets it go as it stops, and a second server refuses to start while that claim is fresh. When the CLI holds the publication lock through startup, as through a backup, the server starts anyway, serves visitors, and claims the directory once the lock is free. Until it has, and while another server holds the directory, owner writes answer 503, and `config.status` says why under `writes`. Under `pnpm dev`, an unset `PORTFOLIO_DATA_DIR` is `.data/` at the workspace root, which git and Docker ignore.
+`owner` keeps its sessions, its preview grants, and its audit log in `PORTFOLIO_DATA_DIR`, the `portfolio-data` volume at `/var/lib/portfolio` in `compose.owner.yml`, beside the revision store ([The revision store](#the-revision-store)). At startup it creates `ephemeral/auth/sessions/` and `audit/` there with mode `0700`, and checks that it can write, sync, and rename a file, the way it writes session records. It refuses to start when the variable is unset, names no directory, or names one the server's user (uid 1001) can't reach or write, that another user owns or others can write, or where a store directory such as `drafts/` is a symbolic link. It makes `ephemeral/preview/` the same way the first time Studio opens a preview. Run one server per data directory: the running one holds `publication/server.json`, and lets it go as it stops, and a second server refuses to start while that claim is fresh. When the CLI holds the publication lock through startup, as through a backup, the server starts anyway, serves visitors, and claims the directory once the lock is free. Until it has, and while another server holds the directory, owner writes answer 503, and `config.status` says why under `writes`. Under `pnpm dev`, an unset `PORTFOLIO_DATA_DIR` is `.data/` at the workspace root, which git and Docker ignore.
 
-`ephemeral/` holds sessions, auth state, and preview grants only, and never belongs in a backup. A restore that brings it back also brings back sessions revoked since the backup was taken, so run [`revoke-sessions`](#revoking-sessions) after any restore of the volume.
+`ephemeral/` holds sessions, auth state, and preview grants only, and never belongs in a backup. `portfolio-store backup` leaves it out, so its restore brings back no session at all ([Backups](#backups)). A file-level copy of the whole volume holds it, and restoring one brings back sessions revoked since the copy was taken: run [`revoke-sessions`](#revoking-sessions) after restoring one.
 
 ### Signing in
 
@@ -242,6 +252,115 @@ Only a frame's own loads reach a grant: a `GET` or `HEAD` with `Sec-Fetch-Dest: 
 ### Audit log
 
 The server appends one JSON line per event to `audit/<yyyy-mm>.jsonl` in the data directory (UTC months, files `0600`). Each line is `{"at", "type", "actor", "outcome", "refs"}`. The events are sign-ins, failed and throttled sign-ins, sign-outs, revocations, evictions, password hash changes, and denied commands. `actor` is `owner`, `anonymous`, or `operator` (`revoke-sessions` and a changed hash), and `refs` may name the session by the first 8 characters of its digest, the source by its IPv4 /24 or IPv6 /48 prefix, the command, the capability, a reason code, the request ID, and a `count`. A denied command is `anonymous`, since a forged one carries the owner's cookie too, and names the session it carried. Anonymous failed and throttled sign-ins and denied commands are written once a minute per kind: the first at once, and the rest as one line with a `count` when the minute ends. No line holds a password, hash, cookie, CSRF token, full IP address, user agent, or request body. A failed write is logged and changes no decision.
+
+## The revision store
+
+Under `owner`, what visitors see is a published revision in `PORTFOLIO_DATA_DIR`, not the mounted files. A draft, from Studio or `import --draft`, saves without changing anything live. A publish, an import, a rollback, or a recover writes a whole revision first, then moves the published pointer, `publication/live.json`, with one rename, so a crash leaves the old revision live or the new one, never a mix of the two. Every pointer move appends an event to the publication log.
+
+### What the data directory holds
+
+| Path                                    | What                                                                | Backed up |
+| --------------------------------------- | ------------------------------------------------------------------- | --------- |
+| `store.json`                            | The store's layout version                                          | yes       |
+| `drafts/`                               | The working draft and its previous version                          | yes       |
+| `revisions/<revisionId>/`               | One revision, never changed: its manifest, documents, and snapshots | yes       |
+| `revisions/<revisionId>.tombstone.json` | A revision retention removed                                        | yes       |
+| `publication/live.json`                 | The published pointer                                               | yes, last |
+| `publication/events/<seq>.json`         | The publication log, one event per file                             | yes       |
+| `publication/lock`, `server.json`       | The publication lock, and the running server's claim                | no        |
+| `assets/sha256/`                        | Blobs, by the SHA-256 of their bytes (#10's media)                  | yes       |
+| `audit/<yyyy-mm>.jsonl`                 | The audit log                                                       | yes       |
+| `ephemeral/`                            | Sessions and auth state                                             | never     |
+
+Directories are `0700` and files `0600`, owned by the server's user. Only local Linux volumes are supported: the store relies on a rename within a directory and on `fsync`. Until #10 brings a media document, `../assets` stays a mount of its own, outside the store: back it up beside the store.
+
+### Running portfolio-store
+
+The image ships the store's command line as `/app/bin/portfolio-store.mjs`. Run it in the server's container, which sets `PORTFOLIO_DATA_DIR` and `PORTFOLIO_SOURCE_DIR` and runs as the server's user, from `deploy/`:
+
+```sh
+docker compose -f compose.owner.yml exec web node bin/portfolio-store.mjs status
+```
+
+In a clone, `pnpm run store <command>` runs the same command line through tsx (`pnpm store` alone is pnpm's own command). It acts as `operator` and needs no session. It runs beside the server: every pointer move, draft write, and retention run takes the publication lock, and a backup holds it throughout. It never runs as root (`running_as_root`), and a command on a store, or a restore into a directory, runs only as the directory's owner (`not_data_dir_owner`): the server has to read what it writes, and root would follow a link someone put in the data directory. It prints revision IDs, hashes, codes, and the paths it was given, never a secret or a document's content. It exits 0 when the command did what it says, 1 when it was refused or failed, and 2 on a usage error. Ctrl-C, SIGTERM, or SIGHUP stops it where it is, after it releases the lock it holds, and it exits 130, 143, or 129.
+
+| Command                                                             | What it does                                                                                                                                                                                  |
+| ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `status`                                                            | The state (`live`, `degraded`, `incompatible`, or `empty`), the live revision and its unit hash, how many revisions there are, the last event, and who holds the lock. Exits 1 unless `live`. |
+| `history`                                                           | Every publication event in `seq` order: its type, its revision, the revision it replaced, who, and when.                                                                                      |
+| `verify`                                                            | Every file and hash: each revision reads whole, the pointer names one, the log runs from 1 to the live `seq`, and each blob's bytes match its name. It skips revisions retention removed.     |
+| `import [--from <dir>] [--expect <revisionId\|empty>] [--draft]`    | Makes the pair in `<dir>`, `PORTFOLIO_SOURCE_DIR` by default, the live revision ([Importing](#importing)).                                                                                    |
+| `rollback --to <revisionId>`                                        | Makes an earlier revision live again, if this build can publish it. Drafts stay as they are.                                                                                                  |
+| `recover [--to <revisionId>]`                                       | Makes the last known good revision live, or the one named.                                                                                                                                    |
+| `unlock --force`                                                    | Removes the publication lock, whoever holds it.                                                                                                                                               |
+| `backup --out <dir>`                                                | Copies the store into an empty or new directory ([Backups](#backups)).                                                                                                                        |
+| `restore --from <dir> --into <dir>`                                 | Copies a backup into an empty or new directory, checks every hash, and runs `verify`.                                                                                                         |
+| `retention [--keep <n>] [--remove <revisionId>] [--dry-run]`        | Deletes what nothing needs ([Retention](#retention)).                                                                                                                                         |
+| `export-revision <revisionId\|live> --out <dir> [--documents-only]` | Writes a revision in the layout `read-only` serves ([Switching owner to read-only](#switching-owner-to-read-only)).                                                                           |
+| `verify-revision <dir>`                                             | Checks a full export against its `bundle.json`.                                                                                                                                               |
+
+### Importing
+
+`import` reads the pair in `--from`, or in `PORTFOLIO_SOURCE_DIR`, the way startup reads it, validates it as a publish does, and makes it the live revision with an `import` event carrying the files' `sourceHash`. A pair that doesn't validate is `validation_failed`, with each record that blocks it, and nothing changes. When the files are the live revision's already, byte for byte, it writes no revision: the import is still recorded, as a new event on the same revision.
+
+It expects the revision that was live when it started. If a Studio publish, another import, or a rollback moves the pointer first, the import is `live_conflict`, nothing changes, and running it again imports over what's live now. `--expect <revisionId>` names the expectation instead, and `--expect empty` expects a store with nothing live.
+
+`--draft` saves the pair as the working draft instead, to review and publish in Studio, and keeps the `sourceHash` for that publish's event. It replaces the working draft only at the version it read when it started, so a Studio save in between makes it `draft_conflict`.
+
+Until #13 registers a composition, every site selects a variant this build doesn't register, and a publish or an import refuses it with `variant.unavailable`. `--draft` saves it.
+
+### Publishing, the lock, and conflicts
+
+Publishes, imports, rollbacks, recovers, draft writes, and retention run one at a time, under `publication/lock`, across the server and the command line. One that waits more than 5 seconds for the lock gives up with `lock_timeout`: Studio answers 503 with `Retry-After`, and `portfolio-store` exits 1. A lock is stale, and the next one to want it takes it, when the process that holds it on this host is gone or restarted, or when nobody has touched it for 2 minutes. A holder that runs long touches it every 30 seconds. One whose lock was taken that way, after a stall, moves nothing more: a publish, an import, a rollback, or a draft write gets `lock_lost`, a backup keeps nothing, and retention stops where it is. Running it again is safe. `unlock --force` removes the lock at once, whoever holds it, so run it only when nothing is publishing.
+
+Of two publishes, imports, or rollbacks that expect the same live revision, one commits and the other gets `live_conflict`, naming the revision that is live now. Studio answers it with 409, so the owner can look at what changed and try again on top of it. A draft write that names a version the draft has moved past gets `draft_conflict`, with the draft's current version and documents. Neither ever overwrites the other.
+
+### Backups
+
+`backup` holds the lock throughout, so nothing moves the pointer while it copies. It copies what the table above backs up, and writes `backup-manifest.json`, listing each file's path, size, and SHA-256. The publication log, the events and `publication/live.json`, goes in last, as one rename of a directory it filled first, so the pointer in the copy names a revision that's in it. The target must be empty or new, and outside the data directory. From `deploy/`, with `../backups` made and owned by uid 1001 (`mkdir -m 0700 ../backups && sudo chown 1001:1001 ../backups`):
+
+```sh
+docker compose -f compose.owner.yml run --rm --name portfolio-store -v "$PWD/../backups:/backups" web \
+  node bin/portfolio-store.mjs backup --out /backups/2026-10-22
+```
+
+A run of its own, named so it doesn't take the server's fixed container name, mounts the volume beside the running server. A backup leaves out `ephemeral/`, so restoring it brings back no session, and none revoked since it was taken: sign in again once the server runs on it. `../assets` isn't in it until #10: back that directory up beside it.
+
+A backup copies regular files only and never follows a link. Neither the server nor the command line writes a link or a special file into the store, so one there was put in by hand: the backup leaves it out, names it as `not_regular_file`, and exits 1. A backup stopped with Ctrl-C leaves a directory with no `backup-manifest.json`, which `restore` refuses: remove it.
+
+To restore, stop the stack and start from an empty volume: a new host, or the old volume removed once you're sure of the backup (`docker volume rm portfolio-owner_portfolio-data`). A run of the command line then gets a new `portfolio-data` volume, made from the image's empty `/var/lib/portfolio`, which uid 1001 owns:
+
+```sh
+docker compose -f compose.owner.yml down
+docker compose -f compose.owner.yml run --rm --name portfolio-store -v "$PWD/../backups:/backups:ro" web \
+  node bin/portfolio-store.mjs restore --from /backups/2026-10-22 --into /var/lib/portfolio
+docker compose -f compose.owner.yml up -d
+```
+
+Before it writes anything, `restore` refuses a target that isn't empty, a backup holding a link or anything else that isn't a directory or a regular file (`not_regular_file`), and a backup that isn't exactly the files its manifest lists, each with its size and hash. It copies the backup in, the publication log last in one rename, runs `verify`, and prints the live revision and its unit hash, the ones `status` printed when the backup was taken. It never creates `ephemeral/`.
+
+### Retention
+
+`retention` takes the lock. With no flag it removes no revision: it deletes the blobs no revision or draft references that are older than 24 hours, so an upload a draft hasn't referenced yet stays, and the audit files whose every line is more than 12 months old. `--keep <n>` also removes the revisions beyond the newest `n` that aren't protected, and `--remove <revisionId>` removes one, or says why it can't. `--dry-run` says what it would remove, and removes nothing.
+
+Protected, always: the live revision, the 10 revisions most recently live before it, and every draft's base. A removed revision leaves `revisions/<revisionId>.tombstone.json`, saying when and by whom. Its events stay in the log, `rollback` and `recover` refuse it as `not_found`, and `verify` and the last-known-good walk skip it. The tombstone is written before the revision's directory goes, so a crash between the two leaves a revision that counts as removed, and the next run finishes removing it.
+
+### Switching owner to read-only
+
+`read-only` serves a source directory, not a store, and a full export of a revision is one: the two documents with their stored text, the snapshots, `media/` once #10 brings media, and `bundle.json`, which `read-only` ignores. Export the live revision and check it, here into `../export`, made and owned by uid 1001 like `../backups`:
+
+```sh
+docker compose -f compose.owner.yml run --rm --name portfolio-store -v "$PWD/../export:/export" web \
+  node bin/portfolio-store.mjs export-revision live --out /export/live
+docker compose -f compose.owner.yml run --rm --name portfolio-store -v "$PWD/../export:/export:ro" web \
+  node bin/portfolio-store.mjs verify-revision /export/live
+```
+
+`verify-revision` checks that the directory holds exactly the files `bundle.json` lists, each with its hash, that they make the revision's unit hash, and that the pair serves under the image that ran it. Then mount `export/live` as `PORTFOLIO_SOURCE_DIR` under `read-only`, as `docker-compose.yml` mounts `config/`. `--documents-only` writes the two documents alone, for carrying the content to another store or tool. Without the snapshots, the media, and `bundle.json`, that isn't for switching `owner` to `read-only`.
+
+### Upgrades
+
+Back up before every upgrade, and keep the backup with the image that took it: going back means that image and that backup. Startup never changes a stored revision. When the new image can't serve the live revision, it serves the most recently live one it can, `degraded`, or nothing, `incompatible`, and `status` says why. Going back across the cutover to this store, to a release before it, means the previous image and the backed-up source files (#18, #12).
 
 ## Startup checks
 
@@ -380,23 +499,23 @@ PORTFOLIO_PROFILE=demo PORTFOLIO_ORIGIN=https://demo.jane.name pnpm start
 
 The server reads these from its environment only. Every key also accepts `<KEY>_FILE`, the path of a file holding the value (such as a Docker secret); set one or the other. An empty value counts as unset. `.env.example` lists them all, the password hash by its `_FILE` only.
 
-| Variable                                   | Profiles         | Purpose                                                                                                                                                                       |
-| ------------------------------------------ | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `PORTFOLIO_PROFILE`                        | all              | Required. Exactly `owner`, `demo`, or `read-only`.                                                                                                                            |
-| `PORTFOLIO_ORIGIN`                         | all              | Required. The origin visitors use, such as `https://jane.name`: no path or slash.                                                                                             |
-| `PORTFOLIO_SOURCE_DIR`                     | owner, read-only | Directory holding one `portfolio.{yml,yaml,json}` and one `site.{yml,yaml,json}`.                                                                                             |
-| `PORTFOLIO_TRUSTED_PROXY_HOPS`             | all              | How many trusted proxies append to `X-Forwarded-For`. Whole number, default `0`.                                                                                              |
-| `PORTFOLIO_PREVIEW_ORIGIN`                 | owner, demo      | Optional preview origin, different from `PORTFOLIO_ORIGIN`.                                                                                                                   |
-| `PORTFOLIO_DATA_DIR`                       | owner            | Required. The writable data directory for sessions, preview grants, and the audit log: `/var/lib/portfolio` in the owner example ([The data directory](#the-data-directory)). |
-| `PORTFOLIO_AUTH_PASSWORD_HASH`             | owner            | The owner password's scrypt hash. Set it through `PORTFOLIO_AUTH_PASSWORD_HASH_FILE` ([Owner authentication](#owner-authentication)).                                         |
-| `PORTFOLIO_AUTH_SESSION_IDLE_MINUTES`      | owner            | Minutes a session lasts idle: 5 to 120, default `60` ([Sessions](#sessions)).                                                                                                 |
-| `PORTFOLIO_AUTH_SESSION_MAX_HOURS`         | owner            | Hours a session lasts at most: 1 to 24, default `12`.                                                                                                                         |
-| `PORTFOLIO_PREVIEW_GRANT_IDLE_TTL_SECONDS` | owner            | Seconds a preview grant lasts without a renewal: 60 to 3600, default `900` ([Preview grants](#preview-grants)).                                                               |
-| `PORTFOLIO_PREVIEW_GRANT_MAX_TTL_SECONDS`  | owner            | Seconds a preview grant lasts at most: 300 to 43200, default `7200`, and never under the idle limit.                                                                          |
-| `GITHUB_TOKEN`                             | owner            | Reserved. Public GitHub sections use unauthenticated REST and never send a token.                                                                                             |
-| `PORT`                                     | all              | Port the host binds to. Default `3000`.                                                                                                                                       |
-| `PORTFOLIO_PATH`                           | none: refused    | Replaced by `PORTFOLIO_SOURCE_DIR`. Setting it stops the server.                                                                                                              |
-| `NEXT_PUBLIC_BASE_URL`                     | none: refused    | Replaced by `PORTFOLIO_ORIGIN`. Setting it stops the server.                                                                                                                  |
+| Variable                                   | Profiles         | Purpose                                                                                                                                                                                           |
+| ------------------------------------------ | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PORTFOLIO_PROFILE`                        | all              | Required. Exactly `owner`, `demo`, or `read-only`.                                                                                                                                                |
+| `PORTFOLIO_ORIGIN`                         | all              | Required. The origin visitors use, such as `https://jane.name`: no path or slash.                                                                                                                 |
+| `PORTFOLIO_SOURCE_DIR`                     | owner, read-only | Directory holding one `portfolio.{yml,yaml,json}` and one `site.{yml,yaml,json}`.                                                                                                                 |
+| `PORTFOLIO_TRUSTED_PROXY_HOPS`             | all              | How many trusted proxies append to `X-Forwarded-For`. Whole number, default `0`.                                                                                                                  |
+| `PORTFOLIO_PREVIEW_ORIGIN`                 | owner, demo      | Optional preview origin, different from `PORTFOLIO_ORIGIN`.                                                                                                                                       |
+| `PORTFOLIO_DATA_DIR`                       | owner            | Required. The writable data directory for the revision store, sessions, preview grants, and the audit log: `/var/lib/portfolio` in the owner example ([The revision store](#the-revision-store)). |
+| `PORTFOLIO_AUTH_PASSWORD_HASH`             | owner            | The owner password's scrypt hash. Set it through `PORTFOLIO_AUTH_PASSWORD_HASH_FILE` ([Owner authentication](#owner-authentication)).                                                             |
+| `PORTFOLIO_AUTH_SESSION_IDLE_MINUTES`      | owner            | Minutes a session lasts idle: 5 to 120, default `60` ([Sessions](#sessions)).                                                                                                                     |
+| `PORTFOLIO_AUTH_SESSION_MAX_HOURS`         | owner            | Hours a session lasts at most: 1 to 24, default `12`.                                                                                                                                             |
+| `PORTFOLIO_PREVIEW_GRANT_IDLE_TTL_SECONDS` | owner            | Seconds a preview grant lasts without a renewal: 60 to 3600, default `900` ([Preview grants](#preview-grants)).                                                                                   |
+| `PORTFOLIO_PREVIEW_GRANT_MAX_TTL_SECONDS`  | owner            | Seconds a preview grant lasts at most: 300 to 43200, default `7200`, and never under the idle limit.                                                                                              |
+| `GITHUB_TOKEN`                             | owner            | Reserved. Public GitHub sections use unauthenticated REST and never send a token.                                                                                                                 |
+| `PORT`                                     | all              | Port the host binds to. Default `3000`.                                                                                                                                                           |
+| `PORTFOLIO_PATH`                           | none: refused    | Replaced by `PORTFOLIO_SOURCE_DIR`. Setting it stops the server.                                                                                                                                  |
+| `NEXT_PUBLIC_BASE_URL`                     | none: refused    | Replaced by `PORTFOLIO_ORIGIN`. Setting it stops the server.                                                                                                                                      |
 
 A key outside its profile's list stops a production server; `pnpm dev` warns and ignores it. `.env` files are gitignored. `pnpm dev` reads `apps/web/.env.development`, which runs `read-only` from `config/` with the origin `http://127.0.0.1:3000`. On another port (`pnpm dev --port <n>`, or when Next moves off a busy 3000), set `PORTFOLIO_ORIGIN` to the address it prints, since owner sign-in checks the origin exactly.
 
@@ -433,7 +552,7 @@ Never cache anything under `/preview` or `/preview-assets`, in any case, at a CD
 
 ## Updating
 
-To pull upstream changes:
+To pull upstream changes, under `owner` after a backup ([Upgrades](#upgrades)):
 
 ```sh
 git fetch origin
