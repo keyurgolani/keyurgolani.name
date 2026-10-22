@@ -233,23 +233,34 @@ function watchRequests(page: Page, appOrigin: string, policy: TracePolicy) {
     }
   };
 
-  page.on('request', (request) => startedAt.set(request, Date.now()));
-  page.on('requestfinished', (request) => pending.push(settle(request, null)));
-  page.on('requestfailed', (request) =>
-    pending.push(settle(request, request.failure()?.errorText ?? 'failed')),
-  );
+  const started = (request: Request) => startedAt.set(request, Date.now());
+  const finished = (request: Request) => pending.push(settle(request, null));
+  const failed = (request: Request) =>
+    pending.push(settle(request, request.failure()?.errorText ?? 'failed'));
+  page.on('request', started);
+  page.on('requestfinished', finished);
+  page.on('requestfailed', failed);
   return {
     markNavigation() {
       navigationStart = Date.now();
     },
-    /** Every request so far, once each has its bytes, in the order they started. */
+    /**
+     * Every request so far, once each has its bytes, in the order they
+     * started. Recording stops here, so nothing after the idle window, such
+     * as the trace's own source map fetches, joins the case.
+     */
     async done() {
       for (let seen = -1; seen !== pending.length;) {
         seen = pending.length;
         await Promise.all(pending.slice());
       }
-      records.sort((a, b) => (a.startMs ?? Infinity) - (b.startMs ?? Infinity));
-      return { records, downloads };
+      page.off('request', started);
+      page.off('requestfinished', finished);
+      page.off('requestfailed', failed);
+      const ordered = [...records].sort(
+        (a, b) => (a.startMs ?? Infinity) - (b.startMs ?? Infinity),
+      );
+      return { records: ordered, downloads: [...downloads] };
     },
   };
 }
