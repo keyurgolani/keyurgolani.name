@@ -207,6 +207,30 @@ test('parseSelection keeps each well-formed value given once, and drops the rest
   );
 });
 
+test('parseSelection reads hostile input as nothing, and never returns anything but strings', () => {
+  const hostile: unknown[] = [
+    null,
+    undefined,
+    42,
+    true,
+    { scheme: null },
+    { scheme: 7, mode: false },
+    { scheme: [['warm-parchment']], type: [{ id: 'humanist-ui' }] },
+    { scheme: ['warm-parchment', 5] },
+    { mode: [['dark']] },
+  ];
+  for (const input of hostile) {
+    assert.deepEqual(parseSelection(input as never), {}, JSON.stringify(input) ?? String(input));
+  }
+  // A string beside garbage still reads.
+  assert.deepEqual(parseSelection({ scheme: 'warm-parchment', mode: null } as never), {
+    colorScheme: 'warm-parchment',
+  });
+  for (const value of Object.values(parseSelection({ scheme: ['warm-parchment'] }))) {
+    assert.equal(typeof value, 'string');
+  }
+});
+
 test('property: serializeSelection and parseSelection round-trip any values', () => {
   const random = seeded(19_002);
   for (let index = 0; index < 2000; index += 1) {

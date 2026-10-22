@@ -187,9 +187,11 @@ export type SelectionText =
 const MAX_TEXT = 1024;
 
 /**
- * The values `text` carries: each key at most once, each value well formed
- * for its axis. A key given twice, a malformed value, and any other key are
- * dropped. Whether the registry has a value is the resolver's to check.
+ * The values `text` carries: each key at most once, each value a string
+ * well formed for its axis. A key given twice, a value that isn't a string
+ * or is malformed, and any other key are dropped, and input that's none of
+ * the forms reads as nothing. Whether the registry has a value is the
+ * resolver's to check.
  */
 export function parseSelection(text: SelectionText): SelectionValues {
   const values: SelectionValues = {};
@@ -198,7 +200,8 @@ export function parseSelection(text: SelectionText): SelectionValues {
   for (const axis of APPEARANCE_AXES) {
     const given = read(QUERY_KEYS[axis]);
     if (given.length !== 1) continue;
-    const value = given[0]!;
+    const value = given[0];
+    if (typeof value !== 'string') continue;
     if (axis === 'displayMode') {
       if (isDisplayMode(value)) values.displayMode = value;
     } else if (REGISTRY_ID_PATTERN.test(value)) {
@@ -208,16 +211,23 @@ export function parseSelection(text: SelectionText): SelectionValues {
   return values;
 }
 
-function reader(text: SelectionText): ((key: string) => readonly string[]) | null {
+/**
+ * What each key was given. A record's value that isn't a string, such as
+ * null, a number, or a nested list, stays in the list as given, so it
+ * counts toward a key given twice and is never read as a string.
+ */
+function reader(text: unknown): ((key: string) => readonly unknown[]) | null {
   if (typeof text === 'string') {
     if (text.length > MAX_TEXT) return null;
     const params = new URLSearchParams(text);
     return (key) => params.getAll(key);
   }
   if (text instanceof URLSearchParams) return (key) => text.getAll(key);
+  if (typeof text !== 'object' || text === null) return null;
+  const record = text as Readonly<Record<string, unknown>>;
   return (key) => {
-    const value = Object.hasOwn(text, key) ? text[key] : undefined;
+    const value = Object.hasOwn(record, key) ? record[key] : undefined;
     if (value === undefined) return [];
-    return typeof value === 'string' ? [value] : value;
+    return Array.isArray(value) ? value : [value];
   };
 }
