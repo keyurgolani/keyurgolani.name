@@ -100,19 +100,42 @@ const WORST: Record<string, string> = {
   ),
 };
 
-/** The median of five runs, in milliseconds. */
-function median(run: () => unknown): number {
+/** A field nobody tuned to be slow, of the same length: paragraphs with marks and links, and a short list. */
+const BENIGN = toLength(
+  '',
+  'Some *emphasis* and a [link](https://example.com) here.\n\n- a short item\n- another one\n\n',
+);
+
+/**
+ * The medians of seven interleaved runs of `run` and of `baseline`, in
+ * milliseconds, after one untimed run of each. Timing both in the same
+ * rounds keeps a slow or busy machine from moving one and not the other.
+ */
+function medians(run: () => unknown, baseline: () => unknown): { time: number; base: number } {
+  run();
+  baseline();
   const times: number[] = [];
-  for (let i = 0; i < 5; i++) {
-    const start = performance.now();
+  const bases: number[] = [];
+  for (let i = 0; i < 7; i++) {
+    let start = performance.now();
+    baseline();
+    bases.push(performance.now() - start);
+    start = performance.now();
     run();
     times.push(performance.now() - start);
   }
-  times.sort((a, b) => a - b);
-  return times[2]!;
+  const middle = (list: number[]) => list.sort((a, b) => a - b)[3]!;
+  return { time: middle(times), base: middle(bases) };
 }
 
-test('a worst-case field at the limits renders through renderMarkdown and renderInlineMarkdown in under 50 ms, the median of 5 runs', (t) => {
+// A worst-case field may cost this many times the benign one of the same
+// length, and never more than the ceiling. About 9 times is the most seen on
+// the development machine. A scan that grew faster than the text would blow
+// through both.
+const MAX_RATIO = 20;
+const CEILING_MS = 1000;
+
+test('a worst-case field at the limits renders through renderMarkdown and renderInlineMarkdown within 20 times a benign field of its length, and under 1 s', (t) => {
   for (const [name, field] of Object.entries(WORST)) {
     const shape = measureMarkdown(field);
     for (const { dimension, max } of MARKDOWN_LIMITS) {
@@ -122,13 +145,29 @@ test('a worst-case field at the limits renders through renderMarkdown and render
       );
     }
     assert.equal(shape.length, MARKDOWN_MAX_LENGTH, name);
-    const block = median(() => renderMarkdown(field));
-    const inline = median(() => renderInlineMarkdown(field));
-    t.diagnostic(`${name}: block ${block.toFixed(1)} ms, inline ${inline.toFixed(1)} ms`);
-    // About 13 ms is the slowest on the development machine: the bound
-    // leaves CI hardware about 4 times that.
-    assert.ok(block < 50, `${name}: block ${block.toFixed(1)} ms`);
-    assert.ok(inline < 50, `${name}: inline ${inline.toFixed(1)} ms`);
+    const block = medians(
+      () => renderMarkdown(field),
+      () => renderMarkdown(BENIGN),
+    );
+    const inline = medians(
+      () => renderInlineMarkdown(field),
+      () => renderInlineMarkdown(BENIGN),
+    );
+    t.diagnostic(
+      `${name}: block ${block.time.toFixed(1)} ms (benign ${block.base.toFixed(1)}), inline ${inline.time.toFixed(1)} ms (benign ${inline.base.toFixed(1)})`,
+    );
+    for (const [kind, { time, base }] of [
+      ['block', block],
+      ['inline', inline],
+    ] as const) {
+      // Below a millisecond the ratio is mostly timer noise, so the benign
+      // time counts as at least 1 ms.
+      const bound = Math.min(MAX_RATIO * Math.max(base, 1), CEILING_MS);
+      assert.ok(
+        time < bound,
+        `${name}: ${kind} ${time.toFixed(1)} ms against ${bound.toFixed(1)} ms (benign ${base.toFixed(1)} ms)`,
+      );
+    }
   }
   const all = WORST['every limit at once']!;
   const shape = measureMarkdown(all);
