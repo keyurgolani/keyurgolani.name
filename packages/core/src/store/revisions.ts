@@ -413,10 +413,13 @@ export async function revisionHealth(
     },
   });
   const blockers = result.diagnostics.filter(blocking);
-  // An older schema major renders after a migration, not as damage.
+  // An older schema major renders after a migration, not as damage: one no
+  // step reads (schema.version), or one the migration does (schema.outdated, #10).
   const previewBlockers = blockers.filter(
     (diagnostic) =>
-      diagnostic.severity === 'blocks-preview' && diagnostic.code !== 'schema.version',
+      diagnostic.severity === 'blocks-preview' &&
+      diagnostic.code !== 'schema.version' &&
+      diagnostic.code !== 'schema.outdated',
   );
   if (previewBlockers.length > 0) {
     return { state: 'damaged', reason: [...new Set(previewBlockers.map((d) => d.code))].join(',') };

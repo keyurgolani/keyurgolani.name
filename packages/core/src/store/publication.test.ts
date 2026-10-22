@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
+import { PORTFOLIO_SCHEMA_VERSION } from '@portfolio/schema';
 import { memoryAuditSink } from '../audit/sink';
 import type { SessionHold } from '../auth/sessions';
 import { onStoreEvent, type StoreError, type StoreEvent, type StoreLogEntry } from './common';
@@ -70,7 +71,7 @@ test('a publish writes one complete revision, moves the pointer, records the eve
   assert.ok(!Number.isNaN(Date.parse(manifest.createdAt)));
   assert.deepEqual(manifest.source, { kind: 'draft', draftId: draft.draftId, draftVersion: 1 });
   assert.equal(manifest.appVersion, '0.0.0-test');
-  assert.equal(manifest.documents.portfolio.schemaVersion, 2);
+  assert.equal(manifest.documents.portfolio.schemaVersion, PORTFOLIO_SCHEMA_VERSION);
   assert.equal(manifest.documents.portfolio.format, 'yaml');
   assert.equal(manifest.documents.portfolio.file, 'portfolio.yml');
   assert.equal(
@@ -460,18 +461,24 @@ test('rollback checks the live revision, its target, and refuses one that is gon
   );
   assert.equal(same.kind === 'rejected' && same.code, 'nothing_to_publish');
 
-  // A revision from an older schema: written by a build that took it.
-  const old = await writeOlderSchemaRevision(store);
-  const incompatible = await owned(store).rollback(
-    { targetRevisionId: old, expectedLiveRevisionId: second },
-    'owner',
-  );
-  assert.equal(incompatible.kind, 'rejected');
-  if (incompatible.kind !== 'rejected') return;
-  assert.equal(incompatible.code, 'revision_incompatible');
-  assert.equal(incompatible.reason, 'schema.version');
-  assert.equal(incompatible.command, `rollback --to ${old}`);
-  assert.ok(incompatible.diagnostics.some((diagnostic) => diagnostic.code === 'schema.version'));
+  // A revision from an older schema, written by a build that took it: one the
+  // migration reads (#10), and one no step does. Neither is damage.
+  for (const [version, code] of [
+    [PORTFOLIO_SCHEMA_VERSION - 1, 'schema.outdated'],
+    [1, 'schema.version'],
+  ] as const) {
+    const old = await writeOlderSchemaRevision(store, version);
+    const incompatible = await owned(store).rollback(
+      { targetRevisionId: old, expectedLiveRevisionId: second },
+      'owner',
+    );
+    assert.equal(incompatible.kind, 'rejected', code);
+    if (incompatible.kind !== 'rejected') return;
+    assert.equal(incompatible.code, 'revision_incompatible');
+    assert.equal(incompatible.reason, code);
+    assert.equal(incompatible.command, `rollback --to ${old}`);
+    assert.ok(incompatible.diagnostics.some((diagnostic) => diagnostic.code === code));
+  }
 
   // A damaged one: a document's bytes no longer match its hash.
   writeFileSync(
@@ -507,13 +514,14 @@ test('a revision whose manifest names another unitHash is damaged, though each d
 });
 
 /** Writes a revision whose portfolio is schema version 1, as an older build would have. */
-async function writeOlderSchemaRevision(store: Store): Promise<RevisionId> {
+async function writeOlderSchemaRevision(store: Store, version: number): Promise<RevisionId> {
   const input = pairInput('engineering');
+  const current = `schemaVersion: ${PORTFOLIO_SCHEMA_VERSION}`;
   const older = {
     ...input,
     portfolio: {
       ...input.portfolio,
-      sourceText: input.portfolio.sourceText.replace('schemaVersion: 2', 'schemaVersion: 1'),
+      sourceText: input.portfolio.sourceText.replace(current, `schemaVersion: ${version}`),
     },
   };
   // The older build's validator took it.
@@ -523,7 +531,7 @@ async function writeOlderSchemaRevision(store: Store): Promise<RevisionId> {
         ...pair,
         portfolio: {
           ...pair.portfolio,
-          text: pair.portfolio.text.replace('schemaVersion: 1', 'schemaVersion: 2'),
+          text: pair.portfolio.text.replace(`schemaVersion: ${version}`, current),
         },
       });
       return result;

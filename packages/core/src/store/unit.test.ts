@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { canonicalize, validatePublicationUnit } from '@portfolio/schema';
+import { canonicalize, PORTFOLIO_SCHEMA_VERSION, validatePublicationUnit } from '@portfolio/schema';
 import { isDraftId, isRevisionId, isSha256, storePaths } from './layout';
 import { checkUnit, contentHash, importSourceHash, oversize, plainModel, sha256 } from './unit';
 import {
@@ -77,7 +77,7 @@ test("a unit keeps each document's text as written and #4's normalized model as 
   assert.ok(checked.ok);
   assert.equal(checked.unit.portfolio.sourceText, input.portfolio.sourceText);
   assert.match(checked.unit.portfolio.sourceText, /^# Engineering:/);
-  assert.equal(checked.unit.portfolio.schemaVersion, 2);
+  assert.equal(checked.unit.portfolio.schemaVersion, PORTFOLIO_SCHEMA_VERSION);
   const result = validatePublicationUnit({
     portfolio: { text: input.portfolio.sourceText, format: 'yaml', name: 'portfolio.yml' },
     site: { text: input.site.sourceText, format: 'yaml', name: 'site.yml' },

@@ -96,11 +96,12 @@ export interface UnitChecks {
   readonly appVersion: string;
 }
 
-/** A finding about a unit: #4's, or the store's own about the media document. */
+/** A finding about a unit: #4's and #10's, or the store's own about the media document. */
 export interface UnitDiagnostic {
   readonly code: string;
   readonly severity: Diagnostic['severity'];
-  readonly document: DocumentName;
+  /** One of the unit's documents, or, for #10's, the snapshots beside them. */
+  readonly document: DocumentName | Diagnostic['document'];
   readonly pointer: string;
   readonly line?: number;
   readonly column?: number;
