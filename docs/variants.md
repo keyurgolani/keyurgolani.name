@@ -122,7 +122,7 @@ The host owns every route, and asks `dispatch()` what each path is, against the 
 
 Link to a route with `routeHref(input, target)` from `@portfolio/variant-contract`. It writes the URL below `input.basePath`, keeps `input.query`, and puts `input.ids.prefix` on a fragment view's id, so one render links right at `/`, below `/sample`, and below #7's preview prefix. The kit's shared renderers do the same for a `/#section` link.
 
-A path view can't start with a segment the host owns: `studio`, `api`, `_next`, `sample`, `reference`, `preview`, `preview-assets`, `work`, `admin`, `variants`, and the metadata files. Generation fails on one, and the root catch-all leaves each to its own route, so a view never shadows an API or metadata route.
+A path view can't start with a segment the host owns: `studio`, `api`, `_next`, `_fixtures`, `sample`, `reference`, `preview`, `preview-assets`, `work`, `admin`, `variants`, and the metadata files. Generation fails on one, and the root catch-all leaves each to its own route, so a view never shadows an API or metadata route.
 
 The route table knows from the build's manifests, before any page runs, which paths name nothing: one no installed variant declares, a work until #10, a placeholder value over 64 characters, or a `?variant=` that names nothing. Each gets the 404 page from the server, with its 404 status, so it works without JavaScript. One 404 still draws in the browser: a view the live variant declares and the site document's `routes` turns off. Next 16 answers a page's `notFound()` with an error document the browser fills in, so without JavaScript that page is empty; the status is 404 either way.
 

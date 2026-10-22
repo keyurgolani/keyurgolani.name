@@ -11,13 +11,15 @@ import { SECTION_ID_MAX_LENGTH } from '@portfolio/schema/ids';
  * `admin` and `variants` are #1's retired routes, which answer 404 in every
  * profile, so a view there could never be reached. `assets` is where the
  * Compose files mount an owner's assets into public/, whose files win over
- * any view. `preview` and `preview-assets` are #7's preview documents and
- * the media they load.
+ * any view. `_fixtures` is #19's test fixture pages, which only a build made
+ * with APPEARANCE_FIXTURES=1 serves. `preview` and `preview-assets` are #7's
+ * preview documents and the media they load.
  */
 export const RESERVED_SEGMENTS: readonly string[] = [
   'studio',
   'api',
   '_next',
+  '_fixtures',
   'sample',
   'reference',
   'preview',

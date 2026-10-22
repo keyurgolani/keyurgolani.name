@@ -1427,19 +1427,13 @@ test('the catch-all shadows no API, metadata, or build path, in any profile (#5,
   }
 });
 
-test('the contract reserves every first segment the table owns that a view could start with, so no view is ever shadowed', () => {
+test('the contract reserves every first segment the table owns, so no view is ever shadowed', () => {
   const owned = [...ownedFirstSegments()].sort();
-  // A view's first segment is a literal segment, lowercase words (#5), so
-  // one outside that grammar, such as the fixtures' _fixtures, never meets a
-  // view, and the catch-all leaves it alone as it does every owned segment.
   assert.deepEqual(
-    owned.filter((segment) => LITERAL_SEGMENT.test(segment) && !isReservedSegment(segment)),
+    owned.filter((segment) => !isReservedSegment(segment)),
     [],
     'a view could start with a segment a route answers first',
   );
-  for (const segment of owned.filter((each) => !LITERAL_SEGMENT.test(each))) {
-    assert.equal(entryFor('owner', `/${segment}/probe`) === '/[...view]', false, segment);
-  }
   // The table's own first segments are all there, the share image's group suffix included.
   for (const segment of [
     '_next',
