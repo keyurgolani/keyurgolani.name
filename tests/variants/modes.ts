@@ -271,12 +271,83 @@ export async function expectStill(page: Page): Promise<void> {
 }
 
 /**
+ * Turns the kit's throw switch on for `page`'s next document, and counts
+ * each enhancement it fails: React reports the kit's error as the
+ * enhancement's boundary catches it. The kit counts each one it mounts.
+ */
+export async function failEveryEnhancement(page: Page): Promise<() => number> {
+  let failed = 0;
+  page.on('console', (message) => {
+    if (message.type() === 'error' && message.text().includes(THROW_SWITCH_ERROR)) failed += 1;
+  });
+  page.on('pageerror', (error) => {
+    if (error.message.includes(THROW_SWITCH_ERROR)) failed += 1;
+  });
+  await page.addInitScript(() => {
+    const kit = globalThis as KitSwitches;
+    kit.__portfolioFailEnhancements = true;
+    kit.__portfolioMountedEnhancements = 0;
+  });
+  return () => failed;
+}
+
+/**
+ * That the throw switch failed every enhancement the kit has mounted on
+ * `page`, and that the kit mounted `floor` at least. First the page goes
+ * idle, which is when #6's islands mount theirs, and the counts have to
+ * hold for a second, so one that mounts late is in them before the check
+ * passes. With `settle: false` it reads them again, for one that mounted
+ * since, without waiting for either.
+ */
+export async function expectEveryEnhancementFailed(
+  page: Page,
+  failed: () => number,
+  floor = 0,
+  { settle = true }: { settle?: boolean } = {},
+): Promise<void> {
+  if (settle) {
+    await page.evaluate(
+      () =>
+        new Promise((resolve) => requestIdleCallback(() => resolve(undefined), { timeout: 5_000 })),
+    );
+  }
+  const held = settle ? 1_000 : 0;
+  let last: { mounted: number; failed: number } | undefined;
+  let since = 0;
+  await expect
+    .poll(
+      async () => {
+        const now = {
+          mounted: await page.evaluate(() =>
+            Number((globalThis as KitSwitches).__portfolioMountedEnhancements),
+          ),
+          failed: failed(),
+        };
+        if (last === undefined || now.mounted !== last.mounted || now.failed !== last.failed) {
+          last = now;
+          since = Date.now();
+        }
+        const done = Date.now() - since >= held && now.mounted === now.failed;
+        return done && now.mounted >= floor
+          ? 'every one failed'
+          : `${now.mounted} mounted, ${now.failed} failed`;
+      },
+      {
+        message: `enhancements the kit mounted, at least ${floor}, and the throw switch failed`,
+        intervals: [100],
+        timeout: 10_000,
+      },
+    )
+    .toBe('every one failed');
+}
+
+/**
  * Every image on the page loaded, or failed, and decoded. A lazy image
  * starts loading only once the window scrolls near it, so most of a long
  * page's would still be empty boxes in a whole-page shot. Each one is made
  * eager, which loads it as that scroll would, without moving the page.
  */
-async function loadImages(page: Page): Promise<void> {
+export async function loadImages(page: Page): Promise<void> {
   await page.evaluate(async () => {
     const images = [...document.images];
     for (const image of images) image.loading = 'eager';
@@ -326,6 +397,8 @@ export interface ModeCheck {
   readonly go: (page: Page) => Promise<unknown>;
   /** The screenshot's name, for desktop and mobile. */
   readonly shot: string;
+  /** The contract fixture the page renders, if it renders one. */
+  readonly fixture?: string;
   /** A resource the page may fail to load without a console error counting, such as a missing image. */
   readonly expectedFailure?: (url: string) => boolean;
 }
@@ -358,21 +431,7 @@ async function checkPage(check: ModeCheck, page: Page, run?: FailedRun): Promise
       return route.abort('failed');
     });
   }
-  let thrown = 0;
-  if (run === 'throw-switch') {
-    // Each enhancement the switch fails reports the kit's error as its boundary catches it.
-    page.on('console', (message) => {
-      if (message.type() === 'error' && message.text().includes(THROW_SWITCH_ERROR)) thrown += 1;
-    });
-    page.on('pageerror', (error) => {
-      if (error.message.includes(THROW_SWITCH_ERROR)) thrown += 1;
-    });
-    await page.addInitScript(() => {
-      const kit = globalThis as KitSwitches;
-      kit.__portfolioFailEnhancements = true;
-      kit.__portfolioMountedEnhancements = 0;
-    });
-  }
+  const failed = run === 'throw-switch' ? await failEveryEnhancement(page) : undefined;
   try {
     await check.go(page);
     await settle(page, mode !== 'no-javascript' && run !== 'blocked-chunks');
@@ -383,21 +442,18 @@ async function checkPage(check: ModeCheck, page: Page, run?: FailedRun): Promise
     }
     await expectEveryMode(page, check.request, check.variant, errors);
     if (run === 'blocked-chunks') expectScriptsAlone(blocked, sheets());
-    if (run === 'throw-switch') {
-      // The switch fails each enhancement the kit mounted on this page, as
-      // many as the kit counted: none on a page that renders none, whatever
-      // the manifest declares.
-      const unfailed = async () =>
-        (await page.evaluate(() =>
-          Number((globalThis as KitSwitches).__portfolioMountedEnhancements),
-        )) - thrown;
-      await expect
-        .poll(unfailed, { message: 'enhancements the kit mounted, less those the switch failed' })
-        .toBe(0);
-    }
+    // complete renders every kind, so a composition that declares an
+    // enhancement mounts one there at least.
+    const floor =
+      check.fixture === 'complete' && (check.variant.manifest.enhancements?.length ?? 0) > 0
+        ? 1
+        : 0;
+    if (failed) await expectEveryEnhancementFailed(page, failed, floor);
     if (mode === 'no-javascript' || mode === 'print' || mode === 'failed-enhancement') {
       await expectReadable(page);
     }
+    // And any enhancement that mounted while those checks ran.
+    if (failed) await expectEveryEnhancementFailed(page, failed, floor, { settle: false });
     if (mode === 'print') await expectNothingFixed(page);
     if (mode === 'reduced-motion') await expectStill(page);
   } finally {

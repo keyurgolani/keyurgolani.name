@@ -38,6 +38,7 @@ for (const mode of MODES) {
           testInfo,
           go: (target) => target.goto('/'),
           shot: `${variant.manifest.id}-${fixture}-${mode.name}`,
+          fixture,
         });
       },
     );
