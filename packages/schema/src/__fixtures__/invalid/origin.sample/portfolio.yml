@@ -1,5 +1,5 @@
 # origin.sample (a warning, with https://rowan.name as the origin): a link to a sample address.
-schemaVersion: 2
+schemaVersion: 3
 locale: en
 direction: ltr
 identity:

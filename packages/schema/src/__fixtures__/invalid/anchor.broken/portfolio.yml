@@ -1,5 +1,5 @@
 # anchor.broken: a link to a section the portfolio does not have.
-schemaVersion: 2
+schemaVersion: 3
 locale: en
 direction: ltr
 identity:

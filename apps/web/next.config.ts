@@ -24,9 +24,18 @@ const config: NextConfig = {
   // For pnpm monorepo: include workspace files in the standalone trace.
   outputFileTracingRoot: path.resolve(process.cwd(), '..', '..'),
   // Ship the bundled sample pair, portfolio.example.yml and site.example.yml,
-  // with the standalone output. Nothing imports them, so the tracer can't
-  // find them on its own.
-  outputFileTracingIncludes: { '/**': ['../../portfolio.example.yml', '../../site.example.yml'] },
+  // with the standalone output, and what sits beside it (#10): the snapshots
+  // the sample adapter reads, and the sample's media sources, which #10's
+  // second slice derives renditions from. Nothing imports them, so the
+  // tracer can't find them on its own.
+  outputFileTracingIncludes: {
+    '/**': [
+      '../../portfolio.example.yml',
+      '../../site.example.yml',
+      '../../snapshots/*.json',
+      '../../example-media/**/*.png',
+    ],
+  },
   transpilePackages: [
     '@portfolio/schema',
     '@portfolio/kit',

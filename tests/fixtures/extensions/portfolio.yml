@@ -1,41 +1,42 @@
 # Harness fixture holding data from content extensions the host doesn't
 # register. Every value starting canary-ext- must stay out of what visitors
 # get: the page, its RSC payload and JSON-LD, and the feed.
-schemaVersion: 2
+schemaVersion: 3
 locale: en
 direction: ltr
-
 identity:
   name: Rowan Fixture
   tagline: Builds calm software for testing harnesses.
   extensions:
     '@acme/portfolio-photography':
       camera: canary-ext-identity
-
 links:
   - platform: website
     url: https://rowan.test
     extensions:
       '@acme/portfolio-photography':
         handle: canary-ext-link
-
+works:
+  - id: notes-on-fixtures
+    title: Notes on fixtures
+    medium: writing
+    summary: Why the fixtures stay boring.
+    url: https://rowan.test/notes
+    publishedAt: 2026-01-05
+    extensions:
+      '@acme/portfolio-photography':
+        note: canary-ext-item
+contact:
+  message: Write to rowan@rowan.test.
 sections:
   - kind: hero
     id: top
     greeting: Hello, I'm
-
-  - kind: writings
+  - kind: works
     id: essays
     title: Essays
     items:
-      - title: Notes on fixtures
-        url: https://rowan.test/notes
-        publishedAt: '2026-01-05'
-        summary: Why the fixtures stay boring.
-        extensions:
-          '@acme/portfolio-photography':
-            note: canary-ext-item
-
+      - notes-on-fixtures
   - kind: '@acme/portfolio-photography/exhibitions'
     id: exhibitions
     title: canary-ext-section-title
@@ -44,8 +45,6 @@ sections:
         - title: canary-ext-section-data
           venue: Harbor Gallery
           year: 2024
-
   - kind: contact
     id: contact
     title: Get in touch
-    message: Write to rowan@rowan.test.

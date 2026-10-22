@@ -4,7 +4,7 @@
   "promise": "Every section, and a notes page listing them, for the route tests.",
   "description": "A test fixture the route tests install in a copy of the repository, never in a release. The home page renders every section, and notes lists their titles.",
   "contract": "2.0",
-  "schemas": { "portfolio": { "min": 2, "max": 2 }, "site": { "min": 2, "max": 2 } },
+  "schemas": { "portfolio": { "min": 3, "max": 3 }, "site": { "min": 2, "max": 2 } },
   "tokenContract": 1,
   "compositionFamily": "custom",
   "motionIntent": "still",

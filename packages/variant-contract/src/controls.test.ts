@@ -1,7 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { toPublicView, type ParsedPair } from '@portfolio/schema';
+import {
+  PortfolioSchema,
+  resolvePortfolioView,
+  type ContentExtension,
+  type ParsedPair,
+} from '@portfolio/schema';
 import { exhibitions } from './__fixtures__/extension';
 import {
   checkControlValues,
@@ -33,20 +38,37 @@ function load(change: (m: Raw) => void = () => {}): VariantManifest {
 }
 
 const MANIFEST = load();
+const WORKS = [
+  { id: 'tide', title: 'Tide', medium: 'writing' },
+  { id: 'atlas', title: 'Atlas', medium: 'software' },
+  { id: 'sketch', title: 'Sketch', medium: 'writing' },
+  { id: 'secret', title: 'Secret', medium: 'writing', visibility: 'private' },
+];
 const SECTIONS = [
   { id: 'top', kind: 'hero' },
-  { id: 'essays', kind: 'writings' },
-  { id: 'work', kind: 'projects' },
-  { id: 'drafts', kind: 'writings' },
+  { id: 'essays', kind: 'works', items: ['tide'] },
+  { id: 'work', kind: 'works', items: ['atlas', 'secret'] },
+  { id: 'drafts', kind: 'works', items: ['sketch'] },
   { id: 'contact', kind: 'contact' },
 ];
-/** A pair holding `sections`, with the site hiding `hidden`. */
+/** A version 3 pair holding `sections`, with the site hiding `hidden`. */
 const pairOf = (sections: readonly object[], hidden: readonly string[] = []) =>
   ({
-    portfolio: { sections },
+    portfolio: PortfolioSchema.parse({
+      schemaVersion: 3,
+      locale: 'en',
+      direction: 'ltr',
+      identity: { name: 'Rowan Controls' },
+      works: WORKS,
+      contact: { message: 'Write.' },
+      sections,
+    }),
     site: { sections: Object.fromEntries(hidden.map((id) => [id, { hidden: true }])) },
   }) as unknown as ParsedPair;
-const CONTENT = contentIndex(toPublicView(pairOf(SECTIONS, ['drafts'])).portfolio);
+/** The published view's portfolio, as a render reads it. */
+const viewOf = (pair: ParsedPair, extensions: readonly ContentExtension[] = []) =>
+  resolvePortfolioView(pair, {}, { mediaBase: '/media', extensions }).portfolio;
+const CONTENT = contentIndex(viewOf(pairOf(SECTIONS, ['drafts'])));
 
 const DEFAULTS = {
   showIndex: true,
@@ -128,7 +150,7 @@ test('an integer off its step, a list that is not ids, and a ref of the wrong ki
     ['controls.invalid'],
   );
   assert.deepEqual(problems({ featured: 'work' }), [['controls.invalid', 'values/featured']]);
-  // leadSection takes writings or projects; contact is neither.
+  // leadSection takes works or evidence; contact is neither.
   assert.deepEqual(problems({ leadSection: 'contact' }), [
     ['controls.invalid', 'values/leadSection'],
   ]);
@@ -161,7 +183,7 @@ test('another version is controls.stale alone, and every control renders its def
   }
 });
 
-test("the content index is the public view's: no hidden or unregistered extension section", () => {
+test("the content index is the published view's: no hidden or unregistered extension section, and no record they alone reach", () => {
   const sections = [
     ...SECTIONS,
     { id: 'shows', kind: '@acme/portfolio-photography/exhibitions', data: { items: [] } },
@@ -169,12 +191,37 @@ test("the content index is the public view's: no hidden or unregistered extensio
   ];
   const pair = pairOf(sections, ['drafts']);
   assert.deepEqual(
-    [...contentIndex(toPublicView(pair).portfolio).keys()],
-    ['top', 'essays', 'work', 'contact'],
+    [...contentIndex(viewOf(pair)).entries()],
+    [
+      ['top', 'hero'],
+      ['essays', 'works'],
+      ['work', 'works'],
+      ['contact', 'contact'],
+      ['tide', 'works'],
+      ['atlas', 'works'],
+    ],
   );
   assert.deepEqual(
-    [...contentIndex(toPublicView(pair, { extensions: [exhibitions] }).portfolio).keys()],
-    ['top', 'essays', 'work', 'contact', 'shows'],
+    [...contentIndex(viewOf(pair, [exhibitions])).keys()],
+    ['top', 'essays', 'work', 'contact', 'shows', 'tide', 'atlas'],
+  );
+});
+
+test('a ref may point at a visible record, by the kind of section that lists it, and not at a private or hidden one (#10)', () => {
+  assert.deepEqual(problems({ leadSection: 'tide', featured: ['atlas', 'essays'] }), []);
+  assert.deepEqual(problems({ leadSection: 'secret', featured: ['sketch'] }), [
+    ['controls.dangling-ref', 'values/leadSection'],
+    ['controls.dangling-ref', 'values/featured/0'],
+  ]);
+  // A kind filter reads a record by the kind of section that lists it.
+  const sectionsOnly = load((m) => {
+    m.controls.items[3].kinds = ['hero'];
+  });
+  assert.deepEqual(
+    checkControlValues(sectionsOnly, { version: 2, values: { leadSection: 'tide' } }, CONTENT).map(
+      ({ code }) => code,
+    ),
+    ['controls.invalid'],
   );
 });
 

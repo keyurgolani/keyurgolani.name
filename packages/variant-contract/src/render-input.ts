@@ -35,7 +35,11 @@ export interface VariantRenderInput {
     /** Its enhancements, for the kit's <Enhancement>. */
     readonly enhancements: NonNullable<VariantManifest['enhancements']>;
   };
-  /** Visible content only: no hidden section and no unregistered extension data. */
+  /**
+   * Visible content only: no hidden section, no private record, nothing no
+   * visible section or curation list reaches, and no unregistered extension
+   * data. Every reference in it resolves.
+   */
   readonly portfolio: PublicPortfolio;
   /** How the site presents it. The appearance ids are #19's to resolve. */
   readonly presentation: {
@@ -57,10 +61,19 @@ export interface VariantRenderInput {
   readonly query: Readonly<Record<string, string>>;
   /** The deployment's canonical origin, such as https://jane.name. */
   readonly origin: string;
-  /** Data derived from the content, such as GitHub's. Empty until #10. */
-  readonly derived: Readonly<Record<string, never>>;
-  /** Media metadata. Empty until #10. */
-  readonly media: Readonly<Record<string, never>>;
+  /**
+   * Data from outside the documents, frozen at publish, by section id: each
+   * github section's snapshot, or why it has none (#10). Nothing fetches it
+   * at render time.
+   */
+  readonly derived: PublicView['derived'];
+  /**
+   * The media the visible content places, by asset id: each asset's authored
+   * fields, and its renditions or why it has none yet (#10). A placement
+   * names its asset here and may override its alt, focal point, and
+   * decorative flag.
+   */
+  readonly media: PublicView['media'];
   /** Resolved appearance tokens. Null until #19. */
   readonly appearance: null;
   readonly env: {
@@ -78,7 +91,7 @@ export interface VariantRenderInput {
 }
 
 export interface RenderInputArgs {
-  /** The pair's public view, from toPublicView(). */
+  /** The unit's published view, from resolvePortfolioView(). */
   readonly view: PublicView;
   /** The rendering variant's manifest. */
   readonly manifest: VariantManifest;
@@ -138,8 +151,8 @@ export function buildRenderInput(args: RenderInputArgs): VariantRenderInput {
     basePath: normalizeBasePath(args.basePath),
     query: linkQuery(args.query),
     origin,
-    derived: {},
-    media: {},
+    derived: view.derived,
+    media: view.media,
     appearance: null,
     env: { now: day.toISOString(), seed: viewSeed(view) },
     ids: { prefix, main: `${prefix}main` },

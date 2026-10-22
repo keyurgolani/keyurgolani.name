@@ -17,6 +17,6 @@ export type {
   MotionPolicy,
   Identity,
   Link,
-  Image,
+  Placement,
   Period,
 } from '@portfolio/schema';

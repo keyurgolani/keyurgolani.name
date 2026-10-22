@@ -1,0 +1,19 @@
+# curation.overlap: the signature work is featured too.
+schemaVersion: 3
+locale: en
+direction: ltr
+identity:
+  name: Rowan Fixture
+links:
+  - url: https://rowan.name
+    label: Site
+signature: tidewater-atlas
+featured: [tidewater-atlas]
+works:
+  - id: tidewater-atlas
+    title: Tidewater Atlas
+    medium: interface
+sections:
+  - kind: works
+    id: work
+    items: [tidewater-atlas]

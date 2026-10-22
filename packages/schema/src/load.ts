@@ -6,12 +6,14 @@ import {
   type ExtensionRegistry,
 } from './extensions';
 import { closestWord, keyContext } from './hints';
+import { describeIssue } from './issues';
 import { parseExtensionKind } from './ids';
 import { isPlainObject } from './json';
-import { detectDocument, legacyFields, legacyMessage } from './legacy';
+import { detectDocument, legacyFields, legacyMessage, MIGRATE_COMMAND, shellQuote } from './legacy';
 import type { Portfolio } from './portfolio';
-import { SCHEMA_VERSION } from './portfolio';
+import { ownerName, repeatedIds } from './record-ids';
 import { redactedPointer, redactSecrets } from './secrets';
+import { PORTFOLIO_SCHEMA_VERSION, SITE_SCHEMA_VERSION } from './versions';
 import type { Site } from './site';
 import { parseSource, type DocumentFormat, type Locate } from './source';
 
@@ -23,11 +25,12 @@ export interface DocumentProblem {
   /**
    * `syntax`: not one plain YAML or JSON document within the size and
    * nesting limits. `legacy`: the old one-file format, so nothing else was
-   * checked. `version`: no `schemaVersion: 2`, so nothing else was checked.
-   * `schema`: the data doesn't match the schema. `duplicate-id`: two
-   * sections share an id.
+   * checked. `outdated`: a version 2 portfolio, which `pnpm config:migrate`
+   * converts, so nothing else was checked. `version`: no schemaVersion this
+   * release reads, so nothing else was checked. `schema`: the data doesn't
+   * match the schema. `duplicate-id`: two entries share an id.
    */
-  readonly kind: 'syntax' | 'legacy' | 'version' | 'schema' | 'duplicate-id';
+  readonly kind: 'syntax' | 'legacy' | 'outdated' | 'version' | 'schema' | 'duplicate-id';
   /** The parser's or the schema's own code, such as DUPLICATE_KEY or invalid_type. */
   readonly code: string;
   /** JSON pointer into the document; absent for a syntax problem that isn't a node. */
@@ -108,12 +111,19 @@ export function readPortfolio(
   options: ParseOptions = {},
 ): DocumentRead<Portfolio> & { readonly duplicates: readonly DocumentProblem[] } {
   const schemas = schemasFor(options.extensions);
-  const read = readWith(schemas.PortfolioSchema, schemas.registry, source, format, options.name);
+  const read = readWith(
+    schemas.PortfolioSchema,
+    schemas.registry,
+    source,
+    format,
+    options.name,
+    'portfolio',
+  );
   const checked = read.problems.every(({ kind }) => kind === 'schema');
   return {
     ...read,
     duplicates:
-      checked && read.locate ? redactProblems(repeatedSectionIds(read.data, read.locate)) : [],
+      checked && read.locate ? redactProblems(repeatedEntryIds(read.data, read.locate)) : [],
   };
 }
 
@@ -124,7 +134,7 @@ export function readSite(
   options: ParseOptions = {},
 ): DocumentRead<Site> {
   const schemas = schemasFor(options.extensions);
-  return readWith(schemas.SiteSchema, schemas.registry, source, format, options.name);
+  return readWith(schemas.SiteSchema, schemas.registry, source, format, options.name, 'site');
 }
 
 function finish<T>(read: DocumentRead<T>, more: readonly DocumentProblem[]): DocumentResult<T> {
@@ -151,21 +161,23 @@ export function duplicateSectionIds(
 }
 
 /**
- * Two sections with one id, found in the data as written, so a schema
- * problem anywhere else in the document doesn't hide them.
+ * Two entries with one id, sections, records, and media assets alike, found
+ * in the data as written, so a schema problem anywhere else in the document
+ * doesn't hide them.
  */
-function repeatedSectionIds(data: unknown, locate: Locate): DocumentProblem[] {
-  const sections = isPlainObject(data) && Array.isArray(data.sections) ? data.sections : [];
-  const ids = sections.map((section: unknown) => ({
-    id: isPlainObject(section) ? section.id : undefined,
-  }));
-  return duplicateSectionIds(ids).map(({ index, firstIndex }) => ({
-    kind: 'duplicate-id',
-    code: 'duplicate_id',
-    pointer: `/sections/${index}/id`,
-    message: `/sections/${index}/id repeats the id of /sections/${firstIndex}. Section ids must be unique.`,
-    ...locate(['sections', index, 'id']),
-  }));
+function repeatedEntryIds(data: unknown, locate: Locate): DocumentProblem[] {
+  return repeatedIds(data).map(({ entry, first }) => {
+    const pointer = redactedPointer([...entry.path, 'id']);
+    const earlier = redactedPointer(first.path);
+    const what = entry.owner === first.owner ? '' : `, which is ${ownerName(first.owner)}`;
+    return {
+      kind: 'duplicate-id',
+      code: 'duplicate_id',
+      pointer,
+      message: `${pointer} repeats the id of ${earlier}${what}. Every id is unique in the document: sections, records, and media assets share one set.`,
+      ...locate([...entry.path, 'id']),
+    };
+  });
 }
 
 const composed = new WeakMap<readonly ContentExtension[], ComposedSchemas>();
@@ -185,7 +197,8 @@ function readWith<T>(
   registry: ExtensionRegistry,
   source: string,
   format: DocumentFormat,
-  name?: string,
+  name: string | undefined,
+  document: 'portfolio' | 'site',
 ): DocumentRead<T> {
   const parsed = parseSource(source, format);
   if (!parsed.ok) {
@@ -215,8 +228,26 @@ function readWith<T>(
     };
   }
 
-  // Checking the rest against version 2 would only bury this one problem.
-  if (isPlainObject(data) && data.schemaVersion !== SCHEMA_VERSION) {
+  // Checking the rest against this release's version would only bury this one problem.
+  const version = document === 'portfolio' ? PORTFOLIO_SCHEMA_VERSION : SITE_SCHEMA_VERSION;
+  if (isPlainObject(data) && data.schemaVersion !== version) {
+    if (document === 'portfolio' && data.schemaVersion === 2) {
+      const file = name ?? 'portfolio.yml';
+      return {
+        problems: [
+          {
+            kind: 'outdated',
+            code: 'outdated_version',
+            pointer: '/schemaVersion',
+            message: `${file} is a schemaVersion 2 portfolio document. This release reads schemaVersion ${version}: run ${MIGRATE_COMMAND} ${shellQuote(file)} to convert it.`,
+            ...locate(['schemaVersion']),
+          },
+        ],
+        data,
+        locate,
+        warnings: [],
+      };
+    }
     const missing = data.schemaVersion === undefined;
     return {
       problems: [
@@ -224,7 +255,7 @@ function readWith<T>(
           kind: 'version',
           code: missing ? 'invalid_type' : 'invalid_literal',
           pointer: '/schemaVersion',
-          message: `/schemaVersion ${missing ? 'is required' : `must be ${SCHEMA_VERSION}`}. This release reads only schemaVersion ${SCHEMA_VERSION} documents.`,
+          message: `/schemaVersion ${missing ? 'is required' : `must be ${version}`}. This release reads only schemaVersion ${version} ${document} documents.`,
           ...locate(['schemaVersion']),
         },
       ],
@@ -247,11 +278,17 @@ function readWith<T>(
   const warnings = findUnregisteredExtensions(result.data, registry).map(
     ({ path, use }): DocumentWarning => {
       const pointer = redactedPointer(path);
-      const what = use === 'section' ? 'is a section from' : 'belongs to';
+      const what =
+        use === 'section'
+          ? 'is a section from'
+          : use === 'medium'
+            ? 'is a medium from'
+            : 'belongs to';
+      const kept = use === 'medium' ? 'Its work is' : "It's";
       return {
         code: 'extension_unregistered',
         pointer,
-        message: `${pointer} ${what} an extension this build doesn't register. It's kept as written, unchecked, and never shown to visitors.`,
+        message: `${pointer} ${what} an extension this build doesn't register. ${kept} kept as written, unchecked, and never shown to visitors.`,
         // An extensions entry is located at its namespace key.
         ...locate(path, use === 'fields' ? 'key' : 'value'),
       };
@@ -395,49 +432,4 @@ function valueAt(data: unknown, path: readonly (string | number)[]): unknown {
   return value;
 }
 
-/** What a schema issue says is wrong, without quoting any value from the document. */
-export function describeIssue(issue: z.ZodIssue): string {
-  const where = redactedPointer(issue.path) || 'The document';
-  switch (issue.code) {
-    case 'invalid_type':
-      return issue.received === 'undefined'
-        ? `${where} is required.`
-        : `${where} should be ${issue.expected}, not ${issue.received}.`;
-    case 'invalid_literal':
-      return issue.received === undefined
-        ? `${where} is required.`
-        : `${where} must be ${JSON.stringify(issue.expected)}.`;
-    case 'invalid_union_discriminator':
-      return `${where} is not a known section kind.`;
-    case 'invalid_union':
-      return `${where} doesn't match any of the shapes it allows.`;
-    case 'invalid_enum_value':
-      return `${where} should be one of: ${issue.options.join(', ')}.`;
-    case 'unrecognized_keys':
-      return `${where} has fields that aren't allowed here.`;
-    case 'too_small':
-      return `${where} ${boundPhrase(issue.type, issue.inclusive ? 'at least' : 'more than', Number(issue.minimum))}.`;
-    case 'too_big':
-      return `${where} ${boundPhrase(issue.type, issue.inclusive ? 'at most' : 'less than', Number(issue.maximum))}.`;
-    case 'invalid_string':
-    case 'custom':
-      // Every regex and refinement in the schemas carries its own value-free message.
-      return `${where} ${issue.message}`;
-    case 'not_finite':
-      return `${where} must be a finite number, not .inf or .nan.`;
-    default:
-      return `${where} doesn't match the schema (${issue.code}).`;
-  }
-}
-
-function boundPhrase(type: string, bound: string, limit: number): string {
-  switch (type) {
-    case 'string':
-      return `must be ${bound} ${limit} character${limit === 1 ? '' : 's'} long`;
-    case 'array':
-    case 'set':
-      return `must have ${bound} ${limit} item${limit === 1 ? '' : 's'}`;
-    default:
-      return `must be ${bound} ${limit}`;
-  }
-}
+export { describeIssue } from './issues';

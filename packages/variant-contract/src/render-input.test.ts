@@ -4,18 +4,19 @@ import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
 import {
   canonicalize,
-  toPublicView,
+  resolvePortfolioView,
   validatePublicationUnit,
   type DocumentFormat,
   type ParsedPair,
+  type UnitInput,
 } from '@portfolio/schema';
 import { buildRenderInput, viewSeed, type RenderInputArgs } from './render-input';
 import { validateManifest } from './validate-manifest';
 
 // The render input (#5, Slice 3, item 4, shipped with the contract): one
-// JSON-serializable value from the public view, the route, and the request
-// time, the same in every runtime. browser.test.ts runs it bundled for a
-// browser.
+// JSON-serializable value from the published view, the route, and the
+// request time, the same in every runtime. browser.test.ts runs it bundled
+// for a browser.
 
 const PAIRS = new URL('../../schema/src/__fixtures__/pairs/', import.meta.url);
 const PAIR = new URL('engineering/yaml/', PAIRS);
@@ -46,9 +47,13 @@ const MANIFEST = (() => {
   return result.manifest;
 })();
 
+/** The published view of `from`, with the unit's derived data. */
+const viewOf = (from: ParsedPair, unit: UnitInput = {}) =>
+  resolvePortfolioView(from, unit, { mediaBase: '/media' });
+
 function args(from: ParsedPair = pair(), extra: Partial<RenderInputArgs> = {}): RenderInputArgs {
   return {
-    view: toPublicView(from),
+    view: viewOf(from),
     manifest: MANIFEST,
     route: { route: 'home' },
     basePath: '',
@@ -85,8 +90,66 @@ test('the input carries the visible content, presentation, materialized controls
   assert.equal(input.basePath, '');
   assert.deepEqual(input.query, {});
   assert.equal(input.origin, 'https://rowan.test');
-  assert.deepEqual([input.derived, input.media, input.appearance], [{}, {}, null]);
+  // The github section has no snapshot, and the pair no media.
+  assert.deepEqual(
+    [input.derived, input.media, input.appearance],
+    [{ 'on-code': { state: 'unavailable', reason: 'never-refreshed', since: null } }, {}, null],
+  );
   assert.deepEqual(input.ids, { prefix: '', main: 'main' });
+});
+
+test("derived and media are the view's: a snapshot's data, and each asset with why it has no renditions yet (#10)", () => {
+  const snapshot = {
+    adapter: 'github',
+    sectionId: 'on-code',
+    fetchedAt: '2026-10-02T08:00:00Z',
+    data: {
+      username: 'ines',
+      profileUrl: 'https://github.com/ines',
+      source: 'rest',
+      totalRepos: 3,
+      totalStarsReceived: 4,
+      starsGiven: null,
+      contributionsLastYear: null,
+      pinnedRepos: [],
+      recentlyActive: [],
+      contributionCalendar: [],
+      languageBreakdown: [],
+    },
+  };
+  const from = pair('', (text) =>
+    text
+      .replace(
+        '  email: ines@okafor.test\n',
+        '  email: ines@okafor.test\n  avatar: { asset: ines-portrait }\n',
+      )
+      .replace(
+        '\nsections:\n',
+        '\nmedia:\n  - { id: ines-portrait, kind: image, source: ines.jpg, alt: Ines Okafor }\nsections:\n',
+      ),
+  );
+  const input = buildRenderInput({
+    ...args(from),
+    view: viewOf(from, { snapshots: { github: { records: [snapshot] } } }),
+  });
+  assert.deepEqual(input.derived, {
+    'on-code': {
+      state: 'ready',
+      value: { ...snapshot.data, fetchedAt: snapshot.fetchedAt },
+      derivedAt: snapshot.fetchedAt,
+    },
+  });
+  assert.deepEqual(input.media, {
+    'ines-portrait': {
+      id: 'ines-portrait',
+      kind: 'image',
+      alt: 'Ines Okafor',
+      derived: { state: 'unavailable', reason: 'processing', since: null },
+    },
+  });
+  // Still plain JSON, and the snapshot is part of what the seed reads.
+  assert.deepEqual(JSON.parse(JSON.stringify(input)), input);
+  assert.notEqual(input.env.seed, buildRenderInput(args(from)).env.seed);
 });
 
 test("the manifest's kinds, views, and enhancements ride along, so a variant needn't import it", () => {
@@ -125,8 +188,8 @@ test('the clock is the request time truncated to the UTC day, however it is give
   }
 });
 
-test("the seed is the first 8 hex digits of the public view's SHA-256, stable and specific", () => {
-  const view = toPublicView(pair());
+test("the seed is the first 8 hex digits of the published view's SHA-256, stable and specific", () => {
+  const view = viewOf(pair());
   const expected = Number.parseInt(
     createHash('sha256').update(canonicalize(view)).digest('hex').slice(0, 8),
     16,
@@ -142,13 +205,12 @@ test("the seed is the first 8 hex digits of the public view's SHA-256, stable an
 });
 
 test('an edit no visitor sees leaves the seed alone, so decoration stays put', () => {
-  const hidden = 'sections:\n  numbers:\n    hidden: true\n';
+  const hidden = 'sections:\n  stack:\n    hidden: true\n';
   const before = buildRenderInput(args(pair(hidden))).env.seed;
-  // `numbers` is hidden, so editing one of its labels changes nothing a visitor sees.
-  const edited = pair(hidden, (text) =>
-    text.replace('label: Services migrated', 'label: Services moved'),
-  );
-  assert.notDeepEqual(edited.portfolio, pair(hidden).portfolio, 'the hidden section changed');
+  // `stack` is hidden, and only it places the practice's tools, so editing one changes
+  // nothing a visitor sees.
+  const edited = pair(hidden, (text) => text.replace('- name: Neovim', '- name: Helix'));
+  assert.notDeepEqual(edited.portfolio, pair(hidden).portfolio, 'the hidden part changed');
   assert.equal(buildRenderInput(args(edited)).env.seed, before);
 });
 
@@ -241,19 +303,46 @@ test("the query links keep rides along in name order, as /sample's variant does"
 
 // What YAML can write that JSON can't, in every number field and in stored control values.
 const NON_FINITE = ['.inf', '-.inf', '.nan'];
-const PORTFOLIO_PROBES = [
-  (value: string) => `  - { kind: tenure, id: probe, years: ${value} }`,
-  (value: string) => `  - { kind: stats, id: probe, items: [{ value: ${value}, label: x }] }`,
-  (value: string) =>
-    `  - { kind: episodes, id: probe, items: [{ title: x, durationMinutes: ${value} }] }`,
-  (value: string) =>
-    `  - { kind: discography, id: probe, items: [{ title: x, tracks: [{ title: t, durationSeconds: ${value} }] }] }`,
-  (value: string) =>
-    `  - { kind: gallery, id: probe, items: [{ image: { src: /a.png, width: ${value}, focalPoint: { x: ${value}, y: 0 } } }] }`,
-  (value: string) =>
-    `  - { kind: writings, id: probe, items: [{ title: x, readingTimeMinutes: ${value} }] }`,
-  (value: string) =>
-    `  - { kind: '@other/x/y', id: probe, data: { ratio: ${value} } }\n  - { kind: lede, id: probe-two, body: x, extensions: { '@other/x': { size: ${value} } } }`,
+/** The engineering portfolio with `record` first in its top-level `list`. */
+const withRecord = (text: string, list: string, record: string) =>
+  text.includes(`\n${list}:\n`)
+    ? text.replace(`\n${list}:\n`, `\n${list}:\n${record}\n`)
+    : text.replace('\nsections:\n', `\n${list}:\n${record}\nsections:\n`);
+const PORTFOLIO_PROBES: ReadonlyArray<(text: string, value: string) => string> = [
+  (text, value) =>
+    withRecord(text, 'evidence', `  - { id: probe, type: metric, metric: { value: ${value} } }`),
+  (text, value) =>
+    withRecord(
+      text,
+      'works',
+      `  - { id: probe, title: x, medium: audio-video, number: 1, durationMinutes: ${value} }`,
+    ),
+  (text, value) =>
+    withRecord(
+      text,
+      'works',
+      `  - { id: probe, title: x, medium: music, tracks: [{ title: t, durationSeconds: ${value} }] }`,
+    ),
+  (text, value) =>
+    withRecord(
+      text,
+      'works',
+      `  - { id: probe, title: x, medium: writing, readingTimeMinutes: ${value} }`,
+    ),
+  (text, value) =>
+    withRecord(
+      text,
+      'media',
+      `  - { id: probe, kind: image, source: a.png, focalPoint: { x: ${value}, y: 0 } }`,
+    ),
+  (text, value) =>
+    withRecord(
+      withRecord(text, 'media', '  - { id: probe, kind: image, source: a.png }'),
+      'works',
+      `  - { id: probe-work, title: x, medium: interface, cover: { asset: probe, focalPoint: { x: 0, y: ${value} } } }`,
+    ),
+  (text, value) =>
+    `${text}\n  - { kind: '@other/x/y', id: probe, data: { ratio: ${value} } }\n  - { kind: lede, id: probe-two, body: x, extensions: { '@other/x': { size: ${value} } } }\n`,
 ];
 const SITE_PROBES = [
   (value: string) =>
@@ -284,7 +373,7 @@ test('no pair that validates can make the builder throw', () => {
   const probe = (value: string): Array<[string, string, string]> => [
     ...PORTFOLIO_PROBES.map((write, index): [string, string, string] => [
       `portfolio probe ${index} ${value}`,
-      `${base.portfolio}\n${write(value)}\n`,
+      write(base.portfolio, value),
       base.site,
     ]),
     ...SITE_PROBES.map((write, index): [string, string, string] => [

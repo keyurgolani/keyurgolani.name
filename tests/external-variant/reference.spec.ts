@@ -43,13 +43,21 @@ test(
 );
 
 test(
-  'stats render bespoke as a ledger, and fun facts not at all',
+  'evidence renders bespoke as a ledger, and fun facts not at all',
   { tag: '@defaults', annotation: [ROOT, READ_ONLY] },
   async ({ page }) => {
     await page.goto('/');
-    const stats = page.locator('[data-kind="stats"]');
-    await expect(stats).toHaveAttribute('data-renderer', 'bespoke');
-    await expect(stats.locator('dl.acme-ledger')).toHaveCount(1);
+    const evidence = page.locator('[data-kind="evidence"]');
+    expect(await evidence.count(), 'evidence sections').toBeGreaterThan(0);
+    for (const section of await evidence.all()) {
+      await expect(section).toHaveAttribute('data-renderer', 'bespoke');
+      await expect(section.locator('dl.acme-ledger')).toHaveCount(1);
+      // Each term says something: a statement, as markdown through the kit, or a title.
+      await expect(section.locator('dt:empty')).toHaveCount(0);
+      // And each pair is whole, a term with its figure or source: no dt without its dd.
+      await expect(section.locator('dl.acme-ledger > div:not(:has(> dt + dd))')).toHaveCount(0);
+    }
+    expect(await page.locator('dl.acme-ledger dt > .pf-rich-text').count()).toBeGreaterThan(0);
     await expect(page.locator('[data-kind="fun-facts"]')).toHaveCount(0);
   },
 );
@@ -121,8 +129,6 @@ test(
 );
 
 test.describe('on the bundled sample', () => {
-  test.use({ blockedHosts: ['picsum.photos'] });
-
   test(
     'the colophon view renders under /sample and links back to it',
     { tag: '@sample', annotation: [{ type: 'route', description: '/sample/[[...path]]' }, DEMO] },

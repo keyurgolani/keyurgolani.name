@@ -63,10 +63,17 @@ test('a catalog that fails gives a fixed 500 and logs the request, not the cause
 
 test('a feed that fails to render logs render_failed', async (t) => {
   const logged = t.mock.method(console, 'log', () => {});
-  // A revision the public view passes along whole, whose identity the feed reads.
-  const portfolio = { schemaVersion: 2, sections: [], identity: null };
+  // A revision the published view passes along whole, with a work whose title the feed can't escape.
+  const portfolio = {
+    schemaVersion: 3,
+    locale: 'en',
+    direction: 'ltr',
+    identity: { name: 'Rowan Test' },
+    works: [{ id: 'essay', title: 42, medium: 'writing' }],
+    sections: [{ kind: 'works', id: 'essays', items: ['essay'] }],
+  };
   const { site } = revision('en', true).unit;
-  deploy(t, () => Promise.resolve({ unit: { portfolio, site } } as never));
+  deploy(t, () => Promise.resolve({ unit: { portfolio, site, snapshots: {} } } as never));
   const response = await GET(request());
   assert.equal(response.status, 500);
   assert.equal(await response.text(), 'Feed unavailable. Request ID: req-0001');
@@ -84,7 +91,7 @@ test('a server with no deployment state serves no feed', async () => {
 /** A live revision of a portfolio in `locale`, on a site whose feed is `feed`. */
 function revision(locale: string, feed: boolean): Awaited<ReturnType<CatalogReader['getLive']>> {
   const portfolio = parsePortfolio(
-    `schemaVersion: 2\nlocale: ${locale}\ndirection: ltr\nidentity:\n  name: Rowan Test\nsections:\n  - kind: writings\n    id: essays\n    items:\n      - { title: First essay, url: 'https://rowan.test/first', publishedAt: '2026-01-02' }\n`,
+    `schemaVersion: 3\nlocale: ${locale}\ndirection: ltr\nidentity:\n  name: Rowan Test\nworks:\n  - { id: first-essay, title: First essay, medium: writing, url: 'https://rowan.test/first', publishedAt: '2026-01-02' }\nsections:\n  - kind: works\n    id: essays\n    items: [first-essay]\n`,
     'yaml',
   );
   const site = parseSite(
@@ -95,7 +102,10 @@ function revision(locale: string, feed: boolean): Awaited<ReturnType<CatalogRead
     'yaml',
   );
   assert.ok(portfolio.ok && site.ok);
-  return { revisionId: 'doc-test', unit: { portfolio: portfolio.value, site: site.value } };
+  return {
+    revisionId: 'doc-test',
+    unit: { portfolio: portfolio.value, site: site.value, snapshots: {} },
+  };
 }
 
 test("the channel's language is the portfolio's locale", async (t) => {
@@ -106,6 +116,8 @@ test("the channel's language is the portfolio's locale", async (t) => {
   const xml = await response.text();
   assert.match(xml, /<language>pt-BR<\/language>/);
   assert.match(xml, /<title>First essay<\/title>/);
+  // Its GUID is made from the record's id (#10).
+  assert.match(xml, /<guid isPermaLink="false">[^<]*\/#first-essay<\/guid>/);
 });
 
 test('a site with features.feed: false serves no feed', async (t) => {

@@ -29,7 +29,7 @@ const EXAMPLES = {
   site: fileURLToPath(new URL('../../../../../site.example.yml', import.meta.url)),
 };
 const VALID =
-  'schemaVersion: 2\nlocale: en\ndirection: ltr\nidentity:\n  name: Rowan Test\nsections:\n  - kind: lede\n    id: about\n    body: Hi.\n';
+  'schemaVersion: 3\nlocale: en\ndirection: ltr\nidentity:\n  name: Rowan Test\nsections:\n  - kind: lede\n    id: about\n    body: Hi.\n';
 const base64 = (bytes: Buffer) => bytes.toString('base64').replace(/=+$/, '');
 // auth.secret parses the hash and never derives, so a random key will do.
 const HASH = `$scrypt$ln=17,r=8,p=1$${base64(randomBytes(16))}$${base64(randomBytes(32))}`;

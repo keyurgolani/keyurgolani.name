@@ -8,7 +8,7 @@ import { testRegistry, VARIANTS } from './test-support/packs';
 const registry = testRegistry();
 
 const PORTFOLIO = {
-  schemaVersion: 2,
+  schemaVersion: 3,
   locale: 'en',
   direction: 'ltr',
   identity: { name: 'Rowan Fixture' },
@@ -217,6 +217,49 @@ test("the content's scripts are checked against the typography profile, visible 
   );
   assert.match(japanese!.message, /Jpan script/);
   assert.equal(japanese!.stableId, 'about');
+  // A record in another script is checked too, where a visible section shows it (#10), and
+  // not when it's private or only a hidden section lists it.
+  const records = {
+    ...PORTFOLIO,
+    works: [
+      { id: 'tokyo-notes', title: '東京', medium: 'writing', lang: 'ja' },
+      {
+        id: 'private-notes',
+        title: 'Ιδιωτικό',
+        medium: 'writing',
+        lang: 'el',
+        visibility: 'private',
+      },
+      { id: 'draft-notes', title: 'Черновик', medium: 'writing', lang: 'ru' },
+    ],
+    sections: [
+      ...PORTFOLIO.sections,
+      { kind: 'works', id: 'essays', items: ['tokyo-notes', 'private-notes'] },
+      { kind: 'works', id: 'drafts', items: ['draft-notes'] },
+    ],
+  };
+  assert.deepEqual(
+    check(site({ sections: { drafts: { hidden: true } } }), { portfolio: records }).records.filter(
+      ([code]) => code === 'appearance.script-coverage',
+    ),
+    [['appearance.script-coverage', 'warning', 'portfolio', '/works/0/lang']],
+  );
+  // A private work that repeats a kept id stays private: id.duplicate blocks publishing, but
+  // the pair previews, and only the public notes the essays show are checked.
+  const repeated = {
+    ...PORTFOLIO,
+    works: [
+      { id: 'notes', title: 'Notes', medium: 'writing' },
+      { id: 'notes', title: 'Σημειώσεις', medium: 'writing', lang: 'el', visibility: 'private' },
+    ],
+    sections: [...PORTFOLIO.sections, { kind: 'works', id: 'essays', items: ['notes'] }],
+  };
+  const duplicated = check(site(), { portfolio: repeated });
+  assert.ok(duplicated.records.some(([code]) => code === 'id.duplicate'));
+  assert.deepEqual(
+    duplicated.records.filter(([code]) => code === 'appearance.script-coverage'),
+    [],
+  );
   // A profile covering every part of a script covers it.
   assert.deepEqual(
     check(

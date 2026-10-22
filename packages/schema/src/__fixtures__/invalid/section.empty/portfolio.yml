@@ -1,0 +1,18 @@
+# section.empty: a practice section whose part is not written.
+schemaVersion: 3
+locale: en
+direction: ltr
+identity:
+  name: Rowan Fixture
+links:
+  - url: https://rowan.name
+    label: Site
+sections:
+  - kind: lede
+    id: about
+    title: About
+    body: Builds calm software.
+  - kind: practice
+    id: skills
+    title: Skills
+    part: skills

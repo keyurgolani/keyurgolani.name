@@ -368,7 +368,7 @@ A key outside its profile's list stops a production server; `pnpm dev` warns and
 
 The host uses Next.js fetch revalidation:
 
-- **GitHub data:** none yet. The `github` section links the profile until #10 brings repository data.
+- **GitHub data:** none fetched. A `github` section renders the snapshot beside the documents, `snapshots/github.json`, read at startup, and links the profile until one holds its section. #10's third slice refreshes it.
 - **Metadata:** rendered per request (`robots.txt`, `sitemap.xml`, the Open Graph image, and the feed), from the documents loaded at startup and `PORTFOLIO_ORIGIN`. `features.feed: false` in the site document turns the feed off.
 - **Variant CSS:** every registered variant's stylesheet, bundled into the static assets and loaded on every page, until #6 loads each variant's where it renders.
 

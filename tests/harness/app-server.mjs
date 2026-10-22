@@ -125,6 +125,9 @@ async function onFreePort(attempt, firstPort) {
  *   fixture host's (fixture-host.mjs)
  * @param {Record<string, string | Uint8Array>} [options.publicFiles] files to add to the
  *   copy's public/, by their path there, as an owner adds assets their portfolio names
+ * @param {Record<string, string | Uint8Array>} [options.sourceFiles] files to add to the
+ *   source directory beside the two documents, by their path there, such as
+ *   `snapshots/github.json` (#10)
  */
 export async function startApp({
   env = {},
@@ -138,6 +141,7 @@ export async function startApp({
   port: firstPort,
   web = WEB,
   publicFiles = {},
+  sourceFiles = {},
 } = {}) {
   const standalone = path.join(web, '.next', 'standalone');
   const serverJs = path.join(standalone, 'apps', 'web', 'server.js');
@@ -163,6 +167,14 @@ export async function startApp({
   if (portfolio) cpSync(portfolio, path.join(sourceDir, `portfolio${path.extname(portfolio)}`));
   if (siteText !== undefined) writeFileSync(path.join(sourceDir, 'site.yml'), siteText);
   else if (site) cpSync(site, path.join(sourceDir, `site${path.extname(site)}`));
+  for (const [file, content] of Object.entries(sourceFiles)) {
+    const target = path.join(sourceDir, file);
+    if (!target.startsWith(sourceDir + path.sep)) {
+      throw new Error(`A source file stays inside the source directory: ${file}`);
+    }
+    mkdirSync(path.dirname(target), { recursive: true });
+    writeFileSync(target, content);
+  }
   const fileEnv = {};
   for (const [key, file] of Object.entries(envFiles)) {
     const target = path.join(root, file.path);

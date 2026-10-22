@@ -7,7 +7,13 @@ import {
   type ContentExtension,
   type UnitValidator,
 } from '@portfolio/schema';
-import { findPair, pairFileNames, readPair, type PairFiles } from '@portfolio/schema/node';
+import {
+  findPair,
+  pairFileNames,
+  readPair,
+  readUnitFiles,
+  type PairFiles,
+} from '@portfolio/schema/node';
 import { isSampleIdentity } from '../lib/sample-identity';
 import type { CatalogReader, LiveRevision } from './catalog-port';
 import type { ConfigIssue, RuntimeMode } from './config';
@@ -16,15 +22,20 @@ import { frozenUnit, pairDigest, recordIssue } from './pair-records';
 // The documents adapter: the CatalogReader for a mounted PORTFOLIO_SOURCE_DIR
 // (#4, items 4 and 5). It reads the pair, one portfolio.{yml,yaml,json} and
 // one site.{yml,yaml,json}, once at startup through loadPair's steps, and
-// freezes the validated pair. Each record the check finds is an issue:
-// blocking ones stop startup, and warnings are logged. Under `next dev` only,
-// it re-validates whenever a document changes on disk, and renders the
-// bundled examples when the directory holds neither document.
+// beside it the unit's derived data (#10): snapshots/<kind>.json and
+// media/media.json, both optional. It freezes all of it. Each record the
+// checks find is an issue: blocking ones stop startup, such as a snapshot
+// that doesn't read, which would otherwise render as missing, and warnings
+// are logged. Under `next dev` only, it re-validates whenever a document, a
+// snapshot, or the media document changes on disk, and renders the bundled
+// examples when the directory holds neither document.
 
 export { BUNDLED_SAMPLE_NAMES } from '../lib/sample-identity';
 
 /** Every name the adapter reads or refuses, so an edit to any of them is seen. */
 const WATCHED = /^(?:(?:portfolio|site)\.(?:yml|yaml|json)|portfolio\.toml)$/;
+/** The unit's derived data beside the documents (#10), watched the same way. */
+const UNIT_FILES = ['snapshots', 'media'] as const;
 const KEY = 'PORTFOLIO_SOURCE_DIR';
 const INVALID_SOURCE =
   'The portfolio source failed validation. The config.fatal lines in the server log say where.';
@@ -136,6 +147,13 @@ function loadRevision(options: DocumentsCatalogOptions): Loaded {
   issues.push(...records);
   const { pair, sources } = result;
 
+  // The snapshots and media document beside the pair: a blocking record in
+  // either, such as a snapshot that doesn't read, stops startup.
+  const unitFiles = readUnitFiles(path.dirname(files.portfolio));
+  const unitRecords = unitFiles.diagnostics.map((record) => recordIssue(record, KEY, names));
+  if (unitRecords.some(({ severity }) => severity === 'fatal')) return fail(...unitRecords);
+  issues.push(...unitRecords);
+
   if (!usingExamples && isSampleIdentity(pair.portfolio.identity.name)) {
     const parsed = parseSource(sources.portfolio.text, sources.portfolio.format);
     const sample: ConfigIssue = {
@@ -156,12 +174,15 @@ function loadRevision(options: DocumentsCatalogOptions): Loaded {
 
   const revision: LiveRevision = Object.freeze({
     revisionId: `doc-${pairDigest(sources)}`,
-    unit: frozenUnit(pair.portfolio, pair.site),
+    unit: frozenUnit(pair.portfolio, pair.site, unitFiles),
   });
   return { ok: true, revision, issues, fingerprint: stamp };
 }
 
-/** Changes whenever a document is added, removed, or rewritten, or the examples change while they render. */
+/**
+ * Changes whenever a document, a snapshot, or the media document is added,
+ * removed, or rewritten, or the examples change while they render.
+ */
 function fingerprint({ sourceDir, examples }: DocumentsCatalogOptions): string {
   let names: string[];
   try {
@@ -170,9 +191,13 @@ function fingerprint({ sourceDir, examples }: DocumentsCatalogOptions): string {
     return `unreadable:${(error as NodeJS.ErrnoException).code}`;
   }
   const watched = names.filter((name) => WATCHED.test(name)).sort();
-  const files = watched.length
-    ? watched.map((name) => path.join(/*turbopackIgnore: true*/ sourceDir, name))
-    : [examples.portfolio, examples.site];
+  const dir = watched.length ? sourceDir : path.dirname(examples.portfolio);
+  const files = [
+    ...(watched.length
+      ? watched.map((name) => path.join(/*turbopackIgnore: true*/ sourceDir, name))
+      : [examples.portfolio, examples.site]),
+    ...unitFilePaths(dir),
+  ];
   return files
     .map((file) => {
       try {
@@ -183,6 +208,22 @@ function fingerprint({ sourceDir, examples }: DocumentsCatalogOptions): string {
       }
     })
     .join('|');
+}
+
+/** The snapshot files and the media document beside the documents in `dir`, sorted. */
+function unitFilePaths(dir: string): string[] {
+  const found: string[] = [];
+  for (const folder of UNIT_FILES) {
+    const full = path.join(/*turbopackIgnore: true*/ dir, folder);
+    try {
+      for (const name of fs.readdirSync(/*turbopackIgnore: true*/ full).sort()) {
+        found.push(path.join(/*turbopackIgnore: true*/ full, name));
+      }
+    } catch {
+      // Neither is required.
+    }
+  }
+  return found;
 }
 
 function fatal(code: string, message: string): ConfigIssue {

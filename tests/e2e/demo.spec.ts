@@ -12,8 +12,9 @@ const DEMO = { type: 'profile', description: 'demo' };
 // identity.name in portfolio.example.yml.
 const SAMPLE_NAME = 'Anamika Devi';
 
-// The sample's placeholder images live on picsum.photos, which stays blocked.
-test.use({ appOptions: DEMO_APP, blockedHosts: ['picsum.photos'] });
+// The sample's images are its own, bundled beside it, and have no rendition
+// until #10's second slice derives them, so the page asks no host for one.
+test.use({ appOptions: DEMO_APP });
 
 profileMatrix('demo');
 
@@ -100,9 +101,29 @@ test(
     for (const url of ['/', '/sample', ...selectable.map((id) => `/sample?variant=${id}`)]) {
       const response = await page.goto(url, { waitUntil: 'networkidle' });
       expect(response?.status(), url).toBe(200);
-      // The sample's github section, which fetches a live account, is gone.
-      await expect(page.locator('#on-github'), url).toHaveCount(0);
     }
+    expect(app.egress()).toEqual([]);
+  },
+);
+
+test(
+  "the sample's github section renders the snapshot bundled beside it, with its date (#10)",
+  { annotation: [{ type: 'route', description: '/' }, DEMO] },
+  async ({ page, app }) => {
+    await page.goto('/', { waitUntil: 'networkidle' });
+    const github = page.locator('#on-github');
+    await expect(github.getByRole('heading', { name: 'On GitHub' })).toBeVisible();
+    // Its figures, its pinned repositories, and the day it was taken.
+    for (const label of ['Repositories', 'Stars received', 'Contributions in the last year']) {
+      await expect(github.locator('dt', { hasText: label })).toHaveCount(1);
+    }
+    await expect(github.getByRole('link', { name: 'postmortem-template-kit' })).toBeVisible();
+    await expect(github.locator('time[datetime="2026-10-17"]')).toHaveText('October 17, 2026');
+    await expect(github.getByRole('link', { name: 'anamika', exact: true })).toHaveAttribute(
+      'href',
+      'https://github.com/anamika',
+    );
+    // From the snapshot alone: the server reached no host for it.
     expect(app.egress()).toEqual([]);
   },
 );

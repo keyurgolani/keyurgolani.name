@@ -210,7 +210,7 @@ export function variant(id: string, packageName: string): RegisteredVariant {
       promise: 'A composition for the appearance tests.',
       description: 'It renders nothing of its own.',
       contract: '2.0',
-      schemas: { portfolio: { min: 2, max: 2 }, site: { min: 2, max: 2 } },
+      schemas: { portfolio: { min: 3, max: 3 }, site: { min: 2, max: 2 } },
       tokenContract: TOKEN_CONTRACT_VERSION,
       compositionFamily: 'document',
       motionIntent: 'still',

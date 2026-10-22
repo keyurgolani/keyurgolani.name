@@ -10,10 +10,11 @@ import {
   canonicalize,
   compareDiagnostics,
   isPlainObject,
+  isPublic,
   languageDirection,
   parseExtensionKind,
   publicSectionIndexes,
-  toPublicView,
+  resolvePortfolioView,
   type ContentExtension,
   type Diagnostic,
   type DiagnosticSeverity,
@@ -280,10 +281,15 @@ function evaluate(
   selected: boolean,
 ): Composition {
   const findings = new Findings(options.live ?? false);
-  const context = { extensions: options.extensions };
-  const view = toPublicView(unit, context);
+  // Kinds, slots, and controls read the authored content alone, so the
+  // unit's derived inputs don't change the report.
+  const view = resolvePortfolioView(
+    unit,
+    {},
+    { mediaBase: '/media', extensions: options.extensions },
+  );
   // Where each visible section sits in the document, by the filter the view used.
-  const sections = publicSectionIndexes(unit, context);
+  const sections = publicSectionIndexes(unit, { extensions: options.extensions });
   const kinds = kindReports(manifest, view.portfolio, sections, options, findings);
 
   const content = contentIndex(view.portfolio);
@@ -299,7 +305,7 @@ function evaluate(
   }
   const values = materializeControls(manifest, entry, content);
   const slots = manifest.contentSlots.map((slot) =>
-    slotReport(slot, manifest, view.portfolio, sections, values, findings),
+    slotReport(slot, manifest, view.portfolio, unit.portfolio, sections, values, findings),
   );
 
   checkDirection(manifest, view.portfolio, sections, findings);
@@ -490,11 +496,19 @@ function slotReport(
   slot: ContentSlot,
   manifest: VariantManifest,
   portfolio: PublicPortfolio,
+  authored: ParsedPair['portfolio'],
   sections: readonly number[],
   values: ControlValues,
   findings: Findings,
 ): SlotReport {
-  const { items, empty, remediation } = slotItems(slot, manifest, portfolio, sections, values);
+  const { items, empty, remediation } = slotItems(
+    slot,
+    manifest,
+    portfolio,
+    authored,
+    sections,
+    values,
+  );
   const count = items.length;
   const want = Math.max(slot.min, 1);
   const short = count < want;
@@ -546,6 +560,7 @@ function slotItems(
   slot: ContentSlot,
   manifest: VariantManifest,
   portfolio: PublicPortfolio,
+  authored: ParsedPair['portfolio'],
   sections: readonly number[],
   values: ControlValues,
 ): { items: SlotItem[]; empty: SlotItem; remediation: string } {
@@ -578,7 +593,7 @@ function slotItems(
     };
   }
   return {
-    items: fieldItems(portfolio, select.field, sections),
+    items: fieldItems(portfolio, authored, select.field, sections),
     empty: { document: 'portfolio', path: staticPrefix(select.field) },
     remediation: `Fill in ${select.field} in the portfolio document.`,
   };
@@ -600,49 +615,95 @@ function staticPrefix(pointer: string): string[] {
 }
 
 /**
- * The values a field pointer reaches in the public portfolio, where `*`
+ * The values a field pointer reaches in the published portfolio, where `*`
  * matches any array index, each located in the document. An array counts
- * each item in it; a blank string, null, or nothing counts none.
+ * each item in it; a blank string, null, or nothing counts none. The view
+ * leaves out hidden sections, private records, and what nothing visible
+ * reaches, so each list of it is matched to the document's own, item by
+ * item, to say where the owner edits it.
  */
 function fieldItems(
   portfolio: PublicPortfolio,
+  authored: ParsedPair['portfolio'],
   pointer: string,
   sections: readonly number[],
 ): SlotItem[] {
   const parts = pointerParts(pointer);
   const items: SlotItem[] = [];
-  // Paths into the public view, whose sections the document numbers its own way.
-  const located = (path: readonly (string | number)[]): SlotItem => ({
-    document: 'portfolio',
-    path:
-      path[0] === 'sections' && typeof path[1] === 'number'
-        ? ['sections', sections[path[1]]!, ...path.slice(2)]
-        : path,
-  });
-  const walk = (value: unknown, depth: number, path: readonly (string | number)[]): void => {
+  // The sections' own positions, by the filter the view used, so a repeated id can't mislead.
+  const positions = (value: readonly unknown[], document: unknown, path: readonly unknown[]) =>
+    path.length === 1 && path[0] === 'sections' ? sections : documentPositions(value, document);
+  const walk = (
+    value: unknown,
+    document: unknown,
+    depth: number,
+    path: readonly (string | number)[],
+  ): void => {
     if (depth === parts.length) {
       if (Array.isArray(value)) {
+        const at = positions(value, document, path);
         value.forEach((item, index) => {
-          if (present(item)) items.push(located([...path, index]));
+          if (present(item)) items.push({ document: 'portfolio', path: [...path, at[index]!] });
         });
       } else if (present(value)) {
-        items.push(located(path));
+        items.push({ document: 'portfolio', path });
       }
       return;
     }
     const part = parts[depth]!;
     if (Array.isArray(value)) {
-      if (part === '*') value.forEach((item, index) => walk(item, depth + 1, [...path, index]));
-      else if (/^(?:0|[1-9]\d*)$/.test(part))
-        walk(value[Number(part)], depth + 1, [...path, Number(part)]);
+      const at = positions(value, document, path);
+      const list: readonly unknown[] = Array.isArray(document) ? document : [];
+      const into = (index: number) =>
+        walk(value[index], list[at[index]!], depth + 1, [...path, at[index]!]);
+      if (part === '*') value.forEach((_, index) => into(index));
+      else if (/^(?:0|[1-9]\d*)$/.test(part) && Number(part) < value.length) into(Number(part));
       return;
     }
     if (isPlainObject(value) && Object.hasOwn(value, part)) {
-      walk(value[part], depth + 1, [...path, part]);
+      const next = isPlainObject(document) ? document[part] : undefined;
+      walk(value[part], next, depth + 1, [...path, part]);
     }
   };
-  walk(portfolio, 0, []);
+  walk(portfolio, authored, 0, []);
   return items;
+}
+
+/**
+ * Where each item of a published list sits in the document's list. The view
+ * keeps the document's order and only leaves items out, so each is matched,
+ * in order, to the next public document item with its id, its asset, or its
+ * value, and an item with none of them to the next public item. A private
+ * record is never in the view (isPublic, the rule it uses), so one that
+ * repeats a public record's id can't take its place.
+ */
+function documentPositions(view: readonly unknown[], document: unknown): number[] {
+  const list: readonly unknown[] = Array.isArray(document) ? document : [];
+  const key = (item: unknown): string | undefined => {
+    if (typeof item === 'string' || typeof item === 'number') return `value:${item}`;
+    if (!isPlainObject(item)) return undefined;
+    if (typeof item.id === 'string') return `id:${item.id}`;
+    return typeof item.asset === 'string' ? `asset:${item.asset}` : undefined;
+  };
+  const shown = (candidate: unknown, index: number, next: number) =>
+    index >= next &&
+    (!isPlainObject(candidate) || isPublic(candidate as { readonly visibility?: string }));
+  const positions: number[] = [];
+  let next = 0;
+  for (const item of view) {
+    const wanted = key(item);
+    const following = list.findIndex((candidate, index) => shown(candidate, index, next));
+    let at = following === -1 ? next : following;
+    if (wanted !== undefined) {
+      const found = list.findIndex(
+        (candidate, index) => shown(candidate, index, next) && key(candidate) === wanted,
+      );
+      if (found !== -1) at = found;
+    }
+    positions.push(at);
+    next = at + 1;
+  }
+  return positions;
 }
 
 function present(value: unknown): boolean {

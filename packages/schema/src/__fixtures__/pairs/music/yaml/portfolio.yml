@@ -1,73 +1,113 @@
 # Music: a composer and bassist with records, shows, and a quote from a review.
-schemaVersion: 2
+# The newest record is the signature and the first one archived; shows are
+# chronology events, a radio session is a recording, and the review is press.
+schemaVersion: 3
 locale: pt-BR
 direction: ltr
-
 identity:
   name: Joana Ribeiro
   tagline: Compositora e baixista
   location: Recife, Brasil
-
 links:
   - platform: bandcamp
     url: https://joana.bandcamp.test
     label: Bandcamp
-
+signature: mare-alta
+proof: [radio-session, som-review]
+archive: [primeira-luz]
+works:
+  - id: mare-alta
+    title: Maré Alta
+    medium: music
+    role: Composer, bass
+    cover:
+      asset: mare-alta-cover
+    evidence: [som-review]
+    links:
+      - url: https://joana.bandcamp.test/album/mare-alta
+        label: Listen
+    artist: Joana Ribeiro Quarteto
+    releasedAt: 2024-11
+    label: Selo Capibaribe
+    tracks:
+      - title: Abertura
+        durationSeconds: 214
+      - title: Ponte Velha
+        durationSeconds: 388
+        url: https://joana.bandcamp.test/track/ponte-velha
+  - id: primeira-luz
+    title: Primeira Luz
+    medium: music
+    releasedAt: '2020'
+evidence:
+  - id: radio-session
+    type: recording
+    title: Sessão ao vivo, Rádio Frei Caneca
+    statement: Four tracks from Maré Alta, recorded live in one take.
+    url: https://radio.test/sessions/joana-ribeiro
+    publishedAt: 2025-03
+  - id: som-review
+    type: press
+    title: Maré Alta
+    publication: Revista Som
+    excerpt: The most patient bass player in Brazil, and the least predictable.
+    url: https://som.test/reviews/mare-alta
+chronology:
+  - id: mare-alta-release-show
+    kind: event
+    title: Maré Alta release show
+    organization: Teatro de Santa Isabel
+    location: Recife
+    period: { start: 2024-12-06 }
+    thread: creative
+    works: [mare-alta]
+  - id: strings-commission
+    kind: project
+    title: Writing for strings
+    period: { start: 2026-03 }
+    thread: creative
+media:
+  - id: mare-alta-cover
+    kind: image
+    source: images/mare-alta.jpg
+    alt: A boat on a high tide at night
+contact:
+  links:
+    - platform: email
+      url: mailto:joana@ribeiro.test
+      label: joana@ribeiro.test
 sections:
   - kind: hero
     id: top
     tagline: Frevo, jazz, and the space between them.
-
-  - kind: discography
+  - kind: works
     id: records
     title: Discos
-    items:
-      - title: Maré Alta
-        artist: Joana Ribeiro Quarteto
-        role: Composer, bass
-        releasedAt: 2024-11
-        label: Selo Capibaribe
-        cover:
-          src: /images/mare-alta.jpg
-          alt: A boat on a high tide at night
-        tracks:
-          - { title: Abertura, durationSeconds: 214 }
-          - { title: Ponte Velha, durationSeconds: 388, url: https://joana.bandcamp.test/track/ponte-velha }
-        links:
-          - url: https://joana.bandcamp.test/album/mare-alta
-            label: Listen
-      - title: Primeira Luz
-        releasedAt: '2020'
-
-  - kind: talks
+    items: [mare-alta, primeira-luz]
+  - kind: chronology
     id: shows
     title: Shows
-    items:
-      - title: Maré Alta release show
-        venue: Teatro de Santa Isabel
-        location: Recife
-        presentedAt: 2024-12-06
-        type: session
-
+    items: [mare-alta-release-show]
+  - kind: evidence
+    id: sessions
+    title: Sessões
+    items: [radio-session]
   - kind: quote
     id: review
     text: The most patient bass player in Brazil, and the least predictable.
     attribution: Revista Som
     sourceUrl: https://som.test/reviews/mare-alta
-
   - kind: now
     id: now
     title: Agora
     asOf: 2026-09
     body: Writing for strings for the first time, and teaching on Saturdays.
-
   - kind: fun-facts
     id: facts
     title: Fun facts
     items:
       - My first bass had three strings for a year.
       - I tune by ear, badly, and then by app.
-
   - kind: contact
     id: contact
     title: Contato

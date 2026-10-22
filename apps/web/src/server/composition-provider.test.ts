@@ -41,7 +41,7 @@ test('the owner branch binds the password provider, and only a session in the da
   mkdirSync(dataDir, { mode: 0o700 });
   writeFileSync(
     path.join(sourceDir, 'portfolio.yml'),
-    'schemaVersion: 2\nlocale: en\ndirection: ltr\nidentity:\n  name: Rowan Test\nsections:\n  - kind: lede\n    id: about\n    body: Hi.\n',
+    'schemaVersion: 3\nlocale: en\ndirection: ltr\nidentity:\n  name: Rowan Test\nsections:\n  - kind: lede\n    id: about\n    body: Hi.\n',
   );
   copyFileSync(EXAMPLES.site, path.join(sourceDir, 'site.yml'));
   const read = readDeploymentConfig(

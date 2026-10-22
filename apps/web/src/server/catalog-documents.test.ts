@@ -39,7 +39,7 @@ const EXAMPLES = {
   site: fileURLToPath(new URL(`${ROOT}site.example.yml`, import.meta.url)),
 };
 /** The lines every version 2 portfolio starts with, before identity. */
-const HEAD = 'schemaVersion: 2\nlocale: en\ndirection: ltr\n';
+const HEAD = 'schemaVersion: 3\nlocale: en\ndirection: ltr\n';
 const PORTFOLIO = `${HEAD}identity:\n  name: Rowan Test\nsections:\n  - kind: lede\n    id: about\n    body: Hi.\n`;
 const SITE = readFileSync(EXAMPLES.site, 'utf8');
 
@@ -388,6 +388,117 @@ test('a valid pair becomes one frozen revision, named by a hash over both docume
   const changed = open(other, 'production');
   assert.ok(changed.ok);
   assert.notEqual((await changed.reader.getLive()).revisionId, live.revisionId);
+});
+
+/** snapshots/github.json for a github section, with every field the snapshot schema requires. */
+const GITHUB_SNAPSHOT = JSON.stringify({
+  records: [
+    {
+      adapter: 'github',
+      sectionId: 'on-github',
+      fetchedAt: '2026-10-02T08:00:00Z',
+      data: {
+        username: 'rowan-test',
+        profileUrl: 'https://github.com/rowan-test',
+        source: 'rest',
+        totalRepos: 3,
+        totalStarsReceived: 4,
+        starsGiven: null,
+        contributionsLastYear: null,
+        pinnedRepos: [],
+        recentlyActive: [],
+        contributionCalendar: [],
+        languageBreakdown: [],
+      },
+    },
+  ],
+});
+
+/** A source directory holding the pair and `snapshots/<name>` with `text`. */
+function withSnapshot(t: { after: (fn: () => void) => void }, name: string, text: string) {
+  const dir = tempDir(t, pair());
+  mkdirSync(path.join(dir, 'snapshots'));
+  writeFileSync(path.join(dir, 'snapshots', name), text);
+  return dir;
+}
+
+test('the snapshots beside the pair reach the revision, frozen (#10)', async (t) => {
+  const result = open(withSnapshot(t, 'github.json', GITHUB_SNAPSHOT), 'production');
+  assert.ok(result.ok, JSON.stringify(result.issues));
+  assert.deepEqual(result.issues, []);
+  const live = await result.reader.getLive();
+  assert.deepEqual(Object.keys(live.unit.snapshots), ['github']);
+  assert.ok(Object.isFrozen(live.unit.snapshots));
+  assert.equal(live.unit.media, undefined);
+  // Without a snapshots directory, the unit has none.
+  const bare = open(tempDir(t, pair()), 'production');
+  assert.ok(bare.ok);
+  assert.deepEqual((await bare.reader.getLive()).unit.snapshots, {});
+});
+
+test('a snapshot that does not read stops startup, naming its file and never quoting it (#10)', (t) => {
+  for (const [text, code] of [
+    ['{ "records": [canary-snapshot', 'snapshot.syntax'],
+    ['{ "records": "canary-snapshot" }', 'snapshot.invalid'],
+  ] as const) {
+    for (const mode of ['production', 'development'] as const) {
+      const issues = fatal(open(withSnapshot(t, 'github.json', text), mode));
+      assert.deepEqual(
+        issues.map((issue) => [issue.key, issue.code, issue.file, issue.document]),
+        [['PORTFOLIO_SOURCE_DIR', code, 'snapshots/github.json', 'snapshots']],
+        `${code} ${mode}`,
+      );
+      assert.ok(!JSON.stringify(issues).includes('canary'), code);
+    }
+  }
+});
+
+test('a media document that does not read stops startup, naming its file and never quoting it (#10)', (t) => {
+  for (const [text, code] of [
+    ['{ "assets": [canary-media', 'media.syntax'],
+    ['{ "assets": "canary-media" }', 'media.invalid'],
+  ] as const) {
+    for (const mode of ['production', 'development'] as const) {
+      const dir = tempDir(t, pair());
+      mkdirSync(path.join(dir, 'media'));
+      writeFileSync(path.join(dir, 'media', 'media.json'), text);
+      const issues = fatal(open(dir, mode));
+      assert.deepEqual(
+        issues.map((issue) => [issue.key, issue.code, issue.file, issue.document]),
+        [['PORTFOLIO_SOURCE_DIR', code, 'media/media.json', 'media']],
+        `${code} ${mode}`,
+      );
+      assert.ok(!JSON.stringify(issues).includes('canary'), code);
+    }
+  }
+});
+
+test('a file in snapshots/ that is no snapshot only warns, and the pair serves (#10)', async (t) => {
+  const result = open(withSnapshot(t, 'notes.txt', 'canary-notes'), 'production');
+  assert.ok(result.ok, JSON.stringify(result.issues));
+  assert.deepEqual(
+    result.issues.map((issue) => [issue.severity, issue.code, issue.file]),
+    [['warning', 'snapshot.ignored', 'snapshots/notes.txt']],
+  );
+  assert.deepEqual((await result.reader.getLive()).unit.snapshots, {});
+});
+
+test('under next dev an edit to a snapshot re-validates, as an edit to a document does (#10)', async (t) => {
+  const dir = withSnapshot(t, 'github.json', GITHUB_SNAPSHOT);
+  const file = path.join(dir, 'snapshots', 'github.json');
+  rewrite(file, GITHUB_SNAPSHOT, 1_000);
+  const reported: ConfigIssue[] = [];
+  const result = open(dir, 'development', { report: (issue) => reported.push(issue) });
+  assert.ok(result.ok);
+  const first = await result.reader.getLive();
+  rewrite(file, '{ "records": [', 2_000);
+  await assert.rejects(result.reader.getLive());
+  assert.deepEqual(
+    reported.map((issue) => [issue.code, issue.file]),
+    [['snapshot.syntax', 'snapshots/github.json']],
+  );
+  rewrite(file, GITHUB_SNAPSHOT, 3_000);
+  assert.deepEqual((await result.reader.getLive()).unit.snapshots, first.unit.snapshots);
 });
 
 test('production reads the pair once and never again', async (t) => {

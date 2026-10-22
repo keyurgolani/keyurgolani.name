@@ -4,10 +4,19 @@ import type { Portfolio, Site } from '@portfolio/schema';
 // server/catalog.ts; this module only exists so config-store.ts can name the
 // port without importing catalog.ts back.
 
-/** The documents a revision publishes: the portfolio's content and the site's presentation. */
+/**
+ * What a revision publishes: the portfolio's content and the site's
+ * presentation, and beside them the unit's derived data (#10): its snapshots
+ * by kind, such as github, and its media document once slice 2 derives one.
+ * Both are plain JSON, which resolvePortfolioView() checks itself.
+ */
 export interface PublicationUnit {
   readonly portfolio: Portfolio;
   readonly site: Site;
+  /** The unit's media document, media/media.json, when it has one. */
+  readonly media?: unknown;
+  /** Its snapshots by kind, from snapshots/<kind>.json: empty when it has none. */
+  readonly snapshots: Readonly<Record<string, unknown>>;
 }
 
 /** The revision the public site renders. */

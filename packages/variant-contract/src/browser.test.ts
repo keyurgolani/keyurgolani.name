@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { runInNewContext } from 'node:vm';
 import { build } from 'esbuild';
 import ts from 'typescript';
-import { toPublicView, validatePublicationUnit } from '@portfolio/schema';
+import { resolvePortfolioView, validatePublicationUnit } from '@portfolio/schema';
 import { compatibilityFor } from './compatibility';
 import { buildRenderInput } from './render-input';
 import { validateManifest } from './validate-manifest';
@@ -166,7 +166,7 @@ test('bundled and run with browser globals alone, it builds the same input as in
   const checked = validateManifest(raw, { packageName: '@acme/ocean' });
   assert.ok(checked.ok);
   const args = {
-    view: toPublicView(pair),
+    view: resolvePortfolioView(pair, {}, { mediaBase: '/media' }),
     manifest: checked.manifest,
     route: { route: 'home' } as const,
     basePath: '/sample',

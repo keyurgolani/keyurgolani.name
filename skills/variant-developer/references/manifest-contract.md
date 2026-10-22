@@ -36,7 +36,7 @@ The fallback composition's, `packages/fallback-composition/manifest.json`, which
   "promise": "Every section in content order, in one readable column.",
   "description": "The host's stand-in. ...",
   "contract": "2.0",
-  "schemas": { "portfolio": { "min": 2, "max": 2 }, "site": { "min": 2, "max": 2 } },
+  "schemas": { "portfolio": { "min": 3, "max": 3 }, "site": { "min": 2, "max": 2 } },
   "tokenContract": 1,
   "compositionFamily": "document",
   "motionIntent": "still",
@@ -67,7 +67,7 @@ Text fields are plain text on one line: no `<` or `>`, no control characters, no
 ## Versions
 
 - **`contract`** (required): `"2.0"`. A host reads its own major and any minor up to its own; a newer minor or another major is refused, with the upgrade or pin that fixes it.
-- **`schemas`** (required): `{ "portfolio": { "min", "max" }, "site": { "min", "max" } }`, the document versions the variant reads. Each range must include the host's, version 2.
+- **`schemas`** (required): `{ "portfolio": { "min", "max" }, "site": { "min", "max" } }`, the document versions the variant reads. Each range must include the host's: portfolio version 3 and site version 2.
 - **`tokenContract`** (required): the appearance token contract the variant reads: `1`, the one `@portfolio/appearance` defines (#19). It must equal the host's.
 
 ## Character
@@ -90,12 +90,12 @@ A kind in neither list renders through the kit's shared renderer, so the visitor
 **`contentSlots`** (required, up to 32): the places the composition needs content, so Studio can say what's missing.
 
 - `id`, `label`: the slot's name and its plain-text label.
-- `select`: what fills it. `{ "kind": "projects" }`, `{ "control": "featured" }`, or `{ "field": "/identity/avatar" }`, a JSON pointer into the portfolio where `*` matches any array index.
+- `select`: what fills it. `{ "kind": "works" }`, `{ "control": "featured" }`, or `{ "field": "/works/*/cover" }`, a JSON pointer into the published view's portfolio where `*` matches any array index.
 - `level`: `required`, `recommended`, or `optional`.
 - `min`, `max`: how many items.
 - `whenEmpty`: `{ "mode": "omit" | "keep", "note": "..." }`, what the composition does without it.
 
-The compatibility report counts each slot: the visible sections of its kind, the visible sections its control points at, or the values its field holds, an array counting each item. A required slot below `min` blocks publishing (`slot.required-empty`), an empty recommended one warns (`slot.recommended-empty`), and more than `max` warns, with the extras rendering after the slot (`slot.overflow`). An empty optional slot shows in the report alone. The note goes to the owner word for word, so write it for them.
+The compatibility report counts each slot: the visible sections of its kind, the visible sections or records its control points at, or the values its field holds, an array counting each item. A required slot below `min` blocks publishing (`slot.required-empty`), an empty recommended one warns (`slot.recommended-empty`), and more than `max` warns, with the extras rendering after the slot (`slot.overflow`). An empty optional slot shows in the report alone. The note goes to the owner word for word, so write it for them.
 
 ## Routes
 
@@ -114,8 +114,8 @@ Each item has a camelCase `id`, a `label`, a `description`, and a `default`, by 
 - `boolean`.
 - `enum`: 2 to 24 `options`, each `{ "value", "label" }`.
 - `integer`: `min`, `max`, `step`.
-- `contentRef`: a section id, optionally limited to `kinds`. Default `null`.
-- `contentRefList`: up to `max` section ids, at least `min`. Default `[]`.
+- `contentRef`: the id of a visible section, or of a visible record, a work, evidence, or chronology entry, which counts as the kind of section that lists it. Optionally limited to `kinds`. Default `null`.
+- `contentRefList`: up to `max` such ids, at least `min`. Default `[]`.
 
 **Controls change composition only**: layout, order, emphasis, interaction. A control that reads as choosing a palette, a color, type, a material, a shape, a display mode, or motion timing is refused (`manifest.controls-appearance`); #19 owns those.
 

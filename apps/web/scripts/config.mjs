@@ -1,14 +1,17 @@
 #!/usr/bin/env node
 /**
- * config.mjs: commands for the portfolio's documents (#4, items 19 and 22).
- * Run it through `pnpm config:validate` or `pnpm config:migrate`, which build
- * the variant registry first and run this file with tsx.
+ * config.mjs: commands for the portfolio's documents (#4, items 19 and 22;
+ * #10, items 3 and 6). Run it through `pnpm config:validate`,
+ * `pnpm config:migrate`, or `pnpm config:ids-fix`; the first two build the
+ * variant registry first, and each runs this file with tsx.
  *
  *   pnpm config:validate [dir] [--origin <url>] [--json]
  *
  * validate reads the pair in a directory, portfolio.{yml,yaml,json} and
- * site.{yml,yaml,json}, the way startup does, and prints every record it
- * finds: where, its code and severity, what's wrong, and how to fix it.
+ * site.{yml,yaml,json}, and once it loads, the snapshots/ and media/media.json
+ * beside it, the way startup does, and prints every record it finds: where,
+ * its code and severity, what's wrong, and how to fix it. The checks that
+ * compare a draft with the live revision run at publish and import, not here.
  *
  *   dir             The directory that holds the pair. Defaults to the
  *                   repository's config directory, which `pnpm dev` reads.
@@ -20,14 +23,21 @@
  * Exit status: 0 when nothing blocks the pair (warnings may remain); 1 when
  * something does, the directory can't be read, or an argument is wrong.
  *
- *   pnpm config:migrate <old-file> [--set <portfolio|site>.<path>=<value>]...
+ *   pnpm config:migrate <file> [--set <portfolio|site>.<path>=<value>]...
  *     [--drop-unknown] [--origin <url>] [--summary] [--write --out <dir>]
  *
- * migrate reads a file in the old one-file format and prints what this
- * release's portfolio and site documents would be: each field it moves, the
- * values it needs with the ids this build accepts, the section ids it gives,
- * the comments it can't keep, the new pair's diagnostics, a diff of the
- * portfolio document, and the whole site document. It writes nothing without
+ * migrate reads a file in the old one-file format, or a schemaVersion 2
+ * portfolio document, and prints what this release's documents would be: the
+ * schemaVersion 3 portfolio document, and for the old format the site
+ * document too. It lists each field it moves, the values it needs with the
+ * ids this build accepts, the section ids it gives, the record and media ids
+ * it mints, what to look at, the comments it can't keep, the new pair's
+ * diagnostics, a diff of the portfolio document, and the whole site document.
+ * For a version 2 portfolio, the site.yml beside it, if there is one, tells
+ * which sections it hides, and the new pair is checked with it. It doesn't
+ * change, unless it names a list section that lists nothing, which goes: then
+ * the migration writes it too, without that entry. A file already at this
+ * release's version is current, and nothing changes. It writes nothing without
  * --write, never over a file that exists, and never to the old file. While
  * the old file holds secret-shaped text, it shows where, and no value, diff,
  * or document.
@@ -42,8 +52,9 @@
  *                         checked; the old meta.url is never used for them.
  *   --summary             Leave every value the documents hold out of the
  *                         report, so it can go to a log.
- *   --write               Write portfolio.yml and site.yml (portfolio.json
- *                         and site.json for a JSON file) into --out.
+ *   --write               Write portfolio.yml, and for the old format
+ *                         site.yml (portfolio.json and site.json for a JSON
+ *                         file), into --out.
  *   --out <dir>           Where --write puts them. Made when it's missing.
  *
  * Exit status: 0 when the file is already current, or nothing stops the
@@ -53,6 +64,23 @@
  * it can't read or migrate, a document already at --out, or an --out it
  * can't write into.
  *
+ *   pnpm config:ids-fix [dir | portfolio-file] [--write]
+ *
+ * ids-fix gives every section, record, and media asset of a schemaVersion 3
+ * portfolio document that has no id, a malformed one, or a repeat of an
+ * earlier one an id of its own, minted from its title. It edits the text in
+ * place, so a YAML document keeps its comments and both formats their key
+ * order; a malformed id's references follow it. Without --write it prints
+ * the ids it would give and changes nothing.
+ *
+ *   dir             The directory that holds portfolio.yml, .yaml, or .json,
+ *                   or the portfolio document itself. Defaults to the
+ *                   repository's config directory.
+ *   --write         Write the ids into the document.
+ *
+ * Exit status: 0 when every entry has an id, or the ids were written (or
+ * would be, without --write); 1 for anything else.
+ *
  * Relative paths are taken from the directory pnpm ran in (INIT_CWD).
  */
 import { randomBytes } from 'node:crypto';
@@ -60,9 +88,15 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
-import { detectFormat, DOCUMENT_MAX_BYTES, parseSource, redactSecrets } from '@portfolio/schema';
+import {
+  detectFormat,
+  DOCUMENT_MAX_BYTES,
+  fixIds,
+  parseSource,
+  redactSecrets,
+} from '@portfolio/schema';
 import { formatMigration, migrate, parseSet } from '@portfolio/schema/migrate';
-import { formatRecords, loadPair, pairFileNames } from '@portfolio/schema/node';
+import { formatRecords, loadPair, pairFileNames, readUnitFiles } from '@portfolio/schema/node';
 
 /**
  * What this build registers (#5): the interim appearance catalog, the content
@@ -78,9 +112,10 @@ async function hostCatalog() {
 
 const VALIDATE_USAGE = 'Usage: pnpm config:validate [dir] [--origin <url>] [--json]';
 const MIGRATE_USAGE = [
-  'Usage: pnpm config:migrate <old-file> [--set <portfolio|site>.<path>=<value>]...',
+  'Usage: pnpm config:migrate <file> [--set <portfolio|site>.<path>=<value>]...',
   '         [--drop-unknown] [--origin <url>] [--summary] [--write --out <dir>]',
 ].join('\n');
+const IDS_FIX_USAGE = 'Usage: pnpm config:ids-fix [dir | portfolio-file] [--write]';
 
 /** Where `pnpm dev` reads the pair: the repository's config directory. */
 const CONFIG_DIR = fileURLToPath(new URL('../../../config', import.meta.url));
@@ -207,12 +242,14 @@ async function migrateCommand(args) {
     return 1;
   }
 
+  const site = siteBeside(file);
   const migration = migrate(
     { text, format },
     {
       set,
       dropUnknown: values['drop-unknown'],
       ...(origin ? { origin } : {}),
+      ...(site ? { site } : {}),
       ...(await hostCatalog()),
     },
   );
@@ -235,9 +272,11 @@ async function migrateCommand(args) {
   };
   const out = path.resolve(base, values.out);
   const extension = format === 'json' ? 'json' : 'yml';
+  // A version 2 portfolio's site document keeps its own format.
+  const siteExtension = (migration.siteFormat ?? format) === 'json' ? 'json' : 'yml';
   const targets = [
     [path.join(out, `portfolio.${extension}`), migration.portfolio.text],
-    [path.join(out, `site.${extension}`), migration.site.text],
+    ...(migration.site ? [[path.join(out, `site.${siteExtension}`), migration.site.text]] : []),
   ];
   try {
     for (const [target] of targets) {
@@ -277,6 +316,138 @@ async function migrateCommand(args) {
   return 0;
 }
 
+/**
+ * The site document beside a portfolio document, which tells a version 2
+ * portfolio's migration the sections it hides, or undefined when there's
+ * none, or more than one, or it can't be read.
+ */
+function siteBeside(file) {
+  const dir = path.dirname(file);
+  const found = ['site.yml', 'site.yaml', 'site.json']
+    .map((name) => path.join(dir, name))
+    .filter((candidate) => candidate !== file && fs.existsSync(candidate));
+  if (found.length !== 1) return undefined;
+  try {
+    return { text: readBounded(found[0], DOCUMENT_MAX_BYTES + 4), format: detectFormat(found[0]) };
+  } catch {
+    return undefined;
+  }
+}
+
+/** The portfolio document in a directory: exactly one portfolio.{yml,yaml,json}. */
+function portfolioIn(dir, shown) {
+  const found = ['portfolio.yml', 'portfolio.yaml', 'portfolio.json'].filter((name) =>
+    fs.existsSync(path.join(dir, name)),
+  );
+  if (found.length === 0) throw new UsageError(`${shown} holds no portfolio.yml, .yaml, or .json.`);
+  if (found.length > 1) {
+    throw new UsageError(`${shown} holds ${found.join(' and ')}. Keep one portfolio document.`);
+  }
+  return path.join(dir, found[0]);
+}
+
+async function idsFixCommand(args) {
+  const { values, positionals } = parseArgs({
+    args,
+    allowPositionals: true,
+    options: {
+      write: { type: 'boolean', default: false },
+      help: { type: 'boolean', short: 'h', default: false },
+    },
+  });
+  if (values.help) {
+    process.stdout.write(`${IDS_FIX_USAGE}\n`);
+    return 0;
+  }
+  if (positionals.length > 1) throw new UsageError('Give one directory or portfolio document.');
+  const base = process.env.INIT_CWD || process.cwd();
+  const target = positionals[0] === undefined ? CONFIG_DIR : path.resolve(base, positionals[0]);
+  let file = target;
+  try {
+    if (fs.statSync(target).isDirectory()) file = portfolioIn(target, shownPath(base, target));
+  } catch (error) {
+    if (error instanceof UsageError) throw error;
+    process.stderr.write(`${shownPath(base, target)} doesn't exist or can't be read.\n`);
+    return 1;
+  }
+  const shown = shownPath(base, file);
+  let format;
+  try {
+    format = detectFormat(file);
+  } catch (error) {
+    throw new UsageError(`${shown}: ${error.message}`);
+  }
+  if (isSymlink(file)) {
+    process.stderr.write(`${shown} is a symbolic link. Run this on the file it points at.\n`);
+    return 1;
+  }
+  let text;
+  try {
+    text = readBounded(file, DOCUMENT_MAX_BYTES + 4);
+  } catch (error) {
+    process.stderr.write(`Can't read ${shown} (${error.code ?? 'error'}).\n`);
+    return 1;
+  }
+  const result = fixIds({ text, format });
+  if (!result.ok) {
+    const reasons = result.reasons.map((reason) => `  ${reason}\n`).join('');
+    process.stderr.write(redactSecrets(`${shown} can't be fixed.\n${reasons}`));
+    return 1;
+  }
+  if (result.fixes.length === 0) {
+    process.stdout.write(
+      `${shown} has an id on every section, record, and media asset. Nothing to fix.\n`,
+    );
+    return 0;
+  }
+  const why = {
+    missing: 'it had none',
+    invalid: "its id wasn't well formed",
+    repeated: 'an earlier entry has its id',
+  };
+  const lines = result.fixes.flatMap(({ pointer, id, reason, references }) => [
+    `  ${pointer} gets ${id}: ${why[reason]}.`,
+    ...references.map((reference) => `    ${reference} names it too, and changes with it.`),
+  ]);
+  process.stdout.write(redactSecrets(`${shown}:\n${lines.join('\n')}\n`));
+  if (!values.write) {
+    process.stdout.write(
+      `\nNothing was written. Run pnpm config:ids-fix with --write to write ${count(result.fixes.length, 'id')} into ${shown}.\n`,
+    );
+    return 0;
+  }
+  try {
+    replaceFile(file, result.text);
+  } catch (error) {
+    process.stderr.write(`Can't write ${shown} (${error.code ?? 'error'}). Nothing was written.\n`);
+    return 1;
+  }
+  process.stdout.write(`\nWrote ${count(result.fixes.length, 'id')} into ${shown}.\n`);
+  return 0;
+}
+
+/** Replaces `file` with `text` all at once: a temp file beside it, synced, then renamed over it, keeping its mode. */
+function replaceFile(file, text) {
+  const { mode } = fs.statSync(file);
+  const temp = path.join(
+    path.dirname(file),
+    `.${path.basename(file)}.${process.pid}.${randomBytes(6).toString('hex')}.tmp`,
+  );
+  const fd = fs.openSync(temp, 'wx', mode & 0o777);
+  try {
+    fs.writeFileSync(fd, text);
+    fs.fsyncSync(fd);
+  } finally {
+    fs.closeSync(fd);
+  }
+  try {
+    fs.renameSync(temp, file);
+  } catch (error) {
+    fs.rmSync(temp, { force: true });
+    throw error;
+  }
+}
+
 function isSymlink(file) {
   try {
     return fs.lstatSync(file).isSymbolicLink();
@@ -307,10 +478,13 @@ async function validateCommand(args) {
 
   const base = process.env.INIT_CWD || process.cwd();
   const dir = positionals[0] === undefined ? CONFIG_DIR : path.resolve(base, positionals[0]);
-  const loaded = loadPair(dir, {
-    ...(await hostCatalog()),
-    ...(origin ? { canonicalOrigin: origin } : {}),
-  });
+  const loaded = withUnitFiles(
+    loadPair(dir, {
+      ...(await hostCatalog()),
+      ...(origin ? { canonicalOrigin: origin } : {}),
+    }),
+    dir,
+  );
   const sample = await sampleIdentity(loaded);
   const result = sample ? { ...loaded, diagnostics: [...loaded.diagnostics, sample] } : loaded;
   const report = values.json
@@ -319,6 +493,25 @@ async function validateCommand(args) {
   // Records never quote a value, and this keeps it that way for the terminal.
   process.stdout.write(redactSecrets(report));
   return result.ok ? 0 : 1;
+}
+
+/**
+ * The snapshots and the media document beside the pair, read the way startup
+ * reads them once the pair loads: a blocking record in either stops it too.
+ */
+function withUnitFiles(loaded, dir) {
+  if (!loaded.ok) return loaded;
+  const found = readUnitFiles(dir).diagnostics;
+  if (found.length === 0) return loaded;
+  const diagnostics = [...loaded.diagnostics, ...found];
+  if (found.every(({ severity }) => severity === 'warning')) return { ...loaded, diagnostics };
+  const { portfolio, site } = loaded.sources;
+  return {
+    ok: false,
+    diagnostics,
+    notChecked: loaded.notChecked,
+    files: { portfolio: portfolio.path, site: site.path },
+  };
 }
 
 /**
@@ -397,6 +590,7 @@ function shownPath(base, file) {
 const COMMANDS = {
   validate: { run: validateCommand, usage: VALIDATE_USAGE },
   migrate: { run: migrateCommand, usage: MIGRATE_USAGE },
+  'ids-fix': { run: idsFixCommand, usage: IDS_FIX_USAGE },
 };
 
 async function main(argv) {
@@ -406,13 +600,15 @@ async function main(argv) {
   try {
     if (!entry) {
       throw new UsageError(
-        command ? `There's no ${command} command.` : 'Name a command: validate or migrate.',
+        command
+          ? `There's no ${command} command.`
+          : 'Name a command: validate, migrate, or ids-fix.',
       );
     }
     return await entry.run(args);
   } catch (error) {
     if (error instanceof UsageError || error?.code?.startsWith?.('ERR_PARSE_ARGS')) {
-      const usage = entry ? entry.usage : `${VALIDATE_USAGE}\n${MIGRATE_USAGE}`;
+      const usage = entry ? entry.usage : `${VALIDATE_USAGE}\n${MIGRATE_USAGE}\n${IDS_FIX_USAGE}`;
       process.stderr.write(`${error.message}\n${usage}\n`);
       return 1;
     }

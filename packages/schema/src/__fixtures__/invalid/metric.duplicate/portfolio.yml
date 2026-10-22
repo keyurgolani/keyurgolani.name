@@ -1,5 +1,5 @@
 # metric.duplicate (a warning): one metric shown twice with the same value.
-schemaVersion: 2
+schemaVersion: 3
 locale: en
 direction: ltr
 identity:
@@ -7,6 +7,19 @@ identity:
 links:
   - url: https://rowan.name
     label: Site
+evidence:
+  - id: talks
+    type: metric
+    statement: Talks
+    metric:
+      key: talks-given
+      value: 12
+  - id: talks-2
+    type: metric
+    statement: Talks
+    metric:
+      key: talks-given
+      value: 12
 sections:
   - kind: lede
     id: about
@@ -15,11 +28,11 @@ sections:
   - kind: contact
     id: contact
     title: Contact
-  - kind: stats
+  - kind: evidence
     id: numbers
     items:
-      - { metric: talks-given, value: "12", label: Talks }
-  - kind: stats
+      - talks
+  - kind: evidence
     id: more-numbers
     items:
-      - { metric: talks-given, value: "12", label: Talks }
+      - talks-2

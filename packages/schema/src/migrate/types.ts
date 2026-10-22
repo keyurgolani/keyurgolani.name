@@ -3,6 +3,16 @@ import type { DocumentFormat } from '../source';
 import type { Diagnostic } from '../validate';
 import type { AssignedId } from './section-ids';
 
+/** An id the step minted: a record's or a media asset's. */
+export interface MintedId {
+  readonly id: string;
+  readonly owner: 'work' | 'evidence' | 'chronology' | 'media';
+  /** Where it is in the new portfolio. */
+  readonly pointer: string;
+  /** What it came from in the old one. */
+  readonly from: string;
+}
+
 /** Where a value went: a JSON pointer into the new portfolio or site document. */
 export interface Target {
   readonly document: 'portfolio' | 'site';
@@ -15,9 +25,10 @@ export interface Change {
    * `moved`: same value, new home. `mapped`: a new value for the old one.
    * `default`: filled where the old file had nothing. `removed`: gone,
    * with nowhere to go. `dropped`: a key the old schema dropped too.
-   * `set`: from `--set`.
+   * `set`: from `--set`. `warned`: carried over, with something to look at,
+   * such as an image with no alt text or a stat whose value isn't a number.
    */
-  readonly code: 'moved' | 'mapped' | 'default' | 'removed' | 'dropped' | 'set';
+  readonly code: 'moved' | 'mapped' | 'default' | 'removed' | 'dropped' | 'set' | 'warned';
   /** Pointer into the old file, and where that is in its text. */
   readonly from?: string;
   readonly line?: number;
@@ -72,15 +83,30 @@ export interface SecretSpot {
 export interface MigrationPlan {
   /** `ready`: nothing stops writing. `blocked`: see needs, unknown, and diagnostics. */
   readonly status: 'ready' | 'blocked';
+  /** 1 for the old one-file format, 2 for a version 2 portfolio document. */
   readonly from: number;
   readonly to: number;
   readonly format: DocumentFormat;
   readonly portfolio: { readonly data: unknown; readonly text: string };
-  readonly site: { readonly data: unknown; readonly text: string };
+  /**
+   * The new site document. For the old one-file format, always. For a
+   * version 2 portfolio document, only when the migration edits the site
+   * document given with it, to remove the entries of the sections that go;
+   * every other byte stays.
+   */
+  readonly site?: { readonly data: unknown; readonly text: string };
+  /**
+   * For a version 2 portfolio document given with its site document, that
+   * document's format, which `site` keeps. Otherwise the site's is `format`.
+   */
+  readonly siteFormat?: DocumentFormat;
   /** The old file's text, for the diff. */
   readonly source: string;
   readonly changes: readonly Change[];
+  /** The section ids the old one-file format got. Empty for a version 2 document, whose ids stay. */
   readonly ids: readonly AssignedId[];
+  /** The record and media ids the 2-to-3 step minted, once, in document order. */
+  readonly minted: readonly MintedId[];
   readonly needs: readonly Need[];
   readonly unknown: readonly UnknownKey[];
   /** Whether `unknown` keys are dropped from the new documents, as with `--drop-unknown`. */
@@ -105,11 +131,12 @@ export interface MigrationPlan {
 }
 
 export type Migration =
-  /** The file is already a schemaVersion 2 document. */
+  /** The file is already at this release's version: a version 3 portfolio, or a version 2 site document. */
   | { readonly status: 'current'; readonly document: 'portfolio' | 'site' }
   /**
-   * The file can't be migrated: it doesn't parse, or it isn't the old format.
-   * `summary` has the reasons without any value from the file, for a log.
+   * The file can't be migrated: it doesn't parse, or it isn't the old format
+   * or a version a step reads. `summary` has the reasons without any value
+   * from the file, for a log.
    */
   | {
       readonly status: 'failed';
@@ -117,3 +144,59 @@ export type Migration =
       readonly summary?: readonly string[];
     }
   | MigrationPlan;
+
+/** One stored document: its text and format, as #3 keeps it. */
+export interface StoredDocument {
+  readonly text: string;
+  readonly format: DocumentFormat;
+}
+
+/** A stored publication unit's documents (#3): the pair, and from slice 2 on, the media document. */
+export interface StoredUnit {
+  readonly portfolio: StoredDocument;
+  readonly site: StoredDocument;
+  /** #10's derived media catalog. Passed through as it is: no step changes it yet. */
+  readonly media?: StoredDocument;
+}
+
+/** What migrateDocuments() would make of a stored unit. */
+export interface UnitMigrationPlan {
+  /** `ready`: nothing stops writing. `blocked`: see needs and diagnostics. */
+  readonly status: 'ready' | 'blocked';
+  readonly from: { readonly portfolio: number; readonly site: number };
+  readonly to: { readonly portfolio: number; readonly site: number };
+  /**
+   * Every document in its own format. One no step changes comes back byte
+   * for byte. The site document changes only to lose the entries of the
+   * sections that go, by edits that keep every other byte.
+   */
+  readonly documents: {
+    readonly portfolio: StoredDocument;
+    readonly site: StoredDocument;
+    readonly media?: StoredDocument;
+  };
+  readonly changes: readonly Change[];
+  /**
+   * The record and media ids the 2-to-3 step minted, once, in document
+   * order, each with its owner, its new pointer, and what it came from. A
+   * stored unit's section ids are #4's and stay, so there's no AssignedId.
+   */
+  readonly ids: readonly MintedId[];
+  readonly needs: readonly Need[];
+  readonly diagnostics: readonly Diagnostic[];
+  readonly notChecked: readonly string[];
+  /** Portfolio source lines whose comments the new text doesn't keep. */
+  readonly comments: readonly number[];
+  readonly secrets: readonly SecretSpot[];
+}
+
+export type UnitMigration =
+  /** Both documents are at this release's versions. */
+  | { readonly status: 'current' }
+  /** Text that doesn't parse, or a version no step reads. `summary` carries no document value, for a log. */
+  | {
+      readonly status: 'failed';
+      readonly reasons: readonly string[];
+      readonly summary: readonly string[];
+    }
+  | UnitMigrationPlan;

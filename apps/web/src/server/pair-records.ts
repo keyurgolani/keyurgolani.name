@@ -19,7 +19,12 @@ export function recordIssue(
   key: string,
   names?: Partial<PairFiles>,
 ): ConfigIssue {
-  const file = names?.[record.document];
+  // A snapshot's or the media document's record names its own file (#10).
+  const file =
+    record.file ??
+    (record.document === 'portfolio' || record.document === 'site'
+      ? names?.[record.document]
+      : undefined);
   return {
     severity: record.severity === 'warning' ? 'warning' : 'fatal',
     key,
@@ -44,7 +49,22 @@ export function pairDigest(sources: { readonly [D in keyof PairFiles]: PairSourc
   return hash.digest('hex').slice(0, 12);
 }
 
-/** The pair as the unit a revision publishes, frozen to the last field. */
-export function frozenUnit(portfolio: Portfolio, site: Site): PublicationUnit {
-  return Object.freeze({ portfolio: deepFreeze(portfolio), site: deepFreeze(site) });
+/** The unit's derived data, as the snapshot and media readers hand it over (#10). */
+export interface UnitData {
+  readonly snapshots: Readonly<Record<string, unknown>>;
+  readonly media?: unknown;
+}
+
+/** The pair and its derived data as the unit a revision publishes, frozen to the last field. */
+export function frozenUnit(
+  portfolio: Portfolio,
+  site: Site,
+  data: UnitData = { snapshots: {} },
+): PublicationUnit {
+  return Object.freeze({
+    portfolio: deepFreeze(portfolio),
+    site: deepFreeze(site),
+    snapshots: deepFreeze({ ...data.snapshots }),
+    ...(data.media === undefined ? {} : { media: deepFreeze(data.media) }),
+  });
 }

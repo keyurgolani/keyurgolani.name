@@ -38,10 +38,10 @@ test(
     await expect
       .poll(() => warnings(app.log))
       .toEqual([
-        ['/identity/extensions/@acme~1portfolio-photography', 12],
-        ['/links/0/extensions/@acme~1portfolio-photography', 19],
-        ['/sections/1/items/0/extensions/@acme~1portfolio-photography', 36],
-        ['/sections/2', 39],
+        ['/identity/extensions/@acme~1portfolio-photography', 11],
+        ['/links/0/extensions/@acme~1portfolio-photography', 17],
+        ['/sections/2', 40],
+        ['/works/0/extensions/@acme~1portfolio-photography', 27],
       ]);
     expect(readFileSync(app.log, 'utf8')).not.toContain(MARKER);
   },

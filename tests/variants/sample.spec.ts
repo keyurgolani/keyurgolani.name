@@ -5,10 +5,8 @@ import { DEMO, FALLBACK_ID, projectTarget } from './target';
 // A registered composition on the bundled sample (#5, Slice 6), under demo
 // at /sample, in every mode: the sample site's own selection for the
 // fallback composition, which stands in for it until #13, and
-// ?variant=<id> for every other. The sample's photos live on picsum.photos,
-// which stays blocked.
-
-test.use({ blockedHosts: ['picsum.photos'] });
+// ?variant=<id> for every other. The sample's images have no rendition
+// until #10's second slice, so the page asks no host for one.
 
 for (const mode of MODES) {
   test.describe(() => {

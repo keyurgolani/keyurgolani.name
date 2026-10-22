@@ -52,6 +52,11 @@
   margin-block-start: 2rem;
 }
 
+/* The evidence a work or a custom item cites, a step closer than an evidence section's own. */
+:where([data-variant] [data-renderer='shared'] .pf-evidence:not(.pf-list) > li + li) {
+  margin-block-start: 1rem;
+}
+
 :where(
   [data-variant] [data-renderer='shared'] :is(.pf-tags, .pf-links, .pf-named-links, .pf-actions)
 ) {
@@ -64,6 +69,23 @@
   display: block;
   max-inline-size: 100%;
   block-size: auto;
+  /* The owner's focal point, from the one inline style a shared renderer sets, for any crop. */
+  object-position: calc(var(--focal-x, 0.5) * 100%) calc(var(--focal-y, 0.5) * 100%);
+}
+
+/* An image with no rendition yet keeps its place, with its label in the middle. */
+:where([data-variant] [data-renderer='shared'] .pf-media-box) {
+  display: grid;
+  place-items: center;
+  inline-size: 100%;
+  aspect-ratio: 3 / 2;
+  padding-inline: 1rem;
+}
+
+:where([data-variant] [data-renderer='shared'] .pf-media-box--small) {
+  display: inline-grid;
+  inline-size: auto;
+  aspect-ratio: auto;
 }
 
 :where([data-variant] [data-renderer='shared'] :is(.pf-logo, .pf-avatar)) {
@@ -76,21 +98,6 @@
   display: grid;
   gap: 1rem;
   grid-template-columns: repeat(auto-fill, minmax(min(16rem, 100%), 1fr));
-}
-
-:where([data-variant] [data-renderer='shared'] .pf-gallery[data-layout='plates']) {
-  grid-template-columns: 1fr;
-}
-
-:where([data-variant] [data-renderer='shared'] .pf-gallery[data-layout='columns']) {
-  display: block;
-  columns: 16rem;
-  column-gap: 1rem;
-}
-
-:where([data-variant] [data-renderer='shared'] .pf-gallery[data-layout='columns'] > li) {
-  break-inside: avoid;
-  margin-block-end: 1rem;
 }
 
 :where([data-variant] [data-renderer='shared'] figcaption) {
@@ -114,5 +121,21 @@
 }
 
 :where([data-variant] [data-renderer='shared'] .pf-facts dd) {
+  margin-inline: 0;
+}
+
+/* A GitHub section's figures: one row of pairs, each number beside its label. */
+:where([data-variant] [data-renderer='shared'] .pf-figures) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.5rem;
+}
+
+:where([data-variant] [data-renderer='shared'] .pf-figures > div) {
+  display: flex;
+  gap: 0.5rem;
+}
+
+:where([data-variant] [data-renderer='shared'] .pf-figures dd) {
   margin-inline: 0;
 }

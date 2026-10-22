@@ -134,7 +134,9 @@ For each cluster:
 
 Renderer reminders:
 
-- **Render defensively.** Every renderer handles `items: []`, optional fields left out, and blank strings. Return `null` rather than an empty shell.
+- **Render defensively.** Every renderer handles optional fields left out and blank strings. Return `null` rather than an empty shell. The view drops a section with nothing public, so a records section always has records.
+- **Read records through the kit.** A works, evidence, or chronology section lists record ids: `worksOf(section, input)`, `evidenceOf`, and `chronologyOf` give its visible records in order, and `recordAnchor` the id for each one's anchor. An image is a placement: `placedMedia(placement, ctx)` resolves it with its caption and details, and `MediaFigure` renders it, as its labeled box until it has a rendition.
+- **Write no words of your own.** Every heading, label, and alt text comes from the document, formatted, or is one of #10's fixed labels, which the kit's renderers already use: no `Projects` heading for an untitled section, no `View project` link, no alt text for a decorative image.
 - **Render from the input alone, synchronously.** No `async` component, no fetch, no storage, no environment, no code run from a string. Use `input.env.now` for the time and `seededRandom(input.env.seed)` for anything random-looking. `pnpm check:variants` refuses the rest.
 - **Markdown goes through `RichText`.** Never `dangerouslySetInnerHTML`.
 - **Slugify any synthesized SVG id** referenced by `url(#id)`, and start it with `input.ids.prefix`. (`references/common-bugs.md` §3)
@@ -143,11 +145,10 @@ Renderer reminders:
 The clusters:
 
 - **Identity**: `hero`, `lede`, `now`, `contact`, `cta`.
-- **Career**: `experience`, `education`, `tenure`, `focus`.
-- **Body of work**: `projects`, `writings`, `publications`, `talks`, `awards`, `episodes`, `patents`, `gallery`, `discography`.
-- **Voice**: `testimonials`, `press`, `quote`.
-- **Skills**: `skills`, `stack`, `services`, `fun-facts`, `stats`.
-- **External**: `external-portfolios`, `github`.
+- **Body of work**: `works`, a section of work records of any medium, and `evidence`, of evidence records of any type: metrics, testimonials, publications, talks, awards, press, and the rest. A work with a case study renders through `CaseStudy`.
+- **Chronology**: `chronology`, roles, studies, projects, events, and milestones, each in its thread.
+- **Practice**: `practice`, one part of the practice per section: the thesis, skills, tools, or services. `focus` and `fun-facts` stay short lists.
+- **Voice and the rest**: `quote`, `custom`, and `github`, which renders the section's snapshot from `input.derived`, never a fetch.
 
 ### Wave 3: Polish
 
@@ -182,7 +183,7 @@ The source audit's rules, each with its own code:
 | `audit.server-module`     | A Node built-in, `server-only`, `next`, `@portfolio/core`, or `process.getBuiltinModule()`.                                                                                                      |
 | `audit.environment`       | `process`, however it's reached.                                                                                                                                                                 |
 | `audit.network`           | `fetch`, `XMLHttpRequest`, `WebSocket`, `EventSource`, `WebTransport`, `navigator.sendBeacon`, and an import from a URL.                                                                         |
-| `audit.github-fetch`      | The kit's `fetchGitHubData`. GitHub data arrives through `input.derived` (#10).                                                                                                                  |
+| `audit.github-fetch`      | The kit's `fetchGitHubData`. GitHub data is the github section's snapshot in `input.derived`: read it with `githubSnapshot`.                                                                     |
 | `audit.storage`           | `document.cookie`, `cookieStore`, `localStorage`, `sessionStorage`, `indexedDB`, and `caches`.                                                                                                   |
 | `audit.clock`             | `Date.now()`, `Date()`, `new Date()` with no argument, `performance.now()`, and a date format's `format()` with no date.                                                                         |
 | `audit.random`            | `Math.random()`, `crypto.getRandomValues()`, and `crypto.randomUUID()`.                                                                                                                          |

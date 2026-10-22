@@ -2,44 +2,173 @@
 
 > Every field that can appear in the two documents, with its type and a
 > one-line "use this when..." per field. The agent loads this when composing a
-> section and needs to know what shape it should take. The Zod source of truth
-> lives at `packages/schema/src/portfolio.ts`, `packages/schema/src/site.ts`,
-> and `packages/schema/src/kinds/*.ts`; if this file ever drifts, those files
-> win. `docs/configuration.md` has the rules behind each field.
+> record or a section and needs to know what shape it should take. The Zod
+> source of truth lives at `packages/schema/src/portfolio.ts`,
+> `packages/schema/src/site.ts`, and `packages/schema/src/kinds/*.ts`; if this
+> file ever drifts, those files win. `docs/configuration.md` has the rules
+> behind each field.
 
 ## `portfolio.yml` top-level shape
 
-| Field           | Type         | Required     | Use when                                                                                             |
-| --------------- | ------------ | ------------ | ---------------------------------------------------------------------------------------------------- |
-| `schemaVersion` | `2`          | yes          | Always. The first line of the document.                                                              |
-| `locale`        | string       | yes          | Always. The content's BCP 47 language tag, such as `en` or `pt-BR`.                                  |
-| `direction`     | `ltr \| rtl` | yes          | Always. `rtl` for Arabic, Hebrew, Persian, and other right-to-left scripts.                          |
-| `identity`      | object       | yes          | Always. Name, tagline, location, email, avatar.                                                      |
-| `links`         | `Link[]`     | default `[]` | Always: at least the primary contact link.                                                           |
-| `meta`          | object       | optional     | SEO: `title`, `description`, `ogImage`. Absolute URLs come from the deployment's `PORTFOLIO_ORIGIN`. |
-| `sections`      | `Section[]`  | default `[]` | The body. The order is the page order; see curation.md.                                              |
+A portfolio is a body of work: records with ids, a few lists that curate them, and sections that place them in reading order.
+
+| Field           | Type                | Required | Use when                                                                                             |
+| --------------- | ------------------- | -------- | ---------------------------------------------------------------------------------------------------- |
+| `schemaVersion` | `3`                 | yes      | Always. The first line of the document.                                                              |
+| `locale`        | string              | yes      | Always. The content's BCP 47 language tag, such as `en` or `pt-BR`.                                  |
+| `direction`     | `ltr \| rtl`        | yes      | Always. `rtl` for Arabic, Hebrew, Persian, and other right-to-left scripts.                          |
+| `identity`      | object              | yes      | Always. Name, tagline, location, email, avatar.                                                      |
+| `links`         | `Link[]`            | optional | At least the primary contact link, usually.                                                          |
+| `meta`          | object              | optional | SEO: `title`, `description`, `ogImage`. Absolute URLs come from the deployment's `PORTFOLIO_ORIGIN`. |
+| `works`         | `Work[]`            | optional | Everything the person made that's worth showing.                                                     |
+| `evidence`      | `Evidence[]`        | optional | Checkable facts: metrics, testimonials, publications, talks, awards, press.                          |
+| `chronology`    | `ChronologyEntry[]` | optional | Roles, studies, and milestones, each with a period.                                                  |
+| `media`         | `MediaAsset[]`      | optional | Every image, audio, video, or document a placement shows.                                            |
+| `practice`      | object              | optional | A thesis, and groups of skills, tools, and services.                                                 |
+| `contact`       | object              | optional | A `message` and `links` the contact section places.                                                  |
+| `signature`     | work id             | optional | The one work to lead with.                                                                           |
+| `featured`      | work ids            | optional | Two to four flagships, in order.                                                                     |
+| `proof`         | evidence ids        | optional | The facts a composition shows up front.                                                              |
+| `archive`       | work ids            | optional | Older work still worth finding.                                                                      |
+| `sections`      | `Section[]`         | optional | The reading order; see curation.md.                                                                  |
 
 Every object is strict: a key not listed here or in the kind's fields is refused. The only other key any object takes is `extensions`, below.
 
+Leave out what isn't written. An empty string and an empty list are errors, not blanks: there's no `links: []` and no `title: ''`.
+
 ## `identity`
 
-| Field      | Type   | Required | Use when                                            |
-| ---------- | ------ | -------- | --------------------------------------------------- |
-| `name`     | string | yes      | Always.                                             |
-| `tagline`  | string | optional | Single-line elevator pitch (at most 80 characters). |
-| `pronouns` | string | optional | If the user wants them visible.                     |
-| `location` | string | optional | City and state or country.                          |
-| `email`    | string | optional | Direct contact.                                     |
-| `avatar`   | Image  | optional | Profile photo.                                      |
+| Field      | Type      | Required | Use when                                            |
+| ---------- | --------- | -------- | --------------------------------------------------- |
+| `name`     | string    | yes      | Always.                                             |
+| `tagline`  | string    | optional | Single-line elevator pitch (at most 80 characters). |
+| `pronouns` | string    | optional | If the user wants them visible.                     |
+| `location` | string    | optional | City and state or country.                          |
+| `email`    | string    | optional | Direct contact.                                     |
+| `avatar`   | Placement | optional | Profile photo: an image asset's id.                 |
 
 ## Common types
 
-- **`Link`**: `{ url, label?, platform? }`. `url` is required: an `https`, `http`, `mailto`, or `tel` URL, a relative reference such as `/resume.pdf`, `resume.pdf`, or `../x` (not `//host`), or a `#fragment` naming a visible section's id, with no unencoded space. `platform` is free-form (`github`, `linkedin`, `mastodon`, `bluesky`, `website`, `resume`, `email`, and so on); variants use it to pick an icon.
-- **`Image`**: `{ src, alt?, width?, height?, credit?, focalPoint? }`. `src` takes what `url` does, plus `data:image` URLs in png, jpeg, gif, webp, or avif. Set `alt` when meaningful. `focalPoint` is `{ x, y }`, each from 0 to 1, for off-centre subjects that may be cropped.
+- **`Id`**: lowercase letters and digits in hyphen-separated words, at most 64 characters, never `main`. Every section, work, evidence entry, chronology entry, and media asset has one, and all of them share one set: no two entries in the document may have the same id. A section's id is its anchor and its key in `site.yml`; a record's is its anchor, feed GUID, and JSON-LD `@id`. Pick the word a visitor would expect in a link and keep it stable. `pnpm config:ids-fix` mints any that are missing.
+- **`Link`**: `{ url, label?, platform? }`. `url` is required: an `https`, `http`, `mailto`, or `tel` URL, a relative reference such as `/resume.pdf`, `resume.pdf`, or `../x` (not `//host`), or a `#fragment` naming a visible section's or record's id, with no unencoded space. `platform` is free-form (`github`, `linkedin`, `mastodon`, `bluesky`, `website`, `resume`, `email`, and so on); variants use it to pick an icon.
+- **`Action`**: a call to action, `{ url, label, platform? }`. The `label` is required: no renderer makes one up.
+- **`Placement`**: where a media asset shows. `{ asset, caption?, alt?, decorative?, focalPoint?, takenAt?, location?, tags? }`. `asset` is the media asset's id; `alt`, `decorative`, and `focalPoint` override the asset's own for this use.
 - **`LooseDate`**: a string: `YYYY`, `YYYY-MM`, `YYYY-MM-DD`, `"Month YYYY"`, or `present`/`now`/`current`. Use the coarsest form, and quote a bare year (`'2023'`): unquoted, YAML reads it as a number.
 - **`Period`**: `{ start: LooseDate, end?: LooseDate }`. Omit `end` for ongoing. Validation rejects an `end` before `start`.
-- **`SectionBase`** (every section has): `kind` and `id`, both required, and `title?`, `subtitle?`, and `lang?` (the section's language when it differs from `locale`). The `id` is lowercase letters and digits in hyphen-separated words, at most 64 characters, unique in the portfolio, and never `main`. It's the section's anchor and its key in `site.yml`, so pick the word a visitor would expect in a link and keep it stable.
-- **`extensions`**: any object may carry `extensions: { '<npm package name>': { ... } }` for data the schema has no field for. A section whose `kind` is `<npm package name>/<name>` holds its content under `data`. Data from a package this build doesn't register is kept, warned about, and never shown.
+- **`Visibility`**: `public` or `private` on any record. A private one never reaches a visitor; leave it out for public.
+- **`SectionBase`** (every section has): `kind` and `id`, both required, and `title?`, `subtitle?`, and `lang?` (the section's language when it differs from `locale`).
+- **`extensions`**: any object may carry `extensions: { '<npm package name>': { ... } }` for data the schema has no field for. A section whose `kind` is `<npm package name>/<name>` holds its content under `data`, and a work's `medium` may be `<npm package name>/<name>`. Data from a package this build doesn't register is kept, warned about, and never shown.
+
+## Records
+
+### `Work`
+
+Something made. Required: `id`, `title`, `medium` (`interface`, `system`, `software`, `photography`, `image-series`, `writing`, `research`, `music`, `audio-video`, `object`). Optional: `slug`, `visibility`, `lang`, `summary`, `description`, `period`, `role`, `organization`, `tools[]`, `cover` (Placement), `media[]` (Placements), `evidence[]` (evidence ids it cites), `links[]`, `highlights[]`, `url`, `caseStudy`. Writing adds `excerpt`, `publication`, `publishedAt`, `readingTimeMinutes`, `tags[]`; music `artist`, `releasedAt`, `label`, `tracks[]` (`{ title, durationSeconds?, url? }`); audio and video `series`, `number`, `durationMinutes`, `showNotes`, `guests[]`, `audioUrl`, `videoUrl`.
+
+A `caseStudy` gives the work its own page at `/work/<slug>`, so it needs `slug`. Its fields are all optional Markdown: `challenge`, `context`, `role`, `constraints`, `decisions[]` (`{ decision, rationale?, alternatives? }`), `evidence`, `outcomes`, `reflection`. Write the ones the work has, at least one.
+
+```yaml
+works:
+  - id: shipyard
+    slug: shipyard
+    title: Shipyard
+    medium: software
+    summary: A deploy orchestrator that rolls back before you notice.
+    period: { start: 2021-03 }
+    role: Author
+    tools: [Go, Kubernetes]
+    cover: { asset: shipyard-cover }
+    evidence: [deploys-per-week]
+    caseStudy:
+      challenge: Deploys failed silently and rollbacks took an hour.
+  - id: quiet-alerts
+    title: Quiet Alerts
+    medium: software
+    summary: Alert routing that pages one person, not twelve.
+```
+
+### `Evidence`
+
+An attributable fact. Required: `id`, `type` (`metric`, `testimonial`, `publication`, `talk`, `award`, `patent`, `press`, `exhibition`, `client`, `recording`, `repository`, `external-work`). Optional: `visibility`, `lang`, `title`, `statement` (Markdown, the claim itself), `description`, `asOf`, `source` (`{ name, url?, role?, organization?, avatar? }`), `metric` (`{ key?, value?, unit? }`), `url`, `links[]`. By type: publication `authors[]`, `venue`, `publishedAt`, `abstract`, `citation`, `doi`, `pdfUrl`, `awards[]`; talk `location`, `presentedAt`, `format` (`keynote`, `workshop`, `panel`, `lightning`, `session`, `interview`), `slidesUrl`, `videoUrl`; award `organization`, `receivedAt`; patent `number`, `status` (`granted`, `pending`, `expired`), `filedAt`, `grantedAt`, `inventors[]`, `assignee`; press `publication`, `excerpt`, `author`; external work `locationLabel`, `categories[]`, `highlights[]` (`{ label, sub }`), `urlLabel`, `buttonText`, `iconName`.
+
+Something has to show: with no `title` and no `metric`, it needs a `statement`. A testimonial needs both the `statement` and the `source`. A metric's `value` is a number; its `key` names the figure, so two claims of it are checked against each other.
+
+```yaml
+evidence:
+  - id: deploys-per-week
+    type: metric
+    statement: Deploys a week through Shipyard
+    metric: { key: deploys-per-week, value: 4000 }
+  - id: quote-from-ana
+    type: testimonial
+    statement: The calmest incident commander I've worked with.
+    source: { name: Ana Ruiz, role: VP Engineering, organization: Harbor }
+```
+
+### `ChronologyEntry`
+
+A role, study, project, event, or milestone. Required: `id`, `kind` (`role`, `study`, `project`, `event`, `milestone`), `title`, `period`. Optional: `visibility`, `lang`, `organization`, `organizationUrl`, `location`, `field`, `description`, `highlights[]`, `achievements[]`, `skills[]`, `logo` (Placement), `thread` (a lane such as `work`, `study`, or `creative`), `branchesFrom` and `mergesInto` (another entry's id), `works[]` (work ids it produced).
+
+```yaml
+chronology:
+  - id: staff-engineer-acme
+    kind: role
+    title: Staff Engineer
+    organization: Acme
+    period: { start: 2022-03, end: present }
+    highlights: [Cut p99 latency 40%]
+  - id: btech-iit-madras
+    kind: study
+    title: B.Tech
+    organization: IIT Madras
+    period: { start: '2014', end: '2018' }
+```
+
+### `MediaAsset`
+
+An image, audio, video, or document by id. Required: `id`, `kind` (`image`, `audio`, `video`, `document`), `source`. Optional: `visibility`, `alt`, `credit`, `focalPoint` (`{ x, y }`, each 0 to 1), `decorative`.
+
+`source` is a path under the media root, such as `shipyard/cover.png` (no leading `/`, no `.` or `..` segments, no `\`, `?`, `#`, or `:`), or an `https` URL. Give every image visitors see alt text that says what it shows, or `decorative: true` (never both). A caption isn't alt text.
+
+```yaml
+media:
+  - id: shipyard-cover
+    kind: image
+    source: shipyard/cover.png
+    alt: The Shipyard dashboard, a rollback in progress.
+```
+
+### `practice`
+
+One object: `thesis` (Markdown), and ordered groups of `skills` (`{ name?, description?, items: [text] }`), `tools` (`items: [{ name, url?, version? }]`), and `services` (`items: [{ name, description?, pricing?, url?, highlights? }]`). At least one part.
+
+```yaml
+practice:
+  thesis: I make failure legible.
+  skills:
+    - { name: Platforms, items: [Kubernetes, Terraform] }
+  tools:
+    - { name: Daily, items: [{ name: Go, version: '1.23' }, { name: Neovim }] }
+```
+
+### `contact`
+
+`{ message?, links? }`, at least one of them.
+
+```yaml
+contact:
+  message: Email is best. I answer within a week.
+```
+
+## Curation
+
+`signature` (one work id), `featured` (work ids), `archive` (work ids), and `proof` (evidence ids). A work sits in at most one of `signature`, `featured`, and `archive`, and a list names an id once.
+
+```yaml
+signature: shipyard
+featured: [quiet-alerts]
+proof: [deploys-per-week, quote-from-ana]
+```
 
 ## `site.yml`
 
@@ -55,14 +184,15 @@ Every object is strict: a key not listed here or in the kind's fields is refused
 
 `appearance.variant` names an installed variant by its manifest id. One this build doesn't register renders as the fallback composition, with a `variant.unavailable` warning, and `fallback` itself can't be selected. Use the owner's choice, or `site.example.yml`'s `editorial-evidence`. `designLanguage` is `platform-neutral`. `colorScheme` and `typography` are the appearance system's ids (#19), such as `warm` and `classic`, which this build records without checking. `displayMode` is `system`, `light`, `dark`, or `high-contrast`. Neither document may hold a deployment setting (the origin, the profile) or anything shaped like a secret.
 
+A hidden section takes every record only it lists off the page too.
+
 ## Section kinds
 
-Each kind: required → optional → minimal example.
+Each kind: what it places, then a minimal example. A section with nothing public to show leaves the page.
 
 ### `kind: hero`
 
-Top-of-page introduction. Use once, first. Optional: `greeting`, `name`,
-`tagline`, `subtagline`, `ctas: Link[]`.
+Top-of-page introduction. Use once, first. Optional: `greeting`, `name`, `tagline`, `subtagline`, `ctas: Action[]`.
 
 ```yaml
 - kind: hero
@@ -74,10 +204,62 @@ Top-of-page introduction. Use once, first. Optional: `greeting`, `name`,
 
 ### `kind: lede`
 
-Long-form bio. Required: `body` (markdown allowed).
+Long-form bio. Required: `body` (Markdown).
 
 ```yaml
 - { kind: lede, id: about, title: About, body: I work where systems meet team design. }
+```
+
+### `kind: works`
+
+Works, by id. Required: `items` (work ids, at least one), in reading order.
+
+```yaml
+- { kind: works, id: work, title: Work, items: [shipyard, quiet-alerts] }
+```
+
+### `kind: evidence`
+
+Evidence, by id. Required: `items` (evidence ids, at least one).
+
+```yaml
+- { kind: evidence, id: at-a-glance, title: At a glance, items: [deploys-per-week] }
+```
+
+### `kind: chronology`
+
+Chronology entries, by id. Optional: `items`; without it, every public entry, newest first.
+
+```yaml
+- { kind: chronology, id: experience, title: Experience, items: [staff-engineer-acme] }
+```
+
+### `kind: practice`
+
+One part of `practice`. Required: `part` (`thesis`, `skills`, `tools`, or `services`). A second practice section shows another part.
+
+```yaml
+- { kind: practice, id: skills, title: Skills, part: skills }
+```
+
+### `kind: contact`
+
+Places the contact record, beside `identity.email` and `links`. No fields of its own.
+
+```yaml
+- { kind: contact, id: contact, title: Contact }
+```
+
+### `kind: custom`
+
+Content no other kind holds. Required: `title`. Optional: `body` (Markdown), `items[]` (`{ title, summary?, media?, evidence?, links? }`). Use sparingly: it always renders in the shared fallback.
+
+```yaml
+- kind: custom
+  id: workshop
+  title: Monthly workshop
+  body: Open to anyone running on-call.
+  items: [{ title: Next session, summary: The first Saturday of the month. }]
 ```
 
 ### `kind: now`
@@ -88,312 +270,45 @@ What the author is doing right now. Required: `body`. Optional: `asOf`.
 - { kind: now, id: now, asOf: 2025-04, body: Leading reliability for payments. }
 ```
 
-### `kind: experience`
-
-Work history. Item required: `role`, `organization`, `period`. Optional:
-`organizationUrl`, `location`, `description`, `highlights[]`, `skills[]`, `logo`.
-
-```yaml
-- kind: experience
-  id: experience
-  items:
-    - {
-        role: Staff Engineer,
-        organization: Acme,
-        period: { start: 2022-03, end: present },
-        highlights: [Cut p99 40%],
-      }
-```
-
-### `kind: education`
-
-Schools and degrees. Item required: `degree`, `institution`, `period`.
-Optional: `field`, `institutionUrl`, `location`, `description`, `achievements[]`, `logo`.
-
-```yaml
-- kind: education
-  id: education
-  items:
-    - { degree: B.Tech, institution: IIT Madras, period: { start: '2014', end: '2018' } }
-```
-
-### `kind: projects`
-
-Portfolio of work. Item required: `name`. Optional: `summary`, `description`,
-`period`, `role`, `organization`, `technologies[]`, `image`, `images[]`,
-`links[]`, `highlights[]`.
-
-```yaml
-- kind: projects
-  id: projects
-  items:
-    - {
-        name: Quietly,
-        summary: A focus timer that stops nagging.,
-        technologies: [TypeScript, Tauri],
-      }
-```
-
-### `kind: writings`
-
-Essays / blog posts. Item required: `title`. Optional: `summary`, `excerpt`,
-`publication`, `publishedAt`, `url`, `readingTimeMinutes`, `tags[]`.
-
-```yaml
-- kind: writings
-  id: writings
-  items:
-    - {
-        title: On legible systems,
-        publication: Increment,
-        publishedAt: 2024-09,
-        url: https://example.com/legible,
-      }
-```
-
-### `kind: publications`
-
-Academic publications. Item required: `title`. Optional: `authors[]`, `venue`,
-`publishedAt`, `abstract`, `citation`, `doi`, `url`, `pdfUrl`, `awards[]`.
-
-```yaml
-- kind: publications
-  id: publications
-  items:
-    - {
-        title: A taxonomy of partial failures,
-        venue: SIGOPS,
-        publishedAt: '2023',
-        doi: 10.1145/0.0,
-      }
-```
-
-### `kind: talks`
-
-Conference / podcast talks. Item required: `title`. Optional: `venue`,
-`location`, `presentedAt`, `type` (`keynote|workshop|panel|lightning|session|interview`),
-`description`, `abstract`, `slidesUrl`, `videoUrl`, `links[]`.
-
-```yaml
-- kind: talks
-  id: talks
-  items:
-    - { title: Calm at scale, venue: SREcon, presentedAt: 2024-03, type: keynote }
-```
-
-### `kind: awards`
-
-Recognition. Item required: `name`. Optional: `organization`, `receivedAt`, `description`, `url`.
-
-```yaml
-- kind: awards
-  id: awards
-  items: [{ name: Engineer of the Year, organization: Acme, receivedAt: '2023' }]
-```
-
-### `kind: episodes`
-
-Podcast / video series episodes. Section: `showName?`, `showDescription?`.
-Item required: `title`. Optional: `number`, `publishedAt`, `durationMinutes`,
-`description`, `showNotes`, `guests[]`, `audioUrl`, `videoUrl`, `links[]`.
-
-```yaml
-- kind: episodes
-  id: episodes
-  showName: Quiet Systems
-  items:
-    - { number: 12, title: On backpressure, publishedAt: 2024-11 }
-```
-
-### `kind: patents`
-
-Patents. Item required: `title`. Optional: `number`,
-`status` (`granted|pending|expired`), `filedAt`, `grantedAt`, `inventors[]`,
-`assignee`, `description`, `url`.
-
-```yaml
-- kind: patents
-  id: patents
-  items:
-    - { title: Adaptive load shedding, number: US-12345, status: granted, grantedAt: '2022' }
-```
-
-### `kind: gallery`
-
-Image-first section. Optional `layout` (`plates|grid|columns`). Item required: `image`. Optional: `caption`, `takenAt`, `location`, `tags[]`.
-
-```yaml
-- kind: gallery
-  id: gallery
-  layout: grid
-  items: [{ image: { src: /img/01.jpg, alt: Pier at dawn }, takenAt: 2024-08 }]
-```
-
-### `kind: discography`
-
-Released music. Item required: `title`. Optional: `artist`, `role`,
-`releasedAt`, `label`, `cover`, `description`,
-`tracks[]` (`{ title, durationSeconds?, url? }`), `links[]`.
-
-```yaml
-- kind: discography
-  id: discography
-  items:
-    - { title: Slow Hours, releasedAt: 2023-05, tracks: [{ title: Prelude, durationSeconds: 142 }] }
-```
-
-### `kind: testimonials`
-
-Quotes about the author. Item required: `quote`, `author`. Optional:
-`authorRole`, `authorOrganization`, `authorAvatar`, `authorUrl`, `sourceUrl`.
-
-```yaml
-- kind: testimonials
-  id: testimonials
-  items:
-    - { quote: She makes the hard parts look obvious., author: A. Director, authorRole: VP Eng }
-```
-
-### `kind: press`
-
-Mentions in third-party media. Item required: `title`, `publication`. Optional: `publishedAt`, `excerpt`, `url`, `author`.
-
-```yaml
-- kind: press
-  id: press
-  items: [{ title: The quiet architect, publication: Wired, publishedAt: 2024-02 }]
-```
-
 ### `kind: quote`
 
-A single displayed quote. Required: `text`. Optional: `attribution`,
-`source`, `sourceUrl`.
+A single standout quote. Required: `text`. Optional: `attribution`, `source`, `sourceUrl`.
 
 ```yaml
-- { kind: quote, id: quote, text: Make the hard parts obvious., attribution: A. Director }
-```
-
-### `kind: skills`
-
-Skill tags. Provide `groups` (named buckets) or flat `items`, at least one. Group: `{ name, description?, items: string[] }`.
-
-```yaml
-- kind: skills
-  id: skills
-  groups: [{ name: Languages, items: [TypeScript, Go, Rust] }]
-```
-
-### `kind: stack`
-
-Tools / dependencies with optional version + link. Required: `groups[]`, each `{ name, items: { name, url?, version? }[] }`.
-
-```yaml
-- kind: stack
-  id: stack
-  groups: [{ name: Frontend, items: [{ name: Next.js, version: '16' }] }]
-```
-
-### `kind: services`
-
-Offerings for hire. Item required: `name`. Optional: `description`,
-`pricing`, `url`, `highlights[]`.
-
-```yaml
-- kind: services
-  id: services
-  items:
-    - { name: Reliability audit, pricing: From $5k, highlights: [2-week engagement] }
-```
-
-### `kind: contact`
-
-Contact block. Optional: `message`, `links[]`, `showAvailability` (bool).
-
-```yaml
-- kind: contact
-  id: contact
-  message: Best reached on LinkedIn.
-  links: [{ url: https://linkedin.com/in/x, label: LinkedIn }]
-```
-
-### `kind: cta`
-
-Call-to-action band. Optional: `description`, `primaryAction` (Link),
-`secondaryAction` (Link).
-
-```yaml
-- { kind: cta, id: cta, title: Hire me, primaryAction: { url: '#contact', label: Get in touch } }
-```
-
-### `kind: stats`
-
-Big-number callouts. Required: `items[]`, each
-`{ value (string|number), label, description?, metric? }`. `metric` is a key
-naming the figure, such as `years-experience`, so the same figure stated in two
-places is checked: two values are a `metric.conflict`, and the same value in
-two visible sections a `metric.duplicate` warning. A `tenure` section's `years`
-is the metric `tenure-years`.
-
-```yaml
-- kind: stats
-  id: by-the-numbers
-  items:
-    - { value: 12, label: Years experience, metric: years-experience }
-    - { value: 10B, label: Requests/day handled }
+- { kind: quote, id: quote, text: 'Make it work, then make it right.', attribution: Kent Beck }
 ```
 
 ### `kind: focus`
 
-Short labels for what the author is putting energy into now. Required:
-`items[]` (≥1). Distinct from `now` (prose) and `skills` (comprehensive).
+What the author is putting energy into. Required: `items` (text).
 
 ```yaml
-- { kind: focus, id: focus, items: [Reliability tooling, Mentoring, Essays] }
+- { kind: focus, id: focus, items: [Incident tooling, Teaching on-call] }
 ```
 
 ### `kind: fun-facts`
 
-Playful personal details. Required: `items[]` (≥1 string).
+Playful personal details. Required: `items` (text).
 
 ```yaml
-- { kind: fun-facts, id: fun-facts, items: [I bake sourdough, I cycled Karnataka] }
+- { kind: fun-facts, id: off-the-page, items: [Bakes sourdough on release days] }
 ```
 
-### `kind: tenure`
+### `kind: cta`
 
-Single accent figure for career length. Optional: `years` (≥0), `summary`.
-
-```yaml
-- { kind: tenure, id: tenure, years: 12, summary: 'Across payments, infra, dev tools.' }
-```
-
-### `kind: external-portfolios`
-
-Cards linking to separate sites the author maintains (photography blog, music site, etc.). Required: `items[]` (≥1). Item required: `url`, `brandName`. Optional: `description`, `locationLabel`, `categories[]`, `highlights[]` (`{ label, sub }`), `urlLabel`, `buttonText`, `iconName` (`camera|music|book|palette|code|pen|globe|film|mic|headphones|gallery`).
+One call to action. Optional: `description`, `primaryAction`, `secondaryAction` (each an Action, label required).
 
 ```yaml
-- kind: external-portfolios
-  id: external-portfolios
-  items: [{ url: https://x.photography, brandName: x.photography, iconName: camera }]
+- kind: cta
+  id: hire
+  description: Open to staff roles in reliability.
+  primaryAction: { url: 'mailto:rowan@rowan.test', label: Write to me }
 ```
 
 ### `kind: github`
 
-Declarative GitHub config. Required: `username`. Today the section renders a link to the profile; the settings below take effect when #10 brings repository data.
-Booleans default to: `showContributionGraph: true`, `showPinnedRepos: true`,
-`showTotalStars: true`, `showLanguageBreakdown: false`,
-`showRecentlyActive: true`. Optional:
-`featuredRepos[]`, `excludeRepos[]`.
-
-- **`showRecentlyActive`**: boolean, default `true`. Shows a list of repositories the user has most recently pushed to. Use when you want to surface live activity below the pinned highlights.
-- **`recentlyActiveLimit`**: integer from 1 to 20, default `10`. How many repositories to include in the recently-active list. Use when the default 10 is too long for your variant's layout.
+A GitHub profile. Required: `username`. Optional: `showContributionGraph`, `showPinnedRepos`, `showTotalStars`, `showRecentlyActive` (each default `true`), `showLanguageBreakdown` (default `false`), `recentlyActiveLimit` (1 to 20, default 10), `featuredRepos[]`, `excludeRepos[]`. What it shows comes from the snapshot at `snapshots/github.json`, never a fetch; without one, the profile link alone.
 
 ```yaml
-- kind: github
-  id: github
-  username: anamika
-  showLanguageBreakdown: true
-  showRecentlyActive: true
-  recentlyActiveLimit: 5
-  featuredRepos: [quietly, sre-notes]
+- { kind: github, id: on-github, title: On GitHub, username: rowan }
 ```

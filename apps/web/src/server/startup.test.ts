@@ -17,7 +17,7 @@ const EXAMPLES = {
   site: fileURLToPath(new URL('../../../../site.example.yml', import.meta.url)),
 };
 const VALID =
-  'schemaVersion: 2\nlocale: en\ndirection: ltr\nidentity:\n  name: Rowan Test\nsections:\n  - kind: lede\n    id: about\n    body: Hi.\n';
+  'schemaVersion: 3\nlocale: en\ndirection: ltr\nidentity:\n  name: Rowan Test\nsections:\n  - kind: lede\n    id: about\n    body: Hi.\n';
 
 /** A source directory holding `document` as portfolio.yml, beside the example site.yml. */
 function sourceDir(t: { after: (fn: () => void) => void }, document?: string): string {

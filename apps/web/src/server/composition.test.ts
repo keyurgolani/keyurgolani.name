@@ -19,7 +19,7 @@ const EXAMPLES = {
   site: fileURLToPath(new URL('../../../../site.example.yml', import.meta.url)),
 };
 const PORTFOLIO =
-  'schemaVersion: 2\nlocale: en\ndirection: ltr\nidentity:\n  name: Rowan Test\nsections:\n  - kind: lede\n    id: about\n    body: Hi.\n';
+  'schemaVersion: 3\nlocale: en\ndirection: ltr\nidentity:\n  name: Rowan Test\nsections:\n  - kind: lede\n    id: about\n    body: Hi.\n';
 
 /** A deployment whose source directory holds `documents`, a valid pair unless a test says. */
 function deployment(

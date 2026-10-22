@@ -1,81 +1,163 @@
-# Design: a product designer with case studies, a gallery, and clients.
-schemaVersion: 2
-locale: ja
+# Design: Mira Voss, a fictional systems designer and field researcher, from
+# the approved prototype's neutral sample. One authored thesis, a signature
+# inquiry with a case study, three flagship works, a proof strip of keyed
+# metrics, and a chronology in three lanes that lists every entry newest
+# first. The images have no file yet, so they render as unavailable.
+schemaVersion: 3
+locale: en-GB
 direction: ltr
-
 identity:
-  name: Aiko Tanabe
-  tagline: Product designer
-  location: Osaka, Japan
-  email: aiko@tanabe.test
-
+  name: Mira Voss
+  tagline: Systems designer and field researcher
+  location: Rotterdam, working across public infrastructure
+  email: mira@voss.test
 links:
-  - platform: dribbble
-    url: https://dribbble.test/aiko
-    label: Dribbble
-
-meta:
-  title: Aiko Tanabe, product designer
-  description: Interfaces for people who read the manual.
-
+  - platform: website
+    url: https://voss.test
+    label: voss.test
+practice:
+  thesis: I turn hard-to-see civic systems into instruments people can inspect, question, and improve.
+  skills:
+    - name: Practice
+      items: [Systems mapping, Field research, Service design, Evidence modelling]
+signature: the-water-beneath-the-dashboard
+featured: [civic-signal-atlas, night-shift-protocol, tide-ledger]
+proof: [field-systems-shipped, research-interviews, open-methods-published]
+archive: [district-walkthroughs]
+works:
+  - id: the-water-beneath-the-dashboard
+    slug: the-water-beneath-the-dashboard
+    title: The water beneath the dashboard
+    medium: system
+    summary: A public observability system that joins maintenance records, sensor drift, and resident reports without flattening uncertainty.
+    period: { start: '2025' }
+    role: Lead designer and researcher
+    cover:
+      asset: water-dashboard-map
+    evidence: [field-systems-shipped, district-reports]
+    caseStudy:
+      challenge: |
+        The city's water dashboard showed one confident number per district. Engineers, residents, and the council each knew it
+        was wrong in different ways, and none of them could say how.
+      context: |
+        Twelve districts, three maintenance contractors, a sensor network with known drift, and a resident reporting line that
+        nobody had joined to the rest.
+      role: I led the research and the design of the evidence model, with two engineers from the water board.
+      constraints: |
+        No new sensors, no new staff, and every figure had to say where it came from, so a resident could check it.
+      decisions:
+        - decision: Show each figure with its sources and how far they disagree.
+          rationale: Disagreement was the information people needed, so hiding it made the dashboard less useful, not more.
+          alternatives: A single blended figure with a confidence badge, which the engineers had already stopped trusting.
+        - decision: Put resident reports beside sensor readings, not under them.
+          rationale: Residents noticed failures days before the sensors drifted far enough to flag them.
+      evidence: Thirty-one interviews across the districts, and six months of reports matched against maintenance records.
+      outcomes: |
+        Twelve districts now share one evidence model, and the council's quarterly review starts from the disagreements instead of
+        arguing about which number is right.
+      reflection: |
+        The hardest part was persuading people that showing uncertainty was a feature. Next time I would bring residents into the
+        first workshop, not the third.
+  - id: civic-signal-atlas
+    title: Civic Signal Atlas
+    medium: interface
+    summary: A living map for deciding what a city knows, and what it only assumes.
+    period: { start: '2025' }
+    cover:
+      asset: civic-signal-atlas-map
+  - id: night-shift-protocol
+    title: Night Shift Protocol
+    medium: writing
+    summary: A handoff language for the people who keep systems working after offices close.
+    period: { start: '2023' }
+  - id: tide-ledger
+    title: Tide Ledger
+    medium: research
+    summary: A small, inspectable record of changing shorelines and disputed measurements.
+    period: { start: '2024' }
+    url: https://voss.test/tide-ledger
+  - id: district-walkthroughs
+    title: District walkthroughs
+    medium: research
+    summary: Early walking surveys of the water network with maintenance crews.
+    period: { start: '2021', end: '2022' }
+evidence:
+  - id: field-systems-shipped
+    type: metric
+    statement: field systems shipped
+    metric: { key: field-systems-shipped, value: 6 }
+  - id: research-interviews
+    type: metric
+    statement: research interviews
+    metric: { key: research-interviews, value: 31 }
+  - id: open-methods-published
+    type: metric
+    statement: open methods published
+    metric: { key: open-methods-published, value: 4 }
+  - id: district-reports
+    type: publication
+    title: Twelve districts, one evidence model
+    venue: Rotterdam Water Board
+    publishedAt: 2025-11
+chronology:
+  - id: independent-practice
+    kind: role
+    title: Independent practice
+    period: { start: '2026' }
+    thread: work
+  - id: civic-signal-atlas-build
+    kind: project
+    title: Civic Signal Atlas
+    period: { start: '2025' }
+    thread: work
+    works: [civic-signal-atlas, the-water-beneath-the-dashboard]
+  - id: field-methods-fellowship
+    kind: study
+    title: Field methods fellowship
+    period: { start: '2024' }
+    thread: study
+    mergesInto: civic-signal-atlas-build
+  - id: night-shift-protocol-writing
+    kind: project
+    title: Night Shift Protocol
+    period: { start: '2023' }
+    thread: creative
+    works: [night-shift-protocol]
+media:
+  - id: water-dashboard-map
+    kind: image
+    source: mira/water-dashboard.png
+    alt: A district map with each figure shown beside the sources it came from.
+  - id: civic-signal-atlas-map
+    kind: image
+    source: mira/civic-signal-atlas.png
+    alt: The atlas's city map, with what is measured in solid lines and what is assumed in dashed ones.
+contact:
+  message: Write about a system your city can't see into.
 sections:
-  - kind: hero
-    id: top
-    name: Aiko Tanabe
-    tagline: Interfaces for people who read the manual.
-
-  - kind: projects
-    id: case-studies
-    title: Case studies
-    items:
-      - name: Ledger redesign
-        summary: A bookkeeping app that small shops finish setting up.
-        role: Lead designer
-        organization: Kurashi
-        period: { start: 2024-01, end: 2025-03 }
-        images:
-          - src: /images/ledger.png
-            alt: The ledger app's month view
-        highlights:
-          - Setup completion went from 38 to 71 percent
-
-  - kind: gallery
-    id: sketches
-    title: Sketches
-    layout: grid
-    items:
-      - image:
-          src: /images/sketch-1.png
-          alt: Pencil wireframes for a checkout screen
-        tags: [wireframes]
-
-  - kind: testimonials
-    id: clients
-    title: Clients
-    items:
-      - quote: Aiko made our hardest screen the one people compliment.
-        author: Kenji Mori
-        authorRole: Head of Product
-        authorOrganization: Kurashi
-
-  - kind: skills
+  - kind: practice
+    id: thesis
+    title: Practice
+    part: thesis
+  - kind: works
+    id: selected-work
+    title: Selected work
+    items: [the-water-beneath-the-dashboard, civic-signal-atlas, night-shift-protocol, tide-ledger]
+  - kind: evidence
+    id: proof
+    title: In the field
+    items: [field-systems-shipped, research-interviews, open-methods-published]
+  - kind: chronology
+    id: chronology
+    title: Chronology
+  - kind: practice
     id: skills
     title: Skills
-    groups:
-      - name: Practice
-        items: [Interaction design, Research, Prototyping]
-
-  - kind: focus
-    id: focus
-    title: Focus
-    items: [Accessible data tables, Type for small screens]
-
-  - kind: tenure
-    id: tenure
-    title: Years designing
-    years: 9
-    summary: Agencies first, then products.
-
+    part: skills
+  - kind: works
+    id: archive
+    title: Archive
+    items: [district-walkthroughs]
   - kind: contact
     id: contact
     title: Contact

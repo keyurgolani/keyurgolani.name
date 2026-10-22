@@ -70,7 +70,7 @@ The classes below are defined in `assets/visual-companion/frame-template.html`. 
 #### Section sketch
 
 ```html
-<h2>How does the projects section lay out?</h2>
+<h2>How does the works section lay out?</h2>
 <div class="section-sketch" data-choice="single-column" onclick="toggleSelect(this)">
   <div class="sketch-title">Single column · prose-driven</div>
   <div class="sketch-row heading"></div>

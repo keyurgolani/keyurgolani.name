@@ -1,6 +1,7 @@
 import {
   chmodSync,
   copyFileSync,
+  existsSync,
   mkdirSync,
   readdirSync,
   readFileSync,
@@ -80,6 +81,8 @@ function place(row: StartupRow | WarningRow): RowPaths {
   mkdirSync(source, { recursive: true });
   const documents = 'fatal' in row ? rowDocuments(row) : row.documents;
   for (const [name, text] of Object.entries(documents)) {
+    // A name may sit in a directory beside the documents, such as snapshots/github.json.
+    mkdirSync(path.dirname(path.join(source, name)), { recursive: true });
     writeFileSync(path.join(source, name), text);
   }
   const beside = (name: string) => test.info().outputPath(name);
@@ -158,6 +161,19 @@ test.describe('the refusal log', () => {
   });
 });
 
+/** The snapshots and media document a pair keeps beside its documents (#10), for the harness to copy too. */
+function unitFiles(dir: string): Record<string, Uint8Array> {
+  const files: Record<string, Uint8Array> = {};
+  for (const folder of ['snapshots', 'media']) {
+    const at = path.join(dir, folder);
+    if (!existsSync(at)) continue;
+    for (const name of readdirSync(at)) {
+      files[`${folder}/${name}`] = readFileSync(path.join(at, name));
+    }
+  }
+  return files;
+}
+
 test.describe('the shared fixtures', () => {
   // @portfolio/schema's pair for each diagnostic code and its startup cases
   // (#4, item 21). The invalid pairs link to https://rowan.name, their own
@@ -174,10 +190,17 @@ test.describe('the shared fixtures', () => {
     'metric.duplicate',
     'origin.sample',
     'origin.stale',
+    // #10: a reference to a private record, a section with nothing public,
+    // and a file in snapshots/ that is no snapshot.
+    'ref.private',
+    'section.empty',
+    'snapshot.ignored',
   ];
   // The host's interim catalog registers no color scheme until #19, so it
   // can't raise this one: the pair starts, with only the fallback's warning.
-  const UNCHECKED = ['appearance.unknown'];
+  // Nor can startup raise the two that compare a draft with the live
+  // revision (#10), which publish and import check.
+  const UNCHECKED = ['appearance.unknown', 'id.reused', 'urls.vanished'];
   const UNAVAILABLE = 'variant.unavailable';
   const RECORD_ORIGIN = 'https://rowan.name';
   const invalid = readdirSync(path.join(FIXTURES, 'invalid')).sort();
@@ -204,6 +227,7 @@ test.describe('the shared fixtures', () => {
         env: { PORTFOLIO_ORIGIN: RECORD_ORIGIN },
         portfolio: path.join(dir, 'portfolio.yml'),
         site: path.join(dir, 'site.yml'),
+        sourceFiles: unitFiles(dir),
       });
       try {
         const logged = (event: string) =>

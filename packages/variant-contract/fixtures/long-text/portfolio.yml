@@ -2,32 +2,59 @@
 # no break in it, long paragraphs, and long list items; titles in non-Latin scripts, each
 # section and item marking its own language; and two sections, and two items, with the same
 # title, whose ids must still differ.
-schemaVersion: 2
+schemaVersion: 3
 locale: en
 direction: ltr
-
 identity:
   name: Kiri Longfellow-Ashbourne-Whitcombe-Ravensworth-Thistlewaite
   tagline: Writes at length about writing at length, and about almost everything else as well
-
 links:
   - platform: website
     url: https://longtext.test/an/unusually/deep/path/that/keeps/going/and/going/until/it/stops
     label: https://longtext.test/an/unusually/deep/path/that/keeps/going/and/going/until/it/stops
-
+practice:
+  skills:
+    - items:
+        - Reading very long documents from the first page to the last without skipping a line
+        - Writing
+        - Electroencephalographically-informed-neuroergonomic-interface-prototyping
+works:
+  - id: the-same-title
+    title: The Same Title
+    medium: writing
+    summary: The first of two essays that share a title.
+    url: https://longtext.test/essays/one
+  - id: the-same-title-2
+    title: The Same Title
+    medium: writing
+    summary: The second of two essays that share a title.
+    url: https://longtext.test/essays/two
+  - id: an-essay-title-that-is-a-whole-sentence-long-because-some-essays
+    title: An essay title that is a whole sentence long, because some essays are named that way and a composition has to show the whole of it
+    medium: writing
+    url: https://longtext.test/essays/three
+  - id: same-name
+    title: Same Name
+    medium: software
+    summary: Two projects with one name.
+  - id: same-name-2
+    title: Same Name
+    medium: software
+    summary: Two projects with one name, again.
+contact:
+  message: Write as much as you like.
+  links:
+    - platform: email
+      url: mailto:kiri@longtext.test
+      label: kiri.longfellow-ashbourne-whitcombe@longtext.test
 sections:
   - kind: hero
     id: top
-    tagline: >-
-      A tagline long enough to wrap across three or four lines on a phone, and maybe two on a
-      wide screen, without ever pushing the page wider than the window it sits in
+    tagline: A tagline long enough to wrap across three or four lines on a phone, and maybe two on a wide screen, without ever pushing the page wider than the window it sits in
     subtagline: Supercalifragilisticexpialidociousantidisestablishmentarianismpneumonoultramicroscopicsilicovolcanoconiosis
-
   - kind: lede
     id: about
-    title: >-
-      About this portfolio, its author, the work, the long history of the work, and why the
-      title of this section goes on for as long as it does
+    title: About this portfolio, its author, the work, the long history of the work, and why the title of this section goes on for as long as it does
     body: |
       This paragraph is long on purpose. It runs on through clause after clause, the way a
       careful writer sometimes lets a sentence run when the thought it carries refuses to be
@@ -36,67 +63,42 @@ sections:
 
       A second paragraph follows the first, with a word that has no place to break in it:
       Llanfairpwllgwyngyllgogerychwyrndrobwllllantysiliogogogochllanfairpwllgwyngyllgogerychwyrndrobwll.
-
-  - kind: writings
+  - kind: works
     id: essays
     title: Essays
     items:
-      - title: The Same Title
-        summary: The first of two essays that share a title.
-        url: https://longtext.test/essays/one
-      - title: The Same Title
-        summary: The second of two essays that share a title.
-        url: https://longtext.test/essays/two
-      - title: >-
-          An essay title that is a whole sentence long, because some essays are named that way
-          and a composition has to show the whole of it
-        url: https://longtext.test/essays/three
-
-  - kind: projects
+      - the-same-title
+      - the-same-title-2
+      - an-essay-title-that-is-a-whole-sentence-long-because-some-essays
+  - kind: works
     id: work
     title: Work
     items:
-      - name: Same Name
-        summary: Two projects with one name.
-      - name: Same Name
-        summary: Two projects with one name, again.
-
+      - same-name
+      - same-name-2
   - kind: lede
     id: about-again
     title: Work
     body: A second section with the title Work, which the navigation names twice.
-
   - kind: lede
     id: japanese
     title: 日本語のセクションと長い題名の見出し
     lang: ja
     body: これは日本語で書かれた段落です。改行の位置はブラウザが決めます。
-
   - kind: lede
     id: greek
     title: Μια ενότητα στα ελληνικά
     lang: el
     body: Μια παράγραφος στα ελληνικά, για να δούμε πώς αποδίδεται.
-
   - kind: lede
     id: hindi
     title: हिन्दी में एक अनुभाग
     lang: hi
     body: यह अनुच्छेद हिन्दी में लिखा गया है।
-
-  - kind: skills
+  - kind: practice
     id: skills
     title: Skills
-    items:
-      - Reading very long documents from the first page to the last without skipping a line
-      - Writing
-      - Electroencephalographically-informed-neuroergonomic-interface-prototyping
-
+    part: skills
   - kind: contact
     id: contact
     title: Contact
-    message: Write as much as you like.
-    links:
-      - platform: email
-        url: mailto:kiri@longtext.test
-        label: kiri.longfellow-ashbourne-whitcombe@longtext.test

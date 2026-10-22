@@ -1,0 +1,106 @@
+# Migration fixture (#10): the version 2 engineering pair as #4 shipped it,
+# which pnpm config:migrate converts. A platform engineer with open-source
+# work and a stack.
+schemaVersion: 2
+locale: en
+direction: ltr
+
+identity:
+  name: Ines Okafor
+  tagline: Platform engineer
+  pronouns: she/her
+  location: Lagos, Nigeria
+  email: ines@okafor.test
+
+links:
+  - platform: github
+    url: https://code.okafor.test/ines
+    label: Code
+  - platform: website
+    url: https://okafor.test
+    label: okafor.test
+
+meta:
+  title: Ines Okafor
+  description: Platform engineer who builds deploy tooling people trust.
+
+sections:
+  - kind: hero
+    id: top
+    greeting: Hi, I'm
+    tagline: I build the boring parts of platforms so product teams don't have to.
+    ctas:
+      - url: '#work'
+        label: See the work
+      - url: '#contact'
+        label: Get in touch
+
+  - kind: lede
+    id: about
+    title: About
+    body: |
+      Ten years of build systems, deploy pipelines, and the dashboards nobody looks at until 3 a.m.
+
+  - kind: stats
+    id: numbers
+    title: Numbers
+    items:
+      - { metric: years-engineering, value: '10', label: Years engineering }
+      - { value: '40', label: Services migrated }
+
+  - kind: projects
+    id: work
+    title: Work
+    items:
+      - name: shipyard
+        summary: A deploy orchestrator that rolls back before you notice.
+        role: Author
+        period: { start: 2021-03 }
+        technologies: [Go, Kubernetes]
+        links:
+          - url: https://code.okafor.test/ines/shipyard
+            label: Source
+        highlights:
+          - Runs 4,000 deploys a week
+      - name: quiet-alerts
+        summary: Alert routing that pages one person, not twelve.
+        role: Maintainer
+        technologies: [TypeScript]
+
+  - kind: experience
+    id: experience
+    title: Experience
+    items:
+      - role: Staff Engineer, Platform
+        organization: Harbor Freight Labs
+        location: Remote
+        period: { start: 2022-01 }
+        highlights:
+          - Cut median deploy time from 40 minutes to 6
+        skills: [Go, Kubernetes, Terraform]
+      - role: Senior Engineer
+        organization: Bluefin
+        period: { start: 2016-05, end: 2021-12 }
+
+  - kind: skills
+    id: skills
+    title: Skills
+    groups:
+      - name: Platforms
+        items: [Kubernetes, Terraform, Nomad]
+      - name: Languages
+        items: [Go, TypeScript, Bash]
+
+  - kind: stack
+    id: stack
+    title: Stack
+    groups:
+      - name: Daily
+        items:
+          - { name: Go, version: '1.23' }
+          - { name: Neovim }
+
+  - kind: contact
+    id: contact
+    title: Contact
+    message: Email is best. I answer within a week.

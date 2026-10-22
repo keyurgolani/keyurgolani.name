@@ -29,16 +29,33 @@ export function storedControls(
   return stored !== undefined && Object.hasOwn(stored, id) ? stored[id] : undefined;
 }
 
-/** The content a contentRef may point at: each visible section's id and kind. */
+/**
+ * The content a contentRef may point at, by id: each visible section, by its
+ * kind, and each visible work, evidence entry, and chronology entry, by the
+ * kind of section that lists it (works, evidence, chronology). Ids are unique
+ * across the document, so the two never collide.
+ */
 export type ContentIndex = ReadonlyMap<string, string>;
 
 /**
- * Each section's id and kind. Pass a public view's portfolio, which has no
- * hidden section and no unregistered extension section, so a reference to
- * either is dangling, as it is when the variant renders.
+ * Each visible section's id and kind, and each visible record's id and the
+ * section kind that lists its type (#10). Pass a public view's portfolio,
+ * which holds no hidden section, private record, or unregistered extension
+ * section, so a reference to any of them is dangling, as it is when the
+ * variant renders.
  */
 export function contentIndex(portfolio: PublicPortfolio): ContentIndex {
-  return new Map(portfolio.sections.map((section) => [section.id, section.kind]));
+  const index = new Map<string, string>(
+    portfolio.sections.map((section) => [section.id, section.kind]),
+  );
+  for (const [kind, records] of [
+    ['works', portfolio.works],
+    ['evidence', portfolio.evidence],
+    ['chronology', portfolio.chronology],
+  ] as const) {
+    for (const { id } of records) if (!index.has(id)) index.set(id, kind);
+  }
+  return index;
 }
 
 export interface ControlProblem {
@@ -130,18 +147,28 @@ function valueProblems(
     case 'contentRef':
       if (value === null) return [];
       if (typeof value !== 'string') {
-        return [invalid('must be a section id or null.', 'Set a section id, or null for none.')];
+        return [
+          invalid(
+            'must be a section or record id, or null.',
+            'Set a section or record id, or null for none.',
+          ),
+        ];
       }
       return refProblems(control, value, content, path);
     case 'contentRefList': {
       if (!Array.isArray(value) || !value.every((item) => typeof item === 'string')) {
-        return [invalid('must be a list of section ids.', 'Set a list of section ids.')];
+        return [
+          invalid(
+            'must be a list of section or record ids.',
+            'Set a list of section or record ids.',
+          ),
+        ];
       }
       const problems: ControlProblem[] = [];
       if (value.length < control.min || value.length > control.max) {
         problems.push(
           invalid(
-            `must list from ${control.min} to ${control.max} sections.`,
+            `must list from ${control.min} to ${control.max} sections or records.`,
             `List between ${control.min} and ${control.max}.`,
           ),
         );
@@ -149,7 +176,7 @@ function valueProblems(
       const seen = new Set<string>();
       value.forEach((item, index) => {
         if (seen.has(item)) {
-          problems.push(invalid('lists a section twice.', 'Remove the repeat.', [...path, index]));
+          problems.push(invalid('lists an id twice.', 'Remove the repeat.', [...path, index]));
         }
         seen.add(item);
         problems.push(...refProblems(control, item, content, [...path, index]));
@@ -184,8 +211,9 @@ function refProblems(
       {
         code: 'controls.dangling-ref',
         path,
-        message: 'points at no visible section: none has that id, or the site document hides it.',
-        remediation: 'Point it at a visible section, or clear it.',
+        message:
+          'points at nothing visible: no section or record has that id, or it is hidden or private.',
+        remediation: 'Point it at a visible section or record, or clear it.',
       },
     ];
   }
@@ -194,8 +222,8 @@ function refProblems(
       {
         code: 'controls.invalid',
         path,
-        message: `points at a section of a kind the control doesn't take.`,
-        remediation: `Point it at a section of kind ${control.kinds.join(', ')}.`,
+        message: `points at content of a kind the control doesn't take.`,
+        remediation: `Point it at a section or record of kind ${control.kinds.join(', ')}.`,
       },
     ];
   }

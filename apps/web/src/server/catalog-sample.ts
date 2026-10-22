@@ -1,21 +1,18 @@
 import 'server-only';
 import path from 'node:path';
-import type {
-  AppearanceCatalog,
-  ContentExtension,
-  Portfolio,
-  UnitValidator,
-} from '@portfolio/schema';
-import { readPair, type PairFiles } from '@portfolio/schema/node';
+import type { AppearanceCatalog, ContentExtension, UnitValidator } from '@portfolio/schema';
+import { readPair, readUnitFiles, type PairFiles } from '@portfolio/schema/node';
 import type { CatalogReader, LiveRevision } from './catalog-port';
 import type { ConfigIssue } from './config';
 import { frozenUnit, pairDigest, recordIssue } from './pair-records';
 
 // The sample adapter (#1, item 16): the CatalogReader for `demo`. It reads
 // the bundled pair, portfolio.example.yml and site.example.yml, once at
-// startup, validates them as a pair, and freezes them. The standalone output
-// ships both through outputFileTracingIncludes. It never reads
-// PORTFOLIO_SOURCE_DIR.
+// startup, validates them as a pair, reads the snapshots bundled beside them
+// (#10: snapshots/github.json), and freezes it all. The standalone output
+// ships them through outputFileTracingIncludes. It never reads
+// PORTFOLIO_SOURCE_DIR, and nothing it renders fetches: a github section
+// shows the bundled snapshot's values.
 
 export interface SampleCatalogOptions {
   /** The bundled examples. */
@@ -61,7 +58,7 @@ export function openSampleCatalog({
       const [code, message] = UNREAD[unread.code as keyof typeof UNREAD];
       return {
         ok: false,
-        issues: [fatal(code, message, path.basename(examples[unread.document]))],
+        issues: [fatal(code, message, path.basename(examples[pairDocument(unread.document)]))],
       };
     }
     // Which file is enough: the sample's own records would only describe the build.
@@ -72,33 +69,45 @@ export function openSampleCatalog({
         fatal(
           'sample_invalid',
           "The bundled sample doesn't validate, so this build is broken.",
-          path.basename(examples[first?.document ?? 'portfolio']),
+          path.basename(examples[pairDocument(first?.document)]),
         ),
       ],
     };
   }
   const { pair, sources } = result;
+  const unitFiles = readUnitFiles(path.dirname(examples.portfolio));
+  const broken = unitFiles.diagnostics.find(({ severity }) => severity !== 'warning');
+  if (broken) {
+    // The files bundled beside the sample are the build's, a snapshot or the
+    // media document: one that doesn't read is a broken build.
+    return {
+      ok: false,
+      issues: [
+        fatal(
+          'sample_invalid',
+          `The bundled sample's ${broken.file ?? 'unit files'} doesn't read, so this build is broken.`,
+          broken.file ?? 'snapshots',
+        ),
+      ],
+    };
+  }
   const live: LiveRevision = Object.freeze({
     revisionId: `sample-${pairDigest(sources)}`,
-    unit: frozenUnit(withoutLiveData(pair.portfolio), pair.site),
+    unit: frozenUnit(pair.portfolio, pair.site, unitFiles),
   });
   const names = { portfolio: sources.portfolio.name, site: sources.site.name };
   return {
     ok: true,
-    issues: result.diagnostics.map((record) => recordIssue(record, KEY, names)),
+    issues: [...result.diagnostics, ...unitFiles.diagnostics].map((record) =>
+      recordIssue(record, KEY, names),
+    ),
     reader: Object.freeze({ getLive: async () => live }),
   };
 }
 
-/**
- * The sample without its `github` sections. Until #10 gives renderers
- * snapshot data, a github section fetches a live account from
- * api.github.com on every render, so the public demo would show someone's
- * real repositories and depend on an outside host. demo serves only the
- * bundled sample, so it drops them.
- */
-function withoutLiveData(portfolio: Portfolio): Portfolio {
-  return { ...portfolio, sections: portfolio.sections.filter(({ kind }) => kind !== 'github') };
+/** Which of the pair's two documents a record names: readPair's records name one or the other. */
+function pairDocument(document: string | undefined): keyof PairFiles {
+  return document === 'site' ? 'site' : 'portfolio';
 }
 
 function fatal(code: string, message: string, file: string): ConfigIssue {

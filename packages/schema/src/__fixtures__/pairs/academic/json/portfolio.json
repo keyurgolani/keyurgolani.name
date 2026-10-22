@@ -1,12 +1,13 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "locale": "de",
   "direction": "ltr",
   "identity": {
     "name": "Dr. Lukas Brenner",
     "tagline": "Computational ecologist",
     "pronouns": "he/him",
-    "location": "Leipzig, Germany"
+    "location": "Leipzig, Germany",
+    "email": "lukas@brenner.test"
   },
   "links": [
     {
@@ -20,110 +21,200 @@
       "label": "Scholar"
     }
   ],
-  "sections": [
+  "practice": {
+    "thesis": "Forests remember droughts. I measure that memory, one sensor and one hectare at a time, so models can plan for it."
+  },
+  "signature": "canopy-drought-memory",
+  "proof": [
+    "erc-starting-grant",
+    "drought-memory-in-temperate-canopies"
+  ],
+  "archive": [
+    "floodplain-survey"
+  ],
+  "works": [
     {
-      "kind": "lede",
-      "id": "research",
-      "title": "Research",
-      "body": "I model how forests answer drought, one sensor and one hectare at a time.\n"
+      "id": "canopy-drought-memory",
+      "slug": "canopy-drought-memory",
+      "title": "Canopy drought memory",
+      "medium": "research",
+      "summary": "A five-year program measuring how beech and oak canopies carry one drought into the next season.",
+      "period": {
+        "start": "2021-10"
+      },
+      "role": "Principal investigator",
+      "evidence": [
+        "drought-memory-in-temperate-canopies",
+        "erc-starting-grant"
+      ],
+      "caseStudy": {
+        "challenge": "Growth models treat each year as new, so they miss forests that are still recovering.",
+        "context": "Forty plots across Saxony, instrumented under the canopy.",
+        "role": "I designed the sensor network and lead the group that runs it.",
+        "outcomes": "A drought-memory term that improves next-season growth forecasts in every plot we tested."
+      }
     },
     {
-      "kind": "publications",
+      "id": "floodplain-survey",
+      "title": "Leipzig floodplain survey",
+      "medium": "research",
+      "summary": "A field survey of riparian forest structure, from my doctoral years.",
+      "period": {
+        "start": "2015",
+        "end": "2017"
+      }
+    }
+  ],
+  "evidence": [
+    {
+      "id": "drought-memory-in-temperate-canopies",
+      "type": "publication",
+      "title": "Drought memory in temperate canopies",
+      "url": "https://doi.test/10.1111/gcb.17000",
+      "authors": [
+        "Lukas Brenner",
+        "Ada Fischer"
+      ],
+      "venue": "Global Change Biology",
+      "publishedAt": "2025-02",
+      "doi": "10.1111/gcb.17000",
+      "pdfUrl": "/papers/drought-memory.pdf"
+    },
+    {
+      "id": "sensor-networks-for-under-canopy-climate",
+      "type": "publication",
+      "title": "Sensor networks for under-canopy climate",
+      "authors": [
+        "Lukas Brenner"
+      ],
+      "venue": "Methods in Ecology and Evolution",
+      "publishedAt": "2022-07"
+    },
+    {
+      "id": "what-trees-remember",
+      "type": "talk",
+      "title": "What trees remember",
+      "venue": "Ecological Society of Germany",
+      "location": "Freiburg",
+      "presentedAt": "2025-09-10",
+      "format": "keynote"
+    },
+    {
+      "id": "erc-starting-grant",
+      "type": "award",
+      "title": "ERC Starting Grant",
+      "organization": "European Research Council",
+      "receivedAt": "2023"
+    },
+    {
+      "id": "low-power-canopy-humidity-sensor",
+      "type": "patent",
+      "title": "Low-power canopy humidity sensor",
+      "number": "DE-10-2022-000-123",
+      "status": "pending",
+      "filedAt": "2022-03-01",
+      "inventors": [
+        "Lukas Brenner"
+      ]
+    }
+  ],
+  "chronology": [
+    {
+      "id": "ph-d-universitat-leipzig",
+      "kind": "study",
+      "title": "Ph.D.",
+      "period": {
+        "start": "2014",
+        "end": "2018"
+      },
+      "organization": "Universität Leipzig",
+      "field": "Ecology",
+      "thread": "study",
+      "works": [
+        "floodplain-survey"
+      ]
+    },
+    {
+      "id": "group-leader-helmholtz-centre-for-environmental-research",
+      "kind": "role",
+      "title": "Group Leader",
+      "period": {
+        "start": "2021-10"
+      },
+      "organization": "Helmholtz Centre for Environmental Research",
+      "thread": "work",
+      "branchesFrom": "ph-d-universitat-leipzig",
+      "works": [
+        "canopy-drought-memory"
+      ]
+    }
+  ],
+  "contact": {
+    "message": "Students and collaborators are welcome to write about the plots."
+  },
+  "sections": [
+    {
+      "kind": "practice",
+      "id": "research",
+      "title": "Research",
+      "part": "thesis"
+    },
+    {
+      "kind": "works",
+      "id": "program",
+      "title": "Program",
+      "items": [
+        "canopy-drought-memory",
+        "floodplain-survey"
+      ]
+    },
+    {
+      "kind": "evidence",
       "id": "papers",
       "title": "Papers",
       "items": [
-        {
-          "title": "Drought memory in temperate canopies",
-          "authors": [
-            "Lukas Brenner",
-            "Ada Fischer"
-          ],
-          "venue": "Global Change Biology",
-          "publishedAt": "2025-02",
-          "doi": "10.1111/gcb.17000",
-          "url": "https://doi.test/10.1111/gcb.17000",
-          "pdfUrl": "/papers/drought-memory.pdf"
-        },
-        {
-          "title": "Sensor networks for under-canopy climate",
-          "authors": [
-            "Lukas Brenner"
-          ],
-          "venue": "Methods in Ecology and Evolution",
-          "publishedAt": "2022-07"
-        }
+        "drought-memory-in-temperate-canopies",
+        "sensor-networks-for-under-canopy-climate"
       ]
     },
     {
-      "kind": "talks",
+      "kind": "evidence",
       "id": "talks",
       "title": "Talks",
       "items": [
-        {
-          "title": "What trees remember",
-          "venue": "Ecological Society of Germany",
-          "location": "Freiburg",
-          "presentedAt": "2025-09-10",
-          "type": "keynote"
-        }
+        "what-trees-remember"
       ]
     },
     {
-      "kind": "education",
+      "kind": "chronology",
       "id": "education",
       "title": "Education",
       "items": [
-        {
-          "degree": "Ph.D.",
-          "field": "Ecology",
-          "institution": "Universität Leipzig",
-          "period": {
-            "start": "2014",
-            "end": "2018"
-          }
-        }
+        "ph-d-universitat-leipzig"
       ]
     },
     {
-      "kind": "experience",
+      "kind": "chronology",
       "id": "positions",
       "title": "Positions",
       "items": [
-        {
-          "role": "Group Leader",
-          "organization": "Helmholtz Centre for Environmental Research",
-          "period": {
-            "start": "2021-10"
-          }
-        }
+        "group-leader-helmholtz-centre-for-environmental-research"
       ]
     },
     {
-      "kind": "awards",
+      "kind": "evidence",
       "id": "grants",
       "title": "Grants",
       "items": [
-        {
-          "name": "ERC Starting Grant",
-          "organization": "European Research Council",
-          "receivedAt": "2023"
-        }
+        "erc-starting-grant"
       ]
     },
     {
-      "kind": "patents",
+      "kind": "evidence",
       "id": "patents",
       "title": "Patents",
       "items": [
-        {
-          "title": "Low-power canopy humidity sensor",
-          "number": "DE-10-2022-000-123",
-          "status": "pending",
-          "filedAt": "2022-03-01",
-          "inventors": [
-            "Lukas Brenner"
-          ]
-        }
+        "low-power-canopy-humidity-sensor"
       ]
     },
     {

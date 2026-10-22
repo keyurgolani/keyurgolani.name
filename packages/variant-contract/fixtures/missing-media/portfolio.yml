@@ -1,65 +1,87 @@
-# Contract fixture (#5, Slice 6): images that never arrive. Every image points at a path
-# this app has no file for, so each answers 404, and some items carry no image at all, so a
-# composition shows its alt text and keeps its layout either way.
-schemaVersion: 2
+# Contract fixture (#5, Slice 6; #10): images that never arrive. Every media asset names a
+# path under the media root that has no file, so no rendition is ever derived and each one
+# renders as unavailable, and some items carry no image at all, so a composition keeps its
+# layout either way, with the image's box, caption, and credit.
+schemaVersion: 3
 locale: en
 direction: ltr
-
 identity:
   name: Mira Missing
   tagline: The pictures are somewhere else
   avatar:
-    src: /media/missing-avatar.png
+    asset: avatar
+works:
+  - id: harbor-and-hills
+    title: Gallery
+    medium: image-series
+    media:
+      - asset: harbor-photo
+        caption: The harbor
+      - asset: hills-photo
+        caption: The hills
+  - id: a-project-with-a-missing-picture
+    title: A project with a missing picture
+    medium: software
+    summary: Its screenshot answers 404.
+    cover:
+      asset: a-project-with-a-missing-picture-cover
+  - id: a-project-with-no-picture
+    title: A project with no picture
+    medium: software
+    summary: It never had one.
+evidence:
+  - id: pat-absent
+    type: testimonial
+    statement: The photos were great, when they loaded.
+    source:
+      name: Pat Absent
+      avatar:
+        asset: pat-absent-avatar
+        decorative: true
+  - id: lee-unpictured
+    type: testimonial
+    statement: No photo of me, please.
+    source:
+      name: Lee Unpictured
+media:
+  - id: avatar
+    kind: image
+    source: missing/avatar.png
     alt: Mira, smiling, in a missing photo
-    width: 400
-    height: 400
-
+  - id: harbor-photo
+    kind: image
+    source: missing/harbor.png
+    alt: A harbor at dusk that didn't load
+  - id: hills-photo
+    kind: image
+    source: missing/hills.jpg
+    alt: Green hills under rain that didn't load
+  - id: a-project-with-a-missing-picture-cover
+    kind: image
+    source: missing/project.png
+    alt: The project's main screen, missing
+  - id: pat-absent-avatar
+    kind: image
+    source: missing/pat.png
+    alt: Pat, missing
 sections:
   - kind: hero
     id: top
     tagline: Every picture here is lost.
-
-  - kind: gallery
+  - kind: works
     id: gallery
     title: Gallery
     items:
-      - image:
-          src: /media/missing-harbor.png
-          alt: A harbor at dusk that didn't load
-          width: 1200
-          height: 800
-        caption: The harbor
-      - image:
-          src: /media/missing-hills.jpg
-          alt: Green hills under rain that didn't load
-          width: 800
-          height: 1200
-        caption: The hills
-
-  - kind: projects
+      - harbor-and-hills
+  - kind: works
     id: projects
     title: Projects
     items:
-      - name: A project with a missing picture
-        summary: Its screenshot answers 404.
-        image:
-          src: /media/missing-project.png
-          alt: The project's main screen, missing
-          width: 1280
-          height: 720
-      - name: A project with no picture
-        summary: It never had one.
-
-  - kind: testimonials
+      - a-project-with-a-missing-picture
+      - a-project-with-no-picture
+  - kind: evidence
     id: testimonials
     title: What people say
     items:
-      - quote: The photos were great, when they loaded.
-        author: Pat Absent
-        authorAvatar:
-          src: /media/missing-pat.png
-          alt: Pat, missing
-          width: 96
-          height: 96
-      - quote: No photo of me, please.
-        author: Lee Unpictured
+      - pat-absent
+      - lee-unpictured

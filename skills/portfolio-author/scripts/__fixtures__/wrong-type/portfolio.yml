@@ -1,4 +1,4 @@
-schemaVersion: 2
+schemaVersion: 3
 locale: en
 direction: ltr
 
@@ -6,7 +6,7 @@ identity:
   name: 42
   tagline: Engineer & writer
 
-links: []
+meta: { title: Test User }
 
 sections:
   - kind: hero

@@ -6,6 +6,7 @@ import { build } from 'esbuild';
 import { parse as parseYaml } from 'yaml';
 import { defineContentExtension } from './extensions';
 import { SITE_SKELETON, SITE_SKELETON_JSON } from './legacy';
+import { PUBLICATION_VALIDATORS } from './published-urls';
 import type { AppearanceSelection } from './site';
 import {
   DIAGNOSTIC_SEVERITIES,
@@ -20,13 +21,15 @@ import {
 const lines = (...text: string[]) => `${text.join('\n')}\n`;
 
 const PORTFOLIO = lines(
-  'schemaVersion: 2',
+  'schemaVersion: 3',
   'locale: en',
   'direction: ltr',
   'identity:',
   '  name: Rowan Test',
   'links:',
   '  - url: https://rowan.name',
+  'contact:',
+  '  message: Write any time.',
   'sections:',
   '  - kind: lede',
   '    id: about',
@@ -216,54 +219,63 @@ test('appearance inputs are checked against the generator each names, when there
   ]);
 });
 
-test('an informative image with no words for what it shows warns, at the image', () => {
-  const gallery = (item: string) =>
-    PORTFOLIO.concat(lines('  - kind: gallery', '    id: plates', '    items:', item));
-  const result = validate(gallery('      - image: { src: /a.png }'));
+/** PORTFOLIO with top-level records before its sections, and more sections after them. */
+const withRecords = (records: readonly string[], sections: readonly string[] = []) =>
+  PORTFOLIO.replace('sections:\n', lines(...records, 'sections:')).concat(
+    sections.length > 0 ? lines(...sections) : '',
+  );
+
+test('an image placement visitors see with no alt text warns, at the placement', () => {
+  const covered = (asset: string, cover = '{ asset: map }') =>
+    withRecords(
+      [
+        'works:',
+        '  - id: atlas',
+        '    title: Atlas',
+        '    medium: interface',
+        `    cover: ${cover}`,
+        'media:',
+        `  - { id: map, kind: image, source: atlas/map.png${asset} }`,
+      ],
+      ['  - kind: works', '    id: work', '    items: [atlas]'],
+    );
+  const result = validate(covered(''));
   assert.ok(result.pair);
   assert.deepEqual(found(result.diagnostics), [
-    ['portfolio', 'image.alt-missing', 'warning', '/sections/2/items/0/image', 19, 16],
+    ['portfolio', 'image.alt-missing', 'warning', '/works/0/cover', 14, 12],
   ]);
   assert.equal(
     result.diagnostics[0]!.message,
-    "/sections/2/items/0/image has no alt text or caption, so a visitor who can't see it can't tell what it shows.",
+    "/works/0/cover shows an image with no alt text, so a visitor who can't see it can't tell what it shows.",
   );
-  assert.match(result.diagnostics[0]!.remediation, /alt: '' if it's only decoration/);
-  // A caption says what it shows, and alt: '' marks decoration on purpose.
-  for (const item of [
-    '      - { image: { src: /a.png }, caption: The harbor at dawn }',
-    "      - image: { src: /a.png, alt: '' }",
-  ]) {
-    assert.deepEqual(codes(validate(gallery(item)).diagnostics), [], item);
+  assert.match(result.diagnostics[0]!.remediation, /decorative: true if it's only decoration/);
+  // Alt text on the asset or the placement says what it shows, and decorative marks decoration.
+  for (const [asset, cover] of [
+    [', alt: The tidal map', undefined],
+    ['', '{ asset: map, alt: The tidal map }'],
+    [', decorative: true', undefined],
+    ['', '{ asset: map, decorative: true }'],
+  ] as const) {
+    assert.deepEqual(codes(validate(covered(asset, cover)).diagnostics), [], `${asset} ${cover}`);
   }
-  // A hidden section shows nothing to describe.
-  const hidden = `${SITE}sections:\n  plates: { hidden: true }\n`;
-  assert.deepEqual(
-    codes(validate(gallery('      - image: { src: /a.png }'), hidden).diagnostics),
-    [],
-  );
-
-  const screenshots = PORTFOLIO.concat(
-    lines(
-      '  - kind: projects',
-      '    id: work',
-      '    items:',
-      '      - name: Tide',
-      '        image: { src: /cover.png }',
-      '        images: [{ src: /one.png, alt: The month view }, { src: /two.png }]',
-    ),
-  );
-  // The cover sits beside the project's name, which says what it's of.
-  assert.deepEqual(codes(validate(screenshots).diagnostics), [
-    'portfolio:image.alt-missing:/sections/2/items/0/images/1',
+  // A caption isn't alt text, and a placement can take decoration back.
+  assert.deepEqual(codes(validate(covered('', '{ asset: map, caption: The map }')).diagnostics), [
+    'portfolio:image.alt-missing:/works/0/cover',
   ]);
+  assert.deepEqual(
+    codes(validate(covered(', decorative: true', '{ asset: map, decorative: false }')).diagnostics),
+    ['portfolio:image.alt-missing:/works/0/cover'],
+  );
+  // A work only a hidden section lists shows nothing to describe.
+  const hidden = `${SITE}sections:\n  work: { hidden: true }\n`;
+  assert.deepEqual(codes(validate(covered(''), hidden).diagnostics), []);
 });
 
 test('repeated ids, missing references, and empty content block publishing, but the pair renders', () => {
   const repeated = validate(PORTFOLIO.replace('    id: contact', '    id: about'));
   assert.ok(repeated.pair);
   assert.deepEqual(found(repeated.diagnostics), [
-    ['portfolio', 'id.duplicate', 'blocks-publish', '/sections/1/id', 14, 9],
+    ['portfolio', 'id.duplicate', 'blocks-publish', '/sections/1/id', 16, 9],
   ]);
   assert.equal(repeated.diagnostics[0]!.stableId, 'about');
 
@@ -271,14 +283,90 @@ test('repeated ids, missing references, and empty content block publishing, but 
   const result = validate(undefined, site);
   assert.ok(result.pair);
   assert.deepEqual(found(result.diagnostics), [
-    ['portfolio', 'content.empty', 'blocks-publish', '/sections', 9, 3],
+    ['portfolio', 'content.empty', 'blocks-publish', '/sections', 11, 3],
     ['site', 'ref.missing', 'blocks-publish', '/sections/gone', 20, 9],
   ]);
   assert.equal(result.diagnostics[1]!.stableId, 'gone');
 });
 
-test('a #fragment link has to name a visible section', () => {
-  const portfolio = PORTFOLIO.replace(
+test('references resolve to a record of the right type, and the curation lists stay apart', () => {
+  const portfolio = withRecords(
+    [
+      'signature: atlas',
+      'featured: [atlas, ledger, ledger, nowhere]',
+      'proof: [about]',
+      'archive: [ledger]',
+      'works:',
+      '  - { id: atlas, title: Atlas, medium: interface, cover: { asset: tide-audio } }',
+      '  - { id: ledger, title: Ledger, medium: research, evidence: [atlas] }',
+      '  - { id: notebook, title: Notebook, medium: writing, visibility: private }',
+      'media:',
+      '  - { id: tide-audio, kind: audio, source: tide.mp3 }',
+    ],
+    ['  - kind: works', '    id: work', '    items: [atlas, notebook]'],
+  );
+  const result = validate(portfolio);
+  assert.ok(result.pair);
+  assert.deepEqual(codes(result.diagnostics), [
+    'portfolio:curation.overlap:/archive/0',
+    'portfolio:curation.overlap:/featured/0',
+    'portfolio:curation.overlap:/featured/2',
+    'portfolio:ref.unresolved:/featured/3',
+    'portfolio:ref.type:/proof/0',
+    'portfolio:ref.private:/sections/2/items/1',
+    'portfolio:ref.type:/works/0/cover/asset',
+    'portfolio:ref.type:/works/1/evidence/0',
+  ]);
+  const message = (pointer: string) =>
+    result.diagnostics.find((diagnostic) => diagnostic.pointer === pointer)?.message;
+  assert.equal(message('/featured/3'), '/featured/3 names no work in the portfolio.');
+  assert.equal(message('/proof/0'), '/proof/0 names a section, not a evidence.');
+  assert.equal(
+    message('/works/0/cover/asset'),
+    '/works/0/cover/asset names a media asset of kind audio; this place shows image.',
+  );
+  assert.equal(
+    message('/sections/2/items/1'),
+    '/sections/2/items/1 names a private work, so it drops out of what visitors see.',
+  );
+});
+
+test('case studies take routes no other public case study has', () => {
+  const portfolio = withRecords(
+    [
+      'works:',
+      '  - { id: atlas, slug: tide, title: Atlas, medium: interface, caseStudy: { challenge: A } }',
+      '  - { id: ledger, slug: tide, title: Ledger, medium: research, caseStudy: { challenge: B } }',
+      '  - { id: notes, slug: tide, title: Notes, medium: writing, caseStudy: { challenge: C }, visibility: private }',
+      '  - { id: sketch, slug: tide, title: Sketch, medium: object }',
+    ],
+    ['  - kind: works', '    id: work', '    items: [atlas, ledger, sketch]'],
+  );
+  assert.deepEqual(codes(validate(portfolio).diagnostics), [
+    'portfolio:slug.duplicate:/works/1/slug',
+  ]);
+});
+
+test('a #fragment link has to name a visible section or a record visitors see', () => {
+  const portfolio = withRecords(
+    [
+      'works:',
+      '  - { id: atlas, title: Atlas, medium: interface }',
+      '  - { id: notebook, title: Notebook, medium: writing, visibility: private }',
+      '  - { id: unlisted, title: Unlisted, medium: writing }',
+    ],
+    [
+      '  - kind: works',
+      '    id: work',
+      '    items: [atlas]',
+      '  - kind: cta',
+      '    id: hidden-bit',
+      '    primaryAction: { url: "#also-nowhere", label: Go }',
+      "  - kind: '@other/x/y'",
+      '    id: extra',
+      '    data: { url: "#nowhere-either" }',
+    ],
+  ).replace(
     '  - url: https://rowan.name',
     [
       '  - url: "#contact"',
@@ -287,84 +375,78 @@ test('a #fragment link has to name a visible section', () => {
       '  - url: "#nowhere"',
       '  - url: "#hidden-bit"',
       '  - url: "#"',
+      '  - url: "#atlas"',
+      '  - url: "#notebook"',
+      '  - url: "#unlisted"',
     ].join('\n'),
-  ).concat(
-    lines(
-      '  - kind: cta',
-      '    id: hidden-bit',
-      '    primaryAction: { url: "#also-nowhere" }',
-      "  - kind: '@other/x/y'",
-      '    id: extra',
-      '    data: { url: "#nowhere-either" }',
-    ),
   );
   const site = `${SITE}sections:\n  hidden-bit: { hidden: true }\n`;
-  // Only links visitors see are checked, and only visible sections count.
-  assert.deepEqual(found(validate(portfolio, site).diagnostics), [
-    ['portfolio', 'anchor.broken', 'blocks-publish', '/links/3/url', 10, 10],
-    ['portfolio', 'anchor.broken', 'blocks-publish', '/links/4/url', 11, 10],
-    ['portfolio', 'extension.unregistered', 'warning', '/sections/3', 24, 5],
-  ]);
-});
-
-test('a metric with two values blocks publishing, and one shown twice warns', () => {
-  const portfolio = PORTFOLIO.concat(
-    lines(
-      '  - kind: stats',
-      '    id: numbers',
-      '    items:',
-      '      - { metric: tenure-years, value: "12", label: Years }',
-      '      - { metric: talks, value: " Forty ", label: Talks }',
-      '  - kind: tenure',
-      '    id: tenure',
-      '    years: 12',
-      '  - kind: stats',
-      '    id: more-numbers',
-      '    items:',
-      '      - { metric: tenure-years, value: 13, label: Years }',
-      '      - { metric: talks, value: forty, label: Talks }',
-    ),
-  );
-  const result = validate(portfolio);
-  assert.ok(result.pair);
-  assert.deepEqual(found(result.diagnostics), [
-    ['portfolio', 'metric.duplicate', 'warning', '/sections/3/years', 23, 12],
-    ['portfolio', 'metric.conflict', 'blocks-publish', '/sections/4/items/0/value', 27, 40],
-    ['portfolio', 'metric.duplicate', 'warning', '/sections/4/items/1/value', 28, 33],
-  ]);
-  assert.equal(
-    result.diagnostics[1]!.message,
-    '/sections/4/items/0/value and /sections/2/items/0/value give one metric different values.',
-  );
-});
-
-test('a hidden first statement of a metric hides no visible duplicate', () => {
-  const stats = (id: string, value: string) =>
-    lines(
-      '  - kind: stats',
-      `    id: ${id}`,
-      '    items:',
-      `      - { metric: talks, value: "${value}", label: Talks }`,
-    );
-  const portfolio = PORTFOLIO.concat(stats('one', '12'), stats('two', '12'), stats('three', '12'));
-  const site = `${SITE}sections:\n  one: { hidden: true }\n`;
+  // Only links visitors see are checked, against visible sections and kept records.
   assert.deepEqual(codes(validate(portfolio, site).diagnostics), [
-    'portfolio:metric.duplicate:/sections/4/items/0/value',
+    'portfolio:anchor.broken:/links/3/url',
+    'portfolio:anchor.broken:/links/4/url',
+    'portfolio:anchor.broken:/links/7/url',
+    'portfolio:anchor.broken:/links/8/url',
+    'portfolio:extension.unregistered:/sections/4',
   ]);
   assert.equal(
     validate(portfolio, site).diagnostics[0]!.message,
-    '/sections/4/items/0/value and /sections/3/items/0/value show one metric with the same value.',
+    '/links/3/url links to no visible section or record.',
+  );
+});
+
+/** Metric evidence, one per [id, key, value], each in an evidence section of its own. */
+const metrics = (...stated: Array<[id: string, key: string, value: number]>) =>
+  withRecords(
+    [
+      'evidence:',
+      ...stated.map(
+        ([id, key, value]) =>
+          `  - { id: ${id}, type: metric, statement: ${id}, metric: { key: ${key}, value: ${value} } }`,
+      ),
+    ],
+    stated.flatMap(([id]) => ['  - kind: evidence', `    id: ${id}-section`, `    items: [${id}]`]),
+  );
+
+test('a metric with two values blocks publishing, and one shown twice warns', () => {
+  const result = validate(
+    metrics(
+      ['years', 'tenure-years', 12],
+      ['talks', 'talks', 40],
+      ['tenure', 'tenure-years', 12],
+      ['years-later', 'tenure-years', 13],
+      ['talks-again', 'talks', 40],
+    ),
+  );
+  assert.ok(result.pair);
+  assert.deepEqual(codes(result.diagnostics), [
+    'portfolio:metric.duplicate:/evidence/2/metric/value',
+    'portfolio:metric.conflict:/evidence/3/metric/value',
+    'portfolio:metric.duplicate:/evidence/4/metric/value',
+  ]);
+  assert.equal(
+    result.diagnostics[1]!.message,
+    '/evidence/3/metric/value and /evidence/0/metric/value give one metric different values.',
+  );
+  assert.equal(result.diagnostics[1]!.line, 14);
+});
+
+test('a hidden first statement of a metric hides no visible duplicate', () => {
+  const site = `${SITE}sections:\n  one-section: { hidden: true }\n`;
+  const portfolio = metrics(['one', 'talks', 12], ['two', 'talks', 12], ['three', 'talks', 12]);
+  assert.deepEqual(codes(validate(portfolio, site).diagnostics), [
+    'portfolio:metric.duplicate:/evidence/2/metric/value',
+  ]);
+  assert.equal(
+    validate(portfolio, site).diagnostics[0]!.message,
+    '/evidence/2/metric/value and /evidence/1/metric/value show one metric with the same value.',
   );
   // A hidden first statement with another value still contradicts the visible ones.
-  const contradicted = PORTFOLIO.concat(
-    stats('one', '9'),
-    stats('two', '12'),
-    stats('three', '12'),
-  );
+  const contradicted = metrics(['one', 'talks', 9], ['two', 'talks', 12], ['three', 'talks', 12]);
   assert.deepEqual(codes(validate(contradicted, site).diagnostics), [
-    'portfolio:metric.conflict:/sections/3/items/0/value',
-    'portfolio:metric.conflict:/sections/4/items/0/value',
-    'portfolio:metric.duplicate:/sections/4/items/0/value',
+    'portfolio:metric.conflict:/evidence/1/metric/value',
+    'portfolio:metric.conflict:/evidence/2/metric/value',
+    'portfolio:metric.duplicate:/evidence/2/metric/value',
   ]);
 });
 
@@ -508,7 +590,7 @@ test('a comment holding a secret blocks publishing, located at the comment', () 
   );
   assert.deepEqual(
     validate(everywhere).diagnostics.map(({ code, line }) => `${code}:${line}`),
-    ['secret.detected:1', 'secret.detected:8', 'secret.detected:17', 'secret.detected:18'],
+    ['secret.detected:1', 'secret.detected:8', 'secret.detected:19', 'secret.detected:20'],
   );
 });
 
@@ -604,7 +686,11 @@ test('unregistered extension data warns in either document', () => {
 test('diagnostics sort by document, pointer with indexes in number order, and code', () => {
   const portfolio = PORTFOLIO.concat(
     Array.from({ length: 10 }, (_, index) =>
-      lines(`  - kind: cta`, `    id: c${index}`, `    primaryAction: { url: "#x${index}" }`),
+      lines(
+        `  - kind: cta`,
+        `    id: c${index}`,
+        `    primaryAction: { url: "#x${index}", label: Go }`,
+      ),
     ).join(''),
   );
   const pointers = validate(portfolio).diagnostics.map(({ pointer }) => pointer);
@@ -679,7 +765,7 @@ test("a plugged-in validator's records are located, redacted, and checked whole"
   const good = run(record(), record({ pointer: `/${token}`, document: 'site' }));
   // Located from the pointer, the section's id attached, and every string redacted.
   assert.deepEqual(found(good.diagnostics), [
-    ['portfolio', 'route.unknown', 'blocks-publish', '/sections/1/title', 15, 12],
+    ['portfolio', 'route.unknown', 'blocks-publish', '/sections/1/title', 17, 12],
     ['site', 'route.unknown', 'blocks-publish', '/[secret]', 1, 1],
   ]);
   assert.equal(good.diagnostics[0]!.stableId, 'contact');
@@ -879,13 +965,6 @@ test('the bundled example has no blocking diagnostic', () => {
 
 test('every diagnostic code comes with a line and column, in YAML and JSON', () => {
   const token = `ghp_${'w'.repeat(36)}`;
-  const stats = (id: string, value: string) =>
-    lines(
-      '  - kind: stats',
-      `    id: ${id}`,
-      '    items:',
-      `      - { metric: talks, value: "${value}", label: Talks }`,
-    );
   const links = [
     '  - url: "#nowhere"',
     '  - url: https://example.org',
@@ -901,24 +980,67 @@ test('every diagnostic code comes with a line and column, in YAML and JSON', () 
       defineContentExtension({ namespace: 'twin' }),
     ],
   };
+  // At publish: the live revision listed a case study, and gave atlas to a work.
+  const live = validate(
+    withRecords(
+      [
+        'works:',
+        '  - { id: atlas, slug: tide, title: Atlas, medium: system, caseStudy: { role: Lead } }',
+      ],
+      ['  - kind: works', '    id: work', '    items: [atlas]'],
+    ),
+  ).pair!;
+  const publishing: Context = {
+    ...CONTEXT,
+    validators: PUBLICATION_VALIDATORS,
+    publication: { live: { pair: live, snapshots: {} } },
+  };
   // Each YAML unit but the first has a JSON twin; JSON's syntax error is its own.
   const units: Array<{ portfolio?: string; site?: string; json?: string; ctx?: Context }> = [
-    { portfolio: PORTFOLIO.replace('identity:', 'identity: &a'), json: '{ "schemaVersion": 2, }' },
+    { portfolio: PORTFOLIO.replace('identity:', 'identity: &a'), json: '{ "schemaVersion": 3, }' },
     { portfolio: PORTFOLIO.replace('  name: Rowan Test', '  name: 7') },
+    { portfolio: PORTFOLIO.replace('schemaVersion: 3', 'schemaVersion: 2') },
+    { portfolio: PORTFOLIO.replace('    id: about\n', '') },
+    { portfolio: PORTFOLIO.replace('    id: about', '    id: About') },
     { site: SITE.replace('schemaVersion: 2', 'schemaVersion: 1') },
     { site: `${SITE}origin: x\n` },
     { site: SITE.replace('colorScheme: warm', 'colorScheme: neon') },
     { portfolio: PORTFOLIO.replace('    id: contact', '    id: about') },
-    { site: `${SITE}sections:\n  gone: { hidden: true }\n` },
-    { portfolio: PORTFOLIO.concat(stats('one', '1'), stats('two', '1'), stats('three', '2')) },
     {
-      portfolio: PORTFOLIO.concat(
-        lines(
-          '  - kind: gallery',
-          '    id: plates',
-          '    items:',
-          '      - image: { src: /a.png }',
-        ),
+      portfolio: PORTFOLIO.concat(lines('  - kind: lede', '    id: atlas', '    body: Hi')),
+      ctx: publishing,
+    },
+    { site: `${SITE}sections:\n  gone: { hidden: true }\n` },
+    {
+      portfolio: withRecords(
+        [
+          'featured: [atlas, atlas, nowhere]',
+          'proof: [about]',
+          'works:',
+          '  - { id: atlas, slug: tide, title: Atlas, medium: system, caseStudy: { role: Lead } }',
+          '  - { id: ledger, slug: tide, title: Ledger, medium: system, caseStudy: { role: Lead } }',
+          '  - { id: notebook, title: Notebook, medium: writing, visibility: private }',
+        ],
+        [
+          '  - kind: works',
+          '    id: work',
+          '    items: [atlas, ledger, notebook]',
+          '  - kind: practice',
+          '    id: skills',
+          '    part: skills',
+        ],
+      ),
+    },
+    { portfolio: metrics(['one', 'talks', 1], ['two', 'talks', 1], ['three', 'talks', 2]) },
+    {
+      portfolio: withRecords(
+        [
+          'works:',
+          '  - { id: atlas, title: Atlas, medium: interface, cover: { asset: map } }',
+          'media:',
+          '  - { id: map, kind: image, source: atlas/map.png }',
+        ],
+        ['  - kind: works', '    id: work', '    items: [atlas]'],
       ),
     },
     { portfolio: PORTFOLIO.replace('  - url: https://rowan.name', links) },
@@ -947,10 +1069,11 @@ test('every diagnostic code comes with a line and column, in YAML and JSON', () 
         );
       }
     }
-    // The source.* codes are about the directory and its files, which only
-    // loadPair() reads (node.test.ts).
+    // The source.*, snapshot.*, and media.* codes are about the directory and
+    // the files beside the pair, which only @portfolio/schema/node reads
+    // (node.test.ts).
     const unitCodes = Object.keys(DIAGNOSTIC_SEVERITIES).filter(
-      (code) => !code.startsWith('source.'),
+      (code) => !/^(?:source|snapshot|media)\./.test(code),
     );
     assert.deepEqual([...seen].sort(), unitCodes.sort(), format);
   }

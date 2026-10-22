@@ -1,6 +1,7 @@
 import type { Hero, Lede, Now } from '@portfolio/schema';
+import { MediaFigure } from '../media';
+import { placedMedia } from '../placement';
 import {
-  ContentImage,
   Heading,
   LabeledDate,
   LinkText,
@@ -23,13 +24,13 @@ export function HeroSection({ section, input, level }: SectionRendererProps<Hero
   const { identity } = input.portfolio;
   const name = present(section.name) ? section.name : identity.name;
   const tagline = present(section.tagline) ? section.tagline : identity.tagline;
+  const avatar = placedMedia(identity.avatar, ctx);
   return (
     <div className="pf-hero">
       {present(section.title) ? <p className="pf-hero__label">{section.title}</p> : null}
       {present(section.greeting) ? <p className="pf-hero__greeting">{section.greeting}</p> : null}
-      {identity.avatar ? (
-        // The name beside it says who it shows.
-        <ContentImage image={identity.avatar} ctx={ctx} className="pf-avatar" inline decorative />
+      {avatar ? (
+        <MediaFigure placed={avatar} ctx={ctx} className="pf-avatar" sizes="3rem" inline />
       ) : null}
       <Heading level={level} className="pf-hero__name">
         {name}
@@ -66,11 +67,12 @@ export function LedeSection({ section, input, level }: SectionRendererProps<Lede
   );
 }
 
+/** What the owner is doing now, as of the date they give. */
 export function NowSection({ section, input, level }: SectionRendererProps<Now>) {
   const ctx = renderContext(input, section, level);
   return (
     <>
-      <SectionHeader section={section} ctx={ctx} fallback="Now" />
+      <SectionHeader section={section} ctx={ctx} />
       <Meta
         parts={[
           section.asOf !== undefined && (

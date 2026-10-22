@@ -10,15 +10,16 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// `pnpm config:migrate` and `pnpm config:validate`, run the way the root
-// scripts run them: config.mjs through tsx. Each run gets a scratch directory
-// as INIT_CWD, the directory pnpm would have run in.
+// `pnpm config:migrate`, `pnpm config:validate`, and `pnpm config:ids-fix`,
+// run the way the root scripts run them: config.mjs through tsx. Each run
+// gets a scratch directory as INIT_CWD, the directory pnpm would have run in.
 
 const CONFIG = fileURLToPath(new URL('./config.mjs', import.meta.url));
 const TSX = fileURLToPath(import.meta.resolve('tsx/cli'));
@@ -73,7 +74,7 @@ test('--write puts both documents in --out, never over a file, and never touches
   assert.match(run.stdout, /\nWrote new\/portfolio\.yml and new\/site\.yml\.\n$/);
   const portfolio = readFileSync(path.join(dir, 'new', 'portfolio.yml'), 'utf8');
   const site = readFileSync(path.join(dir, 'new', 'site.yml'), 'utf8');
-  assert.match(portfolio, /^schemaVersion: 2\nlocale: en\ndirection: ltr\n/);
+  assert.match(portfolio, /^schemaVersion: 3\nlocale: en\ndirection: ltr\n/);
   assert.match(site, /\n {2}colorScheme: warm\n {2}typography: classic\n/);
   // The dry run printed this very site document.
   assert.ok(run.stdout.includes(`site.yml:\n${site}`));
@@ -110,7 +111,7 @@ test('--write puts both documents in --out, never over a file, and never touches
   assert.equal(current.code, 0);
   assert.match(
     current.stdout,
-    /is already a schemaVersion 2 portfolio document\. Nothing to migrate\./,
+    /is already a schemaVersion 3 portfolio document\. Nothing to migrate\./,
   );
 });
 
@@ -131,9 +132,58 @@ test('a JSON file is written as JSON, and a summary leaves its values out', (t) 
   const site = JSON.parse(readFileSync(path.join(dir, 'site.json'), 'utf8'));
   assert.equal(portfolio.identity.name, 'Rowan Owner');
   assert.deepEqual(site.sections, { talks: { hidden: true } });
-  for (const value of ['Rowan Owner', 'rowan-old', 'Lisbon', 'talks', '=warm']) {
+  // The section's id, talks, is a value; "the talks section", its old kind, isn't.
+  assert.match(run.stdout, /The talks section is an evidence section/);
+  for (const value of [
+    'Rowan Owner',
+    'rowan-old',
+    'Lisbon',
+    'calm-systems',
+    '/sections/talks',
+    'is talks',
+    '"talks"',
+    '=warm',
+  ]) {
     assert.ok(!run.stdout.includes(value), value);
   }
+});
+
+test("a version 2 portfolio's site document is written too, in its own format, when a section it names goes", (t) => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'config-migrate-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const root = fileURLToPath(new URL('../../../', import.meta.url));
+  const portfolio = {
+    schemaVersion: 2,
+    locale: 'en',
+    direction: 'ltr',
+    identity: { name: 'Rowan Two' },
+    sections: [
+      { kind: 'lede', id: 'about', title: 'About', body: 'Hi.' },
+      { kind: 'lede', id: 'later', title: 'Later', body: 'Soon.' },
+      { kind: 'talks', id: 'talks', title: 'Talks', items: [] },
+    ],
+  };
+  writeFileSync(path.join(dir, 'portfolio.json'), `${JSON.stringify(portfolio, null, 2)}\n`);
+  const site = `${readFileSync(path.join(root, 'site.example.yml'), 'utf8')}sections:\n  # Not yet.\n  later: { hidden: true }\n  talks: { hidden: true }\n`;
+  writeFileSync(path.join(dir, 'site.yml'), site);
+  const run = migrate(dir, 'portfolio.json', '--write', '--out', 'new');
+  assert.equal(run.code, 0, run.stdout + run.stderr);
+  assert.match(
+    run.stdout,
+    /^portfolio\.json is a schemaVersion 2 portfolio document\. Migrating it writes portfolio\.json at schemaVersion 3, and site\.yml without the entries of the sections that go\.\n/,
+  );
+  assert.match(run.stdout, /\nWrote new\/portfolio\.json and new\/site\.yml\.\n$/);
+  // The site keeps its comments and every other byte, and stays YAML.
+  assert.equal(
+    readFileSync(path.join(dir, 'new', 'site.yml'), 'utf8'),
+    site.replace('  talks: { hidden: true }\n', ''),
+  );
+  const written = JSON.parse(readFileSync(path.join(dir, 'new', 'portfolio.json'), 'utf8'));
+  assert.deepEqual(
+    written.sections.map(({ id }) => id),
+    ['about', 'later'],
+  );
+  assert.equal(readFileSync(path.join(dir, 'site.yml'), 'utf8'), site);
 });
 
 test('bad arguments, a TOML file, and a file it cannot read exit 1', (t) => {
@@ -219,8 +269,8 @@ test('validate prints each record where it is, with how to fix it, and exits 1',
     run.stdout,
     [
       'portfolio.yml:10:10: anchor.broken (blocks-publish) at /links/1/url',
-      '  /links/1/url links to no visible section.',
-      '  Point the link at a visible section id, or drop the #fragment.',
+      '  /links/1/url links to no visible section or record.',
+      '  Point the link at a visible section or record id, or drop the #fragment.',
       '',
       ...UNAVAILABLE('site.yml:4:12'),
       "invalid/anchor.broken can't go live: 1 record blocks it.",
@@ -248,6 +298,12 @@ test('validate exits 0 on a valid pair, warnings or not, and lists what it could
   assert.match(warned.stdout, /\nportfolio\.yml and site\.yml are valid, with 2 warnings\.\n/);
 });
 
+/**
+ * Codes that compare a draft with the live revision, which only publish and
+ * import have (the schema's node.test.ts checks each against its live/).
+ */
+const PUBLICATION_CODES = ['urls.vanished', 'id.reused'];
+
 test('validate refuses every blocking invalid pair and loads every warning one, as JSON', () => {
   for (const code of readdirSync(path.join(ALL_FIXTURES, 'invalid'))) {
     const run = validate(ALL_FIXTURES, `invalid/${code}`, ...ORIGIN, '--json');
@@ -274,16 +330,28 @@ test('validate refuses every blocking invalid pair and loads every warning one, 
       );
     }
     // The host's interim catalog registers no color scheme until #19, so it
-    // can't raise this one, and says it didn't check it.
-    const expected = code === 'appearance.unknown' ? [] : [code];
+    // can't raise this one, and says it didn't check it. A publication code's
+    // draft is clean on its own.
+    const expected =
+      code === 'appearance.unknown' || PUBLICATION_CODES.includes(code) ? [] : [code];
     assert.deepEqual([...new Set(others.map((record) => record.code))], expected, code);
     if (code === 'appearance.unknown') {
       assert.ok(report.notChecked.includes('site.appearance.colorScheme'), code);
     }
     for (const record of report.diagnostics) {
+      // A snapshot's or the media document's record names its file.
+      const file = record.document === 'snapshots' || record.document === 'media';
       assert.deepEqual(
         Object.keys(record).filter((key) => !['line', 'column', 'stableId'].includes(key)),
-        ['code', 'severity', 'document', 'pointer', 'message', 'remediation'],
+        [
+          'code',
+          'severity',
+          'document',
+          ...(file ? ['file'] : []),
+          'pointer',
+          'message',
+          'remediation',
+        ],
         code,
       );
     }
@@ -359,4 +427,103 @@ test('validate warns when the portfolio is still the bundled sample, which produ
     JSON.parse(renamed.stdout).diagnostics.map(({ code }) => code),
     ['variant.unavailable'],
   );
+});
+
+function idsFix(cwd, ...args) {
+  const result = spawnSync(process.execPath, [TSX, CONFIG, 'ids-fix', ...args], {
+    cwd,
+    env: { ...process.env, INIT_CWD: cwd },
+    encoding: 'utf8',
+    timeout: 120_000,
+  });
+  return { code: result.status, stdout: result.stdout, stderr: result.stderr };
+}
+
+function idsDir(t, files) {
+  const dir = mkdtempSync(path.join(tmpdir(), 'config-ids-fix-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  for (const [name, text] of Object.entries(files)) writeFileSync(path.join(dir, name), text);
+  return dir;
+}
+
+const NEEDS_IDS = [
+  '# Rowan, before ids.',
+  'schemaVersion: 3',
+  'locale: en',
+  'direction: ltr',
+  'identity: { name: Rowan Ids }',
+  'works:',
+  '  - { id: Tidewater Atlas, title: Tidewater Atlas, medium: interface }',
+  'sections:',
+  '  - kind: lede',
+  '    title: About Me',
+  '    body: Hi.',
+  '  - { kind: works, id: work, items: [Tidewater Atlas] }',
+  '',
+].join('\n');
+
+test('ids-fix prints the ids it would give, and writes them only with --write, keeping comments', (t) => {
+  const dir = idsDir(t, { 'portfolio.yml': NEEDS_IDS });
+  const dry = idsFix(dir, '.');
+  assert.equal(dry.code, 0, dry.stderr);
+  assert.equal(
+    dry.stdout,
+    [
+      'portfolio.yml:',
+      '  /sections/0/id gets about-me: it had none.',
+      "  /works/0/id gets tidewater-atlas: its id wasn't well formed.",
+      '    /sections/1/items/0 names it too, and changes with it.',
+      '',
+      'Nothing was written. Run pnpm config:ids-fix with --write to write 2 ids into portfolio.yml.',
+      '',
+    ].join('\n'),
+  );
+  assert.equal(readFileSync(path.join(dir, 'portfolio.yml'), 'utf8'), NEEDS_IDS);
+
+  const wrote = idsFix(dir, 'portfolio.yml', '--write');
+  assert.equal(wrote.code, 0, wrote.stderr);
+  assert.match(wrote.stdout, /\nWrote 2 ids into portfolio\.yml\.\n$/);
+  const fixed = readFileSync(path.join(dir, 'portfolio.yml'), 'utf8');
+  assert.ok(fixed.startsWith('# Rowan, before ids.\n'), fixed);
+  assert.match(fixed, /\n {4}body: Hi\.\n {4}id: about-me\n/);
+  assert.match(fixed, /items: \[tidewater-atlas\]/);
+  // Nothing is left beside it, and its own output has nothing to fix.
+  assert.deepEqual(readdirSync(dir), ['portfolio.yml']);
+  const again = idsFix(dir, '.');
+  assert.equal(again.code, 0);
+  assert.equal(
+    again.stdout,
+    'portfolio.yml has an id on every section, record, and media asset. Nothing to fix.\n',
+  );
+});
+
+test('ids-fix refuses a version 2 document, a symbolic link, two portfolio documents, and bad arguments', (t) => {
+  const dir = idsDir(t, {
+    'portfolio.yml': NEEDS_IDS.replace('schemaVersion: 3', 'schemaVersion: 2'),
+  });
+  const old = idsFix(dir, '.');
+  assert.equal(old.code, 1);
+  assert.equal(
+    old.stderr,
+    "portfolio.yml can't be fixed.\n  It isn't a schemaVersion 3 portfolio document. Run pnpm config:migrate on it first, which mints every id.\n",
+  );
+  symlinkSync(path.join(dir, 'portfolio.yml'), path.join(dir, 'link.yml'));
+  const link = idsFix(dir, 'link.yml', '--write');
+  assert.equal(link.code, 1);
+  assert.equal(link.stderr, 'link.yml is a symbolic link. Run this on the file it points at.\n');
+
+  const two = idsDir(t, { 'portfolio.yml': NEEDS_IDS, 'portfolio.json': '{}\n' });
+  for (const [cwd, args, message] of [
+    [two, ['.'], /^\. holds portfolio\.yml and portfolio\.json\. Keep one portfolio document\.\n/],
+    [dir, ['a', 'b'], /^Give one directory or portfolio document\.\n/],
+    [dir, ['.', '--force'], /Unknown option '--force'/],
+  ]) {
+    const run = idsFix(cwd, ...args);
+    assert.equal(run.code, 1, args.join(' '));
+    assert.match(run.stderr, message, args.join(' '));
+    assert.match(run.stderr, /Usage: pnpm config:ids-fix \[dir \| portfolio-file\] \[--write\]/);
+  }
+  const missing = idsFix(dir, 'nowhere');
+  assert.equal(missing.code, 1);
+  assert.equal(missing.stderr, "nowhere doesn't exist or can't be read.\n");
 });

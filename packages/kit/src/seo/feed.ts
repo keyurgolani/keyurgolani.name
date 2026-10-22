@@ -1,7 +1,7 @@
-import type { Portfolio, PublicPortfolio, Section } from '@portfolio/schema';
+import type { Evidence, PublicView, Work } from '@portfolio/schema';
 
 export interface FeedEntry {
-  /** Stable identifier — URL when present, otherwise a slug from title+date. */
+  /** The record's id, which its GUID is made from (#10). */
   id: string;
   title: string;
   url: string | null;
@@ -10,7 +10,7 @@ export interface FeedEntry {
   isoDate: string | null;
   summary: string | null;
   category: 'writing' | 'publication' | 'episode';
-  /** Source venue/publication/show — used as `<source>` in RSS. */
+  /** Source venue/publication/show, used as `<source>` in RSS. */
   venue: string | null;
 }
 
@@ -19,75 +19,72 @@ export interface BuildFeedOptions {
   limit?: number;
 }
 
-/**
- * Collect feed-shaped entries from `writings`, `publications`, and `episodes`
- * sections. Sorts newest-first by `publishedAt`. Items without dates fall to
- * the bottom in stable order.
- */
-export function collectFeedEntries(
-  portfolio: Portfolio,
-  options: BuildFeedOptions = {},
-): FeedEntry[] {
-  const entries: FeedEntry[] = [];
+/** What the feed reads: the published view's portfolio. */
+export type FeedSource = Pick<PublicView, 'portfolio'>;
 
-  for (const section of portfolio.sections) pushFromSection(section, entries);
+/** Which works the feed carries, and as what. */
+const WORK_CATEGORIES: Readonly<Record<string, FeedEntry['category']>> = {
+  writing: 'writing',
+  'audio-video': 'episode',
+};
+
+function workEntry(work: Work, category: FeedEntry['category']): FeedEntry {
+  const publishedAt = work.publishedAt ?? work.releasedAt ?? null;
+  return {
+    id: work.id,
+    title: work.title,
+    url: work.url ?? work.audioUrl ?? work.videoUrl ?? null,
+    publishedAt,
+    isoDate: toIso(publishedAt),
+    summary: work.summary ?? work.excerpt ?? work.description ?? null,
+    category,
+    venue: work.publication ?? work.series ?? null,
+  };
+}
+
+function publicationEntry(evidence: Evidence): FeedEntry | null {
+  const title = evidence.title ?? evidence.statement;
+  if (title === undefined) return null;
+  const publishedAt = evidence.publishedAt ?? null;
+  return {
+    id: evidence.id,
+    title,
+    url: evidence.url ?? evidence.pdfUrl ?? null,
+    publishedAt,
+    isoDate: toIso(publishedAt),
+    summary:
+      evidence.abstract ?? (evidence.title !== undefined ? evidence.statement : undefined) ?? null,
+    category: 'publication',
+    venue: evidence.venue ?? null,
+  };
+}
+
+/**
+ * Collect feed entries from the published view's records: works of the
+ * writing and audio-video media, and publication evidence. The view holds
+ * only public records something visible reaches, so nothing hidden or
+ * private reaches the feed. Sorts newest-first by `publishedAt`; entries
+ * without dates fall to the bottom in document order.
+ */
+export function collectFeedEntries(view: FeedSource, options: BuildFeedOptions = {}): FeedEntry[] {
+  const entries: FeedEntry[] = [];
+  for (const work of view.portfolio.works) {
+    const category = WORK_CATEGORIES[work.medium];
+    if (category) entries.push(workEntry(work, category));
+  }
+  for (const evidence of view.portfolio.evidence) {
+    if (evidence.type !== 'publication') continue;
+    const entry = publicationEntry(evidence);
+    if (entry) entries.push(entry);
+  }
 
   entries.sort((a, b) => {
     const ax = a.isoDate ? Date.parse(a.isoDate) : Number.NEGATIVE_INFINITY;
     const bx = b.isoDate ? Date.parse(b.isoDate) : Number.NEGATIVE_INFINITY;
-    return bx - ax;
+    return bx === ax ? 0 : bx > ax ? 1 : -1;
   });
 
   return options.limit !== undefined ? entries.slice(0, options.limit) : entries;
-}
-
-function pushFromSection(section: Section, out: FeedEntry[]): void {
-  switch (section.kind) {
-    case 'writings':
-      for (const item of section.items) {
-        out.push({
-          id: item.url ?? `writings:${item.title}:${item.publishedAt ?? ''}`,
-          title: item.title,
-          url: item.url ?? null,
-          publishedAt: item.publishedAt ?? null,
-          isoDate: toIso(item.publishedAt),
-          summary: item.summary ?? item.excerpt ?? null,
-          category: 'writing',
-          venue: item.publication ?? null,
-        });
-      }
-      break;
-    case 'publications':
-      for (const item of section.items) {
-        out.push({
-          id: item.url ?? item.doi ?? `publications:${item.title}:${item.publishedAt ?? ''}`,
-          title: item.title,
-          url: item.url ?? item.pdfUrl ?? null,
-          publishedAt: item.publishedAt ?? null,
-          isoDate: toIso(item.publishedAt),
-          summary: item.abstract ?? null,
-          category: 'publication',
-          venue: item.venue ?? null,
-        });
-      }
-      break;
-    case 'episodes':
-      for (const item of section.items) {
-        out.push({
-          id: item.audioUrl ?? `episodes:${item.title}:${item.publishedAt ?? ''}`,
-          title: item.number ? `Ep ${item.number}: ${item.title}` : item.title,
-          url: item.audioUrl ?? item.videoUrl ?? null,
-          publishedAt: item.publishedAt ?? null,
-          isoDate: toIso(item.publishedAt),
-          summary: item.description ?? null,
-          category: 'episode',
-          venue: section.showName ?? null,
-        });
-      }
-      break;
-    default:
-      break;
-  }
 }
 
 function toIso(raw: string | undefined | null): string | null {
@@ -126,12 +123,14 @@ export interface RenderRssOptions {
 
 /**
  * Produce an RSS 2.0 feed (with the Atom self-link extension) from the
- * portfolio's writings/publications/episodes. Returns the XML as a string;
- * callers wrap it in a `Response` with `application/rss+xml`. It takes the
- * public view's portfolio only, so no hidden section reaches the feed, and
- * the channel's `<language>` is the portfolio's locale.
+ * published view's writing and audio-video works and its publications.
+ * Returns the XML as a string; callers wrap it in a `Response` with
+ * `application/rss+xml`. It takes the published view only, so nothing hidden
+ * or private reaches the feed, and the channel's `<language>` is the
+ * portfolio's locale. Each item's GUID is made from its record's id.
  */
-export function renderRssFeed(portfolio: PublicPortfolio, options: RenderRssOptions = {}): string {
+export function renderRssFeed(view: FeedSource, options: RenderRssOptions = {}): string {
+  const { portfolio } = view;
   const site = options.siteUrl ?? '';
   const feed = options.feedUrl ?? (site ? `${site.replace(/\/$/, '')}/feed.xml` : '');
   const title = portfolio.meta?.title ?? `${portfolio.identity.name} — Portfolio`;
@@ -140,8 +139,8 @@ export function renderRssFeed(portfolio: PublicPortfolio, options: RenderRssOpti
     portfolio.identity.tagline ??
     `Updates from ${portfolio.identity.name}.`;
 
-  const entries = collectFeedEntries(portfolio, { limit: options.limit ?? 50 });
-  const items = entries.map(renderItem).join('\n');
+  const entries = collectFeedEntries(view, { limit: options.limit ?? 50 });
+  const items = entries.map((entry) => renderItem(entry, site)).join('\n');
   const lastBuildDate = entries[0]?.isoDate
     ? new Date(entries[0].isoDate).toUTCString()
     : new Date().toUTCString();
@@ -161,10 +160,18 @@ ${items}
 `;
 }
 
-function renderItem(entry: FeedEntry): string {
+/**
+ * An item's GUID: its record's id, under the site's canonical origin when
+ * there is one, so it stays the same for as long as the record does.
+ */
+export function feedGuid(id: string, siteUrl: string): string {
+  return siteUrl ? `${siteUrl.replace(/\/$/, '')}/#${id}` : id;
+}
+
+function renderItem(entry: FeedEntry, site: string): string {
   const pubDate = entry.isoDate ? new Date(entry.isoDate).toUTCString() : null;
   const link = entry.url ? `<link>${escapeXml(entry.url)}</link>` : '';
-  const guid = `<guid isPermaLink="${entry.url ? 'true' : 'false'}">${escapeXml(entry.id)}</guid>`;
+  const guid = `<guid isPermaLink="false">${escapeXml(feedGuid(entry.id, site))}</guid>`;
   const description = entry.summary ? `<description>${escapeXml(entry.summary)}</description>` : '';
   const category = `<category>${escapeXml(entry.category)}</category>`;
   const source = entry.venue ? `<source>${escapeXml(entry.venue)}</source>` : '';

@@ -1,6 +1,7 @@
 # Contract fixture (#5, Slice 6): long lists, a hundred projects, photos, and skills, for
-# a composition that has to stay usable at volume. The photos are bundled as data URLs.
-schemaVersion: 2
+# a composition that has to stay usable at volume. Each photo is its own media asset, a
+# path under the media root with no file yet, so every one renders as unavailable.
+schemaVersion: 3
 locale: en
 direction: ltr
 identity:
@@ -10,1521 +11,1830 @@ links:
   - platform: website
     url: https://large.test
     label: large.test
+practice:
+  skills:
+    - name: Everything
+      items:
+        - Skill 1
+        - Skill 2
+        - Skill 3
+        - Skill 4
+        - Skill 5
+        - Skill 6
+        - Skill 7
+        - Skill 8
+        - Skill 9
+        - Skill 10
+        - Skill 11
+        - Skill 12
+        - Skill 13
+        - Skill 14
+        - Skill 15
+        - Skill 16
+        - Skill 17
+        - Skill 18
+        - Skill 19
+        - Skill 20
+        - Skill 21
+        - Skill 22
+        - Skill 23
+        - Skill 24
+        - Skill 25
+        - Skill 26
+        - Skill 27
+        - Skill 28
+        - Skill 29
+        - Skill 30
+        - Skill 31
+        - Skill 32
+        - Skill 33
+        - Skill 34
+        - Skill 35
+        - Skill 36
+        - Skill 37
+        - Skill 38
+        - Skill 39
+        - Skill 40
+        - Skill 41
+        - Skill 42
+        - Skill 43
+        - Skill 44
+        - Skill 45
+        - Skill 46
+        - Skill 47
+        - Skill 48
+        - Skill 49
+        - Skill 50
+        - Skill 51
+        - Skill 52
+        - Skill 53
+        - Skill 54
+        - Skill 55
+        - Skill 56
+        - Skill 57
+        - Skill 58
+        - Skill 59
+        - Skill 60
+        - Skill 61
+        - Skill 62
+        - Skill 63
+        - Skill 64
+        - Skill 65
+        - Skill 66
+        - Skill 67
+        - Skill 68
+        - Skill 69
+        - Skill 70
+        - Skill 71
+        - Skill 72
+        - Skill 73
+        - Skill 74
+        - Skill 75
+        - Skill 76
+        - Skill 77
+        - Skill 78
+        - Skill 79
+        - Skill 80
+        - Skill 81
+        - Skill 82
+        - Skill 83
+        - Skill 84
+        - Skill 85
+        - Skill 86
+        - Skill 87
+        - Skill 88
+        - Skill 89
+        - Skill 90
+        - Skill 91
+        - Skill 92
+        - Skill 93
+        - Skill 94
+        - Skill 95
+        - Skill 96
+        - Skill 97
+        - Skill 98
+        - Skill 99
+        - Skill 100
+works:
+  - id: project-1
+    title: Project 1
+    medium: software
+    summary: Project 1 of a hundred, each with its own line.
+    tools:
+      - Tool 1
+    links:
+      - platform: web
+        url: https://large.test/projects/1
+        label: Visit
+  - id: project-2
+    title: Project 2
+    medium: software
+    summary: Project 2 of a hundred, each with its own line.
+    tools:
+      - Tool 2
+    links:
+      - platform: web
+        url: https://large.test/projects/2
+        label: Visit
+  - id: project-3
+    title: Project 3
+    medium: software
+    summary: Project 3 of a hundred, each with its own line.
+    tools:
+      - Tool 3
+    links:
+      - platform: web
+        url: https://large.test/projects/3
+        label: Visit
+  - id: project-4
+    title: Project 4
+    medium: software
+    summary: Project 4 of a hundred, each with its own line.
+    tools:
+      - Tool 4
+    links:
+      - platform: web
+        url: https://large.test/projects/4
+        label: Visit
+  - id: project-5
+    title: Project 5
+    medium: software
+    summary: Project 5 of a hundred, each with its own line.
+    tools:
+      - Tool 5
+    links:
+      - platform: web
+        url: https://large.test/projects/5
+        label: Visit
+  - id: project-6
+    title: Project 6
+    medium: software
+    summary: Project 6 of a hundred, each with its own line.
+    tools:
+      - Tool 6
+    links:
+      - platform: web
+        url: https://large.test/projects/6
+        label: Visit
+  - id: project-7
+    title: Project 7
+    medium: software
+    summary: Project 7 of a hundred, each with its own line.
+    tools:
+      - Tool 7
+    links:
+      - platform: web
+        url: https://large.test/projects/7
+        label: Visit
+  - id: project-8
+    title: Project 8
+    medium: software
+    summary: Project 8 of a hundred, each with its own line.
+    tools:
+      - Tool 1
+    links:
+      - platform: web
+        url: https://large.test/projects/8
+        label: Visit
+  - id: project-9
+    title: Project 9
+    medium: software
+    summary: Project 9 of a hundred, each with its own line.
+    tools:
+      - Tool 2
+    links:
+      - platform: web
+        url: https://large.test/projects/9
+        label: Visit
+  - id: project-10
+    title: Project 10
+    medium: software
+    summary: Project 10 of a hundred, each with its own line.
+    tools:
+      - Tool 3
+    links:
+      - platform: web
+        url: https://large.test/projects/10
+        label: Visit
+  - id: project-11
+    title: Project 11
+    medium: software
+    summary: Project 11 of a hundred, each with its own line.
+    tools:
+      - Tool 4
+    links:
+      - platform: web
+        url: https://large.test/projects/11
+        label: Visit
+  - id: project-12
+    title: Project 12
+    medium: software
+    summary: Project 12 of a hundred, each with its own line.
+    tools:
+      - Tool 5
+    links:
+      - platform: web
+        url: https://large.test/projects/12
+        label: Visit
+  - id: project-13
+    title: Project 13
+    medium: software
+    summary: Project 13 of a hundred, each with its own line.
+    tools:
+      - Tool 6
+    links:
+      - platform: web
+        url: https://large.test/projects/13
+        label: Visit
+  - id: project-14
+    title: Project 14
+    medium: software
+    summary: Project 14 of a hundred, each with its own line.
+    tools:
+      - Tool 7
+    links:
+      - platform: web
+        url: https://large.test/projects/14
+        label: Visit
+  - id: project-15
+    title: Project 15
+    medium: software
+    summary: Project 15 of a hundred, each with its own line.
+    tools:
+      - Tool 1
+    links:
+      - platform: web
+        url: https://large.test/projects/15
+        label: Visit
+  - id: project-16
+    title: Project 16
+    medium: software
+    summary: Project 16 of a hundred, each with its own line.
+    tools:
+      - Tool 2
+    links:
+      - platform: web
+        url: https://large.test/projects/16
+        label: Visit
+  - id: project-17
+    title: Project 17
+    medium: software
+    summary: Project 17 of a hundred, each with its own line.
+    tools:
+      - Tool 3
+    links:
+      - platform: web
+        url: https://large.test/projects/17
+        label: Visit
+  - id: project-18
+    title: Project 18
+    medium: software
+    summary: Project 18 of a hundred, each with its own line.
+    tools:
+      - Tool 4
+    links:
+      - platform: web
+        url: https://large.test/projects/18
+        label: Visit
+  - id: project-19
+    title: Project 19
+    medium: software
+    summary: Project 19 of a hundred, each with its own line.
+    tools:
+      - Tool 5
+    links:
+      - platform: web
+        url: https://large.test/projects/19
+        label: Visit
+  - id: project-20
+    title: Project 20
+    medium: software
+    summary: Project 20 of a hundred, each with its own line.
+    tools:
+      - Tool 6
+    links:
+      - platform: web
+        url: https://large.test/projects/20
+        label: Visit
+  - id: project-21
+    title: Project 21
+    medium: software
+    summary: Project 21 of a hundred, each with its own line.
+    tools:
+      - Tool 7
+    links:
+      - platform: web
+        url: https://large.test/projects/21
+        label: Visit
+  - id: project-22
+    title: Project 22
+    medium: software
+    summary: Project 22 of a hundred, each with its own line.
+    tools:
+      - Tool 1
+    links:
+      - platform: web
+        url: https://large.test/projects/22
+        label: Visit
+  - id: project-23
+    title: Project 23
+    medium: software
+    summary: Project 23 of a hundred, each with its own line.
+    tools:
+      - Tool 2
+    links:
+      - platform: web
+        url: https://large.test/projects/23
+        label: Visit
+  - id: project-24
+    title: Project 24
+    medium: software
+    summary: Project 24 of a hundred, each with its own line.
+    tools:
+      - Tool 3
+    links:
+      - platform: web
+        url: https://large.test/projects/24
+        label: Visit
+  - id: project-25
+    title: Project 25
+    medium: software
+    summary: Project 25 of a hundred, each with its own line.
+    tools:
+      - Tool 4
+    links:
+      - platform: web
+        url: https://large.test/projects/25
+        label: Visit
+  - id: project-26
+    title: Project 26
+    medium: software
+    summary: Project 26 of a hundred, each with its own line.
+    tools:
+      - Tool 5
+    links:
+      - platform: web
+        url: https://large.test/projects/26
+        label: Visit
+  - id: project-27
+    title: Project 27
+    medium: software
+    summary: Project 27 of a hundred, each with its own line.
+    tools:
+      - Tool 6
+    links:
+      - platform: web
+        url: https://large.test/projects/27
+        label: Visit
+  - id: project-28
+    title: Project 28
+    medium: software
+    summary: Project 28 of a hundred, each with its own line.
+    tools:
+      - Tool 7
+    links:
+      - platform: web
+        url: https://large.test/projects/28
+        label: Visit
+  - id: project-29
+    title: Project 29
+    medium: software
+    summary: Project 29 of a hundred, each with its own line.
+    tools:
+      - Tool 1
+    links:
+      - platform: web
+        url: https://large.test/projects/29
+        label: Visit
+  - id: project-30
+    title: Project 30
+    medium: software
+    summary: Project 30 of a hundred, each with its own line.
+    tools:
+      - Tool 2
+    links:
+      - platform: web
+        url: https://large.test/projects/30
+        label: Visit
+  - id: project-31
+    title: Project 31
+    medium: software
+    summary: Project 31 of a hundred, each with its own line.
+    tools:
+      - Tool 3
+    links:
+      - platform: web
+        url: https://large.test/projects/31
+        label: Visit
+  - id: project-32
+    title: Project 32
+    medium: software
+    summary: Project 32 of a hundred, each with its own line.
+    tools:
+      - Tool 4
+    links:
+      - platform: web
+        url: https://large.test/projects/32
+        label: Visit
+  - id: project-33
+    title: Project 33
+    medium: software
+    summary: Project 33 of a hundred, each with its own line.
+    tools:
+      - Tool 5
+    links:
+      - platform: web
+        url: https://large.test/projects/33
+        label: Visit
+  - id: project-34
+    title: Project 34
+    medium: software
+    summary: Project 34 of a hundred, each with its own line.
+    tools:
+      - Tool 6
+    links:
+      - platform: web
+        url: https://large.test/projects/34
+        label: Visit
+  - id: project-35
+    title: Project 35
+    medium: software
+    summary: Project 35 of a hundred, each with its own line.
+    tools:
+      - Tool 7
+    links:
+      - platform: web
+        url: https://large.test/projects/35
+        label: Visit
+  - id: project-36
+    title: Project 36
+    medium: software
+    summary: Project 36 of a hundred, each with its own line.
+    tools:
+      - Tool 1
+    links:
+      - platform: web
+        url: https://large.test/projects/36
+        label: Visit
+  - id: project-37
+    title: Project 37
+    medium: software
+    summary: Project 37 of a hundred, each with its own line.
+    tools:
+      - Tool 2
+    links:
+      - platform: web
+        url: https://large.test/projects/37
+        label: Visit
+  - id: project-38
+    title: Project 38
+    medium: software
+    summary: Project 38 of a hundred, each with its own line.
+    tools:
+      - Tool 3
+    links:
+      - platform: web
+        url: https://large.test/projects/38
+        label: Visit
+  - id: project-39
+    title: Project 39
+    medium: software
+    summary: Project 39 of a hundred, each with its own line.
+    tools:
+      - Tool 4
+    links:
+      - platform: web
+        url: https://large.test/projects/39
+        label: Visit
+  - id: project-40
+    title: Project 40
+    medium: software
+    summary: Project 40 of a hundred, each with its own line.
+    tools:
+      - Tool 5
+    links:
+      - platform: web
+        url: https://large.test/projects/40
+        label: Visit
+  - id: project-41
+    title: Project 41
+    medium: software
+    summary: Project 41 of a hundred, each with its own line.
+    tools:
+      - Tool 6
+    links:
+      - platform: web
+        url: https://large.test/projects/41
+        label: Visit
+  - id: project-42
+    title: Project 42
+    medium: software
+    summary: Project 42 of a hundred, each with its own line.
+    tools:
+      - Tool 7
+    links:
+      - platform: web
+        url: https://large.test/projects/42
+        label: Visit
+  - id: project-43
+    title: Project 43
+    medium: software
+    summary: Project 43 of a hundred, each with its own line.
+    tools:
+      - Tool 1
+    links:
+      - platform: web
+        url: https://large.test/projects/43
+        label: Visit
+  - id: project-44
+    title: Project 44
+    medium: software
+    summary: Project 44 of a hundred, each with its own line.
+    tools:
+      - Tool 2
+    links:
+      - platform: web
+        url: https://large.test/projects/44
+        label: Visit
+  - id: project-45
+    title: Project 45
+    medium: software
+    summary: Project 45 of a hundred, each with its own line.
+    tools:
+      - Tool 3
+    links:
+      - platform: web
+        url: https://large.test/projects/45
+        label: Visit
+  - id: project-46
+    title: Project 46
+    medium: software
+    summary: Project 46 of a hundred, each with its own line.
+    tools:
+      - Tool 4
+    links:
+      - platform: web
+        url: https://large.test/projects/46
+        label: Visit
+  - id: project-47
+    title: Project 47
+    medium: software
+    summary: Project 47 of a hundred, each with its own line.
+    tools:
+      - Tool 5
+    links:
+      - platform: web
+        url: https://large.test/projects/47
+        label: Visit
+  - id: project-48
+    title: Project 48
+    medium: software
+    summary: Project 48 of a hundred, each with its own line.
+    tools:
+      - Tool 6
+    links:
+      - platform: web
+        url: https://large.test/projects/48
+        label: Visit
+  - id: project-49
+    title: Project 49
+    medium: software
+    summary: Project 49 of a hundred, each with its own line.
+    tools:
+      - Tool 7
+    links:
+      - platform: web
+        url: https://large.test/projects/49
+        label: Visit
+  - id: project-50
+    title: Project 50
+    medium: software
+    summary: Project 50 of a hundred, each with its own line.
+    tools:
+      - Tool 1
+    links:
+      - platform: web
+        url: https://large.test/projects/50
+        label: Visit
+  - id: project-51
+    title: Project 51
+    medium: software
+    summary: Project 51 of a hundred, each with its own line.
+    tools:
+      - Tool 2
+    links:
+      - platform: web
+        url: https://large.test/projects/51
+        label: Visit
+  - id: project-52
+    title: Project 52
+    medium: software
+    summary: Project 52 of a hundred, each with its own line.
+    tools:
+      - Tool 3
+    links:
+      - platform: web
+        url: https://large.test/projects/52
+        label: Visit
+  - id: project-53
+    title: Project 53
+    medium: software
+    summary: Project 53 of a hundred, each with its own line.
+    tools:
+      - Tool 4
+    links:
+      - platform: web
+        url: https://large.test/projects/53
+        label: Visit
+  - id: project-54
+    title: Project 54
+    medium: software
+    summary: Project 54 of a hundred, each with its own line.
+    tools:
+      - Tool 5
+    links:
+      - platform: web
+        url: https://large.test/projects/54
+        label: Visit
+  - id: project-55
+    title: Project 55
+    medium: software
+    summary: Project 55 of a hundred, each with its own line.
+    tools:
+      - Tool 6
+    links:
+      - platform: web
+        url: https://large.test/projects/55
+        label: Visit
+  - id: project-56
+    title: Project 56
+    medium: software
+    summary: Project 56 of a hundred, each with its own line.
+    tools:
+      - Tool 7
+    links:
+      - platform: web
+        url: https://large.test/projects/56
+        label: Visit
+  - id: project-57
+    title: Project 57
+    medium: software
+    summary: Project 57 of a hundred, each with its own line.
+    tools:
+      - Tool 1
+    links:
+      - platform: web
+        url: https://large.test/projects/57
+        label: Visit
+  - id: project-58
+    title: Project 58
+    medium: software
+    summary: Project 58 of a hundred, each with its own line.
+    tools:
+      - Tool 2
+    links:
+      - platform: web
+        url: https://large.test/projects/58
+        label: Visit
+  - id: project-59
+    title: Project 59
+    medium: software
+    summary: Project 59 of a hundred, each with its own line.
+    tools:
+      - Tool 3
+    links:
+      - platform: web
+        url: https://large.test/projects/59
+        label: Visit
+  - id: project-60
+    title: Project 60
+    medium: software
+    summary: Project 60 of a hundred, each with its own line.
+    tools:
+      - Tool 4
+    links:
+      - platform: web
+        url: https://large.test/projects/60
+        label: Visit
+  - id: project-61
+    title: Project 61
+    medium: software
+    summary: Project 61 of a hundred, each with its own line.
+    tools:
+      - Tool 5
+    links:
+      - platform: web
+        url: https://large.test/projects/61
+        label: Visit
+  - id: project-62
+    title: Project 62
+    medium: software
+    summary: Project 62 of a hundred, each with its own line.
+    tools:
+      - Tool 6
+    links:
+      - platform: web
+        url: https://large.test/projects/62
+        label: Visit
+  - id: project-63
+    title: Project 63
+    medium: software
+    summary: Project 63 of a hundred, each with its own line.
+    tools:
+      - Tool 7
+    links:
+      - platform: web
+        url: https://large.test/projects/63
+        label: Visit
+  - id: project-64
+    title: Project 64
+    medium: software
+    summary: Project 64 of a hundred, each with its own line.
+    tools:
+      - Tool 1
+    links:
+      - platform: web
+        url: https://large.test/projects/64
+        label: Visit
+  - id: project-65
+    title: Project 65
+    medium: software
+    summary: Project 65 of a hundred, each with its own line.
+    tools:
+      - Tool 2
+    links:
+      - platform: web
+        url: https://large.test/projects/65
+        label: Visit
+  - id: project-66
+    title: Project 66
+    medium: software
+    summary: Project 66 of a hundred, each with its own line.
+    tools:
+      - Tool 3
+    links:
+      - platform: web
+        url: https://large.test/projects/66
+        label: Visit
+  - id: project-67
+    title: Project 67
+    medium: software
+    summary: Project 67 of a hundred, each with its own line.
+    tools:
+      - Tool 4
+    links:
+      - platform: web
+        url: https://large.test/projects/67
+        label: Visit
+  - id: project-68
+    title: Project 68
+    medium: software
+    summary: Project 68 of a hundred, each with its own line.
+    tools:
+      - Tool 5
+    links:
+      - platform: web
+        url: https://large.test/projects/68
+        label: Visit
+  - id: project-69
+    title: Project 69
+    medium: software
+    summary: Project 69 of a hundred, each with its own line.
+    tools:
+      - Tool 6
+    links:
+      - platform: web
+        url: https://large.test/projects/69
+        label: Visit
+  - id: project-70
+    title: Project 70
+    medium: software
+    summary: Project 70 of a hundred, each with its own line.
+    tools:
+      - Tool 7
+    links:
+      - platform: web
+        url: https://large.test/projects/70
+        label: Visit
+  - id: project-71
+    title: Project 71
+    medium: software
+    summary: Project 71 of a hundred, each with its own line.
+    tools:
+      - Tool 1
+    links:
+      - platform: web
+        url: https://large.test/projects/71
+        label: Visit
+  - id: project-72
+    title: Project 72
+    medium: software
+    summary: Project 72 of a hundred, each with its own line.
+    tools:
+      - Tool 2
+    links:
+      - platform: web
+        url: https://large.test/projects/72
+        label: Visit
+  - id: project-73
+    title: Project 73
+    medium: software
+    summary: Project 73 of a hundred, each with its own line.
+    tools:
+      - Tool 3
+    links:
+      - platform: web
+        url: https://large.test/projects/73
+        label: Visit
+  - id: project-74
+    title: Project 74
+    medium: software
+    summary: Project 74 of a hundred, each with its own line.
+    tools:
+      - Tool 4
+    links:
+      - platform: web
+        url: https://large.test/projects/74
+        label: Visit
+  - id: project-75
+    title: Project 75
+    medium: software
+    summary: Project 75 of a hundred, each with its own line.
+    tools:
+      - Tool 5
+    links:
+      - platform: web
+        url: https://large.test/projects/75
+        label: Visit
+  - id: project-76
+    title: Project 76
+    medium: software
+    summary: Project 76 of a hundred, each with its own line.
+    tools:
+      - Tool 6
+    links:
+      - platform: web
+        url: https://large.test/projects/76
+        label: Visit
+  - id: project-77
+    title: Project 77
+    medium: software
+    summary: Project 77 of a hundred, each with its own line.
+    tools:
+      - Tool 7
+    links:
+      - platform: web
+        url: https://large.test/projects/77
+        label: Visit
+  - id: project-78
+    title: Project 78
+    medium: software
+    summary: Project 78 of a hundred, each with its own line.
+    tools:
+      - Tool 1
+    links:
+      - platform: web
+        url: https://large.test/projects/78
+        label: Visit
+  - id: project-79
+    title: Project 79
+    medium: software
+    summary: Project 79 of a hundred, each with its own line.
+    tools:
+      - Tool 2
+    links:
+      - platform: web
+        url: https://large.test/projects/79
+        label: Visit
+  - id: project-80
+    title: Project 80
+    medium: software
+    summary: Project 80 of a hundred, each with its own line.
+    tools:
+      - Tool 3
+    links:
+      - platform: web
+        url: https://large.test/projects/80
+        label: Visit
+  - id: project-81
+    title: Project 81
+    medium: software
+    summary: Project 81 of a hundred, each with its own line.
+    tools:
+      - Tool 4
+    links:
+      - platform: web
+        url: https://large.test/projects/81
+        label: Visit
+  - id: project-82
+    title: Project 82
+    medium: software
+    summary: Project 82 of a hundred, each with its own line.
+    tools:
+      - Tool 5
+    links:
+      - platform: web
+        url: https://large.test/projects/82
+        label: Visit
+  - id: project-83
+    title: Project 83
+    medium: software
+    summary: Project 83 of a hundred, each with its own line.
+    tools:
+      - Tool 6
+    links:
+      - platform: web
+        url: https://large.test/projects/83
+        label: Visit
+  - id: project-84
+    title: Project 84
+    medium: software
+    summary: Project 84 of a hundred, each with its own line.
+    tools:
+      - Tool 7
+    links:
+      - platform: web
+        url: https://large.test/projects/84
+        label: Visit
+  - id: project-85
+    title: Project 85
+    medium: software
+    summary: Project 85 of a hundred, each with its own line.
+    tools:
+      - Tool 1
+    links:
+      - platform: web
+        url: https://large.test/projects/85
+        label: Visit
+  - id: project-86
+    title: Project 86
+    medium: software
+    summary: Project 86 of a hundred, each with its own line.
+    tools:
+      - Tool 2
+    links:
+      - platform: web
+        url: https://large.test/projects/86
+        label: Visit
+  - id: project-87
+    title: Project 87
+    medium: software
+    summary: Project 87 of a hundred, each with its own line.
+    tools:
+      - Tool 3
+    links:
+      - platform: web
+        url: https://large.test/projects/87
+        label: Visit
+  - id: project-88
+    title: Project 88
+    medium: software
+    summary: Project 88 of a hundred, each with its own line.
+    tools:
+      - Tool 4
+    links:
+      - platform: web
+        url: https://large.test/projects/88
+        label: Visit
+  - id: project-89
+    title: Project 89
+    medium: software
+    summary: Project 89 of a hundred, each with its own line.
+    tools:
+      - Tool 5
+    links:
+      - platform: web
+        url: https://large.test/projects/89
+        label: Visit
+  - id: project-90
+    title: Project 90
+    medium: software
+    summary: Project 90 of a hundred, each with its own line.
+    tools:
+      - Tool 6
+    links:
+      - platform: web
+        url: https://large.test/projects/90
+        label: Visit
+  - id: project-91
+    title: Project 91
+    medium: software
+    summary: Project 91 of a hundred, each with its own line.
+    tools:
+      - Tool 7
+    links:
+      - platform: web
+        url: https://large.test/projects/91
+        label: Visit
+  - id: project-92
+    title: Project 92
+    medium: software
+    summary: Project 92 of a hundred, each with its own line.
+    tools:
+      - Tool 1
+    links:
+      - platform: web
+        url: https://large.test/projects/92
+        label: Visit
+  - id: project-93
+    title: Project 93
+    medium: software
+    summary: Project 93 of a hundred, each with its own line.
+    tools:
+      - Tool 2
+    links:
+      - platform: web
+        url: https://large.test/projects/93
+        label: Visit
+  - id: project-94
+    title: Project 94
+    medium: software
+    summary: Project 94 of a hundred, each with its own line.
+    tools:
+      - Tool 3
+    links:
+      - platform: web
+        url: https://large.test/projects/94
+        label: Visit
+  - id: project-95
+    title: Project 95
+    medium: software
+    summary: Project 95 of a hundred, each with its own line.
+    tools:
+      - Tool 4
+    links:
+      - platform: web
+        url: https://large.test/projects/95
+        label: Visit
+  - id: project-96
+    title: Project 96
+    medium: software
+    summary: Project 96 of a hundred, each with its own line.
+    tools:
+      - Tool 5
+    links:
+      - platform: web
+        url: https://large.test/projects/96
+        label: Visit
+  - id: project-97
+    title: Project 97
+    medium: software
+    summary: Project 97 of a hundred, each with its own line.
+    tools:
+      - Tool 6
+    links:
+      - platform: web
+        url: https://large.test/projects/97
+        label: Visit
+  - id: project-98
+    title: Project 98
+    medium: software
+    summary: Project 98 of a hundred, each with its own line.
+    tools:
+      - Tool 7
+    links:
+      - platform: web
+        url: https://large.test/projects/98
+        label: Visit
+  - id: project-99
+    title: Project 99
+    medium: software
+    summary: Project 99 of a hundred, each with its own line.
+    tools:
+      - Tool 1
+    links:
+      - platform: web
+        url: https://large.test/projects/99
+        label: Visit
+  - id: project-100
+    title: Project 100
+    medium: software
+    summary: Project 100 of a hundred, each with its own line.
+    tools:
+      - Tool 2
+    links:
+      - platform: web
+        url: https://large.test/projects/100
+        label: Visit
+  - id: a-hundred-photos
+    title: Gallery
+    medium: image-series
+    media:
+      - asset: photo-1
+        caption: Photo 1
+      - asset: photo-2
+        caption: Photo 2
+      - asset: photo-3
+        caption: Photo 3
+      - asset: photo-4
+        caption: Photo 4
+      - asset: photo-5
+        caption: Photo 5
+      - asset: photo-6
+        caption: Photo 6
+      - asset: photo-7
+        caption: Photo 7
+      - asset: photo-8
+        caption: Photo 8
+      - asset: photo-9
+        caption: Photo 9
+      - asset: photo-10
+        caption: Photo 10
+      - asset: photo-11
+        caption: Photo 11
+      - asset: photo-12
+        caption: Photo 12
+      - asset: photo-13
+        caption: Photo 13
+      - asset: photo-14
+        caption: Photo 14
+      - asset: photo-15
+        caption: Photo 15
+      - asset: photo-16
+        caption: Photo 16
+      - asset: photo-17
+        caption: Photo 17
+      - asset: photo-18
+        caption: Photo 18
+      - asset: photo-19
+        caption: Photo 19
+      - asset: photo-20
+        caption: Photo 20
+      - asset: photo-21
+        caption: Photo 21
+      - asset: photo-22
+        caption: Photo 22
+      - asset: photo-23
+        caption: Photo 23
+      - asset: photo-24
+        caption: Photo 24
+      - asset: photo-25
+        caption: Photo 25
+      - asset: photo-26
+        caption: Photo 26
+      - asset: photo-27
+        caption: Photo 27
+      - asset: photo-28
+        caption: Photo 28
+      - asset: photo-29
+        caption: Photo 29
+      - asset: photo-30
+        caption: Photo 30
+      - asset: photo-31
+        caption: Photo 31
+      - asset: photo-32
+        caption: Photo 32
+      - asset: photo-33
+        caption: Photo 33
+      - asset: photo-34
+        caption: Photo 34
+      - asset: photo-35
+        caption: Photo 35
+      - asset: photo-36
+        caption: Photo 36
+      - asset: photo-37
+        caption: Photo 37
+      - asset: photo-38
+        caption: Photo 38
+      - asset: photo-39
+        caption: Photo 39
+      - asset: photo-40
+        caption: Photo 40
+      - asset: photo-41
+        caption: Photo 41
+      - asset: photo-42
+        caption: Photo 42
+      - asset: photo-43
+        caption: Photo 43
+      - asset: photo-44
+        caption: Photo 44
+      - asset: photo-45
+        caption: Photo 45
+      - asset: photo-46
+        caption: Photo 46
+      - asset: photo-47
+        caption: Photo 47
+      - asset: photo-48
+        caption: Photo 48
+      - asset: photo-49
+        caption: Photo 49
+      - asset: photo-50
+        caption: Photo 50
+      - asset: photo-51
+        caption: Photo 51
+      - asset: photo-52
+        caption: Photo 52
+      - asset: photo-53
+        caption: Photo 53
+      - asset: photo-54
+        caption: Photo 54
+      - asset: photo-55
+        caption: Photo 55
+      - asset: photo-56
+        caption: Photo 56
+      - asset: photo-57
+        caption: Photo 57
+      - asset: photo-58
+        caption: Photo 58
+      - asset: photo-59
+        caption: Photo 59
+      - asset: photo-60
+        caption: Photo 60
+      - asset: photo-61
+        caption: Photo 61
+      - asset: photo-62
+        caption: Photo 62
+      - asset: photo-63
+        caption: Photo 63
+      - asset: photo-64
+        caption: Photo 64
+      - asset: photo-65
+        caption: Photo 65
+      - asset: photo-66
+        caption: Photo 66
+      - asset: photo-67
+        caption: Photo 67
+      - asset: photo-68
+        caption: Photo 68
+      - asset: photo-69
+        caption: Photo 69
+      - asset: photo-70
+        caption: Photo 70
+      - asset: photo-71
+        caption: Photo 71
+      - asset: photo-72
+        caption: Photo 72
+      - asset: photo-73
+        caption: Photo 73
+      - asset: photo-74
+        caption: Photo 74
+      - asset: photo-75
+        caption: Photo 75
+      - asset: photo-76
+        caption: Photo 76
+      - asset: photo-77
+        caption: Photo 77
+      - asset: photo-78
+        caption: Photo 78
+      - asset: photo-79
+        caption: Photo 79
+      - asset: photo-80
+        caption: Photo 80
+      - asset: photo-81
+        caption: Photo 81
+      - asset: photo-82
+        caption: Photo 82
+      - asset: photo-83
+        caption: Photo 83
+      - asset: photo-84
+        caption: Photo 84
+      - asset: photo-85
+        caption: Photo 85
+      - asset: photo-86
+        caption: Photo 86
+      - asset: photo-87
+        caption: Photo 87
+      - asset: photo-88
+        caption: Photo 88
+      - asset: photo-89
+        caption: Photo 89
+      - asset: photo-90
+        caption: Photo 90
+      - asset: photo-91
+        caption: Photo 91
+      - asset: photo-92
+        caption: Photo 92
+      - asset: photo-93
+        caption: Photo 93
+      - asset: photo-94
+        caption: Photo 94
+      - asset: photo-95
+        caption: Photo 95
+      - asset: photo-96
+        caption: Photo 96
+      - asset: photo-97
+        caption: Photo 97
+      - asset: photo-98
+        caption: Photo 98
+      - asset: photo-99
+        caption: Photo 99
+      - asset: photo-100
+        caption: Photo 100
+media:
+  - id: photo-1
+    kind: image
+    source: large/photo-1.png
+    alt: Photo 1 of a hundred
+  - id: photo-2
+    kind: image
+    source: large/photo-2.png
+    alt: Photo 2 of a hundred
+  - id: photo-3
+    kind: image
+    source: large/photo-3.png
+    alt: Photo 3 of a hundred
+  - id: photo-4
+    kind: image
+    source: large/photo-4.png
+    alt: Photo 4 of a hundred
+  - id: photo-5
+    kind: image
+    source: large/photo-5.png
+    alt: Photo 5 of a hundred
+  - id: photo-6
+    kind: image
+    source: large/photo-6.png
+    alt: Photo 6 of a hundred
+  - id: photo-7
+    kind: image
+    source: large/photo-7.png
+    alt: Photo 7 of a hundred
+  - id: photo-8
+    kind: image
+    source: large/photo-8.png
+    alt: Photo 8 of a hundred
+  - id: photo-9
+    kind: image
+    source: large/photo-9.png
+    alt: Photo 9 of a hundred
+  - id: photo-10
+    kind: image
+    source: large/photo-10.png
+    alt: Photo 10 of a hundred
+  - id: photo-11
+    kind: image
+    source: large/photo-11.png
+    alt: Photo 11 of a hundred
+  - id: photo-12
+    kind: image
+    source: large/photo-12.png
+    alt: Photo 12 of a hundred
+  - id: photo-13
+    kind: image
+    source: large/photo-13.png
+    alt: Photo 13 of a hundred
+  - id: photo-14
+    kind: image
+    source: large/photo-14.png
+    alt: Photo 14 of a hundred
+  - id: photo-15
+    kind: image
+    source: large/photo-15.png
+    alt: Photo 15 of a hundred
+  - id: photo-16
+    kind: image
+    source: large/photo-16.png
+    alt: Photo 16 of a hundred
+  - id: photo-17
+    kind: image
+    source: large/photo-17.png
+    alt: Photo 17 of a hundred
+  - id: photo-18
+    kind: image
+    source: large/photo-18.png
+    alt: Photo 18 of a hundred
+  - id: photo-19
+    kind: image
+    source: large/photo-19.png
+    alt: Photo 19 of a hundred
+  - id: photo-20
+    kind: image
+    source: large/photo-20.png
+    alt: Photo 20 of a hundred
+  - id: photo-21
+    kind: image
+    source: large/photo-21.png
+    alt: Photo 21 of a hundred
+  - id: photo-22
+    kind: image
+    source: large/photo-22.png
+    alt: Photo 22 of a hundred
+  - id: photo-23
+    kind: image
+    source: large/photo-23.png
+    alt: Photo 23 of a hundred
+  - id: photo-24
+    kind: image
+    source: large/photo-24.png
+    alt: Photo 24 of a hundred
+  - id: photo-25
+    kind: image
+    source: large/photo-25.png
+    alt: Photo 25 of a hundred
+  - id: photo-26
+    kind: image
+    source: large/photo-26.png
+    alt: Photo 26 of a hundred
+  - id: photo-27
+    kind: image
+    source: large/photo-27.png
+    alt: Photo 27 of a hundred
+  - id: photo-28
+    kind: image
+    source: large/photo-28.png
+    alt: Photo 28 of a hundred
+  - id: photo-29
+    kind: image
+    source: large/photo-29.png
+    alt: Photo 29 of a hundred
+  - id: photo-30
+    kind: image
+    source: large/photo-30.png
+    alt: Photo 30 of a hundred
+  - id: photo-31
+    kind: image
+    source: large/photo-31.png
+    alt: Photo 31 of a hundred
+  - id: photo-32
+    kind: image
+    source: large/photo-32.png
+    alt: Photo 32 of a hundred
+  - id: photo-33
+    kind: image
+    source: large/photo-33.png
+    alt: Photo 33 of a hundred
+  - id: photo-34
+    kind: image
+    source: large/photo-34.png
+    alt: Photo 34 of a hundred
+  - id: photo-35
+    kind: image
+    source: large/photo-35.png
+    alt: Photo 35 of a hundred
+  - id: photo-36
+    kind: image
+    source: large/photo-36.png
+    alt: Photo 36 of a hundred
+  - id: photo-37
+    kind: image
+    source: large/photo-37.png
+    alt: Photo 37 of a hundred
+  - id: photo-38
+    kind: image
+    source: large/photo-38.png
+    alt: Photo 38 of a hundred
+  - id: photo-39
+    kind: image
+    source: large/photo-39.png
+    alt: Photo 39 of a hundred
+  - id: photo-40
+    kind: image
+    source: large/photo-40.png
+    alt: Photo 40 of a hundred
+  - id: photo-41
+    kind: image
+    source: large/photo-41.png
+    alt: Photo 41 of a hundred
+  - id: photo-42
+    kind: image
+    source: large/photo-42.png
+    alt: Photo 42 of a hundred
+  - id: photo-43
+    kind: image
+    source: large/photo-43.png
+    alt: Photo 43 of a hundred
+  - id: photo-44
+    kind: image
+    source: large/photo-44.png
+    alt: Photo 44 of a hundred
+  - id: photo-45
+    kind: image
+    source: large/photo-45.png
+    alt: Photo 45 of a hundred
+  - id: photo-46
+    kind: image
+    source: large/photo-46.png
+    alt: Photo 46 of a hundred
+  - id: photo-47
+    kind: image
+    source: large/photo-47.png
+    alt: Photo 47 of a hundred
+  - id: photo-48
+    kind: image
+    source: large/photo-48.png
+    alt: Photo 48 of a hundred
+  - id: photo-49
+    kind: image
+    source: large/photo-49.png
+    alt: Photo 49 of a hundred
+  - id: photo-50
+    kind: image
+    source: large/photo-50.png
+    alt: Photo 50 of a hundred
+  - id: photo-51
+    kind: image
+    source: large/photo-51.png
+    alt: Photo 51 of a hundred
+  - id: photo-52
+    kind: image
+    source: large/photo-52.png
+    alt: Photo 52 of a hundred
+  - id: photo-53
+    kind: image
+    source: large/photo-53.png
+    alt: Photo 53 of a hundred
+  - id: photo-54
+    kind: image
+    source: large/photo-54.png
+    alt: Photo 54 of a hundred
+  - id: photo-55
+    kind: image
+    source: large/photo-55.png
+    alt: Photo 55 of a hundred
+  - id: photo-56
+    kind: image
+    source: large/photo-56.png
+    alt: Photo 56 of a hundred
+  - id: photo-57
+    kind: image
+    source: large/photo-57.png
+    alt: Photo 57 of a hundred
+  - id: photo-58
+    kind: image
+    source: large/photo-58.png
+    alt: Photo 58 of a hundred
+  - id: photo-59
+    kind: image
+    source: large/photo-59.png
+    alt: Photo 59 of a hundred
+  - id: photo-60
+    kind: image
+    source: large/photo-60.png
+    alt: Photo 60 of a hundred
+  - id: photo-61
+    kind: image
+    source: large/photo-61.png
+    alt: Photo 61 of a hundred
+  - id: photo-62
+    kind: image
+    source: large/photo-62.png
+    alt: Photo 62 of a hundred
+  - id: photo-63
+    kind: image
+    source: large/photo-63.png
+    alt: Photo 63 of a hundred
+  - id: photo-64
+    kind: image
+    source: large/photo-64.png
+    alt: Photo 64 of a hundred
+  - id: photo-65
+    kind: image
+    source: large/photo-65.png
+    alt: Photo 65 of a hundred
+  - id: photo-66
+    kind: image
+    source: large/photo-66.png
+    alt: Photo 66 of a hundred
+  - id: photo-67
+    kind: image
+    source: large/photo-67.png
+    alt: Photo 67 of a hundred
+  - id: photo-68
+    kind: image
+    source: large/photo-68.png
+    alt: Photo 68 of a hundred
+  - id: photo-69
+    kind: image
+    source: large/photo-69.png
+    alt: Photo 69 of a hundred
+  - id: photo-70
+    kind: image
+    source: large/photo-70.png
+    alt: Photo 70 of a hundred
+  - id: photo-71
+    kind: image
+    source: large/photo-71.png
+    alt: Photo 71 of a hundred
+  - id: photo-72
+    kind: image
+    source: large/photo-72.png
+    alt: Photo 72 of a hundred
+  - id: photo-73
+    kind: image
+    source: large/photo-73.png
+    alt: Photo 73 of a hundred
+  - id: photo-74
+    kind: image
+    source: large/photo-74.png
+    alt: Photo 74 of a hundred
+  - id: photo-75
+    kind: image
+    source: large/photo-75.png
+    alt: Photo 75 of a hundred
+  - id: photo-76
+    kind: image
+    source: large/photo-76.png
+    alt: Photo 76 of a hundred
+  - id: photo-77
+    kind: image
+    source: large/photo-77.png
+    alt: Photo 77 of a hundred
+  - id: photo-78
+    kind: image
+    source: large/photo-78.png
+    alt: Photo 78 of a hundred
+  - id: photo-79
+    kind: image
+    source: large/photo-79.png
+    alt: Photo 79 of a hundred
+  - id: photo-80
+    kind: image
+    source: large/photo-80.png
+    alt: Photo 80 of a hundred
+  - id: photo-81
+    kind: image
+    source: large/photo-81.png
+    alt: Photo 81 of a hundred
+  - id: photo-82
+    kind: image
+    source: large/photo-82.png
+    alt: Photo 82 of a hundred
+  - id: photo-83
+    kind: image
+    source: large/photo-83.png
+    alt: Photo 83 of a hundred
+  - id: photo-84
+    kind: image
+    source: large/photo-84.png
+    alt: Photo 84 of a hundred
+  - id: photo-85
+    kind: image
+    source: large/photo-85.png
+    alt: Photo 85 of a hundred
+  - id: photo-86
+    kind: image
+    source: large/photo-86.png
+    alt: Photo 86 of a hundred
+  - id: photo-87
+    kind: image
+    source: large/photo-87.png
+    alt: Photo 87 of a hundred
+  - id: photo-88
+    kind: image
+    source: large/photo-88.png
+    alt: Photo 88 of a hundred
+  - id: photo-89
+    kind: image
+    source: large/photo-89.png
+    alt: Photo 89 of a hundred
+  - id: photo-90
+    kind: image
+    source: large/photo-90.png
+    alt: Photo 90 of a hundred
+  - id: photo-91
+    kind: image
+    source: large/photo-91.png
+    alt: Photo 91 of a hundred
+  - id: photo-92
+    kind: image
+    source: large/photo-92.png
+    alt: Photo 92 of a hundred
+  - id: photo-93
+    kind: image
+    source: large/photo-93.png
+    alt: Photo 93 of a hundred
+  - id: photo-94
+    kind: image
+    source: large/photo-94.png
+    alt: Photo 94 of a hundred
+  - id: photo-95
+    kind: image
+    source: large/photo-95.png
+    alt: Photo 95 of a hundred
+  - id: photo-96
+    kind: image
+    source: large/photo-96.png
+    alt: Photo 96 of a hundred
+  - id: photo-97
+    kind: image
+    source: large/photo-97.png
+    alt: Photo 97 of a hundred
+  - id: photo-98
+    kind: image
+    source: large/photo-98.png
+    alt: Photo 98 of a hundred
+  - id: photo-99
+    kind: image
+    source: large/photo-99.png
+    alt: Photo 99 of a hundred
+  - id: photo-100
+    kind: image
+    source: large/photo-100.png
+    alt: Photo 100 of a hundred
 sections:
   - kind: hero
     id: top
     tagline: A hundred of everything.
-  - kind: projects
+  - kind: works
     id: projects
     title: Projects
     items:
-      - name: Project 1
-        summary: Project 1 of a hundred, each with its own line.
-        technologies:
-          - Tool 1
-        links:
-          - platform: web
-            url: https://large.test/projects/1
-            label: Visit
-      - name: Project 2
-        summary: Project 2 of a hundred, each with its own line.
-        technologies:
-          - Tool 2
-        links:
-          - platform: web
-            url: https://large.test/projects/2
-            label: Visit
-      - name: Project 3
-        summary: Project 3 of a hundred, each with its own line.
-        technologies:
-          - Tool 3
-        links:
-          - platform: web
-            url: https://large.test/projects/3
-            label: Visit
-      - name: Project 4
-        summary: Project 4 of a hundred, each with its own line.
-        technologies:
-          - Tool 4
-        links:
-          - platform: web
-            url: https://large.test/projects/4
-            label: Visit
-      - name: Project 5
-        summary: Project 5 of a hundred, each with its own line.
-        technologies:
-          - Tool 5
-        links:
-          - platform: web
-            url: https://large.test/projects/5
-            label: Visit
-      - name: Project 6
-        summary: Project 6 of a hundred, each with its own line.
-        technologies:
-          - Tool 6
-        links:
-          - platform: web
-            url: https://large.test/projects/6
-            label: Visit
-      - name: Project 7
-        summary: Project 7 of a hundred, each with its own line.
-        technologies:
-          - Tool 7
-        links:
-          - platform: web
-            url: https://large.test/projects/7
-            label: Visit
-      - name: Project 8
-        summary: Project 8 of a hundred, each with its own line.
-        technologies:
-          - Tool 1
-        links:
-          - platform: web
-            url: https://large.test/projects/8
-            label: Visit
-      - name: Project 9
-        summary: Project 9 of a hundred, each with its own line.
-        technologies:
-          - Tool 2
-        links:
-          - platform: web
-            url: https://large.test/projects/9
-            label: Visit
-      - name: Project 10
-        summary: Project 10 of a hundred, each with its own line.
-        technologies:
-          - Tool 3
-        links:
-          - platform: web
-            url: https://large.test/projects/10
-            label: Visit
-      - name: Project 11
-        summary: Project 11 of a hundred, each with its own line.
-        technologies:
-          - Tool 4
-        links:
-          - platform: web
-            url: https://large.test/projects/11
-            label: Visit
-      - name: Project 12
-        summary: Project 12 of a hundred, each with its own line.
-        technologies:
-          - Tool 5
-        links:
-          - platform: web
-            url: https://large.test/projects/12
-            label: Visit
-      - name: Project 13
-        summary: Project 13 of a hundred, each with its own line.
-        technologies:
-          - Tool 6
-        links:
-          - platform: web
-            url: https://large.test/projects/13
-            label: Visit
-      - name: Project 14
-        summary: Project 14 of a hundred, each with its own line.
-        technologies:
-          - Tool 7
-        links:
-          - platform: web
-            url: https://large.test/projects/14
-            label: Visit
-      - name: Project 15
-        summary: Project 15 of a hundred, each with its own line.
-        technologies:
-          - Tool 1
-        links:
-          - platform: web
-            url: https://large.test/projects/15
-            label: Visit
-      - name: Project 16
-        summary: Project 16 of a hundred, each with its own line.
-        technologies:
-          - Tool 2
-        links:
-          - platform: web
-            url: https://large.test/projects/16
-            label: Visit
-      - name: Project 17
-        summary: Project 17 of a hundred, each with its own line.
-        technologies:
-          - Tool 3
-        links:
-          - platform: web
-            url: https://large.test/projects/17
-            label: Visit
-      - name: Project 18
-        summary: Project 18 of a hundred, each with its own line.
-        technologies:
-          - Tool 4
-        links:
-          - platform: web
-            url: https://large.test/projects/18
-            label: Visit
-      - name: Project 19
-        summary: Project 19 of a hundred, each with its own line.
-        technologies:
-          - Tool 5
-        links:
-          - platform: web
-            url: https://large.test/projects/19
-            label: Visit
-      - name: Project 20
-        summary: Project 20 of a hundred, each with its own line.
-        technologies:
-          - Tool 6
-        links:
-          - platform: web
-            url: https://large.test/projects/20
-            label: Visit
-      - name: Project 21
-        summary: Project 21 of a hundred, each with its own line.
-        technologies:
-          - Tool 7
-        links:
-          - platform: web
-            url: https://large.test/projects/21
-            label: Visit
-      - name: Project 22
-        summary: Project 22 of a hundred, each with its own line.
-        technologies:
-          - Tool 1
-        links:
-          - platform: web
-            url: https://large.test/projects/22
-            label: Visit
-      - name: Project 23
-        summary: Project 23 of a hundred, each with its own line.
-        technologies:
-          - Tool 2
-        links:
-          - platform: web
-            url: https://large.test/projects/23
-            label: Visit
-      - name: Project 24
-        summary: Project 24 of a hundred, each with its own line.
-        technologies:
-          - Tool 3
-        links:
-          - platform: web
-            url: https://large.test/projects/24
-            label: Visit
-      - name: Project 25
-        summary: Project 25 of a hundred, each with its own line.
-        technologies:
-          - Tool 4
-        links:
-          - platform: web
-            url: https://large.test/projects/25
-            label: Visit
-      - name: Project 26
-        summary: Project 26 of a hundred, each with its own line.
-        technologies:
-          - Tool 5
-        links:
-          - platform: web
-            url: https://large.test/projects/26
-            label: Visit
-      - name: Project 27
-        summary: Project 27 of a hundred, each with its own line.
-        technologies:
-          - Tool 6
-        links:
-          - platform: web
-            url: https://large.test/projects/27
-            label: Visit
-      - name: Project 28
-        summary: Project 28 of a hundred, each with its own line.
-        technologies:
-          - Tool 7
-        links:
-          - platform: web
-            url: https://large.test/projects/28
-            label: Visit
-      - name: Project 29
-        summary: Project 29 of a hundred, each with its own line.
-        technologies:
-          - Tool 1
-        links:
-          - platform: web
-            url: https://large.test/projects/29
-            label: Visit
-      - name: Project 30
-        summary: Project 30 of a hundred, each with its own line.
-        technologies:
-          - Tool 2
-        links:
-          - platform: web
-            url: https://large.test/projects/30
-            label: Visit
-      - name: Project 31
-        summary: Project 31 of a hundred, each with its own line.
-        technologies:
-          - Tool 3
-        links:
-          - platform: web
-            url: https://large.test/projects/31
-            label: Visit
-      - name: Project 32
-        summary: Project 32 of a hundred, each with its own line.
-        technologies:
-          - Tool 4
-        links:
-          - platform: web
-            url: https://large.test/projects/32
-            label: Visit
-      - name: Project 33
-        summary: Project 33 of a hundred, each with its own line.
-        technologies:
-          - Tool 5
-        links:
-          - platform: web
-            url: https://large.test/projects/33
-            label: Visit
-      - name: Project 34
-        summary: Project 34 of a hundred, each with its own line.
-        technologies:
-          - Tool 6
-        links:
-          - platform: web
-            url: https://large.test/projects/34
-            label: Visit
-      - name: Project 35
-        summary: Project 35 of a hundred, each with its own line.
-        technologies:
-          - Tool 7
-        links:
-          - platform: web
-            url: https://large.test/projects/35
-            label: Visit
-      - name: Project 36
-        summary: Project 36 of a hundred, each with its own line.
-        technologies:
-          - Tool 1
-        links:
-          - platform: web
-            url: https://large.test/projects/36
-            label: Visit
-      - name: Project 37
-        summary: Project 37 of a hundred, each with its own line.
-        technologies:
-          - Tool 2
-        links:
-          - platform: web
-            url: https://large.test/projects/37
-            label: Visit
-      - name: Project 38
-        summary: Project 38 of a hundred, each with its own line.
-        technologies:
-          - Tool 3
-        links:
-          - platform: web
-            url: https://large.test/projects/38
-            label: Visit
-      - name: Project 39
-        summary: Project 39 of a hundred, each with its own line.
-        technologies:
-          - Tool 4
-        links:
-          - platform: web
-            url: https://large.test/projects/39
-            label: Visit
-      - name: Project 40
-        summary: Project 40 of a hundred, each with its own line.
-        technologies:
-          - Tool 5
-        links:
-          - platform: web
-            url: https://large.test/projects/40
-            label: Visit
-      - name: Project 41
-        summary: Project 41 of a hundred, each with its own line.
-        technologies:
-          - Tool 6
-        links:
-          - platform: web
-            url: https://large.test/projects/41
-            label: Visit
-      - name: Project 42
-        summary: Project 42 of a hundred, each with its own line.
-        technologies:
-          - Tool 7
-        links:
-          - platform: web
-            url: https://large.test/projects/42
-            label: Visit
-      - name: Project 43
-        summary: Project 43 of a hundred, each with its own line.
-        technologies:
-          - Tool 1
-        links:
-          - platform: web
-            url: https://large.test/projects/43
-            label: Visit
-      - name: Project 44
-        summary: Project 44 of a hundred, each with its own line.
-        technologies:
-          - Tool 2
-        links:
-          - platform: web
-            url: https://large.test/projects/44
-            label: Visit
-      - name: Project 45
-        summary: Project 45 of a hundred, each with its own line.
-        technologies:
-          - Tool 3
-        links:
-          - platform: web
-            url: https://large.test/projects/45
-            label: Visit
-      - name: Project 46
-        summary: Project 46 of a hundred, each with its own line.
-        technologies:
-          - Tool 4
-        links:
-          - platform: web
-            url: https://large.test/projects/46
-            label: Visit
-      - name: Project 47
-        summary: Project 47 of a hundred, each with its own line.
-        technologies:
-          - Tool 5
-        links:
-          - platform: web
-            url: https://large.test/projects/47
-            label: Visit
-      - name: Project 48
-        summary: Project 48 of a hundred, each with its own line.
-        technologies:
-          - Tool 6
-        links:
-          - platform: web
-            url: https://large.test/projects/48
-            label: Visit
-      - name: Project 49
-        summary: Project 49 of a hundred, each with its own line.
-        technologies:
-          - Tool 7
-        links:
-          - platform: web
-            url: https://large.test/projects/49
-            label: Visit
-      - name: Project 50
-        summary: Project 50 of a hundred, each with its own line.
-        technologies:
-          - Tool 1
-        links:
-          - platform: web
-            url: https://large.test/projects/50
-            label: Visit
-      - name: Project 51
-        summary: Project 51 of a hundred, each with its own line.
-        technologies:
-          - Tool 2
-        links:
-          - platform: web
-            url: https://large.test/projects/51
-            label: Visit
-      - name: Project 52
-        summary: Project 52 of a hundred, each with its own line.
-        technologies:
-          - Tool 3
-        links:
-          - platform: web
-            url: https://large.test/projects/52
-            label: Visit
-      - name: Project 53
-        summary: Project 53 of a hundred, each with its own line.
-        technologies:
-          - Tool 4
-        links:
-          - platform: web
-            url: https://large.test/projects/53
-            label: Visit
-      - name: Project 54
-        summary: Project 54 of a hundred, each with its own line.
-        technologies:
-          - Tool 5
-        links:
-          - platform: web
-            url: https://large.test/projects/54
-            label: Visit
-      - name: Project 55
-        summary: Project 55 of a hundred, each with its own line.
-        technologies:
-          - Tool 6
-        links:
-          - platform: web
-            url: https://large.test/projects/55
-            label: Visit
-      - name: Project 56
-        summary: Project 56 of a hundred, each with its own line.
-        technologies:
-          - Tool 7
-        links:
-          - platform: web
-            url: https://large.test/projects/56
-            label: Visit
-      - name: Project 57
-        summary: Project 57 of a hundred, each with its own line.
-        technologies:
-          - Tool 1
-        links:
-          - platform: web
-            url: https://large.test/projects/57
-            label: Visit
-      - name: Project 58
-        summary: Project 58 of a hundred, each with its own line.
-        technologies:
-          - Tool 2
-        links:
-          - platform: web
-            url: https://large.test/projects/58
-            label: Visit
-      - name: Project 59
-        summary: Project 59 of a hundred, each with its own line.
-        technologies:
-          - Tool 3
-        links:
-          - platform: web
-            url: https://large.test/projects/59
-            label: Visit
-      - name: Project 60
-        summary: Project 60 of a hundred, each with its own line.
-        technologies:
-          - Tool 4
-        links:
-          - platform: web
-            url: https://large.test/projects/60
-            label: Visit
-      - name: Project 61
-        summary: Project 61 of a hundred, each with its own line.
-        technologies:
-          - Tool 5
-        links:
-          - platform: web
-            url: https://large.test/projects/61
-            label: Visit
-      - name: Project 62
-        summary: Project 62 of a hundred, each with its own line.
-        technologies:
-          - Tool 6
-        links:
-          - platform: web
-            url: https://large.test/projects/62
-            label: Visit
-      - name: Project 63
-        summary: Project 63 of a hundred, each with its own line.
-        technologies:
-          - Tool 7
-        links:
-          - platform: web
-            url: https://large.test/projects/63
-            label: Visit
-      - name: Project 64
-        summary: Project 64 of a hundred, each with its own line.
-        technologies:
-          - Tool 1
-        links:
-          - platform: web
-            url: https://large.test/projects/64
-            label: Visit
-      - name: Project 65
-        summary: Project 65 of a hundred, each with its own line.
-        technologies:
-          - Tool 2
-        links:
-          - platform: web
-            url: https://large.test/projects/65
-            label: Visit
-      - name: Project 66
-        summary: Project 66 of a hundred, each with its own line.
-        technologies:
-          - Tool 3
-        links:
-          - platform: web
-            url: https://large.test/projects/66
-            label: Visit
-      - name: Project 67
-        summary: Project 67 of a hundred, each with its own line.
-        technologies:
-          - Tool 4
-        links:
-          - platform: web
-            url: https://large.test/projects/67
-            label: Visit
-      - name: Project 68
-        summary: Project 68 of a hundred, each with its own line.
-        technologies:
-          - Tool 5
-        links:
-          - platform: web
-            url: https://large.test/projects/68
-            label: Visit
-      - name: Project 69
-        summary: Project 69 of a hundred, each with its own line.
-        technologies:
-          - Tool 6
-        links:
-          - platform: web
-            url: https://large.test/projects/69
-            label: Visit
-      - name: Project 70
-        summary: Project 70 of a hundred, each with its own line.
-        technologies:
-          - Tool 7
-        links:
-          - platform: web
-            url: https://large.test/projects/70
-            label: Visit
-      - name: Project 71
-        summary: Project 71 of a hundred, each with its own line.
-        technologies:
-          - Tool 1
-        links:
-          - platform: web
-            url: https://large.test/projects/71
-            label: Visit
-      - name: Project 72
-        summary: Project 72 of a hundred, each with its own line.
-        technologies:
-          - Tool 2
-        links:
-          - platform: web
-            url: https://large.test/projects/72
-            label: Visit
-      - name: Project 73
-        summary: Project 73 of a hundred, each with its own line.
-        technologies:
-          - Tool 3
-        links:
-          - platform: web
-            url: https://large.test/projects/73
-            label: Visit
-      - name: Project 74
-        summary: Project 74 of a hundred, each with its own line.
-        technologies:
-          - Tool 4
-        links:
-          - platform: web
-            url: https://large.test/projects/74
-            label: Visit
-      - name: Project 75
-        summary: Project 75 of a hundred, each with its own line.
-        technologies:
-          - Tool 5
-        links:
-          - platform: web
-            url: https://large.test/projects/75
-            label: Visit
-      - name: Project 76
-        summary: Project 76 of a hundred, each with its own line.
-        technologies:
-          - Tool 6
-        links:
-          - platform: web
-            url: https://large.test/projects/76
-            label: Visit
-      - name: Project 77
-        summary: Project 77 of a hundred, each with its own line.
-        technologies:
-          - Tool 7
-        links:
-          - platform: web
-            url: https://large.test/projects/77
-            label: Visit
-      - name: Project 78
-        summary: Project 78 of a hundred, each with its own line.
-        technologies:
-          - Tool 1
-        links:
-          - platform: web
-            url: https://large.test/projects/78
-            label: Visit
-      - name: Project 79
-        summary: Project 79 of a hundred, each with its own line.
-        technologies:
-          - Tool 2
-        links:
-          - platform: web
-            url: https://large.test/projects/79
-            label: Visit
-      - name: Project 80
-        summary: Project 80 of a hundred, each with its own line.
-        technologies:
-          - Tool 3
-        links:
-          - platform: web
-            url: https://large.test/projects/80
-            label: Visit
-      - name: Project 81
-        summary: Project 81 of a hundred, each with its own line.
-        technologies:
-          - Tool 4
-        links:
-          - platform: web
-            url: https://large.test/projects/81
-            label: Visit
-      - name: Project 82
-        summary: Project 82 of a hundred, each with its own line.
-        technologies:
-          - Tool 5
-        links:
-          - platform: web
-            url: https://large.test/projects/82
-            label: Visit
-      - name: Project 83
-        summary: Project 83 of a hundred, each with its own line.
-        technologies:
-          - Tool 6
-        links:
-          - platform: web
-            url: https://large.test/projects/83
-            label: Visit
-      - name: Project 84
-        summary: Project 84 of a hundred, each with its own line.
-        technologies:
-          - Tool 7
-        links:
-          - platform: web
-            url: https://large.test/projects/84
-            label: Visit
-      - name: Project 85
-        summary: Project 85 of a hundred, each with its own line.
-        technologies:
-          - Tool 1
-        links:
-          - platform: web
-            url: https://large.test/projects/85
-            label: Visit
-      - name: Project 86
-        summary: Project 86 of a hundred, each with its own line.
-        technologies:
-          - Tool 2
-        links:
-          - platform: web
-            url: https://large.test/projects/86
-            label: Visit
-      - name: Project 87
-        summary: Project 87 of a hundred, each with its own line.
-        technologies:
-          - Tool 3
-        links:
-          - platform: web
-            url: https://large.test/projects/87
-            label: Visit
-      - name: Project 88
-        summary: Project 88 of a hundred, each with its own line.
-        technologies:
-          - Tool 4
-        links:
-          - platform: web
-            url: https://large.test/projects/88
-            label: Visit
-      - name: Project 89
-        summary: Project 89 of a hundred, each with its own line.
-        technologies:
-          - Tool 5
-        links:
-          - platform: web
-            url: https://large.test/projects/89
-            label: Visit
-      - name: Project 90
-        summary: Project 90 of a hundred, each with its own line.
-        technologies:
-          - Tool 6
-        links:
-          - platform: web
-            url: https://large.test/projects/90
-            label: Visit
-      - name: Project 91
-        summary: Project 91 of a hundred, each with its own line.
-        technologies:
-          - Tool 7
-        links:
-          - platform: web
-            url: https://large.test/projects/91
-            label: Visit
-      - name: Project 92
-        summary: Project 92 of a hundred, each with its own line.
-        technologies:
-          - Tool 1
-        links:
-          - platform: web
-            url: https://large.test/projects/92
-            label: Visit
-      - name: Project 93
-        summary: Project 93 of a hundred, each with its own line.
-        technologies:
-          - Tool 2
-        links:
-          - platform: web
-            url: https://large.test/projects/93
-            label: Visit
-      - name: Project 94
-        summary: Project 94 of a hundred, each with its own line.
-        technologies:
-          - Tool 3
-        links:
-          - platform: web
-            url: https://large.test/projects/94
-            label: Visit
-      - name: Project 95
-        summary: Project 95 of a hundred, each with its own line.
-        technologies:
-          - Tool 4
-        links:
-          - platform: web
-            url: https://large.test/projects/95
-            label: Visit
-      - name: Project 96
-        summary: Project 96 of a hundred, each with its own line.
-        technologies:
-          - Tool 5
-        links:
-          - platform: web
-            url: https://large.test/projects/96
-            label: Visit
-      - name: Project 97
-        summary: Project 97 of a hundred, each with its own line.
-        technologies:
-          - Tool 6
-        links:
-          - platform: web
-            url: https://large.test/projects/97
-            label: Visit
-      - name: Project 98
-        summary: Project 98 of a hundred, each with its own line.
-        technologies:
-          - Tool 7
-        links:
-          - platform: web
-            url: https://large.test/projects/98
-            label: Visit
-      - name: Project 99
-        summary: Project 99 of a hundred, each with its own line.
-        technologies:
-          - Tool 1
-        links:
-          - platform: web
-            url: https://large.test/projects/99
-            label: Visit
-      - name: Project 100
-        summary: Project 100 of a hundred, each with its own line.
-        technologies:
-          - Tool 2
-        links:
-          - platform: web
-            url: https://large.test/projects/100
-            label: Visit
-  - kind: gallery
+      - project-1
+      - project-2
+      - project-3
+      - project-4
+      - project-5
+      - project-6
+      - project-7
+      - project-8
+      - project-9
+      - project-10
+      - project-11
+      - project-12
+      - project-13
+      - project-14
+      - project-15
+      - project-16
+      - project-17
+      - project-18
+      - project-19
+      - project-20
+      - project-21
+      - project-22
+      - project-23
+      - project-24
+      - project-25
+      - project-26
+      - project-27
+      - project-28
+      - project-29
+      - project-30
+      - project-31
+      - project-32
+      - project-33
+      - project-34
+      - project-35
+      - project-36
+      - project-37
+      - project-38
+      - project-39
+      - project-40
+      - project-41
+      - project-42
+      - project-43
+      - project-44
+      - project-45
+      - project-46
+      - project-47
+      - project-48
+      - project-49
+      - project-50
+      - project-51
+      - project-52
+      - project-53
+      - project-54
+      - project-55
+      - project-56
+      - project-57
+      - project-58
+      - project-59
+      - project-60
+      - project-61
+      - project-62
+      - project-63
+      - project-64
+      - project-65
+      - project-66
+      - project-67
+      - project-68
+      - project-69
+      - project-70
+      - project-71
+      - project-72
+      - project-73
+      - project-74
+      - project-75
+      - project-76
+      - project-77
+      - project-78
+      - project-79
+      - project-80
+      - project-81
+      - project-82
+      - project-83
+      - project-84
+      - project-85
+      - project-86
+      - project-87
+      - project-88
+      - project-89
+      - project-90
+      - project-91
+      - project-92
+      - project-93
+      - project-94
+      - project-95
+      - project-96
+      - project-97
+      - project-98
+      - project-99
+      - project-100
+  - kind: works
     id: gallery
     title: Gallery
     items:
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 1 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 1
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 2 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 2
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 3 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 3
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 4 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 4
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 5 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 5
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 6 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 6
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 7 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 7
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 8 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 8
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 9 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 9
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 10 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 10
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 11 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 11
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 12 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 12
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 13 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 13
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 14 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 14
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 15 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 15
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 16 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 16
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 17 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 17
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 18 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 18
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 19 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 19
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 20 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 20
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 21 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 21
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 22 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 22
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 23 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 23
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 24 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 24
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 25 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 25
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 26 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 26
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 27 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 27
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 28 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 28
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 29 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 29
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 30 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 30
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 31 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 31
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 32 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 32
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 33 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 33
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 34 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 34
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 35 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 35
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 36 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 36
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 37 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 37
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 38 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 38
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 39 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 39
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 40 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 40
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 41 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 41
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 42 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 42
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 43 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 43
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 44 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 44
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 45 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 45
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 46 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 46
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 47 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 47
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 48 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 48
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 49 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 49
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 50 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 50
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 51 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 51
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 52 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 52
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 53 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 53
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 54 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 54
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 55 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 55
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 56 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 56
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 57 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 57
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 58 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 58
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 59 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 59
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 60 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 60
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 61 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 61
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 62 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 62
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 63 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 63
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 64 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 64
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 65 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 65
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 66 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 66
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 67 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 67
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 68 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 68
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 69 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 69
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 70 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 70
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 71 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 71
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 72 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 72
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 73 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 73
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 74 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 74
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 75 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 75
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 76 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 76
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 77 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 77
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 78 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 78
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 79 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 79
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 80 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 80
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 81 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 81
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 82 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 82
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 83 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 83
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 84 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 84
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 85 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 85
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 86 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 86
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 87 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 87
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 88 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 88
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 89 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 89
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 90 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 90
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 91 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 91
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 92 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 92
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 93 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 93
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 94 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 94
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 95 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 95
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 96 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 96
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 97 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 97
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 98 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 98
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 99 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 99
-      - image:
-          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
-          alt: Photo 100 of a hundred
-          width: 640
-          height: 480
-        caption: Photo 100
-  - kind: skills
+      - a-hundred-photos
+  - kind: practice
     id: skills
     title: Skills
-    groups:
-      - name: Everything
-        items:
-          - Skill 1
-          - Skill 2
-          - Skill 3
-          - Skill 4
-          - Skill 5
-          - Skill 6
-          - Skill 7
-          - Skill 8
-          - Skill 9
-          - Skill 10
-          - Skill 11
-          - Skill 12
-          - Skill 13
-          - Skill 14
-          - Skill 15
-          - Skill 16
-          - Skill 17
-          - Skill 18
-          - Skill 19
-          - Skill 20
-          - Skill 21
-          - Skill 22
-          - Skill 23
-          - Skill 24
-          - Skill 25
-          - Skill 26
-          - Skill 27
-          - Skill 28
-          - Skill 29
-          - Skill 30
-          - Skill 31
-          - Skill 32
-          - Skill 33
-          - Skill 34
-          - Skill 35
-          - Skill 36
-          - Skill 37
-          - Skill 38
-          - Skill 39
-          - Skill 40
-          - Skill 41
-          - Skill 42
-          - Skill 43
-          - Skill 44
-          - Skill 45
-          - Skill 46
-          - Skill 47
-          - Skill 48
-          - Skill 49
-          - Skill 50
-          - Skill 51
-          - Skill 52
-          - Skill 53
-          - Skill 54
-          - Skill 55
-          - Skill 56
-          - Skill 57
-          - Skill 58
-          - Skill 59
-          - Skill 60
-          - Skill 61
-          - Skill 62
-          - Skill 63
-          - Skill 64
-          - Skill 65
-          - Skill 66
-          - Skill 67
-          - Skill 68
-          - Skill 69
-          - Skill 70
-          - Skill 71
-          - Skill 72
-          - Skill 73
-          - Skill 74
-          - Skill 75
-          - Skill 76
-          - Skill 77
-          - Skill 78
-          - Skill 79
-          - Skill 80
-          - Skill 81
-          - Skill 82
-          - Skill 83
-          - Skill 84
-          - Skill 85
-          - Skill 86
-          - Skill 87
-          - Skill 88
-          - Skill 89
-          - Skill 90
-          - Skill 91
-          - Skill 92
-          - Skill 93
-          - Skill 94
-          - Skill 95
-          - Skill 96
-          - Skill 97
-          - Skill 98
-          - Skill 99
-          - Skill 100
+    part: skills

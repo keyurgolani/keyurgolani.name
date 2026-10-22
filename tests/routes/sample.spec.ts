@@ -9,8 +9,7 @@ import { DEMO, DEMO_APP, expectNotFoundPage, PUBLIC_FILE } from './apps';
 // view under demo. The 404 page renders from the server, so it works without
 // JavaScript too.
 
-// The sample's placeholder images live on picsum.photos, which stays blocked.
-test.use({ appOptions: DEMO_APP, blockedHosts: ['picsum.photos'] });
+test.use({ appOptions: DEMO_APP });
 
 const CHAPTERS = '?variant=fixture-chapters';
 

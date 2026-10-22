@@ -7,12 +7,12 @@
   "homepage": "https://acme.test/ocean",
   "bestFor": ["Writers", "Researchers"],
   "contract": "2.0",
-  "schemas": { "portfolio": { "min": 2, "max": 2 }, "site": { "min": 2, "max": 2 } },
+  "schemas": { "portfolio": { "min": 3, "max": 3 }, "site": { "min": 2, "max": 2 } },
   "tokenContract": 1,
   "compositionFamily": "monograph",
   "motionIntent": "subtle",
   "performanceTier": "light",
-  "renderedKinds": ["hero", "writings"],
+  "renderedKinds": ["hero", "works"],
   "unsupportedKinds": ["github"],
   "contentSlots": [
     {
@@ -27,7 +27,7 @@
     {
       "id": "essays",
       "label": "Essays",
-      "select": { "kind": "writings" },
+      "select": { "kind": "works" },
       "level": "required",
       "min": 1,
       "whenEmpty": { "mode": "keep", "note": "An empty shelf shows until essays exist." }
@@ -42,12 +42,12 @@
       "whenEmpty": { "mode": "omit", "note": "The masthead shows no portrait." }
     },
     {
-      "id": "project-images",
-      "label": "Project images",
-      "select": { "field": "/sections/*/items/*/image" },
+      "id": "covers",
+      "label": "Work covers",
+      "select": { "field": "/works/*/cover" },
       "level": "optional",
       "min": 0,
-      "whenEmpty": { "mode": "omit", "note": "Projects show as text." }
+      "whenEmpty": { "mode": "omit", "note": "Works show as text." }
     }
   ],
   "routes": {
@@ -95,7 +95,7 @@
         "id": "leadSection",
         "label": "Lead section",
         "description": "The section the page opens on.",
-        "kinds": ["writings", "projects"],
+        "kinds": ["works", "evidence"],
         "default": null
       },
       {

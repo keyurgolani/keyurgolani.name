@@ -66,7 +66,7 @@ export function manifestFor(
     promise: 'A composition for the tests.',
     description: 'It renders nothing of its own.',
     contract: '2.0',
-    schemas: { portfolio: { min: 2, max: 2 }, site: { min: 2, max: 2 } },
+    schemas: { portfolio: { min: 3, max: 3 }, site: { min: 2, max: 2 } },
     tokenContract: 1,
     compositionFamily: 'document',
     motionIntent: 'still',

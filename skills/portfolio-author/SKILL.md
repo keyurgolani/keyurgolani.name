@@ -15,14 +15,14 @@ compatibility: >
   Designed for the keyurgolani/portfolio platform. Requires read access to packages/schema/
   and write access to config/portfolio.yml and config/site.yml.
 metadata:
-  version: '2.0.0'
+  version: '3.0.0'
 ---
 
 ## 1. What this platform is
 
-The keyurgolani/portfolio platform is an open-source, self-hostable portfolio site configured by two documents. `config/portfolio.yml` holds the content: identity, links, and the ordered sections. `config/site.yml` holds the presentation: the variant, color scheme, typography, display mode, motion policy, features, and which sections are hidden. Deployment settings and secrets come from the environment and never go in either document. The Next.js host in `apps/web/` validates the pair at startup and renders the portfolio through the site's variant, one of the packages under `packages/variant-*`.
+The keyurgolani/portfolio platform is an open-source, self-hostable portfolio site configured by two documents. `config/portfolio.yml` holds the content: identity, links, the body of work as records, and the sections that place them. `config/site.yml` holds the presentation: the variant, color scheme, typography, display mode, motion policy, features, and which sections are hidden. Deployment settings and secrets come from the environment and never go in either document. The Next.js host in `apps/web/` validates the pair at startup and renders the portfolio through the site's variant, one of the packages under `packages/variant-*`.
 
-Changing `site.yml` changes the look without touching content; editing `portfolio.yml` changes content without touching code. The schema has 28 core section kinds, each with a fixed shape and discriminated by a `kind` field, and none of them assumes a profession. The variant decides how to paint each kind; you decide which kinds to include and what goes in them.
+Changing `site.yml` changes the look without touching content; editing `portfolio.yml` changes content without touching code. The portfolio document is version 3: a body of work. Works (what the person made), evidence (checkable facts about it), chronology entries (roles, studies, milestones), and media assets are records, each with an id; one `practice` and one `contact` record sit beside them; `signature`, `featured`, `proof`, and `archive` curate them; and 14 section kinds place them in reading order. None of it assumes a profession: a work's `medium` and an evidence entry's `type` say what it is. The variant decides how to paint each kind; you decide what to write and how to place it.
 
 Concrete pointers:
 
@@ -45,7 +45,7 @@ Work with whatever the user provides. Don't refuse a source format. Common input
 - A resume PDF or DOCX
 - A LinkedIn export (JSON / CSV) or live profile URL
 - A GitHub username (let your harness fetch repos / READMEs / pinned items)
-- A prior `portfolio.yml` from this or another platform. An unversioned one from this platform's old one-file format is converted with `pnpm config:migrate`, not by hand.
+- A prior `portfolio.yml` from this or another platform. One from this platform's earlier releases, a `schemaVersion: 2` document or the unversioned one-file format, is converted with `pnpm config:migrate`, not by hand.
 - A blog or personal site URL
 - A conversation: answer by answer, the user tells you who they are
 
@@ -55,12 +55,13 @@ You decide what to ingest and how. Use your harness's PDF reading, web fetching,
 
 Turn the gathered material into the pair. This is where this skill earns its keep.
 
-- Pick which sections to include. Curation matters more than completeness; load `references/curation.md` when you're choosing.
-- Pick the order. Hero first, voice sections late, contact last. (Section 4 has the rules.)
-- Give every section an `id`: lowercase words joined by hyphens, unique in the portfolio, never `main`. It's the section's anchor, so use the word a visitor would expect in a link, such as `projects` or `get-in-touch`.
-- Choose field shapes per section. Load `references/schema.md` when filling a section's fields. Load `references/section-kinds.md` before adding a kind you haven't used.
+- Write the records first: a work for each thing made, evidence for each checkable fact, a chronology entry for each role or study, and a media asset for each image. Then curate: one `signature`, two to four `featured`, the `proof` facts, and an `archive`. Curation matters more than completeness; load `references/curation.md` when you're choosing.
+- Pick the sections and their order. Hero first, the work early, voice sections late, contact last. (Section 4 has the rules.)
+- Give every section, record, and media asset an `id`: lowercase words joined by hyphens, unique in the whole document, never `main`. It's the anchor, so use the word a visitor would expect in a link, such as `work` or `get-in-touch`. `pnpm config:ids-fix` mints any you leave out, keeping the file's comments.
+- Choose field shapes. Load `references/schema.md` when filling a record's or a section's fields. Load `references/section-kinds.md` before adding a kind you haven't used.
+- Leave out what you haven't got. An empty string or an empty list is an error, not a blank, and nothing renders in place of a missing field.
 - Compose prose to the platform's quality bar. Load `references/quality-rules.md` before writing taglines, ledes, or item summaries.
-- Write `site.yml` from `site.example.yml`: keep its `appearance`, `visitorControls`, `motionPolicy`, and `features` unless the user asks for something else, and hide a section there (`sections.<id>.hidden: true`) instead of deleting it when the user wants it off the page for now.
+- Write `site.yml` from `site.example.yml`: keep its `appearance`, `visitorControls`, `motionPolicy`, and `features` unless the user asks for something else, and hide a section there (`sections.<id>.hidden: true`) instead of deleting it when the user wants it off the page for now. A record that isn't ready gets `visibility: private`.
 - Stay grounded in the schema. The Zod schema in `packages/schema/src/` is authoritative; if a reference doc and the schema disagree, the schema wins.
 
 Compose end to end before writing. Hold both documents in scratch memory; don't sprinkle partial writes. Then write once and move to Validate.
@@ -78,23 +79,23 @@ Use whatever capability your harness has:
 - **Read PDFs / DOCX**: if your harness can read attached files, ingest them directly. The user can attach `resume.pdf` and you parse the text out.
 - **Browse URLs**: if your harness can fetch web pages, fetch the LinkedIn profile, the GitHub profile, or the existing site. Pull what you need; don't archive.
 - **Ask the user to paste**: if file or URL access isn't available, ask the user to paste the relevant text into the chat. A pasted resume is fine source material.
-- **Interview**: when the user has nothing prepared, drive an interview turn by turn. Start with the hero (name, role, one-line tagline), then experience, then projects, then everything else. Ask one thing at a time.
+- **Interview**: when the user has nothing prepared, drive an interview turn by turn. Start with the hero (name, role, one-line tagline), then the work and what backs it up, then roles and studies, then everything else. Ask one thing at a time.
 - **Mix sources**: a resume for chronology, a LinkedIn export for skills and endorsements, a GitHub username for live project data. Combine them, cross-reference, and flag contradictions to the user.
 
 Do not refuse a source format the user gives you. If you cannot read it directly, ask them to extract or paste. If they want to dictate, take dictation. The skill is source-agnostic on purpose.
 
 ## 4. Picking sections (curation principles)
 
-The schema defines 28 core section kinds. Almost no portfolio uses all of them. Curation, choosing which sections fit _this_ user, _this_ career stage, _this_ audience, and _this_ intent, is the work. A maximalist portfolio that claims everything renders worse than a tight one with five well-chosen sections.
+The schema has 14 section kinds, and most of the choosing is about records, not kinds: which works to show, which one leads, which facts back them up. Curation, choosing what fits _this_ user, _this_ career stage, _this_ audience, and _this_ intent, is the work. A maximalist portfolio that claims everything renders worse than a tight one with five well-chosen sections.
 
-Load `references/curation.md` for the career-stage × intent × audience matrices. The matrices answer concrete questions, such as "should an early-career engineer include `tenure`?", "does an indie maker need `experience` at all?", and "does a writer benefit from a `stats` block?", with specific, opinionated answers for this platform.
+Load `references/curation.md` for the career-stage × intent × audience matrices. The matrices answer concrete questions, such as "should an early-career engineer lead with a tenure metric?", "does an indie maker need a chronology at all?", and "does a writer benefit from metric evidence?", with specific, opinionated answers for this platform.
 
 Ordering rules apply regardless of which sections you pick. The order of `sections` is the page order:
 
 1. **Hero first.** Always. The hero section sets identity in one screen: name, role, one-line tagline, and an avatar if available.
-2. **Lede second** (or merge it into the hero). The one paragraph on what the user does and why a visitor should care lives directly under the hero.
-3. **Signal-dense before list-dense.** A `tenure` summary or `stats` block goes above an `experience` chronology. The visitor gets the gist without scrolling. Lists are for people who already care.
-4. **Voice sections (testimonials, press, quote) go LATE.** They're social proof, not the lead. Place them after the substantive work sections.
+2. **The work early.** The `works` section with the signature and the featured works comes right after the hero, or after a short `lede`.
+3. **Proof before context.** An `evidence` section of metrics goes above the `chronology`. The visitor gets the gist without scrolling. Lists are for people who already care.
+4. **Voice goes LATE.** Testimonial and press evidence and a `quote` are social proof, not the lead. Place them after the substantive work sections.
 5. **Contact / CTA last.** The page ends by telling the visitor what to do next. Don't bury the CTA mid-page.
 
 When in doubt, mirror `portfolio.example.yml`'s ordering, which encodes these rules. Diverge only when the user's intent (a press kit, a portfolio aimed at a specific recruiter) demands it, and note the reason in your scratch notes.
@@ -103,11 +104,11 @@ When in doubt, mirror `portfolio.example.yml`'s ordering, which encodes these ru
 
 Five reference files live alongside this SKILL.md. Load each at the moment its content is needed; do not preload.
 
-- **`references/schema.md`**: every field in both documents, with one-line "use when" guidance. Load when you've decided to include a section and need to know what fields go inside, or when validate.mjs surfaces a path you don't recognize.
+- **`references/schema.md`**: every field in both documents, records and sections, with one-line "use when" guidance. Load when you're writing a record or a section and need to know what fields go inside, or when validate.mjs surfaces a path you don't recognize.
 - **`references/section-kinds.md`**: the shared section-kind catalog with narrative framing for each kind. Load BEFORE adding a section kind you haven't used recently or aren't sure about. (This file is duplicated in `variant-developer/`; CI keeps them in sync.)
 - **`references/quality-rules.md`**: concrete length numbers, tone guidance, and do/don't pairs for visitor-facing copy. Load before composing prose for any section. Load again before validation, as a final pass over taglines and ledes.
 - **`references/curation.md`**: career-stage × intent × audience matrices. Load when picking which sections to include or how to order them, especially if the user's profile is unusual (career changer, multi-discipline, very early career).
-- **`references/examples.md`**: three abridged real-world drafts (engineer, photographer, writer) showing this platform's tone. Load if the user hasn't seen platform output before, or if you need a tone anchor while drafting.
+- **`references/examples.md`**: three abridged real-world drafts (an engineer, a designer-engineer, a maker-photographer) showing this platform's tone and the version 3 shape. Load if the user hasn't seen platform output before, or if you need a tone anchor while drafting.
 
 Loading the wrong reference at the wrong time wastes context. Loading none and guessing the schema produces invalid documents. Be deliberate.
 
@@ -143,14 +144,16 @@ Warnings don't fail validation (it still exits 0), and neither do the length rul
 
 Environment-specific facts that bite agents who skip the references:
 
-- The schema's `kind` field is a Zod **discriminant**. Misspelling it (`expereince`, `Project`) is a `schema.invalid` record with a did-you-mean hint: the server won't start on it, and under `pnpm dev` the page shows an error until it's fixed. Always validate. Spelling matters.
+- A section's `kind` field is a Zod **discriminant**. Misspelling it (`wroks`, `Evidence`) is a `schema.invalid` record with a did-you-mean hint: the server won't start on it, and under `pnpm dev` the page shows an error until it's fixed. The version 2 kinds (`projects`, `experience`, `stats`, `gallery`, and so on) are gone: their content is records now. Always validate. Spelling matters.
 - Every object is strict. A key the schema doesn't define is refused, whatever its value. Data the schema has no field for goes under `extensions`, keyed by an npm package name. It's kept and checked, but no variant shows it to visitors.
-- Every section needs an `id`. Two sections can't share one, and a `#fragment` link (a CTA's `#contact`, say) must name a visible section's id.
+- Every section, record, and media asset needs an `id`, and no two may share one: sections and records share one set. A `#fragment` link (a CTA's `#contact`, say) must name a visible section's or record's id. A reference (a section's `items`, `featured`, a work's `evidence`, a placement's `asset`) must name a record of the right type.
 - `period.start` and `period.end` accept loose strings (`"Jan 2024"`, `"2024-01"`, `"present"`). Prefer human-readable (`"Jan 2024"`) over ISO when the source is ambiguous: readers see this output, not parsers.
-- Avatar paths are relative to `apps/web/public/`. `avatar: { src: '/me.jpg' }` needs a real file at `apps/web/public/me.jpg`. Resume PDFs follow the same rule (`/resume.pdf` is `apps/web/public/resume.pdf`). The platform doesn't fetch arbitrary URLs.
+- An image is a media asset, `{ id, kind: image, source, alt }`, and every place that shows it is a placement, `{ asset: <id> }`: `identity.avatar`, a work's `cover` and `media`, an evidence source's `avatar`, a chronology entry's `logo`. `source` is a path under the media root, such as `rowan/portrait.jpg` (no leading `/`), or an https URL. Write alt text that says what it shows, on the asset, or `decorative: true`; a caption isn't alt text. This release derives no renditions yet, so images render as unavailable until media ingestion lands. Link URLs such as `/resume.pdf` are still paths under `apps/web/public/`.
 - `links[].platform` is free-form, but variants pick an icon, a label, and an order from known values, the ones `references/schema.md` lists. For an unknown platform, omit `platform` and use `label` only; the variant falls back to a generic link.
 - The `tagline` and `subtagline` fields each have a recommended maximum; see `references/quality-rules.md`. Some compositions truncate a long one gracefully and some don't. Stay under the cap.
-- The first sections are what a visitor sees before scrolling. Hero, lede, and one signal-dense section like `tenure` or `stats` is the canonical opening.
+- A metric is evidence of type `metric` with `metric: { key, value, unit? }`. The value is a number; anything else belongs in the `statement`. Give it a key, so the same figure stated twice is checked (`metric.conflict`).
+- A work with a `caseStudy` needs a `slug`: it gets its own page at `/work/<slug>`.
+- The first sections are what a visitor sees before scrolling. Hero, the signature work, and one strip of proof is the canonical opening.
 - This platform's photographers, makers, musicians, academics, and writers all use the same schema. Don't assume a default audience; read what the user gives you. A wedding photographer's portfolio looks very different from a backend engineer's, and both are valid uses of the same documents.
 
 ## 9. Hand-off

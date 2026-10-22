@@ -1,5 +1,5 @@
 # schema.invalid: identity.name is a number.
-schemaVersion: 2
+schemaVersion: 3
 locale: en
 direction: ltr
 identity:

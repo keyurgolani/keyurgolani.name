@@ -1,4 +1,4 @@
-schemaVersion: 2
+schemaVersion: 3
 locale: en
 direction: ltr
 
@@ -7,7 +7,7 @@ identity:
   pronouns: they/them
   location: Bengaluru, India
 
-links: []
+meta: { title: Test User }
 
 sections:
   - kind: hero

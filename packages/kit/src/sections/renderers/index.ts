@@ -1,28 +1,14 @@
 import type { CoreRenderers } from '../types';
+import { ChronologySection } from './chronology';
 import { ContactSection, CtaSection } from './connection';
-import {
-  AwardsSection,
-  EducationSection,
-  EpisodesSection,
-  ExperienceSection,
-  PatentsSection,
-  ProjectsSection,
-  PublicationsSection,
-  TalksSection,
-  WritingsSection,
-} from './dated-entries';
-import {
-  ExternalPortfoliosSection,
-  FocusSection,
-  FunFactsSection,
-  GithubSection,
-  StatsSection,
-  TenureSection,
-} from './figures';
-import { ServicesSection, SkillsSection, StackSection } from './lists';
+import { CustomSection } from './custom';
+import { EvidenceSection } from './evidence';
+import { GithubSection } from './github';
 import { HeroSection, LedeSection, NowSection } from './narrative';
-import { PressSection, QuoteSection, TestimonialsSection } from './quoted';
-import { DiscographySection, GallerySection } from './visual';
+import { PracticeSection } from './practice';
+import { QuoteSection } from './quoted';
+import { FocusSection, FunFactsSection } from './short-lists';
+import { WorksSection } from './works';
 
 /**
  * The shared renderer of every core kind. renderSection() uses one for each
@@ -33,29 +19,15 @@ export const SHARED_RENDERERS: CoreRenderers = {
   hero: HeroSection,
   lede: LedeSection,
   now: NowSection,
-  experience: ExperienceSection,
-  education: EducationSection,
-  projects: ProjectsSection,
-  writings: WritingsSection,
-  publications: PublicationsSection,
-  talks: TalksSection,
-  awards: AwardsSection,
-  episodes: EpisodesSection,
-  patents: PatentsSection,
-  gallery: GallerySection,
-  discography: DiscographySection,
-  testimonials: TestimonialsSection,
-  press: PressSection,
-  quote: QuoteSection,
-  skills: SkillsSection,
-  stack: StackSection,
-  services: ServicesSection,
+  works: WorksSection,
+  evidence: EvidenceSection,
+  chronology: ChronologySection,
+  practice: PracticeSection,
   contact: ContactSection,
-  cta: CtaSection,
-  stats: StatsSection,
+  custom: CustomSection,
+  quote: QuoteSection,
   focus: FocusSection,
   'fun-facts': FunFactsSection,
-  tenure: TenureSection,
-  'external-portfolios': ExternalPortfoliosSection,
+  cta: CtaSection,
   github: GithubSection,
 };

@@ -26,7 +26,7 @@ export const AUDIT_CODES = {
     'A variant runs in browsers too. Use the render input, @portfolio/kit, @portfolio/schema, and @portfolio/variant-contract instead.',
   'audit.environment': 'A variant reads no environment: what it needs is in the render input.',
   'audit.github-fetch':
-    'GitHub data reaches a variant through input.derived (#10). Until then the shared github renderer shows the profile link.',
+    "GitHub data reaches a variant as the github section's snapshot in input.derived: read it with githubSnapshot() from @portfolio/kit/sections.",
   'audit.network': 'A variant fetches nothing: everything it renders is in the render input.',
   'audit.storage':
     "A variant keeps nothing in the visitor's browser: the host owns cookies and storage.",

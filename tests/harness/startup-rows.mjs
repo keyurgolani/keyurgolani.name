@@ -17,8 +17,8 @@ import { DEFAULT_PORTFOLIO, DEFAULT_SITE } from './app-server.mjs';
 
 export const ORIGIN = 'https://rowan.test';
 export const DEMO_ORIGIN = 'https://demo.rowan.test';
-/** The lines every version 2 portfolio document starts with. */
-export const HEAD = 'schemaVersion: 2\nlocale: en\ndirection: ltr\n';
+/** The lines every version 3 portfolio document starts with. */
+export const HEAD = 'schemaVersion: 3\nlocale: en\ndirection: ltr\n';
 const FIXTURE = readFileSync(DEFAULT_PORTFOLIO, 'utf8');
 const SITE = readFileSync(DEFAULT_SITE, 'utf8');
 /** A section, so a portfolio has something to publish. */
@@ -87,6 +87,10 @@ const SOURCE = 'the source directory';
 const PAIR = 'the pair';
 const DOCUMENT = 'the document';
 const OWNER = 'what owner needs';
+const SNAPSHOTS = 'the snapshots beside the pair';
+const MEDIA = 'the media document beside the pair';
+/** A portfolio with a github section, which a snapshot is for. */
+const WITH_GITHUB = `${HEAD}identity:\n  name: Rowan Fixture\nsections:\n  - kind: github\n    id: on-github\n    username: rowan-fixture\n`;
 
 /** @type {readonly StartupRow[]} */
 export const STARTUP_ROWS = [
@@ -354,7 +358,7 @@ export const STARTUP_ROWS = [
     documents: withSite({
       'portfolio.json': [
         '{',
-        '  "schemaVersion": 2,',
+        '  "schemaVersion": 3,',
         '  "locale": "en",',
         '  "direction": "ltr",',
         '  "identity": {',
@@ -378,7 +382,7 @@ export const STARTUP_ROWS = [
   {
     group: DOCUMENT,
     name: 'a JSON syntax error V8 gives no position for, located anyway',
-    documents: withSite({ 'portfolio.json': '{\n  "schemaVersion": 2,\n  "locale": NaN\n}\n' }),
+    documents: withSite({ 'portfolio.json': '{\n  "schemaVersion": 3,\n  "locale": NaN\n}\n' }),
     env: (paths) => readOnly(paths),
     fatal: [
       {
@@ -502,6 +506,53 @@ export const STARTUP_ROWS = [
     fatal: [{ code: 'id.duplicate', path: '/sections/1/id', line: 11 }],
   },
   {
+    // #10: a snapshot that doesn't read would render as missing, so it stops
+    // startup, by its file and never by its contents.
+    group: SNAPSHOTS,
+    name: 'a snapshot that does not parse, refused by its file without quoting it',
+    documents: withSite({
+      'portfolio.yml': WITH_GITHUB,
+      'snapshots/github.json': '{ "records": [canary-snapshot',
+    }),
+    env: (paths) => readOnly(paths),
+    never: ['canary-snapshot'],
+    fatal: [{ code: 'snapshot.syntax', file: 'snapshots/github.json', document: 'snapshots' }],
+  },
+  {
+    group: SNAPSHOTS,
+    name: 'a snapshot that fails its schema, refused by its file without quoting it',
+    documents: withSite({
+      'portfolio.yml': WITH_GITHUB,
+      'snapshots/github.json': '{ "records": "canary-snapshot" }',
+    }),
+    env: (paths) => readOnly(paths),
+    never: ['canary-snapshot'],
+    fatal: [{ code: 'snapshot.invalid', file: 'snapshots/github.json', document: 'snapshots' }],
+  },
+  {
+    // #10: so would a media document that doesn't read, every image unavailable.
+    group: MEDIA,
+    name: 'a media document that does not parse, refused by its file without quoting it',
+    documents: withSite({
+      'portfolio.yml': FIXTURE,
+      'media/media.json': '{ "assets": [canary-media',
+    }),
+    env: (paths) => readOnly(paths),
+    never: ['canary-media'],
+    fatal: [{ code: 'media.syntax', file: 'media/media.json', document: 'media' }],
+  },
+  {
+    group: MEDIA,
+    name: 'a media document that fails its schema, refused by its file without quoting it',
+    documents: withSite({
+      'portfolio.yml': FIXTURE,
+      'media/media.json': '{ "assets": "canary-media" }',
+    }),
+    env: (paths) => readOnly(paths),
+    never: ['canary-media'],
+    fatal: [{ code: 'media.invalid', file: 'media/media.json', document: 'media' }],
+  },
+  {
     group: OWNER,
     name: 'owner, with no password hash or data directory',
     env: (paths) => readOnly(paths, { PORTFOLIO_PROFILE: 'owner' }),
@@ -531,6 +582,23 @@ export const WARNING_ROWS = [
         line: 6,
         column: 12,
       },
+    ],
+  },
+  {
+    // #10: a file in snapshots/ that is no <kind>.json is left out, with a
+    // warning after the pair's own.
+    group: SNAPSHOTS,
+    name: 'a file in snapshots/ that is no snapshot, ignored',
+    documents: {
+      'portfolio.yml': WITH_GITHUB,
+      'site.yml': selecting('canary-variant'),
+      'snapshots/canary-notes.txt': 'canary-notes-text',
+    },
+    env: (paths) => readOnly(paths),
+    never: ['canary-notes-text', 'canary-variant'],
+    warning: [
+      { code: 'variant.unavailable', document: 'site' },
+      { code: 'snapshot.ignored', file: 'snapshots/canary-notes.txt', document: 'snapshots' },
     ],
   },
 ];

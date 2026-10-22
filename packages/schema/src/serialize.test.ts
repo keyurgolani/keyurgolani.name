@@ -23,13 +23,18 @@ const SCRAMBLED = {
       id: 'exhibitions',
       kind: '@acme/portfolio-photography/exhibitions',
     },
+    { items: ['harbor'], title: 'Plates', id: 'plates', kind: 'works' },
+  ],
+  media: [{ alt: 'A', source: 'a.jpg', kind: 'image', id: 'harbor-photo' }],
+  works: [
     {
-      items: [{ caption: 'Harbor', image: { alt: 'A', src: '/a.jpg' } }],
-      title: 'Plates',
-      id: 'plates',
-      kind: 'gallery',
+      media: [{ caption: 'Harbor', asset: 'harbor-photo' }],
+      medium: 'image-series',
+      title: 'Harbor',
+      id: 'harbor',
     },
   ],
+  signature: 'harbor',
   identity: {
     extensions: { '@z/b': { y: 1, x: { d: [{ f: 1, e: 2 }], c: 2 } }, '@a/b': { q: 1 } },
     tagline: LONG,
@@ -37,14 +42,14 @@ const SCRAMBLED = {
   },
   direction: 'ltr',
   locale: 'en',
-  schemaVersion: 2,
+  schemaVersion: 3,
 };
 
 test('serialize writes schema order, extension data sorted at every level, and authored order for the rest', () => {
   assert.equal(
     serialize(SCRAMBLED, 'yaml'),
     lines(
-      'schemaVersion: 2',
+      'schemaVersion: 3',
       'locale: en',
       'direction: ltr',
       'identity:',
@@ -62,6 +67,19 @@ test('serialize writes schema order, extension data sorted at every level, and a
       '            f: 1',
       // A YAML 1.1 reader would take a bare y for true.
       '      "y": 1',
+      'signature: harbor',
+      'works:',
+      '  - id: harbor',
+      '    title: Harbor',
+      '    medium: image-series',
+      '    media:',
+      '      - asset: harbor-photo',
+      '        caption: Harbor',
+      'media:',
+      '  - id: harbor-photo',
+      '    kind: image',
+      '    source: a.jpg',
+      '    alt: A',
       'sections:',
       '  - kind: "@acme/portfolio-photography/exhibitions"',
       '    id: exhibitions',
@@ -69,20 +87,17 @@ test('serialize writes schema order, extension data sorted at every level, and a
       '    data:',
       '      a: 2',
       '      z: 1',
-      '  - kind: gallery',
+      '  - kind: works',
       '    id: plates',
       '    title: Plates',
       '    items:',
-      '      - image:',
-      '          src: /a.jpg',
-      '          alt: A',
-      '        caption: Harbor',
+      '      - harbor',
     ),
   );
   const json = serialize(SCRAMBLED, 'json');
   assert.ok(
     json.startsWith(
-      '{\n  "schemaVersion": 2,\n  "locale": "en",\n  "direction": "ltr",\n  "identity": {\n    "name"',
+      '{\n  "schemaVersion": 3,\n  "locale": "en",\n  "direction": "ltr",\n  "identity": {\n    "name"',
     ),
   );
   assert.ok(json.endsWith('\n}\n') && !json.includes('\r'));
