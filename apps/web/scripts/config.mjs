@@ -8,8 +8,10 @@
  *   pnpm config:validate [dir] [--origin <url>] [--json]
  *
  * validate reads the pair in a directory, portfolio.{yml,yaml,json} and
- * site.{yml,yaml,json}, the way startup does, and prints every record it
- * finds: where, its code and severity, what's wrong, and how to fix it.
+ * site.{yml,yaml,json}, and once it loads, the snapshots/ and media/media.json
+ * beside it, the way startup does, and prints every record it finds: where,
+ * its code and severity, what's wrong, and how to fix it. The checks that
+ * compare a draft with the live revision run at publish and import, not here.
  *
  *   dir             The directory that holds the pair. Defaults to the
  *                   repository's config directory, which `pnpm dev` reads.
@@ -92,7 +94,7 @@ import {
   redactSecrets,
 } from '@portfolio/schema';
 import { formatMigration, migrate, parseSet } from '@portfolio/schema/migrate';
-import { formatRecords, loadPair, pairFileNames } from '@portfolio/schema/node';
+import { formatRecords, loadPair, pairFileNames, readUnitFiles } from '@portfolio/schema/node';
 
 /**
  * What this build registers (#5): the interim appearance catalog, the content
@@ -201,7 +203,7 @@ async function migrateCommand(args) {
     process.stdout.write(`${MIGRATE_USAGE}\n`);
     return 0;
   }
-  if (positionals.length !== 1) throw new UsageError('Give one file to migrate.');
+  if (positionals.length !== 1) throw new UsageError('Give one old file to migrate.');
   if (values.write && values.out === undefined) throw new UsageError('--write needs --out <dir>.');
   if (!values.write && values.out !== undefined) throw new UsageError('--out goes with --write.');
   let set;
@@ -472,10 +474,13 @@ async function validateCommand(args) {
 
   const base = process.env.INIT_CWD || process.cwd();
   const dir = positionals[0] === undefined ? CONFIG_DIR : path.resolve(base, positionals[0]);
-  const loaded = loadPair(dir, {
-    ...(await hostCatalog()),
-    ...(origin ? { canonicalOrigin: origin } : {}),
-  });
+  const loaded = withUnitFiles(
+    loadPair(dir, {
+      ...(await hostCatalog()),
+      ...(origin ? { canonicalOrigin: origin } : {}),
+    }),
+    dir,
+  );
   const sample = await sampleIdentity(loaded);
   const result = sample ? { ...loaded, diagnostics: [...loaded.diagnostics, sample] } : loaded;
   const report = values.json
@@ -484,6 +489,25 @@ async function validateCommand(args) {
   // Records never quote a value, and this keeps it that way for the terminal.
   process.stdout.write(redactSecrets(report));
   return result.ok ? 0 : 1;
+}
+
+/**
+ * The snapshots and the media document beside the pair, read the way startup
+ * reads them once the pair loads: a blocking record in either stops it too.
+ */
+function withUnitFiles(loaded, dir) {
+  if (!loaded.ok) return loaded;
+  const found = readUnitFiles(dir).diagnostics;
+  if (found.length === 0) return loaded;
+  const diagnostics = [...loaded.diagnostics, ...found];
+  if (found.every(({ severity }) => severity === 'warning')) return { ...loaded, diagnostics };
+  const { portfolio, site } = loaded.sources;
+  return {
+    ok: false,
+    diagnostics,
+    notChecked: loaded.notChecked,
+    files: { portfolio: portfolio.path, site: site.path },
+  };
 }
 
 /**
