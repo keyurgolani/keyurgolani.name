@@ -123,3 +123,19 @@
 :where([data-variant] [data-renderer='shared'] .pf-facts dd) {
   margin-inline: 0;
 }
+
+/* A GitHub section's figures: one row of pairs, each number beside its label. */
+:where([data-variant] [data-renderer='shared'] .pf-figures) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.5rem;
+}
+
+:where([data-variant] [data-renderer='shared'] .pf-figures > div) {
+  display: flex;
+  gap: 0.5rem;
+}
+
+:where([data-variant] [data-renderer='shared'] .pf-figures dd) {
+  margin-inline: 0;
+}

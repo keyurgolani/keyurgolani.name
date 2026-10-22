@@ -1116,6 +1116,20 @@ test('the shared stylesheet sets layout alone, under [data-variant], with no wei
   }
 });
 
+test('the github figures sit in one row, each number beside its label, with no dd indent', () => {
+  const css = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
+  const rule = (selector: string) =>
+    css.split(`:where([data-variant] [data-renderer='shared'] ${selector}) {`)[1]?.split('}')[0];
+  assert.match(rule('.pf-figures') ?? '', /display: flex;/);
+  assert.match(rule('.pf-figures > div') ?? '', /display: flex;/);
+  assert.match(rule('.pf-figures dd') ?? '', /margin-inline: 0;/);
+  // The markup those rules lay out: each pair a div of the list.
+  assert.match(
+    render('on-github', READY),
+    /<dl class="pf-figures"><div class="pf-figure-pair"><dt>Repositories<\/dt><dd>31<\/dd><\/div>/,
+  );
+});
+
 test('renderSection stamps the section element and dispatches by kind', () => {
   const input = inputFor(COMPLETE, { idPrefix: 'pv-' });
   const markup = html(renderSection(sectionOf(input, 'about'), input, {}));
