@@ -695,14 +695,19 @@ export function filesystemPublicationService({
     });
   }
 
-  /** The most recently live revisions first, each once: the pointer's, then by seq. */
+  /**
+   * The most recently live revisions first, each once: the pointer's, then
+   * by seq. The walk for the last known good passes over an event file it
+   * can't read, as the reader's does; every other read of the log fails on
+   * one, as history does.
+   */
   async function liveOrder(pointer: LivePointer | null): Promise<RevisionId[]> {
     const order: RevisionId[] = [];
     const add = (id: RevisionId) => {
       if (!order.includes(id)) order.push(id);
     };
     if (pointer) add(pointer.revisionId);
-    const events = await readEvents(fs, paths);
+    const events = await readEvents(fs, paths, { unreadable: () => {} });
     for (let index = events.length - 1; index >= 0; index--) add(events[index]!.revisionId);
     return order;
   }
