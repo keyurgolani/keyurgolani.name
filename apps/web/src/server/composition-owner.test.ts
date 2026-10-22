@@ -291,10 +291,21 @@ test('an unknown operation is the same 404 with or without a session', async () 
 });
 
 test('the owner route matrix: each route as its capability says, and retired ones absent', () => {
-  const concrete = (pattern: string) => pattern.replace(/\[[^\]]+\]/g, 'sample');
+  // Each dynamic segment a word no route starts with, as the profile matrix
+  // does, so the path is the pattern's own: `/[...view]` as `/sample` would
+  // be the demo's sample route.
+  const concrete = (pattern: string) =>
+    pattern.replace(/\/\[\[\.\.\.[^\]]+\]\]/g, '').replace(/\[\.{0,3}[^\]]+\]/g, 'probe') || '/';
   for (const entry of listRoutes()) {
-    const expected = routeAccess('owner', entry) === 'absent' ? 'absent' : 'served';
-    assert.equal(resolveRoute('owner', concrete(entry.pattern)).status, expected, entry.pattern);
+    const pathname = concrete(entry.pattern);
+    // No installed variant declares a view at /probe, and no slug names a work until #10.
+    const expected =
+      entry.kind === 'page' && pathname.includes('probe')
+        ? 'missing'
+        : routeAccess('owner', entry) === 'absent'
+          ? 'absent'
+          : 'served';
+    assert.equal(resolveRoute('owner', pathname).status, expected, entry.pattern);
   }
   for (const pattern of RETIRED_PATTERNS) {
     assert.equal(resolveRoute('owner', concrete(pattern)).status, 'absent', pattern);

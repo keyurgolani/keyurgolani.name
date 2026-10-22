@@ -112,5 +112,6 @@ test("a Studio page proxy.ts marks goes to Next's 404 page: each one the route t
       destination: '/_not-found',
     })),
   );
-  assert.deepEqual([rewrites.afterFiles, rewrites.fallback], [[], []]);
+  // afterFiles holds #5's rewrite of a missing path, which proxy.test.ts checks.
+  assert.deepEqual(rewrites.fallback, []);
 });

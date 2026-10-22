@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import type { NextConfig } from 'next';
-import { listRoutes } from './src/server/routes';
+import { listRoutes, ROUTE_HEADER } from './src/server/routes';
 
 /**
  * The registered variant and content extension packages, which
@@ -55,19 +55,34 @@ const config: NextConfig = {
   // app/global-not-found.tsx, which brings its own document. Without the
   // flag, next build exits.
   experimental: { globalNotFound: true },
-  // A Studio page under a profile with none (#2): proxy.ts marks the request
-  // with x-portfolio-not-found (NOT_FOUND_HEADER in server/studio-headers.ts),
-  // and this sends it to Next's own 404 page before Next finds the page, so it
-  // answers as a path no route matches does, with the request's own URL and
-  // query.
   async rewrites() {
     return {
+      // A Studio page under a profile with none (#2): proxy.ts marks the
+      // request with x-portfolio-not-found (NOT_FOUND_HEADER in
+      // server/studio-headers.ts), and this sends it to Next's own 404 page
+      // before Next finds the page, so it answers as a path no route matches
+      // does, with the request's own URL and query.
       beforeFiles: studioPages().map((source) => ({
         source,
         has: [{ type: 'header' as const, key: 'x-portfolio-not-found', value: '1' }],
         destination: '/_not-found',
       })),
-      afterFiles: [],
+      // A path the route table calls missing (#5, Slice 4): proxy.ts marks it
+      // in the x-portfolio-route header (server/routes.ts ROUTE_HEADER), and
+      // this renders the 404 page through the same /_not-found route, from
+      // the server and with its 404 status. As an afterFiles rewrite it runs
+      // once Next has looked in public/, so a file there is still served, and
+      // before the dynamic routes, so the views catch-all never sees the path.
+      // Its source is an unnamed group: Next adds a named parameter, such as
+      // /:path*'s, to the 404 page's query, which a path no route matches
+      // never has.
+      afterFiles: [
+        {
+          source: '/(.*)',
+          has: [{ type: 'header' as const, key: ROUTE_HEADER, value: 'missing' }],
+          destination: '/_not-found',
+        },
+      ],
       fallback: [],
     };
   },

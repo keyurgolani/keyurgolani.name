@@ -10,17 +10,22 @@ import {
 import { isMetadataRouteFile } from 'next/dist/lib/metadata/is-metadata-route';
 import { normalizeAppPath } from 'next/dist/shared/lib/router/utils/app-paths';
 import ts from 'typescript';
+import { parse as parseYaml } from 'yaml';
+import { isReservedSegment, validateManifest } from '@portfolio/variant-contract';
+import { LITERAL_SEGMENT } from '@portfolio/variant-contract/segments';
 import { CAPABILITIES, PROFILES, type Profile } from './capabilities';
 import type { DeploymentConfig } from './config';
 import { setDeploymentState } from './config-store';
 import { servedPattern } from './route-guard';
 import {
   listRoutes,
+  ownedFirstSegments,
   resolveRoute,
   RETIRED_PATTERNS,
   routeAccess,
   routeResolver,
   serves,
+  type Installed,
   type RouteEntry,
   type RouteKind,
   type RoutePattern,
@@ -32,6 +37,7 @@ import {
 // the build puts them.
 
 const WEB = fileURLToPath(new URL('../..', import.meta.url));
+const FIXTURES = new URL('../../../../tests/fixtures/variants/', import.meta.url);
 const SRC = path.join(WEB, 'src');
 const APP = path.join(SRC, 'app');
 const PACKAGES = path.join(WEB, '..', '..', 'packages');
@@ -131,9 +137,12 @@ function sources(dir: string): string[] {
   return found;
 }
 
-/** A concrete path for `pattern`, filling each dynamic segment. */
+/**
+ * A concrete path for `pattern`, filling each dynamic segment with a word no
+ * route starts with, so the root catch-all's path is its own.
+ */
 function instantiate(pattern: string): string {
-  return pattern.replace(/\[\[?\.{0,3}[^\]]+\]\]?/g, 'sample') || '/';
+  return pattern.replace(/\[\[?\.{0,3}[^\]]+\]\]?/g, 'probe') || '/';
 }
 
 const PATTERNS = [...new Set(listRoutes().map((entry) => entry.pattern))].sort();
@@ -996,20 +1005,26 @@ test("what every profile serves, with #2's Studio pages under owner alone", () =
     '/robots.txt',
     '/sitemap.xml',
   ];
-  assert.deepEqual(
-    served('owner'),
-    [...everywhere, '/feed.xml', '/studio', '/studio/sign-in'].sort(),
-  );
-  assert.deepEqual(served('read-only'), [...everywhere, '/feed.xml'].sort());
-  assert.deepEqual(served('demo'), [...everywhere, '/sample'].sort());
+  // The site's own routes (#5, Slice 4): a variant's path views, and work.
+  const site = ['/[...view]', '/feed.xml', '/work/[slug]', '/work/[slug]/[...view]'];
+  assert.deepEqual(served('owner'), [...everywhere, ...site, '/studio', '/studio/sign-in'].sort());
+  assert.deepEqual(served('read-only'), [...everywhere, ...site].sort());
+  // The bundled sample, and every route under it.
+  assert.deepEqual(served('demo'), [...everywhere, '/sample/[[...path]]'].sort());
 });
 
 test('each table route resolves the way its capability says, in every profile', () => {
   for (const profile of PROFILES) {
     for (const entry of listRoutes()) {
-      const decision = resolveRoute(profile, instantiate(entry.pattern));
-      const expected = routeAccess(profile, entry) === 'absent' ? 'absent' : 'served';
-      assert.equal(decision.status, expected, `${profile} ${entry.pattern}`);
+      const pathname = instantiate(entry.pattern);
+      // No installed variant declares a view at /probe, and no slug names a work until #10.
+      const expected =
+        entry.kind === 'page' && pathname.includes('probe')
+          ? 'missing'
+          : routeAccess(profile, entry) === 'absent'
+            ? 'absent'
+            : 'served';
+      assert.equal(resolveRoute(profile, pathname).status, expected, `${profile} ${entry.pattern}`);
     }
   }
 });
@@ -1020,20 +1035,243 @@ test('retired routes are absent everywhere, and only those exact paths', () => {
       assert.equal(resolveRoute(profile, instantiate(pattern)).status, 'absent', pattern);
       assert.equal(resolveRoute(profile, `${instantiate(pattern)}/`).status, 'absent', pattern);
     }
-    // Paths under /variants/ stay unlisted, free for static assets in public/variants/.
+    // A path below one names nothing, and the app's 404 page answers it.
     assert.equal(
       resolveRoute(profile, '/variants/kinetic-cosmos/aurora-dark-geometric.png').status,
-      'unlisted',
+      'missing',
     );
     assert.equal(resolveRoute(profile, '/%61dmin').status, 'absent', 'an encoded retired path');
-    assert.equal(resolveRoute(profile, '/admin/nested').status, 'unlisted');
+    assert.equal(resolveRoute(profile, '/admin/nested').status, 'missing');
   }
 });
 
-test('paths the table does not list, or that do not decode, are left to Next', () => {
-  assert.equal(resolveRoute('read-only', '/does-not-exist').status, 'unlisted');
-  assert.equal(resolveRoute('read-only', '/api/studio').status, 'unlisted');
-  assert.equal(resolveRoute('read-only', '/%E0%A4%A').status, 'unlisted');
+test("Next's build assets and paths that don't decode are Next's; anything else unlisted is missing", () => {
+  for (const profile of PROFILES) {
+    assert.equal(resolveRoute(profile, '/_next/static/chunks/main.js').status, 'unlisted');
+    assert.equal(resolveRoute(profile, '/%E0%A4%A').status, 'unlisted');
+    assert.equal(resolveRoute(profile, '/api/studio').status, 'missing');
+  }
+});
+
+/** The pattern of the entry `profile` serves `pathname` through, or its status. */
+function entryFor(profile: Profile, pathname: string): string {
+  const decision = resolveRoute(profile, pathname);
+  return decision.status === 'served' ? decision.entry.pattern : decision.status;
+}
+
+/** A test-only variant's registry entry, from tests/fixtures/variants/<name>. */
+function fixture(name: string) {
+  const read = (file: string) =>
+    JSON.parse(readFileSync(new URL(`${name}/${file}`, FIXTURES), 'utf8'));
+  const result = validateManifest(read('manifest.json'), {
+    packageName: read('package.json').name,
+  });
+  assert.ok(result.ok, JSON.stringify(result.diagnostics));
+  return { manifest: result.manifest };
+}
+
+/**
+ * The route specs' build (#5, Slice 4): the fallback composition, which
+ * declares no view; fixture-chapters, chapters/{chapter} under home and
+ * credits under work; and fixture-notes, notes under home.
+ */
+const FIXTURE_BUILD: Installed = [
+  { manifest: { id: 'fallback', routes: { views: [] } } },
+  fixture('chapters'),
+  fixture('notes'),
+];
+const fixtureRoutes = routeResolver(listRoutes(), RETIRED_PATTERNS, FIXTURE_BUILD);
+
+/** The pattern of the entry `profile` serves `pathname` through on the fixture build, or its status. */
+function fixtureEntry(profile: Profile, pathname: string): string {
+  const [path, query = ''] = pathname.split('?');
+  const decision = fixtureRoutes(profile, path!, new URLSearchParams(query));
+  return decision.status === 'served' ? decision.entry.pattern : decision.status;
+}
+
+test('a root path names a view only when an installed variant declares it (#5, Slice 4)', () => {
+  for (const profile of ['owner', 'read-only'] as const) {
+    // Each renders or redirects, whichever variant the live site selects.
+    for (const pathname of ['/chapters/one', `/chapters/${'a'.repeat(64)}`, '/notes']) {
+      assert.equal(fixtureEntry(profile, pathname), '/[...view]', `${profile} ${pathname}`);
+    }
+    for (const pathname of [
+      '/does-not-exist',
+      '/chapters',
+      '/chapters/one/two',
+      '/chapters/Selected-Work',
+      // Longer than a content id: no placeholder value.
+      `/chapters/${'a'.repeat(65)}`,
+      `/chapters/${'a'.repeat(8000)}`,
+      '/credits',
+      // A reserved first segment is never a view, and no route lists these.
+      '/favicon.ico',
+      '/api/nope',
+      '/studio/nowhere',
+      '/work',
+      // No slug names a work until #10, its views included.
+      '/work/tide-tables',
+      '/work/tide-tables/credits',
+    ]) {
+      assert.equal(fixtureEntry(profile, pathname), 'missing', `${profile} ${pathname}`);
+    }
+    assert.equal(fixtureEntry(profile, '/sample'), 'absent');
+    assert.equal(fixtureEntry(profile, '/sample/chapters/one'), 'absent');
+    assert.equal(fixtureEntry(profile, '/sample/nowhere'), 'missing');
+  }
+  // Demo serves no view at the root: a declared one is absent there, and anything else missing.
+  for (const pathname of ['/chapters/one', '/notes', '/feed.xml']) {
+    assert.equal(fixtureEntry('demo', pathname), 'absent', pathname);
+  }
+  for (const pathname of ['/does-not-exist', '/chapters', '/work/tide-tables', '/favicon.ico']) {
+    assert.equal(fixtureEntry('demo', pathname), 'missing', pathname);
+  }
+});
+
+test('/sample serves what the page renders: a registered variant, at home or a declared view', () => {
+  for (const pathname of [
+    '/sample',
+    '/sample?variant=fixture-chapters',
+    '/sample/chapters/one?variant=fixture-chapters',
+    // Declared by another variant, or under the site's own selection: the page redirects.
+    '/sample/notes?variant=fixture-chapters',
+    '/sample/chapters/one',
+    '/sample?variant=fixture-notes&utm=x',
+  ]) {
+    assert.equal(fixtureEntry('demo', pathname), '/sample/[[...path]]', pathname);
+  }
+  for (const pathname of [
+    '/sample?variant=fallback',
+    '/sample?variant=canary-variant',
+    '/sample?variant=',
+    '/sample?variant=fixture-notes&variant=fixture-notes',
+    '/sample/nowhere?variant=fixture-chapters',
+    '/sample/chapters?variant=fixture-chapters',
+    '/sample/work/tide-tables?variant=fixture-chapters',
+    '/sample/api/ready',
+  ]) {
+    assert.equal(fixtureEntry('demo', pathname), 'missing', pathname);
+  }
+  // Under the other profiles a /sample path that names something is absent, as the entry is.
+  assert.equal(fixtureEntry('owner', '/sample?variant=fixture-chapters'), 'absent');
+  assert.equal(fixtureEntry('owner', '/sample?variant=canary-variant'), 'missing');
+});
+
+test('every top-level public/ entry is a name no view or route takes, so a file there is served', () => {
+  // A view's first segment is a literal segment the contract doesn't reserve,
+  // so it never meets a file named outside that grammar, such as me.jpg, or
+  // one the contract reserves, such as favicon.ico. .gitkeep keeps the
+  // directory in git.
+  const owned = ownedFirstSegments();
+  for (const entry of readdirSync(path.join(WEB, 'public'))) {
+    if (entry === '.gitkeep') continue;
+    assert.ok(
+      isReservedSegment(entry) || !LITERAL_SEGMENT.test(entry),
+      `a view could take public/${entry}: name it like a file, or reserve it`,
+    );
+    assert.ok(!owned.has(entry), `a route answers before public/${entry}`);
+  }
+  // Such a path is missing, so it reaches Next, which serves the file before
+  // next.config.ts's rewrite sends anything else to the 404 page.
+  for (const profile of PROFILES) {
+    for (const pathname of ['/me.jpg', '/resume.pdf', '/favicon.ico', '/.gitkeep']) {
+      assert.equal(fixtureEntry(profile, pathname), 'missing', `${profile} ${pathname}`);
+    }
+  }
+});
+
+/** Where each Compose file mounts something into the app's public/, by the name it takes there. */
+function composePublicMounts(): { file: string; name: string }[] {
+  const root = path.join(WEB, '..', '..');
+  const files = [
+    'docker-compose.yml',
+    ...readdirSync(path.join(root, 'deploy'))
+      .filter((name) => /^compose\..+\.ya?ml$/.test(name))
+      .map((name) => `deploy/${name}`),
+  ];
+  const mounts: { file: string; name: string }[] = [];
+  for (const file of files) {
+    const doc = parseYaml(readFileSync(path.join(root, file), 'utf8')) as {
+      services?: Record<string, { volumes?: (string | { target?: string })[] }>;
+    };
+    for (const service of Object.values(doc.services ?? {})) {
+      for (const volume of service.volumes ?? []) {
+        const target = typeof volume === 'string' ? volume.split(':')[1] : volume.target;
+        const name = /^\/app\/apps\/web\/public\/([^/]+)/.exec(target ?? '')?.[1];
+        if (name) mounts.push({ file, name });
+      }
+    }
+  }
+  return mounts;
+}
+
+test('every directory a Compose file mounts into public/ is a name no view or route takes', () => {
+  const mounts = composePublicMounts();
+  // The owner's assets, which docker-compose.yml and compose.owner.yml mount.
+  assert.ok(
+    mounts.some(({ name }) => name === 'assets'),
+    JSON.stringify(mounts),
+  );
+  const owned = ownedFirstSegments();
+  for (const { file, name } of mounts) {
+    assert.ok(isReservedSegment(name), `${file} mounts public/${name}, which a view could take`);
+    assert.ok(!owned.has(name), `a route answers before ${file}'s public/${name}`);
+  }
+  // A file there, extension or not, is missing, so Next serves it.
+  for (const profile of PROFILES) {
+    for (const pathname of ['/assets/me.jpg', '/assets/notes', '/assets']) {
+      assert.equal(fixtureEntry(profile, pathname), 'missing', `${profile} ${pathname}`);
+    }
+  }
+});
+
+test('the catch-all shadows no API, metadata, or build path, in any profile (#5, Slice 4)', () => {
+  for (const profile of PROFILES) {
+    // Each answers through its own entry, whatever the catch-all could match.
+    for (const pattern of PATTERNS.filter((each) => !each.includes('['))) {
+      const decision = resolveRoute(profile, pattern);
+      if (decision.status === 'served') assert.equal(decision.entry.pattern, pattern, pattern);
+    }
+    assert.equal(entryFor(profile, '/api/studio/config.status'), '/api/studio/[name]');
+    // Next's own build assets stay its to answer.
+    for (const pathname of ['/_next/static/chunks/main.js', '/_next/image']) {
+      assert.equal(entryFor(profile, pathname), 'unlisted', `${profile} ${pathname}`);
+    }
+    // What no entry lists under a route's first segment is missing: a missing
+    // API route, or a path beside a retired one.
+    for (const pathname of [
+      '/api/no-such-route',
+      '/api',
+      '/work',
+      '/preview/grant/chapters',
+      '/robots.txt/x',
+    ]) {
+      assert.equal(entryFor(profile, pathname), 'missing', `${profile} ${pathname}`);
+    }
+  }
+});
+
+test('the contract reserves every first segment the table owns, so no view is ever shadowed', () => {
+  const owned = [...ownedFirstSegments()].sort();
+  assert.deepEqual(
+    owned.filter((segment) => !isReservedSegment(segment)),
+    [],
+    'a view could start with a segment a route answers first',
+  );
+  // The table's own first segments are all there, the share image's group suffix included.
+  for (const segment of [
+    '_next',
+    'api',
+    'sample',
+    'work',
+    'studio',
+    'robots.txt',
+    'feed.xml',
+    'opengraph-image-12o0cb',
+    'admin',
+  ]) {
+    assert.ok(owned.includes(segment), segment);
+  }
 });
 
 test('a pattern can serve each profile under its own capability', () => {
@@ -1066,7 +1304,7 @@ test('a static segment wins over a dynamic one, as in Next', () => {
   assert.equal(resolve('read-only', '/work/new').status, 'absent');
   assert.equal(resolve('read-only', '/work/rowan').status, 'served');
   assert.equal(resolve('read-only', '/files/a/b/c').status, 'served');
-  assert.equal(resolve('read-only', '/files').status, 'unlisted');
+  assert.equal(resolve('read-only', '/files').status, 'missing');
 });
 
 test('an entry can serve fewer profiles than its capability allows', () => {

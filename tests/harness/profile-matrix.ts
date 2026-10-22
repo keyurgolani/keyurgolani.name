@@ -89,6 +89,16 @@ export interface MatrixOptions {
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const METHODS = ['GET', 'POST', 'PUT', 'DELETE'] as const;
 
+/**
+ * A page whose concrete path names nothing it can render: no installed
+ * variant declares a view at /probe, and no slug names a work until #10
+ * (#5, Slice 4). The route table calls it missing in every profile, so a
+ * GET gets the app's 404 page, rendered from the server, and any other
+ * method the proxy's plain 404, as an absent route does.
+ */
+const namesNothing = (entry: Routes.RouteEntry) =>
+  entry.kind === 'page' && concrete(entry.pattern).includes('probe');
+
 /** What the transport answers a visitor with no session, by the registry and the matrix. */
 function expected(
   profile: Profile,
@@ -230,10 +240,37 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
     const access = routeAccess(profile, entry);
     const served = access !== 'absent';
     const gated = entry.kind === 'page' && access === 'session';
+    const missing = namesNothing(entry);
+    const state = missing
+      ? 'missing there, the 404 page'
+      : served
+        ? gated
+          ? 'served to a session, and sends a visitor to sign-in'
+          : 'served'
+        : 'absent, 404 for every method';
     test(
-      `${entry.pattern} is ${served ? (gated ? 'served to a session, and sends a visitor to sign-in' : 'served') : 'absent, 404 for every method'}`,
+      `${entry.pattern} is ${state}`,
       { annotation: [{ type: 'route', description: entry.pattern }, annotation] },
       async ({ app, request }) => {
+        if (missing) {
+          const page = await request.get(concrete(entry.pattern), { maxRedirects: 0 });
+          expect(page.status()).toBe(404);
+          // The app's 404 page, from the server: it needs no JavaScript.
+          expect(page.headers()['content-type']).toMatch(/^text\/html/);
+          expect(await page.text()).toMatch(/<h1>Page not found<\/h1>/);
+          expect(page.headers()['x-request-id']).toMatch(UUID);
+          expectProfileHeaders(profile, page, 'GET');
+          for (const method of METHODS.filter((each) => each !== 'GET')) {
+            const response = await request.fetch(concrete(entry.pattern), {
+              method,
+              maxRedirects: 0,
+            });
+            expect(response.status(), method).toBe(404);
+            expect(response.headers()['content-type'], method).toMatch(/^text\/plain/);
+            expectProfileHeaders(profile, response, method);
+          }
+          return;
+        }
         if (served) {
           const response = await request.get(concrete(entry.pattern), { maxRedirects: 0 });
           if (gated) {
@@ -255,6 +292,12 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
             maxRedirects: 0,
           });
           expect(response.status(), method).toBe(404);
+          // The proxy's answer, before Next routes it, but for a Studio page
+          // under a profile with none, which answers as an unknown path does,
+          // with the 404 page (#2).
+          if (!isStudioPath(entry.pattern)) {
+            expect(response.headers()['content-type'], method).toMatch(/^text\/plain/);
+          }
           expectProfileHeaders(profile, response, method);
         }
       },

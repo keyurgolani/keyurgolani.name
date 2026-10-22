@@ -3,7 +3,7 @@ import { INDEXABLE, type Profile } from './server/capabilities';
 import { getDeploymentConfig, isServable } from './server/config-store';
 import { READY_PATH, STARTING, STARTING_HEADERS } from './server/ready-starting';
 import { safeReturnTo, signInLocation } from './server/return-to';
-import { listRoutes, resolveRoute, routeAccess } from './server/routes';
+import { listRoutes, resolveRoute, ROUTE_HEADER, routeAccess } from './server/routes';
 import { readCookies, sessionCookieName } from './server/session-cookie';
 import {
   isStudioPath,
@@ -24,7 +24,9 @@ import {
 // from the route table and the capability matrix only, never from a route's
 // name, and reads the frozen config register() stored. While the catalog
 // can't serve (#5, Slice 3), a visitor page gets a static 503 page, since a
-// page can't set that status itself.
+// page can't set that status itself. A path no route renders (#5, Slice 4)
+// goes on to Next marked missing, and next.config.ts sends it to the 404
+// page; any method but GET and HEAD gets the plain 404 here.
 //
 // For Studio (#2), under a profile with a Studio page, it sends the nonce
 // CSP, Referrer-Policy: same-origin, and Cross-Origin-Resource-Policy:
@@ -49,7 +51,7 @@ export function proxy(request: NextRequest): NextResponse {
     }
     return plain(503, 'Service unavailable.', requestId, {});
   }
-  const { pathname, search } = request.nextUrl;
+  const { pathname, search, searchParams } = request.nextUrl;
   const extra: Record<string, string> = INDEXABLE[deployment.profile]
     ? {}
     : { 'x-robots-tag': 'noindex' };
@@ -58,9 +60,13 @@ export function proxy(request: NextRequest): NextResponse {
   const csp = studio ? studioCsp(newNonce(), deployment.mode) : undefined;
   if (csp) Object.assign(extra, STUDIO_RESPONSE_HEADERS, { 'content-security-policy': csp });
 
-  const decision = resolveRoute(deployment.profile, pathname);
+  const decision = resolveRoute(deployment.profile, pathname, searchParams);
   if (decision.status === 'absent') {
     if (studioPath && !studio) return unknownPath(request, requestId, extra);
+    return plain(404, 'Not found.', requestId, extra);
+  }
+  // Only GET and HEAD load a page: any other method to a missing path is the plain 404.
+  if (decision.status === 'missing' && request.method !== 'GET' && request.method !== 'HEAD') {
     return plain(404, 'Not found.', requestId, extra);
   }
   if (decision.status === 'served' && decision.entry.visitor && !isServable()) {
@@ -81,6 +87,8 @@ export function proxy(request: NextRequest): NextResponse {
   headers.set('x-request-id', requestId);
   headers.delete(STUDIO_PATH_HEADER);
   headers.delete(NOT_FOUND_HEADER);
+  // The table's decision, in place of anything the client sent.
+  headers.set(ROUTE_HEADER, decision.status);
   if (csp) {
     headers.set('content-security-policy', csp);
     headers.set(STUDIO_PATH_HEADER, `${pathname}${search}`);
@@ -127,6 +135,7 @@ function unknownPath(
   const headers = new Headers(request.headers);
   headers.set('x-request-id', requestId);
   headers.delete(STUDIO_PATH_HEADER);
+  headers.delete(ROUTE_HEADER);
   headers.set(NOT_FOUND_HEADER, '1');
   const response = NextResponse.next({ request: { headers } });
   response.headers.set('x-request-id', requestId);
