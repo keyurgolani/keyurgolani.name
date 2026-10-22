@@ -1,6 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { MIGRATE_COMMAND } from './legacy';
+import { parseMediaDocumentText, type MediaDocument } from './media';
+import { redactSecrets } from './secrets';
+import { isSnapshotKind, parseSnapshotText, type UnitFileProblem } from './snapshots';
 import type { ParsedPair } from './view';
 import { detectFormat, DOCUMENT_MAX_BYTES, type DocumentFormat } from './source';
 import {
@@ -286,4 +289,164 @@ function readBounded(file: string): string {
 function list(items: readonly string[]): string {
   if (items.length <= 2) return items.join(' and ');
   return `${items.slice(0, -1).join(', ')}, and ${items.at(-1)}`;
+}
+
+/** The snapshots and the media document beside a pair, as the readers hand them to the view. */
+export interface UnitFiles {
+  /** Every snapshot that reads, by kind: the known kinds checked, the rest as plain JSON. */
+  readonly snapshots: Readonly<Record<string, unknown>>;
+  /** media/media.json, checked, when the directory has one that reads. */
+  readonly media?: MediaDocument;
+  /**
+   * Problems reading them. A blocking one stops `read-only` startup: a
+   * snapshot or media document that doesn't read would otherwise render as
+   * missing.
+   */
+  readonly diagnostics: readonly Diagnostic[];
+}
+
+/**
+ * Reads `<dir>/snapshots/<kind>.json` and `<dir>/media/media.json`, the
+ * layout #3's full `export-revision` writes beside the two documents. Both
+ * are optional. Each file is JSON alone, at most 1 MiB, through #4's
+ * pre-parse guards; any other entry in snapshots/ is a warning. Never throws.
+ */
+export function readUnitFiles(dir: string): UnitFiles {
+  const snapshots = readSnapshots(dir);
+  const media = readMediaDocument(dir);
+  return {
+    snapshots: snapshots.snapshots,
+    ...(media.media ? { media: media.media } : {}),
+    diagnostics: [...snapshots.diagnostics, ...media.diagnostics],
+  };
+}
+
+/** `<dir>/snapshots/<kind>.json`, each kind read and checked. Never throws. */
+export function readSnapshots(dir: string): {
+  readonly snapshots: Readonly<Record<string, unknown>>;
+  readonly diagnostics: readonly Diagnostic[];
+} {
+  const folder = path.join(/*turbopackIgnore: true*/ dir, 'snapshots');
+  const snapshots: Record<string, unknown> = {};
+  const diagnostics: Diagnostic[] = [];
+  let names: string[];
+  try {
+    names = fs.readdirSync(/*turbopackIgnore: true*/ folder);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === 'ENOENT') return { snapshots, diagnostics };
+    diagnostics.push(
+      code === 'ENOTDIR'
+        ? fileRecord(
+            'snapshot.ignored',
+            'snapshots',
+            'snapshots',
+            "snapshots isn't a directory, so it holds no snapshot.",
+          )
+        : fileRecord(
+            'snapshot.invalid',
+            'snapshots',
+            'snapshots',
+            "The snapshots directory can't be read.",
+          ),
+    );
+    return { snapshots, diagnostics };
+  }
+  for (const name of [...names].sort()) {
+    if (name.startsWith('.')) continue;
+    const file = `snapshots/${name}`;
+    const kind = name.endsWith('.json') ? name.slice(0, -'.json'.length) : undefined;
+    if (kind === undefined || !isSnapshotKind(kind)) {
+      diagnostics.push(
+        fileRecord(
+          'snapshot.ignored',
+          'snapshots',
+          redactSecrets(file),
+          `${redactSecrets(file)} isn't a snapshot, <kind>.json, so it's ignored.`,
+        ),
+      );
+      continue;
+    }
+    let text: string;
+    try {
+      text = readBounded(path.join(/*turbopackIgnore: true*/ folder, name));
+    } catch {
+      diagnostics.push(fileRecord('snapshot.invalid', 'snapshots', file, `${file} can't be read.`));
+      continue;
+    }
+    const result = parseSnapshotText(kind, text);
+    if (result.ok) {
+      Object.defineProperty(snapshots, kind, {
+        value: result.value,
+        enumerable: true,
+        writable: true,
+        configurable: true,
+      });
+    } else {
+      diagnostics.push(...problemRecords(result.problems, 'snapshots', file, 'snapshot'));
+    }
+  }
+  return { snapshots, diagnostics };
+}
+
+/** `<dir>/media/media.json`, read and checked, when there is one. Never throws. */
+export function readMediaDocument(dir: string): {
+  readonly media?: MediaDocument;
+  readonly diagnostics: readonly Diagnostic[];
+} {
+  const file = 'media/media.json';
+  let text: string;
+  try {
+    text = readBounded(path.join(/*turbopackIgnore: true*/ dir, 'media', 'media.json'));
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === 'ENOENT' || code === 'ENOTDIR') return { diagnostics: [] };
+    return { diagnostics: [fileRecord('media.invalid', 'media', file, `${file} can't be read.`)] };
+  }
+  const result = parseMediaDocumentText(text);
+  return result.ok
+    ? { media: result.value, diagnostics: [] }
+    : { diagnostics: problemRecords(result.problems, 'media', file, 'media') };
+}
+
+function fileRecord(
+  code: DiagnosticCode,
+  document: 'snapshots' | 'media',
+  file: string,
+  message: string,
+  extra: { pointer?: string; line?: number; column?: number } = {},
+): Diagnostic {
+  return {
+    code,
+    severity: DIAGNOSTIC_SEVERITIES[code],
+    document,
+    file,
+    pointer: extra.pointer ?? '',
+    ...(extra.line !== undefined ? { line: extra.line, column: extra.column } : {}),
+    message,
+    remediation: DIAGNOSTIC_REMEDIATIONS[code],
+  };
+}
+
+/** A file's problems as records: its first syntax problem, else each schema problem. */
+function problemRecords(
+  problems: readonly UnitFileProblem[],
+  document: 'snapshots' | 'media',
+  file: string,
+  prefix: 'snapshot' | 'media',
+): Diagnostic[] {
+  const syntax = problems.find(({ kind }) => kind === 'syntax');
+  if (syntax) {
+    return [
+      fileRecord(`${prefix}.syntax`, document, file, `${file}: ${syntax.message}`, {
+        ...(syntax.line !== undefined ? { line: syntax.line, column: syntax.column } : {}),
+      }),
+    ];
+  }
+  return problems.map((problem) =>
+    fileRecord(`${prefix}.invalid`, document, file, `${file}: ${problem.message}`, {
+      ...(problem.pointer !== undefined ? { pointer: problem.pointer } : {}),
+      ...(problem.line !== undefined ? { line: problem.line, column: problem.column } : {}),
+    }),
+  );
 }

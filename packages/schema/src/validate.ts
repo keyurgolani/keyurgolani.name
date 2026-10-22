@@ -158,6 +158,8 @@ export const DIAGNOSTIC_SEVERITIES = {
   'id.invalid': 'blocks-preview',
   'snapshot.syntax': 'blocks-preview',
   'snapshot.invalid': 'blocks-preview',
+  'media.syntax': 'blocks-preview',
+  'media.invalid': 'blocks-preview',
   'source.missing': 'blocks-preview',
   'source.duplicate': 'blocks-preview',
   'source.unreadable': 'blocks-preview',
@@ -206,6 +208,10 @@ export const DIAGNOSTIC_REMEDIATIONS: Readonly<Record<DiagnosticCode, string>> =
     "Fix the value at this pointer, or remove the file and refresh the source. Until then the deployment won't start.",
   'snapshot.ignored':
     'Rename it to <kind>.json, with a kind of lowercase letters, digits, and hyphens, or remove it.',
+  'media.syntax':
+    'Fix media/media.json at this position: one plain JSON document of at most 1 MiB. Exporting the revision again rewrites it.',
+  'media.invalid':
+    "Fix the value at this pointer, or export the revision again. Until then the deployment won't start.",
   'source.missing':
     'Add the document: portfolio.yml and site.yml, or their .yaml or .json forms. portfolio.example.yml and site.example.yml are ones to start from.',
   'source.duplicate': 'Keep one of them, in the format you edit, and remove the others.',
