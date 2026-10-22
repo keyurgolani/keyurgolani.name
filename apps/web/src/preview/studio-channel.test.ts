@@ -110,7 +110,7 @@ function setup(t: TestContext, clock = { now: 0 }) {
   return { host, iframe, channel, calls, drops, fromFrame, hello, lastPort };
 }
 
-test('Studio takes hello only from its frame’s own window with the frame’s current nonce, and answers connect with a port (#7, Slice 3)', async (t) => {
+test("Studio takes hello only from its frame's own window with the frame's current nonce, and answers connect with a port (#7, Slice 3)", async (t) => {
   const { iframe, channel, calls, drops, fromFrame, hello } = setup(t);
   // Another window, the Studio page itself, and no window at all.
   for (const source of [new FakeFrameWindow(), {}, null]) {
@@ -153,7 +153,7 @@ test('Studio takes hello only from its frame’s own window with the frame’s c
   await tick();
 });
 
-test('Studio drops a handshake that isn’t one: another protocol, version, or type, oversized, or invalid, with no connect (#7, Slice 3)', async (t) => {
+test("Studio drops a handshake that isn't one: another protocol, version, or type, oversized, or invalid, with no connect (#7, Slice 3)", async (t) => {
   const { iframe, channel, calls, fromFrame } = setup(t);
   const hello = envelope('hello', { nonce: NONCE, instance: DOC_A }, 1);
   fromFrame({ ...hello, protocol: 'other' });
@@ -181,7 +181,7 @@ test('Studio drops a handshake that isn’t one: another protocol, version, or t
   await tick();
 });
 
-test('Studio reads the frame’s messages over the port, drops what the protocol refuses with no callback, and takes at most 10 scrolled a second (#7, Slice 3)', async (t) => {
+test("Studio reads the frame's messages over the port, drops what the protocol refuses with no callback, and takes at most 10 scrolled a second (#7, Slice 3)", async (t) => {
   const clock = { now: 1000 };
   const { channel, calls, hello, lastPort } = setup(t, clock);
   hello();
@@ -254,7 +254,7 @@ test('Studio sends a frame only what the protocol takes, and nothing before a ha
   ]);
 });
 
-test('a load whose document isn’t the one holding the port closes it, and Studio sends nothing until that document says hello, in either order (#7, Slice 3)', async (t) => {
+test("a load whose document isn't the one holding the port closes it, and Studio sends nothing until that document says hello, in either order (#7, Slice 3)", async (t) => {
   const { iframe, channel, calls, hello, lastPort } = setup(t);
   // The first document: its load, then its hello.
   iframe.fire('load');

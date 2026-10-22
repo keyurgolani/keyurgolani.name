@@ -192,14 +192,14 @@ function setup(t: TestContext, options: FrameChannelOptions = SERVER, href = `${
 
 const reasons = (drops: readonly PreviewDrop[]) => drops.map(({ reason, type }) => [reason, type]);
 
-test('the agent does nothing in a document that isn’t framed, so the dev fixture route still renders top level (#7, Slice 3)', () => {
+test("the agent does nothing in a document that isn't framed, so the dev fixture route still renders top level (#7, Slice 3)", () => {
   const win = new FakeFrame(`${STUDIO}/preview/dev/fallback/complete`);
   Object.defineProperty(win, 'parent', { value: win });
   assert.equal(startFrameChannel(win as unknown as Window, SERVER), null);
   assert.equal(win.listeners.size, 0);
 });
 
-test('the agent says hello to Studio’s origin alone, after its own load, with the grant’s nonce and its document’s id (#7, Slice 3)', async (t) => {
+test("the agent says hello to Studio's origin alone, after its own load, with the grant's nonce and its document's id (#7, Slice 3)", async (t) => {
   const { win } = setup(t);
   assert.equal(win.parent.posted.length, 0, 'not before the load is done');
   await wait(5);
@@ -225,7 +225,7 @@ test('the agent says hello to Studio’s origin alone, after its own load, with 
   stop?.();
 });
 
-test('the agent takes connect only from its parent window, from Studio’s origin, after its hello, with one port (#7, Slice 3)', async (t) => {
+test("the agent takes connect only from its parent window, from Studio's origin, after its hello, with one port (#7, Slice 3)", async (t) => {
   const { drops, received, fromParent, connect } = setup(t);
   const port = new MessageChannel();
   t.after(() => {
@@ -268,7 +268,7 @@ test('the agent takes connect only from its parent window, from Studio’s origi
   assert.deepEqual(received, [{ ...envelope('ready', { renderedVersion: 4, route: '/' }, 2) }]);
 });
 
-test('the agent reads Studio’s messages over the port, and drops what the protocol refuses with no side effect (#7, Slice 3)', async (t) => {
+test("the agent reads Studio's messages over the port, and drops what the protocol refuses with no side effect (#7, Slice 3)", async (t) => {
   const { win, drops, received, connect, send } = setup(t);
   await wait(5);
   const port = connect();
@@ -416,7 +416,7 @@ test('a local frame takes documents and assets up to their limits and 100 MiB in
   }
 });
 
-test('the link guard cancels every link but a fragment and the grant’s own paths, and sends Studio what it cancelled (#7, Slice 3)', async (t) => {
+test("the link guard cancels every link but a fragment and the grant's own paths, and sends Studio what it cancelled (#7, Slice 3)", async (t) => {
   const { win, received, connect } = setup(t, SERVER, `${STUDIO}${BASE}/work/a`);
   // Before the handshake, the frame still never follows an outside link.
   const early = click('https://example.test/');
