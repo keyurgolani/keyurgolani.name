@@ -88,6 +88,10 @@ function reader(store: Store, options: Partial<RevisionCatalogOptions> = {}) {
   return { catalog, servable, logs };
 }
 
+/** The values the servable flag took, in order, each run of one value as one. */
+const flags = (values: readonly boolean[]) =>
+  values.filter((value, index) => index === 0 || value !== values[index - 1]);
+
 const served = (live: LiveRevision) =>
   live.unit ? live : assert.fail(`nothing served: ${live.state}`);
 
@@ -159,7 +163,11 @@ test('the reader serves the live revision, and the next request sees a publish f
   const next = served(await catalog.getLive());
   assert.deepEqual([next.state, next.revisionId], ['live', step!.outcome.revisionId]);
   assert.equal(next.unit.portfolio.meta?.description, 'A portfolio, version two.');
-  assert.deepEqual(servable, [true, true]);
+  // Every request sets the flag from the decision it got, a kept one too.
+  assert.deepEqual(flags(servable), [true]);
+  const before = servable.length;
+  await catalog.getLive();
+  assert.equal(servable.length, before + 1);
 });
 
 test('a damaged live revision serves the last known good as degraded, and the pointer is never rewritten', async (t) => {
@@ -186,7 +194,7 @@ test('a damaged live revision serves the last known good as degraded, and the po
     renderDrift: null,
   });
   assert.deepEqual(readFileSync(store.paths.live), pointer);
-  assert.deepEqual(servable, [true]);
+  assert.deepEqual(flags(servable), [true]);
   // The owner's diagnostic: one line, with the IDs and why, never content.
   assert.deepEqual(logs, [
     {
@@ -205,7 +213,7 @@ test('a damaged live revision serves the last known good as degraded, and the po
     [unreadable.state, unreadable.liveRevisionId, unreadable.servingRevisionId, unreadable.reason],
     ['degraded', null, first, 'pointer_damaged'],
   );
-  assert.deepEqual(servable, [true, true]);
+  assert.deepEqual(flags(servable), [true]);
 });
 
 test('with nothing servable the reader is incompatible or empty, and says so to the composition root', async (t) => {
@@ -217,7 +225,7 @@ test('with nothing servable the reader is incompatible or empty, and says so to 
     unitHash: null,
     unit: null,
   });
-  assert.deepEqual(none.servable, [false]);
+  assert.deepEqual(flags(none.servable), [false]);
 
   // Until the first-start import, an empty store serves what whenEmpty does.
   const documents: LiveRevision = {
@@ -232,7 +240,7 @@ test('with nothing servable the reader is incompatible or empty, and says so to 
     [(await fallback.catalog.status()).state, (await fallback.catalog.status()).servingRevisionId],
     ['live', 'doc-0123456789ab'],
   );
-  assert.deepEqual(fallback.servable, [true, true, true]);
+  assert.deepEqual(flags(fallback.servable), [true]);
 
   // The only revision, damaged: nothing to fall back on.
   const store = await storeWithOne(t);
@@ -250,7 +258,7 @@ test('with nothing servable the reader is incompatible or empty, and says so to 
     [status.state, status.liveRevisionId, status.servingRevisionId, status.reason],
     ['incompatible', only, null, 'damaged:parse_failure'],
   );
-  assert.deepEqual(broken.servable, [false]);
+  assert.deepEqual(flags(broken.servable), [false]);
   assert.deepEqual(
     broken.logs.map((entry) => [entry.level, entry.event, entry.code]),
     [['error', 'store.catalog.incompatible', 'damaged:parse_failure']],
@@ -590,4 +598,69 @@ test("a decision that fails is kept as nothing servable: requests over a log tha
   // The log line says what, never where.
   assert.ok(logs.every((entry) => !JSON.stringify(entry).includes(store.paths.root)));
   assert.ok(logs.some((entry) => entry.event === 'store.catalog.incompatible'));
+});
+
+test("of two decisions in flight, only the later pointer's sets the flag, whichever finishes last, and every later request keeps it set", async (t) => {
+  for (const order of ['nothing servable, then live', 'live, then nothing servable'] as const) {
+    const store = await newStore(t);
+    const first = await publishInput(store, pairInput('engineering'));
+    const second = await publishInput(store, contentVariant(pairInput('engineering'), 'two'));
+    const damage = (id: Parameters<typeof store.paths.revision>[0]) =>
+      writeFileSync(
+        path.join(store.paths.revision(id), 'documents', 'portfolio.yml'),
+        '# damaged\n',
+      );
+    // Reads of the revisions in `slow` wait for `release`.
+    let slow = new Set<string>();
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const fs: ReadFs = {
+      ...nodeReadFs,
+      async readFile(file) {
+        if ([...slow].some((id) => file.includes(id))) await gate;
+        return nodeReadFs.readFile(file);
+      },
+    };
+    const { catalog, servable } = reader(store, { fs });
+    let expected: boolean;
+    let early: Promise<LiveRevision>;
+    if (order === 'nothing servable, then live') {
+      // The first pointer's decision, nothing servable, is slow; meanwhile a good publish lands.
+      damage(first);
+      damage(second);
+      slow = new Set([first]);
+      early = catalog.getLive();
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      slow = new Set();
+      await publishInput(store, contentVariant(pairInput('engineering'), 'three'));
+      expected = true;
+    } else {
+      // The first pointer's decision, live, is slow, past its tombstone
+      // check; meanwhile the pointer moves back to the first revision, which
+      // is then damaged, and the second is removed, so nothing serves.
+      slow = new Set([second]);
+      early = catalog.getLive();
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      slow = new Set();
+      const moved = await owned(store).rollback(
+        { targetRevisionId: first, expectedLiveRevisionId: second },
+        'owner',
+      );
+      assert.equal(moved.kind, 'committed', order);
+      damage(first);
+      writeFileSync(store.paths.tombstone(second), '{}\n');
+      expected = false;
+    }
+    const later = await catalog.getLive();
+    assert.equal(servable.at(-1), expected, order);
+    release();
+    await early;
+    // The overtaken decision said nothing, and the next request keeps the latest one's flag.
+    assert.equal(servable.at(-1), expected, order);
+    const next = await catalog.getLive();
+    assert.equal(next.state, later.state, order);
+    assert.equal(servable.at(-1), expected, order);
+  }
 });
