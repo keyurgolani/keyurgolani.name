@@ -419,6 +419,42 @@ test('a finding points at its index in the document, past hidden sections and dr
   );
 });
 
+test('a record matches the public one the view kept, not a private one that repeats its id', () => {
+  const pictured = manifest((raw) => {
+    raw.id = 'acme-pictured';
+    const slots = raw.contentSlots as Record<string, unknown>[];
+    slots.find((slot) => slot.id === 'covers')!.max = 1;
+  });
+  const registry: VariantRegistry = [
+    ...REGISTRY,
+    { packageName: '@acme/pictured', version: '1.0.0', manifest: pictured },
+  ];
+  // The private atlas repeats the public one's id: id.duplicate, which blocks publishing, but
+  // the pair still previews, and the view keeps the public atlas, the document's third work.
+  const WORKS = `works:
+  - { id: tide, title: Tide, medium: photography, cover: { asset: tide-shot } }
+  - { id: atlas, title: Atlas, medium: photography, visibility: private }
+  - { id: atlas, title: Atlas, medium: photography, cover: { asset: atlas-shot } }
+`;
+  const MEDIA = `media:
+  - { id: tide-shot, kind: image, source: shots/tide.jpg, alt: A tide pool }
+  - { id: atlas-shot, kind: image, source: shots/atlas.jpg, alt: An open atlas }
+`;
+  const portfolio = withSections(`
+  - kind: works
+    id: shots
+    title: Shots
+    items: [tide, atlas]
+`)
+    .replace('\nworks:\n', `\n${WORKS}`)
+    .replace('\nsections:\n', `\n${MEDIA}sections:\n`);
+  const report = compatibilityFor(pair(site('acme-pictured'), portfolio), { registry });
+  assert.deepEqual(
+    where(report.diagnostics).filter(([code]) => code === 'slot.overflow'),
+    [['slot.overflow', 'warning', 'portfolio', '/works/2/cover']],
+  );
+});
+
 test('each message starts at its pointer, says what renders, ends on what it blocks, and repeats no document value', () => {
   const portfolio = withSections(ESSAYS('essays'), ESSAYS('notebook'), SHOWS).replace(
     'direction: ltr',

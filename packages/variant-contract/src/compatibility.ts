@@ -10,6 +10,7 @@ import {
   canonicalize,
   compareDiagnostics,
   isPlainObject,
+  isPublic,
   languageDirection,
   parseExtensionKind,
   publicSectionIndexes,
@@ -671,8 +672,10 @@ function fieldItems(
 /**
  * Where each item of a published list sits in the document's list. The view
  * keeps the document's order and only leaves items out, so each is matched,
- * in order, to the next document item with its id, its asset, or its value,
- * and an item with none of them to the next item.
+ * in order, to the next public document item with its id, its asset, or its
+ * value, and an item with none of them to the next public item. A private
+ * record is never in the view (isPublic, the rule it uses), so one that
+ * repeats a public record's id can't take its place.
  */
 function documentPositions(view: readonly unknown[], document: unknown): number[] {
   const list: readonly unknown[] = Array.isArray(document) ? document : [];
@@ -682,14 +685,18 @@ function documentPositions(view: readonly unknown[], document: unknown): number[
     if (typeof item.id === 'string') return `id:${item.id}`;
     return typeof item.asset === 'string' ? `asset:${item.asset}` : undefined;
   };
+  const shown = (candidate: unknown, index: number, next: number) =>
+    index >= next &&
+    (!isPlainObject(candidate) || isPublic(candidate as { readonly visibility?: string }));
   const positions: number[] = [];
   let next = 0;
   for (const item of view) {
     const wanted = key(item);
-    let at = next;
+    const following = list.findIndex((candidate, index) => shown(candidate, index, next));
+    let at = following === -1 ? next : following;
     if (wanted !== undefined) {
       const found = list.findIndex(
-        (candidate, index) => index >= next && key(candidate) === wanted,
+        (candidate, index) => shown(candidate, index, next) && key(candidate) === wanted,
       );
       if (found !== -1) at = found;
     }
