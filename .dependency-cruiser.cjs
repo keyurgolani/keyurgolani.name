@@ -135,12 +135,14 @@ module.exports = {
         'evaluate it (#1, item 14). All of @portfolio/core is owner code (#2), and its modules ' +
         'import each other, except its public entry, src/index.ts, and src/catalog/, which ' +
         'every profile loads (#3, item 19). The owner CLI, apps/web/bin/owner.mjs, runs on its ' +
-        'own and imports the PHC module by path. Tests may import it.',
+        "own and imports the PHC module by path, and so does the store's CLI, portfolio-store " +
+        '(#3). Tests may import it.',
       from: {
         pathNot: [
           '^apps/web/src/server/(owner/|composition\\.ts$)',
           '^packages/core/',
           '^apps/web/bin/owner\\.mjs$',
+          '^apps/web/scripts/portfolio-store\\.ts$',
           '\\.test\\.(?:tsx?|mjs)$',
         ],
       },

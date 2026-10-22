@@ -41,9 +41,11 @@ services:
     volumes:
       - ../config:/config:ro
       - ../assets:/app/apps/web/public/assets:ro
-      # Drafts and revisions (#2, #3). Back this volume up. A restore brings
-      # back sessions revoked since the backup: run revoke-sessions after one
-      # (docs/deployment.md, The data directory).
+      # Drafts and revisions (#2, #3). Back it up with portfolio-store backup,
+      # which leaves out ephemeral/, where sessions live, so restoring one
+      # brings back none. A file-level copy of the whole volume holds
+      # ephemeral/: run revoke-sessions after restoring one of those
+      # (docs/deployment.md, Backups).
       - portfolio-data:/var/lib/portfolio
     secrets:
       - owner_password_hash

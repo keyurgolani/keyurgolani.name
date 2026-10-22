@@ -17,6 +17,7 @@
     "config:ids-fix": "tsx apps/web/scripts/config.mjs ids-fix",
     "variants:migrate-controls": "tsx apps/web/scripts/build-registry.ts >&2 && tsx apps/web/scripts/migrate-controls.ts",
     "owner:hash-password": "node apps/web/bin/owner.mjs hash-password",
+    "store": "pnpm --filter @portfolio/web build:registry && tsx --conditions=react-server apps/web/scripts/portfolio-store.ts",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint --max-warnings=0 .",
