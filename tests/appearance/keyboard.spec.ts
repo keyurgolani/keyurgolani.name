@@ -110,7 +110,8 @@ test(
     const saving = page.locator('#actions').getByRole('button', { name: 'Saving the revision' });
     await expect(saving).toHaveAttribute('type', 'submit');
     await expect(saving).toHaveAttribute('aria-busy', 'true');
-    await saving.click();
+    // Playwright waits for an aria-disabled control to be enabled; a person's click doesn't.
+    await saving.click({ force: true });
     await saving.focus();
     await page.keyboard.press('Enter');
     await page.keyboard.press('Space');
