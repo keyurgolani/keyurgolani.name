@@ -1,7 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {
+  NEXT_ROUTER_PREFETCH_HEADER,
+  RSC_HEADER,
+} from 'next/dist/client/components/app-router-headers';
 import { modifyRouteRegex } from 'next/dist/lib/redirect-status';
 import { getPathMatch } from 'next/dist/shared/lib/router/utils/path-match';
+import { matchHas } from 'next/dist/shared/lib/router/utils/prepare-destination';
 import config from '../next.config';
 import { NOT_FOUND_HEADER } from './server/studio-headers';
 
@@ -98,17 +103,19 @@ test("Studio's transport gets Referrer-Policy and Cross-Origin-Resource-Policy: 
 test("any path proxy.ts marks goes to Next's 404 page, before Next looks anywhere else", async () => {
   const rewrites = await config.rewrites?.();
   assert.ok(rewrites && !Array.isArray(rewrites), 'rewrites in phases');
+  const { beforeFiles } = rewrites;
+  assert.ok(beforeFiles);
   // One rule for every spelling: an unnamed group adds no parameter to the
   // 404 page's query, so /%73tudio and /%66eed.xml land there as /studio
-  // does.
-  assert.deepEqual(rewrites.beforeFiles, [
-    {
-      source: '/(.*)',
-      has: [{ type: 'header', key: NOT_FOUND_HEADER, value: '1' }],
-      destination: '/_not-found',
-    },
-  ]);
-  const [rule] = rewrites.beforeFiles;
+  // does. The next one is the router prefetch rule, which the test below
+  // checks.
+  assert.deepEqual(beforeFiles[0], {
+    source: '/(.*)',
+    has: [{ type: 'header', key: NOT_FOUND_HEADER, value: '1' }],
+    destination: '/_not-found',
+  });
+  assert.equal(beforeFiles.length, 2);
+  const [rule] = beforeFiles;
   assert.ok(rule);
   const match = getPathMatch(rule.source, { strict: true, removeUnnamedParams: true });
   for (const path of ['/studio', '/studio/sign-in', '/%73tudio', '/%66eed.xml', '/api/%68ealth']) {
@@ -116,4 +123,37 @@ test("any path proxy.ts marks goes to Next's 404 page, before Next looks anywher
   }
   // afterFiles holds #5's rewrite of a missing path, which proxy.test.ts checks.
   assert.deepEqual(rewrites.fallback, []);
+});
+
+test("a request with Next's router prefetch header and no RSC header goes to Next's 404 page before Next looks anywhere else, and Next's own requests don't (#1)", async () => {
+  const rewrites = await config.rewrites?.();
+  assert.ok(rewrites && !Array.isArray(rewrites), 'rewrites in phases');
+  const { beforeFiles } = rewrites;
+  assert.ok(beforeFiles);
+  // Next's own names, so an upgrade that renames one fails here.
+  assert.equal(NEXT_ROUTER_PREFETCH_HEADER, 'next-router-prefetch');
+  assert.equal(RSC_HEADER, 'rsc');
+  // The rules Next would apply to `path` with `headers`, in order, as its
+  // router matches them: the source, then has and missing.
+  const applied = (path: string, headers: Record<string, string>) =>
+    beforeFiles
+      .filter((rule) => {
+        const match = getPathMatch(rule.source, { strict: true, removeUnnamedParams: true });
+        return (
+          match(path) !== false &&
+          matchHas({ headers } as never, {}, rule.has, rule.missing) !== false
+        );
+      })
+      .map((rule) => rule.destination);
+  const prefetch = { [NEXT_ROUTER_PREFETCH_HEADER]: '1' };
+  for (const path of ['/', '/sample', '/studio/sign-in', '/work/tide-tables', '/feed.xml']) {
+    assert.deepEqual(applied(path, prefetch), ['/_not-found'], `${path}, no RSC header`);
+    assert.deepEqual(applied(path, { ...prefetch, [RSC_HEADER]: '' }), ['/_not-found'], path);
+    assert.deepEqual(applied(path, { [NEXT_ROUTER_PREFETCH_HEADER]: '2' }), ['/_not-found']);
+    // Next's router sends it beside RSC: 1, and a page request sends neither.
+    assert.deepEqual(applied(path, { ...prefetch, [RSC_HEADER]: '1' }), [], `${path}, RSC: 1`);
+    assert.deepEqual(applied(path, {}), [], `${path}, a page request`);
+  }
+  // Build assets are Next's to answer, whatever they come with.
+  assert.deepEqual(applied('/_next/static/chunks/app.js', prefetch), []);
 });

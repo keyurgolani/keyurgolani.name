@@ -60,6 +60,18 @@ const config: NextConfig = {
           has: [{ type: 'header' as const, key: 'x-portfolio-not-found', value: '1' }],
           destination: '/_not-found',
         },
+        // A request with Next's router prefetch header and no RSC header,
+        // which Next's own router never sends, gets the 404 page too (#1).
+        // proxy.ts can't drop the header itself, since Next keeps its router
+        // headers out of the proxy's request and puts them back after it. Build
+        // assets are left alone. An empty RSC header counts as none, as Next
+        // reads it here.
+        {
+          source: '/((?!_next/).*)',
+          has: [{ type: 'header' as const, key: 'next-router-prefetch' }],
+          missing: [{ type: 'header' as const, key: 'rsc' }],
+          destination: '/_not-found',
+        },
       ],
       // A path the route table calls missing (#5, Slice 4): proxy.ts marks it
       // in the x-portfolio-route header (server/routes.ts ROUTE_HEADER), and

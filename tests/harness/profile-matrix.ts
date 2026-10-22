@@ -665,6 +665,47 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
   );
 
   test(
+    "a page request with Next's router prefetch header and no RSC header gets an answer at once: the 404 page, or what proxy.ts answers first (#1)",
+    { annotation: [{ type: 'route', description: 'every route' }, annotation] },
+    async ({ request }) => {
+      // Next's router sends it only beside RSC: 1. next.config.ts sends a
+      // request without one to the 404 page; a redirect proxy.ts answers
+      // itself, such as sign-in for a Studio page, stays as it is.
+      const prefetch = { 'next-router-prefetch': '1', 'next-router-segment-prefetch': '/_tree' };
+      const targets = [
+        ...listRoutes()
+          .filter((entry) => entry.kind === 'page' && routeAccess(profile, entry) !== 'absent')
+          .map((entry) => concrete(entry.pattern)),
+        '/no-such-page',
+      ];
+      expect(targets.length).toBeGreaterThan(1);
+      for (const target of targets) {
+        for (const method of ['GET', 'HEAD'] as const) {
+          const what = `${method} ${target}`;
+          const page = await request.fetch(target, { method, maxRedirects: 0 });
+          const redirect = page.status() >= 300 && page.status() < 400;
+          const prefetched = await request.fetch(target, {
+            method,
+            maxRedirects: 0,
+            headers: prefetch,
+            timeout: 5_000,
+          });
+          expect(prefetched.status(), what).toBe(redirect ? page.status() : 404);
+          if (redirect) {
+            expect(prefetched.headers()['location'], what).toBe(page.headers()['location']);
+            continue;
+          }
+          expect(prefetched.headers()['content-type'], what).toMatch(/^text\/html/);
+          expect(prefetched.headers()['cache-control'], what).toMatch(/(?:^|,)\s*no-store/);
+          if (method === 'GET') {
+            expect(await prefetched.text(), what).toMatch(/<h1>Page not found<\/h1>/);
+          }
+        }
+      }
+    },
+  );
+
+  test(
     'no HTML response names localhost, and the server never resolves metadata against it',
     { annotation: [{ type: 'route', description: 'every route' }, annotation] },
     async ({ app, request }) => {
