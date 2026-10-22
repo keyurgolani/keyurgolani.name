@@ -1,0 +1,130 @@
+/* Studio (#2): a quiet neutral canvas, strong status type, and thin rules.
+   No state shows by color alone: every one has its text. */
+
+.studio {
+  --studio-canvas: #f6f6f3;
+  --studio-surface: #ffffff;
+  --studio-ink: #1b1b19;
+  --studio-muted: #55554f;
+  --studio-rule: #d4d4cd;
+  --studio-edge: #77776f;
+  background: var(--studio-canvas);
+  color: var(--studio-ink);
+  min-height: 100vh;
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+@media (prefers-color-scheme: dark) {
+  .studio {
+    --studio-canvas: #141412;
+    --studio-surface: #1d1d1a;
+    --studio-ink: #ecebe6;
+    --studio-muted: #b3b2aa;
+    --studio-rule: #3a3a35;
+    --studio-edge: #8f8e86;
+  }
+}
+
+.studio-sign-in {
+  max-width: 26rem;
+  margin: 0 auto;
+  padding: clamp(3rem, 12vh, 7rem) 1.5rem 3rem;
+}
+
+.studio-sign-in__title {
+  margin: 0;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--studio-rule);
+  font-size: 1.25rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.studio-sign-in__lede {
+  margin: 1rem 0 1.5rem;
+  color: var(--studio-muted);
+}
+
+.studio-sign-in__form {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.studio-status {
+  margin: 1.25rem 0 1.5rem;
+  font-size: 1.5rem;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+}
+
+.studio-label {
+  font-weight: 600;
+}
+
+.studio-field {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.studio-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.625rem 0.75rem;
+  border: 1px solid var(--studio-edge);
+  border-radius: 2px;
+  background: var(--studio-surface);
+  color: inherit;
+  font: inherit;
+}
+
+.studio-button {
+  justify-self: start;
+  padding: 0.625rem 1.125rem;
+  border: 1px solid var(--studio-ink);
+  border-radius: 2px;
+  background: var(--studio-ink);
+  color: var(--studio-canvas);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.studio-button--quiet {
+  background: transparent;
+  color: inherit;
+  border-color: var(--studio-edge);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.studio-button[aria-disabled='true'] {
+  cursor: progress;
+  opacity: 0.7;
+}
+
+.studio-input:focus-visible,
+.studio-button:focus-visible,
+.studio-alert:focus-visible {
+  outline: 2px solid var(--studio-ink);
+  outline-offset: 2px;
+}
+
+.studio-alert {
+  margin: 0;
+  padding: 0.625rem 0.875rem;
+  border: 1px solid var(--studio-edge);
+  background: var(--studio-surface);
+  font-weight: 600;
+}
+
+.studio-alert[hidden] {
+  display: none;
+}
+
+/* The seconds a rate limit has left, under its alert. Not announced. */
+.studio-countdown {
+  margin: 0;
+  color: var(--studio-muted);
+  font-variant-numeric: tabular-nums;
+}

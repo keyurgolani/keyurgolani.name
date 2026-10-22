@@ -31,6 +31,7 @@ import {
 import { DEFAULT_SITE } from './app-server.mjs';
 import { expect, test, type App, type AppOptions } from './fixtures';
 import { VARIANTS } from './registry';
+import { headerProblems, isStudioPath } from './route-headers.mjs';
 
 // apps/web has no "type": "module", so its modules are CommonJS to Node and
 // load through require().
@@ -108,13 +109,6 @@ function expected(
   return [200, null];
 }
 
-/** The headers next.config.ts sets on every route (#1, item 22). */
-const BASELINE_HEADERS = {
-  'x-content-type-options': 'nosniff',
-  'referrer-policy': 'strict-origin-when-cross-origin',
-  'content-security-policy': "frame-ancestors 'none'",
-} as const;
-
 /** The site document each profile's app serves here: the harness fixture, or the bundled sample. */
 const SERVED_SITES: Partial<Record<Profile, string>> = {
   'read-only': DEFAULT_SITE,
@@ -153,19 +147,47 @@ function readyBody(profile: Profile) {
   };
 }
 
+/** Whether `profile` serves a Studio page, as owner does: under another, /studio is as unknown as any path (#2). */
+const hasStudio = (profile: Profile) =>
+  listRoutes().some(
+    (entry) =>
+      entry.kind === 'page' &&
+      isStudioPath(entry.pattern) &&
+      routeAccess(profile, entry) !== 'absent',
+  );
+
 /**
- * The baseline headers, no cookie, and noindex exactly where the profile
- * can't be indexed.
+ * The headers its path gets (route-headers.mjs): the baseline ones, or
+ * Studio's (#2) where the profile has Studio. No cookie, and noindex exactly
+ * where the profile can't be indexed.
  */
 function expectProfileHeaders(profile: Profile, response: APIResponse, what: string) {
   const headers = response.headers();
-  for (const [name, value] of Object.entries(BASELINE_HEADERS)) {
-    expect(headers[name], `${what}: ${name}`).toBe(value);
-  }
+  expect(
+    headerProblems(new URL(response.url()).pathname, headers, { studio: hasStudio(profile) }),
+    what,
+  ).toEqual([]);
   expect(headers['set-cookie'], `${what}: no cookie`).toBeUndefined();
   expect(headers['x-robots-tag'], `${what}: X-Robots-Tag`).toBe(
     INDEXABLE[profile] ? undefined : 'noindex',
   );
+}
+
+/**
+ * A 404 page's body with its own path taken out of Next's payload, which
+ * names the path it answers, query and all, so two 404 pages compare as the
+ * same page.
+ */
+function withoutOwnPath(body: string, target: string): string {
+  const url = new URL(target, 'http://unset.invalid');
+  const segments = ['', ...url.pathname.split('/').filter(Boolean)];
+  segments[segments.length - 1] += url.search;
+  // The payload is JSON inside a JSON string in a script: its quotes come
+  // escaped, and its ampersands as \u0026.
+  const named = `\\"c\\":${JSON.stringify(segments).replace(/"/g, '\\"').replace(/&/g, '\\u0026')}`;
+  const parts = body.split(named);
+  expect(parts.length, `Next's payload names ${target} once`).toBe(2);
+  return parts.join('\\"c\\":"<path>"');
 }
 
 /** Every target the leak scan requests: each route, retired route, and operation, and some that don't exist. */
@@ -222,14 +244,24 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
   });
 
   for (const entry of listRoutes().filter((route) => route.capability !== 'operations')) {
-    const served = routeAccess(profile, entry) !== 'absent';
+    const access = routeAccess(profile, entry);
+    const served = access !== 'absent';
+    const gated = entry.kind === 'page' && access === 'session';
     test(
-      `${entry.pattern} is ${served ? 'served' : 'absent, 404 for every method'}`,
+      `${entry.pattern} is ${served ? (gated ? 'served to a session, and sends a visitor to sign-in' : 'served') : 'absent, 404 for every method'}`,
       { annotation: [{ type: 'route', description: entry.pattern }, annotation] },
-      async ({ request }) => {
+      async ({ app, request }) => {
         if (served) {
           const response = await request.get(concrete(entry.pattern), { maxRedirects: 0 });
-          expect(response.status()).toBe(200);
+          if (gated) {
+            // No session cookie: proxy.ts sends it to sign-in before the page renders (#2).
+            expect(response.status()).toBe(303);
+            const location = new URL(response.headers()['location'] ?? '', app.origin);
+            expect(location.origin).toBe(app.origin);
+            expect(location.pathname).toBe('/studio/sign-in');
+          } else {
+            expect(response.status()).toBe(200);
+          }
           expect(response.headers()['x-request-id']).toMatch(UUID);
           expectProfileHeaders(profile, response, 'GET');
           return;
@@ -349,6 +381,68 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
     );
   }
 
+  if (profile !== 'owner') {
+    test(
+      'in demo and read-only the sign-in page and every auth route answer the unknown-route 404',
+      {
+        annotation: [
+          { type: 'route', description: '/studio/sign-in' },
+          { type: 'route', description: '/api/studio/[name]' },
+          annotation,
+        ],
+      },
+      async ({ request }) => {
+        // With a cookie of either name, holding what looks like a token: no
+        // session store reads it, and nothing clears it (#2).
+        const cookie = `__Host-studio_session=${'x'.repeat(43)}; studio_session=${'x'.repeat(43)}`;
+        // Each one exactly as a path no route matches: the same status,
+        // headers, and page, but for the path Next's payload names.
+        const shape = async (response: APIResponse, pathname: string) => ({
+          status: response.status(),
+          headers: Object.fromEntries(
+            Object.entries(response.headers()).filter(
+              ([name]) => !['date', 'x-request-id'].includes(name),
+            ),
+          ),
+          body: withoutOwnPath(await response.text(), pathname),
+        });
+        for (const [path, query] of [
+          ['/studio/sign-in', ''],
+          ['/studio', ''],
+          ['/studio/sign-in', '?state=failed&returnTo=%2Fstudio'],
+        ] as const) {
+          const response = await request.get(`${path}${query}`, {
+            maxRedirects: 0,
+            headers: { cookie },
+          });
+          const unknown = await request.get(`/no-such-page${query}`, {
+            maxRedirects: 0,
+            headers: { cookie },
+          });
+          expect(response.status(), path).toBe(404);
+          expect(await response.text(), path).not.toContain('Password');
+          expectProfileHeaders(profile, response, path);
+          expect(await shape(response, `${path}${query}`), `${path}${query}`).toEqual(
+            await shape(unknown, `/no-such-page${query}`),
+          );
+        }
+        for (const operation of listOperations().filter(({ name }) => name.startsWith('auth.'))) {
+          for (const method of ['GET', 'POST'] as const) {
+            const response = await request.fetch(`/api/studio/${operation.name}`, {
+              method,
+              headers: { cookie },
+              data: method === 'POST' ? {} : undefined,
+            });
+            expect(response.status(), `${method} ${operation.name}`).toBe(404);
+            const { error } = (await response.json()) as { error: Record<string, string> };
+            expect(error.code).toBe('not_available_in_profile');
+            expectProfileHeaders(profile, response, `${method} ${operation.name}`);
+          }
+        }
+      },
+    );
+  }
+
   test(
     'an unknown operation gets the same 404 envelope',
     { annotation: [{ type: 'route', description: '/api/studio/[name]' }, annotation] },
@@ -386,9 +480,9 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
   );
 
   test(
-    'a trailing slash is a 308 to the path without it, whose body is only that path',
+    'a trailing or repeated slash is a 308 to the path without it, whose body is only that path',
     { annotation: [{ type: 'route', description: 'every route' }, annotation] },
-    async ({ request }) => {
+    async ({ app, request }) => {
       // Next answers these itself, before proxy.ts and the next.config.ts
       // headers, so they carry none of the baseline headers. The target is
       // the canonical path, and the body holds it and nothing else
@@ -398,11 +492,36 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
         .map((route) => concrete(route.pattern));
       expect(targets.length).toBeGreaterThan(0);
       for (const target of targets) {
-        const response = await request.get(`${target}/`, { maxRedirects: 0 });
-        expect(response.status(), target).toBe(308);
-        expect(response.headers()['location'], target).toBe(target);
-        expect(await response.text(), target).toBe(target);
+        // The repeated slash goes whole, so no one reads it as a host.
+        for (const sent of [`${target}/`, `${app.origin}/${target}`]) {
+          const response = await request.get(sent, { maxRedirects: 0 });
+          expect(response.status(), sent).toBe(308);
+          expect(response.headers()['location'], sent).toBe(target);
+          expect(await response.text(), sent).toBe(target);
+        }
       }
+    },
+  );
+
+  test(
+    'no HTML response names localhost, and the server never resolves metadata against it',
+    { annotation: [{ type: 'route', description: 'every route' }, annotation] },
+    async ({ app, request }) => {
+      // The app here is at 127.0.0.1, so localhost could only come from the
+      // origin Next falls back to when a page's metadata has no
+      // metadataBase, which it warns of in the log.
+      let pages = 0;
+      for (const target of scanTargets()) {
+        const response = await request.get(target, { maxRedirects: 0 });
+        if (!(response.headers()['content-type'] ?? '').startsWith('text/html')) continue;
+        pages += 1;
+        expect((await response.text()).includes('localhost'), `${target} names localhost`).toBe(
+          false,
+        );
+      }
+      expect(pages, 'HTML pages to look at').toBeGreaterThan(1);
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      expect(readFileSync(app.log, 'utf8'), 'the server log').not.toContain('metadataBase');
     },
   );
 }

@@ -11,6 +11,7 @@ import type { DeploymentState } from './config-store';
 import { createDispatcher, NO_BINDINGS, type Handler, type StudioBindings } from './dispatcher';
 import { listOperations, type ConfigSummary } from './operations';
 import type { Session } from './session';
+import type { StudioPages } from './studio-port';
 import { liveVariantHealth } from './variant-health';
 
 // The composition root (#1, item 14). It builds what one profile needs and
@@ -35,6 +36,8 @@ export interface AuthBindings {
   readonly invalidInput?: StudioBindings['invalidInput'];
   /** Handlers for the provider's own entries, such as auth.login. */
   readonly handlers?: Readonly<Record<string, Handler>>;
+  /** How Studio pages find their session, for requireOwnerPage. Without it, every one is refused. */
+  readonly pages?: StudioPages;
 }
 
 /** What the owner branch hands a provider as it loads it. */
@@ -324,6 +327,7 @@ export async function compose(input: CompositionInput): Promise<Composition> {
         bindings,
         issues,
         degraded: [...early.degraded, ...late.degraded],
+        pages: provider.pages,
       });
     }
   }
@@ -360,6 +364,8 @@ interface Built {
   readonly bindings: StudioBindings;
   readonly issues: ConfigIssue[];
   readonly degraded: readonly string[];
+  /** Owner only: the provider's Studio page sessions. */
+  readonly pages?: StudioPages;
 }
 
 function built(config: DeploymentConfig, parts: Built): Composition {
@@ -370,6 +376,7 @@ function built(config: DeploymentConfig, parts: Built): Composition {
     catalog: parts.reader,
     dispatch,
     degraded: Object.freeze([...parts.degraded]),
+    ...(parts.pages ? { pages: parts.pages } : {}),
   });
   return { ok: true, state, issues: parts.issues, summary: configSummary(config, parts.adapter) };
 }

@@ -1,41 +1,29 @@
 import 'server-only';
 import { recordOwnerModule } from '../load-trace';
+import { sessionCookieName, type SessionCookieName } from '../session-cookie';
 
 // The Studio session cookie (#2). Over https it is __Host-studio_session,
 // Secure, HttpOnly, SameSite=Strict, Path=/, with no Domain, which a sibling
 // origin can't set or shadow. An http origin, which config.ts allows owner
 // only on a loopback host, is HTTP test mode: studio_session without Secure.
 // The mode follows the canonical origin's scheme, never X-Forwarded-Proto,
-// and the server reads only its own mode's name. A request with two cookies
-// of that name has one somebody else set, and the provider takes neither.
+// and the server reads only its own mode's name (server/session-cookie.ts).
+// A request with two cookies of that name has one somebody else set, and
+// the provider takes neither.
 
 recordOwnerModule('server/owner/cookie');
 
+export { readCookies } from '../session-cookie';
+
 export interface CookieMode {
-  readonly name: '__Host-studio_session' | 'studio_session';
+  readonly name: SessionCookieName;
   readonly secure: boolean;
 }
 
-const SECURE: CookieMode = Object.freeze({ name: '__Host-studio_session', secure: true });
-const HTTP_TEST: CookieMode = Object.freeze({ name: 'studio_session', secure: false });
-
 /** The session cookie for the canonical origin. */
 export function cookieMode(origin: string): CookieMode {
-  return new URL(origin).protocol === 'https:' ? SECURE : HTTP_TEST;
-}
-
-/** The value of every cookie the request names exactly `name`, in the order sent. */
-export function readCookies(request: Request, name: string): string[] {
-  const header = request.headers.get('cookie');
-  if (!header) return [];
-  const values: string[] = [];
-  for (const part of header.split(';')) {
-    const index = part.indexOf('=');
-    if (index !== -1 && part.slice(0, index).trim() === name) {
-      values.push(part.slice(index + 1).trim());
-    }
-  }
-  return values;
+  const name = sessionCookieName(origin);
+  return Object.freeze({ name, secure: name === '__Host-studio_session' });
 }
 
 function attributes(mode: CookieMode, maxAgeSeconds: number): string {

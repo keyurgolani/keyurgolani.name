@@ -1,8 +1,19 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { INDEXABLE } from './server/capabilities';
+import { INDEXABLE, type Profile } from './server/capabilities';
 import { getDeploymentConfig, isServable } from './server/config-store';
 import { READY_PATH, STARTING, STARTING_HEADERS } from './server/ready-starting';
-import { resolveRoute } from './server/routes';
+import { safeReturnTo, signInLocation } from './server/return-to';
+import { listRoutes, resolveRoute, routeAccess } from './server/routes';
+import { readCookies, sessionCookieName } from './server/session-cookie';
+import {
+  isStudioPath,
+  newNonce,
+  NOT_FOUND_HEADER,
+  STUDIO_PAGES,
+  STUDIO_PATH_HEADER,
+  STUDIO_RESPONSE_HEADERS,
+  studioCsp,
+} from './server/studio-headers';
 
 // Defense in depth (#1, item 15). Each route checks its profile itself; this
 // answers 404 before Next routes a request for a path the route table lists
@@ -14,6 +25,17 @@ import { resolveRoute } from './server/routes';
 // name, and reads the frozen config register() stored. While the catalog
 // can't serve (#5, Slice 3), a visitor page gets a static 503 page, since a
 // page can't set that status itself.
+//
+// For Studio (#2), under a profile with a Studio page, it sends the nonce
+// CSP, Referrer-Policy: same-origin, and Cross-Origin-Resource-Policy:
+// same-origin on every /studio response, in any case or percent-encoding,
+// as the route table reads the path, and tells the page which path was
+// asked for. A Studio page the matrix gives only to a session, asked for with
+// no session cookie at all, goes to sign-in here with a 303 before Next
+// renders it. That only saves the render: it reads no session, and the
+// page's own requireOwnerPage decides. Under a profile with no Studio page,
+// /studio is as unknown as any path: none of Studio's headers, and Next's 404
+// page for the pages the table lists, through next.config.ts's rewrite.
 export function proxy(request: NextRequest): NextResponse {
   const requestId = crypto.randomUUID();
   const deployment = getDeploymentConfig();
@@ -27,21 +49,89 @@ export function proxy(request: NextRequest): NextResponse {
     }
     return plain(503, 'Service unavailable.', requestId, {});
   }
-  const robots: Record<string, string> = INDEXABLE[deployment.profile]
+  const { pathname, search } = request.nextUrl;
+  const extra: Record<string, string> = INDEXABLE[deployment.profile]
     ? {}
     : { 'x-robots-tag': 'noindex' };
-  const route = resolveRoute(deployment.profile, request.nextUrl.pathname);
-  if (route.status === 'absent') {
-    return plain(404, 'Not found.', requestId, robots);
+  const studioPath = isStudioPath(pathname);
+  const studio = studioPath && hasStudio(deployment.profile);
+  const csp = studio ? studioCsp(newNonce(), deployment.mode) : undefined;
+  if (csp) Object.assign(extra, STUDIO_RESPONSE_HEADERS, { 'content-security-policy': csp });
+
+  const decision = resolveRoute(deployment.profile, pathname);
+  if (decision.status === 'absent') {
+    if (studioPath && !studio) return unknownPath(request, requestId, extra);
+    return plain(404, 'Not found.', requestId, extra);
   }
-  if (route.status === 'served' && route.entry.visitor && !isServable()) {
+  if (decision.status === 'served' && decision.entry.visitor && !isServable()) {
     return unavailable(requestId);
   }
+  if (
+    decision.status === 'served' &&
+    decision.entry.kind === 'page' &&
+    decision.access === 'session' &&
+    (request.method === 'GET' || request.method === 'HEAD') &&
+    readCookies(request, sessionCookieName(deployment.origin)).length === 0
+  ) {
+    const location = signInLocation(null, safeReturnTo(`${pathname}${search}`));
+    return seeOther(new URL(location, deployment.origin), requestId, extra);
+  }
+
   const headers = new Headers(request.headers);
   headers.set('x-request-id', requestId);
+  headers.delete(STUDIO_PATH_HEADER);
+  headers.delete(NOT_FOUND_HEADER);
+  if (csp) {
+    headers.set('content-security-policy', csp);
+    headers.set(STUDIO_PATH_HEADER, `${pathname}${search}`);
+  }
   const response = NextResponse.next({ request: { headers } });
   response.headers.set('x-request-id', requestId);
-  for (const [name, value] of Object.entries(robots)) response.headers.set(name, value);
+  for (const [name, value] of Object.entries(extra)) response.headers.set(name, value);
+  return response;
+}
+
+/** Whether `profile` serves a Studio page, by the route table. */
+const studioProfiles = new Map<Profile, boolean>();
+function hasStudio(profile: Profile): boolean {
+  let known = studioProfiles.get(profile);
+  if (known === undefined) {
+    known = listRoutes().some(
+      (entry) =>
+        entry.kind === 'page' &&
+        STUDIO_PAGES.test(entry.pattern) &&
+        routeAccess(profile, entry) !== 'absent',
+    );
+    studioProfiles.set(profile, known);
+  }
+  return known;
+}
+
+/**
+ * What Next sends with its 404 page for a path no route matches, in place of
+ * the no-store next.config.ts asks of a Studio path, which Next keeps when
+ * it renders the page through the rewrite.
+ */
+const UNKNOWN_PATH_CACHE_CONTROL = 'private, no-cache, no-store, max-age=0, must-revalidate';
+
+/**
+ * A page the route table lists, answered as a path it doesn't list is:
+ * Next's 404 page, through next.config.ts's rewrite, with the headers any
+ * path gets.
+ */
+function unknownPath(
+  request: NextRequest,
+  requestId: string,
+  extra: Record<string, string>,
+): NextResponse {
+  const headers = new Headers(request.headers);
+  headers.set('x-request-id', requestId);
+  headers.delete(STUDIO_PATH_HEADER);
+  headers.set(NOT_FOUND_HEADER, '1');
+  const response = NextResponse.next({ request: { headers } });
+  response.headers.set('x-request-id', requestId);
+  response.headers.set('cache-control', UNKNOWN_PATH_CACHE_CONTROL);
+  for (const [name, value] of Object.entries(extra)) response.headers.set(name, value);
   return response;
 }
 
@@ -95,6 +185,19 @@ function unavailable(requestId: string): NextResponse {
       'retry-after': '120',
       'x-robots-tag': 'noindex',
       'x-request-id': requestId,
+    },
+  });
+}
+
+/** A 303 to `location`, which is on the canonical origin, never the request's Host. */
+function seeOther(location: URL, requestId: string, extra: Record<string, string>): NextResponse {
+  return new NextResponse(null, {
+    status: 303,
+    headers: {
+      location: location.href,
+      'cache-control': 'no-store',
+      'x-request-id': requestId,
+      ...extra,
     },
   });
 }

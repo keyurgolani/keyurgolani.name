@@ -17,6 +17,7 @@ import type { DeploymentConfig } from '../config';
 import { setDeploymentState } from '../config-store';
 import { createDispatcher, NO_BINDINGS, type HandlerContext } from '../dispatcher';
 import { AuthSessionSchema, listOperations } from '../operations';
+import { loginAction } from '../return-to';
 import { provider, type OwnerAuth } from './auth';
 import { loginLimits, type LoginLimits } from './login-limits';
 import { mintSession } from './session-mint';
@@ -864,6 +865,49 @@ test('many sources can still fill the room, one place each, and the owner turned
   holding = false;
   for (const release of waiting.splice(0)) release();
   await Promise.all(crowd);
+});
+
+test('a sign-in form turned away before its body is read keeps the returnTo its action URL carries', async (t) => {
+  const verifying: (() => void)[] = [];
+  let holding = false;
+  const { send, derivations } = await setup(t, {
+    hops: 1,
+    gate: () =>
+      holding ? new Promise<void>((resolve) => verifying.push(resolve)) : Promise.resolve(),
+  });
+  const returnTo = '/studio/drafts?tab=history';
+  /** The post the sign-in page makes: the field, and the action URL, which the form takes from loginAction(). */
+  const form = (address: string) => {
+    const request = login({
+      form: true,
+      body: { password: 'wrong password here', returnTo },
+      returnTo,
+      headers: fromSource(address),
+    });
+    const url = new URL(request.url);
+    assert.equal(`${url.pathname}${url.search}`, loginAction(returnTo));
+    return request;
+  };
+  const kept = (seconds: number) =>
+    `/studio/sign-in?state=rate_limited&retryAfter=${seconds}&returnTo=${encodeURIComponent(returnTo)}`;
+
+  // A blocked source.
+  for (let index = 0; index < 5; index += 1) await send(wrongFrom(ATTACKER));
+  const before = derivations();
+  const blocked = await send(form(ATTACKER));
+  assert.equal(blocked.status, 303);
+  assert.equal(blocked.headers.get('location'), kept(60));
+  // A source whose place another attempt holds.
+  holding = true;
+  const running = send(wrongFrom('203.0.113.8'));
+  await until(() => verifying.length === 1, 'an attempt verifying');
+  const crowded = await soon(send(form('203.0.113.8')), 'the second attempt waited');
+  assert.equal(crowded.status, 303);
+  assert.equal(crowded.headers.get('location'), kept(1));
+  assert.equal(derivations(), before + 1, 'a post turned away ran a verification');
+  holding = false;
+  for (const release of verifying.splice(0)) release();
+  await running;
 });
 
 test('a login from another origin or a sibling subdomain is 403 request_origin_rejected', async (t) => {

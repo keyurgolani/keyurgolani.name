@@ -58,6 +58,8 @@ test('read-only builds its catalog adapter and loads no owner module', async (t)
   assert.equal((await composed.state.catalog.getLive()).unit.portfolio.identity.name, 'Rowan Test');
   assert.deepEqual(loadedOwnerModules(), []);
   assert.deepEqual(composed.state.degraded, []);
+  // No Studio page finds a session here (#2).
+  assert.equal(composed.state.pages, undefined);
 
   // Its transport serves no operation.
   setDeploymentState(composed.state);
@@ -98,6 +100,7 @@ test('demo builds the bundled sample and loads no owner module', async (t) => {
   assert.ok(BUNDLED_SAMPLE_NAMES.includes(live.unit.portfolio.identity.name));
   assert.match(live.revisionId, /^sample-/);
   assert.deepEqual(loadedOwnerModules(), []);
+  assert.equal(composed.state.pages, undefined);
 
   // Its transport answers every registered operation with the 404 envelope.
   setDeploymentState(composed.state);

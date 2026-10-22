@@ -122,7 +122,7 @@ test("while the catalog can't serve, visitor pages are a static 503 page, and th
   deploy(t, 'read-only');
   setServable(false);
   t.after(() => setServable(true));
-  for (const path of ['/', '/feed.xml', '/sitemap.xml', '/robots.txt', '/opengraph-image']) {
+  for (const path of ['/', '/feed.xml', '/sitemap.xml', '/robots.txt', '/opengraph-image-12o0cb']) {
     const response = proxy(request(path));
     assert.equal(response.status, 503, path);
     assert.equal(response.headers.get('retry-after'), '120', path);
@@ -162,4 +162,153 @@ test('build assets and optimized images go through the proxy too', async () => {
   // No matcher, so no demo response goes out without its X-Robots-Tag.
   const exported = (await import('./proxy')) as Record<string, unknown>;
   assert.equal(exported.config, undefined);
+});
+
+/** Studio's policy, as studio-headers.ts builds it in production, with its nonce. */
+const STUDIO_CSP =
+  /^default-src 'self'; script-src 'self' 'nonce-([A-Za-z0-9+/]{22}==)' 'strict-dynamic'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; frame-src 'self'; frame-ancestors 'none'; form-action 'self'; base-uri 'none'; object-src 'none'$/;
+
+function studio(path: string, headers: Record<string, string> = {}, method = 'GET'): NextRequest {
+  return new NextRequest(`https://rowan.test${path}`, { method, headers });
+}
+
+test('every /studio response gets a nonce CSP of its own, which the page Next renders reads too', (t) => {
+  deploy(t, 'owner');
+  const nonces = new Set<string>();
+  for (const path of ['/studio/sign-in', '/studio/sign-in', '/studio/sign-in?state=failed']) {
+    const response = proxy(studio(path));
+    assert.equal(response.headers.get('x-middleware-next'), '1', path);
+    const csp = response.headers.get('content-security-policy') ?? '';
+    const nonce = STUDIO_CSP.exec(csp)?.[1];
+    assert.ok(nonce, csp);
+    nonces.add(nonce);
+    assert.equal(response.headers.get('x-middleware-request-content-security-policy'), csp, path);
+  }
+  assert.equal(nonces.size, 3, 'a nonce came twice');
+  // Only /studio: its transport, and a path that only starts the same, get none.
+  for (const path of ['/', '/api/studio/auth.session', '/studios', '/sample']) {
+    assert.equal(proxy(studio(path)).headers.get('content-security-policy'), null, path);
+  }
+});
+
+test("under owner every /studio response, in any case or percent-encoding, gets Studio's CSP, Referrer-Policy, and Cross-Origin-Resource-Policy, redirects and 404s included", (t) => {
+  deploy(t, 'owner');
+  for (const path of [
+    '/studio',
+    '/studio/sign-in',
+    '/studio/nowhere',
+    '/Studio',
+    '/STUDIO/sign-in',
+    // The route table reads /studio here, so this is the 303 too.
+    '/%73tudio',
+    '/%53TUDIO/sign-in',
+  ]) {
+    const response = proxy(studio(path));
+    assert.match(response.headers.get('content-security-policy') ?? '', STUDIO_CSP, path);
+    assert.equal(response.headers.get('referrer-policy'), 'same-origin', path);
+    assert.equal(response.headers.get('cross-origin-resource-policy'), 'same-origin', path);
+  }
+  // /studio with no session cookie is proxy.ts's own 303.
+  assert.equal(proxy(studio('/studio')).status, 303);
+  assert.equal(proxy(studio('/%73tudio')).status, 303);
+  // Outside /studio, none of them.
+  for (const path of ['/', '/studios', '/sample', '/api/studio/auth.session']) {
+    const response = proxy(studio(path));
+    assert.equal(response.headers.get('referrer-policy'), null, path);
+    assert.equal(response.headers.get('cross-origin-resource-policy'), null, path);
+  }
+});
+
+test("under a profile with no Studio page, /studio is as unknown as any path: none of Studio's headers, and Next's 404 page for the ones the table lists", (t) => {
+  for (const profile of ['demo', 'read-only'] as const) {
+    deploy(t, profile);
+    for (const path of [
+      '/studio',
+      '/studio/sign-in',
+      '/studio/sign-in?state=failed',
+      '/%73tudio',
+    ]) {
+      const response = proxy(studio(path));
+      const what = `${profile} ${path}`;
+      // On to Next, marked for next.config.ts's rewrite to the 404 page.
+      assert.equal(response.headers.get('x-middleware-next'), '1', what);
+      assert.equal(response.headers.get('x-middleware-request-x-portfolio-not-found'), '1', what);
+      assert.equal(response.headers.get('x-middleware-request-x-studio-path'), null, what);
+      assert.equal(
+        response.headers.get('cache-control'),
+        'private, no-cache, no-store, max-age=0, must-revalidate',
+        what,
+      );
+      for (const name of [
+        'content-security-policy',
+        'referrer-policy',
+        'cross-origin-resource-policy',
+        'x-middleware-request-content-security-policy',
+      ]) {
+        assert.equal(response.headers.get(name), null, `${what}: ${name}`);
+      }
+      assert.match(response.headers.get('x-request-id') ?? '', UUID, what);
+    }
+    // A Studio path the table doesn't list goes on unmarked, as any unknown path does.
+    for (const path of ['/studio/nowhere', '/Studio']) {
+      const response = proxy(studio(path));
+      assert.equal(response.headers.get('x-middleware-next'), '1', path);
+      assert.equal(response.headers.get('x-middleware-request-x-portfolio-not-found'), null, path);
+      assert.equal(response.headers.get('content-security-policy'), null, path);
+    }
+  }
+});
+
+test('a Studio page learns the path asked for from proxy.ts alone, never from the client', (t) => {
+  deploy(t, 'owner');
+  const forged = { 'x-studio-path': '/studio/elsewhere' };
+  const asked = proxy(studio('/studio/sign-in?returnTo=%2Fstudio', forged));
+  assert.equal(
+    asked.headers.get('x-middleware-request-x-studio-path'),
+    '/studio/sign-in?returnTo=%2Fstudio',
+  );
+  // Outside /studio a client's header is dropped before the route sees it.
+  const outside = proxy(studio('/', forged));
+  assert.equal(outside.headers.get('x-middleware-request-x-studio-path'), null);
+  assert.doesNotMatch(outside.headers.get('x-middleware-override-headers') ?? '', /x-studio-path/);
+  // So is a client's 404 mark, on every path it reaches the app on.
+  for (const path of ['/', '/studio/sign-in']) {
+    const marked = proxy(studio(path, { 'x-portfolio-not-found': '1' }));
+    assert.equal(marked.headers.get('x-middleware-request-x-portfolio-not-found'), null, path);
+    assert.doesNotMatch(
+      marked.headers.get('x-middleware-override-headers') ?? '',
+      /x-portfolio-not-found/,
+      path,
+    );
+  }
+});
+
+test('under owner a Studio page for a session, asked for with no session cookie, is a 303 to sign-in, kept to GET and HEAD', (t) => {
+  deploy(t, 'owner');
+  for (const method of ['GET', 'HEAD']) {
+    const response = proxy(studio('/studio', {}, method));
+    assert.equal(response.status, 303, method);
+    assert.equal(response.headers.get('location'), 'https://rowan.test/studio/sign-in', method);
+    assert.equal(response.headers.get('cache-control'), 'no-store');
+    assert.match(response.headers.get('content-security-policy') ?? '', STUDIO_CSP);
+    assert.match(response.headers.get('x-request-id') ?? '', UUID);
+  }
+  // Where the owner was going comes along, made safe, on the canonical origin.
+  const deep = proxy(studio('/studio?tab=drafts', { host: 'attacker.test' }));
+  assert.equal(
+    deep.headers.get('location'),
+    'https://rowan.test/studio/sign-in?returnTo=%2Fstudio%3Ftab%3Ddrafts',
+  );
+  // With any cookie of the session's name, or for sign-in itself, the page decides.
+  assert.equal(
+    proxy(studio('/studio', { cookie: '__Host-studio_session=anything' })).headers.get(
+      'x-middleware-next',
+    ),
+    '1',
+  );
+  assert.equal(proxy(studio('/studio/sign-in')).headers.get('x-middleware-next'), '1');
+  // A cookie of another name is no session cookie.
+  assert.equal(proxy(studio('/studio', { cookie: 'studio_session=anything' })).status, 303);
+  // Another method goes on to the page, which answers it.
+  assert.equal(proxy(studio('/studio', {}, 'POST')).headers.get('x-middleware-next'), '1');
 });

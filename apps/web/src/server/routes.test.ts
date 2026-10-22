@@ -339,6 +339,375 @@ test('the guard check refuses a skipped guard, a bare method, and a second ungua
   }
 });
 
+/** The guard each profile's Studio pages call (#2), from studio-guard.ts. */
+const STUDIO_GUARDS: Readonly<Partial<Record<Profile, string>>> = {
+  owner: 'requireOwnerPage',
+  demo: 'requireDemoPage',
+};
+/** The guards that return a promise, which must be awaited before anything renders. */
+const AWAITED_GUARDS = new Set(['requireOwnerPage']);
+const STUDIO_GUARD_MODULE = '~/server/studio-guard';
+/** The one Studio page that needs no guard: where a page without a session goes. */
+const SIGN_IN = '/studio/sign-in';
+/** Studio's route group, every file of which this checks. */
+const STUDIO_GROUP = path.join(APP, '(studio)');
+
+const isStudioPage = (pattern: string) => /^\/studio(?:\/|$)/.test(pattern);
+
+type FunctionNode = ts.FunctionDeclaration | ts.FunctionExpression | ts.ArrowFunction;
+
+const isFunctionNode = (node: ts.Node): node is FunctionNode =>
+  ts.isFunctionDeclaration(node) || ts.isFunctionExpression(node) || ts.isArrowFunction(node);
+
+/** The function `name` refers to at the top of `source`: a declaration, or a const set to one. */
+function functionNamed(source: ts.SourceFile, name: string): FunctionNode | undefined {
+  for (const statement of source.statements) {
+    if (ts.isFunctionDeclaration(statement) && statement.name?.text === name) return statement;
+    if (!ts.isVariableStatement(statement)) continue;
+    for (const declaration of statement.declarationList.declarations) {
+      if (!ts.isIdentifier(declaration.name) || declaration.name.text !== name) continue;
+      const value = declaration.initializer;
+      if (value && isFunctionNode(value)) return value;
+    }
+  }
+  return undefined;
+}
+
+/** A function given inline or by name. */
+function functionOf(
+  source: ts.SourceFile,
+  node: ts.Expression | undefined,
+): FunctionNode | undefined {
+  if (!node) return undefined;
+  if (isFunctionNode(node)) return node;
+  return ts.isIdentifier(node) ? functionNamed(source, node.text) : undefined;
+}
+
+/** What a page's or a metadata route's default export renders with: servedPage(pattern, render). */
+function servedRender(source: ts.SourceFile): FunctionNode | undefined {
+  for (const statement of source.statements) {
+    if (!ts.isExportAssignment(statement) || statement.isExportEquals) continue;
+    const call = statement.expression;
+    return ts.isCallExpression(call) ? functionOf(source, call.arguments[1]) : undefined;
+  }
+  return undefined;
+}
+
+/** The function a module exports under `name`, by a declaration or a const. */
+function exportedFunction(source: ts.SourceFile, name: string): FunctionNode | undefined {
+  const named = functionNamed(source, name);
+  if (!named) return undefined;
+  const statement = ts.isFunctionDeclaration(named) ? named : named.parent?.parent?.parent;
+  return statement && isExported(statement) ? named : undefined;
+}
+
+/** Each method a route handler exports, `export const GET = served(pattern, answer)`, with its answer. */
+function handlerFunctions(source: ts.SourceFile): [method: string, fn: FunctionNode | undefined][] {
+  const found: [string, FunctionNode | undefined][] = [];
+  for (const statement of source.statements) {
+    if (!ts.isVariableStatement(statement) || !isExported(statement)) continue;
+    for (const declaration of statement.declarationList.declarations) {
+      if (!ts.isIdentifier(declaration.name) || !METHODS.includes(declaration.name.text)) continue;
+      const call = declaration.initializer;
+      const answer = call && ts.isCallExpression(call) ? call.arguments[1] : undefined;
+      found.push([declaration.name.text, functionOf(source, answer)]);
+    }
+  }
+  return found;
+}
+
+/** The function a layout's or a boundary's default export is: a declaration, or a name for one. */
+function defaultFunction(source: ts.SourceFile): FunctionNode | undefined {
+  for (const statement of source.statements) {
+    if (
+      ts.isFunctionDeclaration(statement) &&
+      (ts.getModifiers(statement) ?? []).some((m) => m.kind === ts.SyntaxKind.DefaultKeyword)
+    ) {
+      return statement;
+    }
+    if (ts.isExportAssignment(statement) && !statement.isExportEquals) {
+      return functionOf(source, statement.expression);
+    }
+  }
+  return undefined;
+}
+
+/** Each node under `node`, in source order, without going into a nested function. */
+function* inline(node: ts.Node): Generator<ts.Node> {
+  for (const child of node.getChildren()) {
+    yield child;
+    if (!isFunctionNode(child)) yield* inline(child);
+  }
+}
+
+/** `guard('capability')`, when `node` calls a guard by its own name with one string. */
+function guardCall(node: ts.Node): string | null {
+  if (!ts.isCallExpression(node) || !ts.isIdentifier(node.expression)) return null;
+  if (!Object.values(STUDIO_GUARDS).includes(node.expression.text)) return null;
+  const [first] = node.arguments;
+  if (node.arguments.length !== 1 || !first || !ts.isStringLiteral(first)) return null;
+  return `${node.expression.text}('${first.text}')`;
+}
+
+/**
+ * What `fn` lacks to be guarded: its first statement calls each guard in
+ * `calls`, awaiting the ones that return a promise, and awaits nothing else,
+ * so nothing renders, reads, or answers before the guard has decided.
+ */
+function guardedFirstProblems(
+  fn: FunctionNode | undefined,
+  calls: readonly string[],
+  what: string,
+) {
+  if (!fn) return [`${what}: no function to check`];
+  const body = fn.body;
+  if (!body || !ts.isBlock(body) || body.statements.length === 0) {
+    return [`${what}: no statements, so no guard first`];
+  }
+  const [first] = body.statements;
+  const made = new Map<string, boolean>();
+  let awaitsElse = false;
+  for (const node of inline(first!)) {
+    const call = guardCall(node);
+    if (call) made.set(call, made.get(call) || ts.isAwaitExpression(node.parent));
+    if (ts.isAwaitExpression(node) && !guardCall(node.expression)) awaitsElse = true;
+  }
+  const problems: string[] = [];
+  for (const call of calls) {
+    if (!made.has(call)) problems.push(`${what}: its first statement doesn't call ${call}`);
+    else if (AWAITED_GUARDS.has(call.slice(0, call.indexOf('('))) && !made.get(call)) {
+      problems.push(`${what}: ${call} isn't awaited`);
+    }
+  }
+  if (awaitsElse) problems.push(`${what}: awaits something else in its first statement`);
+  return problems;
+}
+
+/**
+ * What `route`, a Studio page, route handler, or metadata route, lacks: for
+ * each profile its entries serve, its guard, imported by name from
+ * studio-guard.ts, called on the capability the entry serves there as the
+ * first statement of what it renders or answers with, and of its
+ * generateMetadata and the like. read-only serves no Studio route at all.
+ */
+function studioGuardProblems(
+  route: RouteFile,
+  entries: readonly RouteEntry[],
+  text?: string,
+): string[] {
+  const source = parse(route.file, text);
+  const imported = new Set<string>();
+  for (const statement of source.statements) {
+    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) {
+      continue;
+    }
+    if (statement.moduleSpecifier.text !== STUDIO_GUARD_MODULE) continue;
+    const bindings = statement.importClause?.namedBindings;
+    if (!bindings || !ts.isNamedImports(bindings)) continue;
+    for (const item of bindings.elements) if (!item.propertyName) imported.add(item.name.text);
+  }
+  const problems = new Set<string>();
+  const calls: string[] = [];
+  for (const entry of entries) {
+    for (const profile of PROFILES) {
+      if (routeAccess(profile, entry) === 'absent') continue;
+      const guard = STUDIO_GUARDS[profile];
+      if (!guard) {
+        problems.add(`${profile} serves no Studio page`);
+        continue;
+      }
+      if (!imported.has(guard)) problems.add(`import { ${guard} } from '${STUDIO_GUARD_MODULE}'`);
+      calls.push(`${guard}('${entry.capability}')`);
+    }
+  }
+  const unique = [...new Set(calls)];
+  // What answers: a page's or metadata route's render, or each handler method.
+  const answering: [what: string, fn: FunctionNode | undefined][] =
+    route.kind === 'handler'
+      ? handlerFunctions(source)
+      : [['the default export', servedRender(source)]];
+  for (const name of [
+    'generateMetadata',
+    'generateViewport',
+    'generateImageMetadata',
+    'generateSitemaps',
+  ]) {
+    const fn = exportedFunction(source, name);
+    if (fn) answering.push([name, fn]);
+  }
+  for (const [what, fn] of answering) {
+    for (const problem of guardedFirstProblems(fn, unique, what)) problems.add(problem);
+  }
+  return [...problems];
+}
+
+/** Every module Next loads as part of a segment under app/(studio), but its private folders. */
+function studioGroupFiles(dir = STUDIO_GROUP): string[] {
+  const found: string[] = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (entry.name.startsWith('_')) continue;
+    const file = path.join(dir, entry.name);
+    if (entry.isDirectory()) found.push(...studioGroupFiles(file));
+    else if (PAGE_FILE.test(entry.name)) found.push(file);
+  }
+  return found;
+}
+
+/** The files around Studio's pages: their layouts, templates, and boundaries. */
+const SEGMENT_FILE =
+  /^(layout|template|not-found|error|global-error|loading|default|forbidden|unauthorized)\.(tsx|ts|jsx|js)$/;
+
+/**
+ * What a layout, template, or boundary under the Studio group does that it
+ * mustn't: be async, await anything, or export metadata made from data. A
+ * layout doesn't run again on client navigation, and the sign-in page sits
+ * under the same ones, so none of them can be the guard: Studio's data comes
+ * through pages, after their guard.
+ */
+function studioSegmentProblems(file: string, text?: string): string[] {
+  const source = parse(file, text);
+  const fn = defaultFunction(source);
+  const problems: string[] = [];
+  if (!fn) problems.push('no default export function to check');
+  else {
+    if ((ts.getModifiers(fn) ?? []).some((m) => m.kind === ts.SyntaxKind.AsyncKeyword)) {
+      problems.push('its default export is async');
+    }
+    if ([...inline(fn)].some((node) => ts.isAwaitExpression(node))) {
+      problems.push('its default export awaits');
+    }
+  }
+  for (const name of ['generateMetadata', 'generateViewport']) {
+    if (exportedNames(source).includes(name)) problems.push(`it exports ${name}`);
+  }
+  return problems;
+}
+
+test("every Studio page but /studio/sign-in, and every Studio route handler, metadata route, and generateMetadata, calls its profile's guard first", () => {
+  let checked = 0;
+  for (const route of routeFiles()) {
+    const inGroup = !path.relative(STUDIO_GROUP, route.file).startsWith('..');
+    if (!inGroup && !isStudioPage(route.pattern)) continue;
+    if (route.pattern === SIGN_IN) continue;
+    const entries = listRoutes().filter((entry) => entry.pattern === route.pattern);
+    assert.ok(entries.length > 0, `${path.relative(SRC, route.file)} has no route table entry`);
+    assert.deepEqual(studioGuardProblems(route, entries), [], path.relative(SRC, route.file));
+    checked++;
+  }
+  assert.ok(checked > 0, 'the /studio placeholder, at least');
+});
+
+test("Studio's layouts, templates, and boundaries render markup only: nothing async, awaited, or exported as metadata", () => {
+  const files = studioGroupFiles().filter((file) => SEGMENT_FILE.test(path.basename(file)));
+  assert.ok(
+    files.some((file) => path.basename(file).startsWith('layout.')),
+    "Studio's layout",
+  );
+  for (const file of files) {
+    assert.deepEqual(studioSegmentProblems(file), [], path.relative(SRC, file));
+  }
+  // Every file in the group is a route file, one of these, or in a private folder.
+  const routes = new Set(routeFiles().map((route) => route.file));
+  for (const file of studioGroupFiles()) {
+    assert.ok(
+      routes.has(file) || SEGMENT_FILE.test(path.basename(file)),
+      `${path.relative(SRC, file)} is neither a route file nor a segment file`,
+    );
+  }
+  // What the check refuses.
+  const probe = path.join(STUDIO_GROUP, 'probe', 'layout.tsx');
+  assert.deepEqual(
+    studioSegmentProblems(
+      probe,
+      'export default function Layout({ children }) {\n  return children;\n}\n',
+    ),
+    [],
+  );
+  for (const text of [
+    'export default async function Layout({ children }) {\n  return children;\n}\n',
+    'export default function Layout({ children }) {\n  const data = await load();\n  return children;\n}\n',
+    'async function Layout() {}\nexport default Layout;\n',
+    'export default function Layout() {}\nexport async function generateMetadata() {}\n',
+    'export default load;\n',
+  ]) {
+    assert.notDeepEqual(studioSegmentProblems(probe, text), [], text);
+  }
+});
+
+test('the Studio guard check refuses a missing guard, another capability, a guard from elsewhere, a profile left out, and anything that runs first', () => {
+  const route: RouteFile = { kind: 'page', pattern: '/studio/preview', file: 'probe.tsx' };
+  const entry = (capability: RouteEntry['capability']): RouteEntry => ({
+    pattern: '/studio/preview',
+    kind: 'page',
+    capability,
+  });
+  const owner = [entry('studio.view')];
+  const both = [entry('studio.view'), entry('sandbox.view')];
+  const from = (names: string) => `import { ${names} } from '~/server/studio-guard';\n`;
+  const served = "export default servedPage('/studio/preview', Page);\n";
+  const page = (body: string, names = 'requireOwnerPage') =>
+    `${from(names)}async function Page() {\n${body}}\n${served}`;
+  const guarded = page(
+    "  const { csrfToken } = await requireOwnerPage('studio.view');\n  return csrfToken;\n",
+  );
+  assert.deepEqual(studioGuardProblems(route, owner, guarded), []);
+  assert.deepEqual(
+    studioGuardProblems(route, owner, page("  await requireOwnerPage('studio.view');\n")),
+    [],
+  );
+  for (const text of [
+    `async function Page() {}\n${served}`,
+    page(''),
+    page("  await requireOwnerPage('draft.read');\n"),
+    "import { requireOwnerPage } from './guard';\nasync function Page() {\n  await requireOwnerPage('studio.view');\n}\n" +
+      served,
+    `${from('requireOwnerPage as guard')}async function Page() {\n  await guard('studio.view');\n}\n${served}`,
+    // Not first, not awaited, or after something else awaited.
+    page("  const draft = await readDraft();\n  await requireOwnerPage('studio.view');\n"),
+    page("  requireOwnerPage('studio.view');\n"),
+    page("  const [draft] = await Promise.all([readDraft(), requireOwnerPage('studio.view')]);\n"),
+    page("  log('in');\n  await requireOwnerPage('studio.view');\n"),
+    // In a function the page doesn't render with.
+    `${from('requireOwnerPage')}async function Other() {\n  await requireOwnerPage('studio.view');\n}\nasync function Page() {}\n${served}`,
+    // generateMetadata, which renders before the page decides, unguarded.
+    `${guarded}export async function generateMetadata() {\n  return { title: await readTitle() };\n}\n`,
+  ]) {
+    assert.notDeepEqual(studioGuardProblems(route, owner, text), [], text);
+  }
+  assert.deepEqual(
+    studioGuardProblems(
+      route,
+      owner,
+      `${guarded}export async function generateMetadata() {\n  await requireOwnerPage('studio.view');\n  return { title: 'x' };\n}\n`,
+    ),
+    [],
+  );
+  // A page both profiles serve at one path calls each one's guard, first.
+  const shared = page(
+    "  if (owner) await requireOwnerPage('studio.view');\n  else requireDemoPage('sandbox.view');\n",
+    'requireDemoPage, requireOwnerPage',
+  );
+  assert.deepEqual(studioGuardProblems(route, both, shared), []);
+  assert.deepEqual(studioGuardProblems(route, both, guarded), [
+    "import { requireDemoPage } from '~/server/studio-guard'",
+    "the default export: its first statement doesn't call requireDemoPage('sandbox.view')",
+  ]);
+  // read-only serves no Studio page, so an entry it would serve is refused.
+  assert.deepEqual(
+    studioGuardProblems(route, [entry('catalog.read')], shared).at(0),
+    'read-only serves no Studio page',
+  );
+  // A route handler: each method it exports, guarded first.
+  const handler: RouteFile = { kind: 'handler', pattern: '/studio/preview', file: 'probe.ts' };
+  const answer = (body: string) =>
+    `${from('requireOwnerPage')}async function answer() {\n${body}}\nexport const GET = served('/studio/preview', answer);\n`;
+  assert.deepEqual(
+    studioGuardProblems(handler, owner, answer("  await requireOwnerPage('studio.view');\n")),
+    [],
+  );
+  assert.notDeepEqual(studioGuardProblems(handler, owner, answer('  return draft();\n')), []);
+});
+
 /** Stores a deployment of `profile` for the test, as register() would. */
 function deploy(t: TestContext, profile: Profile) {
   setDeploymentState({
@@ -471,7 +840,7 @@ test('the Studio transport is served in every profile', () => {
   for (const profile of PROFILES) assert.equal(serves(profile, '/api/studio/[name]'), true);
 });
 
-test('what every profile serves at the close of #1', () => {
+test("what every profile serves, with #2's Studio pages under owner alone", () => {
   const served = (profile: Profile) =>
     PATTERNS.filter((pattern) => serves(profile, pattern as RoutePattern));
   const everywhere = [
@@ -479,11 +848,14 @@ test('what every profile serves at the close of #1', () => {
     '/api/health',
     '/api/ready',
     '/api/studio/[name]',
-    '/opengraph-image',
+    '/opengraph-image-12o0cb',
     '/robots.txt',
     '/sitemap.xml',
   ];
-  assert.deepEqual(served('owner'), [...everywhere, '/feed.xml'].sort());
+  assert.deepEqual(
+    served('owner'),
+    [...everywhere, '/feed.xml', '/studio', '/studio/sign-in'].sort(),
+  );
   assert.deepEqual(served('read-only'), [...everywhere, '/feed.xml'].sort());
   assert.deepEqual(served('demo'), [...everywhere, '/sample'].sort());
 });

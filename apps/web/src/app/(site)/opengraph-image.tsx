@@ -6,13 +6,16 @@ import { getPublicView } from '~/server/public-view';
 
 export const runtime = 'nodejs';
 // Per request, from the public view of the revision register() loaded, so a
-// build never bakes in a portfolio or an origin.
+// build never bakes in a portfolio or an origin. In the site's route group,
+// so Next attaches it to the site's pages alone. Next serves a metadata
+// route inside a group with a suffix hashed from the group's path, so its
+// URL is /opengraph-image-12o0cb, which the route table lists.
 export const dynamic = 'force-dynamic';
 export const alt = 'Portfolio';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
 
-export default servedPage('/opengraph-image', async function OpengraphImage() {
+export default servedPage('/opengraph-image-12o0cb', async function OpengraphImage() {
   const host = new URL(requireDeploymentConfig().origin).hostname.replace(/^www\./, '');
   const { portfolio, site } = await getPublicView();
   const name = portfolio.identity.name;

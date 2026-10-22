@@ -3,6 +3,7 @@ import {
   aggregateAnonymous,
   createSessions,
   credentialFingerprint,
+  csrfToken,
   filesystemAuditSink,
   filesystemSessionStore,
   localPasswordProvider,
@@ -21,21 +22,22 @@ import type { Handler, StudioBindings } from '../dispatcher';
 import { recordOwnerModule } from '../load-trace';
 import { log } from '../log';
 import { listOperations, type Operation } from '../operations';
+import { signInLocation } from '../return-to';
 import type { Session } from '../session';
+import type { PageResolution, StudioPages } from '../studio-port';
 import { errorResult, redirectResult } from '../studio-result';
 import { authHandlers, isFormPost, returnToOf, throttledAnswer, type Held } from './auth-commands';
 import { clearedSessionCookie, cookieMode, readCookies, type CookieMode } from './cookie';
 import { checkCsrf, checkMutationOrigin, checkRequestOrigin, clientAddress } from './guard';
 import { loginLimits, type LoginLimits } from './login-limits';
-import { signInLocation } from './return-to';
 
 // The owner's auth provider (#2): the dispatcher's session, origin, touch,
-// and throttle bindings, and the auth entries' handlers, over
-// @portfolio/core's password check, sessions, and audit sink, in the data
-// directory. The composition root loads it through import() in its owner
-// branch, after the auth.secret and data.directory requirements pass, so the
-// hash and the directory are there. Typed by shape, so this module doesn't
-// import the composition root.
+// and throttle bindings, the auth entries' handlers, and the sessions of
+// Studio pages, over @portfolio/core's password check, sessions, and audit
+// sink, in the data directory. The composition root loads it through
+// import() in its owner branch, after the auth.secret and data.directory
+// requirements pass, so the hash and the directory are there. Typed by
+// shape, so this module doesn't import the composition root.
 
 recordOwnerModule('server/owner/auth');
 
@@ -46,6 +48,8 @@ export type OwnerAuthBindings = Pick<
 > & {
   /** The auth entries' handlers, by operation name. */
   readonly handlers: Readonly<Record<string, Handler>>;
+  /** The sessions of Studio pages, for requireOwnerPage. */
+  readonly pages: StudioPages;
 };
 
 export interface OwnerAuthTools {
@@ -78,6 +82,10 @@ const SIGN_IN = 'auth.login';
  * session that resolved, it needs that session's token like any command.
  */
 const SIGN_OUT = 'auth.logout';
+
+const NO_PAGE_SESSION: PageResolution = Object.freeze({ status: 'none' });
+const ENDED_PAGE_SESSION: PageResolution = Object.freeze({ status: 'ended' });
+const UNREADABLE_PAGE_SESSION: PageResolution = Object.freeze({ status: 'unavailable' });
 
 /** What touchSession slides for, by operation (Activity, in @portfolio/core). */
 export function activityOf(operation: Operation): Activity {
@@ -237,6 +245,34 @@ export async function provider(
         refs: { reason: admission.reason, source: sourcePrefix(address), requestId },
       });
       return throttledAnswer(request, admission.retryAfter, { headers: endedCookie(request) });
+    },
+
+    pages: {
+      // A Studio page's session, slid only when the owner opened the page
+      // (slides() in @portfolio/core reads its Fetch Metadata), so a page
+      // another origin loads in the background never keeps it alive. A
+      // page can't set a cookie, so an ended one stays until the next
+      // command clears it.
+      async resolve(request) {
+        const sent = readCookies(request, cookie.name);
+        if (sent.length === 0) return NO_PAGE_SESSION;
+        // Two cookies of the name: as with commands, neither counts.
+        if (sent.length > 1) return ENDED_PAGE_SESSION;
+        const resolution = await sessions.resolve(sent[0]);
+        if (resolution.status === 'none') return NO_PAGE_SESSION;
+        if (resolution.status === 'unavailable') return UNREADABLE_PAGE_SESSION;
+        if (resolution.status === 'ended') return ENDED_PAGE_SESSION;
+        const touched = await sessions.touch(resolution.record, {
+          kind: 'page',
+          headers: request.headers,
+        });
+        if (!touched) return ENDED_PAGE_SESSION;
+        return Object.freeze({
+          status: 'valid' as const,
+          session: mintSession({ ref: sessionRef(touched.digest) }),
+          csrfToken: csrfToken(resolution.token),
+        });
+      },
     },
 
     // A sign-in form whose body isn't UTF-8, gives a field twice, or is over
