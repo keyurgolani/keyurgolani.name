@@ -159,11 +159,37 @@ test(
   { annotation: [ROUTE] },
   async ({ page }) => {
     await openFixtures(page);
-    // The probe sees the document's own: its toast triggers' clicks.
+    // Every plate holds the live form, whose Field, Checkbox, Radio, Select,
+    // and Action each get a handler from their client component.
+    await expect(page.locator(`${PLATE} [data-fixture="live-form"]`)).toHaveCount(PLATES);
+    // The probe sees the document's own: the live form's and the toast triggers'.
+    const live = await reactHandlers(page, '#forms [data-fixture="live-form"]');
+    for (const handler of [
+      'input#live-note onChange',
+      'input#live-track onChange',
+      'input#live-depth--option-1 onChange',
+      'select#live-basin onChange',
+    ]) {
+      expect(live, handler).toContain(handler);
+    }
+    expect(live).toContainEqual(expect.stringMatching(/^button#.* onClick$/));
     expect(await reactHandlers(page, '#overlays')).toContainEqual(
       expect.stringMatching(/^button#.* onClick$/),
     );
     expect(await reactHandlers(page)).toEqual([]);
+    // In the page's boundary they answer.
+    const form = page.locator('#forms [data-fixture="live-form"]');
+    await form.getByRole('textbox', { name: 'Live note' }).fill('Signal');
+    await form.getByRole('checkbox', { name: 'Track the note' }).uncheck();
+    await form.getByRole('radio', { name: 'Comfortable' }).check();
+    await form.getByRole('combobox', { name: 'Live basin' }).selectOption('delta');
+    await expect(form.locator('[data-fixture="live-form-state"]')).toHaveText(
+      'Signal, not tracked, comfortable, delta',
+    );
+    await form.getByRole('button', { name: 'Clear the note' }).click();
+    await expect(form.locator('[data-fixture="live-form-state"]')).toHaveText(
+      'No note, not tracked, comfortable, delta',
+    );
   },
 );
 

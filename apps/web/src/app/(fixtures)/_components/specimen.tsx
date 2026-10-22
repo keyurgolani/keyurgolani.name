@@ -27,6 +27,7 @@ import {
   Tooltip,
   type DataRow,
 } from '@portfolio/appearance/primitives';
+import { FormHarness } from './form-harness';
 import { ToastHarness } from './toast-harness';
 
 // The scenes the appearance fixtures render (#19, Slice 3), after the
@@ -222,6 +223,7 @@ export function DocumentSpecimen({
               ]}
             />
           </div>
+          <FormHarness />
         </div>
       </Region>
 
@@ -458,6 +460,7 @@ export function PlateSpecimen({ ids }: { readonly ids: BoundaryIds }) {
         </Dialog>
       </div>
       <ToastRegion id="toasts" />
+      <FormHarness />
       <DataDisplay
         id={id('evidence')}
         caption="Confidence by source"

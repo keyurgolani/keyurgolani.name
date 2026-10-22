@@ -1,13 +1,14 @@
 import type { ChangeEvent, ReactNode } from 'react';
 import { partId } from '../ids';
 
-// Field, Checkbox, and Radio (#19, Slice 3, item 2): native form controls,
-// labelled, described, and validated through the platform's own semantics.
-// An error sets aria-invalid and joins the description in aria-describedby;
-// an option that isn't available is disabled, and a radio's reason is text
-// its input names in aria-describedby. Each takes its full id, which server
-// code builds with boundaryId(input.ids, local), and names its parts from
-// it, so ids in a plate carry the plate's prefix.
+// The markup of Field, Checkbox, and Radio (#19, Slice 3, item 2): native
+// form controls, labelled, described, and validated through the platform's
+// own semantics. An error sets aria-invalid and joins the description in
+// aria-describedby; an option that isn't available is disabled, and a
+// radio's reason is text its input names in aria-describedby. Each takes its
+// full id, which server code builds with boundaryId(input.ids, local), and
+// names its parts from it, so ids in a plate carry the plate's prefix.
+// form.tsx renders them, and form-client.tsx does when one has a handler.
 
 /** The ids of a control's description and error, those it has, for aria-describedby. */
 function describedBy(id: string, description: unknown, error: unknown): string | undefined {
@@ -31,6 +32,7 @@ export interface FieldProps {
   readonly defaultValue?: string;
   /** With onChange, from a client component. */
   readonly value?: string;
+  /** From a client component. In a plate it never goes on. */
   readonly onChange?: (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
   readonly placeholder?: string;
   /** Help that stays: what to enter. */
@@ -44,7 +46,8 @@ export interface FieldProps {
   readonly className?: string;
 }
 
-export function Field({
+/** A Field's element, with the handler its props give. */
+export function fieldElement({
   id,
   label,
   name,
@@ -107,6 +110,7 @@ export interface CheckboxProps {
   readonly defaultChecked?: boolean;
   /** With onChange, from a client component. */
   readonly checked?: boolean;
+  /** From a client component. In a plate it never goes on. */
   readonly onChange?: (event: ChangeEvent<HTMLInputElement>) => void;
   readonly description?: ReactNode;
   readonly required?: boolean;
@@ -114,7 +118,8 @@ export interface CheckboxProps {
   readonly className?: string;
 }
 
-export function Checkbox({
+/** A Checkbox's element, with the handler its props give. */
+export function checkboxElement({
   id,
   label,
   name,
@@ -177,7 +182,10 @@ export interface RadioProps {
   readonly defaultValue?: string;
   /** With onChange, controlled, from a client component. */
   readonly value?: string;
-  /** Called with the radio a visitor picks, from a client component, controlled or not. */
+  /**
+   * Called with the radio a visitor picks, from a client component,
+   * controlled or not. In a plate it never goes on.
+   */
   readonly onChange?: (value: string) => void;
   readonly description?: ReactNode;
   readonly required?: boolean;
@@ -185,7 +193,8 @@ export interface RadioProps {
   readonly className?: string;
 }
 
-export function Radio({
+/** A Radio's element, with the handler its props give. */
+export function radioElement({
   id,
   legend,
   name,
