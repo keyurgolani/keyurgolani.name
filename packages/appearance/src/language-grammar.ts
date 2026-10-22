@@ -3,7 +3,9 @@
 // own, the shapes the reviewed prototype's recipes use, so no token can
 // carry a layout or visibility keyword: a motion recipe is one of the
 // platform's names, never `fixed` or `hidden`; a texture is gradients; a
-// state transform only nudges, and a state opacity only dims.
+// state transform only nudges, and a state opacity only dims. A border,
+// shadow, size, or offset is px, rem, or em within 64px or 4rem, and a
+// radius within 999px.
 
 import { languageValueProblem } from './values';
 import type { LanguageKey } from './tokens';
@@ -12,9 +14,24 @@ const NUMBER = String.raw`(?:\d+(?:\.\d+)?|\.\d+)`;
 const SIGNED = `-?${NUMBER}`;
 /** A length in px, rem, or em, or 0, never negative. */
 const LENGTH = `(?:0|${NUMBER}(?:px|rem|em))`;
-/** A length or a percentage, never negative. */
-const LENGTH_PERCENT = `(?:0|${NUMBER}(?:px|rem|em|%))`;
 const SIGNED_LENGTH = `(?:0|${SIGNED}(?:px|rem|em))`;
+
+/**
+ * The longest length a language gives a border, shadow, outline, padding,
+ * gap, blur, or control: 64px, or 4rem or 4em, at 16px to the rem. The
+ * prototype's longest is its high shadow's 60px blur, so every one of its
+ * languages fits, and no outline, shadow, or padding can cover the page or
+ * push content off it.
+ */
+export const MAX_LENGTH_PX = 64;
+/** A radius's cap, the prototype's pill radius. A radius can't cover or move anything. */
+export const MAX_RADIUS_PX = 999;
+
+/** Whether every px, rem, or em length in `value` is within `px` either way. */
+const within = (px: number) => (value: string) =>
+  [...value.matchAll(/(-?(?:\d+(?:\.\d+)?|\.\d+))(px|rem|em)(?![a-z])/g)].every(
+    ([, number, unit]) => Math.abs(Number.parseFloat(number!)) <= (unit === 'px' ? px : px / 16),
+  );
 const COLOR_REFERENCE = String.raw`var\(--color-[a-z0-9-]+\)`;
 const MIXED = String.raw`color-mix\(in (?:srgb|srgb-linear|oklab|oklch), ${COLOR_REFERENCE}(?: ${NUMBER}%)?, (?:transparent|${COLOR_REFERENCE})(?: ${NUMBER}%)?\)`;
 const COLOR = `(?:${COLOR_REFERENCE}|${MIXED}|transparent|currentcolor)`;
@@ -158,25 +175,32 @@ interface Grammar {
   readonly expected: string;
 }
 
+const capped = (accepts: (value: string) => boolean, px = MAX_LENGTH_PX) => {
+  const fits = within(px);
+  return (value: string) => accepts(value) && fits(value);
+};
+
 const RADIUS: Grammar = {
-  accepts: pattern(
-    `${LENGTH_PERCENT}(?: ${LENGTH_PERCENT}){0,3}(?: / ${LENGTH_PERCENT}(?: ${LENGTH_PERCENT}){0,3})?`,
+  accepts: capped(
+    pattern(`${LENGTH}(?: ${LENGTH}){0,3}(?: / ${LENGTH}(?: ${LENGTH}){0,3})?`),
+    MAX_RADIUS_PX,
   ),
-  expected: 'one to four lengths or percentages, none negative, such as 10px or 16px 24px',
+  expected:
+    'one to four lengths in px, rem, or em, none negative and none over 999px or 62.4375rem, such as 10px or 16px 24px',
 };
 const BORDER: Grammar = {
-  accepts: pattern(`none|(?:${LENGTH}|thin|medium|thick) ${LINE_STYLE}(?: ${COLOR})?`),
+  accepts: capped(pattern(`none|(?:${LENGTH}|thin|medium|thick) ${LINE_STYLE}(?: ${COLOR})?`)),
   expected:
-    'none, or a width, a line style, and optionally a color, such as 1px solid var(--color-border-strong)',
+    'none, or a width of at most 64px or 4rem, a line style, and optionally a color, such as 1px solid var(--color-border-strong)',
 };
 const SHADOWS: Grammar = {
-  accepts: shadows,
+  accepts: capped(shadows),
   expected:
-    'none, or shadows, each two to four lengths and a color, optionally inset, such as 0 2px 8px color-mix(in srgb, var(--color-text-primary) 12%, transparent)',
+    'none, or shadows, each two to four lengths and a color, optionally inset, every length within 64px or 4rem, such as 0 2px 8px color-mix(in srgb, var(--color-text-primary) 12%, transparent)',
 };
 const SIZE: Grammar = {
-  accepts: pattern(LENGTH),
-  expected: 'a length in px, rem, or em, not negative, such as 1rem',
+  accepts: capped(pattern(LENGTH)),
+  expected: 'a length in px, rem, or em, not negative and at most 64px or 4rem, such as 1rem',
 };
 const STATE_OPACITY: Grammar = {
   accepts: (value) => pattern(`${NUMBER}%?`)(value) && between(value, 0.3, 1),
@@ -228,8 +252,8 @@ export const LANGUAGE_GRAMMARS: Readonly<Record<LanguageKey, Grammar>> = {
   'space-surface-block': SIZE,
   'focus-width': SIZE,
   'focus-offset': {
-    accepts: pattern(SIGNED_LENGTH),
-    expected: 'a length in px, rem, or em, such as 2px',
+    accepts: capped(pattern(SIGNED_LENGTH)),
+    expected: 'a length in px, rem, or em, within 64px or 4rem either way, such as 2px',
   },
   'focus-style': {
     accepts: oneOf([

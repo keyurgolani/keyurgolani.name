@@ -1,0 +1,23 @@
+{
+  "kind": "design-language",
+  "base": "platform-neutral",
+  "description": "platform-neutral with tokens past the length caps: a shadow spread over the page, a focus ring 1000px wide, and a radius in percent.",
+  "patch": {
+    "tokens": {
+      "shadow-card": "0 0 0 1000px var(--color-canvas)",
+      "focus-width": "1000px",
+      "radius-card": "50%"
+    }
+  },
+  "expect": [
+    {
+      "problem": "/tokens/shadow-card must be none, or shadows"
+    },
+    {
+      "problem": "/tokens/focus-width must be a length in px, rem, or em, not negative and at most 64px or 4rem"
+    },
+    {
+      "problem": "/tokens/radius-card must be one to four lengths in px, rem, or em"
+    }
+  ]
+}

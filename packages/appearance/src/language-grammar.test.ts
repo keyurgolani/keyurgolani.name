@@ -143,6 +143,38 @@ test('a token never moves a part off the page, hides it, or stops focus drawing'
   assert.deepEqual(MOTION_RECIPES['motion-exit'], ['none', 'fade', 'pixel-out']);
 });
 
+test("a token's lengths stay within 64px or 4rem, and a radius's within 999px", () => {
+  const refused: Array<[LanguageKey, string, RegExp]> = [
+    ['shadow-card', '0 0 0 100px var(--color-canvas)', /every length within 64px or 4rem/],
+    ['shadow-overlay', '0 22px 65px var(--color-shadow)', /every length within 64px or 4rem/],
+    ['emphasis-glow', '0 0 5rem var(--color-emphasis)', /every length within 64px or 4rem/],
+    ['shadow-raised', '0 -65px 0 var(--color-shadow)', /every length within 64px or 4rem/],
+    ['border-control', '100000px solid', /a width of at most 64px or 4rem/],
+    ['focus-width', '65px', /at most 64px or 4rem/],
+    ['space-surface-inline', '4.5rem', /at most 64px or 4rem/],
+    ['control-height', '100vh', /a length in px, rem, or em/],
+    ['backdrop-blur', '5em', /at most 64px or 4rem/],
+    ['state-selected-emphasis', '100px', /at most 64px or 4rem/],
+    ['focus-offset', '-65px', /within 64px or 4rem either way/],
+    ['radius-badge', '1000px', /none over 999px or 62\.4375rem/],
+    ['radius-card', '50%', /one to four lengths in px, rem, or em/],
+  ];
+  for (const [key, value, message] of refused) {
+    assert.match(languageTokenProblem(key, value) ?? 'accepted', message, `${key}: ${value}`);
+  }
+  for (const [key, value] of [
+    ['shadow-card', '0 22px 60px color-mix(in srgb, var(--color-text-primary) 22%, transparent)'],
+    ['shadow-inset', 'inset 0 0 0 64px var(--color-shadow), 0 -4rem 4em var(--color-shadow)'],
+    ['border-card', '4rem solid'],
+    ['focus-offset', '-64px'],
+    ['control-height', '4rem'],
+    ['radius-badge', '999px'],
+    ['radius-card', '62.4375rem 0'],
+  ] as const) {
+    assert.equal(languageTokenProblem(key, value), null, `${key}: ${value}`);
+  }
+});
+
 test("the validator reports a token's grammar where the token is", () => {
   const result = validatePackManifest(
     {

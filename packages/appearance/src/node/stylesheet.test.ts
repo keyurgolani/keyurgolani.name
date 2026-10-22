@@ -364,6 +364,72 @@ test('every hiding and layout vector the review lists is refused', () => {
   }
 });
 
+test('outlines, shadows, padding, gaps, borders, and radii stay within their caps, so none covers the page or pushes content off it', () => {
+  const slot = '[data-ui-slot="surface"]';
+  refuses(
+    `${slot}:focus-visible { outline: 100000px solid var(--color-canvas); }`,
+    /outline: 100000px solid var\(--color-canvas\) has 100000px, over the cap of 64px or 4rem/,
+  );
+  refuses(
+    `${slot} { box-shadow: 0 0 0 100vmax var(--color-canvas); }`,
+    /box-shadow: 0 0 0 100vmax var\(--color-canvas\) uses 100vmax, which scales with the window/,
+  );
+  refuses(
+    `${slot} { padding-inline-start: 100vw; }`,
+    /padding-inline-start: 100vw uses 100vw, which scales with the window/,
+  );
+  for (const declaration of [
+    'box-shadow: inset 0 0 0 65px var(--color-text-primary)',
+    'box-shadow: 0 0 100px var(--color-shadow)',
+    'outline-offset: -65px',
+    'gap: 4.5rem',
+    'padding: 0 5em',
+    'border-bottom: 1000px solid var(--color-canvas)',
+    'border-width: 65px',
+  ]) {
+    refuses(`${slot} { ${declaration}; }`, /over the cap of 64px or 4rem/);
+  }
+  for (const declaration of [
+    'padding: 10%',
+    'border-radius: 50%',
+    'outline-width: 1dvmax',
+    'gap: 10svh',
+    'padding: 1cqi',
+    'border-width: 1in',
+    'padding: 5',
+  ]) {
+    refuses(`${slot} { ${declaration}; }`, /a length here is px, rem, or em/);
+  }
+  refuses(`${slot} { border-radius: 1000px; }`, /over a radius's cap of 999px or 62\.4375rem/);
+  // Math or a radius token would stretch a length past its cap.
+  refuses(`${slot} { padding: calc(var(--ui-space-surface-block) * 1000); }`, /calls calc\(\)/);
+  refuses(`${slot} { gap: max(4rem, 100vw); }`, /calls max\(\)/);
+  refuses(`${slot} { padding: var(--ui-radius-badge); }`, /reads a radius token/);
+  refuses(
+    `${slot} { box-shadow: 0 0 0 var(--ui-radius-badge) var(--color-canvas); }`,
+    /reads a radius token/,
+  );
+  // What fits: the caps themselves, tokens, and percentages that mix colors.
+  assert.ok(
+    read(`${slot} {
+      box-shadow: 0 22px 60px color-mix(in srgb, var(--color-text-primary) 22%, transparent), var(--ui-shadow-card);
+      outline: 4px solid var(--color-focus);
+      outline-offset: -64px;
+      padding: 4rem 0 4em 64px;
+      gap: var(--ui-space-surface-block);
+      border: var(--ui-border-card);
+      border-color: color-mix(in srgb, var(--color-accent) 40%, transparent);
+      border-radius: 999px 62.4375rem var(--ui-radius-card);
+    }`).ok,
+  );
+  // Elsewhere percentages and other units stay, as in a texture's gradient.
+  assert.ok(
+    read(
+      `${slot} { background-image: radial-gradient(circle at 25% 25%, var(--color-accent) 0 8%, transparent 9%); }`,
+    ).ok,
+  );
+});
+
 test('a control height is the one size a language sets, through its token', () => {
   const slot = '[data-ui-slot="action"]';
   assert.ok(read(`${slot} { min-height: var(--ui-control-height); }`).ok);

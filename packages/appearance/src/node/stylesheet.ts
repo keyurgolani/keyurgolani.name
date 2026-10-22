@@ -7,14 +7,16 @@
 // colors, and the structure the shared primitives give a part, such as
 // clipping a media part's corners. Colors come only as var(--color-*), and
 // transforms, opacity, backdrop blur, and a control's height only through
-// tokens. No non-empty content, color literal, @import, @font-face, :root,
-// html, body, or !important.
+// tokens. Outlines, shadows, padding, gaps, and borders stay within 64px or
+// 4rem, and radii within 999px. No non-empty content, color literal,
+// @import, @font-face, :root, html, body, or !important.
 //
 // The reader takes a small, explicit subset of CSS and refuses the rest. The
 // compiler writes the rules back out from what it read, never the source
 // text, so nothing an author writes can close the language's @scope or its
 // layer, or reach the page outside them.
 
+import { MAX_LENGTH_PX, MAX_RADIUS_PX } from '../language-grammar';
 import { LANGUAGE_KEYS } from '../tokens';
 import { stylesheetValueProblem } from '../values';
 
@@ -404,6 +406,72 @@ const REFUSED_AT_RULES: Readonly<Record<string, string>> = {
 };
 
 const LITERAL_TIME = /(?<![\w.-])(?:\d+(?:\.\d+)?|\.\d+)m?s(?![\w-])/;
+
+/** The properties whose lengths are capped: outlines, shadows, padding, gaps, borders, and radii. */
+const CAPPED =
+  /^(?:outline|outline-[a-z]+|box-shadow|padding|padding-[a-z-]+|gap|row-gap|column-gap|border|border-[a-z-]+)$/;
+const VIEWPORT_UNIT = /^[sld]?v(?:w|h|i|b|min|max)$/;
+
+/** The value with each color-mix() call, whose percentages mix colors, taken out. */
+function withoutColorMixes(value: string): string {
+  let text = value;
+  for (let start = text.indexOf('color-mix('); start >= 0; start = text.indexOf('color-mix(')) {
+    let depth = 0;
+    let end = start;
+    for (; end < text.length; end += 1) {
+      if (text[end] === '(') depth += 1;
+      else if (text[end] === ')' && --depth === 0) break;
+    }
+    text = `${text.slice(0, start)} color ${text.slice(end + 1)}`;
+  }
+  return text;
+}
+
+/**
+ * Why a capped property's value can't be a language's, or null. Its lengths
+ * are px, rem, or em, within MAX_LENGTH_PX, or MAX_RADIUS_PX for a radius,
+ * written out or read from a token whose grammar caps it the same way, so no
+ * viewport unit, percentage, math, or radius token stretches one past it.
+ */
+function lengthProblem(base: string, value: string): string | null {
+  if (!CAPPED.test(base)) return null;
+  const radius = base.endsWith('radius');
+  const cap = radius ? MAX_RADIUS_PX : MAX_LENGTH_PX;
+  const text = withoutColorMixes(value.toLowerCase());
+  for (const [, name] of text.matchAll(/([a-z-]+)\(/g)) {
+    if (name !== 'var') {
+      return `calls ${name}(): a length here is written out or a token, so its cap holds.`;
+    }
+  }
+  if (!radius && text.includes('var(--ui-radius-')) {
+    return `reads a radius token, which may be up to ${MAX_RADIUS_PX}px: only border-radius reads the radius tokens.`;
+  }
+  for (const [, number, unit] of text.matchAll(
+    /(?<![\w.-])(-?(?:\d+(?:\.\d+)?|\.\d+))([a-z%]*)/g,
+  )) {
+    const amount = Math.abs(Number.parseFloat(number!));
+    const length = `${number}${unit}`;
+    if (unit === '%') {
+      return `uses ${length}, a percentage, which scales with the box: a length here is px, rem, or em.`;
+    }
+    if (VIEWPORT_UNIT.test(unit!)) {
+      return `uses ${length}, which scales with the window: a length here is px, rem, or em.`;
+    }
+    if (unit === '') {
+      if (amount === 0) continue;
+      return `uses ${number} with no unit: a length here is px, rem, or em.`;
+    }
+    if (unit !== 'px' && unit !== 'rem' && unit !== 'em') {
+      return `uses ${length}: a length here is px, rem, or em.`;
+    }
+    if (amount > (unit === 'px' ? cap : cap / 16)) {
+      return radius
+        ? `has ${length}, over a radius's cap of ${cap}px or ${cap / 16}rem.`
+        : `has ${length}, over the cap of ${cap}px or ${cap / 16}rem: a language's outlines, shadows, padding, gaps, and borders stay within it, so none covers the page or pushes content off it.`;
+    }
+  }
+  return null;
+}
 
 interface Text {
   readonly source: string;
@@ -949,6 +1017,8 @@ function readDeclaration(piece: string): StyleDeclaration | { readonly message: 
   if (depth !== 0) return refuse('leaves a parenthesis open.');
   if (/\burl\(/i.test(value))
     return refuse("loads a file, and a language can't: url() isn't allowed.");
+  const length = lengthProblem(base, value);
+  if (length) return refuse(length);
   const tokens = TOKEN_ONLY_PROPERTIES[base];
   if (tokens) {
     if (tokens.allowed.includes(value)) return { property, value };

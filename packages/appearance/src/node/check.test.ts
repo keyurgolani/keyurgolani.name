@@ -196,9 +196,14 @@ test('every hiding and layout vector the review of PR #57 lists has its known-ba
     'color-transparent',
     'font-size',
     'text-indent',
+    // The lengths the caps hold: an outline, a shadow's spread, and padding.
+    'outline-length',
+    'shadow-viewport',
+    'padding-viewport',
   ]) {
     assert.ok(audits.includes(`audit-${vector}`), vector);
   }
+  assert.ok(knownBadNames().includes('bad-token-length'));
 });
 
 test('a known-bad input that names no registered base, or an unknown role, is refused', () => {

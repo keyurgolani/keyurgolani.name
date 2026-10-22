@@ -1,0 +1,3 @@
+[data-ui-slot='action']:focus-visible {
+  outline: 100000px solid var(--color-canvas);
+}
