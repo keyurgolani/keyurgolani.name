@@ -304,44 +304,165 @@ test("under owner the plain 404 for a missing /studio path, to a method but GET 
   }
 });
 
-test("under a profile with no Studio page, /studio is as unknown as any path: none of Studio's headers, and Next's 404 page for the ones the table lists", (t) => {
+/** What Next sends with its 404 page for a path no route matches. */
+const UNKNOWN_PATH_CACHE_CONTROL = 'private, no-cache, no-store, max-age=0, must-revalidate';
+
+/** None of Studio's own headers, on the response or on the request Next routes. */
+function noStudioHeaders(response: Response, what: string): void {
+  for (const name of [
+    'content-security-policy',
+    'referrer-policy',
+    'cross-origin-resource-policy',
+    'x-middleware-request-content-security-policy',
+    'x-middleware-request-x-studio-path',
+  ]) {
+    assert.equal(response.headers.get(name), null, `${what}: ${name}`);
+  }
+}
+
+/** The Studio pages the table lists, in each spelling it reads as theirs. */
+const LISTED_STUDIO_PATHS = [
+  '/studio',
+  '/studio/sign-in',
+  '/studio/sign-in?state=failed',
+  '/%73tudio',
+  '/%73tudio/sign-in',
+  '/studio/%73ign-in',
+];
+
+/** Studio paths the table lists no page at: another case, or deeper. */
+const UNLISTED_STUDIO_PATHS = [
+  '/studio/nowhere',
+  '/studio/sign-in/x',
+  '/Studio',
+  '/STUDIO/sign-in',
+  '/sTuDiO/x',
+  '/%53TUDIO/sign-in',
+];
+
+test("under a profile with no Studio page, every Studio path is as unknown as any path: none of Studio's headers, Next's 404 page for GET and HEAD, and the plain 404 for the rest", async (t) => {
   for (const profile of ['demo', 'read-only'] as const) {
     deploy(t, profile);
-    for (const path of [
-      '/studio',
-      '/studio/sign-in',
-      '/studio/sign-in?state=failed',
-      '/%73tudio',
-    ]) {
-      const response = proxy(studio(path));
-      const what = `${profile} ${path}`;
-      // On to Next, marked for next.config.ts's rewrite to the 404 page.
-      assert.equal(response.headers.get('x-middleware-next'), '1', what);
-      assert.equal(response.headers.get('x-middleware-request-x-portfolio-not-found'), '1', what);
-      assert.equal(response.headers.get('x-middleware-request-x-studio-path'), null, what);
-      assert.equal(
-        response.headers.get('cache-control'),
-        'private, no-cache, no-store, max-age=0, must-revalidate',
-        what,
-      );
-      for (const name of [
-        'content-security-policy',
-        'referrer-policy',
-        'cross-origin-resource-policy',
-        'x-middleware-request-content-security-policy',
-      ]) {
-        assert.equal(response.headers.get(name), null, `${what}: ${name}`);
+    for (const method of ['GET', 'HEAD']) {
+      for (const path of LISTED_STUDIO_PATHS) {
+        const response = proxy(studio(path, {}, method));
+        const what = `${profile} ${method} ${path}`;
+        // On to Next, marked for next.config.ts's rewrite to the 404 page.
+        assert.equal(response.headers.get('x-middleware-next'), '1', what);
+        assert.equal(response.headers.get('x-middleware-request-x-portfolio-not-found'), '1', what);
+        assert.equal(response.headers.get('cache-control'), UNKNOWN_PATH_CACHE_CONTROL, what);
+        noStudioHeaders(response, what);
+        assert.match(response.headers.get('x-request-id') ?? '', UUID, what);
       }
-      assert.match(response.headers.get('x-request-id') ?? '', UUID, what);
+      // The rest go on marked missing, as any unknown path does, and get
+      // its Cache-Control in place of next.config.ts's no-store for Studio.
+      for (const path of UNLISTED_STUDIO_PATHS) {
+        const response = proxy(studio(path, {}, method));
+        const what = `${profile} ${method} ${path}`;
+        assert.equal(decision(response), 'missing', what);
+        assert.equal(
+          response.headers.get('x-middleware-request-x-portfolio-not-found'),
+          null,
+          what,
+        );
+        assert.equal(response.headers.get('cache-control'), UNKNOWN_PATH_CACHE_CONTROL, what);
+        noStudioHeaders(response, what);
+      }
     }
-    // A Studio path the table doesn't list goes on unmarked, as any unknown path does.
-    for (const path of ['/studio/nowhere', '/Studio']) {
-      const response = proxy(studio(path));
-      assert.equal(response.headers.get('x-middleware-next'), '1', path);
-      assert.equal(response.headers.get('x-middleware-request-x-portfolio-not-found'), null, path);
-      assert.equal(response.headers.get('content-security-policy'), null, path);
+    // Any other method gets the plain 404 /no-such-page gets.
+    for (const method of ['POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS']) {
+      const unknown = proxy(studio('/no-such-page', {}, method));
+      for (const path of [...LISTED_STUDIO_PATHS, ...UNLISTED_STUDIO_PATHS]) {
+        const response = proxy(studio(path, {}, method));
+        const what = `${profile} ${method} ${path}`;
+        assert.equal(response.status, 404, what);
+        assert.equal(await response.text(), 'Not found.', what);
+        for (const name of ['content-type', 'cache-control', 'x-robots-tag']) {
+          assert.equal(response.headers.get(name), unknown.headers.get(name), `${what}: ${name}`);
+        }
+        noStudioHeaders(response, what);
+      }
     }
   }
+});
+
+test('a route spelled with a fixed segment percent-encoded is a path no route matches: the 404 page for GET and HEAD, the plain 404 for the rest (#5, Slice 4)', async (t) => {
+  // Each one the route table serves the profile, read decoded. Next matches
+  // a fixed segment as sent, so it never reaches the route.
+  const spellings = {
+    owner: [
+      '/%66eed.xml',
+      '/robots.tx%74',
+      '/%73itemap.xml',
+      '/opengraph-image-12o0c%62',
+      '/%61pi/health',
+      '/api/%68ealth',
+      '/api/%72eady',
+      '/%61pi/studio/config.status',
+      '/api/%73tudio/config.status',
+    ],
+    'read-only': ['/%66eed.xml', '/robots.tx%74', '/%61pi/health', '/api/%68ealth'],
+    demo: ['/%73ample', '/robots.tx%74', '/%61pi/health'],
+  } as const;
+  for (const [profile, paths] of Object.entries(spellings) as [Profile, readonly string[]][]) {
+    deploy(t, profile);
+    for (const path of paths) {
+      for (const method of ['GET', 'HEAD']) {
+        const response = proxy(request(path, method));
+        const what = `${profile} ${method} ${path}`;
+        assert.equal(response.headers.get('x-middleware-next'), '1', what);
+        assert.equal(response.headers.get('x-middleware-request-x-portfolio-not-found'), '1', what);
+        // Neither the table's decision nor the client's goes on with it.
+        assert.equal(decision(response), null, what);
+        assert.equal(response.headers.get('cache-control'), UNKNOWN_PATH_CACHE_CONTROL, what);
+        assert.equal(
+          response.headers.get('x-robots-tag'),
+          profile === 'demo' ? 'noindex' : null,
+          what,
+        );
+      }
+      for (const method of ['POST', 'PUT', 'DELETE']) {
+        const response = proxy(request(path, method));
+        assert.equal(response.status, 404, `${profile} ${method} ${path}`);
+        assert.equal(await response.text(), 'Not found.');
+      }
+    }
+  }
+  // A route the profile doesn't serve is its plain 404 in either spelling.
+  deploy(t, 'demo');
+  for (const path of ['/feed.xml', '/%66eed.xml']) {
+    const response = proxy(request(path));
+    assert.equal(response.status, 404, path);
+    assert.equal(await response.text(), 'Not found.', path);
+  }
+  // A dynamic segment spelled encoded is still the route's: Next decodes it.
+  deploy(t, 'read-only');
+  assert.equal(decision(proxy(request('/api/studio/%63onfig.status'))), 'served');
+});
+
+test("under owner a Studio page spelled with a fixed segment percent-encoded is the 404 page with Studio's headers, its request carrying the policy for the page's nonce", (t) => {
+  deploy(t, 'owner');
+  const cookie = { cookie: '__Host-studio_session=anything' };
+  for (const [path, headers] of [
+    ['/%73tudio/sign-in', {}],
+    ['/studio/%73ign-in', {}],
+    ['/%73tudio', cookie],
+  ] as const) {
+    const response = proxy(studio(path, headers));
+    assert.equal(response.headers.get('x-middleware-request-x-portfolio-not-found'), '1', path);
+    const csp = response.headers.get('content-security-policy') ?? '';
+    assert.match(csp, STUDIO_CSP, path);
+    assert.equal(response.headers.get('x-middleware-request-content-security-policy'), csp, path);
+    assert.equal(response.headers.get('referrer-policy'), 'same-origin', path);
+    assert.equal(response.headers.get('cross-origin-resource-policy'), 'same-origin', path);
+    assert.equal(response.headers.get('x-middleware-request-x-studio-path'), null, path);
+  }
+  // A page for a session, asked for with no session cookie, is the 303 first.
+  assert.equal(proxy(studio('/%73tudio')).status, 303);
+  // Any other method is the plain 404, which keeps Studio's headers.
+  const posted = proxy(studio('/%73tudio/sign-in', {}, 'POST'));
+  assert.equal(posted.status, 404);
+  assert.match(posted.headers.get('content-security-policy') ?? '', STUDIO_CSP);
 });
 
 test('a Studio page learns the path asked for from proxy.ts alone, never from the client', (t) => {

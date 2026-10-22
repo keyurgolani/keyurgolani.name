@@ -273,6 +273,21 @@ export function routeResolver(
 export const resolveRoute: ResolveRoute = routeResolver(ROUTES, RETIRED_PATTERNS);
 
 /**
+ * Whether `pathname`, which `pattern` matches once decoded, spells one of the
+ * pattern's fixed segments with percent-encoding, as `/%66eed.xml` spells
+ * `/feed.xml`. The table reads a path decoded, but Next matches a fixed
+ * segment as sent, so it never routes such a path to the entry: proxy.ts
+ * answers it as a path no route matches.
+ */
+export function encodesFixedSegment(pattern: string, pathname: string): boolean {
+  const sent = pathname.split('/').filter((segment) => segment !== '');
+  return pattern
+    .split('/')
+    .filter((part) => part !== '')
+    .some((part, index) => !part.startsWith('[') && sent[index] !== part);
+}
+
+/**
  * The request header proxy.ts sets to the route table's decision on every
  * request it passes to Next. next.config.ts rewrites one marked `missing`
  * to Next's /_not-found route, which renders the app's 404 page from the

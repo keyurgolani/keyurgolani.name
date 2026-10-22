@@ -18,6 +18,7 @@ import type { DeploymentConfig } from './config';
 import { setDeploymentState } from './config-store';
 import { servedPattern } from './route-guard';
 import {
+  encodesFixedSegment,
   listRoutes,
   ownedFirstSegments,
   resolveRoute,
@@ -1058,6 +1059,38 @@ function entryFor(profile: Profile, pathname: string): string {
   const decision = resolveRoute(profile, pathname);
   return decision.status === 'served' ? decision.entry.pattern : decision.status;
 }
+
+test('a path that spells a fixed segment percent-encoded is told apart from the route it decodes to (#5, Slice 4)', () => {
+  // The table reads each one decoded, so it matches the route all the same,
+  // but Next matches a fixed segment as sent, and proxy.ts answers these as
+  // paths no route matches.
+  assert.equal(entryFor('owner', '/%66eed.xml'), '/feed.xml');
+  assert.equal(entryFor('read-only', '/api/%68ealth'), '/api/health');
+  for (const [pattern, pathname] of [
+    ['/feed.xml', '/%66eed.xml'],
+    ['/robots.txt', '/robots.tx%74'],
+    ['/opengraph-image-12o0cb', '/opengraph-image-12o0c%62'],
+    ['/api/health', '/%61pi/health'],
+    ['/api/health', '/api/%68ealth'],
+    ['/studio/sign-in', '/studio/%73ign-in'],
+    ['/studio/sign-in', '/%73tudio/sign-in'],
+    ['/sample/[[...path]]', '/%73ample'],
+    ['/api/studio/[name]', '/%61pi/studio/config.status'],
+  ] as const) {
+    assert.equal(encodesFixedSegment(pattern, pathname), true, pathname);
+  }
+  // As sent, or with only a dynamic segment encoded, which Next decodes for
+  // the route, the path is the route's own.
+  for (const [pattern, pathname] of [
+    ['/', '/'],
+    ['/feed.xml', '/feed.xml'],
+    ['/api/studio/[name]', '/api/studio/%63onfig.status'],
+    ['/sample/[[...path]]', '/sample/%61bout'],
+    ['/[...view]', '/%63hapters/one'],
+  ] as const) {
+    assert.equal(encodesFixedSegment(pattern, pathname), false, pathname);
+  }
+});
 
 /** A test-only variant's registry entry, from tests/fixtures/variants/<name>. */
 function fixture(name: string) {
