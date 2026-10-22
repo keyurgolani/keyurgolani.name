@@ -20,7 +20,7 @@ const fixture = (name: string) =>
 const YAML = fixture('portfolio.yml');
 const JSON_TWIN = fixture('portfolio.json');
 const REGISTERED = [acmePortfolioPhotography];
-const HEAD = 'schemaVersion: 2\nlocale: en\ndirection: ltr\nidentity:\n  name: Rowan Test\n';
+const HEAD = 'schemaVersion: 3\nlocale: en\ndirection: ltr\nidentity:\n  name: Rowan Test\n';
 
 function problems<T>(result: DocumentResult<T>) {
   assert.equal(result.ok, false, 'expected the document to be refused');
@@ -98,10 +98,12 @@ test('an unregistered extension is kept as written and reported where it is', ()
   // Every extension value comes through exactly as the document has it.
   const written = raw.data as {
     identity: { extensions: unknown };
-    sections: Array<{ data?: unknown; items?: Array<{ image: { extensions: unknown } }> }>;
+    media: Array<{ extensions: unknown }>;
+    sections: Array<{ data?: unknown }>;
   };
   assert.deepEqual(yaml.value.identity.extensions, written.identity.extensions);
-  const releases = yaml.value.sections[2];
+  assert.deepEqual(yaml.value.media?.[0]?.extensions, written.media[0]?.extensions);
+  const releases = yaml.value.sections?.[2];
   assert.deepEqual(
     releases && 'data' in releases ? releases.data : undefined,
     written.sections[2]?.data,
@@ -109,16 +111,11 @@ test('an unregistered extension is kept as written and reported where it is', ()
   assert.deepEqual(
     yaml.warnings.map(({ code, pointer, line, column }) => [code, pointer, line, column]),
     [
-      ['extension_unregistered', '/identity/extensions/@acme~1portfolio-photography', 11, 5],
-      ['extension_unregistered', '/identity/extensions/@other~1portfolio-music', 14, 5],
-      [
-        'extension_unregistered',
-        '/sections/0/items/0/image/extensions/@acme~1portfolio-photography',
-        27,
-        13,
-      ],
-      ['extension_unregistered', '/sections/1', 31, 5],
-      ['extension_unregistered', '/sections/2', 42, 5],
+      ['extension_unregistered', '/identity/extensions/@acme~1portfolio-photography', 10, 5],
+      ['extension_unregistered', '/identity/extensions/@other~1portfolio-music', 13, 5],
+      ['extension_unregistered', '/media/0/extensions/@acme~1portfolio-photography', 31, 7],
+      ['extension_unregistered', '/sections/1', 39, 5],
+      ['extension_unregistered', '/sections/2', 49, 5],
     ],
   );
   assert.equal(
@@ -314,7 +311,7 @@ test('extension data is plain JSON, at most 8 levels deep and 32 KiB per occurre
   const nested = (depth: number): unknown => (depth === 0 ? 'leaf' : { a: nested(depth - 1) });
   const document = (entry: unknown) =>
     JSON.stringify({
-      schemaVersion: 2,
+      schemaVersion: 3,
       locale: 'en',
       direction: 'ltr',
       identity: { name: 'Rowan Test', extensions: { '@other/x': entry } },
@@ -365,7 +362,7 @@ test("an extension section's data has the same limits, registered or not", () =>
   });
   const document = (kind: string, data: unknown) =>
     JSON.stringify({
-      schemaVersion: 2,
+      schemaVersion: 3,
       locale: 'en',
       direction: 'ltr',
       identity: { name: 'Rowan Test' },
