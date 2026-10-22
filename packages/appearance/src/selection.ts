@@ -3,7 +3,12 @@
 // setAxis() changes exactly one value or changes nothing, and the cookie and
 // the demo query carry values in one text form, `variant=...&mode=...`.
 
-import { REGISTRY_ID_PATTERN, type AppearanceAxis, type AppearanceSelection, type DisplayMode } from '@portfolio/schema';
+import {
+  REGISTRY_ID_PATTERN,
+  type AppearanceAxis,
+  type AppearanceSelection,
+  type DisplayMode,
+} from '@portfolio/schema';
 import { FALLBACK_ID } from '@portfolio/variant-contract';
 import {
   APPEARANCE_AXES,
@@ -14,7 +19,13 @@ import {
   type IdAxis,
 } from './axes';
 import type { AppearanceDiagnostic } from './diagnostics';
-import { findPack, isRegistered, otherAxes, selectableIds, type AppearanceRegistry } from './registry';
+import {
+  findPack,
+  isRegistered,
+  otherAxes,
+  selectableIds,
+  type AppearanceRegistry,
+} from './registry';
 
 /** Some of a selection's values, such as a visitor's choices. */
 export type SelectionValues = {
@@ -56,7 +67,8 @@ export function valueProblem(
       code: 'schema.invalid',
       axis,
       message: `is not a ${name} id.`,
-      remediation: 'An id starts with a lowercase letter, then 1 to 47 lowercase letters, digits, or hyphens.',
+      remediation:
+        'An id starts with a lowercase letter, then 1 to 47 lowercase letters, digits, or hyphens.',
     };
   }
   if (axis === 'variant' && value === FALLBACK_ID) {
@@ -120,6 +132,21 @@ function choices(registry: AppearanceRegistry, axis: IdAxis): string {
     : `one once a ${AXIS_NAMES[axis]} is installed with ${INSTALL}`;
 }
 
+/**
+ * A selection holding `value` on `axis` and nothing the other axes' checks
+ * could object to, for asking about one value on its own.
+ */
+export function alone(axis: AppearanceAxis, value: string): Selection {
+  return {
+    variant: '',
+    designLanguage: '',
+    colorScheme: '',
+    typography: '',
+    displayMode: 'system',
+    [axis]: value,
+  };
+}
+
 export interface SetAxisResult {
   /** The selection with `axis` changed, or the one given, unchanged, when `diagnostic` says why not. */
   readonly selection: AppearanceSelection;
@@ -154,9 +181,7 @@ export function serializeSelection(values: SelectionValues): string {
 
 /** What parseSelection() reads: a cookie value or query string, URLSearchParams, or a framework's search params. */
 export type SelectionText =
-  | string
-  | URLSearchParams
-  | Readonly<Record<string, string | readonly string[] | undefined>>;
+  string | URLSearchParams | Readonly<Record<string, string | readonly string[] | undefined>>;
 
 /** Longer than five ids and their keys need, so a huge value costs nothing to refuse. */
 const MAX_TEXT = 1024;

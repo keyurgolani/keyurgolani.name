@@ -30,7 +30,10 @@ test('a lightness step keeps the color in sRGB and moves the way it was asked', 
     const stepped = withLightness(color, target);
     assert.ok(isHex(stepped), `${color} at ${target} gave ${stepped}`);
     // Rounding to 8-bit channels and mapping chroma into sRGB keep it within a step's width.
-    assert.ok(Math.abs(lightness(stepped) - target) < 0.02, `${color} at ${target} gave ${stepped}`);
+    assert.ok(
+      Math.abs(lightness(stepped) - target) < 0.02,
+      `${color} at ${target} gave ${stepped}`,
+    );
   }
   assert.equal(withLightness('#917a84', 0.02), '#000000');
   assert.equal(withLightness('#336699', 0), '#000000');

@@ -4,7 +4,10 @@ import { fontStackProblem, languageValueProblem } from './index';
 import { PLATFORM_NEUTRAL, TRANSLUCENT } from './test-support/packs';
 
 test('the fallback and fixture languages are values a language may hold', () => {
-  for (const [key, value] of Object.entries({ ...PLATFORM_NEUTRAL.tokens, ...TRANSLUCENT.tokens })) {
+  for (const [key, value] of Object.entries({
+    ...PLATFORM_NEUTRAL.tokens,
+    ...TRANSLUCENT.tokens,
+  })) {
     assert.equal(languageValueProblem(value), null, `${key}: ${value}`);
   }
   for (const value of [

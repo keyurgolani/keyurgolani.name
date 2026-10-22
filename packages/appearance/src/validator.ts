@@ -17,7 +17,7 @@ import { AXIS_NAMES, PACK_AXES, PLATFORM_DEFAULTS } from './axes';
 import { APPEARANCE_CODES, type AppearanceDiagnostic } from './diagnostics';
 import { findPack, otherAxes, selectableIds, type AppearanceRegistry } from './registry';
 import { coversScript, scriptOf } from './scripts';
-import { valueProblem, type Selection } from './selection';
+import { alone, valueProblem } from './selection';
 
 export interface AppearanceValidatorOptions {
   /**
@@ -78,7 +78,9 @@ export function validateAppearance(
           add('site', ['appearance', axis], {
             ...problem,
             ...(problem.code === 'appearance.unavailable'
-              ? { message: `${problem.message} Preview shows ${PLATFORM_DEFAULTS[axis]} in its place.` }
+              ? {
+                  message: `${problem.message} Preview shows ${PLATFORM_DEFAULTS[axis]} in its place.`,
+                }
               : {}),
           });
         } else if (findPack(registry, axis, id)!.manifest.tier === 'research') {
@@ -111,11 +113,6 @@ function severityOf(
   return APPEARANCE_CODES[finding.code];
 }
 
-/** A selection holding `id` on `axis` and nothing another axis's check could object to. */
-function alone(axis: (typeof PACK_AXES)[number], id: string): Selection {
-  return { variant: '', designLanguage: '', colorScheme: '', typography: '', displayMode: 'system', [axis]: id };
-}
-
 type Add = (
   document: Diagnostic['document'],
   path: readonly (string | number)[],
@@ -127,7 +124,12 @@ type Add = (
  * reads. Every entry is keyed by a generator scheme; one keyed by an id
  * this build doesn't register goes unchecked.
  */
-function checkInputs(registry: AppearanceRegistry, pair: ParsedPair, add: Add, notChecked: string[]) {
+function checkInputs(
+  registry: AppearanceRegistry,
+  pair: ParsedPair,
+  add: Add,
+  notChecked: string[],
+) {
   const inputs = pair.site.appearanceInputs ?? {};
   const selected = findPack(registry, 'colorScheme', pair.site.appearance.colorScheme);
   const generator = selected?.manifest.generator;
@@ -185,7 +187,9 @@ function checkScripts(
     findPack(registry, 'typography', pair.site.appearance.typography) ??
     findPack(registry, 'typography', PLATFORM_DEFAULTS.typography)!;
   const { id, scripts } = typography.manifest;
-  const visible = new Set(toPublicView(pair, { extensions }).portfolio.sections.map((section) => section.id));
+  const visible = new Set(
+    toPublicView(pair, { extensions }).portfolio.sections.map((section) => section.id),
+  );
   const check = (path: readonly (string | number)[], tag: unknown) => {
     if (typeof tag !== 'string') return;
     const script = scriptOf(tag);
@@ -204,6 +208,7 @@ function checkScripts(
   };
   check(['locale'], pair.portfolio.locale);
   pair.portfolio.sections.forEach((section, index) => {
-    if (visible.has(section.id)) check(['sections', index, 'lang'], (section as { lang?: unknown }).lang);
+    if (visible.has(section.id))
+      check(['sections', index, 'lang'], (section as { lang?: unknown }).lang);
   });
 }

@@ -1,11 +1,22 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { anchorV1, highContrastV1, resolveTokens, type ColorTokens } from './index';
-import { DARK_ONLY, HUMANIST_UI, PACKS, PLATFORM_NEUTRAL, testRegistry, WARM_PARCHMENT } from './test-support/packs';
+import {
+  DARK_ONLY,
+  HUMANIST_UI,
+  PACKS,
+  PLATFORM_NEUTRAL,
+  testRegistry,
+  WARM_PARCHMENT,
+} from './test-support/packs';
 import type { MetaPack } from './registry';
 
 const registry = testRegistry();
-const FALLBACKS = { designLanguage: 'platform-neutral', colorScheme: 'warm-parchment', typography: 'humanist-ui' };
+const FALLBACKS = {
+  designLanguage: 'platform-neutral',
+  colorScheme: 'warm-parchment',
+  typography: 'humanist-ui',
+};
 const LIGHT = anchorV1(WARM_PARCHMENT.anchors!.light!, 'light');
 const DARK = anchorV1(WARM_PARCHMENT.anchors!.dark!, 'dark');
 
@@ -25,7 +36,11 @@ test("it gives the packs' typed values for a polarity", () => {
 });
 
 test('a single-mode scheme gives its native mode whichever polarity is asked', () => {
-  const tokens = resolveTokens(registry, { ...FALLBACKS, colorScheme: 'fixture-dark-only', polarity: 'light' });
+  const tokens = resolveTokens(registry, {
+    ...FALLBACKS,
+    colorScheme: 'fixture-dark-only',
+    polarity: 'light',
+  });
   assert.equal(tokens.polarity, 'dark');
   assert.deepEqual(tokens.color, anchorV1(DARK_ONLY.anchors!.dark!, 'dark'));
 });
@@ -35,7 +50,10 @@ test('high contrast gives the derived set of the polarity, or the authored one',
   assert.equal(derived.highContrast, true);
   assert.deepEqual(derived.color, highContrastV1({ light: LIGHT, dark: DARK }, 'light'));
   // Asked twice, the derived set is the same one.
-  assert.equal(resolveTokens(registry, { ...FALLBACKS, polarity: 'light', highContrast: true }).color, derived.color);
+  assert.equal(
+    resolveTokens(registry, { ...FALLBACKS, polarity: 'light', highContrast: true }).color,
+    derived.color,
+  );
 
   const authored: ColorTokens = { ...highContrastV1({ dark: DARK }, 'dark'), accent: '#ffd700' };
   const packs = PACKS.map((pack) =>

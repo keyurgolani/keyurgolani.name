@@ -76,7 +76,10 @@ test('an unregistered pack falls back on its axis alone, and a missing variant t
   // It never claims the requested pack is active, and never repeats an id the build doesn't register.
   for (const { message } of resolved.diagnostics) assert.ok(!message.includes('missing-'), message);
   // editorial-evidence registers with #13; until then it renders the fallback composition.
-  const editorial = resolve({ published: PLATFORM_DEFAULTS, registry: testRegistry(undefined, [registry.variants[0]!]) });
+  const editorial = resolve({
+    published: PLATFORM_DEFAULTS,
+    registry: testRegistry(undefined, [registry.variants[0]!]),
+  });
   assert.equal(editorial.selection.variant, 'fallback');
   assert.deepEqual(editorial.fallbackAxes, ['variant']);
 });
@@ -92,24 +95,36 @@ test('system on a single-mode scheme renders its native mode, locked', () => {
 });
 
 test('an explicit mode the scheme lacks renders the native mode with a diagnostic; high contrast never conflicts', () => {
-  const resolved = resolve({ published: { ...PUBLISHED, colorScheme: 'fixture-dark-only', displayMode: 'light' } });
+  const resolved = resolve({
+    published: { ...PUBLISHED, colorScheme: 'fixture-dark-only', displayMode: 'light' },
+  });
   assert.equal(resolved.resolvedMode, 'dark');
   assert.equal(resolved.modeLocked, true);
   assert.equal(resolved.selection.colorScheme, 'fixture-dark-only');
   assert.equal(resolved.selection.displayMode, 'light');
-  assert.deepEqual(resolved.diagnostics.map(({ code, axis }) => [code, axis]), [['appearance.mode-incompatible', 'displayMode']]);
-  const contrast = resolve({ published: { ...PUBLISHED, colorScheme: 'fixture-dark-only', displayMode: 'high-contrast' } });
+  assert.deepEqual(
+    resolved.diagnostics.map(({ code, axis }) => [code, axis]),
+    [['appearance.mode-incompatible', 'displayMode']],
+  );
+  const contrast = resolve({
+    published: { ...PUBLISHED, colorScheme: 'fixture-dark-only', displayMode: 'high-contrast' },
+  });
   assert.equal(contrast.resolvedMode, 'high-contrast');
   assert.equal(contrast.modeLocked, false);
   assert.deepEqual(contrast.diagnostics, []);
-  const matching = resolve({ published: { ...PUBLISHED, colorScheme: 'fixture-dark-only', displayMode: 'dark' } });
+  const matching = resolve({
+    published: { ...PUBLISHED, colorScheme: 'fixture-dark-only', displayMode: 'dark' },
+  });
   assert.deepEqual([matching.resolvedMode, matching.modeLocked], ['dark', false]);
 });
 
 test('a published Research pack renders, with the owner told it can not be published', () => {
   const resolved = resolve({ published: { ...PUBLISHED, colorScheme: 'fixture-research' } });
   assert.equal(resolved.selection.colorScheme, 'fixture-research');
-  assert.deepEqual(resolved.diagnostics.map(({ code }) => code), ['appearance.not-publishable']);
+  assert.deepEqual(
+    resolved.diagnostics.map(({ code }) => code),
+    ['appearance.not-publishable'],
+  );
 });
 
 test('a generator scheme renders only with its generated sets', () => {
@@ -117,14 +132,20 @@ test('a generator scheme renders only with its generated sets', () => {
   const missing = resolve({ published });
   assert.equal(missing.selection.colorScheme, 'warm-parchment');
   assert.deepEqual(missing.fallbackAxes, ['colorScheme']);
-  assert.deepEqual(missing.diagnostics.map(({ code }) => code), ['appearance.input-missing']);
+  assert.deepEqual(
+    missing.diagnostics.map(({ code }) => code),
+    ['appearance.input-missing'],
+  );
   const light = anchorV1(WARM_PARCHMENT.anchors!.light!, 'light');
   const dark = anchorV1(DARK_ONLY.anchors!.dark!, 'dark');
   const generated = resolve({ published, generated: { 'fixture-seed': { light, dark } } });
   assert.equal(generated.selection.colorScheme, 'fixture-seed');
   assert.deepEqual(generated.diagnostics, []);
   assert.equal(generated.resolvedMode, 'system');
-  const broken = resolve({ published, generated: { 'fixture-seed': { light, dark: { ...dark, canvas: 'red' } } } });
+  const broken = resolve({
+    published,
+    generated: { 'fixture-seed': { light, dark: { ...dark, canvas: 'red' } } },
+  });
   assert.equal(broken.selection.colorScheme, 'warm-parchment');
 });
 
@@ -137,9 +158,16 @@ test('owner and read-only read the cookie on selectable axes only, and never the
     displayMode: 'light',
   });
   for (const profile of ['owner', 'read-only'] as const) {
-    const resolved = resolve({ profile, visitor: { cookie, query: 'scheme=fixture-dark-only&mode=dark' } });
+    const resolved = resolve({
+      profile,
+      visitor: { cookie, query: 'scheme=fixture-dark-only&mode=dark' },
+    });
     // The defaults leave the color scheme and the display mode selectable.
-    assert.deepEqual(resolved.selection, { ...PUBLISHED, colorScheme: 'fixture-light-only', displayMode: 'light' });
+    assert.deepEqual(resolved.selection, {
+      ...PUBLISHED,
+      colorScheme: 'fixture-light-only',
+      displayMode: 'light',
+    });
     assert.deepEqual(resolved.visitorAxes, ['colorScheme', 'displayMode']);
     const queryOnly = resolve({ profile, visitor: { query: 'scheme=fixture-dark-only' } });
     assert.deepEqual(queryOnly.selection, PUBLISHED);
@@ -147,8 +175,12 @@ test('owner and read-only read the cookie on selectable axes only, and never the
 });
 
 test('demo makes every axis selectable and reads the query, never the cookie', () => {
-  const query = 'variant=editorial-evidence&language=fixture-translucent&scheme=fixture-dark-only&type=multilingual-system&mode=dark';
-  const resolved = resolve({ profile: 'demo', visitor: { query, cookie: 'scheme=fixture-light-only' } });
+  const query =
+    'variant=editorial-evidence&language=fixture-translucent&scheme=fixture-dark-only&type=multilingual-system&mode=dark';
+  const resolved = resolve({
+    profile: 'demo',
+    visitor: { query, cookie: 'scheme=fixture-light-only' },
+  });
   assert.deepEqual(resolved.selection, {
     variant: 'editorial-evidence',
     designLanguage: 'fixture-translucent',
@@ -165,25 +197,55 @@ test('demo makes every axis selectable and reads the query, never the cookie', (
 });
 
 test('visitor values that are unregistered, Research, the fallback, or unrenderable do nothing', () => {
-  const query = 'variant=fallback&language=missing-pack&scheme=fixture-research&type=Bad&mode=sepia';
+  const query =
+    'variant=fallback&language=missing-pack&scheme=fixture-research&type=Bad&mode=sepia';
   assert.deepEqual(resolve({ profile: 'demo', visitor: { query } }).selection, PUBLISHED);
-  assert.deepEqual(resolve({ profile: 'demo', visitor: { query: 'scheme=fixture-seed' } }).selection, PUBLISHED);
-  assert.deepEqual(resolve({ profile: 'demo', visitor: { query: 'variant=humanist-ui' } }).selection, PUBLISHED);
-  const generated = { 'fixture-seed': { light: anchorV1(WARM_PARCHMENT.anchors!.light!, 'light'), dark: anchorV1(WARM_PARCHMENT.anchors!.dark!, 'dark') } };
-  assert.equal(resolve({ profile: 'demo', visitor: { query: 'scheme=fixture-seed' }, generated }).selection.colorScheme, 'fixture-seed');
+  assert.deepEqual(
+    resolve({ profile: 'demo', visitor: { query: 'scheme=fixture-seed' } }).selection,
+    PUBLISHED,
+  );
+  assert.deepEqual(
+    resolve({ profile: 'demo', visitor: { query: 'variant=humanist-ui' } }).selection,
+    PUBLISHED,
+  );
+  const generated = {
+    'fixture-seed': {
+      light: anchorV1(WARM_PARCHMENT.anchors!.light!, 'light'),
+      dark: anchorV1(WARM_PARCHMENT.anchors!.dark!, 'dark'),
+    },
+  };
+  assert.equal(
+    resolve({ profile: 'demo', visitor: { query: 'scheme=fixture-seed' }, generated }).selection
+      .colorScheme,
+    'fixture-seed',
+  );
 });
 
 test('visitor values apply in axis order, and one that does not fit what is applied drops', () => {
   const lightPublished = { ...PUBLISHED, displayMode: 'light' as const };
   // The scheme comes before the mode, so a dark-only scheme meets the published light mode and drops.
-  const dropped = resolve({ profile: 'demo', published: lightPublished, visitor: { query: 'scheme=fixture-dark-only&mode=dark' } });
+  const dropped = resolve({
+    profile: 'demo',
+    published: lightPublished,
+    visitor: { query: 'scheme=fixture-dark-only&mode=dark' },
+  });
   assert.deepEqual(dropped.selection, { ...lightPublished, displayMode: 'dark' });
   assert.deepEqual(dropped.visitorAxes, ['displayMode']);
   // Under system, the dark-only scheme fits, and then the dark mode fits it.
-  const applied = resolve({ profile: 'demo', visitor: { query: 'scheme=fixture-dark-only&mode=dark' } });
-  assert.deepEqual(applied.selection, { ...PUBLISHED, colorScheme: 'fixture-dark-only', displayMode: 'dark' });
+  const applied = resolve({
+    profile: 'demo',
+    visitor: { query: 'scheme=fixture-dark-only&mode=dark' },
+  });
+  assert.deepEqual(applied.selection, {
+    ...PUBLISHED,
+    colorScheme: 'fixture-dark-only',
+    displayMode: 'dark',
+  });
   // A mode the applied scheme lacks drops, and the scheme stays.
-  const mode = resolve({ profile: 'demo', visitor: { query: 'scheme=fixture-dark-only&mode=light' } });
+  const mode = resolve({
+    profile: 'demo',
+    visitor: { query: 'scheme=fixture-dark-only&mode=light' },
+  });
   assert.deepEqual(mode.selection, { ...PUBLISHED, colorScheme: 'fixture-dark-only' });
   assert.equal(mode.resolvedMode, 'dark');
   assert.equal(mode.modeLocked, true);
@@ -196,15 +258,24 @@ test('a visitor value on an axis whose published pack fell back still applies', 
   assert.equal(resolved.selection.colorScheme, 'fixture-light-only');
   assert.equal(resolved.requested.colorScheme, 'fixture-light-only');
   assert.deepEqual(resolved.fallbackAxes, []);
-  assert.deepEqual(resolved.diagnostics.map(({ code }) => code), ['appearance.unavailable']);
+  assert.deepEqual(
+    resolved.diagnostics.map(({ code }) => code),
+    ['appearance.unavailable'],
+  );
 });
 
 test('motion follows the policy, and the environment only lowers it', () => {
   assert.equal(resolve({ motionPolicy: 'reduce' }).motion, 'reduced');
   assert.equal(resolve({ environment: { motion: 'reduced' } }).motion, 'reduced');
   assert.equal(resolve({ environment: { motion: 'static' } }).motion, 'static');
-  assert.equal(resolve({ motionPolicy: 'reduce', environment: { motion: 'full' } }).motion, 'reduced');
-  assert.equal(resolve({ motionPolicy: 'reduce', environment: { motion: 'static' } }).motion, 'static');
+  assert.equal(
+    resolve({ motionPolicy: 'reduce', environment: { motion: 'full' } }).motion,
+    'reduced',
+  );
+  assert.equal(
+    resolve({ motionPolicy: 'reduce', environment: { motion: 'static' } }).motion,
+    'static',
+  );
   const environment = resolve({ environment: { contrast: 'more', enhancement: 'off' } });
   assert.deepEqual([environment.contrast, environment.enhancement], ['more', 'off']);
 });
@@ -214,7 +285,13 @@ test('property: a visitor value changes its own axis or nothing, through the coo
   const values: Readonly<Record<AppearanceAxis, readonly string[]>> = {
     variant: ['editorial-evidence', 'acme-gallery', 'fallback', 'missing-variant'],
     designLanguage: ['platform-neutral', 'fixture-translucent', 'missing-pack'],
-    colorScheme: ['warm-parchment', 'fixture-dark-only', 'fixture-light-only', 'fixture-seed', 'fixture-research'],
+    colorScheme: [
+      'warm-parchment',
+      'fixture-dark-only',
+      'fixture-light-only',
+      'fixture-seed',
+      'fixture-research',
+    ],
     typography: ['humanist-ui', 'multilingual-system', 'missing-pack'],
     displayMode: ['system', 'light', 'dark', 'high-contrast', 'sepia'],
   };
@@ -236,7 +313,11 @@ test('property: a visitor value changes its own axis or nothing, through the coo
       visitor: profile === 'demo' ? { query: text } : { cookie: text },
     });
     for (const other of APPEARANCE_AXES.filter((each) => each !== axis)) {
-      assert.equal(resolved.requested[other], published[other], `${profile} ${text} moved ${other}`);
+      assert.equal(
+        resolved.requested[other],
+        published[other],
+        `${profile} ${text} moved ${other}`,
+      );
     }
   }
 });

@@ -29,7 +29,8 @@ const OLD_DEFAULT_VARIANT = 'editorial';
  * old file's parsed contents.
  */
 export function legacyAppearanceRemediation(data: unknown, registry: AppearanceRegistry): string {
-  const own = (key: string) => (isPlainObject(data) && Object.hasOwn(data, key) ? data[key] : undefined);
+  const own = (key: string) =>
+    isPlainObject(data) && Object.hasOwn(data, key) ? data[key] : undefined;
   const list = (ids: readonly string[]) => (ids.length > 0 ? ids.join(', ') : 'none yet');
 
   const variants = selectableIds(registry, 'variant');
@@ -42,7 +43,8 @@ export function legacyAppearanceRemediation(data: unknown, registry: AppearanceR
         : "the old variant isn't one this build registers, so pick one.";
 
   const theme = own('theme');
-  const mode = typeof theme === 'string' && Object.hasOwn(THEMES, theme) ? THEMES[theme] : undefined;
+  const mode =
+    typeof theme === 'string' && Object.hasOwn(THEMES, theme) ? THEMES[theme] : undefined;
   const modeLine =
     theme === undefined
       ? 'system, the old default.'

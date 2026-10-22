@@ -21,7 +21,8 @@ function legacy(name: string): unknown {
   return data;
 }
 
-const line = (text: string, field: string) => text.split('\n').find((each) => each.startsWith(`- ${field}`))!;
+const line = (text: string, field: string) =>
+  text.split('\n').find((each) => each.startsWith(`- ${field}`))!;
 
 test('variant editorial is now editorial-evidence, named even when the old file left it out', () => {
   const text = legacyAppearanceRemediation({ variant: 'editorial' }, registry);
@@ -44,9 +45,18 @@ test('themes bright and black are the light and dark display modes', () => {
     line(legacyAppearanceRemediation(legacy('theme-bright.yml'), registry), 'displayMode'),
     '- displayMode, from theme: light, the display mode the old theme bright is now. It takes system, light, dark, high-contrast.',
   );
-  assert.match(line(legacyAppearanceRemediation({ theme: 'black' }, registry), 'displayMode'), /: dark, the display mode the old theme black is now\./);
-  assert.match(line(legacyAppearanceRemediation(legacy('theme.yml'), registry), 'displayMode'), /: dark, which carries over\./);
-  assert.match(line(legacyAppearanceRemediation({}, registry), 'displayMode'), /: system, the old default\./);
+  assert.match(
+    line(legacyAppearanceRemediation({ theme: 'black' }, registry), 'displayMode'),
+    /: dark, the display mode the old theme black is now\./,
+  );
+  assert.match(
+    line(legacyAppearanceRemediation(legacy('theme.yml'), registry), 'displayMode'),
+    /: dark, which carries over\./,
+  );
+  assert.match(
+    line(legacyAppearanceRemediation({}, registry), 'displayMode'),
+    /: system, the old default\./,
+  );
 });
 
 test('no old color scheme or typography id carries over, and none is repeated', () => {
@@ -56,13 +66,19 @@ test('no old color scheme or typography id carries over, and none is repeated', 
     line(text, 'colorScheme'),
     '- colorScheme: no old color scheme carries over. Registered: fixture-asset, fixture-dark-only, fixture-light-only, fixture-seed, warm-parchment.',
   );
-  assert.equal(line(text, 'typography'), '- typography: no old typography carries over. Registered: humanist-ui, multilingual-system.');
+  assert.equal(
+    line(text, 'typography'),
+    '- typography: no old typography carries over. Registered: humanist-ui, multilingual-system.',
+  );
   for (const old of ['noir', 'modernist']) assert.ok(!text.includes(old), old);
 });
 
 test('an old value this build does not know is never repeated', () => {
   const text = legacyAppearanceRemediation(legacy('variant-unregistered.yml'), registry);
-  assert.match(line(text, 'variant'), /^- variant: the old variant isn't one this build registers, so pick one\./);
+  assert.match(
+    line(text, 'variant'),
+    /^- variant: the old variant isn't one this build registers, so pick one\./,
+  );
   assert.ok(!text.includes('canvas'));
   const theme = legacyAppearanceRemediation({ theme: 'neon-secret-token' }, registry);
   assert.match(line(theme, 'displayMode'), /the old theme isn't a display mode, so pick one\./);

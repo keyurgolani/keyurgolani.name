@@ -134,7 +134,8 @@ export function createAppearanceRegistry(meta: AppearanceMeta): AppearanceRegist
   for (const axis of PACK_AXES) {
     const fallback = PLATFORM_DEFAULTS[axis];
     const entry = packs[axis].get(fallback);
-    if (!entry) throw new Error(`This build registers no ${fallback}, the ${PACK_KINDS[axis]} fallback.`);
+    if (!entry)
+      throw new Error(`This build registers no ${fallback}, the ${PACK_KINDS[axis]} fallback.`);
     if (entry.manifest.tier === 'research') {
       throw new Error(`The ${PACK_KINDS[axis]} fallback ${fallback} can't be a research pack.`);
     }

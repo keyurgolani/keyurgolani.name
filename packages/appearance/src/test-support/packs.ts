@@ -130,7 +130,8 @@ export function roles(text: string, code: string = MONO): Record<TypographyRole,
 export const HUMANIST_UI: TypographyManifest = {
   id: 'humanist-ui',
   name: 'Humanist UI',
-  description: 'The platform fallback: a humanist system stack, from 0.75rem captions to a 3.5rem display.',
+  description:
+    'The platform fallback: a humanist system stack, from 0.75rem captions to a 3.5rem display.',
   tokenContract: TOKEN_CONTRACT_VERSION,
   tier: 'stable',
   provenance,
@@ -155,12 +156,16 @@ function scheme(id: string, extra: Partial<ColorSchemeManifest>): ColorSchemeMan
 export const DARK_ONLY = scheme('fixture-dark-only', {
   tier: 'experimental',
   derivation: 'anchor-v1',
-  anchors: { dark: { canvas: '#2e3440', text: '#eceff4', accent: '#88c0d0', secondary: '#b48ead' } },
+  anchors: {
+    dark: { canvas: '#2e3440', text: '#eceff4', accent: '#88c0d0', secondary: '#b48ead' },
+  },
 });
 
 export const LIGHT_ONLY = scheme('fixture-light-only', {
   derivation: 'anchor-v1',
-  anchors: { light: { canvas: '#faf8ff', text: '#282638', accent: '#8c72d9', secondary: '#4caeb3' } },
+  anchors: {
+    light: { canvas: '#faf8ff', text: '#282638', accent: '#8c72d9', secondary: '#4caeb3' },
+  },
 });
 
 export const SEED = scheme('fixture-seed', {
@@ -207,16 +212,66 @@ export const MULTILINGUAL: TypographyManifest = {
 
 /** Every test pack, the fallbacks first. */
 export const PACKS: readonly MetaPack[] = [
-  { kind: 'design-language', packageName: '@portfolio/appearance-languages', version: '0.1.0', manifest: PLATFORM_NEUTRAL },
-  { kind: 'color-scheme', packageName: '@portfolio/appearance-schemes', version: '0.1.0', manifest: WARM_PARCHMENT },
-  { kind: 'typography', packageName: '@portfolio/appearance-typography', version: '0.1.0', manifest: HUMANIST_UI },
-  { kind: 'design-language', packageName: '@portfolio/appearance-fixtures-languages', version: '0.1.0', manifest: TRANSLUCENT },
-  { kind: 'color-scheme', packageName: '@portfolio/appearance-fixtures-schemes', version: '0.1.0', manifest: DARK_ONLY },
-  { kind: 'color-scheme', packageName: '@portfolio/appearance-fixtures-schemes', version: '0.1.0', manifest: LIGHT_ONLY },
-  { kind: 'color-scheme', packageName: '@portfolio/appearance-fixtures-schemes', version: '0.1.0', manifest: SEED },
-  { kind: 'color-scheme', packageName: '@portfolio/appearance-fixtures-schemes', version: '0.1.0', manifest: ASSET },
-  { kind: 'color-scheme', packageName: '@portfolio/appearance-fixtures-schemes', version: '0.1.0', manifest: RESEARCH },
-  { kind: 'typography', packageName: '@portfolio/appearance-typography', version: '0.1.0', manifest: MULTILINGUAL },
+  {
+    kind: 'design-language',
+    packageName: '@portfolio/appearance-languages',
+    version: '0.1.0',
+    manifest: PLATFORM_NEUTRAL,
+  },
+  {
+    kind: 'color-scheme',
+    packageName: '@portfolio/appearance-schemes',
+    version: '0.1.0',
+    manifest: WARM_PARCHMENT,
+  },
+  {
+    kind: 'typography',
+    packageName: '@portfolio/appearance-typography',
+    version: '0.1.0',
+    manifest: HUMANIST_UI,
+  },
+  {
+    kind: 'design-language',
+    packageName: '@portfolio/appearance-fixtures-languages',
+    version: '0.1.0',
+    manifest: TRANSLUCENT,
+  },
+  {
+    kind: 'color-scheme',
+    packageName: '@portfolio/appearance-fixtures-schemes',
+    version: '0.1.0',
+    manifest: DARK_ONLY,
+  },
+  {
+    kind: 'color-scheme',
+    packageName: '@portfolio/appearance-fixtures-schemes',
+    version: '0.1.0',
+    manifest: LIGHT_ONLY,
+  },
+  {
+    kind: 'color-scheme',
+    packageName: '@portfolio/appearance-fixtures-schemes',
+    version: '0.1.0',
+    manifest: SEED,
+  },
+  {
+    kind: 'color-scheme',
+    packageName: '@portfolio/appearance-fixtures-schemes',
+    version: '0.1.0',
+    manifest: ASSET,
+  },
+  {
+    kind: 'color-scheme',
+    packageName: '@portfolio/appearance-fixtures-schemes',
+    version: '0.1.0',
+    manifest: RESEARCH,
+  },
+  {
+    kind: 'typography',
+    packageName: '@portfolio/appearance-typography',
+    version: '0.1.0',
+    manifest: MULTILINGUAL,
+  },
 ];
 
 /** A registered variant with a manifest that validates against this host's contract, token contract 1 included. */

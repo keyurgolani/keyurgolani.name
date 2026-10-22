@@ -34,7 +34,10 @@ test('setAxis changes the one value it is given', () => {
   assert.equal(codeOf(BASE, 'colorScheme', 'fixture-research'), 'changed');
   // Anything else the selection holds is carried over.
   const extended = { ...BASE, extensions: { '@acme/x': { note: 'kept' } } };
-  assert.deepEqual(setAxis(extended, 'typography', 'multilingual-system', registry).selection.extensions, extended.extensions);
+  assert.deepEqual(
+    setAxis(extended, 'typography', 'multilingual-system', registry).selection.extensions,
+    extended.extensions,
+  );
 });
 
 test('setAxis refuses what an axis cannot take, and changes nothing', () => {
@@ -57,7 +60,10 @@ test('setAxis refuses what an axis cannot take, and changes nothing', () => {
   }
   const unavailable = setAxis(BASE, 'colorScheme', 'missing-pack', registry).diagnostic!;
   assert.equal(unavailable.message, "names a color scheme this build doesn't register.");
-  assert.match(unavailable.remediation, /select one this build registers: fixture-asset, fixture-dark-only, fixture-light-only, fixture-seed, warm-parchment\.$/);
+  assert.match(
+    unavailable.remediation,
+    /select one this build registers: fixture-asset, fixture-dark-only, fixture-light-only, fixture-seed, warm-parchment\.$/,
+  );
   assert.ok(!unavailable.message.includes('missing-pack'));
 });
 
@@ -69,10 +75,14 @@ test('a mode the scheme lacks is refused, never fixed by changing another value'
   assert.equal(dark.selection, light);
   const onDark = { ...BASE, colorScheme: 'fixture-dark-only' };
   assert.equal(codeOf(onDark, 'displayMode', 'light'), 'appearance.mode-incompatible');
-  for (const mode of ['system', 'dark', 'high-contrast'] as const) assert.equal(codeOf(onDark, 'displayMode', mode), 'changed');
+  for (const mode of ['system', 'dark', 'high-contrast'] as const)
+    assert.equal(codeOf(onDark, 'displayMode', mode), 'changed');
   // System, dark, and high contrast all fit a dark-only scheme.
   for (const mode of ['system', 'dark', 'high-contrast'] as const) {
-    assert.equal(codeOf({ ...BASE, displayMode: mode }, 'colorScheme', 'fixture-dark-only'), 'changed');
+    assert.equal(
+      codeOf({ ...BASE, displayMode: mode }, 'colorScheme', 'fixture-dark-only'),
+      'changed',
+    );
   }
 });
 
@@ -80,7 +90,13 @@ test('a mode the scheme lacks is refused, never fixed by changing another value'
 const CANDIDATES = [
   ...['editorial-evidence', 'acme-gallery', 'fallback', 'missing-variant'],
   ...['platform-neutral', 'fixture-translucent'],
-  ...['warm-parchment', 'fixture-dark-only', 'fixture-light-only', 'fixture-seed', 'fixture-research'],
+  ...[
+    'warm-parchment',
+    'fixture-dark-only',
+    'fixture-light-only',
+    'fixture-seed',
+    'fixture-research',
+  ],
   ...['humanist-ui', 'multilingual-system'],
   ...DISPLAY_MODES,
   ...['missing-pack', 'Not An Id', '', 'x', 'warm-parchment ', '__proto__', 'constructor'],
@@ -90,7 +106,13 @@ const CANDIDATES = [
 const OWN: Readonly<Record<AppearanceAxis, readonly string[]>> = {
   variant: ['editorial-evidence', 'acme-gallery'],
   designLanguage: ['platform-neutral', 'fixture-translucent'],
-  colorScheme: ['warm-parchment', 'fixture-dark-only', 'fixture-light-only', 'fixture-seed', 'fixture-research'],
+  colorScheme: [
+    'warm-parchment',
+    'fixture-dark-only',
+    'fixture-light-only',
+    'fixture-seed',
+    'fixture-research',
+  ],
   typography: ['humanist-ui', 'multilingual-system'],
   displayMode: DISPLAY_MODES,
 };
@@ -99,7 +121,13 @@ function randomSelection(random: () => number): AppearanceSelection {
   return {
     variant: pick(random, ['editorial-evidence', 'acme-gallery', 'missing-variant']),
     designLanguage: pick(random, ['platform-neutral', 'fixture-translucent', 'missing-pack']),
-    colorScheme: pick(random, ['warm-parchment', 'fixture-dark-only', 'fixture-light-only', 'fixture-seed', 'missing-pack']),
+    colorScheme: pick(random, [
+      'warm-parchment',
+      'fixture-dark-only',
+      'fixture-light-only',
+      'fixture-seed',
+      'missing-pack',
+    ]),
     typography: pick(random, ['humanist-ui', 'multilingual-system', 'missing-pack']),
     displayMode: pick(random, DISPLAY_MODES),
   };
@@ -118,7 +146,11 @@ test('property: setAxis leaves the other four values byte-identical', () => {
     const value = random() < 0.5 ? pick(random, OWN[axis]) : pick(random, CANDIDATES);
     const result = setAxis(selection, axis, value, registry);
     for (const other of APPEARANCE_AXES.filter((each) => each !== axis)) {
-      assert.deepEqual(bytes(result.selection[other]), bytes(selection[other]), `${axis}=${value} moved ${other}`);
+      assert.deepEqual(
+        bytes(result.selection[other]),
+        bytes(selection[other]),
+        `${axis}=${value} moved ${other}`,
+      );
     }
     assert.deepEqual(bytes(selection), before, 'the input is never changed');
     if (result.diagnostic) {
@@ -138,7 +170,10 @@ test('a selection serializes in axis order with the demo query keys', () => {
     serializeSelection(BASE),
     'variant=acme-gallery&language=platform-neutral&scheme=warm-parchment&type=humanist-ui&mode=system',
   );
-  assert.equal(serializeSelection({ displayMode: 'dark', colorScheme: 'fixture-dark-only' }), 'scheme=fixture-dark-only&mode=dark');
+  assert.equal(
+    serializeSelection({ displayMode: 'dark', colorScheme: 'fixture-dark-only' }),
+    'scheme=fixture-dark-only&mode=dark',
+  );
   assert.equal(serializeSelection({}), '');
 });
 
@@ -147,16 +182,29 @@ test('parseSelection keeps each well-formed value given once, and drops the rest
     colorScheme: 'fixture-dark-only',
     displayMode: 'dark',
   });
-  assert.deepEqual(parseSelection('?variant=a1&variant=b2&type=Bad%20Id&mode=sepia&language=platform-neutral&other=1'), {
-    designLanguage: 'platform-neutral',
-  });
+  assert.deepEqual(
+    parseSelection(
+      '?variant=a1&variant=b2&type=Bad%20Id&mode=sepia&language=platform-neutral&other=1',
+    ),
+    {
+      designLanguage: 'platform-neutral',
+    },
+  );
   assert.deepEqual(parseSelection(`scheme=${'a'.repeat(1100)}`), {});
-  assert.deepEqual(parseSelection(new URLSearchParams({ mode: 'high-contrast' })), { displayMode: 'high-contrast' });
-  // A framework's search params: a value given twice arrives as a list, and is dropped.
-  assert.deepEqual(parseSelection({ scheme: 'warm-parchment', variant: ['a1', 'b2'], mode: undefined }), {
-    colorScheme: 'warm-parchment',
+  assert.deepEqual(parseSelection(new URLSearchParams({ mode: 'high-contrast' })), {
+    displayMode: 'high-contrast',
   });
-  assert.deepEqual(parseSelection({ __proto__: 'x', constructor: 'y' } as Record<string, string>), {});
+  // A framework's search params: a value given twice arrives as a list, and is dropped.
+  assert.deepEqual(
+    parseSelection({ scheme: 'warm-parchment', variant: ['a1', 'b2'], mode: undefined }),
+    {
+      colorScheme: 'warm-parchment',
+    },
+  );
+  assert.deepEqual(
+    parseSelection({ __proto__: 'x', constructor: 'y' } as Record<string, string>),
+    {},
+  );
 });
 
 test('property: serializeSelection and parseSelection round-trip any values', () => {

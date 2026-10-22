@@ -10,12 +10,22 @@ import {
   selectableIds,
   type MetaPack,
 } from './index';
-import { DARK_ONLY, PACKS, SEED, VARIANTS, WARM_PARCHMENT, testRegistry } from './test-support/packs';
+import {
+  DARK_ONLY,
+  PACKS,
+  SEED,
+  VARIANTS,
+  WARM_PARCHMENT,
+  testRegistry,
+} from './test-support/packs';
 
 test('it indexes every pack by axis and keeps the variants as the metadata module lists them', () => {
   const registry = testRegistry();
   assert.equal(registry.variants, VARIANTS);
-  assert.deepEqual([...registry.packs.designLanguage.keys()].sort(), ['fixture-translucent', 'platform-neutral']);
+  assert.deepEqual([...registry.packs.designLanguage.keys()].sort(), [
+    'fixture-translucent',
+    'platform-neutral',
+  ]);
   assert.deepEqual([...registry.packs.colorScheme.keys()].sort(), [
     'fixture-asset',
     'fixture-dark-only',
@@ -24,7 +34,10 @@ test('it indexes every pack by axis and keeps the variants as the metadata modul
     'fixture-seed',
     'warm-parchment',
   ]);
-  assert.deepEqual([...registry.packs.typography.keys()].sort(), ['humanist-ui', 'multilingual-system']);
+  assert.deepEqual([...registry.packs.typography.keys()].sort(), [
+    'humanist-ui',
+    'multilingual-system',
+  ]);
   const scheme = findPack(registry, 'colorScheme', 'warm-parchment')!;
   assert.equal(scheme.packageName, '@portfolio/appearance-schemes');
   assert.equal(scheme.version, '0.1.0');
@@ -44,9 +57,21 @@ test("each scheme's base sets are derived once, and a generator scheme has both 
   assert.deepEqual(seed.modes, ['light', 'dark']);
   assert.deepEqual(seed.sets, {});
   // Authored sets are used as written.
-  const authored = { ...DARK_ONLY, id: 'fixture-authored', anchors: undefined, derivation: undefined, dark: dark.sets.dark! };
-  const withAuthored = testRegistry([...PACKS, { kind: 'color-scheme', packageName: '@portfolio/x', version: '1.0.0', manifest: authored }]);
-  assert.equal(findPack(withAuthored, 'colorScheme', 'fixture-authored')!.sets.dark, dark.sets.dark);
+  const authored = {
+    ...DARK_ONLY,
+    id: 'fixture-authored',
+    anchors: undefined,
+    derivation: undefined,
+    dark: dark.sets.dark!,
+  };
+  const withAuthored = testRegistry([
+    ...PACKS,
+    { kind: 'color-scheme', packageName: '@portfolio/x', version: '1.0.0', manifest: authored },
+  ]);
+  assert.equal(
+    findPack(withAuthored, 'colorScheme', 'fixture-authored')!.sets.dark,
+    dark.sets.dark,
+  );
 });
 
 test('the selectable ids leave out the fallback composition and Research packs', () => {
@@ -71,25 +96,38 @@ test('the selectable ids leave out the fallback composition and Research packs',
 test('a broken build fails to make a registry, saying why', () => {
   const without = (id: string) => PACKS.filter(({ manifest }) => manifest.id !== id);
   assert.throws(() => testRegistry(PACKS, VARIANTS.slice(1)), /no fallback composition/);
-  assert.throws(() => testRegistry(without('platform-neutral')), /no platform-neutral, the design-language fallback/);
+  assert.throws(
+    () => testRegistry(without('platform-neutral')),
+    /no platform-neutral, the design-language fallback/,
+  );
   assert.throws(() => testRegistry(without('warm-parchment')), /no warm-parchment/);
   assert.throws(() => testRegistry(without('humanist-ui')), /no humanist-ui/);
   // The metadata module lists no pack until registry generation registers them (Slice 2).
   assert.throws(() => createAppearanceRegistry({ VARIANTS }), /no platform-neutral/);
   const twice: MetaPack = { ...PACKS[4]! } as MetaPack;
-  assert.throws(() => testRegistry([...PACKS, twice]), /Two color-scheme packs register the id fixture-dark-only/);
+  assert.throws(
+    () => testRegistry([...PACKS, twice]),
+    /Two color-scheme packs register the id fixture-dark-only/,
+  );
   const research = PACKS.map((pack) =>
-    pack.manifest.id === 'humanist-ui' ? ({ ...pack, manifest: { ...pack.manifest, tier: 'research' } } as MetaPack) : pack,
+    pack.manifest.id === 'humanist-ui'
+      ? ({ ...pack, manifest: { ...pack.manifest, tier: 'research' } } as MetaPack)
+      : pack,
   );
   assert.throws(() => testRegistry(research), /can't be a research pack/);
   const singleMode = PACKS.map((pack) =>
     pack.manifest.id === 'warm-parchment'
-      ? ({ ...pack, manifest: { ...WARM_PARCHMENT, anchors: { light: WARM_PARCHMENT.anchors!.light } } } as MetaPack)
+      ? ({
+          ...pack,
+          manifest: { ...WARM_PARCHMENT, anchors: { light: WARM_PARCHMENT.anchors!.light } },
+        } as MetaPack)
       : pack,
   );
   assert.throws(() => testRegistry(singleMode), /needs authored or anchored light and dark modes/);
   const generated = PACKS.map((pack) =>
-    pack.manifest.id === 'warm-parchment' ? ({ ...pack, manifest: { ...SEED, id: 'warm-parchment' } } as MetaPack) : pack,
+    pack.manifest.id === 'warm-parchment'
+      ? ({ ...pack, manifest: { ...SEED, id: 'warm-parchment' } } as MetaPack)
+      : pack,
   );
   assert.throws(() => testRegistry(generated), /needs authored or anchored light and dark modes/);
 });

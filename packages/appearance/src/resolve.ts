@@ -13,15 +13,15 @@ import type {
 } from '@portfolio/schema';
 import { APPEARANCE_AXES, ID_AXES, type IdAxis } from './axes';
 import type { AppearanceDiagnostic } from './diagnostics';
-import {
-  axisFallback,
-  findPack,
-  findSelectableVariant,
-  isRegistered,
-  type AppearanceRegistry,
-} from './registry';
+import { axisFallback, findPack, isRegistered, type AppearanceRegistry } from './registry';
 import { schemeRenders, type GeneratedSchemes } from './resolve-tokens';
-import { parseSelection, valueProblem, type Selection, type SelectionText } from './selection';
+import {
+  alone,
+  parseSelection,
+  valueProblem,
+  type Selection,
+  type SelectionText,
+} from './selection';
 
 /** #1's deployment profiles. */
 export type Profile = 'owner' | 'read-only' | 'demo';
@@ -181,9 +181,14 @@ function renderProblem(
   id: string,
   generated: GeneratedSchemes | undefined,
 ): AppearanceDiagnostic | null {
-  if (axis === 'variant' ? !findSelectableVariant(registry, id) : !isRegistered(registry, axis, id)) {
-    const problem = valueProblem(registry, axis, id, { ...PLACEHOLDER, [axis]: id });
-    return problem && { ...problem, message: `${problem.message} The ${fallbackName(axis)} renders in its place.` };
+  if (!isRegistered(registry, axis, id)) {
+    const problem = valueProblem(registry, axis, id, alone(axis, id));
+    return (
+      problem && {
+        ...problem,
+        message: `${problem.message} The ${fallbackName(axis)} renders in its place.`,
+      }
+    );
   }
   if (axis === 'colorScheme' && !schemeRenders(findPack(registry, 'colorScheme', id)!, generated)) {
     return {
@@ -195,15 +200,6 @@ function renderProblem(
   }
   return null;
 }
-
-/** A selection whose other values need no check, for asking about one axis alone. */
-const PLACEHOLDER: Selection = {
-  variant: '',
-  designLanguage: '',
-  colorScheme: '',
-  typography: '',
-  displayMode: 'system',
-};
 
 function fallbackName(axis: IdAxis): string {
   return axis === 'variant' ? 'fallback composition' : `first-party ${axisFallback(axis)}`;
@@ -226,5 +222,7 @@ function visitorAccepts(
   if (axis === 'variant' || axis === 'displayMode') return true;
   const pack = findPack(registry, axis, value)!;
   if (pack.manifest.tier === 'research') return false;
-  return axis !== 'colorScheme' || schemeRenders(findPack(registry, 'colorScheme', value)!, generated);
+  return (
+    axis !== 'colorScheme' || schemeRenders(findPack(registry, 'colorScheme', value)!, generated)
+  );
 }

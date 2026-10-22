@@ -7,10 +7,19 @@ import { WARM_PARCHMENT, pick, randomHex, seeded } from './test-support/packs';
 
 const LIGHT = WARM_PARCHMENT.anchors!.light!;
 const DARK = WARM_PARCHMENT.anchors!.dark!;
-const GROUNDS = ['canvas', 'surface-subtle', 'surface-default', 'surface-prominent', 'surface-overlay'] as const;
+const GROUNDS = [
+  'canvas',
+  'surface-subtle',
+  'surface-default',
+  'surface-prominent',
+  'surface-overlay',
+] as const;
 
-const worst = (set: ColorTokens, role: keyof ColorTokens, grounds: readonly (keyof ColorTokens)[] = GROUNDS) =>
-  Math.min(...grounds.map((ground) => contrast(set[role], set[ground])));
+const worst = (
+  set: ColorTokens,
+  role: keyof ColorTokens,
+  grounds: readonly (keyof ColorTokens)[] = GROUNDS,
+) => Math.min(...grounds.map((ground) => contrast(set[role], set[ground])));
 
 /** Every gate pair anchor-v1 solves, at the gate's own limits. */
 function assertGate(set: ColorTokens, label: string, text = 4.5, nonText = 3) {
@@ -34,7 +43,10 @@ function assertGate(set: ColorTokens, label: string, text = 4.5, nonText = 3) {
 }
 
 test('anchor-v1 gives every role as concrete hex, in contract order', () => {
-  for (const [anchors, mode] of [[LIGHT, 'light'], [DARK, 'dark']] as const) {
+  for (const [anchors, mode] of [
+    [LIGHT, 'light'],
+    [DARK, 'dark'],
+  ] as const) {
     const set = anchorV1(anchors, mode);
     assert.deepEqual(Object.keys(set), [...COLOR_ROLES]);
     for (const role of COLOR_ROLES) assert.ok(isHex(set[role]), `${mode} ${role}: ${set[role]}`);
@@ -52,8 +64,13 @@ test('anchor-v1 mixes in the refined body percentages and never moves an anchor'
     assert.equal(set['text-primary'], text);
     assert.equal(set.accent, accent);
     assert.equal(set['text-inverse'], canvas);
-    ['surface-subtle', 'surface-default', 'surface-prominent', 'surface-overlay'].forEach((role, index) =>
-      assert.equal(set[role as keyof ColorTokens], mix(canvas, text, surfaces[index]!), `${mode} ${role}`),
+    ['surface-subtle', 'surface-default', 'surface-prominent', 'surface-overlay'].forEach(
+      (role, index) =>
+        assert.equal(
+          set[role as keyof ColorTokens],
+          mix(canvas, text, surfaces[index]!),
+          `${mode} ${role}`,
+        ),
     );
     assert.equal(set['border-subtle'], mix(canvas, text, borders[0]));
     assert.equal(set['border-default'], mix(canvas, text, borders[1]));
@@ -148,10 +165,18 @@ test('high-contrast-v1 holds its sets to 7:1 text and 4.5:1 non-text', () => {
     assert.equal(set['surface-default'], mix(canvas, text, 8));
     assert.equal(set['surface-prominent'], mix(canvas, text, 12));
     assert.equal(set['surface-overlay'], canvas);
-    for (const role of ['text-secondary', 'text-muted', 'border-subtle', 'border-default', 'border-strong', 'focus'] as const) {
+    for (const role of [
+      'text-secondary',
+      'text-muted',
+      'border-subtle',
+      'border-default',
+      'border-strong',
+      'focus',
+    ] as const) {
       assert.equal(set[role], text, role);
     }
-    for (const role of ['text-inverse', 'on-accent', 'on-status'] as const) assert.equal(set[role], canvas, role);
+    for (const role of ['text-inverse', 'on-accent', 'on-status'] as const)
+      assert.equal(set[role], canvas, role);
     assertGate(set, `high-contrast ${polarity}`, 7, 4.5);
     for (const role of ['accent', 'positive', 'warning', 'danger', 'information'] as const) {
       assert.ok(worst(set, role) >= 7, `${polarity} ${role}`);

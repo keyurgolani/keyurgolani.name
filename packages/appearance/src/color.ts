@@ -39,7 +39,9 @@ export function mix(from: string, to: string, percent: number): string {
   }
   const a = channels(from);
   const b = channels(to);
-  return hex(a.map((value, index) => Math.floor((value * (100 - percent) + b[index]! * percent + 50) / 100)));
+  return hex(
+    a.map((value, index) => Math.floor((value * (100 - percent) + b[index]! * percent + 50) / 100)),
+  );
 }
 
 function toLinear(channel: number): number {
@@ -90,7 +92,8 @@ function linearRgb([lightness, a, b]: Lab): Channels {
 }
 
 const GAMUT_EPSILON = 1e-6;
-const fits = (rgb: Channels) => rgb.every((value) => value >= -GAMUT_EPSILON && value <= 1 + GAMUT_EPSILON);
+const fits = (rgb: Channels) =>
+  rgb.every((value) => value >= -GAMUT_EPSILON && value <= 1 + GAMUT_EPSILON);
 
 /** OKLab to hex, keeping lightness and hue and reducing chroma until the color is in sRGB. */
 function fromOklab([lightness, a, b]: Lab): string {

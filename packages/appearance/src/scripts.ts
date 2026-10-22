@@ -13,7 +13,15 @@ const PARTS: Readonly<Record<string, readonly string[]>> = {
 };
 
 /** Codes for no particular script, which any profile covers. */
-const ANY_SCRIPT: ReadonlySet<string> = new Set(['Zinh', 'Zmth', 'Zsye', 'Zsym', 'Zxxx', 'Zyyy', 'Zzzz']);
+const ANY_SCRIPT: ReadonlySet<string> = new Set([
+  'Zinh',
+  'Zmth',
+  'Zsye',
+  'Zsym',
+  'Zxxx',
+  'Zyyy',
+  'Zzzz',
+]);
 
 /**
  * The ISO 15924 script `tag` is written in: its own script subtag, else the

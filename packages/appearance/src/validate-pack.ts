@@ -64,12 +64,12 @@ const SCHEMAS = {
   typography: TypographyManifestSchema,
 } as const satisfies Record<PackKind, z.ZodTypeAny>;
 
-/** The fields each kind may leave out, for the message when a required one is missing. */
+/** What each kind may leave out, for the remedy when a required field is missing. */
 const OPTIONAL_FIELDS: Readonly<Record<PackKind, string>> = {
-  'design-language': 'stylesheet and enhancements',
+  'design-language': 'Only stylesheet and enhancements are optional.',
   'color-scheme':
-    'whichever of light, dark, anchors, derivation, and generator the scheme does not use, highContrast, and swatches',
-  typography: 'none',
+    'A scheme gives token sets, anchors, or a generator, and highContrast and swatches are optional.',
+  typography: 'Every field of a typography pack is required.',
 };
 
 /** The first-party fallback packs' ids, which only @portfolio/* packages may take. */
@@ -134,7 +134,8 @@ export function validatePackManifest<K extends PackKind>(
   }
   const manifest = parsed.data as PackManifestByKind[K];
   const id = packIdProblem(manifest.id, context.packageName);
-  if (id) report(id.code, ['id'], id.message, id.remedy, { expected: id.expected, actual: manifest.id });
+  if (id)
+    report(id.code, ['id'], id.message, id.remedy, { expected: id.expected, actual: manifest.id });
   if (context.kind === 'color-scheme') checkScheme(manifest as ColorSchemeManifest, report);
   if (context.kind === 'design-language') {
     checkLanguage(manifest as DesignLanguageManifest, context, report, notChecked);
@@ -172,7 +173,7 @@ function shapeIssue(
           'manifest.missing',
           path,
           `is required in token contract ${TOKEN_CONTRACT_VERSION}.`,
-          `Add it. A token set gives every role, and the optional fields of a ${kind} pack are ${OPTIONAL_FIELDS[kind]}.`,
+          `Add it. A token set gives every role. ${OPTIONAL_FIELDS[kind]}`,
         );
       } else {
         report(
@@ -211,7 +212,12 @@ function shapeIssue(
       );
       return;
     default:
-      report('manifest.invalid', path, issueMessage(issue), 'Change the value to what the message asks for.');
+      report(
+        'manifest.invalid',
+        path,
+        issueMessage(issue),
+        'Change the value to what the message asks for.',
+      );
   }
 }
 
@@ -228,7 +234,9 @@ function issueMessage(issue: z.ZodIssue): string {
     default: {
       // Custom and pattern messages are written as "must ...".
       const text = issue.message.trim();
-      return /^(?:must|is|has|may|can't|calls|closes|leaves)\b/.test(text) ? text : `is invalid: ${text}`;
+      return /^(?:must|is|has|may|can't|calls|closes|leaves)\b/.test(text)
+        ? text
+        : `is invalid: ${text}`;
     }
   }
 }
@@ -300,7 +308,12 @@ function checkScheme(manifest: ColorSchemeManifest, report: Report) {
   }
   if (manifest.anchors) {
     if (!manifest.anchors.light && !manifest.anchors.dark) {
-      report('manifest.missing', ['anchors'], 'names no mode.', 'Give light anchors, dark anchors, or both.');
+      report(
+        'manifest.missing',
+        ['anchors'],
+        'names no mode.',
+        'Give light anchors, dark anchors, or both.',
+      );
     }
     if (manifest.derivation === undefined) {
       report(
@@ -326,7 +339,7 @@ function checkScheme(manifest: ColorSchemeManifest, report: Report) {
       report(
         'manifest.invalid',
         ['highContrast'],
-        "is authored for a generator scheme, whose high-contrast sets high-contrast-v1 derives from what it generates.",
+        'is authored for a generator scheme, whose high-contrast sets high-contrast-v1 derives from what it generates.',
         'Remove it.',
       );
     } else {
@@ -416,9 +429,15 @@ function duplicates(
   const seen = new Set<string>();
   values.forEach((value, index) => {
     if (seen.has(value)) {
-      report('manifest.duplicate', at(index), `repeats a ${noun} an earlier entry has.`, 'Remove the repeat.', {
-        actual: value,
-      });
+      report(
+        'manifest.duplicate',
+        at(index),
+        `repeats a ${noun} an earlier entry has.`,
+        'Remove the repeat.',
+        {
+          actual: value,
+        },
+      );
     }
     seen.add(value);
   });

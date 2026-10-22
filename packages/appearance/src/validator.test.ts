@@ -40,18 +40,31 @@ function site(extra: Record<string, unknown> = {}, appearance: Record<string, un
 /** The pair checked the way the host will check it: #5's validators, then this one. */
 function check(
   siteDocument: Record<string, unknown>,
-  { live = false, portfolio = PORTFOLIO }: { live?: boolean; portfolio?: Record<string, unknown> } = {},
+  {
+    live = false,
+    portfolio = PORTFOLIO,
+  }: { live?: boolean; portfolio?: Record<string, unknown> } = {},
 ) {
   const result = validatePublicationUnit(
     {
       portfolio: { text: JSON.stringify(portfolio), format: 'json', name: 'portfolio.json' },
       site: { text: JSON.stringify(siteDocument), format: 'json', name: 'site.json' },
     },
-    { validators: [...contractValidators(VARIANTS, { live }), validateAppearance(registry, { live })] },
+    {
+      validators: [
+        ...contractValidators(VARIANTS, { live }),
+        validateAppearance(registry, { live }),
+      ],
+    },
   );
   return {
     ...result,
-    records: result.diagnostics.map(({ code, severity, document, pointer }) => [code, severity, document, pointer]),
+    records: result.diagnostics.map(({ code, severity, document, pointer }) => [
+      code,
+      severity,
+      document,
+      pointer,
+    ]),
   };
 }
 
@@ -67,26 +80,40 @@ test('a registered selection passes, and every appearance entry is checked', () 
 
 test('an unregistered pack blocks publish, and only warns on the live pair', () => {
   const unavailable = check(site({}, { designLanguage: 'missing-pack' }));
-  assert.deepEqual(unavailable.records, [['appearance.unavailable', 'blocks-publish', 'site', '/appearance/designLanguage']]);
-  assert.match(unavailable.diagnostics[0]!.message, /^\/appearance\/designLanguage names a design language this build doesn't register\. Preview shows platform-neutral in its place\.$/);
+  assert.deepEqual(unavailable.records, [
+    ['appearance.unavailable', 'blocks-publish', 'site', '/appearance/designLanguage'],
+  ]);
+  assert.match(
+    unavailable.diagnostics[0]!.message,
+    /^\/appearance\/designLanguage names a design language this build doesn't register\. Preview shows platform-neutral in its place\.$/,
+  );
   assert.ok(unavailable.pair, 'preview still renders');
   const live = check(site({}, { designLanguage: 'missing-pack' }), { live: true });
-  assert.deepEqual(live.records, [['appearance.unavailable', 'warning', 'site', '/appearance/designLanguage']]);
+  assert.deepEqual(live.records, [
+    ['appearance.unavailable', 'warning', 'site', '/appearance/designLanguage'],
+  ]);
 });
 
 test('a Research pack is not publishable, and preview renders it', () => {
   for (const live of [false, true]) {
     const result = check(site({}, { colorScheme: 'fixture-research' }), { live });
-    assert.deepEqual(result.records, [['appearance.not-publishable', 'blocks-publish', 'site', '/appearance/colorScheme']]);
+    assert.deepEqual(result.records, [
+      ['appearance.not-publishable', 'blocks-publish', 'site', '/appearance/colorScheme'],
+    ]);
     assert.ok(result.pair);
   }
 });
 
 test('an id registered on another axis is schema.invalid, and blocks preview', () => {
   const scheme = check(site({}, { colorScheme: 'platform-neutral' }));
-  assert.deepEqual(scheme.records, [['schema.invalid', 'blocks-preview', 'site', '/appearance/colorScheme']]);
+  assert.deepEqual(scheme.records, [
+    ['schema.invalid', 'blocks-preview', 'site', '/appearance/colorScheme'],
+  ]);
   assert.equal(scheme.pair, null);
-  assert.match(scheme.diagnostics[0]!.message, /names a design language this build registers, not a color scheme/);
+  assert.match(
+    scheme.diagnostics[0]!.message,
+    /names a design language this build registers, not a color scheme/,
+  );
   const variant = check(site({}, { variant: 'humanist-ui' }));
   assert.deepEqual(variant.records, [
     ['schema.invalid', 'blocks-preview', 'site', '/appearance/variant'],
@@ -95,10 +122,18 @@ test('an id registered on another axis is schema.invalid, and blocks preview', (
 });
 
 test('an explicit mode the scheme lacks is mode-incompatible; system and high contrast never are', () => {
-  const result = check(site({}, { colorScheme: 'fixture-dark-only', displayMode: 'light' }), { live: true });
-  assert.deepEqual(result.records, [['appearance.mode-incompatible', 'blocks-publish', 'site', '/appearance/displayMode']]);
+  const result = check(site({}, { colorScheme: 'fixture-dark-only', displayMode: 'light' }), {
+    live: true,
+  });
+  assert.deepEqual(result.records, [
+    ['appearance.mode-incompatible', 'blocks-publish', 'site', '/appearance/displayMode'],
+  ]);
   for (const displayMode of ['system', 'dark', 'high-contrast']) {
-    assert.deepEqual(check(site({}, { colorScheme: 'fixture-dark-only', displayMode })).records, [], displayMode);
+    assert.deepEqual(
+      check(site({}, { colorScheme: 'fixture-dark-only', displayMode })).records,
+      [],
+      displayMode,
+    );
   }
 });
 
@@ -107,15 +142,30 @@ test('a generator scheme needs a valid appearanceInputs entry', () => {
     ['appearance.input-missing', 'blocks-publish', 'site', '/appearance/colorScheme'],
   ]);
   assert.deepEqual(
-    check(site({ appearanceInputs: { 'fixture-seed': { sourceAsset: 'hero' } } }, { colorScheme: 'fixture-seed' })).records,
+    check(
+      site(
+        { appearanceInputs: { 'fixture-seed': { sourceAsset: 'hero' } } },
+        { colorScheme: 'fixture-seed' },
+      ),
+    ).records,
     [['appearance.input-missing', 'blocks-publish', 'site', '/appearanceInputs/fixture-seed']],
   );
   assert.deepEqual(
-    check(site({ appearanceInputs: { 'fixture-seed': { seedColor: '#3366ff' } } }, { colorScheme: 'fixture-seed' })).records,
+    check(
+      site(
+        { appearanceInputs: { 'fixture-seed': { seedColor: '#3366ff' } } },
+        { colorScheme: 'fixture-seed' },
+      ),
+    ).records,
     [],
   );
   assert.deepEqual(
-    check(site({ appearanceInputs: { 'fixture-asset': { sourceAsset: 'hero' } } }, { colorScheme: 'fixture-asset' })).records,
+    check(
+      site(
+        { appearanceInputs: { 'fixture-asset': { sourceAsset: 'hero' } } },
+        { colorScheme: 'fixture-asset' },
+      ),
+    ).records,
     [],
   );
 });
@@ -157,10 +207,22 @@ test("the content's scripts are checked against the typography profile, visible 
     ['appearance.script-coverage', 'warning', 'portfolio', '/sections/0/lang'],
   ]);
   const [locale, japanese] = result.diagnostics;
-  assert.match(locale!.message, /^\/locale is written in the Cyrl script, which humanist-ui doesn't cover/);
-  assert.equal(locale!.remediation, 'Select a typography profile that covers Cyrl: multilingual-system.');
+  assert.match(
+    locale!.message,
+    /^\/locale is written in the Cyrl script, which humanist-ui doesn't cover/,
+  );
+  assert.equal(
+    locale!.remediation,
+    'Select a typography profile that covers Cyrl: multilingual-system.',
+  );
   assert.match(japanese!.message, /Jpan script/);
   assert.equal(japanese!.stableId, 'about');
   // A profile covering every part of a script covers it.
-  assert.deepEqual(check({ ...hidden, appearance: { ...APPEARANCE, typography: 'multilingual-system' } }, { portfolio }).records, []);
+  assert.deepEqual(
+    check(
+      { ...hidden, appearance: { ...APPEARANCE, typography: 'multilingual-system' } },
+      { portfolio },
+    ).records,
+    [],
+  );
 });
