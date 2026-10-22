@@ -13,10 +13,11 @@
 //      names that image, the fixture pair in ../config, a password hash made
 //      by the image's own hash-password, and ./backups, owned by uid 1001.
 //   3. A non-root container that imported the mounted pair as revision 1 at
-//      its first start; an edit to the mounted file that changes nothing live
-//      until a second `portfolio-store import`; the container recreated,
-//      serving the same live revision; and startup stopped, with a named
-//      diagnostic, by a data directory that is missing or can't be written.
+//      its first start; an edit to the mounted file that changes nothing live,
+//      though `status` says the source drifted, until a second
+//      `portfolio-store import`; the container recreated, serving the same
+//      live revision; and startup stopped, with a named diagnostic, by a data
+//      directory that is missing or can't be written.
 //   4. `status`, `backup --out /backups/b1`, the volume removed, `restore`
 //      into the empty volume a new run gets, `verify`, and the stack started
 //      on it, serving the same live revision and unitHash.
@@ -75,6 +76,8 @@ const BUILD_DEPENDENCIES = [
   'react-dom',
 ];
 const REPORTS = path.join(reportsDir(), 'rehearsal');
+/** What `status` says of a mounted pair the last import brought in. */
+const UNCHANGED = 'the mounted pair is what the last import brought in.';
 const PNPM = process.env.npm_execpath ? [process.execPath, process.env.npm_execpath] : ['pnpm'];
 
 class RehearsalFailure extends Error {
@@ -191,9 +194,22 @@ function buildImage(work) {
   const vendor = path.join(host, 'apps', 'web', 'vendor');
   mkdirSync(vendor);
   cpSync(tarball, path.join(vendor, path.basename(tarball)));
-  pnpm(['add', `./vendor/${path.basename(tarball)}`, '--prefer-offline', '--store-dir', store], {
-    cwd: path.join(host, 'apps', 'web'),
-  });
+  // The add tests/external-variant/run.mjs makes (#5), from the store this
+  // job's install filled. pnpm resolves a relative tarball from apps/web
+  // and records file:vendor/..., which the image's install finds; an
+  // absolute one, as run.mjs passes, would record the runner's path.
+  pnpm(
+    [
+      '--filter',
+      '@portfolio/web',
+      'add',
+      `./vendor/${path.basename(tarball)}`,
+      '--prefer-offline',
+      '--store-dir',
+      store,
+    ],
+    { cwd: host },
+  );
   const { name } = JSON.parse(readFileSync(path.join(REFERENCE, 'package.json'), 'utf8'));
   const added = JSON.parse(readFileSync(path.join(host, 'apps', 'web', 'package.json'), 'utf8'))
     .dependencies?.[name];
@@ -375,6 +391,12 @@ async function walk(work) {
   const one = liveOf(imported);
   assert.equal(one?.seq, 1, 'revision 1 is live');
   assert.match(field(imported, 'last event') ?? '', /^1 {2}import {2}/, 'by an import event');
+  assert.equal(field(imported, 'source'), UNCHANGED, 'and the mounted pair is what it imported');
+  assert.match(
+    compose(site, ['logs', '--no-color', 'web']).out,
+    /"event":"store\.import\.first_start"/,
+    'startup logged the import',
+  );
   assert.ok((await home(site)).includes(first), 'GET / serves it');
 
   step('An edit to the mounted file changes nothing live');
@@ -382,6 +404,11 @@ async function walk(work) {
   writeFileSync(portfolio, readFileSync(portfolio, 'utf8').replace(first, second));
   const drifted = expectStore(store(site, ['status']), 'status after the edit');
   assert.deepEqual(liveOf(drifted), one, 'the live revision is the same');
+  assert.match(
+    field(drifted, 'source') ?? '',
+    /^Source files changed since the live revision\. /,
+    'status says the mounted pair drifted',
+  );
   const page = await home(site);
   assert.ok(page.includes(first) && !page.includes(second), 'GET / serves the live revision still');
 
@@ -390,6 +417,11 @@ async function walk(work) {
   const two = liveOf(again);
   assert.equal(two?.seq, 2);
   assert.notEqual(two?.revisionId, one?.revisionId, 'a new revision is live');
+  assert.equal(
+    field(expectStore(store(site, ['status']), 'status after the second import'), 'source'),
+    UNCHANGED,
+    'and the mounted pair is what it imported',
+  );
   await waitFor(async () => ((await home(site)).includes(second) ? true : undefined), {
     timeoutMs: 30_000,
     what: 'GET / to serve the second import',

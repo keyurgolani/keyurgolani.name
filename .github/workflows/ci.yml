@@ -447,9 +447,10 @@ jobs:
           retention-days: ${{ env.REPORT_RETENTION_DAYS }}
 
   # The container rehearsal (#3): owner from the shipped Dockerfile and
-  # deploy/compose.owner.yml, with #5's reference variant installed so its
-  # fixture pair can go live. It walks Slice 3's container criterion, then
-  # status, backup, restore into an empty volume, and verify.
+  # deploy/compose.owner.yml, with #5's reference variant packed and added
+  # from its tarball as the external-variant job adds it, so its fixture
+  # pair can go live. It walks Slice 3's container criterion, then status,
+  # backup, restore into an empty volume, and verify.
   rehearsal:
     name: rehearsal
     runs-on: ubuntu-24.04
