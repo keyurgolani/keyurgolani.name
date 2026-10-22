@@ -642,6 +642,11 @@ function runtimeImports(source: ts.SourceFile): (string | null)[] {
  * async or awaits, it exports no metadata made from data, and it imports
  * only CSS, types, react, next/*, and modules that start with 'use client',
  * which render no server component of their own.
+ *
+ * It's a lint against an accident, not a bar to a deliberate bypass: a
+ * synchronous read through process.getBuiltinModule() gets past it. What
+ * holds either way is owner.spec's scan of every Studio page's redirect,
+ * with no cookie and with one that names no session, for state of any kind.
  */
 function studioSegmentProblems(file: string, text?: string): string[] {
   const source = parse(file, text);
