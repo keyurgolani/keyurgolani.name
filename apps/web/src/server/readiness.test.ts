@@ -1,9 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { validatePublicationUnit } from '@portfolio/schema';
 import type { Profile } from './capabilities';
 import type { LiveRevision } from './catalog-port';
-import type { DeploymentConfig } from './config';
+import { readDeploymentConfig, type DeploymentConfig } from './config';
 import type { DeploymentState } from './config-store';
+import { ownerStore, PROBE_INTERVAL_MS } from './owner/store';
 import { capabilityPolicy } from './policy';
 import { readiness, type ReadinessProbes } from './readiness';
 
@@ -171,4 +176,56 @@ test('the catalog check follows the serving state alone, and never names the rev
       assert.ok(!JSON.stringify(result.body).includes('sha256'), serving);
     }
   }
+});
+
+test("owner's readiness lists data-directory, and runs its probe at most every 30 s", async (t) => {
+  const dataDir = mkdtempSync(path.join(tmpdir(), 'readiness-'));
+  t.after(() => rmSync(dataDir, { recursive: true, force: true }));
+  const read = readDeploymentConfig(
+    {
+      NODE_ENV: 'production',
+      PORTFOLIO_PROFILE: 'owner',
+      PORTFOLIO_ORIGIN: 'https://rowan.test',
+      PORTFOLIO_SOURCE_DIR: '/srv/portfolio',
+      PORTFOLIO_DATA_DIR: dataDir,
+    },
+    { cwd: '/' },
+  );
+  assert.ok(read.ok, JSON.stringify(read.issues));
+  let clock = Date.parse('2026-10-22T09:00:00.000Z');
+  const owner = ownerStore({
+    config: read.config,
+    checks: {
+      validate: (pair) => validatePublicationUnit(pair, { canonicalOrigin: 'https://rowan.test' }),
+      appVersion: 'test',
+    },
+    documents: { getLive: async () => assert.fail('readiness reads the catalog it is given') },
+    setServable: () => {},
+    now: () => clock,
+  });
+  // Each run of the probe is a promise of its own.
+  const runs = new Set<Promise<boolean>>();
+  const deployment: DeploymentState = {
+    ...state('owner'),
+    dataDirectory: () => {
+      const run = owner.probe();
+      runs.add(run);
+      return run;
+    },
+  };
+  const first = await readiness(deployment, PROBES);
+  assert.deepEqual(first.body.status === 'starting' ? [] : first.body.checks, [
+    { id: 'catalog', status: 'ok' },
+    { id: 'packs', status: 'ok' },
+    { id: 'data-directory', status: 'ok' },
+  ]);
+  // Within 30 s, the probe that ran answers again.
+  clock += PROBE_INTERVAL_MS - 1;
+  await readiness(deployment, PROBES);
+  await readiness(deployment, PROBES);
+  assert.equal(runs.size, 1);
+  // 30 s on, it runs again.
+  clock += 1;
+  await readiness(deployment, PROBES);
+  assert.equal(runs.size, 2);
 });
