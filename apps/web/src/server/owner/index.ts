@@ -15,6 +15,9 @@ recordOwnerModule('server/owner/index');
 /** For the auth provider: composition.ts hands it on as the provider loads. */
 export { mintSession } from './session-mint';
 
+/** #7's preview grants, which composition.ts binds to the provider's sessions. */
+export { ownerPreviews, type OwnerPreviewInput, type OwnerPreviews } from './preview';
+
 export interface OwnerInput {
   readonly config: DeploymentConfig;
   readonly catalog: CatalogAdapter;

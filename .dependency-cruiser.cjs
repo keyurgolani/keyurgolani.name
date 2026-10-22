@@ -140,12 +140,15 @@ module.exports = {
         'proxy.ts runs before every request; it imports only the route table, the capability ' +
         'matrix behind it, the frozen config (#1, item 15), the body /api/ready answers ' +
         "before startup (item 19), for Studio (#2) its headers, the session cookie's name, " +
-        'and returnTo, and for preview (#7) its headers, none of which reads a session.',
+        'and returnTo, and for preview (#7) its headers and its status document, none of which ' +
+        'reads a session. A grant path is checked through the port the owner composition binds ' +
+        'into the frozen config, which reads the grant and its session by digest, never a cookie.',
       from: { path: '^apps/web/src/proxy\\.ts$' },
       to: {
         pathNot: [
           '^apps/web/src/server/(capabilities|routes|config-store|ready-starting)\\.ts$',
           '^apps/web/src/server/(studio-headers|session-cookie|return-to|preview-headers)\\.ts$',
+          '^apps/web/src/preview/status\\.ts$',
           '^node_modules/(\\.pnpm/next@|next/)',
         ],
       },

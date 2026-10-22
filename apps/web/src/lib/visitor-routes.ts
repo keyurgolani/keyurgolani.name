@@ -19,8 +19,11 @@ import { compositionFor, REGISTRY, type Composition } from './variants';
 export interface VisitorPath {
   /** The path below `basePath`, as segments: a catch-all route's params. */
   readonly segments: readonly string[];
-  /** Where the routes are mounted: '' at the site root, '/sample' under demo. */
-  readonly basePath: '' | '/sample';
+  /**
+   * Where the routes are mounted: '' at the site root, '/sample' under demo,
+   * and a preview frame's grant path (#7).
+   */
+  readonly basePath: '' | '/sample' | `/preview/${string}`;
   /** The query every internal link and redirect keeps, such as /sample's `variant`. */
   readonly query?: Readonly<Record<string, string>>;
   /** The variant to render in place of the site's selection, as /sample's `?variant=` names one. */

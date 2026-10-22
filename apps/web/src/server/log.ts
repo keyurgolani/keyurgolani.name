@@ -37,10 +37,23 @@ const FINDING = [
   'remediation',
 ] as const;
 
+/**
+ * A preview grant's events (#7, Slice 2): the first 8 hex characters of the
+ * grant's digest and of its session's, never a token or a whole digest, and
+ * how many grants an end reached.
+ */
+const GRANT = ['grantRef', 'sessionRef', 'count'] as const;
+
 /** What particular events add. */
 const EXTRA: Readonly<Record<string, readonly string[]>> = {
   'config.fatal': FINDING,
   'config.warning': FINDING,
+  'preview.grant.minted': GRANT,
+  'preview.grant.superseded': GRANT,
+  'preview.grant.session_ended': GRANT,
+  'preview.grant.mark_failed': GRANT,
+  'preview.grant.read_failed': GRANT,
+  'preview.render_failed': GRANT,
   'deployment.config': [
     'origin',
     'previewOrigin',
