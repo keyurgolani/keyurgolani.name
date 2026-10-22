@@ -127,3 +127,23 @@ test('a failure below the boundary leaves nothing in its place', () => {
   boundary.state = { failed: true };
   assert.equal(boundary.render(), null);
 });
+
+test('each boundary that mounts adds one to a count a test has set, and writes nothing otherwise', () => {
+  globalThis.__portfolioMountedEnhancements = undefined;
+  new EnhancementBoundary({ children: <p>enhanced</p> }).componentDidMount();
+  assert.equal(globalThis.__portfolioMountedEnhancements, undefined);
+  globalThis.__portfolioMountedEnhancements = 0;
+  try {
+    // A boundary React builds but never mounts, as in a render it throws away, counts nothing.
+    const built = new EnhancementBoundary({ children: <p>enhanced</p> });
+    built.render();
+    assert.equal(globalThis.__portfolioMountedEnhancements, 0);
+    new EnhancementBoundary({ children: <p>enhanced</p> }).componentDidMount();
+    const failed = new EnhancementBoundary({ children: <p>enhanced</p> });
+    failed.state = { failed: true };
+    failed.componentDidMount();
+    assert.equal(globalThis.__portfolioMountedEnhancements, 2);
+  } finally {
+    globalThis.__portfolioMountedEnhancements = undefined;
+  }
+});

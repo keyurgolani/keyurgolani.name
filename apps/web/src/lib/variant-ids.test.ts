@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { MISSING_VARIANT_ID, RESERVED_IDS } from '@portfolio/variant-contract';
+import { FALLBACK_ID, MISSING_VARIANT_ID, RESERVED_IDS } from '@portfolio/variant-contract';
 
 // Nothing in the host's source names a variant (#5, Slice 3): neither an id
 // the contract reserves for the platform's own packages nor the one fixtures
@@ -14,11 +14,23 @@ import { MISSING_VARIANT_ID, RESERVED_IDS } from '@portfolio/variant-contract';
 
 const SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const GENERATED = path.join(SRC, 'lib', 'generated');
-const IDS = [...RESERVED_IDS, MISSING_VARIANT_ID];
+const escape = (id: string) => id.replace(/[-]/g, '\\-');
 
-/** An id written as a string in source: quoted, in any of the three quotes. */
-const literal = () =>
-  new RegExp(`(['"\`])(${IDS.map((id) => id.replace(/[-]/g, '\\-')).join('|')})\\1`, 'g');
+/** Every reserved id but the fallback's, which is a common word, and MISSING_VARIANT_ID. */
+const TOKENS = [...RESERVED_IDS.filter((id) => id !== FALLBACK_ID), MISSING_VARIANT_ID];
+
+/**
+ * One of TOKENS anywhere, as a whole token: on its own, in a path or query,
+ * in a selector, in a comment.
+ */
+const token = () => new RegExp(`(?<![\\w-])(${TOKENS.map(escape).join('|')})(?![\\w-])`, 'g');
+
+/** The fallback's id as a string, quoted in any of the three quotes: the word alone is common. */
+const fallback = () => new RegExp(`(['"\`])${escape(FALLBACK_ID)}\\1`, 'g');
+
+/** Every id `text` names, as written. */
+const named = (text: string) =>
+  [...text.matchAll(token()), ...text.matchAll(fallback())].map(([written]) => written);
 
 /** Every source file under `dir`, but the tests and the generated registry. */
 function* sourceFiles(dir: string): Generator<string> {
@@ -35,21 +47,43 @@ function* sourceFiles(dir: string): Generator<string> {
 test('no host source file names a variant id', () => {
   const files = [...sourceFiles(SRC)];
   assert.ok(files.length > 50, `the host's source, not ${files.length} files`);
-  const named = files.flatMap((file) =>
-    [...readFileSync(file, 'utf8').matchAll(literal())].map(
-      ([written]) => `${path.relative(SRC, file)}: ${written}`,
-    ),
+  const found = files.flatMap((file) =>
+    named(readFileSync(file, 'utf8')).map((written) => `${path.relative(SRC, file)}: ${written}`),
   );
-  assert.deepEqual(named, []);
+  assert.deepEqual(found, []);
 });
 
-test('the scan finds each id written in any quote', () => {
-  for (const id of IDS) {
-    for (const quote of ["'", '"', '`']) {
-      const text = `const selected = ${quote}${id}${quote};`;
-      assert.equal([...text.matchAll(literal())].length, 1, text);
+test('the scan finds a reserved id but fallback, or missing-variant, wherever it is written', () => {
+  for (const id of TOKENS) {
+    for (const text of [
+      `const selected = '${id}';`,
+      `const selected = "${id}";`,
+      `const selected = \`${id}\`;`,
+      `redirect('/sample?variant=${id}');`,
+      `const main = '[data-variant=${id}] main';`,
+      `[data-variant='${id}'] main { display: grid; }`,
+      `// Until #13, ${id} renders as the fallback.`,
+    ]) {
+      assert.deepEqual(named(text), [id], text);
     }
-    // A longer id that only starts with one is no match.
-    assert.equal([...`'${id}-2'`.matchAll(literal())].length, 0, id);
+    // A longer id that only starts or ends with one is another id.
+    for (const text of [`'${id}-2'`, `'old-${id}'`, `${id}_draft`]) {
+      assert.deepEqual(named(text), [], text);
+    }
+  }
+});
+
+test('the scan finds fallback written as a string, and not the word', () => {
+  for (const quote of ["'", '"', '`']) {
+    const text = `const selected = ${quote}${FALLBACK_ID}${quote};`;
+    assert.deepEqual(named(text), [`${quote}${FALLBACK_ID}${quote}`], text);
+  }
+  for (const text of [
+    '// The fallback composition stands in.',
+    'const id = FALLBACK_VARIANT_ID;',
+    "import { Fallback } from '@portfolio/fallback-composition';",
+    'loading={fallbackAlt}',
+  ]) {
+    assert.deepEqual(named(text), [], text);
   }
 });

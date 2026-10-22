@@ -64,6 +64,18 @@ test(
 );
 
 test(
+  "the harness's API requests each close their connection",
+  { annotation: { type: 'route', description: '/api/health' } },
+  async ({ request }) => {
+    // The server closes it once it answers, so no later request goes out on
+    // a socket the server has closed since (tests/harness/fixtures.ts).
+    const response = await request.get('/api/health');
+    expect(response.status()).toBe(200);
+    expect(response.headers().connection).toBe('close');
+  },
+);
+
+test(
   'requests outside the app are blocked',
   { annotation: { type: 'route', description: '/' } },
   async ({ page, blockedRequests }) => {

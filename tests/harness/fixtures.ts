@@ -8,7 +8,9 @@
 // origin fails, and the blocked URLs are attached to the test. A blocked
 // request to a host outside EXPECTED_BLOCKED_HOSTS fails the test. The server
 // itself reaches no host outside the app: any attempt it makes while a test
-// runs fails that test.
+// runs fails that test. `request` gives each API request a connection of its
+// own. Only `request` does: `page.request`, `context.request`, and a context
+// a spec makes itself keep Playwright's shared keep-alive sockets.
 import path from 'node:path';
 import { test as base } from '@playwright/test';
 import { startApp } from './app-server.mjs';
@@ -114,6 +116,21 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
 
   baseURL: async ({ app }, provide) => {
     await provide(app.origin);
+  },
+
+  // Each API request on a connection of its own, which it closes, as
+  // http-client.mjs's requests are. Playwright's agent keeps an idle socket
+  // until the server closes it, and Node's server closes one idle for 6 s, so
+  // a request sent straight after a long synchronous step could go out on a
+  // socket already closed, and fail with a socket hang up (#52). A spec that
+  // sends through page.request, context.request, or a context of its own
+  // gets no such header, so it shares those sockets.
+  request: async ({ playwright, extraHTTPHeaders }, provide) => {
+    const request = await playwright.request.newContext({
+      extraHTTPHeaders: { ...extraHTTPHeaders, connection: 'close' },
+    });
+    await provide(request);
+    await request.dispose();
   },
 
   blockedRequests: [
