@@ -71,6 +71,26 @@ test('no color literal: colors come from the scheme', () => {
   }
 });
 
+test('a color mix takes its amount from a token too, never a literal percentage', () => {
+  let mixes = 0;
+  for (const { property, value } of DECLARATIONS) {
+    for (let start = value.indexOf('color-mix('); start >= 0;) {
+      // The call, to its own closing parenthesis.
+      let depth = 0;
+      let end = start + 'color-mix'.length;
+      for (; end < value.length; end += 1) {
+        if (value[end] === '(') depth += 1;
+        else if (value[end] === ')' && --depth === 0) break;
+      }
+      const call = value.slice(start, end + 1);
+      mixes += 1;
+      assert.doesNotMatch(call, /(?<![\w-])\d*\.?\d+%/, `${property}: ${call}`);
+      start = value.indexOf('color-mix(', end);
+    }
+  }
+  assert.ok(mixes > 0, 'the surfaces mix their colors');
+});
+
 test('no font, radius, shadow, blur, or timing literal: each comes from its pack', () => {
   const tokenOnly: Readonly<Record<string, RegExp>> = {
     'font-family': /^var\(--type-[a-z-]+-font-family\)$/,

@@ -614,8 +614,9 @@
     animation: var(--ui-motion-enter) var(--ui-motion-standard) var(--ui-motion-easing);
   }
 
+  /* The scheme's scrim, as it gives it: how much of the page shows through is its to say. */
   [data-ui-slot='dialog']::backdrop {
-    background-color: color-mix(in srgb, var(--color-scrim) 55%, transparent);
+    background-color: var(--color-scrim);
   }
 
   [data-ui-slot='dialog.title'],
