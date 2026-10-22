@@ -9,6 +9,7 @@ import {
   resolveRoute,
   ROUTE_HEADER,
   routeAccess,
+  spellsRouteFile,
 } from './server/routes';
 import { readCookies, sessionCookieName } from './server/session-cookie';
 import {
@@ -34,7 +35,9 @@ import {
 // goes on to Next marked missing, and next.config.ts sends it to the 404
 // page; any method but GET and HEAD gets the plain 404 here. So does a route
 // spelled with a fixed segment percent-encoded, such as /%66eed.xml, which
-// the table reads decoded but Next would hand to the views catch-all.
+// the table reads decoded but Next would hand to the views catch-all, and a
+// missing path that is a route file's own path, as sent or decoded whole,
+// such as /work/[slug] or /studio%2Fsign-in, which Next's file check finds.
 //
 // For Studio (#2), under a profile with a Studio page, it sends the nonce
 // CSP, Referrer-Policy: same-origin, and Cross-Origin-Resource-Policy:
@@ -79,6 +82,14 @@ export function proxy(request: NextRequest): NextResponse {
   }
   if (decision.status === 'missing' && !pageLoad) {
     return plain(404, 'Not found.', requestId, extra);
+  }
+  // A missing path that is a route file's own path, as sent or decoded
+  // whole, such as /work/[slug] or /studio%2Fsign-in: Next's file check
+  // finds the file before the afterFiles rewrite runs, and the views
+  // catch-all answers with a 404 that needs JavaScript. The beforeFiles
+  // rewrite comes first.
+  if (decision.status === 'missing' && spellsRouteFile(pathname)) {
+    return unknownPath(request, requestId, extra, csp);
   }
   if (decision.status === 'served' && decision.entry.visitor && !isServable()) {
     return unavailable(requestId);
@@ -150,9 +161,10 @@ const UNKNOWN_PATH_CACHE_CONTROL = 'private, no-cache, no-store, max-age=0, must
 /**
  * A path the route table lists, answered as a path it doesn't list is:
  * Next's 404 page, through next.config.ts's rewrite, with the headers any
- * path gets. That's a Studio page under a profile with none, or a route
- * spelled with a fixed segment percent-encoded. `csp`, for a Studio path
- * under owner, goes on the request too, for the nonce on the page's scripts.
+ * path gets. That's a Studio page under a profile with none, a route spelled
+ * with a fixed segment percent-encoded, or a missing path that is a route
+ * file's own. `csp`, for a Studio path under owner, goes on the request too,
+ * for the nonce on the page's scripts.
  */
 function unknownPath(
   request: NextRequest,

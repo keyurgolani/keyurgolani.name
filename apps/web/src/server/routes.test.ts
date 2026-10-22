@@ -26,6 +26,7 @@ import {
   routeAccess,
   routeResolver,
   serves,
+  spellsRouteFile,
   type Installed,
   type RouteEntry,
   type RouteKind,
@@ -1089,6 +1090,42 @@ test('a path that spells a fixed segment percent-encoded is told apart from the 
     ['/[...view]', '/%63hapters/one'],
   ] as const) {
     assert.equal(encodesFixedSegment(pattern, pathname), false, pathname);
+  }
+});
+
+test("a path that is a route file's own, as sent or decoded whole, names nothing to the table but is told apart (#5, Slice 4)", () => {
+  // Read segment by segment, each one names nothing, but Next's file check
+  // finds a route file for it before the afterFiles rewrite runs.
+  for (const pathname of [
+    '/studio%2Fsign-in',
+    '/studio%2fsign-in',
+    '/%73tudio%2Fsign-in',
+    '/api%2Fhealth',
+    '/api%2Fready',
+    '/work/[slug]',
+    '/work/%5Bslug%5D',
+    '/work/[slug]/[...view]',
+    '/[...view]',
+    '/%5B...view%5D',
+    '/sample/[[...path]]',
+    '/_not-found',
+    '/%5Fnot-found',
+  ]) {
+    assert.equal(spellsRouteFile(pathname), true, pathname);
+    for (const profile of PROFILES) {
+      assert.equal(resolveRoute(profile, pathname).status, 'missing', `${profile} ${pathname}`);
+    }
+  }
+  // Paths no route file has, and one that doesn't decode.
+  for (const pathname of [
+    '/no-such-page',
+    '/work/x',
+    '/work%2Fx',
+    '/studio/sign-in/x',
+    '/api/studio/[name]x',
+    '/%E0%A4%A',
+  ]) {
+    assert.equal(spellsRouteFile(pathname), false, pathname);
   }
 });
 

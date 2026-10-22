@@ -465,6 +465,41 @@ test("under owner a Studio page spelled with a fixed segment percent-encoded is 
   assert.match(posted.headers.get('content-security-policy') ?? '', STUDIO_CSP);
 });
 
+test("a missing path that is a route file's own, as sent or decoded whole, goes to the 404 page ahead of Next's file check, in every profile (#5, Slice 4)", async (t) => {
+  for (const profile of ['owner', 'demo', 'read-only'] as const) {
+    deploy(t, profile);
+    for (const path of [
+      '/studio%2Fsign-in',
+      '/%73tudio%2Fsign-in',
+      '/api%2Fhealth',
+      '/work/[slug]',
+      '/work/%5Bslug%5D',
+      '/[...view]',
+      '/sample/[[...path]]',
+      '/%5Fnot-found',
+    ]) {
+      for (const method of ['GET', 'HEAD']) {
+        const response = proxy(request(path, method));
+        const what = `${profile} ${method} ${path}`;
+        assert.equal(response.headers.get('x-middleware-request-x-portfolio-not-found'), '1', what);
+        assert.equal(decision(response), null, what);
+        assert.equal(response.headers.get('cache-control'), UNKNOWN_PATH_CACHE_CONTROL, what);
+      }
+      const posted = proxy(request(path, 'POST'));
+      assert.equal(posted.status, 404, `${profile} POST ${path}`);
+      assert.equal(await posted.text(), 'Not found.');
+    }
+  }
+  // Under owner, a Studio one carries Studio's policy on the request, for the page's nonce.
+  deploy(t, 'owner');
+  const page = proxy(studio('/studio%2Fsign-in'));
+  const csp = page.headers.get('content-security-policy') ?? '';
+  assert.match(csp, STUDIO_CSP);
+  assert.equal(page.headers.get('x-middleware-request-content-security-policy'), csp);
+  // A path that names nothing and no route file goes on marked missing, for the afterFiles rewrite.
+  assert.equal(decision(proxy(request('/work%2Fx'))), 'missing');
+});
+
 test('a Studio page learns the path asked for from proxy.ts alone, never from the client', (t) => {
   deploy(t, 'owner');
   const forged = { 'x-studio-path': '/studio/elsewhere' };

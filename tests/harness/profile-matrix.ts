@@ -93,9 +93,9 @@ const EVERY_METHOD = ['GET', 'HEAD', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'
 
 /**
  * Studio paths in every spelling a request may use (#2): the pages the table
- * lists, in another case, deeper than any page, and with a fixed segment
- * percent-encoded. Under a profile with no Studio, each one answers every
- * method as /no-such-page does.
+ * lists, in another case, deeper than any page, with a fixed segment
+ * percent-encoded, and with the slash encoded. Under a profile with no
+ * Studio, each one answers every method as /no-such-page does.
  */
 const STUDIO_SPELLINGS = [
   '/studio',
@@ -109,6 +109,8 @@ const STUDIO_SPELLINGS = [
   '/%73tudio',
   '/%73tudio/sign-in',
   '/studio/%73ign-in',
+  '/studio%2Fsign-in',
+  '/%73tudio%2Fsign-in',
 ] as const;
 
 /**
@@ -126,6 +128,27 @@ function encodedSpellings(pattern: string): string[] {
     const encoded = `%${segment.charCodeAt(0).toString(16).toUpperCase()}${segment.slice(1)}`;
     return [`/${sent.map((each, at) => (at === index ? encoded : each)).join('/')}`];
   });
+}
+
+/**
+ * Paths that are a route file's own, as sent or decoded whole: each page
+ * pattern with a dynamic segment written out, and again with its brackets
+ * encoded, each fixed route of two segments or more with its slashes
+ * encoded, and Next's /_not-found with its underscore encoded. The route
+ * table finds each one names nothing, but Next's file check finds a route
+ * file for it (#5, Slice 4).
+ */
+function routeFileSpellings(): string[] {
+  const spellings = new Set(['/%5Fnot-found']);
+  for (const { kind, pattern } of listRoutes()) {
+    if (kind === 'page' && pattern.includes('[')) {
+      spellings.add(pattern);
+      spellings.add(pattern.replace(/\[/g, '%5B').replace(/\]/g, '%5D'));
+    } else if (!pattern.includes('[') && pattern.indexOf('/', 1) > 0) {
+      spellings.add(pattern.replace(/(?!^)\//g, '%2F'));
+    }
+  }
+  return [...spellings];
 }
 
 /**
@@ -228,13 +251,15 @@ function expectProfileHeaders(profile: Profile, response: APIResponse, what: str
 function withoutOwnPath(body: string, target: string): string {
   const url = new URL(target, 'http://unset.invalid');
   const sent = url.pathname.split('/').filter(Boolean);
-  let decoded = sent;
+  const spellings = [sent];
   try {
-    decoded = sent.map((segment) => decodeURIComponent(segment));
+    // Each segment decoded, and the path decoded whole, encoded slashes and all.
+    spellings.push(sent.map((segment) => decodeURIComponent(segment)));
+    spellings.push(decodeURIComponent(url.pathname).split('/').filter(Boolean));
   } catch {
     // Named as sent.
   }
-  for (const spelling of [sent, decoded]) {
+  for (const spelling of spellings) {
     const segments = ['', ...spelling];
     segments[segments.length - 1] += url.search;
     // The payload is JSON inside a JSON string in a script: its quotes come
@@ -566,6 +591,30 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
         }
       }
       expect(spellings, 'spellings checked').toBeGreaterThan(10);
+    },
+  );
+
+  test(
+    "a path that is a route file's own, as sent or decoded whole, is a path no route matches: the 404 page for GET, the plain 404 for POST",
+    { annotation: [{ type: 'route', description: 'every route' }, annotation] },
+    async ({ request }) => {
+      // Such as /work/[slug] or /studio%2Fsign-in: the route table finds it
+      // names nothing, but Next's file check finds a route file for it before
+      // the afterFiles rewrite runs, and the views catch-all's 404 needs
+      // JavaScript (#5, Slice 4).
+      const spellings = routeFileSpellings();
+      expect(spellings.length, 'spellings checked').toBeGreaterThan(5);
+      for (const target of spellings) {
+        const page = await request.get(target, { maxRedirects: 0 });
+        expect(page.status(), target).toBe(404);
+        expect(page.headers()['content-type'], target).toMatch(/^text\/html/);
+        expect(await page.text(), target).toMatch(/<h1>Page not found<\/h1>/);
+        expectProfileHeaders(profile, page, `GET ${target}`);
+        const posted = await request.post(target, { maxRedirects: 0 });
+        expect(posted.status(), `POST ${target}`).toBe(404);
+        expect(posted.headers()['content-type'], `POST ${target}`).toMatch(/^text\/plain/);
+        expectProfileHeaders(profile, posted, `POST ${target}`);
+      }
     },
   );
 

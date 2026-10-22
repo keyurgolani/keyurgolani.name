@@ -287,6 +287,30 @@ export function encodesFixedSegment(pattern: string, pathname: string): boolean 
     .some((part, index) => !part.startsWith('[') && sent[index] !== part);
 }
 
+/** Every route file's own path: each pattern the table lists, and Next's /_not-found. */
+const ROUTE_FILE_PATHS: ReadonlySet<string> = new Set([
+  ...ROUTES.map((entry) => entry.pattern),
+  '/_not-found',
+]);
+
+/**
+ * Whether `pathname`, as sent or decoded whole, is a route file's own path:
+ * a pattern written out, as `/work/[slug]` or `/work/%5Bslug%5D` is, or a
+ * path whose slashes are encoded, as `/studio%2Fsign-in` decodes to
+ * `/studio/sign-in`. The table reads such a path segment by segment and
+ * finds it names nothing, but Next's file check finds the route file before
+ * the afterFiles rewrite runs, and the views catch-all answers it with a 404
+ * that needs JavaScript. proxy.ts sends it through the beforeFiles rewrite.
+ */
+export function spellsRouteFile(pathname: string): boolean {
+  if (ROUTE_FILE_PATHS.has(pathname)) return true;
+  try {
+    return ROUTE_FILE_PATHS.has(decodeURIComponent(pathname));
+  } catch {
+    return false;
+  }
+}
+
 /**
  * The request header proxy.ts sets to the route table's decision on every
  * request it passes to Next. next.config.ts rewrites one marked `missing`
