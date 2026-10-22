@@ -13,8 +13,10 @@ import {
   type SessionStore,
 } from './session-store';
 import {
+  assertSessionHeld,
   browserFamily,
   createSessions,
+  isSessionHeld,
   MAX_SESSIONS,
   slides,
   type Activity,
@@ -656,4 +658,81 @@ test('a session list shows a coarse browser family, never the user agent', () =>
     [null, 'other'],
   ];
   for (const [agent, family] of cases) assert.equal(browserFamily(agent), family, String(agent));
+});
+
+test("holding runs a commit under the session's lock: an ending asked for meanwhile waits, and the hold counts only while it runs", async () => {
+  const { sessions, time } = setup();
+  const { token, record } = await sessions.issue({ uaFamily: 'firefox' });
+  let hold: unknown;
+  const order: string[] = [];
+  let ending: Promise<boolean> | undefined;
+  const holding = await sessions.holding(token, async (proof, current) => {
+    hold = proof;
+    assert.equal(current.digest, record.digest);
+    assert.equal(isSessionHeld(proof), true);
+    assert.equal(proof.sessionRef, sessionRef(record.digest));
+    ending = sessions.end(record.digest, 'logout').then((ended) => {
+      order.push('logout');
+      return ended;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    order.push('commit');
+    return 'committed';
+  });
+  assert.equal(holding.status, 'valid');
+  assert.equal(holding.status === 'valid' && holding.value, 'committed');
+  assert.equal(await ending, true);
+  assert.deepEqual(order, ['commit', 'logout']);
+  assert.equal(isSessionHeld(hold), false);
+  assert.throws(() => assertSessionHeld(hold));
+  assert.throws(() => assertSessionHeld({ sessionRef: sessionRef(record.digest) }));
+
+  // An ended session runs nothing, and neither does one past its limit.
+  let ran = false;
+  const ended = await sessions.holding(token, async () => {
+    ran = true;
+  });
+  assert.equal(statusOf(ended as Resolution), 'ended:unknown');
+  const idle = await sessions.issue({ uaFamily: 'firefox' });
+  time.advance(61 * MINUTE);
+  assert.equal(
+    statusOf(
+      (await sessions.holding(idle.token, async () => {
+        ran = true;
+      })) as Resolution,
+    ),
+    'ended:expired',
+  );
+  assert.equal(
+    statusOf(
+      (await sessions.holding('not a token', async () => {
+        ran = true;
+      })) as Resolution,
+    ),
+    'ended:malformed',
+  );
+  assert.equal(
+    (
+      await sessions.holding(null, async () => {
+        ran = true;
+      })
+    ).status,
+    'none',
+  );
+  assert.equal(ran, false);
+});
+
+test('a commit that throws lets go of the session and of its hold', async () => {
+  const { sessions } = setup();
+  const { token, record } = await sessions.issue({ uaFamily: 'firefox' });
+  let hold: unknown;
+  await assert.rejects(
+    sessions.holding(token, async (proof) => {
+      hold = proof;
+      throw new Error('the commit failed');
+    }),
+    /the commit failed/,
+  );
+  assert.equal(isSessionHeld(hold), false);
+  assert.equal(await sessions.end(record.digest, 'logout'), true);
 });

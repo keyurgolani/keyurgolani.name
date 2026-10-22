@@ -59,6 +59,9 @@ for (const [name, handler] of Object.entries(handlers)) {
     session,
     inputType: operation.kind === 'query' ? 'search' : 'json',
     recheckSession: async () => null,
+    commitWithSession: async () => {
+      throw new Error('Nothing commits in this test.');
+    },
   };
 
   test(`${name} throws on a token authorize() never issued`, async () => {

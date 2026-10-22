@@ -39,6 +39,11 @@ export interface AuthBindings {
    * Without one, a command that asks is stopped whenever it has a session.
    */
   readonly recheckSession?: StudioBindings['recheckSession'];
+  /**
+   * A multi-step command's commit point, holding the session while it reads
+   * it again and commits. Without one, no command commits.
+   */
+  readonly commitWithSession?: StudioBindings['commitWithSession'];
   /** Handlers for the provider's own entries, such as auth.login. */
   readonly handlers?: Readonly<Record<string, Handler>>;
   /** How Studio pages find their session, for requireOwnerPage. Without it, every one is refused. */
@@ -329,6 +334,10 @@ export async function compose(input: CompositionInput): Promise<Composition> {
           provider.recheckSession
             ? provider.recheckSession(context)
             : NO_BINDINGS.recheckSession(context),
+        commitWithSession: (context, commit) =>
+          provider.commitWithSession
+            ? provider.commitWithSession(context, commit)
+            : NO_BINDINGS.commitWithSession(context, commit),
       };
       return built(config, {
         reader: documents.reader,

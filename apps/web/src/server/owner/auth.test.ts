@@ -6,8 +6,10 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { z } from 'zod';
 import {
+  assertSessionHeld,
   csrfToken,
   filesystemSessionStore,
+  isSessionHeld,
   memoryAuditSink,
   prepareAuthDirectories,
   sessionDigest,
@@ -345,18 +347,20 @@ test('a session that ends during a request is let go of at the touch, so nothing
   assert.equal(await auth.checkOrigin({ ...context, session }), false);
 });
 
-test('a command whose session ends between its steps stops before the commit point', async (t) => {
-  // test.publish prepares, then reads its session again before it commits,
-  // as #3's publish does before it moves the live pointer. The session ends
-  // in between, after every check at the start of the request passed.
+test('a command whose session ends between its steps stops at the commit point', async (t) => {
+  // test.publish prepares, then commits through commitWithSession, as #3's
+  // publish does when it moves the live pointer. The session ends in
+  // between, after every check at the start of the request passed.
   let between: () => Promise<void> = async () => {};
   const commits: string[] = [];
   const publish: Handler = async (_authorized, _input, context) => {
     await between();
-    const stop = await context.recheckSession();
-    if (stop) return stop;
-    commits.push(context.requestId);
-    return { ok: true };
+    const committed = await context.commitWithSession(async (hold) => {
+      assertSessionHeld(hold);
+      commits.push(context.requestId);
+      return { ok: true };
+    });
+    return committed.ok ? committed.value : committed.result;
   };
   const { dispatch, auth, dataDir, issue, now, advance } = await setup(t, {
     handlers: { 'test.publish': publish },
@@ -403,12 +407,12 @@ test('a command whose session ends between its steps stops before the commit poi
   // A store that can't be read at the commit point stops it too, and the
   // cookie stays, as at the start of a request.
   const token = await issue();
-  const resolve = auth.sessions.resolve;
+  const holding = auth.sessions.holding;
   t.after(() => {
-    (auth.sessions as { resolve: typeof resolve }).resolve = resolve;
+    (auth.sessions as { holding: typeof holding }).holding = holding;
   });
   between = async () => {
-    (auth.sessions as { resolve: typeof resolve }).resolve = async () => ({
+    (auth.sessions as { holding: typeof holding }).holding = async () => ({
       status: 'unavailable',
     });
   };
@@ -416,6 +420,62 @@ test('a command whose session ends between its steps stops before the commit poi
   assert.equal(await codeOf(unreadable), 'authentication_required');
   assert.equal(unreadable.headers.get('set-cookie'), null);
   assert.equal(commits.length, 1);
+});
+
+test('a logout after the recheck but before the commit stops the commit, and one during it waits for it', async (t) => {
+  // The review's sequence: the session is checked again, the owner logs out
+  // from another tab, then the command commits. The recheck alone let that
+  // commit through; the commit point's hold doesn't.
+  let afterRecheck: () => Promise<void> = async () => {};
+  let duringCommit: () => Promise<void> = async () => {};
+  const commits: string[] = [];
+  let lastHold: unknown;
+  const publish: Handler = async (_authorized, _input, context) => {
+    const stop = await context.recheckSession();
+    if (stop) return stop;
+    await afterRecheck();
+    const committed = await context.commitWithSession(async (hold) => {
+      lastHold = hold;
+      await duringCommit();
+      assertSessionHeld(hold);
+      commits.push(context.requestId);
+      return { ok: true };
+    });
+    return committed.ok ? committed.value : committed.result;
+  };
+  const { dispatch, auth, issue } = await setup(t, { handlers: { 'test.publish': publish } });
+  const send = (token: string) => dispatch(request('test.publish', { token }), 'test.publish');
+
+  const first = await issue();
+  afterRecheck = async () => {
+    assert.ok(await auth.sessions.end(sessionDigest(first), 'logout'));
+  };
+  const stopped = await send(first);
+  assert.equal(stopped.status, 401);
+  assert.equal(await codeOf(stopped), 'authentication_required');
+  assert.deepEqual(commits, []);
+
+  // A logout that comes while the commit runs waits for it, then ends the
+  // session: the commit happened as the session's last act.
+  const second = await issue();
+  afterRecheck = async () => {};
+  let logout: Promise<boolean> | undefined;
+  let loggedOut = false;
+  duringCommit = async () => {
+    logout = auth.sessions.end(sessionDigest(second), 'logout').then((ended) => {
+      loggedOut = true;
+      return ended;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    assert.equal(loggedOut, false, 'the logout waits for the commit');
+  };
+  assert.equal((await send(second)).status, 200);
+  assert.equal(commits.length, 1);
+  assert.equal(await logout, true);
+  assert.deepEqual(await auth.sessions.list(), []);
+  // The hold counted only while its commit ran.
+  assert.equal(isSessionHeld(lastHold), false);
+  assert.throws(() => assertSessionHeld(lastHold), /does not hold a session/);
 });
 
 test("a command from a sibling subdomain is 403 request_origin_rejected with the owner's cookie attached", async (t) => {

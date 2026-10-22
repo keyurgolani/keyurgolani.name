@@ -32,8 +32,10 @@ export {
   type UaFamily,
 } from './auth/session-store';
 export {
+  assertSessionHeld,
   browserFamily,
   createSessions,
+  isSessionHeld,
   MAX_SESSIONS,
   SESSION_LIFETIME,
   SESSION_LIFETIME_RANGE,
@@ -43,8 +45,10 @@ export {
   type AuditContext,
   type EndedReason,
   type HeaderReader,
+  type Holding,
   type Issued,
   type Resolution,
+  type SessionHold,
   type SessionLifetime,
   type Sessions,
   type SessionsOptions,

@@ -273,6 +273,9 @@ test('every protected registry entry is denied without a session, the origin, th
       session,
       inputType: operation.kind === 'query' ? 'search' : 'json',
       recheckSession: async () => null,
+      commitWithSession: async () => {
+        throw new Error('Nothing commits in this test.');
+      },
     };
     // Without a session, authorize() gives no token for a capability that needs one.
     if (accessIn('owner', operation.capability) === 'session') {

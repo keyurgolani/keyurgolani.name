@@ -107,6 +107,41 @@ export interface AuditContext {
   readonly requestId?: string;
 }
 
+declare const held: unique symbol;
+
+/**
+ * Proof that a command holds its session's lock, with the session read again
+ * and still counting, for as long as its commit runs. Only
+ * Sessions.holding() makes one, and it counts only until that commit
+ * returns, so #3's pointer advance can ask for it with assertSessionHeld().
+ */
+export interface SessionHold {
+  /** The session, as an audit record names it. */
+  readonly sessionRef: string;
+  readonly [held]: true;
+}
+
+// Holds in force, on a globalThis symbol: the provider that makes one and the
+// store that checks it can sit in different server bundles.
+const HOLDS = Symbol.for('keyurgolani.portfolio.session-holds');
+type HoldHolder = typeof globalThis & { [HOLDS]?: WeakSet<object> };
+const holds = (): WeakSet<object> => ((globalThis as HoldHolder)[HOLDS] ??= new WeakSet());
+
+/** Whether `value` is a SessionHold whose commit is still running. */
+export function isSessionHeld(value: unknown): value is SessionHold {
+  return typeof value === 'object' && value !== null && holds().has(value);
+}
+
+/** Throws unless `value` is a SessionHold whose commit is still running. */
+export function assertSessionHeld(value: unknown): asserts value is SessionHold {
+  if (!isSessionHeld(value)) throw new Error('The command does not hold a session that counts.');
+}
+
+/** What holding() did: ran the commit, or found the session no longer counts. */
+export type Holding<T> =
+  | { readonly status: 'valid'; readonly value: T; readonly record: SessionRecord }
+  | Exclude<Resolution, { readonly status: 'valid' }>;
+
 export interface Issued {
   /** For the cookie, and nowhere else. */
   readonly token: string;
@@ -126,6 +161,20 @@ export interface Sessions {
   }): Promise<Issued>;
   /** The session a cookie's token carries. One that no longer counts is deleted. */
   resolve(token: string | null | undefined): Promise<Resolution>;
+  /**
+   * A command's commit point: reads the session again under its lock and,
+   * while it still counts, runs `commit` without letting go, so a logout, a
+   * revocation, an eviction, or revoke-all in this process waits for the
+   * commit, and one that came first stops it before it runs. `commit` gets
+   * a SessionHold, good only until it returns, and must not call back into
+   * this session, which would wait on itself. revoke-sessions runs in
+   * another process, outside this lock: a commit already running when it
+   * writes still finishes, and the next request is refused.
+   */
+  holding<T>(
+    token: string | null | undefined,
+    commit: (hold: SessionHold, record: SessionRecord) => Promise<T>,
+  ): Promise<Holding<T>>;
   /**
    * Slides the idle limit when `activity` does (slides()): writes lastSeenAt
    * once a minute at most, or at once for auth.session.extend. Any other
@@ -161,9 +210,9 @@ export interface SessionsOptions {
   readonly log?: OwnerLog;
 }
 
-const NONE: Resolution = Object.freeze({ status: 'none' });
-const UNAVAILABLE: Resolution = Object.freeze({ status: 'unavailable' });
-const ended = (reason: EndedReason): Resolution => Object.freeze({ status: 'ended', reason });
+const NONE = Object.freeze({ status: 'none' as const });
+const UNAVAILABLE = Object.freeze({ status: 'unavailable' as const });
+const ended = (reason: EndedReason) => Object.freeze({ status: 'ended' as const, reason });
 
 /**
  * Runs tasks one after another per key, so a touch never writes back a
@@ -295,6 +344,38 @@ export function createSessions({
         } catch {
           log({ level: 'error', event: 'session.read_failed' });
           return UNAVAILABLE;
+        }
+      });
+    },
+
+    async holding<T>(
+      token: string | null | undefined,
+      commit: (hold: SessionHold, record: SessionRecord) => Promise<T>,
+    ): Promise<Holding<T>> {
+      if (token === undefined || token === null || token === '') return NONE;
+      if (!isSessionToken(token)) return ended('malformed');
+      const digest = sessionDigest(token);
+      return run(digest, async (): Promise<Holding<T>> => {
+        let record: SessionRecord | null;
+        try {
+          record = await store.get(digest);
+          if (!record) return ended('unknown');
+          const reason = problem(record, await store.revokedBefore(), now());
+          if (reason) {
+            await dropHeld(digest);
+            return ended(reason);
+          }
+        } catch {
+          log({ level: 'error', event: 'session.read_failed' });
+          return UNAVAILABLE;
+        }
+        const hold = Object.freeze({ sessionRef: sessionRef(digest) }) as unknown as SessionHold;
+        holds().add(hold);
+        try {
+          const value = (await commit(hold, record)) as T;
+          return Object.freeze({ status: 'valid' as const, value, record });
+        } finally {
+          holds().delete(hold);
         }
       });
     },

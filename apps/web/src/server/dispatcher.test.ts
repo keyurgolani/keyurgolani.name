@@ -69,6 +69,10 @@ function doubles(handlers: Record<string, Handler>, overrides: Partial<StudioBin
     invalidInput: async () => null,
     checkVersion: async () => true,
     recheckSession: async () => null,
+    commitWithSession: async (_context, commit) => ({
+      ok: true,
+      value: await commit({ sessionRef: '00000000' }),
+    }),
     ...overrides,
   } satisfies StudioBindings;
 }
@@ -994,6 +998,62 @@ test('7: a handler checks the session again before its commit point, and stops w
   assert.equal(await NO_BINDINGS.recheckSession({ ...context, session: null }), null);
   const refused = await NO_BINDINGS.recheckSession({ ...context, session: SESSION });
   assert.equal(refused?.kind === 'error' ? refused.code : refused, 'authentication_required');
+});
+
+test("7: a handler commits through the provider's commitWithSession, and stops with what it answers", async (t) => {
+  const steps: string[] = [];
+  let ended = false;
+  const cleared = 'studio_session=; Max-Age=0; Path=/';
+  const operation = fake('publish', { kind: 'command', errors: ['authentication_required'] });
+  const dispatch = owner(
+    t,
+    [operation],
+    doubles(
+      {
+        [operation.name]: async (_authorized, _input, context) => {
+          const committed = await context.commitWithSession(async (hold) => {
+            steps.push(`committed as ${hold.sessionRef}`);
+            return { ok: true };
+          });
+          return committed.ok ? committed.value : committed.result;
+        },
+      },
+      {
+        commitWithSession: async ({ session }, commit) =>
+          ended || !session
+            ? {
+                ok: false,
+                result: errorResult('authentication_required', {
+                  headers: { 'set-cookie': cleared },
+                }),
+              }
+            : { ok: true, value: await commit({ sessionRef: 'abcd1234' }) },
+      },
+    ),
+  );
+  const send = () =>
+    dispatch(
+      call('POST', operation.name, { session: 'owner', origin: true, body: '{}' }).request,
+      operation.name,
+    );
+  assert.equal((await send()).status, 200);
+  assert.deepEqual(steps, ['committed as abcd1234']);
+  ended = true;
+  const stopped = await send();
+  assert.equal(stopped.status, 401);
+  assert.deepEqual(stopped.headers.getSetCookie(), [cleared]);
+  assert.deepEqual(steps, ['committed as abcd1234']);
+
+  // With no provider, nothing commits, with a session or without.
+  const context = { request: new Request('https://rowan.test/'), requestId: 'req-test', operation };
+  for (const session of [null, SESSION]) {
+    let ran = false;
+    const refused = await NO_BINDINGS.commitWithSession({ ...context, session }, async () => {
+      ran = true;
+    });
+    assert.equal(refused.ok, false);
+    assert.equal(ran, false);
+  }
 });
 
 test('7: no binding or result replaces a header the dispatcher sets', async (t) => {
