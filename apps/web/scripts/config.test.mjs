@@ -73,7 +73,7 @@ test('--write puts both documents in --out, never over a file, and never touches
   assert.match(run.stdout, /\nWrote new\/portfolio\.yml and new\/site\.yml\.\n$/);
   const portfolio = readFileSync(path.join(dir, 'new', 'portfolio.yml'), 'utf8');
   const site = readFileSync(path.join(dir, 'new', 'site.yml'), 'utf8');
-  assert.match(portfolio, /^schemaVersion: 2\nlocale: en\ndirection: ltr\n/);
+  assert.match(portfolio, /^schemaVersion: 3\nlocale: en\ndirection: ltr\n/);
   assert.match(site, /\n {2}colorScheme: warm\n {2}typography: classic\n/);
   // The dry run printed this very site document.
   assert.ok(run.stdout.includes(`site.yml:\n${site}`));
@@ -110,7 +110,7 @@ test('--write puts both documents in --out, never over a file, and never touches
   assert.equal(current.code, 0);
   assert.match(
     current.stdout,
-    /is already a schemaVersion 2 portfolio document\. Nothing to migrate\./,
+    /is already a schemaVersion 3 portfolio document\. Nothing to migrate\./,
   );
 });
 
@@ -131,7 +131,18 @@ test('a JSON file is written as JSON, and a summary leaves its values out', (t) 
   const site = JSON.parse(readFileSync(path.join(dir, 'site.json'), 'utf8'));
   assert.equal(portfolio.identity.name, 'Rowan Owner');
   assert.deepEqual(site.sections, { talks: { hidden: true } });
-  for (const value of ['Rowan Owner', 'rowan-old', 'Lisbon', 'talks', '=warm']) {
+  // The section's id, talks, is a value; "the talks section", its old kind, isn't.
+  assert.match(run.stdout, /The talks section is an evidence section/);
+  for (const value of [
+    'Rowan Owner',
+    'rowan-old',
+    'Lisbon',
+    'calm-systems',
+    '/sections/talks',
+    'is talks',
+    '"talks"',
+    '=warm',
+  ]) {
     assert.ok(!run.stdout.includes(value), value);
   }
 });
@@ -219,8 +230,8 @@ test('validate prints each record where it is, with how to fix it, and exits 1',
     run.stdout,
     [
       'portfolio.yml:10:10: anchor.broken (blocks-publish) at /links/1/url',
-      '  /links/1/url links to no visible section.',
-      '  Point the link at a visible section id, or drop the #fragment.',
+      '  /links/1/url links to no visible section or record.',
+      '  Point the link at a visible section or record id, or drop the #fragment.',
       '',
       ...UNAVAILABLE('site.yml:4:12'),
       "invalid/anchor.broken can't go live: 1 record blocks it.",
@@ -248,6 +259,12 @@ test('validate exits 0 on a valid pair, warnings or not, and lists what it could
   assert.match(warned.stdout, /\nportfolio\.yml and site\.yml are valid, with 2 warnings\.\n/);
 });
 
+/**
+ * Codes that compare a draft with the live revision, which only publish and
+ * import have (the schema's node.test.ts checks each against its live/).
+ */
+const PUBLICATION_CODES = ['urls.vanished', 'id.reused'];
+
 test('validate refuses every blocking invalid pair and loads every warning one, as JSON', () => {
   for (const code of readdirSync(path.join(ALL_FIXTURES, 'invalid'))) {
     const run = validate(ALL_FIXTURES, `invalid/${code}`, ...ORIGIN, '--json');
@@ -274,16 +291,27 @@ test('validate refuses every blocking invalid pair and loads every warning one, 
       );
     }
     // The host's interim catalog registers no color scheme until #19, so it
-    // can't raise this one, and says it didn't check it.
-    const expected = code === 'appearance.unknown' ? [] : [code];
+    // can't raise this one, and says it didn't check it. A publication code's
+    // draft is clean on its own.
+    const expected = code === 'appearance.unknown' || PUBLICATION_CODES.includes(code) ? [] : [code];
     assert.deepEqual([...new Set(others.map((record) => record.code))], expected, code);
     if (code === 'appearance.unknown') {
       assert.ok(report.notChecked.includes('site.appearance.colorScheme'), code);
     }
     for (const record of report.diagnostics) {
+      // A snapshot's or the media document's record names its file.
+      const file = record.document === 'snapshots' || record.document === 'media';
       assert.deepEqual(
         Object.keys(record).filter((key) => !['line', 'column', 'stableId'].includes(key)),
-        ['code', 'severity', 'document', 'pointer', 'message', 'remediation'],
+        [
+          'code',
+          'severity',
+          'document',
+          ...(file ? ['file'] : []),
+          'pointer',
+          'message',
+          'remediation',
+        ],
         code,
       );
     }

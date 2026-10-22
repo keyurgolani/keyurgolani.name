@@ -1,5 +1,5 @@
 # Contract fixture (#5, Slice 6; #10): content no visitor may see. The site document hides
-# six sections, and data from a content extension no host registers sits on the identity, a
+# five sections, and data from a content extension no host registers sits on the identity, a
 # link, a section, an item, and in a section of its own. Records only a hidden section lists,
 # their media, a practice part and the contact record only a hidden section places, and a
 # private work a visible section lists, with a private asset only it uses, are gone from the
