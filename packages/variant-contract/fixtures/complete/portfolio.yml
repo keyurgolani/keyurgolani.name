@@ -1,0 +1,440 @@
+# Contract fixture (#5, Slice 6): every core section kind, with every field each kind
+# defines, and every image bundled as a data URL, so nothing renders from outside the
+# app. Each value is distinct, so a test can find it in the markup. Links go to .test
+# hosts only, and the github section names an account and carries no GitHub data.
+schemaVersion: 2
+locale: en
+direction: ltr
+identity:
+  name: Rowan Vale
+  tagline: Identity tagline
+  pronouns: they/them
+  location: Lisbon
+  email: rowan@rowan.test
+  avatar:
+    src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
+    alt: Alt avatar
+    width: 640
+    height: 480
+    credit: Credit avatar
+    focalPoint:
+      x: 0.25
+      y: 0.75
+links:
+  - platform: mastodon
+    url: https://social.rowan.test/@rowan
+    label: Portfolio link
+sections:
+  - kind: hero
+    id: top
+    title: Hero label
+    subtitle: Hero subtitle
+    lang: en-GB
+    greeting: Hero greeting
+    name: Hero name
+    tagline: Hero tagline
+    subtagline: Hero subtagline
+    ctas:
+      - platform: email
+        url: "#contact"
+        label: Hero action
+  - kind: lede
+    id: about
+    title: Lede title
+    subtitle: Lede subtitle
+    body: Lede body.
+  - kind: now
+    id: now
+    title: Now title
+    subtitle: Now subtitle
+    asOf: 2026-09
+    body: Now body.
+  - kind: experience
+    id: experience
+    title: Experience title
+    subtitle: Experience subtitle
+    items:
+      - role: Experience role
+        organization: Experience organization
+        organizationUrl: https://harbor.test
+        location: Experience location
+        period:
+          start: 2019-06
+          end: 2021-03
+        description: Experience description.
+        highlights:
+          - Experience highlight
+        skills:
+          - Experience skill
+        logo:
+          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
+          alt: Alt experience-logo
+          width: 640
+          height: 480
+          credit: Credit experience-logo
+          focalPoint:
+            x: 0.25
+            y: 0.75
+  - kind: education
+    id: education
+    title: Education title
+    subtitle: Education subtitle
+    items:
+      - degree: Education degree
+        field: Education field
+        institution: Education institution
+        institutionUrl: https://university.test
+        location: Education location
+        period:
+          start: "2012"
+          end: "2016"
+        description: Education description.
+        achievements:
+          - Education achievement
+        logo:
+          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
+          alt: Alt education-logo
+          width: 640
+          height: 480
+          credit: Credit education-logo
+          focalPoint:
+            x: 0.25
+            y: 0.75
+  - kind: projects
+    id: projects
+    title: Projects title
+    subtitle: Projects subtitle
+    items:
+      - name: Project name
+        summary: Project summary.
+        description: Project description.
+        period:
+          start: 2022-01
+          end: 2023-05
+        role: Project role
+        organization: Project organization
+        technologies:
+          - Project technology
+        image:
+          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
+          alt: Alt project-image
+          width: 640
+          height: 480
+          credit: Credit project-image
+          focalPoint:
+            x: 0.25
+            y: 0.75
+        images:
+          - src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
+            alt: Alt project-shot
+            width: 640
+            height: 480
+            credit: Credit project-shot
+            focalPoint:
+              x: 0.25
+              y: 0.75
+        links:
+          - platform: github
+            url: https://code.rowan.test/tide
+            label: Project link
+        highlights:
+          - Project highlight
+  - kind: writings
+    id: writings
+    title: Writings title
+    subtitle: Writings subtitle
+    items:
+      - title: Writing title
+        summary: Writing summary.
+        excerpt: Writing excerpt
+        publication: Writing publication
+        publishedAt: 2024-02-03
+        url: https://rowan.test/essays/tide
+        readingTimeMinutes: 7
+        tags:
+          - Writing tag
+  - kind: publications
+    id: publications
+    title: Publications title
+    subtitle: Publications subtitle
+    items:
+      - title: Publication title
+        authors:
+          - Author One
+          - Author Two
+        venue: Publication venue
+        publishedAt: 2023-11
+        abstract: Publication abstract.
+        citation: Publication citation
+        doi: 10.1000/tide.42
+        url: https://papers.rowan.test/tide
+        pdfUrl: https://papers.rowan.test/tide.pdf
+        awards:
+          - Publication award
+  - kind: talks
+    id: talks
+    title: Talks title
+    subtitle: Talks subtitle
+    items:
+      - title: Talk title
+        venue: Talk venue
+        location: Talk location
+        presentedAt: 2025-05-20
+        type: keynote
+        description: Talk description.
+        abstract: Talk abstract.
+        slidesUrl: https://talks.rowan.test/slides
+        videoUrl: https://talks.rowan.test/video
+        links:
+          - platform: web
+            url: https://talks.rowan.test/page
+            label: Talk link
+  - kind: awards
+    id: awards
+    title: Awards title
+    subtitle: Awards subtitle
+    items:
+      - name: Award name
+        organization: Award organization
+        receivedAt: "2021"
+        description: Award description.
+        url: https://awards.rowan.test/42
+  - kind: episodes
+    id: episodes
+    title: Episodes title
+    subtitle: Episodes subtitle
+    showName: Episodes show name
+    showDescription: Episodes show description.
+    items:
+      - number: 12
+        title: Episode title
+        publishedAt: 2026-02-01
+        durationMinutes: 42
+        description: Episode description.
+        showNotes: Episode show notes.
+        guests:
+          - Guest One
+        audioUrl: https://pod.rowan.test/12.mp3
+        videoUrl: https://pod.rowan.test/12
+        links:
+          - platform: web
+            url: https://pod.rowan.test/12/notes
+            label: Episode link
+  - kind: patents
+    id: patents
+    title: Patents title
+    subtitle: Patents subtitle
+    items:
+      - title: Patent title
+        number: US 1,234,567
+        status: granted
+        filedAt: 2018-04
+        grantedAt: 2020-09
+        inventors:
+          - Inventor One
+        assignee: Patent assignee
+        description: Patent description.
+        url: https://patents.rowan.test/1234567
+  - kind: gallery
+    id: gallery
+    title: Gallery title
+    subtitle: Gallery subtitle
+    layout: columns
+    items:
+      - image:
+          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
+          alt: Alt gallery-photo
+          width: 640
+          height: 480
+          credit: Credit gallery-photo
+          focalPoint:
+            x: 0.25
+            y: 0.75
+        caption: Gallery caption
+        takenAt: 2025-08-30
+        location: Gallery location
+        tags:
+          - Gallery tag
+  - kind: discography
+    id: discography
+    title: Discography title
+    subtitle: Discography subtitle
+    items:
+      - title: Release title
+        artist: Release artist
+        role: Release role
+        releasedAt: 2022-10
+        label: Release label
+        cover:
+          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
+          alt: Alt release-cover
+          width: 640
+          height: 480
+          credit: Credit release-cover
+          focalPoint:
+            x: 0.25
+            y: 0.75
+        description: Release description.
+        tracks:
+          - title: Track title
+            durationSeconds: 245
+            url: https://music.rowan.test/track
+        links:
+          - platform: web
+            url: https://music.rowan.test/release
+            label: Release link
+  - kind: testimonials
+    id: testimonials
+    title: Testimonials title
+    subtitle: Testimonials subtitle
+    items:
+      - quote: Testimonial quote
+        author: Testimonial author
+        authorRole: Testimonial role
+        authorOrganization: Testimonial organization
+        authorAvatar:
+          src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAAAAADbboAnAAAADklEQVR4nGPYAgUMpDAAj6MhwZIy8f4AAAAASUVORK5CYII=
+          alt: Alt testimonial-avatar
+          width: 640
+          height: 480
+          credit: Credit testimonial-avatar
+          focalPoint:
+            x: 0.25
+            y: 0.75
+        authorUrl: https://people.rowan.test/author
+        sourceUrl: https://people.rowan.test/source
+  - kind: press
+    id: press
+    title: Press title
+    subtitle: Press subtitle
+    items:
+      - title: Press headline
+        publication: Press publication
+        publishedAt: 2024-06-10
+        excerpt: Press excerpt
+        url: https://news.rowan.test/story
+        author: Press author
+  - kind: quote
+    id: quote
+    title: Quote title
+    subtitle: Quote subtitle
+    text: Quote text
+    attribution: Quote attribution
+    source: Quote source
+    sourceUrl: https://quotes.rowan.test/source
+  - kind: skills
+    id: skills
+    title: Skills title
+    subtitle: Skills subtitle
+    groups:
+      - name: Skill group
+        description: Skill group description
+        items:
+          - Grouped skill
+    items:
+      - Loose skill
+  - kind: stack
+    id: stack
+    title: Stack title
+    subtitle: Stack subtitle
+    groups:
+      - name: Stack group
+        items:
+          - name: Stack tool
+            url: https://tools.rowan.test/tool
+            version: v4.2
+  - kind: services
+    id: services
+    title: Services title
+    subtitle: Services subtitle
+    items:
+      - name: Service name
+        description: Service description.
+        pricing: Service pricing
+        url: https://work.rowan.test/service
+        highlights:
+          - Service highlight
+  - kind: contact
+    id: contact
+    title: Contact title
+    subtitle: Contact subtitle
+    message: Contact message
+    links:
+      - platform: email
+        url: mailto:rowan@rowan.test
+        label: Contact link
+    showAvailability: true
+  - kind: cta
+    id: cta
+    title: Cta title
+    subtitle: Cta subtitle
+    description: Cta description
+    primaryAction:
+      platform: email
+      url: mailto:hire@rowan.test
+      label: Cta primary
+    secondaryAction:
+      platform: web
+      url: "#services"
+      label: Cta secondary
+  - kind: stats
+    id: stats
+    title: Stats title
+    subtitle: Stats subtitle
+    items:
+      - value: 1200
+        label: Stat label
+        description: Stat description
+        metric: ships-built
+      - value: 10B+
+        label: Stat label two
+  - kind: focus
+    id: focus
+    title: Focus title
+    subtitle: Focus subtitle
+    items:
+      - Focus item
+  - kind: fun-facts
+    id: fun-facts
+    title: Fun facts title
+    subtitle: Fun facts subtitle
+    items:
+      - Fun fact
+  - kind: tenure
+    id: tenure
+    title: Tenure title
+    subtitle: Tenure subtitle
+    years: 12
+    summary: Tenure summary
+  - kind: external-portfolios
+    id: elsewhere
+    title: External title
+    subtitle: External subtitle
+    items:
+      - url: https://photos.rowan.test
+        brandName: External brand
+        description: External description
+        locationLabel: External location
+        categories:
+          - External category
+        highlights:
+          - label: External highlight
+            sub: External highlight detail
+        urlLabel: photos.rowan.test
+        buttonText: External button
+        iconName: camera
+  - kind: github
+    id: github
+    title: GitHub title
+    subtitle: GitHub subtitle
+    username: rowan-vale
+    showContributionGraph: false
+    showPinnedRepos: true
+    showTotalStars: true
+    showLanguageBreakdown: true
+    showRecentlyActive: true
+    recentlyActiveLimit: 5
+    featuredRepos:
+      - tide
+    excludeRepos:
+      - scratch

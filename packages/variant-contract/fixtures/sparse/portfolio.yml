@@ -1,0 +1,42 @@
+# Contract fixture (#5, Slice 6): many kinds, each with only what it requires and one item
+# at most, and no hero, so the page's h1 comes from the composition. Nothing optional is
+# set: no subtitles, links, images, dates, or tags.
+schemaVersion: 2
+locale: en
+direction: ltr
+
+identity:
+  name: Jo Sparse
+
+sections:
+  - kind: lede
+    id: about
+    title: About
+    body: A little about me.
+
+  - kind: experience
+    id: experience
+    title: Experience
+    items:
+      - role: Engineer
+        organization: Small Co
+        period: { start: '2020' }
+
+  - kind: projects
+    id: projects
+    title: Projects
+    items:
+      - name: One project
+
+  - kind: skills
+    id: skills
+    title: Skills
+    items: [Listening]
+
+  - kind: quote
+    id: quote
+    text: Less, but better.
+
+  - kind: contact
+    id: contact
+    title: Contact

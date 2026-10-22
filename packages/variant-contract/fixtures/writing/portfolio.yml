@@ -1,0 +1,78 @@
+# Writing: an essayist and novelist with essays, books, and press.
+schemaVersion: 2
+locale: en-GB
+direction: ltr
+
+identity:
+  name: Hana Kowalczyk
+  tagline: Essayist and novelist
+  location: Edinburgh, Scotland
+
+links:
+  - platform: newsletter
+    url: https://letters.kowalczyk.test
+    label: Letters
+
+meta:
+  title: Hana Kowalczyk
+  description: Essays on cities, memory, and the weather.
+
+sections:
+  - kind: lede
+    id: about
+    title: About
+    body: |
+      I write about the cities I've lived in and the ones I keep meaning to leave.
+
+  - kind: writings
+    id: essays
+    title: Essays
+    items:
+      - title: The Weather in Leith
+        excerpt: Rain is a kind of punctuation.
+        publication: Granta
+        publishedAt: 2025-11-02
+        url: https://granta.test/weather-in-leith
+        readingTimeMinutes: 12
+        tags: [cities, weather]
+      - title: Notes on a Borrowed Flat
+        publication: letters.kowalczyk.test
+        publishedAt: 2025-04-19
+        url: https://letters.kowalczyk.test/borrowed-flat
+
+  - kind: publications
+    id: books
+    title: Books
+    items:
+      - title: The Lending Library
+        authors: [Hana Kowalczyk]
+        venue: Canongate
+        publishedAt: '2023'
+        abstract: A novel about a library that lends out its readers.
+
+  - kind: press
+    id: press
+    title: Press
+    items:
+      - title: A novel that reads you back
+        publication: The Scotsman
+        publishedAt: 2023-09-14
+        author: Ewan Reid
+
+  - kind: quote
+    id: quote
+    text: A writer is someone for whom writing is more difficult than it is for other people.
+    attribution: Thomas Mann
+
+  - kind: testimonials
+    id: readers
+    title: Readers
+    items:
+      - quote: The rare essayist who makes rain sound like good news.
+        author: Mairi Campbell
+        authorRole: Editor
+
+  - kind: contact
+    id: contact
+    title: Contact
+    message: For rights and readings, write to my agent.
