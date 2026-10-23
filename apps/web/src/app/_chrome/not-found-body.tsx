@@ -1,7 +1,8 @@
 import Link from 'next/link';
 import type { Site } from '@portfolio/schema';
+import type { VariantRegistry } from '@portfolio/variant-contract';
 import { PresentationBoundary } from '~/lib/experience-document';
-import { compositionFor } from '~/lib/variants';
+import { compositionFor, REGISTRY } from '~/lib/variants';
 import { getDeploymentState } from '~/server/config-store';
 import { getLive } from '~/server/live-revision';
 import { capabilityPolicy, type NavLink } from '~/server/policy';
@@ -14,6 +15,12 @@ import { capabilityPolicy, type NavLink } from '~/server/policy';
 // presentation settings, and shows nothing about the request or the
 // documents. Its links don't prefetch: under a preview path the page has
 // the preview's CSP, whose connect-src lets no request through (#7).
+//
+// Under a visitor page, it's the boundary of the experience segment's
+// composition instead, where that isn't the live site's (#6, Slice 2): Next
+// puts the site's 404 in every page's payload, with the stylesheet its
+// boundary links, and under demo /sample's ?variant= renders a composition
+// the live site doesn't select.
 const HOME: readonly NavLink[] = [{ href: '/', label: 'Home' }];
 
 /**
@@ -30,7 +37,14 @@ async function liveSite(): Promise<Site | null> {
   }
 }
 
-export async function NotFoundBody() {
+export async function NotFoundBody({
+  segment,
+  registry = REGISTRY,
+}: {
+  /** The experience segment proxy.ts named for the request, when it's a visitor page's. */
+  readonly segment?: string;
+  readonly registry?: VariantRegistry;
+} = {}) {
   const state = getDeploymentState();
   const links = state ? capabilityPolicy(state.config.profile).navigation(null) : HOME;
   const site = await liveSite();
@@ -52,11 +66,13 @@ export async function NotFoundBody() {
     </main>
   );
   if (!site) return page;
+  const live = compositionFor(site.appearance.variant, registry);
+  const composition =
+    segment === undefined || segment === live.rendered.manifest.id
+      ? live
+      : compositionFor(segment, registry);
   return (
-    <PresentationBoundary
-      composition={compositionFor(site.appearance.variant)}
-      motionPolicy={site.motionPolicy}
-    >
+    <PresentationBoundary composition={composition} motionPolicy={site.motionPolicy}>
       {page}
     </PresentationBoundary>
   );
