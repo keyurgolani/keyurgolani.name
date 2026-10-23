@@ -294,14 +294,30 @@ function probe(request: ProbeRequest): unknown {
           // A sheet from another origin can't be read; the policy loads none.
         }
       }
+      // Every element a revealing rule matches, since each can show its own
+      // content. A rule with nothing after :hover styles only the element
+      // under the pointer, the same way on each, so its first shown element
+      // stands for the rest.
       const targets = new Set<Element>();
-      for (const selector of [...revealing, ...selectors]) {
+      const stood = new Set<Element>();
+      for (const selector of revealing) {
         try {
           for (const el of doc.querySelectorAll(selector)) if (shown(el)) targets.add(el);
         } catch {
           // A selector the engine keeps but querySelectorAll refuses, such as a pseudo-element.
         }
       }
+      for (const selector of selectors) {
+        try {
+          const matched = [...doc.querySelectorAll(selector)].filter((el) => shown(el));
+          if (matched.length > 0 && !matched.some((el) => targets.has(el) || stood.has(el))) {
+            stood.add(matched[0]!);
+          }
+        } catch {
+          // As above.
+        }
+      }
+      for (const el of stood) targets.add(el);
       return { paths: [...targets].slice(0, request.limit).map(cssPath), total: targets.size };
     }
     case 'title-only':
@@ -411,16 +427,32 @@ function probe(request: ProbeRequest): unknown {
           });
           continue;
         }
+        // A scroller hides the text a leaf lays out, which can run past the
+        // leaf's own box, as a nowrap line does: its extent is the box and
+        // the text together.
+        const range = doc.createRange();
+        range.selectNodeContents(el);
+        const t = range.getBoundingClientRect();
+        const extent =
+          t.width > 0 || t.height > 0
+            ? {
+                left: Math.min(r.left, t.left),
+                right: Math.max(r.right, t.right),
+                top: Math.min(r.top, t.top),
+                bottom: Math.max(r.bottom, t.bottom),
+              }
+            : r;
         for (let up = el.parentElement; up && up !== doc.body; up = up.parentElement) {
           const s = getComputedStyle(up);
           const overflow = `${s.overflowX} ${s.overflowY}`;
           if (!/hidden|clip|auto|scroll/.test(overflow)) continue;
           const b = up.getBoundingClientRect();
+          const e = /auto|scroll/.test(overflow) ? extent : r;
           if (
-            r.left < b.left - 1 ||
-            r.right > b.right + 1 ||
-            r.top < b.top - 1 ||
-            r.bottom > b.bottom + 1
+            e.left < b.left - 1 ||
+            e.right > b.right + 1 ||
+            e.top < b.top - 1 ||
+            e.bottom > b.bottom + 1
           ) {
             problems.push({
               rule: 'clipped',

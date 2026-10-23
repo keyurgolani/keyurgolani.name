@@ -207,6 +207,13 @@ const MANY_HOVERS = built(
   `${Array.from({ length: 45 }, (_, i) => `<p class="h${i}">Item ${i}</p>`).join('')}<div class="card"><a href="#card">A card</a><p class="more">Only a pointer finds this.</p></div>`,
 );
 
+/** Sixty links under one :hover rule that styles only the link: one hover stands for them all. */
+const MANY_LINKS = built(
+  'Many links',
+  'a:hover { color: #000; }',
+  Array.from({ length: 60 }, (_, i) => `<p><a href="#l${i}">Link ${i}</a></p>`).join(''),
+);
+
 /** More controls that toggle something than the overlay check takes. */
 const MANY_TRIGGERS = built(
   'Many toggles',
@@ -337,6 +344,15 @@ export const A11Y_CASES: readonly MetaCase[] = [
     /^(?:runner coverage: 46 on the page, so 6 went unchecked|hover parity: .*)$/,
     hoverFindings,
   ),
+  {
+    id: 'hover/many-links-one-rule',
+    gate: 'hover',
+    input:
+      'sixty links under one :hover rule that styles only the link, past the 40 the check takes',
+    expect: 'pass',
+    browser: true,
+    run: () => onPage(MANY_LINKS, hoverFindings),
+  },
   good('hover', hoverFindings),
   bad('fixed-width', 'reflow-wide.html', 'reflow', 'reflow|zoom', (page) =>
     reflowFindings(page, '/'),

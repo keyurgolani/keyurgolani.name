@@ -191,10 +191,17 @@ test.describe('the Extended tier on a 320px phone', () => {
         { waitUntil: 'load' },
       );
       const layout = await page.evaluate(() => {
+        // The lines the element's text sits on, leaving out a bar drawn below it.
         const lines = (el: Element) => {
-          const range = document.createRange();
-          range.selectNodeContents(el);
-          return new Set([...range.getClientRects()].map((rect) => Math.round(rect.top))).size;
+          const tops = new Set<number>();
+          const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+          for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+            if (!node.textContent?.trim()) continue;
+            const range = document.createRange();
+            range.selectNodeContents(node);
+            for (const rect of range.getClientRects()) tops.add(Math.round(rect.top));
+          }
+          return tops.size;
         };
         const figure = document.querySelector('[data-ui-slot="data-display"]')!;
         return {

@@ -574,21 +574,24 @@ export async function transparencyFindings(page: Page): Promise<Finding[]> {
  * such query fails the row until axe can run with JavaScript off.
  */
 export async function scriptingMediaFindings(page: Page): Promise<Finding[]> {
+  // No named inner function: tsx's keepNames would wrap it in a __name the
+  // page doesn't have.
   const queries = await page.evaluate(() => {
     const found: string[] = [];
-    const walk = (rules: CSSRuleList) => {
-      for (const rule of rules) {
-        const condition = (rule as CSSConditionRule).conditionText ?? '';
-        if (/\bscripting\b/.test(condition)) found.push(condition);
-        if ((rule as CSSGroupingRule).cssRules) walk((rule as CSSGroupingRule).cssRules);
-      }
-    };
+    const pending: CSSRule[] = [];
     for (const sheet of document.styleSheets) {
       try {
-        walk(sheet.cssRules);
+        pending.push(...sheet.cssRules);
       } catch {
         // The policy loads no sheet from another origin.
       }
+    }
+    while (pending.length > 0) {
+      const rule = pending.pop()!;
+      const condition = (rule as CSSConditionRule).conditionText ?? '';
+      if (/\bscripting\b/.test(condition)) found.push(condition);
+      const nested = (rule as CSSGroupingRule).cssRules;
+      if (nested) pending.push(...nested);
     }
     return found;
   });

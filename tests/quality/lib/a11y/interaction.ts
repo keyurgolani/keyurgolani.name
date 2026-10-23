@@ -460,7 +460,7 @@ export async function hoverFindings(page: Page, limit = HOVER_LIMIT): Promise<Fi
     findings.push({
       gate: 'runner',
       rule: 'coverage',
-      expected: `at most ${limit} :hover subjects, each checked, those whose rule reveals something first`,
+      expected: `at most ${limit} elements to hover, each checked: every match of a :hover rule that reveals something, then one per rule that styles only its subject`,
       actual: `${total} on the page, so ${total - limit} went unchecked`,
     });
   }
