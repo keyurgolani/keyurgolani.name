@@ -40,6 +40,19 @@ export const STUDIO_CSP =
 export const PREVIEW_CSP =
   /^default-src 'none'; script-src 'nonce-([A-Za-z0-9+/]{22}==)' 'strict-dynamic'; style-src 'self' 'nonce-\1'; style-src-attr 'unsafe-inline'; font-src 'self'; img-src 'self' data:; media-src 'self'; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors (https?:\/\/[a-z0-9.-]+(?::\d+)?)$/;
 
+/** A response's nonce, as a policy, an attribute, a Link header, or Next's payload carries it. */
+const NONCE = /('nonce-|nonce=\\?"|nonce=|\\?"nonce\\?":\\?")([A-Za-z0-9+/]{22}==)/g;
+
+/**
+ * `text` with each nonce in it as `<nonce>`, so two answers that differ in
+ * nothing but the nonce each response gets (#2, #6, #7) compare equal.
+ *
+ * @param {string} text
+ */
+export function withoutNonces(text) {
+  return text.replace(NONCE, '$1<nonce>');
+}
+
 /** What every preview response carries besides its CSP (#7). */
 export const PREVIEW_HEADERS = Object.freeze({
   'x-content-type-options': 'nosniff',

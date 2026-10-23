@@ -18,6 +18,7 @@ import path from 'node:path';
 import { expect, type TestType } from '@playwright/test';
 import { authPaths } from '../../packages/core/src/data/layout.mjs';
 import { encodings, hashCanaries } from './canaries.mjs';
+import { withoutNonces } from './route-headers.mjs';
 import { send, type Answer } from './http-client.mjs';
 import { OWNER_CLI } from './owner-secret.mjs';
 import { scanTargets } from './scan-targets';
@@ -191,8 +192,11 @@ export function auditRecords(files: readonly DataFile[]): Record<string, unknown
 
 /** The same answer apart from what differs per request: its ID and the date. */
 function shapeOf(answer: Answer) {
+  // Each response's own nonce (#6) aside, as its date and request ID are.
   const headers = Object.fromEntries(
-    Object.entries(answer.headers).filter(([name]) => !['date', 'x-request-id'].includes(name)),
+    Object.entries(answer.headers)
+      .filter(([name]) => !['date', 'x-request-id'].includes(name))
+      .map(([name, value]) => [name, typeof value === 'string' ? withoutNonces(value) : value]),
   );
   let body: unknown = answer.body;
   try {

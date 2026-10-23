@@ -104,7 +104,8 @@ test(
     );
     expect(width).toBe(0);
     await expect.poll(() => refusals.some((text) => text.includes(FIXTURE_IMAGE))).toBe(true);
-    // A request the CSP doesn't cover, a fetch, goes out, and the harness blocks it.
+    // A fetch to that host never goes out either: the site's CSP, connect-src
+    // 'self' (#6, item 8), refuses it too.
     const fetched = await page.evaluate(
       (src) =>
         fetch(src, { mode: 'no-cors' }).then(
@@ -114,6 +115,13 @@ test(
       FIXTURE_IMAGE,
     );
     expect(fetched).toBe('failed');
+    await expect
+      .poll(() => refusals.filter((text) => text.includes(FIXTURE_IMAGE)).length)
+      .toBeGreaterThan(1);
+    expect(blockedRequests).not.toContain(FIXTURE_IMAGE);
+    // What no CSP covers, the page sending the browser to that host, goes
+    // out, and the harness blocks it.
+    await page.evaluate((src) => window.location.assign(src), FIXTURE_IMAGE).catch(() => undefined);
     await expect.poll(() => blockedRequests).toContain(FIXTURE_IMAGE);
   },
 );

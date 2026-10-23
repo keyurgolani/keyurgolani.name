@@ -33,7 +33,7 @@ import {
 import { DEFAULT_SITE } from './app-server.mjs';
 import { expect, test, type App, type AppOptions } from './fixtures';
 import { VARIANTS } from './registry';
-import { headerProblems, isPreviewPath, isStudioPath } from './route-headers.mjs';
+import { headerProblems, isPreviewPath, isStudioPath, withoutNonces } from './route-headers.mjs';
 import { withRscHash } from './rsc';
 import { concrete, scanTargets } from './scan-targets';
 
@@ -497,22 +497,17 @@ async function shape(response: APIResponse, target: string) {
   const type = response.headers()['content-type'] ?? '';
   const page = /^text\/html/.test(type) && text !== '';
   const flight = /^text\/x-component/.test(type);
-  // Studio's policy carries a nonce made per response, as do its page's
-  // scripts and the stylesheet preload Next sends in its Link header.
-  const csp = response.headers()['content-security-policy'];
-  const nonce = /'nonce-([A-Za-z0-9+/=]+)'/.exec(csp ?? '')?.[1];
   return {
     status: response.status(),
+    // Each response's own nonce (#6) aside, as its date and request ID are.
     headers: Object.fromEntries(
       Object.entries(response.headers())
         .filter(([name]) => !['date', 'x-request-id'].includes(name))
-        .map(([name, value]) => [name, nonce ? value.split(nonce).join('<n>') : value]),
+        .map(([name, value]) => [name, withoutNonces(value)]),
     ),
-    body: page
-      ? withoutOwnPath(withoutNonce(text, nonce), target)
-      : flight
-        ? withoutFlightRequestId(text)
-        : text,
+    body: withoutNonces(
+      page ? withoutOwnPath(text, target) : flight ? withoutFlightRequestId(text) : text,
+    ),
   };
 }
 
