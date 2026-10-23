@@ -36,19 +36,56 @@
 //   warning, while the fallback composition renders in place of the
 //   profile's selected variant (#5).
 //
+//
+// And for #12 (12-3), CI's profiles job (pnpm ci:profiles):
+//
+// - every server container runs as the Compose examples now do, with
+//   HARDENING (ci/lib/profile-checks.mjs): --read-only with the cache tmpfs,
+//   --cap-drop=ALL, and no-new-privileges. Under each profile, `inspect`
+//   shows those flags, no writable persistent mount but owner's data
+//   directory, and no hash in the environment; /proc/1/status shows uid and
+//   gid 1001, no capability, and NoNewPrivs; a write probe finds nothing
+//   writable but the cache tmpfs and, under owner, the data directory; the
+//   container has no route out; and the image holds nothing the image scan
+//   refuses (threat rows deploy-2 and deploy-3).
+// - spoofed forwarded headers move no absolute URL or redirect under any
+//   profile, and under owner, at 0 trusted hops and then at 1, no cookie
+//   flag or origin check, and X-Forwarded-For moves the sign-in source only
+//   within the hop count.
+// - each server stops on SIGTERM within 10 seconds, starts again, and
+//   answers health and readiness; owner's data volume then serves a new
+//   container with every durable file it held.
+// - owner refuses to start, with a redacted config.fatal line, on a hash
+//   file that's missing, unreadable, group- or world-writable, or
+//   malformed, on the bundled sample identity, and on a missing or
+//   unreadable source directory. Its hash reaches it only through the _FILE.
+// - per-run canaries, masked in the Actions log, never show in a response,
+//   a log, or the reports this run uploads, which are redacted if one does.
+// - the Compose examples publish only on 127.0.0.1 and keep the hardening,
+//   read from `compose config`.
+//
+// Owner's seeded run stands in for its ready rows until #13 registers a
+// composition (12-5). No publish is reachable today, so the SIGKILL during
+// publish check stays with 12-5 too; packages/core/src/store/crash.test.ts
+// covers the store's side.
+//
 // Removes every container, network, and volume it creates, and the image
-// when it built one.
+// when it built or loaded one.
 //
 // Environment:
-//   CONTAINER_CLI     docker (default) or finch
-//   IMAGE_TAG         tag to build (default portfolio:profiles)
-//   SMOKE_IMAGE       test this image reference instead of building one (kept)
-//   CONTAINER_PREFIX  container, network, and volume name prefix (default portfolio-ci-)
-//   SMOKE_TIMEOUT_MS  how long to wait for /api/health (default 90000)
+//   CONTAINER_CLI        docker (default) or finch
+//   IMAGE_TAG            tag to build or load (default portfolio:profiles)
+//   SMOKE_IMAGE          test this image reference instead of building one (kept)
+//   SMOKE_IMAGE_ARCHIVE  load the image from this `docker save` archive instead
+//                        of building it, as CI's profiles job does with the image job's
+//   SMOKE_PROFILES       the parts to run, from read-only, demo, owner, and rows (default all)
+//   CONTAINER_PREFIX     container, network, and volume name prefix (default portfolio-ci-)
+//   SMOKE_TIMEOUT_MS     how long to wait for /api/health (default 90000)
 // First: the route table below reads the server-only variant registry (#6).
 import '../apps/web/scripts/server-only.cjs';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { randomBytes } from 'node:crypto';
+import { chmodSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { parse as parseYaml } from 'yaml';
@@ -58,6 +95,7 @@ import {
   CANARY_SECRET,
   CANARY_SOURCE,
   canaries,
+  encodings,
   FORGED_LINE,
   hashCanaries,
   HOPS_FILE,
@@ -75,7 +113,36 @@ import {
   WARNING_ROWS,
   warningLines,
 } from '../tests/harness/startup-rows.mjs';
-import { PROBE_SNIPPET, REQUESTS_SNIPPET, TREE_SNIPPET } from './lib/container.mjs';
+import {
+  assessRoutes,
+  PROBE_SNIPPET,
+  REQUESTS_SNIPPET,
+  SCAN_SNIPPET,
+  STATUS_SNIPPET,
+  TREE_SNIPPET,
+  WRITE_SNIPPET,
+} from './lib/container.mjs';
+import {
+  composeProblems,
+  HARDENING,
+  hermeticProblems,
+  inspectProblems,
+  maskCommands,
+  newAuditRecords,
+  partsOf,
+  persistenceProblems,
+  processProblems,
+  redact,
+  redactArtifacts,
+  reproFor,
+  sourceProblems,
+  SPOOFED_HEADERS,
+  SPOOFED_HOST,
+  spoofProblems,
+  stopProblems,
+  WRITE_TARGETS,
+  writeProblems,
+} from './lib/profile-checks.mjs';
 import { buildRegistry } from './lib/registry.mjs';
 import {
   currentGate,
@@ -106,6 +173,7 @@ const { listRoutes, RETIRED_PATTERNS, routeAccess } = require('../apps/web/src/s
 
 const cli = process.env.CONTAINER_CLI || 'docker';
 const pulled = process.env.SMOKE_IMAGE;
+const archive = process.env.SMOKE_IMAGE_ARCHIVE;
 const image = pulled || process.env.IMAGE_TAG || 'portfolio:profiles';
 const prefix = process.env.CONTAINER_PREFIX || 'portfolio-ci-';
 const timeoutMs = Number(process.env.SMOKE_TIMEOUT_MS || 90_000);
@@ -125,8 +193,12 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const METHODS = ['GET', 'POST', 'PUT', 'DELETE'];
 // The server's working directory in the image, which no response may name.
 const SERVER_DIR = '/app/apps/web';
+// Made for this run: a canary every container gets in its environment, and
+// in the path of the _FILE directory, which nothing may repeat.
+const RUN_TOKEN = randomBytes(8).toString('hex');
+const RUN_CANARY = `canary-run-${RUN_TOKEN}`;
 // The canary _FILE, mounted read-only in every profile's container.
-const SECRET_DIR = `/run/${CANARY_SECRET}`;
+const SECRET_DIR = `/run/${CANARY_SECRET}-${RUN_TOKEN}`;
 // Owner's hash, beside it, and its data directory, where compose.owner.yml puts it.
 const HASH_FILE = 'owner_password_hash';
 const DATA_DIR = '/var/lib/portfolio';
@@ -136,11 +208,34 @@ const SESSION_COOKIE =
 const container = (args, options = {}) =>
   spawnSync(cli, args, { cwd: REPO_ROOT, encoding: 'utf8', ...options });
 const envArgs = (env) => Object.entries(env).flatMap(([key, value]) => ['-e', `${key}=${value}`]);
+/** Every server container's environment gets the run's canary. */
+const withCanary = (env) => ({ CI_RUN_CANARY: RUN_CANARY, ...env });
 
+/**
+ * The run's own secrets, in every encoding a response could carry them:
+ * the canary, the token in the _FILE path, and owner's password, hash, and
+ * malformed hash once they're made. No response, log, or uploaded report
+ * may hold one, and no failure message repeats one.
+ */
+const runSecrets = [];
+function addSecrets(...values) {
+  for (const value of values) runSecrets.push(...encodings(value));
+  for (const line of maskCommands(values, process.env)) console.log(line);
+}
+addSecrets(RUN_CANARY, RUN_TOKEN);
+
+/** The part of the run under way (SMOKE_PROFILES), which each failure names. */
+let part = 'read-only';
 const failures = [];
 function fail(test, message, fields = {}) {
-  failures.push({ test, message, fields });
-  console.log(`[profiles] FAIL ${test}: ${message}`);
+  const text = redact(message, runSecrets);
+  failures.push({
+    test,
+    message: text,
+    part,
+    fields: { ...(part === 'rows' ? {} : { profile: part }), ...fields },
+  });
+  console.log(`[profiles] FAIL ${test}: ${text}`);
 }
 
 /**

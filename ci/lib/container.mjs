@@ -86,7 +86,8 @@ function treeFromInside(root) {
 
 /**
  * Lists what under `root` must not ship. Outside node_modules: any
- * portfolio.* except the example, a site document, .env*, .git, a secrets
+ * portfolio.* except the example, a site document, .env*, .git, the
+ * experiments/, archive/, and .variant-preview/ holding pens, a secrets
  * directory, and the tests, ci, and reports trees. Anywhere, node_modules
  * too: the bundled sample's files anywhere but where it ships (#7), a
  * snapshot, snapshots/<kind>.json, outside the root's snapshots/, and
@@ -120,6 +121,7 @@ export function scanTree(root) {
             /^site\.(?:yml|yaml|json)$/.test(name) ||
             name.startsWith('.env') ||
             name === '.git' ||
+            ['experiments', 'archive', '.variant-preview'].includes(name) ||
             (entry.isDirectory() && ['tests', 'ci', 'reports', 'secrets'].includes(name))));
       if (banned) problems.push(path.relative(root, full));
       else if (entry.isDirectory()) walk(full, modules);
@@ -188,12 +190,37 @@ function writableFromInside(root, uid, gid) {
   process.stdout.write(JSON.stringify({ writable, count }));
 }
 
+/**
+ * Tries to create, then removes, a file in each directory of `dirs`, as the
+ * container's user. Prints JSON: { [dir]: 'written' } or the error code,
+ * such as EROFS on a read-only root or EACCES on root's tree.
+ */
+function writeFromInside(dirs) {
+  const fs = process.getBuiltinModule('node:fs');
+  const path = process.getBuiltinModule('node:path');
+  const result = {};
+  for (const dir of dirs) {
+    const file = path.join(dir, `.write-probe-${process.pid}`);
+    try {
+      fs.writeFileSync(file, 'x', { flag: 'wx' });
+      fs.unlinkSync(file);
+      result[dir] = 'written';
+    } catch (error) {
+      result[dir] = String(error.code ?? 'error');
+    }
+  }
+  process.stdout.write(JSON.stringify(result));
+}
+
 export const PROBE_SNIPPET = `(${probeFromInside.toString()})(process.argv[1])`;
 export const WRITABLE_SNIPPET = `(${writableFromInside.toString()})(process.argv[1], Number(process.argv[2]), Number(process.argv[3]))`;
 export const REQUESTS_SNIPPET = `(${requestsFromInside.toString()})(process.getBuiltinModule('node:fs').readFileSync(0, 'utf8'))`;
 export const SCAN_SNIPPET = `process.stdout.write(JSON.stringify((${scanTree.toString()})(process.argv[1])))`;
 export const MAPS_SNIPPET = `(${sourceMapsFromInside.toString()})(process.argv[1])`;
 export const TREE_SNIPPET = `(${treeFromInside.toString()})(process.argv[1])`;
+export const WRITE_SNIPPET = `(${writeFromInside.toString()})(JSON.parse(process.argv[1]))`;
+/** The server's own /proc/1/status: its ids, capability sets, and NoNewPrivs. */
+export const STATUS_SNIPPET = `process.stdout.write(process.getBuiltinModule('node:fs').readFileSync('/proc/1/status', 'utf8'))`;
 
 /**
  * Reads `ip route` output from a container on an internal network. Under
