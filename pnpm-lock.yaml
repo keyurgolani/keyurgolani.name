@@ -130,6 +130,9 @@ importers:
       '@portfolio/variant-contract':
         specifier: workspace:*
         version: link:../../packages/variant-contract
+      '@portfolio/variant-editorial-evidence':
+        specifier: workspace:*
+        version: link:../../packages/variant-editorial-evidence
       '@portfolio/variant-kinetic-cosmos':
         specifier: workspace:*
         version: link:../../packages/variant-kinetic-cosmos
