@@ -538,6 +538,32 @@ test("status, renewal, and revocation act only on the caller's own grant, and an
   }
 });
 
+/**
+ * What `ref` isn't, for a grant whose ref it is: a ref of no grant, the ref
+ * in upper case, the ref with a character more, and nothing. A ref of digits
+ * alone has no letter to raise, so its upper case is the ref itself: its
+ * last digit becomes an upper-case letter instead.
+ */
+function notRefs(ref: string): string[] {
+  const upper = /[a-f]/.test(ref) ? ref.toUpperCase() : `${ref.slice(0, -1)}A`;
+  return [ref === '00000000' ? 'ffffffff' : '00000000', upper, `${ref}0`, ''];
+}
+
+test("what a ref isn't is never the ref, a ref of digits alone included, nor anything a ref may be but another", () => {
+  const REF = /^[0-9a-f]{8}$/;
+  for (const ref of ['09041461', '00000000', 'abcdef01', '1234abcd']) {
+    const values = notRefs(ref);
+    assert.ok(!values.includes(ref), ref);
+    // Every one but the ref of no grant is a shape no ref has.
+    assert.deepEqual(
+      values.filter((value) => REF.test(value)),
+      [ref === '00000000' ? 'ffffffff' : '00000000'],
+      ref,
+    );
+  }
+  assert.equal(notRefs('09041461')[1], '0904146A');
+});
+
 test("a grant's ref revokes it only for its own session, once, and any other ref ends nothing, as an unknown token does (#7)", async (t) => {
   const { store, sessions, grants } = await setup(t);
   const mine = await signIn(sessions);
@@ -549,7 +575,7 @@ test("a grant's ref revokes it only for its own session, once, and any other ref
   assert.equal(await grants.revokeRef(ref, theirs.record.digest), false);
   assert.equal(await grants.status(token, mine.record.digest), 'active');
   // Nor does a ref of no grant, or anything that isn't a ref's shape.
-  for (const value of ['00000000', ref.toUpperCase(), `${ref}0`, '', token, record.digest]) {
+  for (const value of [...notRefs(ref), token, record.digest]) {
     assert.equal(await grants.revokeRef(value, mine.record.digest), false, value);
   }
   assert.equal(await grants.status(token, mine.record.digest), 'active');
