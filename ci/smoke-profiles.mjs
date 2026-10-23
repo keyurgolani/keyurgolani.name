@@ -129,7 +129,10 @@ import {
   composeProblems,
   HARDENING,
   hermeticProblems,
+  anonymousLeaks,
+  fatalCodes,
   HOST_PROBES,
+  hopsLabel,
   hostProblems,
   inspectProblems,
   leakProblems,
@@ -591,6 +594,15 @@ async function waitHealthy(name, what) {
   );
 }
 
+/**
+ * A startup or run error, with the config.fatal codes the container
+ * logged, so a server that exited at startup says why.
+ */
+function explained(name, error) {
+  const codes = fatalCodes(output(name));
+  return codes.length > 0 ? `${error.message}; config.fatal ${codes.join(', ')}` : error.message;
+}
+
 /** Container output, stdout and stderr. */
 function output(name) {
   const logs = container(['logs', name]);
@@ -646,7 +658,7 @@ function hardening(name, profile, secrets) {
  * Spoofed forwarded headers against the pages that print absolute URLs and
  * a page that redirects: none names the spoofed host or leaves `origin`.
  */
-function spoofed(name, profile, origin) {
+function spoofed(name, profile, origin, hops = 0) {
   const paths = ['/', '/robots.txt', '/sitemap.xml', ...(hasStudio(profile) ? ['/studio'] : [])];
   const responses = send(
     name,
@@ -658,11 +670,13 @@ function spoofed(name, profile, origin) {
   );
   const problems = paths.flatMap((pathname, index) =>
     spoofProblems(responses[index], origin, pathname, { indexable: INDEXABLE[profile] }).map(
-      (p) => `spoofed GET ${pathname}: ${p}`,
+      (p) => `${hopsLabel(hops)}, spoofed GET ${pathname}: ${p}`,
     ),
   );
   if (problems.length === 0) {
-    console.log(`[profiles] ${profile}: spoofed forwarded headers move no URL or redirect`);
+    console.log(
+      `[profiles] ${profile}: ${hopsLabel(hops)}, spoofed forwarded headers move no URL or redirect`,
+    );
   }
   return problems;
 }
@@ -825,7 +839,7 @@ async function profileRun(
     if (failures.length > failed) saveLogs(name, redact(after, runSecrets));
     else console.log(`[profiles] ${profile} passed`);
   } catch (error) {
-    fail(profile, error.message);
+    fail(profile, explained(name, error));
     saveLogs(name, redact(output(name), runSecrets));
   } finally {
     container(['rm', '-f', name]);
@@ -890,6 +904,15 @@ function signedIn(name, { password, secrets }) {
     session,
   ]);
   const leaks = signedInLeaks(SERVER_DIR, secrets, runSecrets);
+  const [before, out, after] = responses.slice(requests.length);
+  for (const [what, answer] of [
+    ['the sign-in', login],
+    ['auth.session', before],
+    ['auth.logout', out],
+    ['auth.session after sign-out', after],
+  ]) {
+    for (const problem of leakProblems(answer, leaks)) problems.push(`${what}: ${problem}`);
+  }
   requests.forEach((request, index) => {
     const response = responses[index];
     if (response.error) problems.push(`signed in, ${request.method} ${request.path}: no answer`);
@@ -897,7 +920,6 @@ function signedIn(name, { password, secrets }) {
       problems.push(`signed in, ${request.method} ${request.path} ${problem}`);
     }
   });
-  const [before, out, after] = responses.slice(requests.length);
   // The scan's bodies fit no auth command, so the session lasts until sign-out.
   if (before.status !== 200)
     problems.push(`after the scan, auth.session answered ${before.status}`);
@@ -952,7 +974,7 @@ function ownerTrust(name, hops, { password, secrets }) {
     headers: { ...SPOOFED_HEADERS, ...xff, ...headers },
   });
   const before = readTree(name, DATA_DIR);
-  if (!before) return [`at ${hops} trusted hops: the data directory could not be read`];
+  if (!before) return [`${hopsLabel(hops)}: the data directory could not be read`];
   const [signIn] = send(name, [login({ password }, { origin: ORIGIN })]);
   answers.push(['the spoofed sign-in', signIn]);
   const token = signIn.cookies?.length === 1 ? SESSION_COOKIE.exec(signIn.cookies[0])?.[1] : null;
@@ -1014,10 +1036,10 @@ function ownerTrust(name, hops, { password, secrets }) {
   }
   if (problems.length === 0) {
     console.log(
-      `[profiles] owner: at ${hops} trusted hops, spoofed forwarded headers move no cookie flag, origin check, or sign-in source, and no answer carries a canary`,
+      `[profiles] owner: ${hopsLabel(hops)}, spoofed forwarded headers move no cookie flag, origin check, or sign-in source, and no answer carries a canary`,
     );
   }
-  return problems.map((problem) => `at ${hops} trusted hops: ${problem}`);
+  return problems.map((problem) => `${hopsLabel(hops)}: ${problem}`);
 }
 
 /**
@@ -1053,7 +1075,7 @@ async function ownerReplacement(name, { env, mounts, password, secrets, leaks })
         `[profiles] owner: a new container on the data volume has its ${Object.keys(before).length} files`,
       );
     }
-    problems.push(...spoofed(next, 'owner', ORIGIN).map((p) => `at 1 trusted hop: ${p}`));
+    problems.push(...spoofed(next, 'owner', ORIGIN, 1));
     problems.push(...ownerTrust(next, 1, { password, secrets }));
     const text = output(next);
     if (leaks.some((secret) => text.includes(secret))) {
@@ -1063,9 +1085,17 @@ async function ownerReplacement(name, { env, mounts, password, secrets, leaks })
     }
     if (problems.length > 0) saveLogs(next, redact(text, runSecrets));
   } catch (error) {
-    problems.push(error.message);
+    problems.push(explained(next, error));
     saveLogs(next, redact(output(next), runSecrets));
   } finally {
+    // SIGTERM, never rm -f alone: the server lets its claim on the data
+    // volume go only as it exits, and the preview-origin container comes
+    // next on the same volume.
+    problems.push(
+      ...stopProblems(stopTimed(next), 10_000, [143]).map(
+        (p) => `the 1-hop container, on SIGTERM, ${p}`,
+      ),
+    );
     container(['rm', '-f', next]);
   }
   return problems;
@@ -1078,7 +1108,10 @@ async function ownerReplacement(name, { env, mounts, password, secrets, leaks })
  * gets the whole site, the preview host still gets only what a frame loads,
  * and a host the deployment doesn't name gets the plain 404.
  */
-async function ownerPreviewHost({ env, mounts, leaks }) {
+async function ownerPreviewHost({ env, mounts, secrets }) {
+  // Its answers are anonymous, so the config summary's fields count too.
+  const leaks = anonymousLeaks(SERVER_DIR, secrets, runSecrets);
+  const logLeaks = [...secrets, ...runSecrets];
   const name = `${run}-owner-preview`;
   const started = startServer(name, {
     env: { ...env, PORTFOLIO_PREVIEW_ORIGIN: PREVIEW_ORIGIN },
@@ -1113,7 +1146,7 @@ async function ownerPreviewHost({ env, mounts, leaks }) {
       );
     });
     const text = output(name);
-    if (leaks.some((secret) => text.includes(secret))) {
+    if (logLeaks.some((secret) => text.includes(secret))) {
       problems.push(
         "with a preview origin, the log holds the password, the hash, or the run's canary",
       );
@@ -1126,9 +1159,14 @@ async function ownerPreviewHost({ env, mounts, leaks }) {
       saveLogs(name, redact(text, runSecrets));
     }
   } catch (error) {
-    problems.push(error.message);
+    problems.push(explained(name, error));
     saveLogs(name, redact(output(name), runSecrets));
   } finally {
+    problems.push(
+      ...stopProblems(stopTimed(name), 10_000, [143]).map(
+        (p) => `the preview-origin container, on SIGTERM, ${p}`,
+      ),
+    );
     container(['rm', '-f', name]);
   }
   return problems;
@@ -1225,11 +1263,7 @@ async function ownerProfileRun(source, secret) {
         secrets,
         leaks: [...secrets, ...runSecrets],
       })),
-      ...(await ownerPreviewHost({
-        env,
-        mounts,
-        leaks: signedInLeaks(SERVER_DIR, secrets, runSecrets),
-      })),
+      ...(await ownerPreviewHost({ env, mounts, secrets })),
     ],
   });
 }

@@ -9,12 +9,15 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { CANARY_BODY, encodings, SUMMARY_FIELDS } from '../tests/harness/canaries.mjs';
 import {
+  anonymousLeaks,
   ARTIFACT_LIMIT,
   CACHE_DIR,
   composeProblems,
   DATA_DIR,
+  fatalCodes,
   HARDENING,
   hermeticProblems,
+  hopsLabel,
   HOST_PROBES,
   hostProblems,
   inspectProblems,
@@ -35,6 +38,7 @@ import {
   spoofProblems,
   stopProblems,
   successSourceProblems,
+  UNCHECKED_STUB,
   WRITE_TARGETS,
   writeProblems,
 } from './lib/profile-checks.mjs';
@@ -245,6 +249,11 @@ test('shutdown: exit 143 or 0 under 10 seconds passes; SIGKILL, slowness, or mem
   ]);
   assert.deepEqual(stopProblems({ exitCode: 143, elapsedMs: 900, oomKilled: true }), [
     'was killed for memory',
+  ]);
+  // Where the next container needs the claim released, only Next's own exit counts.
+  assert.deepEqual(stopProblems({ exitCode: 143, elapsedMs: 90 }, 10_000, [143]), []);
+  assert.deepEqual(stopProblems({ exitCode: 0, elapsedMs: 90 }, 10_000, [143]), [
+    'exited 0 on SIGTERM, not 143',
   ]);
   assert.deepEqual(stopProblems({ exitCode: null, elapsedMs: 12 }), [
     'exited never on SIGTERM, not 143 or 0',
@@ -513,7 +522,7 @@ test("spoofed headers: demo's empty sitemap passes, and lists only canonical URL
   ]);
 });
 
-test('artifacts: a report too large to read fails unread, and is left as it is', (t) => {
+test('artifacts: a report too large to read fails, and is cut so it is never uploaded unread', (t) => {
   const dir = mkdtempSync(path.join(tmpdir(), 'profile-artifacts-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   writeFileSync(path.join(dir, 'big.log'), `${'x'.repeat(64)} canary-run-0123`);
@@ -522,7 +531,8 @@ test('artifacts: a report too large to read fails unread, and is left as it is',
     redacted: [],
     unchecked: ['big.log'],
   });
-  assert.match(readFileSync(path.join(dir, 'big.log'), 'utf8'), /canary-run-0123/);
+  assert.equal(readFileSync(path.join(dir, 'big.log'), 'utf8'), UNCHECKED_STUB);
+  assert.equal(readFileSync(path.join(dir, 'small.log'), 'utf8'), 'fine');
   assert.equal(ARTIFACT_LIMIT, 64 * 1024 * 1024);
 });
 
@@ -605,4 +615,31 @@ test('host rule: the answers the rule gives pass, and the ones a header-led rule
   assert.equal(hostProblems(other, right.site, expected).length, 1);
   assert.equal(hostProblems(other, right.unknown, expected).length, 1);
   assert.match(hostProblems(main, { error: 'ECONNRESET' }, expected)[0], /no answer/);
+});
+
+test('anonymous leaks: the summary fields too, beside the run secrets and the data directory', () => {
+  const leaks = anonymousLeaks('/app/apps/web', ['the-password'], encodings('canary-run-0123'));
+  for (const value of ['canary-run-0123', 'the-password', DATA_DIR, ...SUMMARY_FIELDS]) {
+    assert.ok(leaks.includes(value), value);
+  }
+});
+
+test('fatal codes: each config.fatal line, in order, and nothing else', () => {
+  const text = [
+    'not json',
+    '{"level":"fatal","event":"config.fatal","key":"PORTFOLIO_DATA_DIR","code":"data_dir_in_use"}',
+    '{"level":"warn","event":"config.warning","key":"X","code":"y"}',
+    '{"level":"fatal","event":"config.fatal","code":"startup_failed"}',
+    '{broken',
+  ].join('\n');
+  assert.deepEqual(fatalCodes(text), [
+    'PORTFOLIO_DATA_DIR:data_dir_in_use',
+    'unkeyed:startup_failed',
+  ]);
+  assert.deepEqual(fatalCodes(''), []);
+});
+
+test('hop labels read as a person would say them', () => {
+  assert.equal(hopsLabel(0), 'at 0 trusted hops');
+  assert.equal(hopsLabel(1), 'at 1 trusted hop');
 });

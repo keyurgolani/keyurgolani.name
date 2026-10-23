@@ -168,12 +168,17 @@ export function writeProblems(result, profile) {
  *
  * @param {{ exitCode: number | null, elapsedMs: number, oomKilled?: boolean }} stop
  * @param {number} [limitMs]
+ * @param {readonly number[]} [exitCodes] the codes that count as a graceful exit
  * @returns {string[]}
  */
-export function stopProblems({ exitCode, elapsedMs, oomKilled }, limitMs = 10_000) {
+export function stopProblems(
+  { exitCode, elapsedMs, oomKilled },
+  limitMs = 10_000,
+  exitCodes = [143, 0],
+) {
   const problems = [];
-  if (exitCode !== 143 && exitCode !== 0) {
-    problems.push(`exited ${exitCode ?? 'never'} on SIGTERM, not 143 or 0`);
+  if (!exitCodes.includes(exitCode)) {
+    problems.push(`exited ${exitCode ?? 'never'} on SIGTERM, not ${exitCodes.join(' or ')}`);
   }
   if (elapsedMs >= limitMs) problems.push(`took ${elapsedMs} ms to stop, not under ${limitMs}`);
   if (oomKilled) problems.push('was killed for memory');
@@ -383,10 +388,14 @@ export function redact(text, secrets) {
 /** The largest report redactArtifacts reads. A larger one fails the run unread. */
 export const ARTIFACT_LIMIT = 64 * 1024 * 1024;
 
+/** What an oversize report holds once redactArtifacts has failed it, so it's never uploaded unread. */
+export const UNCHECKED_STUB = '[removed: too large to check for a run secret]\n';
+
 /**
  * Every file under `dir` that holds a per-run secret, each then redacted in
  * place, so the uploaded artifact never carries one, and every file too
- * large to read and check. The run fails on each.
+ * large to read and check, each then cut to UNCHECKED_STUB. The run fails
+ * on each.
  *
  * @param {string} dir
  * @param {readonly string[]} secrets
@@ -407,6 +416,7 @@ export function redactArtifacts(dir, secrets, limit = ARTIFACT_LIMIT) {
       const full = path.join(current, entry.name);
       if (entry.isDirectory()) walk(full);
       else if (entry.isFile() && statSync(full).size > limit) {
+        writeFileSync(full, UNCHECKED_STUB);
         unchecked.push(path.relative(dir, full));
       } else if (entry.isFile()) {
         const text = readFileSync(full, 'latin1');
@@ -433,6 +443,42 @@ export function redactArtifacts(dir, secrets, limit = ARTIFACT_LIMIT) {
  */
 export const signedInLeaks = (serverDir, secrets, runSecrets) =>
   canaries(serverDir, { secrets: [...secrets, ...runSecrets, DATA_DIR], summary: false });
+
+/**
+ * What no anonymous response may carry: every fixed canary, the config
+ * summary's fields included, the run's own secrets and canary, owner's
+ * password and hash, and the data directory's path.
+ *
+ * @param {string} serverDir the server's own directory
+ * @param {readonly string[]} secrets owner's password and hash
+ * @param {readonly string[]} runSecrets every per-run secret, encoded
+ */
+export const anonymousLeaks = (serverDir, secrets, runSecrets) =>
+  canaries(serverDir, { secrets: [...secrets, ...runSecrets, DATA_DIR] });
+
+/**
+ * The `key:code` of each config.fatal line in a container's output, which a
+ * failure message carries, so a server that exited at startup says why.
+ *
+ * @param {string} text
+ * @returns {string[]}
+ */
+export function fatalCodes(text) {
+  return String(text ?? '')
+    .split('\n')
+    .filter((line) => line.startsWith('{'))
+    .flatMap((line) => {
+      try {
+        const entry = JSON.parse(line);
+        return entry?.event === 'config.fatal' ? [`${entry.key ?? 'unkeyed'}:${entry.code}`] : [];
+      } catch {
+        return [];
+      }
+    });
+}
+
+/** How a row names its trusted hop count: `at 0 trusted hops`, `at 1 trusted hop`. */
+export const hopsLabel = (hops) => `at ${hops} trusted hop${hops === 1 ? '' : 's'}`;
 
 /**
  * The canaries in `leaks` a response carries, in a header or the body, as
