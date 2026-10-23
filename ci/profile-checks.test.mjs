@@ -481,3 +481,16 @@ test('SMOKE_PROFILES picks the parts, in run order, and each failure names its r
   const pattern = new RegExp(schema.properties.reproCommand.pattern);
   for (const part of partsOf(undefined)) assert.match(reproFor(part), pattern);
 });
+
+test("spoofed headers: demo's empty sitemap passes, and lists only canonical URLs too", () => {
+  const empty = { status: 200, headers: {}, body: '<urlset/>' };
+  assert.deepEqual(spoofProblems(empty, ORIGIN, '/sitemap.xml', { indexable: false }), []);
+  const foreign = {
+    status: 200,
+    headers: {},
+    body: '<urlset><url><loc>https://elsewhere.test/</loc></url></urlset>',
+  };
+  assert.deepEqual(spoofProblems(foreign, ORIGIN, '/sitemap.xml', { indexable: false }), [
+    'the sitemap lists https://elsewhere.test/',
+  ]);
+});

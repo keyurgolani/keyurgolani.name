@@ -235,14 +235,16 @@ export const SPOOFED_HEADERS = Object.freeze({
 /**
  * Problems with a response to a spoofed request: nothing in its headers or
  * body names the spoofed host, a redirect stays on the canonical origin, and
- * a sitemap lists only canonical URLs.
+ * a sitemap lists only canonical URLs, and at least one where the profile
+ * can be indexed. demo's lists none.
  *
  * @param {{ status?: number, headers?: Record<string, string>, body?: string, error?: string }} response
  * @param {string} origin PORTFOLIO_ORIGIN
  * @param {string} pathname
+ * @param {{ indexable?: boolean }} [options]
  * @returns {string[]}
  */
-export function spoofProblems(response, origin, pathname) {
+export function spoofProblems(response, origin, pathname, { indexable = true } = {}) {
   if (!response || response.error) return [`no answer (${response?.error})`];
   const problems = [];
   const headers = Object.entries(response.headers ?? {})
@@ -257,7 +259,7 @@ export function spoofProblems(response, origin, pathname) {
   }
   if (pathname === '/sitemap.xml') {
     const locs = [...(response.body ?? '').matchAll(/<loc>([^<]*)<\/loc>/g)].map((m) => m[1]);
-    if (locs.length === 0) problems.push('the sitemap lists no URL');
+    if (locs.length === 0 && indexable) problems.push('the sitemap lists no URL');
     for (const loc of locs) {
       if (!loc.startsWith(`${origin}/`) && loc !== origin)
         problems.push(`the sitemap lists ${loc}`);

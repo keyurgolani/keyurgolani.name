@@ -26,9 +26,10 @@
 //   summary config.status gives an owner session, sign-out ends the
 //   session, and neither the log nor the data directory holds the password
 //   or the hash.
-// - owner with no password hash refuses to start for the hash alone: the
-//   data directory passes. Its volume starts out owned by uid 1001, mode
-//   0700, as the image's directory is.
+// - owner with no password hash refuses to start for the hash, and for the
+//   first-start import of the fixture's unregistered variant until #13, but
+//   never for the data directory. Its volume starts out owned by uid 1001,
+//   mode 0700, as the image's directory is.
 // - every startup row in tests/harness/startup-rows.mjs that refuses exits 1
 //   with its config.fatal lines and none of its canary values, and every one
 //   that starts serves with its config.warning lines and none of its values.
@@ -104,7 +105,7 @@ import {
 import { waitFor } from '../tests/harness/net.mjs';
 import { ownerSecret } from '../tests/harness/owner-secret.mjs';
 import { COPY_SEED_INTO_VOLUME, seedOwnerStore } from '../tests/harness/owner-store.mjs';
-import { headerProblems, isStudioPath } from '../tests/harness/route-headers.mjs';
+import { headerProblems, isPreviewPath, isStudioPath } from '../tests/harness/route-headers.mjs';
 import {
   checkRefusal,
   checkWarnings,
@@ -171,6 +172,10 @@ const require = createRequire(import.meta.url);
 const { accessIn, CAPABILITIES, INDEXABLE } = require('../apps/web/src/server/capabilities.ts');
 const { listOperations } = require('../apps/web/src/server/operations.ts');
 const { listRoutes, RETIRED_PATTERNS, routeAccess } = require('../apps/web/src/server/routes.ts');
+const {
+  PREVIEW_STATUS_DOCUMENT,
+  PREVIEW_STATUS_TYPE,
+} = require('../apps/web/src/preview/status.ts');
 
 const cli = process.env.CONTAINER_CLI || 'docker';
 const pulled = process.env.SMOKE_IMAGE;
@@ -256,7 +261,18 @@ const concrete = (pattern) =>
  * GET gets the app's 404 page, rendered from the server, and any other
  * method the proxy's plain 404, as an absent route does.
  */
-const namesNothing = (entry) => entry.kind === 'page' && concrete(entry.pattern).includes('probe');
+const namesNothing = (entry) =>
+  entry.kind === 'page' && entry.grant === undefined && concrete(entry.pattern).includes('probe');
+
+/**
+ * Whether `profile` serves a grant route, as owner does (#7): there
+ * proxy.ts gives every preview path no active grant admits the status
+ * document, as tests/harness/profile-matrix.ts expects of the built server.
+ */
+const hasGrantRoutes = (profile) =>
+  listRoutes().some(
+    (entry) => entry.grant !== undefined && routeAccess(profile, entry) !== 'absent',
+  );
 
 /** What the transport answers a visitor with no session, by the registry and the matrix. */
 function expectedOperation(profile, operation, method) {
@@ -321,8 +337,10 @@ function readyBody(profile) {
     checks: [
       { id: 'catalog', status: 'ok' },
       { id: 'packs', status: packs },
-      // Owner's modules are its own.
-      ...(profile === 'owner' ? [] : [{ id: 'owner-modules', status: 'ok' }]),
+      // Owner probes its data directory (#3); the others check no owner code loaded.
+      ...(profile === 'owner'
+        ? [{ id: 'data-directory', status: 'ok' }]
+        : [{ id: 'owner-modules', status: 'ok' }]),
     ],
   };
 }
@@ -410,7 +428,24 @@ function plan(profile, leaks, origin) {
   ]);
   for (const entry of listRoutes().filter((route) => route.capability !== 'operations')) {
     const access = routeAccess(profile, entry);
-    if (namesNothing(entry)) {
+    // No grant is active here: a grant route, and under a profile with grant
+    // routes any preview path the build doesn't serve, answer every method
+    // with the status document (#7).
+    const grant = access !== 'absent' && entry.grant !== undefined;
+    const statusDocument =
+      access === 'absent' && hasGrantRoutes(profile) && isPreviewPath(entry.pattern);
+    if (grant || statusDocument) {
+      for (const method of METHODS) {
+        add(method, concrete(entry.pattern), (response) => [
+          ...status(404)(response),
+          ...(response.headers['content-type'] === PREVIEW_STATUS_TYPE &&
+          response.body === PREVIEW_STATUS_DOCUMENT
+            ? []
+            : ["not the preview's status document"]),
+          ...(UUID.test(response.headers['x-request-id'] ?? '') ? [] : ['no x-request-id']),
+        ]);
+      }
+    } else if (namesNothing(entry)) {
       add('GET', concrete(entry.pattern), (response) => [
         ...status(404)(response),
         ...(/^text\/html/.test(response.headers['content-type'] ?? '') &&
@@ -485,7 +520,11 @@ function plan(profile, leaks, origin) {
         ),
       ];
       if (response.headers['set-cookie'] !== undefined) problems.push('sets a cookie');
-      const robots = INDEXABLE[profile] ? undefined : 'noindex';
+      const robots = isPreviewPath(new URL(request.path, 'http://unset.invalid').pathname)
+        ? 'noindex, nofollow'
+        : INDEXABLE[profile]
+          ? undefined
+          : 'noindex';
       if (response.headers['x-robots-tag'] !== robots) {
         problems.push(`X-Robots-Tag is ${response.headers['x-robots-tag']}, not ${robots}`);
       }
@@ -624,7 +663,9 @@ function spoofed(name, profile, origin) {
     })),
   );
   const problems = paths.flatMap((pathname, index) =>
-    spoofProblems(responses[index], origin, pathname).map((p) => `spoofed GET ${pathname}: ${p}`),
+    spoofProblems(responses[index], origin, pathname, { indexable: INDEXABLE[profile] }).map(
+      (p) => `spoofed GET ${pathname}: ${p}`,
+    ),
   );
   if (problems.length === 0) {
     console.log(`[profiles] ${profile}: spoofed forwarded headers move no URL or redirect`);
@@ -761,7 +802,17 @@ async function profileRun(
     } else if (unavailable[0] && unavailable[0].path !== '/appearance/variant') {
       fail(profile, `variant.unavailable is at ${unavailable[0].path}, not /appearance/variant`);
     }
-    if (text.includes(SELECTED[profile])) fail(profile, 'the log names the selected variant');
+    // Owner's store.render-drift line names the live revision's own
+    // variant to the operator by design (#3, item 21), as the seeded
+    // revision's isn't registered. No other line may.
+    const naming = text
+      .split('\n')
+      .filter((line) => line.includes(SELECTED[profile]))
+      .map((line) => parse(line)?.event ?? 'a line that is not JSON')
+      .filter((event) => event !== 'store.render-drift');
+    if (naming.length > 0) {
+      fail(profile, `the log names the selected variant, in ${[...new Set(naming)].join(', ')}`);
+    }
     if (text.includes(FORGED_LINE)) fail(profile, 'a /_next/image url reached the log as a line');
     // A write the read-only root refused shows up as EROFS.
     if (/EROFS|read-only file system/i.test(text)) {
@@ -773,7 +824,7 @@ async function profileRun(
 
     for (const problem of await restart(name, profile)) fail(`${profile}: restart`, problem);
     for (const problem of restarted ? await restarted(name) : []) fail(profile, problem);
-    const after = output(name);
+    const after = `${text}${output(name).slice(text.length)}`;
     if (leaks.some((secret) => after.includes(secret))) {
       fail(profile, "after a restart, the log holds the password, the hash, or the run's canary");
     }
@@ -950,7 +1001,11 @@ function ownerTrust(name, hops, password) {
     }
   }
   const after = readTree(name, DATA_DIR);
-  problems.push(...sourceProblems(newAuditRecords(before, after ?? {}), hops));
+  // At 0 hops every sign-in this container saw had no trusted hop, and the
+  // signed-in scan's failed sign-in was this minute's first, so the audit
+  // log holds the rest only at the minute's end: every record counts. At 1,
+  // in a new process, only the ones these attempts added.
+  problems.push(...sourceProblems(newAuditRecords(hops === 0 ? {} : before, after ?? {}), hops));
   if (problems.length === 0) {
     console.log(
       `[profiles] owner: at ${hops} trusted hops, spoofed forwarded headers move no cookie flag, origin check, or sign-in source`,
@@ -1270,7 +1325,13 @@ function ownerRun() {
   ]);
   const fatal = logEntries(output).filter((entry) => entry.event === 'config.fatal');
   const keys = fatal.map((entry) => `${entry.key}:${entry.code}`);
-  if (code !== 1 || !same(keys, ['PORTFOLIO_AUTH_PASSWORD_HASH_FILE:required'])) {
+  // The data directory passes preflight. The first-start import of the
+  // fixture's unregistered variant refuses too, until #13 (#3).
+  if (
+    code !== 1 ||
+    !keys.includes('PORTFOLIO_AUTH_PASSWORD_HASH_FILE:required') ||
+    fatal.some((entry) => entry.key === 'PORTFOLIO_DATA_DIR' && /^data_dir_/.test(entry.code))
+  ) {
     fail(test, `exit ${code}, ${JSON.stringify(keys)}: not the missing-hash refusal`);
   } else {
     console.log('[profiles] owner: refuses to start without a password hash, on its data volume');
