@@ -119,6 +119,18 @@ test("a cache someone else could reach is refused: another's mode, or a link", a
   );
 });
 
+test('a cache another user owns is refused, as one made first in a shared temp directory', async (t) => {
+  const { base, root } = dirs(t);
+  const cache = path.join(base, 'theirs');
+  mkdirSync(cache, { mode: 0o700 });
+  // The server runs as someone else than the cache's owner.
+  t.mock.method(process, 'getuid', () => 4242424);
+  await assert.rejects(
+    deriveStartupMedia({ portfolio: portfolio(), root: localMediaRoot(root), cacheDir: cache }),
+    MediaCacheError,
+  );
+});
+
 test('the cache stores blobs by hash, and a link at a blob name is no blob', async (t) => {
   const { base, cache } = dirs(t);
   mkdirSync(cache, { mode: 0o700 });
