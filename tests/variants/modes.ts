@@ -463,6 +463,12 @@ export async function checkMode(check: ModeCheck): Promise<void> {
 
 async function checkPage(check: ModeCheck, page: Page, run?: FailedRun): Promise<void> {
   const { mode, context } = check;
+  // The floor depends on the fixture the caller names, so a project that
+  // renders one has to name the same, or complete's floor drops to 0 unseen.
+  const named = (check.testInfo.project.metadata as { fixture?: string }).fixture;
+  if (named !== undefined) {
+    expect(check.fixture, "the fixture the check names is the project's").toBe(named);
+  }
   const errors = consoleErrors(
     page,
     check.expectedFailure ?? (() => false),

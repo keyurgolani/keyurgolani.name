@@ -1,6 +1,7 @@
 import { stripVTControlCharacters } from 'node:util';
-import { expect, test, type Page, type Route } from '@playwright/test';
+import { expect, test, type Page, type Route, type TestInfo } from '@playwright/test';
 import {
+  checkMode,
   enhancementFloor,
   expectEveryEnhancementFailed,
   failEveryEnhancement,
@@ -206,6 +207,35 @@ test.describe('the throw-switch check', () => {
       enhancementFloor(declaring(['webgl2']), 'complete'),
     );
   });
+});
+
+test.describe('the fixture a check names', () => {
+  // fixtures.spec.ts passes each project's fixture to checkMode, and the
+  // floor follows it, so a project that names one fails a check naming
+  // another, or none, before it looks at the page.
+  for (const named of [undefined, 'sparse'] as const) {
+    test(`fails on the complete project when the check names ${named ?? 'no fixture'}`, async ({
+      page,
+      context,
+      request,
+    }, testInfo) => {
+      const project = { ...testInfo.project, metadata: { fixture: 'complete' } };
+      const message = await failure(
+        checkMode({
+          mode: 'desktop',
+          page,
+          context,
+          request,
+          variant: { manifest: { id: 'stand-in', ...declaring([]) } } as never,
+          testInfo: { ...testInfo, project } as TestInfo,
+          go: (target) => target.goto(`${ORIGIN}/`),
+          shot: 'stand-in',
+          fixture: named,
+        }),
+      );
+      expect(message).toContain("the fixture the check names is the project's");
+    });
+  }
 });
 
 test.describe('the screenshot image wait', () => {
