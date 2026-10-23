@@ -37,7 +37,7 @@ concurrency:
 env:
   # The Node release the image ships: the Dockerfile's node:X.Y.Z tag.
   # pnpm check:pins fails when the two differ.
-  NODE_VERSION: 22.23.3
+  NODE_VERSION: 22.23.4
   TZ: UTC
   NEXT_TELEMETRY_DISABLED: '1'
   REPORT_RETENTION_DAYS: ${{ github.event_name == 'pull_request' && 14 || 90 }}

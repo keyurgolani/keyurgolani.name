@@ -4,7 +4,7 @@
 # Node release, which CI's NODE_VERSION must match (pnpm check:pins).
 
 # ─── deps ──────────────────────────────────────────────────────────────────
-FROM node:22.23.3-alpine@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402 AS deps
+FROM node:22.23.4-alpine@sha256:fe4f6d74e20370acb04ad889077d14d0f64a9c8ea6a42bc60cddf1e844699914 AS deps
 # corepack fetches the pnpm version in package.json and checks its sha512.
 RUN corepack enable
 WORKDIR /repo
@@ -21,7 +21,7 @@ COPY packages packages
 RUN pnpm install --frozen-lockfile
 
 # ─── builder ───────────────────────────────────────────────────────────────
-FROM node:22.23.3-alpine@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402 AS builder
+FROM node:22.23.4-alpine@sha256:fe4f6d74e20370acb04ad889077d14d0f64a9c8ea6a42bc60cddf1e844699914 AS builder
 RUN corepack enable
 WORKDIR /repo
 
@@ -41,7 +41,7 @@ RUN pnpm --filter @portfolio/web build
 RUN pnpm --filter @portfolio/web build:store
 
 # ─── runner ────────────────────────────────────────────────────────────────
-FROM node:22.23.3-alpine@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402 AS runner
+FROM node:22.23.4-alpine@sha256:fe4f6d74e20370acb04ad889077d14d0f64a9c8ea6a42bc60cddf1e844699914 AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
