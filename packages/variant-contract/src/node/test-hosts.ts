@@ -14,8 +14,8 @@ export interface PackageSpec {
   readonly packageJson?: Record<string, unknown>;
   /** Raw package.json text, in place of `packageJson`. */
   readonly packageText?: string;
-  /** Other files, by path in the package. */
-  readonly files?: Readonly<Record<string, string>>;
+  /** Other files, by path in the package: text, or bytes such as a still's. */
+  readonly files?: Readonly<Record<string, string | Uint8Array>>;
 }
 
 const made: string[] = [];
@@ -50,7 +50,7 @@ export function testHost(
   return dir;
 }
 
-function write(file: string, text: string) {
+function write(file: string, text: string | Uint8Array) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, text);
 }
@@ -94,7 +94,7 @@ export function variantPackage(
   }: {
     manifest?: unknown;
     packageJson?: Record<string, unknown>;
-    files?: Record<string, string>;
+    files?: Record<string, string | Uint8Array>;
   } = {},
 ): PackageSpec {
   return {
