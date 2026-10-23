@@ -93,6 +93,32 @@ export const KNOWN_BAD_EXCEPTIONS: readonly KnownBadExceptions[] = [
     reason:
       /contrast text measures a pack's text roles, which carry the page's content, so decorative can't excuse it\./,
   },
+  // Slice 2's rules: focus containment (2.1.2) and expanded state (4.1.2)
+  // are WCAG A, and reduced transparency is a floor, so none can be waived.
+  {
+    name: 'keyboard-containment',
+    quality: 'keyboard-containment.yml',
+    reason:
+      /keyboard containment is WCAG A: a WCAG A or AA failure on essential content can't be excepted, in any tier\. This exception is non-waivable\./,
+  },
+  {
+    name: 'keyboard-state',
+    quality: 'keyboard-state.yml',
+    reason:
+      /keyboard state is WCAG A: a WCAG A or AA failure on essential content can't be excepted, in any tier\. This exception is non-waivable\./,
+  },
+  {
+    name: 'transparency-opaque',
+    quality: 'transparency-opaque.yml',
+    reason:
+      /transparency opaque is a floor every pack is held to, in every tier, so it can't be excepted\. This exception is non-waivable\./,
+  },
+  {
+    name: 'decorative-low-contrast-large',
+    quality: 'decorative-low-contrast-large.yml',
+    reason:
+      /contrast large-text measures a pack's text roles, which carry the page's content, so decorative can't excuse it\./,
+  },
   {
     name: 'budgets-missing-metric',
     budgets: 'runtime-budgets.missing-metric.json',

@@ -1,0 +1,24 @@
+# Known bad (#11, Slice 2, the owner's [31]): an exception for a frosted
+# surface that stays translucent under prefers-reduced-transparency.
+# Reduced transparency overrides every creative choice, so the
+# transparency gate is a floor no kind waives.
+version: 1
+exceptions:
+  - id: translucent-surface-under-reduce
+    kind: above-aa
+    gate: transparency
+    rule: opaque
+    owner: keyurgolani
+    rationale: The frosted surface is the Experimental language's signature.
+    affectedUsers: Readers who reduce transparency.
+    fallback: None.
+    trackingIssue: '#11'
+    created: '2026-10-20'
+    expires: '2026-12-15'
+    scope:
+      surface: primitives
+      route: /_fixtures/appearance
+      tuple: fixture-language-experimental/fixture-scheme-experimental/fixture-typography-experimental/dark
+      viewport: 1440x900
+      preferenceMode: reduced-transparency
+falsePositives: []

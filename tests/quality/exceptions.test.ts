@@ -333,7 +333,10 @@ test("WCAG A and AA failures on essential content can't be excepted, in any tier
   assert.deepEqual(contrast('text'), [
     "exceptions[0] (fallback-decorative-watermark) kind: contrast text measures a pack's text roles, which carry the page's content, so decorative can't excuse it. Text that really is incidental goes in as a falsePositive, with the quality/manual-runs/ record that proves it.",
   ]);
-  assert.deepEqual(contrast('large-text'), []);
+  // Large text is text under 1.4.3, so the same refusal holds.
+  assert.deepEqual(contrast('large-text'), [
+    "exceptions[0] (fallback-decorative-watermark) kind: contrast large-text measures a pack's text roles, which carry the page's content, so decorative can't excuse it. Text that really is incidental goes in as a falsePositive, with the quality/manual-runs/ record that proves it.",
+  ]);
   assert.deepEqual(contrast('non-text'), []);
 });
 
