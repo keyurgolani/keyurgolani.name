@@ -265,13 +265,17 @@ test('every step that runs grype runs under a condition that also installs it', 
 });
 
 test('an image scan never runs without the image it scans', () => {
+  const scans = [];
   for (const [id, job] of Object.entries(JOBS)) {
     for (const step of job.steps ?? []) {
-      if (!/grype .*"registry:/.test(step.run ?? '')) continue;
+      const run = step.run ?? '';
+      if (!run.includes('grype') || !run.includes('registry:')) continue;
+      scans.push(id);
       // No if: is success(), so a failed build or digest step skips it.
       assert.equal(step.if, undefined, `${id}: ${step.name}`);
     }
   }
+  assert.deepEqual(scans.sort(), ['dry-run', 'promote-scan', 'rc-scan']);
 });
 
 test('release tags can be created only by an admin, and by nobody moved or deleted', () => {
