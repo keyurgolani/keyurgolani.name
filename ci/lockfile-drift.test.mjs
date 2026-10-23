@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { parse as parseYaml } from 'yaml';
 import {
   canonicalLockfileProblem,
   LOCKFILE_MODIFIED,
@@ -268,7 +269,39 @@ test('.pnpmfile.cjs exports one readPackage hook and one dropped peer, nothing e
   assert.deepEqual(Object.keys(pnpmfile).sort(), ['DROPPED_PEERS', 'hooks']);
   // Not afterAllResolved, updateConfig (which can turn strictDepBuilds off), or anything new.
   assert.deepEqual(Object.keys(pnpmfile.hooks), ['readPackage']);
+  // By name too, so a non-enumerable or inherited hook can't hide: every hook pnpm 10.33 reads.
+  for (const name of [
+    'readPackage',
+    'updateConfig',
+    'afterAllResolved',
+    'preResolution',
+    'importPackage',
+    'fetchers',
+    'filterLog',
+    'beforePacking',
+  ]) {
+    assert.equal(
+      typeof pnpmfile.hooks[name],
+      name === 'readPackage' ? 'function' : 'undefined',
+      name,
+    );
+  }
+  assert.equal(pnpmfile.finders, undefined);
   assert.deepEqual(pnpmfile.DROPPED_PEERS, [[RESOLVER, 'eslint-plugin-import']]);
+});
+
+test(".pnpmfile.cjs leaves every workspace project's package.json as it is", () => {
+  // A frozen install hands readPackage the workspace manifests alone, so a
+  // change here (a postinstall on the root, say) would run on every install.
+  const importers = Object.keys(
+    parseYaml(readFileSync(new URL('../pnpm-lock.yaml', import.meta.url), 'utf8')).importers,
+  );
+  assert.ok(importers.includes('.') && importers.includes('apps/web'), importers.join(', '));
+  for (const id of importers) {
+    const file = new URL(`../${id === '.' ? '' : `${id}/`}package.json`, import.meta.url);
+    const manifest = JSON.parse(readFileSync(file, 'utf8'));
+    assert.deepEqual(readPackage(structuredClone(manifest)), manifest, id);
+  }
 });
 
 test(".pnpmfile.cjs drops the resolver's optional peer on eslint-plugin-import, and nothing else", () => {
@@ -332,6 +365,8 @@ function installedManifests() {
   return manifests;
 }
 
+// Only what's installed on this platform: another platform's optional
+// packages (@esbuild/*, @img/sharp-*) aren't in node_modules to read.
 test('.pnpmfile.cjs changes no installed manifest but the resolver, and only by its two keys', () => {
   const manifests = installedManifests();
   assert.ok(manifests.length > 500, `read ${manifests.length} installed manifests`);
