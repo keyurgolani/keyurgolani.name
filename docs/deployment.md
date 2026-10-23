@@ -40,7 +40,7 @@ What each profile grants. `public` is anyone, `session` is a signed-in owner, an
 | `media.fetchRemote`     | Fetching an https image source for a draft                 | `session` | `absent` | `absent`    |
 | `preview.grant`         | Preview frames, each by its own grant                      | `session` | `absent` | `absent`    |
 | `appearance.fixtures`   | `/_fixtures/appearance`, in `APPEARANCE_FIXTURES=1` builds | `public`  | `public` | `public`    |
-| `catalog.fixtures`    | `/studio/_catalog-fixture`, in `BUDGET_FIXTURES` builds    | `session` | `absent` | `absent`    |
+| `catalog.fixtures`      | `/studio/_catalog-fixture`, in `BUDGET_FIXTURES` builds    | `session` | `absent` | `absent`    |
 
 <!-- profile-matrix:end -->
 
