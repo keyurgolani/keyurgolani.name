@@ -259,6 +259,39 @@ test('the image ships the owner CLI and every module it imports, at their repo p
   }
 });
 
+test("the image ships the store's CLI as one file at /app/bin, bundled with the react-server condition in the builder stage", () => {
+  const text = readFileSync(path.join(ROOT, 'Dockerfile'), 'utf8');
+  const runnerAt = text.search(/^FROM .* AS runner$/m);
+  const builder = text.slice(text.search(/^FROM .* AS builder$/m), runnerAt);
+  const runner = text.slice(runnerAt);
+  // After the build, which writes the registry the bundle reads.
+  assert.match(
+    builder,
+    /RUN pnpm --filter @portfolio\/web build\n[\s\S]*RUN pnpm --filter @portfolio\/web build:store\n/,
+  );
+  assert.ok(
+    runner
+      .split('\n')
+      .includes(
+        'COPY --from=builder /repo/apps/web/dist/portfolio-store.mjs ./bin/portfolio-store.mjs',
+      ),
+    'the runner stage copies the bundle to /app/bin, without --chown',
+  );
+  const { scripts, devDependencies } = JSON.parse(
+    readFileSync(path.join(ROOT, 'apps/web/package.json'), 'utf8'),
+  );
+  assert.equal(scripts['build:store'], 'pnpm build:registry && node scripts/bundle-store.mjs');
+  assert.equal(devDependencies.esbuild, '0.27.7');
+  const bundler = readFileSync(path.join(ROOT, 'apps/web/scripts/bundle-store.mjs'), 'utf8');
+  assert.match(bundler, /conditions: \['react-server'\]/);
+  assert.match(bundler, /bundle: true/);
+  const root = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
+  assert.equal(
+    root.scripts.store,
+    'pnpm --filter @portfolio/web build:registry && tsx --conditions=react-server apps/web/scripts/portfolio-store.ts',
+  );
+});
+
 for (const hostname of [undefined, '0.0.0.0', '::', '127.0.0.1']) {
   test(`the HEALTHCHECK reaches a server bound for HOSTNAME=${hostname ?? '(unset)'}`, async () => {
     const env = hostname ? { HOSTNAME: hostname } : {};

@@ -36,6 +36,10 @@ ENV NODE_ENV=production
 
 RUN pnpm --filter @portfolio/web build
 
+# The store's CLI (#3): scripts/portfolio-store.ts and every module it
+# imports, bundled by esbuild into one file under the react-server condition.
+RUN pnpm --filter @portfolio/web build:store
+
 # ─── runner ────────────────────────────────────────────────────────────────
 FROM node:22.23.3-alpine@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402 AS runner
 WORKDIR /app
@@ -68,6 +72,11 @@ COPY --from=builder /repo/packages/core/src/audit/record.mjs ./packages/core/src
 COPY --from=builder /repo/packages/core/src/auth/phc.mjs ./packages/core/src/auth/phc.mjs
 COPY --from=builder /repo/packages/core/src/auth/session-files.mjs ./packages/core/src/auth/session-files.mjs
 COPY --from=builder /repo/packages/core/src/data/layout.mjs ./packages/core/src/data/layout.mjs
+
+# The store's CLI (#3), `node bin/portfolio-store.mjs <command>`, which runs
+# in the server's container as the server's user. One file that needs only
+# Node, owned by root like the rest.
+COPY --from=builder /repo/apps/web/dist/portfolio-store.mjs ./bin/portfolio-store.mjs
 
 # No PORTFOLIO_* defaults: the deployment sets its profile, origin, and source
 # directory at run time (docs/deployment.md), and the server refuses to start
