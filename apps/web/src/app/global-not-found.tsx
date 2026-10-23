@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { headers } from 'next/headers';
 import { getDeploymentConfig } from '~/server/config-store';
 import { isPreviewPolicy } from '~/server/preview-headers';
+import { policyNonce } from '~/server/request-nonce';
 import { NotFoundDocument } from './_chrome/not-found-document';
 // The site's 404 renders inside its presentation boundary, so it gets the
 // stylesheets the site's layout imports, the boundary links its variant's
@@ -28,6 +29,5 @@ export default async function GlobalNotFound() {
   // The nonce of the request's Content-Security-Policy, which proxy.ts sets
   // on a Studio or a preview path. A preview's 404 gets no theme script (#7).
   const policy = (await headers()).get('content-security-policy') ?? '';
-  const nonce = /'nonce-([A-Za-z0-9+/=]+)'/.exec(policy)?.[1];
-  return NotFoundDocument({ nonce, theme: !isPreviewPolicy(policy) });
+  return NotFoundDocument({ nonce: policyNonce(policy), theme: !isPreviewPolicy(policy) });
 }

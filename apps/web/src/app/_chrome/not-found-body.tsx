@@ -39,10 +39,13 @@ async function liveSite(): Promise<Site | null> {
 
 export async function NotFoundBody({
   segment,
+  nonce,
   registry = REGISTRY,
 }: {
   /** The experience segment proxy.ts named for the request, when it's a visitor page's. */
   readonly segment?: string;
+  /** The nonce of the request's Content-Security-Policy, for the boundary's stylesheet. */
+  readonly nonce?: string;
   readonly registry?: VariantRegistry;
 } = {}) {
   const state = getDeploymentState();
@@ -72,7 +75,7 @@ export async function NotFoundBody({
       ? live
       : compositionFor(segment, registry);
   return (
-    <PresentationBoundary composition={composition} motionPolicy={site.motionPolicy}>
+    <PresentationBoundary composition={composition} motionPolicy={site.motionPolicy} nonce={nonce}>
       {page}
     </PresentationBoundary>
   );

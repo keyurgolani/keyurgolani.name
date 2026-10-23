@@ -23,7 +23,8 @@ async function livePair() {
 
 /**
  * The document. `nonce` is the one in the request's Content-Security-Policy,
- * which proxy.ts sets on a Studio path, so the theme script runs there too.
+ * which proxy.ts sets on a Studio path, so the theme script runs there too,
+ * and on a preview path, where the variant's stylesheet carries it.
  * A preview's 404 renders without the theme script (`theme: false`), as a
  * preview document does (#7).
  */
@@ -47,7 +48,7 @@ export async function NotFoundDocument({
       <head>
         {theme ? <script nonce={nonce} dangerouslySetInnerHTML={{ __html: initScript }} /> : null}
       </head>
-      <body>{await NotFoundBody()}</body>
+      <body>{await NotFoundBody({ nonce })}</body>
     </html>
   );
 }

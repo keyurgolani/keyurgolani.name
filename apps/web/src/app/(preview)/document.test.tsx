@@ -163,3 +163,21 @@ test('no preview module reads cookies or request headers (#7, item 4)', () => {
   }
   assert.ok(checked >= 2, 'the agent and the document, at least');
 });
+
+test("a grant's frame reads no cookie, and of the request's headers only its Content-Security-Policy, for the nonce (#7, item 4; #6, Slice 2)", () => {
+  // server/preview-page.ts renders the frame's document, and asks
+  // server/request-nonce.ts for the nonce the variant's stylesheet carries:
+  // the one module on a preview's path that reads a request header, and it
+  // reads that one.
+  const read = (file: string) =>
+    readFileSync(fileURLToPath(new URL(`../../server/${file}`, import.meta.url)), 'utf8');
+  const page = read('preview-page.ts');
+  assert.doesNotMatch(page, /\bcookies\s*\(|next\/headers|document\.cookie/);
+  assert.match(page, /from '\.\/request-nonce'/);
+  const nonce = read('request-nonce.ts');
+  assert.doesNotMatch(nonce, /\bcookies\s*\(|document\.cookie/);
+  assert.deepEqual(
+    [...nonce.matchAll(/\.get\(([^)]*)\)/g)].map(([, name]) => name),
+    ["'content-security-policy'"],
+  );
+});

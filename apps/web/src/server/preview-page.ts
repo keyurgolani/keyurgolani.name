@@ -7,13 +7,16 @@ import { variantLoader } from '~/lib/variant-loaders';
 import { resolveVisitorPath } from '~/lib/visitor-routes';
 import { getDeploymentState, requireDeploymentConfig } from './config-store';
 import type { GrantChannel, OpenedGrant } from './preview-port';
+import { requestNonce } from './request-nonce';
 
 // What a grant path renders (#7, Slice 2). proxy.ts has already checked the
 // grant, from the path alone, and let only an iframe document load, or an
 // asset load of the right destination, through. The page checks it again
 // as it reads what the grant renders, through the port the owner
 // composition binds: under demo and read-only there's none, and no grant
-// path is served. Nothing here reads a cookie or a request header.
+// path is served. Nothing here reads a cookie, and of the request's headers
+// only the Content-Security-Policy proxy.ts set, for the nonce the variant's
+// stylesheet needs (server/request-nonce.ts), as Next reads it for its own.
 
 /**
  * The grant's document, checked and read once per request, so the layout,
@@ -58,5 +61,6 @@ export async function previewPage(grant: string, route: readonly string[]) {
     linkBase: { basePath },
     route: resolved.target,
     origin: requireDeploymentConfig().origin,
+    nonce: await requestNonce(),
   });
 }

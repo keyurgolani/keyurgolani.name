@@ -51,6 +51,12 @@ export interface ExperienceDocumentProps {
   readonly canonical?: string;
   /** When the request arrived. Tests pass a fixed time. */
   readonly requestTime?: Date;
+  /**
+   * The nonce of the request's Content-Security-Policy, where it has one: a
+   * preview frame's (#7), whose policy wants it on every stylesheet, the
+   * variant's compiled one among them (#6, Slice 2).
+   */
+  readonly nonce?: string;
 }
 
 /** The skip link, then the selected variant, or the fallback composition in its place, in its boundary. */
@@ -83,6 +89,7 @@ export async function ExperienceDocument(props: ExperienceDocumentProps) {
         composition={selection}
         motionPolicy={unit.site.motionPolicy}
         environment={props.environment}
+        nonce={props.nonce}
       >
         <Variant input={input} />
       </PresentationBoundary>
@@ -97,23 +104,28 @@ export async function ExperienceDocument(props: ExperienceDocumentProps) {
  * share it, and shown only once it has loaded. When the fallback composition
  * stands in, `data-requested-variant` says which variant the site selected,
  * for the owner and the tests; visitors see no label. A preview's
- * environment goes on it too.
+ * environment goes on it too, and under a policy with a nonce, the nonce
+ * goes on the stylesheet.
  */
 export function PresentationBoundary({
   composition,
   motionPolicy,
   environment,
+  nonce,
   children,
 }: {
   composition: Composition;
   motionPolicy: MotionPolicy;
   environment?: EnvironmentAttributes;
+  nonce?: string;
   children: ReactNode;
 }) {
   const stylesheet = variantStylesheet(composition.rendered.manifest.id);
   return (
     <>
-      {stylesheet ? <link rel="stylesheet" href={stylesheet} precedence="variant" /> : null}
+      {stylesheet ? (
+        <link rel="stylesheet" href={stylesheet} precedence="variant" nonce={nonce} />
+      ) : null}
       <div
         data-variant={composition.rendered.manifest.id}
         data-requested-variant={composition.fallback ? composition.requested : undefined}

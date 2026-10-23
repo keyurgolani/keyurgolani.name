@@ -103,8 +103,10 @@ test("the global 404's document is in the portfolio's language and direction, wi
     degraded: [],
   });
   const html = renderToStaticMarkup(await NotFoundDocument({ nonce: 'MVlEoQyHU2PoMq1Imu8oSA==' }));
-  // Inside the site's presentation boundary, with the stylesheet of the variant that renders (#6).
-  const stylesheet = `<link rel="stylesheet" href="${variantStylesheet('fallback')}" data-precedence="variant"/>`;
+  // Inside the site's presentation boundary, with the stylesheet of the
+  // variant that renders (#6), which carries the request's nonce, as a
+  // preview's policy wants (#6, Slice 2).
+  const stylesheet = `<link rel="stylesheet" href="${variantStylesheet('fallback')}" nonce="MVlEoQyHU2PoMq1Imu8oSA==" data-precedence="variant"/>`;
   assert.ok(
     html.startsWith(
       `<html lang="ar" dir="rtl"><head>${stylesheet}<script nonce="MVlEoQyHU2PoMq1Imu8oSA==">${themeInitScript('dark')}</script></head><body>`,
