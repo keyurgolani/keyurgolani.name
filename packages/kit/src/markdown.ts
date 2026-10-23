@@ -253,6 +253,13 @@ const COMMENT_LIKE =
   /<!--(?:-?>|[\s\S]*?(?:-->|$))|<!\[CDATA\[[\s\S]*?(?:\]\]>|$)|<\?[\s\S]*?(?:\?>|$)|<![A-Za-z][\s\S]*?(?:>|$)/g;
 const withoutComments = (html: string) => html.replace(COMMENT_LIKE, '');
 
-/** Text, escaped as escapeHtml does, except that a character reference the author wrote stays one, as marked left it. */
+/**
+ * Text, escaped as escapeHtml does, except that a character reference the
+ * author wrote stays one, as marked left it: a numeric one, or a name of up
+ * to 20 letters and digits. That's what sanitize-html's post-pass
+ * (markdown-sanitize.ts) keeps as a reference, so the two agree. Only a few
+ * names past 20 are references, such as CounterClockwiseContourIntegral, and
+ * those render as their text.
+ */
 const escapeText = (text: string) =>
-  text.replace(/[<>"']|&(?!#\d{1,7};|#[xX][0-9a-fA-F]{1,6};|\w+;)/g, escapeHtml);
+  text.replace(/[<>"']|&(?!#\d{1,7};|#[xX][0-9a-fA-F]{1,6};|[A-Za-z0-9]{1,20};)/g, escapeHtml);

@@ -1,6 +1,7 @@
 // Character references in an attribute value, decoded as a browser decodes
 // them, for #4's link rule to judge the URL a browser would follow: the
-// renderer's links (markdown.ts) read hrefs through it.
+// renderer's links (markdown.ts) and the server's post-pass over its markup
+// (markdown-sanitize.ts) both read hrefs through it.
 
 /** The named references that spell ASCII, so a URL can hide behind them, and the no-break space. */
 const NAMED: Readonly<Record<string, string>> = {

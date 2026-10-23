@@ -2,7 +2,8 @@ import { isAllowedUrl } from '@portfolio/schema';
 import type { VariantRenderInput } from '@portfolio/variant-contract';
 import { cn } from '../cn';
 import { escapeHtml, unescapeHtml } from '../html-escape';
-import { renderInlineMarkdown, renderMarkdown } from '../markdown';
+// By the package's name, so React Server Components get the post-pass (markdown.server.ts).
+import { renderInlineMarkdown, renderMarkdown } from '@portfolio/kit/markdown';
 import { hrefFor } from './primitives';
 
 /**
