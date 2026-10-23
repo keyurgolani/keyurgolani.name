@@ -1,7 +1,18 @@
-# The one CI workflow. `gate` is the only required check: it fails unless every
-# job it needs succeeded, so new jobs join by being added to its `needs`.
-# Every check step runs one `pnpm ci:<job>` script, which is also its local
-# command. On a push to main, after `gate` passes, `publish` pushes the
+# The one CI workflow. `gate` is the only required check: it fails unless this
+# is a complete run and every job it needs succeeded, so new jobs join by
+# being added to its `needs` and to `selected`'s.
+#
+# `changes` (ci/select-jobs.mjs) picks the jobs a run needs. A draft PR runs
+# only the jobs its changed paths select, for fast feedback, and `selected`
+# reports on them; gate fails a draft's run by design, and GitHub refuses to
+# merge a draft. A PR that's ready for review, a PR into main, and a push run
+# the complete product on every head, so gate's pass always covers the whole
+# product on the merge commit it ran. Each check job waits on `changes` and
+# runs when the selection names it; a job that skips that wiring just always
+# runs.
+#
+# Every check step runs one `pnpm ci:<job>` script, or a shard of one
+# (ci/shards.mjs), which is also its local command. On a push to main, after `gate` passes, `publish` pushes the
 # multi-arch image by digest, smoke-tests both platforms from that digest, and
 # tags it sha-<short>. Nothing publishes from a PR or another branch.
 name: ci
@@ -9,7 +20,8 @@ name: ci
 on:
   pull_request:
     branches: [main, next]
-    types: [opened, synchronize, reopened, labeled, unlabeled]
+    # ready_for_review starts the complete run gate needs on a draft's head.
+    types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled]
   push:
     branches: [main]
 
@@ -31,23 +43,47 @@ env:
   REPORT_RETENTION_DAYS: ${{ github.event_name == 'pull_request' && 14 || 90 }}
 
 jobs:
+  # The selection: which check jobs this run needs, and whether that's the
+  # complete product (ci/select-jobs.mjs). On a PR the checkout is the merge
+  # commit, so its first parent is the base tip and the diff is the merge's.
+  # Pure Node on the runner's own, so it needs no install.
+  changes:
+    name: changes
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      jobs: ${{ steps.select.outputs.jobs }}
+      complete: ${{ steps.select.outputs.complete }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - name: Select jobs
+        id: select
+        env:
+          PR_DRAFT: ${{ github.event.pull_request.draft }}
+          BASE_REF: ${{ github.base_ref }}
+        run: node ci/select-jobs.mjs --github
+
   static:
     name: static
+    needs: [changes]
+    if: ${{ contains(fromJSON(needs.changes.outputs.jobs), 'static') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          package-manager-cache: false
-      - name: Enable pnpm
-        run: corepack enable
       - name: Install
         id: install
-        run: pnpm install --frozen-lockfile
+        uses: ./.github/actions/install
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: pnpm store cache hit
+        if: ${{ steps.install.outputs.store-hit == 'true' }}
+        run: echo "pnpm store restored under this lockfile's hash"
       - name: Install workflow linters
         id: linters
         run: |
@@ -93,24 +129,37 @@ jobs:
           if-no-files-found: ignore
           retention-days: ${{ env.REPORT_RETENTION_DAYS }}
 
+  # `pnpm test` in three shards, split by workspace package and root test
+  # script on their measured durations (ci/shards.mjs,
+  # ci/shard-durations.json). Together they run exactly what `pnpm ci:unit`
+  # runs.
   unit:
-    name: unit
+    name: unit (${{ matrix.shard }}/3)
+    needs: [changes]
+    if: ${{ contains(fromJSON(needs.changes.outputs.jobs), 'unit') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      - name: Install
+        id: install
+        uses: ./.github/actions/install
         with:
           node-version: ${{ env.NODE_VERSION }}
-          package-manager-cache: false
-      - name: Enable pnpm
-        run: corepack enable
-      - name: Install
-        run: pnpm install --frozen-lockfile
-      - name: pnpm ci:unit
-        run: pnpm ci:unit
+      - name: pnpm store cache hit
+        if: ${{ steps.install.outputs.store-hit == 'true' }}
+        run: echo "pnpm store restored under this lockfile's hash"
+      - name: pnpm test:shard unit ${{ matrix.shard }}/3
+        env:
+          SHARD: ${{ matrix.shard }}/3
+          CI_REPRO_COMMAND: pnpm test:shard unit ${{ matrix.shard }}/3
+        run: node ci/run.mjs unit -- node ci/shards.mjs run unit "$SHARD"
       - name: Failure summary
         if: ${{ always() }}
         run: node ci/summarize.mjs
@@ -118,27 +167,44 @@ jobs:
         if: ${{ always() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: reports-unit
+          name: reports-unit-${{ matrix.shard }}
           path: reports/
           if-no-files-found: ignore
           retention-days: ${{ env.REPORT_RETENTION_DAYS }}
 
   build:
     name: build
+    needs: [changes]
+    if: ${{ contains(fromJSON(needs.changes.outputs.jobs), 'build') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      - name: Install
+        id: install
+        uses: ./.github/actions/install
         with:
           node-version: ${{ env.NODE_VERSION }}
-          package-manager-cache: false
-      - name: Enable pnpm
-        run: corepack enable
-      - name: Install
-        run: pnpm install --frozen-lockfile
+      - name: pnpm store cache hit
+        if: ${{ steps.install.outputs.store-hit == 'true' }}
+        run: echo "pnpm store restored under this lockfile's hash"
+      # Next's own cache, keyed by the lockfile and the hash of every build
+      # input, and only ever written by the plain build this job, browser,
+      # and variants run: no fixture flag, no analyze build. It never holds
+      # the generated registry, which each build writes fresh, and the image
+      # and publish never read it.
+      - name: Restore the Next build cache
+        id: next-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: apps/web/.next/cache
+          key: next-build-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('apps/web/src/**', 'apps/web/scripts/**', 'apps/web/public/**', 'apps/web/*.ts', 'apps/web/*.json', 'packages/*/src/**', 'packages/*/packs/**', 'packages/*/*.json', '*.example.yml', 'example-media/**', 'snapshots/**') }}
+          restore-keys: next-build-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
+      - name: Next build cache hit
+        if: ${{ steps.next-cache.outputs.cache-hit == 'true' }}
+        run: echo "Next build cache restored for these build inputs"
       - name: pnpm ci:build
         run: pnpm ci:build
       # The default build ships no browser source maps. Only the analyze
@@ -168,10 +234,18 @@ jobs:
           if-no-files-found: ignore
           retention-days: ${{ env.REPORT_RETENTION_DAYS }}
 
+  # The browser suite in two shards, split by spec file on measured
+  # durations (ci/shards.mjs). Each shard builds, then runs its files.
   browser:
-    name: browser
+    name: browser (${{ matrix.shard }}/2)
+    needs: [changes]
+    if: ${{ contains(fromJSON(needs.changes.outputs.jobs), 'browser') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     # Browsers come baked into the image, at the version @playwright/test pins.
     container:
       image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
@@ -183,18 +257,32 @@ jobs:
         with:
           persist-credentials: false
       # The image ships Node 24; the app under test runs on the image's Node 22.
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      - name: Install
+        id: install
+        uses: ./.github/actions/install
         with:
           node-version: ${{ env.NODE_VERSION }}
-          package-manager-cache: false
-      - name: Enable pnpm
-        run: corepack enable
-      - name: Install
-        run: pnpm install --frozen-lockfile
+      - name: pnpm store cache hit
+        if: ${{ steps.install.outputs.store-hit == 'true' }}
+        run: echo "pnpm store restored under this lockfile's hash"
+      # The build job's Next cache (see there).
+      - name: Restore the Next build cache
+        id: next-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: apps/web/.next/cache
+          key: next-build-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('apps/web/src/**', 'apps/web/scripts/**', 'apps/web/public/**', 'apps/web/*.ts', 'apps/web/*.json', 'packages/*/src/**', 'packages/*/packs/**', 'packages/*/*.json', '*.example.yml', 'example-media/**', 'snapshots/**') }}
+          restore-keys: next-build-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
+      - name: Next build cache hit
+        if: ${{ steps.next-cache.outputs.cache-hit == 'true' }}
+        run: echo "Next build cache restored for these build inputs"
       - name: pnpm ci:build
         run: pnpm ci:build
-      - name: pnpm ci:browser
-        run: pnpm ci:browser
+      - name: pnpm test:shard browser ${{ matrix.shard }}/2
+        env:
+          SHARD: ${{ matrix.shard }}/2
+          CI_REPRO_COMMAND: pnpm test:shard browser ${{ matrix.shard }}/2
+        run: node ci/run.mjs browser -- node ci/shards.mjs run browser "$SHARD"
       - name: Failure summary
         if: ${{ always() }}
         run: node ci/summarize.mjs
@@ -202,7 +290,7 @@ jobs:
         if: ${{ always() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: reports-browser
+          name: reports-browser-${{ matrix.shard }}
           path: reports/
           if-no-files-found: ignore
           retention-days: ${{ env.REPORT_RETENTION_DAYS }}
@@ -213,6 +301,8 @@ jobs:
   # from the store this job's install fills. Nothing in the checkout is built.
   routes:
     name: routes
+    needs: [changes]
+    if: ${{ contains(fromJSON(needs.changes.outputs.jobs), 'routes') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     container:
@@ -222,14 +312,14 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      - name: Install
+        id: install
+        uses: ./.github/actions/install
         with:
           node-version: ${{ env.NODE_VERSION }}
-          package-manager-cache: false
-      - name: Enable pnpm
-        run: corepack enable
-      - name: Install
-        run: pnpm install --frozen-lockfile
+      - name: pnpm store cache hit
+        if: ${{ steps.install.outputs.store-hit == 'true' }}
+        run: echo "pnpm store restored under this lockfile's hash"
       - name: pnpm ci:routes
         run: pnpm ci:routes
       - name: Failure summary
@@ -252,6 +342,8 @@ jobs:
   # is built.
   appearance-browser:
     name: appearance-browser
+    needs: [changes]
+    if: ${{ contains(fromJSON(needs.changes.outputs.jobs), 'appearance-browser') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     container:
@@ -261,14 +353,14 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      - name: Install
+        id: install
+        uses: ./.github/actions/install
         with:
           node-version: ${{ env.NODE_VERSION }}
-          package-manager-cache: false
-      - name: Enable pnpm
-        run: corepack enable
-      - name: Install
-        run: pnpm install --frozen-lockfile
+      - name: pnpm store cache hit
+        if: ${{ steps.install.outputs.store-hit == 'true' }}
+        run: echo "pnpm store restored under this lockfile's hash"
       - name: pnpm ci:appearance-browser
         run: pnpm ci:appearance-browser
       - name: Failure summary
@@ -287,20 +379,22 @@ jobs:
   # registered variant's code and styles, and the kit modules they reach.
   check-variants:
     name: check-variants
+    needs: [changes]
+    if: ${{ contains(fromJSON(needs.changes.outputs.jobs), 'check-variants') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      - name: Install
+        id: install
+        uses: ./.github/actions/install
         with:
           node-version: ${{ env.NODE_VERSION }}
-          package-manager-cache: false
-      - name: Enable pnpm
-        run: corepack enable
-      - name: Install
-        run: pnpm install --frozen-lockfile
+      - name: pnpm store cache hit
+        if: ${{ steps.install.outputs.store-hit == 'true' }}
+        run: echo "pnpm store restored under this lockfile's hash"
       - name: pnpm ci:check-variants
         run: pnpm ci:check-variants
       - name: Failure summary
@@ -321,10 +415,18 @@ jobs:
   # compare against tests/variants/__screenshots__/ here, in the pinned
   # image, and nowhere else. A missing baseline fails the job, which writes
   # it and uploads it in the variants-screenshots artifact to be committed.
+  # In two shards, split by Playwright project (one per composition and
+  # fixture, plus the modes' own checks) on measured durations.
   variants:
-    name: variants
+    name: variants (${{ matrix.shard }}/2)
+    needs: [changes]
+    if: ${{ contains(fromJSON(needs.changes.outputs.jobs), 'variants') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     container:
       image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
       options: --user 1001 --ipc=host --init
@@ -334,18 +436,32 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      - name: Install
+        id: install
+        uses: ./.github/actions/install
         with:
           node-version: ${{ env.NODE_VERSION }}
-          package-manager-cache: false
-      - name: Enable pnpm
-        run: corepack enable
-      - name: Install
-        run: pnpm install --frozen-lockfile
+      - name: pnpm store cache hit
+        if: ${{ steps.install.outputs.store-hit == 'true' }}
+        run: echo "pnpm store restored under this lockfile's hash"
+      # The build job's Next cache (see there).
+      - name: Restore the Next build cache
+        id: next-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: apps/web/.next/cache
+          key: next-build-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('apps/web/src/**', 'apps/web/scripts/**', 'apps/web/public/**', 'apps/web/*.ts', 'apps/web/*.json', 'packages/*/src/**', 'packages/*/packs/**', 'packages/*/*.json', '*.example.yml', 'example-media/**', 'snapshots/**') }}
+          restore-keys: next-build-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
+      - name: Next build cache hit
+        if: ${{ steps.next-cache.outputs.cache-hit == 'true' }}
+        run: echo "Next build cache restored for these build inputs"
       - name: pnpm ci:build
         run: pnpm ci:build
-      - name: pnpm ci:variants
-        run: pnpm ci:variants
+      - name: pnpm test:shard variants ${{ matrix.shard }}/2
+        env:
+          SHARD: ${{ matrix.shard }}/2
+          CI_REPRO_COMMAND: pnpm test:shard variants ${{ matrix.shard }}/2
+        run: node ci/run.mjs variants -- node ci/shards.mjs run variants "$SHARD"
       - name: Failure summary
         if: ${{ always() }}
         run: node ci/summarize.mjs
@@ -353,7 +469,7 @@ jobs:
         if: ${{ always() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: reports-variants
+          name: reports-variants-${{ matrix.shard }}
           path: reports/
           if-no-files-found: ignore
           retention-days: ${{ env.REPORT_RETENTION_DAYS }}
@@ -361,7 +477,7 @@ jobs:
         if: ${{ failure() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: variants-screenshots
+          name: variants-screenshots-${{ matrix.shard }}
           path: tests/variants/__screenshots__/
           if-no-files-found: ignore
           retention-days: ${{ env.REPORT_RETENTION_DAYS }}
@@ -374,6 +490,8 @@ jobs:
   # the checkout is built.
   external-variant:
     name: external-variant
+    needs: [changes]
+    if: ${{ contains(fromJSON(needs.changes.outputs.jobs), 'external-variant') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     container:
@@ -383,14 +501,14 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      - name: Install
+        id: install
+        uses: ./.github/actions/install
         with:
           node-version: ${{ env.NODE_VERSION }}
-          package-manager-cache: false
-      - name: Enable pnpm
-        run: corepack enable
-      - name: Install
-        run: pnpm install --frozen-lockfile
+      - name: pnpm store cache hit
+        if: ${{ steps.install.outputs.store-hit == 'true' }}
+        run: echo "pnpm store restored under this lockfile's hash"
       - name: pnpm ci:external-variant
         run: pnpm ci:external-variant
       - name: Failure summary
@@ -405,8 +523,40 @@ jobs:
           if-no-files-found: ignore
           retention-days: ${{ env.REPORT_RETENTION_DAYS }}
 
+  # The offline docs check (ci/docs-check.mjs): every relative link and
+  # anchor in the repository's Markdown resolves, and every `pnpm <script>`
+  # it names exists. Pure Node, so no install. The scheduled workflow checks
+  # external links weekly. It writes its own job summary, since the failure
+  # summary needs the install this job skips.
+  docs:
+    name: docs
+    needs: [changes]
+    if: ${{ contains(fromJSON(needs.changes.outputs.jobs), 'docs') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - name: pnpm ci:docs
+        run: node ci/run.mjs docs -- node ci/docs-check.mjs
+      - name: Upload reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-docs
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: ${{ env.REPORT_RETENTION_DAYS }}
+
   image:
     name: image
+    needs: [changes]
+    if: ${{ contains(fromJSON(needs.changes.outputs.jobs), 'image') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
@@ -416,14 +566,14 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      - name: Install
+        id: install
+        uses: ./.github/actions/install
         with:
           node-version: ${{ env.NODE_VERSION }}
-          package-manager-cache: false
-      - name: Enable pnpm
-        run: corepack enable
-      - name: Install
-        run: pnpm install --frozen-lockfile
+      - name: pnpm store cache hit
+        if: ${{ steps.install.outputs.store-hit == 'true' }}
+        run: echo "pnpm store restored under this lockfile's hash"
       # Builds amd64 without pushing, starts the container, and checks health.
       - name: pnpm ci:image
         id: image
@@ -451,11 +601,14 @@ jobs:
           if-no-files-found: ignore
           retention-days: ${{ env.REPORT_RETENTION_DAYS }}
 
-  gate:
-    name: gate
+  # A draft's feedback: every selected job succeeded and the rest were
+  # skipped. Never required; gate is.
+  selected:
+    name: selected
     if: ${{ always() }}
     needs:
       [
+        changes,
         static,
         unit,
         build,
@@ -466,6 +619,7 @@ jobs:
         variants,
         external-variant,
         image,
+        docs,
       ]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -475,7 +629,39 @@ jobs:
           persist-credentials: false
           sparse-checkout: ci/gate.mjs
           sparse-checkout-cone-mode: false
-      - name: Require every needed job to succeed
+      - name: Require every selected job to succeed
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: node ci/gate.mjs --selected
+
+  # The one required check: a complete run where every job succeeded.
+  gate:
+    name: gate
+    if: ${{ always() }}
+    needs:
+      [
+        changes,
+        static,
+        unit,
+        build,
+        browser,
+        routes,
+        appearance-browser,
+        check-variants,
+        variants,
+        external-variant,
+        image,
+        docs,
+      ]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: ci/gate.mjs
+          sparse-checkout-cone-mode: false
+      - name: Require a complete run where every needed job succeeded
         env:
           NEEDS_JSON: ${{ toJSON(needs) }}
         run: node ci/gate.mjs

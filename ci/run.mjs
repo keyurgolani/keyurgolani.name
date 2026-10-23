@@ -11,8 +11,13 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readFailureRecords, reportError, writeFailureRecord } from './lib/reports.mjs';
 
-/** The command a developer runs locally to reproduce this check. */
+/**
+ * The command a developer runs locally to reproduce this check. A CI step
+ * that runs one shard of a check names that shard's command in
+ * CI_REPRO_COMMAND.
+ */
 export function reproCommandFor(gate, env = process.env) {
+  if (env.CI_REPRO_COMMAND) return env.CI_REPRO_COMMAND;
   const script = env.npm_lifecycle_event;
   return script && script.startsWith('ci:') ? `pnpm ${script}` : `pnpm ci:${gate}`;
 }

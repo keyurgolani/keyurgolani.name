@@ -94,4 +94,11 @@ test('the local command comes from the pnpm script name', () => {
   assert.equal(reproCommandFor('lint', { npm_lifecycle_event: 'ci:lint' }), 'pnpm ci:lint');
   assert.equal(reproCommandFor('lint', { npm_lifecycle_event: 'check:pins' }), 'pnpm ci:lint');
   assert.equal(reproCommandFor('lint', {}), 'pnpm ci:lint');
+  assert.equal(
+    reproCommandFor('unit', {
+      npm_lifecycle_event: 'ci:unit',
+      CI_REPRO_COMMAND: 'pnpm test:shard unit 2/3',
+    }),
+    'pnpm test:shard unit 2/3',
+  );
 });

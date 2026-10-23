@@ -24,7 +24,8 @@ updates:
         update-types: ['version-update:semver-major']
 
   - package-ecosystem: github-actions
-    directory: /
+    # The workflows, and the composite action every CI job installs through.
+    directories: ['/', '/.github/actions/*']
     schedule:
       interval: weekly
     cooldown:
