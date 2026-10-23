@@ -383,6 +383,8 @@ jobs:
   # reports/preview-fixtures/screenshots.
   preview-fixtures-browser:
     name: preview-fixtures-browser
+    needs: [changes]
+    if: ${{ contains(fromJSON(needs.changes.outputs.jobs), 'preview-fixtures-browser') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     container:
@@ -392,14 +394,14 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      - name: Install
+        id: install
+        uses: ./.github/actions/install
         with:
           node-version: ${{ env.NODE_VERSION }}
-          package-manager-cache: false
-      - name: Enable pnpm
-        run: corepack enable
-      - name: Install
-        run: pnpm install --frozen-lockfile
+      - name: pnpm store cache hit
+        if: ${{ steps.install.outputs.store-hit == 'true' }}
+        run: echo "pnpm store restored under this lockfile's hash"
       - name: pnpm ci:preview-fixtures-browser
         run: pnpm ci:preview-fixtures-browser
       - name: Failure summary
@@ -689,6 +691,7 @@ jobs:
         browser,
         routes,
         appearance-browser,
+        preview-fixtures-browser,
         check-variants,
         variants,
         external-variant,
