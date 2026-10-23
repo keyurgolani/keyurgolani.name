@@ -43,16 +43,28 @@ function composeHealthcheck(file) {
 
 /**
  * Runs a `node ...` command (the leading `node` is optional) with a clean env
- * plus `env`; resolves to { status, stdout }.
+ * plus `env`; resolves to { status, stdout }. Only a command given `input`
+ * gets a stdin to read it from. A child can exit before this process writes
+ * to its stdin, if this one is slow to run under load, and a write after
+ * that fails with EPIPE: so one given no input has nothing to write to, and
+ * one that exits without reading its input is answered by its status, not
+ * by the write.
  */
 function runNode(args, env, input) {
   const nodeArgs = args[0] === 'node' ? args.slice(1) : args;
-  return new Promise((resolve) => {
-    const child = spawn(process.execPath, nodeArgs, { env: { PATH: process.env.PATH, ...env } });
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, nodeArgs, {
+      env: { PATH: process.env.PATH, ...env },
+      stdio: [input === undefined ? 'ignore' : 'pipe', 'pipe', 'pipe'],
+    });
     let stdout = '';
     child.stdout.on('data', (chunk) => (stdout += chunk));
     child.on('exit', (status) => resolve({ status, stdout }));
-    child.stdin.end(input ?? '');
+    if (input === undefined) return;
+    child.stdin.on('error', (error) => {
+      if (error.code !== 'EPIPE') reject(error);
+    });
+    child.stdin.end(input);
   });
 }
 
@@ -165,6 +177,23 @@ test('the runner stage copies the app owned by root, so the server cannot change
   for (const line of copies) assert.doesNotMatch(line, /--chown/, line);
   // The one thing the server's user owns: the data directory.
   assert.deepEqual(runner.match(/chown [^&\n]+/g), ['chown nextjs:nodejs /var/lib/portfolio ']);
+});
+
+test('a command given no input gets no stdin, so nothing is written to a child that has gone', async () => {
+  // The ownership check's children exit as soon as they've looked, and its
+  // test failed with write EPIPE under load: this process wrote the empty
+  // input after the child was gone.
+  const stdin = await runNode(
+    ['-e', 'process.stdout.write(String(require("node:fs").fstatSync(0).isCharacterDevice()))'],
+    {},
+  );
+  assert.deepEqual(stdin, { status: 0, stdout: 'true' });
+});
+
+test('a child that exits without reading its input is answered by its status, not the write', async () => {
+  // More than a pipe holds, so the write is still under way when it exits.
+  const result = await runNode(['-e', 'process.exit(3)'], {}, 'x'.repeat(4 * 1024 * 1024));
+  assert.deepEqual(result, { status: 3, stdout: '' });
 });
 
 test('the ownership check lists what a user could change in a tree', async () => {
