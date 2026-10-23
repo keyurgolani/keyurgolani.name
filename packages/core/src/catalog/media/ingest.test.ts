@@ -159,6 +159,24 @@ test('a rename keeps the revision: same hash, same renditions, nothing derived a
   );
 });
 
+test('a revision whose blobs are gone is never reused: the same bytes derive again', async (t) => {
+  const s = await setup(t);
+  await sources(s);
+  const first = (await s.ingest({})).document;
+  const lost = record(first, 'ferry-at-dawn').renditions[0]!.sha256;
+  rmSync(s.store.paths.blob(`sha256:${lost}` as Sha256));
+  assert.equal(await s.store.assets.has(`sha256:${lost}` as Sha256), false);
+  const second = await s.ingest({ previous: first });
+  assert.deepEqual(second.derived, ['ferry-at-dawn']);
+  assert.equal(
+    record(second.document, 'ferry-at-dawn').sha256,
+    record(first, 'ferry-at-dawn').sha256,
+  );
+  for (const blob of mediaBlobs(second.document)) {
+    assert.ok(await s.store.assets.has(blob), blob);
+  }
+});
+
 test('a replacement becomes the revision once it derives; a broken one leaves the last in place', async (t) => {
   const s = await setup(t);
   await sources(s);

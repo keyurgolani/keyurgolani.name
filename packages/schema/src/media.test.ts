@@ -97,6 +97,15 @@ test("each rendition names its own blob, and never the source's", () => {
   assert.equal(original.problems[0]!.pointer, '/assets/0/renditions/1/sha256');
 });
 
+test('a media document holds one record per asset: a repeated assetId is refused', () => {
+  assert.ok(parseMediaDocument({ assets: [RECORD] }).ok);
+  const repeated = parseMediaDocument({
+    assets: [RECORD, { ...RECORD, sha256: hex('e') }],
+  });
+  assert.ok(!repeated.ok);
+  assert.equal(repeated.problems[0]!.pointer, '/assets/1/assetId');
+});
+
 test('mediaBlobs lists every source and rendition blob once, as the store names them', () => {
   const other: MediaRecord = {
     ...RECORD,
