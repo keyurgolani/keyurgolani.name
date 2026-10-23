@@ -116,6 +116,25 @@ test('no CSS recipe in the skills teaches a kill switch the audit fails', () => 
   }
 });
 
+test("a skill recipe that stops motion under the boundary's data-motion stops it under the site's reduce policy too", () => {
+  // Public pages render only data-motion-policy on the boundary until #19
+  // slice 4 brings data-motion there.
+  const dir = path.join(REPO_ROOT, 'skills');
+  let keyed = 0;
+  for (const file of readdirSync(dir, { recursive: true, encoding: 'utf8' })) {
+    if (!file.endsWith('.md')) continue;
+    const text = readFileSync(path.join(dir, file), 'utf8');
+    for (const [, css] of text.matchAll(/```css\n([\s\S]*?)```/g)) {
+      for (const [, selector] of css!.matchAll(/(?:^|\})([^{}]*)\{/g)) {
+        if (!/\[data-motion=/.test(selector!)) continue;
+        keyed += 1;
+        assert.match(selector!, /\[data-motion-policy='reduce'\]/, `${file}: ${selector!.trim()}`);
+      }
+    }
+  }
+  assert.ok(keyed > 0, 'a recipe keys on data-motion');
+});
+
 test('reduced motion allows short opacity and color changes, and no movement or long or endless motion', () => {
   const at = (properties: string[], duration: number, infinite = false) => ({
     kind: 'CSSTransition',
