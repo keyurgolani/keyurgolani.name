@@ -606,3 +606,62 @@ export function partsOf(value) {
   }
   return PARTS.filter((part) => named.includes(part));
 }
+
+/** #10's renditions in the route table, whose probe path names no rendition. */
+export const MEDIA_PATTERN = '/media/[...path]';
+
+/**
+ * Problems with /media's answer to a path that names no rendition (#10):
+ * the plain 404, never cached.
+ *
+ * @param {{ status: number, headers: Record<string, string> }} response
+ * @returns {string[]}
+ */
+export function mediaMissProblems(response) {
+  const problems = [];
+  if (response.status !== 404) problems.push(`answered ${response.status}, not 404`);
+  if (!/^text\/plain/.test(response.headers['content-type'] ?? '')) {
+    problems.push(`is ${response.headers['content-type']}, not the plain 404`);
+  }
+  if (response.headers['cache-control'] !== 'no-store') problems.push('no Cache-Control: no-store');
+  return problems;
+}
+
+/** The first /media rendition a page names, or null. */
+export function renditionIn(html) {
+  return (
+    /\/media\/[a-z0-9]+(?:-[a-z0-9]+)*\/[0-9a-f]{64}\/[a-z0-9-]+\.(?:webp|jpg|png|avif)/.exec(
+      html ?? '',
+    )?.[0] ?? null
+  );
+}
+
+/** A rendition's type, by its extension. */
+const RENDITION_TYPES = {
+  webp: 'image/webp',
+  jpg: 'image/jpeg',
+  png: 'image/png',
+  avif: 'image/avif',
+};
+
+/**
+ * Problems with a real rendition's answer (#10): 200, its own image type,
+ * cached for a year as immutable, and nosniff.
+ *
+ * @param {string} pathname the /media path
+ * @param {{ status: number, headers: Record<string, string> }} response
+ * @returns {string[]}
+ */
+export function renditionProblems(pathname, response) {
+  const problems = [];
+  if (response.status !== 200) problems.push(`answered ${response.status}, not 200`);
+  const type = RENDITION_TYPES[pathname.split('.').at(-1) ?? ''];
+  if (response.headers['content-type'] !== type) {
+    problems.push(`is ${response.headers['content-type']}, not ${type}`);
+  }
+  if (response.headers['cache-control'] !== 'public, max-age=31536000, immutable') {
+    problems.push(`has Cache-Control ${response.headers['cache-control']}, not a year's immutable`);
+  }
+  if (response.headers['x-content-type-options'] !== 'nosniff') problems.push('no nosniff');
+  return problems;
+}

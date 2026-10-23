@@ -24,6 +24,7 @@ import {
   leakProblems,
   isDurable,
   maskCommands,
+  mediaMissProblems,
   newAuditRecords,
   partsOf,
   persistenceProblems,
@@ -31,6 +32,8 @@ import {
   processProblems,
   redact,
   redactArtifacts,
+  renditionIn,
+  renditionProblems,
   reproFor,
   signedInLeaks,
   sourceProblems,
@@ -642,4 +645,51 @@ test('fatal codes: each config.fatal line, in order, and nothing else', () => {
 test('hop labels read as a person would say them', () => {
   assert.equal(hopsLabel(0), 'at 0 trusted hops');
   assert.equal(hopsLabel(1), 'at 1 trusted hop');
+});
+
+test("/media's probe path is the plain uncached 404, and a real rendition is 200, its own type, immutable, and nosniff (#10)", () => {
+  const miss = (status, type, cache) => ({
+    status,
+    headers: { 'content-type': type, 'cache-control': cache },
+  });
+  assert.deepEqual(mediaMissProblems(miss(404, 'text/plain; charset=utf-8', 'no-store')), []);
+  assert.deepEqual(mediaMissProblems(miss(200, 'image/webp', 'no-store')), [
+    'answered 200, not 404',
+    'is image/webp, not the plain 404',
+  ]);
+  assert.deepEqual(mediaMissProblems(miss(404, 'text/plain', 'public, max-age=60')), [
+    'no Cache-Control: no-store',
+  ]);
+
+  const hex = 'a'.repeat(64);
+  const path = `/media/anamika-portrait/${hex}/w480-a1.webp`;
+  assert.equal(renditionIn(`<img src="${path}" srcset="/media/x/${hex}/w960-a1.jpg 960w">`), path);
+  assert.equal(renditionIn('<img src="https://images.rowan.test/a.png">'), null);
+  assert.equal(renditionIn(undefined), null);
+
+  const served = (status, headers) => ({ status, headers });
+  const good = {
+    'content-type': 'image/webp',
+    'cache-control': 'public, max-age=31536000, immutable',
+    'x-content-type-options': 'nosniff',
+  };
+  assert.deepEqual(renditionProblems(path, served(200, good)), []);
+  assert.deepEqual(
+    renditionProblems(
+      path,
+      served(404, { ...good, 'content-type': 'text/plain', 'cache-control': 'no-store' }),
+    ),
+    [
+      'answered 404, not 200',
+      'is text/plain, not image/webp',
+      "has Cache-Control no-store, not a year's immutable",
+    ],
+  );
+  assert.deepEqual(
+    renditionProblems(
+      path.replace('.webp', '.jpg'),
+      served(200, { ...good, 'x-content-type-options': undefined }),
+    ),
+    ['is image/webp, not image/jpeg', 'no nosniff'],
+  );
 });
