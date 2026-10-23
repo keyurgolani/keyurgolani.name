@@ -1,6 +1,9 @@
-// pnpm quality:pr and pnpm quality:full -- --shard=<n>/<m> (#11, Slice 1,
-// item 2): the quality cells, through Playwright with
-// tests/quality/playwright.config.ts, judged here.
+// pnpm quality:pr and pnpm quality:full, each optionally with
+// -- --shard=<n>/<m> (#11, Slice 1, item 2): the quality cells, through
+// Playwright with tests/quality/playwright.config.ts, judged here.
+// quality:full's shard is Playwright's own; quality:pr's is the runner's,
+// by measured duration (lib/pr-shards.ts). Either way `pnpm quality:merge`
+// judges the shards whole.
 //
 //   1. Every engine the mode plans must launch (missing-browser).
 //   2. The quality host is built (lib/build.mjs), unless QUALITY_WEB names
@@ -54,6 +57,7 @@ import { cleanupOnInterrupt } from './lib/interrupt.mjs';
 import { buildReferenceHost, installReference, removeReference } from '../external-variant/run.mjs';
 import { RUN_ENGINES } from './lib/matrix';
 import { RECORD_VERSION } from './lib/failure-records';
+import { prShard } from './lib/pr-shards';
 import { planRecord, type RunVerdict } from './lib/shards';
 import { judge, type Failure, type Verdict } from './lib/verdict';
 import { budgetResults } from './lib/perf/budgets';
@@ -95,18 +99,22 @@ export function parseRunArgs(argv: readonly string[]): RunOptions {
   if (externalVariant && mode === 'pr') {
     throw new Error(`${EXTERNAL_VARIANT_FLAG} is for the close and scheduled runs: quality:full.`);
   }
-  const playwright = args.filter((arg) => arg !== EXTERNAL_VARIANT_FLAG);
   let shard: string | null = null;
-  for (const arg of playwright) {
+  for (const arg of args) {
     const value = /^--shard=(.*)$/.exec(arg)?.[1];
     if (value === undefined) continue;
     const match = /^(\d+)\/(\d+)$/.exec(value);
     if (!match || Number(match[1]) < 1 || Number(match[1]) > Number(match[2])) {
       throw new Error(`--shard takes <n>/<m> with 1 <= n <= m, not ${value}`);
     }
-    if (mode === 'pr') throw new Error('quality:pr runs whole; shard quality:full instead.');
+    if (shard !== null) throw new Error('--shard is given twice.');
     shard = value;
   }
+  // quality:full shards through Playwright's --shard; quality:pr's shard is
+  // the runner's own, by measured duration (lib/pr-shards.ts), so it stays here.
+  const playwright = args.filter(
+    (arg) => arg !== EXTERNAL_VARIANT_FLAG && !(mode === 'pr' && arg.startsWith('--shard=')),
+  );
   return { mode: mode as RunMode, shard, externalVariant, playwright };
 }
 
@@ -234,6 +242,8 @@ async function main(argv: readonly string[]): Promise<number> {
       QUALITY_CANARY: canary,
       QUALITY_SECRETS_FILE: secretsFile,
       ...(changed ? { QUALITY_CHANGED_FILES: JSON.stringify(changed.files) } : {}),
+      // A PR shard's own (lib/pr-shards.ts): the config and the reporter read it.
+      QUALITY_SHARD: options.mode === 'pr' && options.shard ? options.shard : '',
     };
     plan = await loadPlan(env);
     writeFileSync(
@@ -241,6 +251,13 @@ async function main(argv: readonly string[]): Promise<number> {
       `${JSON.stringify(planRecord(plan), null, 2)}\n`,
     );
     console.log(`[quality] ${plan.cells.length} cells, ${plan.tests.length} tests planned`);
+    if (options.mode === 'pr' && options.shard) {
+      const mine = prShard(plan, engines, options.shard);
+      console.log(
+        `[quality] shard ${options.shard}: ${mine.groups.length} test group(s), about ${mine.weight}s on one worker`,
+      );
+      for (const group of mine.groups) console.log(`  ${group.project} ${group.file}`);
+    }
     for (const { axis, id } of plan.changes) {
       const cells = plan.cells.filter((cell) =>
         cell.changed?.some((by) => by.axis === axis && by.id === id),

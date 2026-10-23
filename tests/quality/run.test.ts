@@ -9,7 +9,7 @@ import { scrubRun, parseRunArgs } from './run';
 import { plantCanary } from './lib/artifacts.mjs';
 import { UNKNOWN_FORM } from './lib/canary-forms.mjs';
 
-test('quality:pr runs whole; quality:full takes a shard, and the rest goes to Playwright', () => {
+test("quality:full's shard goes to Playwright; quality:pr's stays the runner's (pr-shards.test.ts), and the rest goes to Playwright", () => {
   assert.deepEqual(parseRunArgs(['pr']), {
     mode: 'pr',
     shard: null,
@@ -28,7 +28,12 @@ test('quality:pr runs whole; quality:full takes a shard, and the rest goes to Pl
     externalVariant: false,
     playwright: ['--shard=1/1', '--grep', 'login'],
   });
-  assert.throws(() => parseRunArgs(['pr', '--shard=1/2']), /quality:pr runs whole/);
+  assert.deepEqual(parseRunArgs(['pr', '--shard=1/2']), {
+    mode: 'pr',
+    shard: '1/2',
+    externalVariant: false,
+    playwright: [],
+  });
   assert.throws(() => parseRunArgs(['full', '--shard=3/2']), /1 <= n <= m/);
   assert.throws(() => parseRunArgs(['full', '--shard=0/2']), /1 <= n <= m/);
   assert.throws(() => parseRunArgs(['full', '--shard=x']), /<n>\/<m>/);

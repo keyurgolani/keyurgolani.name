@@ -1,0 +1,23 @@
+{
+  "source": "Seconds per test, from the list reporter's durations in two quality-pr job logs: #84's run 39952674962 (job 120410772674, the cells with 11-2's rows) and #89's run 39941643227 (job 120374899100, the perf cells). Each is the mean of its tests there. lib/pr-shards.ts reads it.",
+  "group": 3,
+  "skipped": 0,
+  "plain": 2.4,
+  "perf": 87,
+  "harness": {
+    "tests/quality/a11y.spec.ts": 10.6,
+    "tests/quality/harness.spec.ts": 2.6,
+    "tests/quality/canary.spec.ts": 0.6
+  },
+  "conditions": {
+    "1440x900 default": 40.1,
+    "1024x768 default": 33.9,
+    "390x844 default": 46.8,
+    "1440x900 reduced-motion": 8.2,
+    "1440x900 forced-colors": 16.7,
+    "1440x900 contrast-more": 18.1,
+    "1440x900 reduced-transparency": 7.3,
+    "1440x900 print": 1.8,
+    "1440x900 no-javascript": 6.9
+  }
+}
