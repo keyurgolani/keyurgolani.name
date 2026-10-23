@@ -265,6 +265,19 @@ export const LoginInputSchema = z.object({ password: z.unknown().optional() }).p
  */
 export const GrantTokenSchema = z.string().regex(/^[A-Za-z0-9_-]{22}$/);
 
+/**
+ * A grant's ref (#7): the first 8 hex characters of its token's SHA-256
+ * digest, as the server log names it. It reveals nothing of the token, and
+ * names a grant to preview.grant.revoke only within the caller's session.
+ */
+export const GrantRefSchema = z.string().regex(/^[0-9a-f]{8}$/);
+
+/** preview.grant.revoke's input: the grant's token, or its ref, never both. */
+export const GrantRevokeInputSchema = z.union([
+  z.object({ grant: GrantTokenSchema }).strict(),
+  z.object({ ref: GrantRefSchema }).strict(),
+]);
+
 /** What a grant is now: preview.grant.status, and why a frame renders nothing. */
 export const GrantStatusSchema = z.enum([
   'active',
@@ -321,6 +334,8 @@ export const GrantMintOutputSchema = z.union([
     .object({
       status: z.literal('active'),
       grant: GrantTokenSchema,
+      /** What the server log calls it, which revokes it by ref (#7). It reveals nothing of the token. */
+      ref: GrantRefSchema,
       /** The channel nonce the frame's agent says back (Slice 3). */
       nonce: z.string().regex(/^[A-Za-z0-9_-]{22}$/),
       ...GrantExpiry,
@@ -675,7 +690,7 @@ const OPERATIONS: readonly Operation[] = [
     name: 'preview.grant.revoke',
     kind: 'command',
     capability: 'preview.grant',
-    input: z.object({ grant: GrantTokenSchema }).strict(),
+    input: GrantRevokeInputSchema,
     output: z.object({ revoked: z.boolean() }).strict(),
     session: true,
     originCheck: true,

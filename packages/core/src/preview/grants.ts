@@ -13,6 +13,7 @@ import {
   grantDigest,
   grantRef,
   isGrantDigest,
+  isGrantRef,
   isGrantToken,
   newChannelNonce,
   newGrantToken,
@@ -148,6 +149,14 @@ export interface PreviewGrants {
   renew(token: string, sessionDigest: string): Promise<Renewal>;
   /** Ends the caller's own active grant as superseded, for rotation and unmount. Returns whether it did. */
   revoke(token: string, sessionDigest: string): Promise<boolean>;
+  /**
+   * Ends the caller's own active grant that `ref`, its log ref, names, as
+   * superseded: what Studio's next page sends for a grant whose page went
+   * without its revoke reaching the server (#7). A ref of anyone else's
+   * grant, or of none, does nothing, as an unknown token does. Returns
+   * whether it ended one.
+   */
+  revokeRef(ref: string, sessionDigest: string): Promise<boolean>;
   /** What the caller's own grant is now. Anyone else's reads as unknown. */
   status(token: string, sessionDigest: string): Promise<GrantStatus>;
   /** Supersedes every grant of `draftId`, on #3's `draftDiscarded`. Returns how many it ended. */
@@ -439,6 +448,20 @@ export function createPreviewGrants({
       const mine = await own(token, sessionDigest);
       if (!mine) return false;
       return end(mine.digest, 'superseded');
+    },
+
+    async revokeRef(ref, sessionDigest) {
+      if (!isGrantRef(ref)) return false;
+      const matches = (await store.list()).filter(
+        (record) =>
+          record.state === 'active' &&
+          record.sessionDigest === sessionDigest &&
+          grantRef(record.digest) === ref,
+      );
+      // Two of one session's grants under one ref would be a 1 in 2^32
+      // chance: then it ends neither, rather than guess.
+      if (matches.length !== 1) return false;
+      return end(matches[0]!.digest, 'superseded');
     },
 
     async status(token, sessionDigest) {

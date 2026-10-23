@@ -25,7 +25,12 @@ import { openStudioChannel, type StudioChannel } from '~/preview/studio-channel'
 import type { ToFramePayload } from '~/preview/protocol';
 import type { ScrollPosition } from './frame-link';
 import { pageLifecycle, type FrameLifecycle } from './frame-lifecycle';
-import { createGrantSession, type GrantSession, type MintRequest } from './grant-session';
+import {
+  createGrantSession,
+  type GrantSession,
+  type LeftGrant,
+  type MintRequest,
+} from './grant-session';
 import { createRefreshThrottle, type RefreshThrottle } from './refresh-throttle';
 
 // PreviewSurface (#7, Slice 4): one preview frame in Studio, its grant, its
@@ -111,6 +116,40 @@ const mintKey = ({ subject, appearance, environment }: MintRequest) =>
  * `request` as a grant is minted for it: motion held to the owner's system,
  * which the first mint goes out before the controls have read.
  */
+/** The sessionStorage key a page that goes keeps its grants' refs under (#7). */
+export const LEFT_GRANTS_KEY = 'studio.preview.left-grants';
+
+/**
+ * This tab's sessionStorage, as the grant session keeps the refs of the
+ * grants a page held as it goes: synchronous, so the write is done before
+ * the page is. Only refs, never a token. A duplicated tab gets a copy, but
+ * a live page never wrote one, so it carries none. Storage that throws
+ * keeps nothing, and the keepalive revoke and the idle limit still bound
+ * the grant.
+ */
+const TAB_LEFT_GRANTS: LeftGrant = {
+  keep(ref) {
+    try {
+      const kept = JSON.parse(sessionStorage.getItem(LEFT_GRANTS_KEY) ?? '[]') as unknown;
+      const refs = Array.isArray(kept) ? kept.filter((each) => typeof each === 'string') : [];
+      sessionStorage.setItem(LEFT_GRANTS_KEY, JSON.stringify([...refs, ref].slice(-16)));
+    } catch {
+      // Nothing kept.
+    }
+  },
+  take() {
+    try {
+      const kept = JSON.parse(sessionStorage.getItem(LEFT_GRANTS_KEY) ?? '[]') as unknown;
+      sessionStorage.removeItem(LEFT_GRANTS_KEY);
+      return Array.isArray(kept)
+        ? kept.filter((each): each is string => typeof each === 'string')
+        : [];
+    } catch {
+      return [];
+    }
+  },
+};
+
 const heldRequest = (request: MintRequest): MintRequest => ({
   ...request,
   environment: heldToSystem(request.environment, window.matchMedia(REDUCED_MOTION).matches),
@@ -248,6 +287,7 @@ export function PreviewSurface(props: PreviewSurfaceProps) {
     const grants = createGrantSession({
       call: studioFetch,
       csrfToken: latest.current.props.csrfToken,
+      left: TAB_LEFT_GRANTS,
       onState: (state) => {
         if (state.kind === 'minting') setPhase((now) => (now === 'expired' ? now : 'loading'));
         else if (state.kind === 'active') load(state);

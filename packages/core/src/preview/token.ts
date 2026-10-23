@@ -37,6 +37,11 @@ export function grantRef(digest: string): string {
   return digest.slice(0, 8);
 }
 
+/** Whether `value` has a grant ref's shape: 8 hex characters. */
+export function isGrantRef(value: unknown): value is string {
+  return typeof value === 'string' && /^[0-9a-f]{8}$/.test(value);
+}
+
 /**
  * The nonce of a grant's channel, which Studio gets at mint and the frame's
  * agent says back in its handshake (Slice 3): 16 random bytes in base64url.

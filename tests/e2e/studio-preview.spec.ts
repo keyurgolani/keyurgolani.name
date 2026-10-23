@@ -390,6 +390,44 @@ test(
 );
 
 test(
+  'a reload whose keepalive revoke is lost still ends the grant the page held: the next page revokes it by the ref the last one kept, before its first mint (#7)',
+  { annotation: [PAGE] },
+  async ({ page, app }) => {
+    const { csrf, frame } = await openPreview(page, app, secret.password, 'Lost Revoke Person');
+    const before = new URL(frame.url()).pathname.split('/')[2]!;
+    // The page's keepalive revoke, by token, never reaches the server.
+    const sent: string[] = [];
+    await page.route('**/api/studio/preview.grant.revoke', async (route) => {
+      const body = route.request().postData() ?? '';
+      sent.push(body);
+      if (body.includes('"grant"')) await route.abort();
+      else await route.continue();
+    });
+    await page.reload();
+    await expect(stage(page)).toHaveAttribute('data-phase', 'ready');
+    const after = new URL((await grantFrame(page)).url()).pathname.split('/')[2]!;
+    expect(after).not.toBe(before);
+    await expect
+      .poll(
+        async () =>
+          (await command(page, csrf, 'preview.grant.status', { grant: before })).body.data?.status,
+      )
+      .toBe('superseded');
+    // What went out: the lost keepalive by token, then the next page's by ref, which names no token.
+    expect(sent.some((body) => body.includes(before))).toBe(true);
+    const byRef = sent.filter((body) => body.includes('"ref"'));
+    expect(byRef).toHaveLength(1);
+    expect(byRef[0]).not.toContain(before);
+    // The reload's own grant is untouched, and the tab keeps no ref now.
+    const status = await command(page, csrf, 'preview.grant.status', { grant: after });
+    expect(status.body.data).toEqual({ status: 'active' });
+    expect(
+      await page.evaluate(() => sessionStorage.getItem('studio.preview.left-grants')),
+    ).toBeNull();
+  },
+);
+
+test(
   'a grant whose status says its session ended does the same, and tells every other Studio tab, which no 401 has (#7, Slice 4)',
   { annotation: [PAGE, { type: 'route', description: '/studio' }] },
   async ({ page, app }) => {

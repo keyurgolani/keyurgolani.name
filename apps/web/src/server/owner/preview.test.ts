@@ -1,5 +1,6 @@
 import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -464,6 +465,26 @@ test('renew and status never slide the session, a session the provider no longer
   assert.deepEqual(await command('preview.grant.status', { grant }), { status: 'superseded' });
   assert.deepEqual(await command('preview.grant.renew', { grant }), { status: 'superseded' });
   assert.match(digest, /^[0-9a-f]{64}$/);
+
+  // By its ref (#7): the mint gives it, and a revoke by it ends the caller's
+  // own grant. A ref of no grant of the session answers as an unknown token does.
+  const answer = (await command('preview.grant.mint', {
+    subject: { fixture: 'complete' },
+    environment: ENVIRONMENT,
+  })) as { grant: string; ref: string };
+  assert.match(answer.ref, /^[0-9a-f]{8}$/);
+  assert.equal(answer.ref, createHash('sha256').update(answer.grant).digest('hex').slice(0, 8));
+  const unknown = await command('preview.grant.revoke', { grant: 'Z'.repeat(22) });
+  assert.deepEqual(await command('preview.grant.revoke', { ref: '00000000' }), unknown);
+  assert.deepEqual(unknown, { revoked: false });
+  assert.deepEqual(await command('preview.grant.status', { grant: answer.grant }), {
+    status: 'active',
+  });
+  assert.deepEqual(await command('preview.grant.revoke', { ref: answer.ref }), { revoked: true });
+  assert.deepEqual(await command('preview.grant.status', { grant: answer.grant }), {
+    status: 'superseded',
+  });
+  assert.deepEqual(await command('preview.grant.revoke', { ref: answer.ref }), unknown);
 
   const renew = listOperations().find((operation) => operation.name === 'preview.grant.renew')!;
   const status = listOperations().find((operation) => operation.name === 'preview.grant.status')!;

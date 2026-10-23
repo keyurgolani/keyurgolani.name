@@ -423,6 +423,7 @@ export function ownerPreviews({
     return {
       status: 'active',
       grant: minted.token,
+      ref: grantRef(minted.record.digest),
       nonce: minted.record.nonce,
       idleExpiresAt: iso(expiry.idleExpiresAt),
       absoluteExpiresAt: iso(expiry.absoluteExpiresAt),
@@ -446,7 +447,15 @@ export function ownerPreviews({
     assertAuthorized(authorized, 'preview.grant');
     const session = caller(context);
     if (!session) return errorResult('authentication_required');
-    return { revoked: await grants.revoke((input as { grant: string }).grant, session.digest) };
+    // By its token, or by its ref, for a grant whose page went before the
+    // token's revoke reached the server (#7). Either names only the caller's
+    // own active grant; anything else answers as an unknown grant does.
+    const named = input as { grant: string } | { ref: string };
+    const revoked =
+      'grant' in named
+        ? await grants.revoke(named.grant, session.digest)
+        : await grants.revokeRef(named.ref, session.digest);
+    return { revoked };
   };
 
   const status: Handler = async (authorized, input, context) => {

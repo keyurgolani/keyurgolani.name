@@ -53,10 +53,23 @@ export type GrantState =
 /** What a grant session sends Studio's operations through: studioFetch, or a stand-in. */
 export type StudioCall = (name: string, options: StudioFetchOptions) => Promise<Response>;
 
+/**
+ * Where a page that goes keeps the ref of the grant it held, for the next
+ * page in its tab to revoke (#7): the page's keepalive revoke can be lost as
+ * the page goes. The ref is what the server log calls the grant, never the
+ * token. A page with two frames keeps both. take() clears them.
+ */
+export interface LeftGrant {
+  keep(ref: string): void;
+  take(): readonly string[];
+}
+
 export interface GrantSessionOptions {
   readonly call: StudioCall;
   readonly csrfToken: string;
   readonly onState: (state: GrantState) => void;
+  /** Where leave() keeps the held grant's ref, and the first mint finds the last page's. */
+  readonly left?: LeftGrant;
   readonly now?: () => number;
   readonly setTimer?: (run: () => void, ms: number) => unknown;
   readonly clearTimer?: (timer: unknown) => void;
@@ -74,9 +87,10 @@ export interface GrantSession {
   /** The session ended: no request goes out from here on. */
   end(): void;
   /**
-   * The page is going, as on pagehide: revokes the grant with a request that
-   * outlives the page, and holds none. A page back from the back-forward
-   * cache mints again.
+   * The page is going, as on pagehide: keeps the grant's ref where the next
+   * page in the tab finds it, revokes the grant with a request that outlives
+   * the page, and holds none. A page back from the back-forward cache mints
+   * again.
    */
   leave(): void;
   /** Revokes the grant and stops, as the frame unmounts. */
@@ -100,6 +114,8 @@ interface Answer {
 
 interface Current extends HeldGrant {
   readonly idleExpiresAt: unknown;
+  /** What the server log calls it, which leave() keeps for the next page. */
+  readonly ref?: string;
 }
 
 /** Starts a grant session. Nothing goes out until mint(). */
@@ -108,6 +124,7 @@ export function createGrantSession(options: GrantSessionOptions): GrantSession {
     call,
     csrfToken,
     onState,
+    left,
     now = () => Date.now(),
     setTimer = (run, ms) => setTimeout(run, ms),
     clearTimer = (timer) => clearTimeout(timer as ReturnType<typeof setTimeout>),
@@ -119,6 +136,8 @@ export function createGrantSession(options: GrantSessionOptions): GrantSession {
   let stopped = false;
   /** Each mint's turn: the answer to an older one is dropped. */
   let turn = 0;
+  /** Whether the last page's grant, if it left one, has been sent its revoke. */
+  let cleared = false;
 
   /** Tells the surface, until the frame goes or the session ends: nothing brings it back after. */
   const set = (state: GrantState) => {
@@ -167,7 +186,24 @@ export function createGrantSession(options: GrantSessionOptions): GrantSession {
     ).catch(() => undefined);
   };
 
+  /**
+   * The grants the last page in this tab held, if their keepalive revokes may
+   * not have reached the server: each revoked by its ref, once, before this
+   * page's first mint goes out. The server ends one only if it's this
+   * session's.
+   */
+  const clearLeft = () => {
+    if (cleared) return;
+    cleared = true;
+    const refs = left?.take() ?? [];
+    if (ended || stopped) return;
+    for (const ref of refs) {
+      void call('preview.grant.revoke', { body: { ref }, csrfToken }).catch(() => undefined);
+    }
+  };
+
   async function mint(next: MintRequest): Promise<void> {
+    clearLeft();
     request = next;
     const mine = ++turn;
     set({ kind: 'minting' });
@@ -189,6 +225,7 @@ export function createGrantSession(options: GrantSessionOptions): GrantSession {
         grant: data.grant as string,
         nonce: data.nonce as string,
         idleExpiresAt: data.idleExpiresAt,
+        ...(typeof data.ref === 'string' ? { ref: data.ref } : {}),
       };
       set({ kind: 'active', grant: current.grant, nonce: current.nonce });
       return schedule();
@@ -237,6 +274,9 @@ export function createGrantSession(options: GrantSessionOptions): GrantSession {
     end: () => endSession(false),
     leave() {
       clearTimer(timer);
+      // Kept first, synchronously, so the next page can revoke it if the
+      // keepalive below is lost as this page goes.
+      if (current?.ref && !ended) left?.keep(current.ref);
       revoke(current, true);
       current = null;
     },
