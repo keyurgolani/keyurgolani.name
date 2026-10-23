@@ -9,7 +9,9 @@
       }
     },
     "openIssues": [],
-    "expected": []
+    "expected": [],
+    "bodyIncludes": [],
+    "bodyExcludes": []
   },
   {
     "name": "recovered",
@@ -39,7 +41,8 @@
         "issue": 41
       }
     ],
-    "bodyIncludes": ["Every scheduled check passed on 2026-10-26"]
+    "bodyIncludes": ["Every scheduled check passed on 2026-10-26"],
+    "bodyExcludes": []
   },
   {
     "name": "first failure",
@@ -78,10 +81,10 @@
     ],
     "bodyIncludes": [
       "<!-- scheduled-checks-report -->",
-      "| links | failed | `pnpm check:docs && pnpm check:links` |",
+      "| ` links ` | failed | ` pnpm check:docs && pnpm check:links ` |",
       "https://gone.dev/ answered 404"
     ],
-    "bodyExcludes": ["| appearance | failed"]
+    "bodyExcludes": ["| ` appearance ` | failed"]
   },
   {
     "name": "still failing",
@@ -114,7 +117,8 @@
         "issue": 50
       }
     ],
-    "bodyIncludes": ["| links | failed |"]
+    "bodyIncludes": ["| ` links ` | failed |"],
+    "bodyExcludes": []
   },
   {
     "name": "timed out",
@@ -136,9 +140,10 @@
       }
     ],
     "bodyIncludes": [
-      "| links | was cancelled or timed out | `pnpm check:docs && pnpm check:links` |",
-      "| catalog-provenance | was skipped, so it never ran | `pnpm ci:catalog-provenance` |"
-    ]
+      "| ` links ` | was cancelled or timed out | ` pnpm check:docs && pnpm check:links ` |",
+      "| ` catalog-provenance ` | was skipped, so it never ran | ` pnpm ci:catalog-provenance ` |"
+    ],
+    "bodyExcludes": []
   },
   {
     "name": "no jobs",
@@ -150,11 +155,12 @@
         "kind": "create"
       }
     ],
-    "bodyIncludes": ["| report | needs no jobs |"]
+    "bodyIncludes": ["| ` report ` | ` needs no jobs ` |"],
+    "bodyExcludes": []
   },
   {
     "name": "hostile record text",
-    "description": "A record that carries HTML, a mention, an issue reference, and a Markdown link renders as plain text.",
+    "description": "A record's free text renders as code spans, so GitHub makes no HTML, mention, reference, SHA, or link of it.",
     "needs": {
       "links": {
         "result": "failure",
@@ -168,10 +174,63 @@
       }
     ],
     "bodyIncludes": [
-      "&lt;img src=x onerror=alert(1)&gt; &#64;keyurgolani see &#35;12 and &#91;this&#93;(https://evil.example/x) &#124; &#96;code&#96;",
-      "<code>pnpm ci:links &#64;owner &#35;1</code>",
-      "| &lt;script&gt; |"
+      "| ` links ` | `` <img src=x onerror=alert(1)> @keyurgolani see #12 and [this](https://evil.example/x) \\| `code` `` |",
+      "| ` <script> ` |",
+      "` pnpm ci:links @owner #1 ` |"
     ],
-    "bodyExcludes": ["<img", "@keyurgolani", "see #12", "[this]", "<script>", "@owner"]
+    "bodyExcludes": ["<code>", "&#64;", "&#35;"]
+  },
+  {
+    "name": "lone carriage return",
+    "description": "A lone CR, a CRLF, and an LF each become a space, so the row stays one table row.",
+    "needs": {
+      "crlf": {
+        "result": "failure",
+        "outputs": {}
+      }
+    },
+    "openIssues": [],
+    "records": [
+      {
+        "schemaVersion": "1.0",
+        "gate": "crlf",
+        "test": "one\rtwo\r\nthree\nfour",
+        "reproCommand": "pnpm ci:crlf"
+      }
+    ],
+    "expected": [
+      {
+        "kind": "create"
+      }
+    ],
+    "bodyIncludes": ["| ` crlf ` | ` one two three four ` |"],
+    "bodyExcludes": ["\r"]
+  },
+  {
+    "name": "references GitHub links even after escaping",
+    "description": "Mentions, issue references in every form, URLs, emails, SHAs, and entity-encoded ones all stay inside one code span.",
+    "needs": {
+      "refs": {
+        "result": "failure",
+        "outputs": {}
+      }
+    },
+    "openIssues": [],
+    "records": [
+      {
+        "schemaVersion": "1.0",
+        "gate": "refs",
+        "test": "@user &#64;user #12 &#35;12 GH-12 owner/repo#12 owner/repo&#35;12 https://github.com/o/r/issues/12 0123456789abcdef0123456789abcdef01234567 deadbeef https://x.dev www.x.dev a@b.org &amp;#64;user ``tick``",
+        "reproCommand": "pnpm ci:refs"
+      }
+    ],
+    "expected": [
+      {
+        "kind": "create"
+      }
+    ],
+    "bodyIncludes": [
+      "| ` refs ` | ``` @user &#64;user #12 &#35;12 GH-12 owner/repo#12 owner/repo&#35;12 https://github.com/o/r/issues/12 0123456789abcdef0123456789abcdef01234567 deadbeef https://x.dev www.x.dev a@b.org &amp;#64;user ``tick`` ``` |"
+    ]
   }
 ]

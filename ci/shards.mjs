@@ -17,7 +17,7 @@
 // Durations come from ci/shard-durations.json, which `measure` writes from
 // `gh run view --job <id> --log` output of a finished run.
 import { spawnSync } from 'node:child_process';
-import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse as parseYaml } from 'yaml';
@@ -109,21 +109,39 @@ export function workspacePackages(root = REPO_ROOT) {
   if (!Array.isArray(entries) || entries.length === 0) {
     throw new Error('pnpm-workspace.yaml lists no packages');
   }
-  const resolve = (pattern) => {
+  const isDir = (rel) => {
+    try {
+      // statSync follows a symlinked package directory, as pnpm does.
+      return statSync(path.join(root, rel)).isDirectory();
+    } catch (error) {
+      if (error.code === 'ENOENT') return false;
+      throw error;
+    }
+  };
+  const resolve = (pattern, { exclude = false } = {}) => {
     const clean = String(pattern).replace(/^\.\//, '').replace(/\/+$/, '');
+    // The root is no package of pnpm -r's, and as one it would put the
+    // whole root suite in a shard.
+    if (clean === '' || clean === '.') {
+      throw new Error(
+        `pnpm-workspace.yaml entry ${pattern} names the root, which the shards don't run`,
+      );
+    }
     const star = /^([^*?{}[\]!]+)\/\*$/.exec(clean);
     if (star) {
       let children = [];
       try {
-        children = readdirSync(path.join(root, star[1]), { withFileTypes: true });
+        children = readdirSync(path.join(root, star[1]));
       } catch (error) {
         if (error.code !== 'ENOENT') throw error;
       }
       return children
-        .filter((c) => c.isDirectory() && readManifest(root, `${star[1]}/${c.name}`))
-        .map((c) => `${star[1]}/${c.name}`);
+        .map((name) => `${star[1]}/${name}`)
+        .filter((dir) => isDir(dir) && readManifest(root, dir));
     }
     if (/^[^*?{}[\]!]+$/.test(clean)) {
+      // Excluding a directory that isn't there excludes nothing, as in pnpm.
+      if (exclude && !isDir(clean)) return [];
       if (!readManifest(root, clean)) {
         throw new Error(`pnpm-workspace.yaml names ${pattern}, which has no package.json`);
       }
@@ -135,7 +153,8 @@ export function workspacePackages(root = REPO_ROOT) {
   const excluded = new Set();
   for (const entry of entries) {
     const text = String(entry);
-    if (text.startsWith('!')) for (const dir of resolve(text.slice(1))) excluded.add(dir);
+    if (text.startsWith('!'))
+      for (const dir of resolve(text.slice(1), { exclude: true })) excluded.add(dir);
     else for (const dir of resolve(text)) included.add(dir);
   }
   return [...included]

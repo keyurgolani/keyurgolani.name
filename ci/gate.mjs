@@ -8,9 +8,10 @@
 // review, every PR into main, and every push, and only when every job it
 // needs succeeded. A job that failed, was cancelled, hit its
 // timeout-minutes (GitHub reports that as cancelled or as failure), or was
-// skipped fails it, since a complete run skips nothing. A draft PR's selected run always fails gate, so no
-// selection can merge: GitHub refuses to merge a draft, and marking it ready
-// starts the complete run on the same head.
+// skipped fails it, since a complete run skips nothing. A draft PR's
+// selected run always fails gate, so no selection can merge: GitHub refuses
+// to merge a draft, and marking it ready starts the complete run on the
+// same head.
 //
 // selected is the draft's feedback: it passes when every selected job
 // succeeded and the rest were skipped, and it's never required.

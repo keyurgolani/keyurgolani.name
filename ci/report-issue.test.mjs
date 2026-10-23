@@ -4,7 +4,15 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { decide, failedJobs, MARKER, readRecords, report, TITLE } from './report-issue.mjs';
+import {
+  decide,
+  failedJobs,
+  issueCell,
+  MARKER,
+  readRecords,
+  report,
+  TITLE,
+} from './report-issue.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const FIXTURES = path.join(HERE, 'fixtures', 'report-issue');
@@ -17,7 +25,7 @@ for (const fixture of CASES) {
     const actions = decide({
       needs: fixture.needs,
       openIssues: fixture.openIssues,
-      records: RECORDS,
+      records: fixture.records ?? RECORDS,
       runUrl: RUN_URL,
       date: '2026-10-26',
     });
@@ -67,7 +75,7 @@ test('records are read from failures/ directories of the downloaded artifacts on
   }
 });
 
-test('the record table escapes what a record says', () => {
+test('the record table puts what a record says in code spans', () => {
   const [action] = decide({
     needs: { links: { result: 'failure' } },
     openIssues: [],
@@ -75,8 +83,8 @@ test('the record table escapes what a record says', () => {
     runUrl: RUN_URL,
     date: '2026-10-26',
   });
-  assert.ok(action.body.includes('a &#124; b c'));
-  assert.ok(action.body.includes('<code>pnpm &lt;x&gt;</code>'));
+  assert.ok(action.body.includes('| ` a \\| b c ` |'));
+  assert.ok(action.body.includes('| ` pnpm <x> ` |'));
 });
 
 function fakeGitHub(openIssues) {
@@ -161,4 +169,13 @@ test('the reporter fails loudly when the API refuses, or without a token', async
     report({ env: { ...env, NEEDS_JSON: '' }, argv: [], fetchImpl }),
     SyntaxError,
   );
+});
+
+test('a code span is fenced one backtick longer than any run inside it', () => {
+  assert.equal(issueCell('plain'), '` plain `');
+  assert.equal(issueCell('a `b` c'), '`` a `b` c ``');
+  assert.equal(issueCell('x ``` y'), '```` x ``` y ````');
+  assert.equal(issueCell('a|b\rc'), '` a\\|b c `');
+  assert.equal(issueCell(''), '');
+  assert.equal(issueCell(undefined), '');
 });

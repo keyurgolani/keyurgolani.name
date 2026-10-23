@@ -69,33 +69,26 @@ export function readRecords(dir) {
 }
 
 /**
- * One table cell of free text for the issue body. A record's text comes
- * from what a check saw, a page's title or a link's URL among it, so
- * nothing in it may become HTML, a mention, an issue or PR reference, or a
- * link: <, >, &, @, #, [, ], and the cell's own | and backticks become
- * entities in one pass, and a line break becomes a space.
+ * One table cell of free text for the issue body, as a code span. A
+ * record's text comes from what a check saw, a page's title or a link's URL
+ * among it, and GitHub decodes entities before it finds mentions, issue
+ * references, commit SHAs, and bare URLs, so escaping can't keep them out.
+ * Inside a code span GitHub renders none of them, and no HTML or link
+ * either. Every line break becomes a space and `|` becomes `\|`, so the
+ * table holds, and the fence is one backtick longer than the longest run in
+ * the text, padded with spaces.
  */
-const ENTITIES = {
-  '&': '&amp;',
-  '<': '&lt;',
-  '>': '&gt;',
-  '@': '&#64;',
-  '#': '&#35;',
-  '[': '&#91;',
-  ']': '&#93;',
-  '`': '&#96;',
-  '\\': '&#92;',
-  '|': '&#124;',
-};
-
 export function issueCell(value) {
   if (value === undefined || value === null || value === '') return '';
-  return String(value)
-    .replace(/[&<>@#[\]`\\|]/g, (c) => ENTITIES[c])
-    .replace(/\r?\n/g, ' ');
+  const text = String(value)
+    .replace(/\r\n|\r|\n/g, ' ')
+    .replace(/\|/g, '\\|');
+  const longest = Math.max(0, ...[...text.matchAll(/`+/g)].map((m) => m[0].length));
+  const fence = '`'.repeat(longest + 1);
+  return `${fence} ${text} ${fence}`;
 }
 
-/** The failure records as a table for the issue, every cell escaped. */
+/** The failure records as a table for the issue, every cell a code span. */
 export function renderRecords(records) {
   const lines = [
     `### Failures (${records.length})`,
@@ -115,9 +108,8 @@ export function renderRecords(records) {
       r.actual,
       r.threshold,
       Array.isArray(r.artifacts) ? r.artifacts.join(', ') : r.artifacts,
+      r.reproCommand,
     ].map(issueCell);
-    const repro = issueCell(r.reproCommand);
-    cells.push(repro ? `<code>${repro}</code>` : '');
     lines.push(`| ${cells.join(' | ')} |`);
   }
   return lines.join('\n');
@@ -131,7 +123,7 @@ export function renderReport({ failed, records, runUrl, date }) {
     '| --- | --- | --- |',
     ...failed.map(
       ({ job, result }) =>
-        `| ${issueCell(job)} | ${issueCell(RESULT_TEXT[result] ?? result)} | \`${commandFor(job)}\` |`,
+        `| ${issueCell(job)} | ${RESULT_TEXT[result] ?? issueCell(result)} | ${issueCell(commandFor(job))} |`,
     ),
   ];
   const shown = records.slice(0, 50);

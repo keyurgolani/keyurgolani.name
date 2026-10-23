@@ -168,6 +168,10 @@ test('external checks skip local, reserved, and live hosts', () => {
     'http://[::ffff:10.0.0.1]/x',
     'http://[fe80::1]/x',
     'http://[fd00::1]/x',
+    'http://168.63.129.16/machine',
+    'http://[fec0::1]/x',
+    'http://[100::1]/x',
+    'http://[2001:0:4136:e378::1]/x',
     'https://user:pass@github.com/x',
   ]) {
     assert.ok(!externallyChecked(url), url);
@@ -214,9 +218,11 @@ test('external links fail on 4xx and 5xx and network errors, and only warn on 40
     'https://down.dev/ answered 503',
     'https://gone.dev/ answered 404',
   ]);
+  // The localhost link the docs name is reported, never requested.
   assert.deepEqual(result.warnings.map((w) => w.url).sort(), [
     'https://blocked.dev/',
     'https://busy.dev/',
+    'https://localhost/',
   ]);
   assert.ok(!calls.some((c) => c.includes('localhost')));
   assert.match(
@@ -343,4 +349,30 @@ test('address ranges', () => {
   ])
     assert.ok(privateIPv6(a), a);
   assert.ok(!privateIPv6('2606:4700::1111'));
+  for (const a of [
+    'fec0::1',
+    'feff::1',
+    '100::',
+    '100::1',
+    '100:0:0:0:1::',
+    '2001::1',
+    '2001:0:4136:e378::1',
+  ])
+    assert.ok(privateIPv6(a), a);
+  for (const a of ['2001:4860:4860::8888', '2001:470::1', '1000::1']) assert.ok(!privateIPv6(a), a);
+  assert.ok(privateIPv4('168.63.129.16'));
+});
+
+test('a problem keeps to one summary row', async () => {
+  const external = new Map([['https://bad.dev/', ['a.md:1']]]);
+  const fetchImpl = async () => {
+    throw new Error('boom\r\nline two | 100%');
+  };
+  const result = await checkExternal(external, {
+    fetchImpl,
+    lookupImpl: async () => [{ address: '93.184.215.14', family: 4 }],
+  });
+  const summary = renderSummary({ title: 'links', ...result });
+  const row = summary.split('\n').find((l) => l.startsWith('| problem'));
+  assert.equal(row, '| problem | a.md:1 | https://bad.dev/ failed: boom line two \\| 100% |');
 });

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -254,6 +254,7 @@ test('workspace entries resolve in every quoting, as directories, globs, and exc
       '  - ./scripts/runner',
       "  - '!packages/skip-me'",
       "  - 'experiments/*'",
+      "  - '!gone/package'",
       '',
     ].join('\n'),
     {
@@ -282,6 +283,8 @@ test('a workspace entry the shards cannot resolve throws', () => {
     ["'packages/**'", /can't resolve/],
     ["'apps/{web,docs}'", /can't resolve/],
     ["'missing/dir'", /no package\.json/],
+    ["'.'", /names the root/],
+    ["'./'", /names the root/],
   ]) {
     const root = workspace(`packages:\n  - ${entry}\n`, {});
     try {
@@ -295,5 +298,20 @@ test('a workspace entry the shards cannot resolve throws', () => {
     assert.throws(() => workspacePackages(empty), /lists no packages/);
   } finally {
     rmSync(empty, { recursive: true, force: true });
+  }
+});
+
+test('a symlinked package directory is followed, as pnpm follows it', () => {
+  const root = workspace("packages:\n  - 'packages/*'\n", {
+    'elsewhere/real': { name: '@x/real', scripts: { test: 't' } },
+    packages: null,
+  });
+  try {
+    symlinkSync(path.join(root, 'elsewhere', 'real'), path.join(root, 'packages', 'linked'));
+    assert.deepEqual(workspacePackages(root), [
+      { dir: 'packages/linked', name: '@x/real', test: true },
+    ]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
   }
 });

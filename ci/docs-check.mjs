@@ -12,8 +12,8 @@
 // reserved name, a loopback, private, or link-local address, or the live
 // site, which CI doesn't probe, and it follows redirects by hand, checking
 // each hop's host the same way, for at most 5 hops. A 401, 403, or 429, and
-// a link it won't request, are reported but don't fail, since sites refuse
-// automated clients.
+// a link it won't request, whether the docs name it or a redirect leads to
+// it, are warnings that don't fail, since sites refuse automated clients.
 //
 // Pure Node with no dependencies. Each problem is a failure record when the
 // check runs under ci/run.mjs, and a row in the job summary.
@@ -22,7 +22,13 @@ import { lookup } from 'node:dns/promises';
 import { appendFileSync, existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { currentGate, REPO_ROOT, reportError, writeFailureRecord } from './lib/reports.mjs';
+import {
+  currentGate,
+  escapeData,
+  REPO_ROOT,
+  reportError,
+  writeFailureRecord,
+} from './lib/reports.mjs';
 
 const SKIP_FILES = [/^legacy\//, /(^|\/)__fixtures__\//, /(^|\/)node_modules\//];
 
@@ -237,21 +243,27 @@ export function privateIPv4(address) {
     (a === 192 && b === 168) ||
     (a === 192 && b === 0) ||
     (a === 198 && (b === 18 || b === 19)) ||
+    // Azure's WireServer, reachable from every Azure VM, GitHub's runners among them.
+    address === '168.63.129.16' ||
     a >= 224
   );
 }
 
 /**
  * Whether an IPv6 address is loopback, unspecified, unique-local,
- * link-local, multicast, documentation, or carries an IPv4 address
- * (mapped, compatible, NAT64, 6to4), any of which can reach a private host.
+ * link-local, site-local, multicast, discard-only, documentation, or carries
+ * an IPv4 address (mapped, compatible, NAT64, 6to4, Teredo), any of which
+ * can reach a private host.
  */
 export function privateIPv6(address) {
   const a = address.replace(/^\[|\]$/g, '').toLowerCase();
   if (a === '::' || a === '::1') return true;
   if (a.includes('.') || /^::(ffff:)?[0-9a-f]{1,4}:[0-9a-f]{1,4}$/.test(a)) return true;
   if (/^::ffff:/.test(a) || a.startsWith('64:ff9b:') || a.startsWith('2002:')) return true;
-  if (/^f[cd]/.test(a) || /^fe[89ab]/.test(a) || a.startsWith('ff') || a.startsWith('2001:db8'))
+  if (/^f[cd]/.test(a) || /^fe[89a-f]/.test(a) || a.startsWith('ff') || a.startsWith('2001:db8'))
+    return true;
+  // Teredo, 2001::/32, and discard-only, 100::/64.
+  if (/^2001:(0{0,4}:|:)/.test(a) || /^100:(0{0,4}:){0,3}(:|0{0,4}:)/.test(a) || a === '100::')
     return true;
   return false;
 }
@@ -363,6 +375,15 @@ export async function checkExternal(
   const problems = [];
   const warnings = [];
   const urls = [...external.keys()].filter(externallyChecked).sort();
+  // A link the docs name directly that CI won't request is reported, never dropped.
+  for (const url of [...external.keys()].filter((u) => !externallyChecked(u)).sort()) {
+    warnings.push({
+      url,
+      where: external.get(url),
+      status: undefined,
+      message: `${url} is a host CI doesn't request; not requested`,
+    });
+  }
 
   /** Throws a Refused when the URL's host may not be requested. */
   const admit = async (url) => {
@@ -432,6 +453,12 @@ export async function checkExternal(
 
 class Refused extends Error {}
 
+/** A job-summary table cell: one line, its pipes escaped. */
+const summaryCell = (text) =>
+  String(text)
+    .replace(/\r\n|\r|\n/g, ' ')
+    .replace(/\|/g, '\\|');
+
 export function renderSummary({ title, problems, warnings = [], checked }) {
   const lines = [
     `### ${title}: ${problems.length === 0 ? 'passed' : `${problems.length} problems`}`,
@@ -443,7 +470,7 @@ export function renderSummary({ title, problems, warnings = [], checked }) {
     lines.push('| Kind | Where | Problem |', '| --- | --- | --- |');
     for (const [kind, p] of rows) {
       const where = p.where ? p.where.join(', ') : `${p.file}:${p.line}`;
-      lines.push(`| ${kind} | ${where} | ${p.message.replace(/\|/g, '\\|')} |`);
+      lines.push(`| ${kind} | ${summaryCell(where)} | ${summaryCell(p.message)} |`);
     }
   }
   return `${lines.join('\n')}\n`;
@@ -476,7 +503,7 @@ async function main(argv) {
       });
     }
   }
-  for (const w of warnings) console.log(`::warning title=${title}::${w.message}`);
+  for (const w of warnings) console.log(`::warning title=${title}::${escapeData(w.message)}`);
   const summary = renderSummary({ title, problems: all, warnings, checked });
   if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary);
   console.log(summary);

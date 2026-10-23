@@ -95,13 +95,15 @@ export const RULES = [
   },
   { class: 'release', complete: true, paths: ['Dockerfile', '.dockerignore'] },
   {
-    // The container helpers check-standalone (build) and the browser
-    // security suite also import.
+    // The container helpers, which check-standalone in build imports too.
     class: 'container',
     jobs: ['unit', 'build', 'image'],
     paths: ['ci/lib/container.mjs'],
   },
   {
+    // The HTTPS proxy fixture: only image's proxy smoke and tests/proxy use
+    // it. browser runs too, on purpose, since its security spec is the
+    // suite image runs behind this proxy.
     class: 'container',
     jobs: ['unit', 'browser', 'image'],
     paths: ['tests/harness/proxy-stack.mjs'],
