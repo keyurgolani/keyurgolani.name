@@ -52,7 +52,7 @@ export function attestationProblems(provenance, sbom, platforms = PLATFORMS) {
       // Named by key only: its value is the event's text.
       if (holdsKey(slsa, EVENT_PAYLOAD_KEY)) {
         problems.push(
-          `${platform}'s provenance carries ${EVENT_PAYLOAD_KEY}. Set provenance-add-gha=false in the builder's driver-opts`,
+          `${platform}'s provenance carries ${EVENT_PAYLOAD_KEY}. Set provenance-add-gha=false in the builder's driver-opts. On a release candidate the digest is already on GHCR, untagged: delete that package version (docs/releasing.md)`,
         );
       }
     }
@@ -66,17 +66,40 @@ export function attestationProblems(provenance, sbom, platforms = PLATFORMS) {
   return problems;
 }
 
-function main(argv) {
+/** A file's JSON. The error names the file only: the parser's message quotes it. */
+export function readJson(file) {
+  let text;
+  try {
+    text = readFileSync(file, 'utf8');
+  } catch {
+    throw new Error(`${path.basename(file)} can't be read`);
+  }
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(`${path.basename(file)} isn't JSON`);
+  }
+}
+
+/** The CLI. `io` stands in for the console and the environment in tests. */
+export function main(argv, io = {}) {
+  const log = io.log ?? console.log;
+  const env = io.env ?? process.env;
   const option = argv.find((arg) => arg.startsWith('--platforms='));
   const platforms = option ? option.slice('--platforms='.length).split(',') : PLATFORMS;
   const positional = argv.filter((arg) => !arg.startsWith('--'));
   if (positional.length !== 2) {
-    console.error(
-      'usage: node ci/release/attestations.mjs <provenance.json> <sbom.json> [--platforms=a,b]',
-    );
+    log('usage: node ci/release/attestations.mjs <provenance.json> <sbom.json> [--platforms=a,b]');
     return 2;
   }
-  const [provenance, sbom] = positional.map((file) => JSON.parse(readFileSync(file, 'utf8')));
+  let provenance;
+  let sbom;
+  try {
+    [provenance, sbom] = positional.map(readJson);
+  } catch (error) {
+    log(`::error title=attestations::${error.message}`);
+    return 1;
+  }
   const problems = attestationProblems(provenance, sbom, platforms);
   const sbomDir = argv
     .find((arg) => arg.startsWith('--write-sboms='))
@@ -86,15 +109,15 @@ function main(argv) {
     for (const platform of platforms) {
       const file = path.join(sbomDir, sbomFileName(platform));
       writeFileSync(file, `${JSON.stringify(sbom[platform].SPDX, null, 2)}\n`);
-      console.log(`[attestations] ${platform} SBOM -> ${file}`);
+      log(`[attestations] ${platform} SBOM -> ${file}`);
     }
   }
   const summary = problems.length
     ? `### attestations: failed\n\n${problems.map((p) => `- ${p}.`).join('\n')}\n`
     : `### attestations: passed\n\nProvenance (mode=max) and an SBOM for ${platforms.join(' and ')}.\n`;
-  if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary);
-  console.log(summary);
-  for (const problem of problems) console.log(`::error title=attestations::${problem}`);
+  if (env.GITHUB_STEP_SUMMARY) appendFileSync(env.GITHUB_STEP_SUMMARY, summary);
+  log(summary);
+  for (const problem of problems) log(`::error title=attestations::${problem}`);
   return problems.length ? 1 : 0;
 }
 
