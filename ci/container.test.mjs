@@ -280,7 +280,10 @@ test("the image ships the store's CLI as one file at /app/bin, bundled with the 
   const { scripts, devDependencies } = JSON.parse(
     readFileSync(path.join(ROOT, 'apps/web/package.json'), 'utf8'),
   );
-  assert.equal(scripts['build:store'], 'pnpm build:registry && node scripts/bundle-store.mjs');
+  assert.equal(
+    scripts['build:store'],
+    'pnpm build:registry --modules-only && node scripts/bundle-store.mjs',
+  );
   assert.equal(devDependencies.esbuild, '0.27.7');
   const bundler = readFileSync(path.join(ROOT, 'apps/web/scripts/bundle-store.mjs'), 'utf8');
   assert.match(bundler, /conditions: \['react-server'\]/);
@@ -288,7 +291,7 @@ test("the image ships the store's CLI as one file at /app/bin, bundled with the 
   const root = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
   assert.equal(
     root.scripts.store,
-    'pnpm --filter @portfolio/web build:registry && tsx --conditions=react-server apps/web/scripts/portfolio-store.ts',
+    'pnpm --filter @portfolio/web build:registry --modules-only && tsx --conditions=react-server apps/web/scripts/portfolio-store.ts',
   );
 });
 
