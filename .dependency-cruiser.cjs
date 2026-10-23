@@ -215,16 +215,37 @@ module.exports = {
       to: { pathNot: '^apps/web/src/preview/protocol\\.ts$' },
     },
     {
-      name: 'preview-frame-imports-no-studio-channel',
+      name: 'preview-agent-imports-the-frame-channel-only',
       severity: 'error',
       comment:
-        "Studio's half of the preview channel (#7, Slice 3) never ships in a preview document: " +
-        'nothing in app/(preview) or src/preview but it and its tests imports it.',
-      from: {
-        path: '^apps/web/src/(?:app/\\(preview\\)/|preview/)',
-        pathNot: ['\\.test\\.tsx?$', '^apps/web/src/preview/studio-channel\\.ts$'],
+        'The preview agent (#7, Slice 3) runs in every preview document, so it, the status ' +
+        "report, and the frame's half of the channel import that half, the protocol, and React, " +
+        "and nothing else: never Studio's half, which would ship in the frame (threat " +
+        'preview-3). An allowlist, so an import spelled with ~/, which depcruise leaves ' +
+        'unresolved, fails it too.',
+      from: { path: '^apps/web/src/preview/(?:agent|report-status|frame-channel)\\.tsx?$' },
+      to: {
+        pathNot: [
+          '^apps/web/src/preview/(?:frame-channel|protocol)\\.ts$',
+          '^node_modules/(?:\\.pnpm/react@|react/)',
+        ],
       },
-      to: { path: '^apps/web/src/preview/studio-channel\\.ts$' },
+    },
+    {
+      name: 'preview-documents-import-only-the-agent-side',
+      severity: 'error',
+      comment:
+        "A preview document (#7, Slice 3) loads the agent's side of the channel and never " +
+        "Studio's: from src/preview, app/(preview) imports the agent, the status report and " +
+        "texts, and the frame channel's types, and nothing else. An allowlist within " +
+        "src/preview, in either spelling, so an import of Studio's half written with ~/ fails " +
+        'it too. Tests may import anything.',
+      from: { path: '^apps/web/src/app/\\(preview\\)/', pathNot: '\\.test\\.tsx?$' },
+      to: {
+        path: '^(?:apps/web/src/|~/)preview/',
+        pathNot:
+          '^(?:apps/web/src/|~/)preview/(?:agent|report-status|status|frame-channel)(?:\\.ts|\\.tsx)?$',
+      },
     },
     {
       name: 'store-test-support-only-from-tests',
