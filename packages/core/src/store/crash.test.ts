@@ -7,17 +7,33 @@
 // this process and as a SIGKILL of a child process, and then one fresh
 // process repairs and checks every resulting data directory: the live
 // revision is the old or the new one, it validates, nothing staged
-// remains, and no acknowledged draft is lost. These are process crashes,
-// not power loss. A crash point stops before its call, never inside it, so
-// the write discipline is checked on its own: no file the store keeps is
-// ever written in place, so a torn write is only ever a temporary file's.
+// remains, and no acknowledged draft is lost. A backup and a restore are
+// hit the same way, at the end, and judged by their target: untouched, one
+// the next step refuses, or whole (the PR's review, F2). These are process
+// crashes, not power loss. A crash point stops before its call, never
+// inside it, so the write discipline is checked on its own: no file the
+// store keeps is ever written in place, so a torn write is only ever a
+// temporary file's.
 import assert from 'node:assert/strict';
-import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test, type TestContext } from 'node:test';
+import { backupStore, restoreStore, type BackupManifest } from './backup';
+import { nodeFs, type FsPort } from './fs-port';
 import { newRevisionId, storePaths, type DraftId, type RevisionId } from './layout';
 import { thisProcess } from './lock';
+import { readLive } from './pointer';
+import { preflight } from './preflight';
+import { verifyStore } from './verify';
 import { openStore, type Store } from './store';
 import { checkUnit, importSourceHash, sha256, type UnitInput } from '../catalog/unit';
 import type { CheckReport, ChildTask, Step } from './test-support/child';
@@ -578,3 +594,116 @@ for (const scenario of [
     t.diagnostic(`${scenario.name}: ${count} crash points, each thrown and killed`);
   });
 }
+
+/**
+ * What a backup's or a restore's target holds after a crash: nothing of
+ * the run's (it's missing or empty), a run that never finished, which the
+ * next step refuses, or the whole thing. Never a part that passes for one.
+ */
+type Landing = 'untouched' | 'refused' | 'whole';
+
+const untouched = (dir: string) => !existsSync(dir) || readdirSync(dir).length === 0;
+
+/** A restored store is whole: preflight passes, verify finds nothing, and the backup's pointer is live. */
+async function wholeStore(dir: string, manifest: BackupManifest, label: string) {
+  assert.equal(await preflight({ dataDir: dir }), null, `${label}: preflight`);
+  const report = await verifyStore({ fs: nodeFs, paths: storePaths(dir), checks: testChecks() });
+  assert.deepEqual(report.problems, [], `${label}: verify`);
+  const live = await readLive(nodeFs, storePaths(dir));
+  assert.equal(live?.revisionId, manifest.live?.revisionId, `${label}: live`);
+  assert.equal(live?.seq, manifest.live?.seq, `${label}: seq`);
+}
+
+test('a backup or a restore that crashes at any point leaves its target untouched, refused, or whole', async (t) => {
+  const template = await newStore(t);
+  await publishInput(template, pairInput('engineering'));
+  await publishInput(template, contentVariant(pairInput('engineering'), 'two'));
+  const next = scratch(t);
+  const storeCopy = () => {
+    const dir = next();
+    cpSync(template.paths.root, dir, { recursive: true });
+    return dir;
+  };
+  const clean = next();
+  const taken = await backupStore(
+    { fs: nodeFs, paths: template.paths, lock: template.lock },
+    clean,
+  );
+  assert.equal(taken.kind, 'done');
+  if (taken.kind !== 'done') return;
+  const manifest = taken.manifest;
+
+  const runs = {
+    backup: {
+      step: (target: string): Step => ({ op: 'backup', out: target }),
+      async run(dataDir: string, target: string, fs: FsPort) {
+        const store = openStore({ dataDir, checks: testChecks(), fs });
+        return backupStore({ fs, paths: store.paths, lock: store.lock }, target);
+      },
+      /** A backup a crash stopped is one restore refuses, or a whole one. */
+      async landing(target: string, label: string): Promise<Landing> {
+        if (untouched(target)) return 'untouched';
+        const into = next();
+        const restored = await restoreStore({ fs: nodeFs }, target, into);
+        if (restored.kind === 'refused') return 'refused';
+        await wholeStore(into, manifest, label);
+        return 'whole';
+      },
+    },
+    restore: {
+      step: (target: string): Step => ({ op: 'restore', from: clean, into: target }),
+      run: (_dataDir: string, target: string, fs: FsPort) => restoreStore({ fs }, clean, target),
+      /** A restore a crash stopped is one preflight refuses, or a whole store. */
+      async landing(target: string, label: string): Promise<Landing> {
+        if (untouched(target)) return 'untouched';
+        if ((await preflight({ dataDir: target })) === 'data_dir_restore_incomplete') {
+          return 'refused';
+        }
+        await wholeStore(target, manifest, label);
+        return 'whole';
+      },
+    },
+  };
+
+  for (const [name, operation] of Object.entries(runs)) {
+    const recording = recordingFs();
+    await operation.run(storeCopy(), next(), recording.fs);
+    const hits = recording.hits;
+    assert.ok(
+      hits.some((hit) => hit.point === `${name}.claim.write`),
+      `${name} claims its target`,
+    );
+    assert.ok(
+      hits.some((hit) => hit.point === `${name}.log.rename`),
+      `${name} places its log`,
+    );
+    const landings = new Set<Landing>();
+    const label = (hit: PointHit, mode: string) => `${name} ${mode} at ${hit.point} #${hit.nth}`;
+
+    // A failed call: the run gives up there, taking back what it can.
+    for (const hit of hits) {
+      const target = next();
+      const fs = crashingFs(hit, 'throw');
+      await operation.run(storeCopy(), target, fs).catch(() => {});
+      assert.ok(fs.crashed(), `${label(hit, 'throw')} was reached`);
+      landings.add(await operation.landing(target, label(hit, 'throw')));
+    }
+
+    // A SIGKILL: the child dies just before the call, and nothing is taken back.
+    const targets = hits.map(() => next());
+    const tasks: ChildTask[] = hits.map((hit, index) => ({
+      kind: 'run',
+      dataDir: storeCopy(),
+      crash: hit,
+      steps: [operation.step(targets[index]!)],
+    }));
+    const killed = await runChildren(tasks, 3);
+    for (const [index, run] of killed.entries()) {
+      const hit = hits[index]!;
+      assert.equal(run.signal, 'SIGKILL', `${label(hit, 'kill')}: ${run.stderr.slice(-400)}`);
+      landings.add(await operation.landing(targets[index]!, label(hit, 'kill')));
+    }
+    assert.deepEqual([...landings].sort(), ['refused', 'untouched', 'whole'], name);
+    t.diagnostic(`${name}: ${hits.length} crash points, each thrown and killed`);
+  }
+});

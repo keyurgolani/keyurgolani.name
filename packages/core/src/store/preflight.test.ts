@@ -11,7 +11,7 @@ import {
 import path from 'node:path';
 import { test } from 'node:test';
 import { nodeFs, type FsPort } from './fs-port';
-import { STORE_LAYOUT, storePaths } from './layout';
+import { BACKUP_CLAIM, RESTORE_CLAIM, STORE_LAYOUT, storePaths } from './layout';
 import { preflight, storeDirectories } from './preflight';
 import { tempDir } from './test-support/fixtures';
 
@@ -134,4 +134,20 @@ test('a store.json of another layout is store_layout_unsupported', async (t) => 
   assert.equal(await preflight({ dataDir }), 'store_layout_unsupported');
   writeFileSync(path.join(dataDir, 'store.json'), '{');
   assert.equal(await preflight({ dataDir }), 'store_layout_unsupported');
+});
+
+test("preflight refuses a directory a restore didn't finish, by its claim or the log it staged, and lays nothing out", async (t) => {
+  const claimed = tempDir(t);
+  writeFileSync(path.join(claimed, RESTORE_CLAIM), '{}\n');
+  const staged = tempDir(t);
+  mkdirSync(path.join(staged, '.publication.0123456789ab.tmp', 'events'), { recursive: true });
+  for (const dataDir of [claimed, staged]) {
+    const before = readdirSync(dataDir);
+    assert.equal(await preflight({ dataDir }), 'data_dir_restore_incomplete', dataDir);
+    assert.deepEqual(readdirSync(dataDir), before, 'nothing was laid out');
+  }
+  // A backup's claim is a backup directory's, and no data directory's business.
+  const backup = tempDir(t);
+  writeFileSync(path.join(backup, BACKUP_CLAIM), '{}\n');
+  assert.equal(await preflight({ dataDir: backup }), null);
 });

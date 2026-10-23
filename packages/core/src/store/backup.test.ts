@@ -26,7 +26,10 @@ import { test, type TestContext } from 'node:test';
 import { readPairBytes } from '@portfolio/schema/node';
 import { BACKUP_MANIFEST, backupStore, restoreStore, type BackupManifest } from './backup';
 import { nodeFs, type FsPort } from './fs-port';
+import { newRevisionId, RESTORE_CLAIM } from './layout';
 import { readLive } from './pointer';
+import { preflight } from './preflight';
+import { placeCopiedLog } from './publication';
 import { openStore, type Store } from './store';
 import { verifyStore } from './verify';
 import { cli, line } from './test-support/cli';
@@ -184,7 +187,7 @@ test('backup copies the publication log after every other file, the pointer last
   const watching: FsPort = {
     ...recording.fs,
     async writeFile(file, data, point, options) {
-      if (point.startsWith('backup.')) writes.push(relative(file).replace(STAGED, 'publication'));
+      if (point === 'backup.write') writes.push(relative(file).replace(STAGED, 'publication'));
       return recording.fs.writeFile(file, data, point, options);
     },
     async rename(from, to, point, pass) {
@@ -487,5 +490,207 @@ test('restore refuses a backup that holds a link or a special file, and writes n
     'not_regular_file: The backup holds a link or a special file (audit/2026-09.jsonl). A ' +
       'backup holds directories and regular files only, and a restore follows no link. ' +
       'Nothing was restored.\n',
+  );
+});
+
+/** A backup of `store` in a directory of its own. */
+async function backedUp(t: TestContext, store: Store, name = 'b1'): Promise<string> {
+  const out = target(t, name);
+  const backup = await backupStore({ fs: nodeFs, paths: store.paths, lock: store.lock }, out);
+  assert.equal(backup.kind, 'done');
+  return out;
+}
+
+/** A copy of the backup in `from`, its manifest changed by `edit`. */
+function edited(t: TestContext, from: string, edit: (manifest: BackupManifest) => unknown): string {
+  const copy = target(t, 'edited');
+  cpSync(from, copy, { recursive: true });
+  const file = path.join(copy, BACKUP_MANIFEST);
+  const manifest = JSON.parse(readFileSync(file, 'utf8')) as BackupManifest;
+  writeFileSync(file, JSON.stringify(edit(manifest)));
+  return copy;
+}
+
+test('two backups into one new --out at once: one is done, the other gets target_not_empty, and the first stays whole', async (t) => {
+  const store = await seeded(t);
+  const out = target(t, 'same');
+  const both = await Promise.all([
+    backupStore({ fs: nodeFs, paths: store.paths, lock: store.lock }, out),
+    backupStore({ fs: nodeFs, paths: store.paths, lock: store.lock }, out),
+  ]);
+  assert.deepEqual(
+    both.map((outcome) => (outcome.kind === 'refused' ? outcome.code : outcome.kind)).sort(),
+    ['done', 'target_not_empty'],
+  );
+  const done = both.find((outcome) => outcome.kind === 'done');
+  assert.ok(done?.kind === 'done');
+  const restored = await restoreStore({ fs: nodeFs }, out, target(t, 'restored'));
+  assert.equal(restored.kind, 'restored');
+  assert.deepEqual(restored.kind === 'restored' && restored.manifest, done.manifest);
+});
+
+test('a backup that fails takes back only what it wrote, and leaves what another put in its target', async (t) => {
+  const store = await seeded(t);
+  const out = target(t, 'b1');
+  let writes = 0;
+  const meddling: FsPort = {
+    ...nodeFs,
+    async writeFile(file, data, point, options) {
+      if (point === 'backup.write') {
+        writes += 1;
+        // Once the backup has made assets/, someone else puts files there and beside it.
+        if (writes === 2) {
+          writeFileSync(path.join(out, 'assets', 'keep.txt'), 'mine\n');
+          writeFileSync(path.join(out, 'notes.txt'), 'mine too\n');
+        }
+        if (writes === 4) throw Object.assign(new Error('No space left.'), { code: 'ENOSPC' });
+      }
+      return nodeFs.writeFile(file, data, point, options);
+    },
+  };
+  await assert.rejects(backupStore({ fs: meddling, paths: store.paths, lock: store.lock }, out));
+  assert.deepEqual(readdirSync(out).sort(), ['assets', 'notes.txt']);
+  assert.deepEqual(readdirSync(path.join(out, 'assets')), ['keep.txt']);
+  assert.equal(await store.lock.holder(), null, 'the lock is free');
+});
+
+test("a server's preflight and a restore racing for one directory: whichever claims it first has it", async (t) => {
+  const store = await seeded(t);
+  const out = await backedUp(t, store);
+
+  // The restore claims an empty volume first. Preflight refuses it while the
+  // restore runs, lays nothing out, and the restore goes on.
+  const volume = tempDir(t, 'store-volume-');
+  let reached!: () => void;
+  const paused = new Promise<void>((resolve) => {
+    reached = resolve;
+  });
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let held = false;
+  const pausing: FsPort = {
+    ...nodeFs,
+    async writeFile(file, data, point, options) {
+      if (point === 'restore.write' && !held) {
+        held = true;
+        reached();
+        await gate;
+      }
+      return nodeFs.writeFile(file, data, point, options);
+    },
+  };
+  const restoring = restoreStore({ fs: pausing }, out, volume);
+  await paused;
+  const claimed = readdirSync(volume).sort();
+  assert.ok(claimed.includes(RESTORE_CLAIM));
+  assert.equal(await preflight({ dataDir: volume }), 'data_dir_restore_incomplete');
+  assert.deepEqual(readdirSync(volume).sort(), claimed, 'preflight laid nothing out');
+  release();
+  assert.equal((await restoring).kind, 'restored');
+  assert.equal(await preflight({ dataDir: volume }), null);
+
+  // Preflight lays out a volume first: the restore finds it in use, and leaves it as it was.
+  const laidOut = tempDir(t, 'store-volume-');
+  assert.equal(await preflight({ dataDir: laidOut }), null);
+  const before = filesUnder(laidOut);
+  assert.deepEqual(await restoreStore({ fs: nodeFs }, out, laidOut), {
+    kind: 'refused',
+    code: 'target_not_empty',
+  });
+  assert.deepEqual(filesUnder(laidOut), before);
+});
+
+test("restore refuses a manifest whose pointer isn't last, that lists a path twice, or of another backup format", async (t) => {
+  const store = await seeded(t);
+  const out = await backedUp(t, store);
+  const cases: [string, (manifest: BackupManifest) => unknown][] = [
+    ['the pointer first', (m) => ({ ...m, files: [m.files.at(-1)!, ...m.files.slice(0, -1)] })],
+    ['a path twice', (m) => ({ ...m, files: [m.files[0]!, ...m.files] })],
+    ['another format', (m) => ({ ...m, backupFormat: 2 })],
+  ];
+  for (const [what, edit] of cases) {
+    const into = target(t, 'restored');
+    assert.deepEqual(
+      await restoreStore({ fs: nodeFs }, edited(t, out, edit), into),
+      { kind: 'refused', code: 'manifest_unreadable' },
+      what,
+    );
+    assert.equal(existsSync(into), false, `${what}: nothing was written`);
+  }
+});
+
+test('a backup file that changes between the check and the copy stops the restore with hash_mismatch, and nothing stays', async (t) => {
+  const store = await seeded(t);
+  const out = await backedUp(t, store);
+  const manifest = JSON.parse(
+    readFileSync(path.join(out, BACKUP_MANIFEST), 'utf8'),
+  ) as BackupManifest;
+  const changing = path.join(out, ...manifest.files[2]!.path.split('/'));
+  let reads = 0;
+  const swapping: FsPort = {
+    ...nodeFs,
+    async readFile(file) {
+      const bytes = await nodeFs.readFile(file);
+      if (file !== changing) return bytes;
+      reads += 1;
+      return reads === 1 ? bytes : Buffer.concat([bytes, Buffer.from(' ')]);
+    },
+  };
+  const into = target(t, 'restored');
+  assert.deepEqual(await restoreStore({ fs: swapping }, out, into), {
+    kind: 'refused',
+    code: 'hash_mismatch',
+    path: manifest.files[2]!.path,
+  });
+  assert.equal(existsSync(into), false);
+});
+
+test('restore refuses a target inside the backup, or one that holds it, and writes nothing', async (t) => {
+  const store = await seeded(t);
+  const out = await backedUp(t, store);
+  const before = filesUnder(out);
+  // An empty directory adds no file, so the backup still reads whole.
+  const nested = path.join(out, 'nested');
+  mkdirSync(nested);
+  for (const into of [nested, path.dirname(out)]) {
+    assert.deepEqual(
+      await restoreStore({ fs: nodeFs }, out, into),
+      { kind: 'refused', code: 'target_overlaps' },
+      into,
+    );
+  }
+  assert.deepEqual(readdirSync(nested), []);
+  assert.deepEqual(filesUnder(out), before);
+});
+
+test('a copied log goes in place only from a dot directory of its own root', async (t) => {
+  const root = tempDir(t, 'store-place-');
+  const undotted = path.join(root, 'staged');
+  const elsewhere = path.join(tempDir(t, 'store-place-'), '.staged');
+  for (const staged of [undotted, elsewhere]) {
+    mkdirSync(path.join(staged, 'events'), { recursive: true });
+    await assert.rejects(placeCopiedLog(nodeFs, staged, root, 'restore'), TypeError, staged);
+    assert.ok(existsSync(path.join(staged, 'events')), 'the staged log stays');
+  }
+  assert.deepEqual(readdirSync(root), ['staged'], 'no publication/ was made');
+});
+
+test("a restore whose pointer isn't the manifest's says so and exits 1", async (t) => {
+  const store = await seeded(t);
+  const out = await backedUp(t, store);
+  const other = newRevisionId();
+  const copy = edited(t, out, (m) => ({ ...m, live: { ...m.live!, revisionId: other } }));
+  const run = await cli(['restore', '--from', copy, '--into', target(t, 'restored')], {
+    readSource,
+  });
+  assert.equal(run.code, 1, run.out);
+  assert.match(
+    run.err,
+    new RegExp(
+      `^The restored pointer doesn't name ${other}, as the backup's manifest does\\.$`,
+      'm',
+    ),
   );
 });

@@ -2,11 +2,11 @@
 // of damage is a problem with the file it's in; what startup repair
 // finishes is a note, and a whole store has neither problems nor notes.
 import assert from 'node:assert/strict';
-import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test, type TestContext } from 'node:test';
 import { nodeFs } from './fs-port';
-import { storePaths, type RevisionId, type Sha256 } from './layout';
+import { RESTORE_CLAIM, storePaths, type RevisionId, type Sha256 } from './layout';
 import { readLive } from './pointer';
 import { verifyStore, type StoreNoteCode, type StoreProblemCode } from './verify';
 import {
@@ -189,4 +189,50 @@ test('verify names each kind of damage with its file, and only notes what repair
   // The store the copies came from is untouched.
   assert.deepEqual((await verify(store.root)).problems, []);
   assert.equal((await readLive(nodeFs, storePaths(store.root)))?.revisionId, store.live);
+});
+
+test("verify names a restore that didn't finish: its claim, and the log it staged", async (t) => {
+  const { root } = await seeded(t);
+  writeFileSync(path.join(root, RESTORE_CLAIM), '{}\n');
+  mkdirSync(path.join(root, '.publication.0123456789ab.tmp'));
+  const report = await verify(root);
+  assert.deepEqual(
+    report.problems.filter((problem) => problem.code === 'restore_incomplete'),
+    [
+      { code: 'restore_incomplete', path: RESTORE_CLAIM },
+      { code: 'restore_incomplete', path: '.publication.0123456789ab.tmp' },
+    ],
+  );
+});
+
+test('verify follows no link: one in a revision, a loop, or one in a blob shard is a problem where it stands', async (t) => {
+  const { root, live, blob } = await seeded(t);
+  const outside = tempDir(t, 'store-outside-');
+  writeFileSync(path.join(outside, 'secret.txt'), 'outside the store\n');
+  const documents = path.join(root, 'revisions', live, 'documents');
+  symlinkSync(outside, path.join(documents, 'elsewhere'));
+  symlinkSync('..', path.join(documents, 'loop'));
+  const shard = path.join(root, 'assets', 'sha256', blob.slice(7, 9));
+  symlinkSync(outside, path.join(root, 'assets', 'sha256', 'ff'));
+  // Named as a blob of its shard, so only what it is gives it away.
+  symlinkSync(
+    path.join(outside, 'secret.txt'),
+    path.join(shard, `${blob.slice(7, 9)}${'0'.repeat(62)}`),
+  );
+  const report = await verify(root);
+  const at = (code: StoreProblemCode) =>
+    report.problems.filter((problem) => problem.code === code).map((problem) => problem.path);
+  assert.deepEqual(at('revision_unexpected_file').sort(), [
+    `revisions/${live}/documents/elsewhere`,
+    `revisions/${live}/documents/loop`,
+  ]);
+  assert.ok(at('unexpected_file').includes('assets/sha256/ff'), 'a linked shard');
+  assert.ok(
+    at('unexpected_file').some((file) => file?.startsWith(`assets/sha256/${blob.slice(7, 9)}/`)),
+    'a link in a blob shard',
+  );
+  assert.ok(
+    report.problems.every((problem) => !problem.path?.includes('secret')),
+    'nothing behind a link is read',
+  );
 });

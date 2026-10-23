@@ -7,6 +7,7 @@ import { existsSync, readFileSync, writeFileSync, writeSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { runCli } from '../../cli';
+import { backupStore, restoreStore } from '../backup';
 import { recordOwnerModule } from '../../load-trace';
 import type { SourceReader } from '../source';
 import { nodeFs, type CrashPoint, type FsPort } from '../fs-port';
@@ -56,7 +57,11 @@ export type Step =
    */
   | { readonly op: 'publishDocuments'; readonly documents: UnitInput }
   /** Lays out a new data directory, as startup's preflight does; its outcome is the finding, or null. */
-  | { readonly op: 'preflight' };
+  | { readonly op: 'preflight' }
+  /** `portfolio-store backup`'s own call, on this store, into `out`. */
+  | { readonly op: 'backup'; readonly out: string }
+  /** `portfolio-store restore`'s own call. */
+  | { readonly op: 'restore'; readonly from: string; readonly into: string };
 
 export type ChildTask =
   | {
@@ -264,6 +269,12 @@ async function run(task: Extract<ChildTask, { kind: 'run' }>): Promise<StepResul
         }
         case 'preflight':
           outcome = await preflight({ dataDir: task.dataDir });
+          break;
+        case 'backup':
+          outcome = await backupStore({ fs, paths: store.paths, lock: store.lock }, step.out);
+          break;
+        case 'restore':
+          outcome = await restoreStore({ fs }, step.from, step.into);
           break;
         case 'publishDocuments': {
           const working = await store.drafts.getWorking();

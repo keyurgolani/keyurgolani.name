@@ -243,8 +243,24 @@ export interface PublicationLock {
   fence(): Promise<void>;
   /** What holds it now, or null. */
   holder(): Promise<LockRecord | null>;
-  /** `unlock --force`: removes the lock whoever holds it, and a break marker left with it. */
-  forceUnlock(): Promise<boolean>;
+  /**
+   * What holds it now, how long since its holder last touched it, and
+   * whether that holder is running: on this host, its process still the
+   * one that wrote the record, and touched within LOCK_STALE_MS. Null when
+   * nothing holds it.
+   */
+  held(): Promise<{
+    readonly record: Partial<LockRecord>;
+    readonly ageMs: number;
+    readonly running: boolean;
+  } | null>;
+  /**
+   * `unlock --force`: removes the lock, and a break marker left with it. By
+   * its record: the lock is moved aside, checked to be the one read, or the
+   * one with `nonce`, and put back when it isn't, so a lock taken between
+   * the read and the removal stays. True when it removed one.
+   */
+  forceUnlock(nonce?: string): Promise<boolean>;
 }
 
 type Found = { readonly text: string; readonly mtimeMs: number };
@@ -503,11 +519,39 @@ export function publicationLock({
       const found = await read();
       return found ? ((parseRecord(found.text) as LockRecord | null) ?? null) : null;
     },
-    async forceUnlock() {
+    async held() {
+      const found = await read();
+      if (!found) return null;
+      const record = parseRecord(found.text) ?? {};
+      const ageMs = Math.max(0, now() - found.mtimeMs);
+      const running =
+        record.hostname === hostname() &&
+        Number.isSafeInteger(record.pid) &&
+        processGone(record) === null &&
+        ageMs <= staleMs;
+      return { record, ageMs, running };
+    },
+    async forceUnlock(nonce) {
       const found = await read();
       await fs.remove(breakFile, 'lock.force');
       if (!found) return false;
-      await fs.remove(lockFile, 'lock.force');
+      if (nonce !== undefined && parseRecord(found.text)?.nonce !== nonce) return false;
+      const aside = tempBeside(lockFile);
+      try {
+        await fs.rename(lockFile, aside, 'lock.force.aside');
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') return false;
+        throw error;
+      }
+      const moved = await read(aside).catch(() => null);
+      if (moved?.text !== found.text) {
+        // Another holder's, taken since the read: back where it was, unless
+        // a newer one stands there now.
+        await fs.link(aside, lockFile, 'lock.force.restore').catch(() => {});
+        await fs.remove(aside, 'lock.force.remove');
+        return false;
+      }
+      await fs.remove(aside, 'lock.force.remove');
       return true;
     },
   };

@@ -216,6 +216,10 @@ const MESSAGES: Readonly<Record<FindingCode, string>> = {
   store_layout_unsupported:
     'PORTFOLIO_DATA_DIR holds a store in a layout this build does not read. Run the build that ' +
     'wrote it, or restore a backup taken with this one.',
+  data_dir_restore_incomplete:
+    'PORTFOLIO_DATA_DIR holds a restore that did not finish, so what is there is part of a ' +
+    'store. Restore again with portfolio-store restore, into an empty directory, and point ' +
+    'PORTFOLIO_DATA_DIR there.',
   data_dir_in_use:
     'Another owner server holds PORTFOLIO_DATA_DIR. Stop it first: one server runs per data ' +
     'directory. A claim its server stopped refreshing is free after 45 seconds.',

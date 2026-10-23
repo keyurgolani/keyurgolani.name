@@ -3,8 +3,10 @@ import { recordOwnerModule } from '../load-trace';
 import { storageError } from './common';
 import type { CrashPoint, FsPort } from './fs-port';
 import {
+  BACKUP_CLAIM,
   isRevisionId,
   isSha256,
+  RESTORE_CLAIM,
   STORE_LAYOUT,
   tempBeside,
   type RevisionId,
@@ -30,14 +32,21 @@ import { walk } from './walk';
 // Restore takes a target that is empty or not there yet, checks the backup
 // holds exactly what its manifest lists, every hash and size, then copies it
 // in, the log last. It never creates ephemeral/, so it brings back no
-// session, and none revoked since the backup was taken.
+// session, and none revoked since the backup was taken. The hashes are the
+// manifest's own: a backup written by hand, consistent with its manifest,
+// restores, and the reader and verify judge what it holds.
+//
+// Each claims its target with a claim file before its first write, and
+// lets it go last, so two runs never share a target, a failure takes back
+// only what its own run wrote, and a restore a kill stopped is one preflight
+// refuses (the PR's review, F1 and F2).
 //
 // Only commit.ts moves the pointer's paths, and the store's FsPort refuses
 // anyone else, by their names, wherever they are. So both write the log
 // under a directory of their own, a dot and a random name, and the
 // PublicationService's placeCopiedLog() renames it to publication/ in one
 // move, once everything else is in. A failure before that takes back what
-// was written; nothing comes after it but a sync.
+// was written; nothing comes after it but a sync and the claim's removal.
 //
 // Neither follows a link (the PR #50 review's F3). A backup copies only what
 // lstat calls a regular file, and names what it left out; a restore refuses
@@ -158,21 +167,57 @@ async function backedUpFiles(
 
 /** Whether `dir` is missing, or an empty directory. */
 async function usable(fs: FsPort, dir: string): Promise<'missing' | 'empty' | 'in_use'> {
-  const found = await fs.stat(dir);
+  const found = await fs.lstat(dir);
   if (!found) return 'missing';
   if (!found.isDirectory) return 'in_use';
   return (await fs.readdir(dir)).length === 0 ? 'empty' : 'in_use';
 }
 
+const errorCode = (error: unknown) => (error as NodeJS.ErrnoException)?.code;
+
+/** The deepest first. */
+const deepestFirst = (dirs: Iterable<string>) => [...dirs].sort((a, b) => b.length - a.length);
+
 /**
- * Writes files into `root`, which was empty, keeping track of what it made
- * so a failure can take it all back. The log's files go under a directory
- * of their own, which place() puts in place as publication/.
+ * Claims `root` for one backup or restore, then writes files into it,
+ * keeping track of each file and directory it made so a failure takes back
+ * those and nothing else. The log's files go under a directory of their
+ * own, which place() puts in place as publication/.
+ *
+ * The claim (the PR's review, F1): `root` is made when it's missing, then
+ * the operation's claim file is written into it exclusively, and kept only
+ * when it's all `root` holds. So two runs into one target never both hold
+ * it, and none claims a directory something else is in. The claim stays
+ * until finish(), so a target a kill stopped is never taken for a finished
+ * one: a restore's is what preflight refuses (F2), and a backup's is a file
+ * its manifest doesn't list, which restore refuses.
+ *
+ * Returns null when `root` is another's.
  */
-function writer(fs: FsPort, root: string, operation: 'backup' | 'restore') {
-  const dirs = new Set<string>();
-  const made: string[] = [];
+async function claimed(fs: FsPort, root: string, operation: 'backup' | 'restore') {
   const point = (step: string): CrashPoint => `${operation}.${step}`;
+  const claim = path.join(root, operation === 'backup' ? BACKUP_CLAIM : RESTORE_CLAIM);
+  const madeRoot = !(await fs.lstat(root));
+  await fs.mkdir(root, point('mkdir'));
+  try {
+    const record = { operation, pid: process.pid, startedAt: new Date().toISOString() };
+    await fs.writeFile(claim, `${JSON.stringify(record)}\n`, point('claim.write'), {
+      exclusive: true,
+    });
+  } catch (error) {
+    if (errorCode(error) === 'EEXIST') return null;
+    throw error;
+  }
+  await fs.fsync(claim, point('claim.fsync'));
+  if ((await fs.readdir(root)).some((name) => name !== path.basename(claim))) {
+    await fs.remove(claim, point('claim.remove'));
+    return null;
+  }
+  await fs.fsync(root, point('claim.dir.fsync'));
+
+  const synced = new Set<string>();
+  const createdDirs: string[] = [];
+  const made: string[] = [];
   const staged = tempBeside(abs(root, LOG.slice(0, -1)));
   let logged = false;
   let placed = false;
@@ -182,9 +227,16 @@ function writer(fs: FsPort, root: string, operation: 'backup' | 'restore') {
       const target = log ? abs(staged, file.slice(LOG.length)) : abs(root, file);
       logged ||= log;
       const dir = path.dirname(target);
-      if (!dirs.has(dir)) {
+      if (!synced.has(dir)) {
+        const missing: string[] = [];
+        for (let up = dir; up !== root && within(root, up); up = path.dirname(up)) {
+          if (!synced.has(up) && !(await fs.lstat(up))) missing.push(up);
+        }
         await fs.mkdir(dir, point('mkdir'));
-        for (let up = dir; !dirs.has(up) && within(root, up); up = path.dirname(up)) dirs.add(up);
+        createdDirs.push(...missing);
+        for (let up = dir; !synced.has(up) && within(root, up); up = path.dirname(up)) {
+          synced.add(up);
+        }
       }
       await fs.writeFile(target, bytes, point('write'), { exclusive: true });
       made.push(target);
@@ -193,21 +245,42 @@ function writer(fs: FsPort, root: string, operation: 'backup' | 'restore') {
     /**
      * Syncs every directory it wrote into, the deepest first, then puts the
      * log in place as publication/ and syncs `root`. Nothing is taken back
-     * after that.
+     * once the log is in place.
      */
     async place(): Promise<void> {
-      const deepest = [...dirs].sort((a, b) => b.length - a.length);
-      for (const dir of deepest) await fs.fsync(dir, point('dir.fsync'));
-      if (logged) {
-        placed = true;
+      for (const dir of deepestFirst(synced)) await fs.fsync(dir, point('dir.fsync'));
+      if (!logged) return;
+      try {
         await placeCopiedLog(fs, staged, root, operation);
+      } catch (error) {
+        // Placed when the rename landed, whatever came after it.
+        placed = !(await fs.lstat(staged).catch(() => null));
+        throw error;
       }
+      placed = true;
     },
-    /** Removes what it wrote, leaving `root` as empty as it found it, until the log is in place. */
+    /** Lets the claim go: the run is done. */
+    async finish(): Promise<void> {
+      await fs.remove(claim, point('claim.remove'));
+      await fs.fsync(root, point('claim.dir.fsync'));
+    },
+    /**
+     * Removes the files it wrote and the directories it made, when nothing
+     * else is in them, then its claim, until the log is in place. After
+     * that, the claim stays.
+     */
     async undo(): Promise<void> {
       if (placed) return;
-      for (const name of await fs.readdir(root).catch(() => [] as string[])) {
-        await fs.remove(path.join(root, name), point('undo')).catch(() => {});
+      const quietly = (task: Promise<unknown>) => task.catch(() => {});
+      for (const file of made.reverse()) await quietly(fs.remove(file, point('undo')));
+      for (const dir of deepestFirst(createdDirs)) {
+        if ((await fs.readdir(dir).catch(() => [''])).length === 0) {
+          await quietly(fs.remove(dir, point('undo')));
+        }
+      }
+      await quietly(fs.remove(claim, point('undo')));
+      if (madeRoot && (await fs.readdir(root).catch(() => [''])).length === 0) {
+        await quietly(fs.remove(root, point('undo')));
       }
     },
   };
@@ -231,8 +304,8 @@ export async function backupStore(
   try {
     if ((await usable(fs, out)) === 'in_use') return { kind: 'refused', code: 'target_not_empty' };
     return await lock.withLock('cli:backup', async () => {
-      await fs.mkdir(out, 'backup.mkdir');
-      const files = writer(fs, out, 'backup');
+      const files = await claimed(fs, out, 'backup');
+      if (!files) return { kind: 'refused', code: 'target_not_empty' } as const;
       try {
         const listed: BackupFile[] = [];
         const copy = async (file: string) => {
@@ -270,6 +343,7 @@ export async function backupStore(
         };
         await files.write(BACKUP_MANIFEST, Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`));
         await files.place();
+        await files.finish();
         return { kind: 'done', manifest, skipped: store.skipped } as const;
       } catch (error) {
         await files.undo();
@@ -365,8 +439,8 @@ export async function restoreStore(
       }
     }
 
-    await fs.mkdir(into, 'restore.mkdir');
-    const files = writer(fs, into, 'restore');
+    const files = await claimed(fs, into, 'restore');
+    if (!files) return { kind: 'refused', code: 'target_not_empty' };
     try {
       for (const file of manifest.files) {
         const bytes = await fs.readFile(abs(from, file.path));
@@ -378,7 +452,7 @@ export async function restoreStore(
         await files.write(file.path, bytes);
       }
       await files.place();
-      await fs.fsync(into, 'restore.dir.fsync');
+      await files.finish();
     } catch (error) {
       await files.undo();
       throw error;

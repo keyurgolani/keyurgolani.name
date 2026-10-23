@@ -3,6 +3,7 @@ import { recordOwnerModule } from '../load-trace';
 import { asDraft } from './drafts';
 import type { FsPort } from './fs-port';
 import {
+  isRestoreLeftover,
   isRevisionId,
   STORE_LAYOUT,
   type RevisionId,
@@ -23,7 +24,8 @@ import { DOCUMENT_NAMES, sha256, type UnitChecks } from '../catalog/unit';
 // references there. A revision retention removed is skipped, tombstone and
 // all, whatever is left of its directory. What startup repair finishes, a
 // staging directory or the live event's own file, is a note, not a problem.
-// Nothing here writes.
+// Nothing here writes, and nothing here follows a link: one in the store is
+// a problem where it stands (the PR's review, F5).
 
 recordOwnerModule('core/store/verify');
 
@@ -51,6 +53,8 @@ export type StoreProblemCode =
   | 'draft_base_missing'
   | 'blob_missing'
   | 'blob_hash_mismatch'
+  /** A restore into this directory never finished: its claim, or the log it staged, is there. */
+  | 'restore_incomplete'
   | 'unexpected_file';
 
 export type StoreNoteCode =
@@ -94,12 +98,16 @@ async function readJson(fs: FsPort, file: string): Promise<unknown> {
   }
 }
 
-/** Every file under `dir`, relative to it, with / between names. */
+/**
+ * Every file under `dir`, relative to it, with / between names. A link is
+ * listed as it stands, never followed, so a link to a directory or a loop
+ * is one entry.
+ */
 async function filesUnder(fs: FsPort, dir: string, prefix = ''): Promise<string[]> {
   const files: string[] = [];
   for (const name of (await fs.readdir(dir)).sort()) {
     const full = path.join(dir, name);
-    const found = await fs.stat(full);
+    const found = await fs.lstat(full);
     if (found?.isDirectory) files.push(...(await filesUnder(fs, full, `${prefix}${name}/`)));
     else if (found) files.push(`${prefix}${name}`);
   }
@@ -137,9 +145,14 @@ export async function verifyStore({
   // it name its file (pointer-moves.test.ts).
   const pointerProblem = (code: StoreProblemCode) => problems.push({ code });
 
+  // What a restore that never finished left at the top (F2).
+  for (const name of (await fs.readdir(paths.root)).sort()) {
+    if (isRestoreLeftover(name)) problem('restore_incomplete', path.join(paths.root, name));
+  }
+
   // store.json, the layout.
   const layout = (await readJson(fs, paths.storeFile)) as { layout?: unknown } | undefined;
-  if (!(await fs.stat(paths.storeFile))) problem('store_layout_missing', paths.storeFile);
+  if (!(await fs.lstat(paths.storeFile))) problem('store_layout_missing', paths.storeFile);
   else if (layout?.layout !== STORE_LAYOUT) problem('store_layout_unsupported', paths.storeFile);
 
   // Revisions, tombstones, and what a publish in progress left.
@@ -167,7 +180,7 @@ export async function verifyStore({
       note('temp_left', full);
       continue;
     }
-    if (!isRevisionId(name) || !(await fs.stat(full))?.isDirectory) {
+    if (!isRevisionId(name) || !(await fs.lstat(full))?.isDirectory) {
       problem('unexpected_file', full);
       continue;
     }
@@ -185,7 +198,9 @@ export async function verifyStore({
     }
     const expected = new Set(revisionFiles(read.revision.manifest));
     for (const file of await filesUnder(fs, full)) {
-      if (!expected.has(file)) problem('revision_unexpected_file', path.join(full, file));
+      const target = path.join(full, file);
+      if (!expected.has(file)) problem('revision_unexpected_file', target);
+      else if (!(await fs.lstat(target))?.isFile) problem('revision_unreadable', target);
     }
     for (const blob of read.revision.manifest.blobs) referenced.set(blob, full);
   }
@@ -279,7 +294,7 @@ export async function verifyStore({
   const held = new Set<Sha256>();
   for (const shard of (await fs.readdir(paths.assets)).sort()) {
     const dir = path.join(paths.assets, shard);
-    if (!SHARD.test(shard) || !(await fs.stat(dir))?.isDirectory) {
+    if (!SHARD.test(shard) || !(await fs.lstat(dir))?.isDirectory) {
       problem('unexpected_file', dir);
       continue;
     }
@@ -289,7 +304,7 @@ export async function verifyStore({
         note('temp_left', full);
         continue;
       }
-      if (!BLOB_FILE.test(name) || !name.startsWith(shard)) {
+      if (!BLOB_FILE.test(name) || !name.startsWith(shard) || !(await fs.lstat(full))?.isFile) {
         problem('unexpected_file', full);
         continue;
       }

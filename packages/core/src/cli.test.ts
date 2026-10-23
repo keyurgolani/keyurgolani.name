@@ -19,8 +19,8 @@ import path from 'node:path';
 import { test, type TestContext } from 'node:test';
 import { readPairBytes } from '@portfolio/schema/node';
 import { nodeFs, type FsPort } from './store/fs-port';
-import type { RevisionId } from './store/layout';
-import type { LockRecord } from './store/lock';
+import { RESTORE_CLAIM, type RevisionId } from './store/layout';
+import { thisProcess, type LockRecord } from './store/lock';
 import { readEvents, readLive } from './store/pointer';
 import { readManifest } from './store/revisions';
 import { openStore } from './store/store';
@@ -249,7 +249,7 @@ test('rollback --to and recover move the pointer as the operator, and refuse wha
   assert.equal((await readLive(nodeFs, store.paths))?.seq, 4);
 });
 
-test('unlock needs --force, and with it removes the lock whoever holds it', async (t) => {
+test('unlock needs --force, and --running too for a holder still running here, and says its pid and age', async (t) => {
   const store = await newStore(t);
   const held = await store.lock.acquire('publish');
   const call = { dataDir: store.paths.root, readSource };
@@ -257,13 +257,75 @@ test('unlock needs --force, and with it removes the lock whoever holds it', asyn
   assert.equal(refused.code, 2);
   assert.notEqual(await store.lock.holder(), null, 'without --force the lock stays');
 
-  const forced = await cli(['unlock', '--force'], call);
+  // This process holds it, and touched it just now: a running holder.
+  const running = await cli(['unlock', '--force'], call);
+  assert.equal(running.code, 1);
+  assert.match(
+    running.err,
+    new RegExp(
+      `^lock_held: process ${process.pid} on this host holds the publication lock for publish, ` +
+        'and touched it \\d+ s ago, so it.s still running\\. .*unlock --force --running\\. ' +
+        'Nothing changed\\.$',
+      'm',
+    ),
+  );
+  assert.equal((await store.lock.holder())?.nonce, held.record.nonce, 'the lock stays');
+
+  const forced = await cli(['unlock', '--force', '--running'], call);
   assert.equal(forced.code, 0, forced.err);
-  assert.match(forced.out, /^Removed the publication lock, held by publish since /m);
+  assert.match(
+    forced.out,
+    /^Removed the publication lock, held by publish, last touched \d+ s ago\.$/m,
+  );
   assert.equal(await store.lock.holder(), null);
   const again = await cli(['unlock', '--force'], call);
   assert.equal(again.out, 'Nothing holds the publication lock.\n');
   await held.release();
+
+  // A holder on another host can't be checked from here, and isn't refused.
+  const elsewhere: LockRecord = {
+    pid: process.pid,
+    startTime: null,
+    hostname: 'another-host.invalid',
+    holder: 'publish',
+    at: new Date().toISOString(),
+    nonce: 'elsewhere',
+  };
+  writeFileSync(store.paths.lock, JSON.stringify(elsewhere));
+  const other = await cli(['unlock', '--force'], call);
+  assert.equal(other.code, 0, other.err);
+  assert.equal(await store.lock.holder(), null);
+});
+
+test('unlock removes the lock it read, by its record, and leaves one taken while it ran', async (t) => {
+  const store = await newStore(t);
+  const call = { dataDir: store.paths.root, readSource };
+  const record = (nonce: string): LockRecord => ({
+    pid: 999_999,
+    startTime: null,
+    hostname: 'another-host.invalid',
+    holder: 'publish',
+    at: new Date().toISOString(),
+    nonce,
+  });
+  writeFileSync(store.paths.lock, JSON.stringify(record('first')));
+  // Another holder takes the lock between unlock's read and its move.
+  const racing: FsPort = {
+    ...nodeFs,
+    async rename(from, to, point, pass) {
+      if (point === 'lock.force.aside') writeFileSync(from, JSON.stringify(record('second')));
+      return nodeFs.rename(from, to, point, pass);
+    },
+  };
+  const raced = await cli(['unlock', '--force'], { ...call, fs: racing });
+  assert.equal(raced.code, 1);
+  assert.match(raced.out, /^The publication lock changed hands while unlock read it/m);
+  assert.equal((await store.lock.holder())?.nonce, 'second', "the newer holder's lock stays");
+  assert.deepEqual(
+    readdirSync(path.dirname(store.paths.lock)).filter((name) => name.endsWith('.tmp')),
+    [],
+    'nothing is left aside',
+  );
 });
 
 test('a lock held past the wait is lock_timeout, and the command changes nothing', async (t) => {
@@ -458,6 +520,8 @@ async function interrupted(
   argv: readonly string[],
   point: string,
   signal: NodeJS.Signals,
+  /** Runs once the child is stopped at `point`, before the signal, with its pid. */
+  beforeSignal?: (pid: number) => void,
 ) {
   const readyFile = path.join(tempDir(t, 'store-signal-'), 'ready');
   const child = startChild({
@@ -474,6 +538,7 @@ async function interrupted(
     if (ended) assert.fail(`it ended before ${point}: ${(await child.done).stderr.slice(-600)}`);
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
+  beforeSignal?.(child.pid);
   const lock = path.join(dataDir, 'publication', 'lock');
   const held = existsSync(lock) ? (JSON.parse(readFileSync(lock, 'utf8')) as LockRecord) : null;
   process.kill(child.pid, signal);
@@ -625,7 +690,8 @@ test('a command whose lock another process takes over mid-run changes nothing mo
   const backup = await cli(['backup', '--out', out], call());
   assert.equal(backup.code, 1, backup.out);
   assert.match(lockLost(backup) ?? '', /^lock_lost: .* Nothing was kept in /);
-  assert.deepEqual(readdirSync(out), [], 'the backup took back what it copied');
+  // It made --out, so taking back what it copied leaves it as it was: not there.
+  assert.equal(existsSync(out), false, 'the backup took back what it copied');
   rmSync(store.paths.lock, { force: true });
 
   // An old blob nothing references is what a retention run with no flag removes.
@@ -667,4 +733,72 @@ test("preflight's refusals say what to change, and nothing is written", async (t
     /^data_dir_linked: A store directory in PORTFOLIO_DATA_DIR, such as drafts\/, is a symbolic link\. .* Nothing was changed\.$/m,
   );
   assert.equal((await readLive(nodeFs, store.paths))?.seq, 1);
+});
+
+test('a signal leaves a lock that names its pid from another host, or from another start of that pid', async (t) => {
+  const others: [string, Partial<LockRecord>][] = [
+    ['another host', { hostname: 'another-host.invalid' }],
+    ['another start', { startTime: 'an earlier start' }],
+  ];
+  for (const [what, identity] of others) {
+    const store = await newStore(t);
+    await publishInput(store, pairInput('engineering'));
+    const source = mounted(t, contentVariant(pairInput('engineering'), 'waiting'));
+    const nonce = `planted-${what.replace(' ', '-')}`;
+    // Stopped as it starts to take the lock, which a record with its own pid holds.
+    const { run } = await interrupted(
+      t,
+      store.paths.root,
+      ['import', '--from', source],
+      'lock.write',
+      'SIGTERM',
+      (pid) => {
+        const record: LockRecord = {
+          ...thisProcess(),
+          pid,
+          ...identity,
+          holder: 'publish',
+          at: new Date().toISOString(),
+          nonce,
+        };
+        writeFileSync(store.paths.lock, JSON.stringify(record));
+      },
+    );
+    assert.deepEqual([run.code, run.signal], [143, null], `${what}: ${run.stderr.slice(-600)}`);
+    assert.equal((await store.lock.holder())?.nonce, nonce, `${what}: the lock stays`);
+  }
+});
+
+test('import refuses a data directory inside the source directory, and writes nothing', async (t) => {
+  const source = mounted(t, pairInput('engineering'));
+  const dataDir = path.join(source, 'data');
+  mkdirSync(dataDir, { mode: 0o700 });
+  const run = await cli(['import', '--from', source], { dataDir, readSource });
+  assert.equal(run.code, 1, run.out);
+  assert.match(run.err, /^data_dir_in_source: .* Nothing was changed\.$/m);
+  assert.deepEqual(readdirSync(dataDir), []);
+});
+
+test("a write command refuses a data directory a restore didn't finish, and says to restore again", async (t) => {
+  const store = await newStore(t);
+  await publishInput(store, pairInput('engineering'));
+  writeFileSync(path.join(store.paths.root, RESTORE_CLAIM), '{}\n');
+  const source = mounted(t, contentVariant(pairInput('engineering'), 'over a half restore'));
+  const run = await cli(['import', '--from', source], { dataDir: store.paths.root, readSource });
+  assert.equal(run.code, 1, run.out);
+  assert.match(
+    run.err,
+    /^data_dir_restore_incomplete: PORTFOLIO_DATA_DIR holds a restore that didn't finish\. Restore again, into an empty directory, .* Nothing was changed\.$/m,
+  );
+  assert.equal((await readLive(nodeFs, store.paths))?.seq, 1);
+});
+
+test('verify prints no path the operator did not give, even over a link loop', async (t) => {
+  const store = await newStore(t);
+  const live = await publishInput(store, pairInput('engineering'));
+  symlinkSync('..', path.join(store.paths.revision(live), 'documents', 'loop'));
+  const run = await cli(['verify'], { dataDir: store.paths.root, readSource });
+  assert.equal(run.code, 1, run.out);
+  assert.match(run.out + run.err, new RegExp(`revisions/${live}/documents/loop`));
+  assert.ok(!`${run.out}${run.err}`.includes(store.paths.root), 'no absolute path');
 });

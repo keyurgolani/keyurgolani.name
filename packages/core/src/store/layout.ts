@@ -123,6 +123,23 @@ export function storePaths(dataDir: string): StorePaths {
   });
 }
 
+/**
+ * The claim a backup or a restore writes into its target before anything
+ * else, and removes once it's done (#3, item 26). A target holding one is
+ * another run's, or one a kill stopped.
+ */
+export const BACKUP_CLAIM = '.portfolio-store.backup.json';
+export const RESTORE_CLAIM = '.portfolio-store.restore.json';
+
+/**
+ * What a restore that never finished leaves at the top of a data
+ * directory: its claim, or the publication log it stages beside
+ * publication/ (tempBeside()'s name for it). Preflight refuses a directory
+ * holding either.
+ */
+export const isRestoreLeftover = (name: string): boolean =>
+  name === RESTORE_CLAIM || /^\.publication\.[0-9a-f]{12}\.tmp$/.test(name);
+
 /** A name for a temporary file beside `file`, which no listing mistakes for what it replaces. */
 export const tempBeside = (file: string): string =>
   path.join(path.dirname(file), `.${path.basename(file)}.${randomBytes(6).toString('hex')}.tmp`);

@@ -63,7 +63,7 @@ const USAGE = `Usage: portfolio-store <command> [options]
                                            Publishes the pair in <dir>, PORTFOLIO_SOURCE_DIR by default.
   rollback --to <revisionId>               Makes an earlier revision live again.
   recover [--to <revisionId>]              Makes the last known good revision, or <revisionId>, live.
-  unlock --force                           Removes the publication lock, whoever holds it.
+  unlock --force [--running]               Removes the publication lock. A running holder's needs --running.
   backup --out <dir>                       Copies the store into <dir>, which must be empty or new.
   restore --from <dir> --into <dir>        Copies a backup into <dir>, which must be empty or new.
   retention [--keep <n>] [--remove <revisionId>] [--dry-run]
@@ -135,6 +135,9 @@ const PREFLIGHT_MESSAGES: Readonly<Record<PreflightCode, string>> = {
     'PORTFOLIO_DATA_DIR is inside the source directory, or holds it. Keep the two apart.',
   store_layout_unsupported:
     "PORTFOLIO_DATA_DIR holds a store in a layout this build doesn't read (store.json).",
+  data_dir_restore_incomplete:
+    "PORTFOLIO_DATA_DIR holds a restore that didn't finish. Restore again, into an empty " +
+    'directory, and point PORTFOLIO_DATA_DIR there.',
 };
 
 const PROTECTION: Readonly<Record<Protection, string>> = {
@@ -731,7 +734,10 @@ class Commands {
   }
 
   private async unlock(args: readonly string[]): Promise<number> {
-    const { values } = this.parse(args, { force: { type: 'boolean' } });
+    const { values } = this.parse(args, {
+      force: { type: 'boolean' },
+      running: { type: 'boolean' },
+    });
     if (!values.force) {
       throw new UsageError(
         'unlock needs --force: it removes the lock whoever holds it, so run it only when ' +
@@ -739,16 +745,29 @@ class Commands {
       );
     }
     const store = await this.writable();
-    const holder = await store.lock.holder();
-    if (!(await store.lock.forceUnlock())) {
+    const held = await store.lock.held();
+    if (!held) {
       this.say('Nothing holds the publication lock.');
       return 0;
     }
-    this.say(
-      holder
-        ? `Removed the publication lock, held by ${holder.holder} since ${holder.at}.`
-        : 'Removed the publication lock.',
-    );
+    const { record } = held;
+    const what = typeof record.holder === 'string' ? record.holder : 'an unknown holder';
+    const age = `${Math.round(held.ageMs / 1000)} s`;
+    // A lock whose holder stopped breaks itself on the next acquire: only a
+    // running holder's is worth this command, and the one it can hurt.
+    if (held.running && !values.running) {
+      this.complain(
+        `lock_held: process ${record.pid} on this host holds the publication lock for ${what}, ` +
+          `and touched it ${age} ago, so it's still running. Wait for it, or stop it. To ` +
+          'remove its lock anyway, run unlock --force --running. Nothing changed.',
+      );
+      return 1;
+    }
+    if (!(await store.lock.forceUnlock(typeof record.nonce === 'string' ? record.nonce : ''))) {
+      this.say('The publication lock changed hands while unlock read it, and was left as it is.');
+      return 1;
+    }
+    this.say(`Removed the publication lock, held by ${what}, last touched ${age} ago.`);
     return 0;
   }
 
