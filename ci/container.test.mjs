@@ -437,12 +437,16 @@ test('the image scan flags personal data, env files, git, secrets, and test tree
       '.git',
       'deploy/secrets',
       'node_modules/pkg/tests',
+      'snapshots',
+      'example-media/work',
     ]) {
       mkdirSync(path.join(root, dir), { recursive: true });
     }
     for (const file of [
       'portfolio.example.yml',
       'site.example.yml',
+      'snapshots/github.json',
+      'example-media/work/small-traces.png',
       'portfolio.yml',
       'site.yml',
       'apps/web/portfolio.json',
@@ -486,11 +490,81 @@ test('the image scan passes a clean tree and reports a missing example', async (
     writeFileSync(path.join(root, 'apps/web/server.js'), 'x');
     const scan = async () => JSON.parse((await runNode(['-e', SCAN_SNIPPET, root], {})).stdout);
     assert.deepEqual(await scan(), { problems: [], example: false });
-    // Both examples, or the demo profile has no sample pair to read.
+    // Both examples, or the demo profile has no sample pair to read, the
+    // snapshot beside them, or its github section has no data (#10), and
+    // its media sources, which ship only through their own include.
     writeFileSync(path.join(root, 'portfolio.example.yml'), 'x');
     assert.deepEqual(await scan(), { problems: [], example: false });
     writeFileSync(path.join(root, 'site.example.yml'), 'x');
+    assert.deepEqual(await scan(), { problems: [], example: false });
+    mkdirSync(path.join(root, 'snapshots'));
+    writeFileSync(path.join(root, 'snapshots/github.json'), 'x');
+    assert.deepEqual(await scan(), { problems: [], example: false });
+    mkdirSync(path.join(root, 'example-media/work'), { recursive: true });
+    writeFileSync(path.join(root, 'example-media/work/small-traces.png'), 'x');
     assert.deepEqual(await scan(), { problems: [], example: true });
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("the image scan flags any snapshot but the bundled sample's, in node_modules too (#7)", async () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'image-scan-'));
+  try {
+    for (const file of [
+      'portfolio.example.yml',
+      'site.example.yml',
+      'snapshots/github.json',
+      'example-media/work/small-traces.png',
+      'snapshots/urls.json',
+      'packages/variant-contract/fixtures/hidden-canary/snapshots/github.json',
+      'packages/schema/src/__fixtures__/invalid/snapshot.syntax/snapshots/github.json',
+      'packages/schema/src/__fixtures__/invalid/snapshot.ignored/snapshots/github-notes.txt',
+      'apps/web/node_modules/@portfolio/variant-contract/fixtures/hidden-canary/snapshots/github.json',
+      'node_modules/.pnpm/node_modules/@portfolio/schema/src/__fixtures__/invalid/snapshot.invalid/snapshots/github.json',
+      'node_modules/pkg/portfolio.yml',
+      'packages/kit/src/snapshots.json',
+    ]) {
+      mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+      writeFileSync(path.join(root, file), 'x');
+    }
+    const scan = JSON.parse((await runNode(['-e', SCAN_SNIPPET, root], {})).stdout);
+    assert.equal(scan.example, true);
+    assert.deepEqual(scan.problems.sort(), [
+      'apps/web/node_modules/@portfolio/variant-contract/fixtures/hidden-canary/snapshots/github.json',
+      'node_modules/.pnpm/node_modules/@portfolio/schema/src/__fixtures__/invalid/snapshot.invalid/snapshots/github.json',
+      'packages/schema/src/__fixtures__/invalid/snapshot.syntax/snapshots/github.json',
+      'packages/variant-contract/fixtures/hidden-canary/snapshots/github.json',
+    ]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('the image scan flags an example document anywhere but the root, in node_modules too (#7)', async () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'image-scan-'));
+  try {
+    for (const file of [
+      'portfolio.example.yml',
+      'site.example.yml',
+      'snapshots/github.json',
+      'example-media/work/small-traces.png',
+      'packages/schema/src/__fixtures__/zzprobe/portfolio.example.yml',
+      'packages/schema/src/__fixtures__/zzprobe/site.example.yml',
+      'apps/web/node_modules/@portfolio/schema/src/__fixtures__/zzprobe/portfolio.example.yml',
+      'node_modules/.pnpm/node_modules/@portfolio/schema/src/__fixtures__/zzprobe/site.example.yml',
+    ]) {
+      mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+      writeFileSync(path.join(root, file), 'x');
+    }
+    const scan = JSON.parse((await runNode(['-e', SCAN_SNIPPET, root], {})).stdout);
+    assert.equal(scan.example, true);
+    assert.deepEqual(scan.problems.sort(), [
+      'apps/web/node_modules/@portfolio/schema/src/__fixtures__/zzprobe/portfolio.example.yml',
+      'node_modules/.pnpm/node_modules/@portfolio/schema/src/__fixtures__/zzprobe/site.example.yml',
+      'packages/schema/src/__fixtures__/zzprobe/portfolio.example.yml',
+      'packages/schema/src/__fixtures__/zzprobe/site.example.yml',
+    ]);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

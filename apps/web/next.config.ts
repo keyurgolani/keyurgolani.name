@@ -28,13 +28,21 @@ const config: NextConfig = {
   // the sample adapter reads, and the sample's media sources, which #10's
   // second slice derives renditions from. Nothing imports them, so the
   // tracer can't find them on its own.
+  //
+  // The documents and the two directories hang on different routes on
+  // purpose. Turbopack joins a route's includes into one glob, matches it
+  // anywhere in a path, and walks every directory some part of it could
+  // match. A file at the root could be in any directory, so beside the two
+  // documents, snapshots/*.json matched every snapshots directory in the
+  // tree, through every workspace link: the contract fixtures' and the
+  // schema's test snapshots, and tests/fixtures'. On their own, the two
+  // directory globs walk only into the root's snapshots/ and example-media/.
+  // One route is enough to ship a file, and every build has these two. pnpm
+  // check:standalone fails a build whose output holds any other snapshot, or
+  // lacks the sample's.
   outputFileTracingIncludes: {
-    '/**': [
-      '../../portfolio.example.yml',
-      '../../site.example.yml',
-      '../../snapshots/*.json',
-      '../../example-media/**/*.png',
-    ],
+    '/api/health': ['../../portfolio.example.yml', '../../site.example.yml'],
+    '/api/ready': ['../../snapshots/*.json', '../../example-media/**/*.png'],
   },
   // #5's contract fixtures stay out of it. Only the preview's dev fixture
   // route reads them, under next dev alone, but the tracer follows its reads

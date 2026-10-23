@@ -275,12 +275,14 @@ async function smoke() {
       {
         test: 'image contents',
         expected:
-          'only portfolio.example.yml and site.example.yml; no tests, ci, reports, .env*, or .git',
+          'the bundled sample at the root (portfolio.example.yml, site.example.yml, snapshots/github.json, example-media/) and no other document or snapshot; no tests, ci, reports, .env*, or .git',
         actual: found,
       },
     );
   }
-  console.log('[image] image contents: only the example pair, no test or CI files');
+  console.log(
+    '[image] image contents: only the bundled sample, no other document or snapshot, no test or CI files',
+  );
 
   // The image's build is a default one, so it ships no browser source map
   // (#6), under the build's static tree or in public/, which the server

@@ -1,6 +1,7 @@
 // Checks that run inside a container under test. The in-container functions
 // are serialized into `node -e` snippets, so they may use only Node built-ins
-// and nothing from their enclosing scope.
+// and nothing from their enclosing scope. The image scan, scanTree, also runs
+// on the build's own tree, in pnpm check:standalone.
 
 /**
  * Fetches a path from the app inside its own container, at the address
@@ -84,35 +85,54 @@ function treeFromInside(root) {
 }
 
 /**
- * Lists files under `root` (outside node_modules) that must not ship: any
+ * Lists what under `root` must not ship. Outside node_modules: any
  * portfolio.* except the example, a site document, .env*, .git, a secrets
- * directory, and the tests, ci, and reports trees. Prints JSON:
- * { problems, example }, where `example` says both bundled examples are there.
+ * directory, and the tests, ci, and reports trees. Anywhere, node_modules
+ * too: the bundled sample's files anywhere but where it ships (#7), a
+ * snapshot, snapshots/<kind>.json, outside the root's snapshots/, and
+ * portfolio.example.yml or site.example.yml outside the root. Any other is
+ * a fixture's or a test's, and the tracer copies a workspace package's
+ * files under every node_modules path it reached them by. Links aren't
+ * followed. Returns { problems, example }, where `example` says the bundled
+ * sample is there: both examples, the snapshot beside them, and its media.
+ * pnpm check:standalone runs it on the build's tree, and the image smoke
+ * inside the image.
  */
-function scanFromInside(root) {
+export function scanTree(root) {
   const fs = process.getBuiltinModule('node:fs');
   const path = process.getBuiltinModule('node:path');
   const problems = [];
-  const walk = (dir) => {
+  const sample = path.join(root, 'snapshots');
+  const walk = (dir, inModules) => {
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-      if (entry.name === 'node_modules') continue;
       const full = path.join(dir, entry.name);
       const name = entry.name;
+      const modules = inModules || name === 'node_modules';
+      const snapshot =
+        path.basename(dir) === 'snapshots' && name.endsWith('.json') && dir !== sample;
+      const example =
+        (name === 'portfolio.example.yml' || name === 'site.example.yml') && dir !== root;
       const banned =
-        (name.startsWith('portfolio.') && name !== 'portfolio.example.yml') ||
-        /^site\.(?:yml|yaml|json)$/.test(name) ||
-        name.startsWith('.env') ||
-        name === '.git' ||
-        (entry.isDirectory() && ['tests', 'ci', 'reports', 'secrets'].includes(name));
+        snapshot ||
+        example ||
+        (!modules &&
+          ((name.startsWith('portfolio.') && name !== 'portfolio.example.yml') ||
+            /^site\.(?:yml|yaml|json)$/.test(name) ||
+            name.startsWith('.env') ||
+            name === '.git' ||
+            (entry.isDirectory() && ['tests', 'ci', 'reports', 'secrets'].includes(name))));
       if (banned) problems.push(path.relative(root, full));
-      else if (entry.isDirectory()) walk(full);
+      else if (entry.isDirectory()) walk(full, modules);
     }
   };
-  walk(root);
-  const example = ['portfolio.example.yml', 'site.example.yml'].every((file) =>
-    fs.existsSync(path.join(root, file)),
-  );
-  process.stdout.write(JSON.stringify({ problems, example }));
+  walk(root, false);
+  const example = [
+    'portfolio.example.yml',
+    'site.example.yml',
+    'snapshots/github.json',
+    'example-media/work/small-traces.png',
+  ].every((file) => fs.existsSync(path.join(root, file)));
+  return { problems, example };
 }
 
 /**
@@ -171,7 +191,7 @@ function writableFromInside(root, uid, gid) {
 export const PROBE_SNIPPET = `(${probeFromInside.toString()})(process.argv[1])`;
 export const WRITABLE_SNIPPET = `(${writableFromInside.toString()})(process.argv[1], Number(process.argv[2]), Number(process.argv[3]))`;
 export const REQUESTS_SNIPPET = `(${requestsFromInside.toString()})(process.getBuiltinModule('node:fs').readFileSync(0, 'utf8'))`;
-export const SCAN_SNIPPET = `(${scanFromInside.toString()})(process.argv[1])`;
+export const SCAN_SNIPPET = `process.stdout.write(JSON.stringify((${scanTree.toString()})(process.argv[1])))`;
 export const MAPS_SNIPPET = `(${sourceMapsFromInside.toString()})(process.argv[1])`;
 export const TREE_SNIPPET = `(${treeFromInside.toString()})(process.argv[1])`;
 

@@ -36,6 +36,18 @@ module.exports = {
       to: { circular: true },
     },
     {
+      name: 'not-to-unresolvable',
+      severity: 'error',
+      comment:
+        "Every import in the web app's source resolves, so the rules below see where it goes. " +
+        'An import this cruise leaves unresolved is an edge no rule checks: every ~/ alias was ' +
+        'one until the cruise read apps/web/tsconfig.depcruise.json, so the preview and ' +
+        'owner-code rules passed alias imports they exist to refuse (#7). check:deps generates ' +
+        'the registry first, so its modules resolve too.',
+      from: { path: '^apps/web/src/' },
+      to: { couldNotResolve: true },
+    },
+    {
       name: 'packages-not-to-apps',
       severity: 'error',
       comment: 'Shared packages must not depend on an app; apps depend on packages.',
@@ -182,13 +194,14 @@ module.exports = {
       severity: 'error',
       comment:
         'A preview document (#7) shows what a visitor gets, so nothing in app/(preview) or ' +
-        "src/preview imports Studio's route group or host-chrome.css, whose sentinel and " +
-        'markup would reach the frame (threat preview-9). Tests may.',
+        "src/preview reaches Studio's route group or host-chrome.css, whose sentinel and " +
+        'markup would reach the frame (threat preview-9): not by an import of its own, and ' +
+        'not through a shared module that imports one. Tests may.',
       from: {
         path: '^apps/web/src/(?:app/\\(preview\\)/|preview/)',
         pathNot: '\\.test\\.tsx?$',
       },
-      to: { path: ['^apps/web/src/app/\\(studio\\)/', 'host-chrome\\.css$'] },
+      to: { path: ['^apps/web/src/app/\\(studio\\)/', 'host-chrome\\.css$'], reachable: true },
     },
     {
       name: 'preview-protocol-imports-zod-and-ids-only',
@@ -208,9 +221,9 @@ module.exports = {
       comment:
         "Studio's half of the preview channel (#7, Slice 3) imports the protocol and nothing " +
         "else, so nothing a frame sends can reach Studio's transport through it (threat " +
-        'preview-3), and Slice 4 wraps it without its UI. depcruise resolves relative and ' +
-        "package imports, not ~/ ones: protocol.test.ts walks those, and the browser spec's " +
-        'chunk check covers what reaches a page.',
+        'preview-3), and Slice 4 wraps it without its UI. An import spelled with ~/ resolves ' +
+        'here too, and not-to-unresolvable fails one that does not. protocol.test.ts walks ' +
+        "the imports as well, and the browser spec's chunk check covers what reaches a page.",
       from: { path: '^apps/web/src/preview/studio-channel\\.ts$' },
       to: { pathNot: '^apps/web/src/preview/protocol\\.ts$' },
     },
@@ -221,8 +234,8 @@ module.exports = {
         'The preview agent (#7, Slice 3) runs in every preview document, so it, the status ' +
         "report, and the frame's half of the channel import that half, the protocol, and React, " +
         "and nothing else: never Studio's half, which would ship in the frame (threat " +
-        'preview-3). An allowlist, so an import spelled with ~/, which depcruise leaves ' +
-        'unresolved, fails it too.',
+        'preview-3). An allowlist, so an import of anything else fails it, relative or ' +
+        'spelled with ~/.',
       from: { path: '^apps/web/src/preview/(?:agent|report-status|frame-channel)\\.tsx?$' },
       to: {
         pathNot: [
@@ -311,8 +324,14 @@ module.exports = {
     // Workspace packages resolve through their pnpm symlinks to packages/*.
     preserveSymlinks: false,
     tsPreCompilationDeps: true,
-    // Absolute, so the tsconfig's own `extends` resolves from apps/web.
-    tsConfig: { fileName: require('node:path').join(__dirname, 'apps/web/tsconfig.json') },
+    // Absolute, so the tsconfig's own `extends` resolves from apps/web. It's
+    // apps/web's tsconfig with a baseUrl: the tsconfig plugin
+    // dependency-cruiser loads reads a `paths` entry with none from the
+    // working directory, the repository root, so apps/web's `~/*` resolved
+    // nowhere and no rule saw a `~/` import (#6, Slice 2).
+    tsConfig: {
+      fileName: require('node:path').join(__dirname, 'apps/web/tsconfig.depcruise.json'),
+    },
     enhancedResolveOptions: {
       exportsFields: ['exports'],
       conditionNames: ['import', 'require', 'node', 'default', 'types'],
