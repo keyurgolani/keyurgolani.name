@@ -268,9 +268,12 @@ async function checkRemoved(host, work) {
  * install it this way too (tests/quality/run.ts --external-variant).
  *
  * @param {string} work an empty temporary directory
+ * @param {{ onAdded?: () => void }} [hooks] onAdded runs as soon as the add
+ *   succeeds, before the checks after it, so a failure there still knows
+ *   the variant is installed
  * @returns {{ host: string, store: string }}
  */
-export function installReference(work) {
+export function installReference(work, { onAdded } = {}) {
   const host = path.join(work, 'host');
   const head = git(['rev-parse', 'HEAD'], REPO_ROOT).trim();
   step(`A worktree of HEAD (${head.slice(0, 12)}) in ${host}`);
@@ -296,6 +299,7 @@ export function installReference(work) {
   pnpm(['--filter', HOST_PACKAGE, 'add', tarball, '--prefer-offline', '--store-dir', store], {
     cwd: host,
   });
+  onAdded?.();
   expectStatus(
     host,
     [' M apps/web/package.json', ' M pnpm-lock.yaml'],
@@ -334,8 +338,11 @@ async function main() {
   });
   let added = false;
   try {
-    const { store } = installReference(work);
-    added = true;
+    const { store } = installReference(work, {
+      onAdded: () => {
+        added = true;
+      },
+    });
 
     buildReferenceHost(host);
 
