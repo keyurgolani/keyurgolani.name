@@ -1,8 +1,7 @@
-import test, { type TestContext } from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { defineContentExtension } from './extensions';
@@ -18,6 +17,7 @@ import {
 import { PUBLICATION_VALIDATORS } from './published-urls';
 import { canonicalize, serialize } from './serialize';
 import { parseSource } from './source';
+import { lockedModes, lockMode, MADE, tempDir } from './test-support/scratch';
 import {
   DIAGNOSTIC_SEVERITIES,
   type AppearanceCatalog,
@@ -60,37 +60,6 @@ const PRACTICES = [
 ];
 
 const codes = (result: LoadPairResult) => result.diagnostics.map(({ code }) => code);
-
-/** Every scratch directory this run's tests made, so the last test can check each is gone. */
-const MADE: string[] = [];
-/** Paths a test took a mode away from, with the mode to give back before removal. */
-const LOCKED = new Map<string, number>();
-
-/**
- * A scratch directory under the system temp directory, holding `files`. It's
- * removed when the test ends, once any mode the test took away is given back,
- * so a run leaves nothing behind.
- */
-function tempDir(t: TestContext, files: Record<string, string> = {}): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pair-'));
-  MADE.push(dir);
-  t.after(() => {
-    for (const [target, mode] of [...LOCKED].reverse()) {
-      if (target !== dir && !target.startsWith(`${dir}${path.sep}`)) continue;
-      fs.chmodSync(target, mode);
-      LOCKED.delete(target);
-    }
-    fs.rmSync(dir, { recursive: true, force: true });
-  });
-  for (const [name, text] of Object.entries(files)) fs.writeFileSync(path.join(dir, name), text);
-  return dir;
-}
-
-/** chmod, undone by tempDir()'s cleanup before it removes the directory. */
-function lockMode(target: string, mode: number): void {
-  if (!LOCKED.has(target)) LOCKED.set(target, fs.statSync(target).mode & 0o7777);
-  fs.chmodSync(target, mode);
-}
 
 const fixture = (...parts: string[]) => path.join(FIXTURES, ...parts);
 const text = (...parts: string[]) => fs.readFileSync(fixture(...parts), 'utf8');
@@ -530,5 +499,5 @@ test('every scratch directory these tests made is gone once its test ends', () =
     MADE.filter((dir) => fs.existsSync(dir)),
     [],
   );
-  assert.equal(LOCKED.size, 0);
+  assert.equal(lockedModes(), 0);
 });
