@@ -9,6 +9,7 @@ import {
   fontDifference,
   imageFonts,
   inPinnedImage,
+  observedFontsText,
   RANDOM_SEED,
   seedRandomScript,
   VISUAL_SKIP,
@@ -36,7 +37,8 @@ function checkFonts(): { missing: string[]; extra: string[] } {
     const actual = imageFonts();
     const dir = path.join(reportsDir(), 'quality');
     mkdirSync(dir, { recursive: true });
-    writeFileSync(path.join(dir, 'fonts.observed.txt'), `${actual.join('\n')}\n`);
+    // fonts.txt's header, then the list, so the file is committed as it is.
+    writeFileSync(path.join(dir, 'fonts.observed.txt'), observedFontsText(actual));
     fontCheck = fontDifference(expectedFonts(), actual);
   }
   return fontCheck;
