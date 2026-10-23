@@ -97,6 +97,19 @@ test("each rendition names its own blob, and never the source's", () => {
   assert.equal(original.problems[0]!.pointer, '/assets/0/renditions/1/sha256');
 });
 
+test('a rendition is an image: JPEG, PNG, WebP, or AVIF, and nothing else', () => {
+  const ok = (mime: string) =>
+    parseMediaDocument({
+      assets: [{ ...RECORD, renditions: [{ ...RECORD.renditions[0]!, mime }] }],
+    }).ok;
+  for (const mime of ['image/jpeg', 'image/png', 'image/webp', 'image/avif']) {
+    assert.equal(ok(mime), true, mime);
+  }
+  for (const mime of ['text/html', 'image/svg+xml', 'application/octet-stream', 'video/mp4']) {
+    assert.equal(ok(mime), false, mime);
+  }
+});
+
 test('a media document holds one record per asset: a repeated assetId is refused', () => {
   assert.ok(parseMediaDocument({ assets: [RECORD] }).ok);
   const repeated = parseMediaDocument({

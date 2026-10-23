@@ -100,6 +100,18 @@ const RENDITION_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const EXTENSION = /^[a-z0-9]{1,8}$/;
 const MIME = /^[a-z]+\/[a-z0-9.+-]+$/;
 
+/**
+ * The types a rendition may be (#10): images alone, which /media and
+ * /preview-assets serve as the record says. Anything else, text/html among
+ * them, would serve as that from the site's own origin.
+ */
+export const RENDITION_TYPES = Object.freeze([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/avif',
+] as const);
+
 const Dimension = z.number().finite().int().positive();
 
 export const MediaRenditionSchema = z
@@ -110,7 +122,9 @@ export const MediaRenditionSchema = z
     ext: z
       .string()
       .regex(EXTENSION, { message: 'must be a lowercase file extension, such as webp.' }),
-    mime: z.string().regex(MIME, { message: 'must be a MIME type, such as image/webp.' }),
+    mime: z.enum(RENDITION_TYPES, {
+      message: 'must be image/jpeg, image/png, image/webp, or image/avif.',
+    }),
     bytes: z.number().finite().int().nonnegative(),
     width: Dimension.optional(),
     height: Dimension.optional(),

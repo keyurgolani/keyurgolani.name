@@ -87,6 +87,11 @@ test('a private, unknown, or superseded asset, an original, or any other path re
     resolveRendition(undefined, VISIBLE, ['atlas-cover', hex('a'), 'w480-a1.webp']),
     null,
   );
+  // A rendition of any type but an image's names nothing.
+  const html = {
+    assets: [{ ...RECORD, renditions: [{ ...RECORD.renditions[0]!, mime: 'text/html' }] }],
+  };
+  assert.equal(resolveRendition(html, VISIBLE, ['atlas-cover', hex('a'), 'w480-a1.webp']), null);
   // A rendition whose blob is the original's own bytes is the original: never served.
   const original = {
     assets: [{ ...RECORD, renditions: [{ ...RECORD.renditions[0]!, sha256: hex('a') }] }],

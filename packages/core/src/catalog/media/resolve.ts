@@ -1,4 +1,4 @@
-import { isSectionId, parseMediaDocument } from '@portfolio/schema';
+import { isSectionId, parseMediaDocument, RENDITION_TYPES } from '@portfolio/schema';
 
 // Which blob a rendition URL names (#10, slice 2 item 5), for /media and
 // /preview-assets/<grant>: `<assetId>/<sha256>/<name>.<ext>` below the media
@@ -43,6 +43,8 @@ export function resolveRendition(
   if (!record || record.sha256 !== sha256) return null;
   const rendition = record.renditions.find((entry) => entry.name === name && entry.ext === ext);
   if (!rendition || rendition.sha256 === record.sha256) return null;
+  // An image type alone, whatever a document that got past the schema says.
+  if (!(RENDITION_TYPES as readonly string[]).includes(rendition.mime)) return null;
   return {
     blob: `sha256:${rendition.sha256}`,
     mime: rendition.mime,
