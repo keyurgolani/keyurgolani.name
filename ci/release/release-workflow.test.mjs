@@ -235,6 +235,49 @@ test('scan findings upload for one day only, and the logs get counts from scan-g
   }
 });
 
+test('every step that runs grype runs under a condition that also installs it', () => {
+  // How far past a failed step a condition still runs: no if: is success(),
+  // then !cancelled(), then always().
+  const reach = (cond = '') => (/always\(\)/.test(cond) ? 2 : /!cancelled\(\)/.test(cond) ? 1 : 0);
+  const BARE = [undefined, '${{ !cancelled() }}', '${{ always() }}'];
+  let scans = 0;
+  for (const [id, job] of Object.entries(JOBS)) {
+    const steps = job.steps ?? [];
+    const install = steps.findIndex((s) => /install-grype\.mjs/.test(s.run ?? ''));
+    for (const [index, step] of steps.entries()) {
+      if (!/^\s*grype /m.test(step.run ?? '')) continue;
+      scans += 1;
+      const where = `${id}: ${step.name}`;
+      assert.ok(install !== -1 && install < index, `${where} has no Grype installed before it`);
+      const installIf = steps[install].if;
+      // A bare status check: an extra condition could skip the install
+      // when the scan still runs.
+      assert.ok(BARE.includes(installIf), `${id}: Install Grype runs under ${installIf}`);
+      assert.ok(
+        reach(installIf) >= reach(step.if),
+        `${where} runs under ${step.if}, but Grype installs under ${installIf ?? 'success()'}`,
+      );
+    }
+  }
+  // The image and dependency scans in the dry run and rc-scan, and
+  // promote-scan's image scan.
+  assert.equal(scans, 5);
+});
+
+test('an image scan never runs without the image it scans', () => {
+  const scans = [];
+  for (const [id, job] of Object.entries(JOBS)) {
+    for (const step of job.steps ?? []) {
+      const run = step.run ?? '';
+      if (!run.includes('grype') || !run.includes('registry:')) continue;
+      scans.push(id);
+      // No if: is success(), so a failed build or digest step skips it.
+      assert.equal(step.if, undefined, `${id}: ${step.name}`);
+    }
+  }
+  assert.deepEqual(scans.sort(), ['dry-run', 'promote-scan', 'rc-scan']);
+});
+
 test('release tags can be created only by an admin, and by nobody moved or deleted', () => {
   const ruleset = (name) =>
     JSON.parse(

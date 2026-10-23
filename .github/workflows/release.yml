@@ -113,7 +113,7 @@ jobs:
           cache-binary: false
       - name: Build both platforms and push by digest
         id: build
-        # A healthy build takes about 5 minutes. The arm64 leg runs under
+        # A healthy build takes 4 to 7 minutes. The arm64 leg runs under
         # QEMU and has hung, so a stuck build fails here instead of
         # holding the runner for the job's 90 minutes.
         timeout-minutes: 25
@@ -146,7 +146,10 @@ jobs:
           docker buildx imagetools inspect "$IMAGE@$DIGEST" --format '{{ json .Provenance }}' > "$RUNNER_TEMP/provenance.json"
           docker buildx imagetools inspect "$IMAGE@$DIGEST" --format '{{ json .SBOM }}' > "$RUNNER_TEMP/sbom.json"
           node ci/release/attestations.mjs "$RUNNER_TEMP/provenance.json" "$RUNNER_TEMP/sbom.json" --write-sboms="$INVENTORY"
+      # The dependency scan still runs after a failed build, so Grype
+      # installs then too. The image scan skips: it has no image.
       - name: Install Grype
+        if: ${{ !cancelled() }}
         run: |
           node ci/release/install-grype.mjs "$RUNNER_TEMP/grype"
           echo "$RUNNER_TEMP/grype" >> "$GITHUB_PATH"
@@ -303,7 +306,7 @@ jobs:
           password: ${{ github.token }}
       - name: Build both platforms once and push by digest
         id: build
-        # A healthy build takes about 5 minutes. The arm64 leg runs under
+        # A healthy build takes 4 to 7 minutes. The arm64 leg runs under
         # QEMU and has hung, so a stuck build fails here instead of
         # holding the runner for the job's 90 minutes.
         timeout-minutes: 25
@@ -384,7 +387,10 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ github.token }}
+      # The dependency scan still runs after a failed login, so Grype
+      # installs then too.
       - name: Install Grype
+        if: ${{ !cancelled() }}
         run: |
           node ci/release/install-grype.mjs "$RUNNER_TEMP/grype"
           echo "$RUNNER_TEMP/grype" >> "$GITHUB_PATH"
