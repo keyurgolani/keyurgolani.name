@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/keyurgolani/keyurgolani.name/ci/failure-record.schema.json",
   "title": "CI failure record",
-  "description": "One JSON object per CI failure, written to reports/failures/. A minor schema version only adds optional fields. Unknown fields fail validation. Version 1.1 (#11) adds rule, preferenceMode, tuple, uiSlot, accessibleName, exceptionId, and tokenRole, and takes inputMode as mouse, keyboard, or touch. A 1.0 record carries none of the 1.1 fields.",
+  "description": "One JSON object per CI failure, written to reports/failures/. A minor schema version only adds optional fields. Unknown fields fail validation. Version 1.1 (#11) adds rule, preferenceMode, tuple, uiSlot, accessibleName, exceptionId, and tokenRole, #6 adds metric, and it takes inputMode as mouse, keyboard, or touch. A 1.0 record carries none of the 1.1 fields.",
   "type": "object",
   "additionalProperties": false,
   "required": ["schemaVersion", "gate", "reproCommand"],
@@ -89,6 +89,10 @@
       "description": "1.1: the color role the boundary's resolved tokens give the rendered color, or hard-coded when none does.",
       "type": "string",
       "pattern": "^(?:hard-coded|[a-z][a-z0-9-]*)$"
+    },
+    "metric": {
+      "$ref": "#/$defs/label",
+      "description": "1.1 (#6): the runtime budget a record breaks, such as js, css, or remote."
     }
   },
   "allOf": [
@@ -102,7 +106,8 @@
           "uiSlot": false,
           "accessibleName": false,
           "exceptionId": false,
-          "tokenRole": false
+          "tokenRole": false,
+          "metric": false
         }
       }
     },

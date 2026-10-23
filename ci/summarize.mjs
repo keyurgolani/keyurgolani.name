@@ -28,6 +28,8 @@ export const CONTEXT_FIELDS = [
   'accessibleName',
   'tokenRole',
   'exceptionId',
+  // 1.1 (#6): the runtime budget a record breaks.
+  'metric',
 ];
 
 export async function loadValidator() {
