@@ -58,6 +58,7 @@ A `file:` dependency must sit under `apps/` or `packages/`, the trees the Docker
   "compositionFamily": "document",
   "motionIntent": "still",
   "performanceTier": "light",
+  "budgets": { "js": 2048, "css": 2048, "image": 0, "font": 0, "animation": 0, "enhancement": 0 },
   "renderedKinds": [],
   "unsupportedKinds": [],
   "contentSlots": [],
@@ -69,7 +70,7 @@ A `file:` dependency must sit under `apps/` or `packages/`, the trees the Docker
 }
 ```
 
-`renderedKinds` are the kinds the variant renders bespoke, `unsupportedKinds` the ones it deliberately doesn't show, and every other kind renders through the kit's shared renderer. Controls are owner-tunable composition choices, never appearance. Every field, with valid values, is in [`manifest-contract.md`](../skills/variant-developer/references/manifest-contract.md). A v1 field (`slug`, `themes`, `colorSchemes`, `typographyPresets`, `supportedKinds`, and the rest) is refused with where it went.
+`renderedKinds` are the kinds the variant renders bespoke, `unsupportedKinds` the ones it deliberately doesn't show, and every other kind renders through the kit's shared renderer. Controls are owner-tunable composition choices, never appearance. `budgets` is what the variant may ship, in JS, CSS, image, font, animation, and enhancement bytes or counts, each at most its tier's ceiling in `runtime-budgets.json`, which a kind left out gets; `pnpm check:budgets` holds every registered variant and appearance pack to its budgets (Checking a variant, below). Every field, with valid values, is in [`manifest-contract.md`](../skills/variant-developer/references/manifest-contract.md). A v1 field (`slug`, `themes`, `colorSchemes`, `typographyPresets`, `supportedKinds`, and the rest) is refused with where it went.
 
 ## The render path
 
@@ -189,6 +190,12 @@ The audit is a lint over code the host already trusts, not a sandbox: a variant 
 The audit refuses `async` components (by name, as a default export, or wrapped in `memo()`; an async event handler is fine); Node built-ins, `server-only`, `next`, `@portfolio/core`, and an import from a URL; `process`, `process.getBuiltinModule()` included; the kit's `fetchGitHubData`; `fetch`, `XMLHttpRequest`, `WebSocket`, `EventSource`, and `navigator.sendBeacon`; cookies, Web Storage, `indexedDB`, and the Cache API; `Date.now()`, `Date()`, argument-less `new Date()`, `performance.now()`, and a date format's `format()` with no date; `Math.random()`, `crypto.getRandomValues()`, and `crypto.randomUUID()`; `eval`, `Function`, and a timer given a string; `import()` and `require()` of anything but a literal; `dangerouslySetInnerHTML`, `innerHTML`, and `document.write()`; a `<style>`, `<link>`, or `<script>`; CSS imported from a module; a `'use client'` component that takes the whole render input or a prop named `input`, other than a declared enhancement (a `Pick<>` of it, or one field such as `VariantRenderInput['env']`, is fine); a selector or page-wide at-rule outside `[data-variant='<id>']`, or one that reaches a sibling of it; keyframes not named after the id; a remote `@import` or `url()`, or an `@import` of another package; a raw color, font, radius, or shadow; and, in a variant that declares `rtl`, physical properties and shorthands, keyframes included.
 
 CI runs it in a job of its own, `check-variants`. `pnpm check:registry` checks that two registry builds match and that nothing generated is committed.
+
+```sh
+PORTFOLIO_ANALYZE=1 pnpm build && pnpm test:trace && pnpm check:budgets
+```
+
+`pnpm check:budgets` holds the variant to its `budgets`, from the build output, `ASSET_MANIFEST`, and the trace: its compiled stylesheet, its image and font files, its own JavaScript on each traced route, the loops, timers, and infinite animations an idle page runs, and each enhancement's chunks. Each breach is a failure record naming the metric, the route, the asset that carries the most of it, the actual, and the limit, in `reports/budgets/budget-report.json`. A budget declared over its tier's ceiling fails too, as does a remote `@import` or `url()` in its stylesheet. CI's `budgets` job runs it over every registered variant, beside the budget fixtures.
 
 ## Testing a variant
 
