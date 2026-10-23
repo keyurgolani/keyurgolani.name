@@ -1,0 +1,60 @@
+{
+  "total_count": 5,
+  "workflow_runs": [
+    {
+      "id": 101,
+      "name": "ci",
+      "path": ".github/workflows/ci.yml",
+      "event": "pull_request",
+      "head_branch": "feature",
+      "head_sha": "1111111111111111111111111111111111111111",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/owner/repo/actions/runs/101"
+    },
+    {
+      "id": 102,
+      "name": "ci",
+      "path": ".github/workflows/ci.yml",
+      "event": "push",
+      "head_branch": "main",
+      "head_sha": "1111111111111111111111111111111111111111",
+      "status": "completed",
+      "conclusion": "failure",
+      "html_url": "https://github.com/owner/repo/actions/runs/102"
+    },
+    {
+      "id": 103,
+      "name": "scheduled",
+      "path": ".github/workflows/scheduled.yml",
+      "event": "push",
+      "head_branch": "main",
+      "head_sha": "1111111111111111111111111111111111111111",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/owner/repo/actions/runs/103"
+    },
+    {
+      "id": 104,
+      "name": "ci",
+      "path": ".github/workflows/ci.yml",
+      "event": "push",
+      "head_branch": "main",
+      "head_sha": "2222222222222222222222222222222222222222",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/owner/repo/actions/runs/104"
+    },
+    {
+      "id": 105,
+      "name": "ci",
+      "path": ".github/workflows/ci.yml",
+      "event": "push",
+      "head_branch": "main",
+      "head_sha": "1111111111111111111111111111111111111111",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/owner/repo/actions/runs/105"
+    }
+  ]
+}

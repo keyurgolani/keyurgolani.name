@@ -1,0 +1,96 @@
+{
+  "linux/amd64": {
+    "SLSA": {
+      "buildType": "https://mobyproject.org/buildkit@v1",
+      "builder": {
+        "id": ""
+      },
+      "invocation": {
+        "configSource": {
+          "entryPoint": "Dockerfile"
+        },
+        "parameters": {
+          "frontend": "dockerfile.v0",
+          "args": {}
+        }
+      },
+      "buildConfig": {
+        "llbDefinition": [
+          {
+            "id": "step0",
+            "op": {
+              "Op": {
+                "source": {
+                  "identifier": "local://context"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "materials": [
+        {
+          "uri": "pkg:docker/node@22.23.3-alpine",
+          "digest": {
+            "sha256": "0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402"
+          }
+        }
+      ],
+      "metadata": {
+        "buildInvocationID": "abc",
+        "completeness": {
+          "parameters": true,
+          "environment": true,
+          "materials": false
+        }
+      }
+    }
+  },
+  "linux/arm64": {
+    "SLSA": {
+      "buildType": "https://mobyproject.org/buildkit@v1",
+      "builder": {
+        "id": ""
+      },
+      "invocation": {
+        "configSource": {
+          "entryPoint": "Dockerfile"
+        },
+        "parameters": {
+          "frontend": "dockerfile.v0",
+          "args": {}
+        }
+      },
+      "buildConfig": {
+        "llbDefinition": [
+          {
+            "id": "step0",
+            "op": {
+              "Op": {
+                "source": {
+                  "identifier": "local://context"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "materials": [
+        {
+          "uri": "pkg:docker/node@22.23.3-alpine",
+          "digest": {
+            "sha256": "0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402"
+          }
+        }
+      ],
+      "metadata": {
+        "buildInvocationID": "abc",
+        "completeness": {
+          "parameters": true,
+          "environment": true,
+          "materials": false
+        }
+      }
+    }
+  }
+}

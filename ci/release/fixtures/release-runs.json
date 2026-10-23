@@ -1,0 +1,49 @@
+{
+  "total_count": 4,
+  "workflow_runs": [
+    {
+      "id": 201,
+      "name": "release",
+      "path": ".github/workflows/release.yml",
+      "event": "push",
+      "head_branch": "v1.2.0-rc.1",
+      "head_sha": "1111111111111111111111111111111111111111",
+      "status": "completed",
+      "conclusion": "failure",
+      "html_url": "https://github.com/owner/repo/actions/runs/201"
+    },
+    {
+      "id": 202,
+      "name": "release",
+      "path": ".github/workflows/release.yml",
+      "event": "push",
+      "head_branch": "v1.2.0-rc.2",
+      "head_sha": "1111111111111111111111111111111111111111",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/owner/repo/actions/runs/202"
+    },
+    {
+      "id": 203,
+      "name": "release",
+      "path": ".github/workflows/release.yml",
+      "event": "pull_request",
+      "head_branch": "v1.2.0-rc.2",
+      "head_sha": "1111111111111111111111111111111111111111",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/owner/repo/actions/runs/203"
+    },
+    {
+      "id": 204,
+      "name": "ci",
+      "path": ".github/workflows/ci.yml",
+      "event": "push",
+      "head_branch": "v1.2.0-rc.2",
+      "head_sha": "1111111111111111111111111111111111111111",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/owner/repo/actions/runs/204"
+    }
+  ]
+}
