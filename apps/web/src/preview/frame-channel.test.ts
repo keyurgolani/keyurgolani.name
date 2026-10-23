@@ -816,7 +816,7 @@ test('a middle click and a click with a modifier key go through the guard too, a
   assert.deepEqual(win.assigned, [`${STUDIO}${BASE}/work/b`]);
 });
 
-test('where the frame has the Navigation API, a navigation no click showed the guard goes on under the grant, and anywhere else is cancelled and sent to Studio as a link (#7, Slice 3)', async (t) => {
+test('where the frame has the Navigation API, a navigation no click showed the guard, a reload and a history change among them, goes on under the grant, anywhere else is cancelled and sent to Studio as a link, and only back and forward go on unread (#7, Slices 3 and 4)', async (t) => {
   const { win, received, handshake, stop } = setup(t, SERVER, `${STUDIO}${BASE}/work/a`, {
     navigation: true,
   });
@@ -830,15 +830,24 @@ test('where the frame has the Navigation API, a navigation no click showed the g
     ['a download', `${STUDIO}${BASE}/paper.pdf`, { downloadRequest: 'paper.pdf' }],
     ['a data: document', 'data:text/html,hi', {}],
     ['back', 'https://example.test/back', { navigationType: 'traverse', cancelable: false }],
-    ['a reload', `${STUDIO}${BASE}/work/a`, { navigationType: 'reload' }],
+    ['back, cancelable', `${STUDIO}/studio`, { navigationType: 'traverse' }],
+    ["a reload of the grant's page", `${STUDIO}${BASE}/work/a`, { navigationType: 'reload' }],
+    ['a reload outside the grant', `${STUDIO}/studio`, { navigationType: 'reload' }],
     ['a fragment', `${STUDIO}${BASE}/work/a#contact`, { sameDocument: true }],
+    ['a pushState under the grant', `${STUDIO}${BASE}/work/c`, { sameDocument: true }],
+    ['a pushState outside the grant', `${STUDIO}/studio/drafts`, { sameDocument: true }],
+    [
+      'a replaceState outside the grant',
+      `${STUDIO}/studio/history`,
+      { sameDocument: true, navigationType: 'replace' },
+    ],
     ['one it may not cancel', 'https://example.test/late', { cancelable: false }],
   ] as const) {
     const event = navigateEvent(url, init);
     win.navigation!.fire('navigate', event);
     outcomes.push([label, event.defaultPrevented]);
   }
-  await until(() => received.length >= 3, 'the links');
+  await until(() => received.length >= 6, 'the links');
   assert.deepEqual(outcomes, [
     ['another site', true],
     ["the site's own page", true],
@@ -846,8 +855,13 @@ test('where the frame has the Navigation API, a navigation no click showed the g
     ['a download', true],
     ['a data: document', true],
     ['back', false],
-    ['a reload', false],
+    ['back, cancelable', false],
+    ["a reload of the grant's page", false],
+    ['a reload outside the grant', true],
     ['a fragment', false],
+    ['a pushState under the grant', false],
+    ['a pushState outside the grant', true],
+    ['a replaceState outside the grant', true],
     ['one it may not cancel', false],
   ]);
   assert.deepEqual(
@@ -856,10 +870,15 @@ test('where the frame has the Navigation API, a navigation no click showed the g
       ['link', { href: 'https://example.test/assign', kind: 'external' }],
       ['link', { href: `${STUDIO}/`, kind: 'live' }],
       ['link', { href: `${STUDIO}${BASE}/paper.pdf`, kind: 'download' }],
+      ['link', { href: `${STUDIO}/studio`, kind: 'live' }],
+      ['link', { href: `${STUDIO}/studio/drafts`, kind: 'live' }],
+      ['link', { href: `${STUDIO}/studio/history`, kind: 'live' }],
     ],
   );
-  // Stopped, the channel leaves the Navigation API as it found it.
+  // Stopped, the channel leaves the window and the Navigation API as it
+  // found them: no click, middle click, message, scroll, or load listener.
   stop?.();
+  assert.deepEqual([...win.listeners.keys()], []);
   assert.equal(win.navigation!.listeners.size, 0);
 });
 

@@ -208,7 +208,6 @@ export function openStudioChannel(options: StudioChannelOptions): StudioChannel 
     },
     reset(next) {
       nonce = next;
-      mismatchShown = false;
       closePort();
     },
     close() {

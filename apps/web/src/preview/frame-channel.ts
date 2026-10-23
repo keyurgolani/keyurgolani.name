@@ -37,10 +37,11 @@ import {
 // other link is cancelled and sent to Studio as `link`: other sites,
 // mailto: and tel:, downloads, and the site's own pages outside the grant.
 // The guard reads clicks and middle clicks on window, in the capture phase,
-// so no listener in the page can keep a link from it. Where the frame's
-// document has the Navigation API, which an opaque origin doesn't, its
-// `navigate` event backs the guard up for what a click doesn't show: a link
-// in a closed shadow root, and a script's own navigation.
+// so no listener on the document or below can keep a link from it. Where
+// the frame's document has the Navigation API, which an opaque origin
+// doesn't, its `navigate` event backs the guard up for what a click doesn't
+// show: a link in a closed shadow root, a script's own navigation, a
+// reload, and a history change.
 
 export interface FrameChannelOptions {
   readonly mode: 'server' | 'local';
@@ -185,7 +186,7 @@ const elsewhere = (event: MouseEvent) =>
  */
 interface NavigateEventLike extends Event {
   readonly navigationType: string;
-  readonly destination: { readonly url: string; readonly sameDocument: boolean };
+  readonly destination: { readonly url: string };
   readonly downloadRequest: string | null;
 }
 
@@ -414,16 +415,16 @@ export function startFrameChannel(win: Window, options: FrameChannelOptions): ((
 
   /**
    * The backstop: a navigation of the frame that no click the guard saw
-   * started, such as a link in a closed shadow root or a script's
-   * location.assign(). It goes on to the grant's own paths, and else is
-   * cancelled and sent to Studio as a link, as a click on it would be. Back,
-   * forward, a reload, and a move within the document go where the frame
-   * already is or has been.
+   * started, such as a link in a closed shadow root, a script's
+   * location.assign(), a reload, or a pushState() or replaceState(). It
+   * goes on to the grant's own paths and fragments, and else is cancelled
+   * and sent to Studio as a link, as a click on it would be. Only back and
+   * forward go on unread: they go where the frame has been, and with every
+   * other move held to the grant, that's the grant's paths alone.
    */
   const onNavigate = (event: Event) => {
     const { navigationType, destination, downloadRequest } = event as NavigateEventLike;
-    if (navigationType === 'traverse' || navigationType === 'reload') return;
-    if (destination.sameDocument) return;
+    if (navigationType === 'traverse') return;
     let url: URL;
     try {
       url = new URL(destination.url);
