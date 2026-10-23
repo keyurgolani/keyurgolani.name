@@ -90,8 +90,10 @@ test('the proxy and the route table load no zod, no yaml, and neither the schema
     const loaded = [...files].map(relative);
     assert.ok(loaded.includes('packages/variant-contract/src/segments.ts'), entry);
     for (const file of heavy) assert.ok(!loaded.includes(file), `${entry} loads ${file}`);
+    // Next, and server-only, the marker the registry's metadata module
+    // imports (#6), which holds no code.
     assert.deepEqual(
-      [...packages].filter((name) => name !== 'next'),
+      [...packages].filter((name) => name !== 'next' && name !== 'server-only'),
       [],
       `${entry} names outside packages`,
     );
