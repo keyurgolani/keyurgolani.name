@@ -34,6 +34,20 @@
   list-style: none;
 }
 
+/*
+ * Each section link is a target of at least 24 by 24 CSS px, WCAG 2.2's AA
+ * floor (2.5.8), with its label centered. The 4 px row gap alone would miss
+ * the spacing exception. #19's primitives raise this to 32 px at 768 px and
+ * below once the nav moves onto them.
+ */
+[data-variant='fallback'] .fc-nav a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-block-size: 1.5rem;
+  min-inline-size: 1.5rem;
+}
+
 [data-variant='fallback'] .fc-name {
   margin-block: 0 2rem;
 }
