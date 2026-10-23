@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { crc32, deflateSync } from 'node:zlib';
-import type { CatalogReader, RemoteFetcher } from '@portfolio/core';
+import { remoteImageFetcher, type CatalogReader, type RemoteFetcher } from '@portfolio/core';
 import { parsePortfolio, parseSite } from '@portfolio/schema';
 import { GET } from '../app/(site)/media/[...path]/route';
 import { readDeploymentConfig } from './config';
@@ -239,4 +239,84 @@ test("once read-only's derivation finishes, its view shows the image ready and /
   assert.equal(response.headers.get('content-type'), rendition.mime);
   assert.equal(response.headers.get('cache-control'), 'public, max-age=31536000, immutable');
   assert.equal((await response.arrayBuffer()).byteLength, rendition.bytes);
+});
+
+test("the contract fixture's remote source renders only from /media, and its remote host reaches no view, fetched or refused", async (t) => {
+  // `complete` names https://images.rowan.test/project-shot.png. What the
+  // page renders is the view: under the narrowed img-src 'self', it must
+  // name a /media rendition for that asset, or nothing.
+  const { root, cache } = setup(t);
+  const fixture = path.join(REPO, 'packages/variant-contract/fixtures', 'complete');
+  const portfolio = parsePortfolio(
+    readFileSync(path.join(fixture, 'portfolio.yml'), 'utf8'),
+    'yaml',
+  );
+  const site = parseSite(readFileSync(path.join(fixture, 'site.yml'), 'utf8'), 'yaml');
+  assert.ok(portfolio.ok && site.ok);
+  const read = readDeploymentConfig(
+    {
+      NODE_ENV: 'production',
+      PORTFOLIO_PROFILE: 'read-only',
+      PORTFOLIO_ORIGIN: 'https://rowan.test',
+      PORTFOLIO_SOURCE_DIR: '/srv/portfolio',
+    },
+    { cwd: '/' },
+  );
+  assert.ok(read.ok);
+  const REMOTE = 'https://images.rowan.test/project-shot.png';
+
+  for (const fetched of [false, true]) {
+    // A unit of its own each time, so the view is built again.
+    const unit = { portfolio: portfolio.value, site: site.value, snapshots: {} };
+    const catalog = {
+      getLive: async () => ({ state: 'live', revisionId: 'source', unitHash: 'sha256:x', unit }),
+    } as unknown as CatalogReader;
+    setDeploymentState({
+      config: read.config,
+      catalog: catalog as never,
+      dispatch: () => assert.fail('no dispatch here'),
+      degraded: [],
+    });
+    t.after(() => setDeploymentState(undefined));
+    const urls: string[] = [];
+    // The real fetcher refuses a .test host before any lookup, as read-only
+    // does; a stub stands in for a host that answers.
+    const real = remoteImageFetcher();
+    const fetchRemote: RemoteFetcher = async (url) => {
+      urls.push(url);
+      return fetched ? new Uint8Array(solidPng(640, 320)) : real(url);
+    };
+    const derivation = await startStartupMedia({
+      profile: 'read-only',
+      reader: catalog,
+      mediaRoot: root,
+      options: { cacheDir: path.join(cache, String(fetched)), fetchRemote },
+    });
+    assert.ok(derivation, 'the derivation ran');
+    const finding = derivation.findings.find(({ assetId }) => assetId === 'project-shot');
+    assert.deepEqual(
+      finding && [finding.reason, finding.code],
+      fetched ? undefined : ['refused', 'host_reserved'],
+    );
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(urls, [REMOTE], 'ingestion asked for the remote source once');
+
+    const view = await getPublicView();
+    const text = JSON.stringify(view);
+    assert.ok(!text.includes('images.rowan.test'), `fetched: ${fetched}`);
+    const derived = view.media['project-shot']?.derived;
+    assert.ok(derived, 'the view keeps the asset');
+    if (fetched) {
+      assert.equal(derived.state, 'ready');
+      assert.ok(derived.value.renditions.length > 0);
+      for (const rendition of derived.value.renditions) {
+        assert.match(
+          rendition.url,
+          /^\/media\/project-shot\/[0-9a-f]{64}\/[a-z0-9-]+\.(?:webp|jpg|png)$/,
+        );
+      }
+    } else {
+      assert.equal(derived.state, 'unavailable');
+    }
+  }
 });
