@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   appearancePreference,
   MAX_BODY_BYTES,
+  objectKeys,
   PREFERENCE_MAX_AGE,
   preferenceCookie,
   sitePath,
@@ -35,12 +36,12 @@ const answer = (request: Request, origin = ORIGIN) => appearancePreference(reque
 
 const COOKIE_ATTRIBUTES = `Path=/; Max-Age=${PREFERENCE_MAX_AGE}; HttpOnly; SameSite=Lax; Secure`;
 
-test('a form post sets the ids it names, and goes back to its page with a 303, no-store', async () => {
+test('a form post sets the ids it names, and goes back to its page on the canonical origin with a 303, no-store', async () => {
   const response = await answer(
     post('scheme=warm-parchment&mode=dark&return=%2Fwork%2Ftide%3Fview%3Dall%23notes'),
   );
   assert.equal(response.status, 303);
-  assert.equal(response.headers.get('location'), '/work/tide?view=all#notes');
+  assert.equal(response.headers.get('location'), `${ORIGIN}/work/tide?view=all#notes`);
   assert.equal(response.headers.get('cache-control'), 'no-store');
   assert.equal(
     response.headers.get('set-cookie'),
@@ -50,7 +51,7 @@ test('a form post sets the ids it names, and goes back to its page with a 303, n
   assert.doesNotMatch(response.headers.get('set-cookie')!, /domain=/i);
   // Without a return path, home.
   const home = await answer(post('mode=light'));
-  assert.equal(home.headers.get('location'), '/');
+  assert.equal(home.headers.get('location'), `${ORIGIN}/`);
 });
 
 test('the JSON save sets the same cookie and answers 204, since it follows no redirect', async () => {
@@ -125,6 +126,9 @@ test('a request from anywhere but the canonical origin is a 403 that sets nothin
 });
 
 test('a body past the cap is a 413, by its length or as it streams, and another body type a 415', async () => {
+  assert.equal(MAX_BODY_BYTES, 4096);
+  const raw = await answer(post(`mode=dark&return=/${'a'.repeat(5000)}`));
+  assert.equal(raw.status, 413);
   const big = `mode=dark&return=/${'a'.repeat(MAX_BODY_BYTES)}`;
   const declared = await answer(post('mode=dark', { length: String(MAX_BODY_BYTES + 1) }));
   assert.equal(declared.status, 413);
@@ -143,6 +147,8 @@ test('a body the schema refuses is a 400 that sets nothing', async () => {
   for (const [what, request] of [
     ['an unknown field', post('mode=dark&colour=red')],
     ['a field given twice', post('mode=dark&mode=light')],
+    ['a valid value beside an invalid one', post('mode=dark&scheme=Bad')],
+    ['the variant alone, which is never kept', post('variant=editorial-evidence')],
     ['a malformed id', post('scheme=Warm Parchment')],
     ['an id too long', post(`scheme=${'a'.repeat(65)}`)],
     ['a display mode that is none', post('mode=dim')],
@@ -156,6 +162,10 @@ test('a body the schema refuses is a 400 that sets nothing', async () => {
     ['a JSON reset not true', post('{"reset":false}', json)],
     ['a JSON unknown field', post('{"mode":"dark","x":"y"}', json)],
     ['JSON with nothing to set', post('{}', json)],
+    ['JSON with the variant alone', post('{"variant":"editorial-evidence"}', json)],
+    ['a JSON name given twice', post('{"mode":"dark","mode":"light"}', json)],
+    ['a JSON name given twice, escaped', post('{"mode":"dark","\\u006dode":"light"}', json)],
+    ['a JSON reset given twice', post('{"reset":true,"reset":true}', json)],
     [
       'malformed UTF-8',
       new Request(URL_, {
@@ -192,7 +202,7 @@ test('a return path is a path on the canonical origin, or the form is a 400 that
     if (returnTo === '/%0d%0aSet-Cookie:x') {
       // Encoded, it's a path whose characters stay encoded: the Location names the same path.
       assert.equal(response.status, 303, returnTo);
-      assert.equal(response.headers.get('location'), '/%0d%0aSet-Cookie:x', returnTo);
+      assert.equal(response.headers.get('location'), `${ORIGIN}/%0d%0aSet-Cookie:x`, returnTo);
       continue;
     }
     assert.equal(response.status, 400, JSON.stringify(returnTo));
@@ -202,6 +212,45 @@ test('a return path is a path on the canonical origin, or the form is a 400 that
     post(new URLSearchParams({ mode: 'dark', return: `/${'a'.repeat(2048)}` }).toString()),
   );
   assert.equal(long.status, 400);
+});
+
+test('a return path that resolving leaves reading as another host goes to the home page', async () => {
+  for (const returnTo of [
+    '/.//evil.test/x',
+    '/%2e//evil.test/x',
+    '/%2E//evil.test/x',
+    '/a/..//evil.test/x',
+    '/a/%2e%2e//evil.test/x',
+    '/%2e%2e//evil.test',
+  ]) {
+    assert.equal(sitePath(returnTo, ORIGIN), '/', returnTo);
+    const response = await answer(
+      post(new URLSearchParams({ mode: 'dark', return: returnTo }).toString()),
+    );
+    assert.equal(response.status, 303, returnTo);
+    assert.equal(response.headers.get('location'), `${ORIGIN}/`, returnTo);
+  }
+  // A safe path that resolving shortens stays the path it resolves to.
+  assert.equal(sitePath('/a/%2e%2e/b/./c', ORIGIN), '/b/c');
+});
+
+test('sitePath() refuses another origin by the origin alone, before any check of the path', () => {
+  // Each resolves to a path of one slash, on another host: only the origin says no.
+  for (const value of ['//evil.test/x', '///evil.test/x']) {
+    assert.equal(new URL(value, ORIGIN).pathname, '/x', value);
+    assert.equal(sitePath(value, ORIGIN), null, value);
+  }
+});
+
+test('objectKeys() lists every member name of the top-level object, decoded, a repeated one twice', () => {
+  assert.deepEqual(objectKeys('{"mode":"dark","scheme":"a"}'), ['mode', 'scheme']);
+  assert.deepEqual(objectKeys('{"mode":"dark","\\u006dode":"light"}'), ['mode', 'mode']);
+  assert.deepEqual(objectKeys('{"a":{"mode":1,"mode":2},"b":["x","y"],"c":"}\\""}'), [
+    'a',
+    'b',
+    'c',
+  ]);
+  assert.deepEqual(objectKeys('{}'), []);
 });
 
 test('sitePath() keeps a path, query, and fragment on the origin, normalized, and nothing else', () => {

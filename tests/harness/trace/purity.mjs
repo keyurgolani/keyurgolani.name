@@ -348,6 +348,8 @@ const label = (unit) => `${unit.kind} ${unit.id}`;
  *   `scripts` are the settled DOM's script sources and script preloads
  * @param {ReadonlyArray<{ glob: string, pattern: RegExp }>} page.forbidden forbiddenRules()'s rules
  * @param {readonly string[]} [page.forbiddenProblems] forbiddenRules()'s problems
+ * @param {Partial<Record<string, string>>} [page.errorPacks] the pack on each kind the error
+ *   page renders in, whose stylesheet a page may name but not load
  * @returns {{ selected: { units: string[], platform: string | null }, problems: string[] }}
  */
 export function purityProblems(page) {
@@ -394,6 +396,24 @@ export function purityProblems(page) {
   }
 
   // Unit files, wherever the page names or loads one.
+  const loaded = new Set(
+    [...page.requests.map((request) => request.url), ...dom.stylesheets]
+      .map((url) => pathOn(url, appOrigin))
+      .filter(Boolean),
+  );
+  // The error page's fallback packs (#19, Slice 4): a page in a document
+  // boundary names their stylesheets in its payload, for the error page it
+  // may need, and loads none of them unless it does.
+  const errorSheets = new Set(
+    selected.platform
+      ? manifest.units
+          .filter(
+            (unit) => PACK_KINDS.includes(unit.kind) && page.errorPacks?.[unit.kind] === unit.id,
+          )
+          .map((unit) => unit.stylesheet?.url)
+          .filter(Boolean)
+      : [],
+  );
   const unitUrls = new Set([
     ...page.requests.map((request) => request.url),
     ...page.references.unitFiles,
@@ -403,6 +423,7 @@ export function purityProblems(page) {
     const pathname = pathOn(url, appOrigin);
     if (pathname === null || !pathname.startsWith('/_portfolio/')) continue;
     if (allowed.has(pathname)) continue;
+    if (errorSheets.has(pathname) && !loaded.has(pathname)) continue;
     const owner = owners.get(pathname);
     problems.add(
       owner

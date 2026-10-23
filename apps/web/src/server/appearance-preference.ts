@@ -20,7 +20,8 @@ import { APPEARANCE_COOKIE } from '~/lib/document-appearance';
 //   the cookie;
 // - with a form, `return`, the page to go back to, which must resolve
 //   against the canonical origin to that origin, with no backslash or
-//   control character in it;
+//   control character in it, and is checked again once resolved, since
+//   resolving can change the path;
 // - at most MAX_BODY_BYTES, as JSON or a form, from an Origin exactly the
 //   canonical origin, and, when the browser says, Sec-Fetch-Site:
 //   same-origin.
@@ -33,7 +34,9 @@ import { APPEARANCE_COOKIE } from '~/lib/document-appearance';
 // the page's composition, so a visitor's variant waits on the experience
 // segment following the cookie (the backlog's).
 //
-// A form gets a 303 to its page and the JSON save a 204, each no-store.
+// A form gets a 303 to its page, by an absolute URL on the canonical
+// origin, and the JSON save a 204, each no-store. A name given twice is
+// refused, in a form or in JSON.
 // Anything else is refused with nothing set: 403 for the origin, 413 past
 // the cap, 415 for another body type, and 400 for a body the schema doesn't
 // take.
@@ -96,7 +99,7 @@ export async function appearancePreference(
     : preferenceCookie(serializeSelection(body.values), origin, PREFERENCE_MAX_AGE);
   const headers = new Headers({ 'cache-control': 'no-store', 'set-cookie': cookie });
   if (location === null) return new Response(null, { status: 204, headers });
-  headers.set('location', location);
+  headers.set('location', `${new URL(origin).origin}${location}`);
   return new Response(null, { status: 303, headers });
 }
 
@@ -153,10 +156,44 @@ function jsonBody(text: string): Preference | null {
   } catch {
     return null;
   }
+  // A name given twice is invalid, never last-wins, as in a form.
+  const keys = objectKeys(text);
+  if (new Set(keys).size !== keys.length) return null;
   const result = JsonBody.safeParse(parsed);
   if (!result.success) return null;
   if ('reset' in result.data) return { reset: true, values: {} };
   return selection(result.data as Record<string, string | undefined>);
+}
+
+/**
+ * The names of the top-level object's members in `text`, which is valid
+ * JSON, decoded and in order, a name given twice listed twice. JSON.parse
+ * keeps only a repeated name's last value, so it can't say.
+ */
+export function objectKeys(text: string): string[] {
+  const keys: string[] = [];
+  let depth = 0;
+  let expectKey = false;
+  for (let i = 0; i < text.length; i += 1) {
+    const char = text[i];
+    if (char === '"') {
+      let end = i + 1;
+      while (end < text.length && text[end] !== '"') end += text[end] === '\\' ? 2 : 1;
+      if (depth === 1 && expectKey) {
+        keys.push(JSON.parse(text.slice(i, end + 1)) as string);
+        expectKey = false;
+      }
+      i = end;
+    } else if (char === '{' || char === '[') {
+      depth += 1;
+      if (depth === 1) expectKey = char === '{';
+    } else if (char === '}' || char === ']') {
+      depth -= 1;
+    } else if (char === ',' && depth === 1) {
+      expectKey = true;
+    }
+  }
+  return keys;
 }
 
 function formBody(text: string): Preference | null {
@@ -184,17 +221,21 @@ function selection(given: Record<string, string | undefined>): Preference | null
   const kept: SelectionValues = Object.fromEntries(
     Object.entries(values).filter(([axis]) => axis !== 'variant'),
   );
+  // Nothing left to keep: a body that names the variant alone sets nothing.
+  if (Object.keys(kept).length === 0) return null;
   return { reset: false, values: kept };
 }
 
 /**
  * The path, query, and fragment `returnTo` names on the canonical origin,
- * or null for anything that isn't a path there: another origin, a
- * protocol-relative or scheme URL, or a backslash, space, or control
- * character anywhere in it.
+ * or null for anything that isn't a path there: another origin, a scheme
+ * URL, or a backslash, space, or control character anywhere in it. The
+ * path is checked again once resolved: one that resolving leaves starting
+ * with two slashes, or a slash and a backslash, would read as another
+ * host's, so it goes to the home page instead.
  */
 export function sitePath(returnTo: string, origin: string): string | null {
-  if (!returnTo.startsWith('/') || returnTo.startsWith('//')) return null;
+  if (!returnTo.startsWith('/')) return null;
   if (/[\\\s\p{Cc}]/u.test(returnTo)) return null;
   let url: URL;
   try {
@@ -202,7 +243,9 @@ export function sitePath(returnTo: string, origin: string): string | null {
   } catch {
     return null;
   }
-  return url.origin === new URL(origin).origin ? `${url.pathname}${url.search}${url.hash}` : null;
+  if (url.origin !== new URL(origin).origin) return null;
+  if (/^\/[/\\]/.test(url.pathname)) return '/';
+  return `${url.pathname}${url.search}${url.hash}`;
 }
 
 /** The Set-Cookie value: the ids, for `maxAge` seconds, 0 clearing it. */
