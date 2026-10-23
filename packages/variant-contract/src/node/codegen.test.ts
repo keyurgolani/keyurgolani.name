@@ -287,20 +287,29 @@ test('writePackFiles() writes the pack files, keeps what has the bytes, and remo
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'portfolio-packs-'));
   try {
     const target = path.join(dir, '_portfolio', 'pack');
+    const staging = { staging: path.join(dir, 'staging') };
     const packs = packFiles(await withPacks());
     const names = packs.map(({ name }) => name);
-    assert.deepEqual(writePackFiles(target, packs), { written: names, unchanged: [], removed: [] });
+    assert.deepEqual(writePackFiles(target, packs, staging), {
+      written: names,
+      unchanged: [],
+      removed: [],
+    });
     assert.deepEqual(fs.readdirSync(target).sort(), [...names].sort());
     const css = packs.find(({ name }) => name.startsWith('test-scheme.'))!;
     assert.deepEqual(new Uint8Array(fs.readFileSync(path.join(target, css.name))), css.bytes);
-    assert.deepEqual(writePackFiles(target, packs), { written: [], unchanged: names, removed: [] });
+    assert.deepEqual(writePackFiles(target, packs, staging), {
+      written: [],
+      unchanged: names,
+      removed: [],
+    });
 
     // A file from a build that registered more, such as a fixture's, and a
     // temporary file a stopped run left, go.
     const stale = testPackFile('fixture-dusk', 'css', '[data-pack="fixture-dusk"] {}\n');
     fs.writeFileSync(path.join(target, stale.name), stale.bytes);
     fs.writeFileSync(path.join(target, `${css.name}.123.tmp`), 'partial');
-    const pruned = writePackFiles(target, packs);
+    const pruned = writePackFiles(target, packs, staging);
     assert.deepEqual(pruned.written, []);
     assert.deepEqual(pruned.removed, [`${css.name}.123.tmp`, stale.name].sort());
     assert.deepEqual(fs.readdirSync(target).sort(), [...names].sort());
@@ -311,24 +320,26 @@ test('writePackFiles() writes the pack files, keeps what has the bytes, and remo
 
 test('writePackFiles() writes nothing into a directory holding a file no pack wrote', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'portfolio-packs-'));
+  const staging = { staging: `${dir}-staging` };
   try {
     const packs = packFiles(await withPacks());
     fs.writeFileSync(path.join(dir, 'notes.txt'), 'mine');
     assert.throws(
-      () => writePackFiles(dir, packs),
+      () => writePackFiles(dir, packs, staging),
       /holds notes\.txt, which no pack wrote, so nothing was written there/,
     );
     assert.deepEqual(fs.readdirSync(dir), ['notes.txt']);
     const empty = fs.mkdtempSync(path.join(os.tmpdir(), 'portfolio-packs-'));
     try {
       const misnamed = { ...packs[0]!, name: '../escape.css' };
-      assert.throws(() => writePackFiles(empty, [misnamed]), /isn't a pack file's name/);
+      assert.throws(() => writePackFiles(empty, [misnamed], staging), /isn't a pack file's name/);
       assert.deepEqual(fs.readdirSync(empty), []);
     } finally {
       fs.rmSync(empty, { recursive: true, force: true });
     }
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(staging.staging, { recursive: true, force: true });
   }
 });
 
@@ -521,34 +532,41 @@ test('variantFiles() and assetFiles() list each compiled file once, sorted, for 
   assert.match(assets[0]!.name, /^[0-9a-f]{12}\.png$/);
 
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'portfolio-served-'));
+  const staged = (kind: string) => ({ staging: path.join(dir, 'staging', kind) });
   try {
     const variants = path.join(dir, 'variant');
     const names = variantFiles(result).map(({ name }) => name);
-    assert.deepEqual(writeServedFiles(variants, variantFiles(result), 'variant'), {
-      written: names,
-      unchanged: [],
-      removed: [],
-    });
+    assert.deepEqual(
+      writeServedFiles(variants, variantFiles(result), 'variant', staged('variant')),
+      {
+        written: names,
+        unchanged: [],
+        removed: [],
+      },
+    );
     // A pack file isn't a variant file, and a directory holding one is someone else's.
     const packs = path.join(dir, 'pack');
-    writePackFiles(packs, packFiles(result));
+    writePackFiles(packs, packFiles(result), staged('pack'));
     assert.throws(
-      () => writeServedFiles(packs, variantFiles(result), 'variant'),
+      () => writeServedFiles(packs, variantFiles(result), 'variant', staged('variant')),
       /which no variant wrote, so nothing was written there/,
     );
     assert.throws(
-      () => writeServedFiles(path.join(dir, 'asset'), variantFiles(result), 'asset'),
+      () =>
+        writeServedFiles(path.join(dir, 'asset'), variantFiles(result), 'asset', staged('asset')),
       /isn't an asset file's name/,
     );
     const images = path.join(dir, 'asset');
-    assert.deepEqual(writeServedFiles(images, assets, 'asset').written, [assets[0]!.name]);
+    assert.deepEqual(writeServedFiles(images, assets, 'asset', staged('asset')).written, [
+      assets[0]!.name,
+    ]);
     // A stylesheet from a build that registered more goes, and so does a leftover temporary file.
     fs.writeFileSync(path.join(variants, 'fixture-gone.0123456789ab.css'), 'old');
     fs.writeFileSync(path.join(variants, `${names[0]}.42.tmp`), 'partial');
-    assert.deepEqual(writeServedFiles(variants, variantFiles(result), 'variant').removed, [
-      `${names[0]}.42.tmp`,
-      'fixture-gone.0123456789ab.css',
-    ]);
+    assert.deepEqual(
+      writeServedFiles(variants, variantFiles(result), 'variant', staged('variant')).removed,
+      [`${names[0]}.42.tmp`, 'fixture-gone.0123456789ab.css'],
+    );
     assert.deepEqual(fs.readdirSync(variants).sort(), [...names].sort());
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });

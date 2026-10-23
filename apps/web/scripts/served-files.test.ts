@@ -89,13 +89,15 @@ test("a write removes a gone writer's temporary file and keeps a running one's, 
 
 test('the host stages each served directory outside public/, on its filesystem', () => {
   const pub = path.join(HOST, 'public');
-  const device = fs.statSync(HOST).dev;
+  /** The device of the nearest directory that exists, on the way up from `dir`. */
+  const device = (dir: string) => {
+    while (!fs.existsSync(dir)) dir = path.dirname(dir);
+    return fs.statSync(dir).dev;
+  };
   for (const [kind, { dir, staging }] of Object.entries(SERVED_DIRS)) {
     assert.ok(!path.relative(pub, dir).startsWith('..'), `${kind}'s files are served`);
     assert.ok(path.relative(pub, staging).startsWith('..'), `${kind} stages in public/`);
-    let existing = staging;
-    while (!fs.existsSync(existing)) existing = path.dirname(existing);
-    assert.equal(fs.statSync(existing).dev, device, `${kind} stages on another filesystem`);
+    assert.equal(device(staging), device(dir), `${kind} stages on another filesystem`);
   }
   const stagings = Object.values(SERVED_DIRS).map(({ staging }) => staging);
   assert.equal(new Set(stagings).size, stagings.length);

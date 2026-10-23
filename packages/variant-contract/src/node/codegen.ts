@@ -438,13 +438,13 @@ const SERVED_LABELS: Readonly<Record<ServedKind, { file: string; writer: string 
 /** How writeServedFiles() stages what it writes. */
 export interface ServedWriteOptions {
   /**
-   * The directory each file is written to before it's renamed into `dir`:
-   * one outside what the host serves, on the same filesystem as `dir`, so the
-   * rename is atomic and a copy of the served tree, such as the harness's,
-   * never meets a temporary file that vanishes under it. A sibling of `dir`
-   * by default.
+   * The directory each file is written to before it's renamed into `dir`.
+   * The caller picks it, outside what the host serves and on the same
+   * filesystem as `dir`, so the rename is atomic and a copy of the served
+   * tree, such as the harness's, never meets a temporary file that vanishes
+   * under it. There's no default: one beside `dir` would sit inside public/.
    */
-  readonly staging?: string;
+  readonly staging: string;
 }
 
 /** A staged file's name: the file's, then the pid of the process writing it. */
@@ -470,7 +470,7 @@ function gone(pid: number): boolean {
 export function writePackFiles(
   dir: string,
   files: readonly PackFile[],
-  options: ServedWriteOptions = {},
+  options: ServedWriteOptions,
 ): PackWriteResult {
   return writeServedFiles(dir, files, 'pack', options);
 }
@@ -490,9 +490,7 @@ export function writeServedFiles(
   dir: string,
   files: readonly ServedFile[],
   kind: ServedKind,
-  {
-    staging = path.join(path.dirname(dir), `.${path.basename(dir)}.staging`),
-  }: ServedWriteOptions = {},
+  { staging }: ServedWriteOptions,
 ): PackWriteResult {
   const pattern = SERVED_KINDS[kind];
   const staged = (name: string) => {
@@ -506,7 +504,6 @@ export function writeServedFiles(
     throw new Error(`${dir} can't be its own staging directory.`);
   }
   fs.mkdirSync(dir, { recursive: true });
-  fs.mkdirSync(staging, { recursive: true });
   const names = new Set(files.map(({ name }) => name));
   const others = fs.readdirSync(dir).filter((name) => !names.has(name));
   const foreign = others.filter((name) => !pattern.test(name) && staged(name) === undefined);
@@ -515,6 +512,7 @@ export function writeServedFiles(
       `${dir} holds ${foreign.join(', ')}, which ${label.writer}, so nothing was written there.`,
     );
   }
+  fs.mkdirSync(staging, { recursive: true });
   // A temporary file in `dir` is an earlier release's, which staged there.
   const stale = others.filter((name) => {
     const pid = staged(name);
