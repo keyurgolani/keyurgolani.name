@@ -91,7 +91,8 @@ export function plannedTests(record: Pick<PlanRecord, 'planned'>): VerdictTest[]
   return record.planned.map((each) => ({
     cell: { id: each.cell },
     viewport: { id: each.viewport },
-    row: { id: each.row },
+    // The plan wrote it from a row's id.
+    row: { id: each.row as VerdictTest['row']['id'] },
     ...(each.skip === null ? {} : { skip: each.skip }),
     engineSkips: each.engineSkips,
     conditions: each.conditions,

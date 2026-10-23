@@ -415,14 +415,14 @@ export function planCells({ meta, registrations, mode, changes = [] }: PlanInput
       .filter((pack) => pack.kind === 'design-language' && pack.manifest.tier !== 'research')
       .map((pack) => pack.manifest.id),
   );
-  const directed =
+  const directed: readonly Change[] =
     mode === 'full'
       ? [
-          ...variants.map((manifest) => ({ axis: 'variant' as const, id: manifest.id })),
+          ...variants.map((manifest) => ({ axis: 'variant' as const, id: manifest.id, paths: [] })),
           ...packIds('design-language')
             .filter((id) => languageIds.has(id))
             .sort()
-            .map((id) => ({ axis: 'designLanguage' as const, id })),
+            .map((id) => ({ axis: 'designLanguage' as const, id, paths: [] })),
         ]
       : changes.filter((change) =>
           change.axis === 'variant'
@@ -573,6 +573,6 @@ export function planCells({ meta, registrations, mode, changes = [] }: PlanInput
       ...registrations.surfaces.map((surface) => ({ kind: 'surface' as const, id: surface.id })),
     ],
     reasons: [...reasons].sort(),
-    changes: mode === 'full' ? directed.map((each) => ({ ...each, paths: [] })) : directed,
+    changes: directed,
   };
 }
