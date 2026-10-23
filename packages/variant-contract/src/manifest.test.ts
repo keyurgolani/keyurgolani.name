@@ -43,11 +43,12 @@ test('the fixture, which uses every field, is a valid manifest', () => {
   assert.equal(result.manifest.id, 'acme-ocean');
 });
 
-test('only author, homepage, bestFor, enhancements, keyBindings, and recommendedAppearance are optional', () => {
+test('only author, homepage, bestFor, budgets, enhancements, keyBindings, and recommendedAppearance are optional', () => {
   const optional = [
     'author',
     'homepage',
     'bestFor',
+    'budgets',
     'enhancements',
     'keyBindings',
     'recommendedAppearance',
@@ -89,6 +90,16 @@ const CASES: readonly Case[] = [
     name: 'markup in plain text',
     change: (m) => (m.description = 'Uses <b>bold</b> claims.'),
     expect: [['manifest.invalid', '/description']],
+  },
+  {
+    name: 'a budget of a kind #6 has no ceiling for',
+    change: (m) => (m.budgets = { js: 1024, gpu: 1 }),
+    expect: [['manifest.unknown-key', '/budgets/gpu']],
+  },
+  {
+    name: 'a budget that is no whole number of bytes',
+    change: (m) => (m.budgets = { css: -1 }),
+    expect: [['manifest.invalid', '/budgets/css']],
   },
   {
     name: 'a homepage that is not https',

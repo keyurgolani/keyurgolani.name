@@ -19,6 +19,7 @@ import { defineContentExtension, type ContentExtensionSpec } from '@portfolio/sc
 import { parseExtensionKind } from '@portfolio/schema/ids';
 import { toPointer, type ManifestCode, type ManifestDiagnostic } from '../diagnostics';
 import { FALLBACK_ID } from '../ids';
+import type { Budgets } from '../budgets';
 import type { VariantManifest } from '../manifest-schema';
 import { validateManifest } from '../validate-manifest';
 import {
@@ -235,8 +236,8 @@ export interface PackEntry {
   readonly dir: string;
   /** Its manifest.json. */
   readonly manifestFile: string;
-  /** The manifest the pack validator returned. */
-  readonly manifest: { readonly id: string };
+  /** The manifest the pack validator returned, with the budgets it declares (#6). */
+  readonly manifest: { readonly id: string; readonly budgets?: Budgets };
   /** From a `portfolio.fixture: true` package its flag admitted. */
   readonly fixture: boolean;
   readonly stylesheet: PackFile | null;

@@ -4,6 +4,7 @@
   "description": "The platform's fallback typography profile: a humanist system stack from 0.75rem captions to a 3.5rem display, with a monospace system stack for code and numerals.",
   "tokenContract": 1,
   "tier": "stable",
+  "budgets": { "js": 0, "css": 1536, "image": 0, "font": 0, "animation": 0, "enhancement": 0 },
   "provenance": {
     "source": { "name": "Keyur Golani portfolio platform" },
     "license": "first-party",

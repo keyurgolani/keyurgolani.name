@@ -152,10 +152,14 @@ function assetManifest(result: RegistryResult): AssetManifest {
       fonts: [],
       images: variant.assets.map(assetRef),
       stills: [],
-      enhancements: (variant.manifest.enhancements ?? []).map(({ id, requires }) => ({
-        id,
-        requires,
-      })),
+      enhancements: (variant.manifest.enhancements ?? []).map(
+        ({ id, export: entry, requires }) => ({
+          id,
+          export: entry,
+          requires,
+        }),
+      ),
+      budgets: variant.manifest.budgets ?? {},
     })),
     ...result.packs.map((pack): AssetUnit => ({
       kind: pack.kind,
@@ -168,6 +172,7 @@ function assetManifest(result: RegistryResult): AssetManifest {
       images: [],
       stills: [],
       enhancements: [],
+      budgets: pack.manifest.budgets ?? {},
     })),
   ];
 }

@@ -9,6 +9,7 @@
   "compositionFamily": "document",
   "motionIntent": "still",
   "performanceTier": "light",
+  "budgets": { "js": 30720, "css": 10240, "image": 0, "font": 0, "animation": 0, "enhancement": 0 },
   "renderedKinds": [],
   "unsupportedKinds": [],
   "contentSlots": [],

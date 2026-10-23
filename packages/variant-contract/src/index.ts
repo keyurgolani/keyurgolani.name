@@ -23,6 +23,7 @@ export {
   VARIANT_ID_PATTERN,
   type IdProblem,
 } from './ids';
+export { BUDGET_KINDS, BudgetsSchema, type BudgetKind, type Budgets } from './budgets';
 export {
   COMPOSITION_FAMILIES,
   CONTROL_ID_PATTERN,

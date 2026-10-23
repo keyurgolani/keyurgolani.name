@@ -4,6 +4,7 @@
   "description": "A test fixture: a Research scheme, which preview renders and publish refuses, and visitors never get.",
   "tokenContract": 1,
   "tier": "research",
+  "budgets": { "js": 0, "css": 3072, "image": 0, "font": 0, "animation": 0, "enhancement": 0 },
   "provenance": {
     "source": { "name": "Keyur Golani portfolio platform" },
     "license": "first-party",

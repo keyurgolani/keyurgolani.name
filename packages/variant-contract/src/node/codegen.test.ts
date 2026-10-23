@@ -372,6 +372,7 @@ const PNG = '\u0089PNG\r\n\u001a\n-acme-tile';
 const TILED = variantPackage('@acme/tiles', 'acme-tiles', {
   manifest: manifestFor('acme-tiles', {
     performanceTier: 'medium',
+    budgets: { js: 40960, enhancement: 102400 },
     enhancements: [{ id: 'glint', export: './enhancements/glint', requires: ['webgl2'] }],
   }),
   packageJson: {
@@ -436,7 +437,9 @@ test('ASSET_MANIFEST lists each unit with its files, variants first, then packs 
       },
     ],
     stills: [],
-    enhancements: [{ id: 'glint', requires: ['webgl2'] }],
+    enhancements: [{ id: 'glint', export: './enhancements/glint', requires: ['webgl2'] }],
+    // As the manifest declares them, for pnpm check:budgets (#6).
+    budgets: { js: 40960, enhancement: 102400 },
   });
   assert.match(tiles.stylesheet!.url, /^\/_portfolio\/variant\/acme-tiles\.[0-9a-f]{12}\.css$/);
   assert.ok(
@@ -444,6 +447,8 @@ test('ASSET_MANIFEST lists each unit with its files, variants first, then packs 
   );
   const serif = ASSET_MANIFEST.find(({ id }) => id === 'acme-serif')!;
   assert.equal(serif.performanceTier, undefined);
+  // A pack that declares none is held to its axis's ceilings.
+  assert.deepEqual(serif.budgets, {});
   assert.equal(serif.fonts.length, 1);
   assert.match(serif.fonts[0]!.url, /^\/_portfolio\/pack\/acme-serif\.[0-9a-f]{12}\.woff2$/);
   assert.match(serif.stylesheet!.url, /^\/_portfolio\/pack\/acme-serif\.[0-9a-f]{12}\.css$/);
