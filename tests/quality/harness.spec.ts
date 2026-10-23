@@ -1,6 +1,7 @@
+import { readFileSync } from 'node:fs';
 import { COLOR_ROLES } from '../../packages/appearance/src/roles';
 import { axeFor } from './lib/axe';
-import { FIXED_TIME } from './lib/clock';
+import { EGRESS_GUARD_URL, FIXED_CLOCK_URL, FIXED_TIME } from './lib/clock';
 import { elementDetailsScript } from './lib/probes';
 import { expect, test } from './fixtures';
 
@@ -13,10 +14,23 @@ import { expect, test } from './fixtures';
 const READ_ONLY = { type: 'profile', description: 'read-only' };
 
 test(
+  'the server starts with the clock and the socket guard preloaded, and the guard says it loaded',
+  { annotation: [{ type: 'route', description: '/' }, READ_ONLY] },
+  async ({ app }) => {
+    const preloads = (app.env.NODE_OPTIONS ?? '').split(/\s+/);
+    expect(preloads).toContain(`--import=${FIXED_CLOCK_URL}`);
+    expect(preloads).toContain(`--import=${EGRESS_GUARD_URL}`);
+    await expect
+      .poll(() => readFileSync(app.log, 'utf8'), { message: "the guard's line in the server log" })
+      .toContain('[egress-guard] loaded');
+  },
+);
+
+test(
   "the server runs on the fixed clock: the sitemap, modified per request, says the fixture's day",
   { annotation: [{ type: 'route', description: '/sitemap.xml' }, READ_ONLY] },
   async ({ request }) => {
-    const sitemap = await request.get('/sitemap.xml');
+    const sitemap = await request.get('/sitemap.xml', { maxRedirects: 0 });
     expect(sitemap.status()).toBe(200);
     expect(await sitemap.text()).toContain(`<lastmod>${FIXED_TIME.slice(0, 10)}T`);
   },

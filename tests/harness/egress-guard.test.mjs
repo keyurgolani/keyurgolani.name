@@ -163,3 +163,81 @@ test('loopback names and addresses pass, every other host is refused', async () 
     null,
   ]);
 });
+
+test('a DNS lookup or query of a name outside loopback is refused and recorded; localhost still resolves', async () => {
+  const script = `
+    import dns from 'node:dns';
+    import { lookup as importedLookup } from 'node:dns';
+    const code = (promise) => promise.then(() => 'resolved', (error) => error.code);
+    const viaCallback = (call) => new Promise((resolve) => call((error) => resolve(error ? error.code : 'resolved')));
+    const resolver = new dns.Resolver();
+    const promises = new dns.promises.Resolver();
+    process.stdout.write(JSON.stringify({
+      lookup: await viaCallback((done) => dns.lookup('outside-lookup.example.test', done)),
+      imported: await viaCallback((done) => importedLookup('outside-imported.example.test', done)),
+      promise: await code(dns.promises.lookup('outside-promise.example.test')),
+      resolve4: await viaCallback((done) => dns.resolve4('outside-resolve.example.test', done)),
+      resolver: await viaCallback((done) => resolver.resolveTxt('outside-resolver.example.test', done)),
+      promisesResolver: await code(promises.resolveMx('outside-mx.example.test')),
+      reverse: await viaCallback((done) => dns.reverse('${OUTSIDE}', done)),
+      localhost: await code(dns.promises.lookup('localhost')),
+    }));
+  `;
+  const { result, stderr, attempts } = await run(script);
+  assert.deepEqual(result, {
+    lookup: 'ENOTFOUND',
+    imported: 'ENOTFOUND',
+    promise: 'ENOTFOUND',
+    resolve4: 'EREFUSED',
+    resolver: 'EREFUSED',
+    promisesResolver: 'EREFUSED',
+    reverse: 'EREFUSED',
+    localhost: 'resolved',
+  });
+  assert.match(
+    stderr,
+    /\[egress-guard\] refused a lookup to dns:\/\/outside-lookup\.example\.test/,
+  );
+  assert.deepEqual(attempts.sort(), [
+    `dns://${OUTSIDE}`,
+    'dns://outside-imported.example.test',
+    'dns://outside-lookup.example.test',
+    'dns://outside-mx.example.test',
+    'dns://outside-promise.example.test',
+    'dns://outside-resolve.example.test',
+    'dns://outside-resolver.example.test',
+  ]);
+});
+
+test('a worker thread gets the guard, from a file or from eval, and the main thread logs it loaded', async () => {
+  const probe = `
+    const net = process.getBuiltinModule('node:net');
+    const { parentPort } = process.getBuiltinModule('node:worker_threads');
+    const socket = net.connect(9, '${OUTSIDE}');
+    socket.on('error', (error) => parentPort.postMessage(error.code));
+    socket.on('connect', () => parentPort.postMessage('connected'));
+    setTimeout(() => parentPort.postMessage('timeout'), 3000).unref();
+  `;
+  const script = `
+    import { Worker } from 'node:worker_threads';
+    import { writeFileSync, mkdtempSync, rmSync } from 'node:fs';
+    import { tmpdir } from 'node:os';
+    import path from 'node:path';
+    // Kept a moment after its answer, so its report reaches the trap.
+    const ended = (worker) => new Promise((resolve) => worker.once('message', (code) => setTimeout(() => { worker.terminate(); resolve(code); }, 300)));
+    const dir = mkdtempSync(path.join(tmpdir(), 'guard-worker-'));
+    const file = path.join(dir, 'probe.cjs');
+    writeFileSync(file, ${JSON.stringify(probe)});
+    const outcomes = {
+      eval: await ended(new Worker(${JSON.stringify(probe)}, { eval: true })),
+      // The child runs with --input-type, which a worker from a file can't take.
+      file: await ended(new Worker(file, { execArgv: [] })),
+    };
+    rmSync(dir, { recursive: true, force: true });
+    process.stdout.write(JSON.stringify(outcomes));
+  `;
+  const { result, stderr, attempts } = await run(script);
+  assert.deepEqual(result, { eval: 'ECONNREFUSED', file: 'ECONNREFUSED' }, stderr);
+  assert.deepEqual(attempts, [`tcp://${OUTSIDE}:9`, `tcp://${OUTSIDE}:9`]);
+  assert.equal(stderr.match(/\[egress-guard\] loaded/g)?.length, 1, 'once, in the main thread');
+});
