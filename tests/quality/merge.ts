@@ -2,8 +2,11 @@
 // of a sharded quality:full run. <dir> holds each shard's reports artifact,
 // as download-artifact leaves them, one directory each; lib/shards.ts reads
 // them and judges the run whole. The verdict goes to
-// reports/quality/merged-verdict.json, and under ci/run.mjs each failure is a
-// failure record. It exits 1 on any failure, 2 on a usage error.
+// reports/quality/merged-verdict.json, the shards' summaries joined into one
+// to reports/quality/summary.json, with the verdict and the timing trend as
+// an unsharded run writes them, and under ci/run.mjs each failure is a
+// failure record. It exits 1 on any failure, 2 on a usage error. A CI job
+// calls it as `pnpm ci:quality-verdict "$DIR" --shards <m>`, in any mode.
 //
 // Point it only at a new, empty directory the shards' artifacts were
 // downloaded into: it reads every quality/ directory under it.
@@ -13,7 +16,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { currentGate, reportError, reportsDir, writeFailureRecord } from '../../ci/lib/reports.mjs';
 import { RECORD_VERSION } from './lib/failure-records';
-import { mergeShards, readShards, type MergedVerdict } from './lib/shards';
+import { timingTrend } from './lib/perf/timing';
+import { joinSummaries, mergeShards, readShards, type MergedVerdict } from './lib/shards';
+import { SUMMARY_FILE } from './reporter';
 
 export const MERGED_VERDICT = 'merged-verdict.json';
 
@@ -34,10 +39,20 @@ export function parseMergeArgs(argv: readonly string[]): { dir: string; expected
 
 /** Judges the shards under `dir`, writes the merged verdict and its failure records, and prints it. */
 export function mergeRun(dir: string, expected?: number, test = 'quality:full merged verdict') {
-  const verdict: MergedVerdict = mergeShards(readShards(dir), { expected });
+  const shards = readShards(dir);
+  const verdict: MergedVerdict = mergeShards(shards, { expected });
   const quality = path.join(reportsDir(), 'quality');
   mkdirSync(quality, { recursive: true });
   writeFileSync(path.join(quality, MERGED_VERDICT), `${JSON.stringify(verdict, null, 2)}\n`);
+  // The run's summary.json, every shard's tests in it, as an unsharded run
+  // writes it: what a sharded release's timing gate reads (release.ts).
+  const joined = joinSummaries(shards);
+  if (joined) {
+    writeFileSync(
+      SUMMARY_FILE(),
+      `${JSON.stringify({ ...joined, verdict, timing: timingTrend(joined) }, null, 2)}\n`,
+    );
+  }
   const gate = currentGate();
   for (const { rule, message } of gate ? verdict.failures : []) {
     writeFailureRecord({

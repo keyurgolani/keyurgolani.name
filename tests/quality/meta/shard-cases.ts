@@ -13,7 +13,18 @@ import type { Summary, SummaryTest } from '../reporter';
 import { mergeShards, readShards, type PlanRecord, type RunVerdict } from '../lib/shards';
 import type { VerdictTest } from '../lib/verdict';
 import type { MetaCase, MetaOutcome } from './cases';
-import { ALSO_RUNS, CELLS, cellTest, HARNESS, HELD, PROBE, RUNS, summary } from './runner-cases';
+import { five, perfTest } from './perf-cases';
+import {
+  ALSO_RUNS,
+  CELL,
+  CELLS,
+  cellTest,
+  HARNESS,
+  HELD,
+  PROBE,
+  RUNS,
+  summary,
+} from './runner-cases';
 
 const GATE = 'merged-verdict';
 
@@ -38,11 +49,17 @@ function planOf(
       engineSkips: test.engineSkips,
       conditions: test.conditions ?? true,
     })),
-    perf: [],
   };
 }
 
 const PLAN = planOf([RUNS, ALSO_RUNS]);
+
+/** The plan with the fallback composition's perf cell (11-3), which one shard's perf test answers. */
+export const PERF_PLAN: PlanRecord = {
+  ...PLAN,
+  perf: [{ cell: CELL, target: 'composition:fallback', tier: 'light' }],
+};
+const PERF_TEST = perfTest(five());
 
 /** A passing harness test that isn't the canary probe. */
 const HARNESS_CHECK: SummaryTest = {
@@ -52,7 +69,7 @@ const HARNESS_CHECK: SummaryTest = {
   canaryProbe: false,
 };
 
-interface ShardInput {
+export interface ShardInput {
   readonly shard: string;
   readonly tests: readonly SummaryTest[];
   readonly plan?: PlanRecord | null;
@@ -80,19 +97,23 @@ function shardFiles(input: ShardInput) {
   return { plan: input.plan === undefined ? PLAN : input.plan, summary: shardSummary, verdict };
 }
 
+/** Each shard's reports under `root`, one directory each, as download-artifact leaves them. */
+export function writeShards(root: string, shards: readonly ShardInput[]): void {
+  for (const input of shards) {
+    const dir = path.join(root, `reports-quality-full-${input.shard.split('/')[0]}`, 'quality');
+    mkdirSync(dir, { recursive: true });
+    const files = shardFiles(input);
+    if (files.plan) writeFileSync(path.join(dir, 'plan.json'), JSON.stringify(files.plan));
+    writeFileSync(path.join(dir, 'summary.json'), JSON.stringify(files.summary));
+    if (files.verdict) writeFileSync(path.join(dir, 'verdict.json'), JSON.stringify(files.verdict));
+  }
+}
+
 /** The shards written to a new directory, read back, and judged whole. */
 function mergedOutcome(shards: readonly ShardInput[], expected?: number): MetaOutcome {
   const root = mkdtempSync(path.join(tmpdir(), 'quality-meta-shards-'));
   try {
-    for (const input of shards) {
-      const dir = path.join(root, `reports-quality-full-${input.shard.split('/')[0]}`, 'quality');
-      mkdirSync(dir, { recursive: true });
-      const files = shardFiles(input);
-      if (files.plan) writeFileSync(path.join(dir, 'plan.json'), JSON.stringify(files.plan));
-      writeFileSync(path.join(dir, 'summary.json'), JSON.stringify(files.summary));
-      if (files.verdict)
-        writeFileSync(path.join(dir, 'verdict.json'), JSON.stringify(files.verdict));
-    }
+    writeShards(root, shards);
     const verdict = mergeShards(readShards(root), { expected });
     return {
       passed: verdict.ok,
@@ -104,12 +125,12 @@ function mergedOutcome(shards: readonly ShardInput[], expected?: number): MetaOu
 }
 
 /** Two shards that are fine: each planned test once, the probe in the first, its trace holding the canary. */
-const SHARD_1: ShardInput = {
+export const SHARD_1: ShardInput = {
   shard: '1/2',
   tests: [cellTest(RUNS), PROBE],
   verdict: { canary: { before: [HELD], after: [] } },
 };
-const SHARD_2: ShardInput = { shard: '2/2', tests: [cellTest(ALSO_RUNS), HARNESS_CHECK] };
+export const SHARD_2: ShardInput = { shard: '2/2', tests: [cellTest(ALSO_RUNS), HARNESS_CHECK] };
 
 function mergedCase(
   rule: string,
@@ -210,6 +231,33 @@ export const SHARD_CASES: readonly MetaCase[] = [
     { ...SHARD_2, plan: { ...PLAN, reasons: ['Another run planned this.'] } },
   ]),
   mergedCase('no-shards', '', 'an empty directory', 'fail', []),
+  // 11-3's perf-coverage, judged once, on every shard's perf tests together.
+  mergedCase('perf-coverage', 'whole', "the perf cell's test in shard 2 alone", 'pass', [
+    { ...SHARD_1, plan: PERF_PLAN },
+    { ...SHARD_2, plan: PERF_PLAN, tests: [...SHARD_2.tests, PERF_TEST] },
+  ]),
+  mergedCase(
+    'perf-coverage',
+    'in-no-shard',
+    "two passing shards, the perf cell's test in neither",
+    'fail',
+    [
+      { ...SHARD_1, plan: PERF_PLAN },
+      { ...SHARD_2, plan: PERF_PLAN },
+    ],
+    { reason: /^perf-coverage: The perf test of .* is planned on chromium, and didn't run\.$/ },
+  ),
+  mergedCase(
+    'perf-coverage',
+    'in-two-shards',
+    "two passing shards, the perf cell's test in both",
+    'fail',
+    [
+      { ...SHARD_1, plan: PERF_PLAN, tests: [...SHARD_1.tests, PERF_TEST] },
+      { ...SHARD_2, plan: PERF_PLAN, tests: [...SHARD_2.tests, PERF_TEST] },
+    ],
+    { reason: /^perf-coverage: The perf test of .* ran 2 times on chromium, not once\.$/ },
+  ),
   // A shard's own failure the joined summary can't show again carries over, naming its shard.
   mergedCase(
     'artifact-unreadable',

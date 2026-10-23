@@ -3,9 +3,20 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import type { TestContext } from 'node:test';
 import { MERGED_VERDICT, mergeRun, parseMergeArgs } from './merge';
-import { readShards } from './lib/shards';
-import { SHARD_CASES } from './meta/shard-cases';
+import { mergeShards, readShards } from './lib/shards';
+import { OVER, releaseOutcome, WITHIN } from './meta/release-cases';
+import {
+  PERF_PLAN,
+  SHARD_1,
+  SHARD_2,
+  SHARD_CASES,
+  writeShards,
+  type ShardInput,
+} from './meta/shard-cases';
+import { judgeRelease, RELEASE_GATES } from './release';
+import type { Summary } from './reporter';
 
 // pnpm quality:merge (#11, 11-4): a sharded quality:full run judged whole.
 // The rules themselves are quality:meta's merged-verdict cases.
@@ -68,5 +79,109 @@ test('each merged-verdict case goes the way it should', async () => {
   const { judge } = await import('./meta/cases');
   for (const metaCase of SHARD_CASES) {
     assert.equal(judge(metaCase, await metaCase.run()), null, metaCase.id);
+  }
+});
+
+type Joined = Summary & { verdict: { ok: boolean }; timing: { tests: unknown[] } };
+
+/** `shards` written to a new directory, merged by quality:merge into reports of their own; `check` reads them. */
+async function withMerged(
+  t: TestContext,
+  shards: readonly ShardInput[],
+  check: (run: {
+    verdict: ReturnType<typeof mergeRun>;
+    summary: Joined;
+    reports: string;
+  }) => unknown,
+) {
+  const root = mkdtempSync(path.join(tmpdir(), 'quality-merge-shards-'));
+  const reports = mkdtempSync(path.join(tmpdir(), 'quality-merge-reports-'));
+  const previous = process.env.CI_REPORTS_DIR;
+  const attempt = process.env.GITHUB_RUN_ATTEMPT;
+  process.env.CI_REPORTS_DIR = reports;
+  // A workflow's first attempt, whatever this job's is: the timing gate fails a rerun.
+  process.env.GITHUB_RUN_ATTEMPT = '1';
+  t.mock.method(console, 'log', () => {});
+  t.mock.method(console, 'error', () => {});
+  try {
+    writeShards(root, shards);
+    const verdict = mergeRun(root, 2);
+    const summary = JSON.parse(
+      readFileSync(path.join(reports, 'quality', 'summary.json'), 'utf8'),
+    ) as Joined;
+    await check({ verdict, summary, reports });
+  } finally {
+    if (previous === undefined) delete process.env.CI_REPORTS_DIR;
+    else process.env.CI_REPORTS_DIR = previous;
+    if (attempt === undefined) delete process.env.GITHUB_RUN_ATTEMPT;
+    else process.env.GITHUB_RUN_ATTEMPT = attempt;
+    t.mock.restoreAll();
+    rmSync(root, { recursive: true, force: true });
+    rmSync(reports, { recursive: true, force: true });
+  }
+}
+
+/** Two shards of a run with the fallback composition's perf cell, its test in shard 2 with `perf`'s timing. */
+const perfShards = (perf: Pick<Summary, 'tests'>): ShardInput[] => [
+  { ...SHARD_1, plan: PERF_PLAN },
+  { ...SHARD_2, plan: PERF_PLAN, tests: [...SHARD_2.tests, ...perf.tests] },
+];
+
+test("quality:merge writes the shards' joined summary.json: every shard's tests, no shard, the merged verdict", async (t) => {
+  await withMerged(t, perfShards(WITHIN), ({ verdict, summary }) => {
+    assert.equal(verdict.ok, true, JSON.stringify(verdict.failures));
+    assert.equal(summary.shard, null);
+    assert.deepEqual(
+      summary.tests.map((test) => test.title),
+      [...SHARD_1.tests, ...SHARD_2.tests, ...WITHIN.tests].map((test) => test.title),
+    );
+    assert.equal(summary.verdict.ok, true);
+    assert.equal(summary.timing.tests.length, 1, "the trend reads shard 2's perf test");
+  });
+});
+
+test('a sharded release fails on a timing breach in any shard, through the joined summary.json', async (t) => {
+  for (const [perf, passes] of [
+    [WITHIN, true],
+    [OVER, false],
+  ] as const) {
+    // The timing gate reads the reports quality:merge wrote, as quality:release -- --merged does.
+    await withMerged(t, perfShards(perf), async ({ verdict, reports }) => {
+      const release = await judgeRelease(verdict, RELEASE_GATES, reports);
+      assert.equal(release.ok, passes, JSON.stringify(release.gates));
+      const timing = release.gates.find((gate) => gate.id === 'timing')!;
+      assert.deepEqual(
+        timing.failures.map((failure) => failure.rule),
+        passes ? [] : ['timing-over'],
+      );
+    });
+  }
+  // The same breach in an unsharded release's summary.json fails it the same way.
+  const passed = { ok: true, failures: [], flaky: [], counts: {} };
+  assert.equal((await releaseOutcome(passed, RELEASE_GATES, OVER)).passed, false);
+});
+
+test('perf-coverage is judged once, on the joined summary, never carried from a shard', () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'quality-merge-perf-'));
+  try {
+    const stray = { ...WITHIN.tests[0]!, cell: 'composition:fallback nowhere' };
+    const message = `${stray.title} ran, and no perf cell is ${stray.cell}.`;
+    writeShards(root, [
+      // Shard 1 saw the stray and failed it; the joined summary shows it again.
+      {
+        ...SHARD_1,
+        plan: PERF_PLAN,
+        tests: [...SHARD_1.tests, stray],
+        verdict: { ok: false, failures: [{ rule: 'perf-coverage', message }] },
+      },
+      { ...SHARD_2, plan: PERF_PLAN, tests: [...SHARD_2.tests, ...WITHIN.tests] },
+    ]);
+    const verdict = mergeShards(readShards(root), { expected: 2 });
+    assert.deepEqual(
+      verdict.failures.filter((failure) => failure.rule === 'perf-coverage'),
+      [{ rule: 'perf-coverage', message }],
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
   }
 });

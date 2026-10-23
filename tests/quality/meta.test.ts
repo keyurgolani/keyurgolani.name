@@ -201,6 +201,8 @@ test('every gate so far has a known-bad case and a known-good one, and each id i
     'merged-verdict/plan-coverage-in-no-shard',
     'merged-verdict/canary-probe-missing-in-no-shard',
     'merged-verdict/missing-shard',
+    'merged-verdict/perf-coverage-in-no-shard',
+    'merged-verdict/perf-coverage-in-two-shards',
     'release/matrix-failed',
     'release/release-gate-failed',
     'release/timing-breach',

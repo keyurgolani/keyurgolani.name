@@ -52,8 +52,8 @@ export interface PlanRecord {
     /** Whether it runs the default row's reload conditions (cells.ts). */
     readonly conditions: boolean;
   }[];
-  /** The perf cells (lib/perf/plan.ts), which perf-coverage holds the run to. */
-  readonly perf: readonly PlannedPerf[];
+  /** The perf cells (lib/perf/plan.ts), which perf-coverage holds the run to. run.ts always writes them. */
+  readonly perf?: readonly PlannedPerf[];
 }
 
 /** What plan.json keeps of a plan: no file contents. */
@@ -173,7 +173,36 @@ const REJUDGED = new Set([
   'tests-failed',
   'run-errors',
   'canary-leaked',
+  'perf-coverage',
 ]);
+
+/**
+ * The shards' summaries as one run's: every shard's tests and errors, no
+ * shard, and none of what run.ts adds to a shard's summary after judging
+ * it (its verdict, timing trend, and budget results). quality:merge writes
+ * it as the run's summary.json, which the release's timing gate reads.
+ */
+export function joinSummaries(shards: readonly ShardReport[]): Summary | null {
+  const summaries = shards.flatMap((shard) => (shard.summary ? [shard.summary] : []));
+  const first = summaries[0];
+  if (!first) return null;
+  const {
+    verdict: _verdict,
+    timing: _timing,
+    budgets: _budgets,
+    ...rest
+  } = first as Summary & Record<'verdict' | 'timing' | 'budgets', unknown>;
+  void _verdict;
+  void _timing;
+  void _budgets;
+  return {
+    ...rest,
+    shard: null,
+    status: summaries.every((each) => each.status === 'passed') ? 'passed' : 'failed',
+    tests: summaries.flatMap((each) => each.tests),
+    errors: summaries.flatMap((each) => each.errors),
+  };
+}
 
 export interface MergedVerdict extends Verdict {
   readonly shards: readonly { readonly shard: string | null; readonly dir: string }[];
@@ -282,20 +311,15 @@ export function mergeShards(
     }
   }
 
-  const summaries = shards.flatMap((shard) => (shard.summary ? [shard.summary] : []));
-  const first = summaries[0];
-  const joined: Summary | null = first
-    ? {
-        ...first,
-        shard: null,
-        status: summaries.every((each) => each.status === 'passed') ? 'passed' : 'failed',
-        tests: summaries.flatMap((each) => each.tests),
-        errors: summaries.flatMap((each) => each.errors),
-      }
-    : null;
+  const joined = joinSummaries(shards);
   const engines = shards.find((shard) => shard.verdict)?.verdict?.engines ?? [];
   const judged = judge({
-    plan: { targets: plan?.targets ?? [], tests: plan ? plannedTests(plan) : [] },
+    // perf-coverage, too, is judged once, here, on every shard's perf tests.
+    plan: {
+      targets: plan?.targets ?? [],
+      tests: plan ? plannedTests(plan) : [],
+      ...(plan?.perf !== undefined ? { perf: plan.perf } : {}),
+    },
     engines,
     summary: joined,
     missingBrowsers: [],
