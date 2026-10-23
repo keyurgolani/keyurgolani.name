@@ -246,3 +246,25 @@ export {
   type MountedSource,
   type SourceFile,
 } from './store/source';
+
+// Media ingestion (#10, items 5 and 6): owner's draft saves derive image
+// renditions with sharp into the AssetStore. read-only and demo never load it.
+export {
+  mediaIngestion,
+  type IngestInput,
+  type IngestResult,
+  type MediaFinding,
+  type MediaIngestion,
+  type MediaIngestionOptions,
+  type MediaLogEntry,
+} from './media/ingest';
+export { localMediaRoot, type LocalMediaRoot } from './media/local';
+export {
+  remoteImageFetcher,
+  type RemoteFetcher,
+  type RemoteFetcherOptions,
+  type RemoteTransport,
+  type Resolve,
+} from './media/remote';
+export { ALGORITHM_VERSION, loadSharp, type SharpLoad } from './media/derive';
+export { MEDIA_LIMITS, MediaSourceError } from './media/limits';
