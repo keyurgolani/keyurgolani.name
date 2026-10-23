@@ -206,6 +206,12 @@ function dockerfileStages() {
   return stages;
 }
 
+test('the deps install runs with core dumps off, so a crash under QEMU fails instead of hanging', () => {
+  const { deps } = dockerfileStages();
+  const installs = deps.split('\n').filter((line) => /^RUN .*pnpm install/.test(line));
+  assert.deepEqual(installs, ['RUN ulimit -c 0 && pnpm install --frozen-lockfile']);
+});
+
 test('the runner stage upgrades its Alpine packages and removes the package managers the base image bundles, and the builder keeps them', () => {
   const { deps, builder, runner } = dockerfileStages();
   // One RUN, its continuation lines joined.
