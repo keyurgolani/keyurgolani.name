@@ -302,6 +302,9 @@ test('a gone source is missing; an error or a refused connection is unreachable'
       'https://images.example.net/410': { status: 410 },
       'https://images.example.net/500': { status: 500 },
       'https://images.example.net/403': { status: 403 },
+      // A success that isn't the whole image: a partial or a proxy's rewrite.
+      'https://images.example.net/206': { status: 206, body: [IMAGE] },
+      'https://images.example.net/203': { status: 203, body: [IMAGE] },
     },
   );
   const fetch = remoteImageFetcher(stub);
@@ -309,6 +312,8 @@ test('a gone source is missing; an error or a refused connection is unreachable'
   await assert.rejects(fetch('https://images.example.net/410'), refusal('missing'));
   await assert.rejects(fetch('https://images.example.net/500'), refusal('unreachable', 'status'));
   await assert.rejects(fetch('https://images.example.net/403'), refusal('unreachable', 'status'));
+  await assert.rejects(fetch('https://images.example.net/206'), refusal('unreachable', 'status'));
+  await assert.rejects(fetch('https://images.example.net/203'), refusal('unreachable', 'status'));
   await assert.rejects(
     fetch('https://nowhere.example.net/a.jpg'),
     refusal('missing', 'host_not_found'),
@@ -322,6 +327,10 @@ test('a gone source is missing; an error or a refused connection is unreachable'
 test('the address rules: public addresses pass, everything special does not', () => {
   for (const address of ['93.184.216.34', '8.8.8.8', '2606:4700:4700::1111', '[2606:4700::1]']) {
     assert.ok(isPublicAddress(address), address);
+  }
+  // A zone index ties even a public-looking address to a local link.
+  for (const address of ['2606:4700:4700::1111%eth0', '[2606:4700::1%25en0]']) {
+    assert.equal(isPublicAddress(address), false, address);
   }
   for (const address of [
     '127.0.0.1',

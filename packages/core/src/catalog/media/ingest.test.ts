@@ -652,6 +652,7 @@ for (const [damage, change] of [
     },
   ],
   ['a draft file cut short', (raw: string) => raw.slice(0, raw.length - 10)],
+  ["a draft whose previous version can't be read", (raw: string) => raw],
 ] as const) {
   test(`retention 25 hours on keeps every blob of ${damage}`, async (t) => {
     const s = await setup(t);
@@ -665,6 +666,10 @@ for (const [damage, change] of [
     if (created.kind !== 'saved') return;
     const file = s.store.paths.draft(created.draft.draftId);
     writeFileSync(file, change(readFileSync(file, 'utf8')));
+    if (damage === "a draft whose previous version can't be read") {
+      // Something at its previous version's path that won't read: not a file.
+      mkdirSync(s.store.paths.draftPrevious(created.draft.draftId));
+    }
     const orphan = await s.store.assets.put(new TextEncoder().encode('nobody'), 'image/webp');
 
     const report = await runRetention(
@@ -683,7 +688,7 @@ for (const [damage, change] of [
     const blobs = mediaBlobs(document);
     assert.ok(blobs.length > 0);
     for (const blob of blobs) assert.ok(await s.store.assets.has(blob), blob);
-    if (damage === 'a draft file cut short') {
+    if (damage !== 'a media document this build no longer accepts') {
       // Nothing can be said about what it keeps, so nothing goes.
       assert.equal(report.report.blobsKept, 'draft_unreadable');
       assert.deepEqual(report.report.removedBlobs, []);
