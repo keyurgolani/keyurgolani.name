@@ -9,18 +9,23 @@ export type CellCheck = (typeof CELL_CHECKS)[number];
 export const VISUAL_CHECKS = ['fonts', 'status', 'screenshot'] as const;
 export type VisualCheck = (typeof VISUAL_CHECKS)[number];
 
+/** What every perf test (perf.spec.ts, #11's 11-3) runs: the statuses, the LCP and static-mode rules, and the timing medians. */
+export const PERF_CHECKS = ['status', 'lcp', 'static', 'timing'] as const;
+export type PerfCheck = (typeof PERF_CHECKS)[number];
+
 /** The annotation a test lists the checks it ran in. */
 export const CHECKS_ANNOTATION = 'quality-checks';
 
-/** The annotation that says which kind of quality test a test is: cell or visual. */
+/** The annotation that says which kind of quality test a test is: cell, visual, or perf. */
 export const KIND_ANNOTATION = 'quality-kind';
 
-export type TestKind = 'cell' | 'visual';
+export type TestKind = 'cell' | 'visual' | 'perf';
 
 /** Each kind's checks. */
 export const KIND_CHECKS: Readonly<Record<TestKind, readonly string[]>> = {
   cell: CELL_CHECKS,
   visual: VISUAL_CHECKS,
+  perf: PERF_CHECKS,
 };
 
 /**

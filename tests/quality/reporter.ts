@@ -1,7 +1,7 @@
 // The quality runs' reporter (#11, Slice 1, items 10 and 11). It writes
 // reports/quality/summary.json: every collected test, its cell, viewport,
-// row, outcome, the reason it skipped with, the checks it ran, its vitals
-// (report-only until Slice 3), and the run's own errors, which run.ts's
+// row, outcome, the reason it skipped with, the checks it ran, its vitals,
+// a perf test's perf.json, and the run's own errors, which run.ts's
 // verdict reads. Under ci/run.mjs it also writes the failure records: each
 // failed test's own (one per failing rule and element), or, for a test
 // that failed before it wrote any, one record of the failure.
@@ -55,6 +55,8 @@ export interface SummaryTest {
   readonly errors: readonly string[];
   readonly records: number;
   readonly vitals?: unknown;
+  /** A perf test's perf.json: its loads, deterministic findings, and timing medians (#11, 11-3). */
+  readonly perf?: unknown;
 }
 
 export interface Summary {
@@ -131,6 +133,7 @@ export default class QualityReporter implements Reporter {
         errors: (last?.errors ?? []).map((error) => plain(error.message ?? error.value)),
         records: records.length,
         vitals: attachment(test, 'vitals.json'),
+        perf: attachment(test, 'perf.json'),
       };
     });
     const shard = this.config?.shard;

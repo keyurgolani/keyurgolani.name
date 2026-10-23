@@ -40,7 +40,12 @@ const engineUse = (engine: Engine) => ({
   ...(engine === 'chromium' ? { launchOptions: { args: [...TRACE_LAUNCH_ARGS] } } : {}),
 });
 
-const cellSpecs = ['cells.spec.ts', ...(plan.mode === 'full' ? ['visual.spec.ts'] : [])];
+// perf.spec.ts runs each target's representative cell on the same servers (#11, 11-3).
+const cellSpecs = [
+  'cells.spec.ts',
+  'perf.spec.ts',
+  ...(plan.mode === 'full' ? ['visual.spec.ts'] : []),
+];
 
 export default defineConfig({
   ...base,
