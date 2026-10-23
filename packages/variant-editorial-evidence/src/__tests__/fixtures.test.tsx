@@ -17,8 +17,8 @@ import { at, count, fragmentLinks, idsIn, inputFor, render } from './harness';
 
 /** The color schemes and typography presets the contract fixtures name, as their own test lists them. */
 const IDS = {
-  colorScheme: ['warm', 'noir', 'ink-and-paper', 'nebula', 'aurora', 'solar'],
-  typography: ['classic', 'modernist', 'geometric', 'humanist'],
+  colorScheme: ['warm', 'warm-parchment', 'noir', 'ink-and-paper', 'nebula', 'aurora', 'solar'],
+  typography: ['classic', 'humanist-ui', 'modernist', 'geometric', 'humanist'],
   displayMode: ['system', 'light', 'dark', 'high-contrast'],
 } as const;
 const CATALOG: AppearanceCatalog = {
