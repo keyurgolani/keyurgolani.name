@@ -223,3 +223,10 @@ test('touch targets keep their floors, in the utilities layer, whatever the cont
     /@media \(pointer: coarse\)[\s\S]*\[data-emphasis='primary'\][\s\S]*min-block-size: 44px;/,
   );
 });
+
+test("a busy action shows whole while it has focus, so its ring isn't dimmed under 3:1 (#11)", () => {
+  assert.match(
+    CSS,
+    /\[data-ui-slot='action'\]\[data-state='loading'\]:focus-visible \{\s*opacity: 1;\s*\}/,
+  );
+});

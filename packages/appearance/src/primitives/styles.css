@@ -265,6 +265,12 @@
     cursor: progress;
   }
 
+  /* The opacity would dim the focus ring under 3:1 (WCAG 2.4.7, 1.4.11). Focused, a busy
+     action shows whole; its spinner and aria-busy still say it's working. */
+  [data-ui-slot='action'][data-state='loading']:focus-visible {
+    opacity: 1;
+  }
+
   [data-ui-slot='action.icon'],
   [data-ui-slot='badge.icon'] {
     display: inline-flex;
