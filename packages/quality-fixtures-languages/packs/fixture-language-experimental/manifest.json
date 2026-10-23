@@ -4,6 +4,7 @@
   "description": "A tier fixture: an Experimental design language with hard offset shadows, ink-colored borders, springy motion, and a stylesheet of its own, for the quality gates to run as a shipping Experimental pack.",
   "tokenContract": 1,
   "tier": "experimental",
+  "budgets": { "js": 0, "css": 2048, "image": 0, "font": 0, "animation": 0, "enhancement": 0 },
   "provenance": {
     "source": {
       "name": "Keyur Golani portfolio platform"

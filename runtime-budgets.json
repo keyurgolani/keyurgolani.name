@@ -28,6 +28,109 @@
       }
     ]
   },
+  "budgets": {
+    "description": "The ceilings each unit's declared budgets are held to (#6, items 3 and 4): one row per variant tier and one per appearance pack axis, in the six kinds a manifest declares. A kind a unit leaves out is its ceiling, and a declared one over its ceiling fails. pnpm check:budgets measures each registered unit from the build output, ASSET_MANIFEST, and the trace report, and writes one failure record per breach. A ceiling changes only in a reviewed edit to this file, with its basis.",
+    "kinds": {
+      "js": "gzip bytes of the unit's own JavaScript a route downloads as it loads, by source-map attribution, its enhancement chunks left out",
+      "css": "gzip bytes of the unit's compiled stylesheet, the kit's shared renderers' layout included for a variant",
+      "image": "bytes of the image files the unit ships",
+      "font": "bytes of the font files the unit ships",
+      "animation": "continuous work on an active, idle page, as the trace probes count it: frame loops, recurring timers, and running infinite animations",
+      "enhancement": "gzip bytes of the unit's own code in the build's chunks that hold one of its enhancements"
+    },
+    "headroom": "Kind by kind. JS: light 30,720, under the 43,879 of variant code v1 Editorial's page carried over the fallback route's, and medium and heavy 92,160, twice that; slice 2's largest variant, fixture-variant-medium, measured 926. CSS: light 10,240, two thirds of v1's one 14,494 B file of every variant's CSS, and medium and heavy 15,360, above that whole file; slice 2's largest, fixture-variant-medium, compiled 1,184. Image and font: v1 has no measurement of either, since its images were data URLs and its fonts came from Google, so they start at #6's original 102,400, with 204,800 and 409,600 for medium and heavy images. Animation: light 0, as v1 Editorial ran nothing while idle; medium 3, one over the 2 CI measured for fixture-variant-medium, its shader's frame loop and one infinite CSS animation; heavy 4. Heavy shares medium's JS, CSS, and font ceilings because slice 1 traced no heavy composition to set its own from. Pack rows rest on the same measurements, per the basis below.",
+    "tiers": {
+      "light": {
+        "js": 30720,
+        "css": 10240,
+        "image": 102400,
+        "font": 102400,
+        "animation": 0,
+        "enhancement": 15360
+      },
+      "medium": {
+        "js": 92160,
+        "css": 15360,
+        "image": 204800,
+        "font": 102400,
+        "animation": 3,
+        "enhancement": 92160
+      },
+      "heavy": {
+        "js": 92160,
+        "css": 15360,
+        "image": 409600,
+        "font": 102400,
+        "animation": 4,
+        "enhancement": 307200
+      }
+    },
+    "packs": {
+      "color-scheme": {
+        "js": 0,
+        "css": 3072,
+        "image": 0,
+        "font": 0,
+        "animation": 0,
+        "enhancement": 0
+      },
+      "typography": {
+        "js": 0,
+        "css": 3072,
+        "image": 0,
+        "font": 102400,
+        "animation": 0,
+        "enhancement": 0
+      },
+      "design-language": {
+        "js": 15360,
+        "css": 12288,
+        "image": 51200,
+        "font": 0,
+        "animation": 1,
+        "enhancement": 15360
+      }
+    },
+    "basis": {
+      "js": {
+        "restsOn": [
+          "/calibration/baseline-editorial/viewports/1440x900/js/gzipBytes",
+          "/calibration/fallback-route/viewports/1440x900/js/gzipBytes"
+        ],
+        "why": "v1 Editorial's page carried every v1 variant's code over the platform, about 44 KB more than the fallback route's. A light variant gets 30 KB, most of that for one variant; medium and heavy get 90 KB, twice all of it. Slice 2's trace at 055f1f4 measured 125 B of fixture-variant-light and 926 B of fixture-variant-medium."
+      },
+      "css": {
+        "restsOn": ["/calibration/baseline-editorial/viewports/1440x900/css/gzipBytes"],
+        "why": "v1 shipped every variant's CSS in one 14.5 KB file. Medium and heavy get about that whole file, 15 KB, and light two thirds of it, 10 KB. Slice 2 compiled 924 B for the fallback composition, 933 B for fixture-variant-light, and 1184 B for fixture-variant-medium. Packs: v1's file again, against slice 2's 1979 B for warm-parchment, 739 B for platform-neutral, and 648 B for humanist-ui, so a scheme and a typography profile get 3 KB each and a design language, which carries layout, 12 KB."
+      },
+      "image": {
+        "restsOn": [
+          "/calibration/baseline-editorial/viewports/1440x900/images/bytes",
+          "/notes/dataUrls"
+        ],
+        "why": "Slice 1 measured no image bytes: the complete fixture's images are data URLs. The tiers keep #6's original 100, 200, and 400 KB until a fixture with image files is traced; slice 2's medium still is 302 B. A design language may ship 50 KB of textures."
+      },
+      "font": {
+        "restsOn": [
+          "/calibration/baseline-editorial/viewports/1440x900/fonts/bytes",
+          "/calibration/baseline-editorial/viewports/1440x900/thirdParty/count"
+        ],
+        "why": "v1 fetched its fonts from Google, which the trace blocks, so it measured 0 font bytes and 3 third-party requests. Self-hosted fonts get #6's original 100 KB, for a variant and for a typography profile alike; schemes and design languages ship none."
+      },
+      "animation": {
+        "restsOn": [
+          "/calibration/baseline-editorial/viewports/1440x900/counters/frameLoops",
+          "/calibration/baseline-editorial/viewports/1440x900/counters/recurringTimers",
+          "/calibration/baseline-editorial/viewports/1440x900/counters/infiniteAnimations"
+        ],
+        "why": "v1 Editorial, a light variant, ran no loop, timer, or infinite animation while idle, so light gets 0. fixture-variant-medium runs 1 infinite animation, plus its shader's frame loop where WebGL2 draws, 2 in CI, so medium gets 3, one to spare, and heavy 4. A design language gets 1, for an ambient effect."
+      },
+      "enhancement": {
+        "restsOn": ["/calibration/baseline-editorial/viewports/1440x900/js/gzipBytes"],
+        "why": "v1 had no enhancements, so its whole page's JavaScript is the scale. Light gets 15 KB, medium 90 KB, and heavy #6's original one enhancement chunk of up to 300 KB, under v1's 286 KB page plus room. A design language's behavior gets 15 KB."
+      }
+    }
+  },
   "calibration": {
     "baseline-editorial": {
       "base": "62a0f06cf88c5d6c55045945bf0733a6882c5425",

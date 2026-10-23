@@ -1,3 +1,4 @@
+import type { Budgets } from './budgets';
 import type { PERFORMANCE_TIERS } from './manifest-schema';
 
 // ASSET_MANIFEST (#6, Slice 2, item 4): what each registered unit, a variant
@@ -28,6 +29,8 @@ export interface StylesheetRef extends AssetFileRef {
 /** An enhancement a variant declares, keyed `<variant id>/<id>` in the host's loaders. */
 export interface UnitEnhancement {
   readonly id: string;
+  /** The subpath of the package's exports it loads from, such as ./enhancements/orbit. */
+  readonly export: string;
   readonly requires: readonly string[];
 }
 
@@ -50,6 +53,11 @@ export interface AssetUnit {
   /** Catalog stills, which #6's Slice 6 adds. */
   readonly stills: readonly AssetFileRef[];
   readonly enhancements: readonly UnitEnhancement[];
+  /**
+   * The budgets its manifest declares (#6), as written: `pnpm check:budgets`
+   * holds a kind left out to the ceiling of the unit's tier or axis.
+   */
+  readonly budgets: Budgets;
 }
 
 /** Every registered unit, variants first, then packs by kind, each sorted by id. */

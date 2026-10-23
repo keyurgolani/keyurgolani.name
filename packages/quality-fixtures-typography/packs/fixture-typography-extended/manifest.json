@@ -4,6 +4,7 @@
   "description": "A tier fixture: an Extended typography profile, a literary serif system stack with a quieter display, for the quality gates to run as a shipping Extended pack.",
   "tokenContract": 1,
   "tier": "extended",
+  "budgets": { "js": 0, "css": 1536, "image": 0, "font": 0, "animation": 0, "enhancement": 0 },
   "provenance": {
     "source": {
       "name": "Keyur Golani portfolio platform"

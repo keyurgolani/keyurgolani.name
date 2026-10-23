@@ -4,6 +4,7 @@
   "description": "A tier fixture: an Extended design language with square, ruled geometry, two-pixel borders, and no shadows, for the quality gates to run as a shipping Extended pack.",
   "tokenContract": 1,
   "tier": "extended",
+  "budgets": { "js": 0, "css": 2048, "image": 0, "font": 0, "animation": 0, "enhancement": 0 },
   "provenance": {
     "source": {
       "name": "Keyur Golani portfolio platform"

@@ -41,6 +41,7 @@ The fallback composition's, `packages/fallback-composition/manifest.json`, which
   "compositionFamily": "document",
   "motionIntent": "still",
   "performanceTier": "light",
+  "budgets": { "js": 2048, "css": 2048, "image": 0, "font": 0, "animation": 0, "enhancement": 0 },
   "renderedKinds": [],
   "unsupportedKinds": [],
   "contentSlots": [],
@@ -77,6 +78,18 @@ Text fields are plain text on one line: no `<` or `>`, no control characters, no
 - **`performanceTier`** (required): `light` (HTML and CSS), `medium` (one canvas or shader), or `heavy` (a three.js scene). Stay honest; heavy work belongs in an enhancement.
 
 The five first-party compositions have pinned values: `editorial-evidence` is light and still, `kinetic-cosmos` medium and kinetic, `obsidian-atelier` light and subtle, `spatial-bento` heavy and adaptive, `horizontal-cinema` medium and directed.
+
+## Budgets
+
+**`budgets`** (optional): what the variant may ship, as integers in six kinds.
+
+- `js`: gzip bytes of your package's own JavaScript a page downloads as it loads, your enhancements' chunks left out.
+- `css`: gzip bytes of your compiled stylesheet, the kit's shared renderers' layout included.
+- `image` and `font`: bytes of the image and font files you ship.
+- `animation`: how many frame loops, recurring timers, and infinite animations an idle page runs, as `pnpm test:trace` counts them.
+- `enhancement`: gzip bytes of your code in the chunks that hold one of your enhancements, each enhancement on its own.
+
+A kind you leave out is your tier's ceiling in `runtime-budgets.json`'s `budgets` block: light, medium, and heavy each have one. `pnpm check:budgets`, which CI runs on a traced build, fails a declared budget over its ceiling, a unit over what it declares, and a stylesheet with an `@import` or `url()` to another host, each as a record naming the asset that carries the most of it. Declare what you measured, with room to grow, so a regression shows up as yours.
 
 ## Coverage
 

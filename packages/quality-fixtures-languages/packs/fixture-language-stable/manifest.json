@@ -4,6 +4,7 @@
   "description": "A tier fixture: a Stable design language, platform-neutral with tighter radii, for the quality gates to run as a shipping Stable pack.",
   "tokenContract": 1,
   "tier": "stable",
+  "budgets": { "js": 0, "css": 2048, "image": 0, "font": 0, "animation": 0, "enhancement": 0 },
   "provenance": {
     "source": {
       "name": "Keyur Golani portfolio platform"

@@ -825,7 +825,14 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
           expect(await response.text(), what).toBe('Method not allowed.');
         }
         // Next's router asks for the page's payload, and prefetches it, with
-        // RSC: 1; both render in the same segment.
+        // RSC: 1; both render in the same segment. Next names the rewrite in
+        // x-nextjs-rewritten-path, which its router reads: the segment of the
+        // composition the page renders and the visitor path, never the query.
+        const page = await (await request.get(target, { maxRedirects: 0 })).text();
+        const composition = /<div[^>]* data-variant="([a-z][a-z0-9-]{1,47})"/.exec(page)?.[1];
+        expect(composition, `GET ${target}: the boundary names its composition`).toBeTruthy();
+        const { pathname } = new URL(target, 'http://unset.invalid');
+        const segment = `/_experience/${composition}${pathname === '/' ? '' : pathname}`;
         const router: Record<string, string>[] = [
           { rsc: '1' },
           { rsc: '1', 'next-router-prefetch': '1' },
@@ -836,6 +843,8 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
           expect(response.status(), what).toBe(200);
           expect(response.headers()['content-type'], what).toMatch(/^text\/x-component/);
           expectProfileHeaders(profile, response, what);
+          expect(response.headers()['x-nextjs-rewritten-path'], what).toBe(segment);
+          expect(response.headers()['x-nextjs-rewritten-query'] ?? '', what).toBe('');
         }
       }
     },

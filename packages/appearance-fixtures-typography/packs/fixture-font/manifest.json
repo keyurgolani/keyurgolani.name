@@ -4,6 +4,7 @@
   "description": "A test fixture: a typography profile that ships a font file, for font namespacing, loading, and fallback checks.",
   "tokenContract": 1,
   "tier": "experimental",
+  "budgets": { "js": 0, "css": 1536, "image": 0, "font": 30720, "animation": 0, "enhancement": 0 },
   "provenance": {
     "source": {
       "name": "Geist 1.401, the Latin subset next 16.2.4 ships for its dev overlay",

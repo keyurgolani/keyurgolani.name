@@ -5,6 +5,7 @@
 
 import { z } from 'zod';
 import { ALL_SECTION_KINDS, parseExtensionKind, REGISTRY_ID_PATTERN } from '@portfolio/schema';
+import { BudgetsSchema } from './budgets';
 
 const CONTROL_CHARACTER = /[\u0000-\u001f\u007f]/;
 const MARKUP = /[<>]/;
@@ -297,6 +298,8 @@ export const ManifestSchema = z
     compositionFamily: z.enum(COMPOSITION_FAMILIES),
     motionIntent: z.enum(MOTION_INTENTS),
     performanceTier: z.enum(PERFORMANCE_TIERS),
+    /** Its runtime budgets (#6), each at most its tier's ceiling; one left out is the ceiling. */
+    budgets: BudgetsSchema.optional(),
     renderedKinds: z.array(Kind).max(64),
     unsupportedKinds: z.array(Kind).max(64),
     contentSlots: z.array(ContentSlot).max(32),

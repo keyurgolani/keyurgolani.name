@@ -14,12 +14,16 @@ import { MAPS_SNIPPET } from './lib/container.mjs';
 // PORTFOLIO_ANALYZE=1 (apps/web/src/next-config.test.ts), for pnpm
 // test:trace. Nothing that builds or runs the image, no workflow, no build
 // script, and no committed env file may set or pass the variable, and CI's
-// build job checks that its default build left no .map file behind. A CI
-// job that traces an analyze build (#6, Slice 3) changes this test on
-// purpose, for that job alone.
+// build job checks that its default build left no .map file behind. The
+// one exception is CI's trace job (#6, items 3 and 4), whose trace needs
+// the maps: ci/lib/budgets.mjs names the variable once, in ANALYZE_ENV, and
+// only ci/budgets.mjs passes that, to its own two builds, in a job no image,
+// other job, or upload takes a build from.
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const NAME = /PORTFOLIO_ANALYZE/;
+/** The scripts that name it on purpose: this check's, to refuse it, and the trace job's, once. */
+const EXEMPT = [path.join('ci', 'check-source-maps.mjs'), path.join('ci', 'lib', 'budgets.mjs')];
 
 /** Committed files, by the patterns git matches, relative to the root. */
 function tracked(...patterns) {
@@ -48,7 +52,7 @@ function everyFile(dir) {
 function imageAndCiFiles() {
   const scripts = everyFile('ci')
     .filter((name) => /\.m?js$/.test(name) && !/\.test\.m?js$/.test(name))
-    .filter((name) => name !== path.join('ci', 'check-source-maps.mjs'));
+    .filter((name) => !EXEMPT.includes(name));
   return [
     'Dockerfile',
     '.dockerignore',
@@ -75,6 +79,77 @@ test('nothing that builds the image or runs in CI sets or passes PORTFOLIO_ANALY
   for (const file of files) {
     const text = readFileSync(path.join(ROOT, file), 'utf8');
     assert.doesNotMatch(text, NAME, file);
+  }
+});
+
+test("only CI's trace job builds with PORTFOLIO_ANALYZE, and nothing it builds leaves its runner", () => {
+  const lib = readFileSync(path.join(ROOT, 'ci', 'lib', 'budgets.mjs'), 'utf8');
+  assert.deepEqual(
+    lib.split('\n').filter((line) => NAME.test(line)),
+    ["export const ANALYZE_ENV = Object.freeze({ PORTFOLIO_ANALYZE: '1' });"],
+  );
+  // ANALYZE_ENV goes into one environment in all of ci/: the trace job's builds.
+  const users = everyFile('ci')
+    .filter((name) => /\.m?js$/.test(name) && !/\.test\.m?js$/.test(name))
+    .filter((name) => /\bANALYZE_ENV\b/.test(readFileSync(path.join(ROOT, name), 'utf8')));
+  assert.deepEqual(users.sort(), [
+    path.join('ci', 'budgets.mjs'),
+    path.join('ci', 'lib', 'budgets.mjs'),
+  ]);
+  const job = readFileSync(path.join(ROOT, 'ci', 'budgets.mjs'), 'utf8');
+  assert.deepEqual(
+    job
+      .match(/.*\bANALYZE_ENV\b.*/g)
+      .map((line) => line.trim())
+      .filter((line) => !line.startsWith('//')),
+    [
+      "import { ANALYZE_ENV, failureFields, reproCommand } from './lib/budgets.mjs';",
+      'envWith({ BUDGET_FIXTURES: fixtures, ...ANALYZE_ENV }),',
+    ],
+  );
+  assert.match(
+    job,
+    /'pnpm',\n\s+\['build'\],\n\s+envWith\(\{ BUDGET_FIXTURES: fixtures, \.\.\.ANALYZE_ENV \}\),/,
+  );
+  assert.match(job, /sourceMapFiles\(PUBLIC_DIR\)/, 'it checks public/ after each build');
+
+  const { scripts } = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
+  assert.equal(scripts['ci:budgets'], 'node ci/run.mjs budgets -- node ci/budgets.mjs');
+  const workflow = parseYaml(
+    readFileSync(path.join(ROOT, '.github', 'workflows', 'ci.yml'), 'utf8'),
+  );
+  const runners = Object.entries(workflow.jobs).filter(([, job]) =>
+    (job.steps ?? []).some((step) => /\bci:budgets\b/.test(step.run ?? '')),
+  );
+  assert.deepEqual(
+    runners.map(([name]) => name),
+    ['trace'],
+  );
+  // Nothing takes a build from it: only gate and selected wait on it, for its verdict.
+  for (const [name, job] of Object.entries(workflow.jobs)) {
+    const needs = [job.needs ?? []].flat();
+    if (!['gate', 'selected'].includes(name)) {
+      assert.ok(!needs.includes('trace'), `${name} needs nothing of trace`);
+    }
+  }
+  const budgets = workflow.jobs.trace;
+  assert.equal(budgets.outputs, undefined, 'it hands no job an output');
+  const uploads = budgets.steps.filter((step) => /upload-artifact/.test(step.uses ?? ''));
+  assert.equal(uploads.length, 2);
+  for (const step of budgets.steps) {
+    assert.doesNotMatch(step.uses ?? '', /docker|cache/, 'it builds no image and caches nothing');
+    assert.doesNotMatch(step.run ?? '', /docker|ci:image|ci:build/);
+  }
+  for (const step of uploads) {
+    const paths = step.with.path
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean);
+    assert.ok(paths.includes('!reports/**/*.map'), `${step.name} leaves source maps out`);
+    for (const entry of paths.filter((line) => !line.startsWith('!'))) {
+      assert.match(entry, /^reports\//, `${step.name} uploads only reports: ${entry}`);
+      assert.doesNotMatch(entry, /\.next|\.map|apps\//, `${step.name}: ${entry}`);
+    }
   }
 });
 

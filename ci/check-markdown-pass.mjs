@@ -6,7 +6,10 @@
 // whose source map holds packages/kit/src/markdown-post-pass.ts, at once or
 // through a chunk it loads on demand, as a variant's import() is (#6,
 // Slice 2: each experience segment loads its variant, and the kit's
-// sections with it, that way), and nothing
+// sections with it, that way). Since a page passes on any chunk it loads,
+// every server chunk whose map holds the renderer, markdown.ts, must hold
+// the post-pass beside it, so no server render gets the renderer alone. And
+// nothing
 // under .next/static may hold sanitize-html's code or a source map that
 // names it. CI runs it after pnpm ci:standalone.
 //
@@ -19,6 +22,7 @@ import { currentGate, REPO_ROOT, reportError, writeFailureRecord } from './lib/r
 export const NEXT_DIR = path.join(REPO_ROOT, 'apps', 'web', '.next');
 const PAGE_GROUPS = ['(site)', '(preview)'];
 const POST_PASS = 'packages/kit/src/markdown-post-pass.ts';
+const RENDERER = 'packages/kit/src/markdown.ts';
 /** Names only sanitize-html and the parser it brings write, which survive minifying. */
 export const MARKERS = [
   'recursiveEscape',
@@ -107,6 +111,19 @@ export function checkMarkdownPass(nextDir) {
       problems.push(`${page} loads no chunk with the Markdown post-pass (${POST_PASS})`);
     }
   }
+  const chunksDir = path.join(nextDir, 'server', 'chunks');
+  if (existsSync(chunksDir)) {
+    for (const file of files(chunksDir).filter((name) => name.endsWith('.js'))) {
+      const chunk = path.join('server', 'chunks', file);
+      const sources = mapSources(nextDir, chunk) ?? [];
+      if (
+        sources.some((source) => source.endsWith(RENDERER)) &&
+        !sources.some((source) => source.endsWith(POST_PASS))
+      ) {
+        problems.push(`${chunk} holds the renderer (${RENDERER}) without the post-pass`);
+      }
+    }
+  }
   const staticDir = path.join(nextDir, 'static');
   if (existsSync(staticDir)) {
     for (const file of files(staticDir)) {
@@ -127,7 +144,7 @@ function main(argv) {
   const problem = checkMarkdownPass(dir);
   if (!problem) {
     console.log(
-      `[markdown-pass] ${pageEntries(dir).length} site and preview pages load the post-pass, and nothing under static carries sanitize-html`,
+      `[markdown-pass] ${pageEntries(dir).length} site and preview pages load the post-pass, every server chunk with the renderer holds it, and nothing under static carries sanitize-html`,
     );
     return 0;
   }

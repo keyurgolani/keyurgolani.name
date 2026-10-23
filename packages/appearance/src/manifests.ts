@@ -6,7 +6,7 @@
 
 import { z } from 'zod';
 import { REGISTRY_ID_PATTERN } from '@portfolio/schema';
-import { ManifestSchema } from '@portfolio/variant-contract';
+import { BudgetsSchema, ManifestSchema } from '@portfolio/variant-contract';
 import {
   COLOR_ROLES,
   LANGUAGE_KEYS,
@@ -109,6 +109,8 @@ const common = {
   tokenContract: z.number().int().nonnegative(),
   tier: z.enum(PACK_TIERS),
   provenance: Provenance,
+  /** Its runtime budgets (#6), each at most its axis's ceiling; one left out is the ceiling. */
+  budgets: BudgetsSchema.optional(),
 };
 
 const Hex = z.string().regex(/^#[0-9a-f]{6}$/, {

@@ -155,7 +155,7 @@ function shapeIssue(issue: z.ZodIssue, input: unknown, report: Report) {
           'manifest.missing',
           path,
           `is required in contract ${CONTRACT_VERSION}.`,
-          'Add it. Every field but author, homepage, bestFor, enhancements, keyBindings, and recommendedAppearance is required.',
+          'Add it. Every field but author, homepage, bestFor, budgets, enhancements, keyBindings, and recommendedAppearance is required.',
         );
       } else {
         report(

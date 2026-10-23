@@ -12,6 +12,7 @@
   "compositionFamily": "monograph",
   "motionIntent": "subtle",
   "performanceTier": "light",
+  "budgets": { "js": 20480, "css": 8192, "image": 0, "font": 0, "animation": 0, "enhancement": 0 },
   "renderedKinds": ["hero", "works"],
   "unsupportedKinds": ["github"],
   "contentSlots": [

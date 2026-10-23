@@ -15,6 +15,7 @@ import {
 } from './composition';
 import { readDeploymentConfig, type DeploymentConfig } from './config';
 import { compositionFor } from '~/lib/variants';
+import { segmentFor } from './experience';
 import {
   liveComposition,
   setDeploymentState,
@@ -244,7 +245,7 @@ test("owner's revision store reader records the composition of the unit each get
   t.after(() => setLiveComposition(undefined));
   setLiveComposition('stale');
   const live = await state.catalog.getLive();
-  assert.ok(live.unit, 'the empty store serves the mounted documents');
+  assert.ok(live.unit, 'the first-start import published the mounted documents');
   assert.equal(
     liveComposition(),
     compositionFor(live.unit.site.appearance.variant).rendered.manifest.id,
@@ -667,4 +668,41 @@ test('a fatal loaded requirement stops owner before the provider loads', async (
     ['fatal malformed'],
   );
   assert.equal(loaded, false);
+});
+
+test("after a publish from beside the server, a Studio config.status read records the new revision's composition, so a visitor lands in its segment with no 307 (#6, Slice 2)", async (t) => {
+  t.after(() => setLiveComposition(undefined));
+  // A publish from beside the server, as the CLI would make one.
+  const side = await sideStore();
+  const working = await side.drafts.getWorking();
+  const created = await side.drafts.create(
+    {
+      documents: documents('Rowan Background'),
+      ...(working ? { expectedVersion: working.version } : {}),
+    },
+    'owner',
+  );
+  assert.equal(created.kind, 'saved');
+  if (created.kind !== 'saved') return;
+  const outcome = await side.publication.publish(
+    {
+      draftId: created.draft.draftId,
+      draftVersion: created.draft.version,
+      expectedLiveRevisionId: (await side.publication.status()).liveRevisionId,
+    },
+    'operator',
+  );
+  assert.equal(outcome.kind, 'committed', JSON.stringify(outcome));
+  // What a read before the publish left; then Studio's read is the first since.
+  setLiveComposition('stale');
+  const response = await studio('GET', 'config.status', { 'x-test-session': 'owner' });
+  assert.equal(response.status, 200, await response.clone().text());
+  // The example site selects a variant this build doesn't register, so the
+  // fallback composition renders, and the segment the proxy names is the
+  // one the page there checks again: no 307.
+  assert.equal(liveComposition(), 'fallback');
+  assert.equal(
+    segmentFor({ profile: 'owner', pattern: '/', query: new URLSearchParams() }),
+    'fallback',
+  );
 });

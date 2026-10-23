@@ -390,6 +390,15 @@ export function domEvidence(page: Page) {
         'link[rel~="stylesheet"]',
         (element) => (element as HTMLLinkElement).href,
       ),
+      // Every script the settled DOM runs or preloads, for the purity
+      // assertion to require among the attributed chunks.
+      scripts: [
+        ...targets('script[src]', (element) => (element as HTMLScriptElement).src),
+        ...targets(
+          'link[rel~="modulepreload"][href], link[rel~="preload"][as="script"][href]',
+          (element) => (element as HTMLLinkElement).href,
+        ),
+      ],
       styleElements: targets('style', (element) => (element.textContent ?? '').trim().length),
     };
   });
@@ -444,7 +453,7 @@ export async function purityOf(
   const dom = await domEvidence(page);
   const extra = await fetchReferenced(
     page,
-    references.chunks,
+    [...new Set([...references.chunks, ...dom.scripts])],
     evidence.downloads,
     evidence.appOrigin,
   );
@@ -474,6 +483,7 @@ export async function purityOf(
       boundary: dom.boundary,
       links: dom.links.length,
       stylesheets: dom.stylesheets.map((url) => new URL(url).pathname),
+      scripts: dom.scripts.length,
       styleElements: dom.styleElements.length,
     },
   };

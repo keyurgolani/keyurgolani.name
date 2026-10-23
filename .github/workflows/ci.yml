@@ -296,6 +296,61 @@ jobs:
           if-no-files-found: ignore
           retention-days: ${{ env.REPORT_RETENTION_DAYS }}
 
+  # The runtime budgets (#6, items 3 and 4): pnpm ci:budgets builds the
+  # budget fixtures with source maps, traces each registered composition, and
+  # runs pnpm check:budgets, which must pass on BUDGET_FIXTURES=1 and must
+  # fail fixture-over-budget with one record per metric it breaks. Its
+  # builds stay on this runner: no image, no other job, no cache, and no
+  # upload takes them. It uploads the budget and trace reports, and the
+  # trace's results on failure, never .next or a source map.
+  trace:
+    name: trace
+    needs: [changes]
+    if: ${{ contains(fromJSON(needs.changes.outputs.jobs), 'trace') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    # Browsers come baked into the image, at the version @playwright/test pins.
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+      options: --user 1001 --ipc=host --init
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install
+        uses: ./.github/actions/install
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: pnpm ci:budgets
+        run: pnpm ci:budgets
+      - name: Failure summary
+        if: ${{ always() }}
+        run: node ci/summarize.mjs
+      - name: Upload reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-trace
+          path: |
+            reports/budgets/
+            reports/trace/trace-report.json
+            reports/failures/
+            !reports/budgets/over-budget/trace/results/
+            !reports/**/*.map
+          if-no-files-found: ignore
+          retention-days: ${{ env.REPORT_RETENTION_DAYS }}
+      - name: Upload traces
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: traces-trace
+          path: |
+            reports/trace/results/
+            reports/budgets/over-budget/trace/results/
+            !reports/**/*.map
+          if-no-files-found: ignore
+          retention-days: ${{ env.REPORT_RETENTION_DAYS }}
+
   # The route specs (#5, Slice 4) need variants that declare path views, so
   # they build a fixture host of their own: a copy of the workspace with
   # test-only variants from tests/fixtures/variants/ installed, linked offline
@@ -761,6 +816,7 @@ jobs:
         external-variant,
         quality-pr,
         quality-meta,
+        trace,
         image,
         docs,
       ]
@@ -796,6 +852,7 @@ jobs:
         external-variant,
         quality-pr,
         quality-meta,
+        trace,
         image,
         docs,
       ]

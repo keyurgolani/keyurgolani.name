@@ -4,6 +4,7 @@
   "description": "The platform's fallback color scheme: warm paper and ink with a terracotta accent and a sage secondary, in light and dark.",
   "tokenContract": 1,
   "tier": "stable",
+  "budgets": { "js": 0, "css": 3072, "image": 0, "font": 0, "animation": 0, "enhancement": 0 },
   "provenance": {
     "source": { "name": "Keyur Golani portfolio platform" },
     "license": "first-party",

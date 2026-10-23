@@ -9,6 +9,14 @@
   "compositionFamily": "document",
   "motionIntent": "kinetic",
   "performanceTier": "medium",
+  "budgets": {
+    "js": 4096,
+    "css": 4096,
+    "image": 2048,
+    "font": 0,
+    "animation": 3,
+    "enhancement": 4096
+  },
   "renderedKinds": [],
   "unsupportedKinds": [],
   "contentSlots": [],
