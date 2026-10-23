@@ -1218,6 +1218,10 @@ test('under the prefixes next.config.ts lets any origin read, only a GET or HEAD
       [pack.replace(/css$/, 'CSS'), 'GET'],
       [pack.replace('/pack/', '/pack/..%2Fpack/'), 'GET'],
       [pack.replace('/pack/', '/pack%2F'), 'HEAD'],
+      // A trailing slash gets the 404 too, never a 308 naming the file.
+      [`${pack}/`, 'GET'],
+      ['/_portfolio/', 'GET'],
+      ['/_next/static/chunks/app.js/', 'GET'],
       [pack, 'POST'],
       [pack, 'OPTIONS'],
     ] as const) {

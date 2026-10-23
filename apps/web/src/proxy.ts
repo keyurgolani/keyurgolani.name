@@ -170,10 +170,6 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   }
   if (preview && csp) Object.assign(extra, previewHeaders(csp));
 
-  // The 308 Next sent itself for a trailing slash, now with the path's headers.
-  const sent = sentPath(request);
-  if (sent.length > 1 && sent.endsWith('/')) return trailingSlash(request, sent, requestId, extra);
-
   // Only next.config.ts's rewrite of a request marked below reaches an
   // experience segment (#6, Slice 2).
   const decision: RouteDecision = isExperiencePath(pathname)
@@ -182,10 +178,11 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   // Access-Control-Allow-Origin: * goes on everything next.config.ts matches
   // under these prefixes, so only a GET or HEAD of a file Next serves there,
   // spelled as Next serves it, and a route the table serves go on to Next.
-  // Every other spelling, method, or path there gets this plain 404. Under
-  // /_portfolio/ only a path the registry wrote goes on. A build asset that
-  // doesn't exist still reaches a 404 page, the site's, since nothing here
-  // knows which build files exist.
+  // Every other spelling, method, or path there gets this plain 404, a
+  // trailing slash's too, before the 308 below could name another path.
+  // Under /_portfolio/ only a path the registry wrote goes on. A build asset
+  // that doesn't exist still reaches a 404 page, the site's, since nothing
+  // here knows which build files exist.
   if (
     sharedAsset(pathname) &&
     !(pageLoad && sharedFile(pathname)) &&
@@ -193,6 +190,10 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   ) {
     return plain(404, 'Not found.', requestId, extra);
   }
+
+  // The 308 Next sent itself for a trailing slash, now with the path's headers.
+  const sent = sentPath(request);
+  if (sent.length > 1 && sent.endsWith('/')) return trailingSlash(request, sent, requestId, extra);
   // A grant path, and everything else under the preview prefixes, under a
   // profile with grant routes: admitted on to Next, or the status document.
   if (preview && hasGrants(deployment.profile)) {
@@ -443,11 +444,14 @@ const SHARED_ASSETS = /^\/(?:_next\/static|_portfolio)(?:\/|$)/i;
  * Whether `pathname` is a file Next serves under those prefixes, as it
  * spells them: a build asset under /_next/static/, or exactly a path the
  * registry wrote under public/_portfolio/ (#7), such as one of #19's
- * compiled packs. Any other spelling there, encoded, in another case, or of
- * a file the registry never wrote, is not one.
+ * compiled packs. Any other spelling there, encoded, in another case, with
+ * a trailing slash, or of a file the registry never wrote, is not one.
  */
 function sharedFile(pathname: string): boolean {
-  return pathname.startsWith('/_next/static/') || PORTFOLIO_FILES.has(pathname);
+  return (
+    (pathname.startsWith('/_next/static/') && !pathname.endsWith('/')) ||
+    PORTFOLIO_FILES.has(pathname)
+  );
 }
 
 /** Whether `pathname`, decoded, is under one of the prefixes SHARED_ASSETS names, in any case. */
