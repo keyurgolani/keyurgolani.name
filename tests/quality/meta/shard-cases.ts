@@ -9,6 +9,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import type { RunMode } from '../cells';
 import type { Summary, SummaryTest } from '../reporter';
 import { mergeShards, readShards, type PlanRecord, type RunVerdict } from '../lib/shards';
 import type { VerdictTest } from '../lib/verdict';
@@ -75,6 +76,10 @@ export interface ShardInput {
   readonly plan?: PlanRecord | null;
   /** null for a shard cut off before it judged. */
   readonly verdict?: Partial<RunVerdict> | null;
+  /** verdict.json's text as it stands, in place of the verdict run.ts would write. */
+  readonly rawVerdict?: string;
+  /** Its artifact's directory, when not the one its shard index names. */
+  readonly dir?: string;
 }
 
 /** One shard's reports, as run.ts writes them. */
@@ -100,21 +105,32 @@ function shardFiles(input: ShardInput) {
 /** Each shard's reports under `root`, one directory each, as download-artifact leaves them. */
 export function writeShards(root: string, shards: readonly ShardInput[]): void {
   for (const input of shards) {
-    const dir = path.join(root, `reports-quality-full-${input.shard.split('/')[0]}`, 'quality');
+    const dir = path.join(
+      root,
+      input.dir ?? `reports-quality-full-${input.shard.split('/')[0]}`,
+      'quality',
+    );
     mkdirSync(dir, { recursive: true });
     const files = shardFiles(input);
     if (files.plan) writeFileSync(path.join(dir, 'plan.json'), JSON.stringify(files.plan));
     writeFileSync(path.join(dir, 'summary.json'), JSON.stringify(files.summary));
-    if (files.verdict) writeFileSync(path.join(dir, 'verdict.json'), JSON.stringify(files.verdict));
+    if (input.rawVerdict !== undefined)
+      writeFileSync(path.join(dir, 'verdict.json'), input.rawVerdict);
+    else if (files.verdict)
+      writeFileSync(path.join(dir, 'verdict.json'), JSON.stringify(files.verdict));
   }
 }
 
 /** The shards written to a new directory, read back, and judged whole. */
-function mergedOutcome(shards: readonly ShardInput[], expected?: number): MetaOutcome {
+function mergedOutcome(
+  shards: readonly ShardInput[],
+  expected?: number,
+  mode?: RunMode,
+): MetaOutcome {
   const root = mkdtempSync(path.join(tmpdir(), 'quality-meta-shards-'));
   try {
     writeShards(root, shards);
-    const verdict = mergeShards(readShards(root), { expected });
+    const verdict = mergeShards(readShards(root), { expected, mode });
     return {
       passed: verdict.ok,
       findings: verdict.failures.map(({ rule, message }) => `${rule}: ${message}`),
@@ -138,7 +154,7 @@ function mergedCase(
   input: string,
   expect: MetaCase['expect'],
   shards: readonly ShardInput[],
-  options: { expected?: number; reason?: RegExp } = {},
+  options: { expected?: number; reason?: RegExp; mode?: RunMode } = {},
 ): MetaCase {
   return {
     id: `${GATE}/${rule}${slug ? `-${slug}` : ''}`,
@@ -146,7 +162,7 @@ function mergedCase(
     input,
     expect,
     reason: expect === 'fail' ? (options.reason ?? new RegExp(`^${rule}: `)) : undefined,
-    run: () => mergedOutcome(shards, options.expected),
+    run: () => mergedOutcome(shards, options.expected, options.mode),
   };
 }
 
@@ -231,6 +247,53 @@ export const SHARD_CASES: readonly MetaCase[] = [
     { ...SHARD_2, plan: { ...PLAN, reasons: ['Another run planned this.'] } },
   ]),
   mergedCase('no-shards', '', 'an empty directory', 'fail', []),
+  mergedCase(
+    'shard-mismatch',
+    'reported-twice',
+    'two directories both claiming shard 1/2, and a 2/2',
+    'fail',
+    [SHARD_1, { ...SHARD_1, dir: 'reports-quality-full-1-again', tests: [] }, SHARD_2],
+    { reason: /^shard-mismatch: Shard 1 reported twice: in \S+ and \S+\.$/ },
+  ),
+  mergedCase(
+    'shard-mismatch',
+    'outside',
+    'shards 1/2 and 2/2, and a third claiming 3/2',
+    'fail',
+    [SHARD_1, SHARD_2, { shard: '3/2', tests: [] }],
+    { reason: /^shard-mismatch: reports-quality-full-3 names shard 3\/2, outside 1\.\.2\.$/ },
+  ),
+  mergedCase(
+    'whole',
+    'full-mode',
+    'two full shards, merged as the full run',
+    'pass',
+    [SHARD_1, SHARD_2],
+    {
+      expected: 2,
+      mode: 'full',
+    },
+  ),
+  mergedCase(
+    'shard-mismatch',
+    'mode',
+    "two full shards, merged as a PR run's",
+    'fail',
+    [SHARD_1, SHARD_2],
+    { mode: 'pr', reason: /^shard-mismatch: \S+ ran quality:full, and this run is quality:pr\.$/ },
+  ),
+  // A verdict.json that's JSON, and not what run.ts writes, fails the merge, not the merge's own code.
+  mergedCase(
+    'shard-unreadable',
+    'verdict',
+    "shard 2's verdict.json holding only its shard",
+    'fail',
+    [SHARD_1, { ...SHARD_2, rawVerdict: '{"shard":"2/2"}' }],
+    {
+      reason:
+        /^(shard-unreadable: reports-quality-full-2: verdict\.json isn't what run\.ts writes|shard-unjudged: reports-quality-full-2 holds no verdict\.json)/,
+    },
+  ),
   // 11-3's perf-coverage, judged once, on every shard's perf tests together.
   mergedCase('perf-coverage', 'whole', "the perf cell's test in shard 2 alone", 'pass', [
     { ...SHARD_1, plan: PERF_PLAN },

@@ -167,7 +167,7 @@ jobs:
       - name: pnpm ci:quality-verdict
         env:
           SHARDS: ${{ runner.temp }}/quality-shards
-        run: pnpm ci:quality-verdict "$SHARDS" --shards 6
+        run: pnpm ci:quality-verdict "$SHARDS" --shards 6 --mode full
       - name: Failure summary
         if: ${{ always() }}
         run: node ci/summarize.mjs
@@ -185,7 +185,8 @@ jobs:
     needs: [links, quality-full, quality-verdict]
     if: ${{ always() && github.event_name == 'schedule' }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    # It downloads every job's reports, the six quality shards' among them.
+    timeout-minutes: 15
     permissions:
       contents: read # check out the reporter
       issues: write # open, comment on, and close the rolling report

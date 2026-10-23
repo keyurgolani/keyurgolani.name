@@ -118,15 +118,52 @@ export interface ShardReport {
   readonly plan: PlanRecord | null;
   readonly summary: Summary | null;
   readonly verdict: RunVerdict | null;
+  /** Why a file that's there can't be read as what run.ts writes, one line each: such a file reads as none. */
+  readonly problems?: readonly string[];
 }
 
-function readJson<T>(file: string): T | null {
+const isObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+const isArray = (value: unknown) => Array.isArray(value);
+const isShardField = (value: unknown) => value === null || typeof value === 'string';
+
+/** What each file must hold to be read as run.ts wrote it, as checks on its parsed value. */
+const SHAPES: Readonly<Record<string, (value: Record<string, unknown>) => boolean>> = {
+  'plan.json': (value) => isArray(value.targets) && isArray(value.planned),
+  'summary.json': (value) =>
+    isArray(value.tests) &&
+    isArray(value.errors) &&
+    isArray(value.projects) &&
+    isShardField(value.shard),
+  'verdict.json': (value) =>
+    typeof value.ok === 'boolean' &&
+    isArray(value.failures) &&
+    (value.failures as unknown[]).every(
+      (each) => isObject(each) && typeof each.rule === 'string' && typeof each.message === 'string',
+    ) &&
+    typeof value.mode === 'string' &&
+    isShardField(value.shard) &&
+    isArray(value.engines) &&
+    isObject(value.canary) &&
+    isArray(value.canary.before) &&
+    isArray(value.canary.after),
+};
+
+/** A shard's file, or null when it's missing, or when it's there and isn't what run.ts writes, which `problems` says. */
+function readShardFile<T>(file: string, problems: string[]): T | null {
   if (!existsSync(file)) return null;
+  let value: unknown;
   try {
-    return JSON.parse(readFileSync(file, 'utf8')) as T;
-  } catch {
+    value = JSON.parse(readFileSync(file, 'utf8'));
+  } catch (error) {
+    problems.push(`${path.basename(file)} isn't JSON: ${(error as Error).message.split('\n')[0]}`);
     return null;
   }
+  if (!isObject(value) || !SHAPES[path.basename(file)]!(value)) {
+    problems.push(`${path.basename(file)} isn't what run.ts writes, so it can't be read.`);
+    return null;
+  }
+  return value as T;
 }
 
 /**
@@ -142,11 +179,13 @@ export function readShards(root: string): ShardReport[] {
       path.join(quality, name),
     );
     if (files.some((file) => existsSync(file))) {
+      const problems: string[] = [];
       shards.push({
         dir: path.relative(root, dir) || '.',
-        plan: readJson<PlanRecord>(files[0]!),
-        summary: readJson<Summary>(files[1]!),
-        verdict: readJson<RunVerdict>(files[2]!),
+        plan: readShardFile<PlanRecord>(files[0]!, problems),
+        summary: readShardFile<Summary>(files[1]!, problems),
+        verdict: readShardFile<RunVerdict>(files[2]!, problems),
+        ...(problems.length > 0 ? { problems } : {}),
       });
       return;
     }
@@ -215,11 +254,12 @@ const parseShard = (shard: string | null | undefined) => {
 
 /**
  * The whole run's verdict from its shards' reports. `expected` is the
- * shard count the workflow ran, when the caller knows it.
+ * shard count the workflow ran, and `mode` the mode it ran them in (`full`
+ * for the nightly and release runs), when the caller knows them.
  */
 export function mergeShards(
   shards: readonly ShardReport[],
-  options: { readonly expected?: number } = {},
+  options: { readonly expected?: number; readonly mode?: RunMode } = {},
 ): MergedVerdict {
   const failures: Failure[] = [];
   const fail = (rule: string, message: string) => failures.push({ rule, message });
@@ -241,6 +281,8 @@ export function mergeShards(
   }
   const name = (shard: ShardReport) => shard.verdict?.shard ?? shard.summary?.shard ?? shard.dir;
   for (const shard of shards) {
+    for (const problem of shard.problems ?? [])
+      fail('shard-unreadable', `${shard.dir}: ${problem}`);
     if (!shard.verdict) {
       fail(
         'shard-unjudged',
@@ -260,6 +302,13 @@ export function mergeShards(
       continue;
     }
     totals.add(parsed.total);
+    if (parsed.index < 1 || parsed.index > parsed.total) {
+      fail(
+        'shard-mismatch',
+        `${shard.dir} names shard ${parsed.index}/${parsed.total}, outside 1..${parsed.total}.`,
+      );
+      continue;
+    }
     const other = seen.get(parsed.index);
     if (other !== undefined) {
       fail('shard-mismatch', `Shard ${parsed.index} reported twice: in ${other} and ${shard.dir}.`);
@@ -286,6 +335,16 @@ export function mergeShards(
   const modes = new Set(shards.flatMap((shard) => (shard.verdict ? [shard.verdict.mode] : [])));
   if (modes.size > 1)
     fail('shard-mismatch', `The shards ran different modes: ${[...modes].join(', ')}.`);
+  if (options.mode !== undefined) {
+    for (const shard of shards) {
+      if (shard.verdict && shard.verdict.mode !== options.mode) {
+        fail(
+          'shard-mismatch',
+          `${shard.dir} ran quality:${shard.verdict.mode}, and this run is quality:${options.mode}.`,
+        );
+      }
+    }
+  }
   const engineSets = new Set(
     shards.flatMap((shard) => (shard.verdict ? [JSON.stringify(shard.verdict.engines)] : [])),
   );

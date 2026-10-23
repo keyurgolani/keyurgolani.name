@@ -165,7 +165,7 @@ async function main(argv: readonly string[]): Promise<number> {
     return 2;
   }
   const matrix = options.merged
-    ? mergeRun(options.merged, options.shards, 'quality:release merged verdict')
+    ? mergeRun(options.merged, options.shards, 'quality:release merged verdict', 'full')
     : runMatrix();
   const verdict = await judgeRelease(matrix);
   const quality = path.join(reportsDir(), 'quality');

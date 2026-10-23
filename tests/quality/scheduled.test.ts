@@ -21,6 +21,7 @@ interface Step {
 interface Job {
   readonly name?: string;
   readonly needs?: readonly string[];
+  readonly 'timeout-minutes'?: number;
   readonly if?: string;
   readonly permissions?: unknown;
   readonly container?: { readonly image?: string };
@@ -142,7 +143,7 @@ test('quality-verdict judges every shard whole, however they ended, from their o
   assert.equal(download.with?.path, '${{ runner.temp }}/quality-shards');
   const merge = step(job, (each) => /pnpm ci:quality-verdict/.test(each.run ?? ''), 'the merge');
   assert.equal(merge.env?.SHARDS, download.with?.path);
-  assert.equal(merge.run, `pnpm ci:quality-verdict "$SHARDS" --shards ${total}`);
+  assert.equal(merge.run, `pnpm ci:quality-verdict "$SHARDS" --shards ${total} --mode full`);
   assert.equal(
     SCRIPTS['ci:quality-verdict'],
     'node ci/run.mjs quality-verdict -- pnpm quality:merge --',
@@ -158,6 +159,8 @@ test('quality-verdict judges every shard whole, however they ended, from their o
   for (const id of ['quality-full', 'quality-verdict']) {
     assert.ok(SCHEDULED.jobs.report?.needs?.includes(id), `report needs ${id}`);
   }
+  // It downloads every job's reports, the six shards' too, so it gets the time.
+  assert.ok((SCHEDULED.jobs.report?.['timeout-minutes'] ?? 0) >= 15);
 });
 
 test("quality-pr keeps the merge's base tip and names it, so the PR set takes the [37] rule's cells", () => {
