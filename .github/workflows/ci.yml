@@ -754,6 +754,10 @@ jobs:
     if: ${{ contains(fromJSON(needs.changes.outputs.jobs), 'image') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    outputs:
+      # 'true' once the image this job built and checked is in the
+      # image-amd64 artifact, which profiles loads.
+      saved: ${{ steps.saved.outputs.saved }}
     env:
       IMAGE_TAG: portfolio:ci
       IMAGE_PLATFORM: linux/amd64
@@ -773,6 +777,29 @@ jobs:
       - name: pnpm ci:image
         id: image
         run: pnpm ci:image
+      # The image this job built and checked, for profiles, so nothing builds
+      # it twice. Kept for a day, and nothing publishes it.
+      - name: Save the image for profiles
+        id: save
+        if: ${{ !cancelled() && steps.image.outcome == 'success' }}
+        run: |
+          set -o pipefail
+          mkdir -p "$RUNNER_TEMP/image"
+          docker save "$IMAGE_TAG" | gzip -1 > "$RUNNER_TEMP/image/portfolio-ci.tar.gz"
+      - name: Upload the image for profiles
+        id: upload-image
+        if: ${{ !cancelled() && steps.save.outcome == 'success' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: image-amd64
+          path: ${{ runner.temp }}/image/portfolio-ci.tar.gz
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+      - name: Mark the image saved
+        id: saved
+        if: ${{ !cancelled() && steps.upload-image.outcome == 'success' }}
+        run: echo "saved=true" >> "$GITHUB_OUTPUT"
       - name: pnpm ci:proxy
         if: ${{ !cancelled() && steps.image.outcome == 'success' }}
         run: pnpm ci:proxy
@@ -792,6 +819,54 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: reports-image
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: ${{ env.REPORT_RETENTION_DAYS }}
+
+  # The three profiles' containers (#12): pnpm smoke:profiles against the
+  # image the image job built and checked, loaded from its image-amd64
+  # artifact, so nothing builds twice. Each container runs hardened, on an
+  # internal network with no route out, with no token and only .test
+  # origins: read-only, demo, and owner on a seeded data volume, owner's
+  # startup refusals, and every startup row. It runs whenever image saved
+  # the image, so a later image step's failure doesn't hide these results.
+  profiles:
+    name: profiles
+    needs: [changes, image]
+    if: ${{ !cancelled() && contains(fromJSON(needs.changes.outputs.jobs), 'profiles') && needs.image.outputs.saved == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      IMAGE_TAG: portfolio:ci
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install
+        id: install
+        uses: ./.github/actions/install
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: pnpm store cache hit
+        if: ${{ steps.install.outputs.store-hit == 'true' }}
+        run: echo "pnpm store restored under this lockfile's hash"
+      - name: Download the image
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: image-amd64
+          path: ${{ runner.temp }}/image
+      - name: pnpm ci:profiles
+        env:
+          SMOKE_IMAGE_ARCHIVE: ${{ runner.temp }}/image/portfolio-ci.tar.gz
+        run: pnpm ci:profiles
+      - name: Failure summary
+        if: ${{ always() }}
+        run: node ci/summarize.mjs
+      - name: Upload reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-profiles
           path: reports/
           if-no-files-found: ignore
           retention-days: ${{ env.REPORT_RETENTION_DAYS }}
@@ -818,6 +893,7 @@ jobs:
         quality-meta,
         trace,
         image,
+        profiles,
         docs,
       ]
     runs-on: ubuntu-24.04
@@ -854,6 +930,7 @@ jobs:
         quality-meta,
         trace,
         image,
+        profiles,
         docs,
       ]
     runs-on: ubuntu-24.04

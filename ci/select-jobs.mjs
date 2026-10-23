@@ -38,6 +38,8 @@ export const CHECK_JOBS = [
   'variants',
   'external-variant',
   'image',
+  // The profile containers (#12), on the image job's saved image.
+  'profiles',
   'docs',
   // #11's quality cells and the quality gates' own proof (#74).
   'quality-pr',
@@ -97,7 +99,7 @@ export const RULES = [
   {
     // The container helpers, which check-standalone in build imports too.
     class: 'container',
-    jobs: ['unit', 'build', 'image'],
+    jobs: ['unit', 'build', 'image', 'profiles'],
     paths: ['ci/lib/container.mjs'],
   },
   {
@@ -109,14 +111,24 @@ export const RULES = [
     paths: ['tests/harness/proxy-stack.mjs'],
   },
   {
+    // The profile smoke and the Compose examples it reads. profiles runs on
+    // the image job's image, so image runs too.
     class: 'container',
-    jobs: ['unit', 'image'],
+    jobs: ['unit', 'image', 'profiles'],
     paths: [
       'docker-compose.yml',
       'deploy/**',
+      'ci/smoke-profiles.mjs',
+      'ci/lib/profile-checks.mjs',
+      'ci/profile-checks.test.mjs',
+    ],
+  },
+  {
+    class: 'container',
+    jobs: ['unit', 'image'],
+    paths: [
       'ci/image-smoke.mjs',
       'ci/proxy-smoke.mjs',
-      'ci/smoke-profiles.mjs',
       'ci/container.test.mjs',
       'ci/test-security-proxy.mjs',
       'tests/proxy/**',
@@ -190,9 +202,19 @@ export const RULES = [
   {
     // Studio and the owner code behind it: the owner suites run in browser,
     // the route table in routes, the security suite behind the HTTPS proxy
-    // in image, and the registered sign-in surface in quality-pr.
+    // in image, owner's container in profiles, and the registered sign-in
+    // surface in quality-pr.
     class: 'studio',
-    jobs: ['unit', 'build', 'browser', 'routes', 'image', 'preview-fixtures-browser', 'quality-pr'],
+    jobs: [
+      'unit',
+      'build',
+      'browser',
+      'routes',
+      'image',
+      'profiles',
+      'preview-fixtures-browser',
+      'quality-pr',
+    ],
     paths: [
       'apps/web/src/app/(studio)/**',
       'apps/web/src/server/owner/**',
@@ -377,6 +399,7 @@ export const LOCAL_COMMANDS = {
   variants: 'pnpm build && pnpm test:variants',
   'external-variant': 'pnpm test:external-variant',
   image: 'pnpm ci:image && pnpm ci:proxy && pnpm ci:security-proxy (needs Docker)',
+  profiles: 'pnpm smoke:profiles (needs Docker; SMOKE_PROFILES=<part> for one part)',
   docs: 'pnpm check:docs',
   trace: 'pnpm ci:budgets',
 };

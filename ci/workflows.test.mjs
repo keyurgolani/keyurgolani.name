@@ -109,3 +109,35 @@ test('every ci.yml job sets timeout-minutes', () => {
     assert.ok(Number.isInteger(job['timeout-minutes']) && job['timeout-minutes'] > 0, id);
   }
 });
+
+test('profiles loads the image the image job saved, builds nothing, and holds no token', () => {
+  const image = CI.jobs.image;
+  const profiles = CI.jobs.profiles;
+  assert.ok(profiles, 'ci.yml has a profiles job');
+  assert.deepEqual(profiles.needs, ['changes', 'image']);
+  assert.match(profiles.if, /needs\.image\.outputs\.saved == 'true'/);
+  assert.match(profiles.if, /contains\(fromJSON\(needs\.changes\.outputs\.jobs\), 'profiles'\)/);
+  // The image job saves what it built and checked, and says so only once
+  // the upload succeeded.
+  const step = (id) => image.steps.find((s) => s.id === id);
+  assert.ok(step('upload-image'), 'image uploads the image it built');
+  assert.equal(step('upload-image').with['retention-days'], 1);
+  assert.match(image.outputs.saved, /steps\.saved\.outputs\.saved/);
+  assert.match(step('saved').if, /steps\.upload-image\.outcome == 'success'/);
+  assert.match(step('save').if, /steps\.image\.outcome == 'success'/);
+  assert.match(step('save').run, /set -o pipefail/);
+  const download = profiles.steps.find((s) => /^actions\/download-artifact@/.test(s.uses ?? ''));
+  assert.equal(download.with.name, step('upload-image').with.name);
+  const run = profiles.steps.find((s) => s.run === 'pnpm ci:profiles');
+  assert.ok(run, 'profiles runs pnpm ci:profiles');
+  assert.match(run.env.SMOKE_IMAGE_ARCHIVE, /portfolio-ci\.tar\.gz$/);
+  assert.equal(profiles.env.IMAGE_TAG, image.env.IMAGE_TAG);
+  // Nothing builds an image here, and nothing hands a step a token.
+  const text = JSON.stringify(profiles);
+  assert.doesNotMatch(text, /docker build|ci:image|build-push-action/);
+  assert.doesNotMatch(text, /secrets\.|GITHUB_TOKEN|github\.token/);
+  assert.equal(profiles.permissions, undefined, "profiles keeps the workflow's contents: read");
+  for (const checkout of profiles.steps.filter((s) => /^actions\/checkout@/.test(s.uses ?? ''))) {
+    assert.equal(checkout.with['persist-credentials'], false);
+  }
+});
