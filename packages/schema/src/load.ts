@@ -10,6 +10,7 @@ import { describeIssue } from './issues';
 import { parseExtensionKind } from './ids';
 import { isPlainObject } from './json';
 import { detectDocument, legacyFields, legacyMessage, MIGRATE_COMMAND, shellQuote } from './legacy';
+import { markdownIssueCode } from './markdown';
 import type { Portfolio } from './portfolio';
 import { ownerName, repeatedIds } from './record-ids';
 import { redactedPointer, redactSecrets } from './secrets';
@@ -357,7 +358,8 @@ function issueProblems(issue: z.ZodIssue, schema: z.ZodTypeAny, data: unknown): 
   }
   const problem: IssueProblem = {
     kind: 'schema',
-    code: issue.code,
+    // A Markdown field over the cap carries its own code (../markdown.ts).
+    code: markdownIssueCode(issue) ?? issue.code,
     pointer: redactedPointer(issue.path),
     path: issue.path,
     message: describeIssue(issue),

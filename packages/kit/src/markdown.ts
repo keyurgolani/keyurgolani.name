@@ -1,6 +1,7 @@
-import { Marked, type MarkedToken, type Token, type Tokens } from 'marked';
-import { isAllowedUrl } from '@portfolio/schema';
+import { Marked, Tokenizer, type MarkedToken, type Token, type Tokens } from 'marked';
+import { isAllowedUrl, markdownOverLimit } from '@portfolio/schema';
 import { escapeHtml } from './html-escape';
+import { lexBlocks } from './markdown-lexer';
 
 // Markdown from the content, as HTML that RichText injects with
 // dangerouslySetInnerHTML. marked only tokenizes: every tag is written here,
@@ -22,17 +23,53 @@ import { escapeHtml } from './html-escape';
 //   lines, or the phrase inline. marked recurses once per level of nesting, so
 //   a deep enough quote or run of emphasis runs it out of stack, and that
 //   mustn't take the page's render down with it.
+// - So does source over the Markdown cap (#10). Validation refuses a field
+//   over it, but a variant can hand RichText any text, and the measure is
+//   linear where marked isn't.
+// - marked may open at most MAX_NESTING quotes and lists at once. The cap
+//   counts the levels lazy lines add the way marked does, and this holds
+//   marked to a bound even where a line's nesting differs from the count.
+// - When a lazy line makes marked lex a quote's content again, the inline
+//   text of the first lexing isn't lexed as well (markdown-lexer.ts), so a
+//   field's marks cost the same however deep its quotes.
 //
 // No Node API and no DOM: #7's preview frame and #9's browser render call it.
 
 /** Our own instance, so nothing that configures the global `marked` reaches it. */
 const markdown = new Marked({ async: false, breaks: false, gfm: true, pedantic: false });
 
+/**
+ * The most block quotes and lists marked may lex inside one another, re-lexes
+ * included. The cap allows 12; past this a field renders as escaped text.
+ */
+const MAX_NESTING = 32;
+let nesting = 0;
+function nested<T>(lex: () => T): T {
+  if (nesting >= MAX_NESTING) throw new RangeError('Markdown nests too deep to render');
+  nesting++;
+  try {
+    return lex();
+  } finally {
+    nesting--;
+  }
+}
+markdown.use({
+  tokenizer: {
+    blockquote(src) {
+      return nested(() => Tokenizer.prototype.blockquote.call(this, src));
+    },
+    list(src) {
+      return nested(() => Tokenizer.prototype.list.call(this, src));
+    },
+  },
+});
+
 export function renderMarkdown(source: string | undefined | null): string {
   if (!source) return '';
+  if (markdownOverLimit(source)) return paragraphsOf(source);
   try {
     // A copy of the options per call: the lexer keeps its tokenizer on them.
-    return blocks(markdown.lexer(withoutNul(source), { ...markdown.defaults }), true);
+    return blocks(lexBlocks(withoutNul(source), { ...markdown.defaults }), true);
   } catch {
     return paragraphsOf(source);
   }
@@ -40,6 +77,8 @@ export function renderMarkdown(source: string | undefined | null): string {
 
 export function renderInlineMarkdown(source: string | undefined | null): string {
   if (!source) return '';
+  // Inline, nothing is code: the measure counts the marks inside a fence too.
+  if (markdownOverLimit(source, 'inline')) return escapeHtml(withoutNul(source));
   try {
     return inlines(markdown.Lexer.lexInline(withoutNul(source), { ...markdown.defaults }), false);
   } catch {

@@ -6,6 +6,7 @@ import { build } from 'esbuild';
 import { parse as parseYaml } from 'yaml';
 import { defineContentExtension } from './extensions';
 import { SITE_SKELETON, SITE_SKELETON_JSON } from './legacy';
+import { MARKDOWN_MAX_LENGTH } from './markdown';
 import { PUBLICATION_VALIDATORS } from './published-urls';
 import type { AppearanceSelection } from './site';
 import {
@@ -1047,6 +1048,15 @@ test('every diagnostic code comes with a line and column, in YAML and JSON', () 
     { site: `${SITE}sections:\n  about: { hidden: true }\n  contact: { hidden: true }\n` },
     { ctx: twins },
     { portfolio: OLD },
+    // The Markdown cap: one field over each kind of limit.
+    {
+      portfolio: PORTFOLIO.replace(
+        '    body: Hi',
+        `    body: ${'a'.repeat(MARKDOWN_MAX_LENGTH + 1)}`,
+      ),
+    },
+    { portfolio: PORTFOLIO.replace('    body: Hi', '    body: "> > > > > Hi"') },
+    { portfolio: PORTFOLIO.replace('    body: Hi', `    body: "${'[a]('.repeat(9)}x"`) },
   ];
   const twin = (yaml: string) => `${JSON.stringify(parseYaml(yaml), null, 2)}\n`;
   for (const format of ['yaml', 'json'] as const) {
