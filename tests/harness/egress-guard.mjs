@@ -1,6 +1,6 @@
 // The egress trap's in-process half (#11, Slice 1), as NODE_OPTIONS
 // preloads it: --import=<this file's URL>. The guard itself is
-// egress-guard.cjs, CommonJS so a worker thread from eval'd code can
+// egress-guard.cjs, CommonJS so a worker thread's NODE_OPTIONS can
 // require it before its own code runs; importing this installs it.
 
 import guard from './egress-guard.cjs';

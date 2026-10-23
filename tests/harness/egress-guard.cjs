@@ -8,8 +8,8 @@
 // - a TCP or TLS connect (net, tls, http, https, and fetch all end in
 //   net.Socket's connect), before it connects or resolves a name;
 // - a UDP send or connect;
-// - a DNS lookup of a name, or any DNS query: dns.lookup, every
-//   dns.resolve* and reverse, a dns.Resolver's, and dns.promises', so a name
+// - a DNS lookup of a name, or any DNS query: dns.lookup, lookupService,
+//   every dns.resolve* and reverse, a dns.Resolver's, and dns.promises', so a name
 //   never leaves the machine to be resolved either. A lookup of an address,
 //   such as a bind's 0.0.0.0, asks no server, so it passes.
 //
@@ -19,12 +19,11 @@
 // happened in. Each also goes to the server log. Loopback, and a socket on
 // a path (IPC), stay as they are.
 //
-// A worker thread loads it too: one from a file gets NODE_OPTIONS's
-// preloads, and one from eval'd code, which doesn't, gets this file
-// required first. It logs `[egress-guard] loaded` once in the main thread,
+// Every worker thread loads it too, from its own env's NODE_OPTIONS,
+// whatever env the caller gave it, eval'd code included. It logs `[egress-guard] loaded` once in the main thread,
 // which the quality harness checks the server log for. Only the app under
-// test loads it: the harness and the browser never do. It's CommonJS so an
-// eval'd worker can require it before its own code runs.
+// test loads it: the harness and the browser never do. It's CommonJS so a
+// worker's NODE_OPTIONS can --require it.
 
 'use strict';
 
@@ -74,10 +73,13 @@ function install() {
 
   const connect = net.Socket.prototype.connect;
 
-  /** The trap's own address, which HTTP_PROXY names, or null outside a harness server. */
+  /**
+   * The trap's own address, which HTTP_PROXY names, or null outside a
+   * harness server. A worker given its own env gets it as EGRESS_GUARD_TRAP.
+   */
   const trap = (() => {
     try {
-      const url = new URL(process.env.HTTP_PROXY ?? '');
+      const url = new URL(process.env.EGRESS_GUARD_TRAP || process.env.HTTP_PROXY || '');
       return isLoopback(url.hostname) && url.port
         ? { host: url.hostname, port: Number(url.port) }
         : null;
@@ -175,6 +177,21 @@ function install() {
     throw notFound(hostname, 'getaddrinfo');
   };
 
+  // A reverse lookup of an address and port asks a server too.
+  const lookupService = dns.lookupService;
+  dns.lookupService = function guardedLookupService(address, port, callback) {
+    if (isLoopback(address)) return lookupService.call(this, address, port, callback);
+    report(`dns://${address}:${port}`, 'a lookup');
+    process.nextTick(() => callback?.(notFound(address, 'getnameinfo')));
+    return undefined;
+  };
+  const lookupServicePromise = dns.promises.lookupService;
+  dns.promises.lookupService = async function guardedLookupServicePromise(address, port) {
+    if (isLoopback(address)) return lookupServicePromise.call(this, address, port);
+    report(`dns://${address}:${port}`, 'a lookup');
+    throw notFound(address, 'getnameinfo');
+  };
+
   // Every query a resolver makes: the module's own functions, each bound to
   // a default resolver when node:dns loads, and each Resolver's.
   const QUERIES = Object.keys(dns).filter((name) => /^resolve|^reverse$/.test(name));
@@ -207,15 +224,26 @@ function install() {
     }
   }
 
-  // A worker from eval'd code skips NODE_OPTIONS's preloads, so it loads
-  // this first, on its first line, whether the code is CommonJS or, under
-  // --input-type=module, an ES module. One from a file gets the preloads.
-  const self = JSON.stringify(__filename);
-  const prelude = `process.getBuiltinModule('node:module').createRequire(${self})(${self});`;
-  const { Worker } = workerThreads;
+  // Every worker loads this. A worker reads NODE_OPTIONS from the env it's
+  // given, and an eval'd one skips the preloads it would inherit, so each
+  // gets an env whose NODE_OPTIONS requires this, whatever env or execArgv
+  // the caller gave it.
+  const preload = `--require ${JSON.stringify(__filename)}`;
+  const guarded = (env) => {
+    const options = env?.NODE_OPTIONS ?? '';
+    return {
+      ...env,
+      ...(trap ? { EGRESS_GUARD_TRAP: `http://${trap.host}:${trap.port}` } : {}),
+      NODE_OPTIONS: options.includes(preload) ? options : `${options} ${preload}`.trim(),
+    };
+  };
+  const { SHARE_ENV, Worker } = workerThreads;
   class GuardedWorker extends Worker {
     constructor(filename, options = {}) {
-      super(options?.eval ? `${prelude}${String(filename)}` : filename, options);
+      const own = { ...options };
+      if (own.env === SHARE_ENV) process.env.NODE_OPTIONS = guarded(process.env).NODE_OPTIONS;
+      else own.env = guarded(own.env ?? process.env);
+      super(filename, own);
     }
   }
   workerThreads.Worker = GuardedWorker;
@@ -225,7 +253,7 @@ function install() {
 
   if (workerThreads.isMainThread) {
     console.error(
-      '[egress-guard] loaded: sockets, UDP, DNS, and eval workers outside loopback are refused',
+      '[egress-guard] loaded: sockets, UDP, and DNS outside loopback are refused, in every worker too',
     );
   }
 }

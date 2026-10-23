@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import net from 'node:net';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
 import { startEgressTrap } from './egress-trap.mjs';
 
@@ -16,12 +19,18 @@ const OUTSIDE = '192.0.2.7';
  * trap's environment, and a loopback server's port as PORT. Returns the
  * child's stdout parsed as JSON, its stderr, and the trap's attempts.
  */
-async function run(script, { guard = true } = {}) {
+async function run(script, { guard = true, asFile = false } = {}) {
   const trap = await startEgressTrap();
   const server = net.createServer((socket) => socket.end('hello'));
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  // A script from a file, as the app under test runs: a child given -e runs
+  // with --input-type, which its workers inherit and which changes what an
+  // eval'd worker loads.
+  const dir = asFile ? mkdtempSync(path.join(tmpdir(), 'egress-guard-test-')) : null;
+  const file = dir ? path.join(dir, 'script.mjs') : null;
+  if (file) writeFileSync(file, script);
   try {
-    const child = spawn(process.execPath, ['--input-type=module', '-e', script], {
+    const child = spawn(process.execPath, file ? [file] : ['--input-type=module', '-e', script], {
       env: {
         PATH: process.env.PATH ?? '',
         ...trap.env,
@@ -43,6 +52,7 @@ async function run(script, { guard = true } = {}) {
     return { result: JSON.parse(stdout || '{}'), stderr, attempts: trap.attempts() };
   } finally {
     server.close();
+    if (dir) rmSync(dir, { recursive: true, force: true });
   }
 }
 
@@ -180,6 +190,8 @@ test('a DNS lookup or query of a name outside loopback is refused and recorded; 
       resolver: await viaCallback((done) => resolver.resolveTxt('outside-resolver.example.test', done)),
       promisesResolver: await code(promises.resolveMx('outside-mx.example.test')),
       reverse: await viaCallback((done) => dns.reverse('${OUTSIDE}', done)),
+      service: await viaCallback((done) => dns.lookupService('${OUTSIDE}', 443, done)),
+      servicePromise: await code(dns.promises.lookupService('${OUTSIDE}', 80)),
       localhost: await code(dns.promises.lookup('localhost')),
     }));
   `;
@@ -192,6 +204,8 @@ test('a DNS lookup or query of a name outside loopback is refused and recorded; 
     resolver: 'EREFUSED',
     promisesResolver: 'EREFUSED',
     reverse: 'EREFUSED',
+    service: 'ENOTFOUND',
+    servicePromise: 'ENOTFOUND',
     localhost: 'resolved',
   });
   assert.match(
@@ -200,6 +214,8 @@ test('a DNS lookup or query of a name outside loopback is refused and recorded; 
   );
   assert.deepEqual(attempts.sort(), [
     `dns://${OUTSIDE}`,
+    `dns://${OUTSIDE}:443`,
+    `dns://${OUTSIDE}:80`,
     'dns://outside-imported.example.test',
     'dns://outside-lookup.example.test',
     'dns://outside-mx.example.test',
@@ -209,7 +225,7 @@ test('a DNS lookup or query of a name outside loopback is refused and recorded; 
   ]);
 });
 
-test('a worker thread gets the guard, from a file or from eval, and the main thread logs it loaded', async () => {
+test('every worker thread gets the guard: from eval, from a file, and from a file with its own env', async () => {
   const probe = `
     const net = process.getBuiltinModule('node:net');
     const { parentPort } = process.getBuiltinModule('node:worker_threads');
@@ -230,14 +246,18 @@ test('a worker thread gets the guard, from a file or from eval, and the main thr
     writeFileSync(file, ${JSON.stringify(probe)});
     const outcomes = {
       eval: await ended(new Worker(${JSON.stringify(probe)}, { eval: true })),
-      // The child runs with --input-type, which a worker from a file can't take.
-      file: await ended(new Worker(file, { execArgv: [] })),
+      file: await ended(new Worker(file)),
+      ownEnv: await ended(new Worker(file, { env: { PATH: '' }, execArgv: [] })),
     };
     rmSync(dir, { recursive: true, force: true });
     process.stdout.write(JSON.stringify(outcomes));
   `;
-  const { result, stderr, attempts } = await run(script);
-  assert.deepEqual(result, { eval: 'ECONNREFUSED', file: 'ECONNREFUSED' }, stderr);
-  assert.deepEqual(attempts, [`tcp://${OUTSIDE}:9`, `tcp://${OUTSIDE}:9`]);
+  const { result, stderr, attempts } = await run(script, { asFile: true });
+  assert.deepEqual(
+    result,
+    { eval: 'ECONNREFUSED', file: 'ECONNREFUSED', ownEnv: 'ECONNREFUSED' },
+    stderr,
+  );
+  assert.deepEqual(attempts, Array(3).fill(`tcp://${OUTSIDE}:9`));
   assert.equal(stderr.match(/\[egress-guard\] loaded/g)?.length, 1, 'once, in the main thread');
 });
