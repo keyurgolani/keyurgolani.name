@@ -277,6 +277,19 @@ test('a progressive JPEG or interlaced PNG gets the lower cap, from its header',
   assert.equal(MEDIA_LIMITS.progressivePixels, 40_000_000);
 });
 
+test('an AVIF gets its own lower cap, from its header, since it decodes whole', async () => {
+  const sharpFn = await factory();
+  const source = await avif({ width: 100, height: 50 });
+  await deriveImage(sharpFn, source, { maxAvifPixels: 5000 });
+  await assert.rejects(
+    deriveImage(sharpFn, source, { maxAvifPixels: 4999 }),
+    refusal('refused', 'pixels'),
+  );
+  // Another type has only its own caps.
+  await deriveImage(sharpFn, await webp({ width: 100, height: 50 }), { maxAvifPixels: 4999 });
+  assert.equal(MEDIA_LIMITS.avifPixels, 16_000_000);
+});
+
 test('an animated source derives single-frame renditions of its first frame', async () => {
   const sharpFn = await factory();
   const frame = (r: number) =>
@@ -323,9 +336,10 @@ test('HEIF that is not AV1 is refused, as its header says', async () => {
 
 test('at the caps, a derivation stays under 1 GiB and well inside its time limit', async (t) => {
   // The review's sources at 10000 × 10000, in a process of their own so its
-  // peak resident memory is the derivation's: the progressive and the
-  // interlaced one refused from the header, and WebP, and an interlaced
-  // 16-bit PNG at 40 megapixels, derived.
+  // peak resident memory is the derivation's: the progressive, the
+  // interlaced, and the AVIF one refused from the header, and WebP, an
+  // interlaced 16-bit PNG at 40 megapixels, and AVIF at 16, in RGB, with
+  // alpha, and with alpha at 12 bits, derived.
   const dir = mkdtempSync(path.join(tmpdir(), 'derive-caps-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const solid = (width: number, height: number, channels: 3 | 4) =>
@@ -341,6 +355,10 @@ test('at the caps, a derivation stays under 1 GiB and well inside its time limit
     'png16-interlaced-40mp': solid(6300, 6300, 4)
       .toColourspace('rgb16')
       .png({ progressive: true, compressionLevel: 9 }),
+    avif: solid(10_000, 10_000, 3).avif({ effort: 0 }),
+    'avif-16mp': solid(4000, 4000, 3).avif({ effort: 0 }),
+    'avif-alpha-16mp': solid(4000, 4000, 4).avif({ effort: 0 }),
+    'avif-alpha-12bit-16mp': solid(4000, 4000, 4).avif({ effort: 0, bitdepth: 12 }),
   };
   const files: string[] = [];
   for (const [name, pipeline] of Object.entries(sources)) {
@@ -348,31 +366,42 @@ test('at the caps, a derivation stays under 1 GiB and well inside its time limit
     writeFileSync(file, await pipeline.toBuffer());
     files.push(file);
   }
-  const child = spawnSync(
-    process.execPath,
-    ['--conditions=react-server', '--import', 'tsx', '--input-type=module', '-e', CAPS_CHILD],
-    {
-      cwd: fileURLToPath(new URL('../../..', import.meta.url)),
-      env: { ...process.env, DERIVE_URL: new URL('./derive.ts', import.meta.url).href },
-      input: JSON.stringify(files),
-      encoding: 'utf8',
-      timeout: 120_000,
-    },
-  );
-  assert.equal(child.status, 0, child.stderr);
-  const { results, peakMiB } = JSON.parse(child.stdout) as {
-    results: { code: string | null; ms: number }[];
-    peakMiB: number;
-  };
+  // One process each, as the review measured: a process that has derived
+  // one keeps the memory its allocator took, so the next one's peak would
+  // be both's.
+  const results = files.map((file) => {
+    const child = spawnSync(
+      process.execPath,
+      ['--conditions=react-server', '--import', 'tsx', '--input-type=module', '-e', CAPS_CHILD],
+      {
+        cwd: fileURLToPath(new URL('../../..', import.meta.url)),
+        env: { ...process.env, DERIVE_URL: new URL('./derive.ts', import.meta.url).href },
+        input: JSON.stringify([file]),
+        encoding: 'utf8',
+        timeout: 120_000,
+      },
+    );
+    assert.equal(child.status, 0, child.stderr);
+    const {
+      results: [result],
+      peakMiB,
+    } = JSON.parse(child.stdout) as {
+      results: { code: string | null; ms: number }[];
+      peakMiB: number;
+    };
+    return { file: path.basename(file), ...result!, peakMiB };
+  });
   assert.deepEqual(
     results.map(({ code }) => code),
-    ['pixels', 'pixels', null, null],
+    ['pixels', 'pixels', null, null, 'pixels', null, null, null],
   );
-  for (const { ms } of results) assert.ok(ms < 30_000, `${ms} ms`);
-  assert.ok(peakMiB < 1024, `peak RSS ${peakMiB} MiB`);
+  for (const { file, ms, peakMiB } of results) {
+    assert.ok(ms < 30_000, `${file}: ${ms} ms`);
+    assert.ok(peakMiB < 1024, `${file}: peak RSS ${peakMiB} MiB`);
+  }
 });
 
-/** The child's half: derive each file in turn, and say how each went and the peak RSS. */
+/** The child's half: derive each file it's given in turn, and say how each went and the peak RSS. */
 const CAPS_CHILD = `
 const { deriveImage, loadSharp } = await import(process.env.DERIVE_URL);
 const { readFileSync } = await import('node:fs');

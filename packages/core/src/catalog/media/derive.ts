@@ -18,7 +18,7 @@ import { sniffImageType } from './sniff';
 // shrunk on load to the widest rendition, into a raw buffer every rendition
 // and the colour stats come from; each pipeline stops at its time limit; a
 // progressive JPEG or interlaced PNG, which libvips decodes whole, gets a
-// lower pixel cap; libvips runs one thread; and one derivation runs at a
+// lower pixel cap, and an AVIF, which libheif decodes whole, a lower one still; libvips runs one thread; and one derivation runs at a
 // time in a process.
 //
 // sharp loads on first use, through import(), so a process that derives
@@ -139,6 +139,8 @@ export interface DeriveOptions {
   readonly maxPixels?: number;
   /** The cap for a progressive JPEG or an interlaced PNG, which decode whole. */
   readonly maxProgressivePixels?: number;
+  /** The cap for an AVIF, which decodes whole too. */
+  readonly maxAvifPixels?: number;
   readonly timeoutSeconds?: number;
 }
 
@@ -170,6 +172,7 @@ async function deriveOne(
   {
     maxPixels = MEDIA_LIMITS.pixels,
     maxProgressivePixels = MEDIA_LIMITS.progressivePixels,
+    maxAvifPixels = MEDIA_LIMITS.avifPixels,
     timeoutSeconds = DERIVE_TIMEOUT_SECONDS,
   }: DeriveOptions,
 ): Promise<DerivedImage> {
@@ -205,6 +208,10 @@ async function deriveOne(
   }
   // libvips can't shrink a progressive JPEG or an interlaced PNG as it
   // loads: it holds the whole image.
+  // libheif can't either: an AVIF decodes whole, at up to 32 bytes a pixel.
+  if (mime === 'image/avif' && width * height > maxAvifPixels) {
+    throw refused('pixels', 'An AVIF source decodes to more than 16 megapixels.');
+  }
   if (metadata.isProgressive === true && width * height > maxProgressivePixels) {
     throw refused(
       'pixels',

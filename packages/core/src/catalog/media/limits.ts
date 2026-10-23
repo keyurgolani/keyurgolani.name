@@ -15,6 +15,11 @@ export const MEDIA_LIMITS = Object.freeze({
    * holds it whole, so a 16-bit RGBA one at 100 megapixels took 1.1 GiB.
    */
   progressivePixels: 40_000_000,
+  /**
+   * The most an AVIF may decode to: libheif decodes it whole, at up to about
+   * 32 bytes a pixel with alpha at 12 bits, so 100 megapixels took 3.2 GiB.
+   */
+  avifPixels: 16_000_000,
   /** How long one remote fetch may take, redirects and DNS included. */
   remoteTimeoutMs: 15_000,
   /** How many redirects one remote fetch may follow. */
