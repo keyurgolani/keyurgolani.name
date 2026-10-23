@@ -147,6 +147,9 @@ function httpsUrl(value: string, base?: URL): URL {
   if (url.username !== '' || url.password !== '') {
     throw refused('credentials', 'A remote source carries no credentials.');
   }
+  // Port 443 alone (the URL drops it as https's default): a source, or a
+  // redirect, can't reach some other service a public host runs.
+  if (url.port !== '') throw refused('port', 'A remote source is fetched on port 443 only.');
   if (!isHttpsMediaUrl(url.href)) throw refused('url_invalid', 'The source is not an https URL.');
   return url;
 }

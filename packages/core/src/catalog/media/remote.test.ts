@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import net from 'node:net';
+import { fileURLToPath } from 'node:url';
 import { isPublicAddress } from './address';
 import { MediaSourceError } from './limits';
 import {
@@ -195,7 +197,7 @@ test('three redirects are followed, a fourth is refused', async () => {
   await assert.rejects(fetch('https://images.example.net/0'), refusal('refused', 'redirects'));
 });
 
-test('http, credentials, and a redirect off https are refused', async () => {
+test('http, credentials, a port but 443, and a redirect off https are refused', async () => {
   const stub = stubs(
     { 'images.example.net': ['93.184.216.34'] },
     {
@@ -203,6 +205,11 @@ test('http, credentials, and a redirect off https are refused', async () => {
         status: 302,
         headers: { location: 'http://images.example.net/a.jpg' },
       },
+      'https://images.example.net/ported': {
+        status: 302,
+        headers: { location: 'https://images.example.net:8443/a.jpg' },
+      },
+      'https://images.example.net/a.jpg': { status: 200, body: [IMAGE] },
       'https://images.example.net/file': {
         status: 302,
         headers: { location: 'file:///etc/passwd' },
@@ -219,6 +226,11 @@ test('http, credentials, and a redirect off https are refused', async () => {
   await assert.rejects(fetch('https://images.example.net/down'), refusal('refused', 'scheme'));
   await assert.rejects(fetch('https://images.example.net/file'), refusal('refused', 'scheme'));
   await assert.rejects(fetch('not a url'), refusal('refused'));
+  await assert.rejects(fetch('https://images.example.net:8443/a.jpg'), refusal('refused', 'port'));
+  await assert.rejects(fetch('https://images.example.net/ported'), refusal('refused', 'port'));
+  // 443 named outright is the default, and fine.
+  assert.deepEqual(await fetch('https://images.example.net:443/a.jpg'), IMAGE);
+  assert.ok(stub.connections.every(({ url }) => !url.includes(':8443')));
 });
 
 test('the whole fetch stops at its time limit', async () => {
@@ -386,6 +398,69 @@ test('the https transport connects to the checked address, naming the host for T
   assert.equal(clientHello[0], 0x16, 'a TLS handshake record');
   assert.ok(clientHello.includes(Buffer.from('pinned-host.invalid')), 'SNI names the host');
 });
+
+test('the https transport never goes through a proxy the environment names', async (t) => {
+  // Node's own env proxy support, on: a proxy would resolve the host itself,
+  // past the address check and the pin. A loopback listener stands in for
+  // the proxy and counts what connects; another stands in for the host.
+  const listen = async (onConnection: (socket: net.Socket) => void) => {
+    const server = net.createServer(onConnection);
+    server.listen(0, '127.0.0.1');
+    await once(server, 'listening');
+    t.after(() => server.close());
+    return (server.address() as net.AddressInfo).port;
+  };
+  let proxied = 0;
+  const proxyPort = await listen((socket) => {
+    proxied += 1;
+    socket.destroy();
+  });
+  let hello: Buffer | undefined;
+  const hostPort = await listen((socket) => {
+    socket.once('data', (data) => {
+      hello = data;
+      socket.destroy();
+    });
+  });
+  const proxy = `http://127.0.0.1:${proxyPort}`;
+  const env: NodeJS.ProcessEnv = { ...process.env };
+  for (const key of ['NO_PROXY', 'no_proxy']) delete env[key];
+  const child = spawn(
+    process.execPath,
+    ['--import', 'tsx', '--input-type=module', '-e', PROXY_CHILD],
+    {
+      cwd: fileURLToPath(new URL('../../..', import.meta.url)),
+      env: {
+        ...env,
+        NODE_USE_ENV_PROXY: '1',
+        HTTPS_PROXY: proxy,
+        https_proxy: proxy,
+        HTTP_PROXY: proxy,
+        http_proxy: proxy,
+        REMOTE_URL: new URL('./remote.ts', import.meta.url).href,
+        HOST_PORT: String(hostPort),
+      },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    },
+  );
+  let output = '';
+  child.stdout.setEncoding('utf8').on('data', (chunk: string) => (output += chunk));
+  child.stderr.setEncoding('utf8').on('data', (chunk: string) => (output += chunk));
+  const [status] = (await once(child, 'exit')) as [number | null];
+  assert.equal(status, 0, output);
+  assert.match(output, /transport ended/);
+  assert.equal(proxied, 0, 'nothing connected to the proxy');
+  assert.ok(hello?.includes(Buffer.from('pinned-host.invalid')), 'the host got the handshake');
+});
+
+/** The child's half: one request through the real transport, which the stand-in host hangs up on. */
+const PROXY_CHILD = `
+const { httpsTransport } = await import(process.env.REMOTE_URL);
+const url = new URL('https://pinned-host.invalid:' + process.env.HOST_PORT + '/a.jpg');
+await httpsTransport({ url, address: '127.0.0.1', family: 4, signal: AbortSignal.timeout(5000) })
+  .then(() => {}, () => {});
+console.log('transport ended');
+`;
 
 test('a pinned lookup answers with its one address, in either form', async () => {
   const lookup = pinnedLookup('93.184.216.34', 4);
