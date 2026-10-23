@@ -1,25 +1,28 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import {
   canonicalLockfileProblem,
   LOCKFILE_MODIFIED,
   LOCKFILE_REFRESH,
   lockfileDrift,
   normalisePeers,
+  peerCycles,
   removalProblem,
 } from './lib/lockfile-drift.mjs';
 
 const fixture = (name) =>
   readFileSync(new URL(`./fixtures/lockfile-drift/${name}.yaml`, import.meta.url), 'utf8');
 
-/** An excerpt of next's pnpm-lock.yaml: the eslint-plugin-import cycle, and react. */
+/** An excerpt of next's pnpm-lock.yaml before #12: the eslint-plugin-import cycle, and react. */
 const BEFORE = fixture('before');
 /** BEFORE as #82's remove wrote it back: three lines, one cyclic peer suffix cut short. */
 const PEER_REWRITE = fixture('peer-rewrite');
 
-const RACE = /Only nested peer suffixes moved in pnpm-lock\.yaml; possibly pnpm's cyclic peer/;
+const RACE = /Only nested peer suffixes moved in pnpm-lock\.yaml: the shape of a peer cycle/;
 const NOT_CANONICAL = /^pnpm-lock\.yaml isn't what pnpm writes: run pnpm install and commit it\. /;
+const require = createRequire(import.meta.url);
 
 /** `text` with `from` replaced by `to`, which must be there exactly once. */
 function edit(text, from, to) {
@@ -93,20 +96,18 @@ test('a real leftover after the remove fails, and names what was left, not the r
     'lockfile.snapshots["@acme/reference@file:../pack/acme-reference-1.0.0.tgz(react-dom@19.2.5)(react@19.2.5)"]: added',
   ]);
   const problem = removalProblem({ status: [LOCKFILE_MODIFIED], before: BEFORE, after });
-  assert.match(
-    problem,
-    /^the remove leaves nothing changed, but git status shows M pnpm-lock\.yaml\. /,
-  );
+  assert.match(problem, /^the remove leaves nothing changed\. pnpm-lock\.yaml differs in /);
   assert.match(problem, /dependencies\["@acme\/reference"\]: added/);
   assert.doesNotMatch(problem, RACE);
+  assert.equal(problem.match(/git status/g), null, 'expectStatus prints git status, once');
   // A path outside the lockfile fails on its own.
-  assert.match(
+  assert.equal(
     removalProblem({ status: [' M apps/web/package.json'], before: BEFORE, after: BEFORE }),
-    /git status shows M apps\/web\/package\.json$/,
+    'the remove leaves nothing changed',
   );
 });
 
-test("a key that was only rewritten (#82's shape) still fails, and says it may be the race", () => {
+test("a key that was only rewritten (#82's shape) still fails, and says re-run, not commit", () => {
   const changed = BEFORE.split('\n').filter((line, i) => line !== PEER_REWRITE.split('\n')[i]);
   assert.equal(changed.length, 3, "#82's three lines");
   assert.deepEqual(lockfileDrift(BEFORE, PEER_REWRITE), []);
@@ -115,21 +116,38 @@ test("a key that was only rewritten (#82's shape) still fails, and says it may b
     before: BEFORE,
     after: PEER_REWRITE,
   });
-  assert.match(problem, /^the remove leaves nothing changed, but /);
-  assert.match(problem, RACE);
-  assert.match(problem, /Re-run, and if it persists, run pnpm install and commit pnpm-lock\.yaml$/);
+  assert.match(problem, /^the remove leaves nothing changed\. Only nested peer suffixes moved/);
+  assert.match(problem, /Re-run it$/);
+  assert.doesNotMatch(problem, /commit/);
 });
 
 test('a committed lockfile pnpm does not write fails early, with the cause', () => {
-  // #85: committed with a peer key pnpm no longer resolves; the refresh writes another.
+  // #85's shape: committed with a peer key the refresh writes another way.
+  // It opens with re-run, since one run can't tell a stale key from a cycle,
+  // and says to commit only if it repeats.
   const stale = canonicalLockfileProblem({
     status: [LOCKFILE_MODIFIED],
     before: PEER_REWRITE,
     after: BEFORE,
   });
-  assert.match(stale, NOT_CANONICAL);
-  assert.match(stale, RACE);
+  assert.match(
+    stale,
+    /^Only nested peer suffixes moved in pnpm-lock\.yaml: the shape of a peer cycle/,
+  );
+  assert.match(
+    stale,
+    / Re-run\. If it repeats, pnpm-lock\.yaml isn't what pnpm writes: run pnpm install, commit it/,
+  );
   assert.doesNotMatch(stale, /the remove/);
+  // The refresh changing a path other than the lockfile fails too.
+  assert.equal(
+    canonicalLockfileProblem({
+      status: [' M apps/web/package.json'],
+      before: BEFORE,
+      after: BEFORE,
+    }),
+    'the lockfile refresh changes nothing but pnpm-lock.yaml',
+  );
   // Any other change the refresh makes is named.
   const missing = canonicalLockfileProblem({
     status: [LOCKFILE_MODIFIED],
@@ -179,6 +197,10 @@ test('the race diagnosis needs the lockfile otherwise the same', () => {
       '  react-dom@19.2.5(react@19.2.5):',
       '  react-dom@19.2.5(react@19.3.0):',
     ],
+    'a transitive peer': [
+      '      - eslint-import-resolver-webpack\n      - eslint-plugin-import-x\n',
+      '      - eslint-import-resolver-webpack\n',
+    ],
     "a peer's own version in a reference": [
       '      eslint-plugin-react: 7.37.5(eslint@9.39.5)\n',
       '      eslint-plugin-react: 7.37.5(eslint@9.40.0)\n',
@@ -203,4 +225,36 @@ test('the race diagnosis needs the lockfile otherwise the same', () => {
     `  react@19.2.5: {}\n\n${plugin}\n    dependencies:\n      eslint: 9.39.5\n`,
   );
   assert.match(lockfileDrift(BEFORE, twin).join('\n'), /: 1 before, 2 after$/);
+});
+
+test('the committed lockfile has no peer cycle, which pnpm could write two ways', () => {
+  // next before #12 had one: eslint-plugin-import and eslint-import-resolver-typescript.
+  assert.deepEqual(peerCycles(BEFORE), [
+    ['eslint-import-resolver-typescript', 'eslint-plugin-import'],
+  ]);
+  assert.deepEqual(peerCycles('snapshots:\n  a@1.0.0(a@1.0.0): {}\n'), [['a']]);
+  assert.deepEqual(peerCycles('snapshots:\n  a@1.0.0(b@2.0.0): {}\n  b@2.0.0: {}\n'), []);
+  const committed = readFileSync(new URL('../pnpm-lock.yaml', import.meta.url), 'utf8');
+  assert.deepEqual(peerCycles(committed), [], 'a new cycle needs a hook like .pnpmfile.cjs has');
+});
+
+test(".pnpmfile.cjs drops the resolver's optional peer on eslint-plugin-import, and nothing else", () => {
+  const { hooks } = require('../.pnpmfile.cjs');
+  const resolver = hooks.readPackage({
+    name: 'eslint-import-resolver-typescript',
+    peerDependencies: { eslint: '*', 'eslint-plugin-import': '*', 'eslint-plugin-import-x': '*' },
+    peerDependenciesMeta: {
+      'eslint-plugin-import': { optional: true },
+      'eslint-plugin-import-x': { optional: true },
+    },
+  });
+  assert.deepEqual(resolver.peerDependencies, { eslint: '*', 'eslint-plugin-import-x': '*' });
+  // pnpm reads an optional peerDependenciesMeta entry as a peer on its own.
+  assert.deepEqual(resolver.peerDependenciesMeta, { 'eslint-plugin-import-x': { optional: true } });
+  const utils = {
+    name: 'eslint-module-utils',
+    peerDependencies: { 'eslint-import-resolver-typescript': '*' },
+    peerDependenciesMeta: { 'eslint-import-resolver-typescript': { optional: true } },
+  };
+  assert.deepEqual(hooks.readPackage(structuredClone(utils)), utils);
 });

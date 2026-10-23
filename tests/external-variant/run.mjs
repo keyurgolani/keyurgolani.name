@@ -14,7 +14,7 @@
 //      lockfile isn't what pnpm writes and the run stops there, saying so
 //      (ci/lib/lockfile-drift.mjs). After that, a changed lockfile is the
 //      add's or the remove's.
-//   2.The package built outside it, its peers linked from the worktree's
+//   2. The package built outside it, its peers linked from the worktree's
 //      install as a published package's devDependencies would be: tsc writes
 //      ESM and .d.ts into dist/, and `pnpm pack` makes the tarball, which
 //      holds no source, script, or public/ file.
@@ -139,7 +139,7 @@ function expectStatus(host, expected, message) {
   const actual = status(host);
   if (JSON.stringify(actual) !== JSON.stringify(expected)) {
     const diff = git(['diff', '--', ...actual.map((line) => line.slice(3))], host);
-    console.error(`[external-variant] ${message}, but git status shows:\n${actual.join('\n')}`);
+    console.error(`[external-variant] ${message}\ngit status shows:\n${actual.join('\n')}`);
     console.error(diff.split('\n').slice(0, 120).join('\n'));
   }
   assert.deepEqual(actual, expected, message);
@@ -291,7 +291,9 @@ async function checkRemoved(host, work) {
  * the store this checkout's install filled, with the reference variant
  * packed outside it and added from its tarball, as an owner installs one.
  * Returns the worktree and the store. #11's close and scheduled quality runs
- * install it this way too (tests/quality/run.ts --external-variant).
+ * install it this way too (tests/quality/run.ts --external-variant), the
+ * lockfile refresh's check included: a lockfile pnpm doesn't write stops
+ * them before the add as well.
  *
  * @param {string} work an empty temporary directory
  * @param {{ onAdded?: () => void }} [hooks] onAdded runs as soon as the add

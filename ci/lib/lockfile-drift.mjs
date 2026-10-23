@@ -9,13 +9,16 @@
 // "the remove leaves nothing changed". So the run re-resolves the lockfile
 // first (LOCKFILE_REFRESH) and stops there, with the cause, when it changes.
 //
-// Both checks compare exactly. When one fails, the message
-// says whether the lockfile differs in nested peer suffixes alone, with the
-// lockfile otherwise the same: `a@1(b@2(c@3))` against `a@1(b@2)`. That's
-// the shape of pnpm's cyclic peer rewrite (#82: eslint-plugin-import and
-// eslint-import-resolver-typescript peer on each other, and whichever node
-// resolvePeers finishes first settles the other's key), not a leftover. It
-// still fails: a reader sees which it is, nothing passes on it.
+// Both checks compare exactly, which holds only while what pnpm writes is
+// the same on every run. A peer cycle breaks that: pnpm 10.33's
+// resolvePeers sets a cyclic peer's key from whichever node it finishes
+// first, so #82's run wrote next's eslint-plugin-import keys short where
+// the committed ones were long. .pnpmfile.cjs drops the edge that closed
+// that cycle, and peerCycles() keeps a new one out of the committed
+// lockfile (ci/lockfile-drift.test.mjs). When a check still fails with
+// nested peer suffixes alone moved, `a@1(b@2(c@3))` against `a@1(b@2)`, the
+// message says that's the shape of a cycle. It still fails: nothing passes
+// on the normalised comparison.
 import { parse } from 'yaml';
 
 /** The dependency maps whose values are depPaths, in importers and in snapshots. */
@@ -173,28 +176,89 @@ export const LOCKFILE_REFRESH = [
 /** The status line git prints for a modified lockfile. */
 export const LOCKFILE_MODIFIED = ' M pnpm-lock.yaml';
 
+const CYCLE_SHAPE =
+  'Only nested peer suffixes moved in pnpm-lock.yaml: the shape of a peer cycle, ' +
+  'which pnpm resolves differently from run to run (#12), not a leftover.';
+
+/** `name@version(peers)` as its name and its first-level peers' names. */
+function keyPeers(key) {
+  const start = key.indexOf('(');
+  const base = start === -1 ? key : key.slice(0, start);
+  const name = base.slice(0, base.lastIndexOf('@'));
+  const groups =
+    start === -1
+      ? []
+      : (normalisePeers(key)
+          .slice(start)
+          .match(/\(([^()]*)\)/g) ?? []);
+  const peers = groups
+    .map((group) => group.slice(1, -1))
+    .map((peer) => peer.slice(0, peer.lastIndexOf('@')))
+    .filter(Boolean);
+  return { name, peers };
+}
+
 /**
- * What changed, for a failure message: the status, and either the
- * lockfile's real differences or, when nested peer suffixes alone moved,
- * what that likely is and what to do.
+ * The peer cycles in a lockfile's snapshot keys: each a sorted list of the
+ * package names that peer on each other, directly or around a loop. pnpm
+ * can write any key in one of two ways from run to run, so a committed lockfile
+ * should have none.
+ *
+ * @param {string} text
+ * @returns {string[][]}
  */
-function describe(status, before, after) {
-  const changed = `git status shows ${status.map((line) => line.trim()).join(', ')}`;
-  if (!status.includes(LOCKFILE_MODIFIED)) return changed;
-  const drift = lockfileDrift(before, after);
-  if (drift.length === 0) {
-    return (
-      `${changed}. Only nested peer suffixes moved in pnpm-lock.yaml; possibly pnpm's ` +
-      'cyclic peer resolution race (#82). Re-run, and if it persists, run pnpm install ' +
-      'and commit pnpm-lock.yaml'
-    );
+export function peerCycles(text) {
+  /** @type {Map<string, Set<string>>} */
+  const graph = new Map();
+  for (const key of Object.keys(parse(text)?.snapshots ?? {})) {
+    const { name, peers } = keyPeers(key);
+    const edges = graph.get(name) ?? new Set();
+    for (const peer of peers) edges.add(peer);
+    graph.set(name, edges);
   }
-  return `${changed}. pnpm-lock.yaml differs in ${drift.join('; ')}`;
+  // Tarjan's strongly connected components: a component of two or more, or
+  // a package that peers on itself, is a cycle.
+  const index = new Map();
+  const low = new Map();
+  const stack = [];
+  const onStack = new Set();
+  const cycles = [];
+  const visit = (node) => {
+    index.set(node, index.size);
+    low.set(node, index.get(node));
+    stack.push(node);
+    onStack.add(node);
+    for (const next of graph.get(node) ?? []) {
+      if (!index.has(next)) {
+        visit(next);
+        low.set(node, Math.min(low.get(node), low.get(next)));
+      } else if (onStack.has(next)) {
+        low.set(node, Math.min(low.get(node), index.get(next)));
+      }
+    }
+    if (low.get(node) !== index.get(node)) return;
+    const component = [];
+    let member;
+    do {
+      member = stack.pop();
+      onStack.delete(member);
+      component.push(member);
+    } while (member !== node);
+    if (component.length > 1 || graph.get(node)?.has(node)) cycles.push(component.sort());
+  };
+  for (const node of graph.keys()) if (!index.has(node)) visit(node);
+  return cycles.sort();
+}
+
+/** The lockfile's differences, or the cycle shape when nested peer suffixes alone moved. */
+function lockfileChange(before, after) {
+  const drift = lockfileDrift(before, after);
+  return drift.length === 0 ? null : `pnpm-lock.yaml differs in ${drift.join('; ')}`;
 }
 
 /**
  * Why the committed lockfile isn't what pnpm writes, after LOCKFILE_REFRESH
- * ran, or null when it is.
+ * ran, or null when it is. git status itself is for the caller to print.
  *
  * @param {{ status: string[], before: string, after: string }} refresh
  *   `git status --porcelain` after it, as lines, and the lockfile's text at
@@ -203,14 +267,22 @@ function describe(status, before, after) {
  */
 export function canonicalLockfileProblem({ status, before, after }) {
   if (status.length === 0) return null;
-  return (
-    "pnpm-lock.yaml isn't what pnpm writes: run pnpm install and commit it. " +
-    describe(status, before, after)
-  );
+  if (!status.includes(LOCKFILE_MODIFIED)) {
+    return 'the lockfile refresh changes nothing but pnpm-lock.yaml';
+  }
+  const change = lockfileChange(before, after);
+  if (change === null) {
+    return (
+      `${CYCLE_SHAPE} Re-run. If it repeats, pnpm-lock.yaml isn't what pnpm writes: ` +
+      'run pnpm install, commit it, and look for a new cycle (ci/lockfile-drift.test.mjs)'
+    );
+  }
+  return `pnpm-lock.yaml isn't what pnpm writes: run pnpm install and commit it. ${change}`;
 }
 
 /**
- * What the remove left behind, or null when git status is clean.
+ * What the remove left behind, or null when git status is clean. git status
+ * itself is for the caller to print.
  *
  * @param {{ status: string[], before: string, after: string }} removal
  *   `git status --porcelain` after the remove, as lines, and the lockfile's
@@ -219,5 +291,8 @@ export function canonicalLockfileProblem({ status, before, after }) {
  */
 export function removalProblem({ status, before, after }) {
   if (status.length === 0) return null;
-  return `the remove leaves nothing changed, but ${describe(status, before, after)}`;
+  const expected = 'the remove leaves nothing changed';
+  if (!status.includes(LOCKFILE_MODIFIED)) return expected;
+  const change = lockfileChange(before, after);
+  return `${expected}. ${change ?? `${CYCLE_SHAPE} Re-run it`}`;
 }
