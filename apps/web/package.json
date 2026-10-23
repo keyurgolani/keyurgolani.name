@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "build:registry": "tsx scripts/build-registry.ts",
-    "build:store": "pnpm build:registry && node scripts/bundle-store.mjs",
+    "build:store": "pnpm build:registry --modules-only && node scripts/bundle-store.mjs",
     "check:variants": "tsx scripts/check-variants.ts",
     "check:appearance": "tsx scripts/check-appearance.ts",
     "predev": "pnpm build:registry",

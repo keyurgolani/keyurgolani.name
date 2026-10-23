@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import net from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { runAppToExit } from './app-server.mjs';
+import { copyTree, runAppToExit } from './app-server.mjs';
 
 // The harness's run to exit (#12): a port another process takes between the
 // pick and the bind must not fail a startup check, as it can't fail a start
@@ -118,4 +118,59 @@ test('an outbound request still on its way as the server exits is in the egress 
   assert.equal(runs.length, 1);
   assert.equal(run.code, 1);
   assert.deepEqual(run.egress, ['late.test:443']);
+});
+
+// A registry run in another process can remove an outdated compiled file from
+// public/ between a harness copy's listing and its read (#12, harness item 7).
+test('a copy a vanishing file breaks goes once more from scratch, and no more', (t) => {
+  const root = mkdtempSync(path.join(tmpdir(), 'portfolio-copy-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const to = path.join(root, 'to');
+  const vanished = (message) => Object.assign(new Error(message), { code: 'ENOENT' });
+
+  let calls = 0;
+  let failedAt = 0;
+  copyTree(
+    'from',
+    to,
+    { recursive: true },
+    (from, dest, options) => {
+      calls += 1;
+      assert.deepEqual([from, dest, options], ['from', to, { recursive: true }]);
+      mkdirSync(dest, { recursive: true });
+      if (calls === 1) {
+        writeFileSync(path.join(dest, 'outdated.css'), 'half');
+        failedAt = performance.now();
+        throw vanished('vanished');
+      }
+      // It waits for the run that removed the file to finish removing.
+      assert.ok(performance.now() - failedAt >= 50, 'it went again at once');
+      writeFileSync(path.join(dest, 'current.css'), 'whole');
+    },
+    50,
+  );
+  assert.equal(calls, 2);
+  assert.deepEqual(readdirSync(to), ['current.css']);
+
+  calls = 0;
+  assert.throws(
+    () =>
+      copyTree('from', to, {}, () => {
+        calls += 1;
+        throw vanished(`again ${calls}`);
+      }),
+    /again 2/,
+  );
+  assert.equal(calls, 2);
+
+  calls = 0;
+  assert.throws(
+    () =>
+      copyTree('from', to, {}, () => {
+        calls += 1;
+        throw Object.assign(new Error('denied'), { code: 'EACCES' });
+      }),
+    /denied/,
+  );
+  assert.equal(calls, 1);
 });
