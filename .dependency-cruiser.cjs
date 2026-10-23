@@ -221,9 +221,9 @@ module.exports = {
       comment:
         "Studio's half of the preview channel (#7, Slice 3) imports the protocol and nothing " +
         "else, so nothing a frame sends can reach Studio's transport through it (threat " +
-        'preview-3), and Slice 4 wraps it without its UI. depcruise resolves relative and ' +
-        "package imports, not ~/ ones: protocol.test.ts walks those, and the browser spec's " +
-        'chunk check covers what reaches a page.',
+        'preview-3), and Slice 4 wraps it without its UI. An import spelled with ~/ resolves ' +
+        'here too, and not-to-unresolvable fails one that does not. protocol.test.ts walks ' +
+        "the imports as well, and the browser spec's chunk check covers what reaches a page.",
       from: { path: '^apps/web/src/preview/studio-channel\\.ts$' },
       to: { pathNot: '^apps/web/src/preview/protocol\\.ts$' },
     },
@@ -234,8 +234,8 @@ module.exports = {
         'The preview agent (#7, Slice 3) runs in every preview document, so it, the status ' +
         "report, and the frame's half of the channel import that half, the protocol, and React, " +
         "and nothing else: never Studio's half, which would ship in the frame (threat " +
-        'preview-3). An allowlist, so an import spelled with ~/, which depcruise leaves ' +
-        'unresolved, fails it too.',
+        'preview-3). An allowlist, so an import of anything else fails it, relative or ' +
+        'spelled with ~/.',
       from: { path: '^apps/web/src/preview/(?:agent|report-status|frame-channel)\\.tsx?$' },
       to: {
         pathNot: [
