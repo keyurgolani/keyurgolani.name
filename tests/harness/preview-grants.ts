@@ -13,7 +13,7 @@ import { readFileSync } from 'node:fs';
 import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import { expect, type Frame, type Page, type Response } from '@playwright/test';
-import type { Draft, RevisionId } from '../../packages/core/src/owner';
+import type { Draft, RevisionId, UnitInput } from '../../packages/core/src/owner';
 import { DEFAULT_SITE } from './app-server.mjs';
 import type { App } from './fixtures';
 import type { StoreAnswer, StoreStep, StoreTask } from './preview-store';
@@ -108,6 +108,26 @@ export async function seedDraft(
   return (await storeStep(app, {
     op: 'seed',
     documents: unit(portfolio ?? portfolioNamed(name), site),
+  })) as Draft;
+}
+
+/**
+ * The working draft, made or replaced, holding `documents` as they are,
+ * with `blobs` in the AssetStore first: the renditions a media document
+ * among them names (#10).
+ */
+export async function seedDraftWith(
+  app: App,
+  documents: UnitInput,
+  blobs: readonly { readonly bytes: Uint8Array; readonly mediaType: string }[] = [],
+): Promise<Draft> {
+  return (await storeStep(app, {
+    op: 'seed',
+    documents,
+    blobs: blobs.map(({ bytes, mediaType }) => ({
+      base64: Buffer.from(bytes).toString('base64'),
+      mediaType,
+    })),
   })) as Draft;
 }
 

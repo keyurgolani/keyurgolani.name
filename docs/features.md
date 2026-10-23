@@ -16,7 +16,7 @@ What the platform can do today.
 - **One-time migration.** `pnpm config:migrate` converts the old one-file format, or a version 2 portfolio document, to version 3 in one run, with a dry run and a diff before it writes anything.
 - **Loose date strings.** `period: { start: "Jan 2024", end: "present" }` is fine, since people read this output, not parsers. ISO dates work too.
 - **Markdown in prose fields.** `lede.body`, `experience.items[].highlights[]`, and others honor a curated subset of Markdown.
-- **Media by id.** An image is a media asset, with its alt text, credit, and focal point, which a placement names and may override. Its renditions are derived data: until #10's second slice derives them, every image renders as `Image unavailable`, keeping its box, caption, and credit, and a decorative one renders nothing.
+- **Media by id.** An image is a media asset, with its alt text, credit, and focal point, which a placement names and may override. Its renditions are derived data, served from `/media`: until they derive, or when the source is gone, an image renders as `Image unavailable`, keeping its box, caption, and credit, and a decorative one renders nothing.
 - **Snapshots, not fetches.** Data from outside the documents, such as a GitHub profile, is a snapshot in `snapshots/<kind>.json` beside the two documents, frozen when it's taken. Nothing a visitor requests reaches a source.
 
 ## Variants and appearance

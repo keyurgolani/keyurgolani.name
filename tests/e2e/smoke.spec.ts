@@ -80,8 +80,9 @@ test(
   { annotation: { type: 'route', description: '/' } },
   async ({ page, blockedRequests }) => {
     await page.goto('/', { waitUntil: 'networkidle' });
-    // The work's cover has no rendition yet (#10), so it renders as unavailable,
-    // and the page asks the cover's own host for nothing.
+    // The work's cover is on a .test host, which a fetch refuses (#10), so it
+    // has no rendition and renders as unavailable, and the page asks that host
+    // for nothing.
     await expect(page.locator('[data-media-asset="fixture-garden-cover"]')).toContainText(
       'Image unavailable',
     );

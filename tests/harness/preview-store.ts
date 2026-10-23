@@ -12,8 +12,16 @@ import { openStore, preflight, type DraftId, type UnitInput } from '../../packag
 import { validatePublicationUnit } from '../../packages/schema/src/index';
 
 export type StoreStep =
-  /** Makes or replaces the working draft, holding `documents`, and returns it. */
-  | { readonly op: 'seed'; readonly documents: UnitInput }
+  /**
+   * Makes or replaces the working draft, holding `documents`, and returns
+   * it, with `blobs` (base64) put in the AssetStore first, as #10's
+   * ingestion puts a draft's renditions before the draft names them.
+   */
+  | {
+      readonly op: 'seed';
+      readonly documents: UnitInput;
+      readonly blobs?: readonly { readonly base64: string; readonly mediaType: string }[];
+    }
   /** Publishes a draft as the operator would, which removes it, and returns the new revision. */
   | { readonly op: 'publish'; readonly draftId: DraftId; readonly draftVersion: number };
 
@@ -40,6 +48,9 @@ async function storeOf(dataDir: string) {
 async function run({ dataDir, step }: Omit<StoreTask, 'id'>): Promise<unknown> {
   const store = await storeOf(dataDir);
   if (step.op === 'seed') {
+    for (const { base64, mediaType } of step.blobs ?? []) {
+      await store.assets.put(Buffer.from(base64, 'base64'), mediaType);
+    }
     const working = await store.drafts.getWorking();
     const outcome = await store.drafts.create(
       {
