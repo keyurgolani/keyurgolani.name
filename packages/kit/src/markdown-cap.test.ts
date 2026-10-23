@@ -71,10 +71,12 @@ function medians(run: () => unknown, baseline: () => unknown): { time: number; b
 
 // A field may cost this many times the benign field of the same length, the
 // benign time counted as at least the floor, and never more than the ceiling.
-// The search's slowest field costs about 9 times the benign one on the
-// development machine, and CI has run such ratios up to about twice what the
-// development machine does. Without the inline-mark limit the slowest field
-// the search finds costs over 150 times the benign one.
+// On the development machine the search's slowest field takes about 50 ms
+// either way, against 1.5 ms block and 0.7 inline for the benign one, so the
+// floor sets its bound, and a 1 MiB document of the field slowest for its
+// size takes about 30 times a benign document. CI has run such ratios up to
+// about twice what the development machine does. Without the inline-mark
+// limit, this test and the 1 MiB one both fail.
 const MAX_RATIO = 40;
 const FLOOR_MS = 4;
 const CEILING_MS = 1000;

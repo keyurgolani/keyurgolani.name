@@ -123,20 +123,23 @@ test('each limit holds at its value and refuses one past it, at the field pointe
   }
 });
 
-test('a shorter field holds fewer inline marks: four times the square root of its length, and 64 in any field', () => {
+test('a shorter field holds fewer inline marks: eight times the square root of its length, and 64 in any field', () => {
+  // A run of marks, each counted, then words to the length.
   const marks = (count: number, length: number) =>
-    `${'*a '.repeat(count)}${' word'.repeat(length)}`.slice(0, length);
+    `x${'*'.repeat(count)}${' word'.repeat(length)}`.slice(0, length);
   for (const [length, max] of [
     [1, 64],
-    [256, 64],
-    [300, 69],
-    [1024, 128],
-    [2500, 200],
-    [4096, 256],
+    [64, 64],
+    [65, 64],
+    [256, 128],
+    [300, 138],
+    [1024, 256],
+    [2500, 400],
+    [4096, 512],
     [MARKDOWN_MAX_LENGTH, MARKDOWN_MAX_INLINE_MARKS],
   ] as const) {
     assert.equal(inlineMarksFor(length), max, `${length} characters`);
-    if (3 * (max + 1) > length) continue;
+    if (max + 2 > length) continue;
     assert.equal(measureMarkdown(marks(max, length)).inlineMarks, max);
     assert.equal(
       markdownOverLimit(marks(max, length)),
@@ -157,7 +160,30 @@ test('a shorter field holds fewer inline marks: four times the square root of it
       finding.message,
     );
   }
-  assert.equal(MARKDOWN_MAX_INLINE_MARKS, 362);
+  assert.equal(MARKDOWN_MAX_INLINE_MARKS, 724);
+});
+
+test('dense marks that close validate: a 40-term glossary of bold terms and inline code, and emphasis-heavy copy', () => {
+  const glossary = Array.from(
+    { length: 40 },
+    (_, i) => `**Term ${i}** \`code${i}\`: what it does.`,
+  ).join('\n\n');
+  const copy = Array.from(
+    { length: 20 },
+    (_, i) => `*Fast* setup, **no** config, _yours_ to keep ${i}.`,
+  ).join(' ');
+  for (const [name, text, marks] of [
+    ['the glossary', glossary, 240],
+    ['the copy', copy, 160],
+  ] as const) {
+    assert.equal(measureMarkdown(text).inlineMarks, marks, name);
+    assert.ok(text.length < 2048, `${name} is ${text.length} characters`);
+    assert.deepEqual(
+      validate(text).diagnostics.map(({ code }) => code),
+      [],
+      `${name} validates`,
+    );
+  }
 });
 
 test('the Markdown codes block publish and preview, and their messages never quote the field', () => {

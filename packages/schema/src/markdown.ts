@@ -140,18 +140,21 @@ export const MARKDOWN_MAX_DEFINITIONS = 32;
  * with inline code and emphasis (156 marks) costs what plain text does.
  *
  * Text costs its length and these marks the square of their count, so the
- * marks a field may hold grow with the square root of its length: four
- * times that root, and 64 in any field, so 128 in 1,024 characters, 256 in
- * 4,096, and 362 at the length limit. At every length that holds them to
- * about 10 times what as much ordinary prose costs block, and 18 times
- * inline. One limit for every length would let a document of short fields
- * cost many times what as much prose does: at 256 marks a field, 47 times.
+ * marks a field may hold grow with the square root of its length: eight
+ * times that root, and 64 in any field, so 128 in 256 characters, 256 in
+ * 1,024, and 724 at the length limit. Marks that close, as in a glossary of
+ * bold terms and inline code, cost what text does, and the count can't tell
+ * them apart, so the limit leaves room for them: 240 in a 1,700-character
+ * glossary. Marks that never close, at the limit, cost about 21 times what
+ * as much ordinary prose costs block and 46 times inline, at any length. One
+ * limit for every length would let a document of short fields cost many
+ * times what as much prose does: at 256 marks a field, 47 times.
  */
 export function inlineMarksFor(length: number): number {
-  return Math.max(64, Math.floor(Math.sqrt(16 * length)));
+  return Math.max(64, Math.floor(Math.sqrt(64 * length)));
 }
 
-/** The most inline marks a field holds, at the length limit: 362. */
+/** The most inline marks a field holds, at the length limit: 724. */
 export const MARKDOWN_MAX_INLINE_MARKS = inlineMarksFor(MARKDOWN_MAX_LENGTH);
 
 /**
