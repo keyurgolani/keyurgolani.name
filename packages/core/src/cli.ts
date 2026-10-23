@@ -137,7 +137,8 @@ const PREFLIGHT_MESSAGES: Readonly<Record<PreflightCode, string>> = {
     "PORTFOLIO_DATA_DIR holds a store in a layout this build doesn't read (store.json).",
   data_dir_restore_incomplete:
     "PORTFOLIO_DATA_DIR holds a restore that didn't finish. Restore again, into an empty " +
-    'directory, and point PORTFOLIO_DATA_DIR there.',
+    'directory, and point PORTFOLIO_DATA_DIR there: under compose, remove the portfolio-data ' +
+    'volume first (docs/deployment.md, Backups).',
 };
 
 const PROTECTION: Readonly<Record<Protection, string>> = {
@@ -753,12 +754,16 @@ class Commands {
     const { record } = held;
     const what = typeof record.holder === 'string' ? record.holder : 'an unknown holder';
     const age = `${Math.round(held.ageMs / 1000)} s`;
+    const where =
+      record.hostname === thisProcess().hostname
+        ? 'on this host'
+        : `on another host, ${typeof record.hostname === 'string' ? record.hostname : 'unnamed'},`;
     // A lock whose holder stopped breaks itself on the next acquire: only a
     // running holder's is worth this command, and the one it can hurt.
     if (held.running && !values.running) {
       this.complain(
-        `lock_held: process ${record.pid} on this host holds the publication lock for ${what}, ` +
-          `and touched it ${age} ago, so it's still running. Wait for it, or stop it. To ` +
+        `lock_held: process ${record.pid} ${where} holds the publication lock for ${what}, ` +
+          `and touched it ${age} ago, so it may still be running. Wait for it, or stop it. To ` +
           'remove its lock anyway, run unlock --force --running. Nothing changed.',
       );
       return 1;

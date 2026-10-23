@@ -713,3 +713,30 @@ test('two restores into one new directory at once: one restores, the other gets 
   assert.deepEqual(report.problems, []);
   assert.equal((await readLive(nodeFs, storePaths(into)))?.seq, 2);
 });
+
+test('a backup or a restore that fails in a directory that was there and empty leaves it there, and empty', async (t) => {
+  const store = await seeded(t);
+  const out = await backedUp(t, store);
+  /** nodeFs, except that the third file `operation` writes fails. */
+  const failing = (operation: 'backup' | 'restore'): FsPort => {
+    let writes = 0;
+    return {
+      ...nodeFs,
+      async writeFile(file, data, point, options) {
+        if (point === `${operation}.write` && ++writes === 3) {
+          throw Object.assign(new Error('No space left.'), { code: 'ENOSPC' });
+        }
+        return nodeFs.writeFile(file, data, point, options);
+      },
+    };
+  };
+  // An operator's own directory, or a volume's mount point: there before the run.
+  const backupDir = tempDir(t, 'store-existing-');
+  await assert.rejects(
+    backupStore({ fs: failing('backup'), paths: store.paths, lock: store.lock }, backupDir),
+  );
+  assert.deepEqual(readdirSync(backupDir), [], 'the backup directory stays, empty');
+  const volume = tempDir(t, 'store-existing-');
+  await assert.rejects(restoreStore({ fs: failing('restore') }, out, volume));
+  assert.deepEqual(readdirSync(volume), [], 'the volume stays, empty');
+});

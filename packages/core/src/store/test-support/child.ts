@@ -153,6 +153,7 @@ function pausingFs(
     rename: (from, to, point) => hold(point, () => inner.rename(from, to, point)),
     link: (existing, created, point) => hold(point, () => inner.link(existing, created, point)),
     remove: (target, point) => hold(point, () => inner.remove(target, point)),
+    rmdir: (dir, point) => hold(point, () => inner.rmdir(dir, point)),
     touch: (file, point) => hold(point, () => inner.touch(file, point)),
   };
   return fs;

@@ -16,7 +16,7 @@ export interface PointHit {
 
 /** A call that changes the disk, as recordingFs() lists it. */
 export interface FsCall {
-  readonly op: 'mkdir' | 'writeFile' | 'fsync' | 'rename' | 'link' | 'remove' | 'touch';
+  readonly op: 'mkdir' | 'writeFile' | 'fsync' | 'rename' | 'link' | 'remove' | 'rmdir' | 'touch';
   readonly point: CrashPoint;
   /** What it changes: for rename() and link(), the new name. */
   readonly target: string;
@@ -66,6 +66,10 @@ function intercepted(inner: FsPort, before: (call: FsCall) => void): FsPort {
     async remove(target, point) {
       before({ op: 'remove', point, target });
       return inner.remove(target, point);
+    },
+    async rmdir(dir, point) {
+      before({ op: 'rmdir', point, target: dir });
+      return inner.rmdir(dir, point);
     },
     async touch(file, point) {
       before({ op: 'touch', point, target: file });

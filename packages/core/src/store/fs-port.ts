@@ -9,6 +9,7 @@ import {
   readdir,
   rename,
   rm,
+  rmdir,
   stat,
 } from 'node:fs/promises';
 import path from 'node:path';
@@ -133,6 +134,13 @@ export interface FsPort extends ReadFs {
    * nothing is there. One of the pointer's paths fails with EPERM.
    */
   remove(target: string, point: CrashPoint): Promise<void>;
+  /**
+   * Removes `dir` when it's an empty directory, and nothing when nothing is
+   * there. One that isn't empty fails with ENOTEMPTY and stays, whatever
+   * landed in it since anyone looked. One of the pointer's paths fails with
+   * EPERM.
+   */
+  rmdir(dir: string, point: CrashPoint): Promise<void>;
   /** Sets the modification time of `file` itself, not what a link points at, to now. */
   touch(file: string, point: CrashPoint): Promise<void>;
 }
@@ -252,6 +260,14 @@ export const nodeFs: FsPort = Object.freeze({
   async remove(target: string) {
     if (isPointerPath(target)) throw pointerRefused(target);
     await rm(target, { recursive: true, force: true });
+  },
+  async rmdir(dir: string) {
+    if (isPointerPath(dir)) throw pointerRefused(dir);
+    try {
+      await rmdir(dir);
+    } catch (error) {
+      if (!missing(error)) throw error;
+    }
   },
   async touch(file: string) {
     const now = new Date();

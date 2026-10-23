@@ -245,9 +245,11 @@ export interface PublicationLock {
   holder(): Promise<LockRecord | null>;
   /**
    * What holds it now, how long since its holder last touched it, and
-   * whether that holder is running: on this host, its process still the
-   * one that wrote the record, and touched within LOCK_STALE_MS. Null when
-   * nothing holds it.
+   * whether that holder may be running: touched within LOCK_STALE_MS, and,
+   * on this host, its process still the one that wrote the record. One on
+   * another host can't be checked from here, as when the CLI runs in a
+   * container of its own beside the server's, so a fresh one counts as
+   * running. Null when nothing holds it.
    */
   held(): Promise<{
     readonly record: Partial<LockRecord>;
@@ -524,11 +526,8 @@ export function publicationLock({
       if (!found) return null;
       const record = parseRecord(found.text) ?? {};
       const ageMs = Math.max(0, now() - found.mtimeMs);
-      const running =
-        record.hostname === hostname() &&
-        Number.isSafeInteger(record.pid) &&
-        processGone(record) === null &&
-        ageMs <= staleMs;
+      const here = record.hostname === hostname();
+      const running = ageMs <= staleMs && (!here || processGone(record) === null);
       return { record, ageMs, running };
     },
     async forceUnlock(nonce) {

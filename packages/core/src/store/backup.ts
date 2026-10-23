@@ -265,23 +265,18 @@ async function claimed(fs: FsPort, root: string, operation: 'backup' | 'restore'
       await fs.fsync(root, point('claim.dir.fsync'));
     },
     /**
-     * Removes the files it wrote and the directories it made, when nothing
-     * else is in them, then its claim, until the log is in place. After
-     * that, the claim stays.
+     * Removes the files it wrote and the directories it made, each only
+     * while nothing else is in it (rmdir, never a tree), then its claim,
+     * and `root` itself only when it made it. Until the log is in place:
+     * after that, the claim stays.
      */
     async undo(): Promise<void> {
       if (placed) return;
       const quietly = (task: Promise<unknown>) => task.catch(() => {});
       for (const file of made.reverse()) await quietly(fs.remove(file, point('undo')));
-      for (const dir of deepestFirst(createdDirs)) {
-        if ((await fs.readdir(dir).catch(() => [''])).length === 0) {
-          await quietly(fs.remove(dir, point('undo')));
-        }
-      }
+      for (const dir of deepestFirst(createdDirs)) await quietly(fs.rmdir(dir, point('undo')));
       await quietly(fs.remove(claim, point('undo')));
-      if (madeRoot && (await fs.readdir(root).catch(() => [''])).length === 0) {
-        await quietly(fs.remove(root, point('undo')));
-      }
+      if (madeRoot) await quietly(fs.rmdir(root, point('undo')));
     },
   };
 }

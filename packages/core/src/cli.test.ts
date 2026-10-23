@@ -264,7 +264,7 @@ test('unlock needs --force, and --running too for a holder still running here, a
     running.err,
     new RegExp(
       `^lock_held: process ${process.pid} on this host holds the publication lock for publish, ` +
-        'and touched it \\d+ s ago, so it.s still running\\. .*unlock --force --running\\. ' +
+        'and touched it \\d+ s ago, so it may still be running\\. .*unlock --force --running\\. ' +
         'Nothing changed\\.$',
       'm',
     ),
@@ -281,19 +281,38 @@ test('unlock needs --force, and --running too for a holder still running here, a
   const again = await cli(['unlock', '--force'], call);
   assert.equal(again.out, 'Nothing holds the publication lock.\n');
   await held.release();
+});
 
-  // A holder on another host can't be checked from here, and isn't refused.
-  const elsewhere: LockRecord = {
-    pid: process.pid,
+test("unlock --force refuses another host's lock touched in the last 2 minutes, as a server's is to a compose run, and takes an older one", async (t) => {
+  const store = await newStore(t);
+  const call = { dataDir: store.paths.root, readSource };
+  // The server in its own container, as `docker compose run` sees it: another hostname.
+  const server: LockRecord = {
+    pid: 1,
     startTime: null,
     hostname: 'another-host.invalid',
     holder: 'publish',
     at: new Date().toISOString(),
-    nonce: 'elsewhere',
+    nonce: 'server',
   };
-  writeFileSync(store.paths.lock, JSON.stringify(elsewhere));
-  const other = await cli(['unlock', '--force'], call);
-  assert.equal(other.code, 0, other.err);
+  writeFileSync(store.paths.lock, JSON.stringify(server));
+  const fresh = await cli(['unlock', '--force'], call);
+  assert.equal(fresh.code, 1, fresh.out);
+  assert.match(
+    fresh.err,
+    /^lock_held: process 1 on another host, another-host\.invalid, holds the publication lock for publish, and touched it \d+ s ago, so it may still be running\. .* Nothing changed\.$/m,
+  );
+  assert.equal((await store.lock.holder())?.nonce, 'server', 'the lock stays');
+  const confirmed = await cli(['unlock', '--force', '--running'], call);
+  assert.equal(confirmed.code, 0, confirmed.err);
+  assert.equal(await store.lock.holder(), null);
+
+  // One nobody touched for over 2 minutes is stale, wherever its holder runs.
+  writeFileSync(store.paths.lock, JSON.stringify({ ...server, nonce: 'stale' }));
+  const old = new Date(Date.now() - 3 * 60_000);
+  utimesSync(store.paths.lock, old, old);
+  const stale = await cli(['unlock', '--force'], call);
+  assert.equal(stale.code, 0, stale.err);
   assert.equal(await store.lock.holder(), null);
 });
 
@@ -317,7 +336,7 @@ test('unlock removes the lock it read, by its record, and leaves one taken while
       return nodeFs.rename(from, to, point, pass);
     },
   };
-  const raced = await cli(['unlock', '--force'], { ...call, fs: racing });
+  const raced = await cli(['unlock', '--force', '--running'], { ...call, fs: racing });
   assert.equal(raced.code, 1);
   assert.match(raced.out, /^The publication lock changed hands while unlock read it/m);
   assert.equal((await store.lock.holder())?.nonce, 'second', "the newer holder's lock stays");
