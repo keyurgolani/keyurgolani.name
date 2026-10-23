@@ -81,6 +81,7 @@ export const RULES = [
       'package.json',
       'pnpm-workspace.yaml',
       '.npmrc',
+      '.pnpmfile.cjs',
       '.node-version',
       '.nvmrc',
       'tsconfig.base.json',

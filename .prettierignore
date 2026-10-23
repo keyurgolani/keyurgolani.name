@@ -12,3 +12,5 @@ docs/screenshots/
 # copies of #4's pairs
 **/__fixtures__/
 packages/variant-contract/fixtures/
+# pnpm-lock.yaml excerpts, byte for byte, for ci/lib/lockfile-drift.mjs's tests
+ci/fixtures/lockfile-drift/

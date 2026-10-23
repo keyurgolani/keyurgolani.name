@@ -3,12 +3,17 @@
 // variant in this directory, installed the way an owner installs a variant
 // from its tarball, checked, and removed, in a temporary `git worktree` of
 // HEAD. Nothing in this checkout changes. Packages come from the store this
-// checkout's install filled; the add and the remove may fetch registry
+// checkout's install filled; the lockfile's re-resolution, the add, and the
+// remove may fetch registry
 // metadata, which a frozen install never reads, and the servers it starts
 // reach no host outside the machine.
 //
 //   1. The worktree, installed offline from the store this checkout's
-//      install filled. git status is clean.
+//      install filled. git status is clean. Then the lockfile re-resolved,
+//      installing nothing: git status is still clean, or the committed
+//      lockfile isn't what pnpm writes and the run stops there, saying so
+//      (ci/lib/lockfile-drift.mjs). After that, a changed lockfile is the
+//      add's or the remove's.
 //   2. The package built outside it, its peers linked from the worktree's
 //      install as a published package's devDependencies would be: tsc writes
 //      ESM and .d.ts into dist/, and `pnpm pack` makes the tarball, which
@@ -51,6 +56,11 @@ import {
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import {
+  canonicalLockfileProblem,
+  LOCKFILE_REFRESH,
+  removalProblem,
+} from '../../ci/lib/lockfile-drift.mjs';
 import { reportsDir } from '../../ci/lib/reports.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -129,7 +139,7 @@ function expectStatus(host, expected, message) {
   const actual = status(host);
   if (JSON.stringify(actual) !== JSON.stringify(expected)) {
     const diff = git(['diff', '--', ...actual.map((line) => line.slice(3))], host);
-    console.error(`[external-variant] ${message}, but git status shows:\n${actual.join('\n')}`);
+    console.error(`[external-variant] ${message}\ngit status shows:\n${actual.join('\n')}`);
     console.error(diff.split('\n').slice(0, 120).join('\n'));
   }
   assert.deepEqual(actual, expected, message);
@@ -209,6 +219,22 @@ function packReference(host, work) {
   return tarball;
 }
 
+/**
+ * Asserts git status is clean, and when it isn't, fails with `problem`'s
+ * account of what changed, after the diff.
+ *
+ * @param {string} host
+ * @param {typeof canonicalLockfileProblem} problem
+ */
+function expectLockfile(host, problem) {
+  const message = problem({
+    status: status(host),
+    before: git(['show', 'HEAD:pnpm-lock.yaml'], host),
+    after: readFileSync(path.join(host, 'pnpm-lock.yaml'), 'utf8'),
+  });
+  if (message) expectStatus(host, [], message);
+}
+
 /** The host's package.json in the worktree, against HEAD's: what `pnpm add` changed in it. */
 function addedDependencies(host) {
   const before = JSON.parse(git(['show', 'HEAD:apps/web/package.json'], host));
@@ -265,7 +291,9 @@ async function checkRemoved(host, work) {
  * the store this checkout's install filled, with the reference variant
  * packed outside it and added from its tarball, as an owner installs one.
  * Returns the worktree and the store. #11's close and scheduled quality runs
- * install it this way too (tests/quality/run.ts --external-variant).
+ * install it this way too (tests/quality/run.ts --external-variant), the
+ * lockfile refresh's check included: a lockfile pnpm doesn't write stops
+ * them before the add as well.
  *
  * @param {string} work an empty temporary directory
  * @param {{ onAdded?: () => void }} [hooks] onAdded runs as soon as the add
@@ -288,6 +316,9 @@ export function installReference(work, { onAdded } = {}) {
     cwd: host,
   });
   expectStatus(host, [], 'the installed worktree is clean');
+  step('pnpm-lock.yaml re-resolved, as pnpm writes it');
+  pnpm([...LOCKFILE_REFRESH, '--store-dir', store], { cwd: host });
+  expectLockfile(host, canonicalLockfileProblem);
 
   step(`Building and packing ${PACKAGE}`);
   const tarball = packReference(host, work);
@@ -423,7 +454,7 @@ async function main() {
       },
     );
     added = false;
-    expectStatus(host, [], 'the remove leaves nothing changed');
+    expectLockfile(host, removalProblem);
 
     step('pnpm build, without it');
     pnpm(['build'], { cwd: host });

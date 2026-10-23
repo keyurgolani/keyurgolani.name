@@ -60,6 +60,8 @@ export const ROOT_FILES = [
   'pnpm-lock.yaml',
   'pnpm-workspace.yaml',
   '.npmrc',
+  // The lockfile records its checksum: a frozen install without it fails.
+  '.pnpmfile.cjs',
   'tsconfig.base.json',
   'portfolio.example.yml',
   'site.example.yml',
