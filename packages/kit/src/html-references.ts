@@ -3,8 +3,11 @@
 // renderer's links (markdown.ts) and the server's post-pass over its markup
 // (markdown-sanitize.ts) both read hrefs through it.
 
-/** The named references that spell ASCII, so a URL can hide behind them, and the no-break space. */
-const NAMED: Readonly<Record<string, string>> = {
+/**
+ * Every named reference whose expansion starts with ASCII, so a URL can hide
+ * behind it, and the no-break space. A test holds the list to HTML5's.
+ */
+export const NAMED: Readonly<Record<string, string>> = {
   Tab: '\t',
   NewLine: '\n',
   excl: '!',
@@ -50,6 +53,10 @@ const NAMED: Readonly<Record<string, string>> = {
   VerticalLine: '|',
   rcub: '}',
   rbrace: '}',
+  fjlig: 'fj',
+  bne: '=\u20E5',
+  nvlt: '<\u20D2',
+  nvgt: '>\u20D2',
   nbsp: '\u00A0',
   NonBreakingSpace: '\u00A0',
 };
@@ -89,4 +96,16 @@ export function decodeReferences(value: string): string {
 function fromCodePoint(value: number): string {
   if (value === 0 || value > 0x10ffff || (value >= 0xd800 && value <= 0xdfff)) return '\uFFFD';
   return String.fromCodePoint(value);
+}
+
+/**
+ * Whether `value` holds a named reference with its semicolon, `&name;`, that
+ * NAMED doesn't know, which a browser may decode to something this module
+ * can't judge.
+ */
+export function hasUnknownReference(value: string): boolean {
+  for (const [, name] of value.matchAll(/&([A-Za-z][A-Za-z0-9]*);/g)) {
+    if (!Object.hasOwn(NAMED, name!)) return true;
+  }
+  return false;
 }

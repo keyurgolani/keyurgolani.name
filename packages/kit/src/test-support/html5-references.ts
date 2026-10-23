@@ -1,0 +1,60 @@
+// For tests: every HTML5 named character reference whose expansion starts
+// with an ASCII character, 49 of the 2,125 names, with what each
+// expands to. Generated once from the decode table of entities 8.1.0 (the
+// package htmlparser2 parses with), by walking every name it decodes, and
+// frozen here: html-references.ts's NAMED must hold each of them.
+
+export const HTML5_ASCII_REFERENCES: Readonly<Record<string, string>> = {
+  AMP: '&',
+  DiacriticalGrave: '`',
+  GT: '>',
+  Hat: '^',
+  LT: '<',
+  NewLine: '\u000A',
+  QUOT: '"',
+  Tab: '\u0009',
+  UnderBar: '_',
+  VerticalLine: '|',
+  amp: '&',
+  apos: "'",
+  ast: '*',
+  bne: '=\u20E5',
+  bsol: '\\',
+  colon: ':',
+  comma: ',',
+  commat: '@',
+  dollar: '$',
+  equals: '=',
+  excl: '!',
+  fjlig: 'fj',
+  grave: '`',
+  gt: '>',
+  lbrace: '{',
+  lbrack: '[',
+  lcub: '{',
+  lowbar: '_',
+  lpar: '(',
+  lsqb: '[',
+  lt: '<',
+  midast: '*',
+  num: '#',
+  nvgt: '>\u20D2',
+  nvlt: '<\u20D2',
+  percnt: '%',
+  period: '.',
+  plus: '+',
+  quest: '?',
+  quot: '"',
+  rbrace: '}',
+  rbrack: ']',
+  rcub: '}',
+  rpar: ')',
+  rsqb: ']',
+  semi: ';',
+  sol: '/',
+  verbar: '|',
+  vert: '|',
+};
+
+/** How many named references HTML5 has, with their semicolon. */
+export const HTML5_REFERENCE_COUNT = 2125;

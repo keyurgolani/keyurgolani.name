@@ -1,6 +1,6 @@
 import sanitizeHtml from 'sanitize-html';
 import { isAllowedUrl } from '@portfolio/schema';
-import { decodeReferences } from './html-references';
+import { decodeReferences, hasUnknownReference } from './html-references';
 
 // sanitize-html over the markup the Markdown renderer writes (#10), a second
 // pass with the renderer's own allowlist: block p, a, em, strong, code, pre,
@@ -23,14 +23,17 @@ const BLOCK = [...INLINE, 'p', 'pre', 'ul', 'ol', 'li', 'blockquote', 'h3', 'h4'
 
 /**
  * An a keeps its href when #4's link rule allows the URL a browser reads
- * from it, and otherwise stays with none, so it goes nowhere. It isn't
- * renamed to a tag the allowlist drops: sanitize-html 2.18 then writes the
- * next element's closing tag with that name.
+ * from it, and otherwise stays with none, so it goes nowhere. An href with a
+ * named reference the decoder doesn't know is refused, since a browser may
+ * read it as something the rule never judged; the renderer never writes
+ * one. A refused a isn't renamed to a tag the allowlist drops: sanitize-html
+ * 2.18 then writes the next element's closing tag with that name.
  */
 function link(tagName: string, attribs: sanitizeHtml.Attributes): sanitizeHtml.Transformed {
   // The hook decides href alone; allowedAttributes drops the rest.
   const { href, ...rest } = attribs;
-  const allowed = href !== undefined && isAllowedUrl(decodeReferences(href));
+  const allowed =
+    href !== undefined && !hasUnknownReference(href) && isAllowedUrl(decodeReferences(href));
   return { tagName, attribs: allowed ? { ...rest, href } : rest };
 }
 
@@ -40,11 +43,8 @@ function options(allowedTags: string[]): sanitizeHtml.Options {
     allowedAttributes: { a: ['href'] },
     allowedClasses: {},
     allowedStyles: {},
-    allowedSchemes: [],
-    allowedSchemesByTag: {},
+    // sanitize-html's own scheme check judges no attribute: the hook judges href.
     allowedSchemesAppliedToAttributes: [],
-    allowProtocolRelative: false,
-    allowVulnerableTags: false,
     disallowedTagsMode: 'discard',
     // The markup's entities pass as written, and the hook decodes href itself.
     parser: { decodeEntities: false },

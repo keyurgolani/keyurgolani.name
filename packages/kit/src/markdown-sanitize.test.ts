@@ -1,10 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
+import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 import { isAllowedUrl } from '@portfolio/schema';
+import { decodeReferences, NAMED } from './html-references';
 import { renderInlineMarkdown, renderMarkdown } from './markdown';
 import { renderers } from './markdown-post-pass';
 import * as server from './markdown.server';
@@ -18,6 +20,7 @@ import {
   REFUSED_SCHEMES,
   TAG_FORMS,
 } from './test-support/markdown-corpus';
+import { HTML5_ASCII_REFERENCES, HTML5_REFERENCE_COUNT } from './test-support/html5-references';
 import { destinationProblems, hrefProblems, type Allowlist } from './test-support/strict-html';
 
 // The server's post-pass (#10): sanitize-html over the renderer's markup, with
@@ -172,6 +175,58 @@ test('the server entry runs the post-pass over whatever the renderer writes: a b
   assert.equal(server.renderMarkdown('*x*'), renderMarkdown('*x*'));
 });
 
+test('the reference decoder knows every HTML5 name whose expansion starts with ASCII, and no other but the no-break space', () => {
+  assert.equal(HTML5_REFERENCE_COUNT, 2125);
+  assert.equal(Object.keys(HTML5_ASCII_REFERENCES).length, 49);
+  for (const [name, value] of Object.entries(HTML5_ASCII_REFERENCES)) {
+    assert.equal(NAMED[name], value, name);
+    assert.equal(decodeReferences(`&${name};`), value, name);
+  }
+  assert.deepEqual(
+    Object.keys(NAMED)
+      .filter((name) => !Object.hasOwn(HTML5_ASCII_REFERENCES, name))
+      .sort(),
+    ['NonBreakingSpace', 'nbsp'],
+  );
+});
+
+test('an href with a named reference the decoder does not know goes nowhere, and so does one that spells a scheme through fjlig', () => {
+  for (const href of [
+    '&fjlig;x:y',
+    'j&fjlig;:x',
+    '&fjlig;javascript:x',
+    'https://x.test/&copy;',
+    'https://x.test/&notaname;x',
+  ]) {
+    assert.equal(sanitizeBlocks(`<p><a href="${href}">x</a></p>`), '<p><a>x</a></p>', href);
+    assert.equal(sanitizeInline(`<a href="${href}">x</a>`), '<a>x</a>', href);
+  }
+  // A known name, and a reference without its semicolon, which sanitize-html writes as text.
+  for (const href of ['https://x.test/?a=1&amp;b=2', 'https://x.test/&copy']) {
+    const html = `<p><a href="${href}">x</a></p>`;
+    assert.match(sanitizeBlocks(html), /^<p><a href="/, href);
+  }
+});
+
+test('a character reference name of 20 characters stays a reference and one of 21 shows as typed, through both entries', () => {
+  for (const [name, kept] of [
+    ['DoubleLeftRightArrow', true],
+    ['CloseCurlyDoubleQuote', false],
+  ] as const) {
+    assert.equal(name.length, kept ? 20 : 21);
+    for (const render of [
+      renderMarkdown,
+      renderInlineMarkdown,
+      server.renderMarkdown,
+      server.renderInlineMarkdown,
+    ]) {
+      const html = render(`a &${name}; b`);
+      assert.equal(html.includes(`a &${name}; b`), kept, `${name}: ${html}`);
+      assert.equal(html.includes(`a &amp;${name}; b`), !kept, `${name}: ${html}`);
+    }
+  }
+});
+
 /** Where `@portfolio/kit/markdown` resolves from the kit, with `conditions`. */
 function resolved(conditions: string[]): string {
   return execFileSync(
@@ -186,13 +241,36 @@ function resolved(conditions: string[]): string {
   );
 }
 
-test('@portfolio/kit/markdown is the post-pass under the react-server condition and the renderer alone elsewhere, and RichText and the kit index import it by that name', () => {
+/** Every kit source module, tests and test support aside, relative to the kit. */
+function kitModules(): string[] {
+  const files: string[] = [];
+  const walk = (dir: string) => {
+    for (const entry of readdirSync(path.join(KIT, dir), { withFileTypes: true })) {
+      const file = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name !== 'test-support') walk(file);
+      } else if (/\.tsx?$/.test(entry.name) && !/\.test\.tsx?$|\.d\.ts$/.test(entry.name)) {
+        files.push(file);
+      }
+    }
+  };
+  walk('src');
+  return files;
+}
+
+test('@portfolio/kit/markdown is the post-pass under the react-server condition and the renderer alone elsewhere, and no kit module but the post-pass imports the renderer by path', () => {
   assert.match(resolved(['react-server']), /\/src\/markdown\.server\.ts$/);
   assert.match(resolved([]), /\/src\/markdown\.ts$/);
+  const byPath = kitModules().filter((file) =>
+    /from '(?:\.\.?\/)+markdown';/.test(readFileSync(path.join(KIT, file), 'utf8')),
+  );
+  assert.deepEqual(byPath, [path.join('src', 'markdown-post-pass.ts')]);
   for (const file of ['src/sections/rich-text.tsx', 'src/index.ts']) {
-    const source = readFileSync(new URL(file, new URL('../', import.meta.url)), 'utf8');
-    assert.match(source, /from '@portfolio\/kit\/markdown';/, file);
-    assert.doesNotMatch(source, /from '\.\.?\/markdown';/, file);
+    assert.match(
+      readFileSync(path.join(KIT, file), 'utf8'),
+      /from '@portfolio\/kit\/markdown';/,
+      file,
+    );
   }
 });
 

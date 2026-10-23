@@ -14,11 +14,7 @@ declare module 'sanitize-html' {
       allowedAttributes: Record<string, string[]>;
       allowedClasses?: Record<string, string[]>;
       allowedStyles?: Record<string, Record<string, RegExp[]>>;
-      allowedSchemes?: string[];
-      allowedSchemesByTag?: Record<string, string[]>;
       allowedSchemesAppliedToAttributes?: string[];
-      allowProtocolRelative?: boolean;
-      allowVulnerableTags?: boolean;
       disallowedTagsMode?: 'discard' | 'escape' | 'recursiveEscape';
       parser?: { decodeEntities?: boolean; lowerCaseTags?: boolean };
       transformTags?: Record<string, (tagName: string, attribs: Attributes) => Transformed>;
