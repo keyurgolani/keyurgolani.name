@@ -451,7 +451,7 @@ function sharedAsset(pathname: string): boolean {
 const HEALTH_PATHS: ReadonlySet<string> = new Set(['/api/health', READY_PATH]);
 
 /**
- * Which host the request came to (#7, Slice 4, item 2), as its Host header
+ * Which host the request came to (#7, Slice 4), as its Host header
  * names it: the deployment's own, the preview origin's, or another. Without
  * a preview origin every host is the deployment's, as before. With one, it
  * fails closed: a host that's neither, such as one a proxy rewrote, is
