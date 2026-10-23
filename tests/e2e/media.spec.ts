@@ -77,8 +77,13 @@ function writeSources() {
 // A worker writes them as it loads this file: its server starts as the
 // first test's fixtures are set up, before any hook runs. The runner's own
 // process only lists the tests, and writes nothing.
-if (process.env.TEST_WORKER_INDEX !== undefined) writeSources();
-test.afterAll(() => rmSync(base, { recursive: true, force: true }));
+// They go when the worker exits: an afterAll hook runs after each group of
+// this file's tests a worker takes, while its server, and the media cache
+// under the same directory, serve on to the next group.
+if (process.env.TEST_WORKER_INDEX !== undefined) {
+  writeSources();
+  process.once('exit', () => rmSync(base, { recursive: true, force: true }));
+}
 
 /** The page's HTML once startup derivation has finished, which happens in the background. */
 async function derivedHome(request: Parameters<typeof visitorOutput>[0]) {
@@ -158,6 +163,8 @@ test(
     await page.goto('/');
     const image = page.locator('img[alt="Rows of identical seedlings"]');
     await expect(image).toBeVisible();
+    // It may load lazily: in view, it loads.
+    await image.scrollIntoViewIfNeeded();
     await expect
       .poll(() =>
         image.evaluate((element: HTMLImageElement) => element.complete && element.naturalWidth),

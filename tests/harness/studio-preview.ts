@@ -101,6 +101,8 @@ export async function expectFrameImage(
   const grant = new URL(frame.url()).pathname.split('/')[2]!;
   const image = frame.locator('img[alt="Rows of identical seedlings"]');
   await expect(image).toBeVisible();
+  // It may load lazily: in view, it loads.
+  await image.scrollIntoViewIfNeeded();
   await expect
     .poll(() =>
       image.evaluate((element: HTMLImageElement) => element.complete && element.naturalWidth),
