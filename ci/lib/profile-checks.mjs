@@ -704,7 +704,7 @@ export const DYNAMIC_ROUTES = Object.freeze({
   '/[...view]': { madeUp: 'not-found' },
   '/work/[slug]': { madeUp: 'not-found', sample: 'case-study' },
   '/work/[slug]/[...view]': { madeUp: 'not-found' },
-  '/sample/[[...path]]': { madeUp: 'served' },
+  '/sample/[[...path]]': { madeUp: 'served', sample: 'case-study' },
   '/preview/dev/[variant]/[fixture]': { madeUp: 'not-found' },
   '/preview/[grant]/[[...route]]': { madeUp: 'status-document' },
   '/preview-assets/[grant]/[...path]': { madeUp: 'status-document' },
@@ -722,9 +722,12 @@ export const MADE_UP_EXPECTATIONS = Object.freeze([
 /** Whether a route pattern has a dynamic segment, such as [slug] or [[...path]]. */
 export const isDynamic = (pattern) => /\[[^\]]*\]/.test(pattern);
 
-/** The first case study a page links to, as /work/<slug>, or null (#10b). */
+/**
+ * The first case study a page links to, as /work/<slug>, or as
+ * /sample/work/<slug>, where demo's root links the sample's (#10b), or null.
+ */
 export function caseStudyIn(html) {
-  return /\shref="(\/work\/[a-z0-9]+(?:-[a-z0-9]+)*)"/.exec(html ?? '')?.[1] ?? null;
+  return /\shref="((?:\/sample)?\/work\/[a-z0-9]+(?:-[a-z0-9]+)*)"/.exec(html ?? '')?.[1] ?? null;
 }
 
 /**
@@ -757,13 +760,47 @@ export function caseStudyProblems(pathname, response) {
  * answer, `required` says whether a profile that serves the pattern must
  * name one, and `profiles`, when given, which profiles look. demo's
  * renditions must show once it has derived them, from the bundled sample's
- * images; a case study is the content's to have, so a page that links none
- * skips it, as / does until #10b links them.
+ * images. A case study must show where the content links one (#10b): the
+ * bundled sample's root under demo links its case study below /sample. The
+ * harness fixture that read-only and owner serve has none, so they don't
+ * look. Each profile a required sample lists must serve a pattern that
+ * carries it (requiredSampleProblems()), so none is skipped for want of a
+ * route.
  */
 export const SAMPLES = Object.freeze({
   rendition: { find: renditionIn, problems: renditionProblems, required: true, profiles: ['demo'] },
-  'case-study': { find: caseStudyIn, problems: caseStudyProblems, required: false },
+  'case-study': {
+    find: caseStudyIn,
+    problems: caseStudyProblems,
+    required: true,
+    profiles: ['demo'],
+  },
 });
+
+/**
+ * What's wrong with the required samples for `profile`: one that lists the
+ * profile, on no pattern `table` gives it that `profile` serves, which
+ * smoke:profiles would skip without a word.
+ *
+ * @param {string} profile
+ * @param {(pattern: string) => boolean} serves whether `profile` serves a route-table pattern
+ * @param {Readonly<Record<string, { madeUp?: string, sample?: string }>>} [table]
+ * @param {Readonly<Record<string, { required?: boolean, profiles?: readonly string[] }>>} [samples]
+ * @returns {string[]}
+ */
+export function requiredSampleProblems(profile, serves, table = DYNAMIC_ROUTES, samples = SAMPLES) {
+  const problems = [];
+  for (const [name, sample] of Object.entries(samples)) {
+    if (!sample.required || (sample.profiles && !sample.profiles.includes(profile))) continue;
+    const patterns = Object.keys(table).filter((pattern) => table[pattern].sample === name);
+    if (!patterns.some(serves)) {
+      problems.push(
+        `${profile} must check a ${name} sample, and serves none of the patterns DYNAMIC_ROUTES gives it: ${patterns.join(', ') || 'none'}`,
+      );
+    }
+  }
+  return problems;
+}
 
 /**
  * What's wrong with `table` for `patterns`, the route table's: a dynamic

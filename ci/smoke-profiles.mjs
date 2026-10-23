@@ -151,6 +151,7 @@ import {
   redact,
   redactArtifacts,
   reproFor,
+  requiredSampleProblems,
   SAMPLES,
   signedInLeaks,
   sourceProblems,
@@ -592,11 +593,18 @@ function send(name, requests) {
  * pattern it serves whose DYNAMIC_ROUTES entry names a sample, the first
  * one / names, and what's wrong with its answer. A sample SAMPLES marks
  * required fails when / names none within `wait` ms, as demo's renditions
- * do while it derives them in the background (#10); any other is skipped,
- * and says so.
+ * do while it derives them in the background (#10), and so does one the
+ * profile serves no pattern for; any other is skipped, and says so.
  */
 async function samplePaths(name, profile, wait = 60_000) {
-  const problems = [];
+  const serves = (pattern) =>
+    listRoutes().some(
+      (entry) => entry.pattern === pattern && routeAccess(profile, entry) !== 'absent',
+    );
+  const problems = requiredSampleProblems(profile, serves).map((text) => ({
+    route: 'DYNAMIC_ROUTES',
+    text,
+  }));
   for (const entry of listRoutes()) {
     const sampleName = isDynamic(entry.pattern) ? DYNAMIC_ROUTES[entry.pattern]?.sample : undefined;
     if (sampleName === undefined || routeAccess(profile, entry) === 'absent') continue;
