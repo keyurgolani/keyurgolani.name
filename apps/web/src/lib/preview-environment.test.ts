@@ -1,10 +1,21 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ENVIRONMENT_QUERY, environmentQuery, environmentValues } from './preview-environment';
+import { DisplayModeSchema } from '@portfolio/schema';
+import {
+  DISPLAY_MODES,
+  ENVIRONMENT_QUERY,
+  environmentQuery,
+  environmentValues,
+} from './preview-environment';
 
 // The environment the dev fixture route's query asks for (#7, Slice 1, item
 // 8), and what the route table refuses. environment.test.ts holds what it
 // sets on the boundary.
+
+test("the query's display modes are the schema's, in its order, as a plain list the proxy can read without zod (#7)", () => {
+  assert.deepEqual(DISPLAY_MODES, DisplayModeSchema.options);
+  assert.equal(ENVIRONMENT_QUERY.displayMode, DISPLAY_MODES);
+});
 
 test("the dev route's query names its environment, and other parameters don't count (#7)", () => {
   const values = environmentValues(

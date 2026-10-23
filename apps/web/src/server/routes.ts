@@ -1,4 +1,4 @@
-import { isContractFixtureName } from '@portfolio/variant-contract';
+import { isContractFixtureName } from '@portfolio/variant-contract/fixture-names';
 import {
   isReservedSegment,
   matchPathView,

@@ -26,6 +26,23 @@ function isGrantFrame(frame: Frame): boolean {
   }
 }
 
+/** The stage of the `index`th preview, in page order, for two compared frames (#7, item 7). */
+export const stageAt = (page: Page, index: number) => stage(page).nth(index);
+/** The `index`th preview frame's element, in page order. */
+export const frameElementAt = (page: Page, index: number) => frameElement(page).nth(index);
+
+/** The `index`th preview frame, once its document is a grant's. */
+export async function grantFrameAt(page: Page, index: number): Promise<Frame> {
+  const at = async () => (await frameElementAt(page, index).elementHandle())?.contentFrame();
+  await expect
+    .poll(async () => {
+      const found = await at();
+      return found ? isGrantFrame(found) : false;
+    })
+    .toBe(true);
+  return (await at())!;
+}
+
 /** The page's preview frame, once its document is a grant's. */
 export async function grantFrame(page: Page): Promise<Frame> {
   await expect.poll(() => page.frames().some(isGrantFrame)).toBe(true);
@@ -33,9 +50,9 @@ export async function grantFrame(page: Page): Promise<Frame> {
 }
 
 /**
- * Seeds a draft whose portfolio names `name`, with `site`'s text when one is
- * given, signs in, and opens /studio/preview with its frame ready. Returns
- * the session's CSRF token and the frame.
+ * Seeds a draft whose portfolio names `name`, or is `portfolio`'s text, with
+ * `site`'s text when one is given, signs in, and opens /studio/preview with
+ * its frame ready. Returns the session's CSRF token and the frame.
  */
 export async function openPreview(
   page: Page,
@@ -43,8 +60,9 @@ export async function openPreview(
   password: string,
   name: string,
   site?: string,
+  portfolio?: string,
 ): Promise<{ csrf: string; frame: Frame }> {
-  await seedDraft(app, name, site);
+  await seedDraft(app, name, site, portfolio);
   const csrf = await signIn(page, app, password);
   await page.goto(PREVIEW_PAGE);
   await expect(stage(page)).toHaveAttribute('data-phase', 'ready');

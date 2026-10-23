@@ -5,7 +5,8 @@
 // machine with lands on a test's timing. First it writes this checkout's
 // own registry, with no fixture flag, which the shared harness reads as it
 // loads (tests/harness/registry.ts) and which a checkout that hasn't been
-// built has none of.
+// built has none of: the modules alone, since nothing here serves the
+// checkout's public/ (#75).
 import { spawnSync } from 'node:child_process';
 import { appendFileSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
@@ -25,11 +26,15 @@ function checkoutRegistry(log: string): void {
   const [command, ...prefix] = process.env.npm_execpath
     ? [process.execPath, process.env.npm_execpath]
     : ['pnpm'];
-  const result = spawnSync(command!, [...prefix, '--filter', '@portfolio/web', 'build:registry'], {
-    cwd: ROOT,
-    env,
-    encoding: 'utf8',
-  });
+  const result = spawnSync(
+    command!,
+    [...prefix, '--filter', '@portfolio/web', 'build:registry', '--modules-only'],
+    {
+      cwd: ROOT,
+      env,
+      encoding: 'utf8',
+    },
+  );
   appendFileSync(log, `${result.stdout ?? ''}${result.stderr ?? ''}`);
   if (result.status !== 0) {
     throw new Error(`The checkout's registry didn't generate (log: ${log}).`);

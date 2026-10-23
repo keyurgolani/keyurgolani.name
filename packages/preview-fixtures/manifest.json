@@ -8,7 +8,15 @@
   "tokenContract": 1,
   "compositionFamily": "document",
   "motionIntent": "subtle",
-  "performanceTier": "light",
+  "performanceTier": "medium",
+  "budgets": {
+    "js": 2048,
+    "css": 2048,
+    "image": 0,
+    "font": 0,
+    "animation": 1,
+    "enhancement": 2048
+  },
   "renderedKinds": [],
   "unsupportedKinds": [],
   "contentSlots": [],

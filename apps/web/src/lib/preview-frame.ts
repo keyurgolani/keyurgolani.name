@@ -1,6 +1,9 @@
+import { FALLBACK_VARIANT_ID } from '@portfolio/schema/ids';
+
 // A preview frame's element (#7, Slice 4, items 2, 4, 6, and 7): its sandbox,
-// where it loads from, its title, and the viewports Studio simulates. Pure,
-// so the /studio/preview page decides the sandbox on the server and Studio's
+// where it loads from, its title, and the viewports Studio simulates, and
+// what a frame's appearance override can select (item 7). Pure, so the
+// /studio/preview page decides the sandbox on the server and Studio's
 // PreviewSurface draws the frame from the same answers.
 
 /** What every preview frame's element carries besides its sandbox. */
@@ -159,13 +162,46 @@ const STATE_STRINGS: Readonly<Record<FrameSubjectKind, string>> = {
   fixture: 'Preview — fixture',
 };
 
-/** The frame's title: the state string, then the variant and the viewport. */
+/**
+ * The frame's title: the state string, then the variant and the viewport,
+ * and for one of two compared frames (#7, item 7), which one it is.
+ */
 export function frameTitle(
   kind: FrameSubjectKind,
   variant: string | null,
   viewport: Viewport,
+  which?: 'first' | 'second',
 ): string {
-  return `${STATE_STRINGS[kind]}, ${variant ?? 'variant unknown'}, ${viewportLabel(viewport)}`;
+  const title = `${STATE_STRINGS[kind]}, ${variant ?? 'variant unknown'}, ${viewportLabel(viewport)}`;
+  return which ? `${title}, ${which} of two` : title;
+}
+
+/** Something a frame's appearance override can select, by its manifest's id and name. */
+export interface AppearanceOption {
+  readonly id: string;
+  readonly name: string;
+}
+
+/** What this build registers for each part of an appearance a frame's override sets (#7, item 7). */
+export interface AppearanceOptions {
+  /** The variants a site can select: the fallback composition is never one. */
+  readonly variants: readonly AppearanceOption[];
+  readonly designLanguages: readonly AppearanceOption[];
+  readonly colorSchemes: readonly AppearanceOption[];
+  readonly typography: readonly AppearanceOption[];
+}
+
+/**
+ * The composition that renders for a selection of `selected`: it, when this
+ * build registers it, and else the fallback composition, or null when the
+ * site names none.
+ */
+export function renderedVariant(
+  selected: string | null,
+  registered: readonly AppearanceOption[],
+): string | null {
+  if (selected === null) return null;
+  return registered.some(({ id }) => id === selected) ? selected : FALLBACK_VARIANT_ID;
 }
 
 /**

@@ -1169,28 +1169,29 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
         expect(response.headers()['access-control-allow-origin'], asset).toBe('*');
         expectProfileHeaders(profile, response, asset);
       }
-      // One that doesn't exist goes on to a 404 page, the site's, under the
-      // prefix's headers: the views catch-all's for a build asset, as before
-      // (#5), and the global 404 for a pack, which the table marks missing.
+      // A build asset that doesn't exist goes on to a 404 page, the site's,
+      // under the prefix's headers: the views catch-all's, as before (#5).
       // It holds only what an anonymous request for any unknown path gets,
       // and no browser lets a wildcard origin read a credentialed answer.
       const gone = await request.get('/_next/static/chunks/no-such-chunk.js', { maxRedirects: 0 });
       expect(gone.status()).toBe(404);
       expectProfileHeaders(profile, gone, 'a missing build asset');
-      const nopack = await request.get('/_portfolio/pack/no-such.css', { maxRedirects: 0 });
-      expect(nopack.status()).toBe(404);
-      expect(await nopack.text()).toMatch(/<h1>Page not found<\/h1>/);
-      expectProfileHeaders(profile, nopack, 'a missing pack');
-      // Any other method, and a spelling Next doesn't serve from disk, get
-      // the proxy's plain 404.
+      // Any other method, a spelling Next doesn't serve from disk, and under
+      // /_portfolio/ anything but exactly a file the registry wrote, a pack
+      // it never wrote and any other spelling of one it did, get the proxy's
+      // plain 404.
       for (const [target, method] of [
         [assets[0]!, 'POST'],
         [assets[0]!, 'DELETE'],
         [assets[0]!.replace('/_next/static/', '/_NEXT/STATIC/'), 'GET'],
         ['/_next/static', 'GET'],
         [packs[0]!, 'POST'],
+        ['/_portfolio/pack/no-such.css', 'GET'],
         [packs[0]!.replace('/_portfolio/', '/_PORTFOLIO/'), 'GET'],
         [packs[0]!.replace('/_portfolio/', '/%5Fportfolio/'), 'GET'],
+        [packs[0]!.replace('/pack/', '/PACK/'), 'GET'],
+        [packs[0]!.replace(/css$/, '%63ss'), 'GET'],
+        [packs[0]!.replace('/pack/', '/pack/..%2Fpack/'), 'GET'],
         ['/_portfolio', 'GET'],
       ] as const) {
         const response = await request.fetch(target, { method, maxRedirects: 0 });

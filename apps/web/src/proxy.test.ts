@@ -18,6 +18,10 @@ import { readiness } from './server/readiness';
 import { EXPERIENCE_HEADER } from './server/route-header';
 import { ROUTE_HEADER } from './server/routes';
 import { PREVIEW_STATUS_DOCUMENT } from './preview/status';
+import { COMPILED_MODE } from './server/compiled-mode';
+import { PORTFOLIO_FILES } from './server/portfolio-files';
+import { previewCsp } from './server/preview-headers';
+import { studioCsp } from './server/studio-headers';
 
 // proxy.ts: 404 early for what the profile doesn't serve, a fresh request ID
 // on everything else, noindex on every demo response, 503 before register()
@@ -1174,18 +1178,23 @@ test("no response outside /preview and /preview-assets gets the preview's header
   );
 });
 
-test('under the prefixes next.config.ts lets any origin read, only a GET or HEAD of a file Next serves there goes on to Next, and the rest is the plain 404, never a page (#7)', async (t) => {
+test('under the prefixes next.config.ts lets any origin read, only a GET or HEAD of a build asset, or of exactly a file the registry wrote under /_portfolio/, goes on to Next, and the rest is the plain 404, never a page (#7)', async (t) => {
+  // #19's compiled packs, which the registry writes into public/_portfolio/pack/.
+  const written = [...PORTFOLIO_FILES];
+  const pack = written.find((file) => /^\/_portfolio\/pack\/_[^/]+\.css$/.test(file))!;
+  assert.ok(pack, 'the platform stylesheet is among the files the registry wrote');
   for (const profile of ['owner', 'demo', 'read-only'] as const) {
     deploy(t, profile);
     for (const method of ['GET', 'HEAD']) {
       const asset = await proxy(request('/_next/static/chunks/app.js', method));
       assert.equal(asset.headers.get('x-middleware-next'), '1', `${profile} ${method}`);
       assert.equal(decision(asset), 'unlisted', `${profile} ${method}`);
-      // #19's compiled packs, which the registry writes into public/_portfolio/pack/.
-      // Marked missing, so one that isn't there gets the 404 page after Next looks in public/.
-      const pack = await proxy(request('/_portfolio/pack/0123456789ab.css', method));
-      assert.equal(pack.headers.get('x-middleware-next'), '1', `${profile} ${method}`);
-      assert.equal(decision(pack), 'missing', `${profile} ${method}`);
+      for (const file of [...written, pack.replace('/pack/', '/pack/./')]) {
+        const response = await proxy(request(file, method));
+        const what = `${profile} ${method} ${file}`;
+        assert.equal(response.headers.get('x-middleware-next'), '1', what);
+        assert.equal(decision(response), 'missing', what);
+      }
     }
     for (const [path, method] of [
       ['/_next/static/chunks/app.js', 'POST'],
@@ -1198,10 +1207,23 @@ test('under the prefixes next.config.ts lets any origin read, only a GET or HEAD
       ['/%5Fnext/static/chunks/app.js', 'GET'],
       ['/_next/static', 'GET'],
       ['/_portfolio', 'GET'],
-      ['/_PORTFOLIO/pack/0123456789ab.css', 'GET'],
-      ['/%5Fportfolio/pack/0123456789ab.css', 'GET'],
-      ['/_portfolio/pack/0123456789ab.css', 'POST'],
-      ['/_portfolio/pack/0123456789ab.css', 'OPTIONS'],
+      // A file the registry never wrote there, and every other spelling of
+      // one it did: encoded, in another case, or through an encoded slash.
+      ['/_portfolio/pack/0123456789ab.css', 'GET'],
+      ['/_portfolio/pack/0123456789ab.css', 'HEAD'],
+      [pack.replace('/_portfolio/', '/_PORTFOLIO/'), 'GET'],
+      [pack.replace('/_portfolio/', '/%5Fportfolio/'), 'GET'],
+      [pack.replace('/pack/', '/PACK/'), 'GET'],
+      [pack.replace('/pack/_', '/pack/%5F'), 'GET'],
+      [pack.replace(/css$/, 'CSS'), 'GET'],
+      [pack.replace('/pack/', '/pack/..%2Fpack/'), 'GET'],
+      [pack.replace('/pack/', '/pack%2F'), 'HEAD'],
+      // A trailing slash gets the 404 too, never a 308 naming the file.
+      [`${pack}/`, 'GET'],
+      ['/_portfolio/', 'GET'],
+      ['/_next/static/chunks/app.js/', 'GET'],
+      [pack, 'POST'],
+      [pack, 'OPTIONS'],
     ] as const) {
       const response = await proxy(request(path, method));
       const what = `${profile} ${method} ${path}`;
@@ -1509,4 +1531,74 @@ test('without a preview origin a Host header changes nothing, and Studio frames 
     assert.match(response.headers.get('content-security-policy') ?? '', STUDIO_CSP, host);
     assert.equal(response.headers.get('x-middleware-request-x-portfolio-not-found'), null, host);
   }
+});
+
+test("a Content-Security-Policy or Content-Security-Policy-Report-Only header the client sends never reaches Next: the proxy's own goes on in its place, or none, in every profile (#7)", async (t) => {
+  for (const profile of PROFILES) {
+    deploy(t, profile);
+    for (const path of ['/', '/no-such-page', '/studio/sign-in']) {
+      const response = await proxy(
+        new NextRequest(`https://rowan.test${path}`, {
+          headers: {
+            'content-security-policy': "script-src 'nonce-clientchosen'",
+            'content-security-policy-report-only': "default-src 'none'",
+          },
+        }),
+      );
+      const what = `${profile} ${path}`;
+      assert.equal(response.headers.get('x-middleware-next'), '1', what);
+      const passed = (response.headers.get('x-middleware-override-headers') ?? '').split(',');
+      assert.ok(passed.includes('x-request-id'), what);
+      assert.ok(!passed.includes('content-security-policy-report-only'), what);
+      const policy = response.headers.get('x-middleware-request-content-security-policy');
+      if (profile === 'owner' && path === '/studio/sign-in') {
+        // Studio's own policy, with its own nonce, the one its response sends.
+        assert.equal(policy, response.headers.get('content-security-policy'), what);
+        assert.doesNotMatch(policy ?? '', /clientchosen/, what);
+      } else {
+        assert.ok(!passed.includes('content-security-policy'), what);
+        assert.equal(policy, null, what);
+      }
+    }
+  }
+});
+
+test('a production build keeps its strict preview and Studio policies under a server started with NODE_ENV=development: they relax only for the mode the code was compiled in (#7)', async (t) => {
+  // These tests run compiled as production, as a build is.
+  assert.equal(COMPILED_MODE, 'production');
+  const runtime = readDeploymentConfig(
+    {
+      NODE_ENV: 'development',
+      PORTFOLIO_PROFILE: 'owner',
+      PORTFOLIO_ORIGIN: 'https://rowan.test',
+      PORTFOLIO_SOURCE_DIR: '/srv/config',
+    },
+    { cwd: '/' },
+  );
+  assert.ok(runtime.ok && runtime.config.mode === 'development');
+  const { port } = grantsPort();
+  deploy(t, 'owner', port, { NODE_ENV: 'development' });
+  const studio = await proxy(request('/studio/sign-in'));
+  const preview = await proxy(
+    new NextRequest(`https://rowan.test/preview/${ACTIVE}`, {
+      headers: { 'sec-fetch-dest': 'iframe' },
+    }),
+  );
+  for (const [what, response] of [
+    ['Studio', studio],
+    ['the preview', preview],
+  ] as const) {
+    const policy = response.headers.get('content-security-policy') ?? '';
+    assert.match(policy, /script-src [^;]*'nonce-/, what);
+    assert.doesNotMatch(policy, /'unsafe-eval'/, what);
+  }
+  const previewPolicy = preview.headers.get('content-security-policy') ?? '';
+  assert.match(previewPolicy, /style-src 'self' 'nonce-/);
+  assert.match(previewPolicy, /connect-src 'none'/);
+  // The policies themselves relax for next dev, the mode the proxy passes there.
+  assert.match(
+    previewCsp('n', { mode: 'development' }),
+    /'unsafe-eval'.*'unsafe-inline'.*connect-src 'self'/,
+  );
+  assert.match(studioCsp('n', 'development'), /'unsafe-eval'/);
 });

@@ -1,6 +1,7 @@
 import {
   DROP_REASONS,
   envelope,
+  NAVIGATED_PER_SECOND,
   nonceOf,
   readMessage,
   reportDrop,
@@ -96,7 +97,17 @@ export function openStudioChannel(options: StudioChannelOptions): StudioChannel 
   /** Whether `version_mismatch` went out since the frame's last load. */
   let mismatchShown = false;
   let open = true;
+  /** When Studio last took each `scrolled` and `navigated`, within the last second. */
   const scrolledAt: number[] = [];
+  const navigatedAt: number[] = [];
+  /** Whether one more message fits `times`' rate of `limit` a second, which it then counts. */
+  const within = (times: number[], limit: number) => {
+    const at = now();
+    while (times.length > 0 && at - times[0]! >= 1000) times.shift();
+    if (times.length >= limit) return false;
+    times.push(at);
+    return true;
+  };
   const dropped = Object.fromEntries(DROP_REASONS.map((reason) => [reason, 0])) as Record<
     DropReason,
     number
@@ -168,14 +179,11 @@ export function openStudioChannel(options: StudioChannelOptions): StudioChannel 
       case 'rect':
         return on.rect?.(message.payload);
       case 'navigated':
+        if (!within(navigatedAt, NAVIGATED_PER_SECOND)) return drop('rate', 'navigated');
         return on.navigated?.(message.payload);
-      case 'scrolled': {
-        const at = now();
-        while (scrolledAt.length > 0 && at - scrolledAt[0]! >= 1000) scrolledAt.shift();
-        if (scrolledAt.length >= SCROLLED_PER_SECOND) return drop('rate', 'scrolled');
-        scrolledAt.push(at);
+      case 'scrolled':
+        if (!within(scrolledAt, SCROLLED_PER_SECOND)) return drop('rate', 'scrolled');
         return on.scrolled?.(message.payload);
-      }
     }
   };
 

@@ -95,11 +95,19 @@ function storeStep(app: App, step: StoreStep): Promise<unknown> {
   return store({ dataDir, step });
 }
 
-/** The working draft, made or replaced, holding a portfolio named `name` and `site`'s text. */
-export async function seedDraft(app: App, name: string, site?: string): Promise<Draft> {
+/**
+ * The working draft, made or replaced, holding a portfolio named `name` and
+ * `site`'s text, or the `portfolio` text given in place of the named one.
+ */
+export async function seedDraft(
+  app: App,
+  name: string,
+  site?: string,
+  portfolio?: string,
+): Promise<Draft> {
   return (await storeStep(app, {
     op: 'seed',
-    documents: unit(portfolioNamed(name), site),
+    documents: unit(portfolio ?? portfolioNamed(name), site),
   })) as Draft;
 }
 

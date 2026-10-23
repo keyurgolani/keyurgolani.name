@@ -1,4 +1,6 @@
-import { frameSandbox } from '~/lib/preview-frame';
+import { FALLBACK_VARIANT_ID } from '@portfolio/schema/ids';
+import { PACKS, VARIANTS } from '~/lib/generated/registry.meta';
+import { frameSandbox, type AppearanceOption, type AppearanceOptions } from '~/lib/preview-frame';
 import { compositionFor } from '~/lib/variants';
 import { getDeploymentState, requireDeploymentConfig } from '~/server/config-store';
 import { servedPage } from '~/server/page-guard';
@@ -19,6 +21,19 @@ export const metadata = { title: 'Preview · Portfolio Studio' };
 const rendered = (selected: string | null) =>
   selected === null ? null : compositionFor(selected).rendered.manifest.id;
 
+const option = ({ manifest }: { readonly manifest: AppearanceOption }): AppearanceOption => ({
+  id: manifest.id,
+  name: manifest.name,
+});
+
+/** What this build registers for a frame's appearance override (#7, item 7): the fallback composition is no selection. */
+const APPEARANCE_OPTIONS: AppearanceOptions = {
+  variants: VARIANTS.filter(({ manifest }) => manifest.id !== FALLBACK_VARIANT_ID).map(option),
+  designLanguages: PACKS.filter(({ kind }) => kind === 'design-language').map(option),
+  colorSchemes: PACKS.filter(({ kind }) => kind === 'color-scheme').map(option),
+  typography: PACKS.filter(({ kind }) => kind === 'typography').map(option),
+};
+
 async function StudioPreviewPage() {
   const { authorized, csrfToken } = await requireOwnerPage('preview.grant');
   const config = requireDeploymentConfig();
@@ -32,6 +47,7 @@ async function StudioPreviewPage() {
           kind: 'draft',
           subject: each.subject,
           variant: rendered(each.variant),
+          appearance: each.appearance,
         }
       : {
           id: 'live',
@@ -39,6 +55,7 @@ async function StudioPreviewPage() {
           kind: 'revision',
           subject: each.subject,
           variant: rendered(each.variant),
+          appearance: each.appearance,
         },
   );
   const previewOrigin = config.previewOrigin ?? null;
@@ -51,6 +68,7 @@ async function StudioPreviewPage() {
         sandbox={frameSandbox(config.profile, previewOrigin, true)}
         previewOrigin={previewOrigin}
         signIn={signInLocation('session_ended', '/studio/preview')}
+        appearanceOptions={APPEARANCE_OPTIONS}
       />
     </main>
   );

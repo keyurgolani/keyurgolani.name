@@ -666,3 +666,70 @@ test(
     expect(gzipped).toBeGreaterThan(0);
   },
 );
+
+/** A portfolio whose Markdown tries every way to run script. */
+const HOSTILE = [
+  'schemaVersion: 3',
+  'locale: en',
+  'direction: ltr',
+  'identity:',
+  '  name: Hostile Person',
+  '  tagline: Writes tags.',
+  'sections:',
+  '  - kind: lede',
+  '    id: about',
+  '    body: |-',
+  "      <script>document.title = 'ran'; parent.postMessage('ran', '*')</script>",
+  '',
+  '      <img src="/missing.png" onerror="document.title = \'ran\'">',
+  '',
+  "      [Open](javascript:document.title='ran') and <a href=\"javascript:document.title='ran'\">this</a>",
+  '',
+].join('\n');
+
+test(
+  "a hostile markdown fixture doesn't run: in a grant's frame its tags show as text, its handlers and javascript: links never run, and nothing reaches Studio (#7)",
+  { annotation: [PAGE] },
+  async ({ page, app }) => {
+    await page.addInitScript(() => {
+      (window as unknown as { heard: unknown[] }).heard = [];
+      addEventListener('message', (event) => {
+        if (event.data === 'ran')
+          (window as unknown as { heard: unknown[] }).heard.push(event.data);
+      });
+    });
+    const { frame } = await openPreview(
+      page,
+      app,
+      secret.password,
+      'Hostile Person',
+      undefined,
+      HOSTILE,
+    );
+    const found = await frame.evaluate(() => ({
+      title: document.title,
+      text: document.body.textContent ?? '',
+      scripts: [...document.querySelectorAll('script')].filter((each) =>
+        (each.textContent ?? '').includes("'ran'"),
+      ).length,
+      handlers: document.querySelectorAll('[onerror], img[src="/missing.png"]').length,
+      javascript: [...document.querySelectorAll('a')].filter((each) =>
+        (each.getAttribute('href') ?? '').trim().toLowerCase().startsWith('javascript'),
+      ).length,
+    }));
+    // The tags render as text, and none of them became an element.
+    expect(found.text).toContain('<script>');
+    expect(found.text).toContain('onerror=');
+    expect(found).toMatchObject({ scripts: 0, handlers: 0, javascript: 0 });
+    expect(found.title).not.toBe('ran');
+    // A click on whatever link the section holds goes nowhere that runs.
+    const links = frame.locator('[data-section-id="about"] a');
+    for (let at = 0; at < (await links.count()); at += 1) await links.nth(at).click();
+    await page.waitForTimeout(500);
+    expect(await frame.evaluate(() => document.title)).not.toBe('ran');
+    expect(await page.evaluate(() => (window as unknown as { heard: unknown[] }).heard)).toEqual(
+      [],
+    );
+    await expect(stage(page)).toHaveAttribute('data-phase', 'ready');
+  },
+);

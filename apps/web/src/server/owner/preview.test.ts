@@ -329,9 +329,16 @@ test("a grant's content is read through Authorized<'preview.grant'>, built from 
   assert.equal(await previews.port.open(grant), null);
 });
 
-test("/studio/preview is offered the working draft's version and the live revision, each with the variant its site selects, and only under preview.grant from the page's session (#7, Slice 4)", async (t) => {
+test("/studio/preview is offered the working draft's version and the live revision, each with the variant its site selects and the appearance it starts a frame's override from, and only under preview.grant from the page's session (#7, Slice 4)", async (t) => {
   const { store, previews, session } = await setup(t);
   assert.deepEqual(await previews.port.previewable(session), []);
+  const OWN = {
+    variant: 'editorial-evidence',
+    designLanguage: 'platform-neutral',
+    colorScheme: 'warm',
+    typography: 'classic',
+    displayMode: 'system',
+  };
   const live = await store.publication.publish(
     {
       draftId: (await createDraft(store, pair(portfolio('Live Person')))).draftId,
@@ -343,7 +350,12 @@ test("/studio/preview is offered the working draft's version and the live revisi
   assert.equal(live.kind, 'committed');
   const { revisionId } = live as { revisionId: `rev_${string}` };
   assert.deepEqual(await previews.port.previewable(session), [
-    { kind: 'revision', subject: { revision: revisionId }, variant: 'editorial-evidence' },
+    {
+      kind: 'revision',
+      subject: { revision: revisionId },
+      variant: 'editorial-evidence',
+      appearance: OWN,
+    },
   ]);
   const draft = await createDraft(store, pair(portfolio('Draft Person')));
   assert.deepEqual(await previews.port.previewable(session), [
@@ -351,9 +363,26 @@ test("/studio/preview is offered the working draft's version and the live revisi
       kind: 'draft',
       subject: { draft: draft.draftId, version: draft.version },
       variant: 'editorial-evidence',
+      appearance: OWN,
     },
-    { kind: 'revision', subject: { revision: revisionId }, variant: 'editorial-evidence' },
+    {
+      kind: 'revision',
+      subject: { revision: revisionId },
+      variant: 'editorial-evidence',
+      appearance: OWN,
+    },
   ]);
+  // A site whose appearance isn't a whole selection gives the override nothing to start from.
+  const partial = await createDraft(
+    store,
+    pair(portfolio('Partial Person'), SITE.replace('  colorScheme: warm\n', '')),
+  );
+  assert.deepEqual((await previews.port.previewable(session))[0], {
+    kind: 'draft',
+    subject: { draft: partial.draftId, version: partial.version },
+    variant: 'editorial-evidence',
+    appearance: null,
+  });
   // No session, or one no provider minted: the page's policy check fails, and nothing is offered.
   assert.deepEqual(await previews.port.previewable(null), []);
   assert.deepEqual(await previews.port.previewable({ ...session }), []);

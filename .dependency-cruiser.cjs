@@ -247,7 +247,8 @@ module.exports = {
         'proxy.ts runs before every request; it imports only the route table, the capability ' +
         'matrix behind it, the frozen config (#1, item 15), the body /api/ready answers ' +
         "before startup (item 19), for Studio (#2) its headers, the session cookie's name, " +
-        'and returnTo, and for preview (#7) its headers and its status document, none of which ' +
+        'and returnTo, for preview (#7) its headers and its status document, and the mode the ' +
+        'code compiled in and the files the registry wrote under /_portfolio/, none of which ' +
         'reads a session. A grant path is checked through the port the owner composition binds ' +
         'into the frozen config, which reads the grant and its session by digest, never a cookie. ' +
         "A visitor page's experience segment (#6, Slice 2) comes from server/experience.ts, " +
@@ -258,9 +259,32 @@ module.exports = {
         pathNot: [
           '^apps/web/src/server/(capabilities|routes|route-header|config-store|ready-starting|experience)\\.ts$',
           '^apps/web/src/server/(studio-headers|session-cookie|return-to|preview-headers)\\.ts$',
+          '^apps/web/src/server/(compiled-mode|portfolio-files)\\.ts$',
           '^apps/web/src/preview/status\\.ts$',
           '^node_modules/(\\.pnpm/next@|next/)',
         ],
+      },
+    },
+    {
+      name: 'route-table-imports-no-zod-yaml-or-package-roots',
+      severity: 'error',
+      comment:
+        'The route table and what it reads run in the proxy, before every request, so they ' +
+        'import zod, yaml, the schema root, and the variant contract root at run time not at ' +
+        'all (#7): what they need comes through subpaths that bring none of them, and types ' +
+        'bring no code. depcruise follows type-only imports for reachability, so ' +
+        'server/proxy-imports.test.ts walks the whole run time graph from proxy.ts; this ' +
+        'holds the direct imports.',
+      from: {
+        path: '^apps/web/src/(?:proxy|server/(?:routes|capabilities|compiled-mode|portfolio-files)|lib/(?:preview-environment|sample))\\.ts$',
+      },
+      to: {
+        path: [
+          '^node_modules/\\.pnpm/(?:zod|yaml)@',
+          '^packages/schema/src/index\\.ts$',
+          '^packages/variant-contract/src/index\\.ts$',
+        ],
+        dependencyTypesNot: ['type-only'],
       },
     },
     {
