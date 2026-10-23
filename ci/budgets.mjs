@@ -19,7 +19,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PUBLIC_DIR, sourceMapFiles } from './check-source-maps.mjs';
-import { ANALYZE_ENV } from './lib/budgets.mjs';
+import { ANALYZE_ENV, failureFields, reproCommand } from './lib/budgets.mjs';
 import {
   currentGate,
   REPO_ROOT,
@@ -27,6 +27,7 @@ import {
   reportsDir,
   writeFailureRecord,
 } from './lib/reports.mjs';
+import { loadValidator } from './summarize.mjs';
 
 /** The over-budget fixture, and the records its check has to write, one each. */
 export const OVER_BUDGET = 'fixture-over-budget';
@@ -36,14 +37,28 @@ export const OVER_BUDGET_METRICS = {
   remote: /^\/_portfolio\/variant\/fixture-over-budget\.[0-9a-f]{12}\.css$/,
 };
 
+/** Where the over-budget run's reports sit inside the uploaded artifact. */
+export const OVER_BUDGET_ARTIFACTS = [
+  'budgets/over-budget/budgets/budget-report.json',
+  'budgets/over-budget/trace/trace-report.json',
+];
+
+/** The fields every over-budget record's failure record carries, beside its metric and asset. */
+const REQUIRED_FIELDS = ['route', 'actual', 'threshold', 'reproCommand', 'artifacts'];
+
 /**
- * What's wrong with the over-budget check's report: null when it holds one
- * record of each metric OVER_BUDGET_METRICS names for the fixture, each
- * naming its asset, and none of any other metric for it.
+ * What's wrong with the over-budget check's report: nothing when it holds
+ * one record of each metric OVER_BUDGET_METRICS names for the fixture, each
+ * naming its asset, and none of any other metric for it, and each one, as
+ * the failure record the gate would write, valid against the schema with a
+ * route, its actual and limit, the repro command, and its artifacts. The
+ * run under the gate writes those records itself; this one runs outside it,
+ * since its breaches are the point, so the proof builds them here.
  *
- * @param {{ records: { unit: { kind: string, id: string } | null, metric: string, asset: string, test: string }[] }} report
+ * @param {{ records: any[] }} report
+ * @param {(record: object) => boolean} validate the failure record schema's validator
  */
-export function overBudgetProblems(report) {
+export function overBudgetProblems(report, validate) {
   const own = (report.records ?? []).filter(
     (record) => record.unit?.kind === 'variant' && record.unit.id === OVER_BUDGET,
   );
@@ -54,6 +69,27 @@ export function overBudgetProblems(report) {
       problems.push(`${found.length} ${metric} record(s) for ${OVER_BUDGET}, not 1`);
     } else if (!asset.test(found[0].asset)) {
       problems.push(`the ${metric} record names ${found[0].asset}, not the asset that carries it`);
+    } else {
+      const fields = failureFields(found[0], {
+        gate: 'budgets',
+        reproCommand: reproCommand('over'),
+        artifacts: OVER_BUDGET_ARTIFACTS,
+      });
+      const record = Object.fromEntries(
+        Object.entries(fields).filter(([, value]) => value !== undefined && value !== null),
+      );
+      for (const field of REQUIRED_FIELDS) {
+        const value = record[field];
+        if (value === undefined || (Array.isArray(value) && value.length === 0)) {
+          problems.push(`the ${metric} record has no ${field}`);
+        }
+      }
+      if (!validate(record)) {
+        const errors = (validate.errors ?? [])
+          .map((error) => `${error.instancePath || '(record)'} ${error.message}`)
+          .join('; ');
+        problems.push(`the ${metric} record isn't a valid failure record: ${errors}`);
+      }
     }
   }
   const remote = own.find((record) => record.metric === 'remote');
@@ -100,7 +136,8 @@ function analyzeBuild(fixtures) {
   return null;
 }
 
-function main() {
+async function main() {
+  const validate = await loadValidator();
   const problems = [];
   const fail = (problem) => {
     problems.push(problem);
@@ -138,7 +175,7 @@ function main() {
     }
     if (!existsSync(file)) fail(`pnpm check:budgets wrote no report for ${OVER_BUDGET}`);
     else {
-      const found = overBudgetProblems(JSON.parse(readFileSync(file, 'utf8')));
+      const found = overBudgetProblems(JSON.parse(readFileSync(file, 'utf8')), validate);
       for (const problem of found) fail(problem);
       const proof = path.join(reportsDir(), 'budgets', 'over-budget-proof.json');
       mkdirSync(path.dirname(proof), { recursive: true });
@@ -167,5 +204,5 @@ function main() {
 }
 
 if (path.resolve(process.argv[1] ?? '') === fileURLToPath(import.meta.url)) {
-  process.exit(main());
+  process.exit(await main());
 }
