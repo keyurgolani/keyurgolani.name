@@ -559,4 +559,4 @@ pnpm typecheck
 docker compose up --build
 ```
 
-The platform follows semver: a major bump may change the schema in incompatible ways. Read the release notes before upgrading across majors.
+The platform follows semver: a major bump may change the schema in incompatible ways. Read the release notes before upgrading across majors. Each release names its image by digest and says how to verify it ([Releasing](releasing.md)).
