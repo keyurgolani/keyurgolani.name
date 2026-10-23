@@ -1,0 +1,266 @@
+import assert from 'node:assert/strict';
+import { existsSync } from 'node:fs';
+import path from 'node:path';
+import test from 'node:test';
+import { fileURLToPath } from 'node:url';
+import { parse } from 'yaml';
+import { createAppearanceRegistry, type MetaPack } from '../../packages/appearance/src/index';
+import { contractFixture } from '../../packages/variant-contract/src/node/fixtures';
+import {
+  accepts,
+  defaultTuple,
+  planCells,
+  readBuildMeta,
+  siteTextFor,
+  workRoutes,
+  type BuildMeta,
+} from './cells';
+import { tupleKey } from './coverage';
+import { PREFERENCE_ROWS, VIEWPORTS } from './lib/matrix';
+import { loadRegistrations, type Registrations } from './lib/registration';
+
+const WEB = fileURLToPath(new URL('../../apps/web/', import.meta.url));
+
+/** This checkout's registry metadata, which pnpm --filter @portfolio/web build:registry writes. */
+function checkoutMeta(): BuildMeta {
+  const file = path.join(WEB, 'src', 'lib', 'generated', 'registry.meta.ts');
+  assert.ok(existsSync(file), 'run pnpm --filter @portfolio/web build:registry first');
+  return readBuildMeta(WEB);
+}
+
+const TIERS = ['stable', 'extended', 'experimental'] as const;
+
+/** A pack like `base`, renamed `id`, in `tier`, and a fixture or not. */
+function clone(base: MetaPack, id: string, tier: string, fixture: boolean): MetaPack {
+  return {
+    ...base,
+    fixture,
+    manifest: { ...base.manifest, id, name: id, tier },
+  } as MetaPack;
+}
+
+/**
+ * The checkout's metadata with the nine tier packs Part A adds, a dark-only
+ * scheme that isn't a fixture, and a fixture scheme that isn't a tier pack.
+ */
+function withTierPacks(meta: BuildMeta): BuildMeta {
+  const packs = meta.PACKS ?? [];
+  const base = (kind: string) => packs.find((pack) => pack.kind === kind && !pack.fixture)!;
+  const scheme = base('color-scheme');
+  const darkOnly = (id: string, fixture: boolean) => {
+    const pack = clone(scheme, id, 'stable', fixture) as MetaPack & { kind: 'color-scheme' };
+    const { light: _light, ...anchors } = pack.manifest.anchors as Record<string, unknown>;
+    void _light;
+    return { ...pack, manifest: { ...pack.manifest, anchors } } as MetaPack;
+  };
+  return {
+    ...meta,
+    PACKS: [
+      ...packs,
+      ...TIERS.map((tier) =>
+        clone(base('design-language'), `fixture-language-${tier}`, tier, true),
+      ),
+      ...TIERS.map((tier) => clone(scheme, `fixture-scheme-${tier}`, tier, true)),
+      ...TIERS.map((tier) => clone(base('typography'), `fixture-typography-${tier}`, tier, true)),
+      darkOnly('night-only', false),
+      darkOnly('fixture-dark-only', true),
+    ],
+  };
+}
+
+let registrations: Registrations;
+test.before(async () => {
+  registrations = await loadRegistrations();
+});
+
+test('the PR plan: each sentinel at every viewport in the default row, and every row once on the first composition', () => {
+  const plan = planCells({ meta: checkoutMeta(), registrations, mode: 'pr' });
+  const ids = plan.cells.map(
+    (cell) => `${cell.target} ${cell.state} ${cell.path} ${cell.tuple.displayMode}`,
+  );
+  assert.deepEqual(ids.sort(), [
+    'fallback complete / system',
+    'fallback last-known-good / system',
+    'fallback missing-media / system',
+    'fallback not-found /quality-no-such-page system',
+    'fallback sparse / system',
+    'fallback unavailable / system',
+    'login signed-out /studio/sign-in system',
+  ]);
+  const extraRows = PREFERENCE_ROWS.length - 1;
+  assert.equal(plan.tests.length, plan.cells.length * VIEWPORTS.length + extraRows);
+  const rows = plan.tests.filter((each) => each.row.id !== 'default');
+  assert.deepEqual(
+    rows.map((each) => `${each.cell.state} ${each.cell.path} ${each.viewport.id}`),
+    Array(extraRows).fill('complete / 1440x900'),
+  );
+  // The stand-in states are planned, and skip with their declared reason.
+  const skipped = plan.tests.filter((each) => each.skip);
+  assert.deepEqual([...new Set(skipped.map((each) => each.cell.state))].sort(), [
+    'last-known-good',
+    'unavailable',
+  ]);
+  for (const each of skipped) assert.ok(plan.reasons.includes(each.skip!), each.skip);
+  assert.deepEqual(plan.targets, [
+    { kind: 'composition', id: 'fallback' },
+    { kind: 'surface', id: 'login' },
+  ]);
+});
+
+test('the full plan: the covering array on complete, and every other route and state in each display mode', () => {
+  const plan = planCells({ meta: checkoutMeta(), registrations, mode: 'full' });
+  const composition = plan.cells.filter((cell) => cell.kind === 'composition');
+  const route = workRoutes(contractFixture('complete'))[0]!;
+  assert.equal(route, '/work/project-name');
+  for (const mode of ['system', 'light', 'dark', 'high-contrast']) {
+    for (const [state, at] of [
+      ['complete', '/'],
+      ['complete', route],
+      ['sparse', '/'],
+      ['missing-media', '/'],
+      ['not-found', '/quality-no-such-page'],
+    ]) {
+      assert.ok(
+        composition.some(
+          (cell) => cell.state === state && cell.path === at && cell.tuple.displayMode === mode,
+        ),
+        `${state} ${at} ${mode}`,
+      );
+    }
+  }
+  for (const row of plan.coverage.rows) {
+    assert.ok(
+      composition.some(
+        (cell) =>
+          cell.state === 'complete' && cell.path === '/' && tupleKey(cell.tuple) === tupleKey(row),
+      ),
+      tupleKey(row),
+    );
+  }
+  const login = plan.cells.filter((cell) => cell.target === 'login');
+  assert.deepEqual(login.map((cell) => cell.path).sort(), [
+    '/studio/sign-in',
+    '/studio/sign-in?state=error',
+    '/studio/sign-in?state=failed',
+    '/studio/sign-in?state=rate_limited&retryAfter=30',
+    '/studio/sign-in?state=session_ended',
+  ]);
+  assert.equal(plan.tests.length, plan.cells.length * VIEWPORTS.length * PREFERENCE_ROWS.length);
+  assert.equal(new Set(plan.cells.map((cell) => cell.id)).size, plan.cells.length);
+});
+
+test('each tier pack has a sentinel on the fallback composition, and other fixture packs stay out', () => {
+  const meta = withTierPacks(checkoutMeta());
+  const plan = planCells({ meta, registrations, mode: 'pr' });
+  const sentinels = plan.cells.filter((cell) => cell.pack);
+  const covered = sentinels.flatMap((cell) => cell.pack!.split(' ')).sort();
+  assert.deepEqual(
+    covered,
+    ['language', 'scheme', 'typography']
+      .flatMap((axis) => TIERS.map((tier) => `fixture-${axis}-${tier}`))
+      .sort(),
+  );
+  for (const cell of sentinels) {
+    assert.equal(cell.target, 'fallback');
+    assert.equal(cell.state, 'complete');
+    assert.ok(cell.fixture, 'a tier pack cell is a fixture cell');
+  }
+  const full = planCells({ meta, registrations, mode: 'full' });
+  assert.ok(!full.cells.some((cell) => tupleKey(cell.tuple).includes('fixture-dark-only')));
+  assert.ok(full.coverage.rows.some((row) => row.colorScheme === 'night-only'));
+});
+
+test('only tuples the #19 resolver renders as asked become cells', () => {
+  const meta = withTierPacks(checkoutMeta());
+  const registry = createAppearanceRegistry(meta);
+  assert.ok(accepts(registry, defaultTuple('fallback', 'system'), 'read-only'));
+  const night = (displayMode: string) => ({
+    ...defaultTuple('fallback', displayMode),
+    colorScheme: 'night-only',
+  });
+  assert.ok(accepts(registry, night('dark'), 'read-only'));
+  // It has no light mode, and pins system to dark.
+  assert.ok(!accepts(registry, night('light'), 'read-only'));
+  assert.ok(!accepts(registry, night('system'), 'read-only'));
+  // Nothing registers it, so the first-party scheme renders in its place.
+  assert.ok(
+    !accepts(registry, { ...defaultTuple('fallback', 'light'), colorScheme: 'nope' }, 'read-only'),
+  );
+  const plan = planCells({ meta, registrations, mode: 'full' });
+  for (const cell of plan.cells.filter((each) => each.kind === 'composition')) {
+    assert.ok(accepts(registry, cell.tuple, 'read-only'), tupleKey(cell.tuple));
+  }
+  assert.ok(plan.coverage.uncoverable.includes('colorScheme=night-only × displayMode=light'));
+});
+
+test("a cell's site document publishes its tuple, the fallback composition by a variant nothing registers", () => {
+  const site = parse(
+    siteTextFor(contractFixture('complete'), {
+      ...defaultTuple('fallback', 'dark'),
+      typography: 'fixture-typography-stable',
+    }),
+  ) as { appearance: Record<string, string>; visitorControls: unknown };
+  assert.deepEqual(site.appearance, {
+    variant: 'missing-variant',
+    designLanguage: 'platform-neutral',
+    colorScheme: 'warm-parchment',
+    typography: 'fixture-typography-stable',
+    displayMode: 'dark',
+  });
+  assert.ok(site.visitorControls, "the fixture's other settings stay");
+  const other = parse(
+    siteTextFor(contractFixture('complete'), defaultTuple('kinetic', 'light')),
+  ) as {
+    appearance: Record<string, string>;
+  };
+  assert.equal(other.appearance.variant, 'kinetic');
+});
+
+test("a unit's notApplicable skips the cells it names with its reason, and an engine's goes to that engine", () => {
+  const units = [
+    {
+      id: 'fallback',
+      interactions: [],
+      primaryActions: [],
+      notApplicable: [
+        {
+          match: { state: 'sparse', viewport: '390x844' },
+          reason: 'Sparse has nothing to reflow at 390.',
+        },
+        {
+          match: { row: 'forced-colors', engine: 'webkit' },
+          reason: 'WebKit has no forced colors.',
+        },
+      ],
+    },
+  ];
+  const plan = planCells({
+    meta: checkoutMeta(),
+    registrations: { ...registrations, units },
+    mode: 'full',
+  });
+  const sparse = plan.tests.filter(
+    (each) => each.cell.state === 'sparse' && each.viewport.id === '390x844',
+  );
+  assert.ok(sparse.length > 0);
+  for (const each of sparse) assert.equal(each.skip, 'Sparse has nothing to reflow at 390.');
+  const forced = plan.tests.filter(
+    (each) => each.row.id === 'forced-colors' && each.cell.kind === 'composition',
+  );
+  for (const each of forced)
+    assert.deepEqual(each.engineSkips, { webkit: 'WebKit has no forced colors.' });
+  assert.ok(plan.reasons.includes('Sparse has nothing to reflow at 390.'));
+  const other = plan.tests.filter(
+    (each) => each.cell.state === 'sparse' && each.viewport.id !== '390x844',
+  );
+  for (const each of other) assert.equal(each.skip, undefined);
+});
+
+test('the plan is the same each time', () => {
+  const a = planCells({ meta: checkoutMeta(), registrations, mode: 'full' });
+  const b = planCells({ meta: checkoutMeta(), registrations, mode: 'full' });
+  assert.deepEqual(
+    a.tests.map((each) => `${each.cell.id} ${each.viewport.id} ${each.row.id}`),
+    b.tests.map((each) => `${each.cell.id} ${each.viewport.id} ${each.row.id}`),
+  );
+});

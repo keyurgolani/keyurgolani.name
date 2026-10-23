@@ -21,5 +21,11 @@
       "react-dom/*": ["../apps/web/node_modules/@types/react-dom/*"]
     }
   },
-  "include": ["**/*.ts", "**/*.mjs", "variants/parity/*.tsx", "../playwright.config.ts"]
+  "include": [
+    "**/*.ts",
+    "**/*.mjs",
+    "variants/parity/*.tsx",
+    "../playwright.config.ts",
+    "../quality/**/*.ts"
+  ]
 }
