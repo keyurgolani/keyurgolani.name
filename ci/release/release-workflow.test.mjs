@@ -185,6 +185,15 @@ test('every job sets timeout-minutes, and no checkout keeps its credentials', ()
   }
 });
 
+test('each image build has its own 25-minute timeout, inside the job timeout', () => {
+  for (const id of ['dry-run', 'rc-build']) {
+    const [build] = uses(id, 'docker/build-push-action');
+    assert.equal(build.id, 'build', id);
+    assert.equal(build['timeout-minutes'], 25, id);
+    assert.ok(JOBS[id]['timeout-minutes'] > build['timeout-minutes'], id);
+  }
+});
+
 test('no run: block expands an expression, so no tag name or input reaches a shell as code', () => {
   for (const [id, job] of Object.entries(JOBS)) {
     for (const step of job.steps) {

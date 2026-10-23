@@ -113,6 +113,10 @@ jobs:
           cache-binary: false
       - name: Build both platforms and push by digest
         id: build
+        # A healthy build takes about 5 minutes. The arm64 leg runs under
+        # QEMU and has hung, so a stuck build fails here instead of
+        # holding the runner for the job's 90 minutes.
+        timeout-minutes: 25
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         env:
           # The build record artifact holds the build's logs; it isn't needed.
@@ -299,6 +303,10 @@ jobs:
           password: ${{ github.token }}
       - name: Build both platforms once and push by digest
         id: build
+        # A healthy build takes about 5 minutes. The arm64 leg runs under
+        # QEMU and has hung, so a stuck build fails here instead of
+        # holding the runner for the job's 90 minutes.
+        timeout-minutes: 25
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         env:
           # The build record artifact holds the build's logs; it isn't needed.
