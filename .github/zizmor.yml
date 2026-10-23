@@ -1,0 +1,7 @@
+# zizmor's configuration (pnpm check:workflows).
+rules:
+  # zizmor prefers GitHub's $/ form for in-repository actions, but the
+  # pinned actionlint (ci/workflow-linters.mjs) rejects it, so the one
+  # composite action keeps the ./ form until actionlint reads $/.
+  self-repository:
+    disable: true

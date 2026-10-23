@@ -1,0 +1,9 @@
+{
+  "schemaVersion": "1.0",
+  "gate": "links",
+  "test": "https://gone.dev/ answered 404",
+  "asset": "docs/deployment.md:12",
+  "expected": "2xx or 3xx",
+  "actual": "404",
+  "reproCommand": "pnpm ci:links"
+}
