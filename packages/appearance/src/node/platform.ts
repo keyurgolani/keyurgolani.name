@@ -197,6 +197,9 @@ export function platformStylesheet(): string {
       'text-transform': 'none',
       'word-spacing': 'normal',
       'text-shadow': 'none',
+      // A word longer than the line, such as a display headline's on a 320px
+      // phone, wraps rather than widening the page (WCAG 1.4.10).
+      'overflow-wrap': 'anywhere',
     }),
     block([`${BOUNDARY} ::selection`], {
       color: 'var(--color-text-primary)',
