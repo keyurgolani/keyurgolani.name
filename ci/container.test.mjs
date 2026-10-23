@@ -45,8 +45,8 @@ function composeHealthcheck(file) {
  * Runs a `node ...` command (the leading `node` is optional) with a clean env
  * plus `env`; resolves to { status, stdout }. Only a command given `input`
  * gets a stdin to read it from. A child can exit before this process writes
- * to its stdin, if this one is slow to run under load, and a write after
- * that fails with EPIPE: so one given no input has nothing to write to, and
+ * to its stdin, when this one is slow to run under load, and a write after
+ * that fails with EPIPE. So one given no input has no stdin to write to, and
  * one that exits without reading its input is answered by its status, not
  * by the write.
  */

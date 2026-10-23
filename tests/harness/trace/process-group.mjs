@@ -81,14 +81,23 @@ export function groupTracker({ pollMs = 250 } = {}) {
   /** @type {Set<Group>} */
   const live = new Set();
   let stopped = false;
-  /** @param {Group} group whether nothing is left in it, which ends its tracking */
+  /**
+   * Whether nothing is left in `group`, which ends its tracking when so.
+   *
+   * @param {Group} group
+   */
   const emptied = (group) => {
     const { pid } = group.child;
     if (pid !== undefined && signalGroup(pid, 0)) return false;
     live.delete(group);
     return true;
   };
-  /** @param {Group} group looked at once its leader exits, and again until it's empty */
+  /**
+   * Looks at `group` once its leader exits, and every pollMs after that
+   * until it's empty.
+   *
+   * @param {Group} group
+   */
   const watch = (group) => {
     if (!emptied(group)) setTimeout(watch, pollMs, group).unref();
   };

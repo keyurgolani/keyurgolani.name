@@ -23,11 +23,11 @@ const PNG = Buffer.from(
 
 /**
  * Serves `body` as the page at ORIGIN/, and a PNG for every image but
- * `stalled`, which never answers. Every other request, and every
- * WebSocket, is refused by a catch-all registered first, which the
- * stand-in host's own route, registered after it, runs ahead of, so
- * nothing the page asks for leaves the machine. Returns the URLs the
- * catch-all refused.
+ * `stalled`, which never answers. A catch-all registered first refuses
+ * every other request and every WebSocket. Playwright tries the route
+ * registered last first, so the stand-in host's own route answers ahead
+ * of it, and nothing the page asks for leaves the machine. Returns the
+ * URLs the catch-all refused.
  */
 async function open(page: Page, body: string, stalled?: string): Promise<string[]> {
   const refused: string[] = [];

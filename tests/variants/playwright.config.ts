@@ -4,12 +4,11 @@
 // canary, and render parity, against the standalone build (`pnpm build`
 // first), or the one PORTFOLIO_VARIANTS_WEB names. Each composition and
 // fixture is a project, since each needs its own server, and the modes'
-// own checks are one more, which needs none, in a run of every variant
-// only. Screenshots compare
-// against tests/variants/__screenshots__/ only in the pinned Playwright
-// image, where CI's variants job sets PORTFOLIO_SCREENSHOTS=compare;
-// anywhere else they're attached to the report. Everything else is the
-// browser suite's config.
+// own checks are one more, which needs none, when the run checks every
+// variant. Screenshots compare against tests/variants/__screenshots__/
+// only in the pinned Playwright image, where CI's variants job sets
+// PORTFOLIO_SCREENSHOTS=compare; anywhere else they're attached to the
+// report. Everything else is the browser suite's config.
 import path from 'node:path';
 import { defineConfig, devices } from '@playwright/test';
 import { reportsDir } from '../../ci/lib/reports.mjs';
