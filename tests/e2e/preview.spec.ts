@@ -224,7 +224,10 @@ test(
     expect(queriedText).toContain('Pinned Person');
     expect(variantOf(plainText)).toBeDefined();
     expect(variantOf(queriedText)).toBe(variantOf(plainText));
-    expect(queriedText).not.toContain('data-display-mode');
+    // The environment is the grant's own (#7, Slice 4), whatever the query says.
+    expect(plainText).toContain('data-display-mode="system"');
+    expect(queriedText).toContain('data-display-mode="system"');
+    expect(queriedText).not.toContain('data-display-mode="dark"');
 
     // Top level, no Fetch Metadata, a wrong destination, or a method but GET
     // and HEAD: the status document.

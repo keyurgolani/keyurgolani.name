@@ -161,6 +161,9 @@ export function copyTree(from, to, options, copy = cpSync, pauseMs = COPY_RETRY_
  * @param {boolean} [options.dev] run `next dev` in `web` itself instead of a copy of its
  *   build, for what only `next dev` serves, such as #7's dev fixture route. next dev keeps
  *   its output in `web`'s .next/dev, so run one at a time, and add no public files.
+ * @param {string} [options.previewHost] a host name for PORTFOLIO_PREVIEW_ORIGIN, on the
+ *   server's own port, such as preview.localhost, which browsers resolve to loopback (#7,
+ *   Slice 4). The server still binds 127.0.0.1.
  */
 export async function startApp({
   env = {},
@@ -177,6 +180,7 @@ export async function startApp({
   publicFiles = {},
   sourceFiles = {},
   dev = false,
+  previewHost,
 } = {}) {
   const standalone = path.join(web, '.next', 'standalone');
   const serverJs = path.join(standalone, 'apps', 'web', 'server.js');
@@ -256,6 +260,7 @@ export async function startApp({
       PORTFOLIO_PROFILE: 'read-only',
       PORTFOLIO_ORIGIN: origin,
       PORTFOLIO_SOURCE_DIR: sourceDir,
+      ...(previewHost ? { PORTFOLIO_PREVIEW_ORIGIN: `http://${previewHost}:${port}` } : {}),
       ...env,
       ...fileEnv,
       ...trap.env,
@@ -370,6 +375,9 @@ export async function startApp({
   return {
     origin: server.origin,
     port: server.port,
+    ...(server.env.PORTFOLIO_PREVIEW_ORIGIN
+      ? { previewOrigin: server.env.PORTFOLIO_PREVIEW_ORIGIN }
+      : {}),
     root,
     sourceDir,
     log,
