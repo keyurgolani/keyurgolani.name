@@ -5,6 +5,7 @@ import {
   customViewport,
   CUSTOM_WIDTH,
   frameTitle,
+  REDUCED_MOTION,
   viewportLabel,
   VIEWPORTS,
   type FrameSubjectKind,
@@ -42,8 +43,6 @@ export interface StudioPreviewProps {
 }
 
 type Environment = MintRequest['environment'];
-
-const REDUCED_MOTION = '(prefers-reduced-motion: reduce)';
 
 function subscribeToMotion(change: () => void) {
   const query = window.matchMedia(REDUCED_MOTION);

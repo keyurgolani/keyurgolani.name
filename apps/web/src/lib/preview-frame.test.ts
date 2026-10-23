@@ -8,7 +8,9 @@ import {
   frameSandbox,
   frameSource,
   frameTitle,
+  heldToSystem,
   linkTarget,
+  REDUCED_MOTION,
   viewportLabel,
   VIEWPORTS,
 } from './preview-frame';
@@ -115,6 +117,21 @@ test('the presets are width simulations, a custom width holds to 320 and up, and
     frameTitle('fixture', null, VIEWPORTS[1]!),
     'Preview — fixture, variant unknown, Tablet 1024 by 768',
   );
+});
+
+test("a grant's motion is held to the owner's system: reduced when the system reduces it, whatever the controls said, and as asked otherwise (#7, Slice 4)", () => {
+  const asked = {
+    displayMode: 'dark',
+    contrast: 'more',
+    motion: 'system',
+    enhancement: 'on',
+  } as const;
+  assert.deepEqual(heldToSystem(asked, true), { ...asked, motion: 'reduce' });
+  assert.equal(heldToSystem(asked, false), asked);
+  const reduced = { ...asked, motion: 'reduce' } as const;
+  assert.equal(heldToSystem(reduced, true), reduced);
+  assert.equal(heldToSystem(reduced, false), reduced);
+  assert.equal(REDUCED_MOTION, '(prefers-reduced-motion: reduce)');
 });
 
 test('fit scales the frame down to the room it has, never up, so the layout width stays the preset (#7, Slice 4)', () => {

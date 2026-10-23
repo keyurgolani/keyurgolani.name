@@ -6,7 +6,9 @@ import {
   FRAME_ATTRIBUTES,
   frameOrigin,
   frameSource,
+  heldToSystem,
   linkTarget,
+  REDUCED_MOTION,
   type LinkTarget,
   type Viewport,
 } from '~/lib/preview-frame';
@@ -72,6 +74,15 @@ const ANNOUNCEMENTS: Readonly<Record<Phase, string>> = {
 /** The parts of the request a new grant needs; the rest the agent applies in place. */
 const mintKey = ({ subject, appearance, environment }: MintRequest) =>
   JSON.stringify([subject, appearance ?? null, environment.enhancement]);
+
+/**
+ * `request` as a grant is minted for it: motion held to the owner's system,
+ * which the first mint goes out before the controls have read.
+ */
+const heldRequest = (request: MintRequest): MintRequest => ({
+  ...request,
+  environment: heldToSystem(request.environment, window.matchMedia(REDUCED_MOTION).matches),
+});
 
 export function PreviewSurface(props: PreviewSurfaceProps) {
   const { request, sandbox, viewport, title } = props;
@@ -191,9 +202,9 @@ export function PreviewSurface(props: PreviewSurfaceProps) {
     });
     session.current = grants;
     throttle.current = createRefreshThrottle({
-      run: () => void grants.mint(latest.current.props.request),
+      run: () => void grants.mint(heldRequest(latest.current.props.request)),
     });
-    void grants.mint(latest.current.props.request);
+    void grants.mint(heldRequest(latest.current.props.request));
     return () => {
       throttle.current?.cancel();
       grants.stop();

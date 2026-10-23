@@ -93,6 +93,24 @@ export function linkTarget(
   }
 }
 
+/** The media query an owner's system matches when it reduces motion. */
+export const REDUCED_MOTION = '(prefers-reduced-motion: reduce)';
+
+/**
+ * `environment` with motion held to what the owner's system allows: reduced
+ * when the system reduces it, whatever the controls said. A grant minted
+ * before Studio's controls have read the system, as the first one is while
+ * the page hydrates, still renders its first paint reduced.
+ */
+export function heldToSystem<E extends { readonly motion: 'system' | 'reduce' }>(
+  environment: E,
+  systemReduces: boolean,
+): E {
+  return systemReduces && environment.motion !== 'reduce'
+    ? { ...environment, motion: 'reduce' }
+    : environment;
+}
+
 /** A viewport Studio simulates: a layout width and a device height, in CSS pixels. */
 export interface Viewport {
   readonly id: 'desktop' | 'tablet' | 'mobile' | 'custom';
