@@ -211,6 +211,9 @@ async function suites(run: SuiteRun): Promise<Finding[]> {
  * there. Without JavaScript axe needs timers, so script runs for axe alone
  * (the page's own never ran) and stops again.
  */
+/** The longest axe waits for the page's finite animations to end. */
+const ANIMATION_WAIT_MS = 2_000;
+
 async function audit(page: Page, row: PreferenceRow) {
   const forced = row.context.forcedColors === 'active';
   const cdp = scriptless.get(page);
@@ -218,6 +221,21 @@ async function audit(page: Page, row: PreferenceRow) {
   const scripting = cdp ? await scriptingMediaFindings(page) : [];
   await cdp?.send('Emulation.setScriptExecutionDisabled', { value: false });
   try {
+    // A finite animation, such as a toast's entrance fade, ends before axe
+    // reads colors: without JavaScript, settle() can't wait out frames.
+    await page.evaluate(
+      (wait) =>
+        Promise.race([
+          Promise.all(
+            document
+              .getAnimations()
+              .filter((each) => each.effect?.getComputedTiming().iterations !== Infinity)
+              .map((each) => each.finished.catch(() => undefined)),
+          ),
+          new Promise((done) => setTimeout(done, wait)),
+        ]),
+      ANIMATION_WAIT_MS,
+    );
     const builder = axeFor(page);
     if (forced) builder.disableRules(['color-contrast']);
     const results: AxeResults = await builder.analyze();
