@@ -147,11 +147,11 @@ export const RULES = [
     ],
   },
   {
-    // Fixture packs register only under APPEARANCE_FIXTURES=1 (and #11's
-    // quality build), and build's standalone check proves they stay out.
+    // Fixture packs register only under APPEARANCE_FIXTURES=1 or #11's
+    // QUALITY_FIXTURES, and build's standalone check proves they stay out.
     class: 'fixture pack',
     jobs: ['unit', 'build', 'appearance-browser', 'quality-pr', 'quality-meta'],
-    paths: ['packages/appearance-fixtures-*/**'],
+    paths: ['packages/appearance-fixtures-*/**', 'packages/quality-fixtures-*/**'],
   },
   // Before the variant rule: packages/variant-contract isn't a variant.
   {

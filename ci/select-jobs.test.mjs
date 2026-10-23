@@ -57,7 +57,10 @@ const CLASSES = [
   },
   {
     name: 'one fixture pack',
-    files: ['packages/appearance-fixtures-schemes/packs/high-contrast/pack.json'],
+    files: [
+      'packages/appearance-fixtures-schemes/packs/high-contrast/pack.json',
+      'packages/quality-fixtures-schemes/packs/stable/pack.json',
+    ],
     jobs: ['static', 'unit', 'build', 'appearance-browser', 'quality-pr', 'quality-meta'],
   },
   {
