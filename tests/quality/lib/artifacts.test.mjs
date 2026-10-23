@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 import {
   canaryPassword,
   isText,
@@ -159,4 +161,27 @@ test('text is valid UTF-8 without a NUL', () => {
   assert.ok(isText(Buffer.from('héllo')));
   assert.ok(!isText(PNG));
   assert.ok(!isText(Buffer.from([0xc3, 0x28])));
+});
+
+test("CI's scrub step scrubs the reports directory with the canary run.ts left in QUALITY_CANARY_FILE", async () => {
+  const dir = scratch();
+  try {
+    const canary = plantCanary();
+    const reports = path.join(dir, 'reports');
+    mkdirSync(path.join(reports, 'quality'), { recursive: true });
+    await traceWith(path.join(reports, 'quality', 'trace.zip'), canary);
+    writeFileSync(path.join(reports, 'quality', 'note.txt'), `plain ${canary}\n`);
+    const file = path.join(dir, 'canary');
+    writeFileSync(file, `${canary}\n`);
+    const script = fileURLToPath(new URL('../scrub.mjs', import.meta.url));
+    const result = spawnSync(process.execPath, [script], {
+      env: { ...process.env, CI_REPORTS_DIR: reports, QUALITY_CANARY_FILE: file },
+      encoding: 'utf8',
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /scrubbed 2 file\(s\)/);
+    assert.deepEqual(await scanArtifacts(reports, [{ label: 'canary', value: canary }]), []);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
