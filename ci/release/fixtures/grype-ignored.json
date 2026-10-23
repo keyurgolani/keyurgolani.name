@@ -1,0 +1,15 @@
+{
+  "matches": [],
+  "ignoredMatches": [
+    {
+      "vulnerability": {
+        "id": "CVE-2026-1001",
+        "severity": "Critical",
+        "fix": { "versions": ["3.5.2-r0"], "state": "fixed" }
+      },
+      "artifact": { "name": "libcrypto3", "version": "3.5.1-r0", "type": "apk" },
+      "appliedIgnoreRules": [{ "vulnerability": "CVE-2026-1001" }]
+    }
+  ],
+  "descriptor": { "name": "grype", "version": "0.120.1" }
+}

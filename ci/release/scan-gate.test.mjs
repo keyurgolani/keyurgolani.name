@@ -2,12 +2,17 @@
 // output (ci/release/fixtures/grype-*.json).
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { parse } from 'yaml';
 import {
   EXCEPTIONS_FILE,
   evaluateDeps,
   evaluateImage,
   findingsOf,
+  main,
   parseDate,
   readExceptions,
 } from './scan-gate.mjs';
@@ -139,4 +144,98 @@ test('the committed exceptions file reads with no problem', () => {
 test("anything but Grype's JSON is refused", () => {
   assert.throws(() => findingsOf({}), /isn't Grype JSON/);
   assert.throws(() => findingsOf(null), /isn't Grype JSON/);
+});
+
+test('a baseline finding counts only for the same package, at High or Critical', () => {
+  const postcss = grype('grype-deps-head').find((f) => f.package === 'postcss');
+  // The same id in another package at the base leaves this one new.
+  const elsewhere = [{ ...postcss, package: 'autoprefixer' }];
+  assert.deepEqual(evaluateDeps([postcss], elsewhere, []).failing, [postcss]);
+  // The same id and package at Medium at the base: a rise to High is new.
+  const milder = [{ ...postcss, severity: 'Medium' }];
+  assert.deepEqual(evaluateDeps([postcss], milder, []).failing, [postcss]);
+  // At High at the base, it's known.
+  assert.deepEqual(evaluateDeps([postcss], [postcss], []).known, [postcss]);
+});
+
+test('a report where Grype ignored a match by its own rules is refused', () => {
+  assert.throws(() => grype('grype-ignored'), /Grype ignored 1 match\(es\) by its own rules/);
+  // An empty ignoredMatches list is fine.
+  assert.deepEqual(findingsOf({ matches: [], ignoredMatches: [] }), []);
+});
+
+test('.grype.yaml holds only the app-update and database settings, so it ignores nothing', () => {
+  const config = parse(readFileSync(new URL('../../.grype.yaml', import.meta.url), 'utf8'));
+  assert.deepEqual(Object.keys(config).sort(), ['check-for-app-update', 'db']);
+  assert.equal(config['check-for-app-update'], false);
+  assert.deepEqual(Object.keys(config.db).sort(), [
+    'auto-update',
+    'max-allowed-built-age',
+    'validate-age',
+  ]);
+});
+
+const findingDetail = (findings) => [
+  ...new Set(
+    findings.flatMap((f) => [f.package, f.version, ...f.ids, ...f.fixedIn]).filter(Boolean),
+  ),
+];
+
+test('what the CLI prints, summarizes, and annotates names no finding, package, version, or fix', () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'scan-gate-'));
+  try {
+    const summary = path.join(dir, 'summary.md');
+    const report = path.join(dir, 'report.md');
+    const file = (name) => fileURLToPath(new URL(`./fixtures/${name}.json`, import.meta.url));
+    const detail = findingDetail([
+      ...grype('grype-image'),
+      ...grype('grype-deps-head'),
+      ...grype('grype-deps-base'),
+    ]);
+    assert.ok(detail.length > 20, 'the fixtures name plenty that could leak');
+    for (const argv of [
+      ['image', file('grype-image')],
+      ['deps', file('grype-deps-head'), file('grype-deps-base')],
+    ]) {
+      const lines = [];
+      const code = main([...argv, `--report=${report}`], {
+        log: (line) => lines.push(String(line)),
+        env: { GITHUB_STEP_SUMMARY: summary },
+        exceptionsText: 'exceptions: []\n',
+        on: ON,
+      });
+      assert.equal(code, 1, `${argv[0]} fails on the fixture`);
+      const stdout = lines.join('\n');
+      const written = readFileSync(summary, 'utf8');
+      const annotations = lines.filter((line) => line.startsWith('::')).join('\n');
+      assert.match(annotations, /::error title=/, 'it annotates the failure');
+      assert.match(stdout, /\d+ failing \(\d+ Critical, \d+ High\)/);
+      for (const [where, text] of [
+        ['stdout', stdout],
+        ['the summary', written],
+        ['the annotations', annotations],
+      ]) {
+        for (const value of detail) assert.ok(!text.includes(value), `${where} names ${value}`);
+        assert.doesNotMatch(text, /CVE-|GHSA-/i, where);
+      }
+      // The one-day artifact's report names them.
+      assert.match(readFileSync(report, 'utf8'), /CVE-2026-|GHSA-/);
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('an exception problem names the entry and its id, never its package', () => {
+  const lines = [];
+  const code = main(['exceptions'], {
+    log: (line) => lines.push(String(line)),
+    env: {},
+    exceptionsText: yaml([entry({ package: 'quiet-package-name', expires: '2026-01-01' })]),
+    on: ON,
+  });
+  assert.equal(code, 1);
+  const out = lines.join('\n');
+  assert.match(out, /entry 1 \(CVE-2026-1001\) expired on 2026-01-01/);
+  assert.ok(!out.includes('quiet-package-name'));
 });

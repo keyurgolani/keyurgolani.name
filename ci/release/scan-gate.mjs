@@ -4,6 +4,12 @@
 //   node ci/release/scan-gate.mjs exceptions
 //   node ci/release/scan-gate.mjs image <grype.json>...
 //   node ci/release/scan-gate.mjs deps <head-grype.json> <base-grype.json>
+//   (each with --report=<file> for the full report)
+//
+// What it prints, writes to the job summary, and annotates is public, on
+// tag runs too: pass or fail and counts only, never a finding's id,
+// package, version, or fix. The full report goes to --report's file, which
+// the workflow uploads as an artifact kept for one day.
 //
 // image fails on a fixable Critical or High finding in the image, on every
 // platform scanned. deps fails on a High or Critical finding in the
@@ -13,7 +19,7 @@
 // ci/release/scan-exceptions.yml lets one finding through until its expiry,
 // and every mode fails while any entry has expired or isn't valid, whether
 // or not it matches anything.
-import { appendFileSync, readFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse } from 'yaml';
@@ -73,7 +79,8 @@ export function readExceptions(text, { on = today() } = {}) {
       problems.push(`${at} isn't a map`);
       return;
     }
-    const label = `${at} (${entry.id ?? 'no id'} in ${entry.package ?? 'no package'})`;
+    // The file is public, so a problem may name the entry's own id, and no more.
+    const label = `${at} (${typeof entry.id === 'string' ? entry.id : 'no id'})`;
     const missing = FIELDS.filter(
       (field) => typeof entry[field] !== 'string' || !entry[field].trim(),
     );
@@ -83,7 +90,7 @@ export function readExceptions(text, { on = today() } = {}) {
     if (missing.length || unknown.length) return;
     let valid = true;
     if (!ID.test(entry.id)) {
-      problems.push(`${label}: ${entry.id} isn't a CVE or GHSA id`);
+      problems.push(`${label}: the id isn't a CVE or GHSA id`);
       valid = false;
     }
     const expires = parseDate(entry.expires);
@@ -134,6 +141,13 @@ export function findingOf(match) {
 export function findingsOf(report) {
   if (!report || typeof report !== 'object' || !Array.isArray(report.matches)) {
     throw new Error("isn't Grype JSON output: it has no matches list");
+  }
+  // An ignore rule in .grype.yaml or on the command line would let a finding
+  // through with no expiry. Exceptions live in scan-exceptions.yml only.
+  if (Array.isArray(report.ignoredMatches) && report.ignoredMatches.length > 0) {
+    throw new Error(
+      `Grype ignored ${report.ignoredMatches.length} match(es) by its own rules. Remove the ignore rule, and add an expiring entry to ci/release/scan-exceptions.yml instead`,
+    );
   }
   return report.matches.map(findingOf);
 }
@@ -189,22 +203,32 @@ export function evaluateDeps(headFindings, baseFindings, exceptions) {
   return { ok: failing.length === 0, failing, excepted, known };
 }
 
-const row = (f) =>
-  `| ${f.id} | ${f.package} ${f.version} | ${f.severity} | ${f.fixedIn.length ? f.fixedIn.join(', ') : 'no fix'} |`;
-const table = (title, findings) =>
-  findings.length === 0
-    ? []
-    : [
-        `**${title}** (${findings.length})`,
-        '',
-        '| Finding | Package | Severity | Fixed in |',
-        '| --- | --- | --- | --- |',
-        ...findings.map(row),
-        '',
-      ];
+const SEVERITIES = ['Critical', 'High'];
+const CATEGORIES = [
+  ['failing', 'failing'],
+  ['excepted', 'let through by an exception'],
+  ['unfixable', 'with no fix yet, reported only'],
+  ['known', 'already in the baseline'],
+];
 
+/** How many findings of each blocking severity a list holds: "2 Critical, 5 High". */
+export function severityCounts(findings) {
+  return SEVERITIES.map(
+    (severity) =>
+      `${findings.filter((f) => f.severity.toLowerCase() === severity.toLowerCase()).length} ${severity}`,
+  ).join(', ');
+}
+
+/**
+ * The public summary: pass or fail, and a count per category and severity.
+ * Run logs, job summaries, and annotations are public, tag runs' included,
+ * so it never names a finding, a package, a version, or a fix.
+ */
 export function renderSummary(title, verdict, exceptionProblems) {
   const ok = verdict.ok && exceptionProblems.length === 0;
+  const counts = CATEGORIES.filter(([key]) => Array.isArray(verdict[key])).map(
+    ([key, label]) => `- ${verdict[key].length} ${label} (${severityCounts(verdict[key])})`,
+  );
   return [
     `### ${title}: ${ok ? 'passed' : 'failed'}`,
     '',
@@ -216,37 +240,71 @@ export function renderSummary(title, verdict, exceptionProblems) {
           '',
         ]
       : []),
-    ...table('Failing', verdict.failing ?? []),
-    ...table('Let through by an exception', verdict.excepted ?? []),
-    ...table('Unfixable, reported only', verdict.unfixable ?? []),
-    ...table('Already in the baseline', verdict.known ?? []),
-    ...(ok &&
-    !(verdict.excepted ?? []).length &&
-    !(verdict.unfixable ?? []).length &&
-    !(verdict.known ?? []).length
-      ? ['No Critical or High finding.', '']
+    ...(counts.length ? ['Critical and High findings:', '', ...counts, ''] : []),
+    ...(counts.length && !verdict.ok
+      ? ["The full report is in this run's reports artifact, kept for one day.", '']
       : []),
   ].join('\n');
 }
 
+const row = (f) =>
+  `| ${f.id} | ${f.package} ${f.version} | ${f.severity} | ${f.fixedIn.length ? f.fixedIn.join(', ') : 'no fix'} |`;
+
+/** The full report, every finding named, for the one-day artifact only. */
+export function renderReport(title, verdict) {
+  const lines = [`# ${title}: ${verdict.ok ? 'passed' : 'failed'}`, ''];
+  for (const [key, label] of CATEGORIES) {
+    const findings = verdict[key];
+    if (!Array.isArray(findings) || findings.length === 0) continue;
+    lines.push(
+      `## ${findings.length} ${label}`,
+      '',
+      '| Finding | Package | Severity | Fixed in |',
+      '| --- | --- | --- | --- |',
+      ...findings.map(row),
+      '',
+    );
+  }
+  return lines.join('\n');
+}
+
 const readJson = (file) => {
+  let text;
   try {
-    return JSON.parse(readFileSync(file, 'utf8'));
-  } catch (error) {
-    throw new Error(`${file}: ${error.message}`);
+    text = readFileSync(file, 'utf8');
+  } catch {
+    throw new Error(`${path.basename(file)} can't be read`);
+  }
+  try {
+    return JSON.parse(text);
+  } catch {
+    // Never pass the parser's message on: it quotes the file.
+    throw new Error(`${path.basename(file)} isn't JSON`);
   }
 };
 
-function main(argv) {
-  const [mode, ...files] = argv;
-  const { exceptions, problems } = readExceptions(readFileSync(EXCEPTIONS_FILE, 'utf8'));
+/**
+ * The CLI. `io` stands in for the console, the environment, the exceptions
+ * file, and today in tests. With --report=<file>, the full report goes to
+ * that file, which the workflow uploads with a one-day retention, and
+ * nowhere else.
+ */
+export function main(argv, io = {}) {
+  const log = io.log ?? console.log;
+  const env = io.env ?? process.env;
+  const report = argv.find((arg) => arg.startsWith('--report='))?.slice('--report='.length);
+  const [mode, ...files] = argv.filter((arg) => !arg.startsWith('--'));
+  const { exceptions, problems } = readExceptions(
+    io.exceptionsText ?? readFileSync(EXCEPTIONS_FILE, 'utf8'),
+    io.on === undefined ? {} : { on: io.on },
+  );
   let title;
   let verdict;
   if (mode === 'exceptions') {
     title = 'scan exceptions';
     verdict = { ok: true };
   } else if (mode === 'image' && files.length > 0) {
-    title = `image scan (${files.map((f) => path.basename(f)).join(', ')})`;
+    title = 'image scan';
     verdict = evaluateImage(
       files.flatMap((f) => findingsOf(readJson(f))),
       exceptions,
@@ -259,19 +317,23 @@ function main(argv) {
       exceptions,
     );
   } else {
-    console.error(
-      'usage: node ci/release/scan-gate.mjs exceptions | image <grype.json>... | deps <head.json> <base.json>',
+    log(
+      'usage: node ci/release/scan-gate.mjs exceptions | image <grype.json>... | deps <head.json> <base.json> [--report=<file>]',
     );
     return 2;
   }
+  if (report) {
+    mkdirSync(path.dirname(report), { recursive: true });
+    writeFileSync(report, `${renderReport(title, verdict)}\n`);
+  }
   const summary = renderSummary(title, verdict, problems);
-  if (process.env.GITHUB_STEP_SUMMARY)
-    appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${summary}\n`);
-  console.log(summary);
-  for (const problem of problems) console.log(`::error title=scan exceptions::${problem}`);
-  for (const f of verdict.failing ?? []) {
-    console.log(
-      `::error title=${title}::${f.severity} ${f.id} in ${f.package} ${f.version}${f.fixedIn.length ? `, fixed in ${f.fixedIn.join(', ')}` : ''}`,
+  if (env.GITHUB_STEP_SUMMARY) appendFileSync(env.GITHUB_STEP_SUMMARY, `${summary}\n`);
+  log(summary);
+  for (const problem of problems) log(`::error title=scan exceptions::${problem}`);
+  const failing = verdict.failing ?? [];
+  if (failing.length > 0) {
+    log(
+      `::error title=${title}::${failing.length} Critical or High finding(s) fail the scan (${severityCounts(failing)}). The full report is in this run's reports artifact, kept for one day.`,
     );
   }
   return verdict.ok && problems.length === 0 ? 0 : 1;
