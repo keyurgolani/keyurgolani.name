@@ -51,6 +51,12 @@ ENV HOSTNAME=0.0.0.0
 
 RUN addgroup -g 1001 -S nodejs && adduser -S nextjs -u 1001 -G nodejs
 
+# The server, its HEALTHCHECK, and both CLIs run on node alone, so the package
+# managers the base image bundles go (ci/lib/package-managers.mjs).
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+  /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \
+  /usr/local/bin/yarn /usr/local/bin/yarnpkg /opt/yarn-v*
+
 # The owner profile's data directory (#2, #3). A named volume mounted here
 # starts out owned by uid 1001, so the server can write to it; nothing else
 # can read it. demo and read-only never use it.

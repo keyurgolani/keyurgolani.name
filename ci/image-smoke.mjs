@@ -5,7 +5,8 @@
 // inside the container: /api/health, the home page, the image's own
 // HEALTHCHECK command, what the image contains, that the server's user can
 // change nothing in the app tree, the owner CLI's hash-password and
-// revoke-sessions, and that the container has no route out. Always removes
+// revoke-sessions, that no package manager is left and the store's CLI still
+// runs, and that the container has no route out. Always removes
 // the container and network; keeps the image so later steps (the proxy
 // smoke) can run it.
 //
@@ -28,6 +29,7 @@ import {
   SCAN_SNIPPET,
   WRITABLE_SNIPPET,
 } from './lib/container.mjs';
+import { MANAGER_COMMANDS, MANAGERS_SNIPPET } from './lib/package-managers.mjs';
 import {
   currentGate,
   REPO_ROOT,
@@ -148,6 +150,36 @@ async function checkOwnerCli() {
     fail('revoke-sessions did not run against /var/lib/portfolio', `exit ${execStatus(revoked)}`);
   }
   console.log('[image] revoke-sessions: runs as the server user against /var/lib/portfolio');
+}
+
+/**
+ * The runner stage removes the package managers the base image bundles, and
+ * the store's CLI, which runs in the server's container, still starts.
+ */
+function checkPackageManagers() {
+  const managers = container(['exec', name, 'node', '-e', MANAGERS_SNIPPET, '/']);
+  const { found } = JSON.parse(managers.stdout || '{}');
+  if (execStatus(managers) !== 0 || !Array.isArray(found) || found.length > 0) {
+    throw new SmokeFailure(
+      `the image still has a package manager (${found?.join(', ') || `exit ${execStatus(managers)}`})`,
+      {
+        test: 'image has no package manager',
+        expected: `none of ${MANAGER_COMMANDS.join(', ')} on PATH, and no npm or corepack under /usr/local/lib/node_modules`,
+        actual: found?.join(', ') ?? `exit ${execStatus(managers)}`,
+      },
+    );
+  }
+  console.log(`[image] no package manager: none of ${MANAGER_COMMANDS.join(', ')}`);
+
+  const help = container(['exec', name, 'node', 'bin/portfolio-store.mjs', '--help']);
+  if (execStatus(help) !== 0 || !(help.stdout ?? '').startsWith('Usage: portfolio-store ')) {
+    throw new SmokeFailure("the store's CLI did not print its usage", {
+      test: "the store's CLI runs from the image",
+      expected: 'exit 0 and the usage on stdout',
+      actual: `exit ${execStatus(help)}: ${(help.stderr ?? '').trim().slice(0, 200)}`,
+    });
+  }
+  console.log('[image] node bin/portfolio-store.mjs --help -> exit 0 with its usage');
 }
 
 async function smoke() {
@@ -325,6 +357,7 @@ async function smoke() {
   console.log("[image] /app: nothing the server's user can change");
 
   await checkOwnerCli();
+  checkPackageManagers();
 
   const routes = assessRoutes(container(['exec', name, 'ip', 'route']), cli === 'docker');
   if (!routes.ok) {
