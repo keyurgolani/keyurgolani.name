@@ -275,7 +275,7 @@ async function smoke() {
       {
         test: 'image contents',
         expected:
-          'the bundled sample (portfolio.example.yml, site.example.yml, snapshots/github.json) and no other document or snapshot; no tests, ci, reports, .env*, or .git',
+          'the bundled sample at the root (portfolio.example.yml, site.example.yml, snapshots/github.json, example-media/) and no other document or snapshot; no tests, ci, reports, .env*, or .git',
         actual: found,
       },
     );

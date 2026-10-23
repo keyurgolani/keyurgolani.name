@@ -62,7 +62,7 @@ test("a contract fixture's documents in the standalone build fail, by name (#5, 
   ]);
   assert.match(
     checkStandalone(dir),
-    /holds 3 path\(s\) the image must not ship: packages\/variant-contract\/fixtures\/complete\/portfolio\.yml, .*hidden-canary\/site\.yml\. The image copies this tree whole, and its scan refuses any portfolio or site document but the bundled examples, env files, git metadata, secrets, test trees, and any snapshot but the sample's in snapshots\/\. next\.config\.ts's outputFileTracingIncludes and outputFileTracingExcludes decide what the trace ships beside the code\.$/,
+    /holds 3 path\(s\) the image must not ship: packages\/variant-contract\/fixtures\/complete\/portfolio\.yml, .*hidden-canary\/site\.yml\. The image copies this tree whole, and its scan refuses any portfolio or site document but the bundled examples at the root, env files, git metadata, secrets, test trees, and any snapshot but the sample's in snapshots\/\. next\.config\.ts's outputFileTracingIncludes and outputFileTracingExcludes decide what the trace ships beside the code\.$/,
   );
 });
 
@@ -96,8 +96,13 @@ test("a snapshot anywhere but the root's snapshots/ fails, by name, its node_mod
   );
 });
 
-test("a build that lacks any of the bundled sample's files, its snapshot among them, fails (#7, #10)", (t) => {
-  for (const missing of ['snapshots/github.json', 'portfolio.example.yml', 'site.example.yml']) {
+test("a build that lacks any of the bundled sample's files, its snapshot and media among them, fails (#7, #10)", (t) => {
+  for (const missing of [
+    'snapshots/github.json',
+    'example-media/work/small-traces.png',
+    'portfolio.example.yml',
+    'site.example.yml',
+  ]) {
     const dir = standaloneTree(
       t,
       SHIPPED.filter((file) => file !== missing),
@@ -105,10 +110,35 @@ test("a build that lacks any of the bundled sample's files, its snapshot among t
     assert.deepEqual(scanStandalone(dir), { problems: [], example: false }, missing);
     assert.match(
       checkStandalone(dir),
-      /lacks the bundled sample the demo profile renders: portfolio\.example\.yml, site\.example\.yml, and snapshots\/github\.json\. next\.config\.ts's outputFileTracingIncludes ships them\.$/,
+      /lacks the bundled sample the demo profile renders: portfolio\.example\.yml, site\.example\.yml, snapshots\/github\.json, and example-media\/work\/small-traces\.png\. next\.config\.ts's outputFileTracingIncludes ships them\.$/,
       missing,
     );
   }
+});
+
+test('an example document anywhere but the root fails, by name, its node_modules copies too (#7)', (t) => {
+  const dir = standaloneTree(t, [
+    ...SHIPPED,
+    'packages/schema/src/__fixtures__/zzprobe/portfolio.example.yml',
+    'packages/schema/src/__fixtures__/zzprobe/site.example.yml',
+    'apps/web/site.example.yml',
+    'apps/web/node_modules/@portfolio/schema/src/__fixtures__/zzprobe/portfolio.example.yml',
+    'node_modules/.pnpm/node_modules/@portfolio/schema/src/__fixtures__/zzprobe/site.example.yml',
+  ]);
+  assert.deepEqual(scanStandalone(dir), {
+    problems: [
+      'apps/web/site.example.yml',
+      'packages/schema/src/__fixtures__/zzprobe/portfolio.example.yml',
+      'packages/schema/src/__fixtures__/zzprobe/site.example.yml',
+      'apps/web/node_modules/@portfolio/schema/src/__fixtures__/zzprobe/portfolio.example.yml',
+      'node_modules/.pnpm/node_modules/@portfolio/schema/src/__fixtures__/zzprobe/site.example.yml',
+    ],
+    example: true,
+  });
+  assert.match(
+    checkStandalone(dir),
+    /holds 5 path\(s\) the image must not ship: apps\/web\/site\.example\.yml, packages\/schema\/src\/__fixtures__\/zzprobe\/portfolio\.example\.yml, /,
+  );
 });
 
 test('a long list is cut at ten names, and a missing build says so', (t) => {

@@ -88,13 +88,15 @@ function treeFromInside(root) {
  * Lists what under `root` must not ship. Outside node_modules: any
  * portfolio.* except the example, a site document, .env*, .git, a secrets
  * directory, and the tests, ci, and reports trees. Anywhere, node_modules
- * too: a snapshot, snapshots/<kind>.json, but the bundled sample's in the
- * root's snapshots/ (#7), since any other is a fixture's or a test's, and
- * the tracer copies a workspace package's files under every node_modules
- * path it reached them by. Links aren't followed. Returns
- * { problems, example }, where `example` says the bundled sample is there:
- * both examples and the snapshot beside them. pnpm check:standalone runs
- * it on the build's tree, and the image smoke inside the image.
+ * too: the bundled sample's files anywhere but where it ships (#7), a
+ * snapshot, snapshots/<kind>.json, outside the root's snapshots/, and
+ * portfolio.example.yml or site.example.yml outside the root. Any other is
+ * a fixture's or a test's, and the tracer copies a workspace package's
+ * files under every node_modules path it reached them by. Links aren't
+ * followed. Returns { problems, example }, where `example` says the bundled
+ * sample is there: both examples, the snapshot beside them, and its media.
+ * pnpm check:standalone runs it on the build's tree, and the image smoke
+ * inside the image.
  */
 export function scanTree(root) {
   const fs = process.getBuiltinModule('node:fs');
@@ -108,8 +110,11 @@ export function scanTree(root) {
       const modules = inModules || name === 'node_modules';
       const snapshot =
         path.basename(dir) === 'snapshots' && name.endsWith('.json') && dir !== sample;
+      const example =
+        (name === 'portfolio.example.yml' || name === 'site.example.yml') && dir !== root;
       const banned =
         snapshot ||
+        example ||
         (!modules &&
           ((name.startsWith('portfolio.') && name !== 'portfolio.example.yml') ||
             /^site\.(?:yml|yaml|json)$/.test(name) ||
@@ -121,9 +126,12 @@ export function scanTree(root) {
     }
   };
   walk(root, false);
-  const example = ['portfolio.example.yml', 'site.example.yml', 'snapshots/github.json'].every(
-    (file) => fs.existsSync(path.join(root, file)),
-  );
+  const example = [
+    'portfolio.example.yml',
+    'site.example.yml',
+    'snapshots/github.json',
+    'example-media/work/small-traces.png',
+  ].every((file) => fs.existsSync(path.join(root, file)));
   return { problems, example };
 }
 

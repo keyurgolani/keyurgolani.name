@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 // The build's standalone output holds nothing the image must not ship (#5,
 // #7). The image copies the tree whole, and its file scan refuses a
-// portfolio or site document but the bundled examples, env files, git
-// metadata, secrets, test trees, and any snapshot but the sample's, and
-// needs the bundled sample. So a file a route's trace or next.config.ts's
+// portfolio or site document but the bundled examples at the root, env
+// files, git metadata, secrets, test trees, and any snapshot but the
+// sample's, and needs the bundled sample. So a file a route's trace or next.config.ts's
 // includes drag in, such as a contract fixture's document or snapshot,
 // fails the image job. This runs the same scan (ci/lib/container.mjs
 // scanTree) on the build's own tree, with no container, so the build job
@@ -21,7 +21,8 @@ import { currentGate, REPO_ROOT, reportError, writeFailureRecord } from './lib/r
 export const STANDALONE_DIR = path.join(REPO_ROOT, 'apps', 'web', '.next', 'standalone');
 
 /** The bundled sample the demo profile renders, which the scan needs. */
-const SAMPLE = 'portfolio.example.yml, site.example.yml, and snapshots/github.json';
+const SAMPLE =
+  'portfolio.example.yml, site.example.yml, snapshots/github.json, and example-media/work/small-traces.png';
 
 /** Whether a path the scan refuses is a copy the tracer made under node_modules. */
 const inModules = (file) => file.split(path.sep).includes('node_modules');
@@ -61,7 +62,7 @@ export function checkStandalone(dir) {
   const found = [];
   if (problems.length > 0) {
     found.push(
-      `${shown} holds ${problems.length} path(s) the image must not ship: ${listed(problems)}. The image copies this tree whole, and its scan refuses any portfolio or site document but the bundled examples, env files, git metadata, secrets, test trees, and any snapshot but the sample's in snapshots/. next.config.ts's outputFileTracingIncludes and outputFileTracingExcludes decide what the trace ships beside the code.`,
+      `${shown} holds ${problems.length} path(s) the image must not ship: ${listed(problems)}. The image copies this tree whole, and its scan refuses any portfolio or site document but the bundled examples at the root, env files, git metadata, secrets, test trees, and any snapshot but the sample's in snapshots/. next.config.ts's outputFileTracingIncludes and outputFileTracingExcludes decide what the trace ships beside the code.`,
     );
   }
   if (!example) {
