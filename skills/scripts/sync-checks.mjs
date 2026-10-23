@@ -12,6 +12,11 @@
  *      description ≤1024 chars, name matches parent dir).
  *
  * Exit 0 on success, 1 on any failure with human-readable error.
+ *
+ *   node skills/scripts/sync-checks.mjs [<repository root>]
+ *
+ * It checks the repository it sits in, or the one the argument names, as
+ * its tests name a scratch copy they change in place of the checkout.
  */
 import { readFileSync, existsSync, statSync } from 'node:fs';
 import path from 'node:path';
@@ -19,7 +24,9 @@ import { fileURLToPath } from 'node:url';
 
 // SCRIPT_FILE is skills/scripts/sync-checks.mjs; up 3 dirs = repo root.
 const SCRIPT_FILE = fileURLToPath(import.meta.url);
-const ROOT = path.dirname(path.dirname(path.dirname(SCRIPT_FILE)));
+const ROOT = process.argv[2]
+  ? path.resolve(process.argv[2])
+  : path.dirname(path.dirname(path.dirname(SCRIPT_FILE)));
 
 let failures = 0;
 function fail(msg) {
