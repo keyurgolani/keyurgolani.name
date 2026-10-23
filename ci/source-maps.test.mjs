@@ -103,7 +103,7 @@ test("only CI's trace job builds with PORTFOLIO_ANALYZE, and nothing it builds l
       .map((line) => line.trim())
       .filter((line) => !line.startsWith('//')),
     [
-      "import { ANALYZE_ENV } from './lib/budgets.mjs';",
+      "import { ANALYZE_ENV, failureFields, reproCommand } from './lib/budgets.mjs';",
       'envWith({ BUDGET_FIXTURES: fixtures, ...ANALYZE_ENV }),',
     ],
   );

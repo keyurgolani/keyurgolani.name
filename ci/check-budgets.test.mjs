@@ -191,6 +191,9 @@ function bundledUnits() {
   return units;
 }
 
+/** The bundled units no budget of #6's declares yet, each another issue's to declare. */
+const UNDECLARED = ['fixture-environment'];
+
 test('every bundled variant and pack declares budgets within its ceilings', () => {
   const units = bundledUnits();
   for (const id of ['fallback', 'fixture-over-budget', 'warm-parchment', 'fixture-font']) {
@@ -200,7 +203,11 @@ test('every bundled variant and pack declares budgets within its ceilings', () =
     );
   }
   for (const unit of units) {
-    assert.deepEqual(Object.keys(unit.budgets), BUDGET_KINDS, `${unit.id} declares all six`);
+    // A unit declares all six or none: a package another issue owns, such as
+    // #7's fixture-environment, takes its tier's ceilings until it declares.
+    if (Object.keys(unit.budgets).length > 0 || !UNDECLARED.includes(unit.id)) {
+      assert.deepEqual(Object.keys(unit.budgets), BUDGET_KINDS, `${unit.id} declares all six`);
+    }
     for (const [kind, { declared, ceiling }] of Object.entries(limitsFor(unit, CEILINGS))) {
       assert.notEqual(ceiling, null, `${unit.kind} ${unit.id} has a ${kind} ceiling`);
       if (declared !== null)
