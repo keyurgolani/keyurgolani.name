@@ -108,6 +108,7 @@ import { headerProblems, isStudioPath } from '../tests/harness/route-headers.mjs
 import {
   checkRefusal,
   checkWarnings,
+  HEAD,
   rowDocuments,
   STARTUP_ROWS,
   WARNING_ROWS,
@@ -201,6 +202,8 @@ const RUN_CANARY = `canary-run-${RUN_TOKEN}`;
 const SECRET_DIR = `/run/${CANARY_SECRET}-${RUN_TOKEN}`;
 // Owner's hash, beside it, and its data directory, where compose.owner.yml puts it.
 const HASH_FILE = 'owner_password_hash';
+// Beside the hops file: one trusted hop, for owner's new container.
+const HOPS_ONE = 'hops-1';
 const DATA_DIR = '/var/lib/portfolio';
 const SESSION_COOKIE =
   /^__Host-studio_session=([A-Za-z0-9_-]{43}); Path=\/; Max-Age=\d+; HttpOnly; SameSite=Strict; Secure$/;
@@ -522,49 +525,179 @@ function saveLogs(name, text) {
   return path.relative(reportsDir(), file);
 }
 
-/**
- * Runs `profile`'s container through the matrix and the canary scan, with
- * `secrets` among the canaries, which the log mustn't hold either, and
- * `paths`, which no response may name. `then` runs next against the same
- * container, for owner's signed-in checks, and returns its problems.
- */
-async function profileRun(profile, { env, mounts = [], secrets = [], paths = [], then }) {
-  const name = `${run}-${profile}`;
-  const started = container([
+/** Starts a server container, detached, on the internal network with HARDENING. */
+function startServer(name, { env, mounts = [] }) {
+  return container([
     'run',
     '-d',
     '--name',
     name,
     '--network',
     network,
-    '--read-only',
-    '--tmpfs',
-    '/app/apps/web/.next/cache',
+    ...HARDENING,
     '-v',
     `${path.join(stateDir, CANARY_SECRET)}:${SECRET_DIR}:ro`,
     ...mounts,
-    ...envArgs({ TZ: 'UTC', [HOPS_FILE.key]: `${SECRET_DIR}/${HOPS_FILE.name}`, ...env }),
+    ...envArgs(
+      withCanary({ TZ: 'UTC', [HOPS_FILE.key]: `${SECRET_DIR}/${HOPS_FILE.name}`, ...env }),
+    ),
     image,
   ]);
+}
+
+/** Waits for /api/health to answer 200 from inside the container. */
+async function waitHealthy(name, what) {
+  const running = () =>
+    container(['inspect', '--format', '{{.State.Running}}', name]).stdout.trim() === 'true';
+  await waitFor(
+    () => {
+      const result = container(['exec', name, 'node', '-e', PROBE_SNIPPET, '/api/health']);
+      return parse(result.stdout ?? '')?.status === 200 ? true : undefined;
+    },
+    { timeoutMs, alive: running, what: `${what}: GET /api/health to answer 200` },
+  );
+}
+
+/** Container output, stdout and stderr. */
+function output(name) {
+  const logs = container(['logs', name]);
+  return `${logs.stdout ?? ''}${logs.stderr ?? ''}`;
+}
+
+/** Every file under `root` in the container, by its path under `root`, or null. */
+function readTree(name, root) {
+  const tree = container(['exec', name, 'node', '-e', TREE_SNIPPET, root], {
+    maxBuffer: 16 * 1024 * 1024,
+  });
+  return parse(tree.stdout ?? '')?.files ?? null;
+}
+
+/**
+ * What the hardening enforces in a running server container (threat rows
+ * deploy-2 and deploy-3): the flags and mounts `inspect` reports, the
+ * server process's ids, capabilities, and NoNewPrivs, which paths take a
+ * write, no route out, and the image's contents. Returns the problems.
+ */
+function hardening(name, profile, secrets) {
+  const problems = [];
+  const inspected = parse(container(['inspect', name]).stdout ?? '')?.[0];
+  problems.push(...inspectProblems(inspected, { profile, secrets }).map((p) => `inspect: ${p}`));
+  const status = container(['exec', name, 'node', '-e', STATUS_SNIPPET]);
+  problems.push(...processProblems(status.stdout).map((p) => `the server process: ${p}`));
+  const writes = container([
+    'exec',
+    name,
+    'node',
+    '-e',
+    WRITE_SNIPPET,
+    JSON.stringify(WRITE_TARGETS),
+  ]);
+  problems.push(...writeProblems(parse(writes.stdout ?? ''), profile).map((p) => `write: ${p}`));
+  const routes = assessRoutes(container(['exec', name, 'ip', 'route']), cli === 'docker');
+  if (!routes.ok) problems.push(`network: ${routes.message}`);
+  const scan = parse(container(['exec', name, 'node', '-e', SCAN_SNIPPET, '/app']).stdout ?? '');
+  if (!Array.isArray(scan?.problems) || scan.problems.length > 0 || !scan.example) {
+    problems.push(
+      `image contents: ships ${scan?.problems?.join(', ') || 'nothing it must not'}, sample ${scan?.example}`,
+    );
+  }
+  if (problems.length === 0) {
+    console.log(
+      `[profiles] ${profile}: read-only root, no capabilities, no-new-privileges, uid 1001, writes only where expected, no route out, clean image`,
+    );
+  }
+  return problems;
+}
+
+/**
+ * Spoofed forwarded headers against the pages that print absolute URLs and
+ * a page that redirects: none names the spoofed host or leaves `origin`.
+ */
+function spoofed(name, profile, origin) {
+  const paths = ['/', '/robots.txt', '/sitemap.xml', ...(hasStudio(profile) ? ['/studio'] : [])];
+  const responses = send(
+    name,
+    paths.map((pathname) => ({
+      method: 'GET',
+      path: pathname,
+      headers: { ...SPOOFED_HEADERS, 'x-forwarded-for': '198.51.100.7' },
+    })),
+  );
+  const problems = paths.flatMap((pathname, index) =>
+    spoofProblems(responses[index], origin, pathname).map((p) => `spoofed GET ${pathname}: ${p}`),
+  );
+  if (problems.length === 0) {
+    console.log(`[profiles] ${profile}: spoofed forwarded headers move no URL or redirect`);
+  }
+  return problems;
+}
+
+/** `docker stop --time 10`, timed, with the exit code the server left. */
+function stopTimed(name) {
+  const started = Date.now();
+  const stopped = container(['stop', '--time', '10', name], { timeout: 60_000 });
+  const elapsedMs = Date.now() - started;
+  const state = parse(container(['inspect', '--format', '{{json .State}}', name]).stdout ?? '');
+  if (stopped.status !== 0) return { exitCode: null, elapsedMs, oomKilled: false };
+  return { exitCode: state?.ExitCode ?? null, elapsedMs, oomKilled: state?.OOMKilled === true };
+}
+
+/**
+ * Graceful shutdown and restart: SIGTERM stops the server within 10
+ * seconds, and the same container starts again and answers health and
+ * readiness as before.
+ */
+async function restart(name, profile) {
+  const stop = stopTimed(name);
+  const problems = stopProblems(stop).map((p) => `on SIGTERM, the server ${p}`);
+  if (container(['start', name]).status !== 0) return [...problems, 'did not start again'];
+  await waitHealthy(name, `${profile} after a restart`);
+  const [health, ready] = send(name, [
+    { method: 'GET', path: '/api/health' },
+    { method: 'GET', path: '/api/ready' },
+  ]);
+  if (!same(parse(health.body ?? ''), { status: 'ok', profile })) {
+    problems.push(`after a restart, /api/health answered ${health.status} ${health.body}`);
+  }
+  if (ready.status !== 200 || !same(parse(ready.body ?? ''), readyBody(profile))) {
+    problems.push(`after a restart, /api/ready answered ${ready.status} ${ready.body}`);
+  }
+  if (problems.length === 0) {
+    console.log(
+      `[profiles] ${profile}: stopped on SIGTERM in ${stop.elapsedMs} ms (exit ${stop.exitCode}), restarted, and ready again`,
+    );
+  }
+  return problems;
+}
+
+/**
+ * Runs `profile`'s container through the hardening checks, the matrix, the
+ * canary scan, and spoofed forwarded headers, with `secrets` among the
+ * canaries, which the log mustn't hold either, and `paths`, which no
+ * response may name. `then` runs next against the same container, for
+ * owner's signed-in checks, and returns its problems. Then the server
+ * stops on SIGTERM and starts again, and `restarted` runs against it, for
+ * owner's data volume.
+ */
+async function profileRun(
+  profile,
+  { env, mounts = [], secrets = [], paths = [], then, restarted },
+) {
+  const name = `${run}-${profile}`;
+  const started = startServer(name, { env, mounts });
   if (started.status !== 0) {
     fail(profile, `the container did not start: ${(started.stderr || '').trim()}`);
     return;
   }
   const failed = failures.length;
+  const leaks = [...secrets, ...runSecrets];
   try {
-    const running = () =>
-      container(['inspect', '--format', '{{.State.Running}}', name]).stdout.trim() === 'true';
-    await waitFor(
-      () => {
-        const result = container(['exec', name, 'node', '-e', PROBE_SNIPPET, '/api/health']);
-        return parse(result.stdout ?? '')?.status === 200 ? true : undefined;
-      },
-      { timeoutMs, alive: running, what: `${profile}: GET /api/health to answer 200` },
-    );
+    await waitHealthy(name, profile);
+    for (const problem of hardening(name, profile, secrets)) fail(`${profile}: hardening`, problem);
 
     const requests = plan(
       profile,
-      canaries(SERVER_DIR, { secrets: [...secrets, ...paths] }),
+      canaries(SERVER_DIR, { secrets: [...leaks, ...paths] }),
       env.PORTFOLIO_ORIGIN,
     );
     const responses = send(
@@ -583,6 +716,9 @@ async function profileRun(profile, { env, mounts = [], secrets = [], paths = [],
     const expectedName = profile === 'demo' ? 'Anamika Devi' : FIXTURE_NAME;
     if (!home?.body?.includes(expectedName)) fail(profile, `GET / doesn't show ${expectedName}`);
     console.log(`[profiles] ${profile}: ${requests.length} requests checked`);
+    for (const problem of spoofed(name, profile, env.PORTFOLIO_ORIGIN)) {
+      fail(`${profile}: proxy trust`, problem);
+    }
 
     // Every route and operation done, still no owner module, outside owner.
     if (profile !== 'owner') {
@@ -598,8 +734,7 @@ async function profileRun(profile, { env, mounts = [], secrets = [], paths = [],
     }
     for (const problem of then ? then(name) : []) fail(profile, problem);
 
-    const logs = container(['logs', name]);
-    const text = `${logs.stdout ?? ''}${logs.stderr ?? ''}`;
+    const text = output(name);
     const summaries = logEntries(text).filter((entry) => entry.event === 'deployment.config');
     if (summaries.length !== 1) {
       fail(profile, `logged deployment.config ${summaries.length} times, not once`);
@@ -632,15 +767,21 @@ async function profileRun(profile, { env, mounts = [], secrets = [], paths = [],
     if (/EROFS|read-only file system/i.test(text)) {
       fail(profile, 'a write hit the read-only root filesystem');
     }
-    for (const secret of secrets) {
-      if (text.includes(secret)) fail(profile, 'the log holds the password or the hash');
+    if (leaks.some((secret) => text.includes(secret))) {
+      fail(profile, "the log holds the password, the hash, or the run's canary");
     }
-    if (failures.length > failed) saveLogs(name, text);
+
+    for (const problem of await restart(name, profile)) fail(`${profile}: restart`, problem);
+    for (const problem of restarted ? await restarted(name) : []) fail(profile, problem);
+    const after = output(name);
+    if (leaks.some((secret) => after.includes(secret))) {
+      fail(profile, "after a restart, the log holds the password, the hash, or the run's canary");
+    }
+    if (failures.length > failed) saveLogs(name, redact(after, runSecrets));
     else console.log(`[profiles] ${profile} passed`);
   } catch (error) {
     fail(profile, error.message);
-    const logs = container(['logs', name]);
-    saveLogs(name, `${logs.stdout ?? ''}${logs.stderr ?? ''}`);
+    saveLogs(name, redact(output(name), runSecrets));
   } finally {
     container(['rm', '-f', name]);
   }
@@ -746,13 +887,133 @@ function signedIn(name, { password, secrets }) {
   return problems;
 }
 
-/** Owner with the password provider, on a new data volume and a hash made for this run. */
-async function ownerProfileRun(source) {
-  // The image's own hash-password, given the password on stdin that isn't a terminal.
-  const hasher = `${run}-hash`;
-  let secret;
+/**
+ * Owner's proxy trust at `hops` trusted hops (#1, #2), with spoofed
+ * forwarded headers on every request: a sign-in on the canonical origin
+ * still sets the __Host- cookie with Secure, one from the origin the
+ * headers describe is refused, and the audit log gives failed sign-ins the
+ * source the hop count allows: none at 0, and at 1 the last
+ * X-Forwarded-For entry, never one the client wrote. Returns the problems.
+ */
+function ownerTrust(name, hops, password) {
+  const problems = [];
+  const xff = { 'x-forwarded-for': '198.51.100.7, 203.0.113.9' };
+  const login = (body, headers) => ({
+    method: 'POST',
+    path: '/api/studio/auth.login',
+    body,
+    headers: { ...SPOOFED_HEADERS, ...xff, ...headers },
+  });
+  const before = readTree(name, DATA_DIR);
+  if (!before) return [`at ${hops} trusted hops: the data directory could not be read`];
+  const [signIn] = send(name, [login({ password }, { origin: ORIGIN })]);
+  const token = signIn.cookies?.length === 1 ? SESSION_COOKIE.exec(signIn.cookies[0])?.[1] : null;
+  const csrf = parse(signIn.body ?? '')?.data?.csrfToken;
+  if (signIn.status !== 200 || !token) {
+    problems.push(
+      `a spoofed sign-in answered ${signIn.status ?? signIn.error} without one __Host- Secure cookie (${signIn.cookies?.length ?? 0} set)`,
+    );
+  }
+  const [described] = send(name, [
+    login({ password }, { origin: `https://${SPOOFED_HOST}`, 'x-forwarded-proto': 'https' }),
+    ...(token
+      ? [
+          {
+            method: 'POST',
+            path: '/api/studio/auth.logout',
+            body: {},
+            headers: {
+              ...xff,
+              origin: ORIGIN,
+              cookie: `__Host-studio_session=${token}`,
+              'x-csrf-token': csrf,
+            },
+          },
+        ]
+      : []),
+  ]);
+  if (
+    described.status !== 403 ||
+    parse(described.body ?? '')?.error?.code !== 'request_origin_rejected'
+  ) {
+    problems.push(
+      `a sign-in from the spoofed origin answered ${described.status ?? described.error}`,
+    );
+  }
+  const wrong = send(name, [
+    login({ password: 'not the password' }, { origin: ORIGIN }),
+    login({ password: 'not the password' }, { origin: ORIGIN }),
+  ]);
+  for (const answer of wrong) {
+    if (parse(answer.body ?? '')?.error?.code !== 'credentials_rejected') {
+      problems.push(`a wrong password answered ${answer.status ?? answer.error}`);
+    }
+  }
+  const after = readTree(name, DATA_DIR);
+  problems.push(...sourceProblems(newAuditRecords(before, after ?? {}), hops));
+  if (problems.length === 0) {
+    console.log(
+      `[profiles] owner: at ${hops} trusted hops, spoofed forwarded headers move no cookie flag, origin check, or sign-in source`,
+    );
+  }
+  return problems.map((problem) => `at ${hops} trusted hops: ${problem}`);
+}
+
+/**
+ * Owner's data volume under a new container: the old one stops on SIGTERM
+ * and goes, and a new one on the same volume, trusting one hop, starts
+ * with every durable file the old one left, then passes ownerTrust at 1.
+ */
+async function ownerReplacement(name, { env, mounts, password, leaks }) {
+  const problems = [];
+  const before = readTree(name, DATA_DIR);
+  if (!before) return ['the data directory could not be read before the new container'];
+  problems.push(...stopProblems(stopTimed(name)).map((p) => `on SIGTERM, the server ${p}`));
+  container(['rm', '-f', name]);
+  const next = `${name}-next`;
+  const started = startServer(next, {
+    env: { ...env, [HOPS_FILE.key]: `${SECRET_DIR}/${HOPS_ONE}` },
+    mounts,
+  });
+  if (started.status !== 0) {
+    return [...problems, `the new container did not start: ${(started.stderr || '').trim()}`];
+  }
   try {
-    secret = ownerSecret([
+    await waitHealthy(next, 'owner in a new container on its data volume');
+    const after = readTree(next, DATA_DIR);
+    problems.push(
+      ...persistenceProblems(before, after ?? {}).map(
+        (p) => `the data volume, in a new container: ${p}`,
+      ),
+    );
+    if (problems.length === 0) {
+      console.log(
+        `[profiles] owner: a new container on the data volume has its ${Object.keys(before).length} files`,
+      );
+    }
+    problems.push(...ownerTrust(next, 1, password));
+    const text = output(next);
+    if (leaks.some((secret) => text.includes(secret))) {
+      problems.push(
+        "in the new container, the log holds the password, the hash, or the run's canary",
+      );
+    }
+    if (problems.length > 0) saveLogs(next, redact(text, runSecrets));
+  } catch (error) {
+    problems.push(error.message);
+    saveLogs(next, redact(output(next), runSecrets));
+  } finally {
+    container(['rm', '-f', next]);
+  }
+  return problems;
+}
+
+/** A password made for this run and its hash, from the image's own hash-password. */
+function makeOwnerSecret() {
+  // Given the password on stdin that isn't a terminal.
+  const hasher = `${run}-hash`;
+  try {
+    const secret = ownerSecret([
       cli,
       'run',
       '--rm',
@@ -761,25 +1022,37 @@ async function ownerProfileRun(source) {
       hasher,
       '--network',
       network,
+      ...HARDENING,
       image,
       'node',
       'apps/web/bin/owner.mjs',
     ]);
+    addSecrets(secret.password, ...hashCanaries(secret.hash));
+    const file = path.join(stateDir, CANARY_SECRET, HASH_FILE);
+    writeFileSync(file, `${secret.hash}\n`);
+    chmodSync(file, 0o444);
+    return secret;
   } finally {
     container(['rm', '-f', hasher]);
   }
-  writeFileSync(path.join(stateDir, CANARY_SECRET, HASH_FILE), `${secret.hash}\n`);
+}
+
+/** Owner with the password provider, on a new data volume and a hash made for this run. */
+async function ownerProfileRun(source, secret) {
   if (container(['volume', 'create', ownerVolume]).status !== 0) {
     throw new Error("could not create owner's data volume");
   }
   // Owner's first start refuses the fixture's unregistered variant, so the
-  // volume starts with the pair published into it, as root, for uid 1001.
+  // volume starts with the pair published into it, as root, for uid 1001,
+  // with no network.
   const seedDir = path.join(stateDir, 'owner-seed');
   mkdirSync(seedDir, { recursive: true, mode: 0o700 });
   seedOwnerStore(seedDir, path.dirname(DEFAULT_PORTFOLIO));
   const seeded = container([
     'run',
     '--rm',
+    '--network',
+    'none',
     '-u',
     '0',
     '-v',
@@ -795,25 +1068,172 @@ async function ownerProfileRun(source) {
     throw new Error(`could not seed owner's data volume: ${(seeded.stderr || '').trim()}`);
   }
   const secrets = [secret.password, ...hashCanaries(secret.hash)];
+  const env = {
+    PORTFOLIO_PROFILE: 'owner',
+    PORTFOLIO_ORIGIN: ORIGIN,
+    PORTFOLIO_SOURCE_DIR: source,
+    PORTFOLIO_DATA_DIR: DATA_DIR,
+    PORTFOLIO_AUTH_PASSWORD_HASH_FILE: `${SECRET_DIR}/${HASH_FILE}`,
+  };
+  const mounts = [
+    '-v',
+    `${path.dirname(DEFAULT_PORTFOLIO)}:${source}:ro`,
+    '-v',
+    `${ownerVolume}:${DATA_DIR}`,
+  ];
   await profileRun('owner', {
-    env: {
-      PORTFOLIO_PROFILE: 'owner',
-      PORTFOLIO_ORIGIN: ORIGIN,
-      PORTFOLIO_SOURCE_DIR: source,
-      PORTFOLIO_DATA_DIR: DATA_DIR,
-      PORTFOLIO_AUTH_PASSWORD_HASH_FILE: `${SECRET_DIR}/${HASH_FILE}`,
-    },
-    mounts: [
-      '-v',
-      `${path.dirname(DEFAULT_PORTFOLIO)}:${source}:ro`,
-      '-v',
-      `${ownerVolume}:${DATA_DIR}`,
-    ],
+    env,
+    mounts,
     secrets,
     // No response names the data directory either.
     paths: [DATA_DIR],
-    then: (name) => signedIn(name, { password: secret.password, secrets }),
+    then: (name) => [
+      ...signedIn(name, { password: secret.password, secrets }),
+      ...ownerTrust(name, 0, secret.password),
+    ],
+    restarted: (name) =>
+      ownerReplacement(name, {
+        env,
+        mounts,
+        password: secret.password,
+        leaks: [...secrets, ...runSecrets],
+      }),
   });
+}
+
+/**
+ * Owner's startup refusals beyond its missing hash (#2, #3, #12): with the
+ * run's hash in place, each refuses to start, exits 1, and logs a
+ * config.fatal line with the code, naming neither the hash nor the file's
+ * path. A hash file that's missing, unreadable, group- or world-writable,
+ * or malformed; the bundled sample identity; and a source directory that's
+ * missing or unreadable. Each runs on a new data volume, so it's a first
+ * start.
+ */
+function ownerRows(secret) {
+  const sample = `${HEAD}identity:\n  name: Anamika Devi\nsections:\n  - kind: lede\n    id: about\n    body: Hi.\n`;
+  const malformed = `canary-malformed-${RUN_TOKEN}`;
+  addSecrets(malformed);
+  const hashKey = 'PORTFOLIO_AUTH_PASSWORD_HASH_FILE';
+  const rows = [
+    { name: 'a missing password hash file', hash: null, key: hashKey, code: 'file_unreadable' },
+    {
+      name: 'an unreadable password hash file',
+      hash: { text: secret.hash, mode: 0o000 },
+      key: hashKey,
+      code: 'file_unreadable',
+    },
+    {
+      name: 'a group-writable password hash file',
+      hash: { text: secret.hash, mode: 0o620 },
+      key: hashKey,
+      code: 'file_writable',
+    },
+    {
+      name: 'a world-writable password hash file',
+      hash: { text: secret.hash, mode: 0o602 },
+      key: hashKey,
+      code: 'file_writable',
+    },
+    {
+      name: 'a malformed password hash',
+      hash: { text: malformed, mode: 0o444 },
+      key: hashKey,
+      code: 'malformed',
+    },
+    {
+      name: 'the bundled sample identity',
+      documents: { 'portfolio.yml': sample },
+      code: 'sample_identity',
+    },
+    {
+      name: 'a missing source directory',
+      source: 'missing',
+      code: 'source_missing',
+    },
+    {
+      name: 'an unreadable source directory',
+      source: 'unreadable',
+      code: 'source_unreadable',
+    },
+  ];
+  let passed = 0;
+  rows.forEach((row, index) => {
+    const test = `owner startup row: ${row.name}`;
+    const dir = path.join(stateDir, `owner-row-${index}`);
+    const hashDir = path.join(dir, 'hash');
+    const config = path.join(dir, 'config');
+    mkdirSync(hashDir, { recursive: true });
+    mkdirSync(config, { recursive: true });
+    const hashPath = `${SECRET_DIR}-row/${HASH_FILE}`;
+    const hash = row.hash === undefined ? { text: secret.hash, mode: 0o444 } : row.hash;
+    if (hash) {
+      const file = path.join(hashDir, HASH_FILE);
+      writeFileSync(file, `${hash.text}\n`);
+      chmodSync(file, hash.mode);
+    }
+    const documents = {
+      'portfolio.yml': readFileSync(DEFAULT_PORTFOLIO, 'utf8'),
+      'site.yml': readFileSync(DEFAULT_SITE, 'utf8'),
+      ...row.documents,
+    };
+    for (const [name, text] of Object.entries(documents)) {
+      writeFileSync(path.join(config, name), text);
+    }
+    const rowVolume = `${run}-owner-row-${index}`;
+    if (container(['volume', 'create', rowVolume]).status !== 0) {
+      fail(test, 'could not create its data volume');
+      return;
+    }
+    const source =
+      row.source === 'unreadable'
+        ? ['--tmpfs', '/config:mode=0000']
+        : row.source === 'missing'
+          ? []
+          : ['-v', `${config}:/config:ro`];
+    const name = `${run}-owner-row-${index}`;
+    try {
+      const { code, output: text } = runToExit(name, [
+        ...HARDENING,
+        ...source,
+        '-v',
+        `${hashDir}:${SECRET_DIR}-row:ro`,
+        '-v',
+        `${rowVolume}:${DATA_DIR}`,
+        ...envArgs(
+          withCanary({
+            TZ: 'UTC',
+            PORTFOLIO_PROFILE: 'owner',
+            PORTFOLIO_ORIGIN: ORIGIN,
+            PORTFOLIO_SOURCE_DIR: '/config',
+            PORTFOLIO_DATA_DIR: DATA_DIR,
+            [hashKey]: hashPath,
+          }),
+        ),
+        image,
+      ]);
+      const fatal = logEntries(text).filter((entry) => entry.event === 'config.fatal');
+      const problems = [];
+      if (code !== 1) problems.push(`exited ${code ?? 'never'}, not 1`);
+      if (!fatal.some((entry) => (!row.key || entry.key === row.key) && entry.code === row.code)) {
+        problems.push(
+          `no config.fatal ${row.key ?? 'line'} with ${row.code}, got ${JSON.stringify(fatal.map((e) => `${e.key}:${e.code}`))}`,
+        );
+      }
+      if (runSecrets.some((value) => text.includes(value))) {
+        problems.push("the output holds the hash, its file's path, or the run's canary");
+      }
+      if (text.includes('Anamika Devi') && row.code !== 'sample_identity') {
+        problems.push('the output names the bundled sample');
+      }
+      for (const problem of problems) fail(test, problem);
+      if (problems.length === 0) passed += 1;
+      else saveLogs(name, redact(text, runSecrets));
+    } finally {
+      container(['volume', 'rm', '-f', rowVolume]);
+    }
+  });
+  console.log(`[profiles] owner startup rows: ${passed} of ${rows.length} passed`);
 }
 
 function ownerRun() {
@@ -835,6 +1255,7 @@ function ownerRun() {
     }
   }
   const { code, output } = runToExit(`${run}-owner`, [
+    ...HARDENING,
     '-v',
     `${path.dirname(DEFAULT_PORTFOLIO)}:/config:ro`,
     '-v',
@@ -874,16 +1295,20 @@ function rowRuns() {
     }
     const paths = { source: '/config', beside: (name) => `/files/${name}` };
     const { code, output } = runToExit(`${run}-row-${index}`, [
+      ...HARDENING,
       // The server runs as uid 1001, which can't read a root-owned 0000 tmpfs.
       ...(row.unreadable ? ['--tmpfs', '/config:mode=0000'] : ['-v', `${config}:/config:ro`]),
       '-v',
       `${files}:/files:ro`,
-      ...envArgs(row.env(paths)),
+      ...envArgs(withCanary(row.env(paths))),
       image,
     ]);
     const test = `startup row: ${row.group}, ${row.name}`;
     const problems = checkRefusal(row, paths, output);
     if (code !== 1) problems.unshift(`exited ${code ?? 'never'}, not 1`);
+    if (runSecrets.some((value) => output.includes(value))) {
+      problems.push("the output holds the run's canary");
+    }
     for (const problem of problems) fail(test, problem);
     if (problems.length === 0) passed += 1;
     else saveLogs(`${run}-row-${index}`, output);
@@ -911,9 +1336,10 @@ async function warningRowRuns() {
       name,
       '--network',
       network,
+      ...HARDENING,
       '-v',
       `${config}:/config:ro`,
-      ...envArgs(row.env(paths)),
+      ...envArgs(withCanary(row.env(paths))),
       image,
     ]);
     if (started.status !== 0) {
@@ -935,6 +1361,9 @@ async function warningRowRuns() {
         { timeoutMs, alive: running, what: `${test}: GET /api/health to answer 200` },
       );
       const problems = checkWarnings(row, output());
+      if (runSecrets.some((value) => output().includes(value))) {
+        problems.push("the output holds the run's canary");
+      }
       for (const problem of problems) fail(test, problem);
       if (problems.length === 0) passed += 1;
       else saveLogs(name, output());
@@ -948,11 +1377,47 @@ async function warningRowRuns() {
   console.log(`[profiles] warning rows: ${passed} of ${WARNING_ROWS.length} passed`);
 }
 
-async function smoke() {
+/** The Compose example each profile runs from (#1, item 23). */
+const EXAMPLES = {
+  'read-only': 'docker-compose.yml',
+  demo: 'deploy/compose.demo.yml',
+  owner: 'deploy/compose.owner.yml',
+};
+
+/**
+ * The profile's Compose example as `compose config` resolves it, with
+ * PORTFOLIO_ORIGIN set and PORT unset: every port on 127.0.0.1, and the
+ * hardening the smoke runs it with.
+ */
+function composeRun(profile) {
+  const file = EXAMPLES[profile];
+  const env = { ...process.env, PORTFOLIO_ORIGIN: profile === 'demo' ? DEMO_ORIGIN : ORIGIN };
+  delete env.PORT;
+  const result = container(['compose', '-f', file, 'config', '--format', 'json'], { env });
+  const config = parse(result.stdout ?? '');
+  const problems = config
+    ? composeProblems(config)
+    : [`compose config failed: ${(result.stderr || `exit ${result.status}`).trim()}`];
+  for (const problem of problems) fail(`${profile}: Compose example`, `${file}: ${problem}`);
+  if (problems.length === 0) {
+    console.log(`[profiles] ${profile}: ${file} publishes only on 127.0.0.1, hardened`);
+  }
+}
+
+/** Builds, loads, or pulls the image under test. */
+function acquire() {
   if (pulled) {
     console.log(`[profiles] pulling ${image} with ${cli}`);
     if (container(['pull', image], { stdio: 'inherit' }).status !== 0) {
       throw new Error('the image could not be pulled');
+    }
+  } else if (archive) {
+    console.log(`[profiles] loading ${image} from ${path.basename(archive)} with ${cli}`);
+    if (container(['load', '-i', archive], { stdio: 'inherit' }).status !== 0) {
+      throw new Error('the image archive could not be loaded');
+    }
+    if (container(['image', 'inspect', image]).status !== 0) {
+      throw new Error(`the image archive holds no ${image}`);
     }
   } else {
     console.log(`[profiles] building ${image} with ${cli}`);
@@ -960,6 +1425,11 @@ async function smoke() {
       throw new Error('the image build failed');
     }
   }
+}
+
+async function smoke(parts) {
+  for (const problem of hermeticProblems(process.env)) fail('hermetic', problem);
+  acquire();
   const net = container(['network', 'create', '--internal', network]);
   if (net.status !== 0) throw new Error(`could not create the network: ${net.stderr.trim()}`);
   if (container(['volume', 'create', volume]).status !== 0) {
@@ -967,29 +1437,55 @@ async function smoke() {
   }
   mkdirSync(path.join(stateDir, CANARY_SECRET), { recursive: true });
   writeFileSync(path.join(stateDir, CANARY_SECRET, HOPS_FILE.name), HOPS_FILE.text);
+  writeFileSync(path.join(stateDir, CANARY_SECRET, HOPS_ONE), '1\n');
 
   // The source directory at a canary path, so a response naming it shows.
   const source = `/${CANARY_SOURCE}`;
-  await profileRun('read-only', {
-    env: {
-      PORTFOLIO_PROFILE: 'read-only',
-      PORTFOLIO_ORIGIN: ORIGIN,
-      PORTFOLIO_SOURCE_DIR: source,
-    },
-    mounts: ['-v', `${path.dirname(DEFAULT_PORTFOLIO)}:${source}:ro`],
-  });
-  await profileRun('demo', {
-    env: { PORTFOLIO_PROFILE: 'demo', PORTFOLIO_ORIGIN: DEMO_ORIGIN },
-  });
-  await ownerProfileRun(source);
-  ownerRun();
-  rowRuns();
-  await warningRowRuns();
+  if (parts.includes('read-only')) {
+    part = 'read-only';
+    composeRun('read-only');
+    await profileRun('read-only', {
+      env: {
+        PORTFOLIO_PROFILE: 'read-only',
+        PORTFOLIO_ORIGIN: ORIGIN,
+        PORTFOLIO_SOURCE_DIR: source,
+      },
+      mounts: ['-v', `${path.dirname(DEFAULT_PORTFOLIO)}:${source}:ro`],
+    });
+  }
+  if (parts.includes('demo')) {
+    part = 'demo';
+    composeRun('demo');
+    await profileRun('demo', {
+      env: { PORTFOLIO_PROFILE: 'demo', PORTFOLIO_ORIGIN: DEMO_ORIGIN },
+    });
+  }
+  if (parts.includes('owner')) {
+    part = 'owner';
+    composeRun('owner');
+    const secret = makeOwnerSecret();
+    await ownerProfileRun(source, secret);
+    ownerRun();
+    ownerRows(secret);
+  }
+  if (parts.includes('rows')) {
+    part = 'rows';
+    rowRuns();
+    await warningRowRuns();
+  }
 }
 
 let exitCode = 0;
+const runParts = (() => {
+  try {
+    return partsOf(process.env.SMOKE_PROFILES);
+  } catch (error) {
+    fail('smoke:profiles', error.message);
+    return [];
+  }
+})();
 try {
-  await smoke();
+  if (runParts.length > 0) await smoke(runParts);
 } catch (error) {
   fail('smoke:profiles', error.message);
 } finally {
@@ -999,14 +1495,29 @@ try {
   rmSync(stateDir, { recursive: true, force: true });
   if (!pulled) container(['rmi', image]);
 }
+// What this run uploads holds none of its secrets: a file that does is
+// redacted before the upload, and fails the run.
+part = 'rows';
+for (const file of redactArtifacts(reportsDir(), runSecrets)) {
+  fail('artifacts', `reports/${file} held a run secret, now redacted`, { artifacts: [file] });
+}
 if (failures.length > 0) {
   exitCode = 1;
   reportError(`smoke:profiles: ${failures.length} failure(s)`, { title: 'smoke:profiles' });
   const gate = currentGate();
-  for (const { test, message, fields } of failures) {
-    if (gate) writeFailureRecord({ ...gate, test, actual: message, asset: image, ...fields });
+  for (const { test, message, part: where, fields } of failures) {
+    if (gate) {
+      writeFailureRecord({
+        ...gate,
+        reproCommand: reproFor(where),
+        test,
+        actual: message,
+        asset: image,
+        ...fields,
+      });
+    }
   }
 } else {
-  console.log(`[profiles] ${image} passed under every profile and startup row`);
+  console.log(`[profiles] ${image} passed under ${runParts.join(', ')}`);
 }
 process.exit(exitCode);

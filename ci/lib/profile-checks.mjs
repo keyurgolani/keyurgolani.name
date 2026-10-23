@@ -69,7 +69,8 @@ export function inspectProblems(info, { profile, secrets = [] }) {
   if (!(host.CapDrop ?? []).some((cap) => /^(?:CAP_)?ALL$/i.test(cap))) {
     problems.push('capabilities are not all dropped');
   }
-  if ((host.CapAdd ?? []).length > 0) problems.push(`capabilities added: ${host.CapAdd.join(', ')}`);
+  if ((host.CapAdd ?? []).length > 0)
+    problems.push(`capabilities added: ${host.CapAdd.join(', ')}`);
   if (!(host.SecurityOpt ?? []).some((opt) => NO_NEW_PRIVILEGES.test(opt))) {
     problems.push('no-new-privileges is not set');
   }
@@ -248,7 +249,8 @@ export function spoofProblems(response, origin, pathname) {
     .map(([name, value]) => `${name}: ${value}`)
     .join('\n');
   if (headers.includes(SPOOFED_HOST)) problems.push('a header names the spoofed host');
-  if ((response.body ?? '').includes(SPOOFED_HOST)) problems.push('the body names the spoofed host');
+  if ((response.body ?? '').includes(SPOOFED_HOST))
+    problems.push('the body names the spoofed host');
   const location = response.headers?.location;
   if (location && /^[a-z][a-z0-9+.-]*:/i.test(location) && new URL(location).origin !== origin) {
     problems.push(`redirects to ${location}, off ${origin}`);
@@ -257,7 +259,8 @@ export function spoofProblems(response, origin, pathname) {
     const locs = [...(response.body ?? '').matchAll(/<loc>([^<]*)<\/loc>/g)].map((m) => m[1]);
     if (locs.length === 0) problems.push('the sitemap lists no URL');
     for (const loc of locs) {
-      if (!loc.startsWith(`${origin}/`) && loc !== origin) problems.push(`the sitemap lists ${loc}`);
+      if (!loc.startsWith(`${origin}/`) && loc !== origin)
+        problems.push(`the sitemap lists ${loc}`);
     }
   }
   return problems;
@@ -282,7 +285,9 @@ export function sourceProblems(records, hops) {
   const wrong = sources.filter((source) => source !== expected);
   return wrong.length === 0
     ? []
-    : [`at ${hops} hops, failed sign-ins came from ${[...new Set(wrong)].join(', ')}, not ${expected}`];
+    : [
+        `at ${hops} hops, failed sign-ins came from ${[...new Set(wrong)].join(', ')}, not ${expected}`,
+      ];
 }
 
 /**
