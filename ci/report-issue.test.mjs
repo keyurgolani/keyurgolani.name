@@ -9,6 +9,7 @@ import {
   failedJobs,
   issueCell,
   MARKER,
+  parseExpectedSkips,
   readRecords,
   report,
   TITLE,
@@ -28,6 +29,7 @@ for (const fixture of CASES) {
       records: fixture.records ?? RECORDS,
       runUrl: RUN_URL,
       date: '2026-10-26',
+      expectedSkips: fixture.expectedSkips ?? [],
     });
     assert.deepEqual(
       actions.map(({ kind, issue }) => (issue ? { kind, issue } : { kind })),
@@ -57,6 +59,70 @@ test('only success counts as passing', () => {
     }).map((r) => r.job),
     ['b', 'c', 'd', 'e'],
   );
+});
+
+test('an expected skip is only a skip of a job EXPECTED_SKIPS names', () => {
+  assert.deepEqual(parseExpectedSkips(''), []);
+  assert.deepEqual(parseExpectedSkips(undefined), []);
+  assert.deepEqual(parseExpectedSkips('links, quality-full links'), ['links', 'quality-full']);
+  assert.deepEqual(
+    failedJobs(
+      {
+        links: { result: 'skipped' },
+        other: { result: 'skipped' },
+        named: { result: 'failure' },
+        timed: { result: 'cancelled' },
+      },
+      ['links', 'named', 'timed'],
+    ).map((r) => `${r.job} ${r.result}`),
+    ['named failure', 'other skipped', 'timed cancelled'],
+  );
+});
+
+test('EXPECTED_SKIPS naming a job report does not need is an error, through the API too', async () => {
+  assert.throws(
+    () =>
+      decide({
+        needs: { links: { result: 'success' } },
+        openIssues: [],
+        runUrl: RUN_URL,
+        date: '2026-10-26',
+        expectedSkips: ['links', 'lnks'],
+      }),
+    /EXPECTED_SKIPS names lnks, which report doesn't need/,
+  );
+  const { requests, fetchImpl } = fakeGitHub([]);
+  await assert.rejects(
+    report({
+      env: {
+        NEEDS_JSON: JSON.stringify({ links: { result: 'skipped' } }),
+        EXPECTED_SKIPS: 'quality-full',
+        GITHUB_TOKEN: 'test-token',
+        GITHUB_REPOSITORY: 'o/r',
+      },
+      argv: [],
+      fetchImpl,
+    }),
+    /EXPECTED_SKIPS names quality-full/,
+  );
+  // It read the open issues, and changed nothing.
+  assert.deepEqual(
+    requests.map((r) => r.method),
+    ['GET'],
+  );
+});
+
+test("the workflow's EXPECTED_SKIPS names only links, and only on the nights links doesn't run", () => {
+  const workflow = readFileSync(
+    path.join(HERE, '..', '.github', 'workflows', 'scheduled.yml'),
+    'utf8',
+  );
+  assert.ok(
+    workflow.includes(
+      "EXPECTED_SKIPS: ${{ github.event.schedule != '23 6 * * 1' && 'links' || '' }}",
+    ),
+  );
+  assert.ok(workflow.includes("if: ${{ github.event.schedule == '23 6 * * 1' }}"));
 });
 
 test('records are read from failures/ directories of the downloaded artifacts only', () => {
