@@ -152,7 +152,11 @@ function assetManifest(result: RegistryResult): AssetManifest {
       stylesheet: variant.stylesheet ? stylesheetRef(variant.stylesheet) : null,
       fonts: [],
       images: variant.assets.map(assetRef),
-      stills: [],
+      stills: variant.stills.map((still) => ({
+        ...assetRef(still),
+        width: still.width,
+        height: still.height,
+      })),
       enhancements: (variant.manifest.enhancements ?? []).map(
         ({ id, export: entry, requires }) => ({
           id,
@@ -413,6 +417,13 @@ export function variantFiles(result: RegistryResult): ServedFile[] {
     .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
 }
 
+/** Every variant's catalog stills (#6, item 1), sorted by name. */
+export function stillFiles(result: RegistryResult): ServedFile[] {
+  return result.variants
+    .flatMap(({ stills }) => stills)
+    .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+}
+
 /** Every image the variants' stylesheets name, once each, sorted by name. */
 export function assetFiles(result: RegistryResult): ServedFile[] {
   const files = new Map<string, ServedFile>();
@@ -441,6 +452,8 @@ export const SERVED_KINDS = {
   font: /^[a-z_][a-z0-9-]*\.[0-9a-f]{12}\.woff2$/,
   /** public/_portfolio/variant/: `<id>.<sha256-12>.css`. */
   variant: /^[a-z][a-z0-9-]*\.[0-9a-f]{12}\.css$/,
+  /** public/_portfolio/still/ (#6, item 1): `<id>.<sha256-12>.<png|webp>`. */
+  still: /^[a-z][a-z0-9-]*\.[0-9a-f]{12}\.(?:png|webp)$/,
   /** public/_portfolio/asset/: `<sha256-12>.<image extension>`. */
   asset: /^[0-9a-f]{12}\.(?:avif|gif|jpeg|jpg|png|svg|webp)$/,
 } as const;
@@ -452,6 +465,7 @@ const SERVED_LABELS: Readonly<Record<ServedKind, { file: string; writer: string 
   pack: { file: 'a pack file', writer: 'no pack wrote' },
   font: { file: 'a font file', writer: 'no typography profile shipped' },
   variant: { file: 'a variant stylesheet', writer: 'no variant wrote' },
+  still: { file: 'a still', writer: "no variant's manifest listed" },
   asset: { file: 'an asset file', writer: "no variant's stylesheet named" },
 };
 

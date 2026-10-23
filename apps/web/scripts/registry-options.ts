@@ -24,6 +24,7 @@ import {
   fontFiles,
   packFiles,
   readRegistry,
+  stillFiles,
   renderRegistry,
   variantFiles,
   writeRegistry,
@@ -58,6 +59,8 @@ export const PACK_OUT = path.join(HOST, 'public', '_portfolio', 'pack');
 export const FONT_OUT = path.join(HOST, 'public', '_portfolio', 'font');
 /** The variants' compiled stylesheets (#6), which git ignores and the host serves at /_portfolio/variant/. */
 export const VARIANT_OUT = path.join(HOST, 'public', '_portfolio', 'variant');
+/** The variants' catalog stills (#6), which git ignores and the host serves at /_portfolio/still/. */
+export const STILL_OUT = path.join(HOST, 'public', '_portfolio', 'still');
 /** The images those stylesheets name, which git ignores and the host serves at /_portfolio/asset/. */
 export const ASSET_OUT = path.join(HOST, 'public', '_portfolio', 'asset');
 /**
@@ -165,6 +168,8 @@ export interface Generation {
   readonly variants?: readonly ServedFile[];
   /** The images those stylesheets name, when the registry has no errors. */
   readonly assets?: readonly ServedFile[];
+  /** The variants' catalog stills, when the registry has no errors. */
+  readonly stills?: readonly ServedFile[];
   /** Each variant's experience segment files, by path under EXPERIENCE_OUT, when the registry has no errors. */
   readonly segments?: ReadonlyMap<string, string>;
   /** What writing changed, when it wrote. The served files are absent when it wrote modules only. */
@@ -176,6 +181,7 @@ export interface Generation {
       readonly fonts: PackWriteResult;
       readonly variants: PackWriteResult;
       readonly assets: PackWriteResult;
+      readonly stills: PackWriteResult;
     };
   };
 }
@@ -186,6 +192,7 @@ export const SERVED_DIRS = {
   font: { dir: FONT_OUT, staging: path.join(STAGING_OUT, 'font') },
   variant: { dir: VARIANT_OUT, staging: path.join(STAGING_OUT, 'variant') },
   asset: { dir: ASSET_OUT, staging: path.join(STAGING_OUT, 'asset') },
+  still: { dir: STILL_OUT, staging: path.join(STAGING_OUT, 'still') },
 } as const satisfies Record<ServedKind, { dir: string; staging: string }>;
 
 function serve(kind: ServedKind, files: readonly ServedFile[]): PackWriteResult {
@@ -221,8 +228,9 @@ export async function generateRegistry(
   const fonts = fontFiles(result);
   const variants = variantFiles(result);
   const assets = assetFiles(result);
+  const stills = stillFiles(result);
   const segments = renderExperienceSegments(result);
-  const generated = { result, files, packs, fonts, variants, assets, segments };
+  const generated = { result, files, packs, fonts, variants, assets, stills, segments };
   if (!write) return generated;
   const served = modulesOnly
     ? undefined
@@ -231,6 +239,7 @@ export async function generateRegistry(
         fonts: serve('font', fonts),
         variants: serve('variant', variants),
         assets: serve('asset', assets),
+        stills: serve('still', stills),
       };
   return {
     ...generated,

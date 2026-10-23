@@ -9,7 +9,18 @@
   "compositionFamily": "document",
   "motionIntent": "still",
   "performanceTier": "light",
-  "budgets": { "js": 2048, "css": 2048, "image": 0, "font": 0, "animation": 0, "enhancement": 0 },
+  "budgets": {
+    "js": 2048,
+    "css": 2048,
+    "image": 65536,
+    "font": 0,
+    "animation": 0,
+    "enhancement": 0
+  },
+  "stills": [
+    { "file": "./stills/1440.webp", "width": 1440, "height": 900 },
+    { "file": "./stills/720.webp", "width": 720, "height": 450 }
+  ],
   "renderedKinds": [],
   "unsupportedKinds": [],
   "contentSlots": [],

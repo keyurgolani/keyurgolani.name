@@ -12,11 +12,15 @@
   "budgets": {
     "js": 4096,
     "css": 4096,
-    "image": 2048,
+    "image": 32768,
     "font": 0,
     "animation": 3,
     "enhancement": 4096
   },
+  "stills": [
+    { "file": "./stills/1440.webp", "width": 1440, "height": 900 },
+    { "file": "./stills/720.webp", "width": 720, "height": 450 }
+  ],
   "renderedKinds": [],
   "unsupportedKinds": [],
   "contentSlots": [],

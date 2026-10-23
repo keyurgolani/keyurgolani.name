@@ -31,6 +31,7 @@
     "test:preview-fixtures": "playwright test --config tests/preview-fixtures/playwright.config.ts",
     "test:external-variant": "node tests/external-variant/run.mjs",
     "test:trace": "node tests/trace/run.mjs",
+    "stills": "tsx --conditions=react-server tests/stills/run.ts",
     "test:trace:baseline": "node tests/trace/baseline.mjs",
     "test:shard": "node ci/shards.mjs run",
     "quality:pr": "tsx tests/quality/run.ts pr",

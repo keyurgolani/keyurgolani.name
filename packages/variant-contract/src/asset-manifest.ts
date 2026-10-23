@@ -21,6 +21,12 @@ export interface AssetFileRef {
   readonly sha256: string;
 }
 
+/** A catalog still, with the pixel size its file has, for a plate's <img> width and height. */
+export interface StillRef extends AssetFileRef {
+  readonly width: number;
+  readonly height: number;
+}
+
 /** A unit's one stylesheet, with its size gzipped at level 9, as #6's budgets count it. */
 export interface StylesheetRef extends AssetFileRef {
   readonly gzipBytes: number;
@@ -50,8 +56,8 @@ export interface AssetUnit {
   readonly fonts: readonly AssetFileRef[];
   /** The images a variant's stylesheet names, copied by content hash. */
   readonly images: readonly AssetFileRef[];
-  /** Catalog stills, which #6's Slice 6 adds. */
-  readonly stills: readonly AssetFileRef[];
+  /** A variant's catalog stills (#6, item 1), as its manifest lists them, the largest first. */
+  readonly stills: readonly StillRef[];
   readonly enhancements: readonly UnitEnhancement[];
   /**
    * The budgets its manifest declares (#6), as written: `pnpm check:budgets`

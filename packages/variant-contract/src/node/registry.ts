@@ -36,6 +36,7 @@ import {
   type ServedFile,
   type StylesheetSource,
 } from './variant-stylesheet';
+import { readStills, type StillFile } from './stills';
 
 /** The package kinds the registry reads, from `portfolio.kind` in package.json. */
 export const REGISTRY_KINDS = [
@@ -76,6 +77,7 @@ export const REGISTRY_CODES = {
   'registry.pack-id-mismatch': 'error',
   'registry.pack-compile': 'error',
   'registry.stylesheet-compile': 'error',
+  'registry.still-invalid': 'error',
   'registry.fixture-unmapped': 'error',
   'registry.fixture-unmarked': 'error',
   'registry.fixture-leak': 'error',
@@ -126,6 +128,8 @@ export interface VariantEntry {
   readonly assets: readonly ServedFile[];
   /** Every file the compiled stylesheet came from, as real paths: what a watcher watches. */
   readonly stylesheetInputs: readonly string[];
+  /** Its catalog stills (#6, item 1), as its manifest lists them, copied by content hash. */
+  readonly stills: readonly StillFile[];
 }
 
 /** A content extension generation registers. */
@@ -878,6 +882,18 @@ function readVariant(
   }
   if (!checked.ok || !complete) return undefined;
   const { manifest } = checked;
+  const read = readStills(manifest.id, dir, manifest.stills ?? []);
+  if (!read.ok) {
+    for (const problem of read.problems) {
+      reporter(diagnostics, name, version, manifestPath)(
+        'registry.still-invalid',
+        ['stills', ...problem.path],
+        problem.message,
+        problem.remedy,
+      );
+    }
+    return undefined;
+  }
   let compiled: Pick<VariantEntry, 'stylesheet' | 'assets' | 'stylesheetInputs'> = {
     stylesheet: null,
     assets: [],
@@ -921,6 +937,7 @@ function readVariant(
       file: posix(path.relative(dir, exportFile(dir, pkg, item.export)!)),
     })),
     ...compiled,
+    stills: read.stills,
   };
 }
 

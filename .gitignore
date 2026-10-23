@@ -21,6 +21,7 @@ apps/web/public/_portfolio/pack/
 apps/web/public/_portfolio/font/
 apps/web/public/_portfolio/variant/
 apps/web/public/_portfolio/asset/
+apps/web/public/_portfolio/still/
 apps/web/src/app/(site)/%5Fexperience/
 
 # coverage / test
