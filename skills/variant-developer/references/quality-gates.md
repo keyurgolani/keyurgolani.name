@@ -9,6 +9,17 @@
 
 Color, type, and display modes are the appearance system's (#19), so these gates judge composition: structure, order, reveal, and behavior. Until #19 ships, every variant renders in the host's neutral defaults.
 
+## The quality cells (scripted, before the visual gates)
+
+```bash
+pnpm exec playwright install chromium               # once
+QUALITY_CHANGED_BASE=origin/next pnpm quality:pr
+```
+
+#11's quality cells run every registered composition through axe at WCAG 2.2 AA and the keyboard, focus, occlusion, overlay, hover, reflow (320 px, 200% zoom, 200% text, and the text-spacing override), content, failed-enhancement, motion, transparency, and contrast checks, in the default, reduced-motion, forced-colors, `prefers-contrast: more`, high-contrast, reduced-transparency, print, and no-JavaScript rows. `QUALITY_CHANGED_BASE=origin/next` adds the cells your branch's changes direct: a change under your package runs your variant against every stable design language. A failure names the route, viewport, input mode, preference row, tuple, and element, and for a change-directed cell the changed axis and the tokens the page resolved. Fix what it finds before Gate A: the visual gates below look for what these checks can't see.
+
+The cells automate part of Gates C (the reduced-motion row), D (the print row), and I (reflow, overflow, and target size), not all of them, so run those gates too. `pnpm quality:checklist -- <id>` prints the manual screen-reader and interaction checklist for your composition, which the sign-off's manual pass follows.
+
 ## Gate A: Visual sanity (first, before anything else)
 
 About 30 seconds. Catches "the structure isn't there".
@@ -168,7 +179,8 @@ At 375×667 and 430×932:
 
 You've passed Phase 3 when:
 
-- Every scripted gate exits clean (`pnpm check:variants`, the motion contract, `kit-dedup.mjs`, `pnpm typecheck`, `pnpm lint`, `pnpm build`).
+- Every scripted gate exits clean (`pnpm check:variants`, the motion contract, `QUALITY_CHANGED_BASE=origin/next pnpm quality:pr`, `kit-dedup.mjs`, `pnpm typecheck`, `pnpm lint`, `pnpm build`).
+- The manual checklist (`pnpm quality:checklist -- <id>`) is walked with a screen reader, and when the PR adds a composition, its first run is recorded in `quality/manual-runs/` from `pnpm quality:checklist -- <id> --record`.
 - Gates A to I, less the retired E and F, pass, with screenshots and notes for the PR description.
 - DESIGN.md and the package are on the same branch.
 - The user has looked at it and approved.

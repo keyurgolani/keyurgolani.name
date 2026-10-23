@@ -21,6 +21,7 @@ Run often in Waves 2 and 3, and once more at Phase 3.
 - [ ] If you hoisted to `@portfolio/kit`: `pnpm --filter @portfolio/kit test` passes.
 - [ ] `node skills/scripts/sync-checks.mjs` passes: every kit export appears by name in `references/kit-catalog.md`.
 - [ ] `PORTFOLIO_VARIANTS_ONLY=<id> pnpm test:variants` passes, after `pnpm build`: every contract fixture and the bundled sample in six modes, the hidden canary, and render parity.
+- [ ] `QUALITY_CHANGED_BASE=origin/next pnpm quality:pr` passes: #11's quality cells, the PR set plus your variant against every stable design language (`references/quality-gates.md`, "The quality cells").
 
 ## The manifest
 
@@ -55,11 +56,12 @@ Run often in Waves 2 and 3, and once more at Phase 3.
 - [ ] Keyboard navigation reaches every interactive element, and focus is visible.
 - [ ] The host's skip link reaches your `<main>`, which takes focus (`tabIndex={-1}`).
 - [ ] Headings descend in order: the page's one `h1`, then `h2` per section.
+- [ ] `pnpm quality:checklist -- <id>`: every item checked with a screen reader. A new composition's first run is recorded in `quality/manual-runs/` from `pnpm quality:checklist -- <id> --record`, and `pnpm quality:meta` validates it.
 
 ## Hand-off
 
 - [ ] DESIGN.md and the package are on the same branch as the PR.
-- [ ] The PR description has the `check:variants` output, the kit-catalog delta, the motion contract result, the fidelity targets table (port-only), and where the screenshots are.
+- [ ] The PR description has the `check:variants` output, the `quality:pr` counts, the kit-catalog delta, the motion contract result, the fidelity targets table (port-only), and where the screenshots are.
 - [ ] A live render during review: `scripts/visual-companion/start.sh --mode preview --variant <id>`, at `/preview/dev/<id>/complete`.
 
 ## Common failure modes
