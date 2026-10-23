@@ -1,5 +1,4 @@
 import { BlockList, isIP } from 'node:net';
-import { recordOwnerModule } from '../load-trace';
 
 // The addresses a remote media fetch never connects to (#10, slice 2 item 3,
 // SSRF): loopback, private, link-local (169.254.169.254 and the other cloud
@@ -8,8 +7,6 @@ import { recordOwnerModule } from '../load-trace';
 // carries an IPv4 one (mapped, compatible, NAT64, 6to4, Teredo) is refused
 // whole, whatever it carries. Checked after DNS, on the address the
 // connection then uses.
-
-recordOwnerModule('core/media/address');
 
 const IPV4: ReadonlyArray<readonly [string, number]> = [
   ['0.0.0.0', 8], // "this network"

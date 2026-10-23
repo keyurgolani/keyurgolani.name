@@ -1,10 +1,12 @@
+import { readdirSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import path from 'node:path';
 import type { Sharp, SharpOptions } from 'sharp';
-import { recordOwnerModule } from '../load-trace';
 import { MEDIA_LIMITS, MediaSourceError, refused, type ImageType } from './limits';
 import { sniffImageType } from './sniff';
 
-// Image derivation with sharp (#10, slice 2 item 4), on @portfolio/core's
-// owner side. The bytes say what a source is (sniff.ts), and libvips must
+// Image derivation with sharp (#10, slice 2 item 4), in @portfolio/core:
+// owner's draft saves and imports, and read-only's and demo's startup. The bytes say what a source is (sniff.ts), and libvips must
 // agree. A source past 100 megapixels is refused from its header, before it
 // is decoded. Renditions apply the EXIF orientation and carry no metadata at
 // all: EXIF, XMP, IPTC, GPS, and the ICC profile go (pixels are converted
@@ -12,12 +14,12 @@ import { sniffImageType } from './sniff';
 // Widths 480, 960, 1600, and 2400, up to the source's, as WebP plus JPEG, or
 // WebP plus PNG for a source with alpha. The original is never a rendition.
 //
-// sharp loads on first use, through import(), so read-only and demo, which
-// never derive, never load it. When it won't load, as on a platform whose
-// binary is missing, loadSharp() says so once and ingestion keeps every
-// rendition it has.
-
-recordOwnerModule('core/media/derive');
+// sharp loads on first use, through import(), so a process that derives
+// nothing never loads it. Outside the server's build, as the bundled CLI at
+// /app/bin, a bare import may not find it: the server build's external link,
+// `.next/node_modules/sharp-<hash>`, is tried next. When it won't load, as
+// on a platform whose binary is missing, loadSharp() says so and ingestion
+// keeps every rendition it has.
 
 /** The algorithm's version. Rendition names carry it: a new one names new files. */
 export const ALGORITHM_VERSION = 1;
@@ -29,24 +31,51 @@ export type SharpLoad =
   | { readonly ok: true; readonly sharp: SharpFactory }
   | { readonly ok: false; readonly code: string };
 
-let loading: Promise<SharpLoad> | undefined;
+const loads = new Map<string, Promise<SharpLoad>>();
 
-/** sharp, loaded once, or the code of why it won't load. */
-export function loadSharp(): Promise<SharpLoad> {
-  loading ??= import('sharp').then(
-    (module) => {
-      const sharp = (module.default ?? module) as unknown as SharpFactory & {
-        cache(options: boolean): void;
-      };
-      // Every source is read once; libvips' operation cache would only hold memory.
-      sharp.cache(false);
-      return { ok: true as const, sharp };
-    },
-    (error: unknown) => ({
-      ok: false as const,
-      code: String((error as NodeJS.ErrnoException)?.code ?? 'load_failed'),
-    }),
-  );
+const ready = (module: unknown): SharpLoad => {
+  const sharp = ((module as { default?: unknown }).default ?? module) as SharpFactory & {
+    cache(options: boolean): void;
+  };
+  // Every source is read once; libvips' operation cache would only hold memory.
+  sharp.cache(false);
+  return { ok: true, sharp };
+};
+
+/** sharp from a directory that holds it as `sharp` or a build's `sharp-<hash>` link. */
+export function sharpFromDirectory(dir: string): unknown {
+  const names = readdirSync(dir).filter((name) => /^sharp(?:-[0-9a-f]+)?$/.test(name));
+  if (names.length !== 1) throw Object.assign(new Error('no sharp here'), { code: 'not_found' });
+  return createRequire(path.join(dir, 'index.js'))(names[0]!);
+}
+
+/**
+ * sharp, loaded once per set of places: a bare import first, then each of
+ * `directories` in turn, such as the server build's .next/node_modules. Or
+ * the code of why it won't load.
+ */
+export function loadSharp(directories: readonly string[] = []): Promise<SharpLoad> {
+  const key = JSON.stringify(directories);
+  let loading = loads.get(key);
+  if (!loading) {
+    loading = (async () => {
+      let code = 'load_failed';
+      try {
+        return ready(await import('sharp'));
+      } catch (error) {
+        code = String((error as NodeJS.ErrnoException)?.code ?? code);
+      }
+      for (const dir of directories) {
+        try {
+          return ready(sharpFromDirectory(dir));
+        } catch {
+          // The next place, if there is one.
+        }
+      }
+      return { ok: false as const, code };
+    })();
+    loads.set(key, loading);
+  }
   return loading;
 }
 

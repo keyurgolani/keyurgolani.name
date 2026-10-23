@@ -11,20 +11,19 @@ import {
   type MediaRecordSource,
   type MediaUnavailableReason,
 } from '@portfolio/schema';
-import { recordOwnerModule } from '../load-trace';
-import type { AssetStore } from '../store/assets';
 import { ALGORITHM_VERSION, deriveImage, loadSharp, type SharpLoad } from './derive';
 import { MediaSourceError } from './limits';
 import type { LocalMediaRoot } from './local';
 import type { RemoteFetcher } from './remote';
 
-// Media ingestion (#10, items 5 and 6), owner only: the media document a
-// draft takes, from its portfolio's `media` entries and the records it had.
-// For each image entry, in authored order, it reads the source (a path
-// under the media root, or, when the caller may fetch, an https URL),
-// derives its renditions, writes the source and every rendition to #3's
-// AssetStore, and records one asset revision. The AssetStore keeps the
-// original for retention, never to serve it.
+// Media ingestion (#10, items 5 and 6): the media document a unit takes,
+// from its portfolio's `media` entries and the records it had. Owner runs
+// it at a draft save and at an import, into #3's AssetStore; read-only and
+// demo run it once at startup, into their media cache (startup.ts). For
+// each image entry, in authored order, it reads the source (a path under
+// the media root, or, when the caller may fetch, an https URL), derives its
+// renditions, writes the source and every rendition to the blob store, and
+// records one asset revision. The original is kept, never served.
 //
 // What the draft had stays until a replacement validates (item 6):
 // - the same bytes keep their revision, renditions and all, whatever the
@@ -42,8 +41,6 @@ import type { RemoteFetcher } from './remote';
 // read failed, so saving a draft doesn't refetch every image. One ingestion
 // runs at a time, one asset at a time. Audio, video, and documents aren't
 // ingested here (images only).
-
-recordOwnerModule('core/media/ingest');
 
 /** One thing ingestion found about an asset: the reason its source wasn't used, and the detail. */
 export interface MediaFinding {
@@ -84,8 +81,17 @@ export interface MediaLogEntry {
   readonly code?: string;
 }
 
+/**
+ * Where ingestion writes blobs: owner's AssetStore, or read-only's and
+ * demo's startup cache. Content-addressed: `put` returns the bytes' hash.
+ */
+export interface MediaBlobStore {
+  put(bytes: Uint8Array, mediaType: string): Promise<unknown>;
+  has(hash: `sha256:${string}`): Promise<boolean>;
+}
+
 export interface MediaIngestionOptions {
-  readonly assets: AssetStore;
+  readonly assets: MediaBlobStore;
   /** PORTFOLIO_MEDIA_ROOT, when set. Without one, every local source is unreachable. */
   readonly root?: LocalMediaRoot;
   /** The remote fetcher. Without one, every remote source is unreachable. */

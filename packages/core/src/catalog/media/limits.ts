@@ -1,12 +1,9 @@
 import type { MediaUnavailableReason } from '@portfolio/schema';
-import { recordOwnerModule } from '../load-trace';
 
 // The media pipeline's limits and its one error (#10, slice 2 item 3). Each
 // source is read whole, at most 20 MiB, and decoded at most 100 megapixels,
 // so a decompression bomb stops before it is decoded; a remote one gets 15 s
 // and 3 redirects in all. Images only: JPEG, PNG, WebP, and AVIF.
-
-recordOwnerModule('core/media/limits');
 
 export const MEDIA_LIMITS = Object.freeze({
   /** The most a source may hold: 20 MiB. */

@@ -2,7 +2,6 @@ import { constants } from 'node:fs';
 import { open, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { isMediaRootPath } from '@portfolio/schema';
-import { recordOwnerModule } from '../load-trace';
 import { MEDIA_LIMITS, MediaSourceError, refused } from './limits';
 
 // Local media sources (#10, slice 2 item 3): a path resolves only under the
@@ -13,8 +12,6 @@ import { MEDIA_LIMITS, MediaSourceError, refused } from './limits';
 // is fine. What's read is a regular file, opened without following a final
 // link and without waiting on a FIFO, and at most 20 MiB. Nothing here
 // writes, and nothing mounts the root into public/.
-
-recordOwnerModule('core/media/local');
 
 export interface LocalMediaRoot {
   /** The bytes at `source` under the root, or a MediaSourceError that says why not. */

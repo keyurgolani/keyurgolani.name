@@ -1,11 +1,8 @@
-import { recordOwnerModule } from '../load-trace';
 import type { ImageType } from './limits';
 
 // A source's type, from its first bytes alone (#10, slice 2 item 3): never
 // its file name, its URL, or a Content-Type header. Anything else, such as
 // GIF, SVG, TIFF, HEIC, or HTML, is no image here.
-
-recordOwnerModule('core/media/sniff');
 
 const ascii = (bytes: Uint8Array, start: number, end: number) =>
   String.fromCharCode(...bytes.subarray(start, end));

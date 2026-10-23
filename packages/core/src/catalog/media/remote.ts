@@ -2,7 +2,6 @@ import { lookup as dnsLookup } from 'node:dns/promises';
 import https from 'node:https';
 import type { LookupFunction } from 'node:net';
 import { isHttpsMediaUrl } from '@portfolio/schema';
-import { recordOwnerModule } from '../load-trace';
 import { isAddressLiteral, isPublicAddress, literalAddress } from './address';
 import { MEDIA_LIMITS, MediaSourceError, refused } from './limits';
 
@@ -13,11 +12,9 @@ import { MEDIA_LIMITS, MediaSourceError, refused } from './limits';
 // a second lookup can't swap one in (DNS rebinding). At most 3 redirects,
 // each https too, and 15 s for the whole fetch. The body is read to 20 MiB at
 // most, with no content coding. Whether it's an image, and which, the bytes
-// alone decide, later (sniff.ts): this module never trusts Content-Type. Only
-// owner's ingestion calls it, at a draft save; nothing fetches on a visitor
-// request, and demo never fetches.
-
-recordOwnerModule('core/media/remote');
+// alone decide, later (sniff.ts): this module never trusts Content-Type.
+// Ingestion calls it at an owner draft save or import, and at read-only's
+// startup; nothing fetches on a visitor request, and demo never fetches.
 
 /** One address a host resolved to. */
 export interface ResolvedAddress {
@@ -113,6 +110,21 @@ export const httpsTransport: RemoteTransport = ({ url, address, family, signal }
     request.end();
   });
 
+/**
+ * Names that are never a public host (RFC 6761, 6762, 8375, and ICANN's
+ * reserved .internal): localhost and anything under it, .local, .test,
+ * .example, .invalid, .internal, and .home.arpa. A fetch refuses them before
+ * any lookup, so a test fixture's source makes no DNS query either.
+ */
+export function isSpecialUseName(hostname: string): boolean {
+  const name = hostname.toLowerCase().replace(/\.$/, '');
+  return (
+    name === 'localhost' ||
+    /\.(?:localhost|local|test|example|invalid|internal|home\.arpa)$/.test(name) ||
+    /^(?:local|test|example|invalid|internal)$/.test(name)
+  );
+}
+
 const unreachable = (code: string, message: string) =>
   new MediaSourceError('unreachable', code, message);
 
@@ -154,6 +166,10 @@ export function remoteImageFetcher({
         throw refused('address_blocked', 'The source is on an address a fetch never reaches.');
       }
       return { address: host, family: host.includes(':') ? 6 : 4 };
+    }
+    // A special-use name is never a public host, and isn't worth a lookup.
+    if (isSpecialUseName(host)) {
+      throw refused('host_reserved', 'The source is on a name no public host has.');
     }
     let found: readonly ResolvedAddress[];
     try {

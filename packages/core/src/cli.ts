@@ -18,7 +18,11 @@ import {
 import { preflight, type PreflightCode } from './store/preflight';
 import type { PublicationOutcome } from './store/publication';
 import { runRetention, type Protection } from './store/retention';
-import { mountedSource, type SourceReader } from './store/source';
+import { liveMedia, mountedSource, withMountedMedia, type SourceReader } from './store/source';
+import { loadSharp } from './catalog/media/derive';
+import { mediaIngestion, type MediaFinding } from './catalog/media/ingest';
+import { localMediaRoot } from './catalog/media/local';
+import { remoteImageFetcher, type RemoteFetcher } from './catalog/media/remote';
 import { openStore, type Store } from './store/store';
 import type { UnitChecks, UnitDiagnostic } from './catalog/unit';
 import { verifyStore, type VerifyReport } from './store/verify';
@@ -60,7 +64,8 @@ const USAGE = `Usage: portfolio-store <command> [options]
   history                                  Every publication event, in seq order.
   verify                                   Every file of the store and every hash.
   import [--from <dir>] [--expect <revisionId|empty>]
-                                           Publishes the pair in <dir>, PORTFOLIO_SOURCE_DIR by default.
+                                           Publishes the pair in <dir>, PORTFOLIO_SOURCE_DIR by default,
+                                           with its media from PORTFOLIO_MEDIA_ROOT and https sources.
   rollback --to <revisionId>               Makes an earlier revision live again.
   recover [--to <revisionId>]              Makes the last known good revision, or <revisionId>, live.
   unlock --force [--running]               Removes the publication lock. A running holder's needs --running.
@@ -96,6 +101,10 @@ export interface CliOptions {
   readonly now?: () => number;
   /** The effective uid the command runs as: process.geteuid()'s by default, null where there's none. */
   readonly uid?: number | null;
+  /** How `import` fetches an https media source (#10). Tests pass a stub; the default checks every address. */
+  readonly fetchRemote?: RemoteFetcher;
+  /** Where sharp is when a bare import can't find it, such as the server build's .next/node_modules. */
+  readonly sharpDirectories?: readonly string[];
 }
 
 class UsageError extends Error {}
@@ -158,6 +167,12 @@ function setting(env: CliOptions['env'], key: string): string | undefined {
   } catch {
     throw new Refusal(`${key}_FILE names a file that can't be read.`);
   }
+}
+
+/** One line for a media source an import couldn't use: the asset, why, and whether it kept its last revision. */
+function mediaLine({ assetId, reason, code, kept }: MediaFinding): string {
+  const why = reason === 'renditions_unavailable' ? 'renditions unavailable' : `source ${reason}`;
+  return `media ${assetId}: ${why} (${code}); ${kept ? 'kept its last revision' : 'no revision yet'}.`;
 }
 
 function count(n: number, noun: string, plural = `${noun}s`): string {
@@ -601,7 +616,23 @@ class Commands {
       if (why) throw new Refusal(`${from} ${why}. Nothing was imported.`);
       return this.refuse('validation_failed', read.diagnostics, 'Nothing was imported.');
     }
-    const { documents, sourceHash } = mountedSource(read.files);
+    // The pair's media, as a draft save ingests it (#10), over the live
+    // revision's records: an unchanged source keeps its revision.
+    const mediaRoot = setting(this.options.env, 'PORTFOLIO_MEDIA_ROOT');
+    const ingestion = mediaIngestion({
+      assets: store.assets,
+      ...(mediaRoot ? { root: localMediaRoot(path.resolve(this.options.envBase, mediaRoot)) } : {}),
+      fetchRemote: this.options.fetchRemote ?? remoteImageFetcher(),
+      sharp: () => loadSharp(this.options.sharpDirectories ?? []),
+      now: this.now,
+    });
+    const media = await withMountedMedia(mountedSource(read.files), {
+      ingestion,
+      previous: await liveMedia(store),
+      fetchRemote: true,
+    });
+    for (const finding of media.findings) this.say(mediaLine(finding));
+    const { documents, sourceHash } = media.mounted;
 
     this.running.note = '`status` says whether the import took effect.';
     const outcome = await store.publication.importSource(

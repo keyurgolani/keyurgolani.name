@@ -19,12 +19,13 @@ import {
   resolvePortfolioView,
   type MediaDocument,
 } from '@portfolio/schema';
-import { readManifest } from '../store/revisions';
-import { nodeFs } from '../store/fs-port';
-import type { Store } from '../store/store';
-import { newStore, owned, pairInput, tempDir, testChecks } from '../store/test-support/fixtures';
-import type { Sha256 } from '../store/layout';
-import type { UnitInput } from '../catalog/unit';
+import { readManifest } from '../../store/revisions';
+import { runRetention } from '../../store/retention';
+import { nodeFs } from '../../store/fs-port';
+import type { Store } from '../../store/store';
+import { newStore, owned, pairInput, tempDir, testChecks } from '../../store/test-support/fixtures';
+import type { Sha256 } from '../../store/layout';
+import type { UnitInput } from '../unit';
 import type { SharpLoad } from './derive';
 import { mediaIngestion, type IngestInput, type MediaIngestionOptions } from './ingest';
 import { localMediaRoot } from './local';
@@ -332,10 +333,11 @@ test('remote sources: fetched only when allowed, through the address checks, and
   let fetches = 0;
   const transport: RemoteTransport = async ({ url }) => {
     fetches++;
-    if (url.hostname === 'images.test') {
+    if (url.hostname === 'images.example.net') {
       return {
         status: url.pathname === '/moved.jpg' ? 302 : 200,
-        headers: url.pathname === '/moved.jpg' ? { location: 'https://internal.test/a.jpg' } : {},
+        headers:
+          url.pathname === '/moved.jpg' ? { location: 'https://internal.example.net/a.jpg' } : {},
         body: (async function* () {
           yield image;
         })(),
@@ -345,13 +347,13 @@ test('remote sources: fetched only when allowed, through the address checks, and
     throw new Error(`connected to ${url.hostname}`);
   };
   const resolve = async (hostname: string) => [
-    { address: hostname === 'internal.test' ? '10.0.0.8' : '93.184.216.34', family: 4 },
+    { address: hostname === 'internal.example.net' ? '10.0.0.8' : '93.184.216.34', family: 4 },
   ];
   const s = await setup(t, { fetchRemote: remoteImageFetcher({ resolve, transport }) });
   await sources(s);
   const remote = (url: string) => portfolio((text) => text.replace('images/harbor-1.jpg', url));
 
-  const denied = await s.ingest({ portfolio: remote('https://images.test/a.jpg') });
+  const denied = await s.ingest({ portfolio: remote('https://images.example.net/a.jpg') });
   assert.equal(fetches, 0);
   assert.deepEqual(
     denied.findings.map(({ assetId, code }) => [assetId, code]),
@@ -359,17 +361,17 @@ test('remote sources: fetched only when allowed, through the address checks, and
   );
 
   const fetched = await s.ingest({
-    portfolio: remote('https://images.test/a.jpg'),
+    portfolio: remote('https://images.example.net/a.jpg'),
     fetchRemote: true,
   });
   assert.equal(fetches, 1);
   const ferry = record(fetched.document, 'ferry-at-dawn');
-  assert.deepEqual(ferry.source, { kind: 'remote', url: 'https://images.test/a.jpg' });
+  assert.deepEqual(ferry.source, { kind: 'remote', url: 'https://images.example.net/a.jpg' });
   assert.deepEqual([ferry.width, ferry.height], [640, 480]);
 
   // Saved again with the same URL: no fetch.
   await s.ingest({
-    portfolio: remote('https://images.test/a.jpg'),
+    portfolio: remote('https://images.example.net/a.jpg'),
     previous: fetched.document,
     fetchRemote: true,
   });
@@ -377,7 +379,7 @@ test('remote sources: fetched only when allowed, through the address checks, and
 
   // A changed URL that redirects to a private address is refused; the last revision stays.
   const moved = await s.ingest({
-    portfolio: remote('https://images.test/moved.jpg'),
+    portfolio: remote('https://images.example.net/moved.jpg'),
     previous: fetched.document,
     fetchRemote: true,
   });
@@ -567,4 +569,43 @@ test('a published revision keeps its media, bytes and all, through a replacement
   // And the first revision is still whole, a rollback target with every blob.
   const firstManifest = await readManifest(nodeFs, s.store.paths, revisionId);
   for (const blob of firstManifest?.blobs ?? []) assert.ok(await s.store.assets.has(blob));
+});
+
+test('retention 25 hours on keeps every source and rendition a revision or a draft references, and nothing else', async (t) => {
+  const s = await setup(t);
+  await sources(s);
+  const first = (await s.ingest({})).document;
+  await publish(s.store, { ...PAIR, media: asDocument(first) });
+  // A draft takes a replacement the live revision doesn't have.
+  s.put('images/harbor-2.jpg', await png({ width: 320, height: 320, color: '#123456' }));
+  const next = (await s.ingest({ previous: first })).document;
+  const created = await s.store.drafts.create(
+    {
+      documents: { ...PAIR, media: asDocument(next) },
+      expectedVersion: (await s.store.drafts.getWorking())?.version,
+    },
+    'owner',
+  );
+  assert.equal(created.kind, 'saved', JSON.stringify(created));
+  // And a blob nothing references, as a derivation a crash left.
+  const orphan = await s.store.assets.put(new TextEncoder().encode('nobody'), 'image/webp');
+
+  const report = await runRetention(
+    {
+      fs: nodeFs,
+      paths: s.store.paths,
+      lock: s.store.lock,
+      checks: testChecks({ referencedBlobs: mediaBlobs }),
+      actor: 'operator',
+      now: () => Date.now() + 25 * 60 * 60_000,
+    },
+    {},
+  );
+  assert.equal(report.kind, 'done');
+  if (report.kind !== 'done') return;
+  assert.deepEqual(report.report.removedBlobs, [orphan.sha256]);
+  const kept = new Set([...mediaBlobs(first), ...mediaBlobs(next)]);
+  assert.ok(kept.size > mediaBlobs(first).length, 'the draft names blobs the revision does not');
+  for (const blob of kept) assert.ok(await s.store.assets.has(blob), blob);
+  assert.equal(await s.store.assets.has(orphan.sha256), false);
 });

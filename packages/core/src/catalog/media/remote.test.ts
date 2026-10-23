@@ -6,6 +6,7 @@ import { isPublicAddress } from './address';
 import { MediaSourceError } from './limits';
 import {
   httpsTransport,
+  isSpecialUseName,
   pinnedLookup,
   remoteImageFetcher,
   type RemoteResponse,
@@ -74,28 +75,31 @@ const refusal = (reason: string, code?: string) => (error: unknown) => {
 
 test('an https image is fetched from the address its host resolved to', async () => {
   const stub = stubs(
-    { 'images.test': ['93.184.216.34'] },
+    { 'images.example.net': ['93.184.216.34'] },
     {
-      'https://images.test/a.jpg': { status: 200, body: [IMAGE.subarray(0, 4), IMAGE.subarray(4)] },
+      'https://images.example.net/a.jpg': {
+        status: 200,
+        body: [IMAGE.subarray(0, 4), IMAGE.subarray(4)],
+      },
     },
   );
   const fetch = remoteImageFetcher(stub);
-  assert.deepEqual(await fetch('https://images.test/a.jpg'), IMAGE);
+  assert.deepEqual(await fetch('https://images.example.net/a.jpg'), IMAGE);
   assert.deepEqual(stub.connections, [
-    { url: 'https://images.test/a.jpg', address: '93.184.216.34' },
+    { url: 'https://images.example.net/a.jpg', address: '93.184.216.34' },
   ]);
 });
 
 test('127.0.0.1, 169.254.169.254, and every other blocked address are refused before connecting', async () => {
   const stub = stubs(
     {
-      'loopback.test': ['127.0.0.1'],
-      'metadata.test': ['169.254.169.254'],
-      'private.test': ['10.0.0.5'],
-      'mixed.test': ['93.184.216.34', '192.168.1.10'],
-      'v6-loopback.test': ['::1'],
-      'v6-metadata.test': ['fd00:ec2::254'],
-      'v6-mapped.test': ['::ffff:127.0.0.1'],
+      'loopback.example.net': ['127.0.0.1'],
+      'metadata.example.net': ['169.254.169.254'],
+      'private.example.net': ['10.0.0.5'],
+      'mixed.example.net': ['93.184.216.34', '192.168.1.10'],
+      'v6-loopback.example.net': ['::1'],
+      'v6-metadata.example.net': ['fd00:ec2::254'],
+      'v6-mapped.example.net': ['::ffff:127.0.0.1'],
     },
     {},
   );
@@ -106,13 +110,13 @@ test('127.0.0.1, 169.254.169.254, and every other blocked address are refused be
     'https://[::1]/a.jpg',
     'https://[::ffff:169.254.169.254]/a.jpg',
     'https://0.0.0.0/a.jpg',
-    'https://loopback.test/a.jpg',
-    'https://metadata.test/latest/meta-data/',
-    'https://private.test/a.jpg',
-    'https://mixed.test/a.jpg',
-    'https://v6-loopback.test/a.jpg',
-    'https://v6-metadata.test/a.jpg',
-    'https://v6-mapped.test/a.jpg',
+    'https://loopback.example.net/a.jpg',
+    'https://metadata.example.net/latest/meta-data/',
+    'https://private.example.net/a.jpg',
+    'https://mixed.example.net/a.jpg',
+    'https://v6-loopback.example.net/a.jpg',
+    'https://v6-metadata.example.net/a.jpg',
+    'https://v6-mapped.example.net/a.jpg',
   ]) {
     await assert.rejects(fetch(url), refusal('refused', 'address_blocked'), url);
   }
@@ -121,28 +125,34 @@ test('127.0.0.1, 169.254.169.254, and every other blocked address are refused be
 
 test('a redirect to a private address is refused, checked again after DNS', async () => {
   const stub = stubs(
-    { 'images.test': ['93.184.216.34'], 'internal.test': ['10.1.2.3'] },
+    { 'images.example.net': ['93.184.216.34'], 'internal.example.net': ['10.1.2.3'] },
     {
-      'https://images.test/a.jpg': {
+      'https://images.example.net/a.jpg': {
         status: 302,
-        headers: { location: 'https://internal.test/secret.jpg' },
+        headers: { location: 'https://internal.example.net/secret.jpg' },
       },
-      'https://images.test/b.jpg': {
+      'https://images.example.net/b.jpg': {
         status: 301,
         headers: { location: 'https://169.254.169.254/latest/meta-data/' },
       },
     },
   );
   const fetch = remoteImageFetcher(stub);
-  await assert.rejects(fetch('https://images.test/a.jpg'), refusal('refused', 'address_blocked'));
-  await assert.rejects(fetch('https://images.test/b.jpg'), refusal('refused', 'address_blocked'));
+  await assert.rejects(
+    fetch('https://images.example.net/a.jpg'),
+    refusal('refused', 'address_blocked'),
+  );
+  await assert.rejects(
+    fetch('https://images.example.net/b.jpg'),
+    refusal('refused', 'address_blocked'),
+  );
   assert.deepEqual(
     stub.connections.map(({ address }) => address),
     ['93.184.216.34', '93.184.216.34'],
     'only the public first hops were connected to',
   );
   assert.ok(
-    stub.resolved.includes('internal.test'),
+    stub.resolved.includes('internal.example.net'),
     "the redirect's host was resolved and checked",
   );
 });
@@ -152,8 +162,8 @@ test('a host is resolved and checked on every hop, so a rebinding host is caught
   const stub = stubs(
     {},
     {
-      'https://rebind.test/a.jpg': { status: 307, headers: { location: '/b.jpg' } },
-      'https://rebind.test/b.jpg': { status: 200, body: [IMAGE] },
+      'https://rebind.example.net/a.jpg': { status: 307, headers: { location: '/b.jpg' } },
+      'https://rebind.example.net/b.jpg': { status: 200, body: [IMAGE] },
     },
   );
   // Public the first time, loopback the second.
@@ -162,7 +172,10 @@ test('a host is resolved and checked on every hop, so a rebinding host is caught
     return [{ address: calls === 1 ? '93.184.216.34' : '127.0.0.1', family: 4 }];
   };
   const fetch = remoteImageFetcher({ ...stub, resolve });
-  await assert.rejects(fetch('https://rebind.test/a.jpg'), refusal('refused', 'address_blocked'));
+  await assert.rejects(
+    fetch('https://rebind.example.net/a.jpg'),
+    refusal('refused', 'address_blocked'),
+  );
   assert.equal(calls, 2);
   assert.equal(stub.connections.length, 1);
 });
@@ -170,49 +183,55 @@ test('a host is resolved and checked on every hop, so a rebinding host is caught
 test('three redirects are followed, a fourth is refused', async () => {
   const hops: Record<string, Hop> = {};
   for (let i = 0; i < 4; i++) {
-    hops[`https://images.test/${i}`] = { status: 302, headers: { location: `/${i + 1}` } };
+    hops[`https://images.example.net/${i}`] = { status: 302, headers: { location: `/${i + 1}` } };
   }
-  hops['https://images.test/4'] = { status: 200, body: [IMAGE] };
-  hops['https://images.test/3'] = { status: 200, body: [IMAGE] };
-  const stub = stubs({ 'images.test': ['93.184.216.34'] }, hops);
+  hops['https://images.example.net/4'] = { status: 200, body: [IMAGE] };
+  hops['https://images.example.net/3'] = { status: 200, body: [IMAGE] };
+  const stub = stubs({ 'images.example.net': ['93.184.216.34'] }, hops);
   const fetch = remoteImageFetcher(stub);
   // 0 → 1 → 2 → 3: three redirects.
-  assert.deepEqual(await fetch('https://images.test/0'), IMAGE);
-  hops['https://images.test/3'] = { status: 302, headers: { location: '/4' } };
-  await assert.rejects(fetch('https://images.test/0'), refusal('refused', 'redirects'));
+  assert.deepEqual(await fetch('https://images.example.net/0'), IMAGE);
+  hops['https://images.example.net/3'] = { status: 302, headers: { location: '/4' } };
+  await assert.rejects(fetch('https://images.example.net/0'), refusal('refused', 'redirects'));
 });
 
 test('http, credentials, and a redirect off https are refused', async () => {
   const stub = stubs(
-    { 'images.test': ['93.184.216.34'] },
+    { 'images.example.net': ['93.184.216.34'] },
     {
-      'https://images.test/down': {
+      'https://images.example.net/down': {
         status: 302,
-        headers: { location: 'http://images.test/a.jpg' },
+        headers: { location: 'http://images.example.net/a.jpg' },
       },
-      'https://images.test/file': { status: 302, headers: { location: 'file:///etc/passwd' } },
+      'https://images.example.net/file': {
+        status: 302,
+        headers: { location: 'file:///etc/passwd' },
+      },
     },
   );
   const fetch = remoteImageFetcher(stub);
-  await assert.rejects(fetch('http://images.test/a.jpg'), refusal('refused', 'scheme'));
-  await assert.rejects(fetch('ftp://images.test/a.jpg'), refusal('refused', 'scheme'));
+  await assert.rejects(fetch('http://images.example.net/a.jpg'), refusal('refused', 'scheme'));
+  await assert.rejects(fetch('ftp://images.example.net/a.jpg'), refusal('refused', 'scheme'));
   await assert.rejects(
-    fetch('https://user:pw@images.test/a.jpg'),
+    fetch('https://user:pw@images.example.net/a.jpg'),
     refusal('refused', 'credentials'),
   );
-  await assert.rejects(fetch('https://images.test/down'), refusal('refused', 'scheme'));
-  await assert.rejects(fetch('https://images.test/file'), refusal('refused', 'scheme'));
+  await assert.rejects(fetch('https://images.example.net/down'), refusal('refused', 'scheme'));
+  await assert.rejects(fetch('https://images.example.net/file'), refusal('refused', 'scheme'));
   await assert.rejects(fetch('not a url'), refusal('refused'));
 });
 
 test('the whole fetch stops at its time limit', async () => {
   const stub = stubs(
-    { 'images.test': ['93.184.216.34'] },
-    { 'https://images.test/slow.jpg': { status: 200, hang: true } },
+    { 'images.example.net': ['93.184.216.34'] },
+    { 'https://images.example.net/slow.jpg': { status: 200, hang: true } },
   );
   const fetch = remoteImageFetcher({ ...stub, timeoutMs: 50 });
   const started = Date.now();
-  await assert.rejects(fetch('https://images.test/slow.jpg'), refusal('unreachable', 'timeout'));
+  await assert.rejects(
+    fetch('https://images.example.net/slow.jpg'),
+    refusal('unreachable', 'timeout'),
+  );
   assert.ok(Date.now() - started < 2000);
   // A resolver that never answers counts against the same limit.
   const stuck = remoteImageFetcher({
@@ -220,55 +239,70 @@ test('the whole fetch stops at its time limit', async () => {
     resolve: () => new Promise(() => {}),
     timeoutMs: 50,
   });
-  await assert.rejects(stuck('https://images.test/slow.jpg'), refusal('unreachable', 'timeout'));
+  await assert.rejects(
+    stuck('https://images.example.net/slow.jpg'),
+    refusal('unreachable', 'timeout'),
+  );
 });
 
 test('more than the cap is refused, by its length or as it streams', async () => {
   const stub = stubs(
-    { 'images.test': ['93.184.216.34'] },
+    { 'images.example.net': ['93.184.216.34'] },
     {
-      'https://images.test/declared': {
+      'https://images.example.net/declared': {
         status: 200,
         headers: { 'content-length': '65' },
         body: [new Uint8Array(65)],
       },
-      'https://images.test/streamed': {
+      'https://images.example.net/streamed': {
         status: 200,
         body: [new Uint8Array(40), new Uint8Array(40)],
       },
-      'https://images.test/gzip': {
+      'https://images.example.net/gzip': {
         status: 200,
         headers: { 'content-encoding': 'gzip' },
         body: [IMAGE],
       },
-      'https://images.test/fits': { status: 200, body: [new Uint8Array(64)] },
+      'https://images.example.net/fits': { status: 200, body: [new Uint8Array(64)] },
     },
   );
   const fetch = remoteImageFetcher({ ...stub, maxBytes: 64 });
-  await assert.rejects(fetch('https://images.test/declared'), refusal('refused', 'too_large'));
-  await assert.rejects(fetch('https://images.test/streamed'), refusal('refused', 'too_large'));
-  await assert.rejects(fetch('https://images.test/gzip'), refusal('refused', 'content_encoding'));
-  assert.equal((await fetch('https://images.test/fits')).byteLength, 64);
+  await assert.rejects(
+    fetch('https://images.example.net/declared'),
+    refusal('refused', 'too_large'),
+  );
+  await assert.rejects(
+    fetch('https://images.example.net/streamed'),
+    refusal('refused', 'too_large'),
+  );
+  await assert.rejects(
+    fetch('https://images.example.net/gzip'),
+    refusal('refused', 'content_encoding'),
+  );
+  assert.equal((await fetch('https://images.example.net/fits')).byteLength, 64);
 });
 
 test('a gone source is missing; an error or a refused connection is unreachable', async () => {
   const stub = stubs(
-    { 'images.test': ['93.184.216.34'] },
+    { 'images.example.net': ['93.184.216.34'] },
     {
-      'https://images.test/404': { status: 404 },
-      'https://images.test/410': { status: 410 },
-      'https://images.test/500': { status: 500 },
-      'https://images.test/403': { status: 403 },
+      'https://images.example.net/404': { status: 404 },
+      'https://images.example.net/410': { status: 410 },
+      'https://images.example.net/500': { status: 500 },
+      'https://images.example.net/403': { status: 403 },
     },
   );
   const fetch = remoteImageFetcher(stub);
-  await assert.rejects(fetch('https://images.test/404'), refusal('missing'));
-  await assert.rejects(fetch('https://images.test/410'), refusal('missing'));
-  await assert.rejects(fetch('https://images.test/500'), refusal('unreachable', 'status'));
-  await assert.rejects(fetch('https://images.test/403'), refusal('unreachable', 'status'));
-  await assert.rejects(fetch('https://nowhere.test/a.jpg'), refusal('missing', 'host_not_found'));
+  await assert.rejects(fetch('https://images.example.net/404'), refusal('missing'));
+  await assert.rejects(fetch('https://images.example.net/410'), refusal('missing'));
+  await assert.rejects(fetch('https://images.example.net/500'), refusal('unreachable', 'status'));
+  await assert.rejects(fetch('https://images.example.net/403'), refusal('unreachable', 'status'));
   await assert.rejects(
-    fetch('https://images.test/unknown'),
+    fetch('https://nowhere.example.net/a.jpg'),
+    refusal('missing', 'host_not_found'),
+  );
+  await assert.rejects(
+    fetch('https://images.example.net/unknown'),
     refusal('unreachable', 'connect_failed'),
   );
 });
@@ -314,7 +348,7 @@ test('the address rules: public addresses pass, everything special does not', ()
     'fec0::1',
     'ff02::1',
     'localhost',
-    'images.test',
+    'images.example.net',
     '',
   ]) {
     assert.ok(!isPublicAddress(address), address);
@@ -363,4 +397,27 @@ test('a pinned lookup answers with its one address, in either form', async () =>
     lookup('anything.test', { all: true }, (...args: unknown[]) => resolve(args)),
   );
   assert.deepEqual(all, [null, [{ address: '93.184.216.34', family: 4 }]]);
+});
+
+test('a special-use name is refused before any lookup, so a test fixture makes no DNS query', async () => {
+  const stub = stubs({}, {});
+  const fetch = remoteImageFetcher(stub);
+  for (const url of [
+    'https://localhost/a.jpg',
+    'https://cdn.localhost/a.jpg',
+    'https://media.rowan.test/fixture-garden.png',
+    'https://printer.local/a.jpg',
+    'https://images.example/a.jpg',
+    'https://nowhere.invalid/a.jpg',
+    'https://metadata.internal/a.jpg',
+    'https://nas.home.arpa/a.jpg',
+    'https://LOCALHOST./a.jpg',
+  ]) {
+    await assert.rejects(fetch(url), refusal('refused', 'host_reserved'), url);
+  }
+  assert.deepEqual(stub.resolved, [], 'nothing was looked up');
+  assert.deepEqual(stub.connections, []);
+  // A public name that only looks like one is fine.
+  assert.equal(isSpecialUseName('images.testing.example.net'), false);
+  assert.equal(isSpecialUseName('local.example.net'), false);
 });

@@ -238,11 +238,14 @@ export {
   type ServingState,
 } from './store/publication';
 // The mounted pair as an import reads it, and owner's first-start import
-// (#3, item 24).
+// (#3, item 24), with its media ingested (#10).
 export {
   importAtFirstStart,
   importRefusal,
+  liveMedia,
   mountedSource,
+  withMountedMedia,
+  type MountedMedia,
   type MountedSource,
   type SourceFile,
 } from './store/source';
@@ -257,14 +260,14 @@ export {
   type MediaIngestion,
   type MediaIngestionOptions,
   type MediaLogEntry,
-} from './media/ingest';
-export { localMediaRoot, type LocalMediaRoot } from './media/local';
+} from './catalog/media/ingest';
+export { localMediaRoot, type LocalMediaRoot } from './catalog/media/local';
 export {
   remoteImageFetcher,
   type RemoteFetcher,
   type RemoteFetcherOptions,
   type RemoteTransport,
   type Resolve,
-} from './media/remote';
-export { ALGORITHM_VERSION, loadSharp, type SharpLoad } from './media/derive';
-export { MEDIA_LIMITS, MediaSourceError } from './media/limits';
+} from './catalog/media/remote';
+export { ALGORITHM_VERSION, loadSharp, type SharpLoad } from './catalog/media/derive';
+export { MEDIA_LIMITS, MediaSourceError } from './catalog/media/limits';
