@@ -112,10 +112,6 @@ const ANNOUNCEMENTS: Readonly<Record<Phase, string>> = {
 const mintKey = ({ subject, appearance, environment }: MintRequest) =>
   JSON.stringify([subject, appearance ?? null, environment.enhancement]);
 
-/**
- * `request` as a grant is minted for it: motion held to the owner's system,
- * which the first mint goes out before the controls have read.
- */
 /** The sessionStorage key a page that goes keeps its grants' refs under (#7). */
 export const LEFT_GRANTS_KEY = 'studio.preview.left-grants';
 
@@ -150,6 +146,10 @@ const TAB_LEFT_GRANTS: LeftGrant = {
   },
 };
 
+/**
+ * `request` as a grant is minted for it: motion held to the owner's system,
+ * which the first mint goes out before the controls have read.
+ */
 const heldRequest = (request: MintRequest): MintRequest => ({
   ...request,
   environment: heldToSystem(request.environment, window.matchMedia(REDUCED_MOTION).matches),

@@ -413,6 +413,15 @@ test("the page going keeps its grant's ref before the keepalive revoke, and the 
   assert.deepEqual(tab.kept(), []);
 });
 
+test("a session that ended revokes no kept ref on a later mint: the server ended the session's grants itself (#7)", async () => {
+  const tab = tabStore();
+  tab.left.keep(refOf(1));
+  const { session, sent } = setup({}, tab.left);
+  session.end();
+  await session.mint(REQUEST);
+  assert.deepEqual(sent, []);
+});
+
 test('a 401 or session_ended ends the session, and nothing more goes out, and only session_ended is news for the other tabs (#7, Slice 4)', async () => {
   // A 401: studioFetch told the other tabs as it saw it.
   const unauthorized = setup({ 'preview.grant.renew': [{ status: 401 }] });
