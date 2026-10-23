@@ -18,7 +18,9 @@ import { currentGate, REPO_ROOT, reportError, writeFailureRecord } from './lib/r
 
 const GENERATED = 'apps/web/src/lib/generated';
 /** What the host serves from public/_portfolio/: packs, variant stylesheets, and their images. */
-const SERVED = ['pack', 'variant', 'asset'].map((dir) => `apps/web/public/_portfolio/${dir}`);
+const SERVED = ['pack', 'font', 'variant', 'asset'].map(
+  (dir) => `apps/web/public/_portfolio/${dir}`,
+);
 /** Each variant's experience segment, a route per variant in the app directory (#6, Slice 2). */
 const SEGMENTS = 'apps/web/src/app/(site)/%5Fexperience';
 

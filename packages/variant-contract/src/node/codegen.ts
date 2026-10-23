@@ -1,7 +1,8 @@
 // What registry generation writes (#5, Slice 3, item 1): the host's
 // gitignored src/lib/generated/ files, from readRegistry()'s result; (#19,
-// Slice 2) each appearance pack's compiled files in the host's gitignored
-// public/_portfolio/pack/; and (#6, Slice 2) each variant's compiled
+// Slice 2) each appearance pack's compiled stylesheet in the host's
+// gitignored public/_portfolio/pack/, and (#6, item 7) its fonts in
+// public/_portfolio/font/; and (#6, Slice 2) each variant's compiled
 // stylesheet in public/_portfolio/variant/, with the images it names in
 // public/_portfolio/asset/. Each is sorted, so two runs over the same
 // dependencies write the same bytes, and each is written to a temporary file
@@ -386,15 +387,22 @@ export function writeRegistry(dir: string, files: ReadonlyMap<GeneratedFile, str
   return { written, unchanged };
 }
 
-/** Every file in the pack directory: each pack's stylesheet and fonts, and the platform stylesheet. */
+/** Every file in the pack directory: each pack's stylesheet, and the platform stylesheet. */
 export function packFiles(result: RegistryResult): PackFile[] {
   const files = new Map<string, PackFile>();
   for (const pack of result.packs) {
-    for (const file of [...(pack.stylesheet ? [pack.stylesheet] : []), ...pack.assets]) {
-      files.set(file.name, file);
-    }
+    if (pack.stylesheet) files.set(pack.stylesheet.name, pack.stylesheet);
   }
   if (result.platform) files.set(result.platform.name, result.platform);
+  return [...files.values()].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+}
+
+/** Every file in the font directory (#6, item 7): the fonts each typography profile ships, once each. */
+export function fontFiles(result: RegistryResult): PackFile[] {
+  const files = new Map<string, PackFile>();
+  for (const pack of result.packs) {
+    for (const file of pack.assets) files.set(file.name, file);
+  }
   return [...files.values()].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
 }
 
@@ -423,8 +431,14 @@ export interface PackWriteResult {
 
 /** What each directory generation serves files from holds, by name. */
 export const SERVED_KINDS = {
-  /** public/_portfolio/pack/: `<id>.<sha256-12>.css` or `.woff2`. */
+  /**
+   * public/_portfolio/pack/: `<id>.<sha256-12>.css`. A `.woff2` there is an
+   * earlier build's, from before fonts moved to their own directory, and
+   * goes the way any outdated pack file does.
+   */
   pack: /^[a-z_][a-z0-9-]*\.[0-9a-f]{12}\.(?:css|woff2)$/,
+  /** public/_portfolio/font/ (#6, item 7): `<id>.<sha256-12>.woff2`. */
+  font: /^[a-z_][a-z0-9-]*\.[0-9a-f]{12}\.woff2$/,
   /** public/_portfolio/variant/: `<id>.<sha256-12>.css`. */
   variant: /^[a-z][a-z0-9-]*\.[0-9a-f]{12}\.css$/,
   /** public/_portfolio/asset/: `<sha256-12>.<image extension>`. */
@@ -436,6 +450,7 @@ export type ServedKind = keyof typeof SERVED_KINDS;
 /** How writeServedFiles() names each kind's file, and what writes it, in its errors. */
 const SERVED_LABELS: Readonly<Record<ServedKind, { file: string; writer: string }>> = {
   pack: { file: 'a pack file', writer: 'no pack wrote' },
+  font: { file: 'a font file', writer: 'no typography profile shipped' },
   variant: { file: 'a variant stylesheet', writer: 'no variant wrote' },
   asset: { file: 'an asset file', writer: "no variant's stylesheet named" },
 };

@@ -12,6 +12,7 @@
 # segment (#6): the image build writes its own, so a checkout's, fixtures'
 # files among them, never reach it.
 apps/web/public/_portfolio/pack
+apps/web/public/_portfolio/font
 apps/web/public/_portfolio/variant
 apps/web/public/_portfolio/asset
 apps/web/src/app/(site)/%5Fexperience

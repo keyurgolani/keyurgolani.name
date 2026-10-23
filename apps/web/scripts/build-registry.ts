@@ -89,6 +89,7 @@ async function main(): Promise<number> {
             ...(written.served
               ? {
                   packFiles: written.served.packs,
+                  fontFiles: written.served.fonts,
                   variantFiles: written.served.variants,
                   assetFiles: written.served.assets,
                 }
