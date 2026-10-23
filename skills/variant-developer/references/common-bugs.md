@@ -134,21 +134,23 @@ Gradient text is a color effect, so it's the appearance system's (#19) now, with
 
 ### Fix
 
-Wrap the variant's client parts in `MotionPolicyProvider` with `input.presentation.motionPolicy`, and gate every animation entry point on `useMotionPreference()`:
+Wrap the variant's client parts in `MotionPolicyProvider` with `input.presentation.motionPolicy`, and run every script effect on `@portfolio/kit/runtime`. The runtime is static before the page mounts and under reduced motion, and paused while the document is hidden, the effect is offscreen, the visitor paused motion with `MotionControl`, or a preview frame is out of focus, so an effect that runs only while it's active stops for all of them:
 
 ```tsx
-const reduceMotion = useMotionPreference() === 'reduce';
+const runtime = useEnhancementRuntime();
+const { attachRoot } = runtime;
 
 useEffect(() => {
-  if (reduceMotion) {
-    drawFrame(); // one still frame
-    return;
-  }
-  // the requestAnimationFrame loop
-}, [reduceMotion]);
+  drawFrame(); // one still frame, once the page has mounted
+}, []);
+
+// Frames run only while the runtime is active. Never call requestAnimationFrame yourself.
+useFrameLoop(runtime, (time, delta) => drawFrame(delta));
+
+return <canvas ref={attachRoot} />;
 ```
 
-For framer-motion's `useScroll` and `useTransform`, pass `enabled: !reduceMotion` to your wrapper hook (the kit's `useScrollDispersal` does). A framer-motion variant also wraps its root in `MotionConfig`, `reducedMotion: 'always'` under the site's `reduce` and `'user'` otherwise; `legacy/variant-kinetic-cosmos/src/primitives/motion-config.tsx` shows how. That skips transform and layout animations only, and opacity still animates, so an entrance takes `initial={reduce ? false : 'hidden'}`, an animation that repeats forever isn't rendered under reduce, and scrolling takes `behavior: reduce ? 'auto' : 'smooth'`.
+A CSS animation under the effect's root pauses with it, through the root's `data-activity="paused"`; render it only once `runtime.state` isn't `static`, so the server and reduced motion show the still. For framer-motion's `useScroll` and `useTransform`, pass `enabled: runtime.state !== 'static'` to your wrapper hook (the kit's `useScrollDispersal` already holds still on the runtime). A framer-motion variant also wraps its root in `MotionConfig`, `reducedMotion: 'always'` under the site's `reduce` and `'user'` otherwise; `legacy/variant-kinetic-cosmos/src/primitives/motion-config.tsx` shows how. That skips transform and layout animations only, and opacity still animates, so an entrance takes `initial={reduce ? false : 'hidden'}`, an animation that repeats forever isn't rendered under reduce, and scrolling takes `behavior: reduce ? 'auto' : 'smooth'`.
 
 **Check it programmatically.** The motion contract covers what `getAnimations()` lists at load, after a jump, and as the page scrolls, every `requestAnimationFrame` loop, and how links scroll. For a canvas drawn on a timer or a typing animation, use the recipes in `quality-gates.md` Gate C.
 

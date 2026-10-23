@@ -41,8 +41,10 @@ async function windowOf(page: Page, ms = WINDOW_MS) {
     frameLoops: probe.frames.loopCount,
     recurringTimers: probe.timers.recurring,
     infiniteAnimations: probe.animations.infinite.length,
-    loops: probe.frames.loops.map(({ site }) => site),
-    animations: probe.animations.infinite.map(({ kind, target }) => `${kind} on ${target}`),
+    loops: probe.frames.loops.map(({ site }: { site: string }) => site),
+    animations: probe.animations.infinite.map(
+      ({ kind, target }: { kind: string; target: string }) => `${kind} on ${target}`,
+    ),
   };
 }
 
