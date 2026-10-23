@@ -80,6 +80,21 @@ test('every fixture package in the workspace maps to a row of the table', () => 
   for (const dir of marked) assert.ok(fixtureRow(`packages/${dir}`), dir);
 });
 
+test('pnpm check:registry runs under every value a row admits, and with none', () => {
+  // ci/check-registry.mjs can't import this table, so it lists the states
+  // itself; a row's value it doesn't list would go unchecked.
+  const source = fs.readFileSync(path.join(REPO_ROOT, 'ci', 'check-registry.mjs'), 'utf8');
+  for (const { flag, values } of FIXTURE_ROWS) {
+    for (const value of values) {
+      assert.ok(
+        source.includes(`${flag}: '${value}'`),
+        `check:registry runs no state with ${flag}=${value}`,
+      );
+    }
+  }
+  assert.match(source, /label: 'without a fixture flag', env: unflagged/);
+});
+
 const QUALITY_DIRS = [
   'quality-fixtures-languages',
   'quality-fixtures-schemes',
