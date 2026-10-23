@@ -48,6 +48,10 @@
 
 .studio-sign-in__form {
   display: grid;
+  /* One column that never grows past the page: the password row's min-content
+     (the input's own width and the unwrapped toggle) would widen it to 387px at
+     320px (#11, WCAG 1.4.10). */
+  grid-template-columns: minmax(0, 1fr);
   gap: 0.75rem;
 }
 
