@@ -54,3 +54,4 @@ export {
 export { type MediaBlobStore, type MediaFinding, type MediaLogEntry } from './catalog/media/ingest';
 export { localMediaRoot, type LocalMediaRoot } from './catalog/media/local';
 export { remoteImageFetcher, type RemoteFetcher } from './catalog/media/remote';
+export { resolveRendition, type RenditionBlob } from './catalog/media/resolve';

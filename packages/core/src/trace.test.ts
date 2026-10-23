@@ -62,6 +62,7 @@ test('the public entry reaches no owner module, and loading it records nothing i
     'catalog/media/limits.ts',
     'catalog/media/local.ts',
     'catalog/media/remote.ts',
+    'catalog/media/resolve.ts',
     'catalog/media/sniff.ts',
     'catalog/media/startup.ts',
     'catalog/port.ts',
