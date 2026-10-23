@@ -247,7 +247,7 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   // for every request meanwhile, waited on for a second at most
   // (config-store's RECHECK_MS).
   if (decision.status === 'served' && decision.entry.visitor && !isServable()) {
-    if (!(await servableAgain())) return unavailable(requestId);
+    if (!(await servableAgain())) return unavailable(requestId, extra);
   }
   if (
     decision.status === 'served' &&
@@ -606,13 +606,14 @@ function plain(
  * validation text, path, or Studio link, which crawlers are asked to come
  * back for rather than index.
  */
-/** The static 503's page, in the fallback packs' boundary (server/unavailable-page.ts). */
+/** The static 503's page, in the fallback packs' boundary (server/unavailable-page.ts), under the response's own policy in `extra`. */
 const UNAVAILABLE_PAGE = unavailablePage();
 
-function unavailable(requestId: string): NextResponse {
+function unavailable(requestId: string, extra: Record<string, string>): NextResponse {
   return new NextResponse(UNAVAILABLE_PAGE, {
     status: 503,
     headers: {
+      ...extra,
       'content-type': 'text/html; charset=utf-8',
       'cache-control': 'no-store',
       'retry-after': '120',

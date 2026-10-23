@@ -349,7 +349,14 @@ function ownerCatalog(servable: () => boolean, ready: Promise<unknown> = Promise
 
 /** A response's status, its headers but the request ID, and its body. */
 async function shape(response: Response) {
-  const headers = [...response.headers].filter(([name]) => name !== 'x-request-id');
+  // The request id and the policy's nonce are each response's own.
+  const headers = [...response.headers]
+    .filter(([name]) => name !== 'x-request-id')
+    .map(([name, value]) =>
+      name === 'content-security-policy'
+        ? [name, value.replace(/'nonce-[^']+'/g, "'nonce'")]
+        : [name, value],
+    );
   return { status: response.status, headers, body: await response.text() };
 }
 
@@ -548,6 +555,13 @@ test('the plain answers proxy.ts writes itself keep the public policy: a 405, a 
       PUBLIC_CSP,
       `${method} ${path}`,
     );
+  }
+  setServable(false);
+  t.after(() => setServable(true));
+  for (const path of ['/', '/feed.xml']) {
+    const response = await proxy(request(path));
+    assert.equal(response.status, 503, path);
+    assert.match(response.headers.get('content-security-policy') ?? '', PUBLIC_CSP, path);
   }
 });
 
