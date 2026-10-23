@@ -8,7 +8,10 @@
 // its evidence. Egress is the fixtures': any request outside the app fails
 // the test, from the browser or the server.
 
+import { writeFileSync } from 'node:fs';
+import path from 'node:path';
 import type { Page, TestInfo } from '@playwright/test';
+import { reportsDir } from '../../../ci/lib/reports.mjs';
 import { COLOR_ROLES, TOKEN_PROPERTIES } from '../../../packages/appearance/src/roles';
 import type { Cell } from '../cells';
 import { axeFor } from './axe';
@@ -82,29 +85,25 @@ export async function runCell({ page, cell, viewport, row, responses, testInfo, 
   const vitals = await readVitals(page);
   const tokens = await page.evaluate(resolvedTokensScript, [...TOKEN_PROPERTIES]);
 
-  await testInfo.attach('axe.json', {
-    body: JSON.stringify(
-      { violations: results.violations, incomplete: results.incomplete },
-      null,
-      2,
-    ),
-    contentType: 'application/json',
-  });
-  await testInfo.attach('vitals.json', {
-    body: JSON.stringify(vitals, null, 2),
-    contentType: 'application/json',
-  });
-  await testInfo.attach('resolved-tokens.json', {
-    body: JSON.stringify(tokens, null, 2),
-    contentType: 'application/json',
-  });
+  // On disk in the test's output directory, which the reports artifact
+  // uploads, passed or not: axe's JSON, the vitals, and the resolved tokens.
+  const written: string[] = [];
+  const keep = async (name: string, value: unknown) => {
+    const file = testInfo.outputPath(name);
+    writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`);
+    written.push(path.relative(reportsDir(), file));
+    await testInfo.attach(name, { path: file, contentType: 'application/json' });
+  };
+  await keep('axe.json', { violations: results.violations, incomplete: results.incomplete });
+  await keep('vitals.json', vitals);
+  await keep('resolved-tokens.json', tokens);
 
   const context: CellContext = {
     cell,
     viewport,
     row,
     test: testInfo.titlePath.slice(1).join(' > '),
-    artifacts: [],
+    artifacts: written,
   };
   const records: RecordFields[] = [
     ...axeRecords(context, results, details),
@@ -123,10 +122,7 @@ export async function runCell({ page, cell, viewport, row, responses, testInfo, 
           ),
         ]),
   ];
-  await testInfo.attach(RECORDS_ATTACHMENT, {
-    body: JSON.stringify(records, null, 2),
-    contentType: 'application/json',
-  });
+  await keep(RECORDS_ATTACHMENT, records);
   testInfo.annotations.push(
     { type: CHECKS_ANNOTATION, description: ran.join(' ') },
     { type: 'quality-markers', description: HOST_MARKERS },

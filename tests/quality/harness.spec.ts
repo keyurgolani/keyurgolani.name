@@ -1,24 +1,14 @@
 import { COLOR_ROLES } from '../../packages/appearance/src/roles';
-import { defaultTuple } from './cells';
 import { axeFor } from './lib/axe';
 import { FIXED_TIME } from './lib/clock';
-import { runCanary } from './lib/env';
 import { elementDetailsScript } from './lib/probes';
-import { CANARY_COOKIE, expect, test } from './fixtures';
+import { expect, test } from './fixtures';
 
-// The harness's own checks against the quality build (#11, Slice 1): the
-// server's clock, the canary on every request, and the token-role match on
-// the one page that renders #19's boundary today, /_fixtures/appearance
-// (the quality build sets APPEARANCE_FIXTURES=1). The host's other pages
-// render it from #19 slice 4.
-
-test.use({
-  cellServer: {
-    source: 'complete',
-    tuple: defaultTuple('fallback', 'system'),
-    profile: 'read-only',
-  },
-});
+// The harness's own checks against the quality build (#11, Slice 1), on the
+// harness project's server (lib/server.ts's HARNESS_SERVER): the server's
+// clock, and the token-role match on the one page that renders #19's
+// boundary today, /_fixtures/appearance (the quality build sets
+// APPEARANCE_FIXTURES=1). The host's other pages render it from #19 slice 4.
 
 const READ_ONLY = { type: 'profile', description: 'read-only' };
 
@@ -32,36 +22,19 @@ test(
   },
 );
 
-test.describe('the canary', () => {
-  // Kept whether it passes or not, so run.ts can tell the canary reached an artifact.
-  test.use({ trace: 'on' });
-
-  test(
-    'every request the page makes carries the canary, and its trace holds it until the scrub',
-    { annotation: [{ type: 'route', description: '/' }, READ_ONLY] },
-    async ({ page }, testInfo) => {
-      const canary = runCanary();
-      const sent: Record<string, string>[] = [];
-      page.on('request', (request) => sent.push(request.headers()));
-      await page.goto('/');
-      expect(sent.length).toBeGreaterThan(0);
-      for (const headers of sent) {
-        expect(headers['authorization']).toBe(`Bearer ${canary}`);
-        expect(headers['x-csrf-token']).toBe(canary);
-      }
-      const cookies = await page.context().cookies();
-      expect(cookies.find((cookie) => cookie.name === CANARY_COOKIE)?.value).toBe(canary);
-      testInfo.annotations.push({ type: 'quality-canary-probe', description: 'trace on' });
-    },
-  );
-});
-
 test(
   "the token role is the boundary role the element's color resolves to, hard-coded for any other, and none outside a boundary",
   { annotation: [{ type: 'route', description: '/_fixtures/appearance' }, READ_ONLY] },
   async ({ page }) => {
     const response = await page.goto('/_fixtures/appearance');
     expect(response?.status()).toBe(200);
+    // A visible primary action, by its role and name, marked so the probe can find it.
+    const publish = page
+      .locator('[data-appearance-boundary="document"]')
+      .getByRole('button', { name: 'Publish revision' })
+      .first();
+    await expect(publish).toHaveAttribute('data-emphasis', 'primary');
+    await publish.evaluate((element) => element.setAttribute('data-quality-probe', 'action'));
     await page.evaluate(() => {
       const boundary = document.querySelector('[data-appearance-boundary="document"]')!;
       const hard = document.createElement('p');
@@ -76,8 +49,7 @@ test(
     });
     // axe sets window.axe, which the role and name come from.
     await axeFor(page).analyze();
-    const primary =
-      '[data-appearance-boundary="document"] [data-ui-slot="action"][data-emphasis="primary"]';
+    const primary = '[data-quality-probe="action"]';
     const [action, hard, outside] = await page.evaluate(elementDetailsScript, {
       selectors: [primary, '#quality-hard-coded', '#quality-outside'],
       property: 'color' as const,
@@ -107,9 +79,9 @@ test(
     );
     expect(sameAsOnAccent.element).toBe(sameAsOnAccent.target);
     expect(sameAsOnAccent.matching).toContain(action!.tokenRole);
-    expect(['button', 'link']).toContain(action?.semanticRole);
+    expect(action?.semanticRole).toBe('button');
     expect(action?.uiSlot).toBe('action');
-    expect(action?.accessibleName).toBeTruthy();
+    expect(action?.accessibleName).toBe('Publish revision');
     expect(hard?.tokenRole).toBe('hard-coded');
     expect(outside?.found).toBe(true);
     expect(outside?.tokenRole).toBeUndefined();

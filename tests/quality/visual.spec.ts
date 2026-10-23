@@ -1,7 +1,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { reportsDir } from '../../ci/lib/reports.mjs';
-import { cellServer } from './lib/server';
+import { cellServer, serverTag } from './lib/server';
 import { VIEWPORTS } from './lib/matrix';
 import {
   expectedFonts,
@@ -45,8 +45,8 @@ test.describe('visual', () => {
   test.skip(!inPinnedImage(), VISUAL_SKIP);
 
   for (const cell of cells) {
+    const tag = serverTag(cellServer(cell));
     test.describe(cell.id, () => {
-      test.use({ cellServer: cellServer(cell) });
       for (const viewport of viewports) {
         test.describe(viewport.id, () => {
           test.use({
@@ -57,6 +57,7 @@ test.describe('visual', () => {
           test(
             `${cell.target} ${cell.state} at ${viewport.id}, seeded, in the pinned image`,
             {
+              tag,
               annotation: [
                 { type: 'route', description: cell.route },
                 { type: 'cell', description: cell.id },

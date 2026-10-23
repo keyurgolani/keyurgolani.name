@@ -7,6 +7,7 @@
 // of either.
 
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import {
@@ -15,8 +16,8 @@ import {
 } from '../../../packages/variant-contract/src/node/fixtures';
 import type { AppOptions } from '../../harness/fixtures';
 import { OWNER_CLI } from '../../harness/owner-secret.mjs';
-import { siteTextFor, type Cell } from '../cells';
-import type { Tuple } from '../coverage';
+import { defaultTuple, siteTextFor, type Cell, type Plan } from '../cells';
+import { tupleKey, type Tuple } from '../coverage';
 import { canaryPassword } from './artifacts.mjs';
 import { APP_NODE_OPTIONS } from './clock';
 import type { Profile } from './registration';
@@ -30,6 +31,43 @@ export interface CellServer {
 
 export function cellServer(cell: Cell): CellServer {
   return { source: cell.source, tuple: cell.tuple, profile: cell.profile };
+}
+
+/** The server the harness's own checks run on: read-only, complete, the default appearance. */
+export const HARNESS_SERVER: CellServer = {
+  source: 'complete',
+  tuple: defaultTuple('fallback', 'system'),
+  profile: 'read-only',
+};
+
+/** What a server is, in words: its profile, its fixture, and its tuple. */
+export const serverLabel = (server: CellServer) =>
+  `${server.profile} ${server.source} ${tupleKey(server.tuple)}`;
+
+/** A server's id, which names its project and tags its cells' tests. */
+export function serverId(server: CellServer): string {
+  return createHash('sha256').update(serverLabel(server)).digest('hex').slice(0, 10);
+}
+
+/** The tag a test carries to run on `server`'s project, and only there. */
+export const serverTag = (server: CellServer) => `@server-${serverId(server)}`;
+
+/**
+ * Every server the plan's tests run on, once each, sorted by id. A server
+ * is a worker fixture, which Playwright sets per project, so each is a
+ * project of its own (playwright.config.ts), as tests/variants makes one
+ * per fixture.
+ */
+export function planServers(
+  plan: Pick<Plan, 'tests'>,
+): { readonly id: string; readonly label: string; readonly server: CellServer }[] {
+  const servers = new Map<string, { id: string; label: string; server: CellServer }>();
+  for (const { cell } of plan.tests) {
+    const server = cellServer(cell);
+    const id = serverId(server);
+    if (!servers.has(id)) servers.set(id, { id, label: serverLabel(server), server });
+  }
+  return [...servers.values()].sort((a, b) => (a.id < b.id ? -1 : 1));
 }
 
 /** A small gray PNG and a one-page PDF, standing in for the assets a fixture links. */

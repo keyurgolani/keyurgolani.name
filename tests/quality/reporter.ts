@@ -6,7 +6,7 @@
 // failed test's own (one per failing rule and element), or, for a test
 // that failed before it wrote any, one record of the failure.
 
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import type {
   FullConfig,
@@ -72,11 +72,13 @@ function annotation(test: TestCase, type: string): string | undefined {
     ?.description;
 }
 
+/** A JSON attachment of the test's last result, from its body or its file. */
 function attachment(test: TestCase, name: string): unknown {
-  const found = test.results.at(-1)?.attachments.find((each) => each.name === name && each.body);
-  if (!found?.body) return undefined;
+  const found = test.results.at(-1)?.attachments.find((each) => each.name === name);
+  if (!found) return undefined;
   try {
-    return JSON.parse(found.body.toString('utf8'));
+    const text = found.body ? found.body.toString('utf8') : readFileSync(found.path!, 'utf8');
+    return JSON.parse(text);
   } catch {
     return undefined;
   }

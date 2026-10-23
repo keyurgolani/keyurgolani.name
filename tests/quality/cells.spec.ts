@@ -1,18 +1,19 @@
 import { runCell } from './lib/run-cell';
-import { cellServer } from './lib/server';
+import { cellServer, serverTag } from './lib/server';
 import { expect, test } from './fixtures';
 import { loadPlan } from './plan';
 
 // The quality cells (#11, Slice 1): each planned cell, in each viewport and
-// preference row the plan gives it, on the project's engine. A cell's tests
-// share its server; a stand-in state's, or an excluded one's, skip with the
-// reason the plan declares, before any server starts.
+// preference row the plan gives it, on the project's engine. Each test
+// carries its cell's server tag, so it runs only on that server's project
+// (playwright.config.ts). A stand-in state's test, or an excluded one,
+// skips with the reason the plan declares, before any server starts.
 
 const plan = await loadPlan();
 
 for (const cell of plan.cells) {
+  const tag = serverTag(cellServer(cell));
   test.describe(cell.id, () => {
-    test.use({ cellServer: cellServer(cell) });
     for (const planned of plan.tests.filter((each) => each.cell === cell)) {
       const { viewport, row } = planned;
       test.describe(`${viewport.id} ${row.id}`, () => {
@@ -34,6 +35,7 @@ for (const cell of plan.cells) {
         test(
           `${cell.target} ${cell.state} ${cell.path} at ${viewport.id}, ${row.id}`,
           {
+            tag,
             annotation: [
               { type: 'route', description: cell.route },
               { type: 'profile', description: cell.profile },
