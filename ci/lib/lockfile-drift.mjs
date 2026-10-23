@@ -1,23 +1,21 @@
-// What `pnpm remove` left in pnpm-lock.yaml (#12). test:external-variant adds
-// the reference variant and removes it, and the lockfile must come back as
-// it was. pnpm doesn't always write it back byte for byte: where peers form
-// a cycle (eslint-plugin-import and eslint-import-resolver-typescript peer on
-// each other), the first of the two nodes resolvePeers finishes settles the
-// other's depPath, so a key can come back with one level of the cycle spelled
-// out or cut short. #82's run rewrote
+// The lockfile checks around test:external-variant's add and remove (#12).
 //
-//   eslint-plugin-import@2.32.0(…)(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(…)(eslint@9.39.5))(eslint@9.39.5))(eslint@9.39.5)
+// The remove must leave git status clean, the lockfile byte for byte. That
+// only means "no leftover" when the committed lockfile is what pnpm writes,
+// and `pnpm install --frozen-lockfile` doesn't check that: it compares each
+// importer's specifiers with its package.json and installs the rest as
+// written. #85's lockfile kept an old eslint-plugin-import peer key that
+// pnpm no longer resolves, so any remove rewrote it, and the run failed as
+// "the remove leaves nothing changed". So the run re-resolves the lockfile
+// first (LOCKFILE_REFRESH) and stops there, with the cause, when it changes.
 //
-// as
-//
-//   eslint-plugin-import@2.32.0(…)(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.5)
-//
-// The same packages at the same versions, wired the same way. So the check
-// compares the two lockfiles with every peer suffix cut to its first level:
-// each peer's name and version stay, the peers' own suffixes go. Everything
-// else compares exactly: the settings, every importer's specifiers and
-// versions, every package entry with its integrity, and every snapshot,
-// counted, with its dependencies.
+// Both checks compare exactly. When one fails, the message
+// says whether the lockfile differs in nested peer suffixes alone, with the
+// lockfile otherwise the same: `a@1(b@2(c@3))` against `a@1(b@2)`. That's
+// the shape of pnpm's cyclic peer rewrite (#82: eslint-plugin-import and
+// eslint-import-resolver-typescript peer on each other, and whichever node
+// resolvePeers finishes first settles the other's key), not a leftover. It
+// still fails: a reader sees which it is, nothing passes on it.
 import { parse } from 'yaml';
 
 /** The dependency maps whose values are depPaths, in importers and in snapshots. */
@@ -140,7 +138,8 @@ function differences(before, after, at, out) {
 /**
  * How `after` differs from `before` once peer suffixes are cut to their
  * first level, one line per difference, as `path: what changed`. Empty when
- * the only change is a rewritten peer suffix.
+ * nothing but nested peer suffixes moved. For the failure message only:
+ * no check passes on it.
  *
  * @param {string} before pnpm-lock.yaml's text before
  * @param {string} after its text after
@@ -151,23 +150,74 @@ export function lockfileDrift(before, after) {
   return differences(normaliseLockfile(before), normaliseLockfile(after), 'lockfile', []);
 }
 
+/**
+ * Re-resolves pnpm-lock.yaml from the workspace and writes it, installing
+ * nothing. Each flag is there for a reason, in pnpm 10.33:
+ * - `--frozen-lockfile` accepts a lockfile with a key pnpm wouldn't write;
+ *   it checks specifiers against each package.json alone.
+ * - `--lockfile-only` alone is a no-op on an up-to-date lockfile: with
+ *   prefer-frozen-lockfile on, as it is by default, it writes the lockfile
+ *   back as read. `--no-prefer-frozen-lockfile` makes it resolve.
+ * - `--offline` fails on CI's metadata cache, empty after a frozen install
+ *   (ERR_PNPM_NO_OFFLINE_META). `--prefer-offline` reads the registry's
+ *   metadata where the cache has none, as the add does.
+ */
+export const LOCKFILE_REFRESH = [
+  'install',
+  '--lockfile-only',
+  '--no-prefer-frozen-lockfile',
+  '--prefer-offline',
+  '--ignore-scripts',
+];
+
 /** The status line git prints for a modified lockfile. */
 export const LOCKFILE_MODIFIED = ' M pnpm-lock.yaml';
 
 /**
- * What the remove left behind: every changed path but the lockfile, and
- * the lockfile's drift. Empty when nothing is left. `rewritten` says the
- * lockfile's bytes differ, by peer suffixes alone when there are no
- * problems.
+ * What changed, for a failure message: the status, and either the
+ * lockfile's real differences or, when nested peer suffixes alone moved,
+ * what that likely is and what to do.
+ */
+function describe(status, before, after) {
+  const changed = `git status shows ${status.map((line) => line.trim()).join(', ')}`;
+  if (!status.includes(LOCKFILE_MODIFIED)) return changed;
+  const drift = lockfileDrift(before, after);
+  if (drift.length === 0) {
+    return (
+      `${changed}. Only nested peer suffixes moved in pnpm-lock.yaml; possibly pnpm's ` +
+      'cyclic peer resolution race (#82). Re-run, and if it persists, run pnpm install ' +
+      'and commit pnpm-lock.yaml'
+    );
+  }
+  return `${changed}. pnpm-lock.yaml differs in ${drift.join('; ')}`;
+}
+
+/**
+ * Why the committed lockfile isn't what pnpm writes, after LOCKFILE_REFRESH
+ * ran, or null when it is.
+ *
+ * @param {{ status: string[], before: string, after: string }} refresh
+ *   `git status --porcelain` after it, as lines, and the lockfile's text at
+ *   HEAD and after it
+ * @returns {string | null}
+ */
+export function canonicalLockfileProblem({ status, before, after }) {
+  if (status.length === 0) return null;
+  return (
+    "pnpm-lock.yaml isn't what pnpm writes: run pnpm install and commit it. " +
+    describe(status, before, after)
+  );
+}
+
+/**
+ * What the remove left behind, or null when git status is clean.
  *
  * @param {{ status: string[], before: string, after: string }} removal
  *   `git status --porcelain` after the remove, as lines, and the lockfile's
  *   text at HEAD and after the remove
- * @returns {{ problems: string[], rewritten: boolean }}
+ * @returns {string | null}
  */
-export function removalLeftovers({ status, before, after }) {
-  const problems = status.filter((line) => line !== LOCKFILE_MODIFIED);
-  const rewritten = status.includes(LOCKFILE_MODIFIED);
-  if (rewritten) problems.push(...lockfileDrift(before, after));
-  return { problems, rewritten };
+export function removalProblem({ status, before, after }) {
+  if (status.length === 0) return null;
+  return `the remove leaves nothing changed, but ${describe(status, before, after)}`;
 }

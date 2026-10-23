@@ -3,13 +3,18 @@
 // variant in this directory, installed the way an owner installs a variant
 // from its tarball, checked, and removed, in a temporary `git worktree` of
 // HEAD. Nothing in this checkout changes. Packages come from the store this
-// checkout's install filled; the add and the remove may fetch registry
+// checkout's install filled; the lockfile's re-resolution, the add, and the
+// remove may fetch registry
 // metadata, which a frozen install never reads, and the servers it starts
 // reach no host outside the machine.
 //
 //   1. The worktree, installed offline from the store this checkout's
-//      install filled. git status is clean.
-//   2. The package built outside it, its peers linked from the worktree's
+//      install filled. git status is clean. Then the lockfile re-resolved,
+//      installing nothing: git status is still clean, or the committed
+//      lockfile isn't what pnpm writes and the run stops there, saying so
+//      (ci/lib/lockfile-drift.mjs). After that, a changed lockfile is the
+//      add's or the remove's.
+//   2.The package built outside it, its peers linked from the worktree's
 //      install as a published package's devDependencies would be: tsc writes
 //      ESM and .d.ts into dist/, and `pnpm pack` makes the tarball, which
 //      holds no source, script, or public/ file.
@@ -27,9 +32,7 @@
 //      Then the reference's own checks: the colophon view, the compact
 //      control, and the badge's lazy load.
 //   6. `pnpm --filter @portfolio/web remove @acme/reference`: git status is
-//      clean again, but for a lockfile whose one change is a cyclic peer
-//      suffix pnpm spelled another way (ci/lib/lockfile-drift.mjs). After
-//      `pnpm build`, a site selecting acme-reference gets
+//      clean again. After `pnpm build`, a site selecting acme-reference gets
 //      the fallback composition with 200, a variant.unavailable warning at
 //      startup and from config:validate, and degraded readiness.
 //
@@ -53,7 +56,11 @@ import {
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { removalLeftovers } from '../../ci/lib/lockfile-drift.mjs';
+import {
+  canonicalLockfileProblem,
+  LOCKFILE_REFRESH,
+  removalProblem,
+} from '../../ci/lib/lockfile-drift.mjs';
 import { reportsDir } from '../../ci/lib/reports.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -213,24 +220,19 @@ function packReference(host, work) {
 }
 
 /**
- * Asserts the remove left nothing behind: git status is clean, or shows the
- * lockfile alone, with nothing changed in it but peer suffixes pnpm spelled
- * another way. Any other path, or any real change to the lockfile, fails
- * with the diff and each difference.
+ * Asserts git status is clean, and when it isn't, fails with `problem`'s
+ * account of what changed, after the diff.
+ *
+ * @param {string} host
+ * @param {typeof canonicalLockfileProblem} problem
  */
-function expectRemoved(host) {
-  const { problems, rewritten } = removalLeftovers({
+function expectLockfile(host, problem) {
+  const message = problem({
     status: status(host),
     before: git(['show', 'HEAD:pnpm-lock.yaml'], host),
     after: readFileSync(path.join(host, 'pnpm-lock.yaml'), 'utf8'),
   });
-  const message = `the remove leaves nothing changed: ${problems.join('; ')}`;
-  if (problems.length > 0) expectStatus(host, [], message);
-  if (rewritten) {
-    console.log(
-      '[external-variant] pnpm-lock.yaml differs from HEAD in nested peer suffixes alone.',
-    );
-  }
+  if (message) expectStatus(host, [], message);
 }
 
 /** The host's package.json in the worktree, against HEAD's: what `pnpm add` changed in it. */
@@ -312,6 +314,9 @@ export function installReference(work, { onAdded } = {}) {
     cwd: host,
   });
   expectStatus(host, [], 'the installed worktree is clean');
+  step('pnpm-lock.yaml re-resolved, as pnpm writes it');
+  pnpm([...LOCKFILE_REFRESH, '--store-dir', store], { cwd: host });
+  expectLockfile(host, canonicalLockfileProblem);
 
   step(`Building and packing ${PACKAGE}`);
   const tarball = packReference(host, work);
@@ -447,7 +452,7 @@ async function main() {
       },
     );
     added = false;
-    expectRemoved(host);
+    expectLockfile(host, removalProblem);
 
     step('pnpm build, without it');
     pnpm(['build'], { cwd: host });
