@@ -153,6 +153,7 @@ export function placedImage(
     alt: decorative ? undefined : (placement.alt ?? asset.alt),
     caption,
     credit: asset.credit,
+    rights: asset.rights,
     decorative,
     focalPoint: placement.focalPoint ?? asset.focalPoint,
     image: asset.derived,

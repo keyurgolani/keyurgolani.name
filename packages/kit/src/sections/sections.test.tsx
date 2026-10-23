@@ -351,6 +351,8 @@ function shown(key: string, value: unknown, record: Record<string, unknown>): st
       return ['Granted'];
     case 'iconName':
       return [`data-icon="${value}"`];
+    case 'attributionRequired':
+      return value === true ? ['data-attribution-required="true"'] : [];
     case 'key':
       return [`data-metric="${value}"`];
     case 'thread':
@@ -664,13 +666,13 @@ test('a ready image takes its srcset, sizes, width, and height from derived data
   assert.doesNotMatch(page(READY), /alt="(?:Work title|Placement caption|Custom caption)"/);
 });
 
-test('an unavailable image keeps its box, caption, and credit with Image unavailable, and decoration renders nothing', () => {
+test('an unavailable image keeps its box, caption, credit, and rights with Image unavailable, and decoration renders nothing', () => {
   const markup = page(INPUT);
   assert.doesNotMatch(markup, /<img\b/);
   const works = render('selected-work');
   assert.match(
     works,
-    /<figure class="pf-figure pf-figure--unavailable" data-media-asset="atlas-cover"><span class="pf-media-box" data-media-state="unavailable" data-media-reason="processing"><span class="pf-media-box__label">Image unavailable<\/span><\/span><figcaption><p class="pf-caption">Cover caption<\/p>[\s\S]*?<small class="pf-credit">Credit atlas-cover<\/small><\/figcaption><\/figure>/,
+    /<figure class="pf-figure pf-figure--unavailable" data-media-asset="atlas-cover"><span class="pf-media-box" data-media-state="unavailable" data-media-reason="processing"><span class="pf-media-box__label">Image unavailable<\/span><\/span><figcaption><p class="pf-caption">Cover caption<\/p>[\s\S]*?<small class="pf-credit">Credit atlas-cover<\/small><small class="pf-rights" data-attribution-required="true"><span class="pf-rights-holder">Holder atlas-cover<\/span><span class="pf-rights-license">CC BY 4.0<\/span><\/small><\/figcaption><\/figure>/,
   );
   assert.match(
     works,
@@ -772,11 +774,11 @@ test('every placement shows its caption, and when, where, and with what tags it 
     new RegExp(
       `<p class="pf-caption">${caption}</p><p class="pf-meta"><time class="pf-date" dateTime="${date}" data-field="takenAt">${escape(formatDate(date))}</time> <span class="pf-sep" aria-hidden="true">·</span> ${location}</p><ul class="pf-tags" role="list"><li>${tag}</li></ul>`,
     );
-  // A cover, in its figure's caption, before the credit.
+  // A cover, in its figure's caption, before the credit and the rights.
   assert.match(
     markup,
     new RegExp(
-      `data-media-asset="atlas-cover"><picture>(?:(?!</picture>)[\\s\\S])*</picture><figcaption>${details('Cover caption', '2019-07-08', 'Cover location', 'Cover tag').source}<small class="pf-credit">Credit atlas-cover</small></figcaption>`,
+      `data-media-asset="atlas-cover"><picture>(?:(?!</picture>)[\\s\\S])*</picture><figcaption>${details('Cover caption', '2019-07-08', 'Cover location', 'Cover tag').source}<small class="pf-credit">Credit atlas-cover</small><small class="pf-rights" data-attribution-required="true"><span class="pf-rights-holder">Holder atlas-cover</span><span class="pf-rights-license">CC BY 4.0</span></small></figcaption>`,
     ),
   );
   // A custom item's photograph, and a gallery's.

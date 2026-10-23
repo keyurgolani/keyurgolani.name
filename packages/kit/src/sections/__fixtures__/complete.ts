@@ -15,6 +15,7 @@ const asset = (id: string) => ({
   visibility: 'public',
   alt: `Alt ${id}`,
   credit: `Credit ${id}`,
+  rights: { holder: `Holder ${id}`, license: 'CC BY 4.0', attributionRequired: true },
   focalPoint: focal,
 });
 
@@ -30,7 +31,9 @@ export const COMPLETE = {
     email: 'rowan@rowan.test',
     avatar: { asset: 'avatar' },
   },
-  links: [{ platform: 'mastodon', url: 'https://social.rowan.test/@rowan', label: 'Portfolio link' }],
+  links: [
+    { platform: 'mastodon', url: 'https://social.rowan.test/@rowan', label: 'Portfolio link' },
+  ],
   meta: { title: 'Meta title', description: 'Meta description', ogImage: { asset: 'og-image' } },
   practice: {
     thesis: 'Practice thesis.',
@@ -176,7 +179,9 @@ export const COMPLETE = {
         organization: 'Evidence source organization',
       },
       url: 'https://evidence.rowan.test',
-      links: [{ platform: 'site', url: 'https://evidence-link.rowan.test', label: 'Evidence link' }],
+      links: [
+        { platform: 'site', url: 'https://evidence-link.rowan.test', label: 'Evidence link' },
+      ],
       authors: ['Author One', 'Author Two'],
       venue: 'Evidence venue',
       publishedAt: '2022-01',
@@ -278,7 +283,13 @@ export const COMPLETE = {
       subtagline: 'Hero subtagline',
       ctas: [{ platform: 'email', url: '#get-in-touch', label: 'Hero action' }],
     },
-    { kind: 'lede', id: 'about', title: 'Lede title', subtitle: 'Lede subtitle', body: 'Lede body.' },
+    {
+      kind: 'lede',
+      id: 'about',
+      title: 'Lede title',
+      subtitle: 'Lede subtitle',
+      body: 'Lede body.',
+    },
     {
       kind: 'now',
       id: 'now',
@@ -310,7 +321,13 @@ export const COMPLETE = {
     },
     { kind: 'chronology', id: 'everything-since', title: 'Everything since' },
     { kind: 'practice', id: 'thesis', title: 'Thesis title', part: 'thesis' },
-    { kind: 'practice', id: 'skills', title: 'Skills title', subtitle: 'Skills subtitle', part: 'skills' },
+    {
+      kind: 'practice',
+      id: 'skills',
+      title: 'Skills title',
+      subtitle: 'Skills subtitle',
+      part: 'skills',
+    },
     { kind: 'practice', id: 'tools', title: 'Tools title', part: 'tools' },
     { kind: 'practice', id: 'services', title: 'Services title', part: 'services' },
     { kind: 'contact', id: 'get-in-touch', title: 'Contact title', subtitle: 'Contact subtitle' },
@@ -348,7 +365,13 @@ export const COMPLETE = {
       source: 'Quote source',
       sourceUrl: 'https://quotes.rowan.test/tide',
     },
-    { kind: 'focus', id: 'focus', title: 'Focus title', subtitle: 'Focus subtitle', items: ['Focus item'] },
+    {
+      kind: 'focus',
+      id: 'focus',
+      title: 'Focus title',
+      subtitle: 'Focus subtitle',
+      items: ['Focus item'],
+    },
     {
       kind: 'fun-facts',
       id: 'fun-facts',

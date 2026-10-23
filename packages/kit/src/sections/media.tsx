@@ -33,6 +33,12 @@ export interface PlacedImage {
   readonly caption?: ReactNode;
   /** Who made it, shown beside it. */
   readonly credit?: string;
+  /** Who holds its rights and under what license, shown after the credit (#10). */
+  readonly rights?: {
+    readonly holder?: string;
+    readonly license?: string;
+    readonly attributionRequired?: boolean;
+  };
   /** Decoration: an empty alt when ready, and nothing at all when not. */
   readonly decorative: boolean;
   /** Where the subject sits, 0 to 1 from the start and the top. */
@@ -168,6 +174,24 @@ function UnavailableBox({
   );
 }
 
+/**
+ * The rights holder and the license, as authored and nothing added; when the
+ * credit is required, the line says so in an attribute a stylesheet or a
+ * variant may read. Null when neither is authored.
+ */
+function rightsLine(rights: PlacedImage['rights']): ReactNode {
+  if (!rights || (!present(rights.holder) && !present(rights.license))) return null;
+  return (
+    <small
+      className="pf-rights"
+      {...(rights.attributionRequired === true ? { 'data-attribution-required': 'true' } : {})}
+    >
+      {present(rights.holder) ? <span className="pf-rights-holder">{rights.holder}</span> : null}
+      {present(rights.license) ? <span className="pf-rights-license">{rights.license}</span> : null}
+    </small>
+  );
+}
+
 export interface MediaFigureProps {
   readonly placed: PlacedImage;
   readonly ctx: RenderContext;
@@ -209,6 +233,7 @@ export function MediaFigure({
   const credit = present(placed.credit) ? (
     <small className="pf-credit">{placed.credit}</small>
   ) : null;
+  const rights = rightsLine(placed.rights);
   const caption = placed.caption ?? null;
   if (inline) {
     return (
@@ -216,6 +241,7 @@ export function MediaFigure({
         {picture}
         {caption}
         {credit}
+        {rights}
       </>
     );
   }
@@ -225,10 +251,11 @@ export function MediaFigure({
       data-media-asset={placed.asset}
     >
       {picture}
-      {caption !== null || credit !== null ? (
+      {caption !== null || credit !== null || rights !== null ? (
         <figcaption>
           {caption}
           {credit}
+          {rights}
         </figcaption>
       ) : null}
     </figure>
