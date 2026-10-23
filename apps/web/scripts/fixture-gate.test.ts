@@ -81,6 +81,7 @@ test('every fixture package in the workspace maps to a row of the table', () => 
     'packages/appearance-fixtures-schemes',
     'packages/appearance-fixtures-typography',
     'packages/budget-fixtures/fixture-over-budget',
+    'packages/budget-fixtures/fixture-type-font',
     'packages/budget-fixtures/fixture-variant-light',
     'packages/budget-fixtures/fixture-variant-medium',
     'packages/preview-fixtures',
@@ -92,7 +93,7 @@ test('every fixture package in the workspace maps to a row of the table', () => 
   for (const dir of marked) assert.ok(fixtureRow(dir), dir);
 });
 
-test('BUDGET_FIXTURES=1 admits the light and medium fixture variants, and over the one over budget, alone', () => {
+test('BUDGET_FIXTURES=1 admits the light and medium fixture variants and the font fixture, and over the one over budget, alone', () => {
   const decide = (value: string | undefined, dir: string) => {
     const decision = fixtureGate({ BUDGET_FIXTURES: value })({
       name: `@portfolio/${dir}`,
@@ -102,19 +103,24 @@ test('BUDGET_FIXTURES=1 admits the light and medium fixture variants, and over t
     assert.equal(decision.flag, 'BUDGET_FIXTURES', dir);
     return decision.admitted;
   };
-  const dirs = ['fixture-variant-light', 'fixture-variant-medium', 'fixture-over-budget'];
+  const dirs = [
+    'fixture-variant-light',
+    'fixture-variant-medium',
+    'fixture-type-font',
+    'fixture-over-budget',
+  ];
   assert.deepEqual(
     dirs.map((dir) => decide('1', dir)),
-    [true, true, false],
+    [true, true, true, false],
   );
   assert.deepEqual(
     dirs.map((dir) => decide('over', dir)),
-    [false, false, true],
+    [false, false, false, true],
   );
   for (const value of [undefined, '', '0', 'true', 'OVER', ' 1', '1,over']) {
     assert.deepEqual(
       dirs.map((dir) => decide(value, dir)),
-      [false, false, false],
+      [false, false, false, false],
       String(value),
     );
   }
@@ -124,11 +130,19 @@ test('BUDGET_FIXTURES=1 admits the light and medium fixture variants, and over t
 });
 
 test('the host registers each budget fixture only under the value that admits it', async () => {
-  const fixtures = ['fixture-over-budget', 'fixture-variant-light', 'fixture-variant-medium'];
+  const fixtures = [
+    'fixture-over-budget',
+    'fixture-type-font',
+    'fixture-variant-light',
+    'fixture-variant-medium',
+  ];
   const registered = async (env: Record<string, string | undefined>) => {
     const result = await readRegistry(registryOptions(env));
     assert.ok(result.ok, JSON.stringify(result.diagnostics, null, 2));
-    const ids = result.variants.map(({ manifest }) => manifest.id);
+    const ids = [
+      ...result.variants.map(({ manifest }) => manifest.id),
+      ...result.packs.map(({ manifest }) => manifest.id),
+    ].sort();
     // Each fixture is decided, admitted or not, every time.
     assert.deepEqual(
       result.fixtures
@@ -140,6 +154,7 @@ test('the host registers each budget fixture only under the value that admits it
   };
   assert.deepEqual(await registered({}), []);
   assert.deepEqual(await registered({ BUDGET_FIXTURES: '1' }), [
+    'fixture-type-font',
     'fixture-variant-light',
     'fixture-variant-medium',
   ]);
