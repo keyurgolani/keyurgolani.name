@@ -43,6 +43,7 @@ export {
   stylesheetsUnder,
   unmetExpectations,
   type AppearanceCheck,
+  type CheckOptions,
   type GateFailure,
   type HierarchyFailure,
   type KnownBadExpectation,

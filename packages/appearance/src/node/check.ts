@@ -5,6 +5,12 @@
 // quieter text roles apart; and the layer order of every layered stylesheet.
 // A known-bad test input under packages/appearance/test/fixtures/ joins the
 // run when named, and the run must fail on it.
+//
+// The caller may pass the targets, which `pnpm check:appearance` reads from
+// quality/thresholds.json (#11, AC5), and may have it gate a fixture pack as
+// it gates a shipping one: #11's tier fixtures stand in for Stable,
+// Extended, and Experimental packs, so the command gates those (#11, Slice
+// 1, item 9).
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -13,7 +19,14 @@ import type { DisplayMode } from '@portfolio/schema';
 import { PACK_AXES, PACK_KIND_BY_AXIS, type PackAxis, type PackKind } from '../axes';
 import { deltaE } from '../color';
 import { DISTINCT_PAIRS } from '../derive';
-import { gateLanguage, gateSet, gateTypography, type GatePair } from '../gate';
+import {
+  GATE_TARGETS,
+  gateLanguage,
+  gateSet,
+  gateTypography,
+  type GatePair,
+  type GateTargets,
+} from '../gate';
 import { startsWithLayerOrder } from '../layers';
 import {
   createAppearanceRegistry,
@@ -64,6 +77,20 @@ export interface SkippedPack {
   readonly axis: PackAxis;
   readonly id: string;
   readonly reason: string;
+}
+
+/** How checkAppearance() runs. */
+export interface CheckOptions {
+  /** The targets to gate at: GATE_TARGETS unless the caller reads them from quality/thresholds.json. */
+  readonly targets?: GateTargets;
+  /**
+   * Whether to gate a fixture pack as it gates a shipping one. Without it,
+   * every fixture pack is skipped.
+   */
+  readonly gateFixture?: (pack: {
+    readonly packageName: string;
+    readonly manifest: { readonly id: string };
+  }) => boolean;
 }
 
 export interface AppearanceCheck {
@@ -154,17 +181,21 @@ const byId = <T extends { readonly manifest: { readonly id: string } }>(entries:
 
 /**
  * The gate over every combination of the registry's packs. A fixture pack
- * is skipped; a known-bad input is registered as an ordinary pack, so it's
- * checked. A generator scheme is skipped too: its sets come from a site's
- * input at draft save, where its own contrast report gates them.
+ * is skipped unless `gateFixture` says to gate it; a known-bad input is
+ * registered as an ordinary pack, so it's checked. A generator scheme is
+ * skipped too: its sets come from a site's input at draft save, where its
+ * own contrast report gates them.
  */
-export function checkAppearance(registry: AppearanceRegistry): AppearanceCheck {
+export function checkAppearance(
+  registry: AppearanceRegistry,
+  { targets = GATE_TARGETS, gateFixture }: CheckOptions = {},
+): AppearanceCheck {
   const skipped: SkippedPack[] = [];
   const problems: PackProblem[] = [];
   const failures: GateFailure[] = [];
   const hierarchy: HierarchyFailure[] = [];
   const keep = <A extends PackAxis>(axis: A, entry: PackEntry<A>) => {
-    if (entry.fixture) {
+    if (entry.fixture && !gateFixture?.(entry)) {
       skipped.push({
         axis,
         id: entry.manifest.id,
@@ -186,7 +217,10 @@ export function checkAppearance(registry: AppearanceRegistry): AppearanceCheck {
     });
   const typographies = byId(registry.packs.typography.values())
     .filter((entry) => keep('typography', entry))
-    .map((entry) => ({ id: entry.manifest.id, gate: gateTypography(entry.manifest.roles) }));
+    .map((entry) => ({
+      id: entry.manifest.id,
+      gate: gateTypography(entry.manifest.roles, targets),
+    }));
   const schemes = byId(registry.packs.colorScheme.values())
     .filter((entry) => keep('colorScheme', entry))
     .flatMap((entry) => {
@@ -211,7 +245,13 @@ export function checkAppearance(registry: AppearanceRegistry): AppearanceCheck {
       for (const typography of typographies) {
         combinations += modes.length;
         for (const name of rendered) {
-          const results = gateSet(scheme.sets[name]!, name, language.gate, typography.gate);
+          const results = gateSet(
+            scheme.sets[name]!,
+            name,
+            language.gate,
+            typography.gate,
+            targets,
+          );
           pairs +=
             results.length *
             modes.filter((mode) => setsForMode(scheme.sets, mode).includes(name)).length;
@@ -458,10 +498,14 @@ export interface KnownBadRun {
 
 /**
  * Checks a known-bad input the way registry generation and the gate check
- * a pack: its manifest, its compile, then the gate with it registered as an
- * ordinary pack beside the build's own.
+ * a pack: its manifest, its compile, then the gate, at `targets`, with it
+ * registered as an ordinary pack beside the build's own.
  */
-export function runKnownBad(fixture: KnownBadFixture, meta: AppearanceMeta): KnownBadRun {
+export function runKnownBad(
+  fixture: KnownBadFixture,
+  meta: AppearanceMeta,
+  { targets }: Pick<CheckOptions, 'targets'> = {},
+): KnownBadRun {
   const validated = validatePackManifest(fixture.manifest, {
     kind: fixture.kind,
     packageName: '@portfolio/appearance',
@@ -499,6 +543,7 @@ export function runKnownBad(fixture: KnownBadFixture, meta: AppearanceMeta): Kno
   } as MetaPack;
   const check = checkAppearance(
     createAppearanceRegistry({ ...meta, PACKS: [...(meta.PACKS ?? []), pack] }),
+    { targets },
   );
   return { problems: check.problems.map(({ message }) => message), check };
 }

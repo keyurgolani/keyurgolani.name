@@ -44,6 +44,9 @@ importers:
       yaml:
         specifier: ^2.8.4
         version: 2.8.4
+      zod:
+        specifier: 3.25.76
+        version: 3.25.76
 
   apps/web:
     dependencies:
@@ -77,6 +80,18 @@ importers:
       '@portfolio/kit':
         specifier: workspace:*
         version: link:../../packages/kit
+      '@portfolio/quality-fixtures-languages':
+        specifier: workspace:*
+        version: link:../../packages/quality-fixtures-languages
+      '@portfolio/quality-fixtures-schemes':
+        specifier: workspace:*
+        version: link:../../packages/quality-fixtures-schemes
+      '@portfolio/quality-fixtures-schemes-meta':
+        specifier: workspace:*
+        version: link:../../packages/quality-fixtures-schemes-meta
+      '@portfolio/quality-fixtures-typography':
+        specifier: workspace:*
+        version: link:../../packages/quality-fixtures-typography
       '@portfolio/schema':
         specifier: workspace:*
         version: link:../../packages/schema
@@ -250,6 +265,14 @@ importers:
       typescript:
         specifier: ^5.7.2
         version: 5.9.3
+
+  packages/quality-fixtures-languages: {}
+
+  packages/quality-fixtures-schemes: {}
+
+  packages/quality-fixtures-schemes-meta: {}
+
+  packages/quality-fixtures-typography: {}
 
   packages/schema:
     dependencies:

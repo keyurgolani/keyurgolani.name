@@ -2,14 +2,14 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/keyurgolani/keyurgolani.name/ci/failure-record.schema.json",
   "title": "CI failure record",
-  "description": "One JSON object per CI failure, written to reports/failures/. A minor schema version only adds optional fields. Unknown fields fail validation.",
+  "description": "One JSON object per CI failure, written to reports/failures/. A minor schema version only adds optional fields. Unknown fields fail validation. Version 1.1 (#11) adds rule, preferenceMode, tuple, uiSlot, accessibleName, exceptionId, and tokenRole, and takes inputMode as mouse, keyboard, or touch. A 1.0 record carries none of the 1.1 fields.",
   "type": "object",
   "additionalProperties": false,
   "required": ["schemaVersion", "gate", "reproCommand"],
   "properties": {
     "schemaVersion": {
       "description": "Schema version the record was written against.",
-      "enum": ["1.0"]
+      "enum": ["1.0", "1.1"]
     },
     "gate": {
       "description": "The check that failed: the <job> in `pnpm ci:<job>`.",
@@ -26,13 +26,16 @@
     "viewport": { "$ref": "#/$defs/label", "description": "Viewport, as WIDTHxHEIGHT." },
     "inputMode": {
       "$ref": "#/$defs/label",
-      "description": "Input mode, such as pointer, touch, or keyboard."
+      "description": "Input mode, such as pointer, touch, or keyboard. From 1.1, mouse, keyboard, or touch."
     },
     "displayMode": {
       "$ref": "#/$defs/label",
       "description": "Display mode, such as light, dark, or forced-colors."
     },
-    "semanticRole": { "$ref": "#/$defs/label", "description": "Semantic role under test." },
+    "semanticRole": {
+      "$ref": "#/$defs/label",
+      "description": "Semantic role under test: the failing element's ARIA role."
+    },
     "asset": { "$ref": "#/$defs/label", "description": "File or asset path." },
     "expected": { "$ref": "#/$defs/measure" },
     "actual": { "$ref": "#/$defs/measure" },
@@ -46,8 +49,70 @@
       "description": "Local command that reproduces the failure. It starts with pnpm, optionally after VAR=value pairs, and needs no secrets: no $ expansion, no secrets. reference, and no variable named like a token, secret, or password.",
       "type": "string",
       "pattern": "^(?![^\\n]*\\$)(?![^\\n]*secrets\\.)(?:(?![A-Z0-9_]*(?:TOKEN|SECRET|PASSWORD))[A-Z][A-Z0-9_]*=[^\\s]+ )*pnpm [^\\s][^\\n]*$"
+    },
+    "rule": {
+      "$ref": "#/$defs/label",
+      "description": "1.1: the rule that failed, such as axe's color-contrast."
+    },
+    "preferenceMode": {
+      "description": "1.1: the preference row the cell ran under.",
+      "enum": [
+        "default",
+        "reduced-motion",
+        "forced-colors",
+        "contrast-more",
+        "high-contrast",
+        "reduced-transparency",
+        "print",
+        "no-javascript"
+      ]
+    },
+    "tuple": {
+      "description": "1.1: the appearance tuple, as designLanguage/colorScheme/typography/displayMode, such as platform-neutral/warm-parchment/humanist-ui/light.",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{1,47}/[a-z][a-z0-9-]{1,47}/[a-z][a-z0-9-]{1,47}/(?:system|light|dark|high-contrast)$"
+    },
+    "uiSlot": {
+      "$ref": "#/$defs/label",
+      "description": "1.1: the #19 primitive slot of the failing element, its data-ui-slot."
+    },
+    "accessibleName": {
+      "$ref": "#/$defs/label",
+      "description": "1.1: the failing element's accessible name."
+    },
+    "exceptionId": {
+      "description": "1.1: the quality/exceptions.yml or runtime-budgets.json exception that covers the failure.",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{2,63}$"
+    },
+    "tokenRole": {
+      "description": "1.1: the color role the boundary's resolved tokens give the rendered color, or hard-coded when none does.",
+      "type": "string",
+      "pattern": "^(?:hard-coded|[a-z][a-z0-9-]*)$"
     }
   },
+  "allOf": [
+    {
+      "if": { "properties": { "schemaVersion": { "const": "1.0" } } },
+      "then": {
+        "properties": {
+          "rule": false,
+          "preferenceMode": false,
+          "tuple": false,
+          "uiSlot": false,
+          "accessibleName": false,
+          "exceptionId": false,
+          "tokenRole": false
+        }
+      }
+    },
+    {
+      "if": { "properties": { "schemaVersion": { "const": "1.1" } } },
+      "then": {
+        "properties": { "inputMode": { "enum": ["mouse", "keyboard", "touch"] } }
+      }
+    }
+  ],
   "$defs": {
     "label": { "type": "string", "minLength": 1 },
     "measure": { "type": ["string", "number", "boolean"] }

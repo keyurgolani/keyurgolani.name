@@ -1,0 +1,33 @@
+{
+  "id": "fixture-scheme-stable",
+  "name": "Fixture Scheme Stable",
+  "description": "A tier fixture: a Stable color scheme, cool slate with a blue accent and a teal secondary, in light and dark, for the quality gates to run as a shipping Stable pack.",
+  "tokenContract": 1,
+  "tier": "stable",
+  "provenance": {
+    "source": {
+      "name": "Keyur Golani portfolio platform"
+    },
+    "license": "first-party",
+    "researchedAt": "2026-10-22",
+    "maintainer": "keyurgolani",
+    "derivation": "anchor-v1 from cool slate anchors in light and dark.",
+    "caveats": ["A test fixture: it registers only when QUALITY_FIXTURES is 1 or meta."]
+  },
+  "derivation": "anchor-v1",
+  "anchors": {
+    "light": {
+      "canvas": "#f4f6f8",
+      "text": "#1f2933",
+      "accent": "#2f6db5",
+      "secondary": "#327565"
+    },
+    "dark": {
+      "canvas": "#161b22",
+      "text": "#e6edf3",
+      "accent": "#79b8ff",
+      "secondary": "#7ee0c3"
+    }
+  },
+  "swatches": ["#f4f6f8", "#1f2933", "#2f6db5", "#327565"]
+}

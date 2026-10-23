@@ -20,6 +20,14 @@ const CONTEXT_FIELDS = [
   'displayMode',
   'semanticRole',
   'asset',
+  // 1.1 (#11): the quality gates' rule, preference row, tuple, and element.
+  'rule',
+  'preferenceMode',
+  'tuple',
+  'uiSlot',
+  'accessibleName',
+  'tokenRole',
+  'exceptionId',
 ];
 
 export async function loadValidator() {

@@ -1,0 +1,33 @@
+{
+  "id": "fixture-scheme-experimental",
+  "name": "Fixture Scheme Experimental",
+  "description": "A tier fixture: an Experimental color scheme, high-chroma magenta and cyan on near-white and near-black, for the quality gates to run as a shipping Experimental pack. Its accessible minimums are the same as a Stable pack.",
+  "tokenContract": 1,
+  "tier": "experimental",
+  "provenance": {
+    "source": {
+      "name": "Keyur Golani portfolio platform"
+    },
+    "license": "first-party",
+    "researchedAt": "2026-10-22",
+    "maintainer": "keyurgolani",
+    "derivation": "anchor-v1 from high-chroma magenta and cyan anchors in light and dark.",
+    "caveats": ["A test fixture: it registers only when QUALITY_FIXTURES is 1 or meta."]
+  },
+  "derivation": "anchor-v1",
+  "anchors": {
+    "light": {
+      "canvas": "#fff7fd",
+      "text": "#2a1030",
+      "accent": "#c2188f",
+      "secondary": "#07798f"
+    },
+    "dark": {
+      "canvas": "#12061a",
+      "text": "#f8e9ff",
+      "accent": "#ff5ccf",
+      "secondary": "#3fe0ff"
+    }
+  },
+  "swatches": ["#fff7fd", "#2a1030", "#c2188f", "#07798f"]
+}

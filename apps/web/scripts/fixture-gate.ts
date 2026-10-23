@@ -37,6 +37,26 @@ export const FIXTURE_ROWS: readonly FixtureRow[] = [
     directories: ['packages/appearance-fixtures-*'],
     values: ['1'],
   },
+  // #11, Slice 1, item 9: the nine tier fixture packs, which the quality
+  // build sets QUALITY_FIXTURES=1 for, and quality:meta's build too.
+  {
+    flag: 'QUALITY_FIXTURES',
+    key: 'quality',
+    directories: [
+      'packages/quality-fixtures-languages',
+      'packages/quality-fixtures-schemes',
+      'packages/quality-fixtures-typography',
+    ],
+    values: ['1', 'meta'],
+  },
+  // The known-bad low-contrast scheme, under meta alone. The table admits
+  // packages by directory, so it has a package of its own.
+  {
+    flag: 'QUALITY_FIXTURES',
+    key: 'quality',
+    directories: ['packages/quality-fixtures-schemes-meta'],
+    values: ['meta'],
+  },
 ];
 
 type Environment = Readonly<Record<string, string | undefined>>;

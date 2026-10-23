@@ -11,6 +11,12 @@
 // canvas, black, and white. A textured language raises every target on
 // canvas and surfaces by 10%; pairs on fills (on-accent, on-status, on-scrim)
 // keep theirs.
+//
+// The targets are #11's, in quality/thresholds.json (#11, AC5). `pnpm
+// check:appearance` reads them from that file and passes them in. A browser
+// can't read the file, so GATE_TARGETS is the default every other caller
+// gets, and apps/web/scripts/appearance-targets.test.ts fails when it drifts
+// from the file.
 
 import { BLACK, composite, contrast, mix, WHITE } from './color';
 import { isHighContrastSet, type ColorSetName } from './sets';
@@ -23,17 +29,38 @@ import {
   type TypographyRoles,
 } from './roles';
 
-export const GATE_TARGETS = Object.freeze({
+/** The limits the gate holds a set to. */
+export interface GateTargets {
+  readonly text: number;
+  readonly largeText: number;
+  readonly nonText: number;
+  readonly highContrastText: number;
+  readonly highContrastLargeText: number;
+  readonly highContrastNonText: number;
+  /** A textured language multiplies the targets on canvas and surfaces by this. */
+  readonly textureRaise: number;
+  /** The narrowest focus ring, in CSS px. */
+  readonly focusWidth: number;
+  /** WCAG large text: at least this many points... */
+  readonly largeTextPt: number;
+  /** ...or at least this many at largeBoldWeight or heavier. */
+  readonly largeBoldTextPt: number;
+  readonly largeBoldWeight: number;
+}
+
+/** quality/thresholds.json's targets, for callers that can't read it. */
+export const GATE_TARGETS: GateTargets = Object.freeze({
   text: 4.5,
   largeText: 3,
   nonText: 3,
   highContrastText: 7,
   highContrastLargeText: 4.5,
   highContrastNonText: 4.5,
-  /** A textured language multiplies the targets on canvas and surfaces by this. */
   textureRaise: 1.1,
-  /** The narrowest focus ring, in CSS px. */
   focusWidth: 2,
+  largeTextPt: 18,
+  largeBoldTextPt: 14,
+  largeBoldWeight: 700,
 });
 
 /** What text and non-text pairs sit on: the canvas and the four surfaces. */
@@ -203,13 +230,21 @@ export function gateLanguage(
 }
 
 /** WCAG 2 large text: at least 18pt, or 14pt and bold. Sizes are rem at the 16px default. */
-export function isLargeText(role: TypeRole): boolean {
+export function isLargeText(role: TypeRole, targets: GateTargets = GATE_TARGETS): boolean {
   const points = Number.parseFloat(role['font-size']) * 16 * 0.75;
-  return points >= 18 || (points >= 14 && role['font-weight'] >= 700);
+  return (
+    points >= targets.largeTextPt ||
+    (points >= targets.largeBoldTextPt && role['font-weight'] >= targets.largeBoldWeight)
+  );
 }
 
-export function gateTypography(roles: TypographyRoles): GateTypography {
-  return { largeSignature: isLargeText(roles.display) && isLargeText(roles.headline) };
+export function gateTypography(
+  roles: TypographyRoles,
+  targets: GateTargets = GATE_TARGETS,
+): GateTypography {
+  return {
+    largeSignature: isLargeText(roles.display, targets) && isLargeText(roles.headline, targets),
+  };
 }
 
 /** A ratio rounded down to two places, so a reported 4.50 always passes 4.5. */
@@ -274,11 +309,12 @@ export function gateSet(
   name: ColorSetName,
   language: GateLanguage,
   typography: GateTypography,
+  targets: GateTargets = GATE_TARGETS,
 ): GatePair[] {
   const highContrast = isHighContrastSet(name);
-  const raise = language.textured ? GATE_TARGETS.textureRaise : 1;
-  const text = highContrast ? GATE_TARGETS.highContrastText : GATE_TARGETS.text;
-  const nonText = highContrast ? GATE_TARGETS.highContrastNonText : GATE_TARGETS.nonText;
+  const raise = language.textured ? targets.textureRaise : 1;
+  const text = highContrast ? targets.highContrastText : targets.text;
+  const nonText = highContrast ? targets.highContrastNonText : targets.nonText;
   const ground = grounds(set, language.surfaceOpacity);
   const pairs: GatePair[] = [];
   const add = (
@@ -314,8 +350,8 @@ export function gateSet(
     const large = typography.largeSignature;
     const target = large
       ? highContrast
-        ? GATE_TARGETS.highContrastLargeText
-        : GATE_TARGETS.largeText
+        ? targets.highContrastLargeText
+        : targets.largeText
       : text;
     const colors = fillColors(set, signature);
     for (const g of ground) {
@@ -345,8 +381,8 @@ export function gateSet(
     foreground: 'focus-width',
     ground: '',
     ratio: floor2(language.focusWidth),
-    target: GATE_TARGETS.focusWidth,
-    passes: language.focusWidth >= GATE_TARGETS.focusWidth,
+    target: targets.focusWidth,
+    passes: language.focusWidth >= targets.focusWidth,
   });
   return pairs;
 }
@@ -366,9 +402,10 @@ export function contrastReport(
   sets: { readonly [N in ColorSetName]?: ColorTokens },
   language: GateLanguage = NEUTRAL_LANGUAGE,
   typography: GateTypography = SMALL_SIGNATURE,
+  targets: GateTargets = GATE_TARGETS,
 ): ContrastReport {
   const pairs = (Object.keys(sets) as ColorSetName[])
     .sort()
-    .flatMap((name) => gateSet(sets[name]!, name, language, typography));
+    .flatMap((name) => gateSet(sets[name]!, name, language, typography, targets));
   return { passes: pairs.every((pair) => pair.passes), pairs };
 }
