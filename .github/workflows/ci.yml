@@ -700,12 +700,13 @@ jobs:
   # probe, and targets with no result, across every shard together. A shard
   # job that failed, was cancelled, or was skipped fails it, as does a
   # missing, unjudged, or mismatched shard. It runs however the shards
-  # ended, and reads only their scrubbed reports, downloaded into a
+  # ended, unless the run was cancelled (gate fails a skipped verdict), and
+  # reads only their scrubbed reports, downloaded into a
   # directory of their own.
   quality-pr-verdict:
     name: quality-pr-verdict
     needs: [changes, quality-pr]
-    if: ${{ always() && contains(fromJSON(needs.changes.outputs.jobs), 'quality-pr-verdict') }}
+    if: ${{ !cancelled() && contains(fromJSON(needs.changes.outputs.jobs), 'quality-pr-verdict') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:

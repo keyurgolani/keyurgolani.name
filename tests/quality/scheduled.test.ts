@@ -218,7 +218,8 @@ test("quality-pr-verdict judges quality-pr's shards whole, however they ended, f
   assert.deepEqual(job.needs, ['changes', 'quality-pr']);
   assert.equal(
     job.if,
-    "${{ always() && contains(fromJSON(needs.changes.outputs.jobs), 'quality-pr-verdict') }}",
+    // A failed or skipped shard still reaches it; a cancelled run, such as a superseded push, skips it.
+    "${{ !cancelled() && contains(fromJSON(needs.changes.outputs.jobs), 'quality-pr-verdict') }}",
   );
   assert.equal(job.permissions, undefined);
   assert.equal(job.container, undefined, 'it runs no browser');
