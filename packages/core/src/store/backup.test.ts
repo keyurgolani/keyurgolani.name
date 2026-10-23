@@ -26,7 +26,7 @@ import { test, type TestContext } from 'node:test';
 import { readPairBytes } from '@portfolio/schema/node';
 import { BACKUP_MANIFEST, backupStore, restoreStore, type BackupManifest } from './backup';
 import { nodeFs, type FsPort } from './fs-port';
-import { newRevisionId, RESTORE_CLAIM } from './layout';
+import { newRevisionId, RESTORE_CLAIM, storePaths } from './layout';
 import { readLive } from './pointer';
 import { preflight } from './preflight';
 import { placeCopiedLog } from './publication';
@@ -693,4 +693,23 @@ test("a restore whose pointer isn't the manifest's says so and exits 1", async (
       'm',
     ),
   );
+});
+
+test('two restores into one new directory at once: one restores, the other gets target_not_empty, and the store is whole', async (t) => {
+  const store = await seeded(t);
+  const out = await backedUp(t, store);
+  const into = target(t, 'restored');
+  // No lock orders two restores: the claim alone does.
+  const both = await Promise.all([
+    restoreStore({ fs: nodeFs }, out, into),
+    restoreStore({ fs: nodeFs }, out, into),
+  ]);
+  assert.deepEqual(
+    both.map((outcome) => (outcome.kind === 'refused' ? outcome.code : outcome.kind)).sort(),
+    ['restored', 'target_not_empty'],
+  );
+  assert.equal(await preflight({ dataDir: into }), null);
+  const report = await verifyStore({ fs: nodeFs, paths: storePaths(into), checks: testChecks() });
+  assert.deepEqual(report.problems, []);
+  assert.equal((await readLive(nodeFs, storePaths(into)))?.seq, 2);
 });
