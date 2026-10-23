@@ -3,24 +3,16 @@ import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import {
-  MARKDOWN_LIMITS,
-  MARKDOWN_MAX_ANGLE_BRACKETS,
-  MARKDOWN_MAX_INLINE_MARKS,
-  MARKDOWN_MAX_LENGTH,
-  MARKDOWN_MAX_LINK_PARENS,
-  MARKDOWN_MAX_LIST_DEPTH,
-  MARKDOWN_MAX_LIST_ITEM_LINES,
-  MARKDOWN_MAX_QUOTE_DEPTH,
-  MARKDOWN_MAX_URL_PUNCTUATION,
-  measureMarkdown,
-  validatePublicationUnit,
-} from '@portfolio/schema';
+import { MARKDOWN_MAX_LENGTH, markdownOverLimit, validatePublicationUnit } from '@portfolio/schema';
 import { renderInlineMarkdown, renderMarkdown } from './markdown';
+import { searchMarkdown, table } from './test-support/markdown-search';
 
-// The Markdown cap (#10) from the renderer's side: a field at every limit at
-// once renders fast through both functions, a 1 MiB document of them renders
-// in bounded time, and every field a renderer reads as Markdown is capped.
+// The Markdown cap (#10) from the renderer's side: the slowest field an
+// adversarial search finds within the limits renders fast through both
+// functions, so does a field over them that skipped validation, marked never
+// nests past the renderer's ceiling, a 1 MiB document of the field slowest
+// for its size renders within a bound of a benign one, and every field a
+// renderer reads as Markdown is capped.
 
 const SITE = [
   'schemaVersion: 2',
@@ -48,63 +40,12 @@ const validate = (portfolio: object) =>
     site: { text: SITE, format: 'yaml', name: 'site.yml' },
   });
 
-/** Link sites and parentheses in one word, weighing exactly `target`. */
-function linkSites(target: number): string {
-  let sites = 1;
-  while (((sites + 1) * sites) / 2 <= target) sites++;
-  let out = '[a]('.repeat(sites);
-  let weight = (sites * (sites - 1)) / 2;
-  while (weight + sites <= target) {
-    out += '(';
-    weight += sites;
-  }
-  out += 'x ';
-  while (weight < target) {
-    out += '[a](b(x ';
-    weight += 1;
-  }
-  return out;
-}
-
-/** Every inline limit's opener at once: marks, `<`, link parentheses, and a web address. */
-const OPENERS =
-  '*a '.repeat(MARKDOWN_MAX_INLINE_MARKS) +
-  '<?'.repeat(MARKDOWN_MAX_ANGLE_BRACKETS) +
-  ' ' +
-  linkSites(MARKDOWN_MAX_LINK_PARENS) +
-  `www.a${'?'.repeat(MARKDOWN_MAX_URL_PUNCTUATION - 2)} `;
-
-const toLength = (head: string, fill: string) =>
-  head +
-  fill
-    .repeat(Math.ceil(MARKDOWN_MAX_LENGTH / fill.length))
-    .slice(0, MARKDOWN_MAX_LENGTH - head.length);
-
-/**
- * The slowest fields an adversarial search found within the limits (about
- * 5,800 shapes: every structure, opener, and filler), and one at every limit
- * at once. Openers come first, so every scan they start runs to the end.
- */
-const WORST: Record<string, string> = {
-  'lists 8 deep, items at the line limit, pipes inside': toLength(
-    `${'- '.repeat(MARKDOWN_MAX_LIST_DEPTH)}x\n`,
-    `${'a\n'.repeat(MARKDOWN_MAX_LIST_ITEM_LINES - 1)}- ${'|'.repeat(40)}\n`,
-  ),
-  'quotes 4 deep around every inline opener, then a flat list': toLength(
-    `${'>'.repeat(MARKDOWN_MAX_QUOTE_DEPTH)} x ${OPENERS}\n`,
-    '- a\n',
-  ),
-  'every limit at once': toLength(
-    `${'>'.repeat(MARKDOWN_MAX_QUOTE_DEPTH)} ${'- '.repeat(MARKDOWN_MAX_LIST_DEPTH)}x ${OPENERS}\n${'a\n'.repeat(MARKDOWN_MAX_LIST_ITEM_LINES - 3)}`,
-    '|[',
-  ),
-};
-
-/** A field nobody tuned to be slow, of the same length: paragraphs with marks and links, and a short list. */
-const BENIGN = toLength(
-  '',
-  'Some *emphasis* and a [link](https://example.com) here.\n\n- a short item\n- another one\n\n',
-);
+/** A field nobody tuned to be slow, of the length limit: paragraphs with marks and links, and a short list. */
+const BENIGN = (() => {
+  const fill =
+    'Some *emphasis* and a [link](https://example.com) here.\n\n- a short item\n- another one\n\n';
+  return fill.repeat(Math.ceil(MARKDOWN_MAX_LENGTH / fill.length)).slice(0, MARKDOWN_MAX_LENGTH);
+})();
 
 /**
  * The medians of seven interleaved runs of `run` and of `baseline`, in
@@ -128,61 +69,98 @@ function medians(run: () => unknown, baseline: () => unknown): { time: number; b
   return { time: middle(times), base: middle(bases) };
 }
 
-// A worst-case field may cost this many times the benign one of the same
-// length, and never more than the ceiling. About 9 times is the most seen on
-// the development machine. A scan that grew faster than the text would blow
-// through both.
-const MAX_RATIO = 20;
+// A field may cost this many times the benign field of the same length, the
+// benign time counted as at least the floor, and never more than the ceiling.
+// The search's slowest field costs about 9 times the benign one on the
+// development machine, and CI has run such ratios up to about twice what the
+// development machine does. Without the inline-mark limit the slowest field
+// the search finds costs over 150 times the benign one.
+const MAX_RATIO = 40;
+const FLOOR_MS = 4;
 const CEILING_MS = 1000;
+const bound = (base: number) => Math.min(MAX_RATIO * Math.max(base, FLOOR_MS), CEILING_MS);
 
-test('a worst-case field at the limits renders through renderMarkdown and renderInlineMarkdown within 20 times a benign field of its length, and under 1 s', (t) => {
-  for (const [name, field] of Object.entries(WORST)) {
-    const shape = measureMarkdown(field);
-    for (const { dimension, max } of MARKDOWN_LIMITS) {
+const RENDER = { block: renderMarkdown, inline: renderInlineMarkdown } as const;
+
+let search: ReturnType<typeof searchMarkdown> | undefined;
+const searched = () => (search ??= searchMarkdown());
+
+test('the slowest field the adversarial search finds within the limits renders through both renderers within 40 times a benign field of its length, and under 1 s', (t) => {
+  assert.equal(markdownOverLimit(BENIGN), null, 'the benign field keeps to every limit');
+  assert.equal(markdownOverLimit(BENIGN, 'inline'), null, 'and inline');
+  const { fields, unfit } = searched();
+  assert.deepEqual(unfit, [], 'every structure fits a field within the limits');
+  assert.ok(fields.length > 250, `${fields.length} fields searched`);
+  t.diagnostic(`${fields.length} fields searched`);
+  for (const { name, text } of fields.slice(0, 2)) {
+    assert.equal(markdownOverLimit(text), null, `${name} keeps to every limit`);
+    const benign = BENIGN.slice(0, text.length);
+    for (const mode of ['block', 'inline'] as const) {
+      const render = RENDER[mode];
+      const { time, base } = medians(
+        () => render(text),
+        () => render(benign),
+      );
+      t.diagnostic(
+        `${mode} ${time.toFixed(1)} ms (benign ${base.toFixed(1)}, bound ${bound(base).toFixed(0)}): ${name}`,
+      );
       assert.ok(
-        shape[dimension] <= max,
-        `${name}: ${dimension} ${shape[dimension]} is within ${max}`,
+        time < bound(base),
+        `${name}: ${mode} ${time.toFixed(1)} ms against ${bound(base).toFixed(1)} ms (benign ${base.toFixed(1)} ms)`,
       );
     }
-    assert.equal(shape.length, MARKDOWN_MAX_LENGTH, name);
-    const block = medians(
-      () => renderMarkdown(field),
-      () => renderMarkdown(BENIGN),
-    );
-    const inline = medians(
-      () => renderInlineMarkdown(field),
-      () => renderInlineMarkdown(BENIGN),
-    );
-    t.diagnostic(
-      `${name}: block ${block.time.toFixed(1)} ms (benign ${block.base.toFixed(1)}), inline ${inline.time.toFixed(1)} ms (benign ${inline.base.toFixed(1)})`,
-    );
-    for (const [kind, { time, base }] of [
-      ['block', block],
-      ['inline', inline],
-    ] as const) {
-      // Below a millisecond the ratio is mostly timer noise, so the benign
-      // time counts as at least 1 ms.
-      const bound = Math.min(MAX_RATIO * Math.max(base, 1), CEILING_MS);
-      assert.ok(
-        time < bound,
-        `${name}: ${kind} ${time.toFixed(1)} ms against ${bound.toFixed(1)} ms (benign ${base.toFixed(1)} ms)`,
-      );
-    }
-  }
-  const all = WORST['every limit at once']!;
-  const shape = measureMarkdown(all);
-  for (const { dimension, max } of MARKDOWN_LIMITS) {
-    if (dimension === 'length') continue;
-    assert.ok(
-      shape[dimension] >= max * 0.9,
-      `every limit at once: ${dimension} ${shape[dimension]} is near ${max}`,
-    );
   }
 });
 
-test('a 1 MiB document of worst-case fields at the limits validates and renders in bounded time', (t) => {
-  const field = WORST['every limit at once']!;
-  const works: object[] = [];
+test('a field over the cap renders as escaped text, at once, when it skipped validation', () => {
+  // The review's slow fields (#65): up to seconds through marked, and the
+  // last past what marked can lex at all.
+  const definitions = Array.from({ length: 256 }, (_, i) => `[d${i}]: u`).join('\n');
+  const fields: Record<string, string> = {
+    'a 1,024-column table of one-character rows': `${table(1024, 0)}${'a\n'.repeat(1500)}`,
+    'a 768-column table under 256 definitions': `${definitions}\n\n${table(768, 8)}`,
+    'a quoted item and a lazy line, repeated': '> - a\nb\n'.repeat(1024),
+    'x and 40,000 asterisks': `x ${'*'.repeat(40_000)}`,
+    'a quoted ladder of lists and a lazy line, repeated': `> ${'- '.repeat(8)}a\nb\n`.repeat(372),
+  };
+  for (const [name, text] of Object.entries(fields)) {
+    assert.ok(markdownOverLimit(text), `${name} is over the cap`);
+    for (const mode of ['block', 'inline'] as const) {
+      const render = RENDER[mode];
+      const html = render(text);
+      for (const tag of ['<blockquote>', '<li>', '<em>', '<strong>']) {
+        assert.ok(!html.includes(tag), `${name}: ${mode} renders as text`);
+      }
+      const { time, base } = medians(
+        () => render(text),
+        () => render(BENIGN),
+      );
+      assert.ok(
+        time < bound(base),
+        `${name}: ${mode} ${time.toFixed(1)} ms against ${bound(base).toFixed(1)} ms`,
+      );
+    }
+  }
+});
+
+test("marked never nests past the renderer's ceiling, even where it nests a field deeper than the cap counts", () => {
+  // marked reads `2) >>a` as the paragraph's next line rather than a list,
+  // which the measure can't tell from a list, and nests each repeat deeper:
+  // the measure counts 10 levels here and marked opens 121. Past the
+  // renderer's ceiling the field renders as escaped text.
+  const repeat = '>>> > # h\na|b\n2) >>a\n      a|b\n';
+  const text = repeat.repeat(40);
+  assert.equal(markdownOverLimit(text), null);
+  assert.ok(!renderMarkdown(text).includes('<blockquote>'), 'it renders as text');
+  assert.ok(
+    renderMarkdown(repeat.repeat(2)).includes('<blockquote>'),
+    'two repeats render as quotes',
+  );
+});
+
+/** A portfolio of works whose descriptions are `field`, as many as fit in 1 MiB. */
+function documentOf(field: string) {
+  const works: Array<{ id: string; title: string; medium: string; description: string }> = [];
   const portfolio = {
     schemaVersion: 3,
     locale: 'en',
@@ -199,30 +177,50 @@ test('a 1 MiB document of worst-case fields at the limits validates and renders 
     if (size() > 1 << 20) {
       works.pop();
       portfolio.sections[0]!.items.pop();
-      break;
+      return portfolio;
     }
   }
-  assert.ok(works.length >= 100, `${works.length} fields fill the document`);
-  const start = performance.now();
-  const result = validate(portfolio);
-  const validated = performance.now();
-  assert.deepEqual(
-    result.diagnostics.filter(({ severity }) => severity !== 'warning').map(({ code }) => code),
-    [],
-  );
-  assert.ok(result.pair);
-  const parsed = result.pair.portfolio.works ?? [];
-  assert.equal(parsed.length, works.length);
-  for (const work of parsed) {
-    renderMarkdown(work.description);
-    renderInlineMarkdown(work.description);
-  }
-  const rendered = performance.now();
+}
+
+test('a 1 MiB document of the field the search finds slowest for its size validates, and renders within 40 times a benign document', (t) => {
+  // For its size: a document holds more of a shorter field, and the marks a
+  // field may hold shrink with its length so that none costs more for its
+  // size than the limits let the longest cost.
+  const perByte = ({ text, block, inline }: { text: string; block: number; inline: number }) =>
+    (block + inline) / Buffer.byteLength(text, 'utf8');
+  const [slowest] = [...searched().fields].sort((a, b) => perByte(b) - perByte(a));
+  /** Milliseconds to validate the document, and to render every field both ways. */
+  const timeOf = (portfolio: ReturnType<typeof documentOf>) => {
+    const start = performance.now();
+    const result = validate(portfolio);
+    const validated = performance.now() - start;
+    assert.deepEqual(
+      result.diagnostics.filter(({ severity }) => severity !== 'warning').map(({ code }) => code),
+      [],
+    );
+    assert.ok(result.pair);
+    const parsed = result.pair.portfolio.works ?? [];
+    assert.equal(parsed.length, portfolio.works.length);
+    const rendering = performance.now();
+    for (const work of parsed) {
+      renderMarkdown(work.description);
+      renderInlineMarkdown(work.description);
+    }
+    return { validated, rendered: performance.now() - rendering };
+  };
+  const worst = documentOf(slowest!.text);
+  assert.ok(worst.works.length >= 32, `${worst.works.length} fields fill the document`);
+  const { validated, rendered } = timeOf(worst);
+  const benign = timeOf(documentOf(BENIGN));
   t.diagnostic(
-    `${works.length} fields: validated in ${(validated - start).toFixed(0)} ms, rendered in ${(rendered - validated).toFixed(0)} ms`,
+    `${worst.works.length} fields of ${slowest!.name}: validated in ${validated.toFixed(0)} ms, rendered in ${rendered.toFixed(0)} ms (benign ${benign.rendered.toFixed(0)} ms)`,
   );
-  assert.ok(validated - start < 5000, 'validation is bounded');
-  assert.ok(rendered - validated < 20_000, 'rendering is bounded');
+  assert.ok(validated < 5000, 'validation is bounded');
+  const limit = MAX_RATIO * Math.max(benign.rendered, FLOOR_MS);
+  assert.ok(
+    rendered < limit,
+    `rendering is bounded: ${rendered.toFixed(0)} ms against ${limit.toFixed(0)} ms`,
+  );
 });
 
 const KIT = path.dirname(fileURLToPath(import.meta.url));

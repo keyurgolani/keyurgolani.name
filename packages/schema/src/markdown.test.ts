@@ -16,6 +16,8 @@ import {
   MARKDOWN_MAX_LIST_ITEM_LINES,
   MARKDOWN_MAX_QUOTE_DEPTH,
   MARKDOWN_MAX_URL_PUNCTUATION,
+  inlineMarksFor,
+  markdownOverLimit,
   measureMarkdown,
   type MarkdownShape,
 } from './markdown';
@@ -59,13 +61,27 @@ function validate(markdown: string) {
   });
 }
 
+/** A table `columns` wide with `rows` rows under its header: columns times rows plus one cells. */
+const table = (columns: number, rows: number) =>
+  `${'a|'.repeat(columns - 1)}a\n${'|-'.repeat(columns)}|\n${'a\n'.repeat(rows)}`;
+
 /** For each limit, text at exactly the limit, and text one past it. */
 const AT_AND_OVER: Record<keyof MarkdownShape, (n: number) => string> = {
   length: (n) => 'a'.repeat(n),
   quoteDepth: (n) => `${'> '.repeat(n)}quoted`,
   listDepth: (n) => `${'- '.repeat(n)}item`,
   listItemLines: (n) => `- first\n${'  more\n'.repeat(n - 1)}`,
-  inlineMarks: (n) => '*a '.repeat(n),
+  // Each lazy line under a quoted item nests what follows two levels deeper.
+  nestingDepth: (n) => `${'> - a\nb\n'.repeat(Math.floor(n / 2))}${n % 2 ? '> x' : 'x'}`,
+  tableCells: (n) =>
+    [n >= 64 ? table(64, Math.floor(n / 64) - 1) : '', n % 64 ? table(n % 64, 0) : '']
+      .filter(Boolean)
+      .join('\n'),
+  definitions: (n) =>
+    Array.from({ length: n }, (_, i) => `[d${i}]: https://a.test/${i}`).join('\n'),
+  // At the length limit, where a field holds the most.
+  inlineMarks: (n) =>
+    `${'*a '.repeat(n)}${' word'.repeat(MARKDOWN_MAX_LENGTH)}`.slice(0, MARKDOWN_MAX_LENGTH),
   linkParens: (n) => `[a](b${'('.repeat(n)}`,
   angleBrackets: (n) => 'a < b '.repeat(n),
   urlPunctuation: (n) => `www.example.test/${'?'.repeat(n - 2)}`,
@@ -107,6 +123,43 @@ test('each limit holds at its value and refuses one past it, at the field pointe
   }
 });
 
+test('a shorter field holds fewer inline marks: four times the square root of its length, and 64 in any field', () => {
+  const marks = (count: number, length: number) =>
+    `${'*a '.repeat(count)}${' word'.repeat(length)}`.slice(0, length);
+  for (const [length, max] of [
+    [1, 64],
+    [256, 64],
+    [300, 69],
+    [1024, 128],
+    [2500, 200],
+    [4096, 256],
+    [MARKDOWN_MAX_LENGTH, MARKDOWN_MAX_INLINE_MARKS],
+  ] as const) {
+    assert.equal(inlineMarksFor(length), max, `${length} characters`);
+    if (3 * (max + 1) > length) continue;
+    assert.equal(measureMarkdown(marks(max, length)).inlineMarks, max);
+    assert.equal(
+      markdownOverLimit(marks(max, length)),
+      null,
+      `${max} marks in ${length} characters`,
+    );
+    const over = markdownOverLimit(marks(max + 1, length));
+    assert.ok(over, `${max + 1} marks in ${length} characters`);
+    assert.equal(over.limit.dimension, 'inlineMarks');
+    assert.equal(over.value, max + 1);
+    const [finding] = validate(marks(max + 1, length)).diagnostics;
+    assert.ok(finding);
+    assert.equal(finding.code, 'markdown.too-dense');
+    assert.ok(
+      finding.message.endsWith(
+        `in ${length.toLocaleString('en-US')} characters; the limit is ${max.toLocaleString('en-US')}.`,
+      ),
+      finding.message,
+    );
+  }
+  assert.equal(MARKDOWN_MAX_INLINE_MARKS, 362);
+});
+
 test('the Markdown codes block publish and preview, and their messages never quote the field', () => {
   for (const code of ['markdown.too-long', 'markdown.too-deep', 'markdown.too-dense'] as const) {
     assert.equal(DIAGNOSTIC_SEVERITIES[code], 'blocks-preview');
@@ -141,6 +194,12 @@ test("every hostile shape from #58's follow-up is refused at validation, before 
     'a web address with 4,000 question marks': `www.a${'?'.repeat(4000)}`,
     '2,000 unclosed processing instructions': '<?'.repeat(2000),
     'one list item 2,000 lines long': `- x\n${'a\n'.repeat(2000)}`,
+    // The review's slow fields (#65), each within every limit before them.
+    'a 1,024-column table of one-character rows': `${table(1024, 0)}${'a\n'.repeat(1500)}`,
+    'a 768-column table under 256 definitions': `${Array.from({ length: 256 }, (_, i) => `[d${i}]: u`).join('\n')}\n\n${table(768, 8)}`,
+    'a quoted item and a lazy line, repeated': '> - a\nb\n'.repeat(1024),
+    'quotes around lazy lines, repeated': '> > a\nb\n'.repeat(1024),
+    'a quoted ladder of lists and a lazy line, repeated': `> ${'- '.repeat(8)}a\nb\n`.repeat(372),
   };
   for (const [name, text] of Object.entries(shapes)) {
     const result = validate(text);
@@ -185,15 +244,17 @@ function committedStrings(): Array<{ where: string; text: string }> {
 
 test('every committed fixture, profession pair, and example keeps every string at least 4 times inside each limit', () => {
   const strings = committedStrings();
-  for (const { dimension, max } of MARKDOWN_LIMITS) {
-    let largest = { value: 0, where: '' };
+  for (const { dimension, max, maxFor } of MARKDOWN_LIMITS) {
+    // The share of its limit, at its own length, each string takes.
+    let largest = { share: 0, value: 0, limit: max, where: '' };
     for (const { where, text } of strings) {
       const value = measureMarkdown(text)[dimension];
-      if (value > largest.value) largest = { value, where };
+      const limit = maxFor ? maxFor(text.length) : max;
+      if (value / limit > largest.share) largest = { share: value / limit, value, limit, where };
     }
     assert.ok(
-      largest.value * 4 <= max,
-      `${dimension}: ${largest.value} at ${largest.where} is within 4 times of ${max}`,
+      largest.value * 4 <= largest.limit,
+      `${dimension}: ${largest.value} at ${largest.where} is within 4 times of ${largest.limit}`,
     );
   }
 });
@@ -210,7 +271,7 @@ function fastest(run: () => unknown): number {
 }
 
 test('the measure is linear: four times the text takes at most about four times the time', () => {
-  // Shapes that are quadratic or worse in marked, and plain prose, at 512 KiB and 2 MiB.
+  // Shapes that are quadratic or worse in marked, and plain prose, at 256 KiB and 1 MiB.
   const shapes = [
     (n: number) => `x ${'*'.repeat(n)}`,
     (n: number) => '[a]('.repeat(n / 4),
@@ -219,10 +280,18 @@ test('the measure is linear: four times the text takes at most about four times 
     (n: number) => `- x\n${'a\n'.repeat(n / 2)}`,
     (n: number) =>
       'The quick brown fox, *jumps* over [the](https://a.test) lazy dog. '.repeat(n / 64),
+    // The block structure: tables, definitions, lazy lines, fences, and code.
+    (n: number) => `${table(n / 8, 0)}${'a\n'.repeat(n / 4)}`,
+    (n: number) => '[a]: b\n'.repeat(n / 7),
+    (n: number) => '> - a\nb\n'.repeat(n / 8),
+    (n: number) => '> x\n```\n'.repeat(n / 8),
+    (n: number) => `\`\`\`\n${'> - *a\n'.repeat(n / 8)}`,
+    (n: number) => `\n${'    > - *a <b>\n'.repeat(n / 16)}`,
+    (n: number) => '-\t- \t> x\n'.repeat(n / 10),
   ];
   for (const shape of shapes) {
-    const small = shape(1 << 19);
-    const large = shape(1 << 21);
+    const small = shape(1 << 18);
+    const large = shape(1 << 20);
     measureMarkdown(small);
     const ratio = fastest(() => measureMarkdown(large)) / fastest(() => measureMarkdown(small));
     // Linear is 4 times; quadratic would be 16. The slack is for a busy machine.
@@ -256,6 +325,34 @@ test('the measure counts what marked reads, and leaves escaped and inert marks o
     ['see www.a.test/b?c=d&e=f.', { urlPunctuation: 5 }],
     ['www.a. b???', { urlPunctuation: 2 }],
     ['- a\r\n  - b', { listDepth: 2 }],
+    // Nesting: a lazy line under a quoted list or quote nests what follows.
+    ['> a\nlazy', { nestingDepth: 1 }],
+    ['> - a\n> b', { nestingDepth: 2 }],
+    ['> - a\nb\n> - c', { nestingDepth: 4 }],
+    ['> > a\nb\n> > c', { nestingDepth: 3 }],
+    ['> - a\nb\n\n> - c', { nestingDepth: 2 }],
+    // Tables: rows run to a blank line, each the header's width.
+    ['a|b\n-|-\nc|d\ne', { tableCells: 6 }],
+    ['a|b|c\n|-|-|-|\n\nd', { tableCells: 3 }],
+    ['a\n:-\nb', { tableCells: 2 }],
+    ['[a]: https://a.test\n[b]: https://b.test "B"', { definitions: 2 }],
+    // Code is inert in block mode: its marks, quotes, and lists count for nothing.
+    [
+      '```\n> > > > >\n- - - - - x\n*a <b>\n```',
+      { quoteDepth: 0, listDepth: 0, inlineMarks: 0, angleBrackets: 0 },
+    ],
+    ['~~~~\n```\n*a\n~~~~\n*b*', { inlineMarks: 2 }],
+    ['    >>>>> x\n    *a <b>', { quoteDepth: 0, inlineMarks: 0, angleBrackets: 0 }],
+    ['- a\n\n        *b*', { inlineMarks: 0 }],
+    // Not code: a paragraph's next line, a fence a lazy line can't open,
+    // and wherever marked may have read the lines another way.
+    ['a\n    *b*', { inlineMarks: 2 }],
+    ['> a\n```*b*', { inlineMarks: 5 }],
+    ['<div>\n\n```\n*b*\n```', { inlineMarks: 8 }],
+    ['[x]: https://a.test\n\n```\n*b*\n```', { inlineMarks: 8 }],
+    ['a\n2) ```\n   *b*\n   ```', { inlineMarks: 8 }],
+    [' - ```\n   *b*\n==', { inlineMarks: 5 }],
+    ['> - a\nb\n\n```\n*b*\n```', { inlineMarks: 8 }],
   ];
   for (const [text, expected] of cases) {
     const shape = measureMarkdown(text);
@@ -263,7 +360,46 @@ test('the measure counts what marked reads, and leaves escaped and inert marks o
       assert.equal(shape[key as keyof MarkdownShape], value, `${JSON.stringify(text)} ${key}`);
     }
   }
+  // Inline, a fence is only backticks: what's inside it counts.
+  assert.equal(measureMarkdown('```\n*a <b>\n```', 'inline').inlineMarks, 7);
+  assert.equal(measureMarkdown('```\n*a <b>\n```', 'inline').angleBrackets, 1);
   assert.equal(MARKDOWN_MAX_LINK_PARENS + MARKDOWN_MAX_ANGLE_BRACKETS > 0, true);
   assert.ok(MARKDOWN_MAX_LIST_DEPTH > 0 && MARKDOWN_MAX_LIST_ITEM_LINES > 0);
   assert.ok(MARKDOWN_MAX_URL_PUNCTUATION > 0);
+});
+
+test('code in a fence or an indented block validates whatever it holds, as marked leaves it inert', () => {
+  const samples: Record<string, string> = {
+    'a fenced diff with conflict markers': [
+      'The merge left this:',
+      '',
+      '```diff',
+      '<<<<<<< HEAD',
+      'const retries = 3;',
+      '=======',
+      'const retries = 5;',
+      '>>>>>>> feature',
+      '```',
+    ].join('\n'),
+    'a fenced YAML sample nested 10 deep': [
+      '~~~yaml',
+      ...Array.from({ length: 10 }, (_, i) => `${'  '.repeat(i)}- level${i}:`),
+      '~~~',
+    ].join('\n'),
+    'a fence with more marks and < than a field allows': `\`\`\`html\n${'<p>*a* _b_ ~c~ !d `e`</p>\n'.repeat(60)}\`\`\``,
+    'the same as indented code': `Before:\n\n${'    <p>*a* _b_ ~c~ !d `e`</p> >>>>>>> x\n'.repeat(60)}`,
+    'a shell transcript in a quote': `> Run it:\n>\n> \`\`\`\n${'> >>> print(1)\n'.repeat(12)}> \`\`\``,
+  };
+  for (const [name, text] of Object.entries(samples)) {
+    assert.ok(text.length <= MARKDOWN_MAX_LENGTH, name);
+    assert.deepEqual(
+      validate(text).diagnostics.map(({ code }) => code),
+      [],
+      `${name} validates`,
+    );
+  }
+  // Read inline, as renderInlineMarkdown reads a field, the same fence is text.
+  const fence = samples['a fence with more marks and < than a field allows']!;
+  assert.equal(markdownOverLimit(fence), null);
+  assert.equal(markdownOverLimit(fence, 'inline')?.limit.dimension, 'inlineMarks');
 });

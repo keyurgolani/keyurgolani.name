@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Lexer, Marked, type MarkedOptions } from 'marked';
+import { markdownOverLimit } from '@portfolio/schema';
+import { renderMarkdown } from './markdown';
 import { lexBlocks } from './markdown-lexer';
 
 // The renderer's block lexer (markdown-lexer.ts): marked's own tokens, with
@@ -106,4 +108,27 @@ test("a lazy line under quotes has the renderer lex a paragraph's inline text on
       `marked, ${depth} quotes`,
     );
   }
+});
+
+test('renderMarkdown lexes a paragraph under four quotes and a lazy line in about the time it lexes the paragraph alone', () => {
+  // 256 marks that never close, which marked would lex four times over.
+  const paragraph = `x ${'*a '.repeat(256)}${'word '.repeat(700)}\nlazy`;
+  const quoted = `>>>> ${paragraph}`;
+  assert.equal(markdownOverLimit(quoted), null);
+  assert.ok(renderMarkdown(quoted).startsWith('<blockquote>'));
+  const times: number[] = [];
+  const bases: number[] = [];
+  renderMarkdown(quoted);
+  renderMarkdown(paragraph);
+  for (let i = 0; i < 7; i++) {
+    let start = performance.now();
+    renderMarkdown(paragraph);
+    bases.push(performance.now() - start);
+    start = performance.now();
+    renderMarkdown(quoted);
+    times.push(performance.now() - start);
+  }
+  const median = (list: number[]) => list.sort((a, b) => a - b)[3]!;
+  const [time, base] = [median(times), median(bases)];
+  assert.ok(time < 2 * base, `${time.toFixed(1)} ms quoted against ${base.toFixed(1)} ms alone`);
 });
