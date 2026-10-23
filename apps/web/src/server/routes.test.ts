@@ -1295,7 +1295,14 @@ test("what every profile serves, with #2's Studio pages under owner alone", () =
     ...(ASKED.appearance ? ['/_fixtures/appearance'] : []),
   ];
   // The site's own routes (#5, Slice 4): a variant's path views, and work.
-  const site = ['/[...view]', '/feed.xml', '/work/[slug]', '/work/[slug]/[...view]'];
+  // And the visitor's appearance preference (#19, Slice 4), which demo reads from the query instead.
+  const site = [
+    '/[...view]',
+    '/api/appearance',
+    '/feed.xml',
+    '/work/[slug]',
+    '/work/[slug]/[...view]',
+  ];
   // A preview grant's frame and its draft-only assets (#7, Slice 2): owner alone mints grants.
   const grants = ['/preview/[grant]/[[...route]]', '/preview-assets/[grant]/[...path]'];
   // /studio/preview (#7, Slice 4) is owner's alone: demo's preview is #9's.

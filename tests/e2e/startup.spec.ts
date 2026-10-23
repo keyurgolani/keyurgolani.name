@@ -123,8 +123,8 @@ test.describe('rows that start', () => {
         const page = await fetch(`${app.origin}/`);
         expect(page.status).toBe(200);
         const html = await page.text();
-        expect(html).toContain(
-          '<div data-variant="fallback" data-requested-variant="canary-variant"',
+        expect(html).toMatch(
+          /<div data-appearance-boundary="document" data-variant="fallback" [^>]*data-requested-variant="canary-variant"/,
         );
         const ready = await fetch(`${app.origin}/api/ready`);
         expect(ready.status).toBe(200);
@@ -196,11 +196,15 @@ test.describe('the shared fixtures', () => {
     'section.empty',
     'snapshot.ignored',
   ];
-  // The host's interim catalog registers no color scheme until #19, so it
-  // can't raise this one: the pair starts, with only the fallback's warning.
-  // Nor can startup raise the two that compare a draft with the live
-  // revision (#10), which publish and import check.
-  const UNCHECKED = ['appearance.unknown', 'id.reused', 'urls.vanished'];
+  // Live, a color scheme this build doesn't register is the appearance's
+  // own warning, appearance.unavailable, and its axis falls back (#19, Slice
+  // 4): the pair starts, as with the fallback composition's.
+  const LIVE_CODES: Readonly<Record<string, string>> = {
+    'appearance.unknown': 'appearance.unavailable',
+  };
+  // Startup can't raise the two that compare a draft with the live revision
+  // (#10), which publish and import check.
+  const UNCHECKED = ['id.reused', 'urls.vanished'];
   const UNAVAILABLE = 'variant.unavailable';
   const RECORD_ORIGIN = 'https://rowan.name';
   const invalid = readdirSync(path.join(FIXTURES, 'invalid')).sort();
@@ -210,7 +214,8 @@ test.describe('the shared fixtures', () => {
     PORTFOLIO_SOURCE_DIR: source,
   });
 
-  for (const code of invalid.filter((name) => ![...WARNINGS, ...UNCHECKED].includes(name))) {
+  const STARTS = [...WARNINGS, ...Object.keys(LIVE_CODES), ...UNCHECKED];
+  for (const code of invalid.filter((name) => !STARTS.includes(name))) {
     test(`invalid/${code} stops the server with that code alone`, async () => {
       const dir = path.join(FIXTURES, 'invalid', code);
       const fatal = await expectRefusal(readOnly(dir, RECORD_ORIGIN));
@@ -218,8 +223,9 @@ test.describe('the shared fixtures', () => {
     });
   }
 
-  for (const code of [...WARNINGS, ...UNCHECKED]) {
-    const warned = WARNINGS.includes(code) ? [code, UNAVAILABLE] : [UNAVAILABLE];
+  for (const code of STARTS) {
+    const live = WARNINGS.includes(code) ? code : LIVE_CODES[code];
+    const warned = live ? [live, UNAVAILABLE] : [UNAVAILABLE];
     test(`invalid/${code} warns ${warned.join(' and ')}, and the server starts`, async () => {
       expect(invalid).toContain(code);
       const dir = path.join(FIXTURES, 'invalid', code);
@@ -269,4 +275,14 @@ test.describe('the shared fixtures', () => {
       expect(fatal.map((entry) => [entry.code, entry.document])).toEqual(records);
     });
   }
+
+  test('an old one-file portfolio stops the server with a remediation that names the appearance ids this build registers (#19, Slice 4)', async () => {
+    const fatal = await expectRefusal(readOnly(path.join(FIXTURES, 'startup', 'legacy-only')));
+    const [legacy] = fatal.filter((entry) => entry.code === 'legacy.document');
+    expect(legacy, 'a legacy.document record').toBeTruthy();
+    const remediation = (legacy as unknown as { remediation?: string }).remediation ?? '';
+    for (const id of ['platform-neutral', 'warm-parchment', 'humanist-ui']) {
+      expect(remediation, id).toContain(id);
+    }
+  });
 });

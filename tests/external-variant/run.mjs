@@ -74,6 +74,7 @@ const { id: ID } = JSON.parse(readFileSync(path.join(HERE, 'manifest.json'), 'ut
 const PACKAGE_FILES = ['package.json', 'manifest.json', 'styles.css', 'tsconfig.json', 'src'];
 /** What its build resolves, as a published variant's devDependencies would install them. */
 const BUILD_DEPENDENCIES = [
+  '@portfolio/appearance',
   '@portfolio/kit',
   '@portfolio/schema',
   '@portfolio/variant-contract',
@@ -268,7 +269,9 @@ async function checkRemoved(host, work) {
     const page = await fetch(`${app.origin}/`);
     assert.equal(page.status, 200, 'GET / answers 200');
     assert.ok(
-      (await page.text()).includes(`<div data-variant="fallback" data-requested-variant="${ID}"`),
+      new RegExp(
+        `<div data-appearance-boundary="document" data-variant="fallback" [^>]*data-requested-variant="${ID}"`,
+      ).test(await page.text()),
       'the fallback composition renders in its place',
     );
     const ready = await fetch(`${app.origin}/api/ready`);

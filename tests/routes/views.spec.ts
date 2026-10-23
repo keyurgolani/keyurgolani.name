@@ -184,3 +184,64 @@ test(
     expect(ready.checks).toContainEqual({ id: 'packs', status: 'ok' });
   },
 );
+
+test(
+  'beside the catch-all, POST /api/appearance answers for itself, and the page it returns to renders in the display mode the visitor chose (#19, Slice 4)',
+  {
+    annotation: [
+      { type: 'route', description: '/api/appearance' },
+      { type: 'route', description: '/' },
+      READ_ONLY,
+    ],
+  },
+  async ({ request, app }) => {
+    // Each page reads the cookie back, the 404 page too, and none may be
+    // stored by any cache: Next sets its own Vary on every page, so
+    // no-store is what keeps one visitor's appearance from another.
+    const pages = [
+      ['/', 200],
+      ['/?view=all', 200],
+      ['/no-such-page', 404],
+    ] as const;
+    const expectPages = async (mode: 'system' | 'dark', what: string) => {
+      for (const [path, status] of pages) {
+        const page = await request.get(path, { maxRedirects: 0 });
+        expect(page.status(), `${path} ${what}`).toBe(status);
+        expect(await page.text(), `${path} ${what}`).toMatch(
+          new RegExp(`data-appearance-boundary="document"[^>]* data-display-mode="${mode}"`),
+        );
+        expectUncacheable(page.headers()['cache-control'], `${path} ${what}`);
+      }
+    };
+    await expectPages('system', 'with no cookie');
+    // The request context keeps the cookie the answer sets, as a browser does.
+    const response = await request.post('/api/appearance', {
+      headers: { origin: app.origin },
+      form: { mode: 'dark', return: '/?view=all' },
+      maxRedirects: 0,
+    });
+    expect(response.status()).toBe(303);
+    expect(response.headers()['location']).toBe(`${app.origin}/?view=all`);
+    expect(response.headers()['cache-control']).toBe('no-store');
+    expect(response.headers()['set-cookie'] ?? '').toMatch(
+      /^portfolio_appearance=mode=dark; Path=\/; Max-Age=\d+; HttpOnly; SameSite=Lax/,
+    );
+    await expectPages('dark', 'with the cookie');
+  },
+);
+
+/**
+ * A page that reads the visitor's appearance cookie is private and never
+ * stored: anything that makes it cacheable, such as `revalidate`, a static
+ * render, or a cache header of the host's, fails here.
+ */
+function expectUncacheable(header: string | undefined, what: string): void {
+  const directives = (header ?? '').split(',').map((directive) => directive.trim().toLowerCase());
+  expect(directives, what).toContain('private');
+  expect(directives, what).toContain('no-store');
+  for (const caching of ['public', 'immutable']) expect(directives, what).not.toContain(caching);
+  expect(
+    directives.filter((directive) => /^(?:s-maxage|stale-while-revalidate)=/.test(directive)),
+    what,
+  ).toEqual([]);
+}

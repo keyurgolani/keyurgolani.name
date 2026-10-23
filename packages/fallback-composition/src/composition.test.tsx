@@ -127,9 +127,13 @@ test('one main, one h1 from the hero, one visitor control slot, and every sectio
 test('the navigation links each titled section but the hero and calls to action', () => {
   const html = render(PORTFOLIO);
   const nav =
-    /<nav class="fc-nav" aria-labelledby="fc--sections">([\s\S]*?)<\/nav>/.exec(html)?.[1] ?? '';
+    /<nav class="fc-nav" data-ui-slot="navigation"[^>]* aria-labelledby="fc--sections">([\s\S]*?)<\/nav>/.exec(
+      html,
+    )?.[1] ?? '';
   assert.deepEqual(
-    [...nav.matchAll(/<a href="([^"]+)"[^>]*>([^<]+)<\/a>/g)].map(([, href, text]) => [href, text]),
+    [...nav.matchAll(/<a data-ui-slot="navigation.link" href="([^"]+)"[^>]*>([^<]+)<\/a>/g)].map(
+      ([, href, text]) => [href, text],
+    ),
     [
       ['#about', 'About'],
       ['#contact', 'Contact'],
@@ -138,7 +142,7 @@ test('the navigation links each titled section but the hero and calls to action'
   // The render's id prefix reaches the main, the sections, and every link.
   const prefixed = render(PORTFOLIO, 'pv-');
   assert.match(prefixed, /<main id="pv-main"/);
-  assert.match(prefixed, /<a href="#pv-contact"[^>]*>Contact<\/a>/);
+  assert.match(prefixed, /<a data-ui-slot="navigation.link" href="#pv-contact"[^>]*>Contact<\/a>/);
   assert.match(prefixed, /<section id="pv-contact"/);
 });
 
@@ -156,7 +160,10 @@ test('a section with nothing public leaves the page and the navigation (#10)', (
       { kind: 'works', id: 'drafts', title: 'Drafts', items: ['draft'] },
     ],
   });
-  assert.match(html, /<a href="#selected-work"[^>]*>Selected work<\/a>/);
+  assert.match(
+    html,
+    /<a data-ui-slot="navigation.link" href="#selected-work"[^>]*>Selected work<\/a>/,
+  );
   assert.doesNotMatch(html, /drafts|Drafts|Draft/);
   // Works in the archive say so, in the order the section lists them.
   assert.match(html, /<p class="pf-label" data-label="archive">Archive<\/p>/);

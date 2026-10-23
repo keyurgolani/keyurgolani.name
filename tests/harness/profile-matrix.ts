@@ -20,8 +20,6 @@ import type * as PreviewStatus from '../../apps/web/src/preview/status';
 import type * as Capabilities from '../../apps/web/src/server/capabilities';
 import type * as Operations from '../../apps/web/src/server/operations';
 import type * as Routes from '../../apps/web/src/server/routes';
-// The key the site's theme script reads, which only its text holds.
-import { THEME_STORAGE_KEY as THEME_KEY } from '../../packages/kit/src/theme-init';
 import {
   CANARY_BODY,
   CANARY_DATA,
@@ -46,7 +44,7 @@ const { accessIn, CAPABILITIES, INDEXABLE, PROFILES } =
   require('../../apps/web/src/server/capabilities.ts') as typeof Capabilities;
 const { fixtureFlags } = require('../../apps/web/scripts/fixture-gate.ts') as typeof FixtureGate;
 const { listOperations } = require('../../apps/web/src/server/operations.ts') as typeof Operations;
-const { listExperienceRoutes, listRoutes, RETIRED_PATTERNS, routeAccess } =
+const { listExperienceRoutes, listRoutes, RETIRED_PATTERNS, routeAccess, serves } =
   require('../../apps/web/src/server/routes.ts') as typeof Routes;
 const { PREVIEW_STATUS_DOCUMENT, PREVIEW_STATUS_TYPE } =
   require('../../apps/web/src/preview/status.ts') as typeof PreviewStatus;
@@ -634,6 +632,30 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
           }
           return;
         }
+        if (served && entry.methods) {
+          // A route handler that takes only the methods it lists, such as
+          // POST /api/appearance (#19, Slice 4): the rest are proxy.ts's 405.
+          for (const method of METHODS.filter((each) => !entry.methods!.includes(each as 'POST'))) {
+            const response = await request.fetch(concrete(entry.pattern), {
+              method,
+              maxRedirects: 0,
+            });
+            expect(response.status(), method).toBe(405);
+            expect(response.headers()['allow'], method).toBe(entry.methods.join(', '));
+            expect(response.headers()['cache-control'], method).toBe('no-store');
+            expectProfileHeaders(profile, response, method);
+          }
+          // A POST from no origin at all sets nothing.
+          const posted = await request.post(concrete(entry.pattern), {
+            form: { mode: 'dark' },
+            maxRedirects: 0,
+          });
+          expect(posted.status()).toBe(403);
+          expect(posted.headers()['set-cookie']).toBeUndefined();
+          expect(posted.headers()['x-request-id']).toMatch(UUID);
+          expectProfileHeaders(profile, posted, 'POST');
+          return;
+        }
         if (served) {
           const response = await request.get(concrete(entry.pattern), { maxRedirects: 0 });
           if (gated) {
@@ -707,6 +729,55 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
           // The ID is the one proxy.ts set, never the client's.
           expect(error.requestId).toMatch(UUID);
           expect(response.headers()['x-request-id']).toBe(error.requestId);
+        }
+      },
+    );
+  }
+
+  // Every page that reads the visitor's appearance cookie (#19, Slice 4) is
+  // private and never stored, with the cookie or without it, the 404 page
+  // too. Next sets its own Vary on every page, so no-store is what keeps one
+  // visitor's appearance out of another's response; a page made cacheable,
+  // by `revalidate`, a static render, or a cache header, fails here.
+  if (serves(profile, '/api/appearance')) {
+    test(
+      'every page that reads the appearance cookie answers private and no-store, with or without one, the 404 page too',
+      {
+        annotation: [
+          { type: 'route', description: '/api/appearance' },
+          ...visitorPages(profile).map((path) => ({ type: 'route', description: path })),
+          annotation,
+        ],
+      },
+      async ({ request }) => {
+        for (const path of [...visitorPages(profile), '/no-such-page']) {
+          for (const cookie of [undefined, 'portfolio_appearance=mode=dark']) {
+            const response = await request.get(path, {
+              ...(cookie ? { headers: { cookie } } : {}),
+              maxRedirects: 0,
+            });
+            const what = `${path} ${cookie ?? 'with no cookie'}`;
+            expect(response.headers()['content-type'], what).toMatch(/^text\/html/);
+            expect(await response.text(), what).toMatch(
+              new RegExp(
+                `data-appearance-boundary="document"[^>]* data-display-mode="${cookie ? 'dark' : 'system'}"`,
+              ),
+            );
+            const directives = (response.headers()['cache-control'] ?? '')
+              .split(',')
+              .map((directive) => directive.trim().toLowerCase());
+            expect(directives, what).toContain('private');
+            expect(directives, what).toContain('no-store');
+            expect(
+              directives.filter(
+                (directive) =>
+                  directive === 'public' ||
+                  directive === 'immutable' ||
+                  /^(?:s-maxage|stale-while-revalidate)=/.test(directive),
+              ),
+              what,
+            ).toEqual([]);
+          }
         }
       },
     );
@@ -1110,9 +1181,15 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
         expect(reference.status()).toBe(404);
         const referenceText = await reference.text();
         expect(referenceText).toMatch(/<h1>Page not found<\/h1>/);
-        expect(referenceText, "the preview's 404: the theme script").not.toContain(THEME_KEY);
+        // Both 404s render in a document boundary (#19), and neither has a theme script.
         const site = await (await request.get('/no-such-page', { maxRedirects: 0 })).text();
-        expect(site, "the site's 404: the theme script").toContain(THEME_KEY);
+        for (const [what, text] of [
+          ["the preview's 404", referenceText],
+          ["the site's 404", site],
+        ] as const) {
+          expect(text, what).toContain('data-appearance-boundary="document"');
+          expect(text, what).not.toContain('localStorage');
+        }
         // As that path: the same status, type, and page, but for the path Next's
         // payload names, and the nonce the preview's scripts and styles carry.
         const shape = async (response: APIResponse, target: string) => {

@@ -15,6 +15,7 @@ test('before startup, /api/ready is 503 with the starting body and no-store', as
   assert.match(response.headers.get('content-type') ?? '', /^application\/json/);
   const starting = await readiness(undefined, {
     variantHealth: () => assert.fail('nothing loads before startup'),
+    appearanceHealth: () => assert.fail('nothing is told before startup'),
     loadedOwnerModules: () => [],
   });
   assert.deepEqual(await response.json(), starting.body);

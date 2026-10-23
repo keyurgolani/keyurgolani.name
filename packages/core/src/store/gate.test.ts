@@ -37,8 +37,8 @@ const INVALID = path.join(SCHEMA_FIXTURES, 'invalid');
  * mode, and their own origin, https://rowan.name.
  */
 const IDS: Readonly<Record<string, readonly string[]>> = {
-  colorScheme: ['warm', 'noir', 'ink-and-paper', 'nebula', 'aurora', 'solar'],
-  typography: ['classic', 'modernist', 'geometric', 'humanist'],
+  colorScheme: ['warm', 'warm-parchment', 'noir', 'ink-and-paper', 'nebula', 'aurora', 'solar'],
+  typography: ['classic', 'humanist-ui', 'modernist', 'geometric', 'humanist'],
   displayMode: ['system', 'light', 'dark', 'high-contrast'],
 };
 const CATALOG: AppearanceCatalog = {

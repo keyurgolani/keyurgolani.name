@@ -116,9 +116,9 @@ test('no CSS recipe in the skills teaches a kill switch the audit fails', () => 
   }
 });
 
-test("a skill recipe that stops motion under the boundary's data-motion stops it under the site's reduce policy too", () => {
-  // Public pages render only data-motion-policy on the boundary until #19
-  // slice 4 brings data-motion there.
+test("a skill recipe that stops motion under the boundary's data-motion stops it under the site's reduce policy and a visitor's pause both", () => {
+  // Every boundary renders the site's reduce policy as data-motion="reduced"
+  // and a pause as data-motion="static" (#19, Slice 4).
   const dir = path.join(REPO_ROOT, 'skills');
   let keyed = 0;
   for (const file of readdirSync(dir, { recursive: true, encoding: 'utf8' })) {
@@ -128,7 +128,8 @@ test("a skill recipe that stops motion under the boundary's data-motion stops it
       for (const [, selector] of css!.matchAll(/(?:^|\})([^{}]*)\{/g)) {
         if (!/\[data-motion=/.test(selector!)) continue;
         keyed += 1;
-        assert.match(selector!, /\[data-motion-policy='reduce'\]/, `${file}: ${selector!.trim()}`);
+        assert.match(selector!, /\[data-motion='reduced'\]/, `${file}: ${selector!.trim()}`);
+        assert.match(selector!, /\[data-motion='static'\]/, `${file}: ${selector!.trim()}`);
       }
     }
   }

@@ -6,10 +6,9 @@ import { actionElement, type ActionProps } from './action-markup';
 // components alike. A submit or reset button, and an action given onClick,
 // render through action-client.tsx, which reads its boundary and attaches
 // nothing in a plate. Which half renders never depends on loading, so a
-// button whose loading flips stays the same element and keeps its focus. A
-// caller that has something to do on a click only some of the time passes
-// one handler for the action's whole life and decides inside it. Only a
-// client component can pass onClick, so a link or a plain button a server
+// button whose loading flips stays the same element and keeps its focus;
+// the onClick prop says how a handler keeps it so too. Only a client
+// component can pass onClick, so a link or a plain button a server
 // component renders stays markup alone.
 
 export type { ActionProps } from './action-markup';

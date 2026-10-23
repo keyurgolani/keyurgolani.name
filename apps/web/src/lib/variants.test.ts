@@ -44,17 +44,15 @@ test('a registered selection renders itself; anything else, the fallback in its 
 
 test('documents are checked live: an unavailable selection warns, so startup serves the fallback', () => {
   const { catalog, extensions, validators } = liveContext();
-  assert.deepEqual(catalog.ids('displayMode', {} as never), [
-    'system',
-    'light',
-    'dark',
-    'high-contrast',
-  ]);
-  assert.equal(catalog.ids('variant', {} as never), null);
+  // #4's core checks no appearance axis: the appearance check (#19) checks each.
+  for (const axis of ['variant', 'designLanguage', 'colorScheme', 'typography', 'displayMode']) {
+    assert.equal(catalog.ids(axis as never, {} as never), null, axis);
+  }
   assert.deepEqual(extensions, []);
-  // The compatibility check (#5, Slice 5), which folds in the selection, controls, and toggles.
+  // The compatibility check (#5, Slice 5), which folds in the selection,
+  // controls, and toggles, and #19's appearance check.
   assert.deepEqual(
     validators.map(({ id }) => id),
-    ['variant-compatibility'],
+    ['variant-compatibility', 'appearance'],
   );
 });

@@ -17,7 +17,8 @@ import {
   TOKEN_CONTRACT_VERSION,
   type VariantRegistry,
 } from '@portfolio/variant-contract';
-import { createAppearanceCatalog } from './appearance-catalog';
+import type { AppearanceRegistry } from '@portfolio/appearance';
+import { appearanceCatalog, appearanceValidator } from '../lib/appearance-checks';
 
 // The checks a publication unit goes through in this build (#3, items 5
 // and 21), for the composition root and #3's CLI alike: #4's composite
@@ -32,6 +33,8 @@ import { createAppearanceCatalog } from './appearance-catalog';
 export interface UnitChecksInput {
   /** The variants this build registers. */
   readonly registry: VariantRegistry;
+  /** What this build registers on each appearance axis (#19), which the site's appearance is checked against. */
+  readonly appearance: AppearanceRegistry;
   /** The content extensions this build registers. */
   readonly extensions?: readonly ContentExtension[];
   /** The deployment's canonical origin, which links are checked against. */
@@ -48,14 +51,15 @@ export const CONTRACTS: Readonly<Record<string, string>> = Object.freeze({
 
 export function buildUnitChecks({
   registry,
+  appearance,
   extensions,
   origin,
   appVersion,
 }: UnitChecksInput): UnitChecks {
   const context = (live: boolean): Context => ({
-    catalog: createAppearanceCatalog(),
+    catalog: appearanceCatalog(appearance),
     ...(extensions ? { extensions } : {}),
-    validators: contractValidators(registry, { live }),
+    validators: [...contractValidators(registry, { live }), appearanceValidator(appearance, live)],
     ...(origin ? { canonicalOrigin: origin } : {}),
   });
   const publish = context(false);

@@ -384,6 +384,62 @@ test("a selected pack's stylesheet and the platform's are allowed once the bound
   ]);
 });
 
+test("the error page's fallback packs may be named in a document boundary's payload, and never loaded, linked, or named elsewhere", () => {
+  const page = lightPage();
+  const parchment = `${APP}/_portfolio/pack/warm-parchment.eeeeeeeeeeee.css`;
+  const platform = `${APP}/_portfolio/pack/_platform.111111111111.css`;
+  const boundary = {
+    'data-appearance-boundary': 'document',
+    'data-variant': 'fixture-variant-light',
+    'data-color-scheme': 'night-ink',
+  };
+  const named = (overrides = {}) =>
+    purityProblems({
+      ...page,
+      requests: [...page.requests, request(platform, 'stylesheet')],
+      references: { ...page.references, unitFiles: [...page.references.unitFiles, parchment] },
+      dom: { ...page.dom, boundary },
+      errorPacks: { 'color-scheme': 'warm-parchment' },
+      ...overrides,
+    }).problems;
+  const notRendered =
+    "/_portfolio/pack/warm-parchment.eeeeeeeeeeee.css is color-scheme warm-parchment's, which the page doesn't render.";
+  assert.deepEqual(named(), []);
+  // Loaded, or linked, it renders on a page that doesn't render it.
+  assert.deepEqual(
+    named({
+      requests: [
+        ...page.requests,
+        request(platform, 'stylesheet'),
+        request(parchment, 'stylesheet'),
+      ],
+    }),
+    [notRendered],
+  );
+  assert.deepEqual(
+    named({ dom: { ...page.dom, boundary, stylesheets: [...page.dom.stylesheets, parchment] } }),
+    [notRendered],
+  );
+  // Another pack on the same kind, named but never loaded, is no error pack.
+  const night = `${APP}/_portfolio/pack/night-ink.ffffffffffff.css`;
+  assert.deepEqual(
+    named({
+      references: { ...page.references, unitFiles: [...page.references.unitFiles, night] },
+      dom: { ...page.dom, boundary: { ...boundary, 'data-color-scheme': 'warm-parchment' } },
+    }),
+    [
+      "/_portfolio/pack/night-ink.ffffffffffff.css is color-scheme night-ink's, which the page doesn't render.",
+    ],
+  );
+  // Without errorPacks, or outside a document boundary, it's any other unit's.
+  assert.deepEqual(named({ errorPacks: undefined }), [notRendered]);
+  assert.ok(
+    named({ dom: { ...page.dom, boundary: { 'data-variant': 'fixture-variant-light' } } }).includes(
+      notRendered,
+    ),
+  );
+});
+
 test("another unit's code, or a forbidden module, in any chunk the page references or loads is a problem", () => {
   const page = lightPage();
   const chunk = {

@@ -22,6 +22,7 @@ import { COMPILED_MODE } from './server/compiled-mode';
 import { PORTFOLIO_FILES } from './server/portfolio-files';
 import { previewCsp } from './server/preview-headers';
 import { studioCsp } from './server/studio-headers';
+import { fallbackStylesheets } from './server/unavailable-page';
 
 // proxy.ts: 404 early for what the profile doesn't serve, a fresh request ID
 // on everything else, noindex on every demo response, 503 before register()
@@ -129,6 +130,7 @@ test('before startup, /api/ready answers with the starting body readiness docume
   assert.match(response.headers.get('x-request-id') ?? '', UUID);
   const starting = await readiness(undefined, {
     variantHealth: () => assert.fail('nothing loads before startup'),
+    appearanceHealth: () => assert.fail('nothing is told before startup'),
     loadedOwnerModules: () => [],
   });
   assert.deepEqual(await response.json(), starting.body);
@@ -277,8 +279,16 @@ test("while the catalog can't serve, visitor pages are a static 503 page, and th
     assert.match(response.headers.get('x-request-id') ?? '', UUID, path);
     const html = await response.text();
     assert.match(html, /<h1>Temporarily unavailable<\/h1>/);
-    // No validation text, path, or Studio link.
-    assert.doesNotMatch(html, /studio|config|\.yml|href=/i);
+    // No validation text, path, or Studio link: what it links is the
+    // fallback packs' stylesheets the registry wrote, and its skip link to
+    // its own main (#19, Slice 4).
+    assert.doesNotMatch(html, /studio|config|\.yml/i);
+    const hrefs = [...html.matchAll(/href="([^"]*)"/g)].map((match) => match[1]!);
+    assert.deepEqual(hrefs, [...fallbackStylesheets(), '#main'], path);
+    assert.ok(
+      hrefs.slice(0, -1).every((href) => href.startsWith('/_portfolio/pack/')),
+      path,
+    );
   }
   // Readiness, health, Studio, build assets, and what the profile doesn't serve answer as before.
   for (const path of [
@@ -1372,6 +1382,33 @@ test("#10's /media takes GET and HEAD alone: any other method is the same plain 
       assert.equal(response.headers.get('x-middleware-next'), '1', `${profile} ${method}`);
       assert.equal(segment(response), null, `${profile} ${method}`);
     }
+  }
+});
+
+test('POST /api/appearance goes on under owner and read-only, any other method to it is a plain 405 naming POST, and under demo it is absent (#19, Slice 4)', async (t) => {
+  for (const profile of ['owner', 'read-only'] as const) {
+    deploy(t, profile);
+    const posted = await proxy(request('/api/appearance', 'POST'));
+    assert.ok(onward(posted), profile);
+    assert.equal(decision(posted), 'served', profile);
+    for (const method of ['GET', 'HEAD', 'PUT', 'DELETE', 'PATCH', 'OPTIONS']) {
+      const what = `${profile} ${method}`;
+      const response = await proxy(request('/api/appearance', method));
+      assert.equal(response.status, 405, what);
+      assert.equal(response.headers.get('allow'), 'POST', what);
+      assert.equal(response.headers.get('cache-control'), 'no-store', what);
+      assert.match(response.headers.get('content-type') ?? '', /^text\/plain/, what);
+      assert.equal(decision(response), null, what);
+    }
+    // It reads nothing of the published site, so it answers while the catalog can't serve.
+    setServable(false);
+    assert.ok(onward(await proxy(request('/api/appearance', 'POST'))), profile);
+    setServable(true);
+  }
+  deploy(t, 'demo');
+  for (const method of ['POST', 'GET']) {
+    const response = await proxy(request('/api/appearance', method));
+    assert.equal(response.status, 404, method);
   }
 });
 

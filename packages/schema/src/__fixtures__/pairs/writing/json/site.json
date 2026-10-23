@@ -3,8 +3,8 @@
   "appearance": {
     "variant": "missing-variant",
     "designLanguage": "platform-neutral",
-    "colorScheme": "warm",
-    "typography": "classic",
+    "colorScheme": "warm-parchment",
+    "typography": "humanist-ui",
     "displayMode": "system"
   },
   "visitorControls": {

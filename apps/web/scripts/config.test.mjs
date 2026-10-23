@@ -274,19 +274,32 @@ test('validate prints each record where it is, with how to fix it, and exits 1',
       '',
       ...UNAVAILABLE('site.yml:4:12'),
       "invalid/anchor.broken can't go live: 1 record blocks it.",
-      'Not checked: site.appearance.colorScheme, site.appearance.designLanguage, site.appearance.typography.',
       '',
     ].join('\n'),
   );
 });
 
 test('validate exits 0 on a valid pair, warnings or not, and lists what it could not check', () => {
-  // The fallback composition renders for the pair's variant, which this build doesn't register.
+  // The fallback composition renders for the pair's variant, which this
+  // build doesn't register, and the fallback packs for its scheme and
+  // typography, whose humanist-ui covers no Arabic (#19, Slice 4).
   const valid = validate(ALL_FIXTURES, 'pairs/mixed/json');
   assert.equal(valid.code, 0, valid.stderr);
-  assert.ok(valid.stdout.startsWith(UNAVAILABLE('site.json:4:16').join('\n')), valid.stdout);
-  assert.match(valid.stdout, /\nportfolio\.json and site\.json are valid, with 1 warning\.\n/);
-  assert.match(valid.stdout, /\nNot checked: origin\.sample, origin\.stale, /);
+  assert.ok(valid.stdout.includes(UNAVAILABLE('site.json:4:16').join('\n')), valid.stdout);
+  assert.deepEqual(
+    [...valid.stdout.matchAll(/^\S+: ([a-z.-]+) \(warning\) at (\S+)$/gm)].map((match) =>
+      match.slice(1).join(' '),
+    ),
+    [
+      'appearance.script-coverage /locale',
+      'appearance.unavailable /appearance/colorScheme',
+      'appearance.unavailable /appearance/typography',
+      'variant.unavailable /appearance/variant',
+    ],
+    valid.stdout,
+  );
+  assert.match(valid.stdout, /\nportfolio\.json and site\.json are valid, with 4 warnings\.\n/);
+  assert.match(valid.stdout, /\nNot checked: origin\.sample, origin\.stale\.\n/);
   assert.match(valid.stdout, /\nPass --origin with the site's origin/);
 
   const warned = validate(ALL_FIXTURES, 'invalid/origin.stale', ...ORIGIN);
@@ -329,15 +342,15 @@ test('validate refuses every blocking invalid pair and loads every warning one, 
         `${code} parses, and has no variant.unavailable`,
       );
     }
-    // The host's interim catalog registers no color scheme until #19, so it
-    // can't raise this one, and says it didn't check it. A publication code's
-    // draft is clean on its own.
-    const expected =
-      code === 'appearance.unknown' || PUBLICATION_CODES.includes(code) ? [] : [code];
+    // The host checks appearance against the packs this build registers (#19,
+    // Slice 4), where a scheme it doesn't register is appearance.unavailable,
+    // a warning, as the fallback pack renders in its place. A publication
+    // code's draft is clean on its own.
+    const expected = PUBLICATION_CODES.includes(code)
+      ? []
+      : [code === 'appearance.unknown' ? 'appearance.unavailable' : code];
     assert.deepEqual([...new Set(others.map((record) => record.code))], expected, code);
-    if (code === 'appearance.unknown') {
-      assert.ok(report.notChecked.includes('site.appearance.colorScheme'), code);
-    }
+    assert.ok(!report.notChecked.some((what) => what.startsWith('site.appearance.')), code);
     for (const record of report.diagnostics) {
       // A snapshot's or the media document's record names its file.
       const file = record.document === 'snapshots' || record.document === 'media';

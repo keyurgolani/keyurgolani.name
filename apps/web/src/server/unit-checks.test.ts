@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import type { UnitChecks } from '@portfolio/core';
 import { mediaBlobs } from '@portfolio/schema';
 import { readPair } from '@portfolio/schema/node';
+import { APPEARANCE_REGISTRY } from '~/lib/appearance-registry';
 import { OriginError, storeChecks, storeOrigin } from '../../scripts/portfolio-store';
 import { deploymentUnitChecks } from './register';
 import { buildUnitChecks } from './unit-checks';
@@ -115,7 +116,11 @@ const DOCUMENT = {
 };
 
 test("a unit references its media document's source and rendition blobs", () => {
-  const checks = buildUnitChecks({ registry: [], appVersion: 'test' });
+  const checks = buildUnitChecks({
+    registry: [],
+    appearance: APPEARANCE_REGISTRY,
+    appVersion: 'test',
+  });
   assert.deepEqual(checks.referencedBlobs?.(DOCUMENT), [
     `sha256:${hex('a')}`,
     `sha256:${hex('b')}`,

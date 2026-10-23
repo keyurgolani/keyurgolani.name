@@ -8,8 +8,8 @@
 // hover, reflow, the content inventory, failed enhancement, motion, and
 // transparency (lib/a11y/). An appearance cell, the complete fixture at
 // the first route, also runs them on #19's shared primitives at
-// /_fixtures/appearance under the cell's tuple, the one page that renders
-// the packs today, so every pack the plan reaches is checked there.
+// /_fixtures/appearance under the cell's tuple, which renders every slot,
+// so every pack the plan reaches is checked there.
 //
 // Everything it saw is attached first (axe's JSON, the vitals, the
 // boundary's resolved tokens, and one failure record per failing rule and

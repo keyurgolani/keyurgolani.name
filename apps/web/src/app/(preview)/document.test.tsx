@@ -11,7 +11,6 @@ import {
   resolvePortfolioView,
   type PublicView,
 } from '@portfolio/schema';
-import { themeInitScript } from '@portfolio/kit';
 import { experienceHead } from '~/lib/experience-head';
 
 // The preview document (#7, Slice 1, item 3): the previewed unit's language,
@@ -88,9 +87,9 @@ test("a preview document is in the previewed unit's language and direction, with
     html,
     `<html lang="he" dir="rtl"><head>${jsonLd}</head><body><main id="page">the page</main></body></html>`,
   );
-  // No theme script, whatever display mode the site selects: #19's
-  // environment attributes say it instead.
-  assert.ok(!html.includes(themeInitScript('dark')), html);
+  // No theme script, whatever display mode the site selects: the page's
+  // document boundary says it instead (#19, Slice 4).
+  assert.ok(!html.includes('localStorage'), html);
   assert.ok(!html.includes('data-theme'), html);
 });
 

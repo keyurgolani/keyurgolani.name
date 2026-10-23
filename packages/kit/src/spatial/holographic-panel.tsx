@@ -3,11 +3,9 @@ import { cn } from '../cn';
 
 interface HolographicPanelProps extends HTMLAttributes<HTMLDivElement> {
   children: ReactNode;
-  /** Tone of the panel: 'dark' = obsidian glass, 'light' = pearl. */
-  tone?: 'dark' | 'light';
   /** Adds horizontal scanline overlay. */
   scanlines?: boolean;
-  /** Glow color around the edge. */
+  /** Glow color around the edge. The boundary's accent unless given. */
   glow?: string;
   /** Override blur amount (px). */
   blur?: number;
@@ -20,11 +18,15 @@ interface HolographicPanelProps extends HTMLAttributes<HTMLDivElement> {
  * holographic feel comes from layering: blurred backdrop + faint border +
  * edge gradient + optional scanlines.
  *
+ * Its glass, border, text, and corner are the document boundary's (#19,
+ * Slice 4): the overlay surface, the subtle border, the primary text, and
+ * the card radius, so it's dark glass in a dark mode and pearl in a light
+ * one, with no tone of its own.
+ *
  * Pure CSS — no client logic, safe in server components.
  */
 export function HolographicPanel({
   children,
-  tone = 'dark',
   scanlines = false,
   glow,
   blur = 18,
@@ -33,23 +35,18 @@ export function HolographicPanel({
   style,
   ...rest
 }: HolographicPanelProps) {
+  const highlight = 'color-mix(in oklab, var(--color-text-primary) 6%, transparent)';
   const base: CSSProperties = {
     position: 'relative',
     backdropFilter: `blur(${blur}px) saturate(140%)`,
     WebkitBackdropFilter: `blur(${blur}px) saturate(140%)`,
     background:
-      tone === 'dark'
-        ? 'linear-gradient(180deg, rgba(20,22,30,0.55) 0%, rgba(10,12,18,0.45) 100%)'
-        : 'linear-gradient(180deg, rgba(255,255,255,0.55) 0%, rgba(240,240,245,0.45) 100%)',
-    border: `${borderWeight}px solid ${
-      tone === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'
-    }`,
-    borderRadius: 4,
-    boxShadow: glow
-      ? `0 0 28px -8px ${glow}, inset 0 1px 0 ${tone === 'dark' ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.6)'}`
-      : `inset 0 1px 0 ${tone === 'dark' ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.6)'}`,
+      'linear-gradient(180deg, color-mix(in oklab, var(--color-surface-overlay) 55%, transparent) 0%, color-mix(in oklab, var(--color-surface-overlay) 45%, transparent) 100%)',
+    border: `${borderWeight}px solid var(--color-border-subtle)`,
+    borderRadius: 'var(--ui-radius-card)',
+    boxShadow: `0 0 28px -8px ${glow ?? 'var(--color-accent)'}, inset 0 1px 0 ${highlight}`,
     overflow: 'hidden',
-    color: tone === 'dark' ? '#ebe7df' : '#1a1a1a',
+    color: 'var(--color-text-primary)',
     ...style,
   };
 
@@ -63,8 +60,7 @@ export function HolographicPanel({
             position: 'absolute',
             inset: 0,
             pointerEvents: 'none',
-            background:
-              'repeating-linear-gradient(0deg, transparent 0, transparent 2px, rgba(255,255,255,0.025) 2px, rgba(255,255,255,0.025) 3px)',
+            background: `repeating-linear-gradient(0deg, transparent 0, transparent 2px, color-mix(in oklab, var(--color-text-primary) 2.5%, transparent) 2px, color-mix(in oklab, var(--color-text-primary) 2.5%, transparent) 3px)`,
             mixBlendMode: 'overlay',
           }}
         />

@@ -1,3 +1,4 @@
+import { appearanceHealth } from '~/server/appearance-health';
 import { getDeploymentState } from '~/server/config-store';
 import { loadedOwnerModules } from '~/server/load-trace';
 import { readiness } from '~/server/readiness';
@@ -12,6 +13,7 @@ export const GET = served('/api/ready', async () => {
   const { httpStatus, body } = await readiness(getDeploymentState(), {
     // The variant that renders loads on the first readiness check.
     variantHealth,
+    appearanceHealth,
     loadedOwnerModules,
   });
   return Response.json(body, { status: httpStatus, headers: { 'cache-control': 'no-store' } });

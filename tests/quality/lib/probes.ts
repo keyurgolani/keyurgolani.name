@@ -1,10 +1,10 @@
 // What a failure record says about the element it's on (#11, Slice 1, item
 // 10), read in the page: its ARIA role and accessible name, as axe computes
 // them, the #19 slot it's in, and its token role, the boundary token its
-// rendered color is, or `hard-coded` when it's none of them. The host
-// renders #19's presentation boundary only from #19 slice 4, so on today's
-// site pages an element has no boundary and no token role; on the
-// /_fixtures/appearance page, which renders the boundary, every one has one.
+// rendered color is, or `hard-coded` when it's none of them. Every page
+// renders in #19's document boundary (#19, Slice 4), so an element inside
+// it has a token role; one outside any boundary, as Studio's are, has
+// none.
 
 /** The color properties a token role is matched on, by the rule that failed. */
 export type ColorProperty = 'color' | 'background-color' | 'border-color' | 'outline-color';

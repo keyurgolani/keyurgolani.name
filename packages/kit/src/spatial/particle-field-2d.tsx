@@ -3,6 +3,9 @@
 import { useCallback, useEffect, useRef, type CSSProperties } from 'react';
 import type { MotionPolicy } from '@portfolio/schema';
 import { useEnhancementRuntime, useFrameLoop } from '../runtime';
+import { useBoundaryColors, withAlpha } from './boundary-colors';
+
+const BOUNDARY_ROLES = ['accent'] as const;
 
 interface ParticleField2DProps {
   motionPreference?: MotionPolicy;
@@ -12,9 +15,9 @@ interface ParticleField2DProps {
   maxParticles?: number;
   /** Particle radius (px). */
   particleSize?: number;
-  /** Particle color (CSS color). */
+  /** Particle color (a CSS color a canvas takes). The boundary's accent unless given. */
   particleColor?: string;
-  /** Connection line color (CSS color). */
+  /** Connection line color (a CSS color a canvas takes). The boundary's accent, fainter, unless given. */
   lineColor?: string;
   /** Distance below which lines are drawn (px). */
   connectDistance?: number;
@@ -47,8 +50,8 @@ export function ParticleField2D({
   density = 0.00012,
   maxParticles = 160,
   particleSize = 1.4,
-  particleColor = 'rgba(168, 218, 220, 0.85)',
-  lineColor = 'rgba(168, 218, 220, 0.18)',
+  particleColor,
+  lineColor,
   connectDistance = 140,
   cursorRadius = 220,
   cursorStrength = 0.06,
@@ -67,6 +70,19 @@ export function ParticleField2D({
   );
   // Draws a frame: moved first when `move`, else as the particles stand.
   const scene = useRef<((move: boolean) => void) | null>(null);
+  // The boundary's accent, for the dots and the lines, unless given (#19, Slice 4).
+  const boundary = useBoundaryColors(canvasRef, BOUNDARY_ROLES);
+  const accent = boundary?.accent ?? null;
+  const particle = particleColor ?? (accent ? withAlpha(accent, 0.85) : '');
+  const line = lineColor ?? (accent ? withAlpha(accent, 0.18) : '');
+  // What the frames draw with. A new appearance redraws the still frame;
+  // while active, the next frame has it anyway. Before the scene below, so
+  // its first frame has them.
+  const paint = useRef({ particle: '', line: '' });
+  useEffect(() => {
+    paint.current = { particle, line };
+    scene.current?.(false);
+  }, [particle, line]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -124,8 +140,12 @@ export function ParticleField2D({
         }
       }
 
+      // Nothing draws until the boundary's colors are read.
+      const { particle, line } = paint.current;
+      if (particle === '' || line === '') return;
+
       // Lines
-      ctx!.strokeStyle = lineColor;
+      ctx!.strokeStyle = line;
       ctx!.lineWidth = 0.5;
       for (let i = 0; i < particles.length; i++) {
         for (let j = i + 1; j < particles.length; j++) {
@@ -147,7 +167,7 @@ export function ParticleField2D({
       ctx!.globalAlpha = 1;
 
       // Dots
-      ctx!.fillStyle = particleColor;
+      ctx!.fillStyle = particle;
       for (const p of particles) {
         ctx!.beginPath();
         ctx!.arc(p.x, p.y, particleSize, 0, Math.PI * 2);
@@ -184,16 +204,7 @@ export function ParticleField2D({
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerleave', onLeave);
     };
-  }, [
-    density,
-    maxParticles,
-    particleSize,
-    particleColor,
-    lineColor,
-    connectDistance,
-    cursorRadius,
-    cursorStrength,
-  ]);
+  }, [density, maxParticles, particleSize, connectDistance, cursorRadius, cursorStrength]);
 
   useFrameLoop(runtime, () => {
     scene.current?.(true);

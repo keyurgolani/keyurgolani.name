@@ -919,6 +919,38 @@ test('an old-format document gets one legacy.document, and nothing else is repor
   ]);
 });
 
+test("legacy.document's remediation ends with the catalog's appearance lines for the old file, after the site document's skeleton (#19)", () => {
+  const seen: unknown[] = [];
+  const catalog = {
+    ...CONTEXT.catalog!,
+    legacyAppearance(data: unknown) {
+      seen.push(data);
+      return 'Its appearance values move to appearance in the site document.\n';
+    },
+  };
+  const [legacy] = validate(OLD, 'schemaVersion: 2\n', { ...CONTEXT, catalog }).diagnostics;
+  assert.ok(
+    legacy!.remediation.endsWith(
+      `${SITE_SKELETON}Its appearance values move to appearance in the site document.\n`,
+    ),
+    legacy!.remediation,
+  );
+  // It gets the old file's own parsed values.
+  assert.equal((seen[0] as { theme?: unknown }).theme, 'dark');
+  // One that throws adds nothing, and the record still goes out.
+  const throwing = {
+    ...catalog,
+    legacyAppearance(): string {
+      throw new Error('no registry');
+    },
+  };
+  const [plain] = validate(OLD, 'schemaVersion: 2\n', {
+    ...CONTEXT,
+    catalog: throwing,
+  }).diagnostics;
+  assert.ok(plain!.remediation.endsWith(SITE_SKELETON));
+});
+
 test('a document in the other one slot gets one schema.invalid at its marker', () => {
   const result = validatePublicationUnit(unit(SITE, PORTFOLIO), CONTEXT);
   assert.equal(result.pair, null);

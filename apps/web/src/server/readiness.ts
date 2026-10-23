@@ -40,16 +40,27 @@ export interface Readiness {
 export interface ReadinessProbes {
   /** The health of the site's selection, once the module that renders it has loaded; it throws when that fails. */
   readonly variantHealth: (variant: string) => Promise<VariantHealth>;
+  /** The health of the site's packs, `degraded` while one falls back (#19, Slice 4), for the serving revision. */
+  readonly appearanceHealth: (
+    site: PublicSite,
+    revision: { readonly revisionId: string; readonly profile: Profile },
+  ) => { readonly status: 'ok' | 'degraded' };
   readonly loadedOwnerModules: () => readonly string[];
 }
+
+/** What the packs check reads of the serving revision's site. */
+type PublicSite = NonNullable<
+  Extract<LiveRevision, { state: 'live' | 'degraded' }>['unit']
+>['site'];
 
 /**
  * The checks: `catalog`, from the serving state alone, never the revision's
  * IDs (#3, item 23): `ok` live, `degraded` while the last known good serves,
  * and `fail` when nothing is servable, `incompatible` or `empty`; `packs`
  * (what renders the live site's variant loads, `degraded` when the fallback
- * composition stands in for it; #19 adds packs; with nothing served there's
- * none to load, so it fails too); under demo and read-only, `owner-modules`
+ * composition stands in for it or one of its packs falls back, #19's
+ * appearanceHealth(); with nothing served there's none to load, so it fails
+ * too); under demo and read-only, `owner-modules`
  * (no owner module has loaded); and under owner, `data-directory` (#3, item
  * 23): the data directory's write, sync, and rename probe, run at most every
  * 30 s. A failed check is a 503. A degraded check, or a startup requirement
@@ -61,21 +72,31 @@ export async function readiness(
 ): Promise<Readiness> {
   if (!state) return { httpStatus: 503, body: STARTING };
   const { profile } = state.config;
-  let site: string | undefined;
+  let site: PublicSite | undefined;
+  let revisionId: string | null = null;
   let catalog: CheckStatus = 'fail';
   try {
     const live = await state.catalog.getLive();
     catalog = SERVING[live.state];
-    site = live.unit?.site.appearance.variant;
+    site = live.unit?.site;
+    revisionId = live.revisionId;
   } catch {
     catalog = 'fail';
   }
-  const selected = site;
+  const served = site;
   const checks: ReadinessCheck[] = [
     { id: 'catalog', status: catalog },
     {
       id: 'packs',
-      status: selected === undefined ? 'fail' : await packs(() => probes.variantHealth(selected)),
+      status:
+        served === undefined || revisionId === null
+          ? 'fail'
+          : worst(
+              await packs(() => probes.variantHealth(served.appearance.variant)),
+              appearance(() =>
+                probes.appearanceHealth(served, { revisionId: revisionId!, profile }),
+              ),
+            ),
     },
   ];
   if (profile !== 'owner') {
@@ -117,6 +138,22 @@ async function settle(probe: () => Promise<boolean>): Promise<CheckStatus> {
   } catch {
     return 'fail';
   }
+}
+
+/** The appearance's status; fail when it can't be told. */
+function appearance(probe: () => { readonly status: 'ok' | 'degraded' }): CheckStatus {
+  try {
+    return probe().status;
+  } catch {
+    return 'fail';
+  }
+}
+
+const RANK: Readonly<Record<CheckStatus, number>> = { ok: 0, degraded: 1, fail: 2 };
+
+/** The worse of two statuses. */
+function worst(a: CheckStatus, b: CheckStatus): CheckStatus {
+  return RANK[a] >= RANK[b] ? a : b;
 }
 
 /** The health's own status; fail when the module that renders doesn't load. */

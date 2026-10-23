@@ -6,7 +6,7 @@ import { runtimeAnimation, useEnhancementRuntime } from '../runtime';
 
 interface AuroraGradientProps {
   motionPreference?: MotionPolicy;
-  /** 2-5 colors for the gradient stops. */
+  /** 2-5 colors for the gradient stops. The boundary's signature, accent, and emphasis colors unless given. */
   colors?: string[];
   /** Animation duration (seconds). */
   speed?: number;
@@ -34,7 +34,7 @@ interface AuroraGradientProps {
  */
 export function AuroraGradient({
   motionPreference = 'respect-os',
-  colors = ['#0a1f3d', '#5a2a82', '#0d4f5c', '#1a0a2e'],
+  colors = AURORA_COLORS,
   speed = 28,
   blend = 'screen',
   opacity = 1,
@@ -109,8 +109,20 @@ export function AuroraGradient({
   );
 }
 
+/**
+ * The boundary's own colors (#19, Slice 4): its signature gradient, its
+ * accent, and its emphasis, as the selected scheme and display mode define
+ * them, so the wash changes with the appearance and needs no script for it.
+ */
+const AURORA_COLORS = [
+  'var(--color-signature-start)',
+  'var(--color-signature-end)',
+  'var(--color-accent)',
+  'var(--color-emphasis)',
+];
+
 function padColors(colors: string[]): [string, string, string, string] {
-  const c0 = colors[0] ?? '#0a1f3d';
+  const c0 = colors[0] ?? AURORA_COLORS[0]!;
   const c1 = colors[1] ?? c0;
   const c2 = colors[2] ?? c1;
   const c3 = colors[3] ?? c2;

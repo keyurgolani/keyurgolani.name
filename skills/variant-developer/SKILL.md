@@ -43,7 +43,7 @@ Reference packages:
 
 ## 2. What the host does around a variant
 
-- It renders a skip link to `#<input.ids.main>`, then the presentation boundary, `<div data-variant="<id>" data-motion-policy="...">`, with your component inside. #19's tokens apply at the boundary, and your stylesheet's `[data-variant='<id>']` rules start there. Don't render `data-variant` yourself.
+- It renders the document boundary, `<div data-appearance-boundary="document" data-variant="<id>" data-motion="..." ...>`, with its skip link to `#<input.ids.main>` first and your component inside. #19's tokens apply at the boundary, and your stylesheet's `[data-variant='<id>']` rules start there. Don't render `data-variant` yourself.
 - Your component renders exactly one `<main id={input.ids.main}>` and exactly one `<VisitorControlSlot />`, at your manifest's `visitorControl.placement`.
 - The host owns the routes: `/`, `/sample` under the demo profile, and the 404 page, which renders inside the boundary too. Your manifest's `routes` says whether home and work are bespoke or shared, and declares any views.
 - Every DOM id you render starts with `input.ids.prefix`, so a host page and a preview frame can share a document. A section's id is `${input.ids.prefix}${section.id}`; `renderSection` does this for you.

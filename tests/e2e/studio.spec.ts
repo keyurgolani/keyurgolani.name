@@ -35,7 +35,7 @@ test(
     for (const tag of scripts)
       expect(tag, 'a script without the nonce').toContain(`nonce="${nonce}"`);
     expect(html).not.toContain('application/ld+json');
-    // The site's theme script sets data-theme before first paint; Studio has none.
+    // No page has a theme script any more (#19, Slice 4), and Studio's never did.
     expect(html).not.toContain('data-theme');
   },
 );

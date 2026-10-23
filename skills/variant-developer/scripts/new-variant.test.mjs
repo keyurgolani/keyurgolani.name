@@ -54,7 +54,10 @@ test('it copies the fallback composition into a variant of its own', (t) => {
 
   const styles = read('src/styles.css');
   assert.match(styles, /^\/\*\n \* Acme Ocean's layout\./);
-  assert.match(styles, /\[data-variant='acme-ocean'\] \.ao-nav ul \{/);
+  assert.match(
+    styles,
+    /\[data-variant='acme-ocean'\] \.ao-nav \[data-ui-slot='navigation\.list'\] \{/,
+  );
   assert.doesNotMatch(styles, /fallback|\.fc-/);
 
   // The fallback's tests and README stay behind.

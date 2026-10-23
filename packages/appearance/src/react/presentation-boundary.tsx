@@ -33,6 +33,8 @@ export interface PresentationBoundaryProps {
   readonly stylesheets?: AppearanceStylesheets;
   /** A document boundary's skip link: its label, and its language when the portfolio's isn't the label's. */
   readonly skipLink?: { readonly label?: string; readonly lang?: string };
+  /** The nonce of the request's Content-Security-Policy, where its policy wants one on every stylesheet, as a preview frame's does. */
+  readonly nonce?: string;
   readonly children?: ReactNode;
 }
 
@@ -42,6 +44,7 @@ export function PresentationBoundary({
   ids,
   stylesheets,
   skipLink,
+  nonce,
   children,
 }: PresentationBoundaryProps) {
   if (kind === 'document' && ids.prefix !== '') {
@@ -58,7 +61,7 @@ export function PresentationBoundary({
   return (
     <>
       {hrefs.map((href) => (
-        <link key={href} rel="stylesheet" href={href} precedence="appearance" />
+        <link key={href} rel="stylesheet" href={href} precedence="appearance" nonce={nonce} />
       ))}
       <BoundaryRoot kind={kind} ids={ids} attributes={boundaryAttributes(appearance, kind)}>
         {kind === 'document' ? <SkipLink target={ids.main} {...skipLink} /> : null}

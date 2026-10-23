@@ -1,17 +1,22 @@
 import type { ComponentType, ReactNode } from 'react';
 import type { VariantComponent } from '@portfolio/kit/sections';
-import type { MotionPolicy, PublicView } from '@portfolio/schema';
+import type { PublicView } from '@portfolio/schema';
+import type { ResolvedAppearance } from '@portfolio/appearance';
+import { PresentationBoundary } from '@portfolio/appearance/react';
 import { buildRenderInput, type RouteTarget } from '@portfolio/variant-contract';
 import './host-modules';
-import type { EnvironmentAttributes } from './environment';
+import { APPEARANCE_STYLESHEETS } from './appearance-registry';
 import { variantStylesheet, type Composition } from './variants';
+import { VisitorControlProvider, type VisitorControlValue } from './visitor-control';
 
 // The portfolio a document shows (#5, Slice 3, item 6, and #7, Slice 1, item
-// 2): a skip link to the variant's main, then the presentation boundary,
-// <div data-variant>, with the variant inside it. Public pages and previews
-// both render it, so a preview shows the same tree a visitor gets. #19's
-// tokens apply at the boundary, so the 404 page renders inside one too. The
-// boundary links the stylesheet of the variant it renders and no other, and
+// 2): #19's document boundary, which resolveAppearance() decided for the
+// page (lib/document-appearance.ts), with its skip link to the variant's
+// main and the variant inside it. Public pages and previews both render it,
+// so a preview shows the same tree a visitor gets, and the 404 page renders
+// inside one too. The boundary links the platform stylesheet and the
+// selected packs' and no others, and the stylesheet of the variant it
+// renders and no other, and
 // the variant comes from the loader its caller passes, never from a module
 // that can load every variant (#6, Slice 2): a visitor page's is its
 // experience segment's own.
@@ -41,8 +46,8 @@ export interface ExperienceDocumentProps {
    * every variant's, for the routes that render any of them.
    */
   readonly hostModules: ComponentType;
-  /** A preview's fixed environment. Public pages pass none. */
-  readonly environment?: EnvironmentAttributes;
+  /** What the document boundary renders: lib/document-appearance.ts's answer for this page. */
+  readonly appearance: ResolvedAppearance;
   readonly linkBase: LinkBase;
   readonly route: RouteTarget;
   /** The deployment's canonical origin, PORTFOLIO_ORIGIN. */
@@ -57,6 +62,8 @@ export interface ExperienceDocumentProps {
    * variant's compiled one among them (#6, Slice 2).
    */
   readonly nonce?: string;
+  /** The visitor control's model and the page's path, on a visitor page (#19, Slice 4). A preview has none. */
+  readonly control?: VisitorControlValue;
 }
 
 /** The skip link, then the selected variant, or the fallback composition in its place, in its boundary. */
@@ -82,58 +89,69 @@ export async function ExperienceDocument(props: ExperienceDocumentProps) {
       {props.canonical === undefined ? null : (
         <link rel="canonical" href={`${props.origin}${props.canonical}`} />
       )}
-      <a className="host-skip-link" href={`#${input.ids.main}`} lang={hostLang(unit)}>
-        Skip to content
-      </a>
-      <PresentationBoundary
-        composition={selection}
-        motionPolicy={unit.site.motionPolicy}
-        environment={props.environment}
+      <DocumentBoundary
+        appearance={props.appearance}
+        main={input.ids.main}
+        lang={hostLang(unit)}
         nonce={props.nonce}
+        control={props.control}
       >
         <Variant input={input} />
-      </PresentationBoundary>
+      </DocumentBoundary>
     </>
   );
 }
 
 /**
- * `<div data-variant="<id>">` around what renders, after the compiled
- * stylesheet of the variant that renders (#6, Slice 2), which React hoists
- * into the head as a stylesheet resource: once, however many boundaries
- * share it, and shown only once it has loaded. When the fallback composition
- * stands in, `data-requested-variant` says which variant the site selected,
- * for the owner and the tests; visitors see no label. A preview's
- * environment goes on it too, and under a policy with a nonce, the nonce
- * goes on the stylesheet.
+ * #19's document boundary around what renders (#19, Slice 4): its skip link
+ * to the variant's main, its attributes, and the platform's and the
+ * selected packs' stylesheets, after the compiled stylesheet of the variant
+ * that renders (#6, Slice 2). React hoists each into the head as a
+ * stylesheet resource: once, however many boundaries share it, and shown
+ * only once it has loaded. When an axis falls back, such as the fallback
+ * composition standing in, data-appearance-fallback and
+ * data-requested-<axis> say what the site selected, for the owner and the
+ * tests; visitors see no label. Under a policy with a nonce, the nonce goes
+ * on every stylesheet.
  */
-export function PresentationBoundary({
-  composition,
-  motionPolicy,
-  environment,
+export function DocumentBoundary({
+  appearance,
+  main,
+  lang,
   nonce,
+  control,
   children,
 }: {
-  composition: Composition;
-  motionPolicy: MotionPolicy;
-  environment?: EnvironmentAttributes;
+  appearance: ResolvedAppearance;
+  /** The id of the variant's main, which the skip link goes to. */
+  main: string;
+  /** The skip link's language, when the portfolio's isn't English. */
+  lang?: string;
   nonce?: string;
+  /** What the slot's visitor control shows, where the page has one. */
+  control?: VisitorControlValue;
   children: ReactNode;
 }) {
-  const stylesheet = variantStylesheet(composition.rendered.manifest.id);
+  const stylesheet = variantStylesheet(appearance.selection.variant);
   return (
     <>
       {stylesheet ? (
         <link rel="stylesheet" href={stylesheet} precedence="variant" nonce={nonce} />
       ) : null}
-      <div
-        data-variant={composition.rendered.manifest.id}
-        data-requested-variant={composition.fallback ? composition.requested : undefined}
-        data-motion-policy={motionPolicy}
-        {...environment}
+      <PresentationBoundary
+        kind="document"
+        appearance={appearance}
+        ids={{ prefix: '', main }}
+        stylesheets={APPEARANCE_STYLESHEETS}
+        skipLink={{ label: 'Skip to content', ...(lang ? { lang } : {}) }}
+        {...(nonce ? { nonce } : {})}
       >
-        {children}
-      </div>
+        {control ? (
+          <VisitorControlProvider value={control}>{children}</VisitorControlProvider>
+        ) : (
+          children
+        )}
+      </PresentationBoundary>
     </>
   );
 }
