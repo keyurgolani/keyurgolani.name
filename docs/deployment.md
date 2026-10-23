@@ -110,7 +110,7 @@ Under `owner`, edit the files in `config/`, then import them from `deploy/`. Not
 docker compose -f compose.owner.yml exec web node bin/portfolio-store.mjs import
 ```
 
-A Studio publish goes live the same way, and a draft never does ([Importing](#importing)).
+A Studio publish goes live the same way, and a draft never does ([Importing](#importing)). A new case study's `/work/<slug>` serves once the server has read the revision that adds it. A Studio publish, rollback, or recover reads it as it commits, so the page serves on the next request. `portfolio-store import`, or a publish from the CLI, runs outside the server, so the page serves from the server's next read of the live revision, which any visitor page makes. Until then that slug is the 404 page. A case study a publish drops is the 404 page on the next request either way.
 
 Under `read-only`, the server reads `config/portfolio.yml` and `config/site.yml` once, at startup. After you edit either, restart the container:
 

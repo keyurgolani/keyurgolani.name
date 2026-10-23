@@ -17,8 +17,10 @@ import { readDeploymentConfig, type DeploymentConfig } from './config';
 import { compositionFor } from '~/lib/variants';
 import { segmentFor } from './experience';
 import {
+  liveCaseStudies,
   liveComposition,
   setDeploymentState,
+  setLiveCaseStudies,
   setLiveComposition,
   type DeploymentState,
 } from './config-store';
@@ -706,4 +708,60 @@ test("after a publish from beside the server, a Studio config.status read record
     segmentFor({ profile: 'owner', pattern: '/', query: new URLSearchParams() }),
     'fallback',
   );
+});
+
+test('a Studio publish that adds a case study serves its /work/<slug> on the next request, with no other read in between (#10b)', async (t) => {
+  t.after(() => setLiveCaseStudies(undefined));
+  const slug = 'tide-tables';
+  const side = await sideStore();
+  const working = await side.drafts.getWorking();
+  const portfolio = [
+    'schemaVersion: 3',
+    'locale: en',
+    'direction: ltr',
+    'identity:',
+    '  name: Rowan Case',
+    'works:',
+    '  - id: tide-tables',
+    `    slug: ${slug}`,
+    '    title: Tide Tables',
+    '    medium: software',
+    '    caseStudy:',
+    '      challenge: Read the tides.',
+    'sections:',
+    '  - kind: works',
+    '    id: work',
+    '    items: [tide-tables]',
+    '',
+  ].join('\n');
+  const created = await side.drafts.create(
+    {
+      documents: {
+        ...documents('Rowan Case'),
+        portfolio: { format: 'yaml', sourceText: portfolio },
+      },
+      ...(working ? { expectedVersion: working.version } : {}),
+    },
+    'owner',
+  );
+  assert.equal(created.kind, 'saved', JSON.stringify(created));
+  if (created.kind !== 'saved') return;
+  // What the last read recorded: the live revision has no case study.
+  setLiveCaseStudies(new Set());
+  assert.equal(resolveRoute('owner', `/work/${slug}`).status, 'missing');
+  const response = await studio(
+    'POST',
+    'publish',
+    { origin: ORIGIN, 'content-type': 'application/json', 'x-test-session': 'owner' },
+    {
+      draftId: created.draft.draftId,
+      draftVersion: created.draft.version,
+      expectedLiveRevisionId: (await side.publication.status()).liveRevisionId,
+    },
+  );
+  assert.equal(response.status, 200, await response.clone().text());
+  // The publish recorded the new revision's slugs as it committed: the next
+  // request's route table serves the page, with nothing read since.
+  assert.deepEqual([...liveCaseStudies()], [slug]);
+  assert.equal(resolveRoute('owner', `/work/${slug}`).status, 'served');
 });

@@ -420,7 +420,7 @@ export async function compose(input: CompositionInput): Promise<Composition> {
           ...owner.ownerHandlers({
             config,
             catalog,
-            store,
+            store: { ...store, studio: refreshingOnCommit(store.studio, reader) },
             variantHealth: () =>
               liveVariantHealth(async () => selectedVariant(await reader.getLive())),
           }),
@@ -533,6 +533,36 @@ function caseStudiesOf(unit: PublicationUnit): ReadonlySet<string> | undefined {
   } catch {
     return undefined;
   }
+}
+
+/** The Studio moves that change what's live. */
+const MOVES = ['publish', 'rollback', 'recover'] as const;
+
+type Move = (...args: never[]) => Promise<{ readonly kind: string }>;
+
+/**
+ * `studio`, its publish, rollback, and recover reading the live revision
+ * through `reader`, the composition root's, once one commits and before it
+ * answers (#10b). So the slugs /work serves and the live composition are the
+ * new revision's by the time Studio hears the publish went through, and the
+ * owner's new case study isn't a 404 on the next request. proxy.ts still
+ * reads memory alone. A publish from the CLI, outside this process, shows
+ * on the next read instead. A read that fails leaves what was recorded.
+ */
+function refreshingOnCommit<S extends Record<(typeof MOVES)[number], Move>>(
+  studio: S,
+  reader: CatalogReader,
+): S {
+  const refreshed = { ...studio };
+  for (const name of MOVES) {
+    const move = studio[name];
+    refreshed[name] = (async (...args: Parameters<Move>) => {
+      const outcome = await move(...args);
+      if (outcome.kind === 'committed') await reader.getLive().catch(() => undefined);
+      return outcome;
+    }) as S[typeof name];
+  }
+  return Object.freeze(refreshed);
 }
 
 /** The readers recordingLive() made. */
