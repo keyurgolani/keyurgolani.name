@@ -393,7 +393,10 @@ export async function compose(input: CompositionInput): Promise<Composition> {
           })
         : undefined;
       const catalog: CatalogAdapter = 'revisions';
-      const reader = store.reader;
+      // Every read of the live revision records its composition, Studio's
+      // own included: after a publish from beside the server, a config.status
+      // read can be the one that sees it first (#6, Slice 2).
+      const reader = recordingLive(store.reader);
       const bindings: StudioBindings = {
         ...NO_BINDINGS,
         handlers: {
@@ -502,6 +505,9 @@ interface Built {
   readonly release?: () => void;
 }
 
+/** The readers recordingLive() made. */
+const RECORDING = new WeakSet<CatalogReader>();
+
 /**
  * `reader`, recording in config-store the composition each live revision
  * renders, on every getLive() (#6, Slice 2): the id of the variant its site
@@ -519,7 +525,10 @@ export function recordingLive(
   reader: CatalogReader,
   registry: VariantRegistry = REGISTRY,
 ): CatalogReader {
-  return Object.freeze({
+  // A reader that records already is used as it is: built() wraps whichever
+  // reader it gets, and owner's comes wrapped for Studio's reads too.
+  if (RECORDING.has(reader)) return reader;
+  const recording: CatalogReader = Object.freeze({
     async getLive() {
       const live = await reader.getLive();
       setLiveComposition(
@@ -530,6 +539,8 @@ export function recordingLive(
       return live;
     },
   });
+  RECORDING.add(recording);
+  return recording;
 }
 
 function built(config: DeploymentConfig, parts: Built): Composition {
