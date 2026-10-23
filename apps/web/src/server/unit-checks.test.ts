@@ -1,9 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { UnitChecks } from '@portfolio/core';
 import { readPair } from '@portfolio/schema/node';
-import { storeChecks } from '../../scripts/portfolio-store';
+import { OriginError, storeChecks, storeOrigin } from '../../scripts/portfolio-store';
 import { deploymentUnitChecks } from './register';
 
 // One unit check for a revision, whoever writes it (#3, items 21 and 26):
@@ -41,4 +44,44 @@ test('the CLI and the composition root check a pair alike: one rendering, snapsh
   }
   // As published, the example's unregistered variant blocks; as served, it warns.
   assert.ok(findings(server, 'validate').some((line) => line.includes('variant.unavailable')));
+});
+
+test('portfolio-store reads PORTFOLIO_ORIGIN or PORTFOLIO_ORIGIN_FILE as the server does, and refuses an origin that is not bare', (t) => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'store-origin-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const file = (name: string, text: string) => {
+    const at = path.join(dir, name);
+    writeFileSync(at, text);
+    return at;
+  };
+  assert.equal(storeOrigin({}), undefined);
+  assert.equal(storeOrigin({ PORTFOLIO_ORIGIN: ORIGIN }), ORIGIN);
+  // One trailing newline trimmed, as config.ts trims it.
+  assert.equal(storeOrigin({ PORTFOLIO_ORIGIN_FILE: file('origin', `${ORIGIN}\n`) }), ORIGIN);
+  assert.equal(storeOrigin({ PORTFOLIO_ORIGIN_FILE: file('crlf', `${ORIGIN}\r\n`) }), ORIGIN);
+  assert.equal(storeOrigin({ PORTFOLIO_ORIGIN_FILE: file('empty', '') }), undefined);
+
+  const refused = (env: Record<string, string>, message: RegExp) =>
+    assert.throws(
+      () => storeChecks(env),
+      (error) => error instanceof OriginError && message.test(error.message),
+    );
+  refused({ PORTFOLIO_ORIGIN: `${ORIGIN}/` }, /^PORTFOLIO_ORIGIN must be a bare origin/);
+  refused({ PORTFOLIO_ORIGIN: 'rowan.name' }, /^PORTFOLIO_ORIGIN must be a bare origin/);
+  refused({ PORTFOLIO_ORIGIN: 'ftp://rowan.name' }, /^PORTFOLIO_ORIGIN must be a bare origin/);
+  refused(
+    { PORTFOLIO_ORIGIN_FILE: file('path', `${ORIGIN}/about\n`) },
+    /^PORTFOLIO_ORIGIN must be a bare origin/,
+  );
+  refused(
+    { PORTFOLIO_ORIGIN: ORIGIN, PORTFOLIO_ORIGIN_FILE: file('both', ORIGIN) },
+    /^Set PORTFOLIO_ORIGIN or PORTFOLIO_ORIGIN_FILE, not both\.$/,
+  );
+  const folder = path.join(dir, 'folder');
+  mkdirSync(folder);
+  refused({ PORTFOLIO_ORIGIN_FILE: folder }, /^PORTFOLIO_ORIGIN_FILE must name a regular file/);
+  refused(
+    { PORTFOLIO_ORIGIN_FILE: path.join(dir, 'missing') },
+    /^PORTFOLIO_ORIGIN_FILE must name a regular file/,
+  );
 });

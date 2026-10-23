@@ -15,7 +15,7 @@
  * imports (scripts/bundle-store.mjs), so it needs Node and nothing else.
  * `--help` and packages/core/src/cli.ts say what each command does.
  */
-import { realpathSync } from 'node:fs';
+import { readFileSync, realpathSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { UnitChecks } from '@portfolio/core';
@@ -39,20 +39,58 @@ function webDir(): string {
     : path.resolve(here, '..', 'apps', 'web');
 }
 
-/** PORTFOLIO_ORIGIN when it's a bare http or https origin, as startup takes it, else nothing. */
-function origin(value: string | undefined): string | undefined {
-  if (!value) return undefined;
+/** Why the CLI won't run on the origin it was given. */
+export class OriginError extends Error {}
+
+type Env = Readonly<Record<string, string | undefined>>;
+
+/**
+ * PORTFOLIO_ORIGIN, or the file PORTFOLIO_ORIGIN_FILE names, read as
+ * config.ts reads them: one or the other, the file a regular one, with one
+ * trailing newline trimmed, and empty counting as unset. The origin's
+ * warning rules, such as origin.sample, go by it, so a value that isn't a
+ * bare http or https origin is refused, as startup refuses it.
+ */
+export function storeOrigin(
+  env: Env,
+  files: {
+    readonly readFile?: (file: string) => string;
+    readonly isFile?: (file: string) => boolean;
+  } = {},
+): string | undefined {
+  const readFile = files.readFile ?? ((file) => readFileSync(file, 'utf8'));
+  const isFile = files.isFile ?? ((file) => statSync(file).isFile());
+  const direct = env.PORTFOLIO_ORIGIN || undefined;
+  const file = env.PORTFOLIO_ORIGIN_FILE || undefined;
+  if (direct !== undefined && file !== undefined) {
+    throw new OriginError('Set PORTFOLIO_ORIGIN or PORTFOLIO_ORIGIN_FILE, not both.');
+  }
+  let value = direct;
+  if (file !== undefined) {
+    try {
+      if (!isFile(file)) throw new Error('not a regular file');
+      const text = readFile(file);
+      value = text.replace(/\r?\n$/, '') || undefined;
+    } catch {
+      throw new OriginError('PORTFOLIO_ORIGIN_FILE must name a regular file this user can read.');
+    }
+  }
+  if (value === undefined) return undefined;
   try {
     const url = new URL(value);
-    return /^https?:$/.test(url.protocol) && url.origin === value ? url.origin : undefined;
+    if (/^https?:$/.test(url.protocol) && url.origin === value) return url.origin;
   } catch {
-    return undefined;
+    // Not a URL at all.
   }
+  throw new OriginError(
+    'PORTFOLIO_ORIGIN must be a bare origin: http or https, a host, and an optional port, ' +
+      'with no path or trailing slash, such as https://jane.name.',
+  );
 }
 
-/** The checks the CLI runs a unit through, on PORTFOLIO_ORIGIN as `env` has it. */
-export function storeChecks(env: Readonly<Record<string, string | undefined>>): UnitChecks {
-  const canonical = origin(env.PORTFOLIO_ORIGIN);
+/** The checks the CLI runs a unit through, on the origin `env` gives. Throws OriginError. */
+export function storeChecks(env: Env): UnitChecks {
+  const canonical = storeOrigin(env);
   return buildUnitChecks({
     registry: VARIANTS,
     extensions: CONTENT_EXTENSIONS,
@@ -75,11 +113,24 @@ function isMain(): boolean {
 const context = { catalog: createAppearanceCatalog(), extensions: CONTENT_EXTENSIONS };
 
 // No top-level await: tsx runs this file as CommonJS, since apps/web isn't a module package.
-if (isMain()) {
+/** The checks, or null once it said why it can't run, as a usage error. */
+function mainChecks(): UnitChecks | null {
+  try {
+    return storeChecks(process.env);
+  } catch (error) {
+    if (!(error instanceof OriginError)) throw error;
+    process.stderr.write(`origin_invalid: ${error.message} Nothing was read or changed.\n`);
+    process.exitCode = 2;
+    return null;
+  }
+}
+
+const checks = isMain() ? mainChecks() : null;
+if (checks) {
   void runCli({
     argv: process.argv.slice(2),
     env: process.env,
-    checks: storeChecks(process.env),
+    checks,
     readSource: (dir) => readPairBytes(dir, context),
     envBase: webDir(),
     // A path on the command line is from where pnpm ran, or the shell is.
