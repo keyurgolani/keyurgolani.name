@@ -14,9 +14,12 @@
 // `pr` plans the sentinels: each composition's published default
 // appearance, each tier fixture pack on the fallback composition, each
 // state fixture, and each surface's default state, at every viewport in the
-// default row, plus every other row once, on the first composition at
-// 1440x900. `full` plans every cell in every row. Slice 4 adds the 40-cell
-// cap and change mapping.
+// default row, plus every other row once at 1440x900, on the first
+// composition and on each tier pack's sentinel, so each tier's packs meet
+// the contrast, focus, forced-colors, reduced-motion, and
+// reduced-transparency rows on every PR (#11, Slice 2, the owner's [37]).
+// `full` plans every cell in every row. Slice 4 adds the 40-cell cap and
+// change mapping.
 
 // First: readBuildMeta() loads the generated registry, which imports
 // `server-only`; #73's shim resolves it to its empty module, as Next's
@@ -390,7 +393,7 @@ export function planCells({ meta, registrations, mode }: PlanInput): Plan {
         const planned =
           mode === 'full' ||
           row === DEFAULT_ROW ||
-          (cell === firstDefault && viewport === VIEWPORTS[0]);
+          ((cell === firstDefault || cell.pack !== undefined) && viewport === VIEWPORTS[0]);
         if (!planned) continue;
         const fields = { route: cell.route, state: cell.state, viewport: viewport.id, row: row.id };
         const exclusions = exclusionsFor(cell);

@@ -4,7 +4,8 @@
 // setting a custom property on a probe). An engine, a browser build, or a
 // context that drops the emulation would otherwise run the row as the
 // default and pass it. The default row checks the other way round: nothing
-// may be emulated in it.
+// may be emulated in it. A row that sets a display mode (high-contrast)
+// also needs every document boundary on the page to render that mode.
 
 import type { Page } from '@playwright/test';
 import type { PreferenceRow } from './matrix';
@@ -62,8 +63,32 @@ export function emulationProblems(row: PreferenceRow, readings: readonly MediaRe
   return problems;
 }
 
-/** Reads the row's queries in `page` and returns what's wrong, as emulationProblems() does. */
+/** The display mode each document boundary on the page renders. Runs in the browser. */
+export function readDisplayModesScript(): string[] {
+  return [...document.querySelectorAll('[data-appearance-boundary="document"]')].map(
+    (boundary) => boundary.getAttribute('data-display-mode') ?? '',
+  );
+}
+
+/** What's wrong for a row that sets a display mode: no document boundary, or one rendering another mode. */
+export function displayModeProblems(row: PreferenceRow, modes: readonly string[]): string[] {
+  if (!row.displayMode) return [];
+  if (modes.length === 0) {
+    return [
+      `${row.id}: no presentation boundary renders a display mode: the emulation was ignored`,
+    ];
+  }
+  return modes
+    .filter((mode) => mode !== row.displayMode)
+    .map(
+      (mode) =>
+        `${row.id}: a boundary renders ${mode || 'no mode'}, not ${row.displayMode}: the emulation was ignored`,
+    );
+}
+
+/** Reads the row's queries and display mode in `page` and returns what's wrong. */
 export async function checkEmulation(page: Page, row: PreferenceRow): Promise<string[]> {
   const readings = await page.evaluate(readMediaScript, Object.keys(row.media));
-  return emulationProblems(row, readings);
+  const modes = row.displayMode ? await page.evaluate(readDisplayModesScript) : [];
+  return [...emulationProblems(row, readings), ...displayModeProblems(row, modes)];
 }

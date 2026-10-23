@@ -95,12 +95,18 @@ test('the PR plan: each sentinel at every viewport in the default row, and every
     rows.map((each) => `${each.cell.state} ${each.cell.path} ${each.viewport.id}`),
     Array(extraRows).fill('complete / 1440x900'),
   );
-  // The stand-in states are planned, and skip with their declared reason.
+  // The stand-in states are planned, and skip with their declared reason,
+  // as does the high-contrast row, which quality/units/fallback.ts excludes
+  // until the site pages render a presentation boundary.
   const skipped = plan.tests.filter((each) => each.skip);
-  assert.deepEqual([...new Set(skipped.map((each) => each.cell.state))].sort(), [
-    'last-known-good',
-    'unavailable',
-  ]);
+  assert.deepEqual(
+    [
+      ...new Set(
+        skipped.map((each) => (each.row.id === 'high-contrast' ? each.row.id : each.cell.state)),
+      ),
+    ].sort(),
+    ['high-contrast', 'last-known-good', 'unavailable'],
+  );
   for (const each of skipped) assert.ok(plan.reasons.includes(each.skip!), each.skip);
   for (const reason of plan.reasons) assert.ok(isReason(reason), reason);
   assert.deepEqual(plan.targets, [
@@ -166,6 +172,15 @@ test('each tier pack has a sentinel on the fallback composition, and other fixtu
     assert.equal(cell.target, 'fallback');
     assert.equal(cell.state, 'complete');
     assert.ok(cell.fixture, 'a tier pack cell is a fixture cell');
+    // Every row at the first viewport, so each tier meets every row on a PR.
+    const rows = plan.tests
+      .filter((each) => each.cell === cell && each.viewport === VIEWPORTS[0])
+      .map((each) => each.row.id);
+    assert.deepEqual(
+      rows,
+      PREFERENCE_ROWS.map((row) => row.id),
+      cell.id,
+    );
   }
   const full = planCells({ meta, registrations, mode: 'full' });
   assert.ok(!full.cells.some((cell) => tupleKey(cell.tuple).includes('fixture-dark-only')));
