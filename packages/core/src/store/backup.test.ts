@@ -8,6 +8,7 @@
 // or a special file.
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import {
   cpSync,
   existsSync,
@@ -148,6 +149,27 @@ test('ephemeral/ is not in the backup, and restore never creates it', async (t) 
     code: 'backup_unexpected_file',
     path: 'ephemeral/auth/revoked-before',
   });
+  // So is one the manifest lists, with its size and hash: no manifest that
+  // names ephemeral/ is one a restore trusts.
+  const manifest = JSON.parse(
+    readFileSync(path.join(planted, BACKUP_MANIFEST), 'utf8'),
+  ) as BackupManifest;
+  const bytes = readFileSync(path.join(planted, 'ephemeral', 'auth', 'revoked-before'));
+  const listed = {
+    path: 'ephemeral/auth/revoked-before',
+    size: bytes.byteLength,
+    sha256: `sha256:${createHash('sha256').update(bytes).digest('hex')}`,
+  };
+  writeFileSync(
+    path.join(planted, BACKUP_MANIFEST),
+    JSON.stringify({ ...manifest, files: [listed, ...manifest.files] }),
+  );
+  const listedInto = target(t, 'listed');
+  assert.deepEqual(await restoreStore({ fs: nodeFs }, planted, listedInto), {
+    kind: 'refused',
+    code: 'manifest_unreadable',
+  });
+  assert.equal(existsSync(listedInto), false);
 });
 
 test('backup copies the publication log after every other file, the pointer last, then the manifest with each SHA-256, and puts the log in place in one rename', async (t) => {
