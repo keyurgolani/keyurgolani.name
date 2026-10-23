@@ -300,13 +300,16 @@ jobs:
   # budget fixtures with source maps, traces each registered composition, and
   # runs pnpm check:budgets, which must pass on BUDGET_FIXTURES=1 and must
   # fail fixture-over-budget with one record per metric it breaks. Its
-  # builds stay on this runner: no image, no other job, and no upload takes
-  # them. It uploads the budget and trace reports, and the trace's results
-  # on failure, never .next or a source map.
-  budgets:
-    name: budgets
+  # builds stay on this runner: no image, no other job, no cache, and no
+  # upload takes them. It uploads the budget and trace reports, and the
+  # trace's results on failure, never .next or a source map.
+  trace:
+    name: trace
+    needs: [changes]
+    if: ${{ contains(fromJSON(needs.changes.outputs.jobs), 'trace') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 40
+    # Browsers come baked into the image, at the version @playwright/test pins.
     container:
       image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
       options: --user 1001 --ipc=host --init
@@ -314,14 +317,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      - name: Install
+        uses: ./.github/actions/install
         with:
           node-version: ${{ env.NODE_VERSION }}
-          package-manager-cache: false
-      - name: Enable pnpm
-        run: corepack enable
-      - name: Install
-        run: pnpm install --frozen-lockfile
       - name: pnpm ci:budgets
         run: pnpm ci:budgets
       - name: Failure summary
@@ -331,7 +330,7 @@ jobs:
         if: ${{ always() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: reports-budgets
+          name: reports-trace
           path: |
             reports/budgets/
             reports/trace/trace-report.json
@@ -344,7 +343,7 @@ jobs:
         if: ${{ failure() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: traces-budgets
+          name: traces-trace
           path: |
             reports/trace/results/
             reports/budgets/over-budget/trace/results/
@@ -809,7 +808,6 @@ jobs:
         unit,
         build,
         browser,
-        budgets,
         routes,
         appearance-browser,
         preview-fixtures-browser,
@@ -818,6 +816,7 @@ jobs:
         external-variant,
         quality-pr,
         quality-meta,
+        trace,
         image,
         docs,
       ]
@@ -853,6 +852,7 @@ jobs:
         external-variant,
         quality-pr,
         quality-meta,
+        trace,
         image,
         docs,
       ]

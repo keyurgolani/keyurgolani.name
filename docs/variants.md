@@ -195,7 +195,7 @@ CI runs it in a job of its own, `check-variants`. `pnpm check:registry` checks t
 PORTFOLIO_ANALYZE=1 pnpm build && pnpm test:trace && pnpm check:budgets
 ```
 
-`pnpm check:budgets` holds the variant to its `budgets`, from the build output, `ASSET_MANIFEST`, and the trace: its compiled stylesheet, its image and font files, its own JavaScript on each traced route, the loops, timers, and infinite animations an idle page runs, and each enhancement's chunks. Each breach is a failure record naming the metric, the route, the asset that carries the most of it, the actual, and the limit, in `reports/budgets/budget-report.json`. A budget declared over its tier's ceiling fails too, as does a remote `@import` or `url()` in its stylesheet. CI's `budgets` job runs it over every registered variant, beside the budget fixtures.
+`pnpm check:budgets` holds the variant to its `budgets`, from the build output, `ASSET_MANIFEST`, and the trace: its compiled stylesheet, its image and font files, its own JavaScript on each traced route, the loops, timers, and infinite animations an idle page runs, and each enhancement's chunks. Each breach is a failure record naming the metric, the route, the asset that carries the most of it, the actual, and the limit, in `reports/budgets/budget-report.json`. A budget declared over its tier's ceiling fails too, as does a remote `@import` or `url()` in its stylesheet. CI's `trace` job runs it over every registered variant, beside the budget fixtures.
 
 ## Testing a variant
 

@@ -19,7 +19,7 @@ import { REPO_ROOT } from './lib/reports.mjs';
 import { loadValidator } from './summarize.mjs';
 
 // pnpm check:budgets (#6, items 3 and 4). The fixtures below stand in for a
-// build, its ASSET_MANIFEST, and a trace report; CI's budgets job runs the
+// build, its ASSET_MANIFEST, and a trace report; CI's trace job runs the
 // check on real ones (ci/budgets.mjs).
 
 const RUNTIME = JSON.parse(readFileSync(path.join(REPO_ROOT, 'runtime-budgets.json'), 'utf8'));

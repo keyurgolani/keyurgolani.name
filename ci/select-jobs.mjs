@@ -378,7 +378,7 @@ export const LOCAL_COMMANDS = {
   'external-variant': 'pnpm test:external-variant',
   image: 'pnpm ci:image && pnpm ci:proxy && pnpm ci:security-proxy (needs Docker)',
   docs: 'pnpm check:docs',
-  trace: 'pnpm build && pnpm test:trace',
+  trace: 'pnpm ci:budgets',
 };
 
 export const localCommand = (job) => LOCAL_COMMANDS[job] ?? `pnpm ci:${job}`;
