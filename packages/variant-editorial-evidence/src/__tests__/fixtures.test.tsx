@@ -1,8 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { CONTRACT_FIXTURES, HIDDEN_CANARY } from '@portfolio/variant-contract/node';
+import path from 'node:path';
+import type { AppearanceCatalog, ParsedPair, UnitInput } from '@portfolio/schema';
+import { loadPair, readUnitFiles } from '@portfolio/schema/node';
+import { CONTRACT_FIXTURES, FIXTURES_DIR, HIDDEN_CANARY } from '@portfolio/variant-contract/node';
 import { homeModel } from '../model';
-import { at, contractUnit, count, fragmentLinks, idsIn, inputFor, render } from './harness';
+import { at, count, fragmentLinks, idsIn, inputFor, render } from './harness';
 
 // Every contract fixture through Editorial Evidence (#13), as the server
 // renders it: the home page, and the page of every work with a slug. These
@@ -11,6 +14,26 @@ import { at, contractUnit, count, fragmentLinks, idsIn, inputFor, render } from 
 // practices, a mixed practice right to left, identity only, a hundred
 // works, long and duplicate titles, media that never arrives, sparse
 // records, and hidden content that must not show.
+
+/** The color schemes and typography presets the contract fixtures name, as their own test lists them. */
+const IDS = {
+  colorScheme: ['warm', 'noir', 'ink-and-paper', 'nebula', 'aurora', 'solar'],
+  typography: ['classic', 'modernist', 'geometric', 'humanist'],
+  displayMode: ['system', 'light', 'dark', 'high-contrast'],
+} as const;
+const CATALOG: AppearanceCatalog = {
+  ids: (axis) => (axis in IDS ? IDS[axis as keyof typeof IDS] : null),
+  generatorInput: () => undefined,
+};
+
+/** A contract fixture's pair and unit files, as a host reads them from its source directory. */
+export function contractUnit(name: string): { pair: ParsedPair; unit: UnitInput } {
+  const dir = path.join(FIXTURES_DIR, name);
+  const result = loadPair(dir, { catalog: CATALOG });
+  assert.ok(result.ok, `${name}: ${JSON.stringify(result.diagnostics, null, 2)}`);
+  const { snapshots, media } = readUnitFiles(dir);
+  return { pair: result.pair, unit: { snapshots, ...(media ? { media } : {}) } };
+}
 
 for (const { name } of CONTRACT_FIXTURES) {
   test(`the ${name} fixture renders whole: one main, one h1, unique ids, and links that land`, () => {

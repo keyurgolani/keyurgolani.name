@@ -7,11 +7,9 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import {
   composeSchemas,
   resolvePortfolioView,
-  type AppearanceCatalog,
   type ParsedPair,
   type UnitInput,
 } from '@portfolio/schema';
-import { loadPair, readUnitFiles } from '@portfolio/schema/node';
 import {
   buildRenderInput,
   validateManifest,
@@ -19,7 +17,6 @@ import {
   type VariantManifest,
   type VariantRenderInput,
 } from '@portfolio/variant-contract';
-import { FIXTURES_DIR } from '@portfolio/variant-contract/node';
 import EditorialEvidence from '..';
 
 // What the package's tests share (#13): the manifest, the package's own
@@ -74,26 +71,6 @@ export const SITE = SiteSchema.parse({
 /** A pair from a portfolio document written in a test, on SITE. */
 export function pairOf(portfolio: unknown): ParsedPair {
   return { portfolio: PortfolioSchema.parse(portfolio), site: SITE } as unknown as ParsedPair;
-}
-
-/** The color schemes and typography presets the contract fixtures name, as their own test lists them. */
-const IDS = {
-  colorScheme: ['warm', 'noir', 'ink-and-paper', 'nebula', 'aurora', 'solar'],
-  typography: ['classic', 'modernist', 'geometric', 'humanist'],
-  displayMode: ['system', 'light', 'dark', 'high-contrast'],
-} as const;
-const CATALOG: AppearanceCatalog = {
-  ids: (axis) => (axis in IDS ? IDS[axis as keyof typeof IDS] : null),
-  generatorInput: () => undefined,
-};
-
-/** A contract fixture's pair and unit files, as a host reads them from its source directory. */
-export function contractUnit(name: string): { pair: ParsedPair; unit: UnitInput } {
-  const dir = path.join(FIXTURES_DIR, name);
-  const result = loadPair(dir, { catalog: CATALOG });
-  assert.ok(result.ok, `${name}: ${JSON.stringify(result.diagnostics, null, 2)}`);
-  const { snapshots, media } = readUnitFiles(dir);
-  return { pair: result.pair, unit: { snapshots, ...(media ? { media } : {}) } };
 }
 
 export interface RenderOptions {
