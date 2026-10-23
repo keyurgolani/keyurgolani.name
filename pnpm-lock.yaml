@@ -318,6 +318,9 @@ importers:
       '@chenglou/pretext':
         specifier: ^0.0.6
         version: 0.0.6
+      '@portfolio/appearance':
+        specifier: workspace:*
+        version: link:../appearance
       '@portfolio/schema':
         specifier: workspace:*
         version: link:../schema

@@ -1,12 +1,14 @@
 'use client';
 
 import { useEffect, useRef, type ReactElement } from 'react';
+import { useEnhancementRuntime, useFrameLoop } from '@portfolio/kit/runtime';
 
 // fixture-variant-medium's stage (#6, Slice 2): one WebGL2 fragment shader,
 // drawn over the still the stylesheet gives the stage, which stays when the
-// browser has no WebGL2. Until #6's Slice 4 moves it onto useFrameLoop, the
-// loop is plain requestAnimationFrame, and it stops while the document is
-// hidden or reduced motion is on, and starts again when neither holds.
+// browser has no WebGL2, and a mark on an infinite CSS animation. Both run
+// on the kit runtime (#6, items 6 and 7): the shader through useFrameLoop,
+// and the mark under the stage's root, which pauses CSS animations whenever
+// the runtime isn't active.
 
 const VERTEX = `#version 300 es
 in vec2 position;
@@ -36,10 +38,18 @@ function shader(gl: WebGL2RenderingContext, type: number, source: string): WebGL
 
 export function ShaderStage(): ReactElement {
   const canvas = useRef<HTMLCanvasElement>(null);
+  const runtime = useEnhancementRuntime({ requires: ['webgl2'] });
+  const scene = useRef<{ gl: WebGL2RenderingContext; time: WebGLUniformLocation | null } | null>(
+    null,
+  );
+  const started = useRef<number | null>(null);
+
+  // The program, once, as soon as WebGL2 is there to draw with.
   useEffect(() => {
     const element = canvas.current;
-    const gl = element?.getContext('webgl2');
-    if (!element || !gl) return;
+    if (!element || !runtime.eligible || scene.current) return;
+    const gl = element.getContext('webgl2');
+    if (!gl) return;
     const vertex = shader(gl, gl.VERTEX_SHADER, VERTEX);
     const fragment = shader(gl, gl.FRAGMENT_SHADER, FRAGMENT);
     const program = gl.createProgram();
@@ -56,36 +66,29 @@ export function ShaderStage(): ReactElement {
     gl.enableVertexAttribArray(position);
     gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0);
     gl.uniform2f(gl.getUniformLocation(program, 'size'), element.width, element.height);
-    const time = gl.getUniformLocation(program, 'time');
+    scene.current = { gl, time: gl.getUniformLocation(program, 'time') };
+  }, [runtime.eligible]);
 
-    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
-    let frame = 0;
-    let started: number | null = null;
-    const draw = (now: number) => {
-      started ??= now;
-      gl.uniform1f(time, (now - started) / 1000);
-      gl.drawArrays(gl.TRIANGLES, 0, 3);
-      frame = window.requestAnimationFrame(draw);
-    };
-    const update = () => {
-      const run = document.visibilityState === 'visible' && !reduced.matches;
-      if (run && frame === 0) {
-        element.dataset.running = '';
-        frame = window.requestAnimationFrame(draw);
-      } else if (!run && frame !== 0) {
-        window.cancelAnimationFrame(frame);
-        frame = 0;
-        delete element.dataset.running;
-      }
-    };
-    update();
-    document.addEventListener('visibilitychange', update);
-    reduced.addEventListener('change', update);
-    return () => {
-      window.cancelAnimationFrame(frame);
-      document.removeEventListener('visibilitychange', update);
-      reduced.removeEventListener('change', update);
-    };
-  }, []);
-  return <canvas ref={canvas} className="fvm-canvas" width={640} height={360} />;
+  // Frames only while the runtime is active: hidden, offscreen, paused by
+  // the visitor or a preview, or reduced, the still shows and nothing draws.
+  useFrameLoop(runtime, (now) => {
+    const drawing = scene.current;
+    if (!drawing) return;
+    started.current ??= now;
+    drawing.gl.uniform1f(drawing.time, (now - started.current) / 1000);
+    drawing.gl.drawArrays(drawing.gl.TRIANGLES, 0, 3);
+  });
+
+  return (
+    <div className="fvm-stage" ref={runtime.rootRef} aria-hidden="true">
+      <canvas
+        ref={canvas}
+        className="fvm-canvas"
+        width={640}
+        height={360}
+        data-running={runtime.state === 'active' && runtime.eligible ? '' : undefined}
+      />
+      <span className="fvm-pulse" />
+    </div>
+  );
 }

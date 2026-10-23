@@ -35,12 +35,14 @@ test('it is a client module, the one place the kit loads package code in a brows
   assert.match(source, /^'use client';\n/);
 });
 
-test('it exports a component, which a server component renders, and no function to call', () => {
+test('it exports components, which a server component renders, and no function to call', () => {
   // A server component can render a client module's export as an element,
   // and can't call one: Next swaps each export for a reference to it.
-  assert.deepEqual(Object.keys(entry), ['Enhancement']);
-  assert.equal(typeof Enhancement, 'function');
-  assert.match(Enhancement.name, /^[A-Z]/);
+  assert.deepEqual(Object.keys(entry).sort(), ['Enhancement', 'EnhancementIsland']);
+  for (const component of Object.values(entry)) {
+    assert.equal(typeof component, 'function');
+    assert.match(component.name, /^[A-Z]/);
+  }
 });
 
 test('the server renders nothing, so the page never waits on or depends on an enhancement', () => {

@@ -104,7 +104,16 @@ export function enhancementsOff(document: Pick<Document, 'querySelector'> | unde
  * globalThis.__portfolioFailEnhancements is set, and renders nothing when the
  * page's boundary turns enhancements off.
  */
-export function MountedEnhancement({ input, id }: { input: VariantRenderInput; id: string }) {
+export function MountedEnhancement({
+  input,
+  id,
+  fallback = null,
+}: {
+  input: VariantRenderInput;
+  id: string;
+  /** What shows while the module loads: nothing, or an island's server markup. */
+  fallback?: ReactNode;
+}) {
   const mounted = useMounted();
   if (!mounted) return null;
   if (!input.capabilities.enhancements.some((declared) => declared.id === id)) {
@@ -115,7 +124,7 @@ export function MountedEnhancement({ input, id }: { input: VariantRenderInput; i
     throw new Error('Every enhancement fails: globalThis.__portfolioFailEnhancements is set.');
   }
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={fallback}>
       <Loaded input={input} moduleKey={`${input.variant}/${id}`} />
     </Suspense>
   );
