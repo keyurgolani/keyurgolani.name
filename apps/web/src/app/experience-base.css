@@ -85,3 +85,14 @@ html[data-theme='dark'] ::selection {
     animation-play-state: paused;
   }
 }
+
+/* The focus ring every portfolio document starts from (#11, WCAG 2.4.7 and
+   1.4.11): Chromium's own is a 1px orange ring on phones, under 3:1 on the
+   neutral canvas. It sits in the reset layer, so a variant's own focus style,
+   unlayered, and #19's accessibility layer both win over it. */
+@layer reset {
+  :focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
+  }
+}
