@@ -20,7 +20,7 @@ Pushing `vX.Y.Z-rc.N` runs these jobs in order, and each one stops the release w
 Pushing `vX.Y.Z` on the newest candidate's commit runs:
 
 1. **classify**, as above.
-2. **promote-verify** refuses unless a candidate for `X.Y.Z` exists, the newest one (the highest `N`) is on this commit, and its release run passed `rc-scan` and `rc-tag` ([`ci/release/promote-check.mjs`](../ci/release/promote-check.mjs)). To promote an older candidate, don't: cut a new one on the commit you want.
+2. **promote-verify** refuses unless a candidate for `X.Y.Z` exists, the newest one (the highest `N`) is on this commit, and its release run passed `rc-scan` and `rc-tag` ([`ci/release/promote-check.mjs`](../ci/release/promote-check.mjs)). An older candidate never promotes. Cut a new one on the commit you want instead.
 3. **promote-scan** resolves the candidate's GHCR tag to its digest, then verifies that digest's provenance attestation: signed by this repository's `release.yml`, on a GitHub-hosted runner, for the candidate's tag and this commit. Whatever the GHCR tag says, only the digest that run built gets through. It checks the provenance and SBOMs again and scans the image again, with that day's vulnerability database.
 4. **promote** points `X.Y.Z` at the digest with `docker buildx imagetools create`, which copies the index by reference and builds nothing. It moves `X.Y`, `X`, and `latest` too, unless a final release already out is newer in that line, so a patch to an older line never moves them backwards ([`ci/release/tags.mjs`](../ci/release/tags.mjs)). It's the only job that moves `latest`.
 5. **promote-release** creates the GitHub Release with the same notes.
