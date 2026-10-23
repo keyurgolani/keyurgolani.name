@@ -22,6 +22,18 @@ export function reproCommandFor(gate, env = process.env) {
   return script && script.startsWith('ci:') ? `pnpm ${script}` : `pnpm ci:${gate}`;
 }
 
+/**
+ * The checked command's environment. CI_REPRO_COMMAND names this run's
+ * command only, so it's read once and kept from the child: a nested
+ * `ci/run.mjs` gate, or a test of this runner, must not report the outer
+ * shard's command as its own.
+ */
+export function childEnv(env, gate, repro) {
+  const rest = { ...env };
+  delete rest.CI_REPRO_COMMAND;
+  return { ...rest, CI_GATE: gate, CI_REPRO: repro };
+}
+
 function main(argv) {
   const [gate, separator, ...command] = argv;
   if (!gate || separator !== '--' || command.length === 0) {
@@ -41,7 +53,7 @@ function main(argv) {
     stdio: 'inherit',
     shell: process.platform === 'win32',
     // Checks that write their own, more specific records use these.
-    env: { ...process.env, CI_GATE: gate, CI_REPRO: repro },
+    env: childEnv(process.env, gate, repro),
   });
   const seconds = ((Date.now() - started) / 1000).toFixed(1);
   const status = result.error ? 127 : (result.status ?? 1);

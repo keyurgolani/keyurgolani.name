@@ -5,7 +5,7 @@ import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSyn
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { reproCommandFor } from './run.mjs';
+import { childEnv, reproCommandFor } from './run.mjs';
 
 const RUNNER = path.join(path.dirname(fileURLToPath(import.meta.url)), 'run.mjs');
 const REPORTS = path.join(path.dirname(fileURLToPath(import.meta.url)), 'lib', 'reports.mjs');
@@ -16,10 +16,15 @@ function runner(args, env = {}, seed = []) {
     mkdirSync(path.join(reports, 'failures'), { recursive: true });
     writeFileSync(path.join(reports, 'failures', `seed-${i}.json`), JSON.stringify(record));
   });
+  // The outer runner's CI_* variables, such as CI_REPRO_COMMAND when this
+  // file runs inside a CI shard, never reach the runner under test.
+  const inherited = Object.fromEntries(
+    Object.entries(process.env).filter(([key]) => !key.startsWith('CI_')),
+  );
   const result = spawnSync(process.execPath, [RUNNER, ...args], {
     encoding: 'utf8',
     env: {
-      ...process.env,
+      ...inherited,
       CI_REPORTS_DIR: reports,
       GITHUB_ACTIONS: '',
       npm_lifecycle_event: '',
@@ -99,6 +104,40 @@ test('the local command comes from the pnpm script name', () => {
       npm_lifecycle_event: 'ci:unit',
       CI_REPRO_COMMAND: 'pnpm test:shard unit 2/3',
     }),
+    'pnpm test:shard unit 2/3',
+  );
+});
+
+test("a shard's CI_REPRO_COMMAND names only that run, and never reaches the command it runs", () => {
+  const probe =
+    'console.log(JSON.stringify({ outer: process.env.CI_REPRO_COMMAND ?? null, repro: process.env.CI_REPRO }))';
+  const result = runner(['unit', '--', process.execPath, '-e', probe], {
+    CI_REPRO_COMMAND: 'pnpm test:shard unit 2/3',
+  });
+  assert.equal(result.status, 0);
+  const seen = JSON.parse(result.stdout.split('\n').find((line) => line.startsWith('{')));
+  assert.deepEqual(seen, { outer: null, repro: 'pnpm test:shard unit 2/3' });
+  assert.equal(childEnv({ CI_REPRO_COMMAND: 'x', A: '1' }, 'g', 'r').CI_REPRO_COMMAND, undefined);
+});
+
+test('a gate nested under a shard reports its own command', () => {
+  const nested = [
+    process.execPath,
+    RUNNER,
+    'demo',
+    '--',
+    process.execPath,
+    '-e',
+    'process.exit(4)',
+  ];
+  const outer = `process.exit(require('node:child_process').spawnSync(${JSON.stringify(nested[0])}, ${JSON.stringify(nested.slice(1))}, { stdio: 'inherit' }).status)`;
+  const result = runner(['unit', '--', process.execPath, '-e', outer], {
+    CI_REPRO_COMMAND: 'pnpm test:shard unit 2/3',
+  });
+  assert.equal(result.status, 4);
+  assert.equal(result.records.find((r) => r.gate === 'demo')?.reproCommand, 'pnpm ci:demo');
+  assert.equal(
+    result.records.find((r) => r.gate === 'unit')?.reproCommand,
     'pnpm test:shard unit 2/3',
   );
 });
