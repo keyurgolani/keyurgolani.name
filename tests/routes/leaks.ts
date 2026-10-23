@@ -9,6 +9,7 @@ import {
   HOPS_FILE,
 } from '../harness/canaries.mjs';
 import { expect, type App } from '../harness/fixtures';
+import { withRscHash } from '../harness/rsc';
 
 // The canary scan (#1, Verification item 2) over every view the fixture
 // variants declare (#5, Slice 4): leaks.spec.ts at the root, and
@@ -74,8 +75,13 @@ export async function expectNoLeaks(
       expect(html, view.path).toMatch(/<h1>Page not found<\/h1>/);
     }
     await expectNone(page, `GET ${view.path}`);
-    const payload = await request.get(view.path, { maxRedirects: 0, headers: { rsc: '1' } });
+    const rsc = { rsc: '1' };
+    const payload = await request.get(await withRscHash(view.path, rsc), {
+      maxRedirects: 0,
+      headers: rsc,
+    });
     if (view.status === 200) {
+      expect(payload.status(), `RSC ${view.path}`).toBe(200);
       expect(payload.headers()['content-type'], `RSC ${view.path}`).toMatch(/^text\/x-component/);
     }
     await expectNone(payload, `RSC ${view.path}`);

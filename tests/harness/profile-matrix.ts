@@ -36,6 +36,7 @@ import { DEFAULT_SITE } from './app-server.mjs';
 import { expect, test, type App, type AppOptions } from './fixtures';
 import { VARIANTS } from './registry';
 import { headerProblems, isPreviewPath, isStudioPath } from './route-headers.mjs';
+import { withRscHash } from './rsc';
 import { concrete, scanTargets } from './scan-targets';
 
 // apps/web has no "type": "module", so its modules are CommonJS to Node and
@@ -825,7 +826,8 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
           expect(await response.text(), what).toBe('Method not allowed.');
         }
         // Next's router asks for the page's payload, and prefetches it, with
-        // RSC: 1; both render in the same segment. Next names the rewrite in
+        // RSC: 1 and the `_rsc` hash of its headers; both render in the same
+        // segment, with no redirect. Next names the rewrite in
         // x-nextjs-rewritten-path, which its router reads: the segment of the
         // composition the page renders and the visitor path, never the query.
         const page = await (await request.get(target, { maxRedirects: 0 })).text();
@@ -839,7 +841,10 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
         ];
         for (const headers of router) {
           const what = `GET ${target} with ${Object.keys(headers).join(' and ')}`;
-          const response = await request.get(target, { headers, maxRedirects: 0 });
+          const response = await request.get(await withRscHash(target, headers), {
+            headers,
+            maxRedirects: 0,
+          });
           expect(response.status(), what).toBe(200);
           expect(response.headers()['content-type'], what).toMatch(/^text\/x-component/);
           expectProfileHeaders(profile, response, what);

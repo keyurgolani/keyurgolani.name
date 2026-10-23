@@ -74,9 +74,10 @@ test(
         const headers = response!.headers();
         for (const [name, value] of Object.entries(PREVIEW_HEADERS)) {
           // next dev sends its own Cache-Control on every page after the
-          // app's, so a dev page never stays in a cache; a production build
-          // sends private, no-store, which the profile matrix checks.
-          const expected = name === 'cache-control' ? 'no-cache, must-revalidate' : value;
+          // app's, no-store since 16.4, so a dev page never stays in a cache;
+          // a production build sends private, no-store, which the profile
+          // matrix checks.
+          const expected = name === 'cache-control' ? 'no-store' : value;
           expect(headers[name], `${path}: ${name}`).toBe(expected);
         }
         // The composition the route names, in the preview document.
