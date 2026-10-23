@@ -1,14 +1,20 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { MotionPolicy } from '@portfolio/schema';
 import type { VariantManifest } from '@portfolio/variant-contract';
-import { useMotionPreference, type ResolvedMotion } from '../motion';
+import type { ResolvedMotion } from '../motion';
+import { useEnhancementRuntime, type EnhancementRuntime } from '../runtime';
 
 /** The manifest's runtime cost class. */
 type PerformanceTier = VariantManifest['performanceTier'];
 
 export interface SpatialContractValues {
+  /**
+   * The kit runtime the canvas runs on: loop through `useFrameLoop(runtime, ...)`
+   * so frames run only while it's active.
+   */
+  runtime: EnhancementRuntime;
   /** Resolved motion mode — `reduce` should freeze loops/cameras. */
   motion: ResolvedMotion;
   /** Convenience boolean. True iff `motion === 'reduce'`. */
@@ -21,15 +27,16 @@ export interface SpatialContractValues {
    */
   dprCap: [number, number];
   /**
-   * Becomes true once the canvas root has entered the viewport. Until
-   * then, the variant should render its SSR poster only.
+   * Becomes true once the canvas root has first been in view on a mounted
+   * page, and stays true. Until then, the variant should render its SSR
+   * poster only.
    */
   isVisible: boolean;
   /**
-   * Attach to the wrapper that holds the canvas. Used by the
-   * IntersectionObserver to drive `isVisible`.
+   * Attach to the wrapper that holds the canvas: the runtime's root, whose
+   * visibility pauses it and drives `isVisible`.
    */
-  rootRef: (node: HTMLElement | null) => void;
+  rootRef: (node: Element | null) => void;
 }
 
 export interface UseSpatialContractOptions {
@@ -58,9 +65,11 @@ const DESKTOP_DPR_CAP: [number, number] = [1, 2];
  * Single source of truth for the platform's spatial contract.
  *
  * Every spatial variant uses this hook so the same SSR/reduced-motion/
- * DPR/lazy-mount rules apply everywhere — see research/spatial.md §4.
+ * DPR/lazy-mount rules apply everywhere — see research/spatial.md §4. It
+ * sits on the kit runtime, so `reduced` and `isVisible` are the runtime's,
+ * and `runtime` pauses the canvas's loop with everything else on the page.
  *
- *   const { reduced, isMobile, dprCap, isVisible, rootRef } =
+ *   const { runtime, reduced, isMobile, dprCap, isVisible, rootRef } =
  *     useSpatialContract({ tier: manifest.performanceTier });
  *
  *   return (
@@ -77,10 +86,16 @@ export function useSpatialContract(options: UseSpatialContractOptions = {}): Spa
   const breakpoint = options.mobileBreakpoint ?? 768;
   const rootMargin = options.rootMargin ?? '200px';
 
-  const motion = useMotionPreference(options.motionPreference);
+  const runtime = useEnhancementRuntime({
+    motionPolicy: options.motionPreference,
+    rootMargin,
+  });
+  const reduced = runtime.state === 'static' && runtime.reason === 'reduced';
   const [isMobile, setIsMobile] = useState(false);
-  const [isVisible, setIsVisible] = useState(false);
-  const observedRef = useRef<HTMLElement | null>(null);
+  const [seen, setSeen] = useState(false);
+  // Once it has been in view on a mounted page, it stays visible.
+  const { inView } = runtime;
+  if (inView && !seen) setSeen(true);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -91,40 +106,14 @@ export function useSpatialContract(options: UseSpatialContractOptions = {}): Spa
     return () => mq.removeEventListener('change', update);
   }, [breakpoint]);
 
-  function attachRoot(node: HTMLElement | null) {
-    if (observedRef.current === node) return;
-
-    if (observedRef.current) {
-      // Disconnecting via the stored observer happens in the cleanup hook
-      // below — here we only need to update the ref.
-    }
-
-    observedRef.current = node;
-
-    if (!node || typeof IntersectionObserver === 'undefined') return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting) {
-            setIsVisible(true);
-            observer.disconnect();
-            break;
-          }
-        }
-      },
-      { rootMargin },
-    );
-    observer.observe(node);
-  }
-
   return {
-    motion,
-    reduced: motion === 'reduce',
+    runtime,
+    motion: reduced ? 'reduce' : 'full',
+    reduced,
     isMobile,
     dprCap: dprCapFor(tier, isMobile),
-    isVisible,
-    rootRef: attachRoot,
+    isVisible: seen || inView,
+    rootRef: runtime.attachRoot,
   };
 }
 

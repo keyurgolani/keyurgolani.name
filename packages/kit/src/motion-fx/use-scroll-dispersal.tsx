@@ -2,6 +2,7 @@
 
 import { useScroll, useSpring, useTransform, type MotionValue } from 'framer-motion';
 import { useMemo } from 'react';
+import { useEnhancementRuntime } from '../runtime';
 
 export interface ScrollDispersalOptions {
   /**
@@ -72,8 +73,9 @@ export interface ScrollDispersalValues {
  * Distance from center is normalized so corner elements travel further than
  * near-center ones — feels organic, not uniform.
  *
- * Reduced-motion: pass `enabled: false` to freeze every output to its identity
- * value while keeping the same hook contract.
+ * Reduced motion freezes every output to its identity value on its own, on
+ * the kit runtime; pass `enabled: false` to freeze them for any other reason
+ * while keeping the same hook contract.
  */
 export function useScrollDispersal(options: ScrollDispersalOptions): ScrollDispersalValues {
   const {
@@ -84,8 +86,12 @@ export function useScrollDispersal(options: ScrollDispersalOptions): ScrollDispe
     opacityCurve = [1, 0.85, 0.4, 0],
     scaleRange = [1, 0.75],
     spring,
-    enabled = true,
+    enabled: wanted = true,
   } = options;
+  // On the kit runtime: reduced motion and a page that hasn't mounted hold
+  // every output at identity, as the server rendered it.
+  const runtime = useEnhancementRuntime();
+  const enabled = wanted && runtime.state !== 'static';
 
   const direction = useMemo(() => {
     const px = parseFloat(position.x);

@@ -21,10 +21,11 @@ function resolvedOnServer(provided: MotionPolicy | null, own?: MotionPolicy): st
 
 test('a reduce policy from the provider reaches every hook below it', () => {
   assert.equal(resolvedOnServer('reduce'), '<i>reduce</i>');
-  // respect-os renders full on the server, and follows the OS once hydrated.
-  assert.equal(resolvedOnServer('respect-os'), '<i>full</i>');
+  // The server can't know the OS's preference, so respect-os renders the
+  // still there, and follows the OS once hydrated (#6).
+  assert.equal(resolvedOnServer('respect-os'), '<i>reduce</i>');
   // Without a provider, it's respect-os.
-  assert.equal(resolvedOnServer(null), '<i>full</i>');
+  assert.equal(resolvedOnServer(null), '<i>reduce</i>');
   // A policy given to the hook can add a reduce, and can't take one away.
   assert.equal(resolvedOnServer('respect-os', 'reduce'), '<i>reduce</i>');
   assert.equal(resolvedOnServer('reduce', 'respect-os'), '<i>reduce</i>');

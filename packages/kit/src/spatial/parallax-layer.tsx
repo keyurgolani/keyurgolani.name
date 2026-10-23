@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
-import { useMotionPreference } from '../motion';
+import { useCallback, useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
 import type { MotionPolicy } from '@portfolio/schema';
+import { useEnhancementRuntime, useFrameLoop } from '../runtime';
 
 interface ParallaxLayerProps {
   children: ReactNode;
@@ -22,7 +22,9 @@ interface ParallaxLayerProps {
  * create depth. Each ParallaxLayer gets its own speeds; stacking multiple
  * with different speeds yields the parallax effect.
  *
- * Reduced motion freezes everything (no scroll/pointer response).
+ * It runs on the kit runtime: reduced motion freezes everything (no
+ * scroll/pointer response), and it holds still while the document is
+ * hidden, the layer is offscreen, or the visitor paused motion.
  */
 export function ParallaxLayer({
   children,
@@ -33,57 +35,55 @@ export function ParallaxLayer({
   className,
   style,
 }: ParallaxLayerProps) {
-  const motion = useMotionPreference(motionPreference);
-  const ref = useRef<HTMLDivElement>(null);
+  const runtime = useEnhancementRuntime({ motionPolicy: motionPreference });
+  const ref = useRef<HTMLDivElement | null>(null);
+  const { attachRoot } = runtime;
+  const attach = useCallback(
+    (node: HTMLDivElement | null) => {
+      ref.current = node;
+      attachRoot(node);
+    },
+    [attachRoot],
+  );
+  // Where the scroll and the pointer put the layer, kept across pauses.
+  const at = useRef({ scroll: 0, mx: 0, my: 0, curMx: 0, curMy: 0 });
+  const active = runtime.state === 'active';
 
   useEffect(() => {
-    if (motion === 'reduce') return;
-    if (typeof window === 'undefined') return;
-
-    let scrollOffset = 0;
-    let targetMx = 0;
-    let targetMy = 0;
-    let curMx = 0;
-    let curMy = 0;
-    let raf = 0;
-
+    if (!active) return;
+    const target = at.current;
     function onScroll() {
-      scrollOffset = window.scrollY * scrollSpeed;
+      target.scroll = window.scrollY * scrollSpeed;
     }
-
     function onMove(e: PointerEvent) {
       const w = window.innerWidth || 1;
       const h = window.innerHeight || 1;
-      targetMx = (e.clientX / w - 0.5) * 2;
-      targetMy = (e.clientY / h - 0.5) * 2;
+      target.mx = (e.clientX / w - 0.5) * 2;
+      target.my = (e.clientY / h - 0.5) * 2;
     }
-
-    function tick() {
-      curMx += (targetMx - curMx) * 0.08;
-      curMy += (targetMy - curMy) * 0.08;
-      if (ref.current) {
-        const tx = curMx * mouseInfluence * 40;
-        const ty = curMy * mouseInfluence * 40 - scrollOffset;
-        ref.current.style.transform = `translate3d(${tx}px, ${ty}px, ${depth}px)`;
-      }
-      raf = requestAnimationFrame(tick);
-    }
-
     onScroll();
     window.addEventListener('scroll', onScroll, { passive: true });
     window.addEventListener('pointermove', onMove, { passive: true });
-    raf = requestAnimationFrame(tick);
-
     return () => {
       window.removeEventListener('scroll', onScroll);
       window.removeEventListener('pointermove', onMove);
-      cancelAnimationFrame(raf);
     };
-  }, [motion, scrollSpeed, mouseInfluence, depth]);
+  }, [active, scrollSpeed]);
+
+  useFrameLoop(runtime, () => {
+    const target = at.current;
+    target.curMx += (target.mx - target.curMx) * 0.08;
+    target.curMy += (target.my - target.curMy) * 0.08;
+    if (ref.current) {
+      const tx = target.curMx * mouseInfluence * 40;
+      const ty = target.curMy * mouseInfluence * 40 - target.scroll;
+      ref.current.style.transform = `translate3d(${tx}px, ${ty}px, ${depth}px)`;
+    }
+  });
 
   return (
     <div
-      ref={ref}
+      ref={attach}
       className={className}
       style={{
         willChange: 'transform',

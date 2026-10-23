@@ -4,7 +4,7 @@ import { useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Float, MeshTransmissionMaterial } from '@react-three/drei';
 import * as THREE from 'three';
-import { useMotionPreference } from '../motion';
+import { useSceneAnimates } from './scene-runtime';
 import type { MotionPolicy } from '@portfolio/schema';
 
 interface TransmissionGemProps {
@@ -41,9 +41,9 @@ export function TransmissionGem({
   color = '#ffffff',
   rotationSpeed = 0.06,
 }: TransmissionGemProps) {
-  const motion = useMotionPreference(motionPreference);
   const groupRef = useRef<THREE.Group>(null);
-  const animate = motion === 'full';
+  // In a SpatialCanvas, useFrame runs only while its runtime is active.
+  const animate = useSceneAnimates(motionPreference);
 
   useFrame((_, delta) => {
     if (!animate) return;

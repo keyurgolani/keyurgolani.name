@@ -104,4 +104,4 @@ Under the site's `reduce` policy the boundary, the element that carries `data-va
 }
 ```
 
-CSS doesn't reach script motion: gate it on `useMotionPreference()` (`references/common-bugs.md` §8). The motion contract (`tests/e2e/motion-contract.spec.ts`) checks the result.
+CSS doesn't reach script motion: run it on `@portfolio/kit/runtime` (`references/common-bugs.md` §8). The motion contract (`tests/e2e/motion-contract.spec.ts`) checks the result.

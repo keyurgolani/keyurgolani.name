@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useRef, type CSSProperties } from 'react';
-import { useMotionPreference } from '../motion';
+import { useCallback, useEffect, useRef, type CSSProperties } from 'react';
 import type { MotionPolicy } from '@portfolio/schema';
+import { useEnhancementRuntime, useFrameLoop } from '../runtime';
 
 interface ParticleField2DProps {
   motionPreference?: MotionPolicy;
@@ -37,7 +37,10 @@ interface Particle {
 /**
  * 2D canvas network of drifting particles connected by proximity-based lines.
  * Cursor exerts a soft attractive force. Pure canvas, no WebGL — affordable
- * on mobile. Reduced-motion: renders one static frame, no animation.
+ * on mobile. It runs on the kit runtime: it draws one still frame once the
+ * page has mounted, and moves only while the runtime is active, so reduced
+ * motion keeps the still, and a hidden document or the visitor's pause
+ * holds the particles where they are.
  */
 export function ParticleField2D({
   motionPreference = 'respect-os',
@@ -52,8 +55,18 @@ export function ParticleField2D({
   zIndex = 0,
   style,
 }: ParticleField2DProps) {
-  const motion = useMotionPreference(motionPreference);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const runtime = useEnhancementRuntime({ motionPolicy: motionPreference });
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const { attachRoot } = runtime;
+  const attach = useCallback(
+    (node: HTMLCanvasElement | null) => {
+      canvasRef.current = node;
+      attachRoot(node);
+    },
+    [attachRoot],
+  );
+  // Draws a frame: moved first when `move`, else as the particles stand.
+  const scene = useRef<((move: boolean) => void) | null>(null);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -68,7 +81,6 @@ export function ParticleField2D({
     let particles: Particle[] = [];
     let mouseX = -9999;
     let mouseY = -9999;
-    let raf = 0;
 
     function resize() {
       width = window.innerWidth;
@@ -87,12 +99,12 @@ export function ParticleField2D({
       }));
     }
 
-    function step() {
+    function step(move: boolean) {
       ctx!.clearRect(0, 0, width, height);
 
       for (const p of particles) {
         // Cursor pull
-        if (motion === 'full') {
+        if (move) {
           const dx = mouseX - p.x;
           const dy = mouseY - p.y;
           const dist = Math.sqrt(dx * dx + dy * dy);
@@ -141,8 +153,6 @@ export function ParticleField2D({
         ctx!.arc(p.x, p.y, particleSize, 0, Math.PI * 2);
         ctx!.fill();
       }
-
-      if (motion === 'full') raf = requestAnimationFrame(step);
     }
 
     function onMove(e: PointerEvent) {
@@ -155,20 +165,26 @@ export function ParticleField2D({
       mouseY = -9999;
     }
 
+    // A resize clears the canvas, so the still frame draws again with it.
+    function onResize() {
+      resize();
+      step(false);
+    }
+
     resize();
-    window.addEventListener('resize', resize);
+    window.addEventListener('resize', onResize);
     window.addEventListener('pointermove', onMove, { passive: true });
     window.addEventListener('pointerleave', onLeave);
-    step();
+    step(false);
+    scene.current = step;
 
     return () => {
-      cancelAnimationFrame(raf);
-      window.removeEventListener('resize', resize);
+      scene.current = null;
+      window.removeEventListener('resize', onResize);
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerleave', onLeave);
     };
   }, [
-    motion,
     density,
     maxParticles,
     particleSize,
@@ -179,9 +195,13 @@ export function ParticleField2D({
     cursorStrength,
   ]);
 
+  useFrameLoop(runtime, () => {
+    scene.current?.(true);
+  });
+
   return (
     <canvas
-      ref={canvasRef}
+      ref={attach}
       aria-hidden="true"
       style={{
         position: 'fixed',

@@ -2,6 +2,7 @@
 
 import { useCallback, useRef } from 'react';
 import { useMotionValue, useSpring, type MotionValue } from 'framer-motion';
+import { useEnhancementRuntime } from '../runtime';
 
 export interface MouseTiltOptions {
   /** Maximum tilt in degrees. Default 5. */
@@ -45,7 +46,11 @@ export interface MouseTiltValues {
  */
 export function useMouseTilt(options: MouseTiltOptions = {}): MouseTiltValues {
   const maxDegrees = options.maxDegrees ?? 5;
-  const enabled = options.enabled ?? true;
+  // On the kit runtime: it tilts only while the runtime is active, so reduced
+  // motion, a page that hasn't mounted, a hidden document, and the visitor's
+  // pause all hold it flat.
+  const runtime = useEnhancementRuntime();
+  const enabled = (options.enabled ?? true) && runtime.state === 'active';
   const springConfig = {
     stiffness: options.spring?.stiffness ?? 300,
     damping: options.spring?.damping ?? 40,

@@ -1,8 +1,8 @@
 'use client';
 
 import type { CSSProperties } from 'react';
-import { useMotionPreference } from '../motion';
 import type { MotionPolicy } from '@portfolio/schema';
+import { runtimeAnimation, useEnhancementRuntime } from '../runtime';
 
 interface AuroraGradientProps {
   motionPreference?: MotionPolicy;
@@ -27,7 +27,10 @@ interface AuroraGradientProps {
  * stacked conic + radial gradients drifting with phase-offset keyframes. No
  * canvas, no shader, runs everywhere.
  *
- * Reduced motion freezes the layers in place.
+ * It runs on the kit runtime: the layers stand still on the server, until
+ * the page has mounted, and under reduced motion, and the drift pauses while
+ * the document is hidden, the backdrop is offscreen, or the visitor paused
+ * motion.
  */
 export function AuroraGradient({
   motionPreference = 'respect-os',
@@ -39,8 +42,10 @@ export function AuroraGradient({
   zIndex = 0,
   grain = 0.04,
 }: AuroraGradientProps) {
-  const motion = useMotionPreference(motionPreference);
-  const animate = motion === 'full';
+  const runtime = useEnhancementRuntime({ motionPolicy: motionPreference });
+  const { attachRoot } = runtime;
+  // Static, the layers stand still; paused, each holds where it is (runtime/animation.ts).
+  const { state } = runtime;
 
   const [c0, c1, c2, c3] = padColors(colors);
 
@@ -58,7 +63,7 @@ export function AuroraGradient({
     inset: '-25%',
     background: `radial-gradient(60% 80% at 30% 30%, ${c0} 0%, transparent 60%), radial-gradient(50% 70% at 70% 70%, ${c1} 0%, transparent 65%)`,
     filter: 'blur(40px)',
-    animation: animate ? `aurora-drift-a ${speed}s ease-in-out infinite` : undefined,
+    ...runtimeAnimation(state, { name: 'aurora-drift-a', seconds: speed, timing: 'ease-in-out' }),
   };
 
   const layerStyleB: CSSProperties = {
@@ -67,11 +72,15 @@ export function AuroraGradient({
     background: `radial-gradient(45% 65% at 65% 35%, ${c2} 0%, transparent 60%), radial-gradient(55% 75% at 25% 75%, ${c3} 0%, transparent 65%)`,
     filter: 'blur(60px)',
     mixBlendMode: blend,
-    animation: animate ? `aurora-drift-b ${speed * 1.4}s ease-in-out infinite` : undefined,
+    ...runtimeAnimation(state, {
+      name: 'aurora-drift-b',
+      seconds: speed * 1.4,
+      timing: 'ease-in-out',
+    }),
   };
 
   return (
-    <div style={baseStyle} aria-hidden="true">
+    <div ref={attachRoot} style={baseStyle} aria-hidden="true">
       <div style={layerStyleA} />
       <div style={layerStyleB} />
       {grain > 0 ? (

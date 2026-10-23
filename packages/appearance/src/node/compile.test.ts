@@ -364,7 +364,7 @@ test('a typography profile scopes its roles and namespaces each font it ships', 
     assert.deepEqual(css.match(/@layer [a-z-]+ \{/g), ['@layer typography {']);
     assert.match(
       css,
-      /@font-face \{\n {4}font-family: "acme-type Body Face";\n {4}src: url\("\/_portfolio\/pack\/acme-type\.[0-9a-f]{12}\.woff2"\) format\("woff2"\);\n {4}font-weight: 100 900;\n {4}font-style: normal;\n {4}font-display: swap;\n {4}unicode-range: U\+0000-00FF;\n {2}\}/,
+      /@font-face \{\n {4}font-family: "acme-type Body Face";\n {4}src: url\("\/_portfolio\/font\/acme-type\.[0-9a-f]{12}\.woff2"\) format\("woff2"\);\n {4}font-weight: 100 900;\n {4}font-style: normal;\n {4}font-display: swap;\n {4}unicode-range: U\+0000-00FF;\n {2}\}/,
     );
     // The shipped family comes ahead of the declared fallbacks.
     assert.match(css, /--type-body-font-family: "acme-type Body Face", "Segoe UI", sans-serif;/);
@@ -388,6 +388,7 @@ test("a font a typography profile can't ship is a problem, never a silent skip",
       file,
       weight: 400,
       style: 'normal' as const,
+      unicodeRange: 'U+0000-00FF',
     });
     const problems = (file: string) => {
       const result = compilePack({

@@ -19,6 +19,7 @@
     "./host-modules": "./src/entries/host-modules.ts",
     "./sections/styles.css": "./src/sections/styles.css",
     "./enhancements": "./src/enhancements/index.tsx",
+    "./runtime": "./src/runtime/index.ts",
     "./spatial": "./src/spatial/index.ts",
     "./spatial-r3f": "./src/spatial-r3f/index.ts",
     "./github": "./src/github/index.ts",
@@ -33,6 +34,7 @@
   },
   "dependencies": {
     "@chenglou/pretext": "^0.0.6",
+    "@portfolio/appearance": "workspace:*",
     "@portfolio/schema": "workspace:*",
     "@portfolio/variant-contract": "workspace:*",
     "@react-three/drei": "^10.0.0",

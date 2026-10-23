@@ -2,7 +2,7 @@
 
 import type { ReactNode } from 'react';
 import { Html, Float } from '@react-three/drei';
-import { useMotionPreference } from '../motion';
+import { useSceneAnimates } from './scene-runtime';
 import type { MotionPolicy } from '@portfolio/schema';
 
 interface FloatingCardProps {
@@ -37,8 +37,8 @@ export function FloatingCard({
   className,
   width = 320,
 }: FloatingCardProps) {
-  const motion = useMotionPreference(motionPreference);
-  const animate = motion === 'full';
+  // In a SpatialCanvas, Float drifts only while its runtime does.
+  const animate = useSceneAnimates(motionPreference);
 
   return (
     <Float

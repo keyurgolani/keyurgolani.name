@@ -1,8 +1,9 @@
 // compilePack() (#19, Slice 2, items 1 and 4): one stylesheet per pack, its
 // rules inside its axis layer, starting with LAYER_ORDER so load order can't
-// change layer order. Registry generation writes each pack's files to
-// apps/web/public/_portfolio/pack/ by content hash, and the metadata module
-// lists each stylesheet with its url and sha256.
+// change layer order. Registry generation writes each pack's stylesheet to
+// apps/web/public/_portfolio/pack/ by content hash, and its fonts to
+// apps/web/public/_portfolio/font/ (#6, item 7), and the metadata module
+// lists each with its url and sha256.
 //
 // - A scheme gets a block per display mode, keyed on the boundary's
 //   attributes, with the prefers-color-scheme, prefers-contrast, and print
@@ -45,8 +46,10 @@ import {
 import type { PackManifest } from '../validate-pack';
 import { readLanguageStylesheet, writeStyleNodes } from './stylesheet';
 
-/** Where the host serves pack files from: apps/web/public/_portfolio/pack/. */
+/** Where the host serves pack stylesheets from: apps/web/public/_portfolio/pack/. */
 export const PACK_URL = '/_portfolio/pack/';
+/** Where the host serves the fonts a typography profile ships (#6, item 7): apps/web/public/_portfolio/font/. */
+export const FONT_URL = '/_portfolio/font/';
 
 /** Larger than any subset a pack needs. */
 export const MAX_FONT_BYTES = 512 * 1024;
@@ -91,11 +94,12 @@ export interface PackSource {
 
 const sha256 = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
 
-/** A file named by its content: `<id>.<sha256-12>.<extension>`. */
+/** A file named by its content, `<id>.<sha256-12>.<extension>`: a stylesheet under PACK_URL, a font under FONT_URL. */
 export function packFile(id: string, extension: 'css' | 'woff2', bytes: Uint8Array): PackFile {
   const digest = sha256(bytes);
   const name = `${id}.${digest.slice(0, 12)}.${extension}`;
-  return { name, url: `${PACK_URL}${name}`, sha256: digest, bytes };
+  const base = extension === 'woff2' ? FONT_URL : PACK_URL;
+  return { name, url: `${base}${name}`, sha256: digest, bytes };
 }
 
 const cssFile = (id: string, css: string) => packFile(id, 'css', new TextEncoder().encode(css));
@@ -294,7 +298,7 @@ function compileTypography(manifest: TypographyManifest, dir: string): CompileRe
         `  font-weight: ${weight};`,
         `  font-style: ${asset.style};`,
         '  font-display: swap;',
-        ...(asset.unicodeRange ? [`  unicode-range: ${asset.unicodeRange};`] : []),
+        `  unicode-range: ${asset.unicodeRange};`,
         '}',
         '',
       ].join('\n'),

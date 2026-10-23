@@ -49,8 +49,12 @@ type Loads = Map<string, Promise<{ default: EnhancementComponent }>>;
 const loadsByModules = new WeakMap<object, Loads>();
 
 /**
- * One load per enhancement, kept, so a re-render never loads it twice. A load
- * that fails is dropped, so the next mount tries again.
+ * One load per enhancement, kept for the page, so a re-render never loads it
+ * twice. A load that fails stays failed for the page too: React renders the
+ * suspended enhancement again once it settles, and gets the failure for its
+ * boundary to catch, not a new load, and nothing on the page, a parent's
+ * re-render or a remount with a new key included, asks for the chunk again.
+ * A new page, which registers its host modules afresh, tries again, once.
  */
 export function moduleFor(key: string): Promise<{ default: EnhancementComponent }> {
   const modules = hostModules();
@@ -61,12 +65,10 @@ export function moduleFor(key: string): Promise<{ default: EnhancementComponent 
   }
   let load = loads.get(key);
   if (!load) {
-    const started = loadModule(key);
-    load = started;
-    loads.set(key, started);
-    started.catch(() => {
-      if (loads.get(key) === started) loads.delete(key);
-    });
+    load = loadModule(key);
+    // A failure is the page's answer; mark it handled, for the boundary to report.
+    load.catch(() => undefined);
+    loads.set(key, load);
   }
   return load;
 }
@@ -104,7 +106,16 @@ export function enhancementsOff(document: Pick<Document, 'querySelector'> | unde
  * globalThis.__portfolioFailEnhancements is set, and renders nothing when the
  * page's boundary turns enhancements off.
  */
-export function MountedEnhancement({ input, id }: { input: VariantRenderInput; id: string }) {
+export function MountedEnhancement({
+  input,
+  id,
+  fallback = null,
+}: {
+  input: VariantRenderInput;
+  id: string;
+  /** What shows while the module loads: nothing, or an island's server markup. */
+  fallback?: ReactNode;
+}) {
   const mounted = useMounted();
   if (!mounted) return null;
   if (!input.capabilities.enhancements.some((declared) => declared.id === id)) {
@@ -115,7 +126,7 @@ export function MountedEnhancement({ input, id }: { input: VariantRenderInput; i
     throw new Error('Every enhancement fails: globalThis.__portfolioFailEnhancements is set.');
   }
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={fallback}>
       <Loaded input={input} moduleKey={`${input.variant}/${id}`} />
     </Suspense>
   );

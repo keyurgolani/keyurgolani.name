@@ -1,8 +1,8 @@
 'use client';
 
 import type { CSSProperties } from 'react';
-import { useMotionPreference } from '../motion';
 import type { MotionPolicy } from '@portfolio/schema';
+import { runtimeAnimation, useEnhancementRuntime } from '../runtime';
 
 interface ScanlineOverlayProps {
   motionPreference?: MotionPolicy;
@@ -31,7 +31,10 @@ interface ScanlineOverlayProps {
  *   3. Optional vignette (radial dark gradient at edges)
  *   4. Optional tint
  *
- * The scanlines slowly scroll vertically. Reduced motion stops the scroll.
+ * The scanlines slowly scroll vertically, on the kit runtime: they stand
+ * still on the server, until the page has mounted, and under reduced motion,
+ * and the scroll pauses while the document is hidden or the visitor paused
+ * motion.
  */
 export function ScanlineOverlay({
   motionPreference = 'respect-os',
@@ -44,8 +47,10 @@ export function ScanlineOverlay({
   opacity = 1,
   zIndex = 2,
 }: ScanlineOverlayProps) {
-  const motion = useMotionPreference(motionPreference);
-  const animate = motion === 'full';
+  const runtime = useEnhancementRuntime({ motionPolicy: motionPreference });
+  const { attachRoot } = runtime;
+  // Static, the lines stand still; paused, they hold where they are (runtime/animation.ts).
+  const { state } = runtime;
 
   const overlayStyle: CSSProperties = {
     position: 'fixed',
@@ -54,13 +59,13 @@ export function ScanlineOverlay({
     zIndex,
     opacity,
     backgroundImage: `repeating-linear-gradient(0deg, transparent 0, transparent ${scanlineSpacing - 1}px, ${scanlineColor} ${scanlineSpacing - 1}px, ${scanlineColor} ${scanlineSpacing}px)`,
-    animation: animate ? `scanline-scroll ${scrollSpeed}s linear infinite` : undefined,
+    ...runtimeAnimation(state, { name: 'scanline-scroll', seconds: scrollSpeed }),
     mixBlendMode: 'screen',
   };
 
   return (
     <>
-      <div aria-hidden="true" style={overlayStyle} />
+      <div ref={attachRoot} aria-hidden="true" style={overlayStyle} />
       {vignette ? (
         <div
           aria-hidden="true"

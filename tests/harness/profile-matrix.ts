@@ -9,7 +9,7 @@
 // secret, or config summary in any response. A spec runs it for the profile
 // its app options start: read-only and demo, and owner with the password
 // provider (#2), whose password and hash join the canaries.
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -55,6 +55,8 @@ type Operation = Operations.Operation;
 
 /** Where the registry writes #19's compiled packs, which the app serves under /_portfolio/pack/. */
 const PACKS = fileURLToPath(new URL('../../apps/web/public/_portfolio/pack/', import.meta.url));
+/** Where it writes the fonts typography profiles ship (#6, item 7), served under /_portfolio/font/. */
+const FONTS = fileURLToPath(new URL('../../apps/web/public/_portfolio/font/', import.meta.url));
 
 /** A _FILE every profile reads, in a canary-named directory. */
 const ENV_FILES: AppOptions['envFiles'] = {
@@ -1168,7 +1170,13 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
         .filter((entry) => entry.isFile())
         .map(({ name }) => `/_portfolio/pack/${name}`);
       expect(packs.length, 'compiled packs').toBeGreaterThan(0);
-      for (const asset of [...assets, ...packs]) {
+      // Their fonts, which only a profile that ships one writes, such as the appearance fixtures'.
+      const fonts = existsSync(FONTS)
+        ? readdirSync(FONTS, { withFileTypes: true })
+            .filter((entry) => entry.isFile())
+            .map(({ name }) => `/_portfolio/font/${name}`)
+        : [];
+      for (const asset of [...assets, ...packs, ...fonts]) {
         const response = await request.get(asset, { maxRedirects: 0 });
         expect(response.status(), asset).toBe(200);
         expect(response.headers()['access-control-allow-origin'], asset).toBe('*');

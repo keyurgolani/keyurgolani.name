@@ -74,3 +74,14 @@ html[data-theme='dark'] ::selection {
   display: inline-block;
   padding: 0.5rem 1rem;
 }
+
+/* The kit runtime's pause (#6, items 6 and 7): while an effect's runtime
+   isn't active, its root carries data-activity="paused", and CSS animations
+   below it hold where they are. In the last layer, so a variant's layout
+   can't start them again. */
+@layer accessibility {
+  [data-activity='paused'],
+  [data-activity='paused'] * {
+    animation-play-state: paused;
+  }
+}

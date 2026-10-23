@@ -307,8 +307,22 @@ test("a typography profile's roles, measures, scripts, and font files are checke
         style: 'normal',
         unicodeRange: 'U+0000-00FF, U+0131',
       },
-      { family: 'Inter', file: './fonts/inter.woff2', weight: 400, style: 'italic' },
-      { family: 'Inter', file: './fonts/inter.ttf', weight: 400, style: 'normal' },
+      {
+        family: 'Inter',
+        file: './fonts/inter.woff2',
+        weight: 400,
+        style: 'italic',
+        unicodeRange: 'U+0000-00FF',
+      },
+      {
+        family: 'Inter',
+        file: './fonts/inter.ttf',
+        weight: 400,
+        style: 'normal',
+        unicodeRange: 'U+0000-00FF',
+      },
+      // Every face declares its subset (#6, item 7).
+      { family: 'Inter', file: './fonts/inter-bold.woff2', weight: 700, style: 'normal' },
     ],
   };
   assert.deepEqual(records(manifest, 'typography').found, [
@@ -319,6 +333,7 @@ test("a typography profile's roles, measures, scripts, and font files are checke
     ['manifest.invalid', '/measures/body'],
     ['manifest.invalid', '/scripts/1'],
     ['manifest.invalid', '/fontAssets/2/file'],
+    ['manifest.missing', '/fontAssets/3/unicodeRange'],
   ]);
   const valid = {
     ...manifest,

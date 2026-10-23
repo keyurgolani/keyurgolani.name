@@ -71,6 +71,9 @@ export const FIXTURE_ROWS: readonly FixtureRow[] = [
     directories: [
       'packages/budget-fixtures/fixture-variant-light',
       'packages/budget-fixtures/fixture-variant-medium',
+      // The trace's typography profile, which ships a font for the font
+      // budget and the fonts-blocked mode to count and block.
+      'packages/budget-fixtures/fixture-type-font',
     ],
     values: ['1'],
   },

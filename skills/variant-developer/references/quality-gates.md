@@ -89,7 +89,7 @@ const a = el.textContent;
 setTimeout(() => console.log({ frozen: el.textContent === a }), 500);
 ```
 
-If one moves, its script isn't gated on `useMotionPreference()`. (`references/common-bugs.md` §8)
+If one moves, its script doesn't run on the kit runtime's `useFrameLoop()`. (`references/common-bugs.md` §8)
 
 ## Gate D: Print preview
 

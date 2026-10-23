@@ -239,10 +239,13 @@ const FontAsset = z
     file: PackFile('woff2'),
     weight: z.union([Weight, z.tuple([Weight, Weight])]),
     style: z.enum(['normal', 'italic']),
+    /**
+     * The code points the file covers (#6, item 7): a browser downloads it
+     * only for text that uses one, so every face declares its subset.
+     */
     unicodeRange: z
       .string()
-      .regex(UNICODE_RANGE, { message: 'must be a unicode-range, such as U+0000-00FF, U+0131.' })
-      .optional(),
+      .regex(UNICODE_RANGE, { message: 'must be a unicode-range, such as U+0000-00FF, U+0131.' }),
   })
   .strict();
 

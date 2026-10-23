@@ -1,0 +1,11 @@
+{
+  "name": "@portfolio/fixture-type-font",
+  "version": "0.1.0",
+  "private": true,
+  "description": "#6's typography fixture: fixture-type-font, which ships a font file, so the trace's font budget and fonts-blocked mode have one. It registers only when BUDGET_FIXTURES=1.",
+  "portfolio": {
+    "kind": "typography",
+    "packs": "./packs",
+    "fixture": true
+  }
+}

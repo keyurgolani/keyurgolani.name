@@ -35,12 +35,14 @@ test('it is a client module, the one place the kit loads package code in a brows
   assert.match(source, /^'use client';\n/);
 });
 
-test('it exports a component, which a server component renders, and no function to call', () => {
+test('it exports components, which a server component renders, and no function to call', () => {
   // A server component can render a client module's export as an element,
   // and can't call one: Next swaps each export for a reference to it.
-  assert.deepEqual(Object.keys(entry), ['Enhancement']);
-  assert.equal(typeof Enhancement, 'function');
-  assert.match(Enhancement.name, /^[A-Z]/);
+  assert.deepEqual(Object.keys(entry).sort(), ['Enhancement', 'EnhancementIsland']);
+  for (const component of Object.values(entry)) {
+    assert.equal(typeof component, 'function');
+    assert.match(component.name, /^[A-Z]/);
+  }
 });
 
 test('the server renders nothing, so the page never waits on or depends on an enhancement', () => {
@@ -78,7 +80,7 @@ test('it loads the module the host registered under the variant and enhancement 
   }
 });
 
-test('a load that fails is dropped, so the next mount tries again', async () => {
+test("a load that fails stays failed for the page, whatever re-renders or remounts, and a new page's modules try again once", async () => {
   let attempts = 0;
   registerHostModules({
     enhancementLoaders: {
@@ -92,9 +94,26 @@ test('a load that fails is dropped, so the next mount tries again', async () => 
   try {
     const failed = moduleFor('kit-shared/orbit');
     await assert.rejects(failed, /chunk failed/);
+    // React renders the suspended enhancement again once the load settles,
+    // a parent re-renders, an island remounts under a new key: each asks
+    // again, and gets the failure for its boundary, never a second load.
+    for (let render = 0; render < 3; render++) {
+      assert.equal(moduleFor('kit-shared/orbit'), failed);
+    }
+    assert.equal(attempts, 1);
+    // A new page registers its host modules afresh, and tries once more.
+    registerHostModules({
+      enhancementLoaders: {
+        'kit-shared/orbit': async () => {
+          attempts += 1;
+          return { default: Orbit };
+        },
+      },
+    });
     const again = moduleFor('kit-shared/orbit');
     assert.notEqual(again, failed);
     assert.equal((await again).default, Orbit);
+    assert.equal(moduleFor('kit-shared/orbit'), again);
     assert.equal(attempts, 2);
   } finally {
     registerHostModules({});

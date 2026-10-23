@@ -1,6 +1,7 @@
 'use client';
 
 import { useScroll, useVelocity, useSpring, useTransform, type MotionValue } from 'framer-motion';
+import { useEnhancementRuntime } from '../runtime';
 
 export interface ScrollVelocityInertiaOptions {
   /**
@@ -38,16 +39,17 @@ export interface ScrollVelocityInertiaValues {
  * single hook. Returns motion values consumers can apply to a wrapper
  * `motion.div` via `style={{ y, rotateX }}`.
  *
- * Used by kinetic timelines and parallax cards. Reduced-motion handling is
- * the consumer's responsibility — typically gate the values behind an
- * `isActive && motion === 'full'` check or pass `velocityRange: [0,0,0]`.
+ * Used by kinetic timelines and parallax cards. It's on the kit runtime:
+ * reduced motion and a page that hasn't mounted hold both outputs at 0.
  */
 export function useScrollVelocityInertia(
   options: ScrollVelocityInertiaOptions = {},
 ): ScrollVelocityInertiaValues {
+  const runtime = useEnhancementRuntime();
+  const still = runtime.state === 'static';
   const velocityRange = options.velocityRange ?? [-1000, 0, 1000];
-  const yRange = options.yRange ?? [-30, 0, 30];
-  const rotateXRange = options.rotateXRange ?? [15, 0, -15];
+  const yRange = still ? [0, 0, 0] : (options.yRange ?? [-30, 0, 30]);
+  const rotateXRange = still ? [0, 0, 0] : (options.rotateXRange ?? [15, 0, -15]);
   const spring = {
     damping: options.spring?.damping ?? 50,
     stiffness: options.spring?.stiffness ?? 400,

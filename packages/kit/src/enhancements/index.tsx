@@ -7,6 +7,8 @@
 import type { VariantRenderInput } from '@portfolio/variant-contract';
 import { EnhancementBoundary, MountedEnhancement } from './load';
 
+export { EnhancementIsland, type EnhancementIslandProps } from './island';
+
 export interface EnhancementProps {
   /** The render input, as the variant got it. */
   readonly input: VariantRenderInput;

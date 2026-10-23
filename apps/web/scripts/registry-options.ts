@@ -21,6 +21,7 @@ import {
   assetFiles,
   exportTarget,
   findInstalled,
+  fontFiles,
   packFiles,
   readRegistry,
   renderRegistry,
@@ -51,8 +52,10 @@ export const HOST = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '
 export const REPO_ROOT = path.resolve(HOST, '..', '..');
 /** The generated modules, which git ignores. */
 export const OUT = path.join(HOST, 'src', 'lib', 'generated');
-/** The packs' compiled files, which git ignores and the host serves at /_portfolio/pack/. */
+/** The packs' compiled stylesheets, which git ignores and the host serves at /_portfolio/pack/. */
 export const PACK_OUT = path.join(HOST, 'public', '_portfolio', 'pack');
+/** The fonts typography profiles ship (#6, item 7), which git ignores and the host serves at /_portfolio/font/. */
+export const FONT_OUT = path.join(HOST, 'public', '_portfolio', 'font');
 /** The variants' compiled stylesheets (#6), which git ignores and the host serves at /_portfolio/variant/. */
 export const VARIANT_OUT = path.join(HOST, 'public', '_portfolio', 'variant');
 /** The images those stylesheets name, which git ignores and the host serves at /_portfolio/asset/. */
@@ -154,8 +157,10 @@ export interface Generation {
   readonly result: RegistryResult;
   /** The generated modules, when the registry has no errors. */
   readonly files?: ReadonlyMap<GeneratedFile, string>;
-  /** The pack files, when the registry has no errors. */
+  /** The pack stylesheets, when the registry has no errors. */
   readonly packs?: readonly PackFile[];
+  /** The fonts the typography profiles ship, when the registry has no errors. */
+  readonly fonts?: readonly PackFile[];
   /** The variants' compiled stylesheets, when the registry has no errors. */
   readonly variants?: readonly ServedFile[];
   /** The images those stylesheets name, when the registry has no errors. */
@@ -168,6 +173,7 @@ export interface Generation {
     readonly segments: SegmentWriteResult;
     readonly served?: {
       readonly packs: PackWriteResult;
+      readonly fonts: PackWriteResult;
       readonly variants: PackWriteResult;
       readonly assets: PackWriteResult;
     };
@@ -177,6 +183,7 @@ export interface Generation {
 /** Each directory of compiled files the host serves, and where its files stage. */
 export const SERVED_DIRS = {
   pack: { dir: PACK_OUT, staging: path.join(STAGING_OUT, 'pack') },
+  font: { dir: FONT_OUT, staging: path.join(STAGING_OUT, 'font') },
   variant: { dir: VARIANT_OUT, staging: path.join(STAGING_OUT, 'variant') },
   asset: { dir: ASSET_OUT, staging: path.join(STAGING_OUT, 'asset') },
 } as const satisfies Record<ServedKind, { dir: string; staging: string }>;
@@ -211,15 +218,17 @@ export async function generateRegistry(
   if (!result.ok) return { result };
   const files = renderRegistry(result, renderOptions(env));
   const packs = packFiles(result);
+  const fonts = fontFiles(result);
   const variants = variantFiles(result);
   const assets = assetFiles(result);
   const segments = renderExperienceSegments(result);
-  const generated = { result, files, packs, variants, assets, segments };
+  const generated = { result, files, packs, fonts, variants, assets, segments };
   if (!write) return generated;
   const served = modulesOnly
     ? undefined
     : {
         packs: serve('pack', packs),
+        fonts: serve('font', fonts),
         variants: serve('variant', variants),
         assets: serve('asset', assets),
       };

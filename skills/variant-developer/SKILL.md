@@ -265,7 +265,7 @@ For the full catalog with reproductions and fixes, load `references/common-bugs.
 
 ### Motion and performance
 
-- CSS `@media (prefers-reduced-motion)` stops CSS animations only. Script motion needs `useMotionPreference()` gating. (`common-bugs.md` §8)
+- CSS `@media (prefers-reduced-motion)` stops CSS animations only. Script motion runs on `@portfolio/kit/runtime`: `useEnhancementRuntime()` and `useFrameLoop()`. (`common-bugs.md` §8)
 - `@portfolio/kit/spatial-r3f` is heavy: only with a `medium` or `heavy` tier and a reason, and better as an enhancement.
 - `@portfolio/kit/motion-fx` needs `framer-motion`, an optional peer: list it in your own dependencies when you import the subpath.
 - `next.config.ts` has `reactStrictMode: false` because R3F survives WebGL context loss only without strict double-mount. Don't change it from a variant.

@@ -31,6 +31,7 @@ export {
 export {
   assetFiles,
   GENERATED_FILES,
+  fontFiles,
   packFiles,
   registryMeta,
   renderRegistry,

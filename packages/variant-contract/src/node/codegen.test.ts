@@ -6,6 +6,7 @@ import path from 'node:path';
 import {
   assetFiles,
   GENERATED_FILES,
+  fontFiles,
   packFiles,
   registryMeta,
   renderRegistry,
@@ -214,7 +215,7 @@ test('the meta file lists each pack with its files, the platform stylesheet, and
   assert.equal(packs.match(/"fonts": \[/g)?.length, 1);
   assert.match(
     meta,
-    /"fonts": \[\n {6}\{\n {8}"url": "\/_portfolio\/pack\/acme-serif\.[0-9a-f]{12}\.woff2"/,
+    /"fonts": \[\n {6}\{\n {8}"url": "\/_portfolio\/font\/acme-serif\.[0-9a-f]{12}\.woff2"/,
   );
   assert.match(
     meta,
@@ -269,18 +270,43 @@ test('without pack checks, the meta file lists no packs and no platform styleshe
   assert.match(meta, /export const PLATFORM_STYLESHEET: PackFileRef \| null = null;/);
 });
 
-test('packFiles() lists each stylesheet and font, and the platform stylesheet, once, sorted', async () => {
-  const names = packFiles(await withPacks()).map(({ name }) =>
-    name.replace(/[0-9a-f]{12}/, '<hash>'),
-  );
-  assert.deepEqual(names, [
+test('packFiles() lists each stylesheet and the platform stylesheet, and fontFiles() each font, once, sorted', async () => {
+  const result = await withPacks();
+  const hashed = (files: readonly { name: string }[]) =>
+    files.map(({ name }) => name.replace(/[0-9a-f]{12}/, '<hash>'));
+  assert.deepEqual(hashed(packFiles(result)), [
     '_platform.<hash>.css',
     'acme-serif.<hash>.css',
-    'acme-serif.<hash>.woff2',
     'test-language.<hash>.css',
     'test-scheme.<hash>.css',
     'test-type.<hash>.css',
   ]);
+  // Fonts are served from their own directory (#6, item 7).
+  const fonts = fontFiles(result);
+  assert.deepEqual(hashed(fonts), ['acme-serif.<hash>.woff2']);
+  assert.match(fonts[0]!.url, /^\/_portfolio\/font\/acme-serif\.[0-9a-f]{12}\.woff2$/);
+});
+
+test("writeServedFiles() writes fonts into the font directory, and takes nothing there that isn't one", async () => {
+  const result = await withPacks();
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'portfolio-fonts-'));
+  const staging = { staging: path.join(dir, 'staging') };
+  try {
+    const target = path.join(dir, 'font');
+    const fonts = fontFiles(result);
+    assert.deepEqual(writeServedFiles(target, fonts, 'font', staging).written, [fonts[0]!.name]);
+    assert.throws(
+      () => writeServedFiles(target, packFiles(result), 'font', staging),
+      /isn't a font file's name/,
+    );
+    // A pack directory an earlier build wrote a font into drops it as outdated.
+    const packs = path.join(dir, 'pack');
+    fs.mkdirSync(packs);
+    fs.writeFileSync(path.join(packs, fonts[0]!.name), 'old');
+    assert.deepEqual(writePackFiles(packs, packFiles(result), staging).removed, [fonts[0]!.name]);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 // A pid above any pid_max, so no process has it on any host: a temporary
@@ -450,7 +476,7 @@ test('ASSET_MANIFEST lists each unit with its files, variants first, then packs 
   // A pack that declares none is held to its axis's ceilings.
   assert.deepEqual(serif.budgets, {});
   assert.equal(serif.fonts.length, 1);
-  assert.match(serif.fonts[0]!.url, /^\/_portfolio\/pack\/acme-serif\.[0-9a-f]{12}\.woff2$/);
+  assert.match(serif.fonts[0]!.url, /^\/_portfolio\/font\/acme-serif\.[0-9a-f]{12}\.woff2$/);
   assert.match(serif.stylesheet!.url, /^\/_portfolio\/pack\/acme-serif\.[0-9a-f]{12}\.css$/);
 
   const generated = renderRegistry(result);

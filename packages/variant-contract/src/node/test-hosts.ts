@@ -176,7 +176,12 @@ export function testPackFile(id: string, extension: 'css' | 'woff2', text: strin
   const bytes = new TextEncoder().encode(text);
   const sha256 = createHash('sha256').update(bytes).digest('hex');
   const name = `${id}.${sha256.slice(0, 12)}.${extension}`;
-  return { name, url: `/_portfolio/pack/${name}`, sha256, bytes };
+  return {
+    name,
+    url: `/_portfolio/${extension === 'woff2' ? 'font' : 'pack'}/${name}`,
+    sha256,
+    bytes,
+  };
 }
 
 /** Each pack kind's fallback in the tests' hosts. */

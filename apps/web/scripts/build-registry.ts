@@ -2,7 +2,8 @@
 // dependencies, checks every variant, content extension, and appearance pack
 // among them, and writes the modules the host imports into the gitignored
 // src/lib/generated/, and the files the host serves into the gitignored
-// public/_portfolio/: each pack's compiled files in pack/ (#19, Slice 2), and
+// public/_portfolio/: each pack's compiled stylesheet in pack/ (#19, Slice
+// 2), and the fonts it ships in font/ (#6), and
 // each variant's compiled stylesheet in variant/, with the images it names in
 // asset/ (#6, Slice 2), and each variant's experience segment, the route
 // visitor pages render in, into the gitignored app/(site)/%5Fexperience/
@@ -53,13 +54,11 @@ async function main(): Promise<number> {
     process.stderr.write(USAGE);
     return 2;
   }
-  const { result, files, packs, variants, assets, segments, written } = await generateRegistry(
-    process.env,
-    {
+  const { result, files, packs, fonts, variants, assets, segments, written } =
+    await generateRegistry(process.env, {
       write: !options.check,
       modulesOnly: options.modulesOnly,
-    },
-  );
+    });
 
   if (options.format === 'json') {
     const report = {
@@ -89,6 +88,7 @@ async function main(): Promise<number> {
             ...(written.served
               ? {
                   packFiles: written.served.packs,
+                  fontFiles: written.served.fonts,
                   variantFiles: written.served.variants,
                   assetFiles: written.served.assets,
                 }
@@ -115,7 +115,10 @@ async function main(): Promise<number> {
   const stale =
     (written?.segments.removed.length ?? 0) +
     (served
-      ? served.packs.removed.length + served.variants.removed.length + served.assets.removed.length
+      ? served.packs.removed.length +
+        served.fonts.removed.length +
+        served.variants.removed.length +
+        served.assets.removed.length
       : 0);
   process.stdout.write(
     `[registry] ${registrySummary(result)}. ` +
@@ -125,6 +128,7 @@ async function main(): Promise<number> {
           ? `${modules}, and nothing in public/` +
             (stale > 0 ? `, removing ${plural(stale, 'stale file')}.\n` : '.\n')
           : `${modules}, and in public/_portfolio ${served.packs.written.length} of ${packs!.length} in pack/, ` +
+            `${served.fonts.written.length} of ${fonts!.length} in font/, ` +
             `${served.variants.written.length} of ${variants!.length} in variant/, and ` +
             `${served.assets.written.length} of ${assets!.length} in asset/` +
             (stale > 0 ? `, removing ${plural(stale, 'stale file')}.\n` : '.\n')),

@@ -2,7 +2,8 @@ import { ASSET_MANIFEST, PACKS, PLATFORM_STYLESHEET } from '../lib/generated/reg
 
 // The files registry generation writes into public/_portfolio/ (#19, Slice
 // 2, and #6, Slice 2), by the path each is served at: the platform
-// stylesheet, every pack's compiled stylesheet and font files, and every
+// stylesheet, every pack's compiled stylesheet and its font files, which
+// #6 serves from /_portfolio/font/, and every
 // unit's in ASSET_MANIFEST, a variant's compiled stylesheet and the images
 // it names among them. proxy.ts lets a GET or HEAD under /_portfolio/ go on
 // only for one of these, spelled exactly as listed (#7), and answers every
