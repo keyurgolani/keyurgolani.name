@@ -229,14 +229,18 @@ test('an enhancement chunk that fails to load tears its island down to the serve
   page,
 }) => {
   // Every chunk the document doesn't name fails, as a blocked one would:
-  // the glint's, which its island loads on demand.
+  // the glint's, which its island loads on demand, once it's active.
   const html = await (await page.request.get('/')).text();
   const named = new Set(
-    [...html.matchAll(/\/_next\/static\/chunks\/[^"'\s)]+\.js/g)].map(([path]) => path),
+    [...html.matchAll(/\/_next\/static\/chunks\/[^"'\s)]+\.(?:js|css)/g)].map(([path]) => path),
   );
-  await page.route('**/_next/static/chunks/**', (route) =>
-    named.has(new URL(route.request().url()).pathname) ? route.fallback() : route.abort('failed'),
-  );
+  const blocked: string[] = [];
+  await page.route('**/_next/static/chunks/**', (route) => {
+    const at = new URL(route.request().url()).pathname;
+    if (named.has(at)) return route.fallback();
+    blocked.push(at);
+    return route.abort('failed');
+  });
   await load(page);
   const plain = await withoutJavaScript(page);
   await page.locator('[data-enhancement-island="glint"]').scrollIntoViewIfNeeded();
@@ -245,17 +249,36 @@ test('an enhancement chunk that fails to load tears its island down to the serve
     'failed',
   );
   await expect(page.locator('[data-enhancement-island="glint"] .fvm-glint')).toHaveCount(1);
+  // Asked for once the island was active, and given up on: Turbopack's
+  // loader tries a chunk twice, and the island never asks again.
+  expect(blocked.length, "the glint's chunk, which the island asked for").toBeGreaterThan(0);
+  await page.waitForTimeout(2_000);
+  expect(
+    blocked.length,
+    `the requests for the failed chunk: ${blocked.join(', ')}`,
+  ).toBeLessThanOrEqual(2);
   expect(await readable(page)).toEqual(plain);
 });
+
+/**
+ * Fails every request `pattern` matches from here on, the browser's cache
+ * off, so nothing it already holds gets past. The trace's site publishes
+ * fixture-type-font, which ships a font; a public page links it once #19's
+ * fourth slice links the selected packs, and 6-5's CSP follow-up then
+ * asserts a font was refused.
+ */
+async function block(page: Page, pattern: RegExp) {
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Network.setCacheDisabled', { cacheDisabled: true });
+  await page.route(pattern, (route) => route.abort('failed'));
+}
 
 test('with the still, the unit stylesheet, and fonts blocked, the page reads the same', async ({
   page,
 }) => {
   await load(page);
   const plain = await withoutJavaScript(page);
-  await page.route(/\/_portfolio\/(?:asset|font|variant)\/|\.woff2?(?:$|\?)/, (route) =>
-    route.abort('failed'),
-  );
+  await block(page, /\/_portfolio\/(?:asset|font|variant)\/|\.woff2?(?:$|\?)/);
   await page.reload({ waitUntil: 'load' });
   await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => undefined);
   expect(await readable(page)).toEqual(plain);
@@ -285,9 +308,7 @@ test("the page's layout shift, with fonts and media blocked and without, is reco
   };
   await load(page);
   const loaded = await cls();
-  await page.route(/\/_portfolio\/(?:asset|font)\/|\.woff2?(?:$|\?)/, (route) =>
-    route.abort('failed'),
-  );
+  await block(page, /\/_portfolio\/(?:asset|font)\/|\.woff2?(?:$|\?)/);
   await page.reload({ waitUntil: 'load' });
   const blocked = await cls();
   await testInfo.attach('layout-shift.json', {
@@ -297,7 +318,8 @@ test("the page's layout shift, with fonts and media blocked and without, is reco
   console.log(
     `[trace] layout shift: ${loaded.toFixed(4)} loaded, ${blocked.toFixed(4)} with fonts and media blocked`,
   );
-  // #11 sets the threshold by tier; this holds the fixture under the "good" CLS line until then.
-  expect(loaded).toBeLessThan(0.1);
-  expect(blocked).toBeLessThan(0.1);
+  // #11 sets the threshold by tier. The fixture measures none either way,
+  // with font-display: swap and its fallback stack, so any shift is new.
+  expect(loaded).toBe(0);
+  expect(blocked).toBe(0);
 });

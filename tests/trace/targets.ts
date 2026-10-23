@@ -24,6 +24,34 @@ export const TRACE_FIXTURE = 'complete';
 
 /** Where registry generation writes the trace matrix, for the build the trace starts. */
 export const TRACE_MATRIX = path.join(WEB, 'src', 'lib', 'generated', 'trace-matrix.json');
+const ASSET_MANIFEST = path.join(WEB, 'src', 'lib', 'generated', 'asset-manifest.json');
+
+/**
+ * The typography profile the trace's site publishes when the build
+ * registers it, as BUDGET_FIXTURES=1 does: #6's font fixture, which ships a
+ * font file, so the font budget counts one and the fonts-blocked mode blocks
+ * one. Any other build publishes the fixture's own, which falls back.
+ */
+export const TRACE_TYPOGRAPHY = 'fixture-type-font';
+
+function registersTypography(id: string, file = ASSET_MANIFEST): boolean {
+  try {
+    const { units } = JSON.parse(readFileSync(file, 'utf8')) as {
+      units: { kind: string; id: string }[];
+    };
+    return units.some((unit) => unit.kind === 'typography' && unit.id === id);
+  } catch {
+    return false;
+  }
+}
+
+/** `site` publishing `typography`, in place of the fixture's own. */
+export function publishingTypography(site: string, typography: string): string {
+  const published = site.replace(/^(\s+typography:\s*)classic\s*$/m, `$1${typography}`);
+  if (published === site)
+    throw new Error("The trace fixture's site publishes no typography to replace.");
+  return published;
+}
 
 export interface TraceTarget {
   /** The Playwright project's name. */
@@ -104,9 +132,14 @@ export function traceTargets(
   let hash: string | undefined;
   const ownerHash = () => (hash ??= ownerSecret().hash);
   const fixture = contractFixture(TRACE_FIXTURE);
+  const fonts = registersTypography(TRACE_TYPOGRAPHY);
   return profiles.flatMap((profile) =>
     chosen.map((entry) => {
-      const app = fixtureApp(fixture, { manifest: { id: entry.id } });
+      const own = fixtureApp(fixture, { manifest: { id: entry.id } });
+      const app =
+        fonts && own.siteText
+          ? { ...own, siteText: publishingTypography(own.siteText, TRACE_TYPOGRAPHY) }
+          : own;
       return {
         name: profile === 'read-only' ? entry.id : `${entry.id} (${profile})`,
         selection: entry.selection.variant,

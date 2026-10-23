@@ -29,6 +29,7 @@
     "@portfolio/core": "workspace:*",
     "@portfolio/fallback-composition": "workspace:*",
     "@portfolio/fixture-over-budget": "workspace:*",
+    "@portfolio/fixture-type-font": "workspace:*",
     "@portfolio/fixture-variant-light": "workspace:*",
     "@portfolio/fixture-variant-medium": "workspace:*",
     "@portfolio/kit": "workspace:*",

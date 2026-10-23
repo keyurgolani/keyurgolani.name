@@ -89,6 +89,9 @@ importers:
       '@portfolio/fixture-over-budget':
         specifier: workspace:*
         version: link:../../packages/budget-fixtures/fixture-over-budget
+      '@portfolio/fixture-type-font':
+        specifier: workspace:*
+        version: link:../../packages/budget-fixtures/fixture-type-font
       '@portfolio/fixture-variant-light':
         specifier: workspace:*
         version: link:../../packages/budget-fixtures/fixture-variant-light
@@ -221,6 +224,8 @@ importers:
       typescript:
         specifier: ^5.7.2
         version: 5.9.3
+
+  packages/budget-fixtures/fixture-type-font: {}
 
   packages/budget-fixtures/fixture-variant-light:
     dependencies:
