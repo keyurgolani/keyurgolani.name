@@ -204,6 +204,9 @@ test(
     const appOrigin = new URL(app.origin).origin;
     const home = await page.goto('/', { waitUntil: 'load' });
     expect(home?.status(), 'GET /').toBe(200);
+    // What / loads after it hydrates, such as an island's enhancement, is
+    // its own, so it settles before the next page's requests count.
+    await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => undefined);
     const linked = (await linkedPages(page, appOrigin)).slice(0, LINKED_PAGES);
     const pages = [];
     for (const route of [...linked, NOT_FOUND]) {

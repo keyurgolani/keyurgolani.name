@@ -71,9 +71,11 @@ export function ShaderStage(): ReactElement {
 
   // Frames only while the runtime is active: hidden, offscreen, paused by
   // the visitor or a preview, or reduced, the still shows and nothing draws.
-  useFrameLoop(runtime, (now) => {
+  // Without WebGL2, nothing draws, so no loop runs at all.
+  useFrameLoop({ state: runtime.eligible ? runtime.state : 'static' }, (now) => {
     const drawing = scene.current;
-    if (!drawing) return;
+    // A context that never compiled ends the loop.
+    if (!drawing) return false;
     started.current ??= now;
     drawing.gl.uniform1f(drawing.time, (now - started.current) / 1000);
     drawing.gl.drawArrays(drawing.gl.TRIANGLES, 0, 3);
