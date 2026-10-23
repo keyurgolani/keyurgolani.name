@@ -167,19 +167,19 @@ Each is one plain JSON document of at most 1 MiB. One that doesn't parse is `sna
 
 ### Appearance
 
-The appearance names a composition, three appearance axes, and a display mode. The axes are #19's (appearance axes); until it ships:
+The appearance names a composition, three appearance axes, and a display mode. The axes are #19's (appearance axes): each names a pack this build registers, and every page renders in the packs the site selects.
 
 - **`variant`** is the composition: which installed variant package lays out the page, by its manifest's id. This build registers only the fallback composition, which a site can't select (`variant: fallback` is `schema.invalid`). Any other id renders as the fallback composition, with a `variant.unavailable` warning at startup and in `config.status`, until a package with that id is installed. The example's `editorial-evidence` arrives with #13.
 - **`designLanguage`** is the component style. Use `platform-neutral`.
-- **`colorScheme`** is the palette, such as `warm`.
-- **`typography`** is the type preset, such as `classic`.
-- **`displayMode`** is the theme a visit starts in: `system`, `light`, `dark`, or `high-contrast`. `system` follows the visitor's `prefers-color-scheme`, and `high-contrast` starts at `system` until #19 renders it.
+- **`colorScheme`** is the palette. Use `warm-parchment`, the platform's.
+- **`typography`** is the type profile. Use `humanist-ui`, the platform's.
+- **`displayMode`** is the mode a visit starts in: `system`, `light`, `dark`, or `high-contrast`. `system` follows the visitor's `prefers-color-scheme` in CSS, so the first paint is already right, and a scheme with one mode renders it whatever this says.
 
-This build records the design language, color scheme, and typography without checking them, and lists them as not checked. #19's catalog checks them, as `appearance.unknown` with the ids it registers, and nothing will fall back to a default in an unknown one's place.
+This build registers the platform's three packs, `platform-neutral`, `warm-parchment`, and `humanist-ui`, and checks every id against them. A pack id it doesn't register is `appearance.unavailable`: at startup and in preview a warning, and the page renders the platform's pack on that axis in its place; an import or a publish refuses it. An old document's `legacy.document` names the ids to use.
 
 ### Visitor controls
 
-`visitorControls` says which of the five appearance fields a visitor may change for themselves: `locked` keeps the published value, and `selectable` lets them pick another. All five are required. This release checks the values but doesn't apply them yet: they take effect with #19's visitor control, which renders in each variant's slot for it. Until then visitors can't pick a variant, design language, color scheme, or typography preset, and no variant renders a theme toggle.
+`visitorControls` says which of the five appearance fields a visitor may change for themselves: `locked` keeps the published value, and `selectable` lets them pick another. All five are required. Each `selectable` field but `variant` gets a control in the Appearance disclosure, which renders in every variant's slot for it; the composition stays the site's for now. A visitor's choice is a cookie, `portfolio_appearance`, which holds the ids alone and lasts 180 days, and the page renders in it from the first paint. Without JavaScript the control is a form that posts and comes back to the page. Under `demo` there's no control, and the appearance is the query's. No variant renders a theme toggle.
 
 ### Motion
 
@@ -199,7 +199,7 @@ A hidden section stays in the portfolio and out of everything visitors get: the 
 
 Deployment settings come from the environment. `deploymentProfile`, `profile`, `origin`, `canonicalOrigin`, `url`, `baseUrl`, `studio`, `previewOrigin`, `trustedProxies`, and `proxy`, at the top level or under `features`, are `site.deployment-setting`, and the remediation names the environment variable to use.
 
-`appearanceInputs` belongs to #19's color scheme registry: this release checks its shape and lists its entries as not checked. `routes` and `variantControls` are checked against the selected variant's manifest when this build registers it, and listed as not checked when it doesn't. Another variant's control entries are kept as written, unchecked. When a variant raises its controls version, `pnpm variants:migrate-controls --site config/site.yml` migrates the stored values: it prints the changes and a diff, and writes only with `--write`.
+`appearanceInputs` is checked against #19's color scheme registry: an entry for a registered scheme has to be for a generated one and give the input its generator takes, an entry keyed by another axis's pack is invalid, and one for a scheme this build doesn't register is listed as not checked. `routes` and `variantControls` are checked against the selected variant's manifest when this build registers it, and listed as not checked when it doesn't. Another variant's control entries are kept as written, unchecked. When a variant raises its controls version, `pnpm variants:migrate-controls --site config/site.yml` migrates the stored values: it prints the changes and a diff, and writes only with `--write`.
 
 ## Deployment settings and secrets
 
@@ -287,64 +287,69 @@ Each record has a code, a severity, the document, a JSON pointer, a line and col
 - **`blocks-publish`**: a draft preview (#7, #8) could render it, but it can't go live.
 - **`warning`**: reported only.
 
-Startup treats the mounted pair as live, so both blocking severities stop it, except for the variant's compatibility findings: live, `variant.unavailable`, `controls.*`, `slot.required-empty`, and `kind.no-renderer` only warn, since something renders in place of each: the fallback composition for an unregistered variant, a control's default, a slot's `whenEmpty`, or the rest of the page. #3's publish still refuses them. [variants.md](variants.md#compatibility) has the whole report. Checks that can't run are listed as not checked: the origin checks without an origin, the publication checks without the live revision, and the design language, color scheme, typography, and appearance inputs until #19.
+Startup treats the mounted pair as live, so both blocking severities stop it, except for the variant's compatibility findings: live, `variant.unavailable`, `controls.*`, `slot.required-empty`, and `kind.no-renderer` only warn, since something renders in place of each: the fallback composition for an unregistered variant, a control's default, a slot's `whenEmpty`, or the rest of the page. #3's publish still refuses them. [variants.md](variants.md#compatibility) has the whole report. Checks that can't run are listed as not checked: the origin checks without an origin, the publication checks without the live revision, and an `appearanceInputs` entry for a color scheme this build doesn't register.
 
-| Code                        | Severity       | Meaning                                                                                                                                                        |
-| --------------------------- | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `parse.syntax`              | blocks-preview | The text isn't one plain YAML or JSON document within the limits.                                                                                              |
-| `schema.invalid`            | blocks-preview | A value isn't what the schema expects, or a key isn't one it defines.                                                                                          |
-| `schema.version`            | blocks-preview | A document declares a version this release doesn't read: the portfolio reads `schemaVersion: 3`, and the site `schemaVersion: 2`.                              |
-| `schema.outdated`           | blocks-preview | The portfolio is a version 2 document, which `pnpm config:migrate` converts. Nothing else is reported with it.                                                 |
-| `id.missing`                | blocks-preview | A section, record, or media asset has no `id`. `pnpm config:ids-fix` gives it one.                                                                             |
-| `id.invalid`                | blocks-preview | An `id` that isn't lowercase words joined by hyphens, at most 64 characters, not `main`.                                                                       |
-| `snapshot.syntax`           | blocks-preview | A file in `snapshots/` isn't one plain JSON document of at most 1 MiB.                                                                                         |
-| `snapshot.invalid`          | blocks-preview | A known snapshot kind's data doesn't check, or the file can't be read.                                                                                         |
-| `media.syntax`              | blocks-preview | `media/media.json` isn't one plain JSON document of at most 1 MiB.                                                                                             |
-| `media.invalid`             | blocks-preview | The media document's data doesn't check, or the file can't be read.                                                                                            |
-| `source.missing`            | blocks-preview | The directory has no portfolio or no site document.                                                                                                            |
-| `source.duplicate`          | blocks-preview | The directory holds one document in two formats.                                                                                                               |
-| `source.unreadable`         | blocks-preview | The server can't read a document, such as one without read permission, or a directory with its name.                                                           |
-| `legacy.document`           | blocks-preview | The portfolio is in the old one-file format, with or without a `site.yml`, or it's a `portfolio.toml`. Nothing else is reported with it.                       |
-| `site.deployment-setting`   | blocks-preview | The site document holds a deployment setting.                                                                                                                  |
-| `appearance.unknown`        | blocks-preview | An appearance id the catalog doesn't register. This build's interim catalog checks only `displayMode`, which the schema already limits.                        |
-| `markdown.too-long`         | blocks-preview | A Markdown field past 8,192 characters, with a list item past 128 lines between blank lines, or with tables past 4,096 cells.                                  |
-| `markdown.too-deep`         | blocks-preview | A Markdown field that nests block quotes past 4 deep, lists past 8 deep, or the two past 12 deep together, counting the levels lazy lines add.                 |
-| `markdown.too-dense`        | blocks-preview | A Markdown field past the limits on inline marks for its length, link reference definitions, `<` characters, link parentheses, or web address punctuation.     |
-| `validator.failed`          | blocks-preview | A bug in the build, such as two extensions with one namespace, not in the documents.                                                                           |
-| `id.duplicate`              | blocks-publish | Two entries share an id: sections, records, and media assets share one set.                                                                                    |
-| `id.reused`                 | blocks-publish | At publish: the draft gives an id the live revision uses to something of another type.                                                                         |
-| `ref.missing`               | blocks-publish | The site document names a section the portfolio doesn't have.                                                                                                  |
-| `ref.unresolved`            | blocks-publish | A reference names no record in the portfolio.                                                                                                                  |
-| `ref.type`                  | blocks-publish | A reference names a record of the wrong type, such as a section id in `proof`, or an audio asset as a cover.                                                   |
-| `curation.overlap`          | blocks-publish | A work in two of `signature`, `featured`, and `archive`, or an id twice in one list.                                                                           |
-| `slug.duplicate`            | blocks-publish | Two public works with case studies share a slug.                                                                                                               |
-| `urls.vanished`             | blocks-publish | At publish: a live URL the revision drops, with no redirect and no acknowledgement.                                                                            |
-| `metric.conflict`           | blocks-publish | One metric key has two values.                                                                                                                                 |
-| `anchor.broken`             | blocks-publish | A `#fragment` link points at no visible section or record.                                                                                                     |
-| `secret.detected`           | blocks-publish | A string looks like a secret.                                                                                                                                  |
-| `content.empty`             | blocks-publish | No section is visible.                                                                                                                                         |
-| `variant.unavailable`       | blocks-publish | The site selects a variant this build doesn't register. Live, it only warns, and the fallback composition renders in its place.                                |
-| `controls.invalid`          | blocks-publish | A control value the selected variant doesn't declare or accept. Live, it only warns, and the control renders its default.                                      |
-| `controls.stale`            | blocks-publish | Control values stored at another version of the variant's controls. Live, it only warns, and every control renders its default.                                |
-| `controls.dangling-ref`     | blocks-publish | A control points at no visible section. Live, it only warns, and the control renders its default.                                                              |
-| `slot.required-empty`       | blocks-publish | A content slot the selected variant requires holds fewer items than its `min`. Live, it only warns, and the composition does what the slot's `whenEmpty` says. |
-| `kind.no-renderer`          | blocks-publish | A visible extension section no registered renderer handles. Live, it only warns, and the rest of the page renders without it.                                  |
-| `ref.private`               | warning        | A visible section or a curation list names a private record, which drops out there.                                                                            |
-| `section.empty`             | warning        | A visible section with nothing visitors may see, which leaves the page and the navigation.                                                                     |
-| `snapshot.ignored`          | warning        | A file in `snapshots/` whose name isn't `<kind>.json`.                                                                                                         |
-| `metric.duplicate`          | warning        | One metric with the same value shown twice.                                                                                                                    |
-| `image.alt-missing`         | warning        | An image placement visitors see with no alt text and no `decorative: true`.                                                                                    |
-| `origin.sample`             | warning        | A link points at a sample address, such as a `.test` or `example.com` host.                                                                                    |
-| `origin.stale`              | warning        | A link's host differs from the origin's only in its last label, like an old domain.                                                                            |
-| `extension.unregistered`    | warning        | Data from an extension this build doesn't register.                                                                                                            |
-| `slot.recommended-empty`    | warning        | A content slot the selected variant recommends is empty, or holds fewer than its `min`.                                                                        |
-| `slot.overflow`             | warning        | A content slot holds more items than its `max`. The extras render after it.                                                                                    |
-| `kind.unsupported`          | warning        | A visible section of a kind the selected variant doesn't show.                                                                                                 |
-| `direction.unsupported`     | warning        | A right-to-left portfolio, or a section in a right-to-left language, in a variant that declares only `ltr`.                                                    |
-| `appearance.unknown-recipe` | warning        | The selected variant recommends an appearance recipe this build doesn't list. Not checked until #20 lists recipes.                                             |
-| `route.unknown`             | warning        | A `routes` entry the selected variant doesn't have, which changes nothing.                                                                                     |
-| `route.required`            | warning        | A `routes` entry that turns off the front page, which every site serves, so it's ignored.                                                                      |
-| `sample.identity`           | warning        | From `pnpm config:validate` only: `identity.name` is the bundled sample's, which production refuses to start with.                                             |
+| Code                           | Severity       | Meaning                                                                                                                                                        |
+| ------------------------------ | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `parse.syntax`                 | blocks-preview | The text isn't one plain YAML or JSON document within the limits.                                                                                              |
+| `schema.invalid`               | blocks-preview | A value isn't what the schema expects, or a key isn't one it defines.                                                                                          |
+| `schema.version`               | blocks-preview | A document declares a version this release doesn't read: the portfolio reads `schemaVersion: 3`, and the site `schemaVersion: 2`.                              |
+| `schema.outdated`              | blocks-preview | The portfolio is a version 2 document, which `pnpm config:migrate` converts. Nothing else is reported with it.                                                 |
+| `id.missing`                   | blocks-preview | A section, record, or media asset has no `id`. `pnpm config:ids-fix` gives it one.                                                                             |
+| `id.invalid`                   | blocks-preview | An `id` that isn't lowercase words joined by hyphens, at most 64 characters, not `main`.                                                                       |
+| `snapshot.syntax`              | blocks-preview | A file in `snapshots/` isn't one plain JSON document of at most 1 MiB.                                                                                         |
+| `snapshot.invalid`             | blocks-preview | A known snapshot kind's data doesn't check, or the file can't be read.                                                                                         |
+| `media.syntax`                 | blocks-preview | `media/media.json` isn't one plain JSON document of at most 1 MiB.                                                                                             |
+| `media.invalid`                | blocks-preview | The media document's data doesn't check, or the file can't be read.                                                                                            |
+| `source.missing`               | blocks-preview | The directory has no portfolio or no site document.                                                                                                            |
+| `source.duplicate`             | blocks-preview | The directory holds one document in two formats.                                                                                                               |
+| `source.unreadable`            | blocks-preview | The server can't read a document, such as one without read permission, or a directory with its name.                                                           |
+| `legacy.document`              | blocks-preview | The portfolio is in the old one-file format, with or without a `site.yml`, or it's a `portfolio.toml`. Nothing else is reported with it.                       |
+| `site.deployment-setting`      | blocks-preview | The site document holds a deployment setting.                                                                                                                  |
+| `appearance.unknown`           | blocks-preview | An appearance id a catalog doesn't register, where a tool checks one without #19's registry. The host checks with it, and reports `appearance.unavailable`.    |
+| `appearance.unavailable`       | blocks-publish | A pack id this build doesn't register. Startup and preview warn, and the platform's pack renders on that axis; import and publish refuse it.                   |
+| `appearance.not-publishable`   | blocks-publish | A Research pack. Preview renders it; publish refuses it.                                                                                                       |
+| `appearance.mode-incompatible` | blocks-publish | A `light` or `dark` display mode the color scheme lacks. Preview renders the scheme's own mode.                                                                |
+| `appearance.input-missing`     | blocks-publish | A generated color scheme with no `appearanceInputs` entry, or nothing generated to render.                                                                     |
+| `appearance.script-coverage`   | warning        | The portfolio's locale, or a section's `lang`, is in a script the typography profile doesn't cover, so browsers use a font of their own for it.                |
+| `markdown.too-long`            | blocks-preview | A Markdown field past 8,192 characters, with a list item past 128 lines between blank lines, or with tables past 4,096 cells.                                  |
+| `markdown.too-deep`            | blocks-preview | A Markdown field that nests block quotes past 4 deep, lists past 8 deep, or the two past 12 deep together, counting the levels lazy lines add.                 |
+| `markdown.too-dense`           | blocks-preview | A Markdown field past the limits on inline marks for its length, link reference definitions, `<` characters, link parentheses, or web address punctuation.     |
+| `validator.failed`             | blocks-preview | A bug in the build, such as two extensions with one namespace, not in the documents.                                                                           |
+| `id.duplicate`                 | blocks-publish | Two entries share an id: sections, records, and media assets share one set.                                                                                    |
+| `id.reused`                    | blocks-publish | At publish: the draft gives an id the live revision uses to something of another type.                                                                         |
+| `ref.missing`                  | blocks-publish | The site document names a section the portfolio doesn't have.                                                                                                  |
+| `ref.unresolved`               | blocks-publish | A reference names no record in the portfolio.                                                                                                                  |
+| `ref.type`                     | blocks-publish | A reference names a record of the wrong type, such as a section id in `proof`, or an audio asset as a cover.                                                   |
+| `curation.overlap`             | blocks-publish | A work in two of `signature`, `featured`, and `archive`, or an id twice in one list.                                                                           |
+| `slug.duplicate`               | blocks-publish | Two public works with case studies share a slug.                                                                                                               |
+| `urls.vanished`                | blocks-publish | At publish: a live URL the revision drops, with no redirect and no acknowledgement.                                                                            |
+| `metric.conflict`              | blocks-publish | One metric key has two values.                                                                                                                                 |
+| `anchor.broken`                | blocks-publish | A `#fragment` link points at no visible section or record.                                                                                                     |
+| `secret.detected`              | blocks-publish | A string looks like a secret.                                                                                                                                  |
+| `content.empty`                | blocks-publish | No section is visible.                                                                                                                                         |
+| `variant.unavailable`          | blocks-publish | The site selects a variant this build doesn't register. Live, it only warns, and the fallback composition renders in its place.                                |
+| `controls.invalid`             | blocks-publish | A control value the selected variant doesn't declare or accept. Live, it only warns, and the control renders its default.                                      |
+| `controls.stale`               | blocks-publish | Control values stored at another version of the variant's controls. Live, it only warns, and every control renders its default.                                |
+| `controls.dangling-ref`        | blocks-publish | A control points at no visible section. Live, it only warns, and the control renders its default.                                                              |
+| `slot.required-empty`          | blocks-publish | A content slot the selected variant requires holds fewer items than its `min`. Live, it only warns, and the composition does what the slot's `whenEmpty` says. |
+| `kind.no-renderer`             | blocks-publish | A visible extension section no registered renderer handles. Live, it only warns, and the rest of the page renders without it.                                  |
+| `ref.private`                  | warning        | A visible section or a curation list names a private record, which drops out there.                                                                            |
+| `section.empty`                | warning        | A visible section with nothing visitors may see, which leaves the page and the navigation.                                                                     |
+| `snapshot.ignored`             | warning        | A file in `snapshots/` whose name isn't `<kind>.json`.                                                                                                         |
+| `metric.duplicate`             | warning        | One metric with the same value shown twice.                                                                                                                    |
+| `image.alt-missing`            | warning        | An image placement visitors see with no alt text and no `decorative: true`.                                                                                    |
+| `origin.sample`                | warning        | A link points at a sample address, such as a `.test` or `example.com` host.                                                                                    |
+| `origin.stale`                 | warning        | A link's host differs from the origin's only in its last label, like an old domain.                                                                            |
+| `extension.unregistered`       | warning        | Data from an extension this build doesn't register.                                                                                                            |
+| `slot.recommended-empty`       | warning        | A content slot the selected variant recommends is empty, or holds fewer than its `min`.                                                                        |
+| `slot.overflow`                | warning        | A content slot holds more items than its `max`. The extras render after it.                                                                                    |
+| `kind.unsupported`             | warning        | A visible section of a kind the selected variant doesn't show.                                                                                                 |
+| `direction.unsupported`        | warning        | A right-to-left portfolio, or a section in a right-to-left language, in a variant that declares only `ltr`.                                                    |
+| `appearance.unknown-recipe`    | warning        | The selected variant recommends an appearance recipe this build doesn't list. Not checked until #20 lists recipes.                                             |
+| `route.unknown`                | warning        | A `routes` entry the selected variant doesn't have, which changes nothing.                                                                                     |
+| `route.required`               | warning        | A `routes` entry that turns off the front page, which every site serves, so it's ignored.                                                                      |
+| `sample.identity`              | warning        | From `pnpm config:validate` only: `identity.name` is the bundled sample's, which production refuses to start with.                                             |
 
 ## Migrating a version 2 portfolio
 

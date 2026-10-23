@@ -15,20 +15,20 @@ schemaVersion: 2
 # The published appearance. variant is an installed variant package's id.
 # Editorial Evidence is the owner default; until #13 installs it, the
 # fallback composition renders in its place and startup warns. The design
-# language, color scheme, and typography are #19's appearance axes, which
-# this build doesn't check yet
+# language, color scheme, and typography are #19's appearance axes: each
+# names a pack this build registers, and these are the platform's defaults
 appearance:
   variant: editorial-evidence
   designLanguage: platform-neutral
-  colorScheme: warm
-  typography: classic
-  # system, light, dark, or high-contrast, which starts at system until #19
+  colorScheme: warm-parchment
+  typography: humanist-ui
+  # system, light, dark, or high-contrast
   displayMode: system
 
 # Whether visitors may change each appearance field for themselves:
-# locked or selectable, all five required. This build checks them but doesn't
-# apply them yet: they take effect with #19, whose visitor control renders in
-# each variant's visitor control slot
+# locked or selectable, all five required. The visitor's appearance control
+# renders in each variant's visitor control slot, with one choice per
+# selectable field, and keeps the visitor's choice in a cookie
 visitorControls:
   variant: locked
   designLanguage: locked

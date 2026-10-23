@@ -64,6 +64,12 @@ export interface AppearanceCatalog {
    * isn't generator-backed, undefined when there's no registry to ask.
    */
   generatorInput(schemeId: string): 'seed-color' | 'asset' | null | undefined;
+  /**
+   * What a legacy document's appearance values become, for legacy.document's
+   * remediation to add after the conversion steps: #19's
+   * legacyAppearanceRemediation(), from the old file's parsed contents.
+   */
+  legacyAppearance?(data: unknown): string;
 }
 
 /**

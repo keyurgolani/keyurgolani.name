@@ -108,12 +108,25 @@ export interface NavigationItem {
   readonly lang?: string;
 }
 
-export interface NavigationProps extends Omit<LandmarkProps, 'children' | 'labelledBy'> {
-  /** Its accessible name, such as Primary. */
-  readonly label: string;
+export type NavigationProps = Omit<LandmarkProps, 'children' | 'label' | 'labelledBy'> & {
   readonly items: readonly NavigationItem[];
   readonly orientation?: 'horizontal' | 'vertical';
-}
+} & (
+    | {
+        /** Its accessible name, such as Primary. */
+        readonly label: string;
+        readonly labelledBy?: undefined;
+      }
+    | {
+        /**
+         * The id of the element that names it, in place of `label`: for a
+         * name in another language than the links', which that element
+         * marks with its own `lang`.
+         */
+        readonly labelledBy: string;
+        readonly label?: undefined;
+      }
+  );
 
 /** A named list of links, the current one marked with aria-current. */
 export function Navigation({ items, orientation = 'horizontal', ...props }: NavigationProps) {

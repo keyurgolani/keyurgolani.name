@@ -23,13 +23,9 @@
   margin-block-end: 2.5rem;
 }
 
-[data-variant='acme-reference'] .acme-nav ul {
-  display: flex;
-  flex-wrap: wrap;
+/* The navigation primitive's list, which the platform lays out and sizes: the variant spaces it. */
+[data-variant='acme-reference'] .acme-nav [data-ui-slot='navigation.list'] {
   gap: 0.25rem 1.25rem;
-  margin-block: 0;
-  padding-inline: 0;
-  list-style: none;
 }
 
 [data-variant='acme-reference'] .acme-badge {

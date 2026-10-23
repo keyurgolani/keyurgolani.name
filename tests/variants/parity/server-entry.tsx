@@ -12,7 +12,6 @@ import '@host/host-modules';
 import { CONTENT_EXTENSIONS } from '@host/generated/registry.extensions';
 import { VARIANT_LOADERS } from '@host/generated/registry.loaders';
 import { VARIANTS } from '@host/generated/registry.meta';
-import { createAppearanceCatalog } from '@host-server/appearance-catalog';
 
 /** Where the host serves the published view's renditions: server/public-view.ts's MEDIA_BASE. */
 const MEDIA_BASE = '/media';
@@ -29,7 +28,7 @@ export function renderArgs(
   origin: string,
   requestTime: string,
 ): RenderInputArgs {
-  const read = readPair(files, { catalog: createAppearanceCatalog() });
+  const read = readPair(files);
   if (!read.ok) throw new Error(`The fixture doesn't load: ${JSON.stringify(read.diagnostics)}`);
   // As the host's catalog reads them: a blocking record would stop its startup.
   const unit = readUnitFiles(path.dirname(files.portfolio));

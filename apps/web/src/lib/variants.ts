@@ -7,7 +7,8 @@ import {
   type RegisteredVariant,
   type VariantRegistry,
 } from '@portfolio/variant-contract';
-import { createAppearanceCatalog } from '../server/appearance-catalog';
+import { appearanceCatalog, appearanceValidator } from './appearance-checks';
+import { APPEARANCE_REGISTRY } from './appearance-registry';
 import { CONTENT_EXTENSIONS, EXTENSION_RENDERED_KINDS } from './generated/registry.extensions';
 import { ASSET_MANIFEST, VARIANTS } from './generated/registry.meta';
 
@@ -68,10 +69,10 @@ export function variantStylesheet(id: string): string | null {
 
 /**
  * What documents are checked against, live, as startup and `pnpm
- * config:validate` check them: the interim appearance catalog, the
+ * config:validate` check them: #19's appearance registries, the
  * registered content extensions, and the contract's compatibility check,
  * under which what renders in place of a finding, such as the fallback
- * composition or a control's default, only warns.
+ * composition, an axis's fallback pack, or a control's default, only warns.
  */
 export function liveContext(): {
   readonly catalog: AppearanceCatalog;
@@ -79,11 +80,14 @@ export function liveContext(): {
   readonly validators: readonly UnitValidator[];
 } {
   return {
-    catalog: createAppearanceCatalog(),
+    catalog: appearanceCatalog(APPEARANCE_REGISTRY),
     extensions: CONTENT_EXTENSIONS,
-    validators: contractValidators(REGISTRY, {
-      live: true,
-      extensionRenderers: EXTENSION_RENDERED_KINDS,
-    }),
+    validators: [
+      ...contractValidators(REGISTRY, {
+        live: true,
+        extensionRenderers: EXTENSION_RENDERED_KINDS,
+      }),
+      appearanceValidator(APPEARANCE_REGISTRY, true),
+    ],
   };
 }

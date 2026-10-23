@@ -22,6 +22,10 @@ export interface ParityNode {
  * own body: pass it to page.evaluate() with no argument for the page's own
  * document, or evaluate its source against a parsed one. Comments, scripts,
  * styles, and templates drop out, since React and Next place their own.
+ * So do the host's own parts of the boundary (#19, Slice 4), which no
+ * variant renders: the document boundary's skip link, its first child, and
+ * whatever the host puts in the variant's VisitorControlSlot, which stays as
+ * the slot's empty element.
  */
 export function snapshotBoundary(root: ParentNode = document): ParityNode | null {
   const boundary = root.querySelector('[data-variant]');
@@ -35,13 +39,20 @@ export function snapshotBoundary(root: ParentNode = document): ParityNode | null
       if (joined !== '') children.push(joined);
       text = '';
     };
-    for (const child of Array.from(element.childNodes)) {
+    const slot = element.hasAttribute('data-visitor-control-slot');
+    for (const child of slot ? [] : Array.from(element.childNodes)) {
       // 3 is a text node, 1 an element: Node.TEXT_NODE and Node.ELEMENT_NODE.
       if (child.nodeType === 3) {
         text += child.textContent ?? '';
       } else if (child.nodeType === 1) {
         const tag = (child as Element).tagName.toLowerCase();
         if (skipped.has(tag)) continue;
+        if (
+          element === boundary &&
+          (child as Element).getAttribute('data-ui-slot') === 'skip-link'
+        ) {
+          continue;
+        }
         flush();
         children.push(read(child as Element));
       }

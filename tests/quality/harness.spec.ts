@@ -7,9 +7,10 @@ import { expect, test } from './fixtures';
 
 // The harness's own checks against the quality build (#11, Slice 1), on the
 // harness project's server (lib/server.ts's HARNESS_SERVER): the server's
-// clock, and the token-role match on the one page that renders #19's
-// boundary today, /_fixtures/appearance (the quality build sets
-// APPEARANCE_FIXTURES=1). The host's other pages render it from #19 slice 4.
+// clock, and the token-role match on #19's primitives page,
+// /_fixtures/appearance (the quality build sets APPEARANCE_FIXTURES=1),
+// which renders every slot in the boundary. The host's site pages render
+// the same boundary (#19, Slice 4).
 
 const READ_ONLY = { type: 'profile', description: 'read-only' };
 

@@ -1,7 +1,7 @@
 import 'server-only';
 import { cache } from 'react';
 import { notFound, redirect } from 'next/navigation';
-import { environmentAttributes, environmentSelection } from '~/lib/environment';
+import { documentAppearance } from '~/lib/document-appearance';
 import { ExperienceDocument } from '~/lib/experience-document';
 import { ClientHostModules } from '~/lib/host-modules-client';
 import { variantLoader } from '~/lib/variant-loaders';
@@ -59,11 +59,14 @@ export async function previewPage(grant: string, route: readonly string[]) {
     // renders through every variant's loader: frames are owner-only (#6).
     load: variantLoader(resolved.composition.rendered.manifest.id),
     hostModules: ClientHostModules,
-    // The grant's environment, so the frame's first paint is right (Slice 4).
-    environment: environmentAttributes(
-      environmentSelection(resolved.view.site),
-      opened.environment,
-    ),
+    // The grant's environment, so the frame's first paint is right (Slice 4),
+    // through #19's resolver: what Studio asked for, and never a visitor's value.
+    appearance: documentAppearance({
+      site: resolved.view.site,
+      variant: resolved.composition.rendered.manifest.id,
+      profile: requireDeploymentConfig().profile,
+      environment: opened.environment,
+    }),
     linkBase: { basePath },
     route: resolved.target,
     origin: requireDeploymentConfig().origin,

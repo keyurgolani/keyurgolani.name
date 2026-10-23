@@ -481,7 +481,13 @@ function legacyRemediation(file: string, data: unknown = {}, catalog?: Appearanc
     .join('');
   const skeleton = names.site.endsWith('.json') ? SITE_SKELETON_JSON : SITE_SKELETON;
   const command = `${MIGRATE_COMMAND} ${shellQuote(file)}`;
-  return `Run ${command} to see every change it makes, then ${command}${sets} --write --out <dir> to write ${names.portfolio} and ${names.site}. A ${names.site} starts like this:\n${skeleton}`;
+  let appearance = '';
+  try {
+    appearance = catalog?.legacyAppearance?.(data) ?? '';
+  } catch {
+    appearance = '';
+  }
+  return `Run ${command} to see every change it makes, then ${command}${sets} --write --out <dir> to write ${names.portfolio} and ${names.site}. A ${names.site} starts like this:\n${skeleton}${appearance}`;
 }
 
 /** A selection to ask the catalog for its variants, which no selection changes. */

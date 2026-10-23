@@ -1,7 +1,6 @@
 import type { Metadata } from 'next';
 import { headers } from 'next/headers';
 import { getDeploymentConfig } from '~/server/config-store';
-import { isPreviewPolicy } from '~/server/preview-headers';
 import { policyNonce } from '~/server/request-nonce';
 import { NotFoundDocument } from './_chrome/not-found-document';
 // The site's 404 renders inside its presentation boundary, so it gets the
@@ -27,7 +26,7 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function GlobalNotFound() {
   // The nonce of the request's Content-Security-Policy, which proxy.ts sets
-  // on a Studio or a preview path. A preview's 404 gets no theme script (#7).
+  // on a Studio or a preview path, for the boundary's stylesheets.
   const policy = (await headers()).get('content-security-policy') ?? '';
-  return NotFoundDocument({ nonce: policyNonce(policy), theme: !isPreviewPolicy(policy) });
+  return NotFoundDocument({ nonce: policyNonce(policy) });
 }

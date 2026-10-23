@@ -1132,6 +1132,16 @@ test('the github figures sit in one row, each number beside its label, with no d
   );
 });
 
+test("a meta line's link, such as a quote's source, wraps as one box, so its focus ring is one ring", () => {
+  // At 390 px in a wide face, a quote's source broke across two lines, and
+  // its ring drew as two pieces (#11's focus perimeter, #19 Slice 4).
+  const css = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
+  const rule = css
+    .split(":where([data-variant] [data-renderer='shared'] .pf-meta a) {")[1]
+    ?.split('}')[0];
+  assert.match(rule ?? '', /display: inline-block;/);
+});
+
 test('renderSection stamps the section element and dispatches by kind', () => {
   const input = inputFor(COMPLETE, { idPrefix: 'pv-' });
   const markup = html(renderSection(sectionOf(input, 'about'), input, {}));
@@ -1471,6 +1481,17 @@ test('seededRandom gives the same sequence for a seed, a different one for anoth
 });
 
 test('the visitor control slot is one empty marked element', () => {
+  assert.equal(html(<VisitorControlSlot />), '<div data-visitor-control-slot=""></div>');
+});
+
+test("the visitor control slot renders the host's registered control inside it, and the next registration without one empties it (#19, Slice 4)", (t) => {
+  t.after(() => registerHostModules({}));
+  registerHostModules({ visitorControl: () => <form data-host-control="" /> });
+  assert.equal(
+    html(<VisitorControlSlot />),
+    '<div data-visitor-control-slot=""><form data-host-control=""></form></div>',
+  );
+  registerHostModules({ extensionRenderers: {} });
   assert.equal(html(<VisitorControlSlot />), '<div data-visitor-control-slot=""></div>');
 });
 

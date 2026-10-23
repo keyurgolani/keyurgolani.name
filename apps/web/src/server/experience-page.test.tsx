@@ -12,6 +12,7 @@ import { readDeploymentConfig } from './config';
 import { liveComposition, setDeploymentState, setLiveComposition } from './config-store';
 import { segmentFor } from './experience';
 import { experiencePage } from './experience-page';
+import { preferenceCookie } from './visitor-appearance';
 
 // A visitor page renders in its composition's experience segment (#6, Slice
 // 2). proxy.ts picks the segment from the live composition config-store
@@ -69,6 +70,8 @@ function deploy(t: TestContext, live: () => LiveRevision) {
     { cwd: '/' },
   );
   assert.ok(read.ok, JSON.stringify(read.issues));
+  // Outside a request Next has no cookies: the visitor sent no preference.
+  t.mock.method(preferenceCookie, 'read', async () => null);
   setDeploymentState({
     config: read.config,
     catalog: recordingLive({ getLive: async () => live() }, BUILD),

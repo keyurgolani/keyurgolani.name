@@ -131,6 +131,7 @@ function element(tag: string, attributes: Record<string, string>, children: unkn
     nodeType: 1,
     tagName: tag.toUpperCase(),
     getAttribute: (name: string) => (name in attributes ? attributes[name] : null),
+    hasAttribute: (name: string) => name in attributes,
     childNodes: children,
     querySelector: () => null,
   };
@@ -153,4 +154,29 @@ test('snapshotBoundary reads tags, ids, links, roles, and joined text, and skips
   };
   assert.deepEqual(snapshotBoundary(root as never), page);
   assert.equal(snapshotBoundary({ querySelector: () => null } as never), null);
+});
+
+test("snapshotBoundary leaves out the host's own parts: the document boundary's skip link, and what fills the visitor control slot (#19, Slice 4)", () => {
+  const variant = (slot: unknown[]) => [
+    element('HEADER', {}, [element('DIV', { 'data-visitor-control-slot': '' }, slot)]),
+    element('MAIN', { id: 'main' }, [text('Rowan')]),
+  ];
+  const host = element('DIV', { 'data-variant': 'fallback' }, [
+    element('A', { 'data-ui-slot': 'skip-link', href: '#main' }, [text('Skip to content')]),
+    ...variant([element('FORM', {}, [text('Appearance')])]),
+  ]);
+  const alone = element('DIV', { 'data-variant': 'fallback' }, variant([]));
+  const read = (boundary: unknown) =>
+    snapshotBoundary({
+      querySelector: (selector: string) => (selector === '[data-variant]' ? boundary : null),
+    } as never);
+  assert.deepEqual(read(host), read(alone));
+  assert.deepEqual(compareSnapshots(read(host), read(alone)), []);
+  // A skip link the variant renders itself, deeper in, still counts.
+  const own = element('DIV', { 'data-variant': 'fallback' }, [
+    element('MAIN', { id: 'main' }, [
+      element('A', { 'data-ui-slot': 'skip-link', href: '#x' }, [text('Skip')]),
+    ]),
+  ]);
+  assert.match(JSON.stringify(read(own)), /"href":"#x"/);
 });

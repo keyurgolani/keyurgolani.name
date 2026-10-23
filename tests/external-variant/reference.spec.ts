@@ -118,6 +118,56 @@ test.describe('without JavaScript', () => {
   );
 });
 
+/** The WCAG contrast ratio of two colors as getComputedStyle() gives them. */
+function contrast(a: string, b: string): number {
+  const luminance = (color: string) => {
+    const [r, g, bl] = (color.match(/[\d.]+/g) ?? []).map(Number).map((channel) => {
+      const c = channel / 255;
+      return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * r! + 0.7152 * g! + 0.0722 * bl!;
+  };
+  const [light, dark] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return (light! + 0.05) / (dark! + 0.05);
+}
+
+test(
+  "the platform's fallback packs render the reference variant in every display mode, its text readable on its canvas (#19, Slice 4)",
+  { tag: '@defaults', annotation: [ROOT, READ_ONLY] },
+  async ({ page, app }, testInfo) => {
+    for (const [mode, os] of [
+      ['system', 'light'],
+      ['system', 'dark'],
+      ['light', 'light'],
+      ['dark', 'light'],
+      ['high-contrast', 'light'],
+    ] as const) {
+      await page.emulateMedia({ colorScheme: os });
+      await page
+        .context()
+        .addCookies([{ name: 'portfolio_appearance', value: `mode=${mode}`, url: app.origin }]);
+      await page.goto('/');
+      const boundary = page.locator('[data-appearance-boundary="document"]');
+      await expect(boundary).toHaveAttribute('data-variant', REFERENCE_ID);
+      await expect(boundary).toHaveAttribute('data-color-scheme', 'warm-parchment');
+      await expect(boundary).toHaveAttribute('data-display-mode', mode);
+      // The navigation is the primitive's, which the platform styles.
+      await expect(page.locator('nav[data-ui-slot="navigation"]')).toHaveCount(1);
+      const { text, canvas } = await page.evaluate(() => ({
+        text: getComputedStyle(document.querySelector('h1')!).color,
+        canvas: getComputedStyle(document.documentElement).backgroundColor,
+      }));
+      expect(contrast(text, canvas), `${mode} ${os}`).toBeGreaterThanOrEqual(
+        mode === 'high-contrast' ? 7 : 4.5,
+      );
+      await testInfo.attach(`reference-${mode}-${os}.png`, {
+        body: await page.screenshot({ fullPage: true }),
+        contentType: 'image/png',
+      });
+    }
+  },
+);
+
 test(
   'the compact control on brings the sections closer',
   { tag: '@compact', annotation: [ROOT, READ_ONLY] },

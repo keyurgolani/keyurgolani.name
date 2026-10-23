@@ -2,21 +2,29 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 
-// The section links' target floor (WCAG 2.2 AA, 2.5.8), pinned here until
-// #11's quality gate measures it in a browser.
+// The section links' target floor (WCAG 2.2 AA, 2.5.8) is the platform's:
+// the links are #19's navigation primitive (#19, Slice 4), which the
+// platform stylesheet sizes, 24 by 24 CSS px and 32 by 32 at 768 px and
+// below. The composition only spaces them, so nothing here can undercut it.
 const css = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
 
-function rule(selector: string): string {
-  const start = css.indexOf(`${selector} {`);
-  assert.notEqual(start, -1, `styles.css has no ${selector} rule`);
-  return css.slice(start, css.indexOf('}', start));
+/** Each rule's selector and body, comments left out. */
+function rules(): { selector: string; body: string }[] {
+  const text = css.replace(/\/\*[\s\S]*?\*\//g, '');
+  return [...text.matchAll(/([^{}]+)\{([^}]*)\}/g)].map(([, selector, body]) => ({
+    selector: selector!.trim(),
+    body: body!,
+  }));
 }
 
-test('every section link is at least 24 by 24 CSS px, its label centered', () => {
-  const links = rule("[data-variant='fallback'] .fc-nav a");
-  assert.match(links, /min-block-size: 1\.5rem;/);
-  assert.match(links, /min-inline-size: 1\.5rem;/);
-  assert.match(links, /display: inline-flex;/);
-  assert.match(links, /align-items: center;/);
-  assert.match(links, /justify-content: center;/);
+test("the section links are the navigation primitive's, and the composition sets no size on one", () => {
+  const nav = rules().filter(({ selector }) => selector.includes('.fc-nav'));
+  assert.deepEqual(
+    nav.map(({ selector }) => selector),
+    ["[data-variant='fallback'] .fc-nav [data-ui-slot='navigation.list']"],
+  );
+  for (const { selector, body } of rules()) {
+    if (!/navigation|\.fc-nav\b.*\ba\b/.test(selector)) continue;
+    assert.doesNotMatch(body, /(?:min-|max-)?(?:block|inline)-size|height|width|padding/, selector);
+  }
 });

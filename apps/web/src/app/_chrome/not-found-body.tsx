@@ -1,17 +1,21 @@
 import Link from 'next/link';
 import type { Site } from '@portfolio/schema';
-import type { VariantRegistry } from '@portfolio/variant-contract';
-import { PresentationBoundary } from '~/lib/experience-document';
+import { FALLBACK_ID, type VariantRegistry } from '@portfolio/variant-contract';
+import { DocumentBoundary } from '~/lib/experience-document';
+import { documentAppearance } from '~/lib/document-appearance';
 import { compositionFor, REGISTRY } from '~/lib/variants';
 import { getDeploymentState } from '~/server/config-store';
 import { getLive } from '~/server/live-revision';
+import { visitorPageAppearance } from '~/server/visitor-appearance';
 import { capabilityPolicy, type NavLink } from '~/server/policy';
 
 // What every 404 shows, inside the site's layout or the global 404 page's
 // own document. It links only to pages the profile serves, from
 // CapabilityPolicy, and reads no session, so it lists the public ones. It
-// renders inside the live site's presentation boundary (#5, Slice 3, item
-// 6), so #19's tokens reach it once they ship. It reads only the site's
+// renders inside the live site's document boundary (#5, Slice 3, item 6;
+// #19, Slice 4), in the visitor's own selection, with its skip link, and
+// before startup or while the catalog can't serve, in the platform's
+// fallback packs. It reads only the site's
 // presentation settings, and shows nothing about the request or the
 // documents. Its links don't prefetch: under a preview path the page has
 // the preview's CSP, whose connect-src lets no request through (#7).
@@ -52,7 +56,7 @@ export async function NotFoundBody({
   const links = state ? capabilityPolicy(state.config.profile).navigation(null) : HOME;
   const site = await liveSite();
   const page = (
-    <main className="host-chrome">
+    <main id="main" tabIndex={-1} className="host-chrome">
       <h1>Page not found</h1>
       <p>Nothing lives at this address.</p>
       <nav aria-label="Pages">
@@ -68,15 +72,33 @@ export async function NotFoundBody({
       </nav>
     </main>
   );
-  if (!site) return page;
+  if (!site || !state) {
+    return (
+      <DocumentBoundary
+        appearance={documentAppearance({
+          site: null,
+          variant: FALLBACK_ID,
+          profile: state?.config.profile ?? 'read-only',
+        })}
+        main="main"
+        nonce={nonce}
+      >
+        {page}
+      </DocumentBoundary>
+    );
+  }
   const live = compositionFor(site.appearance.variant, registry);
   const composition =
     segment === undefined || segment === live.rendered.manifest.id
       ? live
       : compositionFor(segment, registry);
   return (
-    <PresentationBoundary composition={composition} motionPolicy={site.motionPolicy} nonce={nonce}>
+    <DocumentBoundary
+      appearance={await visitorPageAppearance(site, composition.rendered.manifest.id)}
+      main="main"
+      nonce={nonce}
+    >
       {page}
-    </PresentationBoundary>
+    </DocumentBoundary>
   );
 }

@@ -101,7 +101,8 @@ for (const { manifest } of VARIANTS) {
         await loadHome(page, `${app.origin}/`);
         const root = page.locator('[data-variant]');
         await expect(root).toHaveAttribute('data-variant', manifest.id);
-        await expect(root).toHaveAttribute('data-motion-policy', policy);
+        // The document boundary's motion: reduced under the site's reduce, else full (#19, Slice 4).
+        await expect(root).toHaveAttribute('data-motion', policy === 'reduce' ? 'reduced' : 'full');
         if (fallback) await expect(root).toHaveAttribute('data-requested-variant', UNREGISTERED);
         const endless = (await runningAnimations(page)).filter((animation) => animation.endless);
         expect(endless).toEqual([]);

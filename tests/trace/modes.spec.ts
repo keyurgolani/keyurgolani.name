@@ -150,9 +150,10 @@ test("under the site's reduce policy, the runtime stays static, and MotionContro
   page,
 }) => {
   await load(page);
-  // The boundary carries the site's policy; the runtime follows it as it changes.
+  // The document boundary renders the site's reduce policy as data-motion="reduced"
+  // (#19, Slice 4); the runtime follows it as it changes.
   await page.evaluate(() =>
-    document.querySelector('[data-variant]')?.setAttribute('data-motion-policy', 'reduce'),
+    document.querySelector('[data-variant]')?.setAttribute('data-motion', 'reduced'),
   );
   await expect.poll(async () => (await stage(page)).activity).toBe('paused');
   await expect(page.locator('[data-motion-control]')).toHaveCount(0);

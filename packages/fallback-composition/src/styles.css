@@ -25,27 +25,14 @@
   margin-block-end: 3rem;
 }
 
-[data-variant='fallback'] .fc-nav ul {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem 1.25rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
 /*
- * Each section link is a target of at least 24 by 24 CSS px, WCAG 2.2's AA
- * floor (2.5.8), with its label centered. The 4 px row gap alone would miss
- * the spacing exception. #19's primitives raise this to 32 px at 768 px and
- * below once the nav moves onto them.
+ * The section links are #19's navigation primitive, which the platform
+ * stylesheet sizes: a target of at least 24 by 24 CSS px, WCAG 2.2's AA
+ * floor (2.5.8), and 32 by 32 at 768 px wide and below. The composition
+ * spaces the list and sets no size of its own on a link.
  */
-[data-variant='fallback'] .fc-nav a {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-block-size: 1.5rem;
-  min-inline-size: 1.5rem;
+[data-variant='fallback'] .fc-nav [data-ui-slot='navigation.list'] {
+  gap: 0.25rem 1.25rem;
 }
 
 [data-variant='fallback'] .fc-name {

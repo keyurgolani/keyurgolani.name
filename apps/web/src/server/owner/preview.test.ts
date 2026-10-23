@@ -338,8 +338,8 @@ test("/studio/preview is offered the working draft's version and the live revisi
   const OWN = {
     variant: 'editorial-evidence',
     designLanguage: 'platform-neutral',
-    colorScheme: 'warm',
-    typography: 'classic',
+    colorScheme: 'warm-parchment',
+    typography: 'humanist-ui',
     displayMode: 'system',
   };
   const live = await store.publication.publish(
@@ -378,7 +378,7 @@ test("/studio/preview is offered the working draft's version and the live revisi
   // A site whose appearance isn't a whole selection gives the override nothing to start from.
   const partial = await createDraft(
     store,
-    pair(portfolio('Partial Person'), SITE.replace('  colorScheme: warm\n', '')),
+    pair(portfolio('Partial Person'), SITE.replace('  colorScheme: warm-parchment\n', '')),
   );
   assert.deepEqual((await previews.port.previewable(session))[0], {
     kind: 'draft',

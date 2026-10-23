@@ -1,12 +1,12 @@
 import type { ReactNode } from 'react';
 import type { Metadata } from 'next';
 import type { PublicView } from '@portfolio/schema';
-import { themeInitScript } from '@portfolio/kit/theme-init';
 import { experienceHead } from '~/lib/experience-head';
-import { startingTheme } from '~/lib/starting-theme';
+import { fallbackBoundary } from '~/lib/fallback-boundary';
 import { requireDeploymentConfig } from '~/server/config-store';
 import { getPublicView } from '~/server/public-view';
 import '~/lib/experience-styles';
+import { FallbackBoundaryProvider } from '../_chrome/fallback-boundary';
 
 // Rendered per request from the revision register() loaded at startup, so a
 // build with no deployment configuration (the image's) never bakes in a
@@ -38,27 +38,22 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   const view = await liveView();
   const portfolio = view?.portfolio;
   const jsonLdBlocks = view ? experienceHead(view, origin).jsonLd : [];
-  // The first paint's theme, until the visitor picks one: the site's display mode.
-  const initScript = themeInitScript(
-    view ? startingTheme(view.site.appearance.displayMode) : 'system',
-  );
-
   // The portfolio's language and writing direction, from its locale and
-  // direction. The neutral defaults stand in only while an invalid edit
-  // under next dev leaves no pair to read.
+  // direction, and nothing else: the appearance is the document boundary's
+  // (#19), which the server renders whole, so <html> carries no theme and
+  // nothing changes it before hydration. The neutral defaults stand in only
+  // while an invalid edit under next dev leaves no pair to read.
   return (
-    <html
-      lang={portfolio?.locale ?? 'en'}
-      dir={portfolio?.direction ?? 'ltr'}
-      suppressHydrationWarning
-    >
+    <html lang={portfolio?.locale ?? 'en'} dir={portfolio?.direction ?? 'ltr'}>
       <head>
-        <script dangerouslySetInnerHTML={{ __html: initScript }} />
         {jsonLdBlocks.map((json, i) => (
           <script key={i} type="application/ld+json" dangerouslySetInnerHTML={{ __html: json }} />
         ))}
       </head>
-      <body>{children}</body>
+      <body>
+        {/* The fallback packs' boundary, which the error page renders in. */}
+        <FallbackBoundaryProvider value={fallbackBoundary()}>{children}</FallbackBoundaryProvider>
+      </body>
     </html>
   );
 }

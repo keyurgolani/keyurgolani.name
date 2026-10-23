@@ -1,4 +1,5 @@
 import type { ReactElement } from 'react';
+import { Navigation } from '@portfolio/appearance/primitives';
 import { Enhancement } from '@portfolio/kit/enhancements';
 import {
   evidenceOf,
@@ -103,26 +104,24 @@ export default function AcmeReference({ input }: Props): ReactElement {
   return (
     <>
       <header className="acme-header">
-        <nav className="acme-nav" aria-label="Pages" lang={uiLang(input)}>
-          <ul role="list">
-            <li>
-              <a
-                href={routeHref(input, { route: 'home' })}
-                aria-current={onColophon ? undefined : 'page'}
-              >
-                Home
-              </a>
-            </li>
-            <li>
-              <a
-                href={routeHref(input, { route: 'view', view: colophon, params: {} })}
-                aria-current={onColophon ? 'page' : undefined}
-              >
-                Colophon
-              </a>
-            </li>
-          </ul>
-        </nav>
+        {/* #19's navigation primitive: the platform styles and sizes its links (#19, Slice 4). */}
+        <Navigation
+          className="acme-nav"
+          label="Pages"
+          lang={uiLang(input)}
+          items={[
+            {
+              href: routeHref(input, { route: 'home' }),
+              label: 'Home',
+              ...(onColophon ? {} : { current: 'page' as const }),
+            },
+            {
+              href: routeHref(input, { route: 'view', view: colophon, params: {} }),
+              label: 'Colophon',
+              ...(onColophon ? { current: 'page' as const } : {}),
+            },
+          ]}
+        />
         <VisitorControlSlot />
         <Enhancement input={input} id="badge" />
       </header>

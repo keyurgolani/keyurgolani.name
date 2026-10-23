@@ -1,10 +1,7 @@
 export * from './cn';
 export * from './format';
-export * from './tokens';
 // By the package's name, so React Server Components get the post-pass (markdown.server.ts).
 export * from '@portfolio/kit/markdown';
-export * from './theme';
-export { themeInitScript, THEME_INIT_SCRIPT } from './theme-init';
 export * from './motion';
 export * from './pretext';
 export * from './nav';

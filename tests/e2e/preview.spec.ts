@@ -88,8 +88,10 @@ test(
     expect(studio.found.sentinel, 'the sentinel shows on a Studio page').toBe('present');
     expect(studioSelectors(studio.found).length).toBeGreaterThan(0);
     const notFound = await load(page, '/no-such-page', 404);
-    // The site's 404 runs the site's theme script, as its pages do.
-    expect(await paintedTheme(page), 'the theme on the site 404').not.toBeNull();
+    // The site's 404 renders in its document boundary, as its pages do, and
+    // no page runs a theme script any more (#19, Slice 4).
+    await expect(page.locator('[data-appearance-boundary="document"]')).toHaveCount(1);
+    expect(await paintedTheme(page), 'no theme on the site 404').toBeNull();
     const site = [notFound, await load(page, '/', 200)];
     const publicScripts = new Set(site.flatMap(({ found: each }) => each.scripts));
     const studioOnly = studio.found.scripts.filter((src) => !publicScripts.has(src));
@@ -110,7 +112,10 @@ test(
     const found = await inventory(frame, nonceOf(csp));
     expect(await frame.textContent('body')).toContain('Inventory Person');
     expect(await paintedTheme(frame), "the frame's theme script").toBeNull();
-    expect(found.classes, "the experience's skip link").toContain('host-skip-link');
+    await expect(
+      frame.locator('[data-ui-slot="skip-link"]'),
+      "the experience's skip link",
+    ).toHaveCount(1);
     expect(found.stylesheets.length, "the experience's stylesheets").toBeGreaterThan(0);
     expect(found.sentinel, 'the sentinel').toBe('');
     expect(studioSelectors(found), "Studio's selectors").toEqual([]);
@@ -428,7 +433,10 @@ test(
       const { found } = await load(page, path, status);
       expect(found.sentinel, `${path}: the sentinel`).toBe('');
       expect(studioSelectors(found), `${path}: Studio's selectors`).toEqual([]);
-      expect(found.selectors.some((selector) => selector.includes('host-skip-link'))).toBe(true);
+      expect(
+        found.selectors.some((selector) => selector.includes('[data-ui-slot="skip-link"]')),
+        "the skip link's focus ring",
+      ).toBe(true);
     }
   },
 );

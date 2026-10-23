@@ -55,6 +55,8 @@ const PROBES: ReadinessProbes = {
     variant === 'acme-ocean'
       ? { status: 'ok', requested: variant, rendered: variant }
       : { status: 'degraded', requested: variant, rendered: 'fallback' },
+  // A site whose packs all render, unless a test says otherwise.
+  appearanceHealth: () => ({ status: 'ok' }),
   loadedOwnerModules: () => [],
 };
 
@@ -130,6 +132,35 @@ test("the fallback standing in for the site's variant is 200, degraded, with pac
   // It names neither variant.
   assert.ok(!JSON.stringify(result.body).includes('canary-variant'));
   assert.ok(!JSON.stringify(result.body).includes('fallback'));
+});
+
+test("a pack of the site's that falls back is 200, degraded, with packs degraded, for the serving revision, and a failure to tell is a fail (#19, Slice 4)", async () => {
+  const asked: unknown[] = [];
+  const degraded = await readiness(state('read-only'), {
+    ...PROBES,
+    appearanceHealth: (site, revision) => {
+      asked.push([site.appearance.variant, revision]);
+      return { status: 'degraded' };
+    },
+  });
+  assert.equal(degraded.httpStatus, 200);
+  assert.ok(degraded.body.status === 'degraded');
+  assert.deepEqual(degraded.body.checks.slice(0, 2), [
+    { id: 'catalog', status: 'ok' },
+    { id: 'packs', status: 'degraded' },
+  ]);
+  assert.deepEqual(asked, [
+    ['acme-ocean', { revisionId: `rev_${'c'.repeat(32)}`, profile: 'read-only' }],
+  ]);
+  // A health that can't be told fails the check, and says nothing of why.
+  const failed = await readiness(state('read-only'), {
+    ...PROBES,
+    appearanceHealth: () => {
+      throw new Error('canary');
+    },
+  });
+  assert.equal(failed.httpStatus, 503);
+  assert.ok(!JSON.stringify(failed.body).includes('canary'));
 });
 
 test('a degraded startup requirement is 200, degraded', async () => {

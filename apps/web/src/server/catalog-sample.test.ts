@@ -8,7 +8,8 @@ import { parse as parseYaml } from 'yaml';
 import { contractValidators } from '@portfolio/variant-contract';
 import { acmePortfolioPhotography } from '../../../../packages/schema/src/__fixtures__/acme-portfolio-photography';
 import { REGISTRY } from '~/lib/variants';
-import { createAppearanceCatalog } from './appearance-catalog';
+import { appearanceCatalog } from '../lib/appearance-checks';
+import { APPEARANCE_REGISTRY } from '../lib/appearance-registry';
 import { BUNDLED_SAMPLE_NAMES } from '../lib/sample-identity';
 import { openSampleCatalog } from './catalog-sample';
 
@@ -37,8 +38,8 @@ const WITH_EXTENSIONS = `${HEAD}${[
   '',
 ].join('\n')}`;
 
-/** The host's interim catalog: display modes only. */
-const HOST = createAppearanceCatalog();
+/** The host's appearance catalog, which leaves every axis to the appearance check. */
+const HOST = appearanceCatalog(APPEARANCE_REGISTRY);
 /** The contract's checks, live, as startup runs them on the sample. */
 const LIVE = contractValidators(REGISTRY, { live: true });
 

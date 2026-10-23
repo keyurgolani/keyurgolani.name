@@ -31,13 +31,14 @@ const ROOT = fileURLToPath(new URL('../../../', import.meta.url));
 
 /**
  * A test catalog: the color schemes and typography presets the fixtures name,
- * and every display mode. Like the host's interim catalog since #5, it names
- * no variant: the variant contract checks the selection, and every fixture
- * selects missing-variant, which no package registers.
+ * #19's platform defaults, which the bundled examples select, and every
+ * display mode. It names no variant: the variant contract checks the
+ * selection, and every fixture selects missing-variant, which no package
+ * registers.
  */
 const IDS = {
-  colorScheme: ['warm', 'noir', 'ink-and-paper', 'nebula', 'aurora', 'solar'],
-  typography: ['classic', 'modernist', 'geometric', 'humanist'],
+  colorScheme: ['warm', 'warm-parchment', 'noir', 'ink-and-paper', 'nebula', 'aurora', 'solar'],
+  typography: ['classic', 'humanist-ui', 'modernist', 'geometric', 'humanist'],
   displayMode: ['system', 'light', 'dark', 'high-contrast'],
 } as const;
 const CATALOG: AppearanceCatalog = {
