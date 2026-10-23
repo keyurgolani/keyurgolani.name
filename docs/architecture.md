@@ -89,7 +89,7 @@ A variant is an isolated package, a dependency of `@portfolio/web`:
 - **The `./styles.css` export**: layout only, every selector under `[data-variant='<id>']`. Registry generation compiles it with the kit's shared renderers' layout first, all of it inside #19's `variant-layout` cascade layer after the layer-order statement, and copies the images its `url()`s name by content hash. The page that renders the variant links it, and no other page does.
 - **`"sideEffects": false`** in its `package.json`, as the kit and the shared packages declare it, so a page's chunks keep only the modules it uses.
 
-`packages/fallback-composition` is the one registered today: every section in content order through the shared renderers. The retired v1 Editorial and Kinetic Cosmos packages sit in `legacy/`, outside the workspace, for #13 and #14 to rebuild. Variants must not reach into other variants, and talk to the host only through the manifest and the render input. [variants.md](variants.md) covers building one.
+`packages/fallback-composition` stands in for an unregistered selection: every section in content order through the shared renderers. `packages/variant-kinetic-cosmos` is the first composition (#14): an orbital opening, evidence that opens in place, and a chronology in its authored lanes. The retired v1 Editorial package sits in `legacy/`, outside the workspace, for #13 to rebuild. Variants must not reach into other variants, and talk to the host only through the manifest and the render input. [variants.md](variants.md) covers building one.
 
 ### `apps/web`
 

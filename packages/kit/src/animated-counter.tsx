@@ -25,7 +25,9 @@ export interface AnimatedCounterProps {
 /**
  * Counts from 0 to `end` using a cubic ease-out, starting either on mount
  * (`startOnView: false`) or the first time the element scrolls into view
- * (default). Reduced-motion users see the final value immediately.
+ * (default). The server, a first client render, and reduced motion show
+ * `end` itself, so the page reads the real value without JavaScript (#14);
+ * the ramp shows only while it runs.
  *
  * No spring physics: a frame-loop ramp gives predictable end frames and is
  * light enough that running 4–8 of these on a stats grid costs nothing. It
@@ -48,7 +50,8 @@ export function AnimatedCounter({
   const { attachRoot } = runtime;
   // How long the ramp has run, kept across pauses.
   const elapsed = useRef(0);
-  const [ramp, setRamp] = useState({ value: 0, done: false });
+  // Null until the ramp's first frame: before it, `end` shows.
+  const [ramp, setRamp] = useState<{ value: number; done: boolean } | null>(null);
 
   useFrameLoop(runtime, (_, delta) => {
     elapsed.current += delta;
@@ -60,9 +63,9 @@ export function AnimatedCounter({
     return t < 1;
   });
 
-  // Reduced motion, and a finished ramp, show `end` itself.
+  // Reduced motion, a ramp that hasn't started, and a finished one show `end` itself.
   const reduced = runtime.state === 'static' && runtime.reason !== 'pending';
-  const shown = reduced || ramp.done ? end : ramp.value;
+  const shown = reduced || ramp === null || ramp.done ? end : ramp.value;
   // A fixed locale, so the server's number matches the browser's during
   // hydration. #4 adds the portfolio's own locale.
   const formatted = decimals > 0 ? shown.toFixed(decimals) : shown.toLocaleString('en-US');

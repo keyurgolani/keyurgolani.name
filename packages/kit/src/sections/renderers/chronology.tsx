@@ -40,14 +40,21 @@ function ProducedWorks({ entry, ctx }: { entry: ChronologyEntry; ctx: RenderCont
   );
 }
 
-function ChronologyItem({
+/**
+ * One chronology entry, as a list item whose id is the record's on the first
+ * section that lists it. A composition that draws lanes passes the entry's
+ * lane, and the lanes its fork and join reach, which ride on data attributes.
+ */
+export function ChronologyItem({
   entry,
   ctx,
   anchor,
+  lane,
 }: {
   entry: ChronologyEntry;
   ctx: RenderContext;
   anchor?: string;
+  lane?: { lane: number; branchesFromLane?: number; mergesIntoLane?: number };
 }) {
   const logo = placedMedia(entry.logo, ctx);
   return (
@@ -58,6 +65,9 @@ function ChronologyItem({
       data-thread={entry.thread}
       data-branches-from={entry.branchesFrom}
       data-merges-into={entry.mergesInto}
+      data-lane={lane?.lane}
+      data-branches-from-lane={lane?.branchesFromLane}
+      data-merges-into-lane={lane?.mergesIntoLane}
       lang={entry.lang}
     >
       {logo ? (

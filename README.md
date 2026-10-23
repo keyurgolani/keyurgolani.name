@@ -18,7 +18,7 @@ Designed for engineers, makers, photographers, writers, musicians, designers, co
   <img src="docs/screenshots/05-variant-kinetic-cosmos.png" alt="Kinetic Cosmos variant" width="49%" />
 </p>
 
-<p align="center"><em>The same <code>portfolio.yml</code> rendered through the v1 variants, Editorial and Kinetic Cosmos, now retired to <code>legacy/</code> while #13 and #14 rebuild them as compositions.</em><br/>
+<p align="center"><em>The same <code>portfolio.yml</code> rendered through the v1 variants, Editorial and Kinetic Cosmos, which #13 and #14 rebuild as compositions.</em><br/>
 <strong><a href="SHOWCASE.md">See the full visual showcase »</a></strong></p>
 
 ## Quick start

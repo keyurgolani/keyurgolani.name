@@ -36,10 +36,12 @@ type Phase = 'typing' | 'pausing' | 'deleting';
  * pause, then deletes it and types the next. It stops where it is while the
  * document is hidden, the text is offscreen, or the visitor paused motion.
  *
- * The component renders raw text into a `<span aria-live="polite">` plus
- * an optional caret span. Variants restyle via the `className` prop and
- * a CSS rule on `.kc-typing__caret` (or an equivalent caret class of their
- * choosing — the caret carries no class itself if you override the markup).
+ * The component renders the text as plain text, with no live region, so a
+ * screen reader reads it where the reader is and never has every keystroke
+ * announced (#14), plus an optional caret span, which assistive technology
+ * doesn't see. Variants restyle via the `className` prop and a CSS rule on
+ * `.kc-typing__caret` (or an equivalent caret class of their choosing — the
+ * caret carries no class itself if you override the markup).
  */
 export function TypingAnimation({
   texts,
@@ -111,14 +113,7 @@ export function TypingAnimation({
   const visible = still ? current : displayed;
 
   return (
-    <span
-      ref={attachRoot}
-      className={className}
-      role="status"
-      aria-live="polite"
-      aria-atomic="true"
-      aria-label={`Currently displaying: ${current}`}
-    >
+    <span ref={attachRoot} className={className}>
       <span>{visible}</span>
       {caret ? (
         <span className="kc-typing__caret" aria-hidden="true">

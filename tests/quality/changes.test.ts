@@ -215,7 +215,11 @@ test('a PR that changes a variant runs it against every stable language, and one
 
   const language = plan([{ axis: 'designLanguage', id: 'extended-language', paths: [] }]);
   const byLanguage = language.cells.filter((cell) => cell.changed);
-  assert.deepEqual(byLanguage.map((cell) => cell.target).sort(), ['fallback', 'second-variant']);
+  assert.deepEqual(byLanguage.map((cell) => cell.target).sort(), [
+    'fallback',
+    'kinetic-cosmos',
+    'second-variant',
+  ]);
   for (const cell of byLanguage) {
     assert.equal(cell.tuple.designLanguage, 'extended-language');
     assert.deepEqual(cell.changed, [{ axis: 'designLanguage', id: 'extended-language' }]);

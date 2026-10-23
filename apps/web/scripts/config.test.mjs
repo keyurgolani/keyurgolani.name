@@ -254,11 +254,11 @@ function validate(cwd, ...args) {
 /** The invalid pairs link to https://rowan.name, their own origin. */
 const ORIGIN = ['--origin', 'https://rowan.name'];
 
-/** What every pair says while this build registers only the fallback composition (#5). */
+/** What every pair says for a variant this build doesn't register, which names the one it does (#14). */
 const UNAVAILABLE = (file) => [
   `${file}: variant.unavailable (warning) at /appearance/variant`,
   "  /appearance/variant names a variant this build doesn't register, so the fallback composition renders instead. It blocks publishing, not preview.",
-  '  Install its package with pnpm --filter @portfolio/web add <package> and rebuild. This build registers no variant yet.',
+  '  Install its package with pnpm --filter @portfolio/web add <package> and rebuild, or select one this build registers: kinetic-cosmos.',
   '',
 ];
 
