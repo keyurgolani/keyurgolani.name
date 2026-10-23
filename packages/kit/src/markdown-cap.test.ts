@@ -185,10 +185,29 @@ function documentOf(field: string) {
 test('a 1 MiB document of the field the search finds slowest for its size validates, and renders within 40 times a benign document', (t) => {
   // For its size: a document holds more of a shorter field, and the marks a
   // field may hold shrink with its length so that none costs more for its
-  // size than the limits let the longest cost.
-  const perByte = ({ text, block, inline }: { text: string; block: number; inline: number }) =>
-    (block + inline) / Buffer.byteLength(text, 'utf8');
-  const [slowest] = [...searched().fields].sort((a, b) => perByte(b) - perByte(a));
+  // size than the limits let the longest cost. The search times each field
+  // once, and block alone for most, so the eight slowest for their size
+  // block are timed again, both ways, over as many renders as make the
+  // length limit's worth, the median of five.
+  const bytes = (text: string) => Buffer.byteLength(text, 'utf8');
+  const again = (text: string) => {
+    const renders = Math.max(1, Math.round(MARKDOWN_MAX_LENGTH / text.length));
+    const time = (render: (source: string) => string) => {
+      const runs: number[] = [];
+      for (let run = 0; run < 5; run++) {
+        const start = performance.now();
+        for (let i = 0; i < renders; i++) render(text);
+        runs.push((performance.now() - start) / renders);
+      }
+      return runs.sort((a, b) => a - b)[2]!;
+    };
+    return (time(renderMarkdown) + time(renderInlineMarkdown)) / bytes(text);
+  };
+  const [slowest] = [...searched().fields]
+    .sort((a, b) => b.block / bytes(b.text) - a.block / bytes(a.text))
+    .slice(0, 8)
+    .map((field) => ({ ...field, cost: again(field.text) }))
+    .sort((a, b) => b.cost - a.cost);
   /** Milliseconds to validate the document, and to render every field both ways. */
   const timeOf = (portfolio: ReturnType<typeof documentOf>) => {
     const start = performance.now();
