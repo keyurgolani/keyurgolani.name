@@ -24,7 +24,12 @@ export type Access = 'public' | 'session';
  */
 export const FIXTURE_CAPABILITIES = {
   'appearance.fixtures': { flag: 'APPEARANCE_FIXTURES', key: 'appearance' },
-} as const satisfies Record<string, { readonly flag: string; readonly key: string }>;
+  // #6's catalog fixture, /studio/_catalog-fixture: owner only, with a session.
+  'catalog.fixtures': { flag: 'BUDGET_FIXTURES', key: 'budget', access: 'owner-session' },
+} as const satisfies Record<
+  string,
+  { readonly flag: string; readonly key: string; readonly access?: 'owner-session' }
+>;
 
 /** What a fixture capability grants in a build with its flag: anyone, in every profile. */
 export const FIXTURE_ACCESS = Object.freeze({
@@ -32,6 +37,15 @@ export const FIXTURE_ACCESS = Object.freeze({
   demo: 'public',
   'read-only': 'public',
 } as const satisfies Record<Profile, Access>);
+
+/**
+ * What an owner-session fixture capability grants in a build with its flag:
+ * the owner with a session, as preview.grant does, and no one else, so demo
+ * and read-only answer it as any unknown Studio path.
+ */
+export const FIXTURE_OWNER_ACCESS = Object.freeze({
+  owner: 'session',
+} as const satisfies Partial<Record<Profile, Access>>);
 
 /** Whether registry generation ran with the fixture flag whose FIXTURE_FLAGS key is `key`. */
 export function builtWithFixtures(key: string): boolean {
@@ -42,7 +56,10 @@ export function builtWithFixtures(key: string): boolean {
 function fixtureGrants(
   capability: keyof typeof FIXTURE_CAPABILITIES,
 ): Partial<Record<Profile, Access>> {
-  return builtWithFixtures(FIXTURE_CAPABILITIES[capability].key) ? FIXTURE_ACCESS : {};
+  const fixture: { readonly key: string; readonly access?: 'owner-session' } =
+    FIXTURE_CAPABILITIES[capability];
+  if (!builtWithFixtures(fixture.key)) return {};
+  return fixture.access === 'owner-session' ? FIXTURE_OWNER_ACCESS : FIXTURE_ACCESS;
 }
 
 export const CAPABILITY_MATRIX = {
@@ -78,6 +95,8 @@ export const CAPABILITY_MATRIX = {
   'preview.grant': { owner: 'session' }, // #7
   // /_fixtures/appearance (#19, Slice 3), only in a build with APPEARANCE_FIXTURES=1.
   'appearance.fixtures': fixtureGrants('appearance.fixtures'),
+  // /studio/_catalog-fixture (#6, item 5), only in a build with BUDGET_FIXTURES, and only to the owner.
+  'catalog.fixtures': fixtureGrants('catalog.fixtures'),
 } as const satisfies Record<string, Partial<Record<Profile, Access>>>;
 
 export type Capability = keyof typeof CAPABILITY_MATRIX;

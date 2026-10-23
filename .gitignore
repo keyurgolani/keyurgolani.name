@@ -23,6 +23,8 @@ apps/web/public/_portfolio/variant/
 apps/web/public/_portfolio/asset/
 apps/web/public/_portfolio/still/
 apps/web/src/app/(site)/%5Fexperience/
+# #6's catalog fixture page, which generation writes only with BUDGET_FIXTURES.
+apps/web/src/app/(studio)/studio/%5Fcatalog-fixture/
 
 # coverage / test
 coverage

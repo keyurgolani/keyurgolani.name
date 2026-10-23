@@ -197,20 +197,29 @@ const PATTERNS = [...new Set(listRoutes().map((entry) => entry.pattern))].sort()
  * that render in an experience segment and have no file of their own, and
  * each experience segment's (#6, Slice 2).
  */
-const FILE_PATTERNS = [
-  ...new Set(
-    [...listRoutes().filter((entry) => !entry.experience), ...listExperienceRoutes()].map(
-      (entry) => entry.pattern,
-    ),
-  ),
-].sort();
-
 /**
  * The fixture flags this run's environment asks for, as registry generation,
  * which every test run starts with, reads them (#19, Slice 3). Each fixture
  * expectation comes from here, never from the capability code under test.
  */
 const ASKED = fixtureFlags(process.env);
+
+/** Whether this run's generation wrote `entry`'s file: a fixture route only with its flag (#6). */
+function generated(entry: RouteEntry): boolean {
+  if (!entry.fixtureRoute) return true;
+  const fixtures: Readonly<Record<string, { readonly key: string }>> = FIXTURE_CAPABILITIES;
+  const fixture = fixtures[entry.capability];
+  return fixture !== undefined && ASKED[fixture.key] === true;
+}
+
+const FILE_PATTERNS = [
+  ...new Set(
+    [
+      ...listRoutes().filter((entry) => !entry.experience && generated(entry)),
+      ...listExperienceRoutes(),
+    ].map((entry) => entry.pattern),
+  ),
+].sort();
 
 test('Next finds routes only in apps/web/src/app', async () => {
   // Next prefers apps/web/app to src/app, and serves a Pages Router
@@ -1306,9 +1315,19 @@ test("what every profile serves, with #2's Studio pages under owner alone", () =
   // A preview grant's frame and its draft-only assets (#7, Slice 2): owner alone mints grants.
   const grants = ['/preview/[grant]/[[...route]]', '/preview-assets/[grant]/[...path]'];
   // /studio/preview (#7, Slice 4) is owner's alone: demo's preview is #9's.
+  // So is #6's catalog fixture, in a build made with BUDGET_FIXTURES.
+  const catalog = ASKED.budget ? ['/studio/_catalog-fixture'] : [];
   assert.deepEqual(
     served('owner'),
-    [...everywhere, ...site, '/studio', '/studio/preview', '/studio/sign-in', ...grants].sort(),
+    [
+      ...everywhere,
+      ...site,
+      '/studio',
+      '/studio/preview',
+      '/studio/sign-in',
+      ...catalog,
+      ...grants,
+    ].sort(),
   );
   assert.deepEqual(served('read-only'), [...everywhere, ...site].sort());
   // The bundled sample, and every route under it.
@@ -1354,6 +1373,23 @@ test('a table route no profile of this build serves is absent there and unknown,
     assert.deepEqual(
       decision.status === 'served' ? [decision.entry.pattern, decision.access] : decision,
       built ? ['/_fixtures/appearance', 'public'] : { status: 'absent', unknown: true },
+      profile,
+    );
+  }
+  // #6's catalog fixture: the owner's with a session in a build made with
+  // BUDGET_FIXTURES, absent under demo and read-only there, and unknown
+  // everywhere in any other build. Its encoded spellings are the encoded
+  // spellings test's, which proxy.ts answers as unknown paths.
+  const catalog = ASKED.budget === true;
+  for (const profile of PROFILES) {
+    const decision = resolveRoute(profile, '/studio/_catalog-fixture');
+    assert.deepEqual(
+      decision.status === 'served' ? [decision.entry.pattern, decision.access] : decision,
+      catalog && profile === 'owner'
+        ? ['/studio/_catalog-fixture', 'session']
+        : catalog
+          ? { status: 'absent' }
+          : { status: 'absent', unknown: true },
       profile,
     );
   }
@@ -1407,6 +1443,9 @@ test('a path that spells a fixed segment percent-encoded is told apart from the 
     ['/api/studio/[name]', '/%61pi/studio/config.status'],
     ['/_fixtures/appearance', '/%5Ffixtures/appearance'],
     ['/_fixtures/appearance', '/_fixtures/%61ppearance'],
+    ['/studio/_catalog-fixture', '/studio/%5Fcatalog-fixture'],
+    ['/studio/_catalog-fixture', '/studio/_catalog-%66ixture'],
+    ['/studio/_catalog-fixture', '/%73tudio/_catalog-fixture'],
   ] as const) {
     assert.equal(encodesFixedSegment(pattern, pathname), true, pathname);
   }

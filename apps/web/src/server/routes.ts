@@ -100,6 +100,14 @@ export interface RouteEntry {
    * proxy.ts answers any other with a 405 naming them, before Next does.
    */
   readonly methods?: readonly 'POST'[];
+  /**
+   * A fixture page whose route file registry generation writes only in a
+   * build with its capability's flag (#6, item 5), so a build without it
+   * ships none of its code (scripts/fixture-routes.ts). The entry is here in
+   * every build; without the flag its capability is in no profile, so the
+   * path answers as an unknown one does.
+   */
+  readonly fixtureRoute?: true;
 }
 
 // What visitors read the site through at its root, which the demo profile
@@ -283,6 +291,17 @@ const ROUTES = [
   // selections, for tests/appearance. Its capability is in every profile of a
   // build with APPEARANCE_FIXTURES=1 and in none of any other build.
   { pattern: '/_fixtures/appearance', kind: 'page', capability: 'appearance.fixtures' },
+  // #6's catalog fixture (item 5): the catalog plates over each registered
+  // variant's stills, live through #7's PreviewSurface on request or a
+  // near-viewport prefetch, for the trace. A Studio page, the owner's with a
+  // session, in a build with BUDGET_FIXTURES; its file is generated there
+  // alone, app/(studio)/studio/%5Fcatalog-fixture/page.tsx.
+  {
+    pattern: '/studio/_catalog-fixture',
+    kind: 'page',
+    capability: 'catalog.fixtures',
+    fixtureRoute: true,
+  },
 ] as const satisfies readonly RouteEntry[];
 
 /**

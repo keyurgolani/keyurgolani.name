@@ -638,6 +638,60 @@ test("under a profile with no Studio page, every Studio path is as unknown as an
   }
 });
 
+test("#6's catalog fixture is the owner's Studio page in a build with BUDGET_FIXTURES, and as unknown as any path everywhere else, in every spelling", async (t) => {
+  const built = fixtureFlags(process.env).budget === true;
+  const spellings = [
+    '/studio/%5Fcatalog-fixture',
+    '/studio/_catalog-%66ixture',
+    '/%73tudio/_catalog-fixture',
+    '/studio%2F_catalog-fixture',
+  ];
+  for (const profile of PROFILES) {
+    deploy(t, profile);
+    for (const method of ['GET', 'HEAD']) {
+      const page = await proxy(request('/studio/_catalog-fixture', method));
+      const what = `${profile} ${method}`;
+      if (built && profile === 'owner') {
+        // The owner's with a session, as /studio/preview is: without one,
+        // a page load goes to sign in and back.
+        assert.equal(page.status, 303, what);
+        assert.match(page.headers.get('location') ?? '', /\/studio\/sign-in\?/, what);
+        assert.match(page.headers.get('location') ?? '', /_catalog-fixture/, what);
+      } else {
+        // The unknown path's 404, in any build, under demo and read-only,
+        // with what any unknown Studio path gets there: Studio's own
+        // headers under owner, and none under a profile with no Studio.
+        assert.equal(page.headers.get('x-middleware-request-x-portfolio-not-found'), '1', what);
+        assert.equal(decision(page), null, what);
+        assert.equal(page.headers.get('cache-control'), UNKNOWN_PATH_CACHE_CONTROL, what);
+        const studio = await proxy(request('/studio/no-such-page', method));
+        assert.equal(
+          page.headers.has('content-security-policy'),
+          studio.headers.has('content-security-policy'),
+          what,
+        );
+        if (profile !== 'owner') noStudioHeaders(page, what);
+      }
+      for (const path of spellings) {
+        const response = await proxy(request(path, method));
+        const at = `${what} ${path}`;
+        assert.notEqual(decision(response), 'served', at);
+        // Without a session the owner's spellings go to sign in first, as
+        // every Studio page's do; every other answer is the unknown path's.
+        if (built && profile === 'owner' && response.status === 303) continue;
+        assert.equal(response.headers.get('x-middleware-request-x-portfolio-not-found'), '1', at);
+      }
+    }
+    // Where it isn't served, any other method gets the plain 404; where it
+    // is, Next answers it as it does /studio/preview's.
+    if (built && profile === 'owner') continue;
+    for (const method of ['POST', 'PUT', 'DELETE']) {
+      const response = await proxy(request('/studio/_catalog-fixture', method));
+      assert.equal(response.status, 404, `${profile} ${method}`);
+    }
+  }
+});
+
 test('a route no profile of this build serves, as the appearance fixtures are without APPEARANCE_FIXTURES=1, is as unknown as any path in every profile (#19, Slice 3)', async (t) => {
   // The page and its spellings the table reads as the page, which go to the
   // 404 page ahead of Next's file check, and paths beside it, which go on

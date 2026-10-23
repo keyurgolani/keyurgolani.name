@@ -47,6 +47,11 @@ import {
   writeExperienceSegments,
   type SegmentWriteResult,
 } from './experience-segments';
+import {
+  renderFixtureRoutes,
+  writeFixtureRoutes,
+  type FixtureRouteWriteResult,
+} from './fixture-routes';
 import { fixtureFlags, fixtureGate } from './fixture-gate';
 
 export const HOST = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -72,6 +77,8 @@ export const ASSET_OUT = path.join(HOST, 'public', '_portfolio', 'asset');
 export const STAGING_OUT = path.join(HOST, '.cache', 'portfolio-served');
 /** Each variant's experience segment (#6), which git ignores and Next serves at /_experience/<id>. */
 export const EXPERIENCE_OUT = path.join(HOST, 'src', 'app', '(site)', '%5Fexperience');
+/** The app directory, where the fixture routes a build's flags admit go (#6, scripts/fixture-routes.ts). */
+export const APP_OUT = path.join(HOST, 'src', 'app');
 
 /** The cascade layer every variant rule goes in (#19). */
 const VARIANT_LAYER: AppearanceLayer = 'variant-layout';
@@ -172,10 +179,13 @@ export interface Generation {
   readonly stills?: readonly ServedFile[];
   /** Each variant's experience segment files, by path under EXPERIENCE_OUT, when the registry has no errors. */
   readonly segments?: ReadonlyMap<string, string>;
+  /** The fixture routes the build's flags admit, by path under APP_OUT, when the registry has no errors. */
+  readonly fixtureRoutes?: ReadonlyMap<string, string>;
   /** What writing changed, when it wrote. The served files are absent when it wrote modules only. */
   readonly written?: {
     readonly modules: WriteResult;
     readonly segments: SegmentWriteResult;
+    readonly fixtureRoutes: FixtureRouteWriteResult;
     readonly served?: {
       readonly packs: PackWriteResult;
       readonly fonts: PackWriteResult;
@@ -230,7 +240,18 @@ export async function generateRegistry(
   const assets = assetFiles(result);
   const stills = stillFiles(result);
   const segments = renderExperienceSegments(result);
-  const generated = { result, files, packs, fonts, variants, assets, stills, segments };
+  const fixtureRoutes = renderFixtureRoutes(fixtureFlags(env));
+  const generated = {
+    result,
+    files,
+    packs,
+    fonts,
+    variants,
+    assets,
+    stills,
+    segments,
+    fixtureRoutes,
+  };
   if (!write) return generated;
   const served = modulesOnly
     ? undefined
@@ -246,6 +267,7 @@ export async function generateRegistry(
     written: {
       modules: writeRegistry(OUT, files),
       segments: writeExperienceSegments(EXPERIENCE_OUT, segments),
+      fixtureRoutes: writeFixtureRoutes(APP_OUT, fixtureRoutes),
       ...(served ? { served } : {}),
     },
   };

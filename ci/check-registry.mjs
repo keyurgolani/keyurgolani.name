@@ -11,7 +11,7 @@
 // production build leaves it. The source audit, `pnpm check:variants`, is
 // CI's check-variants job (Slice 6).
 import { spawnSync } from 'node:child_process';
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { FIXTURE_FLAG } from './lib/fixture-flags.mjs';
 import { currentGate, REPO_ROOT, reportError, writeFailureRecord } from './lib/reports.mjs';
@@ -23,6 +23,8 @@ const SERVED = ['pack', 'font', 'variant', 'asset', 'still'].map(
 );
 /** Each variant's experience segment, a route per variant in the app directory (#6, Slice 2). */
 const SEGMENTS = 'apps/web/src/app/(site)/%5Fexperience';
+/** #6's catalog fixture page, which generation writes only with BUDGET_FIXTURES (scripts/fixture-routes.ts). */
+const FIXTURE_ROUTE = 'apps/web/src/app/(studio)/studio/%5Fcatalog-fixture';
 
 const run = (command, args, env) =>
   spawnSync(command, args, { cwd: REPO_ROOT, stdio: 'inherit', env }).status ?? 1;
@@ -31,13 +33,14 @@ const run = (command, args, env) =>
 function snapshot() {
   const files = {};
   const walk = (dir) => {
+    if (!existsSync(path.join(REPO_ROOT, dir))) return;
     for (const entry of readdirSync(path.join(REPO_ROOT, dir), { withFileTypes: true })) {
       const file = `${dir}/${entry.name}`;
       if (entry.isDirectory()) walk(file);
       else files[file] = readFileSync(path.join(REPO_ROOT, file)).toString('base64');
     }
   };
-  for (const dir of [GENERATED, ...SERVED, SEGMENTS]) walk(dir);
+  for (const dir of [GENERATED, ...SERVED, SEGMENTS, FIXTURE_ROUTE]) walk(dir);
   return Object.fromEntries(Object.entries(files).sort(([a], [b]) => a.localeCompare(b)));
 }
 
@@ -86,10 +89,23 @@ for (const { label, env } of states) {
   files = Object.keys(second).length;
 }
 
-const tracked = spawnSync('git', ['ls-files', '--', GENERATED, ...SERVED, SEGMENTS], {
-  cwd: REPO_ROOT,
-  encoding: 'utf8',
-});
+// The last state has no flag, so it leaves no fixture route behind.
+if (existsSync(path.join(REPO_ROOT, FIXTURE_ROUTE))) {
+  fail(`registry generation without a fixture flag left ${FIXTURE_ROUTE}`, {
+    test: 'a fixture route exists only with its flag',
+    expected: 'no fixture route',
+    actual: FIXTURE_ROUTE,
+  });
+}
+
+const tracked = spawnSync(
+  'git',
+  ['ls-files', '--', GENERATED, ...SERVED, SEGMENTS, FIXTURE_ROUTE],
+  {
+    cwd: REPO_ROOT,
+    encoding: 'utf8',
+  },
+);
 if (tracked.status !== 0 || tracked.stdout.trim() !== '') {
   fail(`git tracks generated files: ${tracked.stdout.trim().split('\n').join(', ')}`, {
     test: 'generated files are untracked',

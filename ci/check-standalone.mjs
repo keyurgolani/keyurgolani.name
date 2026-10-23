@@ -12,7 +12,7 @@
 // rest out of the image's build.
 //
 //   node ci/check-standalone.mjs [standalone dir]
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { scanTree } from './lib/container.mjs';
@@ -40,6 +40,47 @@ export function scanStandalone(dir) {
   return { problems: sorted, example };
 }
 
+/**
+ * What only #6's catalog fixture ships (scripts/fixture-routes.ts): its
+ * route, and its plates' attribute in any chunk. A build without
+ * BUDGET_FIXTURES has neither, since generation writes no route file there.
+ */
+const CATALOG_ROUTE = /(?:^|[\\/])(?:_|%5F)catalog-fixture(?:[\\/.]|$)/i;
+const CATALOG_MARKER = 'data-plate-live';
+
+/** Every file under `dir`, relative to it. */
+function filesUnder(dir) {
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir, { recursive: true, withFileTypes: true })
+    .filter((entry) => entry.isFile())
+    .map((entry) => path.relative(dir, path.join(entry.parentPath ?? entry.path, entry.name)));
+}
+
+/**
+ * The catalog fixture's paths and chunks in a build's output: the
+ * standalone tree and the static assets beside it, .next/static. A build
+ * made with BUDGET_FIXTURES ships them, and every other build none.
+ *
+ * @param {string} dir the build's .next/standalone
+ */
+export function catalogFixtureFiles(dir) {
+  const found = [];
+  for (const root of [dir, path.join(dir, '..', 'static')]) {
+    for (const file of filesUnder(root)) {
+      if (file.split(path.sep).includes('node_modules')) continue;
+      const shown = path.join(path.relative(dir, root), file);
+      if (CATALOG_ROUTE.test(file)) {
+        found.push(shown);
+        continue;
+      }
+      if (/\.(?:js|mjs|cjs|html|rsc|json)$/.test(file)) {
+        if (readFileSync(path.join(root, file), 'utf8').includes(CATALOG_MARKER)) found.push(shown);
+      }
+    }
+  }
+  return found;
+}
+
 /** Up to ten names, and how many more there are. */
 function listed(names) {
   const shown = names.slice(0, 10).join(', ');
@@ -52,7 +93,7 @@ function listed(names) {
  *
  * @param {string} dir the build's .next/standalone
  */
-export function checkStandalone(dir) {
+export function checkStandalone(dir, env = process.env) {
   // A tree outside the repository goes by its own path.
   const relative = path.relative(REPO_ROOT, dir);
   const outside = relative === '..' || relative.startsWith(`..${path.sep}`);
@@ -69,6 +110,14 @@ export function checkStandalone(dir) {
     found.push(
       `${shown} lacks the bundled sample the demo profile renders: ${SAMPLE}. next.config.ts's outputFileTracingIncludes ships them.`,
     );
+  }
+  if (!env.BUDGET_FIXTURES) {
+    const catalog = catalogFixtureFiles(dir);
+    if (catalog.length > 0) {
+      found.push(
+        `${shown} ships #6's catalog fixture, which only a BUDGET_FIXTURES build may: ${listed(catalog)}. Registry generation writes its route only with the flag; remove the file at apps/web/src/app/(studio)/studio/%5Fcatalog-fixture and generate again.`,
+      );
+    }
   }
   return found.length === 0 ? null : found.join(' ');
 }

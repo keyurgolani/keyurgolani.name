@@ -235,7 +235,18 @@ const unbuilt = (entry: Routes.RouteEntry) =>
  * the preview spelling checks below cover it.
  */
 const unknownEverywhere = (entry: Routes.RouteEntry) =>
-  unbuilt(entry) && !isPreviewPath(entry.pattern);
+  unbuilt(entry) && !isPreviewPath(entry.pattern) && !isStudioPath(entry.pattern);
+
+/**
+ * A Studio route no profile of this build serves, as #6's catalog fixture is
+ * in a build made without BUDGET_FIXTURES. Under owner it answers as any
+ * unknown Studio path does, with Studio's headers; under demo and read-only
+ * as any path no route matches.
+ */
+const unknownStudio = (entry: Routes.RouteEntry) => unbuilt(entry) && isStudioPath(entry.pattern);
+
+/** Whether this run says the build under test was made with BUDGET_FIXTURES, from its environment. */
+const BUDGET_BUILT = fixtureFlags(process.env).budget === true;
 
 /**
  * Whether this run says the build under test was made with the appearance
@@ -507,6 +518,7 @@ async function expectUnknown(
   profile: Profile,
   targets: readonly string[],
   headers: Record<string, string> = {},
+  reference = '/no-such-page',
 ): Promise<void> {
   for (const target of targets) {
     const query = target.includes('?') ? target.slice(target.indexOf('?')) : '';
@@ -514,12 +526,12 @@ async function expectUnknown(
       const what = `${method} ${target}`;
       const options = { method, maxRedirects: 0, headers };
       const response = await request.fetch(target, options);
-      const unknown = await request.fetch(`/no-such-page${query}`, options);
+      const unknown = await request.fetch(`${reference}${query}`, options);
       expect(response.status(), what).toBe(404);
       expect(await response.text(), what).not.toContain('Password');
       expectProfileHeaders(profile, response, what);
       expect(await shape(response, target), what).toEqual(
-        await shape(unknown, `/no-such-page${query}`),
+        await shape(unknown, `${reference}${query}`),
       );
     }
   }
@@ -911,6 +923,37 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
         );
       }
       await expectUnknown(request, profile, spellings);
+    },
+  );
+
+  test(
+    "a Studio route no profile of this build serves, in any spelling and to any method, answers as an unknown Studio path does (#6's catalog fixture)",
+    {
+      annotation: [
+        ...listRoutes()
+          .filter(unknownStudio)
+          .map(({ pattern }) => ({ type: 'route', description: pattern })),
+        annotation,
+      ],
+    },
+    async ({ request }) => {
+      const routes = listRoutes().filter(unknownStudio);
+      if (!BUDGET_BUILT) {
+        // A build made without the flag has no catalog fixture in any profile.
+        expect(routes.map(({ pattern }) => pattern)).toContain('/studio/_catalog-fixture');
+      }
+      const spellings = routes.flatMap(({ pattern }) => {
+        const at = concrete(pattern);
+        return [at, `${at}?x=1`, at.toUpperCase(), `${at}/x`, ...encodedSpellings(pattern)];
+      });
+      // Under owner, Studio's unknown path; under a profile with no Studio, any path's.
+      await expectUnknown(
+        request,
+        profile,
+        spellings,
+        {},
+        hasStudio(profile) ? '/studio/nowhere' : '/no-such-page',
+      );
     },
   );
 
