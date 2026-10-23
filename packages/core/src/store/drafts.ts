@@ -385,7 +385,8 @@ export function draftInput(draft: Draft): UnitInput {
   };
 }
 
-function checkedInput(documents: UnitInput): UnitInput {
+/** `documents`, checked to be a unit's input: each document's format and text, and no other document. */
+export function checkedInput(documents: UnitInput): UnitInput {
   const one = (document: DocumentInput | undefined, name: DocumentName): DocumentInput => {
     if (
       document === null ||

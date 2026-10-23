@@ -7,7 +7,7 @@ import path from 'node:path';
 import { test, type TestContext } from 'node:test';
 import { nodeFs } from './fs-port';
 import type { RevisionId } from './layout';
-import { readLive } from './pointer';
+import { readEvents, readLive } from './pointer';
 import { readManifest } from './revisions';
 import type { Store } from './store';
 import { checkUnit } from '../catalog/unit';
@@ -219,6 +219,76 @@ test('of two rollbacks with the same expectation, from two processes, exactly on
     assert.equal(lost?.code, 'live_conflict');
     assert.equal(lost?.liveRevisionId, committed[0]!.revisionId);
   }
+});
+
+test('a CLI import during a server publish, from two processes: with one expectation exactly one commits, and no import ever replaces a publish it did not see', async (t) => {
+  const store = await newStore(t);
+  await publishInput(store, pairInput('engineering'));
+  const source = tempDir(t, 'store-source-');
+  const wins = { publish: 0, import: 0 };
+  for (let round = 0; round < 6; round++) {
+    const live = (await readLive(nodeFs, store.paths))!.revisionId;
+    const draft = await workingDraft(store, `round ${round} studio`);
+    const mounted = contentVariant(pairInput('engineering'), `round ${round} mounted`);
+    writeFileSync(path.join(source, 'portfolio.yml'), mounted.portfolio.sourceText);
+    writeFileSync(path.join(source, 'site.yml'), mounted.site.sourceText);
+    // Half the rounds name the expectation; the rest take the default, what was live at the start.
+    const argv = ['import', '--from', source, ...(round % 2 === 0 ? ['--expect', live] : [])];
+    // The import has more to do before it takes the lock: in every other
+    // round the publish waits a little, so either may go first.
+    const [server, operator] = await together(t, store.paths.root, [
+      [
+        { op: 'sleep', ms: round % 4 >= 2 ? 250 : 0 },
+        {
+          op: 'publish',
+          input: {
+            draftId: draft.draftId,
+            draftVersion: draft.version,
+            expectedLiveRevisionId: live,
+          },
+        },
+      ],
+      [{ op: 'cli', argv }],
+    ]);
+    const published = outcome(server![1]);
+    const imported = outcome(operator![0]) as unknown as { code: number; err: string };
+    const events = (await readEvents(nodeFs, store.paths)).slice(-2);
+    // The log is one line of history: each event replaced what was live just before it.
+    const after = await readEvents(nodeFs, store.paths);
+    for (let index = 1; index < after.length; index++) {
+      assert.equal(
+        after[index]!.previousRevisionId,
+        after[index - 1]!.revisionId,
+        `round ${round}`,
+      );
+    }
+    if (published.kind === 'committed' && imported.code === 0) {
+      // Both: the import started after the publish, and read it as live.
+      assert.ok(round % 2 === 1, `round ${round}: with --expect, both can't commit`);
+      assert.deepEqual(
+        events.map((event) => event.type),
+        ['publish', 'import'],
+      );
+      wins.publish += 1;
+      wins.import += 1;
+      continue;
+    }
+    if (published.kind === 'committed') {
+      assert.equal(imported.code, 1, `round ${round}`);
+      assert.match(
+        imported.err,
+        new RegExp(`^live_conflict: ${published.revisionId} is live now`, 'm'),
+      );
+      wins.publish += 1;
+    } else {
+      assert.equal(imported.code, 0, `round ${round}: ${imported.err}`);
+      assert.equal(published.code, 'live_conflict', `round ${round}`);
+      assert.equal(published.liveRevisionId, (await readLive(nodeFs, store.paths))!.revisionId);
+      assert.equal(events.at(-1)?.type, 'import');
+      wins.import += 1;
+    }
+  }
+  t.diagnostic(`the publish committed in ${wins.publish} rounds, the import in ${wins.import}`);
 });
 
 test('of two saves of one version, from two processes, one saves and the other gets draft_conflict', async (t) => {

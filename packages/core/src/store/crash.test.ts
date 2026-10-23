@@ -1,16 +1,16 @@
 // The crash criterion (#3, Slice 1, and Verification required): every write,
-// sync, and rename of a publish, a rollback, a draft save, and an asset put
-// has a named crash point, and so does each step of breaking a stale lock
-// and clearing a dead breaker's marker, of moving aside event files
-// live.json disagrees with, of removing a revision that never went live,
-// and of repair. Each is hit twice, as a failed call in this process and as
-// a SIGKILL of a child process, and then one fresh process repairs and
-// checks every resulting data directory: the live revision is the old or
-// the new one, it validates, nothing staged remains, and no acknowledged
-// draft is lost. These are process crashes, not power loss. A crash point
-// stops before its call, never inside it, so the write discipline is
-// checked on its own: no file the store keeps is ever written in place, so
-// a torn write is only ever a temporary file's.
+// sync, and rename of a publish, a rollback, an import (Slice 3), a draft
+// save, and an asset put has a named crash point, and so does each step of
+// breaking a stale lock and clearing a dead breaker's marker, of moving
+// aside event files live.json disagrees with, of removing a revision that
+// never went live, and of repair. Each is hit twice, as a failed call in
+// this process and as a SIGKILL of a child process, and then one fresh
+// process repairs and checks every resulting data directory: the live
+// revision is the old or the new one, it validates, nothing staged
+// remains, and no acknowledged draft is lost. These are process crashes,
+// not power loss. A crash point stops before its call, never inside it, so
+// the write discipline is checked on its own: no file the store keeps is
+// ever written in place, so a torn write is only ever a temporary file's.
 import assert from 'node:assert/strict';
 import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -19,7 +19,7 @@ import { test, type TestContext } from 'node:test';
 import { newRevisionId, storePaths, type DraftId, type RevisionId } from './layout';
 import { thisProcess } from './lock';
 import { openStore, type Store } from './store';
-import { checkUnit, sha256, type UnitInput } from '../catalog/unit';
+import { checkUnit, importSourceHash, sha256, type UnitInput } from '../catalog/unit';
 import type { CheckReport, ChildTask, Step } from './test-support/child';
 import { crashingFs, recordingFs, type FsCall, type PointHit } from './test-support/crash-fs';
 import {
@@ -249,6 +249,80 @@ const rollbackScenario: Scenario = {
     return 'new';
   },
 };
+
+const importHash = (input: UnitInput) =>
+  importSourceHash({
+    'portfolio.yml': input.portfolio.sourceText,
+    'site.yml': input.site.sourceText,
+  });
+
+/** An import of `next` over a live revision, `R1`. */
+function importScenario(
+  name: string,
+  next: (first: UnitInput) => UnitInput,
+  required: readonly string[],
+): Scenario {
+  const first = pairInput('engineering');
+  const input = (seeded: Seeded) => ({
+    documents: next(first),
+    sourceHash: importHash(next(first)),
+    expectedLiveRevisionId: seeded.liveBefore,
+  });
+  return {
+    name,
+    required,
+    async seed(t) {
+      const store = await newStore(t);
+      const outcome = await store.publication.importSource(
+        { documents: first, sourceHash: importHash(first), expectedLiveRevisionId: null },
+        'operator',
+      );
+      assert.equal(outcome.kind, 'committed');
+      return {
+        template: store.paths.root,
+        liveBefore: outcome.kind === 'committed' ? outcome.revisionId : null,
+        seqBefore: 1,
+        newHash: unitHash(next(first)),
+      };
+    },
+    step: (seeded) => ({ op: 'import', input: input(seeded) }),
+    run: (store, seeded) => store.publication.importSource(input(seeded), 'operator'),
+    verify(report, seeded, label) {
+      verifyCommon(report, label);
+      if (report.live!.seq === 1) {
+        assert.equal(report.live!.revisionId, seeded.liveBefore, label);
+        return 'old';
+      }
+      assert.equal(report.live!.seq, 2, label);
+      assert.equal(report.live!.unitHash, seeded.newHash, `${label}: the imported unit`);
+      return 'new';
+    },
+  };
+}
+
+const importNewScenario = importScenario(
+  'an import of changed files',
+  (first) => contentVariant(first, 'imported'),
+  [
+    'import.staging.manifest.write',
+    'import.staging.dir.fsync',
+    'import.revision.rename',
+    'import.revisions.fsync',
+    'import.live.write',
+    'import.live.fsync',
+    'import.live.rename',
+    'import.publication.fsync',
+    'import.event.write',
+    'import.events.fsync',
+  ],
+);
+
+// The same files: no revision is written, and the pointer moves to live again.
+const importSameScenario = importScenario('an import of unchanged files', (first) => first, [
+  'import.live.write',
+  'import.live.rename',
+  'import.event.write',
+]);
 
 const saveScenario: Scenario = {
   name: 'a draft save',
@@ -491,6 +565,8 @@ async function crashEveryPoint(t: TestContext, scenario: Scenario) {
 for (const scenario of [
   publishScenario,
   rollbackScenario,
+  importNewScenario,
+  importSameScenario,
   saveScenario,
   putScenario,
   leftScenario,

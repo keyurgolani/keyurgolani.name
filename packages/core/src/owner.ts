@@ -129,9 +129,8 @@ export {
   type Renewal,
 } from './preview/grants';
 
-// The revision store (#3). Owner serves it through RevisionCatalogReader
-// once it holds a published revision; until Slice 3's first-start import, an
-// empty one serves the mounted documents.
+// The revision store (#3). Owner serves it through RevisionCatalogReader; an
+// empty one serves nothing until owner's first-start import commits.
 export { openStore, type Store, type StoreOptions } from './store/store';
 export {
   revisionCatalogReader,
@@ -238,3 +237,12 @@ export {
   type RollbackInput,
   type ServingState,
 } from './store/publication';
+// The mounted pair as an import reads it, and owner's first-start import
+// (#3, item 24).
+export {
+  importAtFirstStart,
+  importRefusal,
+  mountedSource,
+  type MountedSource,
+  type SourceFile,
+} from './store/source';
