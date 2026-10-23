@@ -20,11 +20,18 @@ test('the paths the proxy lets through under /_portfolio/ are exactly the files 
     ...(generation.fonts ?? []),
     ...(generation.variants ?? []),
     ...(generation.assets ?? []),
+    ...(generation.stills ?? []),
   ].map(({ url }) => url);
   assert.ok(served.length > 0, 'the registry serves files');
   assert.ok(
     served.some((url) => url.startsWith('/_portfolio/variant/')),
     "a variant's stylesheet",
+  );
+  // Every build registers the fallback composition, whose catalog stills
+  // (#6) take the list's image branch, so it's exercised in each one.
+  assert.ok(
+    served.some((url) => /^\/_portfolio\/still\/fallback\.[0-9a-f]{12}\.webp$/.test(url)),
+    "the fallback composition's stills",
   );
   assert.deepEqual([...PORTFOLIO_FILES].sort(), served.sort());
   // A font is served from the font directory, never beside the pack stylesheets.

@@ -82,6 +82,18 @@ export function readTraceMatrix(file = TRACE_MATRIX): TraceMatrixFile {
   return matrix;
 }
 
+/** One owner secret per process, made only when an owner target needs it. */
+let secret: { password: string; hash: string } | undefined;
+
+/**
+ * The owner secret this process's owner targets start with: the catalog
+ * trace signs in with its password (catalog.spec.ts). Each worker evaluates
+ * the config, and so makes its own, for the apps it starts.
+ */
+export function traceOwner(): { password: string; hash: string } {
+  return (secret ??= ownerSecret());
+}
+
 /**
  * `options` under owner: the password provider with `hash` in a _FILE, and a
  * data directory made for the run.
@@ -128,9 +140,7 @@ export function traceTargets(
     throw new Error(`--selection ${options.selection} names no registered variant (${known})`);
   }
   const profiles = options.profile ? [options.profile] : TRACE_PROFILES;
-  // One hash per process, made only when an owner target needs it.
-  let hash: string | undefined;
-  const ownerHash = () => (hash ??= ownerSecret().hash);
+  const ownerHash = () => traceOwner().hash;
   const fixture = contractFixture(TRACE_FIXTURE);
   const fonts = registersTypography(TRACE_TYPOGRAPHY);
   return profiles.flatMap((profile) =>

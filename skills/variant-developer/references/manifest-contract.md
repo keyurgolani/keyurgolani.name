@@ -91,6 +91,12 @@ The five first-party compositions have pinned values: `editorial-evidence` is li
 
 A kind you leave out is your tier's ceiling in `runtime-budgets.json`'s `budgets` block: light, medium, and heavy each have one. `pnpm check:budgets`, which CI runs on a traced build, fails a declared budget over its ceiling, a unit over what it declares, and a stylesheet with an `@import` or `url()` to another host, each as a record naming the asset that carries the most of it. Declare what you measured, with room to grow, so a regression shows up as yours.
 
+## Stills
+
+**`stills`** (optional): your catalog stills, one to four, the largest first. Each is `{ "file": "./stills/1440.webp", "width": 1440, "height": 900 }`: a PNG or WebP in your package, by a relative path in lowercase, at most 256 KB, between 160x100 and 2880x2880, whose pixels are exactly the width and height you declare. A catalog plate shows the still before, and instead of, a live preview of your variant, as a plain `<img>` with its width and height, so the page doesn't shift as it loads. Registry generation checks each file, copies it by content hash to `/_portfolio/still/<id>.<sha256-12>.<ext>`, and lists it in `ASSET_MANIFEST`. Stills count toward your `image` budget.
+
+`pnpm stills` shoots them for you: after `pnpm build`, it renders each registered variant on the `complete` contract fixture at 1440x900 under reduced motion, in Chromium, and writes `stills/1440.webp` and `stills/720.webp` into its package; `--variant <id>` shoots fewer. Commit them, and list them in the manifest.
+
 ## Coverage
 
 - **`renderedKinds`** (required): the kinds your variant renders bespoke. Each needs a renderer in the map you pass `renderSection`, and each renderer needs its kind here: a mismatch throws.

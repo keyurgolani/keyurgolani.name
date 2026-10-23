@@ -1,7 +1,7 @@
 import { expect, test } from '../harness/fixtures';
 import { send } from '../harness/http-client.mjs';
 import { ownerSecret } from '../harness/owner-secret.mjs';
-import { ownerApp } from '../harness/profile-matrix';
+import { IMMUTABLE, ownerApp, portfolioFiles } from '../harness/profile-matrix';
 import {
   environmentIn,
   frameElement,
@@ -148,6 +148,19 @@ test(
     const asset = /\/_next\/static\/[^"']+\.js/.exec(studio.body)?.[0];
     expect(asset, 'a build asset on the sign-in page').toBeTruthy();
     expect((await get(asset!, previewHost, '*/*')).status).toBe(200);
+    // A pack's stylesheet and a catalog still (#6), which a frame and a
+    // plate load from there, under the same rule as on the canonical origin.
+    const files = portfolioFiles();
+    for (const file of [
+      files.find((path) => path.startsWith('/_portfolio/pack/')),
+      files.find((path) => path.startsWith('/_portfolio/still/')),
+    ]) {
+      expect(file, 'a file the registry wrote').toBeTruthy();
+      const served = await get(file!, previewHost, '*/*');
+      expect(served.status, `${file} on the preview origin`).toBe(200);
+      expect(served.headers['access-control-allow-origin'], file).toBe('*');
+      expect(served.headers['cache-control'], file).toBe(IMMUTABLE);
+    }
     // A grant path gets its own rules there: the preview's status document.
     const grantPath = `/preview/${'G'.repeat(22)}`;
     const refused = await get(grantPath, previewHost);

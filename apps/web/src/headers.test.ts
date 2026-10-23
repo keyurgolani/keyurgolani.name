@@ -12,6 +12,7 @@ import {
   prepareDestination,
 } from 'next/dist/shared/lib/router/utils/prepare-destination';
 import config from '../next.config';
+import { IMMUTABLE } from './server/cache-rules';
 import { EXPERIENCE_HEADER } from './server/route-header';
 import { NOT_FOUND_HEADER } from './server/studio-headers';
 
@@ -103,10 +104,39 @@ test('only the build assets and /_portfolio allow any origin, never a page, an A
     '/_next/static/css/site.css',
     '/_portfolio/generated/0123456789ab.css',
     '/_portfolio/fonts/serif.woff2',
-    // #6's typography fonts, which an opaque preview frame loads cross-origin.
-    '/_portfolio/font/humanist-ui.0123456789ab.woff2',
   ]) {
     assert.deepEqual(await configHeaders(path), shared, path);
+  }
+  // What registry generation names by content hash (#6, item 8) is cached a
+  // year, immutable, and nothing else under /_portfolio/ is.
+  const hashed = { ...shared, 'cache-control': IMMUTABLE };
+  for (const path of [
+    '/_portfolio/pack/warm-parchment.0123456789ab.css',
+    '/_portfolio/pack/_platform.0123456789ab.css',
+    // #6's typography fonts, which an opaque preview frame loads cross-origin.
+    '/_portfolio/font/humanist-ui.0123456789ab.woff2',
+    '/_portfolio/variant/fallback.0123456789ab.css',
+    '/_portfolio/asset/0123456789ab.png',
+    '/_portfolio/still/fallback.0123456789ab.webp',
+  ]) {
+    assert.deepEqual(await configHeaders(path), hashed, path);
+  }
+  for (const path of [
+    '/_portfolio/pack/warm-parchment.css',
+    '/_portfolio/pack/warm-parchment.0123456789a.css',
+    '/_portfolio/pack/warm-parchment.0123456789ab.css/x',
+    '/_portfolio/still/fallback.0123456789ab.webp.map',
+    '/_portfolio/still/fallback.0123456789ab.html',
+    '/_portfolio/stills/fallback.0123456789ab.webp',
+    '/_portfolio/fallback.0123456789ab.css',
+    '/_portfolio/x/../pack/warm-parchment.0123456789ab.css',
+    '/_portfolio',
+  ]) {
+    assert.equal((await configHeaders(path))['cache-control'], undefined, `${path} is immutable`);
+  }
+  // No document, API route, preview path, or Studio path is immutable.
+  for (const path of ['/', '/sample', '/feed.xml', '/api/health', '/preview/g/x', '/studio']) {
+    assert.notEqual((await configHeaders(path))['cache-control'], IMMUTABLE, path);
   }
   for (const path of [
     '/',

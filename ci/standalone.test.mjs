@@ -225,3 +225,26 @@ test("CI's build job checks the standalone output after its build and the source
     /outputFileTracingExcludes: \{\n\s+'\/\*\*': \['\.\.\/\.\.\/packages\/variant-contract\/fixtures\/\*\*'\],\n\s+\}/,
   );
 });
+
+test("a build without BUDGET_FIXTURES that ships #6's catalog fixture fails, by its route or a chunk holding its plates, and one with the flag passes", (t) => {
+  // The route's own server files.
+  const routed = standaloneTree(t, [
+    ...SHIPPED,
+    'apps/web/.next/server/app/studio/_catalog-fixture/page.js',
+  ]);
+  assert.match(checkStandalone(routed, {}) ?? '', /ships #6's catalog fixture[^]*_catalog-fixture/);
+  assert.equal(checkStandalone(routed, { BUDGET_FIXTURES: '1' }), null);
+  // A chunk, beside the standalone tree in .next/static, that holds a plate.
+  const parent = mkdtempSync(path.join(tmpdir(), 'next-'));
+  t.after(() => rmSync(parent, { recursive: true, force: true }));
+  const dir = path.join(parent, 'standalone');
+  for (const file of SHIPPED) {
+    mkdirSync(path.dirname(path.join(dir, file)), { recursive: true });
+    writeFileSync(path.join(dir, file), '');
+  }
+  mkdirSync(path.join(parent, 'static', 'chunks'), { recursive: true });
+  writeFileSync(path.join(parent, 'static', 'chunks', 'a.js'), 'x("data-plate-live",1)');
+  assert.match(checkStandalone(dir, {}) ?? '', /static[\\/]chunks[\\/]a\.js/);
+  writeFileSync(path.join(parent, 'static', 'chunks', 'a.js'), 'x("data-plate",1)');
+  assert.equal(checkStandalone(dir, {}), null);
+});

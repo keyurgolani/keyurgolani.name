@@ -4,8 +4,8 @@ import { ASSET_MANIFEST, PACKS, PLATFORM_STYLESHEET } from '../lib/generated/reg
 // 2, and #6, Slice 2), by the path each is served at: the platform
 // stylesheet, every pack's compiled stylesheet and its font files, which
 // #6 serves from /_portfolio/font/, and every
-// unit's in ASSET_MANIFEST, a variant's compiled stylesheet and the images
-// it names among them. proxy.ts lets a GET or HEAD under /_portfolio/ go on
+// unit's in ASSET_MANIFEST, a variant's compiled stylesheet, the images
+// it names, and its catalog stills in /_portfolio/still/ among them. proxy.ts lets a GET or HEAD under /_portfolio/ go on
 // only for one of these, spelled exactly as listed (#7), and answers every
 // other path there with the plain 404. A file the registry writes there that
 // this leaves out would answer 404 too, so a test holds the list to what

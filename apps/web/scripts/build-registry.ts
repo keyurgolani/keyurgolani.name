@@ -54,7 +54,7 @@ async function main(): Promise<number> {
     process.stderr.write(USAGE);
     return 2;
   }
-  const { result, files, packs, fonts, variants, assets, segments, written } =
+  const { result, files, packs, fonts, variants, assets, stills, segments, written } =
     await generateRegistry(process.env, {
       write: !options.check,
       modulesOnly: options.modulesOnly,
@@ -91,6 +91,7 @@ async function main(): Promise<number> {
                   fontFiles: written.served.fonts,
                   variantFiles: written.served.variants,
                   assetFiles: written.served.assets,
+                  stillFiles: written.served.stills,
                 }
               : {}),
           }
@@ -118,7 +119,8 @@ async function main(): Promise<number> {
       ? served.packs.removed.length +
         served.fonts.removed.length +
         served.variants.removed.length +
-        served.assets.removed.length
+        served.assets.removed.length +
+        served.stills.removed.length
       : 0);
   process.stdout.write(
     `[registry] ${registrySummary(result)}. ` +
@@ -129,8 +131,9 @@ async function main(): Promise<number> {
             (stale > 0 ? `, removing ${plural(stale, 'stale file')}.\n` : '.\n')
           : `${modules}, and in public/_portfolio ${served.packs.written.length} of ${packs!.length} in pack/, ` +
             `${served.fonts.written.length} of ${fonts!.length} in font/, ` +
-            `${served.variants.written.length} of ${variants!.length} in variant/, and ` +
-            `${served.assets.written.length} of ${assets!.length} in asset/` +
+            `${served.variants.written.length} of ${variants!.length} in variant/, ` +
+            `${served.assets.written.length} of ${assets!.length} in asset/, and ` +
+            `${served.stills.written.length} of ${stills!.length} in still/` +
             (stale > 0 ? `, removing ${plural(stale, 'stale file')}.\n` : '.\n')),
   );
   return 0;

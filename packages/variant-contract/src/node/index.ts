@@ -33,6 +33,7 @@ export {
   GENERATED_FILES,
   fontFiles,
   packFiles,
+  stillFiles,
   registryMeta,
   renderRegistry,
   SERVED_KINDS,

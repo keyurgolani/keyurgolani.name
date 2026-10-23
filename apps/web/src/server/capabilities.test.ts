@@ -11,6 +11,7 @@ import {
   CAPABILITY_MATRIX,
   FIXTURE_ACCESS,
   FIXTURE_CAPABILITIES,
+  FIXTURE_OWNER_ACCESS,
   INDEXABLE,
   PROFILES,
   type Access,
@@ -23,6 +24,17 @@ import {
 
 type Cell = Access | 'absent';
 
+/** What docs/deployment.md's row for a fixture capability says `profile` gets in a build with its flag. */
+function builtDoc(capability: string, profile: (typeof PROFILES)[number]): Cell {
+  const fixture: { readonly access?: string } | undefined = (
+    FIXTURE_CAPABILITIES as Readonly<Record<string, { readonly access?: string }>>
+  )[capability];
+  if (fixture?.access === 'owner-session') {
+    return (FIXTURE_OWNER_ACCESS as Partial<Record<string, Access>>)[profile] ?? 'absent';
+  }
+  return FIXTURE_ACCESS[profile];
+}
+
 /**
  * The fixture flags this run's environment asks for, as registry generation,
  * which every test run starts with, reads them (#19, Slice 3). Each fixture
@@ -30,10 +42,22 @@ type Cell = Access | 'absent';
  */
 const ASKED = fixtureFlags(process.env);
 
-/** A fixture capability's row: public in every profile when the run asks for its flag, absent in all otherwise. */
+/**
+ * A fixture capability's row when the run asks for its flag: public in every
+ * profile, or the owner's with a session for an owner-session one. Absent in
+ * all without the flag.
+ */
+function builtCells(capability: keyof typeof FIXTURE_CAPABILITIES): [Cell, Cell, Cell] {
+  const fixture: { readonly key: string; readonly access?: string } =
+    FIXTURE_CAPABILITIES[capability];
+  return fixture.access === 'owner-session'
+    ? ['session', 'absent', 'absent']
+    : ['public', 'public', 'public'];
+}
+
 function fixtureCells(capability: keyof typeof FIXTURE_CAPABILITIES): [Cell, Cell, Cell] {
   return ASKED[FIXTURE_CAPABILITIES[capability].key]
-    ? ['public', 'public', 'public']
+    ? builtCells(capability)
     : ['absent', 'absent', 'absent'];
 }
 
@@ -62,6 +86,7 @@ const TABLE: ReadonlyArray<readonly [Capability, owner: Cell, demo: Cell, readOn
   ['media.fetchRemote', 'session', 'absent', 'absent'],
   ['preview.grant', 'session', 'absent', 'absent'],
   ['appearance.fixtures', ...fixtureCells('appearance.fixtures')],
+  ['catalog.fixtures', ...fixtureCells('catalog.fixtures')],
 ];
 
 test('the matrix has exactly the capabilities of the table', () => {
@@ -99,13 +124,17 @@ test('only owner grants a capability by session', () => {
   }
 });
 
-test("a fixture capability is anyone's in every profile with its build-time flag, and absent in every one without", () => {
+test("a fixture capability is anyone's in every profile with its build-time flag, or the owner's with a session, and absent in every one without", () => {
   assert.deepEqual(FIXTURE_ACCESS, { owner: 'public', demo: 'public', 'read-only': 'public' });
+  assert.deepEqual(FIXTURE_OWNER_ACCESS, { owner: 'session' });
+  assert.equal(FIXTURE_CAPABILITIES['catalog.fixtures'].access, 'owner-session');
   for (const [capability, { key }] of Object.entries(FIXTURE_CAPABILITIES)) {
     const cells = PROFILES.map((profile) => accessIn(profile, capability as Capability));
     assert.deepEqual(
       cells,
-      ASKED[key] ? ['public', 'public', 'public'] : ['absent', 'absent', 'absent'],
+      ASKED[key]
+        ? builtCells(capability as keyof typeof FIXTURE_CAPABILITIES)
+        : ['absent', 'absent', 'absent'],
       capability,
     );
     assert.equal(builtWithFixtures(key), ASKED[key] === true, capability);
@@ -125,6 +154,18 @@ test('a run without APPEARANCE_FIXTURES generates the flag off, and appearance.f
   );
   if (process.env.APPEARANCE_FIXTURES === undefined) {
     assert.deepEqual(CAPABILITY_MATRIX['appearance.fixtures'], {});
+  }
+});
+
+test('a run without BUDGET_FIXTURES generates the flag off, and catalog.fixtures grants nothing, and the owner alone with it', () => {
+  assert.equal(
+    FIXTURE_FLAGS.budget,
+    ASKED.budget === true,
+    'the generated module is from another environment: run pnpm build:registry in this one',
+  );
+  assert.deepEqual(CAPABILITY_MATRIX['catalog.fixtures'], ASKED.budget ? FIXTURE_OWNER_ACCESS : {});
+  if (process.env.BUDGET_FIXTURES === undefined) {
+    assert.deepEqual(CAPABILITY_MATRIX['catalog.fixtures'], {});
   }
 });
 
@@ -174,7 +215,7 @@ test("docs/deployment.md's profile matrix is this matrix (#1, item 24)", () => {
     assert.deepEqual(
       cells,
       PROFILES.map((profile) =>
-        fixture ? FIXTURE_ACCESS[profile] : accessIn(profile, capability as Capability),
+        fixture ? builtDoc(capability!, profile) : accessIn(profile, capability as Capability),
       ),
       capability,
     );

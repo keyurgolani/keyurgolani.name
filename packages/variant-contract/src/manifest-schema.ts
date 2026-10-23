@@ -279,6 +279,17 @@ const TextDirection = z
     message: 'must be ["ltr"] or ["ltr", "rtl"].',
   });
 
+/** A catalog still: a file in the package, by relative path, and its pixel size. */
+const Still = z
+  .object({
+    file: z.string().regex(/^\.\/(?:[a-z0-9][a-z0-9._-]*\/)*[a-z0-9][a-z0-9._-]*\.(?:png|webp)$/, {
+      message: 'must be a PNG or WebP file in the package, such as ./stills/1440.webp.',
+    }),
+    width: z.number().int().min(160).max(2880),
+    height: z.number().int().min(100).max(2880),
+  })
+  .strict();
+
 export const ManifestSchema = z
   .object({
     id: RegistryId,
@@ -300,6 +311,12 @@ export const ManifestSchema = z
     performanceTier: z.enum(PERFORMANCE_TIERS),
     /** Its runtime budgets (#6), each at most its tier's ceiling; one left out is the ceiling. */
     budgets: BudgetsSchema.optional(),
+    /**
+     * Its catalog stills (#6, item 1): committed PNG or WebP images in the
+     * package, each with the width and height its file has, which a catalog
+     * plate shows before a live preview, the largest first.
+     */
+    stills: z.array(Still).min(1).max(4).optional(),
     renderedKinds: z.array(Kind).max(64),
     unsupportedKinds: z.array(Kind).max(64),
     contentSlots: z.array(ContentSlot).max(32),

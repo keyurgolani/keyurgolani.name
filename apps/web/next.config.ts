@@ -7,6 +7,7 @@ import {
   EXPERIENCE_SEGMENT,
   ROUTE_HEADER,
 } from './src/server/route-header';
+import { CONTENT_HASHED, IMMUTABLE } from './src/server/cache-rules';
 
 /**
  * The registered variant and content extension packages, which
@@ -190,6 +191,11 @@ const config: NextConfig = {
   // /_portfolio, #19's compiled packs and #6's fonts and variant assets,
   // allow any origin, since an opaque preview frame loads them cross-origin;
   // proxy.ts answers any other method or spelling under those prefixes.
+  // A file the registry names by its content hash under /_portfolio/ (#6,
+  // item 8) never changes at its URL, so it's cached for a year, immutable:
+  // a new build names new bytes with a new URL. Only that spelling gets it,
+  // and proxy.ts answers any other path there, and a hashed name the
+  // registry never wrote, with its plain no-store 404 first.
   // headers.test.ts holds every path to these. HSTS belongs at the
   // TLS-terminating proxy (docs/deployment.md).
   async headers() {
@@ -217,6 +223,10 @@ const config: NextConfig = {
       {
         source: '/_portfolio/:path*',
         headers: [{ key: 'Access-Control-Allow-Origin', value: '*' }],
+      },
+      {
+        source: CONTENT_HASHED,
+        headers: [{ key: 'Cache-Control', value: IMMUTABLE }],
       },
       {
         source: '/:path(api/studio(?:/.*)?)',

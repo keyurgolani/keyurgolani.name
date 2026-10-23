@@ -530,7 +530,7 @@ test("an extension's ./renderers default-exports a renderer for each section it 
 test("a dependency installed only above the repository's root isn't the host's", async () => {
   const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'portfolio-outside-'));
   try {
-    const write = (file: string, text: string) => {
+    const write = (file: string, text: string | Uint8Array) => {
       fs.mkdirSync(path.dirname(path.join(outside, file)), { recursive: true });
       fs.writeFileSync(path.join(outside, file), text);
     };
