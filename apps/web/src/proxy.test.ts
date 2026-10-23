@@ -1524,6 +1524,56 @@ test('on the preview origin only a frame and what it loads go on, and every othe
   assert.equal((await proxy(bare)).status, 404);
 });
 
+test('with a preview origin, no forwarding header moves a request to another host: only Host decides (#7, Slice 4)', async (t) => {
+  const { port } = grantsPort();
+  deploy(t, 'owner', port, { PORTFOLIO_PREVIEW_ORIGIN: `https://${PREVIEW_HOST}` });
+  // What a client or a proxy might send to name a host other than Host's.
+  const claims = (host: string): Record<string, string>[] => [
+    { 'x-forwarded-host': host },
+    { 'x-forwarded-server': host },
+    { 'x-original-host': host },
+    { 'x-host': host },
+    { forwarded: `host=${host}` },
+    { 'x-forwarded-host': host, 'x-forwarded-proto': 'https', 'x-forwarded-port': '443' },
+  ];
+  const asFrame = { 'sec-fetch-dest': 'iframe' };
+  // A request to the preview host that claims the site's host still gets
+  // only a frame and what it loads.
+  for (const claim of claims('rowan.test')) {
+    const what = JSON.stringify(claim);
+    const studio = await proxy(toHost(PREVIEW_HOST, '/studio/sign-in', 'GET', claim));
+    assert.equal(studio.headers.get('x-middleware-request-x-portfolio-not-found'), '1', what);
+    noStudioHeaders(studio, what);
+    const post = await proxy(toHost(PREVIEW_HOST, '/api/studio/auth.login', 'POST', claim));
+    assert.equal(post.status, 404, what);
+  }
+  // A request to the site's host that claims the preview host is the site's:
+  // Studio keeps its own headers, and the preview rule doesn't apply.
+  for (const claim of claims(PREVIEW_HOST)) {
+    const what = JSON.stringify(claim);
+    const own = await proxy(toHost('rowan.test', '/studio/sign-in', 'GET', claim));
+    assert.equal(own.headers.get('x-middleware-request-x-portfolio-not-found'), null, what);
+    assert.match(own.headers.get('content-security-policy') ?? '', /frame-ancestors 'none';/, what);
+  }
+  // Any other host that claims either one still fails closed.
+  for (const named of ['rowan.test', PREVIEW_HOST]) {
+    for (const claim of claims(named)) {
+      for (const [path, headers] of [
+        ['/', {}],
+        ['/studio/sign-in', {}],
+        [`/preview/${ACTIVE}`, asFrame],
+      ] as const) {
+        const what = `${JSON.stringify(claim)} ${path}`;
+        const response = await proxy(
+          toHost('elsewhere.test', path, 'GET', { ...headers, ...claim }),
+        );
+        assert.equal(response.status, 404, what);
+        assert.equal(await response.text(), 'Not found.', what);
+      }
+    }
+  }
+});
+
 test('without a preview origin a Host header changes nothing, and Studio frames its own origin alone (#7, Slice 4)', async (t) => {
   deploy(t, 'owner');
   for (const host of [PREVIEW_HOST, 'rowan.test']) {
