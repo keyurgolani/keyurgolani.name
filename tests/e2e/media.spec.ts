@@ -100,7 +100,11 @@ test(
     for (const url of renditions) {
       const response = await request.get(url);
       expect(response.status(), url).toBe(200);
-      expect(response.headers()['content-type'], url).toMatch(/^image\/(?:webp|png)$/);
+      // The record's type, which the rendition's extension matches.
+      const ext = url.split('.').at(-1)!;
+      expect(response.headers()['content-type'], url).toBe(
+        { webp: 'image/webp', jpg: 'image/jpeg', png: 'image/png' }[ext],
+      );
       expect(response.headers()['cache-control'], url).toBe('public, max-age=31536000, immutable');
       expect(response.headers()['x-content-type-options'], url).toBe('nosniff');
     }
