@@ -16,6 +16,7 @@ export * from './secrets';
 export * from './media-source';
 export * from './timestamp';
 export * from './media';
+export * from './media-catalog';
 export * from './snapshots';
 export * from './view';
 export * from './record-ids';

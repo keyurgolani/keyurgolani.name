@@ -335,6 +335,15 @@ export function recordSchemas({ object, Link, Placement, Period, FocalPoint }: S
     works: listOf(RefSchema).optional(),
   });
 
+  /** Who holds an asset's rights, under what license, and whether showing it needs the credit. */
+  const MediaRights = object({
+    holder: TextSchema.optional(),
+    license: TextSchema.optional(),
+    attributionRequired: z.boolean().optional(),
+  }).refine((rights) => Object.keys(rights).some((key) => key !== 'extensions'), {
+    message: 'has no part authored. Leave rights out, or name its holder or license.',
+  });
+
   /**
    * A media asset: an image, audio, video, or document, by a stable id. Its
    * derived record (dimensions, renditions) is the unit's media document's.
@@ -346,6 +355,7 @@ export function recordSchemas({ object, Link, Placement, Period, FocalPoint }: S
     visibility: VisibilitySchema.optional(),
     alt: TextSchema.optional(),
     credit: TextSchema.optional(),
+    rights: MediaRights.optional(),
     focalPoint: FocalPoint.optional(),
     decorative: z.boolean().optional(),
   }).refine(({ alt, decorative }) => !(decorative === true && alt !== undefined), {

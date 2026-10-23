@@ -126,7 +126,7 @@ chronology:
 
 ### `MediaAsset`
 
-An image, audio, video, or document by id. Required: `id`, `kind` (`image`, `audio`, `video`, `document`), `source`. Optional: `visibility`, `alt`, `credit`, `focalPoint` (`{ x, y }`, each 0 to 1), `decorative`.
+An image, audio, video, or document by id. Required: `id`, `kind` (`image`, `audio`, `video`, `document`), `source`. Optional: `visibility`, `alt`, `credit`, `rights` (`{ holder?, license?, attributionRequired? }`, at least one), `focalPoint` (`{ x, y }`, each 0 to 1), `decorative`.
 
 `source` is a path under the media root, such as `shipyard/cover.png` (no leading `/`, no `.` or `..` segments, no `\`, `?`, `#`, or `:`), or an `https` URL. Give every image visitors see alt text that says what it shows, or `decorative: true` (never both). A caption isn't alt text.
 

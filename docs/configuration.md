@@ -71,7 +71,7 @@ A chronology entry is a `role`, `study`, `project`, `event`, or `milestone` (its
 
 ### Media
 
-A media asset is an `image`, `audio`, `video`, or `document` (its `kind`) with an `id` and a `source`: a path under the media root, such as `atlas/cover.jpg`, with no leading `/`, no `.` or `..` segment, and no `\`, `?`, `#`, or `:`, or an `https` URL. It may have `alt`, `credit`, `focalPoint` (`{ x, y }` between 0 and 1), and `decorative: true`, which marks decoration that takes no alt text.
+A media asset is an `image`, `audio`, `video`, or `document` (its `kind`) with an `id` and a `source`: a path under the media root, such as `atlas/cover.jpg`, with no leading `/`, no `.` or `..` segment, and no `\`, `?`, `#`, or `:`, or an `https` URL. It may have `alt`, `credit`, `rights` (`holder`, `license`, and `attributionRequired`, at least one of them), `focalPoint` (`{ x, y }` between 0 and 1), and `decorative: true`, which marks decoration that takes no alt text.
 
 A placement uses an asset where it shows: `{ asset: <id> }`, plus what this use changes, `alt`, `decorative`, and `focalPoint`, and what belongs to it, `caption`, `takenAt`, `location`, and `tags`. An avatar, a cover, a logo, and an Open Graph image show an image asset (`ref.type`). An image placement visitors see with no alt text, on the asset or the placement, and no `decorative: true` is an `image.alt-missing` warning: a caption isn't alt text.
 
