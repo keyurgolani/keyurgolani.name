@@ -41,8 +41,8 @@ test('the reset paints each boundary from its tokens', () => {
   assert.equal(reset.get('background-color'), 'var(--color-canvas)');
   assert.equal(reset.get('font-family'), 'var(--type-body-font-family)');
   assert.equal(reset.get('line-height'), 'var(--type-body-line-height)');
-  // A word wider than a 320px phone's line, such as a display headline's, wraps (#11, 1.4.10).
-  assert.equal(reset.get('overflow-wrap'), 'anywhere');
+  // A word wider than its line breaks, without lowering min-content sizing (#11, 1.4.10).
+  assert.equal(reset.get('overflow-wrap'), 'break-word');
 });
 
 test("the reset puts every id and focusable element below a variant's sticky chrome (Slice 3)", () => {

@@ -230,3 +230,12 @@ test("a busy action shows whole while it has focus, so its ring isn't dimmed und
     /\[data-ui-slot='action'\]\[data-state='loading'\]:focus-visible \{\s*opacity: 1;\s*\}/,
   );
 });
+
+test('only the display role lets a word break anywhere, so a 320px headline fits (#11)', () => {
+  const block = (role: string) =>
+    new RegExp(`\\[data-type-role='${role}'\\] \\{([^}]*)\\}`).exec(CSS)?.[1] ?? '';
+  assert.match(block('display'), /overflow-wrap: anywhere;/);
+  for (const role of ['headline', 'body', 'label']) {
+    assert.doesNotMatch(block(role), /overflow-wrap/, role);
+  }
+});

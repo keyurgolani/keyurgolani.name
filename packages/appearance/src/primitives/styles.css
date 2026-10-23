@@ -40,6 +40,9 @@
     line-height: var(--type-display-line-height);
     letter-spacing: var(--type-display-letter-spacing);
     font-variation-settings: var(--type-display-font-variation-settings);
+    /* A display word can be wider than a 320px phone's line, and a grid or flex track
+       sizes to it: here alone a word may break to fit (WCAG 1.4.10). */
+    overflow-wrap: anywhere;
   }
 
   [data-type-role='headline'] {

@@ -197,9 +197,10 @@ export function platformStylesheet(): string {
       'text-transform': 'none',
       'word-spacing': 'normal',
       'text-shadow': 'none',
-      // A word longer than the line, such as a display headline's on a 320px
-      // phone, wraps rather than widening the page (WCAG 1.4.10).
-      'overflow-wrap': 'anywhere',
+      // A word longer than its line breaks rather than overflowing it (WCAG
+      // 1.4.10). break-word leaves min-content sizing alone, so a table still
+      // scrolls and a number stays whole wherever it fits.
+      'overflow-wrap': 'break-word',
     }),
     block([`${BOUNDARY} ::selection`], {
       color: 'var(--color-text-primary)',
