@@ -9,6 +9,8 @@
 // below.
 
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import type { MotionPolicy } from '@portfolio/schema';
+import { useProvidedMotionPolicy } from '../motion';
 import { browserProbe, meetsRequirements } from './requirements';
 import { documentInputs, SERVER_INPUTS, subscribeDocument } from './store';
 import { motionReduced, resolveRuntime, type RuntimeStatus } from './state';
@@ -18,13 +20,21 @@ export interface RuntimeOptions {
   readonly requires?: readonly string[];
   /** How far outside the viewport the root still counts as in view. Default 200px. */
   readonly rootMargin?: string;
+  /**
+   * The effect's own motion policy, as its `motionPreference` prop gives it.
+   * It can only add a `reduce`: the boundary's policy, a MotionPolicyProvider
+   * above it, and the OS each reduce motion as well.
+   */
+  readonly motionPolicy?: MotionPolicy;
 }
 
 export interface EnhancementRuntime extends RuntimeStatus {
   /** Whether this browser meets every requirement. False until the page has mounted. */
   readonly eligible: boolean;
+  /** Whether the root is in view, with its margin, on a mounted page, whatever else pauses it. */
+  readonly inView: boolean;
   /** Attach to the effect's root: the element whose visibility decides whether it runs. */
-  readonly rootRef: (node: Element | null) => void;
+  readonly attachRoot: (node: Element | null) => void;
   /** Marks the effect failed: static, for good, so it tears down to its server markup. */
   readonly fail: () => void;
 }
@@ -56,20 +66,25 @@ export function useEnhancementRuntime(options: RuntimeOptions = {}): Enhancement
   );
   const inputs = useSyncExternalStore(subscribeDocument, documentInputs, () => SERVER_INPUTS);
   const [root, setRoot] = useState<Element | null>(null);
-  const [intersecting, setIntersecting] = useState(false);
+  const [observed, setObserved] = useState<{ root: Element; intersecting: boolean } | null>(null);
   const [boundary, setBoundary] = useState<BoundaryMotion>(NO_BOUNDARY);
   const [failed, setFailed] = useState(false);
+  const provided = useProvidedMotionPolicy();
+  // Any one policy at `reduce` reduces: none can undo another's.
+  const policy =
+    options.motionPolicy === 'reduce' || provided === 'reduce' ? 'reduce' : boundary.policy;
 
-  // In view, both ways, for as long as the effect is mounted.
+  // In view, both ways, for as long as the effect is mounted. An effect
+  // with no root, or a browser with no IntersectionObserver, counts as in
+  // view; a root counts as out of view until its observer first reports.
+  const observable = root !== null && typeof IntersectionObserver !== 'undefined';
+  const intersecting = !observable || (observed?.root === root && observed.intersecting);
   useEffect(() => {
-    if (!root || typeof IntersectionObserver === 'undefined') {
-      setIntersecting(true);
-      return;
-    }
+    if (!root || typeof IntersectionObserver === 'undefined') return;
     const observer = new IntersectionObserver(
       (entries) => {
         const entry = entries.at(-1);
-        if (entry) setIntersecting(entry.isIntersecting);
+        if (entry) setObserved({ root, intersecting: entry.isIntersecting });
       },
       { rootMargin },
     );
@@ -98,7 +113,7 @@ export function useEnhancementRuntime(options: RuntimeOptions = {}): Enhancement
   const status = resolveRuntime({
     mounted,
     osReduced: inputs.osReduced,
-    policy: boundary.policy,
+    policy,
     environmentMotion: boundary.motion,
     documentVisible: inputs.documentVisible,
     intersecting,
@@ -108,7 +123,7 @@ export function useEnhancementRuntime(options: RuntimeOptions = {}): Enhancement
   });
   const reduced = motionReduced({
     osReduced: inputs.osReduced,
-    policy: boundary.policy,
+    policy,
     environmentMotion: boundary.motion,
   });
   const eligible = useMemo(
@@ -121,14 +136,15 @@ export function useEnhancementRuntime(options: RuntimeOptions = {}): Enhancement
   // CSS animations below a root that isn't active pause with it.
   useEffect(() => {
     if (!(root instanceof HTMLElement || root instanceof SVGElement)) return;
-    if (status.state === 'active') delete root.dataset.activity;
-    else root.dataset.activity = 'paused';
+    if (status.state === 'active') root.removeAttribute('data-activity');
+    else root.setAttribute('data-activity', 'paused');
   }, [root, status.state]);
 
   return {
     ...status,
     eligible,
-    rootRef: setRoot,
+    inView: mounted && intersecting,
+    attachRoot: setRoot,
     fail: () => setFailed(true),
   };
 }

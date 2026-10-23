@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
-import { useMotionPreference } from '../motion';
+import { useCallback, useEffect, useRef } from 'react';
 import type { MotionPolicy } from '@portfolio/schema';
+import { useEnhancementRuntime, useFrameLoop } from '../runtime';
 
 interface WavePlaneCanvasProps {
   motionPreference?: MotionPolicy;
@@ -92,7 +92,10 @@ void main() {
  * Vertex-displaced wave plane drawn as a single full-screen WebGL2 fragment
  * shader. No three.js, no R3F — just a raw canvas with a custom shader.
  *
- * Reduced motion: renders one frame, no animation.
+ * It runs on the kit runtime: it draws one still frame once the page has
+ * mounted, and animates only while the runtime is active, so reduced motion
+ * keeps the still, and a hidden document or the visitor's pause holds the
+ * wave where it is. Without WebGL2 it shows a gradient and runs no loop.
  */
 export function WavePlaneCanvas({
   motionPreference = 'respect-os',
@@ -104,8 +107,23 @@ export function WavePlaneCanvas({
   frequency = 1.4,
   zIndex = 0,
 }: WavePlaneCanvasProps) {
-  const motion = useMotionPreference(motionPreference);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const runtime = useEnhancementRuntime({
+    motionPolicy: motionPreference,
+    requires: ['webgl2'],
+  });
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const { attachRoot } = runtime;
+  const attach = useCallback(
+    (node: HTMLCanvasElement | null) => {
+      canvasRef.current = node;
+      attachRoot(node);
+    },
+    [attachRoot],
+  );
+  // Draws the wave `elapsed` ms in, while a program is compiled.
+  const scene = useRef<((elapsed: number) => void) | null>(null);
+  // How far the wave has run, kept across pauses so it picks up where it stopped.
+  const elapsed = useRef(0);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -180,33 +198,38 @@ export function WavePlaneCanvas({
     gl.uniform3f(uB, colorB[0], colorB[1], colorB[2]);
     gl.uniform3f(uC, colorC[0], colorC[1], colorC[2]);
 
-    let raf = 0;
-    const start = performance.now();
-
-    function frame() {
-      const t = ((performance.now() - start) / 1000) * speed;
-      gl!.uniform1f(uTime, t);
+    function frame(ms: number) {
+      gl!.uniform1f(uTime, (ms / 1000) * speed);
       gl!.drawArrays(gl!.TRIANGLES, 0, 3);
-      if (motion === 'full') raf = requestAnimationFrame(frame);
     }
 
     resize();
     window.addEventListener('resize', resize);
-    frame();
+    frame(elapsed.current);
+    scene.current = frame;
 
     return () => {
-      cancelAnimationFrame(raf);
+      scene.current = null;
       window.removeEventListener('resize', resize);
       gl.deleteProgram(program);
       gl.deleteShader(vs);
       gl.deleteShader(fs);
       gl.deleteBuffer(buffer);
     };
-  }, [motion, colorA, colorB, colorC, speed, amplitude, frequency]);
+  }, [colorA, colorB, colorC, speed, amplitude, frequency]);
+
+  // Without WebGL2, nothing draws, so no loop runs at all.
+  useFrameLoop({ state: runtime.eligible ? runtime.state : 'static' }, (_, delta) => {
+    const draw = scene.current;
+    // A program that never compiled ends the loop.
+    if (!draw) return false;
+    elapsed.current += delta;
+    draw(elapsed.current);
+  });
 
   return (
     <canvas
-      ref={canvasRef}
+      ref={attach}
       aria-hidden="true"
       style={{
         position: 'fixed',

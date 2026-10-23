@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useSyncExternalStore } from 'react';
-import { useMotionPreference } from '../motion';
 import type { MotionPolicy } from '@portfolio/schema';
+import { useEnhancementRuntime, useFrameLoop } from '../runtime';
 
 const COARSE_POINTER_QUERY = '(pointer: coarse)';
 
@@ -35,12 +35,23 @@ interface MagneticCursorProps {
   hideSystemCursor?: boolean;
 }
 
+interface Pointer {
+  x: number;
+  y: number;
+  haloX: number;
+  haloY: number;
+  hovering: boolean;
+}
+
 /**
  * Custom cursor: a hard-edged dot tracking the pointer instantly, plus a
  * larger halo that lags behind with spring damping. Halo scales up over
  * interactive elements (a, button, [data-cursor-hover]).
  *
- * Hidden on touch devices and when motion preference resolves to `reduce`.
+ * Hidden on touch devices, under reduced motion, and until the page has
+ * mounted. It runs on the kit runtime, so it holds still while the document
+ * is hidden or the visitor paused motion. It follows the whole page, so it
+ * has no root of its own to go offscreen.
  */
 export function MagneticCursor({
   motionPreference = 'respect-os',
@@ -50,58 +61,59 @@ export function MagneticCursor({
   haloDamping = 0.18,
   hideSystemCursor = false,
 }: MagneticCursorProps) {
-  const motion = useMotionPreference(motionPreference);
+  const runtime = useEnhancementRuntime({ motionPolicy: motionPreference });
   const coarsePointer = useSyncExternalStore(
     subscribeCoarsePointer,
     hasCoarsePointer,
     serverHasCoarsePointer,
   );
-  const enabled = motion !== 'reduce' && !coarsePointer;
+  const enabled = runtime.state !== 'static' && !coarsePointer;
+  const active = enabled && runtime.state === 'active';
   const dotRef = useRef<HTMLDivElement>(null);
   const haloRef = useRef<HTMLDivElement>(null);
+  // Where the pointer is and where the halo trails it, kept across pauses.
+  const pointer = useRef<Pointer | null>(null);
 
   useEffect(() => {
-    if (!enabled) return;
-
-    let dotX = window.innerWidth / 2;
-    let dotY = window.innerHeight / 2;
-    let haloX = dotX;
-    let haloY = dotY;
-    let raf = 0;
-    let hovering = false;
-
+    if (!active) return;
+    if (!pointer.current) {
+      const x = window.innerWidth / 2;
+      const y = window.innerHeight / 2;
+      pointer.current = { x, y, haloX: x, haloY: y, hovering: false };
+    }
+    const at = pointer.current;
     function onMove(e: PointerEvent) {
-      dotX = e.clientX;
-      dotY = e.clientY;
+      at.x = e.clientX;
+      at.y = e.clientY;
       const target = e.target as HTMLElement | null;
-      hovering = !!target?.closest('a, button, [data-cursor-hover]');
+      at.hovering = !!target?.closest('a, button, [data-cursor-hover]');
     }
-
-    function tick() {
-      haloX += (dotX - haloX) * haloDamping;
-      haloY += (dotY - haloY) * haloDamping;
-      if (dotRef.current) {
-        dotRef.current.style.transform = `translate3d(${dotX}px, ${dotY}px, 0) translate(-50%, -50%)`;
-      }
-      if (haloRef.current) {
-        const scale = hovering ? 1.7 : 1;
-        haloRef.current.style.transform = `translate3d(${haloX}px, ${haloY}px, 0) translate(-50%, -50%) scale(${scale})`;
-        haloRef.current.style.opacity = hovering ? '0.85' : '0.5';
-      }
-      raf = requestAnimationFrame(tick);
-    }
-
     window.addEventListener('pointermove', onMove, { passive: true });
-    raf = requestAnimationFrame(tick);
+    return () => window.removeEventListener('pointermove', onMove);
+  }, [active]);
 
-    if (hideSystemCursor) document.documentElement.style.cursor = 'none';
-
+  useEffect(() => {
+    if (!enabled || !hideSystemCursor) return;
+    document.documentElement.style.cursor = 'none';
     return () => {
-      window.removeEventListener('pointermove', onMove);
-      cancelAnimationFrame(raf);
-      if (hideSystemCursor) document.documentElement.style.cursor = '';
+      document.documentElement.style.cursor = '';
     };
-  }, [enabled, haloDamping, hideSystemCursor]);
+  }, [enabled, hideSystemCursor]);
+
+  useFrameLoop({ state: enabled ? runtime.state : 'static' }, () => {
+    const at = pointer.current;
+    if (!at) return;
+    at.haloX += (at.x - at.haloX) * haloDamping;
+    at.haloY += (at.y - at.haloY) * haloDamping;
+    if (dotRef.current) {
+      dotRef.current.style.transform = `translate3d(${at.x}px, ${at.y}px, 0) translate(-50%, -50%)`;
+    }
+    if (haloRef.current) {
+      const scale = at.hovering ? 1.7 : 1;
+      haloRef.current.style.transform = `translate3d(${at.haloX}px, ${at.haloY}px, 0) translate(-50%, -50%) scale(${scale})`;
+      haloRef.current.style.opacity = at.hovering ? '0.85' : '0.5';
+    }
+  });
 
   if (!enabled) return null;
 

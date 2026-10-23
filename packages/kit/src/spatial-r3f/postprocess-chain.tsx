@@ -1,7 +1,6 @@
 'use client';
 
 import { EffectComposer, Bloom, Noise, Vignette } from '@react-three/postprocessing';
-import { useMotionPreference } from '../motion';
 import type { MotionPolicy } from '@portfolio/schema';
 
 interface PostprocessChainProps {
@@ -27,11 +26,10 @@ export function PostprocessChain({
   noise = 0.04,
   vignette = 0.45,
 }: PostprocessChainProps) {
-  const motion = useMotionPreference(motionPreference);
-  // Even in reduced mode we keep the static effects (bloom, vignette) — only
-  // the noise grain "shimmer" is naturally unsteady, but it animates per-frame
-  // anyway in the implementation, so we leave it on.
-  void motion;
+  // Every effect stays under reduced motion. The grain changes only when a
+  // frame renders, and in a SpatialCanvas frames render continuously only
+  // while its runtime is active, so a reduced or paused scene keeps one grain.
+  void motionPreference;
 
   return (
     <EffectComposer>

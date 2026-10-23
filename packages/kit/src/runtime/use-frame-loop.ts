@@ -17,9 +17,13 @@ export function useFrameLoop(
   callback: FrameCallback,
 ): void {
   const latest = useRef(callback);
-  latest.current = callback;
   const ended = useRef(false);
   const active = runtime.state === 'active';
+
+  // The loop calls the latest callback, so one that reads new props needs no new loop.
+  useEffect(() => {
+    latest.current = callback;
+  });
 
   useEffect(() => {
     if (!active || ended.current) return;

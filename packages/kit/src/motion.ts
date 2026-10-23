@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from 'react';
 import type { MotionPolicy } from '@portfolio/schema';
+import { documentInputs, SERVER_INPUTS, subscribeDocument } from './runtime/store';
 
 export type ResolvedMotion = 'reduce' | 'full';
 
@@ -29,21 +30,15 @@ export function MotionPolicyProvider({
   return createElement(MotionPolicyContext.Provider, { value: policy }, children);
 }
 
-const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)';
-
-function subscribeReducedMotion(onChange: () => void): () => void {
-  const mq = window.matchMedia(REDUCED_MOTION_QUERY);
-  mq.addEventListener('change', onChange);
-  return () => mq.removeEventListener('change', onChange);
+/** The policy the nearest MotionPolicyProvider gives, else `respect-os`. */
+export function useProvidedMotionPolicy(): MotionPolicy {
+  return useContext(MotionPolicyContext);
 }
 
-function osPrefersReducedMotion(): boolean {
-  return window.matchMedia(REDUCED_MOTION_QUERY).matches;
-}
-
-function serverPrefersReducedMotion(): boolean {
-  return false;
-}
+// The OS's preference comes from the kit runtime's one document store
+// (runtime/store.ts), so every hook and effect on the page reads the same value.
+const osPrefersReducedMotion = () => documentInputs().osReduced;
+const serverPrefersReducedMotion = () => SERVER_INPUTS.osReduced;
 
 /**
  * Resolve the effective motion mode for a session.
@@ -61,11 +56,16 @@ function serverPrefersReducedMotion(): boolean {
  * to `full` during SSR and hydration to avoid layout-shift (unless the policy
  * is `reduce`); the OS value takes over right after hydration and follows
  * later changes.
+ *
+ * This is the preference, not whether an effect may run now: an effect
+ * runs on useEnhancementRuntime from `@portfolio/kit/runtime`, which also
+ * pauses it while it's hidden, offscreen, or paused by the visitor, and
+ * keeps it static until the page has mounted.
  */
 export function useMotionPreference(policy?: MotionPolicy): ResolvedMotion {
   const provided = useContext(MotionPolicyContext);
   const osReduce = useSyncExternalStore(
-    subscribeReducedMotion,
+    subscribeDocument,
     osPrefersReducedMotion,
     serverPrefersReducedMotion,
   );

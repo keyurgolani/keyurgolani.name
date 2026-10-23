@@ -5,3 +5,4 @@ export { PostprocessChain } from './postprocess-chain';
 export { EnvironmentBoundary } from './environment-boundary';
 export { ScrollCameraRig } from './scroll-camera-rig';
 export { FloatingCard } from './floating-card';
+export { useSceneAnimates } from './scene-runtime';

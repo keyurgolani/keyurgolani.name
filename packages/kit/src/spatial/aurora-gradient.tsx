@@ -1,8 +1,8 @@
 'use client';
 
 import type { CSSProperties } from 'react';
-import { useMotionPreference } from '../motion';
 import type { MotionPolicy } from '@portfolio/schema';
+import { useEnhancementRuntime } from '../runtime';
 
 interface AuroraGradientProps {
   motionPreference?: MotionPolicy;
@@ -27,7 +27,10 @@ interface AuroraGradientProps {
  * stacked conic + radial gradients drifting with phase-offset keyframes. No
  * canvas, no shader, runs everywhere.
  *
- * Reduced motion freezes the layers in place.
+ * It runs on the kit runtime: the layers stand still on the server, until
+ * the page has mounted, and under reduced motion, and the drift pauses while
+ * the document is hidden, the backdrop is offscreen, or the visitor paused
+ * motion.
  */
 export function AuroraGradient({
   motionPreference = 'respect-os',
@@ -39,8 +42,10 @@ export function AuroraGradient({
   zIndex = 0,
   grain = 0.04,
 }: AuroraGradientProps) {
-  const motion = useMotionPreference(motionPreference);
-  const animate = motion === 'full';
+  const runtime = useEnhancementRuntime({ motionPolicy: motionPreference });
+  const { attachRoot } = runtime;
+  // Paused, the drift keeps its keyframes and its root's data-activity pauses them.
+  const animate = runtime.state !== 'static';
 
   const [c0, c1, c2, c3] = padColors(colors);
 
@@ -71,7 +76,7 @@ export function AuroraGradient({
   };
 
   return (
-    <div style={baseStyle} aria-hidden="true">
+    <div ref={attachRoot} style={baseStyle} aria-hidden="true">
       <div style={layerStyleA} />
       <div style={layerStyleB} />
       {grain > 0 ? (

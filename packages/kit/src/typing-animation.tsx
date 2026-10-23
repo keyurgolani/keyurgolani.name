@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { useMotionPreference } from './motion';
 import type { MotionPolicy } from '@portfolio/schema';
+import { useEnhancementRuntime } from './runtime';
 
 export interface TypingAnimationProps {
   /** Strings to cycle through. Empty array renders nothing. */
@@ -29,7 +29,12 @@ type Phase = 'typing' | 'pausing' | 'deleting';
 
 /**
  * Multi-text typing/deleting animation. Cycles forever through `texts`.
- * Reduced-motion users see the first text statically.
+ *
+ * It runs on the kit runtime. The server, a first client render, and
+ * reduced motion show the current text whole, so the page reads the same
+ * without JavaScript; once the runtime is active it holds that text for its
+ * pause, then deletes it and types the next. It stops where it is while the
+ * document is hidden, the text is offscreen, or the visitor paused motion.
  *
  * The component renders raw text into a `<span aria-live="polite">` plus
  * an optional caret span. Variants restyle via the `className` prop and
@@ -46,12 +51,16 @@ export function TypingAnimation({
   motionPreference,
   caret = true,
 }: TypingAnimationProps) {
-  const [displayed, setDisplayed] = useState('');
-  const [phase, setPhase] = useState<Phase>('typing');
-  const [textIndex, setTextIndex] = useState(0);
-  const reduce = useMotionPreference(motionPreference) === 'reduce';
-
   const normalized = useMemo(() => (texts.length > 0 ? texts : ['']), [texts]);
+  // It starts with the first text typed out, as the server rendered it.
+  const [displayed, setDisplayed] = useState(() => normalized[0] ?? '');
+  const [phase, setPhase] = useState<Phase>('pausing');
+  const [textIndex, setTextIndex] = useState(0);
+  const runtime = useEnhancementRuntime({ motionPolicy: motionPreference });
+  const { attachRoot } = runtime;
+  const still = runtime.state === 'static';
+  const active = runtime.state === 'active';
+
   const current = normalized[textIndex] ?? '';
   const currentPause =
     pauseDurations && pauseDurations[textIndex] !== undefined
@@ -59,7 +68,7 @@ export function TypingAnimation({
       : pauseDuration;
 
   useEffect(() => {
-    if (reduce || normalized.length === 0) return;
+    if (!active || normalized.length === 0) return;
     let timeoutId: ReturnType<typeof setTimeout>;
 
     if (phase === 'typing') {
@@ -94,15 +103,16 @@ export function TypingAnimation({
     currentPause,
     typingSpeed,
     deletingSpeed,
-    reduce,
+    active,
     normalized.length,
   ]);
 
   if (texts.length === 0) return null;
-  const visible = reduce ? current : displayed;
+  const visible = still ? current : displayed;
 
   return (
     <span
+      ref={attachRoot}
       className={className}
       role="status"
       aria-live="polite"

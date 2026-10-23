@@ -3,7 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
-import { useMotionPreference } from '../motion';
+import { useSceneAnimates } from './scene-runtime';
 import type { MotionPolicy } from '@portfolio/schema';
 
 interface ScrollCameraRigProps {
@@ -18,8 +18,8 @@ interface ScrollCameraRigProps {
 
 /**
  * Drives the camera along a Catmull-Rom curve based on document scroll
- * progress. Used for "scroll IS a camera dolly" variants. Reduced motion:
- * camera locks at the first waypoint.
+ * progress. Used for "scroll IS a camera dolly" variants. Until the page has
+ * mounted, and under reduced motion, the camera locks at the first waypoint.
  */
 export function ScrollCameraRig({
   motionPreference = 'respect-os',
@@ -27,7 +27,8 @@ export function ScrollCameraRig({
   lookAts,
   smoothing = 0.5,
 }: ScrollCameraRigProps) {
-  const motion = useMotionPreference(motionPreference);
+  // In a SpatialCanvas, useFrame runs only while its runtime is active.
+  const animate = useSceneAnimates(motionPreference);
   const { camera } = useThree();
   const progressRef = useRef(0);
 
@@ -53,7 +54,7 @@ export function ScrollCameraRig({
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    if (motion === 'reduce') {
+    if (!animate) {
       const start = positions[0];
       if (start) camera.position.set(start[0], start[1], start[2]);
       const lookStart = lookAts?.[0];
@@ -72,10 +73,10 @@ export function ScrollCameraRig({
     onScroll();
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
-  }, [camera, motion, positions, lookAts]);
+  }, [camera, animate, positions, lookAts]);
 
   useFrame(() => {
-    if (motion === 'reduce') return;
+    if (!animate) return;
     const t = progressRef.current;
     const p = positionCurve.current.getPointAt(t);
     camera.position.lerp(p, 0.08);

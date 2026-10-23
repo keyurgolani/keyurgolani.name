@@ -74,13 +74,13 @@ export function EnhancementIsland({
 }: EnhancementIslandProps) {
   const declared = input.capabilities.enhancements.find((entry) => entry.id === id);
   const runtime = useEnhancementRuntime({ requires: declared?.requires ?? [], rootMargin });
+  const { attachRoot } = runtime;
   const [started, setStarted] = useState(false);
   const [failed, setFailed] = useState(false);
   const ready = runtime.state === 'active' && runtime.eligible;
 
-  useEffect(() => {
-    if (ready && !started) setStarted(true);
-  }, [ready, started]);
+  // Once started, it stays started: a pause doesn't unload the enhancement.
+  if (ready && !started) setStarted(true);
 
   const waiting = !started && !failed;
   useEffect(() => {
@@ -93,7 +93,7 @@ export function EnhancementIsland({
   const live = started && !failed && !off;
   return (
     <div
-      ref={runtime.rootRef}
+      ref={attachRoot}
       className={className}
       data-enhancement-island={id}
       data-island={failed ? 'failed' : live ? 'live' : 'markup'}

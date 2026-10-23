@@ -39,6 +39,7 @@ function shader(gl: WebGL2RenderingContext, type: number, source: string): WebGL
 export function ShaderStage(): ReactElement {
   const canvas = useRef<HTMLCanvasElement>(null);
   const runtime = useEnhancementRuntime({ requires: ['webgl2'] });
+  const { attachRoot } = runtime;
   const scene = useRef<{ gl: WebGL2RenderingContext; time: WebGLUniformLocation | null } | null>(
     null,
   );
@@ -82,7 +83,7 @@ export function ShaderStage(): ReactElement {
   });
 
   return (
-    <div className="fvm-stage" ref={runtime.rootRef} aria-hidden="true">
+    <div className="fvm-stage" ref={attachRoot} aria-hidden="true">
       <canvas
         ref={canvas}
         className="fvm-canvas"

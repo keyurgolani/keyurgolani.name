@@ -1,8 +1,8 @@
 'use client';
 
 import type { CSSProperties } from 'react';
-import { useMotionPreference } from '../motion';
 import type { MotionPolicy } from '@portfolio/schema';
+import { useEnhancementRuntime } from '../runtime';
 
 interface ScanlineOverlayProps {
   motionPreference?: MotionPolicy;
@@ -31,7 +31,10 @@ interface ScanlineOverlayProps {
  *   3. Optional vignette (radial dark gradient at edges)
  *   4. Optional tint
  *
- * The scanlines slowly scroll vertically. Reduced motion stops the scroll.
+ * The scanlines slowly scroll vertically, on the kit runtime: they stand
+ * still on the server, until the page has mounted, and under reduced motion,
+ * and the scroll pauses while the document is hidden or the visitor paused
+ * motion.
  */
 export function ScanlineOverlay({
   motionPreference = 'respect-os',
@@ -44,8 +47,10 @@ export function ScanlineOverlay({
   opacity = 1,
   zIndex = 2,
 }: ScanlineOverlayProps) {
-  const motion = useMotionPreference(motionPreference);
-  const animate = motion === 'full';
+  const runtime = useEnhancementRuntime({ motionPolicy: motionPreference });
+  const { attachRoot } = runtime;
+  // Paused, the scroll keeps its keyframes and the overlay's data-activity pauses them.
+  const animate = runtime.state !== 'static';
 
   const overlayStyle: CSSProperties = {
     position: 'fixed',
@@ -60,7 +65,7 @@ export function ScanlineOverlay({
 
   return (
     <>
-      <div aria-hidden="true" style={overlayStyle} />
+      <div ref={attachRoot} aria-hidden="true" style={overlayStyle} />
       {vignette ? (
         <div
           aria-hidden="true"

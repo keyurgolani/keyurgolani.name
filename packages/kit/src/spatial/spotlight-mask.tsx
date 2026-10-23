@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
-import { useMotionPreference } from '../motion';
+import { useCallback, useEffect, useRef } from 'react';
 import type { MotionPolicy } from '@portfolio/schema';
+import { useEnhancementRuntime, useFrameLoop } from '../runtime';
 
 interface SpotlightMaskProps {
   motionPreference?: MotionPolicy;
@@ -22,9 +22,11 @@ interface SpotlightMaskProps {
  * Fullscreen mask that follows the pointer with a circular spotlight cutout.
  * Everything outside the spotlight darkens to `shade × intensity`.
  *
- * Uses CSS custom properties (--mx, --my) updated from a rAF-throttled
- * pointer handler so the gradient stays in sync with the cursor without
- * causing reflows.
+ * Uses CSS custom properties (--mx, --my) updated once a frame so the
+ * gradient stays in sync with the cursor without causing reflows. It runs on
+ * the kit runtime: under reduced motion it takes `reducedFallback`, a touch
+ * screen holds it at the center, and it holds still while the document is
+ * hidden or the visitor paused motion.
  */
 export function SpotlightMask({
   motionPreference = 'respect-os',
@@ -34,65 +36,63 @@ export function SpotlightMask({
   shade = '#000',
   reducedFallback = 'static-center',
 }: SpotlightMaskProps) {
-  const motion = useMotionPreference(motionPreference);
-  const ref = useRef<HTMLDivElement>(null);
+  const runtime = useEnhancementRuntime({
+    motionPolicy: motionPreference,
+    requires: ['fine-pointer'],
+  });
+  const ref = useRef<HTMLDivElement | null>(null);
+  const { attachRoot } = runtime;
+  const attach = useCallback(
+    (node: HTMLDivElement | null) => {
+      ref.current = node;
+      attachRoot(node);
+    },
+    [attachRoot],
+  );
+  const reduced = runtime.state === 'static' && runtime.reason === 'reduced';
+  const follows = runtime.eligible && runtime.state === 'active';
+  // Where the pointer is and where the spotlight trails it, kept across pauses.
+  const pointer = useRef<{ x: number; y: number; curX: number; curY: number } | null>(null);
+
+  // Reduced motion lifts the mask for 'visible'; otherwise it stays at the
+  // center the CSS falls back to, or where the spotlight last was.
+  useEffect(() => {
+    const element = ref.current;
+    if (!element || !reduced || reducedFallback !== 'visible') return;
+    element.style.opacity = '0';
+    return () => {
+      element.style.opacity = '';
+    };
+  }, [reduced, reducedFallback]);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    if (motion === 'reduce') {
-      if (!ref.current) return;
-      if (reducedFallback === 'visible') {
-        ref.current.style.opacity = '0';
-      } else {
-        ref.current.style.setProperty('--mx', '50%');
-        ref.current.style.setProperty('--my', '50%');
-      }
-      return;
+    if (!follows) return;
+    if (!pointer.current) {
+      const x = window.innerWidth / 2;
+      const y = window.innerHeight / 2;
+      pointer.current = { x, y, curX: x, curY: y };
     }
-
-    const isTouch = window.matchMedia('(pointer: coarse)').matches;
-    if (isTouch) {
-      if (ref.current) {
-        ref.current.style.setProperty('--mx', '50%');
-        ref.current.style.setProperty('--my', '50%');
-      }
-      return;
-    }
-
-    let targetX = window.innerWidth / 2;
-    let targetY = window.innerHeight / 2;
-    let curX = targetX;
-    let curY = targetY;
-    let raf = 0;
-
+    const at = pointer.current;
     function onMove(e: PointerEvent) {
-      targetX = e.clientX;
-      targetY = e.clientY;
+      at.x = e.clientX;
+      at.y = e.clientY;
     }
-
-    function tick() {
-      curX += (targetX - curX) * damping;
-      curY += (targetY - curY) * damping;
-      if (ref.current) {
-        ref.current.style.setProperty('--mx', `${curX}px`);
-        ref.current.style.setProperty('--my', `${curY}px`);
-      }
-      raf = requestAnimationFrame(tick);
-    }
-
     window.addEventListener('pointermove', onMove, { passive: true });
-    raf = requestAnimationFrame(tick);
+    return () => window.removeEventListener('pointermove', onMove);
+  }, [follows]);
 
-    return () => {
-      window.removeEventListener('pointermove', onMove);
-      cancelAnimationFrame(raf);
-    };
-  }, [motion, damping, reducedFallback]);
+  useFrameLoop({ state: runtime.eligible ? runtime.state : 'static' }, () => {
+    const at = pointer.current;
+    if (!at || !ref.current) return;
+    at.curX += (at.x - at.curX) * damping;
+    at.curY += (at.y - at.curY) * damping;
+    ref.current.style.setProperty('--mx', `${at.curX}px`);
+    ref.current.style.setProperty('--my', `${at.curY}px`);
+  });
 
   return (
     <div
-      ref={ref}
+      ref={attach}
       aria-hidden="true"
       style={{
         position: 'fixed',

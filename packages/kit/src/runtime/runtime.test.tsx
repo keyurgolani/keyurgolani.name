@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import * as React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { VariantRenderInput } from '@portfolio/variant-contract';
@@ -138,6 +140,7 @@ test('an island renders its server markup on the server, in an element its runti
   } as unknown as VariantRenderInput;
   const html = renderToStaticMarkup(
     <EnhancementIsland input={input} id="orbit" className="slot">
+      {/* eslint-disable-next-line @next/next/no-img-element -- a server-rendered still, as a variant gives it */}
       <img src="/still.png" alt="A still of the orbit" width={4} height={3} />
     </EnhancementIsland>,
   );
@@ -154,4 +157,26 @@ test('only the runtime asks the browser about reduced motion or runs a frame loo
   assert.match(store, /prefers-reduced-motion: reduce/);
   const loop = readFileSync(new URL('./use-frame-loop.ts', import.meta.url), 'utf8');
   assert.match(loop, /requestAnimationFrame\(tick\)/);
+
+  const kit = fileURLToPath(new URL('..', import.meta.url));
+  const own: string[] = [];
+  for (const file of readdirSync(kit, { recursive: true, encoding: 'utf8' })) {
+    if (!/\.tsx?$/.test(file) || /\.test\.tsx?$/.test(file) || file.startsWith('test-support')) {
+      continue;
+    }
+    const source = readFileSync(path.join(kit, file), 'utf8');
+    const rel = file.split(path.sep).join('/');
+    if (rel !== 'runtime/store.ts' && /\(prefers-reduced-motion/.test(source)) {
+      own.push(`${rel} asks about reduced motion`);
+    }
+    if (rel !== 'runtime/use-frame-loop.ts' && /requestAnimationFrame\(/.test(source)) {
+      own.push(`${rel} runs a frame loop`);
+    }
+    if (/setInterval\(/.test(source)) own.push(`${rel} runs an interval`);
+    // An infinite CSS animation runs only once its runtime isn't static.
+    if (/\binfinite\b/.test(source) && !/useEnhancementRuntime\(/.test(source)) {
+      own.push(`${rel} has an infinite animation off the runtime`);
+    }
+  }
+  assert.deepEqual(own, []);
 });
