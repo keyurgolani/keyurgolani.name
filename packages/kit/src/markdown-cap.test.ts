@@ -80,9 +80,10 @@ const FLOOR_MS = 4;
 const CEILING_MS = 1000;
 // A 1 MiB document of the field slowest for its size renders in about 27
 // times a benign document on the development machine and has reached 41 on
-// a shared runner. Without the inline-mark limit it takes about 400 times,
-// so the bound sits well away from both.
+// a shared runner. Without the inline-mark limit it takes hundreds of times
+// (400 and 670 in two runs), so the bound sits well away from both.
 const DOCUMENT_RATIO = 150;
+const VALIDATE_RATIO = 20;
 const bound = (base: number) => Math.min(MAX_RATIO * Math.max(base, FLOOR_MS), CEILING_MS);
 
 const RENDER = { block: renderMarkdown, inline: renderInlineMarkdown } as const;
@@ -240,10 +241,16 @@ test('a 1 MiB document of the field the search finds slowest for its size valida
   const { validated, rendered } = timeOf(worst);
   const after = timeOf(documentOf(BENIGN));
   const benign = (before.rendered + after.rendered) / 2;
+  const benignValidated = (before.validated + after.validated) / 2;
   t.diagnostic(
-    `${worst.works.length} fields of ${slowest!.name}: validated in ${validated.toFixed(0)} ms, rendered in ${rendered.toFixed(0)} ms (benign ${before.rendered.toFixed(0)} and ${after.rendered.toFixed(0)} ms)`,
+    `${worst.works.length} fields of ${slowest!.name}: validated in ${validated.toFixed(0)} ms (benign ${benignValidated.toFixed(0)}), rendered in ${rendered.toFixed(0)} ms (benign ${before.rendered.toFixed(0)} and ${after.rendered.toFixed(0)} ms)`,
   );
-  assert.ok(validated < 5000, 'validation is bounded');
+  // Validation is one linear pass either way, so the worst document validates
+  // in about the benign one's time.
+  assert.ok(
+    validated < VALIDATE_RATIO * Math.max(benignValidated, FLOOR_MS),
+    `validation is bounded: ${validated.toFixed(0)} ms against benign ${benignValidated.toFixed(0)} ms`,
+  );
   const limit = DOCUMENT_RATIO * Math.max(benign, FLOOR_MS);
   assert.ok(
     rendered < limit,

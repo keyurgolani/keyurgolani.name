@@ -285,7 +285,6 @@ test('every committed fixture, profession pair, and example keeps every string a
   }
 });
 
-/** The fewest milliseconds `run` takes in five tries. */
 /**
  * How many times longer `large` takes than `small`: the fastest of five
  * interleaved rounds of each, after one untimed run of each. Timing both in
