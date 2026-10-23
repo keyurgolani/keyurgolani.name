@@ -109,6 +109,22 @@ async function onFreePort(attempt, firstPort) {
 }
 
 /**
+ * Copies a tree as cpSync() does, and once more, from scratch, when a file
+ * vanishes mid-copy: registry generation in another process can replace
+ * public/'s compiled files while a harness starts, removing an outdated one
+ * between the copy's listing and its read.
+ */
+export function copyTree(from, to, options, copy = cpSync) {
+  try {
+    copy(from, to, options);
+  } catch (error) {
+    if (error?.code !== 'ENOENT') throw error;
+    rmSync(to, { recursive: true, force: true });
+    copy(from, to, options);
+  }
+}
+
+/**
  * @param {object} [options]
  * @param {Record<string, string>} [options.env] extra server environment
  * @param {string | null} [options.portfolio] document copied into the source directory
@@ -168,11 +184,11 @@ export async function startApp({
   }
   // The image's layout: the standalone tree plus static assets and public/.
   if (!dev) {
-    cpSync(standalone, appDir, { recursive: true, verbatimSymlinks: true });
-    cpSync(path.join(web, '.next', 'static'), path.join(appDir, 'apps', 'web', '.next', 'static'), {
+    copyTree(standalone, appDir, { recursive: true, verbatimSymlinks: true });
+    copyTree(path.join(web, '.next', 'static'), path.join(appDir, 'apps', 'web', '.next', 'static'), {
       recursive: true,
     });
-    cpSync(path.join(web, 'public'), path.join(appDir, 'apps', 'web', 'public'), {
+    copyTree(path.join(web, 'public'), path.join(appDir, 'apps', 'web', 'public'), {
       recursive: true,
     });
   }

@@ -435,42 +435,92 @@ const SERVED_LABELS: Readonly<Record<ServedKind, { file: string; writer: string 
   asset: { file: 'an asset file', writer: "no variant's stylesheet named" },
 };
 
+/** How writeServedFiles() stages what it writes. */
+export interface ServedWriteOptions {
+  /**
+   * The directory each file is written to before it's renamed into `dir`:
+   * one outside what the host serves, on the same filesystem as `dir`, so the
+   * rename is atomic and a copy of the served tree, such as the harness's,
+   * never meets a temporary file that vanishes under it. A sibling of `dir`
+   * by default.
+   */
+  readonly staging?: string;
+}
+
+/** A staged file's name: the file's, then the pid of the process writing it. */
+const STAGED = /^(.*)\.(\d+)\.tmp$/;
+
+/** Whether the process with this pid is gone, so a file it staged is a leftover. */
+function gone(pid: number): boolean {
+  if (!Number.isSafeInteger(pid) || pid < 1) return true;
+  if (pid === process.pid) return false;
+  try {
+    process.kill(pid, 0);
+    return false;
+  } catch (error) {
+    // EPERM: it runs, as another user.
+    return (error as NodeJS.ErrnoException).code !== 'EPERM';
+  }
+}
+
 /**
  * Writes the pack files into `dir` the way writeRegistry() writes its own,
  * and removes every other pack file there (writeServedFiles()).
  */
-export function writePackFiles(dir: string, files: readonly PackFile[]): PackWriteResult {
-  return writeServedFiles(dir, files, 'pack');
+export function writePackFiles(
+  dir: string,
+  files: readonly PackFile[],
+  options: ServedWriteOptions = {},
+): PackWriteResult {
+  return writeServedFiles(dir, files, 'pack', options);
 }
 
 /**
- * Writes `files` into `dir`, a directory of `kind`'s, the way writeRegistry()
- * writes its own, and removes every other file of that kind there, so a
- * build only ever serves the files of what it registers: a fixture's never
- * outlive the build that admitted it. Anything else in `dir` stops it before
- * it writes, so it can never empty a directory it doesn't own.
+ * Writes `files` into `dir`, a directory of `kind`'s, through a temporary
+ * file in `options.staging` renamed into place, and removes every other
+ * file of that kind there, so a build only ever serves the files of what it
+ * registers: a fixture's never outlive the build that admitted it. Anything
+ * else in `dir` stops it before it writes, so it can never empty a directory
+ * it doesn't own. Other runs can write the same directories at once, as
+ * tests and a harness start do, so it removes only what's its own to
+ * remove: an outdated file of `kind`, and a temporary file whose writer is
+ * gone. Another run's temporary file stays, wherever it is.
  */
 export function writeServedFiles(
   dir: string,
   files: readonly ServedFile[],
   kind: ServedKind,
+  { staging = path.join(path.dirname(dir), `.${path.basename(dir)}.staging`) }: ServedWriteOptions = {},
 ): PackWriteResult {
   const pattern = SERVED_KINDS[kind];
-  const leftover = (name: string) => {
-    const staged = /^(.*)\.\d+\.tmp$/.exec(name);
-    return staged !== null && pattern.test(staged[1]!);
+  const staged = (name: string) => {
+    const match = STAGED.exec(name);
+    return match !== null && pattern.test(match[1]!) ? Number(match[2]) : undefined;
   };
   const label = SERVED_LABELS[kind];
   const misnamed = files.find(({ name }) => !pattern.test(name));
   if (misnamed) throw new Error(`${misnamed.name} isn't ${label.file}'s name.`);
+  if (path.resolve(staging) === path.resolve(dir)) {
+    throw new Error(`${dir} can't be its own staging directory.`);
+  }
   fs.mkdirSync(dir, { recursive: true });
+  fs.mkdirSync(staging, { recursive: true });
   const names = new Set(files.map(({ name }) => name));
-  const stale = fs.readdirSync(dir).filter((name) => !names.has(name));
-  const foreign = stale.filter((name) => !pattern.test(name) && !leftover(name));
+  const others = fs.readdirSync(dir).filter((name) => !names.has(name));
+  const foreign = others.filter((name) => !pattern.test(name) && staged(name) === undefined);
   if (foreign.length > 0) {
     throw new Error(
       `${dir} holds ${foreign.join(', ')}, which ${label.writer}, so nothing was written there.`,
     );
+  }
+  // A temporary file in `dir` is an earlier release's, which staged there.
+  const stale = others.filter((name) => {
+    const pid = staged(name);
+    return pid === undefined || gone(pid);
+  });
+  for (const name of fs.readdirSync(staging)) {
+    const pid = staged(name);
+    if (pid !== undefined && gone(pid)) fs.rmSync(path.join(staging, name), { force: true });
   }
   const written: string[] = [];
   const unchanged: string[] = [];
@@ -487,7 +537,7 @@ export function writeServedFiles(
       unchanged.push(file.name);
       continue;
     }
-    const temporary = `${target}.${process.pid}.tmp`;
+    const temporary = path.join(staging, `${file.name}.${process.pid}.tmp`);
     fs.writeFileSync(temporary, file.bytes);
     fs.renameSync(temporary, target);
     written.push(file.name);

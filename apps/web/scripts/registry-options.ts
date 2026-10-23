@@ -56,6 +56,12 @@ export const PACK_OUT = path.join(HOST, 'public', '_portfolio', 'pack');
 export const VARIANT_OUT = path.join(HOST, 'public', '_portfolio', 'variant');
 /** The images those stylesheets name, which git ignores and the host serves at /_portfolio/asset/. */
 export const ASSET_OUT = path.join(HOST, 'public', '_portfolio', 'asset');
+/**
+ * Where those three stage each file before it's renamed into place: outside
+ * public/, so a copy of public/, as a harness start makes, never meets a
+ * temporary file, and on the same filesystem, so the rename stays atomic.
+ */
+export const STAGING_OUT = path.join(HOST, 'node_modules', '.cache', 'portfolio-served');
 /** Each variant's experience segment (#6), which git ignores and Next serves at /_experience/<id>. */
 export const EXPERIENCE_OUT = path.join(HOST, 'src', 'app', '(site)', '%5Fexperience');
 
@@ -199,9 +205,15 @@ export async function generateRegistry(
   const served = modulesOnly
     ? undefined
     : {
-        packs: writeServedFiles(PACK_OUT, packs, 'pack'),
-        variants: writeServedFiles(VARIANT_OUT, variants, 'variant'),
-        assets: writeServedFiles(ASSET_OUT, assets, 'asset'),
+        packs: writeServedFiles(PACK_OUT, packs, 'pack', {
+          staging: path.join(STAGING_OUT, 'pack'),
+        }),
+        variants: writeServedFiles(VARIANT_OUT, variants, 'variant', {
+          staging: path.join(STAGING_OUT, 'variant'),
+        }),
+        assets: writeServedFiles(ASSET_OUT, assets, 'asset', {
+          staging: path.join(STAGING_OUT, 'asset'),
+        }),
       };
   return {
     ...generated,
