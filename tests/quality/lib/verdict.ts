@@ -16,7 +16,12 @@
 //   with one that isn't its own: a cell test's planned reason on its
 //   engine, or a visual test's VISUAL_SKIP.
 // - target-without-results: a registered composition or surface got no
-//   result: none of its tests collected, or every one skipped.
+//   result: none of its tests collected, or every one skipped. Perf tests
+//   don't count here: a target needs a cell test of its own.
+// - perf-coverage: a planned perf cell's test (perf.spec.ts, #11's 11-3)
+//   didn't run exactly once on each engine, a perf test ran that the plan
+//   has no perf cell for, or a target has no perf cell. It runs when the
+//   plan names its perf cells, as run.ts's and plan.json's do.
 // - unchecked-cell: a cell or visual test passed without every check its
 //   kind runs.
 // - tests-failed, run-errors: a test failed, or something outside a test
@@ -26,14 +31,14 @@
 //   before the scrub, so the scan proved nothing.
 //
 // A sharded run holds only some of the tests, so the checks that need all
-// of them (the plan's coverage, empty projects, the canary probe, and
-// targets with no test) skip there; merging the shards' verdicts is #11's
+// of them (the plan's coverage, empty projects, the canary probe, targets
+// with no test, and perf cells that didn't run) skip there; merging the shards' verdicts is #11's
 // Slice 4. The checks that need a collected test skip when there's none,
 // since zero-tests already fails it. Each failure names its rule, and
 // run.ts writes it as a failure record.
 
 import type { Plan, PlannedTest } from '../cells';
-import { isReason, KIND_CHECKS, type TestKind } from './checks';
+import { isReason, KIND_CHECKS, PERF_KIND, type TestKind } from './checks';
 import type { Summary, SummaryTest } from '../reporter';
 import { VISUAL_SKIP } from './visual';
 
@@ -53,8 +58,20 @@ export interface ArtifactHit {
   readonly canary: string;
 }
 
+/** A planned perf cell, as plan.json and the verdict name one (lib/perf/plan.ts). */
+export interface PlannedPerf {
+  readonly cell: string;
+  /** kind:id of the composition or surface it stands for. */
+  readonly target: string;
+  readonly tier: string;
+}
+
 export interface VerdictInput {
-  readonly plan: Pick<Plan, 'targets'> & { readonly tests: readonly VerdictTest[] };
+  readonly plan: Pick<Plan, 'targets'> & {
+    readonly tests: readonly VerdictTest[];
+    /** The perf cells, when the plan has them: perf-coverage holds the run to them. */
+    readonly perf?: readonly PlannedPerf[];
+  };
   /** The engines the run plans, each of which runs every planned test once. */
   readonly engines: readonly string[];
   readonly summary: Summary | null;
@@ -186,7 +203,7 @@ export function judge({ plan, engines, summary, missingBrowsers, canary }: Verdi
 
   for (const target of plan.targets) {
     const key = `${target.kind}:${target.id}`;
-    const own = tests.filter((test) => test.target === key);
+    const own = tests.filter((test) => test.target === key && test.kind !== PERF_KIND);
     if (own.length === 0) {
       // A shard holds only some tests; the merged shards answer for the rest.
       if (!sharded)
@@ -200,6 +217,8 @@ export function judge({ plan, engines, summary, missingBrowsers, canary }: Verdi
       );
     }
   }
+
+  if (plan.perf) failures.push(...perfCoverage(plan.perf, plan.targets, engines, summary));
 
   for (const test of tests) {
     if (!test.kind || test.status !== 'passed') continue;
@@ -244,4 +263,42 @@ export function judge({ plan, engines, summary, missingBrowsers, canary }: Verdi
     flaky: tests.filter((test) => test.outcome === 'flaky').map((test) => test.title),
     counts,
   };
+}
+
+/**
+ * perf-coverage: each perf cell's test ran exactly once on each engine,
+ * every perf test that ran is a perf cell's, and every target has one. A
+ * shard holds only some of them, so only the repeats and strays count there.
+ */
+export function perfCoverage(
+  perf: readonly PlannedPerf[],
+  targets: Plan['targets'],
+  engines: readonly string[],
+  summary: Pick<Summary, 'tests' | 'shard'>,
+): Failure[] {
+  const failures: Failure[] = [];
+  const fail = (message: string) => failures.push({ rule: 'perf-coverage', message });
+  const sharded = summary.shard !== null;
+  for (const target of targets) {
+    const key = `${target.kind}:${target.id}`;
+    if (!perf.some((each) => each.target === key)) {
+      fail(`${key} has no representative cell, so nothing measures its performance.`);
+    }
+  }
+  const ran = summary.tests.filter((test) => test.kind === PERF_KIND);
+  for (const test of ran) {
+    if (!perf.some((each) => each.cell === test.cell)) {
+      fail(`${test.title} ran, and no perf cell is ${test.cell}.`);
+    }
+  }
+  for (const { cell } of perf) {
+    for (const engine of engines) {
+      const count = ran.filter((test) => test.cell === cell && test.engine === engine).length;
+      if (count > 1) fail(`The perf test of ${cell} ran ${count} times on ${engine}, not once.`);
+      else if (count === 0 && !sharded) {
+        fail(`The perf test of ${cell} is planned on ${engine}, and didn't run.`);
+      }
+    }
+  }
+  return failures;
 }

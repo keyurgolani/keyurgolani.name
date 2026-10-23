@@ -38,6 +38,7 @@ import {
   KNOWN_BAD_WORKFLOWS,
   KNOWN_GOOD_WORKFLOWS,
 } from '../lib/workflow-fixtures';
+import { PERF_BROWSER_CASES } from './perf-browser-cases';
 import { PERFORMANCE_CASES } from './perf-cases';
 import { RUNNER_CASES } from './runner-cases';
 
@@ -413,4 +414,5 @@ export const META_CASES: readonly MetaCase[] = [
   ...FIXTURE_GATE_CASES,
   ...RUNNER_CASES,
   ...PERFORMANCE_CASES,
+  ...PERF_BROWSER_CASES,
 ];

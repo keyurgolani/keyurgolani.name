@@ -13,6 +13,9 @@ export type VisualCheck = (typeof VISUAL_CHECKS)[number];
 export const PERF_CHECKS = ['status', 'lcp', 'static', 'timing'] as const;
 export type PerfCheck = (typeof PERF_CHECKS)[number];
 
+/** The test kind perf.spec.ts's tests carry. */
+export const PERF_KIND = 'perf';
+
 /** The annotation a test lists the checks it ran in. */
 export const CHECKS_ANNOTATION = 'quality-checks';
 

@@ -11,8 +11,15 @@ import { KIND_CHECKS } from '../checks';
 import { GOOD_RUN } from '../../meta/perf-cases';
 import type { SummaryTest } from '../../reporter';
 import { budgetResults, BUDGETS_GATED_BY } from './budgets';
-import { cumulativeShift, LAB_VIEWPORT, PERF_PROBE, totalBlockingTime } from './measure';
-import { PERF_KIND, perfCells, perfCoverage } from './plan';
+import {
+  cumulativeShift,
+  inServerHtml,
+  LAB_VIEWPORT,
+  PERF_PROBE,
+  totalBlockingTime,
+} from './measure';
+import { PERF_KIND, perfCells, plannedPerf } from './plan';
+import { judge, perfCoverage } from '../verdict';
 import {
   ceilingFor,
   median,
@@ -36,6 +43,7 @@ const STILL: PerfSample['static'] = {
   status: 200,
   lcp: GOOD_RUN.lcp,
   canvasLed: false,
+  reducedMotion: true,
   frameCallbacks: 0,
   layoutCount: 0,
 };
@@ -111,6 +119,26 @@ test('the deterministic rules: an LCP entry on every load, a canvas-led LCP elem
     rules({ static: { ...STILL, frameCallbacks: 1, layoutCount: 2 }, runs: five() }),
     ['frame-callbacks reduced-motion', 'layout-count reduced-motion'],
   );
+  assert.deepEqual(rules({ static: { ...STILL, reducedMotion: false }, runs: five() }), [
+    'static-emulation reduced-motion',
+  ]);
+  // A canvas-led load needs a server-rendered poster or headline, of at least the floor's share.
+  const led = (lcp: Partial<NonNullable<PerfRun['lcp']>>) =>
+    rules({
+      static: STILL,
+      runs: five({ ...GOOD_RUN, canvasLed: true, lcp: { ...GOOD_RUN.lcp!, ...lcp } }),
+    });
+  assert.deepEqual(led({}), []);
+  assert.deepEqual(led({ kind: 'image', tag: 'img' }), []);
+  assert.deepEqual(led({ share: thresholds.vitals.canvasLcpMinShare }), []);
+  for (const bad of [
+    { kind: 'text' as const },
+    { kind: 'background' as const },
+    { serverRendered: false },
+    { share: thresholds.vitals.canvasLcpMinShare - 0.001 },
+  ]) {
+    assert.deepEqual(led(bad), ['lcp-element default'], JSON.stringify(bad));
+  }
   // The window and the limit are the thresholds file's.
   const looser = {
     ...thresholds,
@@ -216,11 +244,13 @@ test('perf coverage fails a perf cell that ran twice or not at all, one the plan
     registrations: await loadRegistrations(),
     mode: 'pr',
   });
-  const ids = perfCells(plan).map((cell) => cell.id);
-  const all = ids.map((id) => perfSummaryTest(id));
-  assert.deepEqual(perfCoverage(plan, ['chromium'], { tests: all, shard: null }), []);
-  const rules = (tests: SummaryTest[], shard: string | null = null) =>
-    perfCoverage(plan, ['chromium'], { tests, shard }).map(({ message }) => message);
+  const perf = plannedPerf(plan);
+  const all = perf.map(({ cell }) => perfSummaryTest(cell));
+  const rules = (tests: SummaryTest[], shard: string | null = null, planned = perf) =>
+    perfCoverage(planned, plan.targets, ['chromium'], { tests, shard }).map(
+      ({ message }) => message,
+    );
+  assert.deepEqual(rules(all), []);
   assert.match(rules(all.slice(1))[0]!, /is planned on chromium, and didn't run\.$/);
   assert.deepEqual(rules(all.slice(1), '1/2'), [], 'a shard answers only for repeats');
   assert.match(rules([...all, all[0]!])[0]!, /ran 2 times on chromium, not once\.$/);
@@ -228,16 +258,59 @@ test('perf coverage fails a perf cell that ran twice or not at all, one the plan
     rules([...all, perfSummaryTest('composition:nothing')])[0]!,
     /no perf cell is composition:nothing\.$/,
   );
-  // A target whose cells hold no representative one: only work routes, say.
-  const noRoot = {
-    targets: plan.targets,
-    cells: plan.cells.filter((cell) => !(cell.target === 'fallback' && cell.path === '/')),
-  };
   assert.ok(
-    perfCoverage(noRoot, ['chromium'], { tests: all, shard: null }).some(({ message }) =>
-      /^composition:fallback has no representative cell/.test(message),
+    rules(all.slice(1), null, perf.slice(1)).some((message) =>
+      /has no representative cell/.test(message),
     ),
   );
+});
+
+test('the verdict judges perf coverage itself, so a re-judged verdict holds it, and a perf test alone gives a target no result', () => {
+  const cell = 'composition:fallback complete / x';
+  const perf = [{ cell, target: 'composition:fallback', tier: 'light' }];
+  const summary = {
+    schemaVersion: 1 as const,
+    mode: 'pr',
+    shard: null,
+    status: 'passed',
+    projects: [{ name: 'chromium x', browserName: 'chromium' }],
+    tests: [perfSummaryTest(cell)],
+    errors: [],
+  };
+  const input = {
+    plan: { targets: [{ kind: 'composition' as const, id: 'fallback' }], tests: [], perf },
+    engines: ['chromium'],
+    summary,
+    missingBrowsers: [],
+    canary: null,
+  };
+  const rules = (verdict: ReturnType<typeof judge>) => verdict.failures.map(({ rule }) => rule);
+  assert.ok(!rules(judge(input)).includes('perf-coverage'));
+  // The perf test is the target's only one: it isn't a result for it.
+  assert.ok(rules(judge(input)).includes('target-without-results'));
+  assert.ok(
+    rules(judge({ ...input, summary: { ...summary, tests: [] } })).includes('perf-coverage'),
+  );
+});
+
+test("an LCP element is server-rendered when the response body's markup, outside scripts, holds its text or image", () => {
+  const html =
+    '<html><body><h1>Tom &amp; Jerry<!-- --> ride</h1><img src="/img/hero.png?w=2&amp;q=1"><script>self.__next_f.push("Hydrated only")</script></body></html>';
+  assert.equal(inServerHtml({ kind: 'headline', text: 'Tom & Jerry ride', url: '' }, html), true);
+  assert.equal(inServerHtml({ kind: 'headline', text: 'Hydrated only', url: '' }, html), false);
+  assert.equal(
+    inServerHtml(
+      { kind: 'image', text: '', url: 'http://127.0.0.1:3000/img/hero.png?w=2&q=1' },
+      html,
+    ),
+    true,
+  );
+  assert.equal(
+    inServerHtml({ kind: 'image', text: '', url: 'http://127.0.0.1:3000/img/other.png' }, html),
+    false,
+  );
+  assert.equal(inServerHtml({ kind: 'headline', text: 'Tom & Jerry ride', url: '' }, null), false);
+  assert.equal(inServerHtml({ kind: 'removed', text: 'Tom & Jerry ride', url: '' }, html), false);
 });
 
 test('the timing trend reports each median over its ceiling, and never fails a pull request', () => {
@@ -254,14 +327,26 @@ test('the timing trend reports each median over its ceiling, and never fails a p
   assert.match(markdown, /\| composition:fallback \| light \| tbtMs \| 260 \| 200 \| 0 \| over \|/);
   assert.match(timingMarkdown(timingTrend({ tests: [] })), /No perf test ran\./);
   // The release gate fails that one: 260 is 30% over.
+  const first = { GITHUB_RUN_ATTEMPT: '1' };
   assert.deepEqual(
-    timingFailures({ tests: [over] }).map(({ rule }) => rule),
+    timingFailures({ tests: [over] }, undefined, first).map(({ rule }) => rule),
     ['timing-over'],
   );
+  // A workflow run past its first attempt never counts, whatever its medians.
+  assert.deepEqual(
+    timingFailures({ tests: [perfSummaryTest('a')] }, undefined, { GITHUB_RUN_ATTEMPT: '2' }).map(
+      ({ rule }) => rule,
+    ),
+    ['timing-rerun'],
+  );
+  assert.deepEqual(timingFailures({ tests: [perfSummaryTest('a')] }, undefined, {}), []);
 });
 
 test('TIMING_GATE reads quality/summary.json under the reports it is given, and fails closed without one', () => {
   const reports = mkdtempSync(path.join(tmpdir(), 'quality-timing-'));
+  // The gate reads this job's own attempt, which a re-run of the unit job would raise.
+  const attempt = process.env.GITHUB_RUN_ATTEMPT;
+  delete process.env.GITHUB_RUN_ATTEMPT;
   try {
     assert.equal(TIMING_GATE.id, 'timing');
     assert.deepEqual(
@@ -275,6 +360,7 @@ test('TIMING_GATE reads quality/summary.json under the reports it is given, and 
     );
     assert.deepEqual(TIMING_GATE.run({ reports }), []);
   } finally {
+    if (attempt !== undefined) process.env.GITHUB_RUN_ATTEMPT = attempt;
     rmSync(reports, { recursive: true, force: true });
   }
 });

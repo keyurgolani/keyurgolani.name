@@ -125,6 +125,7 @@ export const ThresholdsSchema = z
         lcpMs: z.number().int().positive(),
         cls: z.number().positive().max(1),
         tbtMs: z.number().int().positive(),
+        canvasLcpMinShare: z.number().positive().max(1),
       })
       .strict(),
     idle: z

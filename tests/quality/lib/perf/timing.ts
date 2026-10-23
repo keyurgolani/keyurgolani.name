@@ -8,7 +8,8 @@
 // - TIMING_GATE, on the release run: fails a median more than
 //   timing.releaseTolerance over its ceiling, a test with fewer loads than
 //   timing.runs or a metric that didn't come, and a perf test that ran more
-//   than once, since a retried test's numbers aren't its first run's. It
+//   than once, or a workflow run past its first attempt (GITHUB_RUN_ATTEMPT),
+//   since a retried test's numbers aren't its first run's. It
 //   fails closed on a run with no summary or no perf test. It has the shape
 //   of 11-4's ReleaseGate, for its RELEASE_GATES seam.
 
@@ -97,9 +98,22 @@ export function timingMarkdown(trend: TimingTrend): string {
 export function timingFailures(
   summary: Pick<Summary, 'tests'> | null,
   thresholds: Thresholds = loadThresholds(),
+  env: NodeJS.ProcessEnv = process.env,
 ): Failure[] {
+  // A re-run of the job is a retry too: its numbers aren't the first run's.
+  const attempt = Number(env.GITHUB_RUN_ATTEMPT ?? '1');
+  const rerun: Failure[] =
+    attempt > 1
+      ? [
+          {
+            rule: 'timing-rerun',
+            message: `This is attempt ${attempt} of the workflow run, and timing is never retried to green: only a first attempt's medians count.`,
+          },
+        ]
+      : [];
   if (!summary) {
     return [
+      ...rerun,
       {
         rule: 'timing-no-summary',
         message: 'The run left no summary.json, so no median says anything.',
@@ -107,6 +121,7 @@ export function timingFailures(
     ];
   }
   const tests = perfTests(summary);
+  if (rerun.length > 0) return rerun;
   if (tests.length === 0) {
     return [
       { rule: 'timing-no-perf', message: 'No perf test ran, so nothing measured the timing.' },

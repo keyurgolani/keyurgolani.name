@@ -1,10 +1,11 @@
 // The performance gates' cases for `pnpm quality:meta` (#11, 11-3): a
 // known-bad and a known-good input for each, appended to META_CASES
-// (cases.ts), each through the gate's own code with recorded inputs, so
-// none needs a build or a browser:
+// (cases.ts), each through the gate's own code:
 //
 // - perf: the deterministic rules every run holds a perf cell to
-//   (lib/perf/samples.ts's perfFindings), over recorded samples.
+//   (lib/perf/samples.ts's perfFindings), over recorded samples, and the
+//   verdict's perf-coverage rule (lib/verdict.ts). perf-browser-cases.ts
+//   adds the cases that run the real probe in Chromium.
 // - timing: the release run's timing gate (lib/perf/timing.ts's
 //   timingFailures, which TIMING_GATE runs), over recorded summaries whose
 //   medians come from timingResult, as perf.spec.ts writes them.
@@ -22,20 +23,36 @@ import { overBudgetProblems } from '../../../ci/budgets.mjs';
 import { checkBudgets, reportRecord } from '../../../ci/lib/budgets.mjs';
 import { loadValidator } from '../../../ci/summarize.mjs';
 import { gzipBytes } from '../../harness/trace/attribution.mjs';
-import { perfFindings, timingResult, type PerfRun, type PerfSample } from '../lib/perf/samples';
+import { PERF_KIND } from '../lib/checks';
+import {
+  perfFindings,
+  timingResult,
+  type LcpEntry,
+  type PerfRun,
+  type PerfSample,
+} from '../lib/perf/samples';
 import { timingFailures } from '../lib/perf/timing';
-import { PERF_KIND, perfCoverage } from '../lib/perf/plan';
-import { APPEARANCE_STATE } from '../lib/state-fixtures';
-import { defaultTuple, type Cell } from '../cells';
+import { perfCoverage } from '../lib/verdict';
 import type { Summary, SummaryTest } from '../reporter';
 import type { MetaCase, MetaOutcome } from './cases';
 
 // ---- perf: the deterministic rules -----------------------------------------
 
+/** A server-rendered headline covering a tenth of the viewport. */
+const HEADLINE: LcpEntry = {
+  startTime: 900,
+  kind: 'headline',
+  tag: 'h1',
+  size: 33_000,
+  share: 0.1,
+  serverRendered: true,
+  selector: 'main > h1',
+};
+
 /** A load that's fine: a server-rendered heading as its LCP element, well within every ceiling. */
 export const GOOD_RUN: PerfRun = {
   status: 200,
-  lcp: { startTime: 900, kind: 'text', tag: 'h1', serverRendered: true, selector: 'main > h1' },
+  lcp: HEADLINE,
   canvasLed: false,
   lcpMs: 900,
   cls: 0,
@@ -46,10 +63,11 @@ export const GOOD_RUN: PerfRun = {
   payload: { requests: 14, transferBytes: 180_000, byType: { document: 35_000, script: 140_000 } },
 };
 
-const GOOD_STATIC: PerfSample['static'] = {
+export const GOOD_STATIC: PerfSample['static'] = {
   status: 200,
-  lcp: GOOD_RUN.lcp,
+  lcp: HEADLINE,
   canvasLed: false,
+  reducedMotion: true,
   frameCallbacks: 0,
   layoutCount: 0,
 };
@@ -62,7 +80,7 @@ const sample = (
   staticRun: PerfSample['static'] = GOOD_STATIC,
 ): PerfSample => ({ tier: 'light', static: staticRun, runs });
 
-const findingsOutcome = (input: PerfSample): MetaOutcome => {
+const findingsOutcome = (input: Pick<PerfSample, 'static' | 'runs'>): MetaOutcome => {
   const findings = perfFindings(input);
   return {
     passed: findings.length === 0,
@@ -72,34 +90,33 @@ const findingsOutcome = (input: PerfSample): MetaOutcome => {
   };
 };
 
-const CANVAS_LED_GOOD: PerfRun = { ...GOOD_RUN, canvasLed: true };
-const CLIENT_CANVAS: PerfRun = {
-  ...GOOD_RUN,
-  canvasLed: true,
-  lcp: { ...GOOD_RUN.lcp!, serverRendered: false, tag: 'p', selector: 'main > p' },
-};
+/** Every load canvas-led, with `lcp` as its LCP element. */
+const canvasLed = (lcp: LcpEntry | null): PerfSample =>
+  sample(five({ ...GOOD_RUN, canvasLed: true, lcp }), { ...GOOD_STATIC, canvasLed: true, lcp });
 
 export const PERF_CASES: readonly MetaCase[] = [
   {
     id: 'perf/good',
     gate: 'perf',
     input:
-      'a recorded perf sample: server-rendered text LCP on every load, and a still static load',
+      'a recorded perf sample: server-rendered headline LCP on every load, and a still static load',
     expect: 'pass',
     run: () => findingsOutcome(sample()),
   },
   {
+    id: 'perf/canvas-led-headline',
+    gate: 'perf',
+    input:
+      'a canvas-led sample whose LCP element is a server-rendered h1 covering 10% of the viewport',
+    expect: 'pass',
+    run: () => findingsOutcome(canvasLed(HEADLINE)),
+  },
+  {
     id: 'perf/canvas-led-poster',
     gate: 'perf',
-    input: 'a canvas-led sample whose LCP element is server-rendered headline text',
+    input: 'a canvas-led sample whose LCP element is a server-rendered poster image',
     expect: 'pass',
-    run: () =>
-      findingsOutcome(
-        sample(five(CANVAS_LED_GOOD), {
-          ...GOOD_STATIC,
-          canvasLed: true,
-        }),
-      ),
+    run: () => findingsOutcome(canvasLed({ ...HEADLINE, kind: 'image', tag: 'img', share: 0.4 })),
   },
   {
     id: 'perf/missing-lcp-entry',
@@ -118,19 +135,42 @@ export const PERF_CASES: readonly MetaCase[] = [
     expect: 'fail',
     reason:
       /^lcp-entry: (?:the static load|load \d of 5) ended with none; expected a largest-contentful-paint entry: a canvas-led page needs server-rendered text or a poster image/,
-    run: () => {
-      const canvas: PerfRun = { ...GOOD_RUN, canvasLed: true, lcp: null };
-      return findingsOutcome(sample(five(canvas), { ...GOOD_STATIC, canvasLed: true, lcp: null }));
-    },
+    run: () => findingsOutcome(canvasLed(null)),
   },
   {
-    id: 'perf/canvas-led-client-text',
+    id: 'perf/canvas-led-client-headline',
     gate: 'perf',
-    input: 'a canvas-led sample whose LCP element the client rendered, not the server HTML',
+    input: "a canvas-led sample whose headline the document's response body doesn't hold",
     expect: 'fail',
     reason:
-      /^lcp-element: load \d of 5's LCP element is text <p>, rendered on the client; expected with a canvas in the first viewport/,
-    run: () => findingsOutcome(sample(five(CLIENT_CANVAS))),
+      /^lcp-element: (?:the static load|load \d of 5)'s LCP element is headline <h1>, which the document's response body doesn't hold; expected with a canvas in the first viewport/,
+    run: () => findingsOutcome(canvasLed({ ...HEADLINE, serverRendered: false })),
+  },
+  {
+    id: 'perf/canvas-led-small-headline',
+    gate: 'perf',
+    input: 'a canvas-led sample whose server-rendered h1 covers 1% of the viewport',
+    expect: 'fail',
+    reason:
+      /^lcp-element: (?:the static load|load \d of 5)'s LCP element is headline <h1> covering 1% of the viewport, under 5%; expected/,
+    run: () => findingsOutcome(canvasLed({ ...HEADLINE, share: 0.01 })),
+  },
+  {
+    id: 'perf/canvas-led-body-text',
+    gate: 'perf',
+    input: 'a canvas-led sample whose LCP element is a server-rendered paragraph, not a headline',
+    expect: 'fail',
+    reason:
+      /^lcp-element: (?:the static load|load \d of 5)'s LCP element is text in <p>, not a poster image or headline; expected/,
+    run: () => findingsOutcome(canvasLed({ ...HEADLINE, kind: 'text', tag: 'p' })),
+  },
+  {
+    id: 'perf/static-emulation-ignored',
+    gate: 'perf',
+    input: "a static load whose page didn't match prefers-reduced-motion: reduce",
+    expect: 'fail',
+    reason: /^static-emulation: it didn't, so its frame and layout counts say nothing/,
+    run: () => findingsOutcome(sample(undefined, { ...GOOD_STATIC, reducedMotion: false })),
   },
   {
     id: 'perf/static-frame-loop',
@@ -154,23 +194,15 @@ export const PERF_CASES: readonly MetaCase[] = [
 
 // ---- perf: every target's perf cell ran, once ------------------------------
 
-const FALLBACK_CELL = {
-  id: 'composition:fallback complete / fallback/platform-neutral/warm-parchment/humanist-ui/system',
-  kind: 'composition',
-  target: 'fallback',
-  state: APPEARANCE_STATE.id,
-  path: '/',
-  route: '/',
-  performanceTier: 'light',
-  tuple: defaultTuple('fallback', 'system'),
-} as unknown as Cell;
-const COVERAGE_PLAN = {
-  targets: [{ kind: 'composition' as const, id: 'fallback' }],
-  cells: [FALLBACK_CELL],
+const FALLBACK_PERF = {
+  cell: 'composition:fallback complete / fallback/platform-neutral/warm-parchment/humanist-ui/system',
+  target: 'composition:fallback',
+  tier: 'light',
 };
+const TARGETS = [{ kind: 'composition' as const, id: 'fallback' }];
 
 const coverageOutcome = (tests: readonly SummaryTest[]): MetaOutcome => {
-  const failures = perfCoverage(COVERAGE_PLAN, ['chromium'], { tests, shard: null });
+  const failures = perfCoverage([FALLBACK_PERF], TARGETS, ['chromium'], { tests, shard: null });
   return {
     passed: failures.length === 0,
     findings: failures.map(({ rule, message }) => `${rule}: ${message}`),
@@ -227,7 +259,8 @@ function perfTest(runs: readonly PerfRun[], overrides: Partial<SummaryTest> = {}
 const summaryOf = (tests: readonly SummaryTest[]): Pick<Summary, 'tests'> => ({ tests });
 
 const timingOutcome = (summary: Pick<Summary, 'tests'> | null): MetaOutcome => {
-  const failures = timingFailures(summary);
+  // A first attempt, whatever this job's own is: timing/rerun names another.
+  const failures = timingFailures(summary, undefined, { GITHUB_RUN_ATTEMPT: '1' });
   return {
     passed: failures.length === 0,
     findings: failures.map(({ rule, message }) => `${rule}: ${message}`),
@@ -316,6 +349,23 @@ export const TIMING_CASES: readonly MetaCase[] = [
     expect: 'fail',
     reason: /^timing-no-summary: /,
     run: () => timingOutcome(null),
+  },
+  {
+    id: 'timing/rerun',
+    gate: 'timing',
+    input: "a release summary within every ceiling, on the workflow run's second attempt",
+    expect: 'fail',
+    reason:
+      /^timing-rerun: This is attempt 2 of the workflow run, and timing is never retried to green/,
+    run: () => {
+      const failures = timingFailures(summaryOf([perfTest(five())]), undefined, {
+        GITHUB_RUN_ATTEMPT: '2',
+      });
+      return {
+        passed: failures.length === 0,
+        findings: failures.map(({ rule, message }) => `${rule}: ${message}`),
+      };
+    },
   },
 ];
 

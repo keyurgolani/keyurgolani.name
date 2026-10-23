@@ -14,8 +14,8 @@
 //      can't read is deleted and fails the run.
 //   5. The verdict (lib/verdict.ts) reads summary.json against the plan and
 //      fails closed; it goes into summary.json and verdict.json, and under
-//      ci/run.mjs each failure is a failure record. It also holds the run
-//      to its perf cells (lib/perf/plan.ts), and summary.json gets the
+//      ci/run.mjs each failure is a failure record. The verdict holds the run
+//      to its perf cells too (lib/perf/plan.ts), and summary.json gets the
 //      timing medians, which only a release run gates (lib/perf/timing.ts),
 //      and #6's budget results when the job has them (lib/perf/budgets.ts).
 //
@@ -53,7 +53,7 @@ import { RUN_ENGINES } from './lib/matrix';
 import { RECORD_VERSION } from './lib/failure-records';
 import { judge, type Failure, type Verdict } from './lib/verdict';
 import { budgetResults } from './lib/perf/budgets';
-import { perfCells, perfCoverage } from './lib/perf/plan';
+import { plannedPerf } from './lib/perf/plan';
 import { timingMarkdown, timingTrend } from './lib/perf/timing';
 import { loadPlan, RUN_MODES } from './plan';
 import { SUMMARY_FILE, type Summary } from './reporter';
@@ -165,11 +165,7 @@ function planRecord(plan: Plan) {
       skip: test.skip ?? null,
       engineSkips: test.engineSkips,
     })),
-    perf: perfCells(plan).map((cell) => ({
-      cell: cell.id,
-      target: `${cell.kind}:${cell.target}`,
-      tier: cell.performanceTier,
-    })),
+    perf: plannedPerf(plan),
   };
 }
 
@@ -302,15 +298,13 @@ async function main(argv: readonly string[]): Promise<number> {
 
   const summary = missing.length === 0 ? readSummary() : null;
   const judged = judge({
-    plan: plan ?? { targets: [], tests: [] },
+    plan: plan ? { ...plan, perf: plannedPerf(plan) } : { targets: [], tests: [] },
     engines,
     summary,
     missingBrowsers: missing,
     canary: { before, after },
   });
-  // Each perf cell ran once (#11, 11-3), fail-closed like the cells.
-  const perf = plan && summary ? perfCoverage(plan, engines, summary) : [];
-  const failures = [...setup, ...judged.failures, ...perf];
+  const failures = [...setup, ...judged.failures];
   const verdict: Verdict = { ...judged, ok: failures.length === 0, failures };
   writeFileSync(path.join(quality, 'verdict.json'), `${JSON.stringify(verdict, null, 2)}\n`);
   // The timing medians, reported and never gating here, and #6's budget
