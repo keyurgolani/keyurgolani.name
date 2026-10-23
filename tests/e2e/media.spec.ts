@@ -19,7 +19,7 @@ const MEDIA = { type: 'route', description: '/media/[...path]' };
 const READ_ONLY = { type: 'profile', description: 'read-only' };
 const CANARY = 'canary-media-private';
 
-// The worker writes the media root and the pair before its server starts.
+// The media root and the pair, under a directory of this worker's own.
 const base = path.join(tmpdir(), `portfolio-media-spec-${randomUUID()}`);
 const root = path.join(base, 'media');
 const portfolio = path.join(base, 'portfolio.yml');
@@ -35,7 +35,8 @@ test.use({
   },
 });
 
-test.beforeAll(() => {
+/** Writes the media root and the pair. */
+function writeSources() {
   mkdirSync(root, { recursive: true });
   writeFileSync(path.join(root, 'fixture-garden.png'), PUBLIC);
   writeFileSync(path.join(root, `${CANARY}.png`), PRIVATE);
@@ -71,7 +72,12 @@ test.beforeAll(() => {
     )
     .replace('      - fixture-garden\n', `      - fixture-garden\n      - ${CANARY}-work\n`);
   writeFileSync(portfolio, text);
-});
+}
+
+// A worker writes them as it loads this file: its server starts as the
+// first test's fixtures are set up, before any hook runs. The runner's own
+// process only lists the tests, and writes nothing.
+if (process.env.TEST_WORKER_INDEX !== undefined) writeSources();
 test.afterAll(() => rmSync(base, { recursive: true, force: true }));
 
 /** The page's HTML once startup derivation has finished, which happens in the background. */

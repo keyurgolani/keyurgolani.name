@@ -87,7 +87,12 @@ test(
       'Image unavailable',
     );
     expect(blockedRequests).not.toContain(FIXTURE_IMAGE);
-    // An image the page loads from that host never arrives.
+    // An image the page loads from that host never arrives: the site's CSP,
+    // img-src 'self' data: (#10), refuses it before any request goes out.
+    const refusals: string[] = [];
+    page.on('console', (message) => {
+      if (/Content Security Policy/i.test(message.text())) refusals.push(message.text());
+    });
     const width = await page.evaluate(
       (src) =>
         new Promise<number>((resolve) => {
@@ -98,6 +103,17 @@ test(
       FIXTURE_IMAGE,
     );
     expect(width).toBe(0);
+    await expect.poll(() => refusals.some((text) => text.includes(FIXTURE_IMAGE))).toBe(true);
+    // A request the CSP doesn't cover, a fetch, goes out, and the harness blocks it.
+    const fetched = await page.evaluate(
+      (src) =>
+        fetch(src, { mode: 'no-cors' }).then(
+          () => 'arrived',
+          () => 'failed',
+        ),
+      FIXTURE_IMAGE,
+    );
+    expect(fetched).toBe('failed');
     await expect.poll(() => blockedRequests).toContain(FIXTURE_IMAGE);
   },
 );
