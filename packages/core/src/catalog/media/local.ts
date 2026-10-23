@@ -16,8 +16,9 @@ import { MEDIA_LIMITS, MediaSourceError, refused } from './limits';
 // realpath() and open() are two steps, and O_NOFOLLOW covers only the last
 // component, so a directory swapped for a link between them could still
 // lead outside. Once the file is open, its descriptor's own path is checked
-// against the root too: /proc/self/fd/<fd> on Linux, where the server runs.
-// Where there is no /proc, as on macOS, that check can't be made, and the
+// against the root too: /proc/self/fd/<fd> on Linux, where the server runs,
+// and a descriptor whose path /proc can't tell is refused there. Where there
+// is no /proc, as on macOS, that check can't be made, and the
 // read-only mount (Compose mounts the root `:ro`, and startup warns when the
 // server can write there) is the control. A hard link inside the root reads
 // its target, wherever that is: only someone who can write the root can make
@@ -33,6 +34,12 @@ export interface LocalMediaRootOptions {
   readonly maxBytes?: number;
   /** Where an open descriptor's file really is, or null where that can't be told. Tests' own. */
   readonly openedPath?: (fd: number) => Promise<string | null>;
+  /**
+   * Whether an opened file whose path can't be told is refused: on Linux,
+   * where /proc always tells, one that doesn't, such as a file unlinked
+   * since it opened, is. Tests' own.
+   */
+  readonly requireOpenedPath?: boolean;
 }
 
 /** /proc/self/fd/<fd>'s target, on Linux; null where there is no /proc. */
@@ -58,7 +65,11 @@ function inside(root: string, target: string): boolean {
 
 export function localMediaRoot(
   root: string,
-  { maxBytes = MEDIA_LIMITS.sourceBytes, openedPath = procOpenedPath }: LocalMediaRootOptions = {},
+  {
+    maxBytes = MEDIA_LIMITS.sourceBytes,
+    openedPath = procOpenedPath,
+    requireOpenedPath = process.platform === 'linux',
+  }: LocalMediaRootOptions = {},
 ): LocalMediaRoot {
   if (!path.isAbsolute(root)) throw new TypeError('The media root is an absolute path.');
   return {
@@ -105,6 +116,9 @@ export function localMediaRoot(
           opened = await openedPath(handle.fd);
         } catch {
           throw new MediaSourceError('unreachable', 'read_failed', "The file can't be read.");
+        }
+        if (opened === null && requireOpenedPath) {
+          throw refused('path_unchecked', "Where the opened file is can't be checked.");
         }
         if (opened !== null && !inside(realRoot, opened)) {
           throw refused('path_escape', 'The path leaves the media root through a link.');

@@ -101,13 +101,24 @@ test('what was opened is checked against the root too, as a directory swapped fo
   });
   await assert.rejects(swapped.read('atlas/cover.jpg'), refusal('refused', 'path_escape'));
   assert.equal(opened.length, 1);
-  // Where it landed inside, or where that can't be told, the file reads.
+  // Where it landed inside, the file reads.
   const inside = localMediaRoot(root, {
     openedPath: async () => path.join(realpathSync(root), 'atlas', 'cover.jpg'),
   });
   assert.equal(Buffer.from(await inside.read('atlas/cover.jpg')).toString(), 'cover bytes');
-  const untold = localMediaRoot(root, { openedPath: async () => null });
-  assert.equal(Buffer.from(await untold.read('atlas/cover.jpg')).toString(), 'cover bytes');
+  // Where that can't be told: refused on Linux, where /proc always tells, as
+  // for a file unlinked since it opened; read where there's no /proc to ask.
+  const untold = (requireOpenedPath: boolean) =>
+    localMediaRoot(root, { openedPath: async () => null, requireOpenedPath });
+  await assert.rejects(untold(true).read('atlas/cover.jpg'), refusal('refused', 'path_unchecked'));
+  assert.equal(Buffer.from(await untold(false).read('atlas/cover.jpg')).toString(), 'cover bytes');
+  // Linux is the one that requires it.
+  const fallback = localMediaRoot(root, { openedPath: async () => null });
+  if (process.platform === 'linux') {
+    await assert.rejects(fallback.read('atlas/cover.jpg'), refusal('refused', 'path_unchecked'));
+  } else {
+    assert.equal(Buffer.from(await fallback.read('atlas/cover.jpg')).toString(), 'cover bytes');
+  }
 
   // The real check: /proc/self/fd on Linux, where the server runs; nothing elsewhere.
   const handle = await open(path.join(root, 'atlas', 'cover.jpg'));
