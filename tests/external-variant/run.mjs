@@ -27,7 +27,9 @@
 //      Then the reference's own checks: the colophon view, the compact
 //      control, and the badge's lazy load.
 //   6. `pnpm --filter @portfolio/web remove @acme/reference`: git status is
-//      clean again. After `pnpm build`, a site selecting acme-reference gets
+//      clean again, but for a lockfile whose one change is a cyclic peer
+//      suffix pnpm spelled another way (ci/lib/lockfile-drift.mjs). After
+//      `pnpm build`, a site selecting acme-reference gets
 //      the fallback composition with 200, a variant.unavailable warning at
 //      startup and from config:validate, and degraded readiness.
 //
@@ -51,6 +53,7 @@ import {
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { removalLeftovers } from '../../ci/lib/lockfile-drift.mjs';
 import { reportsDir } from '../../ci/lib/reports.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -207,6 +210,27 @@ function packReference(host, work) {
   );
   assert.equal(packed.scripts, undefined, 'the package runs no script on install');
   return tarball;
+}
+
+/**
+ * Asserts the remove left nothing behind: git status is clean, or shows the
+ * lockfile alone, with nothing changed in it but peer suffixes pnpm spelled
+ * another way. Any other path, or any real change to the lockfile, fails
+ * with the diff and each difference.
+ */
+function expectRemoved(host) {
+  const { problems, rewritten } = removalLeftovers({
+    status: status(host),
+    before: git(['show', 'HEAD:pnpm-lock.yaml'], host),
+    after: readFileSync(path.join(host, 'pnpm-lock.yaml'), 'utf8'),
+  });
+  const message = `the remove leaves nothing changed: ${problems.join('; ')}`;
+  if (problems.length > 0) expectStatus(host, [], message);
+  if (rewritten) {
+    console.log(
+      '[external-variant] pnpm-lock.yaml differs from HEAD in nested peer suffixes alone.',
+    );
+  }
 }
 
 /** The host's package.json in the worktree, against HEAD's: what `pnpm add` changed in it. */
@@ -423,7 +447,7 @@ async function main() {
       },
     );
     added = false;
-    expectStatus(host, [], 'the remove leaves nothing changed');
+    expectRemoved(host);
 
     step('pnpm build, without it');
     pnpm(['build'], { cwd: host });
