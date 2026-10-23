@@ -260,6 +260,69 @@ async function checkRemoved(host, work) {
   }
 }
 
+/**
+ * Steps 1 to 3: a worktree of HEAD in `work`/host, installed offline from
+ * the store this checkout's install filled, with the reference variant
+ * packed outside it and added from its tarball, as an owner installs one.
+ * Returns the worktree and the store. #11's close and scheduled quality runs
+ * install it this way too (tests/quality/run.ts --external-variant).
+ *
+ * @param {string} work an empty temporary directory
+ * @returns {{ host: string, store: string }}
+ */
+export function installReference(work) {
+  const host = path.join(work, 'host');
+  const head = git(['rev-parse', 'HEAD'], REPO_ROOT).trim();
+  step(`A worktree of HEAD (${head.slice(0, 12)}) in ${host}`);
+  if (status(REPO_ROOT).length > 0) {
+    console.log(
+      '[external-variant] This checkout has uncommitted changes, which the run leaves out.',
+    );
+  }
+  git(['worktree', 'add', '--detach', host, head], REPO_ROOT);
+  const store = pnpm(['store', 'path'], { cwd: REPO_ROOT, capture: true }).trim();
+  pnpm(['install', '--offline', '--frozen-lockfile', '--ignore-scripts', '--store-dir', store], {
+    cwd: host,
+  });
+  expectStatus(host, [], 'the installed worktree is clean');
+
+  step(`Building and packing ${PACKAGE}`);
+  const tarball = packReference(host, work);
+
+  step(`pnpm --filter ${HOST_PACKAGE} add ${path.basename(tarball)}`);
+  // Prefer-offline, not offline: with no package metadata cached, as after
+  // a frozen install, an offline add resolves the workspace without the
+  // other platforms' optional packages and drops them from the lockfile.
+  pnpm(['--filter', HOST_PACKAGE, 'add', tarball, '--prefer-offline', '--store-dir', store], {
+    cwd: host,
+  });
+  expectStatus(
+    host,
+    [' M apps/web/package.json', ' M pnpm-lock.yaml'],
+    'the add changes the dependency and the lockfile, and no host file',
+  );
+  addedDependencies(host);
+  return { host, store };
+}
+
+/** Removes the worktree installReference() made in `work`, and `work` itself. */
+export function removeReference(work) {
+  const host = path.join(work, 'host');
+  try {
+    if (existsSync(host)) git(['worktree', 'remove', '--force', host], REPO_ROOT);
+  } catch (error) {
+    console.error(`[external-variant] git worktree remove failed: ${error.message}`);
+  }
+  rmSync(work, { recursive: true, force: true });
+  git(['worktree', 'prune'], REPO_ROOT);
+}
+
+/** Builds the worktree's host, under `env`'s build-time flags, such as #11's quality flags. */
+export function buildReferenceHost(host, env = {}) {
+  step('pnpm build');
+  pnpm(['build'], { cwd: host, env });
+}
+
 async function main() {
   const work = mkdtempSync(path.join(tmpdir(), 'portfolio-external-variant-'));
   const host = path.join(work, 'host');
@@ -271,40 +334,10 @@ async function main() {
   });
   let added = false;
   try {
-    const head = git(['rev-parse', 'HEAD'], REPO_ROOT).trim();
-    step(`A worktree of HEAD (${head.slice(0, 12)}) in ${host}`);
-    if (status(REPO_ROOT).length > 0) {
-      console.log(
-        '[external-variant] This checkout has uncommitted changes, which the run leaves out.',
-      );
-    }
-    git(['worktree', 'add', '--detach', host, head], REPO_ROOT);
-    const store = pnpm(['store', 'path'], { cwd: REPO_ROOT, capture: true }).trim();
-    pnpm(['install', '--offline', '--frozen-lockfile', '--ignore-scripts', '--store-dir', store], {
-      cwd: host,
-    });
-    expectStatus(host, [], 'the installed worktree is clean');
-
-    step(`Building and packing ${PACKAGE}`);
-    const tarball = packReference(host, work);
-
-    step(`pnpm --filter ${HOST_PACKAGE} add ${path.basename(tarball)}`);
-    // Prefer-offline, not offline: with no package metadata cached, as after
-    // a frozen install, an offline add resolves the workspace without the
-    // other platforms' optional packages and drops them from the lockfile.
-    pnpm(['--filter', HOST_PACKAGE, 'add', tarball, '--prefer-offline', '--store-dir', store], {
-      cwd: host,
-    });
+    const { store } = installReference(work);
     added = true;
-    expectStatus(
-      host,
-      [' M apps/web/package.json', ' M pnpm-lock.yaml'],
-      'the add changes the dependency and the lockfile, and no host file',
-    );
-    addedDependencies(host);
 
-    step('pnpm build');
-    pnpm(['build'], { cwd: host });
+    buildReferenceHost(host);
 
     step('Discovery: the registry and the audit');
     const registry = JSON.parse(
@@ -400,18 +433,14 @@ async function main() {
     if (added)
       console.log(`[external-variant] ${PACKAGE} was still installed when the run stopped.`);
     interrupted = false;
-    try {
-      if (existsSync(host)) git(['worktree', 'remove', '--force', host], REPO_ROOT);
-    } catch (error) {
-      console.error(`[external-variant] git worktree remove failed: ${error.message}`);
-    }
-    rmSync(work, { recursive: true, force: true });
-    git(['worktree', 'prune'], REPO_ROOT);
+    removeReference(work);
   }
 }
 
-started = Date.now();
-main().catch((error) => {
-  console.error(`\n[external-variant] Failed: ${error.message}`);
-  process.exitCode = 1;
-});
+if (path.resolve(process.argv[1] ?? '') === fileURLToPath(import.meta.url)) {
+  started = Date.now();
+  main().catch((error) => {
+    console.error(`\n[external-variant] Failed: ${error.message}`);
+    process.exitCode = 1;
+  });
+}

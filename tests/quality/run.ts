@@ -18,7 +18,8 @@
 // --shard=1/3 or --grep. The quality host is removed once the run is done.
 
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -26,7 +27,8 @@ import { currentGate, REPO_ROOT, reportError, reportsDir } from '../../ci/lib/re
 import type { Plan, RunMode } from './cells';
 import { canaryPassword, plantCanary, scanArtifacts, scrubArtifacts } from './lib/artifacts.mjs';
 import { missingBrowsers } from './lib/browsers.mjs';
-import { buildQualityHost } from './lib/build.mjs';
+import { buildQualityHost, QUALITY_BUILD_ENV } from './lib/build.mjs';
+import { buildReferenceHost, installReference, removeReference } from '../external-variant/run.mjs';
 import { RUN_ENGINES } from './lib/matrix';
 import { writeRecords } from './lib/records';
 import { judge, type Failure, type Verdict } from './lib/verdict';
@@ -40,19 +42,33 @@ const PLAYWRIGHT = createRequire(import.meta.url).resolve('@playwright/test/cli'
 export interface RunOptions {
   readonly mode: RunMode;
   readonly shard: string | null;
+  /**
+   * Run against a worktree with the reference third-party variant installed
+   * from its tarball, as test:external-variant installs it: the close and
+   * scheduled runs' build. Full runs only.
+   */
+  readonly externalVariant: boolean;
   /** What goes to Playwright as it is, --shard included. */
   readonly playwright: readonly string[];
 }
+
+/** The runner's own flag for the close and scheduled runs' build. */
+export const EXTERNAL_VARIANT_FLAG = '--external-variant';
 
 /** The runner's arguments: the mode, then Playwright's, a `--` before them dropped. */
 export function parseRunArgs(argv: readonly string[]): RunOptions {
   const [mode, ...rest] = argv;
   if (!(RUN_MODES as readonly (string | undefined)[]).includes(mode)) {
     throw new Error(
-      `usage: run.ts <${RUN_MODES.join('|')}> [-- --shard=<n>/<m>] [playwright args]`,
+      `usage: run.ts <${RUN_MODES.join('|')}> [-- [${EXTERNAL_VARIANT_FLAG}] --shard=<n>/<m>] [playwright args]`,
     );
   }
-  const playwright = rest[0] === '--' ? rest.slice(1) : [...rest];
+  const args = rest[0] === '--' ? rest.slice(1) : [...rest];
+  const externalVariant = args.includes(EXTERNAL_VARIANT_FLAG);
+  if (externalVariant && mode === 'pr') {
+    throw new Error(`${EXTERNAL_VARIANT_FLAG} is for the close and scheduled runs: quality:full.`);
+  }
+  const playwright = args.filter((arg) => arg !== EXTERNAL_VARIANT_FLAG);
   let shard: string | null = null;
   for (const arg of playwright) {
     const value = /^--shard=(.*)$/.exec(arg)?.[1];
@@ -64,7 +80,24 @@ export function parseRunArgs(argv: readonly string[]): RunOptions {
     if (mode === 'pr') throw new Error('quality:pr runs whole; shard quality:full instead.');
     shard = value;
   }
-  return { mode: mode as RunMode, shard, playwright };
+  return { mode: mode as RunMode, shard, externalVariant, playwright };
+}
+
+/**
+ * The close and scheduled runs' host: a worktree of HEAD with the reference
+ * variant installed from its tarball by tests/external-variant/run.mjs's
+ * own steps, built with the quality flags.
+ */
+function externalVariantHost(): { web: string; remove: () => void } {
+  const work = mkdtempSync(path.join(tmpdir(), 'portfolio-quality-external-'));
+  try {
+    const { host } = installReference(work);
+    buildReferenceHost(host, { ...QUALITY_BUILD_ENV });
+    return { web: path.join(host, 'apps', 'web'), remove: () => removeReference(work) };
+  } catch (error) {
+    removeReference(work);
+    throw error;
+  }
 }
 
 function readSummary(): Summary | null {
@@ -140,7 +173,12 @@ async function main(argv: readonly string[]): Promise<number> {
   let host: { remove: () => void } | null = null;
   try {
     let web = process.env.QUALITY_WEB;
-    if (!web) {
+    if (options.externalVariant) {
+      console.log('[quality] installing the reference variant, as test:external-variant does');
+      const installed = externalVariantHost();
+      host = installed;
+      web = installed.web;
+    } else if (!web) {
       console.log('[quality] building the quality host');
       const built = buildQualityHost({ log: path.join(quality, 'quality-host.log') });
       host = built;

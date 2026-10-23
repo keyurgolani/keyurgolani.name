@@ -6,15 +6,22 @@ import { FIXED_TIME } from './lib/clock';
 import { parseRunArgs } from './run';
 
 test('quality:pr runs whole; quality:full takes a shard, and the rest goes to Playwright', () => {
-  assert.deepEqual(parseRunArgs(['pr']), { mode: 'pr', shard: null, playwright: [] });
+  assert.deepEqual(parseRunArgs(['pr']), {
+    mode: 'pr',
+    shard: null,
+    externalVariant: false,
+    playwright: [],
+  });
   assert.deepEqual(parseRunArgs(['full', '--', '--shard=2/3']), {
     mode: 'full',
     shard: '2/3',
+    externalVariant: false,
     playwright: ['--shard=2/3'],
   });
   assert.deepEqual(parseRunArgs(['full', '--shard=1/1', '--grep', 'login']), {
     mode: 'full',
     shard: '1/1',
+    externalVariant: false,
     playwright: ['--shard=1/1', '--grep', 'login'],
   });
   assert.throws(() => parseRunArgs(['pr', '--shard=1/2']), /quality:pr runs whole/);
@@ -22,6 +29,13 @@ test('quality:pr runs whole; quality:full takes a shard, and the rest goes to Pl
   assert.throws(() => parseRunArgs(['full', '--shard=0/2']), /1 <= n <= m/);
   assert.throws(() => parseRunArgs(['full', '--shard=x']), /<n>\/<m>/);
   assert.throws(() => parseRunArgs(['nightly']), /usage/);
+  assert.deepEqual(parseRunArgs(['full', '--', '--external-variant', '--shard=1/2']), {
+    mode: 'full',
+    shard: '1/2',
+    externalVariant: true,
+    playwright: ['--shard=1/2'],
+  });
+  assert.throws(() => parseRunArgs(['pr', '--external-variant']), /close and scheduled runs/);
   assert.throws(() => parseRunArgs([]), /usage/);
 });
 
