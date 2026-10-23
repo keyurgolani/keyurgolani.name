@@ -21,6 +21,7 @@ import {
 } from '@portfolio/schema';
 import { readManifest } from '../../store/revisions';
 import { runRetention } from '../../store/retention';
+import { verifyStore } from '../../store/verify';
 import { nodeFs } from '../../store/fs-port';
 import type { Store } from '../../store/store';
 import { newStore, owned, pairInput, tempDir, testChecks } from '../../store/test-support/fixtures';
@@ -609,3 +610,69 @@ test('retention 25 hours on keeps every source and rendition a revision or a dra
   for (const blob of kept) assert.ok(await s.store.assets.has(blob), blob);
   assert.equal(await s.store.assets.has(orphan.sha256), false);
 });
+
+for (const [damage, change] of [
+  [
+    'a media document this build no longer accepts',
+    (raw: string) => {
+      // One field a newer schema may write: the document stops checking here.
+      const draft = JSON.parse(raw) as {
+        documents: { media: { model: { assets: { algorithmVersion: number }[] } } };
+      };
+      draft.documents.media.model.assets[0]!.algorithmVersion = 0;
+      return JSON.stringify(draft);
+    },
+  ],
+  ['a draft file cut short', (raw: string) => raw.slice(0, raw.length - 10)],
+] as const) {
+  test(`retention 25 hours on keeps every blob of ${damage}`, async (t) => {
+    const s = await setup(t);
+    await sources(s);
+    const document = (await s.ingest({})).document;
+    const created = await s.store.drafts.create(
+      { documents: { ...PAIR, media: asDocument(document) } },
+      'owner',
+    );
+    assert.equal(created.kind, 'saved', JSON.stringify(created));
+    if (created.kind !== 'saved') return;
+    const file = s.store.paths.draft(created.draft.draftId);
+    writeFileSync(file, change(readFileSync(file, 'utf8')));
+    const orphan = await s.store.assets.put(new TextEncoder().encode('nobody'), 'image/webp');
+
+    const report = await runRetention(
+      {
+        fs: nodeFs,
+        paths: s.store.paths,
+        lock: s.store.lock,
+        checks: testChecks({ referencedBlobs: mediaBlobs }),
+        actor: 'operator',
+        now: () => Date.now() + 25 * 60 * 60_000,
+      },
+      {},
+    );
+    assert.equal(report.kind, 'done');
+    if (report.kind !== 'done') return;
+    const blobs = mediaBlobs(document);
+    assert.ok(blobs.length > 0);
+    for (const blob of blobs) assert.ok(await s.store.assets.has(blob), blob);
+    if (damage === 'a draft file cut short') {
+      // Nothing can be said about what it keeps, so nothing goes.
+      assert.equal(report.report.blobsKept, 'draft_unreadable');
+      assert.deepEqual(report.report.removedBlobs, []);
+    } else {
+      // Read by shape, it still names its blobs, and only the orphan goes.
+      assert.deepEqual(report.report.removedBlobs, [orphan.sha256]);
+      // verify reads it the same way: one of its blobs gone is a problem.
+      rmSync(s.store.paths.blob(blobs[0]!));
+      const verified = await verifyStore({
+        fs: nodeFs,
+        paths: s.store.paths,
+        checks: testChecks({ referencedBlobs: mediaBlobs }),
+      });
+      assert.ok(
+        verified.problems.some(({ code }) => code === 'blob_missing'),
+        JSON.stringify(verified.problems),
+      );
+    }
+  });
+}

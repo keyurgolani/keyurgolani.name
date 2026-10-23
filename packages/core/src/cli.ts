@@ -957,7 +957,11 @@ class Commands {
     }
     for (const blob of report.removedBlobs) this.say(`${verb} blob ${blob}`);
     for (const file of report.removedAudit) this.say(`${verb} audit/${file}`);
-    if (report.blobsKept) this.say("kept every blob: a revision's manifest can't be read");
+    if (report.blobsKept === 'manifest_unreadable') {
+      this.say("kept every blob: a revision's manifest can't be read");
+    } else if (report.blobsKept) {
+      this.say("kept every blob: a draft's file or media document can't be read");
+    }
     const protectedCount = report.protected.size;
     this.say(
       `${dryRun ? 'Dry run: nothing was removed. ' : ''}` +

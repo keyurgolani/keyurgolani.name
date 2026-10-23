@@ -362,7 +362,7 @@ Before it writes anything, `restore` refuses a target that isn't empty, a backup
 
 ### Retention
 
-`retention` takes the lock. With no flag it removes no revision: it deletes the blobs no revision or draft references that are older than 24 hours, so an upload a draft hasn't referenced yet stays, and the audit files whose every line is more than 12 months old. `--keep <n>` also removes the revisions beyond the newest `n` that aren't protected, and `--remove <revisionId>` removes one, or says why it can't. `--dry-run` says what it would remove, and removes nothing.
+`retention` takes the lock. With no flag it removes no revision: it deletes the blobs no revision or draft references that are older than 24 hours, so an upload a draft hasn't referenced yet stays, and the audit files whose every line is more than 12 months old. It reads a draft's media document by its shape, so one a newer build wrote still keeps its blobs, and while a revision's manifest or a draft's file can't be read, it deletes no blob at all. `--keep <n>` also removes the revisions beyond the newest `n` that aren't protected, and `--remove <revisionId>` removes one, or says why it can't. `--dry-run` says what it would remove, and removes nothing.
 
 Protected, always: the live revision, the 10 revisions most recently live before it, and every draft's base. A removed revision leaves `revisions/<revisionId>.tombstone.json`, saying when and by whom. Its events stay in the log, `rollback` and `recover` refuse it as `not_found`, and `verify` and the last-known-good walk skip it. The tombstone is written before the revision's directory goes, so a crash between the two leaves a revision that counts as removed, and the next run finishes removing it.
 
