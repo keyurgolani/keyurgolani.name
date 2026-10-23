@@ -8,7 +8,7 @@
 // It starts at apps/web's dependencies and optionalDependencies, follows
 // workspace links into the linked packages' own, and walks the lockfile's
 // snapshots from there. devDependencies never join, at any level, and nor
-// does a peer the shipped tree doesn't itself depend on. The output
+// does an optional peer the shipped tree doesn't itself depend on. The output
 // is a CycloneDX 1.5 SBOM of npm components, which `grype sbom:<file>` reads.
 import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -83,15 +83,19 @@ export function productionPackages(lockfileText, importer = APP_IMPORTER) {
     found.set(key, pkg);
     const snapshot = snapshots[key];
     if (!snapshot) continue;
-    // A peer comes from the package's dependent, which lists it itself when
-    // it ships it, so a peer met only by a dev dependency (next's optional
-    // @playwright/test) stays out.
-    const peers = new Set(
-      Object.keys(packages[`${pkg.name}@${pkg.version}`]?.peerDependencies ?? {}),
+    // An optional peer is the dependent's to ship. The lockfile lists one
+    // the workspace met anywhere, so next's optional @playwright/test, met
+    // only by a dev dependency, stays out. A required peer is always
+    // installed, so it stays in.
+    const meta = packages[`${pkg.name}@${pkg.version}`]?.peerDependenciesMeta ?? {};
+    const optionalPeers = new Set(
+      Object.entries(meta)
+        .filter(([, value]) => value?.optional === true)
+        .map(([name]) => name),
     );
     for (const field of PROD_FIELDS) {
       for (const [name, version] of Object.entries(snapshot[field] ?? {})) {
-        if (peers.has(name) || String(version).startsWith('link:')) continue;
+        if (optionalPeers.has(name) || String(version).startsWith('link:')) continue;
         queue.push(snapshotKey(name, version));
       }
     }

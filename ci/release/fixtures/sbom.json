@@ -1,0 +1,47 @@
+{
+  "linux/amd64": {
+    "SPDX": {
+      "spdxVersion": "SPDX-2.3",
+      "dataLicense": "CC0-1.0",
+      "SPDXID": "SPDXRef-DOCUMENT",
+      "name": "sbom",
+      "packages": [
+        {
+          "name": "package-0",
+          "SPDXID": "SPDXRef-Package-0",
+          "versionInfo": "1.0.0"
+        },
+        {
+          "name": "package-1",
+          "SPDXID": "SPDXRef-Package-1",
+          "versionInfo": "1.0.0"
+        },
+        {
+          "name": "package-2",
+          "SPDXID": "SPDXRef-Package-2",
+          "versionInfo": "1.0.0"
+        }
+      ]
+    }
+  },
+  "linux/arm64": {
+    "SPDX": {
+      "spdxVersion": "SPDX-2.3",
+      "dataLicense": "CC0-1.0",
+      "SPDXID": "SPDXRef-DOCUMENT",
+      "name": "sbom",
+      "packages": [
+        {
+          "name": "package-0",
+          "SPDXID": "SPDXRef-Package-0",
+          "versionInfo": "1.0.0"
+        },
+        {
+          "name": "package-1",
+          "SPDXID": "SPDXRef-Package-1",
+          "versionInfo": "1.0.0"
+        }
+      ]
+    }
+  }
+}
