@@ -1,5 +1,12 @@
 import assert from 'node:assert/strict';
-import { readdirSync, readFileSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  readdirSync,
+  readFileSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -377,4 +384,46 @@ test("the store's FsPort moves the pointer's paths for commit.ts alone: without 
   // And the PublicationService moves the pointer, through commit.ts.
   await publishInput(store, contentVariant(pairInput('engineering'), 'two'));
   assert.notDeepEqual(pointerFile(paths.live), before);
+});
+
+test("without the pass, the store's FsPort links from none of the pointer's paths, so no second name writes one in place", async (t) => {
+  const store = await newStore(t);
+  await publishInput(store, pairInput('engineering'));
+  const { paths } = store;
+  const before = pointerFile(paths.live);
+  const event = readFileSync(paths.event(1));
+  const second = path.join(paths.root, 'second.json');
+  const refused = (error: unknown) => (error as NodeJS.ErrnoException).code === 'EPERM';
+  await assert.rejects(nodeFs.link(paths.live, second, 'test'), refused, 'from live.json');
+  await assert.rejects(nodeFs.link(paths.event(1), second, 'test'), refused, 'from an event');
+  assert.equal(existsSync(second), false);
+  assert.deepEqual(pointerFile(paths.live), before);
+  assert.deepEqual(readFileSync(paths.event(1)), event);
+  // A link from a file that isn't the pointer's is made as before.
+  const staged = path.join(paths.root, 'staged.json');
+  writeFileSync(staged, '{}\n');
+  await nodeFs.link(staged, second, 'test');
+  assert.equal(statSync(second).nlink, 2);
+});
+
+test("without the pass, the store's FsPort makes no directory at live.json's name or an event's, or under one", async (t) => {
+  const store = await newStore(t);
+  const { paths } = store;
+  const refused = (error: unknown) => (error as NodeJS.ErrnoException).code === 'EPERM';
+  const made: Array<[string, string]> = [
+    ['at live.json', paths.live],
+    ['at the next event', paths.event(1)],
+    ['under an event', path.join(paths.event(2), 'nested')],
+  ];
+  for (const [what, dir] of made) {
+    await assert.rejects(nodeFs.mkdir(dir, 'test'), refused, what);
+  }
+  assert.equal(existsSync(paths.live), false);
+  assert.deepEqual(readdirSync(paths.events), []);
+  // The directories the store lays out are made as before.
+  await nodeFs.mkdir(paths.publication, 'test');
+  await nodeFs.mkdir(paths.events, 'test');
+  // And the next publish writes its pointer and its event where they go.
+  await publishInput(store, pairInput('engineering'));
+  assert.deepEqual(readdirSync(paths.events), ['1.json']);
 });

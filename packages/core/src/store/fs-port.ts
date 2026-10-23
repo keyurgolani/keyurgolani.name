@@ -72,6 +72,18 @@ export function isPointerPath(target: string): boolean {
   return parent === 'events' && above === 'publication' && !name.startsWith('.');
 }
 
+/**
+ * Whether `target` is the pointer's file or one of its log's: live.json, or
+ * an event's own file. publication/ and events/ are directories the store
+ * lays out.
+ */
+function isPointerFile(target: string): boolean {
+  const parts = path.resolve(target).split(path.sep);
+  const [name, parent] = [parts.at(-1), parts.at(-2)];
+  if (name === 'publication' || (name === 'events' && parent === 'publication')) return false;
+  return isPointerPath(target);
+}
+
 /** An EPERM error, for a move of the pointer's paths without the pass. */
 function pointerRefused(target: string): NodeJS.ErrnoException {
   return Object.assign(new Error('Only commit.ts moves the published pointer or its log.'), {
@@ -87,6 +99,7 @@ export interface FsPort extends ReadFs {
   /**
    * Makes `dir` and its parents, each 0700, and sets `dir` to 0700 either
    * way. A symbolic link at `dir` fails with ELOOP and is left as it is.
+   * At live.json's name or an event's, or under one, it fails with EPERM.
    */
   mkdir(dir: string, point: CrashPoint): Promise<void>;
   /**
@@ -111,8 +124,8 @@ export interface FsPort extends ReadFs {
   rename(from: string, to: string, point: CrashPoint, pass?: PointerPass): Promise<void>;
   /**
    * Makes `created` a second name for `existing`, failing with EEXIST when
-   * it's taken. At one of the pointer's paths, it needs `pass`, as a rename
-   * does.
+   * it's taken. From or at one of the pointer's paths, it needs `pass`, as
+   * a rename does.
    */
   link(existing: string, created: string, point: CrashPoint, pass?: PointerPass): Promise<void>;
   /**
@@ -185,6 +198,11 @@ export const nodeFs: FsPort = Object.freeze({
     }
   },
   async mkdir(dir: string) {
+    // A directory at live.json's name, or an event's, or above one, would
+    // stand where the next pointer move writes. Nothing makes one.
+    for (let at = path.resolve(dir); at !== path.dirname(at); at = path.dirname(at)) {
+      if (isPointerFile(at)) throw pointerRefused(at);
+    }
     await mkdir(dir, { recursive: true, mode: 0o700 });
     // chmod follows a link, so a link here is refused before it.
     if (!(await lstat(dir)).isDirectory()) throw linkError(dir);
@@ -224,7 +242,11 @@ export const nodeFs: FsPort = Object.freeze({
     await rename(from, to);
   },
   async link(existing: string, created: string, _point: CrashPoint, pass?: PointerPass) {
-    if (pass !== POINTER_PASS && isPointerPath(created)) throw pointerRefused(created);
+    // A second name for live.json or an event would let a write in place
+    // through it, so a link from one takes the pass too.
+    for (const target of [existing, created]) {
+      if (pass !== POINTER_PASS && isPointerPath(target)) throw pointerRefused(target);
+    }
     await link(existing, created);
   },
   async remove(target: string) {
