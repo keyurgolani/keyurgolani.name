@@ -234,6 +234,14 @@ test("a build without BUDGET_FIXTURES that ships #6's catalog fixture fails, by 
   ]);
   assert.match(checkStandalone(routed, {}) ?? '', /ships #6's catalog fixture[^]*_catalog-fixture/);
   assert.equal(checkStandalone(routed, { BUDGET_FIXTURES: '1' }), null);
+  // A value the fixture gate doesn't read admits no fixture, so that build has none to ship.
+  for (const value of ['0', 'false', 'yes', '']) {
+    assert.match(
+      checkStandalone(routed, { BUDGET_FIXTURES: value }) ?? '',
+      /ships #6's catalog fixture/,
+      `BUDGET_FIXTURES=${value}`,
+    );
+  }
   // A chunk, beside the standalone tree in .next/static, that holds a plate.
   const parent = mkdtempSync(path.join(tmpdir(), 'next-'));
   t.after(() => rmSync(parent, { recursive: true, force: true }));

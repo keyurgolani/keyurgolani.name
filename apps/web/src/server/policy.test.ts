@@ -60,13 +60,23 @@ test('the summary names each granted capability and its access, and nothing else
   assert.ok(
     owner.capabilities.some((entry) => entry.id === 'publish' && entry.access === 'session'),
   );
+  for (const [id, fixture] of Object.entries(FIXTURE_CAPABILITIES)) {
+    if ('access' in fixture && fixtureFlags(process.env)[fixture.key] === true) {
+      assert.ok(
+        owner.capabilities.some((entry) => entry.id === id && entry.access === 'session'),
+        id,
+      );
+    }
+  }
   const readOnly = capabilityPolicy('read-only').summary();
   // A fixture capability is there when this run's environment asks registry
   // generation for its flag (#19, Slice 3), as APPEARANCE_FIXTURES=1 pnpm
   // test does: read from the environment, never from the code under test.
+  // One the owner alone holds, with a session, such as #6's catalog
+  // fixture under BUDGET_FIXTURES=1, read-only never lists.
   const asked = fixtureFlags(process.env);
   const fixtures = Object.entries(FIXTURE_CAPABILITIES)
-    .filter(([, { key }]) => asked[key] === true)
+    .filter(([, fixture]) => asked[fixture.key] === true && !('access' in fixture))
     .map(([id]) => ({ id, access: 'public' }));
   assert.deepEqual(readOnly, {
     profile: 'read-only',

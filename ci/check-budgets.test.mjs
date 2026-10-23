@@ -813,3 +813,24 @@ test("the check finds an enhancement's chunk in the build through its source map
   assert.equal(glint.enhancement, 'glint');
   assert.ok(glint.actual > 0);
 });
+
+test("a variant's catalog stills count toward its image budget, so stills alone can break it (#6)", () => {
+  const still = (width, bytes) => ({
+    url: `/_portfolio/still/stilled.${String(width).padStart(12, '0')}.webp`,
+    bytes,
+    width,
+    height: Math.round(width * 0.625),
+  });
+  const stilled = variant('stilled', {
+    budgets: { image: 100000 },
+    images: [],
+    stills: [still(1440, 70000), still(720, 40000)],
+  });
+  const { records, checked } = check([stilled], [traceCase('stilled')]);
+  assert.deepEqual(metrics(records), ['image']);
+  const [image] = records;
+  assert.equal(image.actual, 110000);
+  assert.equal(image.threshold, 100000);
+  assert.equal(image.asset, stilled.stills[0].url);
+  assert.equal(checked.find((row) => row.metric === 'image').actual, 110000);
+});

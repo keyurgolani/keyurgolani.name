@@ -16,6 +16,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { scanTree } from './lib/container.mjs';
+import { budgetFixtures } from './lib/fixture-flags.mjs';
 import { currentGate, REPO_ROOT, reportError, writeFailureRecord } from './lib/reports.mjs';
 
 export const STANDALONE_DIR = path.join(REPO_ROOT, 'apps', 'web', '.next', 'standalone');
@@ -111,7 +112,9 @@ export function checkStandalone(dir, env = process.env) {
       `${shown} lacks the bundled sample the demo profile renders: ${SAMPLE}. next.config.ts's outputFileTracingIncludes ships them.`,
     );
   }
-  if (!env.BUDGET_FIXTURES) {
+  // A flag set to a value the fixture gate doesn't read, such as 0, admits
+  // nothing, so that build is one without it.
+  if (!budgetFixtures(env)) {
     const catalog = catalogFixtureFiles(dir);
     if (catalog.length > 0) {
       found.push(

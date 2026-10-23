@@ -948,7 +948,14 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
       }
       const spell = (pattern: string) => {
         const at = concrete(pattern);
-        return [at, `${at}?x=1`, at.toUpperCase(), `${at}/x`, ...encodedSpellings(pattern)];
+        return [
+          at,
+          `${at}?x=1`,
+          at.toUpperCase(),
+          `${at}/x`,
+          `${at}.rsc`,
+          ...encodedSpellings(pattern),
+        ];
       };
       const spellings = routes.flatMap(({ pattern }) => spell(pattern));
       // Under owner, each as the same spelling of a Studio path no route
@@ -958,13 +965,45 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
       const nowhere = routes.flatMap(({ pattern }) =>
         spell(pattern.replace(/\/[^/]+$/, '/nowhere')),
       );
-      await expectUnknown(
-        request,
-        profile,
-        spellings,
+      // What answers `path` the same: the same spelling of a Studio path no
+      // route matches under owner, and /no-such-page, its query and its .rsc
+      // kept, elsewhere.
+      const reference = (path: string) => {
+        const query = path.includes('?') ? path.slice(path.indexOf('?')) : '';
+        const bare = path.slice(0, path.length - query.length);
+        return hasStudio(profile)
+          ? `${bare.replace(/\/[^/]+$/, '/nowhere')}${query}`
+          : `/no-such-page${bare.endsWith('.rsc') ? '.rsc' : ''}${query}`;
+      };
+      // As a document, as Next's router asks for its RSC payload, and as it
+      // prefetches one, each the way its counterpart answers.
+      const asked: Record<string, string>[] = [
         {},
-        hasStudio(profile) ? nowhere : '/no-such-page',
-      );
+        { rsc: '1' },
+        { rsc: '1', 'next-router-prefetch': '1' },
+      ];
+      for (const headers of asked) {
+        await expectUnknown(
+          request,
+          profile,
+          spellings,
+          headers,
+          hasStudio(profile) ? nowhere : spellings.map(reference),
+        );
+      }
+      // A trailing slash: the 308 to the path without it, as its counterpart gets.
+      for (const { pattern } of routes) {
+        const at = concrete(pattern);
+        for (const method of EVERY_METHOD) {
+          const what = `${method} ${at}/`;
+          const response = await request.fetch(`${at}/`, { method, maxRedirects: 0 });
+          const counterpart = await request.fetch(`${reference(at)}/`, { method, maxRedirects: 0 });
+          expect(response.status(), what).toBe(counterpart.status());
+          expect(response.status(), what).toBe(308);
+          expect(response.headers()['location'], what).toBe(at);
+          expectProfileHeaders(profile, response, what);
+        }
+      }
     },
   );
 

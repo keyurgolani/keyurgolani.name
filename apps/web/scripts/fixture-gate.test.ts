@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readRegistry } from '@portfolio/variant-contract/node';
-import { FIXTURE_FLAG } from '../../../ci/lib/fixture-flags.mjs';
+import { BUDGET_FIXTURE_VALUES, FIXTURE_FLAG } from '../../../ci/lib/fixture-flags.mjs';
 import {
   FIXTURE_ROWS,
   fixtureFlags,
@@ -91,6 +91,16 @@ test('every fixture package in the workspace maps to a row of the table', () => 
     'packages/quality-fixtures-typography',
   ]);
   for (const dir of marked) assert.ok(fixtureRow(dir), dir);
+});
+
+test('the values BUDGET_FIXTURES admits a fixture under are the ones ci/lib/fixture-flags.mjs says, so check:standalone reads the flag as the gate does', () => {
+  const values = FIXTURE_ROWS.filter(({ flag }) => flag === 'BUDGET_FIXTURES').flatMap(
+    (row) => row.values,
+  );
+  assert.deepEqual([...new Set(values)].sort(), [...BUDGET_FIXTURE_VALUES].sort());
+  for (const value of ['0', 'false', '']) {
+    assert.equal(fixtureFlags({ BUDGET_FIXTURES: value }).budget, false, value);
+  }
 });
 
 test('BUDGET_FIXTURES=1 admits the light and medium fixture variants and the font fixture, and over the one over budget, alone', () => {

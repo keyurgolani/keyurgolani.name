@@ -45,12 +45,22 @@ function registersTypography(id: string, file = ASSET_MANIFEST): boolean {
   }
 }
 
-/** `site` publishing `typography`, in place of the fixture's own. */
+/**
+ * `site` publishing `typography`, in place of the fixture's own, and
+ * leaving the typography to the visitor, so a page offers the build's other
+ * one to switch to (axis-switch.spec.ts).
+ */
 export function publishingTypography(site: string, typography: string): string {
   const published = site.replace(/^(\s+typography:\s*)[a-z][a-z0-9-]*\s*$/m, `$1${typography}`);
   if (published === site)
     throw new Error("The trace fixture's site publishes no typography to replace.");
-  return published;
+  const controls = published.replace(
+    /^(visitorControls:\n(?:\s+.*\n)*?\s+typography:\s*)locked\s*$/m,
+    '$1selectable',
+  );
+  if (controls === published)
+    throw new Error("The trace fixture's site leaves no locked typography to open.");
+  return controls;
 }
 
 export interface TraceTarget {
