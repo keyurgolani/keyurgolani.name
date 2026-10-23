@@ -660,11 +660,16 @@ test("#6's catalog fixture is the owner's Studio page in a build with BUDGET_FIX
       } else {
         // The unknown path's 404, in any build, under demo and read-only,
         // with what any unknown Studio path gets there: Studio's own
-        // headers under owner, and none under a profile with no Studio.
+        // headers under owner, and its no-store, which next.config.ts
+        // adds, and none under a profile with no Studio.
         assert.equal(page.headers.get('x-middleware-request-x-portfolio-not-found'), '1', what);
         assert.equal(decision(page), null, what);
-        assert.equal(page.headers.get('cache-control'), UNKNOWN_PATH_CACHE_CONTROL, what);
         const studio = await proxy(request('/studio/no-such-page', method));
+        assert.equal(
+          page.headers.get('cache-control'),
+          profile === 'owner' ? studio.headers.get('cache-control') : UNKNOWN_PATH_CACHE_CONTROL,
+          what,
+        );
         assert.equal(
           page.headers.has('content-security-policy'),
           studio.headers.has('content-security-policy'),

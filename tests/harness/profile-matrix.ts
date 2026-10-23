@@ -497,14 +497,22 @@ async function shape(response: APIResponse, target: string) {
   const type = response.headers()['content-type'] ?? '';
   const page = /^text\/html/.test(type) && text !== '';
   const flight = /^text\/x-component/.test(type);
+  // Studio's policy carries a nonce made per response, as do its page's
+  // scripts and the stylesheet preload Next sends in its Link header.
+  const csp = response.headers()['content-security-policy'];
+  const nonce = /'nonce-([A-Za-z0-9+/=]+)'/.exec(csp ?? '')?.[1];
   return {
     status: response.status(),
     headers: Object.fromEntries(
-      Object.entries(response.headers()).filter(
-        ([name]) => !['date', 'x-request-id'].includes(name),
-      ),
+      Object.entries(response.headers())
+        .filter(([name]) => !['date', 'x-request-id'].includes(name))
+        .map(([name, value]) => [name, nonce ? value.split(nonce).join('<n>') : value]),
     ),
-    body: page ? withoutOwnPath(text, target) : flight ? withoutFlightRequestId(text) : text,
+    body: page
+      ? withoutOwnPath(withoutNonce(text, nonce), target)
+      : flight
+        ? withoutFlightRequestId(text)
+        : text,
   };
 }
 
@@ -512,27 +520,28 @@ async function shape(response: APIResponse, target: string) {
  * Sends every method to each target, with `headers`, and expects each answer
  * to be exactly /no-such-page's, with the target's own query: the same
  * status, headers, and body, but for the path Next's payload names in a page.
+ * `reference` names another path to answer as, or one per target, each sent
+ * as is.
  */
 async function expectUnknown(
   request: APIRequestContext,
   profile: Profile,
   targets: readonly string[],
   headers: Record<string, string> = {},
-  reference = '/no-such-page',
+  reference: string | readonly string[] = '/no-such-page',
 ): Promise<void> {
-  for (const target of targets) {
+  for (const [index, target] of targets.entries()) {
     const query = target.includes('?') ? target.slice(target.indexOf('?')) : '';
+    const unknownAt = typeof reference === 'string' ? `${reference}${query}` : reference[index]!;
     for (const method of EVERY_METHOD) {
       const what = `${method} ${target}`;
       const options = { method, maxRedirects: 0, headers };
       const response = await request.fetch(target, options);
-      const unknown = await request.fetch(`${reference}${query}`, options);
+      const unknown = await request.fetch(unknownAt, options);
       expect(response.status(), what).toBe(404);
       expect(await response.text(), what).not.toContain('Password');
       expectProfileHeaders(profile, response, what);
-      expect(await shape(response, target), what).toEqual(
-        await shape(unknown, `${reference}${query}`),
-      );
+      expect(await shape(response, target), what).toEqual(await shape(unknown, unknownAt));
     }
   }
 }
@@ -942,17 +951,24 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
         // A build made without the flag has no catalog fixture in any profile.
         expect(routes.map(({ pattern }) => pattern)).toContain('/studio/_catalog-fixture');
       }
-      const spellings = routes.flatMap(({ pattern }) => {
+      const spell = (pattern: string) => {
         const at = concrete(pattern);
         return [at, `${at}?x=1`, at.toUpperCase(), `${at}/x`, ...encodedSpellings(pattern)];
-      });
-      // Under owner, Studio's unknown path; under a profile with no Studio, any path's.
+      };
+      const spellings = routes.flatMap(({ pattern }) => spell(pattern));
+      // Under owner, each as the same spelling of a Studio path no route
+      // matches, the route's own segment as `nowhere`, since Studio's
+      // headers follow the path as sent; under a profile with no Studio,
+      // each as any path no route matches.
+      const nowhere = routes.flatMap(({ pattern }) =>
+        spell(pattern.replace(/\/[^/]+$/, '/nowhere')),
+      );
       await expectUnknown(
         request,
         profile,
         spellings,
         {},
-        hasStudio(profile) ? '/studio/nowhere' : '/no-such-page',
+        hasStudio(profile) ? nowhere : '/no-such-page',
       );
     },
   );

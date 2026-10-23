@@ -1,5 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import type * as FixtureGate from '../../apps/web/scripts/fixture-gate';
+import type * as Capabilities from '../../apps/web/src/server/capabilities';
 import type * as Routes from '../../apps/web/src/server/routes';
 import { expect, test } from '../harness/fixtures';
 import { profileMatrix, READ_ONLY_APP } from '../harness/profile-matrix';
@@ -17,6 +19,21 @@ import { profileMatrix, READ_ONLY_APP } from '../harness/profile-matrix';
 const require = createRequire(import.meta.url);
 const { listExperienceRoutes, listRoutes } =
   require('../../apps/web/src/server/routes.ts') as typeof Routes;
+const { FIXTURE_CAPABILITIES } =
+  require('../../apps/web/src/server/capabilities.ts') as typeof Capabilities;
+const { fixtureFlags } = require('../../apps/web/scripts/fixture-gate.ts') as typeof FixtureGate;
+
+/**
+ * Whether the build has `entry`'s route file: registry generation writes a
+ * fixture route, such as #6's catalog fixture, only with its flag, which
+ * this run's environment names as the build's did.
+ */
+function generated(entry: Routes.RouteEntry): boolean {
+  if (!entry.fixtureRoute) return true;
+  const fixtures: Readonly<Record<string, { readonly key: string }>> = FIXTURE_CAPABILITIES;
+  const fixture = fixtures[entry.capability];
+  return fixture !== undefined && fixtureFlags(process.env)[fixture.key] === true;
+}
 
 // The build's own entries in its route manifests, which no route file declares.
 const NEXT_ENTRIES = new Set([
@@ -45,9 +62,10 @@ test(
       ...Object.keys(manifest('server/pages-manifest.json')),
     ].filter((url) => !NEXT_ENTRIES.has(url));
     const table = new Set(
-      [...listRoutes().filter((entry) => !entry.experience), ...listExperienceRoutes()].map(
-        (entry) => entry.pattern,
-      ),
+      [
+        ...listRoutes().filter((entry) => !entry.experience && generated(entry)),
+        ...listExperienceRoutes(),
+      ].map((entry) => entry.pattern),
     );
     expect([...new Set(built)].sort()).toEqual([...table].sort());
   },

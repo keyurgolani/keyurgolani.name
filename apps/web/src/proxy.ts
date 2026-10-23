@@ -206,8 +206,11 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   // (#19, Slice 3): a page load goes to the 404 page ahead of Next's file
   // check, and any other method gets the plain 404 below. A preview path's
   // gate above answers first under a profile with grant routes (#7).
+  // A Studio route under a profile with Studio, such as #6's catalog fixture
+  // in a build without its flag, keeps the no-store next.config.ts asks of
+  // a Studio path, so it answers exactly as an unknown Studio path does.
   if (decision.status === 'absent' && decision.unknown && pageLoad) {
-    return unknownPath(request, requestId, extra, { csp, preview });
+    return unknownPath(request, requestId, extra, { csp, preview, studioCaching: studio });
   }
   if (decision.status === 'absent') {
     // A Studio page under a profile with none, and a preview route this
@@ -554,13 +557,18 @@ function unknownPath(
   request: NextRequest,
   requestId: string,
   extra: Record<string, string>,
-  options: { readonly csp?: string; readonly preview?: boolean },
+  options: {
+    readonly csp?: string;
+    readonly preview?: boolean;
+    /** Keep next.config.ts's Studio no-store in place of the unknown path's caching. */
+    readonly studioCaching?: boolean;
+  },
 ): NextResponse {
   const headers = forwarded(request, requestId, options);
   headers.set(NOT_FOUND_HEADER, '1');
   const response = NextResponse.next({ request: { headers } });
   response.headers.set('x-request-id', requestId);
-  response.headers.set('cache-control', UNKNOWN_PATH_CACHE_CONTROL);
+  if (!options.studioCaching) response.headers.set('cache-control', UNKNOWN_PATH_CACHE_CONTROL);
   for (const [name, value] of Object.entries(extra)) response.headers.set(name, value);
   return response;
 }
