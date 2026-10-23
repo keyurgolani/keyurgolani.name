@@ -114,6 +114,10 @@ jobs:
         env:
           # The build record artifact holds the build's logs; it isn't needed.
           DOCKER_BUILD_RECORD_UPLOAD: 'false'
+          # buildx's own metadata provenance carries the event payload (a
+          # PR's body, a tag's commit messages) into the step's log. The
+          # image's attestations don't come from it.
+          BUILDX_METADATA_PROVENANCE: disabled
         with:
           context: .
           file: ./Dockerfile
@@ -129,9 +133,12 @@ jobs:
           DIGEST: ${{ steps.build.outputs.digest }}
         run: |
           mkdir -p "$INVENTORY"
-          docker buildx imagetools inspect "$IMAGE@$DIGEST" --format '{{ json .Provenance }}' > "$INVENTORY/provenance.json"
-          docker buildx imagetools inspect "$IMAGE@$DIGEST" --format '{{ json .SBOM }}' > "$INVENTORY/sbom.json"
-          node ci/release/attestations.mjs "$INVENTORY/provenance.json" "$INVENTORY/sbom.json" --write-sboms="$INVENTORY"
+          mkdir -p "$INVENTORY"
+          # The raw provenance stays on the runner: it may carry the event
+          # payload. Only the SBOMs it checks are kept.
+          docker buildx imagetools inspect "$IMAGE@$DIGEST" --format '{{ json .Provenance }}' > "$RUNNER_TEMP/provenance.json"
+          docker buildx imagetools inspect "$IMAGE@$DIGEST" --format '{{ json .SBOM }}' > "$RUNNER_TEMP/sbom.json"
+          node ci/release/attestations.mjs "$RUNNER_TEMP/provenance.json" "$RUNNER_TEMP/sbom.json" --write-sboms="$INVENTORY"
       - name: Install Grype
         run: |
           node ci/release/install-grype.mjs "$RUNNER_TEMP/grype"
@@ -288,6 +295,10 @@ jobs:
         env:
           # The build record artifact holds the build's logs; it isn't needed.
           DOCKER_BUILD_RECORD_UPLOAD: 'false'
+          # buildx's own metadata provenance carries the event payload (a
+          # PR's body, a tag's commit messages) into the step's log. The
+          # image's attestations don't come from it.
+          BUILDX_METADATA_PROVENANCE: disabled
         with:
           context: .
           file: ./Dockerfile
@@ -304,9 +315,9 @@ jobs:
           DIGEST: ${{ steps.build.outputs.digest }}
         run: |
           mkdir -p "$REPORTS"
-          docker buildx imagetools inspect "$IMAGE@$DIGEST" --format '{{ json .Provenance }}' > "$REPORTS/provenance.json"
-          docker buildx imagetools inspect "$IMAGE@$DIGEST" --format '{{ json .SBOM }}' > "$REPORTS/sbom.json"
-          node ci/release/attestations.mjs "$REPORTS/provenance.json" "$REPORTS/sbom.json" --write-sboms="$REPORTS/sboms"
+          docker buildx imagetools inspect "$IMAGE@$DIGEST" --format '{{ json .Provenance }}' > "$RUNNER_TEMP/provenance.json"
+          docker buildx imagetools inspect "$IMAGE@$DIGEST" --format '{{ json .SBOM }}' > "$RUNNER_TEMP/sbom.json"
+          node ci/release/attestations.mjs "$RUNNER_TEMP/provenance.json" "$RUNNER_TEMP/sbom.json" --write-sboms="$REPORTS/sboms"
       - name: Attest the build provenance
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
@@ -518,7 +529,6 @@ jobs:
     env:
       IMAGE: ${{ needs.classify.outputs.image }}
       REPORTS: reports/release
-      INVENTORY: inventory/release
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -573,10 +583,9 @@ jobs:
         env:
           DIGEST: ${{ steps.digest.outputs.digest }}
         run: |
-          mkdir -p "$INVENTORY"
-          docker buildx imagetools inspect "$IMAGE@$DIGEST" --format '{{ json .Provenance }}' > "$INVENTORY/provenance.json"
-          docker buildx imagetools inspect "$IMAGE@$DIGEST" --format '{{ json .SBOM }}' > "$INVENTORY/sbom.json"
-          node ci/release/attestations.mjs "$INVENTORY/provenance.json" "$INVENTORY/sbom.json"
+          docker buildx imagetools inspect "$IMAGE@$DIGEST" --format '{{ json .Provenance }}' > "$RUNNER_TEMP/provenance.json"
+          docker buildx imagetools inspect "$IMAGE@$DIGEST" --format '{{ json .SBOM }}' > "$RUNNER_TEMP/sbom.json"
+          node ci/release/attestations.mjs "$RUNNER_TEMP/provenance.json" "$RUNNER_TEMP/sbom.json"
       - name: Install Grype
         run: |
           node ci/release/install-grype.mjs "$RUNNER_TEMP/grype"
@@ -598,14 +607,6 @@ jobs:
           path: reports/
           if-no-files-found: ignore
           retention-days: 1
-      - name: Upload the inventory
-        if: ${{ always() }}
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: release-inventory-promote-scan
-          path: inventory/
-          if-no-files-found: ignore
-          retention-days: 90
 
   # The one job that moves latest: the candidate's digest gets the final
   # tags, with no rebuild.
@@ -616,7 +617,9 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     # One promotion at a time, across every final tag, so two never race
-    # for latest. None is cancelled.
+    # for latest. GitHub keeps one pending job per group, so a third final
+    # pushed while one runs and one waits cancels the waiting one: re-run
+    # that run's failed jobs (docs/releasing.md).
     concurrency:
       group: release-promote
       cancel-in-progress: false

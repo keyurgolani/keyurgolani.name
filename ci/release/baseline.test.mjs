@@ -46,3 +46,17 @@ test('only a published final release counts, not a draft, a pre-release, or a 40
   assert.equal(isPublishedRelease(release('v1.0.1'), 'v1.0.0'), false);
   assert.equal(isPublishedRelease(null, 'v1.0.0'), false);
 });
+
+test('a release lookup that fails stops the baseline instead of skipping to an older one', async () => {
+  const asked = [];
+  await assert.rejects(
+    pickBaseline(['v1.0.0', 'v1.1.0'], async (tag) => {
+      asked.push(tag);
+      if (tag === 'v1.1.0') throw new Error('GET releases/tags/v1.1.0 answered HTTP 502');
+      return true;
+    }),
+    /HTTP 502/,
+  );
+  // It never fell back to v1.0.0, which would hide what v1.1.0 fixed.
+  assert.deepEqual(asked, ['v1.1.0']);
+});

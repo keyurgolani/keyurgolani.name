@@ -260,6 +260,21 @@ test('every setup-buildx pins its buildx version, and no build uploads a build r
   for (const id of ['dry-run', 'rc-build']) {
     for (const step of uses(id, 'docker/build-push-action')) {
       assert.equal(step.env.DOCKER_BUILD_RECORD_UPLOAD, 'false', id);
+      // buildx's metadata provenance prints the event payload in the log.
+      assert.equal(step.env.BUILDX_METADATA_PROVENANCE, 'disabled', id);
     }
   }
+  // The raw provenance may carry the event payload too, so it stays on the
+  // runner, outside every uploaded directory.
+  let inspected = 0;
+  for (const [id, job] of Object.entries(JOBS)) {
+    for (const step of job.steps) {
+      for (const line of (step.run ?? '').match(/imagetools inspect .*\.(Provenance|SBOM) .*$/gm) ??
+        []) {
+        inspected += 1;
+        assert.match(line, />\s*"\$RUNNER_TEMP\//, `${id}: ${line}`);
+      }
+    }
+  }
+  assert.equal(inspected, 6, 'dry-run, rc-build, and promote-scan each read both');
 });

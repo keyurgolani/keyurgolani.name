@@ -2,7 +2,7 @@
 // output (ci/release/fixtures/grype-*.json).
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -13,6 +13,7 @@ import {
   evaluateImage,
   findingsOf,
   main,
+  run,
   parseDate,
   readExceptions,
 } from './scan-gate.mjs';
@@ -238,4 +239,114 @@ test('an exception problem names the entry and its id, never its package', () =>
   const out = lines.join('\n');
   assert.match(out, /entry 1 \(CVE-2026-1001\) expired on 2026-01-01/);
   assert.ok(!out.includes('quiet-package-name'));
+});
+
+/** run() over `argv` in a scratch directory: { code, stdout, summary, annotations }. */
+function runIn(dir, argv, exceptionsText = 'exceptions: []\n') {
+  const summaryFile = path.join(dir, `summary-${Math.random()}.md`);
+  const lines = [];
+  const code = run(argv, {
+    log: (line) => lines.push(String(line)),
+    env: { GITHUB_STEP_SUMMARY: summaryFile },
+    exceptionsText,
+    on: ON,
+  });
+  let summary = '';
+  try {
+    summary = readFileSync(summaryFile, 'utf8');
+  } catch {
+    // A run that stopped before its summary wrote none.
+  }
+  const stdout = lines.join('\n');
+  return {
+    code,
+    stdout,
+    summary,
+    annotations: lines.filter((line) => line.startsWith('::')).join('\n'),
+  };
+}
+
+test('every way the CLI stops fails closed and names no finding, package, version, or file text', () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'scan-gate-run-'));
+  try {
+    const fixture = (name) => fileURLToPath(new URL(`./fixtures/${name}.json`, import.meta.url));
+    const write = (name, text) => {
+      const file = path.join(dir, name);
+      writeFileSync(file, text);
+      return file;
+    };
+    const leaky = 'leaky-package-name';
+    const malformed = write(
+      'malformed.json',
+      `{"matches":[{"vulnerability":{"id":"CVE-2026-9999"},"artifact":{"name":"${leaky}","version":"9.9.9"`,
+    );
+    const empty = write('empty.json', '');
+    const ignored = write('ignored.json', readFileSync(fixture('grype-ignored'), 'utf8'));
+    const covering = yaml([entry(), entry({ id: 'CVE-2026-1003', package: 'cross-spawn' })]);
+    const cases = [
+      ['malformed JSON', ['image', malformed], 1, /malformed\.json isn't JSON/],
+      ["Grype's own ignores", ['image', ignored], 1, /Grype ignored 1 match/],
+      ['an empty report', ['image', empty], 1, /empty\.json isn't JSON/],
+      ['an empty object', ['image', write('object.json', '{}')], 1, /isn't Grype JSON/],
+      [
+        'a missing file',
+        ['deps', path.join(dir, 'gone.json'), malformed],
+        1,
+        /gone\.json can't be read/,
+      ],
+    ];
+    const detail = [...findingDetail(grype('grype-image')), leaky, '9.9.9', 'CVE-2026-9999'];
+    const check = (label, result) => {
+      for (const [where, text] of [
+        ['stdout', result.stdout],
+        ['the summary', result.summary],
+        ['the annotations', result.annotations],
+      ]) {
+        for (const value of detail)
+          assert.ok(!text.includes(value), `${label}: ${where} names ${value}`);
+        assert.doesNotMatch(text, /CVE-|GHSA-/i, `${label}: ${where}`);
+      }
+    };
+    for (const [label, argv, code, message] of cases) {
+      const result = runIn(dir, argv);
+      assert.equal(result.code, code, label);
+      assert.match(result.annotations, message, label);
+      check(label, result);
+    }
+    // A report whose every failing finding an exception covers passes, and
+    // still names none of them.
+    const excepted = runIn(dir, ['image', fixture('grype-image')], covering);
+    assert.equal(excepted.code, 0);
+    assert.match(excepted.stdout, /2 let through by an exception \(1 Critical, 1 High\)/);
+    check('a matching exception', excepted);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('an unexpected error fails the scan without its message', () => {
+  const lines = [];
+  const code = run(['image', '/dev/null'], {
+    log: (line) => lines.push(String(line)),
+    env: {},
+    exceptionsText: 'exceptions: []\n',
+    on: ON,
+  });
+  assert.equal(code, 1);
+  // /dev/null reads as empty, a ScanError; a non-ScanError prints no message.
+  assert.match(lines.join('\n'), /isn't JSON/);
+  const thrown = [];
+  assert.equal(
+    run(['image', 'x'], {
+      log: (line) => thrown.push(String(line)),
+      env: {},
+      get exceptionsText() {
+        throw new TypeError('quoted secret-ish text');
+      },
+    }),
+    1,
+  );
+  assert.deepEqual(thrown, [
+    '::error title=scan::scan-gate stopped on an unexpected error, so the scan fails',
+  ]);
 });

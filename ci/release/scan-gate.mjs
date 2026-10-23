@@ -25,6 +25,12 @@ import { fileURLToPath } from 'node:url';
 import { parse } from 'yaml';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
+
+/**
+ * A refusal whose message names no finding and quotes no file, so run()
+ * prints it. Any other error prints as a bare failure.
+ */
+export class ScanError extends Error {}
 export const EXCEPTIONS_FILE = path.join(HERE, 'scan-exceptions.yml');
 /** The longest an exception may run from the day it's checked. */
 export const MAX_EXCEPTION_DAYS = 90;
@@ -140,12 +146,12 @@ export function findingOf(match) {
 /** Every finding in a Grype JSON document. Throws when it isn't one. */
 export function findingsOf(report) {
   if (!report || typeof report !== 'object' || !Array.isArray(report.matches)) {
-    throw new Error("isn't Grype JSON output: it has no matches list");
+    throw new ScanError("isn't Grype JSON output: it has no matches list");
   }
   // An ignore rule in .grype.yaml or on the command line would let a finding
   // through with no expiry. Exceptions live in scan-exceptions.yml only.
   if (Array.isArray(report.ignoredMatches) && report.ignoredMatches.length > 0) {
-    throw new Error(
+    throw new ScanError(
       `Grype ignored ${report.ignoredMatches.length} match(es) by its own rules. Remove the ignore rule, and add an expiring entry to ci/release/scan-exceptions.yml instead`,
     );
   }
@@ -273,13 +279,13 @@ const readJson = (file) => {
   try {
     text = readFileSync(file, 'utf8');
   } catch {
-    throw new Error(`${path.basename(file)} can't be read`);
+    throw new ScanError(`${path.basename(file)} can't be read`);
   }
   try {
     return JSON.parse(text);
   } catch {
     // Never pass the parser's message on: it quotes the file.
-    throw new Error(`${path.basename(file)} isn't JSON`);
+    throw new ScanError(`${path.basename(file)} isn't JSON`);
   }
 };
 
@@ -339,11 +345,25 @@ export function main(argv, io = {}) {
   return verdict.ok && problems.length === 0 ? 0 : 1;
 }
 
-if (path.resolve(process.argv[1] ?? '') === fileURLToPath(import.meta.url)) {
+/**
+ * main() behind a catch that fails closed: a refusal prints its own
+ * message, which names no finding, and anything else prints no message
+ * at all, since an unexpected error may quote what it read.
+ */
+export function run(argv, io = {}) {
+  const log = io.log ?? console.log;
   try {
-    process.exit(main(process.argv.slice(2)));
+    return main(argv, io);
   } catch (error) {
-    console.log(`::error title=scan::${error.message}`);
-    process.exit(1);
+    log(
+      error instanceof ScanError
+        ? `::error title=scan::${error.message}`
+        : '::error title=scan::scan-gate stopped on an unexpected error, so the scan fails',
+    );
+    return 1;
   }
+}
+
+if (path.resolve(process.argv[1] ?? '') === fileURLToPath(import.meta.url)) {
+  process.exit(run(process.argv.slice(2)));
 }
