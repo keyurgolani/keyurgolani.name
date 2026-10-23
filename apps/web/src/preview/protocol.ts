@@ -44,6 +44,13 @@ export const LIMITS = Object.freeze({
 /** The most `scrolled` messages a frame sends, and Studio takes, in any second. */
 export const SCROLLED_PER_SECOND = 10;
 
+/**
+ * The most `navigated` messages Studio takes in any second (#7). A frame
+ * sends one as each of its loads starts, so a reader never comes near it,
+ * and a linked pair passes no more than this on.
+ */
+export const NAVIGATED_PER_SECOND = 10;
+
 /** Why a side dropped a message. */
 export const DROP_REASONS = [
   /** From a window that isn't the other side's. */
@@ -67,7 +74,7 @@ export const DROP_REASONS = [
   'payload',
   /** A message this side doesn't take now, such as a `connect` before its `hello`. */
   'state',
-  /** A `scrolled` past SCROLLED_PER_SECOND. */
+  /** A `scrolled` past SCROLLED_PER_SECOND, or a `navigated` past NAVIGATED_PER_SECOND. */
   'rate',
 ] as const;
 export type DropReason = (typeof DROP_REASONS)[number];

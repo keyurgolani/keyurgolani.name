@@ -409,7 +409,8 @@ export function StudioPreview({
               onArrived={(route) => link.current.arrived(side, route)}
               onNavigated={(route) => {
                 const to = link.current.navigated(side, route);
-                if (to !== null) other(side)?.navigate(to);
+                const otherSide: FrameSide = side === 0 ? 1 : 0;
+                if (to !== null && other(side)?.navigate(to)) link.current.moved(otherSide, to);
               }}
               onScrolled={(position) => {
                 const to = link.current.scrolled(side, position);

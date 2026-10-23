@@ -25,8 +25,14 @@ export interface FrameLink {
   setLinked(linked: boolean): void;
   /** `side` loaded `route`, its `ready`: noted, and passed on to no frame. */
   arrived(side: FrameSide, route: string): void;
-  /** `side` moved to `route`, its `navigated`: the route the other frame loads, or null. */
+  /**
+   * `side` moved to `route`, its `navigated`: the route the other frame is to
+   * load, or null. Where the other frame is changes only once it takes the
+   * move, moved(), or says where it is itself.
+   */
   navigated(side: FrameSide, route: string): string | null;
+  /** `side` took a move to `route` that navigated() passed it: it's on its way there. */
+  moved(side: FrameSide, route: string): void;
   /** `side`'s reader scrolled to `position`: where the other frame scrolls, or null. */
   scrolled(side: FrameSide, position: ScrollPosition): ScrollPosition | null;
 }
@@ -49,8 +55,10 @@ export function createFrameLink(): FrameLink {
       routes[side] = route;
       const other: FrameSide = side === 0 ? 1 : 0;
       if (!linked || routes[other] === route) return null;
-      routes[other] = route;
       return route;
+    },
+    moved(side, route) {
+      routes[side] = route;
     },
     scrolled(_side, position) {
       return linked ? { anchor: position.anchor, progress: position.progress } : null;

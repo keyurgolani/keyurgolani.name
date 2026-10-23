@@ -306,6 +306,29 @@ test("Studio reads the frame's messages over the port, drops what the protocol r
   assert.equal(calls.scrolled.length, 11);
 });
 
+test('Studio takes at most 10 navigated a second, as it does scrolled, so a linked pair passes no more on (#7)', async (t) => {
+  const clock = { now: 1000 };
+  const { channel, calls, hello, lastPort } = setup(t, clock);
+  hello();
+  const port = lastPort()!;
+  let seq = 0;
+  for (let i = 0; i < 14; i++) {
+    port.postMessage(envelope('navigated', { route: `/view-${i}` }, ++seq));
+  }
+  await tick();
+  await tick();
+  assert.equal(calls.navigated.length, 10);
+  assert.equal(channel.dropped.rate, 4);
+  // Its own count: a scrolled still goes through.
+  port.postMessage(envelope('scrolled', { anchor: 'about', progress: 0 }, ++seq));
+  // A second later, navigated goes through again.
+  clock.now += 1000;
+  port.postMessage(envelope('navigated', { route: '/' }, ++seq));
+  await tick();
+  assert.equal(calls.scrolled.length, 1);
+  assert.equal(calls.navigated.length, 11);
+});
+
 test('Studio sends a frame only what the protocol takes, and nothing before a handshake (#7, Slice 3)', async (t) => {
   const { channel, hello, lastPort } = setup(t);
   assert.equal(channel.send('lifecycle', { state: 'visible', focused: true }), false);
