@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { cpSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -14,13 +14,24 @@ const SCRIPT = path.join(__dirname, 'sync-checks.mjs');
 /** Everything sync-checks reads, which each drift test copies. */
 const READS = ['skills', 'packages/kit', 'packages/schema/src/kinds'];
 
-/** The checkout's files the drift tests change copies of, and when each last changed as this file started. */
-const DRIFTED = [
-  'skills/variant-developer/references/section-kinds.md',
-  'packages/kit/src/index.ts',
-  'skills/portfolio-author/references/schema.md',
-  'skills/portfolio-author/SKILL.md',
-].map((file) => ({ file, changed: statSync(path.join(REPO_ROOT, file)).mtimeMs }));
+/** When each file git tracks in the checkout last changed, by path, the ones on disk. */
+function trackedChanges() {
+  const files = execFileSync('git', ['ls-files', '-z'], { cwd: REPO_ROOT, encoding: 'utf8' })
+    .split('\0')
+    .filter(Boolean);
+  const changed = new Map();
+  for (const file of files) {
+    try {
+      changed.set(file, statSync(path.join(REPO_ROOT, file)).mtimeMs);
+    } catch {
+      // Deleted in the working tree: nothing here writes it back.
+    }
+  }
+  return changed;
+}
+
+/** The checkout as this file started, which no drift test may write. */
+const BEFORE = trackedChanges();
 
 /** sync-checks on `root`, a scratch copy, or on the checkout. */
 function run(root) {
@@ -112,7 +123,12 @@ test('sync-checks detects malformed SKILL.md frontmatter', (t) => {
 });
 
 test('the drift tests change their scratch copies, never the checkout', () => {
-  for (const { file, changed } of DRIFTED) {
-    assert.equal(statSync(path.join(REPO_ROOT, file)).mtimeMs, changed, `${file} was written`);
-  }
+  assert.ok(BEFORE.size > 0, 'git lists the checkout');
+  const after = trackedChanges();
+  const written = [...BEFORE].filter(([file, changed]) => after.get(file) !== changed);
+  assert.deepEqual(
+    written.map(([file]) => file),
+    [],
+    'tracked files written while these tests ran',
+  );
 });
