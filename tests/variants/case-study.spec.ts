@@ -9,7 +9,12 @@ import { FALLBACK_ID, projectTarget, READ_ONLY } from './target';
 // Case-study pages (#10b, VR3): a registered composition on a contract
 // fixture, under read-only. Each public case study a visible section
 // reaches renders at /work/<slug> from the server, its title the page's one
-// h1, so it works without JavaScript, and the sitemap lists it. Its RSC
+// h1, so it works without JavaScript, and the sitemap lists it. A
+// composition whose manifest says `routes.work: bespoke` renders the page
+// itself, as the fallback composition does its own; for one that says
+// `shared`, such as Kinetic Cosmos or the external reference variant, the
+// fallback composition renders it, so no composition shows its home at a
+// work's address. Its RSC
 // payload answers too, and neither names a private record or the hidden
 // canary. Any other slug, a private work's and one only a hidden section
 // reaches included, answers every method exactly as /no-such-page does, as a
@@ -18,6 +23,10 @@ import { FALLBACK_ID, projectTarget, READ_ONLY } from './target';
 test.use({ javaScriptEnabled: false });
 
 const RSC = { RSC: '1' };
+
+/** The composition that renders a work's own page under `variant`: its own, or the fallback's. */
+const workPageComposition = ({ manifest }: ReturnType<typeof projectTarget>['variant']) =>
+  manifest.id === FALLBACK_ID || manifest.routes.work === 'bespoke' ? manifest.id : FALLBACK_ID;
 
 /** The fixture's works, its routed slugs, and the ids of its private records. */
 function fixtureWorks(testInfo: Parameters<typeof projectTarget>[0]) {
@@ -41,10 +50,11 @@ function fixtureWorks(testInfo: Parameters<typeof projectTarget>[0]) {
 }
 
 test(
-  'each public case study renders at /work/<slug> from the server, its title the one h1, and the sitemap lists it',
+  'each public case study renders at /work/<slug> from the server, in its composition or the fallback, its title the one h1, and the sitemap lists it',
   { annotation: [{ type: 'route', description: '/work/[slug]' }, READ_ONLY] },
   async ({ page, request, app }, testInfo) => {
     const { variant } = projectTarget(testInfo);
+    const renders = workPageComposition(variant);
     const { fixture, routed, works, privateIds } = fixtureWorks(testInfo);
     // These fixtures each hold a public case study, so the checks below run.
     if (['complete', 'photography'].includes(fixture)) expect(routed.length).toBeGreaterThan(0);
@@ -60,6 +70,10 @@ test(
       expect(response?.status(), path).toBe(200);
       expect(response?.request().redirectedFrom(), path).toBeNull();
       await expect(page.getByRole('heading', { level: 1 }), path).toHaveText(work.title);
+      await expect(page.locator('[data-appearance-boundary="document"]'), path).toHaveAttribute(
+        'data-variant',
+        renders,
+      );
       const html = await response!.text();
       const rsc = await request.get(await withRscHash(path, RSC), {
         headers: RSC,
@@ -82,6 +96,13 @@ test(
         await expect(page.getByRole('heading', { level: 1 }), path).toHaveText(work.title);
       }
     }
+    // The fallback stands in for the work's own page alone: home is the
+    // composition's own.
+    await page.goto('/');
+    await expect(page.locator('[data-appearance-boundary="document"]')).toHaveAttribute(
+      'data-variant',
+      variant.manifest.id,
+    );
   },
 );
 

@@ -551,7 +551,8 @@ export function ownedFirstSegments(
   return owned;
 }
 
-function splitPath(pathname: string): string[] | null {
+/** A path's decoded segments, as the table reads them, or null for one that doesn't decode. */
+export function splitPath(pathname: string): string[] | null {
   try {
     return pathname
       .split('/')

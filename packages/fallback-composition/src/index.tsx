@@ -16,8 +16,8 @@ import { routeHref, type VariantRenderInput } from '@portfolio/variant-contract'
 // fixtures and #19's matrices; a site can't select it. It owns composition
 // alone: no color, type, or motion of its own, and no theme toggle. On a
 // work's route (#10b) it renders that work's case study, through the kit's
-// shared CaseStudy, as its manifest's `routes.work: shared` says, with a
-// link back home.
+// shared CaseStudy, with a link back home. The host renders that page here
+// for every composition whose manifest says `routes.work: shared`.
 
 /** A section with a title the navigation can name. The hero and a call to action stand apart. */
 const NAMED = (section: Section) =>

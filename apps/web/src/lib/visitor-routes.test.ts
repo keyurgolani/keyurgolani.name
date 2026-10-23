@@ -70,6 +70,7 @@ const HIDDEN = (() => {
 async function resolve(
   path: Partial<VisitorPath> & { segments: string[] },
   view: PublicView = viewFor('fixture-chapters'),
+  registry: VariantRegistry = BUILD,
 ): Promise<{ route: VisitorRoute; loaded: boolean }> {
   let loaded = false;
   const route = await resolveVisitorPath(
@@ -78,7 +79,7 @@ async function resolve(
       loaded = true;
       return view;
     },
-    BUILD,
+    registry,
   );
   return { route, loaded };
 }
@@ -171,8 +172,10 @@ test('anything else is missing: an undeclared path, a bare view prefix, or a tur
 });
 
 test('a public case study renders at its slug, and its views as any view does (#10b)', async () => {
+  // fixture-chapters says routes.work: shared, so the fallback composition
+  // renders the work's own page (lib/work-page.ts).
   assert.deepEqual(rendered((await resolve({ segments: ['work', SLUG] })).route), [
-    'fixture-chapters',
+    FALLBACK_ID,
     { route: 'work', slug: SLUG },
     undefined,
   ]);
@@ -202,6 +205,59 @@ test('a public case study renders at its slug, and its views as any view does (#
     ).route,
     { kind: 'redirect', location: `/sample/work/${SLUG}?variant=fixture-notes` },
   );
+});
+
+test("a work's own page renders in a composition that says routes.work: bespoke, and in the fallback composition for one that says shared, the site's selection kept (#10b)", async () => {
+  const notes = BUILD[2]!;
+  // fixture-notes, as a variant that renders its work pages itself.
+  const bespoke = {
+    ...notes,
+    manifest: {
+      ...notes.manifest,
+      id: 'fixture-bespoke',
+      routes: { ...notes.manifest.routes, work: 'bespoke' as const },
+    },
+  };
+  const build: VariantRegistry = [...BUILD, bespoke];
+  const work = { route: 'work', slug: SLUG } as const;
+  const own = (await resolve({ segments: ['work', SLUG] }, viewFor('fixture-bespoke'), build))
+    .route;
+  assert.deepEqual(rendered(own), ['fixture-bespoke', work, undefined]);
+  assert.equal(own.kind === 'render' && own.composition.fallback, false);
+  for (const variant of ['fixture-chapters', 'fixture-notes']) {
+    const shared = (await resolve({ segments: ['work', SLUG] }, viewFor(variant), build)).route;
+    assert.deepEqual(rendered(shared), [FALLBACK_ID, work, undefined], variant);
+    assert.ok(shared.kind === 'render');
+    assert.equal(shared.composition.requested, variant);
+    assert.equal(shared.composition.fallback, true);
+    // Home and the variant's own views stay its own.
+    assert.equal(
+      rendered((await resolve({ segments: [] }, viewFor(variant), build)).route)[0],
+      variant,
+    );
+  }
+  // A view under work is the variant's, so it renders there.
+  assert.equal(
+    rendered((await resolve({ segments: ['work', SLUG, 'credits'] }, undefined, build)).route)[0],
+    'fixture-chapters',
+  );
+  // Under /sample, ?variant= picks the composition, and the rule is the same.
+  for (const [selected, expected] of [
+    ['fixture-notes', FALLBACK_ID],
+    ['fixture-bespoke', 'fixture-bespoke'],
+  ] as const) {
+    const sample = await resolve(
+      {
+        segments: ['work', SLUG],
+        basePath: '/sample',
+        selected,
+        query: { variant: selected },
+      },
+      viewFor('editorial-evidence'),
+      build,
+    );
+    assert.deepEqual(rendered(sample.route), [expected, work, undefined], selected);
+  }
 });
 
 test('any other work is missing, its views and redirects included: unknown, with no case study, private, or unreached (#10b)', async () => {

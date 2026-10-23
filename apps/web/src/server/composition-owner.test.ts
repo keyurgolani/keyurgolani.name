@@ -705,7 +705,7 @@ test("after a publish from beside the server, a Studio config.status read record
   // one the page there checks again: no 307.
   assert.equal(liveComposition(), 'fallback');
   assert.equal(
-    segmentFor({ profile: 'owner', pattern: '/', query: new URLSearchParams() }),
+    segmentFor({ profile: 'owner', pattern: '/', segments: [], query: new URLSearchParams() }),
     'fallback',
   );
 });

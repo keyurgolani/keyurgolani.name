@@ -1,12 +1,14 @@
 import { routedSlugs, type PublicView } from '@portfolio/schema';
 import {
   dispatch,
+  FALLBACK_ID,
   href,
   isReservedSegment,
   type RouteTarget,
   type VariantRegistry,
 } from '@portfolio/variant-contract';
 import { compositionFor, REGISTRY, type Composition } from './variants';
+import { rendersWorkPage } from './work-page';
 
 // What a visitor's path is (#5, Slice 4). Every visitor page asks here: `/`,
 // a variant's path views under it, `/work/<slug>` and the views under that,
@@ -15,7 +17,9 @@ import { compositionFor, REGISTRY, type Composition } from './variants';
 // only another installed variant declares redirects to its canonical route,
 // and anything else is missing. A work route, and everything under it,
 // exists only for a slug the view routes (#10b): a public work with a case
-// study that something visible reaches.
+// study that something visible reaches. A work's own page renders in the
+// fallback composition when the composition leaves that page to the host
+// (lib/work-page.ts).
 
 /** A request for a visitor page. */
 export interface VisitorPath {
@@ -76,6 +80,11 @@ export async function resolveVisitorPath(
   if (first === 'work' && !routedSlugs(view).has(path.segments[1] ?? '')) return NOT_FOUND;
   if (result.kind !== 'render') return result;
   const { target } = result;
+  if (target.route === 'work' && !rendersWorkPage(composition.rendered.manifest)) {
+    // The selection stays the site's; only what renders the page changes.
+    const fallback = { ...compositionFor(FALLBACK_ID, registry), requested: composition.requested };
+    return { kind: 'render', view, composition: fallback, target };
+  }
   if (target.route !== 'view') return { kind: 'render', view, composition, target };
   // A view is canonical to its parent route.
   const parent: RouteTarget =

@@ -27,7 +27,9 @@ import { visitorPageAppearance } from './visitor-appearance';
 // the value proxy.ts read, which the reader has just refreshed. When the
 // revision changed in between, or its composition isn't this segment's, it
 // answers a 307 to the same URL, and proxy.ts marks that request for the
-// right segment. Otherwise it renders the route: a view of the composition,
+// right segment. Both pick the fallback composition for a work's own page
+// that the composition leaves to the host (lib/work-page.ts, #10b), so they
+// agree there too. Otherwise it renders the route: a view of the composition,
 // a 307 to the canonical route of a view only another installed variant
 // declares, or the 404 page. demo's root shows the sample, and demo serves
 // the sample's routes under /sample alone, so the root's links, such as a
@@ -83,7 +85,10 @@ export function experiencePage(
       path = { segments, basePath: '' };
     }
     const route = await resolveVisitorPath(path, getPublicView, registry);
-    const here = segmentFor({ profile, pattern: decision.entry.pattern, query }, registry);
+    const here = segmentFor(
+      { profile, pattern: decision.entry.pattern, segments, query },
+      registry,
+    );
     const rendered = route.kind === 'render' ? route.composition.rendered.manifest.id : here;
     // From a page, before anything streams, redirect() answers 307.
     if (here !== id || rendered !== id) redirect(`${asked}${query.size > 0 ? `?${query}` : ''}`);
