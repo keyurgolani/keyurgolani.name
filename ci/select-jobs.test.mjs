@@ -83,7 +83,16 @@ const CLASSES = [
   {
     name: 'Studio',
     files: ['apps/web/src/app/(studio)/studio/page.tsx', 'apps/web/src/server/owner/session.ts'],
-    jobs: ['static', 'unit', 'build', 'browser', 'routes', 'image', 'preview-fixtures-browser'],
+    jobs: [
+      'static',
+      'unit',
+      'build',
+      'browser',
+      'routes',
+      'image',
+      'preview-fixtures-browser',
+      'quality-pr',
+    ],
   },
   {
     name: 'container',

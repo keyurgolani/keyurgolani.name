@@ -39,12 +39,12 @@ export const CHECK_JOBS = [
   'external-variant',
   'image',
   'docs',
-  // On open branches, mapped ahead of their merge: #7's preview fixture
-  // renders (#71), #11's quality jobs (#70 and its follow-ups), and #6's
-  // trace job (6-3).
-  'preview-fixtures-browser',
+  // #11's quality cells and the quality gates' own proof (#74).
   'quality-pr',
   'quality-meta',
+  // On open branches, mapped ahead of their merge: #7's preview fixture
+  // renders (#71), and #6's trace job (6-3).
+  'preview-fixtures-browser',
   'trace',
 ];
 
@@ -189,10 +189,10 @@ export const RULES = [
   },
   {
     // Studio and the owner code behind it: the owner suites run in browser,
-    // the route table in routes, and the security suite behind the HTTPS
-    // proxy in image.
+    // the route table in routes, the security suite behind the HTTPS proxy
+    // in image, and the registered sign-in surface in quality-pr.
     class: 'studio',
-    jobs: ['unit', 'build', 'browser', 'routes', 'image', 'preview-fixtures-browser'],
+    jobs: ['unit', 'build', 'browser', 'routes', 'image', 'preview-fixtures-browser', 'quality-pr'],
     paths: [
       'apps/web/src/app/(studio)/**',
       'apps/web/src/server/owner/**',
