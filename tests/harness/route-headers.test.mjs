@@ -67,7 +67,7 @@ test('under a profile with no Studio page, a Studio path needs what any path get
 });
 
 const PREVIEW_CSP_VALUE =
-  "default-src 'none'; script-src 'nonce-MVlEoQyHU2PoMq1Imu8oSA==' 'strict-dynamic'; style-src 'self' 'nonce-MVlEoQyHU2PoMq1Imu8oSA=='; style-src-attr 'unsafe-inline'; font-src 'self'; img-src 'self' https: data:; media-src 'self' https:; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors https://rowan.test";
+  "default-src 'none'; script-src 'nonce-MVlEoQyHU2PoMq1Imu8oSA==' 'strict-dynamic'; style-src 'self' 'nonce-MVlEoQyHU2PoMq1Imu8oSA=='; style-src-attr 'unsafe-inline'; font-src 'self'; img-src 'self' data:; media-src 'self'; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors https://rowan.test";
 
 const PREVIEW_PAGE = {
   'x-content-type-options': 'nosniff',

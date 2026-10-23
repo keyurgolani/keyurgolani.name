@@ -1,3 +1,4 @@
+import type { Readable } from 'node:stream';
 import type { AppearanceSelection, PublicView } from '@portfolio/schema';
 import type { Session } from './session';
 
@@ -92,6 +93,24 @@ export interface PreviewGrantsPort {
    * reach preview.grant.
    */
   previewable(session: Session | null): Promise<readonly Previewable[]>;
+  /**
+   * A rendition the grant's view keeps (#10), at the media path below
+   * /preview-assets/<grant>/: `<assetId>/<sha256>/<rendition>.<ext>`. The
+   * same check as open(), and the media the grant pinned, never what's live
+   * or what the draft holds now. Null when the grant isn't active or the
+   * path names nothing it keeps.
+   */
+  asset(grant: string, segments: readonly string[]): Promise<PreviewAsset | null>;
+}
+
+/** A rendition a grant's view keeps: its record's type and size, and its blob's bytes. */
+export interface PreviewAsset {
+  readonly assetId: string;
+  readonly mime: string;
+  readonly bytes: number;
+  readonly blob: `sha256:${string}`;
+  /** The blob's bytes, or null when the AssetStore doesn't hold it. */
+  open(): Promise<Readable | null>;
 }
 
 /** What a frame's agent needs to open its channel to Studio. */

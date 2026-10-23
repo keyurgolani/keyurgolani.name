@@ -20,10 +20,9 @@ import { log } from './log';
 // so a changed file shows on the next start. Owner never derives here: its
 // media comes from draft saves and imports, into its AssetStore.
 //
-// No route serves the cache yet, so the view doesn't take the derived
-// document either: an image renders as unavailable, as before, rather than
-// pointing at a rendition nothing answers. The /media route reads it from
-// startupMedia() once it lands.
+// Once it has finished, the public view takes the derived document for a
+// pair that has none of its own, and /media serves its renditions from the
+// cache (live-media.ts). Until then an image renders as unavailable.
 
 export interface StartupMediaInput {
   readonly profile: Profile;
@@ -40,11 +39,24 @@ export interface StartupMediaInput {
 }
 
 const SLOT = Symbol.for('keyurgolani.portfolio.startup-media');
-type Holder = typeof globalThis & { [SLOT]?: Promise<StartupMedia | null> };
+const SETTLED = Symbol.for('keyurgolani.portfolio.startup-media-settled');
+type Holder = typeof globalThis & {
+  [SLOT]?: Promise<StartupMedia | null>;
+  [SETTLED]?: StartupMedia | null;
+};
 
 /** The startup derivation this process started, if it started one. */
 export function startupMedia(): Promise<StartupMedia | null> | undefined {
   return (globalThis as Holder)[SLOT];
+}
+
+/**
+ * The startup derivation once it has finished, for a request to read
+ * without waiting: undefined while it runs or when none started, null when
+ * it had nothing to derive or failed. A request never waits for it.
+ */
+export function settledStartupMedia(): StartupMedia | null | undefined {
+  return (globalThis as Holder)[SETTLED];
 }
 
 /** Whether a portfolio model names an https media source. */
@@ -69,7 +81,12 @@ export function startStartupMedia(input: StartupMediaInput): Promise<StartupMedi
     });
     return null;
   });
-  (globalThis as Holder)[SLOT] = running;
+  const holder = globalThis as Holder;
+  holder[SLOT] = running;
+  delete holder[SETTLED];
+  void running.then((settled) => {
+    if (holder[SLOT] === running) holder[SETTLED] = settled;
+  });
   return running;
 }
 

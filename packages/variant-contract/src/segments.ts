@@ -10,8 +10,8 @@ import { SECTION_ID_MAX_LENGTH } from '@portfolio/schema/ids';
  * under home can't start with one. #6, #7, #10, and #22 extend the list.
  * `admin` and `variants` are #1's retired routes, which answer 404 in every
  * profile, so a view there could never be reached. `assets` is where the
- * Compose files mount an owner's assets into public/, whose files win over
- * any view. `_fixtures` is #19's test fixture pages, which only a build made
+ * Compose files once mounted an owner's assets into public/; it answers 404
+ * in every profile. `media` is #10's renditions. `_fixtures` is #19's test fixture pages, which only a build made
  * with APPEARANCE_FIXTURES=1 serves. `preview` and `preview-assets` are #7's
  * preview documents and the media they load. `_portfolio` is where the host
  * serves the files registry generation compiles: #19's packs, and #6's
@@ -34,6 +34,7 @@ export const RESERVED_SEGMENTS: readonly string[] = [
   'admin',
   'variants',
   'assets',
+  'media',
   'robots.txt',
   'sitemap.xml',
   'feed.xml',

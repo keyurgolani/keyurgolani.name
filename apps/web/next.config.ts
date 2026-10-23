@@ -202,7 +202,12 @@ const config: NextConfig = {
         source: '/:path((?!api/studio(?:/|$))(?!preview(?:-assets)?(?:/|$)).*)',
         headers: [
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-          { key: 'Content-Security-Policy', value: "frame-ancestors 'none'" },
+          // Images and media load from the site's own /media alone, or a
+          // data: URL (#10): never a remote host.
+          {
+            key: 'Content-Security-Policy',
+            value: "frame-ancestors 'none'; img-src 'self' data:; media-src 'self'",
+          },
         ],
       },
       {
@@ -217,7 +222,10 @@ const config: NextConfig = {
         source: '/:path(api/studio(?:/.*)?)',
         headers: [
           { key: 'Referrer-Policy', value: 'same-origin' },
-          { key: 'Content-Security-Policy', value: "frame-ancestors 'none'" },
+          {
+            key: 'Content-Security-Policy',
+            value: "frame-ancestors 'none'; img-src 'self' data:; media-src 'self'",
+          },
           { key: 'Cross-Origin-Resource-Policy', value: 'same-origin' },
         ],
       },

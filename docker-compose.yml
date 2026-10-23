@@ -41,9 +41,6 @@ services:
       # assets/ holds the files the portfolio's media sources name, such as
       # atlas/cover.jpg. The server only reads it.
       - ./assets:/media:ro
-      # Optional: bind-mount user assets into the public dir. Goes once #10's
-      # /media route serves renditions from /media.
-      - ./assets:/app/apps/web/public/assets:ro
     healthcheck:
       test:
         - CMD

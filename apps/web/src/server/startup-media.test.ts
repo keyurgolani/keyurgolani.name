@@ -1,11 +1,16 @@
 import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { crc32, deflateSync } from 'node:zlib';
 import type { CatalogReader, RemoteFetcher } from '@portfolio/core';
+import { parsePortfolio, parseSite } from '@portfolio/schema';
+import { GET } from '../app/(site)/media/[...path]/route';
+import { readDeploymentConfig } from './config';
+import { setDeploymentState } from './config-store';
+import { getPublicView } from './public-view';
 import { startStartupMedia, startupMedia } from './startup-media';
 
 // read-only's and demo's startup media (#10, Risk 3): derived once, in the
@@ -176,4 +181,62 @@ test("demo's bundled sample derives from example-media, every image of it", asyn
   );
   assert.deepEqual(derived?.findings, []);
   assert.equal(lines.filter((line) => line.event === 'media.startup.asset').length, 2);
+});
+
+test("once read-only's derivation finishes, its view shows the image ready and /media serves it from the cache", async (t) => {
+  const { root, cache } = setup(t);
+  const pairs = path.join(REPO, 'packages/schema/src/__fixtures__/pairs/photography/yaml');
+  const portfolio = parsePortfolio(
+    readFileSync(path.join(pairs, 'portfolio.yml'), 'utf8').replace(
+      'source: images/mateo.jpg',
+      'source: cover.png',
+    ),
+    'yaml',
+  );
+  const site = parseSite(readFileSync(path.join(pairs, 'site.yml'), 'utf8'), 'yaml');
+  assert.ok(portfolio.ok && site.ok);
+  const unit = { portfolio: portfolio.value, site: site.value, snapshots: {} };
+  const catalog = {
+    getLive: async () => ({ state: 'live', revisionId: 'source', unitHash: 'sha256:x', unit }),
+  } as unknown as CatalogReader;
+  const read = readDeploymentConfig(
+    {
+      NODE_ENV: 'production',
+      PORTFOLIO_PROFILE: 'read-only',
+      PORTFOLIO_ORIGIN: 'https://rowan.test',
+      PORTFOLIO_SOURCE_DIR: '/srv/portfolio',
+    },
+    { cwd: '/' },
+  );
+  assert.ok(read.ok);
+  setDeploymentState({
+    config: read.config,
+    catalog: catalog as never,
+    dispatch: () => assert.fail('no dispatch here'),
+    degraded: [],
+  });
+  t.after(() => setDeploymentState(undefined));
+
+  const running = startStartupMedia({
+    profile: 'read-only',
+    reader: catalog,
+    mediaRoot: root,
+    options: { cacheDir: cache },
+  });
+  // Until it finishes, the portrait renders as unavailable.
+  assert.equal((await getPublicView()).media.portrait?.derived.state, 'unavailable');
+  assert.ok(await running);
+  await new Promise((resolve) => setImmediate(resolve));
+
+  const derived = (await getPublicView()).media.portrait?.derived;
+  assert.equal(derived?.state, 'ready');
+  const rendition = derived.value.renditions[0]!;
+  assert.match(rendition.url, /^\/media\/portrait\/[0-9a-f]{64}\//);
+  const response = await GET(new Request(`https://rowan.test${rendition.url}`), {
+    params: Promise.resolve({ path: rendition.url.split('/').slice(2) }),
+  } as never);
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('content-type'), rendition.mime);
+  assert.equal(response.headers.get('cache-control'), 'public, max-age=31536000, immutable');
+  assert.equal((await response.arrayBuffer()).byteLength, rendition.bytes);
 });

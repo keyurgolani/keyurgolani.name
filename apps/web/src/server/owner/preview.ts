@@ -30,6 +30,7 @@ import {
   type Store,
   type UnitInput,
 } from '@portfolio/core/owner';
+import { resolveRendition } from '@portfolio/core';
 import { assertAuthorized, authorize, type Authorized } from '../authorize';
 import type { DeploymentConfig } from '../config';
 import type { Handler, HandlerContext } from '../dispatcher';
@@ -75,7 +76,8 @@ export interface OwnerPreviewInput {
    * #3's store; without one, the data directory's, opened for reads. Without
    * its publication service, nothing is live to preview.
    */
-  readonly store?: Pick<Store, 'drafts' | 'revisions'> & Partial<Pick<Store, 'publication'>>;
+  readonly store?: Pick<Store, 'drafts' | 'revisions'> &
+    Partial<Pick<Store, 'publication' | 'assets'>>;
   /** #5's contract fixtures by id (#5, Slice 6); none until they ship. */
   readonly fixtures?: (id: string) => PreviewFixture | null;
   /** The clock grants run on. Tests pass their own. */
@@ -371,6 +373,33 @@ export function ownerPreviews({
       });
     },
     previewable,
+    async asset(grant: string, segments: readonly string[]) {
+      const checked = await grants.check(grant);
+      if (checked.status !== 'active') return null;
+      const session = mintSession({ ref: sessionRef(checked.record.sessionDigest) });
+      const authorized = authorize('preview.grant', session);
+      if (!authorized) return null;
+      const { record } = checked;
+      const { view } = await read(authorized, record, grant);
+      // What the grant pinned: a draft's documents as minted, or what its
+      // revision or fixture holds.
+      const documents =
+        record.subject.kind === 'draft'
+          ? (record.documents ?? null)
+          : ((await contentOf(record.subject))?.documents ?? null);
+      if (!documents) return null;
+      const found = resolveRendition(
+        mediaOf(documents),
+        new Set(Object.keys(view.media)),
+        segments,
+      );
+      if (!found) return null;
+      const assets = store.assets;
+      return Object.freeze({
+        ...found,
+        open: async () => (assets ? assets.open(found.blob) : null),
+      });
+    },
   });
 
   /** The session a grant command came with, as its grants bind to it. */

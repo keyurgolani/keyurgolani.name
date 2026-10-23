@@ -74,6 +74,7 @@ function grantsPort(admitted = new Set([ACTIVE])) {
     },
     open: () => assert.fail('proxy.ts opens no grant'),
     channel: () => assert.fail("proxy.ts reads no grant's channel"),
+    asset: () => assert.fail("proxy.ts reads no grant's media"),
     previewable: () => assert.fail('proxy.ts offers nothing to preview'),
   };
   return { port, checked };
@@ -855,7 +856,7 @@ const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
  */
 const previewPolicy = (ancestors: string) =>
   new RegExp(
-    `^default-src 'none'; script-src 'nonce-([A-Za-z0-9+/]{22}==)' 'strict-dynamic'; style-src 'self' 'nonce-\\1'; style-src-attr 'unsafe-inline'; font-src 'self'; img-src 'self' https: data:; media-src 'self' https:; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors ${escape(ancestors)}$`,
+    `^default-src 'none'; script-src 'nonce-([A-Za-z0-9+/]{22}==)' 'strict-dynamic'; style-src 'self' 'nonce-\\1'; style-src-attr 'unsafe-inline'; font-src 'self'; img-src 'self' data:; media-src 'self'; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors ${escape(ancestors)}$`,
   );
 
 /** Preview paths, in any case and percent-encoded, as next.config.ts and the route table read them. */
@@ -1098,6 +1099,7 @@ test('a port that fails to check a grant admits nothing (#7)', async (t) => {
     admit: () => Promise.reject(new Error('the data directory is gone')),
     open: () => assert.fail('proxy.ts opens no grant'),
     channel: () => assert.fail("proxy.ts reads no grant's channel"),
+    asset: () => assert.fail("proxy.ts reads no grant's media"),
     previewable: () => assert.fail('proxy.ts offers nothing to preview'),
   });
   await assertStatusDocument(await proxy(loaded(`/preview/${ACTIVE}`, 'iframe')), 'failed check');

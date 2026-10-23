@@ -150,7 +150,11 @@ test('each Compose example runs its profile from the one image, on loopback', ()
     } else {
       assert.equal(web.environment.PORTFOLIO_SOURCE_DIR, '/config', file);
       assert.ok(volumes.includes(`${dir}/config:/config:ro`), file);
-      assert.ok(volumes.includes(`${dir}/assets:/app/apps/web/public/assets:ro`), file);
+      // Nothing mounts into public/ (#10): renditions serve from /media.
+      assert.ok(
+        volumes.every((volume) => !String(volume).includes(':/app/apps/web/public')),
+        file,
+      );
       // The media root (#10): the same files, read-only, where sources resolve.
       assert.ok(volumes.includes(`${dir}/assets:/media:ro`), file);
       assert.equal(web.environment.PORTFOLIO_MEDIA_ROOT, '/media', file);

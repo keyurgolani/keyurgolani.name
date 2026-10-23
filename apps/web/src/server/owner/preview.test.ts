@@ -22,6 +22,7 @@ import {
   type Store,
 } from '@portfolio/core/owner';
 import { liveContext } from '~/lib/variants';
+import { PREVIEW_STATUS, PREVIEW_STATUS_DOCUMENT } from '~/preview/status';
 import {
   readDeploymentConfig,
   PREVIEW_GRANT_LIFETIME_KEYS,
@@ -31,6 +32,7 @@ import { setDeploymentState } from '../config-store';
 import type { HandlerContext } from '../dispatcher';
 import { authorize } from '../authorize';
 import { listOperations } from '../operations';
+import { previewAsset } from '../preview-asset';
 import type { GrantSessionPort } from '../preview-port';
 import type { Session } from '../session';
 import { isStudioResult } from '../studio-result';
@@ -541,4 +543,122 @@ test("the config's grant lifetimes are the ones @portfolio/core enforces (#7)", 
     },
     JSON.parse(JSON.stringify(GRANT_LIFETIME_RANGE)),
   );
+});
+
+/** A media document with an image for each asset, each one rendition: the blob `blob`. */
+const mediaDocument = (assetIds: readonly string[], sha256: string, blob: string, bytes: number) =>
+  JSON.stringify({
+    assets: assetIds.map((assetId) => ({
+      assetId,
+      sha256,
+      mime: 'image/jpeg',
+      bytes: 4096,
+      width: 960,
+      height: 640,
+      renditions: [
+        { name: 'w480-a1', ext: 'webp', mime: 'image/webp', bytes, width: 480, sha256: blob },
+      ],
+      derivedAt: '2026-10-23T08:00:00Z',
+      algorithmVersion: 1,
+      source: { kind: 'local', path: `images/${assetId}.jpg` },
+      availability: { state: 'available' },
+    })),
+  });
+
+test('a grant serves the renditions of the media it pinned, private and no-store, and nothing past them (#10)', async (t) => {
+  const { store, command, endSession } = await setup(t);
+  const bytes = Buffer.from('a draft rendition, in bytes');
+  const { sha256: blob } = await store.assets.put(bytes, 'image/webp');
+  const hex = blob.slice('sha256:'.length);
+  const original = 'a'.repeat(64);
+  // The portrait shows; `hidden` is private, so the view never keeps it.
+  const withAvatar = portfolio(
+    'Draft Person',
+    [
+      'media:',
+      '  - id: portrait',
+      '    kind: image',
+      '    source: images/portrait.jpg',
+      '    alt: The owner',
+      '  - id: hidden',
+      '    kind: image',
+      '    source: images/hidden.jpg',
+      '    alt: Not for visitors',
+      '    visibility: private',
+      '',
+    ].join('\n'),
+  ).replace(
+    'identity:\n  name: Draft Person\n',
+    'identity:\n  name: Draft Person\n  avatar:\n    asset: portrait\n',
+  );
+  const documents = (sha: string) => ({
+    ...pair(withAvatar),
+    media: {
+      format: 'json' as DocumentFormat,
+      sourceText: mediaDocument(['portrait', 'hidden'], sha, hex, bytes.length),
+    },
+  });
+  const draft = await createDraft(store, documents(original));
+  const grant = minted(
+    await command('preview.grant.mint', {
+      subject: { draft: draft.draftId, version: draft.version },
+      environment: ENVIRONMENT,
+    }),
+  );
+  const get = (as: string, rest: string) =>
+    previewAsset(new Request(`${ORIGIN}/preview-assets/${as}/${rest}`), {
+      params: Promise.resolve({ grant: as, path: rest.split('/') }),
+    });
+  const refused = async (response: Response, label: string) => {
+    assert.equal(response.status, PREVIEW_STATUS, label);
+    assert.equal(response.headers.get('cache-control'), 'private, no-store', label);
+    assert.equal(await response.text(), PREVIEW_STATUS_DOCUMENT, label);
+  };
+
+  const served = await get(grant, `portrait/${original}/w480-a1.webp`);
+  assert.equal(served.status, 200);
+  assert.equal(served.headers.get('cache-control'), 'private, no-store');
+  assert.equal(served.headers.get('content-type'), 'image/webp');
+  assert.equal(served.headers.get('x-content-type-options'), 'nosniff');
+  assert.equal(served.headers.get('accept-ranges'), 'none');
+  assert.ok(Buffer.from(await served.arrayBuffer()).equals(bytes));
+
+  for (const rest of [
+    `hidden/${original}/w480-a1.webp`,
+    `nobody/${original}/w480-a1.webp`,
+    `portrait/${'b'.repeat(64)}/w480-a1.webp`,
+    `portrait/${original}/w960-a1.webp`,
+    `portrait/${original}/${hex}.webp`,
+  ]) {
+    await refused(await get(grant, rest), rest);
+  }
+  await refused(await get('x'.repeat(43), `portrait/${original}/w480-a1.webp`), 'no such grant');
+
+  // The draft moves on to another original: the grant still serves the
+  // version it pinned, and never the new one's.
+  const saved = await store.drafts.save(
+    {
+      draftId: draft.draftId,
+      expectedVersion: draft.version,
+      documents: documents('c'.repeat(64)),
+    },
+    'owner',
+  );
+  assert.equal(saved.kind, 'saved');
+  assert.equal((await get(grant, `portrait/${original}/w480-a1.webp`)).status, 200);
+  await refused(await get(grant, `portrait/${'c'.repeat(64)}/w480-a1.webp`), 'the newer version');
+
+  // A grant of the new version supersedes the old one, which serves nothing more.
+  const next = minted(
+    await command('preview.grant.mint', {
+      subject: { draft: draft.draftId, version: draft.version + 1 },
+      environment: ENVIRONMENT,
+    }),
+  );
+  await refused(await get(grant, `portrait/${original}/w480-a1.webp`), 'superseded');
+  assert.equal((await get(next, `portrait/${'c'.repeat(64)}/w480-a1.webp`)).status, 200);
+
+  // The session ends, and the grant with it.
+  await endSession();
+  await refused(await get(next, `portrait/${'c'.repeat(64)}/w480-a1.webp`), 'after the session');
 });

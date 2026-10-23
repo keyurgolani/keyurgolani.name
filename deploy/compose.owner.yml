@@ -50,8 +50,6 @@ services:
       - ../config:/config:ro
       # The files the portfolio's media sources name. The server only reads them.
       - ../assets:/media:ro
-      # Goes once #10's /media route serves renditions from the store.
-      - ../assets:/app/apps/web/public/assets:ro
       # Drafts and revisions (#2, #3). Back it up with portfolio-store backup,
       # which leaves out ephemeral/, where sessions live, so restoring one
       # brings back none. A file-level copy of the whole volume holds

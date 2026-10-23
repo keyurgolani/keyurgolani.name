@@ -245,6 +245,10 @@ const ROUTES = [
     visitor: true,
   },
   { pattern: '/feed.xml', kind: 'handler', capability: 'feed.read', visitor: true },
+  // A rendition of the live revision's media (#10, slice 2 item 5):
+  // /media/<assetId>/<sha256>/<rendition>.<ext>. Every profile serves it, for
+  // what its catalog serves, and anything the live view doesn't keep is 404.
+  { pattern: '/media/[...path]', kind: 'handler', capability: 'catalog.read', visitor: true },
   { pattern: '/api/health', kind: 'handler', capability: 'health.read' },
   { pattern: '/api/ready', kind: 'handler', capability: 'ready.read' },
   { pattern: '/api/studio/[name]', kind: 'handler', capability: 'operations' },
