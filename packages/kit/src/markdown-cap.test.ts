@@ -73,13 +73,17 @@ function medians(run: () => unknown, baseline: () => unknown): { time: number; b
 // benign time counted as at least the floor, and never more than the ceiling.
 // On the development machine the search's slowest field takes about 50 ms
 // either way, against 1.5 ms block and 0.7 inline for the benign one, so the
-// floor sets its bound, and a 1 MiB document of the field slowest for its
-// size takes about 30 times a benign document. CI has run such ratios up to
-// about twice what the development machine does. Without the inline-mark
-// limit, this test and the 1 MiB one both fail.
+// floor sets its bound. CI has run such ratios up to about twice what the
+// development machine does. Without the inline-mark limit, this test fails.
 const MAX_RATIO = 40;
 const FLOOR_MS = 4;
 const CEILING_MS = 1000;
+// A 1 MiB document of the field slowest for its size renders in about 27
+// times a benign document on the development machine and has reached 41 on
+// a shared runner. Without the inline-mark limit it takes hundreds of times
+// (400 and 670 in two runs), so the bound sits well away from both.
+const DOCUMENT_RATIO = 150;
+const VALIDATE_RATIO = 20;
 const bound = (base: number) => Math.min(MAX_RATIO * Math.max(base, FLOOR_MS), CEILING_MS);
 
 const RENDER = { block: renderMarkdown, inline: renderInlineMarkdown } as const;
@@ -184,7 +188,7 @@ function documentOf(field: string) {
   }
 }
 
-test('a 1 MiB document of the field the search finds slowest for its size validates, and renders within 40 times a benign document', (t) => {
+test('a 1 MiB document of the field the search finds slowest for its size validates, and renders within 150 times a benign document, where without the inline-mark limit it takes hundreds', (t) => {
   // For its size: a document holds more of a shorter field, and the marks a
   // field may hold shrink with its length so that none costs more for its
   // size than the limits let the longest cost. The search times each field
@@ -231,13 +235,23 @@ test('a 1 MiB document of the field the search finds slowest for its size valida
   };
   const worst = documentOf(slowest!.text);
   assert.ok(worst.works.length >= 32, `${worst.works.length} fields fill the document`);
+  // The benign document is timed on both sides of the worst one, so a runner
+  // that slows down or speeds up partway moves the baseline with it.
+  const before = timeOf(documentOf(BENIGN));
   const { validated, rendered } = timeOf(worst);
-  const benign = timeOf(documentOf(BENIGN));
+  const after = timeOf(documentOf(BENIGN));
+  const benign = (before.rendered + after.rendered) / 2;
+  const benignValidated = (before.validated + after.validated) / 2;
   t.diagnostic(
-    `${worst.works.length} fields of ${slowest!.name}: validated in ${validated.toFixed(0)} ms, rendered in ${rendered.toFixed(0)} ms (benign ${benign.rendered.toFixed(0)} ms)`,
+    `${worst.works.length} fields of ${slowest!.name}: validated in ${validated.toFixed(0)} ms (benign ${benignValidated.toFixed(0)}), rendered in ${rendered.toFixed(0)} ms (benign ${before.rendered.toFixed(0)} and ${after.rendered.toFixed(0)} ms)`,
   );
-  assert.ok(validated < 5000, 'validation is bounded');
-  const limit = MAX_RATIO * Math.max(benign.rendered, FLOOR_MS);
+  // Validation is one linear pass either way, so the worst document validates
+  // in about the benign one's time.
+  assert.ok(
+    validated < VALIDATE_RATIO * Math.max(benignValidated, FLOOR_MS),
+    `validation is bounded: ${validated.toFixed(0)} ms against benign ${benignValidated.toFixed(0)} ms`,
+  );
+  const limit = DOCUMENT_RATIO * Math.max(benign, FLOOR_MS);
   assert.ok(
     rendered < limit,
     `rendering is bounded: ${rendered.toFixed(0)} ms against ${limit.toFixed(0)} ms`,
