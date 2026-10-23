@@ -975,21 +975,39 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
           ? `${bare.replace(/\/[^/]+$/, '/nowhere')}${query}`
           : `/no-such-page${bare.endsWith('.rsc') ? '.rsc' : ''}${query}`;
       };
-      // As a document, as Next's router asks for its RSC payload, and as it
-      // prefetches one, each the way its counterpart answers.
-      const asked: Record<string, string>[] = [
+      await expectUnknown(
+        request,
+        profile,
+        spellings,
         {},
+        hasStudio(profile) ? nowhere : '/no-such-page',
+      );
+      // As Next's router asks for its RSC payload, and as it prefetches one:
+      // the answer its counterpart gets, Next's not-found payload, a 200
+      // to an RSC request, never the route's.
+      const counterparts = hasStudio(profile) ? nowhere : spellings.map(reference);
+      const asked: Record<string, string>[] = [
         { rsc: '1' },
         { rsc: '1', 'next-router-prefetch': '1' },
       ];
       for (const headers of asked) {
-        await expectUnknown(
-          request,
-          profile,
-          spellings,
-          headers,
-          hasStudio(profile) ? nowhere : spellings.map(reference),
-        );
+        for (const [index, target] of spellings.entries()) {
+          for (const method of ['GET', 'HEAD'] as const) {
+            const what = `${method} ${target} with ${Object.keys(headers).join(' and ')}`;
+            const options = { method, maxRedirects: 0, headers };
+            const response = await request.fetch(target, options);
+            const counterpart = await request.fetch(counterparts[index]!, options);
+            expect(response.status(), what).toBe(counterpart.status());
+            expect(response.headers()['content-type'], what).toBe(
+              counterpart.headers()['content-type'],
+            );
+            // Nothing of the route's own: no plate, and no sign-in form.
+            const text = await response.text();
+            expect(text, what).not.toContain('Password');
+            expect(text, what).not.toContain('data-plate');
+            expectProfileHeaders(profile, response, what);
+          }
+        }
       }
       // A trailing slash: the 308 to the path without it, as its counterpart gets.
       for (const { pattern } of routes) {
