@@ -45,8 +45,8 @@ for (const cell of plan.cells) {
               { type: 'row', description: row.id },
             ],
           },
-          async ({ page, appResponses }, testInfo) => {
-            await runCell({ page, cell, viewport, row, responses: appResponses, testInfo, expect });
+          async ({ page }, testInfo) => {
+            await runCell({ page, cell, viewport, row, testInfo, expect });
           },
         );
       });

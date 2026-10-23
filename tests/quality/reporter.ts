@@ -17,7 +17,6 @@ import type {
   TestError,
 } from '@playwright/test/reporter';
 import { currentGate, REPO_ROOT, reportsDir, writeFailureRecord } from '../../ci/lib/reports.mjs';
-import { HOST_MARKERS } from './lib/markers';
 import { writeCellFailures, type CellFailure } from './lib/failure-records';
 import { RECORDS_ATTACHMENT } from './lib/records';
 import { CHECKS_ANNOTATION } from './lib/checks';
@@ -46,7 +45,6 @@ export interface SummaryTest {
   readonly skipReason: string | null;
   /** The checks a cell test ran (run-cell.ts's CELL_CHECKS). */
   readonly checks: readonly string[];
-  readonly markers?: string;
   readonly canaryProbe: boolean;
   readonly errors: readonly string[];
   readonly records: number;
@@ -58,7 +56,6 @@ export interface Summary {
   readonly mode: string;
   readonly shard: string | null;
   readonly status: string;
-  readonly markers: string;
   readonly projects: readonly { readonly name: string; readonly browserName?: string }[];
   readonly tests: readonly SummaryTest[];
   /** Errors outside any test: a load error, a global setup's, or a worker's teardown. */
@@ -121,7 +118,6 @@ export default class QualityReporter implements Reporter {
           ? (annotation(test, 'skip') ?? annotation(test, 'fixme') ?? null)
           : null,
         checks: annotation(test, CHECKS_ANNOTATION)?.split(' ').filter(Boolean) ?? [],
-        markers: annotation(test, 'quality-markers'),
         canaryProbe: annotation(test, 'quality-canary-probe') !== undefined,
         errors: (last?.errors ?? []).map((error) => plain(error.message ?? error.value)),
         records: records.length,
@@ -134,7 +130,6 @@ export default class QualityReporter implements Reporter {
       mode: process.env.QUALITY_MODE ?? 'pr',
       shard: shard ? `${shard.current}/${shard.total}` : null,
       status: result.status,
-      markers: HOST_MARKERS,
       projects: (this.config?.projects ?? []).map((project) => ({
         name: project.name,
         browserName: (project.use as { browserName?: string }).browserName,

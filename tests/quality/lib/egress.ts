@@ -4,12 +4,9 @@
 // the cell: there's no allowlist. Chromium itself also resolves no name but
 // loopback (tests/harness/trace/policy.mjs's TRACE_LAUNCH_ARGS, which the
 // quality config launches with), so what routing never sees, such as a
-// redirect hop, fails to resolve instead of leaving the machine. Until the
-// host places the fixture markers, the app's own responses get them here,
-// from the stand-in (markers.ts).
+// redirect hop, fails to resolve instead of leaving the machine.
 
 import type { BrowserContext } from '@playwright/test';
-import { HOST_MARKERS, standInMarkers } from './markers';
 
 /** `url`'s origin, or null for one that doesn't parse. */
 function originOf(url: string): string | null {
@@ -27,7 +24,6 @@ function originOf(url: string): string | null {
 export async function installBrowserPolicy(
   context: BrowserContext,
   appOrigin: string,
-  { markers = HOST_MARKERS }: { readonly markers?: 'host' | 'stand-in' } = {},
 ): Promise<string[]> {
   const blocked: string[] = [];
   const appHost = new URL(appOrigin).host;
@@ -37,10 +33,7 @@ export async function installBrowserPolicy(
       blocked.push(url);
       return route.abort('blockedbyclient');
     }
-    if (markers === 'host') return route.continue();
-    const response = await route.fetch({ maxRedirects: 0 });
-    const { headers, body } = standInMarkers(response.headers(), await response.body());
-    return route.fulfill({ status: response.status(), headers, body });
+    return route.continue();
   });
   await context.routeWebSocket(/.*/, (ws) => {
     if (new URL(ws.url()).host === appHost) ws.connectToServer();

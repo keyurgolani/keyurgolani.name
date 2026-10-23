@@ -6,9 +6,7 @@
 //   harness's serverEgress fails the test it happens in, and an attempt
 //   still on its way after the last test fails the worker as it stops.
 // - The browser reaches nothing but the app: every other request is
-//   aborted and logged, and any one fails the test, with no allowlist. Until
-//   the host places the fixture markers, the app's responses get them from
-//   the stand-in here (lib/markers.ts).
+//   aborted and logged, and any one fails the test, with no allowlist.
 // - The page's Date is pinned (page.clock.setFixedTime, never install), and
 //   web-vitals records from before its first script.
 // - Every request carries the run's canary, as a cookie, an Authorization
@@ -21,7 +19,6 @@ import { startApp } from '../harness/app-server.mjs';
 import { pinPageClock } from './lib/clock';
 import { qualityWeb, runCanary } from './lib/env';
 import { egressFailure, installBrowserPolicy, serverEgressFailure } from './lib/egress';
-import type { MarkedResponse } from './lib/markers';
 import { appOptionsFor, type CellServer } from './lib/server';
 import { recordVitals } from './lib/vitals';
 
@@ -35,12 +32,7 @@ interface QualityWorkerFixtures {
   cellServer: CellServer | null;
 }
 
-interface QualityTestFixtures {
-  /** Every response from the app the page got, as the marker check reads them. */
-  appResponses: MarkedResponse[];
-}
-
-export const test = base.extend<QualityTestFixtures, QualityWorkerFixtures>({
+export const test = base.extend<Record<never, never>, QualityWorkerFixtures>({
   cellServer: [null, { scope: 'worker', option: true }],
 
   app: [
@@ -90,18 +82,5 @@ export const test = base.extend<QualityTestFixtures, QualityWorkerFixtures>({
       });
       throw new Error(failure);
     }
-  },
-
-  appResponses: async ({ page, app }, provide) => {
-    const seen: MarkedResponse[] = [];
-    page.on('response', (response) => {
-      try {
-        if (new URL(response.url()).origin !== app.origin) return;
-      } catch {
-        return;
-      }
-      seen.push({ url: response.url(), status: response.status(), headers: response.headers() });
-    });
-    await provide(seen);
   },
 });

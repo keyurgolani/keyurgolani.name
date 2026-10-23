@@ -22,7 +22,7 @@ type NodeResult = Result['nodes'][number];
 /** The attachment a test's failures travel in, to the reporter. */
 export const RECORDS_ATTACHMENT = 'quality-records.json';
 
-/** The check the runner's own rules belong to: the status, the markers, the emulation, and the clock. */
+/** The check the runner's own rules belong to: the status, the emulation, and the clock. */
 export const RUNNER_CHECK = 'runner';
 
 /** The property a rule's token role is matched on, or null for a rule that isn't about color. */
@@ -110,7 +110,7 @@ export function axeFailures(
   );
 }
 
-/** One failure of the runner's own rules, such as a missing marker. */
+/** One failure of the runner's own rules, such as a status other than the state's. */
 export function runnerFailure(context: CellContext, rule: string, actual: string): CellFailure {
   return { ...cellFields(context), check: RUNNER_CHECK, rule, actual };
 }

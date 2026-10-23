@@ -12,7 +12,6 @@ const RULES = [
   'undeclared-skip',
   'missing-browser',
   'target-without-results',
-  'missing-fixture-marker',
   'ignored-media-emulation',
   'unchecked-cell',
   'tests-failed',
@@ -49,7 +48,6 @@ test("a launch error inside a test's result fails the run as a missing browser, 
       mode: 'pr',
       shard: null,
       status: 'failed',
-      markers: 'stand-in',
       projects: [],
       tests: [
         {

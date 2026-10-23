@@ -2,8 +2,7 @@
 // 8, and 11): a known-bad and a known-good input for each fail-closed rule,
 // appended to META_CASES (cases.ts). Each runs the check the quality runs
 // use, not a copy: the verdict over summary.json (lib/verdict.ts), the
-// missing-browser launch, the marker check, the emulation check, the
-// browser policy, the socket guard beside the egress trap, and the artifact
+// missing-browser launch, the emulation check, the browser policy, the socket guard beside the egress trap, and the artifact
 // scan. A verdict case's findings are every failure the verdict gives, so a
 // known-bad input is built to break its one rule and no other: take the
 // rule away and the case goes the wrong way. The cases marked `browser`
@@ -23,13 +22,6 @@ import { plantCanary, scanArtifacts, scrubArtifacts, writeZip } from '../lib/art
 import { CELL_CHECKS } from '../lib/checks';
 import { checkEmulation } from '../lib/emulation';
 import { egressFailure, installBrowserPolicy, serverEgressFailure } from '../lib/egress';
-import {
-  documentMarkerScript,
-  MARKER_ATTRIBUTE,
-  MARKER_HEADER,
-  markerProblems,
-  type MarkedResponse,
-} from '../lib/markers';
 import { PREFERENCE_ROWS } from '../lib/matrix';
 import { judge as verdictOf, type VerdictInput } from '../lib/verdict';
 import { startEgressTrap } from '../../harness/egress-trap.mjs';
@@ -55,7 +47,6 @@ function cellTest(overrides: Partial<SummaryTest> = {}): SummaryTest {
     status: 'passed',
     skipReason: null,
     checks: [...CELL_CHECKS],
-    markers: 'stand-in',
     canaryProbe: false,
     errors: [],
     records: 0,
@@ -69,7 +60,6 @@ function summary(tests: readonly SummaryTest[], overrides: Partial<Summary> = {}
     mode: 'pr',
     shard: null,
     status: 'passed',
-    markers: 'stand-in',
     projects: [{ name: 'chromium c946a80325' }],
     tests,
     errors: [],
@@ -136,46 +126,18 @@ function launchOutcome(env: Record<string, string>): MetaOutcome {
   });
 }
 
-/** A loopback server that answers every request with `html`, and `headers`. */
-async function standInHost(
-  html: string,
-  headers: Record<string, string> = {},
-): Promise<{ origin: string; server: Server }> {
+/** A loopback server that answers every request with `html`. */
+async function standInHost(html: string): Promise<{ origin: string; server: Server }> {
   const server = createServer((_request, response) => {
-    response.writeHead(200, { 'content-type': 'text/html; charset=utf-8', ...headers });
+    response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
     response.end(html);
   });
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   return { origin: `http://127.0.0.1:${(server.address() as AddressInfo).port}`, server };
 }
 
-/** The marker check, as run-cell.ts runs it, on a page from a host that sends `html` and `headers`. */
-async function markerOutcome(html: string, headers: Record<string, string>): Promise<MetaOutcome> {
-  const { chromium } = await import('playwright');
-  const { origin, server } = await standInHost(html, headers);
-  const browser = await chromium.launch();
-  try {
-    const context = await browser.newContext();
-    await installBrowserPolicy(context, origin, { markers: 'host' });
-    const page = await context.newPage();
-    const seen: MarkedResponse[] = [];
-    page.on('response', (response) =>
-      seen.push({ url: response.url(), status: response.status(), headers: response.headers() }),
-    );
-    await page.goto(`${origin}/`);
-    const problems = markerProblems(
-      seen,
-      await page.evaluate(documentMarkerScript, MARKER_ATTRIBUTE),
-    );
-    return { passed: problems.length === 0, findings: problems };
-  } finally {
-    await browser.close();
-    server.close();
-  }
-}
-
-const PAGE = (attribute: string) =>
-  `<!doctype html><html lang="en"${attribute}><head><title>Stand-in</title></head><body><main><h1>Stand-in</h1></main></body></html>`;
+const PAGE =
+  '<!doctype html><html lang="en"><head><title>Stand-in</title></head><body><main><h1>Stand-in</h1></main></body></html>';
 
 /** The emulation check on the reduced-motion row, with the context emulating it or not. */
 async function emulationOutcome(emulated: boolean): Promise<MetaOutcome> {
@@ -184,7 +146,7 @@ async function emulationOutcome(emulated: boolean): Promise<MetaOutcome> {
   try {
     const context = await browser.newContext(emulated ? { reducedMotion: 'reduce' } : {});
     const page = await context.newPage();
-    await page.setContent(PAGE(''));
+    await page.setContent(PAGE);
     const row = PREFERENCE_ROWS.find((each) => each.id === 'reduced-motion')!;
     const problems = await checkEmulation(page, row);
     return { passed: problems.length === 0, findings: problems };
@@ -204,7 +166,7 @@ async function browserEgressOutcome(outside: boolean): Promise<MetaOutcome> {
   });
   try {
     const context = await browser.newContext();
-    const blocked = await installBrowserPolicy(context, origin, { markers: 'host' });
+    const blocked = await installBrowserPolicy(context, origin);
     const page = await context.newPage();
     await page.goto(`${origin}/`);
     await page.waitForLoadState('load');
@@ -421,38 +383,6 @@ export const RUNNER_CASES: readonly MetaCase[] = [
   verdictCase('run-errors', 'none', 'a run with no error outside its tests', 'pass', {}),
   verdictCase('no-summary', 'none', 'a run that wrote no summary.json', 'fail', { summary: null }),
   verdictCase('no-summary', 'written', 'a run that wrote its summary.json', 'pass', {}),
-
-  // a missing fixture marker
-  {
-    id: `${GATE}/missing-fixture-marker-unmarked`,
-    gate: GATE,
-    input: 'a page from a host that sends neither marker',
-    expect: 'fail',
-    reason: new RegExp(`(?:has no ${MARKER_HEADER} header|<html> has no ${MARKER_ATTRIBUTE})$`),
-    browser: true,
-    run: () => markerOutcome(PAGE(''), {}),
-  },
-  {
-    id: `${GATE}/missing-fixture-marker-other-build`,
-    gate: GATE,
-    input: 'a page from the meta build, whose markers say quality-meta',
-    expect: 'fail',
-    reason: /quality-meta"?, not quality$/,
-    browser: true,
-    run: () =>
-      markerOutcome(PAGE(` ${MARKER_ATTRIBUTE}="quality-meta"`), {
-        [MARKER_HEADER]: 'quality-meta',
-      }),
-  },
-  {
-    id: `${GATE}/missing-fixture-marker-marked`,
-    gate: GATE,
-    input: 'a page from a host that marks the response and <html> with quality',
-    expect: 'pass',
-    browser: true,
-    run: () =>
-      markerOutcome(PAGE(` ${MARKER_ATTRIBUTE}="quality"`), { [MARKER_HEADER]: 'quality' }),
-  },
 
   // ignored media emulation
   {

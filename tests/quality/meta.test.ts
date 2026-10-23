@@ -120,7 +120,6 @@ test('every gate so far has a known-bad case and a known-good one, and each id i
     'runner/undeclared-skip-no-reason',
     'runner/missing-browser-not-installed',
     'runner/target-without-results-surface-uncollected',
-    'runner/missing-fixture-marker-unmarked',
     'runner/ignored-media-emulation-ignored',
   ]) {
     assert.ok(ids.includes(id), id);

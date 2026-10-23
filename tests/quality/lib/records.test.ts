@@ -134,7 +134,7 @@ test("each failure goes through Part A's writer: valid 1.1 records, one file per
   try {
     const failures = [
       ...axeFailures(CONTEXT, RESULTS, DETAILS),
-      runnerFailure(CONTEXT, 'fixture-marker', '<html> has no data-quality-fixture'),
+      runnerFailure(CONTEXT, 'status', '503, not 200'),
     ];
     const { written, duplicates } = await writeCellFailures(failures, {
       gate: {
@@ -149,15 +149,16 @@ test("each failure goes through Part A's writer: valid 1.1 records, one file per
     const records = written.map(
       (file) => JSON.parse(readFileSync(file, 'utf8')) as Record<string, unknown>,
     );
-    const marker = records.find((record) => record.rule === 'fixture-marker')!;
-    assert.equal(marker.schemaVersion, '1.1');
-    assert.equal(marker.gate, 'quality-pr');
-    assert.equal(marker.test, 'runner on fallback');
-    assert.equal(marker.variant, 'fallback');
-    assert.equal(marker.inputMode, 'touch');
-    assert.equal(marker.preferenceMode, 'default');
-    assert.equal(marker.tuple, 'platform-neutral/warm-parchment/humanist-ui/system');
-    assert.equal(marker.reproCommand, 'pnpm ci:quality-pr tests/quality/cells.spec.ts:35');
+    const status = records.find((record) => record.rule === 'status')!;
+    assert.equal(status.schemaVersion, '1.1');
+    assert.equal(status.gate, 'quality-pr');
+    assert.equal(status.test, 'runner on fallback');
+    assert.equal(status.variant, 'fallback');
+    assert.equal(status.inputMode, 'touch');
+    assert.equal(status.preferenceMode, 'default');
+    assert.equal(status.tuple, 'platform-neutral/warm-parchment/humanist-ui/system');
+    assert.equal(status.actual, '503, not 200');
+    assert.equal(status.reproCommand, 'pnpm ci:quality-pr tests/quality/cells.spec.ts:35');
     const contrast = records.find((record) => record.rule === 'color-contrast')!;
     assert.equal(contrast.tokenRole, 'text-muted');
     assert.equal(contrast.semanticRole, 'paragraph');

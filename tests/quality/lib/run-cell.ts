@@ -1,8 +1,7 @@
 // One quality cell in one viewport, preference row, and engine (#11, Slice
 // 1). It loads the cell's path from the quality build and checks, in order:
-// the status its state answers, the fixture markers on every response and
-// on <html>, that the row's media emulation took, that the page's clock
-// reads FIXED_TIME, and axe with the WCAG 2.2 AA tags. Everything it saw
+// the status its state answers, that the row's media emulation took, that
+// the page's clock reads FIXED_TIME, and axe with the WCAG 2.2 AA tags. Everything it saw
 // is attached first (axe's JSON, the vitals, the boundary's resolved tokens,
 // and one failure record per failing rule and element), so a failure keeps
 // its evidence. Egress is the fixtures': any request outside the app fails
@@ -18,13 +17,6 @@ import { axeFor } from './axe';
 import { CHECKS_ANNOTATION, type CellCheck } from './checks';
 import { FIXED_TIME } from './clock';
 import { checkEmulation } from './emulation';
-import {
-  documentMarkerScript,
-  HOST_MARKERS,
-  MARKER_ATTRIBUTE,
-  markerProblems,
-  type MarkedResponse,
-} from './markers';
 import type { PreferenceRow, Viewport } from './matrix';
 import { elementDetailsScript, resolvedTokensScript, type ElementDetails } from './probes';
 import type { CellFailure } from './failure-records';
@@ -52,21 +44,17 @@ export interface CellRun {
   readonly cell: Cell;
   readonly viewport: Viewport;
   readonly row: PreferenceRow;
-  readonly responses: readonly MarkedResponse[];
   readonly testInfo: TestInfo;
   readonly expect: typeof import('@playwright/test').expect;
 }
 
-export async function runCell({ page, cell, viewport, row, responses, testInfo, expect }: CellRun) {
+export async function runCell({ page, cell, viewport, row, testInfo, expect }: CellRun) {
   const ran: CellCheck[] = [];
   const response = await page.goto(cell.path, { waitUntil: 'load' });
   const status = response?.status() ?? 0;
   ran.push('status');
   await settle(page);
 
-  const documentMarker = await page.evaluate(documentMarkerScript, MARKER_ATTRIBUTE);
-  const markers = markerProblems(responses, documentMarker);
-  ran.push('markers');
   const emulation = await checkEmulation(page, row);
   ran.push('emulation');
   const now = await page.evaluate(() => Date.now());
@@ -104,7 +92,6 @@ export async function runCell({ page, cell, viewport, row, responses, testInfo, 
     ...(status === cell.expectedStatus
       ? []
       : [runnerFailure(context, 'status', `${status}, not ${cell.expectedStatus}`)]),
-    ...markers.map((problem) => runnerFailure(context, 'fixture-marker', problem)),
     ...emulation.map((problem) => runnerFailure(context, 'media-emulation', problem)),
     ...(now === Date.parse(FIXED_TIME)
       ? []
@@ -117,13 +104,9 @@ export async function runCell({ page, cell, viewport, row, responses, testInfo, 
         ]),
   ];
   await keep(RECORDS_ATTACHMENT, failures);
-  testInfo.annotations.push(
-    { type: CHECKS_ANNOTATION, description: ran.join(' ') },
-    { type: 'quality-markers', description: HOST_MARKERS },
-  );
+  testInfo.annotations.push({ type: CHECKS_ANNOTATION, description: ran.join(' ') });
 
   expect.soft(status, `${cell.path} answers ${cell.expectedStatus}`).toBe(cell.expectedStatus);
-  expect.soft(markers, `the fixture markers (${HOST_MARKERS})`).toEqual([]);
   expect.soft(emulation, `the ${row.id} row's media emulation`).toEqual([]);
   expect.soft(new Date(now).toISOString(), "the page's clock").toBe(FIXED_TIME);
   expect

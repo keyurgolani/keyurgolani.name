@@ -3,8 +3,7 @@
 // which the cells' standalone servers run, never next dev. Nothing in the
 // checkout is built, so its own build stays free of fixtures. The flags:
 //
-// - QUALITY_FIXTURES=1: #11's tier packs (Part A's rows of the fixture gate)
-//   and the fixture markers, keyed on the generated FIXTURE_FLAGS.quality.
+// - QUALITY_FIXTURES=1: #11's tier packs (Part A's rows of the fixture gate).
 // - APPEARANCE_FIXTURES=1: #19's fixture packs and /_fixtures/appearance,
 //   where the token-role match is checked.
 // - BUDGET_FIXTURES=1: #6's budget fixtures. #6 slice 2 adds their packages
