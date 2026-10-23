@@ -6,10 +6,13 @@
 // PERF_PROBE runs before the page's own scripts and keeps what the page
 // can tell: the last largest-contentful-paint entry and its element, the
 // elements present when parsing finished (the server HTML), the layout
-// shifts, the long tasks, FCP, whether a <canvas> showed in the first
-// viewport at load, and each requestAnimationFrame callback's time.
-// web-vitals' attribution build (vitals.ts) runs beside it, and its LCP and
-// CLS are the ones reported when it has them.
+// shifts, the long tasks, FCP, the load event's end, whether a <canvas>
+// showed in the first viewport at load, and each requestAnimationFrame
+// callback's time. It reads entries through PerformanceObserver only: the
+// pinned clock (clock.ts) gives the page a performance object whose entry
+// lists are empty. web-vitals' attribution build (vitals.ts) runs beside
+// it, and its LCP and CLS are the ones reported when it has them. The
+// payload comes from CDP's Network events.
 //
 // - defaultLoad(): one load at default motion, held for
 //   memory.growthWindowMs[1] after load. TaskDuration over the idle window
@@ -51,7 +54,7 @@ export const LAB_NETWORK = {
 /** The probe, as source text: it closes over nothing. */
 export const PERF_PROBE = `(() => {
   if (window.__qualityPerf) return;
-  const state = { lcp: null, shifts: [], longTasks: [], fcp: null, frames: [], parsed: new WeakSet(), canvasLed: false };
+  const state = { lcp: null, shifts: [], longTasks: [], fcp: null, loadEnd: null, frames: [], parsed: new WeakSet(), canvasLed: false };
   Object.defineProperty(window, '__qualityPerf', { value: state });
   const observe = (type, take) => {
     try { new PerformanceObserver((list) => { for (const entry of list.getEntries()) take(entry); }).observe({ type, buffered: true }); } catch {}
@@ -60,8 +63,9 @@ export const PERF_PROBE = `(() => {
   observe('layout-shift', (entry) => { state.shifts.push({ value: entry.value, startTime: entry.startTime, hadRecentInput: entry.hadRecentInput }); });
   observe('longtask', (entry) => { state.longTasks.push({ startTime: entry.startTime, duration: entry.duration }); });
   observe('paint', (entry) => { if (entry.name === 'first-contentful-paint') state.fcp = entry.startTime; });
+  observe('navigation', (entry) => { if (entry.loadEventEnd > 0) state.loadEnd = entry.loadEventEnd; });
   const raf = window.requestAnimationFrame.bind(window);
-  window.requestAnimationFrame = (callback) => raf((time) => { state.frames.push(performance.now()); return callback(time); });
+  window.requestAnimationFrame = (callback) => raf((time) => { state.frames.push(time); return callback(time); });
   document.addEventListener('DOMContentLoaded', () => {
     for (const element of document.querySelectorAll('body, body *')) state.parsed.add(element);
   }, { once: true });
@@ -81,7 +85,6 @@ interface ProbeRead {
   readonly fcp: number | null;
   readonly frames: readonly number[];
   readonly canvasLed: boolean;
-  readonly payload: PerfRun['payload'];
 }
 
 /** Reads the probe in the page. */
@@ -118,20 +121,6 @@ async function readProbe(page: Page): Promise<ProbeRead> {
       }
       return parts.join(' > ');
     };
-    const entries = [
-      ...performance.getEntriesByType('navigation'),
-      ...performance.getEntriesByType('resource'),
-    ] as PerformanceResourceTiming[];
-    const byType: Record<string, number> = {};
-    for (const entry of entries) {
-      const type = entry.entryType === 'navigation' ? 'document' : entry.initiatorType || 'other';
-      byType[type] = (byType[type] ?? 0) + (entry.transferSize ?? 0);
-    }
-    const payload = {
-      requests: entries.length,
-      transferBytes: entries.reduce((sum, entry) => sum + (entry.transferSize ?? 0), 0),
-      byType,
-    };
     if (!state) {
       return {
         lcp: null,
@@ -140,7 +129,6 @@ async function readProbe(page: Page): Promise<ProbeRead> {
         fcp: null,
         frames: [],
         canvasLed: false,
-        payload,
       };
     }
     const element = state.lcp?.element ?? null;
@@ -159,7 +147,6 @@ async function readProbe(page: Page): Promise<ProbeRead> {
       fcp: state.fcp,
       frames: state.frames,
       canvasLed: state.canvasLed,
-      payload,
     };
   });
 }
@@ -214,17 +201,60 @@ const metrics = async (cdp: CDPSession) =>
 /** Loads `path`, cold, and returns its status, and how to wait until `ms` after its load event. */
 async function load(page: Page, cdp: CDPSession, path: string) {
   await cdp.send('Network.clearBrowserCache');
+  const payload = watchPayload(cdp);
   const response = await page.goto(path, { waitUntil: 'load' });
-  const loadEnd = await page.evaluate(() => {
-    const navigation = performance.getEntriesByType('navigation')[0] as
-      PerformanceNavigationTiming | undefined;
-    return navigation && navigation.loadEventEnd > 0 ? navigation.loadEventEnd : performance.now();
-  });
+  // The navigation entry comes through the probe's observer: the page's
+  // performance object is the pinned clock's, whose entry lists are empty.
+  const loadEnd = await page
+    .waitForFunction(
+      () =>
+        (window as unknown as { __qualityPerf?: { loadEnd: number | null } }).__qualityPerf
+          ?.loadEnd ?? null,
+      undefined,
+      { timeout: 10_000 },
+    )
+    .then((handle) => handle.jsonValue() as Promise<number>)
+    .catch(() => page.evaluate(() => Number(document.timeline.currentTime)));
+  // The page's own timeline, on the entries' timebase: the pinned clock's
+  // performance.now() isn't.
   const until = async (ms: number) => {
-    const now = await page.evaluate(() => performance.now());
-    if (loadEnd + ms > now) await page.waitForTimeout(loadEnd + ms - now);
+    for (;;) {
+      const now = await page.evaluate(() => Number(document.timeline.currentTime));
+      if (!Number.isFinite(now)) throw new Error("The page's timeline has no current time.");
+      if (now >= loadEnd + ms) return;
+      await page.waitForTimeout(loadEnd + ms - now);
+    }
   };
-  return { status: response?.status() ?? 0, loadEnd, until };
+  return { status: response?.status() ?? 0, loadEnd, until, payload };
+}
+
+/**
+ * What a load transfers, from CDP's Network events, by resource type: each
+ * finished request's encoded bytes. Report-only: #6's budgets gate bytes.
+ */
+function watchPayload(cdp: CDPSession) {
+  const types = new Map<string, string>();
+  const byType: Record<string, number> = {};
+  let requests = 0;
+  let transferBytes = 0;
+  const onResponse = (event: { requestId: string; type?: string }) =>
+    types.set(event.requestId, (event.type ?? 'Other').toLowerCase());
+  const onFinished = (event: { requestId: string; encodedDataLength: number }) => {
+    const type = types.get(event.requestId) ?? 'other';
+    requests += 1;
+    transferBytes += event.encodedDataLength;
+    byType[type] = (byType[type] ?? 0) + event.encodedDataLength;
+  };
+  cdp.on('Network.responseReceived', onResponse);
+  cdp.on('Network.loadingFinished', onFinished);
+  return {
+    /** Stops counting, and what it counted. */
+    stop(): PerfRun['payload'] {
+      cdp.off('Network.responseReceived', onResponse);
+      cdp.off('Network.loadingFinished', onFinished);
+      return { requests, transferBytes, byType: { ...byType } };
+    },
+  };
 }
 
 const MIB = 1024 * 1024;
@@ -240,7 +270,7 @@ export async function defaultLoad(
   await cdp.send('Emulation.setCPUThrottlingRate', { rate: CPU_THROTTLING_RATE });
   await cdp.send('Network.emulateNetworkConditions', { ...LAB_NETWORK });
   try {
-    const { status, loadEnd, until } = await load(page, cdp, path);
+    const { status, loadEnd, until, payload } = await load(page, cdp, path);
     const idleFrom = thresholds.idle.startMs;
     const idleTo = idleFrom + thresholds.idle.windowMs;
     const [growthFrom, growthTo] = thresholds.memory.growthWindowMs;
@@ -288,7 +318,7 @@ export async function defaultLoad(
           : Math.max(0, (idleEnd - idleStart - collected) * 1000),
       heapMiB: finite(heap) ? heap / MIB : null,
       growthMiB: finite(from) && finite(to) ? (to - from) / MIB : null,
-      payload: probe.payload,
+      payload: payload.stop(),
     };
   } finally {
     await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
@@ -310,7 +340,8 @@ export async function staticLoad(
 ): Promise<StaticRun> {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   try {
-    const { status, loadEnd, until } = await load(page, cdp, path);
+    const { status, loadEnd, until, payload } = await load(page, cdp, path);
+    payload.stop();
     const [from, to] = thresholds.reducedMotion.rafWindowMs;
     await until(from);
     const start = (await metrics(cdp)).LayoutCount ?? 0;
