@@ -281,7 +281,7 @@ test('FIXTURE_FLAGS has one boolean per flag, true when its value admits any of 
     appearance: false,
     quality: false,
   });
-  // quality is true under either value, so the quality build's markers key on it.
+  // quality is true under either value, since each admits quality fixture packs into the build.
   assert.deepEqual(fixtureFlags({ QUALITY_FIXTURES: '1' }), { appearance: false, quality: true });
   assert.deepEqual(fixtureFlags({ QUALITY_FIXTURES: 'meta' }), {
     appearance: false,

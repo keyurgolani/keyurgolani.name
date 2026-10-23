@@ -187,11 +187,15 @@ test('a viewport, input mode, preference mode, surface, or route it cannot name 
 
 test('with no gate from ci/run.mjs or the caller, nothing is written, as with every CI record', async (t) => {
   const dir = scratch(t);
-  const saved = process.env.CI_GATE;
-  delete process.env.CI_GATE;
+  // ci/run.mjs sets both for the check it runs, as it does for this suite in CI.
+  const names = ['CI_GATE', 'CI_REPRO'] as const;
+  const saved = names.map((name) => process.env[name]);
+  for (const name of names) delete process.env[name];
   t.after(() => {
-    if (saved === undefined) delete process.env.CI_GATE;
-    else process.env.CI_GATE = saved;
+    names.forEach((name, i) => {
+      if (saved[i] === undefined) delete process.env[name];
+      else process.env[name] = saved[i];
+    });
   });
   assert.deepEqual(await writeCellFailures([FAILURE], { dir }), { written: [], duplicates: 0 });
   assert.equal(fs.existsSync(dir), false);

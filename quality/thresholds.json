@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "Every limit #11's quality gates and #19's computed contrast gate use (AC5). tests/quality/lib/thresholds.ts validates this file with zod, and gate code reads its limits only from here: pnpm check:appearance hands the contrast and focus limits to #19's gate, whose browser default, GATE_TARGETS, a test holds to this file. #6's budgets stay in runtime-budgets.json.",
+  "description": "Every limit #11's quality gates and #19's computed contrast gate use (AC5). quality/thresholds.ts validates this file with zod, and gate code reads its limits only from here: pnpm check:appearance hands the contrast and focus limits to #19's gate, whose browser default, GATE_TARGETS, a test holds to this file. #6's budgets stay in runtime-budgets.json.",
   "conformance": {
     "description": "WCAG 2.2 AA for public portfolios, both Studios, and every shipping pack, the same in every tier. axe runs these tags.",
     "standard": "WCAG 2.2",
