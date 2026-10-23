@@ -286,18 +286,28 @@ test('every committed fixture, profession pair, and example keeps every string a
 });
 
 /** The fewest milliseconds `run` takes in five tries. */
-function fastest(run: () => unknown): number {
-  let best = Infinity;
+/**
+ * How many times longer `large` takes than `small`: the fastest of five
+ * interleaved rounds of each, after one untimed run of each. Timing both in
+ * the same rounds keeps a busy runner from slowing one and not the other.
+ */
+function slowdown(large: () => unknown, small: () => unknown): number {
+  large();
+  small();
+  let [fastLarge, fastSmall] = [Infinity, Infinity];
   for (let i = 0; i < 5; i++) {
-    const start = performance.now();
-    run();
-    best = Math.min(best, performance.now() - start);
+    let start = performance.now();
+    large();
+    fastLarge = Math.min(fastLarge, performance.now() - start);
+    start = performance.now();
+    small();
+    fastSmall = Math.min(fastSmall, performance.now() - start);
   }
-  return best;
+  return fastLarge / fastSmall;
 }
 
-test('the measure is linear: four times the text takes at most about four times the time', () => {
-  // Shapes that are quadratic or worse in marked, and plain prose, at 256 KiB and 1 MiB.
+test('the measure is linear: sixteen times the text takes under four times sixteen the time, where quadratic would take sixteen squared', () => {
+  // Shapes that are quadratic or worse in marked, and plain prose, at 64 KiB and 1 MiB.
   const shapes = [
     (n: number) => `x ${'*'.repeat(n)}`,
     (n: number) => '[a]('.repeat(n / 4),
@@ -316,14 +326,19 @@ test('the measure is linear: four times the text takes at most about four times 
     (n: number) => '-\t- \t> x\n'.repeat(n / 10),
   ];
   for (const shape of shapes) {
-    const small = shape(1 << 18);
+    const small = shape(1 << 16);
     const large = shape(1 << 20);
-    measureMarkdown(small);
-    const ratio = fastest(() => measureMarkdown(large)) / fastest(() => measureMarkdown(small));
-    // Linear is 4 times; quadratic would be 16. The slack is for a busy machine.
+    const ratio = slowdown(
+      () => measureMarkdown(large),
+      () => measureMarkdown(small),
+    );
+    // Linear is 16 times, and quadratic 256. The bound sits a factor of 4
+    // from each, so a slow or busy runner doesn't fail it and a quadratic
+    // pass can't pass it: four times the text measured up to 8.5 times as
+    // long on a shared runner, where the gap was 4 to 16.
     assert.ok(
-      ratio < 8,
-      `${small.slice(0, 12)}: four times the text took ${ratio.toFixed(2)} times as long`,
+      ratio < 64,
+      `${small.slice(0, 12)}: sixteen times the text took ${ratio.toFixed(1)} times as long`,
     );
   }
 });
