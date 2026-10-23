@@ -221,7 +221,7 @@ test(
       maxRedirects: 0,
     });
     expect(response.status()).toBe(303);
-    expect(response.headers()['location']).toBe('/?view=all');
+    expect(response.headers()['location']).toBe(`${app.origin}/?view=all`);
     expect(response.headers()['cache-control']).toBe('no-store');
     expect(response.headers()['set-cookie'] ?? '').toMatch(
       /^portfolio_appearance=mode=dark; Path=\/; Max-Age=\d+; HttpOnly; SameSite=Lax/,

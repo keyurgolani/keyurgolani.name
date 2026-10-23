@@ -16,10 +16,16 @@
   overflow-wrap: anywhere;
 }
 
+/* The visitor control starts the header and MotionControl ends it, so a
+   control whose width changes as a font swaps in moves nothing: #6's trace
+   holds the page's layout shift to zero. */
 [data-variant='fixture-variant-medium'] .fvm-header {
   display: flex;
-  justify-content: flex-end;
   margin-block-end: 2rem;
+}
+
+[data-variant='fixture-variant-medium'] .fvm-header .fvm-motion {
+  margin-inline-start: auto;
 }
 
 [data-variant='fixture-variant-medium'] .fvm-stage {
