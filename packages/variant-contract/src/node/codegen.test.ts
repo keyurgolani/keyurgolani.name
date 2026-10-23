@@ -283,6 +283,10 @@ test('packFiles() lists each stylesheet and font, and the platform stylesheet, o
   ]);
 });
 
+// A pid above any pid_max, so no process has it on any host: a temporary
+// file named with it is a gone writer's leftover.
+const GONE_PID = 2147483646;
+
 test('writePackFiles() writes the pack files, keeps what has the bytes, and removes the rest', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'portfolio-packs-'));
   try {
@@ -308,11 +312,14 @@ test('writePackFiles() writes the pack files, keeps what has the bytes, and remo
     // temporary file a stopped run left, go.
     const stale = testPackFile('fixture-dusk', 'css', '[data-pack="fixture-dusk"] {}\n');
     fs.writeFileSync(path.join(target, stale.name), stale.bytes);
-    fs.writeFileSync(path.join(target, `${css.name}.123.tmp`), 'partial');
+    fs.writeFileSync(path.join(target, `${css.name}.${GONE_PID}.tmp`), 'partial');
+    // A running writer's temporary file stays.
+    const running = `${css.name}.${process.pid}.tmp`;
+    fs.writeFileSync(path.join(target, running), 'partial');
     const pruned = writePackFiles(target, packs, staging);
     assert.deepEqual(pruned.written, []);
-    assert.deepEqual(pruned.removed, [`${css.name}.123.tmp`, stale.name].sort());
-    assert.deepEqual(fs.readdirSync(target).sort(), [...names].sort());
+    assert.deepEqual(pruned.removed, [`${css.name}.${GONE_PID}.tmp`, stale.name].sort());
+    assert.deepEqual(fs.readdirSync(target).sort(), [...names, running].sort());
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -560,14 +567,17 @@ test('variantFiles() and assetFiles() list each compiled file once, sorted, for 
     assert.deepEqual(writeServedFiles(images, assets, 'asset', staged('asset')).written, [
       assets[0]!.name,
     ]);
-    // A stylesheet from a build that registered more goes, and so does a leftover temporary file.
+    // A stylesheet from a build that registered more goes, and so does a
+    // leftover temporary file. A running writer's stays.
     fs.writeFileSync(path.join(variants, 'fixture-gone.0123456789ab.css'), 'old');
-    fs.writeFileSync(path.join(variants, `${names[0]}.42.tmp`), 'partial');
+    fs.writeFileSync(path.join(variants, `${names[0]}.${GONE_PID}.tmp`), 'partial');
+    const running = `${names[0]}.${process.pid}.tmp`;
+    fs.writeFileSync(path.join(variants, running), 'partial');
     assert.deepEqual(
       writeServedFiles(variants, variantFiles(result), 'variant', staged('variant')).removed,
-      [`${names[0]}.42.tmp`, 'fixture-gone.0123456789ab.css'],
+      [`${names[0]}.${GONE_PID}.tmp`, 'fixture-gone.0123456789ab.css'],
     );
-    assert.deepEqual(fs.readdirSync(variants).sort(), [...names].sort());
+    assert.deepEqual(fs.readdirSync(variants).sort(), [...names, running].sort());
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

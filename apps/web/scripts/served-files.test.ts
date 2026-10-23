@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { spawn, spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -63,8 +63,8 @@ test("a write removes a gone writer's temporary file and keeps a running one's, 
   const { dir, staging } = scratch(t);
   const live = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
   t.after(() => live.kill());
-  const dead = spawnSync(process.execPath, ['-e', '']).pid;
-  assert.throws(() => process.kill(dead, 0), { code: 'ESRCH' }, `pid ${dead} was reused`);
+  // Above any pid_max, so no process has it on any host.
+  const dead = 2147483646;
   const kept = served('kept', 'k {}\n');
   const outdated = served('outdated', 'o {}\n');
   fs.mkdirSync(dir, { recursive: true });
