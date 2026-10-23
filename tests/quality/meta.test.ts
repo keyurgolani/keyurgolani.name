@@ -76,7 +76,16 @@ test('every gate so far has a known-bad case and a known-good one, and each id i
     if (metaCase.expect === 'fail') assert.ok(metaCase.reason, metaCase.id);
   }
   const gates = [...new Set(META_CASES.map(({ gate }) => gate))];
-  assert.deepEqual(gates, ['workflows', 'exceptions', 'appearance', 'fixture-gate', 'runner']);
+  assert.deepEqual(gates, [
+    'workflows',
+    'exceptions',
+    'appearance',
+    'fixture-gate',
+    'runner',
+    'perf',
+    'timing',
+    'budgets',
+  ]);
   for (const gate of gates) {
     const cases = META_CASES.filter((metaCase) => metaCase.gate === gate);
     assert.ok(
@@ -121,6 +130,27 @@ test('every gate so far has a known-bad case and a known-good one, and each id i
     'runner/missing-browser-not-installed',
     'runner/target-without-results-surface-uncollected',
     'runner/ignored-media-emulation-ignored',
+    // 11-3's performance gates: the deterministic rules, the release timing
+    // gate, and VR1's bundle size through #6's check.
+    'perf/missing-lcp-entry',
+    'perf/canvas-only',
+    'perf/canvas-led-client-headline',
+    'perf/canvas-led-small-headline',
+    'perf/canvas-led-body-text',
+    'perf/static-emulation-ignored',
+    'perf/probe-good',
+    'perf/probe-late-canvas',
+    'perf/probe-small-text',
+    'perf/probe-script-text',
+    'perf/probe-frame-loop',
+    'timing/rerun',
+    'perf/static-frame-loop',
+    'perf/static-layout',
+    'timing/over',
+    'timing/one-slow-load',
+    'timing/retried',
+    'budgets/fixture-over-budget',
+    'budgets/fixture-variant-light',
   ]) {
     assert.ok(ids.includes(id), id);
   }
@@ -141,7 +171,7 @@ test('pnpm quality:meta --no-browser passes on the repository, every case it run
   assert.match(
     run.stdout,
     new RegExp(
-      `\\[quality:meta\\] ${cases.length} cases over 5 gates: ${cases.filter(({ expect }) => expect === 'fail').length} known-bad inputs failing for the reason each names, and ${cases.filter(({ expect }) => expect === 'pass').length} known-good inputs passing\\.\\n\\[quality:meta\\] --no-browser left out ${left} cases that launch Chromium\\.`,
+      `\\[quality:meta\\] ${cases.length} cases over 8 gates: ${cases.filter(({ expect }) => expect === 'fail').length} known-bad inputs failing for the reason each names, and ${cases.filter(({ expect }) => expect === 'pass').length} known-good inputs passing\\.\\n\\[quality:meta\\] --no-browser left out ${left} cases that launch Chromium\\.`,
     ),
   );
   for (const args of [['--all'], ['--no-browser', '--all']]) {

@@ -53,10 +53,11 @@
     "rafCallbacks": 0
   },
   "vitals": {
-    "description": "Lab vitals, for every tier. TBT stands in for INP. A canvas-led cell, with a canvas in the first viewport, makes a server-rendered poster image or headline text its LCP element within lcpMs. A missing LCP entry fails.",
+    "description": "Lab vitals, for every tier. TBT stands in for INP. A canvas-led cell, with a canvas in the first viewport, makes a server-rendered poster image or headline text its LCP element within lcpMs, covering at least canvasLcpMinShare of the viewport by the LCP entry's size. A missing LCP entry fails.",
     "lcpMs": 2500,
     "cls": 0.1,
-    "tbtMs": 200
+    "tbtMs": 200,
+    "canvasLcpMinShare": 0.05
   },
   "idle": {
     "description": "TaskDuration over windowMs, starting startMs after load, visible, at default motion, on the default path, by performanceTier. The forced software-WebGL path is report-only.",

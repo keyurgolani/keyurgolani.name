@@ -86,6 +86,8 @@ test("quality/thresholds.json holds the refined body's Thresholds table", () => 
     [200, [1000, 4000], 0],
   );
   assert.deepEqual([t.vitals.lcpMs, t.vitals.cls, t.vitals.tbtMs], [2500, 0.1, 200]);
+  // 11-3's floor for a canvas-led cell's LCP element: 5% of the viewport.
+  assert.equal(t.vitals.canvasLcpMinShare, 0.05);
   assert.deepEqual(
     [t.idle.startMs, t.idle.windowMs, t.idle.taskDurationMs],
     [2000, 5000, { light: 50, medium: 500, heavy: 500 }],

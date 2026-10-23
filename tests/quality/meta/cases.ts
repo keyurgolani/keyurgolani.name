@@ -7,8 +7,10 @@
 //
 // The gates so far: the static workflow check, the exceptions validator,
 // check:appearance over the tier fixture packs and the low-contrast scheme,
-// the fixture gate's leak check, and the quality runner's fail-closed
-// rules (runner-cases.ts).
+// the fixture gate's leak check, the quality runner's fail-closed rules
+// (runner-cases.ts), and the performance gates: the perf cells'
+// deterministic rules, the release timing gate, and #6's budget check over
+// its fixtures (perf-cases.ts).
 
 import fs from 'node:fs';
 import { spawnSync } from 'node:child_process';
@@ -36,6 +38,8 @@ import {
   KNOWN_BAD_WORKFLOWS,
   KNOWN_GOOD_WORKFLOWS,
 } from '../lib/workflow-fixtures';
+import { PERF_BROWSER_CASES } from './perf-browser-cases';
+import { PERFORMANCE_CASES } from './perf-cases';
 import { RUNNER_CASES } from './runner-cases';
 
 /** What a gate said about one input. */
@@ -409,4 +413,6 @@ export const META_CASES: readonly MetaCase[] = [
   ...APPEARANCE_CASES,
   ...FIXTURE_GATE_CASES,
   ...RUNNER_CASES,
+  ...PERFORMANCE_CASES,
+  ...PERF_BROWSER_CASES,
 ];
