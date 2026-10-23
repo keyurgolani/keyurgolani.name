@@ -218,6 +218,11 @@ export function platformStylesheet(): string {
   );
   const accessibility = [
     block([`${BOUNDARY} [data-ui-slot]:focus-visible`], FOCUS_RING),
+    // On a status fill the focus color can fall under 3:1 (WCAG 2.4.7, 1.4.11). on-status
+    // is held to every status fill, so a control focused inside one rings in it.
+    block([`${BOUNDARY} [data-ui-slot='toast'][data-status] [data-ui-slot]:focus-visible`], {
+      'outline-color': 'var(--color-on-status)',
+    }),
     wrap('@media (prefers-reduced-motion: reduce)', block([BOUNDARY], REDUCED)),
     block([`${BOUNDARY}[data-motion="reduced"]`], REDUCED),
     block([`${BOUNDARY}[data-motion="static"]`], STATIC),

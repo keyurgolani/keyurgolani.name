@@ -216,6 +216,17 @@ test('every focusable part draws its focus ring in the accessibility layer, past
   const order = LAYER_ORDER.replace(/^@layer |;$/g, '').split(', ');
   assert.ok(order.indexOf('language') < order.indexOf('accessibility'));
   assert.equal(order.at(-1), 'accessibility');
+  // On a toast's status fill the ring takes on-status, which the gate holds
+  // to the fill, since the focus color can fall under 3:1 there (#11).
+  assert.deepEqual(
+    Object.fromEntries(
+      declarations(
+        "  [data-appearance-boundary] [data-ui-slot='toast'][data-status] [data-ui-slot]:focus-visible",
+        '@layer accessibility',
+      ),
+    ),
+    { 'outline-color': 'var(--color-on-status)' },
+  );
   // Forced colors give the ring the system highlight.
   assert.equal(
     declarations('    [data-appearance-boundary]', '@media (forced-colors: active)').get(
