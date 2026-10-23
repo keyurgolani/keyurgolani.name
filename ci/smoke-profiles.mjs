@@ -137,6 +137,9 @@ import {
   inspectProblems,
   leakProblems,
   maskCommands,
+  DYNAMIC_ROUTES,
+  dynamicRouteProblems,
+  isDynamic,
   mediaCacheFor,
   MEDIA_PATTERN,
   mediaMissProblems,
@@ -147,9 +150,8 @@ import {
   processProblems,
   redact,
   redactArtifacts,
-  renditionIn,
-  renditionProblems,
   reproFor,
+  SAMPLES,
   signedInLeaks,
   sourceProblems,
   SPOOFED_HEADERS,
@@ -270,14 +272,22 @@ const concrete = (pattern) =>
   pattern.replace(/\/\[\[\.\.\.[^\]]+\]\]/g, '').replace(/\[\.{0,3}[^\]]+\]/g, 'probe') || '/';
 
 /**
- * A page whose concrete path names nothing it can render: no installed
- * variant declares a view at /probe, and no slug names a work until #10
- * (#5, Slice 4). The route table calls it missing in every profile, so a
- * GET gets the app's 404 page, rendered from the server, and any other
- * method the proxy's plain 404, as an absent route does.
+ * What a dynamic pattern's made-up path answers, by DYNAMIC_ROUTES (#12),
+ * or undefined for a static pattern. `not-found` is a path that names
+ * nothing it can render: no installed variant declares a view at /probe,
+ * and no work has the slug probe (#5, Slice 4). The route table calls it
+ * missing in every profile, so a GET gets the app's 404 page, rendered from
+ * the server, and any other method the proxy's plain 404, as an absent
+ * route does.
  */
-const namesNothing = (entry) =>
-  entry.kind === 'page' && entry.grant === undefined && concrete(entry.pattern).includes('probe');
+const madeUpOf = (entry) =>
+  isDynamic(entry.pattern) ? DYNAMIC_ROUTES[entry.pattern]?.madeUp : undefined;
+
+/** The patterns smoke:profiles probes, the operations aside, which listOperations() covers. */
+const probedPatterns = () =>
+  listRoutes()
+    .filter((route) => route.capability !== 'operations')
+    .map(({ pattern }) => pattern);
 
 /**
  * Whether `profile` serves a grant route, as owner does (#7): there
@@ -447,7 +457,7 @@ function plan(profile, leaks, origin) {
           ...(UUID.test(response.headers['x-request-id'] ?? '') ? [] : ['no x-request-id']),
         ]);
       }
-    } else if (namesNothing(entry)) {
+    } else if (madeUpOf(entry) === 'not-found') {
       add('GET', concrete(entry.pattern), (response) => [
         ...status(404)(response),
         ...(/^text\/html/.test(response.headers['content-type'] ?? '') &&
@@ -471,13 +481,16 @@ function plan(profile, leaks, origin) {
           ...(UUID.test(response.headers['x-request-id'] ?? '') ? [] : ['no x-request-id']),
         ];
       });
-    } else if (access !== 'absent' && entry.pattern === MEDIA_PATTERN) {
+    } else if (access !== 'absent' && madeUpOf(entry) === 'media-miss') {
       // #10's renditions: the probe path names none, so it's the plain
-      // 404, never cached. demo also loads a real one (demoRendition).
+      // 404, never cached. demo also loads a real one (its sample).
       add('GET', concrete(entry.pattern), (response) => [
         ...mediaMissProblems(response),
         ...(UUID.test(response.headers['x-request-id'] ?? '') ? [] : ['no x-request-id']),
       ]);
+    } else if (access !== 'absent' && isDynamic(entry.pattern) && madeUpOf(entry) !== 'served') {
+      // A dynamic pattern checked by its sample alone: no made-up path to ask.
+      continue;
     } else if (access !== 'absent') {
       add('GET', concrete(entry.pattern), (response) => [
         ...status(200)(response),
@@ -558,23 +571,52 @@ function send(name, requests) {
 }
 
 /**
- * demo's sample images (#10): it derives them once it starts, in the
- * background, and then / names their renditions. Loads the first one / names,
- * once it does, and returns what's wrong with it, or that none showed.
+ * The real paths a profile's container is asked for (#12): for each dynamic
+ * pattern it serves whose DYNAMIC_ROUTES entry names a sample, the first
+ * one / names, and what's wrong with its answer. A sample SAMPLES marks
+ * required fails when / names none within `wait` ms, as demo's renditions
+ * do while it derives them in the background (#10); any other is skipped,
+ * and says so.
  */
-async function demoRendition(name) {
-  const deadline = Date.now() + 60_000;
-  for (;;) {
-    const [home] = send(name, [{ method: 'GET', path: '/' }]);
-    const rendition = renditionIn(home?.body);
-    if (rendition) {
-      const [response] = send(name, [{ method: 'GET', path: rendition }]);
-      console.log(`[profiles] demo: GET ${rendition} ${response.status}`);
-      return renditionProblems(rendition, response).map((problem) => `GET ${rendition} ${problem}`);
+async function samplePaths(name, profile, wait = 60_000) {
+  const problems = [];
+  for (const entry of listRoutes()) {
+    const sampleName = isDynamic(entry.pattern) ? DYNAMIC_ROUTES[entry.pattern]?.sample : undefined;
+    if (sampleName === undefined || routeAccess(profile, entry) === 'absent') continue;
+    const sample = SAMPLES[sampleName];
+    if (sample.profiles && !sample.profiles.includes(profile)) continue;
+    const deadline = Date.now() + (sample.required ? wait : 0);
+    for (;;) {
+      const [home] = send(name, [{ method: 'GET', path: '/' }]);
+      const found = sample.find(home?.body);
+      if (found) {
+        const [response] = send(name, [{ method: 'GET', path: found }]);
+        console.log(`[profiles] ${profile}: ${entry.pattern} GET ${found} ${response.status}`);
+        problems.push(
+          ...sample.problems(found, response).map((problem) => ({
+            route: entry.pattern,
+            text: `GET ${found} ${problem}`,
+          })),
+        );
+        break;
+      }
+      if (Date.now() >= deadline) {
+        if (sample.required) {
+          problems.push({
+            route: entry.pattern,
+            text: `GET / names no ${sampleName} below ${entry.pattern} ${wait / 1000} s after it started`,
+          });
+        } else {
+          console.log(
+            `[profiles] ${profile}: ${entry.pattern} has no ${sampleName} on / to sample`,
+          );
+        }
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 1000));
     }
-    if (Date.now() > deadline) return ['GET / names no /media rendition 60 s after it started'];
-    await new Promise((resolve) => setTimeout(resolve, 1000));
   }
+  return problems;
 }
 
 /** JSON log lines among a container's output. */
@@ -799,10 +841,8 @@ async function profileRun(
     const expectedName = profile === 'demo' ? 'Anamika Devi' : FIXTURE_NAME;
     if (!home?.body?.includes(expectedName)) fail(profile, `GET / doesn't show ${expectedName}`);
     console.log(`[profiles] ${profile}: ${requests.length} requests checked`);
-    if (profile === 'demo') {
-      for (const problem of await demoRendition(name)) {
-        fail(`${profile}: media`, problem, { profile, route: MEDIA_PATTERN });
-      }
+    for (const { route, text } of await samplePaths(name, profile)) {
+      fail(`${profile}: ${route === MEDIA_PATTERN ? 'media' : 'sample'}`, text, { profile, route });
     }
     for (const problem of spoofed(name, profile, env.PORTFOLIO_ORIGIN)) {
       fail(`${profile}: proxy trust`, problem);
@@ -1690,6 +1730,11 @@ async function smoke(parts) {
 }
 
 let exitCode = 0;
+// Every dynamic pattern in the route table says what a path below it
+// answers (#12), checked before any container starts.
+part = 'rows';
+for (const problem of dynamicRouteProblems(probedPatterns())) fail('route table', problem);
+part = 'read-only';
 const runParts = (() => {
   try {
     return partsOf(process.env.SMOKE_PROFILES);

@@ -681,3 +681,123 @@ export function renditionProblems(pathname, response) {
   if (response.headers['x-content-type-options'] !== 'nosniff') problems.push('no nosniff');
   return problems;
 }
+
+/**
+ * What smoke:profiles asks of each route-table pattern with a dynamic
+ * segment (#12), where a profile serves it, since a pattern alone says
+ * nothing about which paths below it name anything. Every one has a
+ * `madeUp` expectation, for its concrete path, each dynamic segment a word
+ * no record takes:
+ *
+ * - `not-found`: the app's 404 page to GET, and the plain 404 to any other
+ *   method, as a path no route matches gets;
+ * - `media-miss`: #10's plain 404, never cached;
+ * - `served`: 200, for a pattern whose concrete path is real, as /sample's
+ *   empty optional catch-all is the bundled sample's home;
+ * - `status-document`: a grant route with no active grant, #7's status
+ *   document to every method.
+ *
+ * A `sample`, by name in SAMPLES, adds a real path below the pattern, found
+ * in a page the running app serves, with what its answer must be.
+ */
+export const DYNAMIC_ROUTES = Object.freeze({
+  '/[...view]': { madeUp: 'not-found' },
+  '/work/[slug]': { madeUp: 'not-found', sample: 'case-study' },
+  '/work/[slug]/[...view]': { madeUp: 'not-found' },
+  '/sample/[[...path]]': { madeUp: 'served' },
+  '/preview/dev/[variant]/[fixture]': { madeUp: 'not-found' },
+  '/preview/[grant]/[[...route]]': { madeUp: 'status-document' },
+  '/preview-assets/[grant]/[...path]': { madeUp: 'status-document' },
+  [MEDIA_PATTERN]: { madeUp: 'media-miss', sample: 'rendition' },
+});
+
+/** What a made-up path below a dynamic pattern may be expected to answer. */
+export const MADE_UP_EXPECTATIONS = Object.freeze([
+  'not-found',
+  'media-miss',
+  'served',
+  'status-document',
+]);
+
+/** Whether a route pattern has a dynamic segment, such as [slug] or [[...path]]. */
+export const isDynamic = (pattern) => /\[[^\]]*\]/.test(pattern);
+
+/** The first case study a page links to, as /work/<slug>, or null (#10b). */
+export function caseStudyIn(html) {
+  return /\shref="(\/work\/[a-z0-9]+(?:-[a-z0-9]+)*)"/.exec(html ?? '')?.[1] ?? null;
+}
+
+/**
+ * Problems with a case study's answer (#10b): 200, an HTML page, and the
+ * app's request id.
+ *
+ * @param {string} pathname
+ * @param {{ status: number, headers: Record<string, string> }} response
+ * @returns {string[]}
+ */
+export function caseStudyProblems(pathname, response) {
+  const problems = [];
+  if (response.status !== 200) problems.push(`answered ${response.status}, not 200`);
+  if (!/^text\/html/.test(response.headers['content-type'] ?? '')) {
+    problems.push(`is ${response.headers['content-type']}, not a page`);
+  }
+  if (
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(
+      response.headers['x-request-id'] ?? '',
+    )
+  ) {
+    problems.push('no x-request-id');
+  }
+  return problems;
+}
+
+/**
+ * The real paths smoke:profiles samples, each found in a page the running
+ * app serves: `find` reads one from the page's HTML, `problems` checks its
+ * answer, `required` says whether a profile that serves the pattern must
+ * name one, and `profiles`, when given, which profiles look. demo's
+ * renditions must show once it has derived them, from the bundled sample's
+ * images; a case study is the content's to have, so a page that links none
+ * skips it, as / does until #10b links them.
+ */
+export const SAMPLES = Object.freeze({
+  rendition: { find: renditionIn, problems: renditionProblems, required: true, profiles: ['demo'] },
+  'case-study': { find: caseStudyIn, problems: caseStudyProblems, required: false },
+});
+
+/**
+ * What's wrong with `table` for `patterns`, the route table's: a dynamic
+ * pattern with neither a made-up expectation nor a sample, an expectation or
+ * a sample nothing knows, and an entry for a pattern the table no longer
+ * has.
+ *
+ * @param {readonly string[]} patterns
+ * @param {Readonly<Record<string, { madeUp?: string, sample?: string }>>} [table]
+ * @returns {string[]}
+ */
+export function dynamicRouteProblems(patterns, table = DYNAMIC_ROUTES) {
+  const problems = [];
+  for (const pattern of patterns.filter(isDynamic)) {
+    const entry = Object.hasOwn(table, pattern) ? table[pattern] : undefined;
+    if (!entry || (entry.madeUp === undefined && entry.sample === undefined)) {
+      problems.push(
+        `${pattern} has a dynamic segment, and DYNAMIC_ROUTES in ci/lib/profile-checks.mjs gives it neither a made-up path's expected status nor a sample path`,
+      );
+      continue;
+    }
+    if (entry.madeUp !== undefined && !MADE_UP_EXPECTATIONS.includes(entry.madeUp)) {
+      problems.push(
+        `${pattern}'s made-up path expects ${entry.madeUp}, not one of ${MADE_UP_EXPECTATIONS.join(', ')}`,
+      );
+    }
+    if (entry.sample !== undefined && !Object.hasOwn(SAMPLES, entry.sample)) {
+      problems.push(`${pattern}'s sample ${entry.sample} is none SAMPLES knows`);
+    }
+  }
+  for (const pattern of Object.keys(table)) {
+    if (!patterns.includes(pattern)) {
+      problems.push(`DYNAMIC_ROUTES has ${pattern}, which the route table doesn't`);
+    }
+  }
+  return problems;
+}

@@ -14,7 +14,14 @@ import {
   anonymousLeaks,
   ARTIFACT_LIMIT,
   CACHE_DIR,
+  caseStudyIn,
+  caseStudyProblems,
   composeProblems,
+  DYNAMIC_ROUTES,
+  dynamicRouteProblems,
+  isDynamic,
+  MADE_UP_EXPECTATIONS,
+  SAMPLES,
   DATA_DIR,
   fatalCodes,
   HARDENING,
@@ -716,5 +723,83 @@ test("/media's probe path is the plain uncached 404, and a real rendition is 200
       served(200, { ...good, 'x-content-type-options': undefined }),
     ),
     ['is image/webp, not image/jpeg', 'no nosniff'],
+  );
+});
+
+/** The route table's patterns, read from its source: what smoke:profiles reads through tsx. */
+function routeTablePatterns() {
+  const source = readFileSync(
+    fileURLToPath(new URL('../apps/web/src/server/routes.ts', import.meta.url)),
+    'utf8',
+  );
+  return [...source.matchAll(/pattern: '([^']+)'/g)]
+    .map(([, pattern]) => pattern)
+    .filter((pattern) => pattern !== '/api/studio/[name]');
+}
+
+test('every dynamic pattern in the route table has a made-up path expectation or a sample, and nothing else is listed (#12)', () => {
+  const patterns = routeTablePatterns();
+  assert.ok(patterns.some(isDynamic), 'the source holds dynamic patterns');
+  assert.deepEqual(dynamicRouteProblems(patterns), []);
+  // #79's media keeps its two checks: the made-up path's plain 404, and demo's real rendition.
+  assert.deepEqual(DYNAMIC_ROUTES['/media/[...path]'], {
+    madeUp: 'media-miss',
+    sample: 'rendition',
+  });
+  assert.equal(SAMPLES.rendition.required, true);
+  assert.deepEqual(SAMPLES.rendition.profiles, ['demo']);
+  // /work/<slug> (#10b): a slug nothing has is the 404 page; a case study / links to is a page.
+  assert.deepEqual(DYNAMIC_ROUTES['/work/[slug]'], { madeUp: 'not-found', sample: 'case-study' });
+  for (const entry of Object.values(DYNAMIC_ROUTES)) {
+    assert.ok(MADE_UP_EXPECTATIONS.includes(entry.madeUp), JSON.stringify(entry));
+  }
+});
+
+test('a dynamic pattern with neither a made-up expectation nor a sample fails, as do unknown ones and stale entries (#12)', () => {
+  const table = {
+    '/a/[id]': { madeUp: 'not-found' },
+    '/b/[[...rest]]': { sample: 'case-study' },
+  };
+  assert.deepEqual(dynamicRouteProblems(['/a/[id]', '/b/[[...rest]]', '/static'], table), []);
+  const [missing] = dynamicRouteProblems(['/a/[id]', '/b/[[...rest]]', '/c/[slug]'], table);
+  assert.match(missing, /^\/c\/\[slug\] has a dynamic segment, and DYNAMIC_ROUTES .* neither/);
+  assert.equal(dynamicRouteProblems(['/a/[id]'], { '/a/[id]': {} }).length, 1);
+  assert.match(
+    dynamicRouteProblems(['/a/[id]'], { '/a/[id]': { madeUp: 'teapot' } })[0],
+    /expects teapot, not one of not-found, media-miss, served, status-document/,
+  );
+  assert.match(
+    dynamicRouteProblems(['/a/[id]'], { '/a/[id]': { madeUp: 'served', sample: 'nope' } })[0],
+    /sample nope is none SAMPLES knows/,
+  );
+  assert.deepEqual(
+    dynamicRouteProblems(['/a/[id]'], {
+      '/a/[id]': { madeUp: 'served' },
+      '/gone/[x]': { madeUp: 'served' },
+    }),
+    ["DYNAMIC_ROUTES has /gone/[x], which the route table doesn't"],
+  );
+  // A static pattern needs nothing, such as the catalog fixture's Studio page (#6).
+  assert.deepEqual(dynamicRouteProblems(['/studio/_catalog-fixture'], {}), []);
+});
+
+test("a case study sample is the first /work/<slug> a page links to, and its answer is a page with the app's request id (#10b)", () => {
+  assert.equal(
+    caseStudyIn('<a href="/sample">x</a><a href="/work/ledger">Ledger</a><a href="/work/atlas">'),
+    '/work/ledger',
+  );
+  assert.equal(caseStudyIn('<a href="/work/">x</a><a href="/work/Bad_Slug">'), null);
+  assert.equal(caseStudyIn(undefined), null);
+  const page = {
+    status: 200,
+    headers: {
+      'content-type': 'text/html; charset=utf-8',
+      'x-request-id': '0b1e7c2a-3d4f-4a5b-8c6d-7e8f9a0b1c2d',
+    },
+  };
+  assert.deepEqual(caseStudyProblems('/work/ledger', page), []);
+  assert.deepEqual(
+    caseStudyProblems('/work/ledger', { status: 404, headers: { 'content-type': 'text/plain' } }),
+    ['answered 404, not 200', 'is text/plain, not a page', 'no x-request-id'],
   );
 });
