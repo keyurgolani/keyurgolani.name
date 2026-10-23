@@ -42,7 +42,12 @@ ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 
 RUN addgroup -g 1001 -S nodejs && adduser -S nextjs -u 1001 -G nodejs
-RUN apk add --no-cache wget
+# Patched Alpine packages, and no package managers at runtime: the server is
+# node apps/web/server.js alone, so npm and corepack only add attack surface.
+RUN apk upgrade --no-cache && apk add --no-cache wget \
+  && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+     /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \
+     /usr/local/bin/yarn /usr/local/bin/yarnpkg /opt/yarn-*
 
 # Standalone output ships its own minimal node_modules + server.js
 COPY --from=builder --chown=nextjs:nodejs /repo/apps/web/.next/standalone ./

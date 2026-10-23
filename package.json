@@ -1,7 +1,7 @@
 {
   "name": "portfolio-monorepo",
   "private": true,
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Self-hostable portfolio platform with pluggable visual variants",
   "packageManager": "pnpm@10.33.0",
   "engines": {
@@ -20,6 +20,11 @@
     "check-coverage": "node skills/variant-developer/scripts/check-coverage.mjs",
     "check:skills": "node skills/scripts/sync-checks.mjs",
     "postinstall": "pnpm --filter @portfolio/web build:registry || true"
+  },
+  "pnpm": {
+    "overrides": {
+      "source-map-js": "1.2.2"
+    }
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
