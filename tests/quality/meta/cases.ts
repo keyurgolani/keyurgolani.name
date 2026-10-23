@@ -77,6 +77,34 @@ export function judge(metaCase: MetaCase, outcome: MetaOutcome): string | null {
   return null;
 }
 
+/**
+ * Why `cases` can't be run as the meta table, one line each, or none: it's
+ * empty, an id repeats, or a gate lacks a known-bad or a known-good case. A
+ * table with no known-bad case for a gate would pass a gate that passes
+ * everything.
+ */
+export function tableProblems(cases: readonly MetaCase[]): string[] {
+  if (cases.length === 0) return ['The table has no case, so nothing was checked.'];
+  const problems: string[] = [];
+  const ids = cases.map(({ id }) => id);
+  const repeated = [...new Set(ids.filter((id, index) => ids.indexOf(id) !== index))];
+  if (repeated.length > 0) problems.push(`Case ids repeat: ${repeated.join(', ')}.`);
+  for (const gate of new Set(cases.map(({ gate: name }) => name))) {
+    const own = cases.filter((metaCase) => metaCase.gate === gate);
+    if (!own.some(({ expect }) => expect === 'fail')) {
+      problems.push(
+        `The ${gate} gate has no known-bad case, so a gate that passes everything would pass.`,
+      );
+    }
+    if (!own.some(({ expect }) => expect === 'pass')) {
+      problems.push(
+        `The ${gate} gate has no known-good case, so a gate that fails everything would pass.`,
+      );
+    }
+  }
+  return problems;
+}
+
 // ---- the static workflow check ---------------------------------------------
 
 const workflowOutcome = (problems: readonly WorkflowProblem[]): MetaOutcome => ({

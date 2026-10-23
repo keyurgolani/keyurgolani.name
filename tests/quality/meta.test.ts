@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
-import { judge, META_CASES, type MetaCase } from './meta/cases';
+import { judge, META_CASES, tableProblems, type MetaCase } from './meta/cases';
 
 // pnpm quality:meta's frame (#11, Slice 1): a table of cases, each a known-bad
 // or known-good input to one gate, judged so a known-bad input passes the
@@ -54,6 +54,20 @@ test('a known-good case holds only when its gate passes it with no finding', () 
   );
 });
 
+test('an empty table, a repeated id, or a gate without both kinds of case is refused before anything runs', () => {
+  assert.deepEqual(tableProblems([]), ['The table has no case, so nothing was checked.']);
+  assert.deepEqual(tableProblems([knownBad, knownGood]), []);
+  assert.deepEqual(tableProblems([knownBad, knownGood, knownBad]), ['Case ids repeat: trial/bad.']);
+  assert.deepEqual(tableProblems([knownBad]), [
+    'The trial gate has no known-good case, so a gate that fails everything would pass.',
+  ]);
+  assert.deepEqual(tableProblems([knownGood, { ...knownGood, id: 'other/good', gate: 'other' }]), [
+    'The trial gate has no known-bad case, so a gate that passes everything would pass.',
+    'The other gate has no known-bad case, so a gate that passes everything would pass.',
+  ]);
+  assert.deepEqual(tableProblems(META_CASES), []);
+});
+
 test('every gate so far has a known-bad case and a known-good one, and each id is unique', () => {
   const ids = META_CASES.map(({ id }) => id);
   assert.deepEqual(ids, [...new Set(ids)]);
@@ -81,6 +95,14 @@ test('every gate so far has a known-bad case and a known-good one, and each id i
     'workflows/pull-request-target',
     'workflows/write-permissions',
     'workflows/secrets',
+    'workflows/secrets-in-string-run',
+    'workflows/secrets-in-string-env',
+    'workflows/yaml-directive',
+    'workflows/pull-request-review',
+    'workflows/pull-request-review-comment',
+    'workflows/workflow-run',
+    'workflows/issue-comment',
+    'workflows/not-pull-request-if',
     'exceptions/repository',
     'exceptions/expired',
     'exceptions/wildcard',

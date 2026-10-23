@@ -1,11 +1,13 @@
 // `pnpm quality:meta` (#11, Slice 1): runs every case in META_CASES and
 // fails unless each known-bad input fails its gate for the reason it names
-// and each known-good input passes its gate with no finding. A case that
+// and each known-good input passes its gate with no finding. It fails before
+// running anything when the table is empty, an id repeats, or a gate lacks a
+// known-bad or a known-good case (tableProblems in cases.ts). A case that
 // throws counts as an unexpected result. Under ci/run.mjs each unexpected
 // case also gets a failure record.
 
 import { currentGate, writeFailureRecord } from '../../../ci/lib/reports.mjs';
-import { judge, META_CASES, type MetaOutcome } from './cases';
+import { judge, META_CASES, tableProblems, type MetaOutcome } from './cases';
 
 const TAG = '[quality:meta]';
 const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? '' : 's'}`;
@@ -15,10 +17,10 @@ async function main(): Promise<number> {
     process.stderr.write('Usage: pnpm quality:meta\n');
     return 2;
   }
-  const ids = META_CASES.map(({ id }) => id);
-  const repeated = ids.filter((id, index) => ids.indexOf(id) !== index);
-  if (repeated.length > 0) {
-    process.stderr.write(`${TAG} Case ids repeat: ${[...new Set(repeated)].join(', ')}.\n`);
+  // An empty table, a repeated id, or a gate without both kinds of case fails before anything runs.
+  const table = tableProblems(META_CASES);
+  if (table.length > 0) {
+    for (const problem of table) process.stderr.write(`${TAG} ${problem}\n`);
     return 1;
   }
   const gate = currentGate();

@@ -122,7 +122,9 @@ export const EXCEPTION_GATES = {
       'high-contrast-non-text': 'above-aa',
       print: 'above-aa',
     },
-    decorative: ['text', 'large-text', 'non-text'],
+    // Not text: a pack's text roles carry the page's content, so decorative
+    // can't excuse a text contrast failure (the refusal names the way in).
+    decorative: ['large-text', 'non-text'],
   },
   focus: {
     description:
@@ -258,15 +260,24 @@ export type ExceptionGateId = keyof typeof EXCEPTION_GATES;
 
 const GATES: Readonly<Record<string, ExceptionGate>> = EXCEPTION_GATES;
 
+/**
+ * `record[key]` when `key` is its own property, else undefined, so a gate or
+ * rule named constructor, __proto__, or toString reads as no gate or rule
+ * and the validator reports it rather than throwing.
+ */
+function own<T>(record: Readonly<Record<string, T>>, key: string): T | undefined {
+  return Object.hasOwn(record, key) ? record[key] : undefined;
+}
+
 /** A rule's level in `gate`, or undefined when the gate has no such rule. */
 export function ruleLevel(gate: string, rule: string): RuleLevel | undefined {
-  const row = GATES[gate];
+  const row = own(GATES, gate);
   if (!row) return undefined;
   if ('pattern' in row.rules) {
     const { pattern, level } = row.rules as { pattern: RegExp; level: RuleLevel };
     return pattern.test(rule) ? level : undefined;
   }
-  return (row.rules as Readonly<Record<string, RuleLevel>>)[rule];
+  return own(row.rules as Readonly<Record<string, RuleLevel>>, rule);
 }
 
 /** A value that names more than one thing: a glob or pattern, or a word for every. */
@@ -418,7 +429,7 @@ export function exceptionSchema(source: ExceptionSource, context: ExceptionConte
   return ExceptionShape.superRefine((entry, ctx) => {
     const fail = (pathTo: (string | number)[], message: string) =>
       ctx.addIssue({ code: 'custom', path: pathTo, message });
-    const gate = GATES[entry.gate];
+    const gate = own(GATES, entry.gate);
 
     // The gate, the rule, and the kind.
     if (!gate) {
@@ -440,7 +451,12 @@ export function exceptionSchema(source: ExceptionSource, context: ExceptionConte
       if (!level) {
         fail(['rule'], `isn't a rule of ${entry.gate}, so it can't be excepted.`);
       } else if (entry.kind === 'decorative') {
-        if (level !== 'A' && level !== 'AA') {
+        if (entry.gate === 'contrast' && entry.rule === 'text') {
+          fail(
+            ['kind'],
+            "contrast text measures a pack's text roles, which carry the page's content, so decorative can't excuse it. Text that really is incidental goes in as a falsePositive, with the quality/manual-runs/ record that proves it.",
+          );
+        } else if (level !== 'A' && level !== 'AA') {
           fail(
             ['kind'],
             `${entry.gate} ${entry.rule} is no A or AA rule, so decorative doesn't apply: use the kind its level takes.`,

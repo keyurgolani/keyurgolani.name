@@ -12,6 +12,7 @@ import {
   quarantineFor,
   repositoryContext,
   repositoryInputs,
+  ruleLevel,
   validateExceptions,
   type ExceptionContext,
   type ExceptionInputs,
@@ -315,6 +316,53 @@ test("WCAG A and AA failures on essential content can't be excepted, in any tier
   assert.deepEqual(messages(quality([edit(DECORATIVE, { selector: undefined })])), [
     'exceptions[0] (fallback-decorative-watermark) selector: a decorative exception names the element it waives, by selector.',
   ]);
+  // Decorative never excuses text contrast, a pack's text roles being content; large text and non-text it may.
+  const contrast = (rule: string) =>
+    messages(
+      quality([
+        edit(DECORATIVE, {
+          gate: 'contrast',
+          rule,
+          scope: {
+            ...scopeFor('contrast'),
+            tuple: 'platform-neutral/fixture-scheme-experimental-low-contrast/humanist-ui/light',
+          },
+        }),
+      ]),
+    );
+  assert.deepEqual(contrast('text'), [
+    "exceptions[0] (fallback-decorative-watermark) kind: contrast text measures a pack's text roles, which carry the page's content, so decorative can't excuse it. Text that really is incidental goes in as a falsePositive, with the quality/manual-runs/ record that proves it.",
+  ]);
+  assert.deepEqual(contrast('large-text'), []);
+  assert.deepEqual(contrast('non-text'), []);
+});
+
+test('a gate or rule named for a prototype key is no gate or rule, reported and never thrown', () => {
+  for (const name of ['constructor', '__proto__', 'toString', 'hasOwnProperty', 'valueOf']) {
+    assert.equal(ruleLevel(name, 'text'), undefined, name);
+    assert.equal(ruleLevel('contrast', name), undefined, name);
+    assert.equal(ruleLevel('targets', name), undefined, name);
+    let found: string[] = [];
+    assert.doesNotThrow(() => {
+      found = messages(quality([edit(TARGET, { gate: name })]));
+    }, `gate ${name}`);
+    assert.ok(
+      found.some((message) => message.includes('gate: names no gate: it must be one of axe,')),
+      `gate ${name}: ${found.join(' | ')}`,
+    );
+    for (const gate of ['contrast', 'targets'] as const) {
+      assert.doesNotThrow(() => {
+        found = messages(quality([edit(TARGET, { gate, rule: name, scope: scopeFor(gate) })]));
+      }, `${gate} rule ${name}`);
+      assert.deepEqual(
+        found,
+        [
+          `exceptions[0] (login-primary-target) rule: isn't a rule of ${gate}, so it can't be excepted.`,
+        ],
+        `${gate} rule ${name}`,
+      );
+    }
+  }
 });
 
 /** A valid scope for `gate`'s fields. */

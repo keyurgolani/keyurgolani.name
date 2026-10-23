@@ -88,6 +88,12 @@ export const KNOWN_BAD_EXCEPTIONS: readonly KnownBadExceptions[] = [
       /contrast text is WCAG AA: a WCAG A or AA failure on essential content can't be excepted, in any tier/,
   },
   {
+    name: 'decorative-low-contrast',
+    quality: 'decorative-low-contrast.yml',
+    reason:
+      /contrast text measures a pack's text roles, which carry the page's content, so decorative can't excuse it\./,
+  },
+  {
     name: 'budgets-missing-metric',
     budgets: 'runtime-budgets.missing-metric.json',
     reason: /scope\.metric: is missing: budget varies on metric/,
