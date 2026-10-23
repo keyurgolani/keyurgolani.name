@@ -14,7 +14,7 @@ import { listOperations } from '../operations';
 import { mintSession } from './session-mint';
 import { mediaCheck } from './media';
 import { NO_MEDIA, ownerStore } from './store';
-import { storeHandlers } from './store-handlers';
+import { mediaGrant, storeHandlers } from './store-handlers';
 
 // Media at a Studio draft save (#10, items 5 and 6): draft.save, behind #2's
 // session and #1's draft.write, derives the draft's media document from its
@@ -285,4 +285,34 @@ test("media.renditions warns when sharp won't load, and when the media root isn'
     ['warning:media_renditions_unavailable'],
   );
   assert.match(issues[0]!.message, /published media keeps serving/);
+});
+
+test("a save's media grant is #1's policy for its session: owner's session gets both, nothing else gets either", (t) => {
+  const base = mkdtempSync(path.join(tmpdir(), 'owner-media-grant-'));
+  t.after(() => rmSync(base, { recursive: true, force: true }));
+  const deployAs = (env: Record<string, string>) => {
+    const read = readDeploymentConfig(
+      { NODE_ENV: 'production', PORTFOLIO_ORIGIN: ORIGIN, ...env },
+      { cwd: '/' },
+    );
+    assert.ok(read.ok, JSON.stringify(read.issues));
+    setDeploymentState({
+      config: read.config,
+      catalog: { getLive: () => assert.fail('no visitor route here') },
+      dispatch: () => assert.fail('no dispatch here'),
+      degraded: [],
+    });
+  };
+  t.after(() => setDeploymentState(undefined));
+  deployAs({
+    PORTFOLIO_PROFILE: 'owner',
+    PORTFOLIO_SOURCE_DIR: '/srv/portfolio',
+    PORTFOLIO_DATA_DIR: base,
+  });
+  assert.deepEqual(mediaGrant({ session: SESSION }), { ingest: true, fetchRemote: true });
+  assert.deepEqual(mediaGrant({ session: null }), { ingest: false, fetchRemote: false });
+  deployAs({ PORTFOLIO_PROFILE: 'read-only', PORTFOLIO_SOURCE_DIR: '/srv/portfolio' });
+  assert.deepEqual(mediaGrant({ session: SESSION }), { ingest: false, fetchRemote: false });
+  deployAs({ PORTFOLIO_PROFILE: 'demo' });
+  assert.deepEqual(mediaGrant({ session: SESSION }), { ingest: false, fetchRemote: false });
 });

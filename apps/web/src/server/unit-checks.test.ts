@@ -5,9 +5,11 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { UnitChecks } from '@portfolio/core';
+import { mediaBlobs } from '@portfolio/schema';
 import { readPair } from '@portfolio/schema/node';
 import { OriginError, storeChecks, storeOrigin } from '../../scripts/portfolio-store';
 import { deploymentUnitChecks } from './register';
+import { buildUnitChecks } from './unit-checks';
 
 // One unit check for a revision, whoever writes it (#3, items 21 and 26):
 // the composition root's, as register() binds it, and portfolio-store's.
@@ -84,4 +86,41 @@ test('portfolio-store reads PORTFOLIO_ORIGIN or PORTFOLIO_ORIGIN_FILE as the ser
     { PORTFOLIO_ORIGIN_FILE: path.join(dir, 'missing') },
     /^PORTFOLIO_ORIGIN_FILE must name a regular file/,
   );
+});
+
+// The blobs a unit's media document references (#10): every source and
+// rendition blob, so a draft or a publish that names one the AssetStore
+// lacks fails with asset_missing, and each manifest lists what its revision
+// keeps.
+
+const hex = (digit: string) => digit.repeat(64);
+
+const DOCUMENT = {
+  assets: [
+    {
+      assetId: 'atlas-cover',
+      sha256: hex('a'),
+      mime: 'image/jpeg',
+      bytes: 10,
+      renditions: [
+        { name: 'w480-a1', ext: 'webp', mime: 'image/webp', bytes: 5, sha256: hex('b') },
+        { name: 'w480-a1-jpg', ext: 'jpg', mime: 'image/jpeg', bytes: 6, sha256: hex('c') },
+      ],
+      derivedAt: '2026-10-23T08:00:00Z',
+      algorithmVersion: 1,
+      source: { kind: 'local', path: 'atlas/cover.jpg' },
+      availability: { state: 'available' },
+    },
+  ],
+};
+
+test("a unit references its media document's source and rendition blobs", () => {
+  const checks = buildUnitChecks({ registry: [], appVersion: 'test' });
+  assert.deepEqual(checks.referencedBlobs?.(DOCUMENT), [
+    `sha256:${hex('a')}`,
+    `sha256:${hex('b')}`,
+    `sha256:${hex('c')}`,
+  ]);
+  assert.deepEqual(checks.referencedBlobs?.(DOCUMENT), mediaBlobs(DOCUMENT));
+  assert.deepEqual(checks.referencedBlobs?.(undefined), []);
 });

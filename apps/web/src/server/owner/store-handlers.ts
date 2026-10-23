@@ -169,7 +169,7 @@ function handler(
  * policy for the same session: media.ingest to derive renditions, and
  * media.fetchRemote, on top of it, to fetch an https source.
  */
-function mediaGrant(authorized: Authorized): MediaGrant {
+export function mediaGrant(authorized: Pick<Authorized, 'session'>): MediaGrant {
   const ingest = authorize('media.ingest', authorized.session) !== null;
   return {
     ingest,

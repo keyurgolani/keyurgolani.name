@@ -342,7 +342,13 @@ test('the https transport connects to the checked address, naming the host for T
   await assert.rejects(
     httpsTransport({ url, address: '127.0.0.1', family: 4, signal: AbortSignal.timeout(5000) }),
   );
-  const clientHello = await hello;
+  // A transport that ignored the address would fail DNS and never connect: fail fast.
+  const clientHello = await Promise.race([
+    hello,
+    new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error('nothing connected to the checked address')), 5000).unref();
+    }),
+  ]);
   assert.equal(clientHello[0], 0x16, 'a TLS handshake record');
   assert.ok(clientHello.includes(Buffer.from('pinned-host.invalid')), 'SNI names the host');
 });
