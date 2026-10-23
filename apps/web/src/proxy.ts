@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { PREVIEW_STATUS, PREVIEW_STATUS_DOCUMENT, PREVIEW_STATUS_TYPE } from './preview/status';
 import { INDEXABLE, type Profile } from './server/capabilities';
+import { COMPILED_MODE } from './server/compiled-mode';
 import {
   getDeploymentConfig,
   getDeploymentState,
@@ -9,6 +10,7 @@ import {
 } from './server/config-store';
 import { isExperiencePath, segmentFor } from './server/experience';
 import { isPreviewPath, previewCsp, previewHeaders } from './server/preview-headers';
+import { PORTFOLIO_FILES } from './server/portfolio-files';
 import { READY_PATH, STARTING, STARTING_HEADERS } from './server/ready-starting';
 import { EXPERIENCE_HEADER } from './server/route-header';
 import { safeReturnTo, signInLocation } from './server/return-to';
@@ -59,9 +61,10 @@ import {
 // with no grant route, a preview route this build doesn't serve, such as the
 // dev fixture route outside `next dev`, answers as a path no route matches,
 // in any spelling. Under the prefixes next.config.ts serves with
-// Access-Control-Allow-Origin: *, only a GET or HEAD of a file there, the
-// build's assets and public/_portfolio/'s, spelled as Next serves them, and a
-// route the table serves get past here; anything else there is the plain 404.
+// Access-Control-Allow-Origin: *, only a GET or HEAD of a build asset, or of
+// exactly a path the registry wrote into public/_portfolio/, spelled as Next
+// serves them, and a route the table serves get past here; anything else
+// there is the plain 404.
 //
 // Under a profile that serves grant routes (owner, #7 Slice 2), this is
 // where a grant path is checked, every request: only a GET or HEAD of a
@@ -158,9 +161,9 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   const studioPath = isStudioPath(pathname);
   const studio = studioPath && hasStudio(deployment.profile);
   const csp = studio
-    ? studioCsp(newNonce(), deployment.mode, deployment.previewOrigin)
+    ? studioCsp(newNonce(), COMPILED_MODE, deployment.previewOrigin)
     : preview
-      ? previewCsp(newNonce(), { mode: deployment.mode, studioOrigin: deployment.origin })
+      ? previewCsp(newNonce(), { mode: COMPILED_MODE, studioOrigin: deployment.origin })
       : undefined;
   if (studio && csp) {
     Object.assign(extra, STUDIO_RESPONSE_HEADERS, { 'content-security-policy': csp });
@@ -179,12 +182,13 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   // Access-Control-Allow-Origin: * goes on everything next.config.ts matches
   // under these prefixes, so only a GET or HEAD of a file Next serves there,
   // spelled as Next serves it, and a route the table serves go on to Next.
-  // Every other spelling, method, or path there gets this plain 404. A file
-  // that doesn't exist still reaches a 404 page, the site's, since nothing
-  // here knows which files exist.
+  // Every other spelling, method, or path there gets this plain 404. Under
+  // /_portfolio/ only a path the registry wrote goes on. A build asset that
+  // doesn't exist still reaches a 404 page, the site's, since nothing here
+  // knows which build files exist.
   if (
     sharedAsset(pathname) &&
-    !(pageLoad && SHARED_FILES.test(pathname)) &&
+    !(pageLoad && sharedFile(pathname)) &&
     decision.status !== 'served'
   ) {
     return plain(404, 'Not found.', requestId, extra);
@@ -436,11 +440,15 @@ const UNKNOWN_PATH_CACHE_CONTROL = 'private, no-cache, no-store, max-age=0, must
 const SHARED_ASSETS = /^\/(?:_next\/static|_portfolio)(?:\/|$)/i;
 
 /**
- * The files Next serves under those prefixes, as it spells them: the build's
- * assets, and what the registry writes into public/_portfolio/, such as
- * #19's compiled packs in public/_portfolio/pack/.
+ * Whether `pathname` is a file Next serves under those prefixes, as it
+ * spells them: a build asset under /_next/static/, or exactly a path the
+ * registry wrote under public/_portfolio/ (#7), such as one of #19's
+ * compiled packs. Any other spelling there, encoded, in another case, or of
+ * a file the registry never wrote, is not one.
  */
-const SHARED_FILES = /^\/(?:_next\/static|_portfolio)\//;
+function sharedFile(pathname: string): boolean {
+  return pathname.startsWith('/_next/static/') || PORTFOLIO_FILES.has(pathname);
+}
 
 /** Whether `pathname`, decoded, is under one of the prefixes SHARED_ASSETS names, in any case. */
 function sharedAsset(pathname: string): boolean {
@@ -490,8 +498,11 @@ function decodedPath(pathname: string): string {
  * The headers of the request Next routes: a fresh request ID, none of the
  * marks only proxy.ts may set, the experience segment among them, and `csp`,
  * where a Studio or preview response sends one, so Next reads its nonce. A
- * preview's request goes on without its Cookie header (#7, Slice 1, item 4),
- * so no preview route can read the session cookie or a visitor's preference.
+ * policy the client sent never goes on (#7): Next would put its nonce on
+ * every script, and a page's own read of the request's policy would take it
+ * for this one. A preview's request goes on without its Cookie header (#7,
+ * Slice 1, item 4), so no preview route can read the session cookie or a
+ * visitor's preference.
  */
 function forwarded(
   request: NextRequest,
@@ -504,6 +515,8 @@ function forwarded(
   headers.delete(NOT_FOUND_HEADER);
   headers.delete(ROUTE_HEADER);
   headers.delete(EXPERIENCE_HEADER);
+  headers.delete('content-security-policy');
+  headers.delete('content-security-policy-report-only');
   if (csp) headers.set('content-security-policy', csp);
   if (preview) headers.delete('cookie');
   return headers;

@@ -1,14 +1,20 @@
-import { DisplayModeSchema } from '@portfolio/schema';
+import type { DisplayMode } from '@portfolio/schema';
 import type { EnvironmentOverride } from './environment';
 
 // The environment the dev fixture route's query asks for (#7, Slice 1, item
 // 8): the display mode, contrast, motion, and enhancement it renders under.
 // environment.ts turns it into the boundary's attributes, as it does a
 // grant's.
+//
+// The proxy reads it through the route table, so it imports types alone:
+// the display modes are a plain list, which a test holds to the schema's.
+
+/** The display modes a preview's query names: the schema's, without zod. */
+export const DISPLAY_MODES: readonly DisplayMode[] = ['system', 'light', 'dark', 'high-contrast'];
 
 /** The values each environment parameter takes in a preview's query. */
 export const ENVIRONMENT_QUERY = {
-  displayMode: DisplayModeSchema.options,
+  displayMode: DISPLAY_MODES,
   contrast: ['system', 'more'],
   motion: ['system', 'reduce'],
   enhancement: ['on', 'off'],
