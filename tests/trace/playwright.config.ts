@@ -40,7 +40,7 @@ export default defineConfig({
     { name: 'policy', testMatch: 'policy.spec.ts', use: { ...devices['Desktop Chrome'] } },
     ...traceTargets(readTraceEnv()).map(({ appOptions, ...target }) => ({
       name: target.name,
-      testMatch: /(?:^|\/)(?:trace|modes)\.spec\.ts$/,
+      testMatch: /(?:^|\/)(?:trace|modes|catalog)\.spec\.ts$/,
       dependencies: ['policy'],
       use: { ...devices['Desktop Chrome'], ...(appOptions ? { appOptions } : {}) },
       metadata: { ...target },
