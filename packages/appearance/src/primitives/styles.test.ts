@@ -59,8 +59,10 @@ test('it starts with the layer order, and every rule sits in the reset or utilit
 });
 
 test('no color literal: colors come from the scheme', () => {
-  // The source audit's list, so the primitives and the variants answer to one.
-  const NAMED = new RegExp(`\\b(?:${NAMED_COLORS.join('|')})\\b`, 'i');
+  // The source audit's list and word rule, so the primitives and the
+  // variants answer to one: `background` is a system color, but not inside
+  // `background-color`.
+  const NAMED = new RegExp(`(?<![\\w-])(?:${NAMED_COLORS.join('|')})(?![\\w(-])`, 'i');
   for (const { property, value } of DECLARATIONS) {
     assert.doesNotMatch(value, /#[0-9a-f]{3,8}\b/i, `${property}: ${value}`);
     assert.doesNotMatch(

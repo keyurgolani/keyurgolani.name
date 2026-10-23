@@ -444,3 +444,113 @@ test('code: a named color assigned to a canvas or a color style key is a color l
     assert.deepEqual(found(source), [], source);
   }
 });
+
+test('a --layout-* property declared twice passes where it is read only when every value it takes passes', () => {
+  const twice = (second: string, use: string) =>
+    `[data-variant='acme'] .a { --layout-r: 12px; ${use} }\n[data-variant='acme'] .b { --layout-r: ${second}; }\n`;
+  assert.deepEqual(rulesIn(twice('0', 'border-radius: var(--layout-r);')), ['radius']);
+  assert.deepEqual(
+    rulesIn(
+      `[data-variant='acme'] .a { --layout-r: 0; border-radius: var(--layout-r); }\n` +
+        `[data-variant='acme'] .b { --layout-r: 12px; }\n`,
+    ),
+    ['radius'],
+  );
+  assert.deepEqual(
+    rulesIn(
+      `[data-variant='acme'] .a { --layout-t: var(--ui-duration-short); transition: opacity var(--layout-t); }\n` +
+        `[data-variant='acme'] .b { --layout-t: 300ms; }\n`,
+    ),
+    ['timing'],
+  );
+  assert.deepEqual(
+    rulesIn(
+      `[data-variant='acme'] .a { --layout-r: var(--ui-radius-card); border-radius: var(--layout-r); }\n` +
+        `[data-variant='acme'] .b { --layout-r: 0; }\n`,
+    ),
+    [],
+  );
+});
+
+test('every CSS named and system color is a literal, in a color property, a layout property, a gradient in any property, and code', () => {
+  for (const css of [
+    'color: tomato;',
+    'color: rebeccapurple;',
+    'background-image: linear-gradient(black, white);',
+    'mask-image: linear-gradient(black, transparent);',
+    '-webkit-mask-image: radial-gradient(circle, white 40%, transparent);',
+    'border-image: linear-gradient(to right, gold, transparent) 1;',
+    'background: CanvasText;',
+    'list-style-image: repeating-linear-gradient(navy, transparent 2px);',
+    '--layout-x: tomato;',
+  ]) {
+    assert.deepEqual(rulesIn(rule(css)), ['color-literal'], css);
+  }
+  for (const css of [
+    'transition-property: background-color, color;',
+    'mask-image: linear-gradient(currentColor, transparent);',
+    "background-image: url('./white.png');",
+    'background: url(./white.png) no-repeat;',
+    '--layout-angle: tan(30deg);',
+    'mask-mode: alpha;',
+  ]) {
+    assert.deepEqual(rulesIn(rule(css)), [], css);
+  }
+  assert.deepEqual(
+    auditCodeText("const s = { color: 'tomato' };").map(({ rule: name }) => name),
+    ['color-literal'],
+  );
+});
+
+test('custom-property: a variant’s code sets no token but its own --layout-* ones', () => {
+  const variantCode = (source: string) =>
+    auditCodeText(source, { variant: true }).map(({ rule: name }) => name);
+  for (const source of [
+    "const s = { '--ui-radius-card': '24px' };",
+    'const s = { "--ui-shadow-card": shadow };',
+    "<div style={{ '--color-text-primary': ink }} />",
+    "el.style.setProperty('--ui-blur-glass', value);",
+    "el.style['--type-body'] = family;",
+  ]) {
+    assert.ok(variantCode(source).includes('custom-property'), source);
+    assert.ok(
+      !auditCodeText(source)
+        .map(({ rule: name }) => name)
+        .includes('custom-property'),
+      source,
+    );
+  }
+  for (const source of [
+    "const s = { '--layout-columns': count };",
+    "el.style.setProperty('--layout-gap', gap);",
+    "const name = '--ui-radius-card';",
+  ]) {
+    assert.deepEqual(variantCode(source), [], source);
+  }
+});
+
+test('a --layout-* property the package’s code sets fails closed where its stylesheet reads it', () => {
+  const root = scratch({
+    'packages/variant-acme/package.json': JSON.stringify({ portfolio: { kind: 'variant' } }),
+    'packages/variant-acme/src/styles.css':
+      "[data-variant='acme'] .x { --layout-r: 0; border-radius: var(--layout-r); }\n" +
+      "[data-variant='acme'] .y { --layout-g: 0; border-radius: var(--layout-g); }\n",
+    'packages/variant-acme/src/index.tsx': "export const s = { '--layout-r': radius };\n",
+  });
+  try {
+    const result = runSourceAudit(root, variantPackageDirs(path.join(root, 'packages')), []);
+    assert.deepEqual(
+      result.findings.map(({ path: file, line, rule: name }) => `${file}:${line} ${name}`),
+      ['packages/variant-acme/src/styles.css:1 radius'],
+    );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('code: setProperty() meets the rules of the property it sets', () => {
+  const found = (source: string) => auditCodeText(source).map(({ rule: name }) => name);
+  assert.deepEqual(found("el.style.setProperty('border-radius', '12px');"), ['radius']);
+  assert.deepEqual(found("el.style.setProperty('transition', 'opacity 300ms');"), ['timing']);
+  assert.deepEqual(found("el.style.setProperty('border-radius', 'var(--ui-radius-card)');"), []);
+});

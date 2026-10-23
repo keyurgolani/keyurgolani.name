@@ -141,26 +141,205 @@ const HEX_IN_CODE = /(?:^|[\s:,(])#(?:[0-9a-f]{8}|[0-9a-f]{6}|[0-9a-f]{3,4})(?![
 
 /**
  * The named colors the audit refuses, the list primitives/styles.test.ts
- * holds the shared primitives to: the plain names, and the system colors a
- * forced-colors stylesheet is the place for. `transparent`, `currentColor`,
- * and the CSS-wide keywords stay allowed.
+ * holds the shared primitives to: CSS Color 4's 148 names, then its system
+ * colors, the deprecated ones among them, which a forced-colors stylesheet
+ * is the place for. `transparent`, `currentColor`, and the CSS-wide
+ * keywords stay allowed.
  */
 export const NAMED_COLORS = [
+  'aliceblue',
+  'antiquewhite',
+  'aqua',
+  'aquamarine',
+  'azure',
+  'beige',
+  'bisque',
   'black',
-  'white',
-  'red',
-  'green',
+  'blanchedalmond',
   'blue',
+  'blueviolet',
+  'brown',
+  'burlywood',
+  'cadetblue',
+  'chartreuse',
+  'chocolate',
+  'coral',
+  'cornflowerblue',
+  'cornsilk',
+  'crimson',
+  'cyan',
+  'darkblue',
+  'darkcyan',
+  'darkgoldenrod',
+  'darkgray',
+  'darkgreen',
+  'darkgrey',
+  'darkkhaki',
+  'darkmagenta',
+  'darkolivegreen',
+  'darkorange',
+  'darkorchid',
+  'darkred',
+  'darksalmon',
+  'darkseagreen',
+  'darkslateblue',
+  'darkslategray',
+  'darkslategrey',
+  'darkturquoise',
+  'darkviolet',
+  'deeppink',
+  'deepskyblue',
+  'dimgray',
+  'dimgrey',
+  'dodgerblue',
+  'firebrick',
+  'floralwhite',
+  'forestgreen',
+  'fuchsia',
+  'gainsboro',
+  'ghostwhite',
+  'gold',
+  'goldenrod',
   'gray',
+  'green',
+  'greenyellow',
   'grey',
+  'honeydew',
+  'hotpink',
+  'indianred',
+  'indigo',
+  'ivory',
+  'khaki',
+  'lavender',
+  'lavenderblush',
+  'lawngreen',
+  'lemonchiffon',
+  'lightblue',
+  'lightcoral',
+  'lightcyan',
+  'lightgoldenrodyellow',
+  'lightgray',
+  'lightgreen',
+  'lightgrey',
+  'lightpink',
+  'lightsalmon',
+  'lightseagreen',
+  'lightskyblue',
+  'lightslategray',
+  'lightslategrey',
+  'lightsteelblue',
+  'lightyellow',
+  'lime',
+  'limegreen',
+  'linen',
+  'magenta',
+  'maroon',
+  'mediumaquamarine',
+  'mediumblue',
+  'mediumorchid',
+  'mediumpurple',
+  'mediumseagreen',
+  'mediumslateblue',
+  'mediumspringgreen',
+  'mediumturquoise',
+  'mediumvioletred',
+  'midnightblue',
+  'mintcream',
+  'mistyrose',
+  'moccasin',
+  'navajowhite',
+  'navy',
+  'oldlace',
+  'olive',
+  'olivedrab',
+  'orange',
+  'orangered',
+  'orchid',
+  'palegoldenrod',
+  'palegreen',
+  'paleturquoise',
+  'palevioletred',
+  'papayawhip',
+  'peachpuff',
+  'peru',
+  'pink',
+  'plum',
+  'powderblue',
+  'purple',
+  'rebeccapurple',
+  'red',
+  'rosybrown',
+  'royalblue',
+  'saddlebrown',
+  'salmon',
+  'sandybrown',
+  'seagreen',
+  'seashell',
+  'sienna',
   'silver',
-  'canvas',
-  'canvastext',
-  'highlight',
+  'skyblue',
+  'slateblue',
+  'slategray',
+  'slategrey',
+  'snow',
+  'springgreen',
+  'steelblue',
+  'tan',
+  'teal',
+  'thistle',
+  'tomato',
+  'turquoise',
+  'violet',
+  'wheat',
+  'white',
+  'whitesmoke',
+  'yellow',
+  'yellowgreen',
+  'accentcolor',
+  'accentcolortext',
+  'activetext',
+  'buttonborder',
   'buttonface',
   'buttontext',
+  'canvas',
+  'canvastext',
+  'field',
+  'fieldtext',
+  'graytext',
+  'highlight',
+  'highlighttext',
+  'linktext',
+  'mark',
+  'marktext',
+  'selecteditem',
+  'selecteditemtext',
+  'visitedtext',
+  'activeborder',
+  'activecaption',
+  'appworkspace',
+  'background',
+  'buttonhighlight',
+  'buttonshadow',
+  'captiontext',
+  'inactiveborder',
+  'inactivecaption',
+  'inactivecaptiontext',
+  'infobackground',
+  'infotext',
+  'menu',
+  'menutext',
+  'scrollbar',
+  'threeddarkshadow',
+  'threedface',
+  'threedhighlight',
+  'threedlightshadow',
+  'threedshadow',
+  'window',
+  'windowframe',
+  'windowtext',
 ] as const;
-const NAMED = new RegExp(`(?<![\\w-])(?:${NAMED_COLORS.join('|')})(?![\\w-])`, 'i');
+/** A named color as a word of its own: not part of a longer name, and not a function such as `tan()`. */
+const NAMED = new RegExp(`(?<![\\w-])(?:${NAMED_COLORS.join('|')})(?![\\w(-])`, 'i');
 
 /** The properties whose value is a color, where a named color is one. */
 const COLOR_PROPERTY =
@@ -217,10 +396,21 @@ function replaceVars(
 
 /** What a stylesheet's checks know beyond one declaration: its own --layout-* values, and whose file it is. */
 interface DeclarationContext {
-  /** Each --layout-* property the file declares, by name, with its value. */
-  readonly layout: ReadonlyMap<string, string>;
+  /**
+   * Each --layout-* property the file declares, by name, with every value
+   * it gives it: a later rule may give it another, so each one must pass.
+   */
+  readonly layout: ReadonlyMap<string, readonly string[]>;
   /** A variant package's stylesheet, where a custom property of its own is a --layout-* one alone. */
   readonly variant: boolean;
+  /** The --layout-* properties the package's code sets, whose values no stylesheet check can read. */
+  readonly fromCode: ReadonlySet<string>;
+}
+
+/** The values the file gives a --layout-* property, or null when one of them can't be read. */
+function layoutValues(name: string, context: DeclarationContext): readonly string[] | null {
+  if (context.fromCode.has(name)) return null;
+  return context.layout.get(name) ?? null;
 }
 
 /**
@@ -238,17 +428,13 @@ function onlyTokens(
 ): boolean {
   let ok = true;
   const rest = replaceVars(value, ({ name, fallback }) => {
+    const values = name.startsWith('--layout-') ? layoutValues(name, context) : null;
     const named =
       prefixes.some((prefix) => name.startsWith(prefix)) ||
-      (name.startsWith('--layout-') &&
+      (values !== null &&
         !seen.has(name) &&
-        context.layout.has(name) &&
-        onlyTokens(
-          context.layout.get(name)!,
-          prefixes,
-          keywords,
-          context,
-          new Set([...seen, name]),
+        values.every((own) =>
+          onlyTokens(own, prefixes, keywords, context, new Set([...seen, name])),
         ));
     if (!named) ok = false;
     if (fallback !== null && !onlyTokens(fallback, prefixes, keywords, context, seen)) ok = false;
@@ -263,6 +449,22 @@ function fallbacksOf(value: string): string {
   return replaceVars(value, ({ fallback }) =>
     fallback === null ? ' ' : ` ${fallbacksOf(fallback)} `,
   );
+}
+
+/** Whether a gradient in `value` names a color among its stops. */
+function gradientNamesColor(value: string): boolean {
+  const opener = /(?<![\w-])(?:repeating-)?(?:linear|radial|conic)-gradient\(/gi;
+  for (const match of value.matchAll(opener)) {
+    let depth = 1;
+    let i = match.index + match[0].length;
+    const start = i;
+    for (; i < value.length && depth > 0; i++) {
+      if (value[i] === '(') depth++;
+      else if (value[i] === ')') depth--;
+    }
+    if (NAMED.test(value.slice(start, i - 1))) return true;
+  }
+  return false;
 }
 
 /** The property a declaration sets, lowercase and without a -webkit- or -moz- prefix. */
@@ -285,12 +487,17 @@ function declarationRules(
   const custom = property.startsWith('--');
   const layout = property.startsWith('--layout-');
   if (custom && !layout && context.variant) rules.push('custom-property');
-  // A named color, past the names of the properties var() reads.
-  const named = NAMED.test(replaceVars(value, ({ fallback }) => ` ${fallback ?? ''} `));
+  // A named color, past the names of the properties var() reads, a url(),
+  // and a quoted string: in a color property, a layout property, or a
+  // gradient's stops in any property.
+  const words = replaceVars(value, ({ fallback }) => ` ${fallback ?? ''} `)
+    .replace(/(?<![\w-])url\([^)]*\)/gi, ' ')
+    .replace(/"[^"]*"|'[^']*'/g, ' ');
   if (
     HEX.test(value) ||
     literalColorFunction(value) ||
-    ((COLOR_PROPERTY.test(property) || layout) && named)
+    ((COLOR_PROPERTY.test(property) || layout) && NAMED.test(words)) ||
+    gradientNamesColor(words)
   ) {
     rules.push('color-literal');
   }
@@ -338,9 +545,9 @@ function declarationRules(
       ({ name }) =>
         name.startsWith('--ui-') ||
         (name.startsWith('--layout-') &&
-          context.layout.has(name) &&
-          !TIME.test(fallbacksOf(context.layout.get(name)!)) &&
-          !TIME.test(context.layout.get(name)!.replace(/var\([^()]*\)/g, ' '))),
+          (layoutValues(name, context) ?? ['0s']).every(
+            (own) => !TIME.test(fallbacksOf(own)) && !TIME.test(own.replace(/var\([^()]*\)/g, ' ')),
+          )),
     );
     if (literal || !tokens) rules.push('timing');
   }
@@ -408,22 +615,28 @@ function lineStarts(text: string): number[] {
 
 type Found = { line: number; rule: SourceAuditRule; found: string };
 
-/** What the stylesheet audit takes beyond the text: whether a variant package holds it. */
+/** What the audit takes beyond the text: whether a variant package holds it, and, for a stylesheet, the --layout-* properties the package's code sets. */
 export interface StylesheetOptions {
   readonly variant?: boolean;
+  readonly layoutFromCode?: ReadonlySet<string>;
 }
 
 /** The findings in one stylesheet's text, each on the line its statement starts. */
 export function auditStylesheetText(text: string, options: StylesheetOptions = {}): Found[] {
   const statements = statementsOf(text);
-  const layout = new Map<string, string>();
+  const layout = new Map<string, string[]>();
   for (const { kind, text: body } of statements) {
     const colon = body.indexOf(':');
     if (kind === 'declaration' && colon > 0 && body.startsWith('--layout-')) {
-      layout.set(body.slice(0, colon).trim(), body.slice(colon + 1).trim());
+      const name = body.slice(0, colon).trim();
+      layout.set(name, [...(layout.get(name) ?? []), body.slice(colon + 1).trim()]);
     }
   }
-  const context: DeclarationContext = { layout, variant: options.variant === true };
+  const context: DeclarationContext = {
+    layout,
+    variant: options.variant === true,
+    fromCode: options.layoutFromCode ?? new Set(),
+  };
   const starts = lineStarts(text);
   const lines = text.split('\n');
   const findings: Found[] = [];
@@ -473,6 +686,8 @@ interface CodeString {
   readonly value: string;
   readonly offset: number;
   readonly before: string;
+  /** The code just after it. */
+  readonly after: string;
 }
 
 /**
@@ -522,6 +737,7 @@ function stringsOf(code: string): CodeString[] {
           value: code.slice(start + 1, i),
           offset: start,
           before: code.slice(Math.max(0, start - 80), start),
+          after: code.slice(i + 1, i + 20),
         });
         i++;
         last = 'a';
@@ -545,6 +761,7 @@ function stringsOf(code: string): CodeString[] {
           value: text,
           offset: start,
           before: code.slice(Math.max(0, start - 80), start),
+          after: code.slice(i + 1, i + 20),
         });
         i++;
         last = 'a';
@@ -567,7 +784,10 @@ function stringsOf(code: string): CodeString[] {
 /** The CSS property a string in code is the value of, by the code before it, or null. */
 function styleKeyBefore(before: string): string | null {
   const match =
-    /(?:^|[{,\s(])(?:(['"])(-?[a-zA-Z][\w-]*)\1|([a-zA-Z_$][\w$]*))\s*:\s*\(?\s*$/.exec(before) ??
+    /(?:^|[{,\s(])(?:(['"])(-{0,2}[a-zA-Z][\w-]*)\1|([a-zA-Z_$][\w$]*))\s*:\s*\(?\s*$/.exec(
+      before,
+    ) ??
+    /\.setProperty\(\s*(['"])(-{0,2}[a-zA-Z][\w-]*)\1\s*,\s*$/.exec(before) ??
     /\.style\.([a-zA-Z]+)\s*=\s*$/.exec(before) ??
     /\.style\[\s*['"]([\w-]+)['"]\s*\]\s*=\s*$/.exec(before);
   if (!match) return null;
@@ -585,18 +805,47 @@ function styleKeyBefore(before: string): string | null {
 /** Whether the code before a string assigns it to a canvas's or an element's color. */
 const COLOR_ASSIGNMENT = /(?:fillStyle|strokeStyle|shadowColor|\.style\.[a-zA-Z]*[cC]olor)\s*=\s*$/;
 
+/**
+ * The custom property a string in code names as a style key, by the code
+ * around it: an object key (`{ '--ui-radius': r }`), or what
+ * `setProperty()` or `style[...]` sets. Null for any other string.
+ */
+function customKeyOf({ value, before, after }: CodeString): string | null {
+  if (!/^--[\w-]+$/.test(value)) return null;
+  const key =
+    /^\s*:/.test(after) ||
+    /\.setProperty\(\s*$/.test(before) ||
+    (/\.style\[\s*$/.test(before) && /^\s*\]\s*=/.test(after));
+  return key ? value : null;
+}
+
+/** The --layout-* properties a module's code sets as style keys, whose values its package's stylesheets can't read. */
+export function layoutSetInCode(text: string): Set<string> {
+  const names = new Set<string>();
+  for (const found of stringsOf(text)) {
+    const key = customKeyOf(found);
+    if (key?.startsWith('--layout-')) names.add(key);
+  }
+  return names;
+}
+
 /** The findings in one module's text: what its strings hold, as CSS, as a style value, or as a color. */
-export function auditCodeText(text: string): Found[] {
+export function auditCodeText(text: string, options: StylesheetOptions = {}): Found[] {
   const starts = lineStarts(text);
   const lines = text.split('\n');
   const findings: Found[] = [];
-  const context: DeclarationContext = { layout: new Map(), variant: false };
-  for (const { value, offset, before } of stringsOf(text)) {
+  const variant = options.variant === true;
+  const context: DeclarationContext = { layout: new Map(), variant, fromCode: new Set() };
+  for (const found of stringsOf(text)) {
+    const { value, offset, before } = found;
     const line = lineAt(starts, offset);
     const report = (rule: SourceAuditRule, at = line) =>
       findings.push({ line: at, rule, found: lines[at - 1]!.trim() });
     if (HEX_IN_CODE.test(value) || literalColorFunction(value)) report('color-literal');
     if (LEGACY.test(value)) report('legacy-property');
+    // A variant's code sets no token but its own --layout-* ones, as its stylesheet does.
+    const key = customKeyOf(found);
+    if (variant && key !== null && !key.startsWith('--layout-')) report('custom-property');
     const property = styleKeyBefore(before);
     const assigned = COLOR_ASSIGNMENT.test(before);
     if (
@@ -606,24 +855,22 @@ export function auditCodeText(text: string): Found[] {
       report('color-literal');
     }
     if (property !== null) {
-      for (const rule of declarationRules(property, value, context)) {
-        if (rule !== 'custom-property') report(rule);
-      }
+      for (const rule of declarationRules(property, value, context)) report(rule);
     }
     // CSS in a string: a style attribute's declarations, or a stylesheet,
     // such as a <style> element's text, each finding on its own line.
     if (/[{}]/.test(value) && /:/.test(value)) {
-      for (const finding of auditStylesheetText(value)) {
+      for (const finding of auditStylesheetText(value, { variant })) {
         report(finding.rule, line + finding.line - 1);
       }
-    } else if (property === null && /(?:^|;)\s*-?[a-z][a-z-]*\s*:/i.test(value)) {
+    } else if (property === null && /(?:^|;)\s*-{0,2}[a-z][\w-]*\s*:/i.test(value)) {
       for (const declaration of value.split(';')) {
         const colon = declaration.indexOf(':');
         if (colon <= 0) continue;
         const name = declaration.slice(0, colon).trim();
-        if (!/^-?[a-z][a-z-]*$/i.test(name)) continue;
+        if (!/^-{0,2}[a-z][\w-]*$/i.test(name)) continue;
         for (const rule of declarationRules(name, declaration.slice(colon + 1), context)) {
-          if (rule !== 'custom-property') report(rule);
+          report(rule);
         }
       }
     }
@@ -654,10 +901,16 @@ function isVariantPackage(dir: string): boolean {
 export function auditSources(root: string, dirs: readonly string[]): SourceAuditFinding[] {
   return dirs.flatMap((dir) => {
     const variant = isVariantPackage(dir);
-    return auditedFiles(dir).flatMap((file) => {
-      const text = fs.readFileSync(file, 'utf8');
+    const files = auditedFiles(dir).map((file) => ({ file, text: fs.readFileSync(file, 'utf8') }));
+    // A --layout-* property the package's code sets fails closed in its stylesheets.
+    const layoutFromCode = new Set(
+      files.flatMap(({ file, text }) => (CSS.test(file) ? [] : [...layoutSetInCode(text)])),
+    );
+    return files.flatMap(({ file, text }) => {
       const relative = path.relative(root, file).split(path.sep).join('/');
-      const found = CSS.test(file) ? auditStylesheetText(text, { variant }) : auditCodeText(text);
+      const found = CSS.test(file)
+        ? auditStylesheetText(text, { variant, layoutFromCode })
+        : auditCodeText(text, { variant });
       return found.map((finding) => ({ path: relative, ...finding }));
     });
   });
