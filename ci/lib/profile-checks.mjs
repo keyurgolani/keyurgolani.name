@@ -607,6 +607,22 @@ export function partsOf(value) {
   return PARTS.filter((part) => named.includes(part));
 }
 
+/** Where read-only and demo derive their media at startup (#10). */
+export const MEDIA_CACHE = '/tmp/portfolio-media';
+
+/**
+ * The tmpfs a profile's container gets for its media cache, as
+ * docker-compose.yml and deploy/compose.demo.yml give it: read-only and demo
+ * derive into it, owner into its data directory, so owner gets none.
+ *
+ * @param {string} profile
+ * @returns {string[]} `docker run` arguments
+ */
+export const mediaCacheFor = (profile) =>
+  profile === 'read-only' || profile === 'demo'
+    ? ['--tmpfs', `${MEDIA_CACHE}:uid=${RUNTIME_UID},gid=${RUNTIME_UID},mode=0700`]
+    : [];
+
 /** #10's renditions in the route table, whose probe path names no rendition. */
 export const MEDIA_PATTERN = '/media/[...path]';
 

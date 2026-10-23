@@ -137,6 +137,7 @@ import {
   inspectProblems,
   leakProblems,
   maskCommands,
+  mediaCacheFor,
   MEDIA_PATTERN,
   mediaMissProblems,
   newAuditRecords,
@@ -764,7 +765,9 @@ async function profileRun(
   { env, mounts = [], secrets = [], paths = [], then, restarted },
 ) {
   const name = `${run}-${profile}`;
-  const started = startServer(name, { env, mounts });
+  // read-only and demo derive their media into a tmpfs of their own, as
+  // the Compose examples give them (#10).
+  const started = startServer(name, { env, mounts: [...mediaCacheFor(profile), ...mounts] });
   if (started.status !== 0) {
     fail(profile, `the container did not start: ${(started.stderr || '').trim()}`);
     return;

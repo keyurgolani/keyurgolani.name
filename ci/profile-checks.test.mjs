@@ -7,6 +7,8 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { parse as parseYaml } from 'yaml';
 import { CANARY_BODY, encodings, SUMMARY_FIELDS } from '../tests/harness/canaries.mjs';
 import {
   anonymousLeaks,
@@ -24,6 +26,8 @@ import {
   leakProblems,
   isDurable,
   maskCommands,
+  MEDIA_CACHE,
+  mediaCacheFor,
   mediaMissProblems,
   newAuditRecords,
   partsOf,
@@ -84,6 +88,27 @@ test('HARDENING is the flags the Compose examples run with', () => {
     '--security-opt',
     'no-new-privileges:true',
   ]);
+});
+
+const REPO = fileURLToPath(new URL('..', import.meta.url));
+
+test('read-only and demo get the media cache tmpfs the Compose examples give them, and owner none (#10)', () => {
+  const tmpfs = (file) =>
+    (parseYaml(readFileSync(path.join(REPO, file), 'utf8')).services.web.tmpfs ?? []).filter(
+      (entry) => entry.startsWith(`${MEDIA_CACHE}:`),
+    );
+  for (const [profile, file] of [
+    ['read-only', 'docker-compose.yml'],
+    ['demo', 'deploy/compose.demo.yml'],
+    ['owner', 'deploy/compose.owner.yml'],
+  ]) {
+    assert.deepEqual(
+      mediaCacheFor(profile),
+      tmpfs(file).flatMap((entry) => ['--tmpfs', entry]),
+      profile,
+    );
+  }
+  assert.deepEqual(mediaCacheFor('owner'), []);
 });
 
 test('inspect: a hardened container passes under every profile', () => {
