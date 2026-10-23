@@ -40,8 +40,8 @@ export interface CatalogPlatesProps {
   readonly csrfToken: string;
   /** What every live frame previews: the published revision. */
   readonly subject: MintRequest['subject'];
-  /** The appearance the revision selects, each plate's override starting from it. */
-  readonly appearance: AppearanceSelection | null;
+  /** The appearance the revision selects: each plate's override is it, with the plate's variant. */
+  readonly appearance: AppearanceSelection;
   readonly sandbox: string;
   readonly previewOrigin: string | null;
   readonly signIn: string;
@@ -98,7 +98,7 @@ function Plate({
   const request: MintRequest = {
     subject: props.subject,
     environment: { displayMode: 'system', contrast: 'system', motion: 'system', enhancement: 'on' },
-    ...(props.appearance ? { appearance: { ...props.appearance, variant: plate.id } } : {}),
+    appearance: { ...props.appearance, variant: plate.id },
   };
   return (
     <figure

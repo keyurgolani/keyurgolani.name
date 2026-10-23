@@ -8,14 +8,20 @@
 // its still. The plates sit a few viewports apart there, so near and far are
 // the trace's to tell.
 //
+// It's also item 8's proof for the variant axis: each plate's frame is the
+// published revision's appearance with the variant alone switched to the
+// plate's, and each frame downloads its own variant's files, by
+// ASSET_MANIFEST, and no other unit's. The pack axes' half waits for #19's
+// Slice 4, which links the selected packs; no page links one before it.
+//
 // It runs in fixture-variant-medium's owner project alone, since the page is
 // the owner's, with a session. The trace's policy lets through GET and HEAD
 // alone; this spec alone lets through POSTs to /api/studio/ on the app's own
 // origin, which signing in and minting the frames' grants need, and nothing
 // else.
-import type { Frame, Locator, Page } from '@playwright/test';
+import type { Frame, Locator, Page, Request } from '@playwright/test';
 import { lifecycleIn, recordGrantCommands } from '../harness/studio-preview';
-import { expect, test } from './fixtures';
+import { assetManifest, expect, test } from './fixtures';
 import { traceOwner, type TraceTarget } from './targets';
 
 const PAGE = '/studio/_catalog-fixture';
@@ -37,6 +43,66 @@ async function signIn(page: Page, origin: string) {
   await page.getByLabel('Password').fill(traceOwner().password);
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page).toHaveURL(`${origin}/studio`);
+}
+
+interface UnitFile {
+  readonly url: string;
+}
+
+interface Unit {
+  readonly kind: string;
+  readonly id: string;
+  readonly stylesheet: UnitFile | null;
+  readonly fonts: readonly UnitFile[];
+  readonly images: readonly UnitFile[];
+  readonly stills: readonly UnitFile[];
+}
+
+/** Which unit each of the build's unit files is, by URL path, as `kind id`. */
+function unitOwners(): Map<string, string> {
+  const owners = new Map<string, string>();
+  for (const unit of assetManifest().units as Unit[]) {
+    for (const file of [unit.stylesheet, ...unit.fonts, ...unit.images, ...unit.stills]) {
+      if (file) owners.set(file.url, `${unit.kind} ${unit.id}`);
+    }
+  }
+  return owners;
+}
+
+/** The frame a request came from, or null when Playwright can't say. */
+function frameOfRequest(request: Request): Frame | null {
+  try {
+    return request.frame();
+  } catch {
+    return null;
+  }
+}
+
+/** The /_portfolio/ paths `frame` requested, each once, from what was recorded. */
+function portfolioFiles(requests: readonly Request[], frame: Frame): string[] {
+  const paths = requests
+    .filter((request) => frameOfRequest(request) === frame)
+    .map((request) => new URL(request.url()).pathname)
+    .filter((pathname) => pathname.startsWith('/_portfolio/'));
+  return [...new Set(paths)].sort();
+}
+
+/**
+ * A live frame's unit files, once its document has loaded: its variant's
+ * stylesheet among them, and every one its variant's, no other unit's.
+ */
+async function expectOwnFiles(requests: readonly Request[], frame: Frame, variant: string) {
+  await frame.waitForLoadState('load');
+  const owners = unitOwners();
+  const files = portfolioFiles(requests, frame);
+  const own = (assetManifest().units as Unit[]).find(
+    (unit) => unit.kind === 'variant' && unit.id === variant,
+  );
+  if (own?.stylesheet) expect(files, `${variant}'s frame`).toContain(own.stylesheet.url);
+  expect(
+    files.map((file) => [file, owners.get(file) ?? 'no unit']),
+    `${variant}'s frame downloads its own variant's files alone`,
+  ).toEqual(files.map((file) => [file, `variant ${variant}`]));
 }
 
 const plates = (page: Page) => page.locator('[data-plate]');
@@ -62,6 +128,8 @@ test('the catalog fixture shows stills first, and live frames only on request or
 }) => {
   await signIn(page, app.origin);
   const mints = recordGrantCommands(page);
+  const requests: Request[] = [];
+  page.on('request', (request) => requests.push(request));
 
   // The server's render: a still in every plate, no frame anywhere.
   const html = await (await page.request.get(PAGE)).text();
@@ -80,10 +148,15 @@ test('the catalog fixture shows stills first, and live frames only on request or
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(PAGE, { waitUntil: 'load' });
   const [first, second] = [plates(page).nth(0), plates(page).nth(1)];
+  const [firstId, secondId] = [
+    (await first.getAttribute('data-plate'))!,
+    (await second.getAttribute('data-plate'))!,
+  ];
+  expect(firstId).not.toBe(secondId);
   // On screen, the first plate prefetches its frame; the second, viewports
   // further down, keeps its still and mints nothing.
   await expect.poll(() => liveOf(first)).toBe('prefetch');
-  await frameOf(first);
+  await expectOwnFiles(requests, await frameOf(first), firstId);
   await page.waitForTimeout(2_000);
   expect(await liveOf(second)).toBe('still');
   await expect(second.locator('iframe')).toHaveCount(0);
@@ -96,7 +169,10 @@ test('the catalog fixture shows stills first, and live frames only on request or
     'aria-pressed',
     'true',
   );
+  // One axis switched, the variant: the new frame downloads its variant's
+  // files, and none of the first's or any other unit's.
   const requested = await frameOf(second);
+  await expectOwnFiles(requests, requested, secondId);
   await expect.poll(() => liveOf(first)).toBe('still');
   await expect(first.locator('iframe')).toHaveCount(0);
   await expect(page.locator('[data-plate] iframe')).toHaveCount(1);
@@ -113,4 +189,13 @@ test('the catalog fixture shows stills first, and live frames only on request or
   expect(
     await page.locator('[data-plate-live]:not([data-plate-live="still"])').count(),
   ).toBeLessThanOrEqual(2);
+
+  // The catalog page itself downloads no unit's files but the plates' stills.
+  const owners = unitOwners();
+  const pageFiles = portfolioFiles(requests, page.mainFrame());
+  expect(pageFiles.length, 'the stills the page showed').toBeGreaterThan(0);
+  for (const file of pageFiles) {
+    expect(file, 'a plate still').toMatch(/^\/_portfolio\/still\//);
+    expect([`variant ${firstId}`, `variant ${secondId}`], file).toContain(owners.get(file));
+  }
 });

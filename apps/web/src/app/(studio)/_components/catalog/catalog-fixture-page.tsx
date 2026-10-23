@@ -22,7 +22,10 @@ export async function CatalogFixture({ owner }: { owner: OwnerPage }) {
   const config = requireDeploymentConfig();
   const previews = getDeploymentState()?.previews;
   const offered = previews ? await previews.previewable(authorized.session) : [];
-  const live = offered.find((each) => each.kind !== 'draft') ?? null;
+  // Each plate's frame is the revision's appearance with one axis, the
+  // variant, switched to the plate's, so a revision whose site selects no
+  // whole appearance has nothing to switch.
+  const live = offered.find((each) => each.kind !== 'draft' && each.appearance) ?? null;
   const plates: CatalogPlate[] = VARIANTS.filter(
     ({ manifest }) => manifest.id !== FALLBACK_VARIANT_ID,
   ).map(({ manifest }) => {
@@ -38,7 +41,7 @@ export async function CatalogFixture({ owner }: { owner: OwnerPage }) {
   return (
     <main className="studio-page catalog-fixture">
       <h1 className="studio-sign-in__title">Catalog fixture</h1>
-      {live ? (
+      {live?.appearance ? (
         <CatalogPlates
           plates={plates}
           csrfToken={csrfToken}
@@ -50,7 +53,7 @@ export async function CatalogFixture({ owner }: { owner: OwnerPage }) {
         />
       ) : (
         <p className="studio-status" role="status">
-          Nothing to preview yet: there&apos;s no published revision.
+          Nothing to preview yet: there&apos;s no published revision that selects an appearance.
         </p>
       )}
     </main>
