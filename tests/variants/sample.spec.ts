@@ -46,6 +46,7 @@ for (const mode of MODES) {
           testInfo,
           go: (target) => target.goto(id === FALLBACK_ID ? '/sample' : `/sample?variant=${id}`),
           shot: `${id}-sample-${mode.name}`,
+          fixture: undefined,
         });
       },
     );

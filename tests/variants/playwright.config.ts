@@ -4,7 +4,8 @@
 // canary, and render parity, against the standalone build (`pnpm build`
 // first), or the one PORTFOLIO_VARIANTS_WEB names. Each composition and
 // fixture is a project, since each needs its own server, and the modes'
-// own checks are one more, which needs none. Screenshots compare
+// own checks are one more, which needs none, in a run of every variant
+// only. Screenshots compare
 // against tests/variants/__screenshots__/ only in the pinned Playwright
 // image, where CI's variants job sets PORTFOLIO_SCREENSHOTS=compare;
 // anywhere else they're attached to the report. Everything else is the
@@ -15,7 +16,7 @@ import { reportsDir } from '../../ci/lib/reports.mjs';
 import base from '../../playwright.config';
 import { SCREENSHOT_COMPARISON } from '../harness/screenshots.mjs';
 import { CONTRACT_FIXTURES } from '../../packages/variant-contract/src/node/fixtures';
-import { fixtureApp, SAMPLE_APP, UNDER_TEST } from './target';
+import { fixtureApp, LISTED_ONLY, SAMPLE_APP, UNDER_TEST } from './target';
 
 const reports = path.join(reportsDir(), 'variants');
 
@@ -60,6 +61,11 @@ export default defineConfig({
       ];
     }),
     // The modes' own checks, on pages of their own: no server, no variant.
-    { name: 'modes', testMatch: ['modes.spec.ts'], use: { ...devices['Desktop Chrome'] } },
+    // A run for the variants PORTFOLIO_VARIANTS_ONLY lists, such as
+    // test:external-variant's, leaves them to the full run, since they
+    // check no variant.
+    ...(LISTED_ONLY
+      ? []
+      : [{ name: 'modes', testMatch: ['modes.spec.ts'], use: { ...devices['Desktop Chrome'] } }]),
   ],
 });

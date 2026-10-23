@@ -39,6 +39,9 @@ export const UNREGISTERED = 'missing-variant';
 
 const only = process.env.PORTFOLIO_VARIANTS_ONLY?.split(',').filter(Boolean);
 
+/** Whether PORTFOLIO_VARIANTS_ONLY limits the run to the variants it lists. */
+export const LISTED_ONLY = only !== undefined;
+
 /** The registered variants the specs check, sorted by id. */
 export const UNDER_TEST: readonly RegisteredVariant[] = VARIANTS.filter(
   ({ manifest }) => !only || only.includes(manifest.id),
