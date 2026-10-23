@@ -68,16 +68,34 @@ export async function stopGroup(group, { graceMs = 10_000 } = {}) {
 }
 
 /**
- * The groups a run has started and not yet seen exit, so its teardown can
- * stop whichever step is running. Once stopped, it starts no more.
+ * The groups a run has started, each tracked until nothing is left in it,
+ * so its teardown can stop whichever step is running, and whatever a step
+ * that ended left running in its group, such as a server its leader
+ * started and didn't stop. A browser Playwright launches leads a group of
+ * its own, which Playwright stops. Once stopped, it starts no more.
+ *
+ * @param {{ pollMs?: number }} [options] how often a group whose leader has
+ *   exited is looked at again, until it's empty
  */
-export function groupTracker() {
+export function groupTracker({ pollMs = 250 } = {}) {
   /** @type {Set<Group>} */
   const live = new Set();
   let stopped = false;
+  /** @param {Group} group whether nothing is left in it, which ends its tracking */
+  const emptied = (group) => {
+    const { pid } = group.child;
+    if (pid !== undefined && signalGroup(pid, 0)) return false;
+    live.delete(group);
+    return true;
+  };
+  /** @param {Group} group looked at once its leader exits, and again until it's empty */
+  const watch = (group) => {
+    if (!emptied(group)) setTimeout(watch, pollMs, group).unref();
+  };
   return {
     /**
-     * spawnGroup, tracked until its leader exits.
+     * spawnGroup, tracked until the group is empty: its leader exited, and
+     * everything that joined its group too.
      *
      * @param {string} command
      * @param {string[]} args
@@ -87,10 +105,10 @@ export function groupTracker() {
       if (stopped) throw new Error(`Stopping: ${command} does not start.`);
       const group = spawnGroup(command, args, options);
       live.add(group);
-      void group.exited.then(() => live.delete(group));
+      void group.exited.then(() => watch(group));
       return group;
     },
-    /** How many tracked groups' leaders are still running. */
+    /** How many tracked groups still hold a process: a leader running, or what one left. */
     get running() {
       return live.size;
     },
@@ -99,13 +117,19 @@ export function groupTracker() {
       return stopped;
     },
     /**
-     * Stops every tracked group, and refuses new ones.
+     * Stops every tracked group, a leader that exited included, waits up to
+     * 2 s more for each to empty after its SIGKILL, and refuses new ones.
      *
      * @param {{ graceMs?: number }} [options]
      */
     async stopAll(options) {
       stopped = true;
-      await Promise.all([...live].map((group) => stopGroup(group, options)));
+      await Promise.all(
+        [...live].map(async (group) => {
+          await stopGroup(group, options);
+          for (let tries = 0; tries < 40 && !emptied(group); tries += 1) await delay(50);
+        }),
+      );
     },
   };
 }
