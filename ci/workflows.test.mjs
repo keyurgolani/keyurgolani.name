@@ -47,7 +47,9 @@ test('publish reads no cache: no cache action, no shared install, no setup-node 
 test('publish runs only on a push to main, and only its own jobs follow gate', () => {
   const MAIN_PUSH = "${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}";
   const after = Object.entries(CI.jobs)
-    .filter(([, job]) => [job.needs ?? []].flat().some((n) => PUBLISH_JOBS.includes(n) || n === 'gate'))
+    .filter(([, job]) =>
+      [job.needs ?? []].flat().some((n) => PUBLISH_JOBS.includes(n) || n === 'gate'),
+    )
     .map(([id]) => id);
   assert.deepEqual(after.sort(), [...PUBLISH_JOBS].sort());
   assert.deepEqual(CI.jobs['publish-build'].needs, ['gate']);
