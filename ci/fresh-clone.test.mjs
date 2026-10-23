@@ -27,6 +27,9 @@ import { REPO_ROOT } from './lib/reports.mjs';
 // exit 1, and so is CONTAINER_CLI.
 
 const GENERATED = path.join('apps', 'web', 'src', 'lib', 'generated');
+// What only a build or `next dev` writes: a harness copies the last build's
+// (#12, harness item 7).
+const SERVED = path.join('apps', 'web', 'public', '_portfolio');
 
 /** The checkout's files as a clone would have them, with what isn't committed yet. */
 function cloneFiles() {
@@ -96,6 +99,7 @@ test('pnpm ci:security-proxy writes the registry, so the proxy specs load the ro
   assert.equal(status, 0, output);
   assert.doesNotMatch(output, /Cannot find module/);
   assert.ok(existsSync(path.join(clone.root, GENERATED, 'registry.meta.ts')), output);
+  assert.equal(existsSync(path.join(clone.root, SERVED)), false, 'it wrote public/');
   const listed = /Total: (\d+) tests? in \d+ files?/.exec(output);
   assert.ok(listed && Number(listed[1]) > 0, output);
   for (const spec of ['security-suite.ts', 'security.spec.ts', 'hop-count.spec.ts']) {
@@ -122,6 +126,7 @@ test('pnpm smoke:profiles writes the registry, so it loads the route table on a 
   assert.match(output, /^stub docker \S/m);
   assert.equal(status, 1, output);
   assert.ok(existsSync(path.join(clone.root, GENERATED, 'registry.meta.ts')), output);
+  assert.equal(existsSync(path.join(clone.root, SERVED)), false, 'it wrote public/');
 });
 
 test("each script reports a registry that doesn't build as its own failure, before any container or spec runs", (t) => {

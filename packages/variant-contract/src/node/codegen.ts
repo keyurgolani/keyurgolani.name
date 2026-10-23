@@ -490,7 +490,9 @@ export function writeServedFiles(
   dir: string,
   files: readonly ServedFile[],
   kind: ServedKind,
-  { staging = path.join(path.dirname(dir), `.${path.basename(dir)}.staging`) }: ServedWriteOptions = {},
+  {
+    staging = path.join(path.dirname(dir), `.${path.basename(dir)}.staging`),
+  }: ServedWriteOptions = {},
 ): PackWriteResult {
   const pattern = SERVED_KINDS[kind];
   const staged = (name: string) => {

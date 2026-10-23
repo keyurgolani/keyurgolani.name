@@ -185,9 +185,13 @@ export async function startApp({
   // The image's layout: the standalone tree plus static assets and public/.
   if (!dev) {
     copyTree(standalone, appDir, { recursive: true, verbatimSymlinks: true });
-    copyTree(path.join(web, '.next', 'static'), path.join(appDir, 'apps', 'web', '.next', 'static'), {
-      recursive: true,
-    });
+    copyTree(
+      path.join(web, '.next', 'static'),
+      path.join(appDir, 'apps', 'web', '.next', 'static'),
+      {
+        recursive: true,
+      },
+    );
     copyTree(path.join(web, 'public'), path.join(appDir, 'apps', 'web', 'public'), {
       recursive: true,
     });

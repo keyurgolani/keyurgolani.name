@@ -36,6 +36,7 @@ import {
   type RegistryResult,
   type RenderOptions,
   type ServedFile,
+  type ServedKind,
   type StylesheetHooks,
   type WriteResult,
 } from '@portfolio/variant-contract/node';
@@ -60,8 +61,9 @@ export const ASSET_OUT = path.join(HOST, 'public', '_portfolio', 'asset');
  * Where those three stage each file before it's renamed into place: outside
  * public/, so a copy of public/, as a harness start makes, never meets a
  * temporary file, and on the same filesystem, so the rename stays atomic.
+ * Git and the image build ignore every `.cache`.
  */
-export const STAGING_OUT = path.join(HOST, 'node_modules', '.cache', 'portfolio-served');
+export const STAGING_OUT = path.join(HOST, '.cache', 'portfolio-served');
 /** Each variant's experience segment (#6), which git ignores and Next serves at /_experience/<id>. */
 export const EXPERIENCE_OUT = path.join(HOST, 'src', 'app', '(site)', '%5Fexperience');
 
@@ -172,6 +174,18 @@ export interface Generation {
   };
 }
 
+/** Each directory of compiled files the host serves, and where its files stage. */
+export const SERVED_DIRS = {
+  pack: { dir: PACK_OUT, staging: path.join(STAGING_OUT, 'pack') },
+  variant: { dir: VARIANT_OUT, staging: path.join(STAGING_OUT, 'variant') },
+  asset: { dir: ASSET_OUT, staging: path.join(STAGING_OUT, 'asset') },
+} as const satisfies Record<ServedKind, { dir: string; staging: string }>;
+
+function serve(kind: ServedKind, files: readonly ServedFile[]): PackWriteResult {
+  const { dir, staging } = SERVED_DIRS[kind];
+  return writeServedFiles(dir, files, kind, { staging });
+}
+
 export interface GenerateOptions {
   /** Whether to write anything. */
   readonly write: boolean;
@@ -205,15 +219,9 @@ export async function generateRegistry(
   const served = modulesOnly
     ? undefined
     : {
-        packs: writeServedFiles(PACK_OUT, packs, 'pack', {
-          staging: path.join(STAGING_OUT, 'pack'),
-        }),
-        variants: writeServedFiles(VARIANT_OUT, variants, 'variant', {
-          staging: path.join(STAGING_OUT, 'variant'),
-        }),
-        assets: writeServedFiles(ASSET_OUT, assets, 'asset', {
-          staging: path.join(STAGING_OUT, 'asset'),
-        }),
+        packs: serve('pack', packs),
+        variants: serve('variant', variants),
+        assets: serve('asset', assets),
       };
   return {
     ...generated,
