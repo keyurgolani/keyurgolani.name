@@ -39,7 +39,9 @@ import type {
   OpenedGrant,
   PreviewFixture,
   PreviewGrantsPort,
+  Previewable,
 } from '../preview-port';
+import type { Session } from '../session';
 import { errorResult } from '../studio-result';
 import { mintSession } from './session-mint';
 
@@ -68,8 +70,11 @@ export interface OwnerPreviewInput {
   readonly catalog?: AppearanceCatalog;
   readonly extensions?: readonly ContentExtension[];
   readonly validators?: readonly UnitValidator[];
-  /** #3's store; without one, the data directory's, opened for reads. */
-  readonly store?: Pick<Store, 'drafts' | 'revisions'>;
+  /**
+   * #3's store; without one, the data directory's, opened for reads. Without
+   * its publication service, nothing is live to preview.
+   */
+  readonly store?: Pick<Store, 'drafts' | 'revisions'> & Partial<Pick<Store, 'publication'>>;
   /** #5's contract fixtures by id (#5, Slice 6); none until they ship. */
   readonly fixtures?: (id: string) => PreviewFixture | null;
   /** The clock grants run on. Tests pass their own. */
@@ -102,6 +107,24 @@ const sourceOf = (
   format: document.format,
   name: `${name}.${document.format === 'yaml' ? 'yml' : 'json'}`,
 });
+
+/**
+ * The variant a site document selects, as Studio names it in a frame's
+ * title: its appearance.variant, or null when it doesn't parse or names none.
+ */
+function selectedVariant(site: {
+  readonly format: 'yaml' | 'json';
+  readonly sourceText: string;
+}): string | null {
+  const parsed = parseSource(site.sourceText, site.format);
+  if (!parsed.ok) return null;
+  const appearance = (parsed.data as { readonly appearance?: unknown }).appearance;
+  const variant =
+    typeof appearance === 'object' && appearance !== null
+      ? (appearance as { readonly variant?: unknown }).variant
+      : undefined;
+  return typeof variant === 'string' && variant !== '' ? variant : null;
+}
 
 /** What a grant renders from: its documents, and the snapshots derived beside them. */
 interface Content {
@@ -274,6 +297,32 @@ export function ownerPreviews({
   const renderedVersionOf = (record: GrantRecord) =>
     record.subject.kind === 'draft' ? record.subject.version : null;
 
+  /** What /studio/preview offers (Slice 4): the working draft's latest version, then the live revision. */
+  async function previewable(session: Session | null): Promise<readonly Previewable[]> {
+    if (!authorize('preview.grant', session)) return [];
+    const offered: Previewable[] = [];
+    const working = await store.drafts.getWorking();
+    if (working) {
+      offered.push({
+        kind: 'draft',
+        subject: { draft: working.draftId, version: working.version },
+        variant: selectedVariant(working.documents.site),
+      });
+    }
+    const live = store.publication ? (await store.publication.status()).liveRevisionId : null;
+    if (live) {
+      const read = await store.revisions.read(live);
+      if (read.ok) {
+        offered.push({
+          kind: 'revision',
+          subject: { revision: live },
+          variant: selectedVariant(read.revision.unit.site),
+        });
+      }
+    }
+    return Object.freeze(offered);
+  }
+
   const port: PreviewGrantsPort = Object.freeze({
     async admit(grant: string) {
       try {
@@ -302,6 +351,7 @@ export function ownerPreviews({
         renderedVersion: renderedVersionOf(checked.record),
       });
     },
+    previewable,
   });
 
   /** The session a grant command came with, as its grants bind to it. */

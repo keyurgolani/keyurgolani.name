@@ -210,6 +210,9 @@ const ROUTES = [
   // Neither reads the published site, so neither is a visitor route.
   { pattern: '/studio', kind: 'page', capability: 'studio.view' },
   { pattern: '/studio/sign-in', kind: 'page', capability: 'auth.session' },
+  // The owner's preview page (#7, Slice 4), on PreviewSurface. Demo's preview
+  // is #9's (Demo Studio), so under demo the path is as unknown as any.
+  { pattern: '/studio/preview', kind: 'page', capability: 'preview.grant' },
   // The preview's dev fixture route (#7). It renders fixtures, never the
   // published site, so it isn't a visitor route either.
   devPreviewRoute(PREVIEW_DEV),

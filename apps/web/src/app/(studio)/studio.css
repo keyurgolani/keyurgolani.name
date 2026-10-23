@@ -128,3 +128,106 @@
   color: var(--studio-muted);
   font-variant-numeric: tabular-nums;
 }
+
+/* A Studio page with room for a preview (#7, Slice 4). */
+.studio-page {
+  max-width: 96rem;
+  margin: 0 auto;
+  padding: 2rem 1.5rem 3rem;
+}
+
+/* /studio/preview: the controls, then the frame below them, never over it. */
+.studio-preview {
+  display: grid;
+  gap: 1.25rem;
+  margin-top: 1.25rem;
+}
+
+.studio-preview__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 1rem 1.25rem;
+}
+
+.studio-preview__field {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.studio-preview__note {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--studio-muted);
+  font-size: 0.875rem;
+}
+
+.studio-preview__field .studio-preview__note {
+  flex-basis: auto;
+}
+
+.studio-input:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+/* PreviewSurface: the frame at its layout width, scaled down to fit. */
+.preview-surface {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.preview-surface__stage {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--studio-rule);
+  background: var(--studio-surface);
+}
+
+/* Loading: a neutral background, with aria-busy on the stage. */
+.preview-surface__stage[data-phase='loading'] {
+  background: var(--studio-canvas);
+}
+
+.preview-surface__frame {
+  display: block;
+  border: 0;
+  transform-origin: 0 0;
+}
+
+.preview-surface__state,
+.preview-surface__link {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.preview-surface__state p,
+.preview-surface__link p {
+  margin: 0;
+}
+
+.preview-surface__href {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  overflow-wrap: anywhere;
+}
+
+/* Out of sight, as the skip link is until it has focus. */
+.preview-surface__skip:not(:focus),
+.preview-surface__after:not(:focus),
+.preview-surface__live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.preview-surface__skip:focus-visible,
+.preview-surface__after:focus-visible {
+  outline: 2px solid var(--studio-ink);
+  outline-offset: 2px;
+}

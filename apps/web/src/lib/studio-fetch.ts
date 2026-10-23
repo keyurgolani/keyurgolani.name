@@ -112,5 +112,32 @@ export function leaveOnSignOut(
   return () => env.channel.removeEventListener('message', listener);
 }
 
+/**
+ * Calls `listener` when another tab signs out or loses its session, and
+ * leaves the page where it is: a page that keeps local work, such as
+ * /studio/preview (#7, Slice 4), says the session expired instead of going
+ * to sign-in. Returns the unsubscribe.
+ */
+export function onSignedOut(
+  listener: () => void,
+  env: Pick<StudioFetchEnv, 'channel'> = browser(),
+): () => void {
+  const handle = (event: MessageEvent) => {
+    if (event.data === SIGNED_OUT) listener();
+  };
+  env.channel.addEventListener('message', handle);
+  return () => env.channel.removeEventListener('message', handle);
+}
+
+/**
+ * Tells every other Studio tab the session ended, as a 401 does, for a page
+ * that learns it another way: /studio/preview (#7, Slice 4), when a grant's
+ * status says its session ended. Never for what another tab said, or two
+ * tabs would tell each other forever.
+ */
+export function announceSignedOut(env: Pick<StudioFetchEnv, 'channel'> = browser()): void {
+  env.channel.postMessage(SIGNED_OUT);
+}
+
 /** Where a page goes once its own sign-out succeeds. */
 export const SIGNED_OUT_LOCATION = signInLocation('signed_out', DEFAULT_RETURN_TO);
