@@ -397,6 +397,20 @@ test("the page going keeps its grant's ref before the keepalive revoke, and the 
   ended.session.end();
   ended.session.leave();
   assert.deepEqual(tab.log, [`keep ${refOf(1)}`]);
+  // A page back from the back-forward cache mints again, and its next mint
+  // revokes the grant it kept as it went.
+  const restored = setup({}, tab.left);
+  await restored.session.mint(REQUEST);
+  restored.session.leave();
+  assert.deepEqual(tab.kept(), [refOf(1)]);
+  await restored.session.mint(REQUEST);
+  assert.deepEqual(
+    restored.sent
+      .filter(({ body }) => (body as { ref?: string })?.ref !== undefined)
+      .map(({ body }) => body),
+    [{ ref: refOf(1) }],
+  );
+  assert.deepEqual(tab.kept(), []);
 });
 
 test('a 401 or session_ended ends the session, and nothing more goes out, and only session_ended is news for the other tabs (#7, Slice 4)', async () => {

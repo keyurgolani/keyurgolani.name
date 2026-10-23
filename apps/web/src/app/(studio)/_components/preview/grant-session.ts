@@ -136,8 +136,6 @@ export function createGrantSession(options: GrantSessionOptions): GrantSession {
   let stopped = false;
   /** Each mint's turn: the answer to an older one is dropped. */
   let turn = 0;
-  /** Whether the last page's grant, if it left one, has been sent its revoke. */
-  let cleared = false;
 
   /** Tells the surface, until the frame goes or the session ends: nothing brings it back after. */
   const set = (state: GrantState) => {
@@ -187,14 +185,14 @@ export function createGrantSession(options: GrantSessionOptions): GrantSession {
   };
 
   /**
-   * The grants the last page in this tab held, if their keepalive revokes may
-   * not have reached the server: each revoked by its ref, once, before this
-   * page's first mint goes out. The server ends one only if it's this
+   * The grants a page in this tab held as it went, if their keepalive revokes
+   * may not have reached the server: each revoked by its ref, before the next
+   * mint goes out, and taken from the tab so it goes once. That's the last
+   * page's on this page's first mint, and this page's own after a return
+   * from the back-forward cache. The server ends one only if it's this
    * session's.
    */
   const clearLeft = () => {
-    if (cleared) return;
-    cleared = true;
     const refs = left?.take() ?? [];
     if (ended || stopped) return;
     for (const ref of refs) {
