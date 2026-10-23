@@ -1,57 +1,49 @@
 {
   "id": "kinetic-cosmos",
   "name": "Kinetic Cosmos",
-  "promise": "Replace this with the composition idea from DESIGN.md, in one sentence.",
-  "description": "Replace this with what the composition does with the portfolio, from DESIGN.md.",
+  "promise": "An orbital opening, evidence you can pick up and open, and a chronology that branches where the path did.",
+  "description": "A controlled expressive composition: the opening sits in a still orbit around one luminous signature, each piece of evidence is an object that opens in place, and the chronology runs in lanes from its authored threads on large screens and as one vertical list on small ones. Every destination is a link or a disclosure in the page's order, and the motion layer, which follows, only adds to what the still composition already shows.",
   "contract": "2.0",
-  "schemas": {
-    "portfolio": {
-      "min": 3,
-      "max": 3
-    },
-    "site": {
-      "min": 2,
-      "max": 2
-    }
-  },
+  "schemas": { "portfolio": { "min": 3, "max": 3 }, "site": { "min": 2, "max": 2 } },
   "tokenContract": 1,
-  "compositionFamily": "document",
-  "motionIntent": "still",
-  "performanceTier": "light",
-  "budgets": {
-    "js": 2048,
-    "css": 2048,
-    "image": 0,
-    "font": 0,
-    "animation": 0,
-    "enhancement": 0
-  },
-  "renderedKinds": [],
+  "compositionFamily": "kinetic",
+  "motionIntent": "kinetic",
+  "performanceTier": "medium",
+  "budgets": { "js": 8192, "css": 6144, "image": 0, "font": 0, "animation": 0, "enhancement": 0 },
+  "renderedKinds": ["hero", "evidence", "chronology"],
   "unsupportedKinds": [],
   "contentSlots": [],
-  "routes": {
-    "home": "shared",
-    "work": "shared",
-    "views": []
-  },
-  "controls": {
-    "version": 1,
-    "items": [],
-    "migrations": []
-  },
-  "visitorControl": {
-    "placement": "header"
-  },
-  "textDirection": [
-    "ltr",
-    "rtl"
-  ],
+  "routes": { "home": "shared", "work": "shared", "views": [] },
+  "controls": { "version": 1, "items": [], "migrations": [] },
+  "visitorControl": { "placement": "header" },
+  "textDirection": ["ltr", "rtl"],
   "provenance": {
     "provisional": true,
     "sources": [
       {
-        "source": "The fallback composition",
-        "disposition": "preserved"
+        "source": "Kinetic Cosmos v1 (legacy/variant-kinetic-cosmos), page-zero's re-imagining",
+        "disposition": "preserved",
+        "note": "The orbital opening, the evidence cards, and the forking timeline, rebuilt on the v3 records, the kit's shared renderers, and #19's primitives."
+      },
+      {
+        "source": "Kinetic Cosmos v1's nebula, aurora, and solar color schemes, its geometric and humanist type presets, and its theme toggle",
+        "disposition": "retired",
+        "note": "Color, type, and display mode belong to the appearance axes (#19), not to a composition."
+      },
+      {
+        "source": "Kinetic Cosmos v1's glass and gradient on every surface, and its gradient section titles",
+        "disposition": "retired",
+        "note": "One signature, the design language's signature fill, on the opening's core alone."
+      },
+      {
+        "source": "Kinetic Cosmos v1's keyword lane classifier and pixel-positioned SVG timeline",
+        "disposition": "retired",
+        "note": "Lanes come from the authored thread, branchesFrom, and mergesInto, through the kit's threadLanes, in one ordered list."
+      },
+      {
+        "source": "Kinetic Cosmos v1's falling-glyph canvas, orbit drag, chrome recession, and pause control",
+        "disposition": "reused-interaction",
+        "note": "The motion layer, #14's second pull request, on #6's runtime. This composition is complete and still without it."
       }
     ]
   }

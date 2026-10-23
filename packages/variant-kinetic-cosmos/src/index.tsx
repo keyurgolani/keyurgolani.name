@@ -1,72 +1,57 @@
 import type { ReactElement } from 'react';
 import type { Section } from '@portfolio/schema';
-import { renderSection, VisitorControlSlot } from '@portfolio/kit/sections';
+import { renderSection, type BespokeRenderers } from '@portfolio/kit/sections';
 import type { VariantRenderInput } from '@portfolio/variant-contract';
+import { Chrome, type ChromeLink } from './chrome';
+import { BranchingChronology } from './chronology';
+import { EvidenceObjects } from './evidence';
+import { OrbitalOpening } from './opening';
 
-// Kinetic Cosmos, scaffolded from the fallback composition (#5): every section in
-// content order through the kit's shared renderers, until DESIGN.md says
-// otherwise. Composition only: color, type, and motion timing are #19's.
+// Kinetic Cosmos (#14), the still composition: an orbital opening, evidence
+// as objects that open in place, and a chronology that branches where the
+// owner's threads do, every other kind through the kit's shared renderers.
+// It owns composition alone. Color, type, materials, and timing are the
+// appearance packs' (#19), and its one signature is the design language's
+// signature fill, on the opening's core. It renders from its input alone,
+// and only what the input holds: a hidden section never reaches it. Inside
+// a plate it renders the same, with nothing fixed, no listener on the page,
+// and every id under the boundary's prefix.
 
-/** A section with a title the navigation can name. The hero and a call to action stand apart. */
-const NAMED = (section: Section) =>
+const RENDERERS: BespokeRenderers = {
+  hero: OrbitalOpening,
+  evidence: EvidenceObjects,
+  chronology: BranchingChronology,
+};
+
+/** A section the chrome can name: a title, and not the opening or a call to action. */
+const named = (section: Section) =>
   section.kind !== 'hero' && section.kind !== 'cta' && Boolean(section.title?.trim());
 
-export default function KineticCosmosComposition({ input }: { readonly input: VariantRenderInput }) {
+export default function KineticCosmos({ input }: { readonly input: VariantRenderInput }) {
   const { portfolio, ids } = input;
   // The page's one h1 comes before any section's h2: a hero that renders
-  // first carries it, and otherwise the identity's name does, above the
-  // sections, every hero among them at h2.
+  // first carries it, and otherwise the identity's name does.
   let heroLeads = false;
   let rendered = false;
   const sections: { section: Section; element: ReactElement }[] = [];
   for (const section of portfolio.sections) {
     const leads = !rendered && section.kind === 'hero';
-    const element = renderSection(section, input, {}, { level: leads ? 1 : 2 });
+    const element = renderSection(section, input, RENDERERS, { level: leads ? 1 : 2 });
     if (element === null) continue;
     heroLeads ||= leads;
     rendered = true;
     sections.push({ section, element });
   }
-  const named = sections.filter(({ section }) => NAMED(section));
-  // The host's own words are English, marked so in a portfolio in another language.
-  const uiLang = /^en(?:-|$)/i.test(portfolio.locale) ? undefined : 'en';
-  // Two hyphens: no content id has them, so none can take this one.
-  const label = `${ids.prefix}kc--sections`;
+  const links: ChromeLink[] = sections
+    .filter(({ section }) => named(section))
+    .map(({ section }) => ({
+      id: section.id,
+      title: section.title!,
+      ...(section.lang !== undefined ? { lang: section.lang } : {}),
+    }));
   return (
     <>
-      <header className="kc-header">
-        {named.length > 0 ? (
-          // #19's navigation primitive's markup, its slots, which the platform
-          // stylesheet styles and sizes: each link a target of 24 by 24 CSS px,
-          // and 32 by 32 at 768 px wide and below. Written out rather than
-          // through <Navigation>, a client component, so the composition stays
-          // a server module that loads anywhere the host checks it.
-          <nav
-            className="kc-nav"
-            data-ui-slot="navigation"
-            data-orientation="horizontal"
-            aria-labelledby={label}
-          >
-            <span id={label} lang={uiLang} hidden>
-              Sections
-            </span>
-            <ul data-ui-slot="navigation.list">
-              {named.map(({ section }) => (
-                <li key={section.id} data-ui-slot="navigation.item">
-                  <a
-                    data-ui-slot="navigation.link"
-                    href={`#${ids.prefix}${section.id}`}
-                    lang={section.lang}
-                  >
-                    {section.title}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </nav>
-        ) : null}
-        <VisitorControlSlot />
-      </header>
+      <Chrome input={input} links={links} />
       {/* Focusable, so the host's skip link moves focus here, not only the view. */}
       <main id={ids.main} className="kc-main" tabIndex={-1}>
         {heroLeads ? null : <h1 className="kc-name">{portfolio.identity.name}</h1>}
