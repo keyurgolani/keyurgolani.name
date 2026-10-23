@@ -108,11 +108,15 @@ module.exports = {
         'Turbopack gives a page one client chunk group of every client module its server graph ' +
         "reaches, so a visitor page that reached every variant's loader would put every " +
         "variant's client code on every visitor's wire (#6, Slice 2). Nothing in the site's route " +
-        "group, an experience segment's files among them, reaches the modules that load every " +
-        'variant or name every enhancement: generated/registry.loaders.ts and ' +
-        'registry.enhancements.ts, lib/variant-loaders.ts, and lib/host-modules-client.tsx. Only ' +
-        "#7's preview routes and the startup health check use those.",
-      from: { path: '^apps/web/src/app/\\(site\\)/', pathNot: '\\.test\\.tsx?$' },
+        "group, an experience segment's files among them, nor the 404 and error documents a " +
+        'public page can end in, reaches the modules that load every variant or name every ' +
+        'enhancement: generated/registry.loaders.ts and registry.enhancements.ts, ' +
+        "lib/variant-loaders.ts, and lib/host-modules-client.tsx. Only #7's preview routes and " +
+        'the startup health check use those.',
+      from: {
+        path: '^apps/web/src/app/(?:\\(site\\)/|_chrome/|global-(?:not-found|error)\\.tsx$)',
+        pathNot: '\\.test\\.tsx?$',
+      },
       to: {
         path: [
           '^apps/web/src/lib/generated/registry\\.(?:loaders|enhancements)\\.ts$',
