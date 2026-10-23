@@ -62,6 +62,8 @@ const EXTRA: Readonly<Record<string, readonly string[]>> = {
   'preview.render_failed': GRANT,
   'media.asset.derived': MEDIA,
   'media.source.unused': MEDIA,
+  'media.startup.asset': MEDIA,
+  'media.startup.derived': ['count'],
   'deployment.config': [
     'origin',
     'previewOrigin',

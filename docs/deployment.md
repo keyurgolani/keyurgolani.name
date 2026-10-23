@@ -71,7 +71,7 @@ echo 'PORTFOLIO_ORIGIN=https://jane.name' > .env
 docker compose up --build
 ```
 
-This mounts `config/` read-only at `/config` and `assets/` at the site's `/assets/`, a first segment the variant contract reserves, so no variant's view can take a path a file there answers. Nothing in the container is writable but a tmpfs at Next.js's cache, `/app/apps/web/.next/cache`.
+This mounts `config/` read-only at `/config`, and `assets/` read-only at `/media`, the media root (`PORTFOLIO_MEDIA_ROOT`) the portfolio's media sources resolve under ([Media](#media)). It also still mounts `assets/` at the site's `/assets/`, a first segment the variant contract reserves, so no variant's view can take a path a file there answers; that mount goes once #10's `/media` route serves renditions. Nothing in the container is writable but a tmpfs at Next.js's cache, `/app/apps/web/.next/cache`, and one at the media cache `read-only` derives into, `/tmp/portfolio-media`, owned by the server's user.
 
 ### `demo`
 
@@ -85,7 +85,7 @@ docker compose -f compose.demo.yml up --build
 
 ### `owner`
 
-`deploy/compose.owner.yml` mounts `../config` and `../assets` as `read-only` does, on the same read-only root and cache tmpfs, and keeps drafts and revisions in the `portfolio-data` volume at `/var/lib/portfolio` (`PORTFOLIO_DATA_DIR`). The image creates that directory for the server's user (uid 1001, mode `0700`), so a new volume starts out writable by the server and no one else. A host directory mounted there instead needs `sudo chown 1001:1001` and `chmod 0700` first: the store refuses one another user owns, or that its group or anyone else may write (`data_dir_not_private`). Run one server per volume: the fixed container name stops `docker compose up --scale`. Back the volume up with `portfolio-store backup` ([Backups](#backups)).
+`deploy/compose.owner.yml` mounts `../config` and `../assets` as `read-only` does, on the same read-only root and Next.js cache tmpfs, and keeps drafts and revisions in the `portfolio-data` volume at `/var/lib/portfolio` (`PORTFOLIO_DATA_DIR`). The image creates that directory for the server's user (uid 1001, mode `0700`), so a new volume starts out writable by the server and no one else. A host directory mounted there instead needs `sudo chown 1001:1001` and `chmod 0700` first: the store refuses one another user owns, or that its group or anyone else may write (`data_dir_not_private`). Run one server per volume: the fixed container name stops `docker compose up --scale`. Back the volume up with `portfolio-store backup` ([Backups](#backups)).
 
 At its first start, on an empty volume, the server publishes `../config` as revision 1, or refuses to start on a pair a publish refuses ([Importing](#importing)). From then on the data directory is what visitors see, and `../config` is import input: an edit there changes nothing live until `portfolio-store import` or a Studio publish. The image ships the store's command line as `/app/bin/portfolio-store.mjs` ([The revision store](#the-revision-store)).
 
@@ -257,16 +257,16 @@ Studio's `/studio/preview` shows the working draft or the live revision in one s
 
 ### Media
 
-Saving a Studio draft derives its media document (#10): for each image asset, in the portfolio's order, `owner` reads the source, writes it and its renditions to the data directory's asset store, and records one asset revision under the source's SHA-256. Nothing ingests or fetches on a visitor request, and `demo` fetches nothing. A draft save's session needs `media.ingest`, and `media.fetchRemote` for an `https` source.
+Saving a Studio draft derives its media document (#10), and so do `portfolio-store import` and the first-start import: for each image asset, in the portfolio's order, `owner` reads the source, writes it and its renditions to the data directory's asset store, and records one asset revision under the source's SHA-256. An import starts from the live revision's records, so an unchanged source derives nothing again, and it prints a line for each source it couldn't use. `retention` keeps every source and rendition a revision or a draft references. Nothing ingests or fetches on a visitor request, and `demo` fetches nothing. A draft save's session needs `media.ingest`, and `media.fetchRemote` for an `https` source.
 
 - A path resolves only under `PORTFOLIO_MEDIA_ROOT`. An absolute path, a `.` or `..` segment, or a link whose real path leaves the root is refused, and only regular files are read. The server only reads the root: startup warns when it can write there (`media_root_writable`) or when it names no directory (`media_root_missing`).
-- An `https` source is fetched over https only, with at most 3 redirects and 15 seconds for the whole fetch. Every request and every redirect resolves its host, and a host that resolves to a loopback, private, link-local, or cloud metadata address (`169.254.169.254` among them) is refused before anything connects. A remote source is fetched again only when its URL changes or its last fetch failed.
+- An `https` source is fetched over https only, with at most 3 redirects and 15 seconds for the whole fetch. A special-use name, such as `localhost`, `*.local`, `*.test`, `*.internal`, or `*.home.arpa`, is refused without a lookup. Every request and every redirect resolves its host, and a host that resolves to a loopback, private, link-local, or cloud metadata address (`169.254.169.254` among them) is refused before anything connects. A remote source is fetched again only when its URL changes or its last fetch failed.
 - A source is JPEG, PNG, WebP, or AVIF by its bytes, never its name or `Content-Type`, at most 20 MiB, and at most 100 megapixels decoded.
 - Renditions are 480, 960, 1600, and 2400 pixels wide, up to the source's width, as WebP and JPEG, or WebP and PNG for a source with transparency. They apply the EXIF orientation and carry no EXIF, XMP, IPTC, GPS, or ICC data. The original is kept in the asset store and never served.
 - A source that is missing, unreachable, refused, or not a valid image leaves the asset's last revision in place, marked unavailable; new bytes replace it only once they derive. Published revisions keep their own media document and blobs, so a changed or lost source never changes them.
 - When `sharp`, the image library, won't load, startup warns (`media_renditions_unavailable`), draft saves derive nothing new and keep every revision they have, and published media keeps serving.
 
-`read-only` and `demo` don't derive media yet, and no route serves renditions yet.
+`read-only` and `demo` derive their media once the server starts, in the background, into `/tmp/portfolio-media`, a directory of the server user's own (one another user owns, or that others can open, is refused, and nothing derives). `read-only` reads sources under `PORTFOLIO_MEDIA_ROOT` and fetches `https` ones; `demo` reads the bundled sample's `example-media/` and fetches nothing. A changed media file changes what derives on the next start, so the log lists each asset revision's hash as it derives (`media.startup.asset`, with `assetId` and `sha256`). No route serves renditions yet, so images still render as unavailable everywhere.
 
 ### Audit log
 
@@ -291,7 +291,7 @@ Under `owner`, what visitors see is a published revision in `PORTFOLIO_DATA_DIR`
 | `audit/<yyyy-mm>.jsonl`                 | The audit log                                                       | yes       |
 | `ephemeral/`                            | Sessions and auth state                                             | never     |
 
-Directories are `0700` and files `0600`, owned by the server's user. Only local Linux volumes are supported: the store relies on a rename within a directory and on `fsync`. Until #10 brings a media document, `../assets` stays a mount of its own, outside the store: back it up beside the store.
+Directories are `0700` and files `0600`, owned by the server's user. Only local Linux volumes are supported: the store relies on a rename within a directory and on `fsync`. Each revision's media renditions and sources are blobs in `assets/sha256/`, so a backup holds what every revision shows. `../assets`, where the sources come from, stays a mount of its own: back it up beside the store.
 
 ### Running portfolio-store
 

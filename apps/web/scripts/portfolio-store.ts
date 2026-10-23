@@ -12,7 +12,8 @@
  *
  * `pnpm store` alone is pnpm's own command, so a clone says `pnpm run store`.
  * The image's copy is this file bundled by esbuild with every module it
- * imports (scripts/bundle-store.mjs), so it needs Node and nothing else.
+ * imports (scripts/bundle-store.mjs), so it needs Node and nothing else,
+ * but for sharp, a native module, which it loads from the server's build.
  * `--help` and packages/core/src/cli.ts say what each command does.
  */
 import { readFileSync, realpathSync, statSync } from 'node:fs';
@@ -135,6 +136,9 @@ if (checks) {
     envBase: webDir(),
     // A path on the command line is from where pnpm ran, or the shell is.
     cwd: process.env.INIT_CWD || process.cwd(),
+    // The image's bundle at /app/bin finds sharp through the server build's
+    // external link, as the server's own chunks do (#10).
+    sharpDirectories: [path.join(webDir(), '.next', 'node_modules')],
   }).then((code) => {
     process.exitCode = code;
   });

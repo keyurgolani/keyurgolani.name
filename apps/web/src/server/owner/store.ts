@@ -13,6 +13,7 @@ import {
   claimServer,
   filesystemAuditSink,
   importAtFirstStart,
+  withMountedMedia,
   importRefusal,
   mountedSource,
   openStore,
@@ -568,6 +569,8 @@ export function ownerStore({
   // runs it once the lock is free.
   let importPending = false;
   let importing: Promise<Imported> | undefined;
+  // Media ingestion (#10), for Studio's draft saves and the first-start import.
+  const media = ownerMedia({ config, assets: store.assets });
 
   /**
    * The mounted pair as an import reads it: PORTFOLIO_SOURCE_DIR's, or under
@@ -598,7 +601,14 @@ export function ownerStore({
     }
     let outcome: PublicationOutcome;
     try {
-      outcome = await importAtFirstStart(store, read.mounted);
+      // The pair's media, as a draft save ingests it (#10): an empty store
+      // has no records yet, so each image derives its first revision.
+      const withMedia = await withMountedMedia(read.mounted, {
+        ingestion: media,
+        previous: null,
+        fetchRemote: true,
+      });
+      outcome = await importAtFirstStart(store, withMedia.mounted);
     } catch (error) {
       const code = codeOf(error);
       if (code === 'lock_timeout') return { kind: 'waiting' };
@@ -757,7 +767,7 @@ export function ownerStore({
   const owner: OwnerStore = Object.freeze({
     store,
     reader,
-    studio: studioStore(store, reader, writable, ownerMedia({ config, assets: store.assets })),
+    studio: studioStore(store, reader, writable, media),
     async checkDirectory() {
       const problem = await preflight({ dataDir, sourceDir: config.sourceDir });
       if (problem) return [finding(problem)];

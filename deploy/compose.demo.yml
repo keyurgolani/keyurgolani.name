@@ -19,7 +19,8 @@ services:
       # The demo hostname, such as https://demo.jane.name.
       PORTFOLIO_ORIGIN: ${PORTFOLIO_ORIGIN:?set PORTFOLIO_ORIGIN in .env to the demo hostname}
       NODE_ENV: production
-    # Nothing in the container is writable but Next's cache.
+    # Nothing in the container is writable but Next's cache and the media
+    # cache.
     read_only: true
     # No capabilities, and no way to gain privileges: the server needs
     # neither (threat row deploy-2).
@@ -29,6 +30,9 @@ services:
       - no-new-privileges:true
     tmpfs:
       - /app/apps/web/.next/cache
+      # The media cache read-only and demo derive into at startup (#10),
+      # the server user's own.
+      - /tmp/portfolio-media:uid=1001,gid=1001,mode=0700
     healthcheck:
       test:
         - CMD

@@ -122,5 +122,8 @@ test("a unit references its media document's source and rendition blobs", () => 
     `sha256:${hex('c')}`,
   ]);
   assert.deepEqual(checks.referencedBlobs?.(DOCUMENT), mediaBlobs(DOCUMENT));
+  // portfolio-store's retention and verify reference the same blobs as the server.
+  const cli = storeChecks({ PORTFOLIO_ORIGIN: 'https://rowan.name' });
+  assert.deepEqual(cli.referencedBlobs?.(DOCUMENT), mediaBlobs(DOCUMENT));
   assert.deepEqual(checks.referencedBlobs?.(undefined), []);
 });

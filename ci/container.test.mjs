@@ -129,9 +129,17 @@ test('each Compose example runs its profile from the one image, on loopback', ()
     assert.match(web.environment.PORTFOLIO_ORIGIN, /^\$\{PORTFOLIO_ORIGIN:\?.+\}$/, file);
     for (const port of web.ports) assert.match(port, /^127\.0\.0\.1:/, file);
     assert.equal('profiles' in web, false, `${file}: no Compose profiles`);
-    // A read-only root with a tmpfs for Next's cache, under every profile.
+    // A read-only root with a tmpfs for Next's cache, under every profile,
+    // and for read-only and demo the media cache they derive into (#10),
+    // the server user's own.
     assert.equal(web.read_only, true, file);
-    assert.deepEqual(web.tmpfs, ['/app/apps/web/.next/cache'], file);
+    assert.deepEqual(
+      web.tmpfs,
+      profile === 'owner'
+        ? ['/app/apps/web/.next/cache']
+        : ['/app/apps/web/.next/cache', '/tmp/portfolio-media:uid=1001,gid=1001,mode=0700'],
+      file,
+    );
     // No capabilities and no privileges to gain, as smoke:profiles runs it (#12).
     assert.deepEqual(web.cap_drop, ['ALL'], file);
     assert.deepEqual(web.security_opt, ['no-new-privileges:true'], file);
@@ -143,6 +151,9 @@ test('each Compose example runs its profile from the one image, on loopback', ()
       assert.equal(web.environment.PORTFOLIO_SOURCE_DIR, '/config', file);
       assert.ok(volumes.includes(`${dir}/config:/config:ro`), file);
       assert.ok(volumes.includes(`${dir}/assets:/app/apps/web/public/assets:ro`), file);
+      // The media root (#10): the same files, read-only, where sources resolve.
+      assert.ok(volumes.includes(`${dir}/assets:/media:ro`), file);
+      assert.equal(web.environment.PORTFOLIO_MEDIA_ROOT, '/media', file);
     }
     if (profile === 'owner') {
       // One writable named volume at the data directory, for one replica.

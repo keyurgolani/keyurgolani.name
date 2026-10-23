@@ -8,6 +8,7 @@ import { setDeploymentState } from './config-store';
 import { log } from './log';
 import type { Registration } from './start-or-exit';
 import { runStartup, type StartupResult } from './startup';
+import { startStartupMedia } from './startup-media';
 import { buildUnitChecks, renderDrift } from './unit-checks';
 
 /**
@@ -75,6 +76,17 @@ export async function registerDeployment(): Promise<Registration> {
   // The server keeps running, so stdout can take its time with these.
   for (const issue of result.issues) console.log(issueLogLine(issue, result.profile));
   log({ level: 'info', event: 'deployment.config', ...result.summary });
+  // read-only and demo derive their media now, in the background, logging
+  // each asset's hash (#10, Risk 3); owner's comes from its store.
+  const { config } = result.state;
+  if (config.profile !== 'owner') {
+    void startStartupMedia({
+      profile: config.profile,
+      reader: result.state.catalog,
+      ...(config.mediaRoot ? { mediaRoot: config.mediaRoot } : {}),
+      sampleMedia: example('example-media'),
+    });
+  }
   return { ok: true };
 }
 
