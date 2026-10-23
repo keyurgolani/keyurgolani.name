@@ -32,13 +32,14 @@ interface AxeGlobal {
 
 /**
  * The details of each element `selectors` names, with the token role
- * matched on `property`. `roles` are the token contract's color roles, as
- * --color-<role>. Runs in the browser, after axe ran there, so window.axe
- * is set; without it, role and name stay unset.
+ * matched on `property`, or none when it's null: a rule that isn't about
+ * color. `roles` are the token contract's color roles, as --color-<role>.
+ * Runs in the browser, after axe ran there, so window.axe is set; without
+ * it, role and name stay unset.
  */
 export function elementDetailsScript(args: {
   readonly selectors: readonly string[];
-  readonly property: ColorProperty;
+  readonly property: ColorProperty | null;
   readonly roles: readonly string[];
 }): ElementDetails[] {
   const axe = (window as unknown as { axe?: AxeGlobal }).axe;
@@ -54,7 +55,7 @@ export function elementDetailsScript(args: {
       if (!element) return { found: false };
       const boundary = element.closest('[data-appearance-boundary]');
       let tokenRole: string | undefined;
-      if (boundary) {
+      if (boundary && args.property !== null) {
         const rendered = getComputedStyle(element).getPropertyValue(args.property);
         // Each role's value as the boundary resolves it, normalized by the
         // browser the way the element's own color is.

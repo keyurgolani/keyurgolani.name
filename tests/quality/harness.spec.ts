@@ -1,0 +1,117 @@
+import { COLOR_ROLES } from '../../packages/appearance/src/roles';
+import { defaultTuple } from './cells';
+import { axeFor } from './lib/axe';
+import { FIXED_TIME } from './lib/clock';
+import { runCanary } from './lib/env';
+import { elementDetailsScript } from './lib/probes';
+import { CANARY_COOKIE, expect, test } from './fixtures';
+
+// The harness's own checks against the quality build (#11, Slice 1): the
+// server's clock, the canary on every request, and the token-role match on
+// the one page that renders #19's boundary today, /_fixtures/appearance
+// (the quality build sets APPEARANCE_FIXTURES=1). The host's other pages
+// render it from #19 slice 4.
+
+test.use({
+  cellServer: {
+    source: 'complete',
+    tuple: defaultTuple('fallback', 'system'),
+    profile: 'read-only',
+  },
+});
+
+const READ_ONLY = { type: 'profile', description: 'read-only' };
+
+test(
+  "the server runs on the fixed clock: the sitemap, modified per request, says the fixture's day",
+  { annotation: [{ type: 'route', description: '/sitemap.xml' }, READ_ONLY] },
+  async ({ request }) => {
+    const sitemap = await request.get('/sitemap.xml');
+    expect(sitemap.status()).toBe(200);
+    expect(await sitemap.text()).toContain(`<lastmod>${FIXED_TIME.slice(0, 10)}T`);
+  },
+);
+
+test.describe('the canary', () => {
+  // Kept whether it passes or not, so run.ts can tell the canary reached an artifact.
+  test.use({ trace: 'on' });
+
+  test(
+    'every request the page makes carries the canary, and its trace holds it until the scrub',
+    { annotation: [{ type: 'route', description: '/' }, READ_ONLY] },
+    async ({ page }, testInfo) => {
+      const canary = runCanary();
+      const sent: Record<string, string>[] = [];
+      page.on('request', (request) => sent.push(request.headers()));
+      await page.goto('/');
+      expect(sent.length).toBeGreaterThan(0);
+      for (const headers of sent) {
+        expect(headers['authorization']).toBe(`Bearer ${canary}`);
+        expect(headers['x-csrf-token']).toBe(canary);
+      }
+      const cookies = await page.context().cookies();
+      expect(cookies.find((cookie) => cookie.name === CANARY_COOKIE)?.value).toBe(canary);
+      testInfo.annotations.push({ type: 'quality-canary-probe', description: 'trace on' });
+    },
+  );
+});
+
+test(
+  "the token role is the boundary role the element's color resolves to, hard-coded for any other, and none outside a boundary",
+  { annotation: [{ type: 'route', description: '/_fixtures/appearance' }, READ_ONLY] },
+  async ({ page }) => {
+    const response = await page.goto('/_fixtures/appearance');
+    expect(response?.status()).toBe(200);
+    await page.evaluate(() => {
+      const boundary = document.querySelector('[data-appearance-boundary="document"]')!;
+      const hard = document.createElement('p');
+      hard.id = 'quality-hard-coded';
+      hard.textContent = 'Hard-coded';
+      hard.style.color = 'rgb(1, 2, 3)';
+      boundary.append(hard);
+      const outside = document.createElement('p');
+      outside.id = 'quality-outside';
+      outside.textContent = 'Outside';
+      document.body.append(outside);
+    });
+    // axe sets window.axe, which the role and name come from.
+    await axeFor(page).analyze();
+    const primary =
+      '[data-appearance-boundary="document"] [data-ui-slot="action"][data-emphasis="primary"]';
+    const [action, hard, outside] = await page.evaluate(elementDetailsScript, {
+      selectors: [primary, '#quality-hard-coded', '#quality-outside'],
+      property: 'color' as const,
+      roles: [...COLOR_ROLES],
+    });
+    expect(action?.found, 'a primary action renders in the document boundary').toBe(true);
+    // A primary action's text is on-accent, or a role that resolves to the same color.
+    const sameAsOnAccent = await page.evaluate(
+      ({ selector, roles }) => {
+        const boundary = document.querySelector('[data-appearance-boundary="document"]')!;
+        const probe = document.createElement('span');
+        boundary.append(probe);
+        const colorOf = (role: string) => {
+          probe.style.color = `var(--color-${role})`;
+          return getComputedStyle(probe).color;
+        };
+        const target = colorOf('on-accent');
+        const matching = roles.filter((role) => colorOf(role) === target);
+        probe.remove();
+        return {
+          matching,
+          element: getComputedStyle(document.querySelector(selector)!).color,
+          target,
+        };
+      },
+      { selector: primary, roles: [...COLOR_ROLES] },
+    );
+    expect(sameAsOnAccent.element).toBe(sameAsOnAccent.target);
+    expect(sameAsOnAccent.matching).toContain(action!.tokenRole);
+    expect(['button', 'link']).toContain(action?.semanticRole);
+    expect(action?.uiSlot).toBe('action');
+    expect(action?.accessibleName).toBeTruthy();
+    expect(hard?.tokenRole).toBe('hard-coded');
+    expect(outside?.found).toBe(true);
+    expect(outside?.tokenRole).toBeUndefined();
+  },
+);
