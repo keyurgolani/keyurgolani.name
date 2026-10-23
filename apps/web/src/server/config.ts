@@ -99,6 +99,8 @@ export interface DeploymentConfig {
   readonly previewOrigin?: string;
   /** Writable data directory (`owner`), for auth state, the audit log, and revisions. */
   readonly dataDir?: string;
+  /** Set when `dataDir` is `next dev`'s default rather than PORTFOLIO_DATA_DIR, so startup may make it. */
+  readonly dataDirDefault?: true;
   /** How long an owner session lasts (`owner`): idle, and at most. */
   readonly sessionLifetime?: Readonly<{ idleMinutes: number; maxHours: number }>;
   /** How long a preview grant lasts (`owner`): idle, and at most (#7). */
@@ -168,6 +170,12 @@ export interface ReadConfigOptions {
   readonly readFile?: (file: string) => string;
   /** Stats a _FILE before it's read. Defaults to fs.statSync, which follows links. */
   readonly statFile?: (file: string) => { isFile(): boolean; readonly mode: number };
+  /**
+   * Under `next dev`, owner's data directory when PORTFOLIO_DATA_DIR is
+   * unset: register() passes `<workspace root>/.data` (#3). Production has
+   * no default.
+   */
+  readonly devDataDir?: string;
 }
 
 /**
@@ -387,7 +395,13 @@ export function readDeploymentConfig(env: Env, options: ReadConfigOptions): Read
     );
   }
 
-  const dataDir = valueOf(resolveFor('PORTFOLIO_DATA_DIR'));
+  const dataValue = resolveFor('PORTFOLIO_DATA_DIR');
+  const dataDefault =
+    dataValue.state === 'unset' &&
+    profile === 'owner' &&
+    mode === 'development' &&
+    options.devDataDir !== undefined;
+  const dataDir = dataDefault ? options.devDataDir : valueOf(dataValue);
   const lifetime = {
     idleMinutes: SESSION_LIFETIME_KEYS.PORTFOLIO_AUTH_SESSION_IDLE_MINUTES.default as number,
     maxHours: SESSION_LIFETIME_KEYS.PORTFOLIO_AUTH_SESSION_MAX_HOURS.default as number,
@@ -476,6 +490,7 @@ export function readDeploymentConfig(env: Env, options: ReadConfigOptions): Read
     ...(dataDir !== undefined
       ? { dataDir: path.resolve(/*turbopackIgnore: true*/ options.cwd, dataDir) }
       : {}),
+    ...(dataDefault ? { dataDirDefault: true as const } : {}),
     ...(profile === 'owner'
       ? {
           sessionLifetime: Object.freeze(lifetime),

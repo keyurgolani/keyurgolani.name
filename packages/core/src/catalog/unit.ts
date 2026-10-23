@@ -9,8 +9,6 @@ import {
   type PublicationUnitResult,
   type SourceDocument,
 } from '@portfolio/schema';
-import { recordOwnerModule } from '../load-trace';
-import { isSha256, type Sha256 } from './layout';
 
 // A publication unit (#3, items 5 and 6): the portfolio and site documents
 // (#4), an optional media document (#10, opaque here), and the snapshots
@@ -20,8 +18,17 @@ import { isSha256, type Sha256 } from './layout';
 // model, so YAML and JSON with equal content hash equally, its sourceHash
 // covers its bytes, and the unitHash covers every document's and snapshot's
 // contentHash by name.
+//
+// The store builds a revision with checkUnit(), and so does read-only's
+// SourceCatalogReader from the mounted documents (item 19), so this module
+// is shared code, not owner code: it records nothing in the owner load
+// trace and imports nothing that does.
 
-recordOwnerModule('core/store/unit');
+/** A SHA-256 digest as the store writes one: `sha256:` and 64 hex digits. */
+export type Sha256 = `sha256:${string}`;
+const SHA256 = /^sha256:[0-9a-f]{64}$/;
+export const isSha256 = (value: unknown): value is Sha256 =>
+  typeof value === 'string' && SHA256.test(value);
 
 export type DocumentName = 'portfolio' | 'site' | 'media';
 export const DOCUMENT_NAMES: readonly DocumentName[] = Object.freeze([
@@ -34,6 +41,11 @@ export const DOCUMENT_NAMES: readonly DocumentName[] = Object.freeze([
 export interface DocumentInput {
   readonly format: DocumentFormat;
   readonly sourceText: string;
+  /**
+   * Its file's name, such as portfolio.yaml, which a finding's remediation
+   * names. Without one, the name a revision stores it under: portfolio.yml.
+   */
+  readonly name?: string;
 }
 
 export interface UnitInput {
@@ -81,8 +93,21 @@ export interface Rendering {
  * from a valid unit.
  */
 export interface UnitChecks {
-  /** validatePublicationUnit with the build's context (#4, #5). */
+  /**
+   * validatePublicationUnit with the build's context (#4, #5), as a publish
+   * checks a unit: what can go live. An unregistered variant blocks it.
+   */
   validate(pair: {
+    readonly portfolio: SourceDocument;
+    readonly site: SourceDocument;
+  }): PublicationUnitResult;
+  /**
+   * The same, as serving checks a revision that is live already (#5's live
+   * validators): an unregistered variant or stale controls only warn, since
+   * the fallback composition and the controls' defaults render. Without
+   * it, `validate` serves for both.
+   */
+  validateLive?(pair: {
     readonly portfolio: SourceDocument;
     readonly site: SourceDocument;
   }): PublicationUnitResult;
@@ -155,7 +180,7 @@ export const documentFileName = (name: DocumentName, format: DocumentFormat) =>
 const sourceOf = (name: 'portfolio' | 'site', input: DocumentInput): SourceDocument => ({
   text: input.sourceText,
   format: input.format,
-  name: documentFileName(name, input.format),
+  name: input.name ?? documentFileName(name, input.format),
 });
 
 const blocks = (diagnostic: { readonly severity: Diagnostic['severity'] }) =>

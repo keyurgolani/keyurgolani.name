@@ -55,13 +55,13 @@ function intercepted(inner: FsPort, before: (call: FsCall) => void): FsPort {
       before({ op: 'fsync', point, target });
       return inner.fsync(target, point);
     },
-    async rename(from, to, point) {
+    async rename(from, to, point, pass) {
       before({ op: 'rename', point, target: to, from });
-      return inner.rename(from, to, point);
+      return inner.rename(from, to, point, pass);
     },
-    async link(existing, created, point) {
+    async link(existing, created, point, pass) {
       before({ op: 'link', point, target: created, from: existing });
-      return inner.link(existing, created, point);
+      return inner.link(existing, created, point, pass);
     },
     async remove(target, point) {
       before({ op: 'remove', point, target });

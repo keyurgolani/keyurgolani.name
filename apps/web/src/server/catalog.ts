@@ -1,15 +1,8 @@
 import 'server-only';
-import type { LiveRevision } from './catalog-port';
-import { getDeploymentState, NOT_LOADED } from './config-store';
+
+// The catalog, as every page and metadata route reads it (#1, item 3): the
+// live revision register() built a CatalogReader for, once per request
+// (live-revision.ts), and the port's types.
 
 export type { CatalogReader, LiveRevision, PublicationUnit } from './catalog-port';
-
-/**
- * The live revision. Every page and metadata route reads the catalog through
- * here, from the adapter register() built at startup.
- */
-export function getLive(): Promise<LiveRevision> {
-  const state = getDeploymentState();
-  if (!state) return Promise.reject(new Error(NOT_LOADED));
-  return state.catalog.getLive();
-}
+export { getLive } from './live-revision';

@@ -1,4 +1,5 @@
 import 'server-only';
+import type { RenderDrift, Rendering, UnitChecks } from '@portfolio/core';
 import type { AppearanceCatalog, ContentExtension, UnitValidator } from '@portfolio/schema';
 import type { PairFiles } from '@portfolio/schema/node';
 import { compose, type AuthProviderFactory } from './composition';
@@ -27,6 +28,12 @@ export interface StartupInput {
   readonly readFile?: (file: string) => string;
   /** Defaults to the providers the build registers; tests pass doubles. */
   readonly authProviders?: readonly AuthProviderFactory[];
+  /** The build's checks on a publication unit (#3), on the deployment's origin. */
+  readonly unitChecks?: (origin: string) => UnitChecks;
+  /** Where a live manifest's rendering differs from the build's (#3). */
+  readonly renderDrift?: (rendering: Rendering) => readonly RenderDrift[];
+  /** Under `next dev`, owner's data directory when PORTFOLIO_DATA_DIR is unset (#3). */
+  readonly devDataDir?: string;
 }
 
 export type StartupResult =
@@ -41,7 +48,11 @@ export type StartupResult =
   | { readonly ok: false; readonly profile?: Profile; readonly issues: ConfigIssue[] };
 
 export async function runStartup(input: StartupInput): Promise<StartupResult> {
-  const read = readDeploymentConfig(input.env, { cwd: input.cwd, readFile: input.readFile });
+  const read = readDeploymentConfig(input.env, {
+    cwd: input.cwd,
+    readFile: input.readFile,
+    ...(input.devDataDir ? { devDataDir: input.devDataDir } : {}),
+  });
   if (!read.ok) return read;
   const { config } = read;
   const composed = await compose({
@@ -52,6 +63,8 @@ export async function runStartup(input: StartupInput): Promise<StartupResult> {
     validators: input.validators,
     report: input.report,
     authProviders: input.authProviders,
+    unitChecks: input.unitChecks,
+    renderDrift: input.renderDrift,
   });
   const issues = [...read.issues, ...composed.issues];
   return composed.ok

@@ -3,7 +3,7 @@ import path from 'node:path';
 import { ensurePrivateDir, writePrivateFile } from '../data/layout.mjs';
 import { recordOwnerModule } from '../load-trace';
 import { isDraftId, isRevisionId, type DraftId, type RevisionId } from '../store/layout';
-import type { DocumentInput, UnitInput } from '../store/unit';
+import type { DocumentInput, UnitInput } from '../catalog/unit';
 import { isGrantDigest } from './token';
 
 // The GrantStore port (#7, Slice 2), with a memory adapter for tests and the

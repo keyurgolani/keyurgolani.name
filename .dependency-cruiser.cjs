@@ -145,8 +145,9 @@ module.exports = {
       comment:
         'Owner code loads only through the composition root, so demo and read-only never ' +
         'evaluate it (#1, item 14). All of @portfolio/core is owner code (#2), and its modules ' +
-        'import each other. The owner CLI, apps/web/bin/owner.mjs, runs on its own and imports ' +
-        'the PHC module by path. Tests may import it.',
+        'import each other, except its public entry, src/index.ts, and src/catalog/, which ' +
+        'every profile loads (#3, item 19). The owner CLI, apps/web/bin/owner.mjs, runs on its ' +
+        'own and imports the PHC module by path. Tests may import it.',
       from: {
         pathNot: [
           '^apps/web/src/server/(owner/|composition\\.ts$)',
@@ -155,17 +156,28 @@ module.exports = {
           '\\.test\\.(?:tsx?|mjs)$',
         ],
       },
-      to: { path: ['^apps/web/src/server/owner/', '^packages/core/'] },
+      to: { path: ['^apps/web/src/server/owner/', '^packages/core/src/(?!index\\.ts$|catalog/)'] },
+    },
+    {
+      name: 'core-public-entry-imports-no-owner-code',
+      severity: 'error',
+      comment:
+        "@portfolio/core's public entry and src/catalog/ are what read-only and demo load " +
+        "(#3, item 19): read-only's SourceCatalogReader and the publication unit. They import " +
+        'no owner module of the package, so loading them puts nothing in the owner load trace.',
+      from: { path: '^packages/core/src/(?:index\\.ts$|catalog/)', pathNot: '\\.test\\.ts$' },
+      to: { path: '^packages/core/src/(?!index\\.ts$|catalog/)' },
     },
     {
       name: 'composition-loads-owner-code-only-through-import',
       severity: 'error',
       comment:
         'startup.ts imports the composition root in every profile, so the root reaches owner ' +
-        'code only through import() in its owner branch, never a static or type import (#1, item 14).',
+        'code only through import() in its owner branch, never a static or type import (#1, item 14). ' +
+        "@portfolio/core's public entry is no owner code.",
       from: { path: '^apps/web/src/server/composition\\.ts$' },
       to: {
-        path: ['^apps/web/src/server/owner/', '^packages/core/'],
+        path: ['^apps/web/src/server/owner/', '^packages/core/src/(?!index\\.ts$|catalog/)'],
         dependencyTypesNot: ['dynamic-import'],
       },
     },
@@ -300,9 +312,15 @@ module.exports = {
       severity: 'error',
       comment:
         '@portfolio/schema/node reads the pair from disk (#4, item 5), so only server code, ' +
-        'the config command, and tests import it. The validator it wraps stays browser-safe.',
+        "the config command, read-only's SourceCatalogReader in @portfolio/core (#3), and " +
+        'tests import it. The validator it wraps stays browser-safe.',
       from: {
-        pathNot: ['^apps/web/src/server/', '^apps/web/scripts/', '\\.test\\.(?:tsx?|mjs)$'],
+        pathNot: [
+          '^apps/web/src/server/',
+          '^apps/web/scripts/',
+          '^packages/core/src/catalog/',
+          '\\.test\\.(?:tsx?|mjs)$',
+        ],
       },
       to: { path: '^packages/schema/src/node\\.ts$' },
     },
@@ -314,8 +332,22 @@ module.exports = {
         'loading the registry never loads owner code (#1, item 10).',
       from: { path: '^apps/web/src/server/operations\\.ts$' },
       to: {
-        pathNot: ['^apps/web/src/server/capabilities\\.ts$', '^node_modules/(\\.pnpm/zod@|zod/)'],
+        pathNot: [
+          '^apps/web/src/server/capabilities\\.ts$',
+          // #3's store entries' schemas, data like the rest.
+          '^apps/web/src/server/store-schemas\\.ts$',
+          '^node_modules/(\\.pnpm/zod@|zod/)',
+        ],
       },
+    },
+    {
+      name: 'store-schemas-are-data',
+      severity: 'error',
+      comment:
+        "The store entries' schemas load with the registry in every profile, so they import " +
+        'zod and nothing else (#3, item 22).',
+      from: { path: '^apps/web/src/server/store-schemas\\.ts$' },
+      to: { pathNot: ['^node_modules/(\\.pnpm/zod@|zod/)'] },
     },
   ],
   options: {

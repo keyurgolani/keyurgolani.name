@@ -10,7 +10,7 @@ import type { RevisionId } from './layout';
 import { readLive } from './pointer';
 import { readManifest } from './revisions';
 import type { Store } from './store';
-import { checkUnit } from './unit';
+import { checkUnit } from '../catalog/unit';
 import type { ChildTask, Step, StepResult } from './test-support/child';
 import {
   contentVariant,

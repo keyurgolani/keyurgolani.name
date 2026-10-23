@@ -1,5 +1,6 @@
 import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
+import { AsyncResource } from 'node:async_hooks';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -15,9 +16,12 @@ import {
 import {
   assertSessionHeld,
   browserFamily,
+  COMMIT_TIMEOUT_MS,
   createSessions,
+  enterCommitPoint,
   isSessionHeld,
   MAX_SESSIONS,
+  SessionReentryError,
   slides,
   type Activity,
   type Issued,
@@ -705,12 +709,14 @@ test("holding runs a commit under the session's lock: an ending asked for meanwh
   let hold: unknown;
   const order: string[] = [];
   let ending: Promise<boolean> | undefined;
+  // The logout comes from outside the commit, as another request's does.
+  const elsewhere = AsyncResource.bind((ask: () => Promise<boolean>) => ask());
   const holding = await sessions.holding(token, async (proof, current) => {
     hold = proof;
     assert.equal(current.digest, record.digest);
     assert.equal(isSessionHeld(proof), true);
     assert.equal(proof.sessionRef, sessionRef(record.digest));
-    ending = sessions.end(record.digest, 'logout').then((ended) => {
+    ending = elsewhere(() => sessions.end(record.digest, 'logout')).then((ended) => {
       order.push('logout');
       return ended;
     });
@@ -774,4 +780,118 @@ test('a commit that throws lets go of the session and of its hold', async () => 
   );
   assert.equal(isSessionHeld(hold), false);
   assert.equal(await sessions.end(record.digest, 'logout'), true);
+});
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** A promise and the function that resolves it. */
+function deferred() {
+  let resolve!: () => void;
+  const promise = new Promise<void>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
+/** `promise`'s outcome, or a failure once `ms` pass without one: a hang fails the test. */
+async function settlesWithin<T>(promise: Promise<T>, ms: number, what: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${what} waited on itself`)), ms);
+  });
+  try {
+    return await Promise.race([promise, late]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+test("a commit that asks for its own session's lock fails at once instead of waiting on itself", async () => {
+  const { sessions, time } = setup();
+  const { token, record } = await sessions.issue({ uaFamily: 'firefox' });
+  const holding = await settlesWithin(
+    sessions.holding(token, async () => {
+      await assert.rejects(sessions.end(record.digest, 'logout'), SessionReentryError);
+      await assert.rejects(sessions.resolve(token), SessionReentryError);
+      await assert.rejects(sessions.touch(record, COMMAND), SessionReentryError);
+      // A sign-in that replaces this very session.
+      await assert.rejects(
+        sessions.issue({ uaFamily: 'firefox', replacing: token }),
+        SessionReentryError,
+      );
+      // A list that finds the held session past its limit, as when it
+      // expires mid-commit, would drop it under the lock the commit holds.
+      time.advance(61 * MINUTE);
+      await assert.rejects(sessions.list(), SessionReentryError);
+      return 'done';
+    }),
+    2_000,
+    'the commit',
+  );
+  assert.equal(holding.status === 'valid' && holding.value, 'done');
+  // Outside the commit, the same calls go through: the expired session goes.
+  assert.deepEqual(await settlesWithin(sessions.list(), 2_000, 'the list'), []);
+  assert.equal(await sessions.end(record.digest, 'logout'), false);
+});
+
+test('a commit that runs out of time loses its hold and the lock, and can no longer reach its commit point', async () => {
+  assert.equal(COMMIT_TIMEOUT_MS, 10_000);
+  const { sessions } = setup({ commitTimeoutMs: 30 });
+  const { token, record } = await sessions.issue({ uaFamily: 'firefox' });
+  const order: string[] = [];
+  const started = deferred();
+  const gate = deferred();
+  let hold: unknown;
+  const holding = sessions.holding(token, async (proof) => {
+    hold = proof;
+    started.resolve();
+    await gate.promise;
+    order.push('commit');
+    return enterCommitPoint(proof);
+  });
+  await started.promise;
+  assert.equal(isSessionHeld(hold), true);
+  // The logout queues behind the commit, and gets the lock once the
+  // commit's time runs out, while the commit is still waiting.
+  const logout = sessions.end(record.digest, 'logout').then((existed) => {
+    order.push('logout');
+    return existed;
+  });
+  assert.equal(await settlesWithin(logout, 2_000, 'the logout'), true);
+  assert.equal(isSessionHeld(hold), false);
+  assert.throws(() => assertSessionHeld(hold));
+  gate.resolve();
+  const result = await holding;
+  // Too late for its commit point: the commit must not commit.
+  assert.equal(result.status === 'valid' && result.value, false);
+  assert.deepEqual(order, ['logout', 'commit']);
+  assert.equal(enterCommitPoint(hold), false);
+});
+
+test('a commit past its commit point keeps the lock past its time, so a logout lands only after it', async () => {
+  const { sessions } = setup({ commitTimeoutMs: 20 });
+  const { token, record } = await sessions.issue({ uaFamily: 'firefox' });
+  const order: string[] = [];
+  const started = deferred();
+  let hold: unknown;
+  const holding = sessions.holding(token, async (proof) => {
+    hold = proof;
+    assert.equal(enterCommitPoint(proof), true);
+    started.resolve();
+    // Well past the 20 ms.
+    await sleep(80);
+    assert.equal(isSessionHeld(proof), true);
+    order.push('commit');
+    return 'committed';
+  });
+  await started.promise;
+  const logout = sessions.end(record.digest, 'logout').then((existed) => {
+    order.push('logout');
+    return existed;
+  });
+  const result = await holding;
+  assert.equal(result.status === 'valid' && result.value, 'committed');
+  assert.equal(await logout, true);
+  assert.deepEqual(order, ['commit', 'logout']);
+  assert.equal(isSessionHeld(hold), false);
 });

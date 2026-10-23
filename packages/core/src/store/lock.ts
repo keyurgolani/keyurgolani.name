@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { hostname } from 'node:os';
+import path from 'node:path';
 import { recordOwnerModule } from '../load-trace';
 import { sleep, StoreError, storageError, type StoreLog } from './common';
 import type { FsPort } from './fs-port';
@@ -68,7 +69,8 @@ const held = (): Set<string> => ((globalThis as Holder)[HELD] ??= new Set());
 
 // The data directories whose server claim another server took from this
 // process (server-claim.ts), on globalThis for the same reason: every lock
-// over one refuses, so this server stops writing there.
+// over one refuses with data_dir_in_use, but a new claim's own, so this
+// server writes nothing more there until a claim of its own stands again.
 const CLAIMS_LOST = Symbol.for('keyurgolani.portfolio.store-claims-lost');
 type LostHolder = typeof globalThis & { [CLAIMS_LOST]?: Set<string> };
 const claimsLost = (): Set<string> => ((globalThis as LostHolder)[CLAIMS_LOST] ??= new Set());
@@ -217,10 +219,22 @@ export interface LockOptions {
   readonly log?: StoreLog;
 }
 
+export interface AcquireOptions {
+  /**
+   * The server claim's own: taken even while this process's claim is lost,
+   * so a new claim can find out whether the data directory is free again.
+   */
+  readonly claiming?: boolean;
+}
+
 export interface PublicationLock {
-  acquire(holder: string): Promise<HeldLock>;
+  acquire(holder: string, options?: AcquireOptions): Promise<HeldLock>;
   /** Runs `body` holding the lock, touching it every 30 s, and releases it however `body` ends. */
-  withLock<T>(holder: string, body: (lock: HeldLock) => Promise<T>): Promise<T>;
+  withLock<T>(
+    holder: string,
+    body: (lock: HeldLock) => Promise<T>,
+    options?: AcquireOptions,
+  ): Promise<T>;
   /**
    * Throws LockLostError unless publication/lock is still the one this
    * lock's holder took. A commit calls it just before the rename that makes
@@ -249,11 +263,22 @@ export function publicationLock({
   // acquirers in this process take turns.
   let current: LockRecord | null = null;
 
-  /** The file's text and its age, or null when it isn't there. */
+  /**
+   * The file's text and its age, or null when it isn't there. Anything at
+   * its name that no holder writes, such as a link or a FIFO, is
+   * storage_unavailable: no wait ends it, and a FIFO's read would wait for
+   * a writer.
+   */
   async function read(file = lockFile): Promise<Found | null> {
     try {
-      const stats = await fs.stat(file);
+      const stats = await fs.lstat(file);
       if (!stats) return null;
+      if (!stats.isFile) {
+        throw new StoreError(
+          'storage_unavailable',
+          `${path.relative(paths.root, file)} isn't a regular file.`,
+        );
+      }
       return { text: (await fs.readFile(file)).toString('utf8'), mtimeMs: stats.mtimeMs };
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
@@ -380,9 +405,15 @@ export function publicationLock({
     return false;
   }
 
-  async function acquire(holder: string): Promise<HeldLock> {
-    if (claimsLost().has(paths.root)) {
-      throw new StoreError('storage_unavailable', 'Another server holds this data directory now.');
+  async function acquire(
+    holder: string,
+    { claiming = false }: AcquireOptions = {},
+  ): Promise<HeldLock> {
+    if (!claiming && claimsLost().has(paths.root)) {
+      throw new StoreError(
+        'data_dir_in_use',
+        'Another owner server holds this data directory now. Stop it, or restart this one.',
+      );
     }
     const { record, text } = newRecord(holder);
     const deadline = now() + waitMs;
@@ -402,9 +433,10 @@ export function publicationLock({
           held().delete(record.nonce);
           if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
         }
+        // A link or a FIFO at the name fails here, rather than spin or wait.
         const found = await read();
         if (found && stale(found) && (await breakStale(found))) continue;
-        if (!found) continue;
+        // Held, or let go just now: try again within the wait.
         if (now() >= deadline) {
           throw new StoreError('lock_timeout', 'Another publication is in progress.');
         }
@@ -442,8 +474,8 @@ export function publicationLock({
 
   return {
     acquire,
-    async withLock(holder, body) {
-      const lock = await acquire(holder);
+    async withLock(holder, body, options) {
+      const lock = await acquire(holder, options);
       const toucher = setInterval(() => {
         lock.touch().catch(() => {});
       }, LOCK_TOUCH_MS);

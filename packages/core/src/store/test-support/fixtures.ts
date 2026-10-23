@@ -1,6 +1,16 @@
 // For the store's tests: #4's fixture pairs as unit input, a UnitChecks
 // built on the real composite validator, and temporary data directories.
-import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import {
+  closeSync,
+  constants,
+  mkdtempSync,
+  openSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -9,6 +19,7 @@ import {
   validatePublicationUnit,
   type DocumentFormat,
   type ParsedPair,
+  type UnitValidator,
 } from '@portfolio/schema';
 import { memoryAuditSink } from '../../audit/sink';
 import { memorySessionStore } from '../../auth/session-store';
@@ -17,7 +28,7 @@ import { preflight } from '../preflight';
 import type { HeldMove, PublicationOutcome, PublicationService } from '../publication';
 import { openStore, type Store, type StoreOptions } from '../store';
 import { isSha256, type Sha256 } from '../layout';
-import type { UnitChecks, UnitInput } from '../unit';
+import type { UnitChecks, UnitInput } from '../../catalog/unit';
 import { recordOwnerModule } from '../../load-trace';
 
 recordOwnerModule('core/store/test-support/fixtures');
@@ -105,11 +116,84 @@ export function testChecks(overrides: Partial<UnitChecks> = {}): UnitChecks {
   };
 }
 
+/**
+ * The checks of a build that registers only the `registered` variants, as
+ * #5's contract validators check a selection: any other is
+ * variant.unavailable, which blocks a publish (`validate`) and only warns
+ * live (`validateLive`), where the fallback composition renders. The
+ * fixture pairs select `missing-variant`.
+ */
+export function registryChecks(
+  registered: readonly string[],
+  overrides: Partial<UnitChecks> = {},
+): UnitChecks {
+  const selection = (live: boolean): UnitValidator => ({
+    id: 'test-variant-selection',
+    covers: ['site.appearance.variant'],
+    validate: (pair) =>
+      registered.includes(pair.site.appearance.variant)
+        ? { diagnostics: [] }
+        : {
+            diagnostics: [
+              {
+                code: 'variant.unavailable',
+                severity: live ? 'warning' : 'blocks-publish',
+                document: 'site',
+                pointer: '/appearance/variant',
+                message: "/appearance/variant names a variant this build doesn't register.",
+                remediation: 'Install its package and rebuild.',
+              },
+            ],
+          },
+  });
+  return testChecks({
+    validate: (pair) => validatePublicationUnit(pair, { validators: [selection(false)] }),
+    validateLive: (pair) => validatePublicationUnit(pair, { validators: [selection(true)] }),
+    ...overrides,
+  });
+}
+
 /** A new empty directory under the system temp directory, removed when the test ends. */
 export function tempDir(t: { after(fn: () => void): void }, prefix = 'store-'): string {
   const dir = mkdtempSync(path.join(tmpdir(), prefix));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   return dir;
+}
+
+/**
+ * Makes a FIFO at `file`, which nothing writes, and returns what takes it
+ * away again: a writer opens it once, which lets go a read that waits on
+ * it, and then its name goes, so no read waits on it after. Call it before
+ * the test ends: a read left waiting keeps the test's process from ending.
+ */
+export function fifoAt(file: string): () => void {
+  const made = spawnSync('mkfifo', [file], { encoding: 'utf8' });
+  if (made.status !== 0) throw new Error(`mkfifo: ${made.stderr}`);
+  return () => {
+    let writer: number | undefined;
+    try {
+      writer = openSync(file, constants.O_WRONLY | constants.O_NONBLOCK);
+    } catch {
+      // ENXIO: no read waits on it.
+    }
+    rmSync(file, { force: true });
+    if (writer !== undefined) closeSync(writer);
+  };
+}
+
+/** What `run` settles to, or a failure once `ms` pass first, so a wait fails a test rather than hangs it. */
+export async function within<T>(ms: number, run: Promise<T>): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    return await Promise.race([
+      run,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`Still waiting after ${ms} ms.`)), ms);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /** A store over a new data directory that passed preflight. */
@@ -128,11 +212,12 @@ export async function newStore(
  * would, and returns the revision ID.
  */
 /** An owner session in memory, as #2 issues one at sign-in. */
-export async function ownerSession() {
+export async function ownerSession(options: { readonly commitTimeoutMs?: number } = {}) {
   const sessions = createSessions({
     store: memorySessionStore(),
     audit: memoryAuditSink(),
     fingerprint: 'test-fingerprint',
+    ...options,
   });
   const { token, record } = await sessions.issue({ uaFamily: 'firefox' });
   /** The store's holdSession(), the way a Studio command passes commitWithSession(). */

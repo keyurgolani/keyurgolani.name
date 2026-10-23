@@ -17,7 +17,8 @@ import {
   type HeldLock,
 } from './lock';
 import { preflight } from './preflight';
-import { tempDir } from './test-support/fixtures';
+import { claimServer } from './server-claim';
+import { fifoAt, tempDir, within } from './test-support/fixtures';
 
 async function lockIn(t: { after(fn: () => void): void }, waitMs = 300) {
   const dataDir = tempDir(t);
@@ -118,6 +119,73 @@ test('a waiter gives up after its wait with lock_timeout, and gets the lock once
   const next = await waiting;
   assert.equal(next.record.holder, 'publish');
   await next.release();
+});
+
+test('a link at publication/lock that leads nowhere stops an acquirer at once with storage_unavailable, and the claim with it', async (t) => {
+  const { paths } = await lockIn(t);
+  symlinkSync(path.join(paths.publication, 'nowhere'), paths.lock);
+  let links = 0;
+  const counting: FsPort = {
+    ...nodeFs,
+    async link(existing, created, point, pass) {
+      links += 1;
+      return nodeFs.link(existing, created, point, pass);
+    },
+  };
+  const lock = publicationLock({ fs: counting, paths, waitMs: 500 });
+  const refused = (error: unknown) => (error as StoreError).code === 'storage_unavailable';
+  const started = Date.now();
+  await assert.rejects(
+    lock.withLock('publish', async () => assert.fail('it never holds the lock')),
+    refused,
+  );
+  // No spin: one try at the name, and well inside the wait.
+  assert.equal(links, 1);
+  assert.ok(Date.now() - started < 500);
+  // The server's claim, as startup makes it, answers the same.
+  await assert.rejects(claimServer({ fs: counting, paths, lock }), refused);
+  assert.ok(Date.now() - started < 1_000);
+});
+
+test('a FIFO at publication/lock or its break marker is storage_unavailable at once: no read of the lock waits for a writer', async (t) => {
+  const { paths } = await lockIn(t);
+  const lock = publicationLock({ fs: nodeFs, paths, waitMs: 500 });
+  const refused = (name: string) => (error: unknown) =>
+    (error as StoreError).code === 'storage_unavailable' &&
+    (error as StoreError).message === `${name} isn't a regular file.`;
+  const release = fifoAt(paths.lock);
+  try {
+    const started = Date.now();
+    await within(
+      2_000,
+      assert.rejects(
+        lock.withLock('publish', async () => assert.fail('it never holds the lock')),
+        refused('publication/lock'),
+      ),
+    );
+    assert.ok(Date.now() - started < 500);
+    // The claim at startup, and the lock's other reads, answer the same.
+    await within(2_000, assert.rejects(claimServer({ paths, lock }), refused('publication/lock')));
+    await within(2_000, assert.rejects(lock.holder(), refused('publication/lock')));
+  } finally {
+    release();
+  }
+  // A breaker of a stale lock finds a FIFO at the break marker.
+  staleLock(paths);
+  const releaseMarker = fifoAt(paths.lockBreak);
+  try {
+    await within(
+      2_000,
+      assert.rejects(
+        lock.withLock('publish', async () => assert.fail('it never holds the lock')),
+        refused('publication/lock.break'),
+      ),
+    );
+  } finally {
+    releaseMarker();
+  }
+  // Once it's gone, the stale lock is broken and taken.
+  assert.equal(await lock.withLock('publish', async () => 'held'), 'held');
 });
 
 test('withLock releases the lock however its body ends', async (t) => {
@@ -238,9 +306,9 @@ test('acquirers in one process take turns in the order they asked, and only the 
   let links = 0;
   const counted: FsPort = {
     ...nodeFs,
-    async link(existing, created, point) {
+    async link(existing, created, point, pass) {
       if (point === 'lock.link') links += 1;
-      return nodeFs.link(existing, created, point);
+      return nodeFs.link(existing, created, point, pass);
     },
   };
   const lock = publicationLock({ fs: counted, paths, waitMs: 5_000 });
@@ -290,12 +358,12 @@ test('a breaker that finds a live lock where the stale one was puts it back, and
   // lets go and another process takes the lock, just before the breaker moves it.
   const meddling: FsPort = {
     ...nodeFs,
-    async rename(from, to, point) {
+    async rename(from, to, point, pass) {
       if (point === 'lock.break.rename' && !taken) {
         rmSync(paths.lock);
         taken = await live.acquire('publish');
       }
-      return nodeFs.rename(from, to, point);
+      return nodeFs.rename(from, to, point, pass);
     },
   };
   const breaker = publicationLock({ fs: meddling, paths: anotherSpelling(t, paths), waitMs: 300 });
@@ -327,8 +395,8 @@ test('a breaker that finds a live lock in place of the stale one once it holds t
       }
       return nodeFs.writeFile(file, data, point, options);
     },
-    async rename(from, to, point) {
-      await nodeFs.rename(from, to, point);
+    async rename(from, to, point, pass) {
+      await nodeFs.rename(from, to, point, pass);
       // Had the breaker moved the live lock aside, a third acquirer would link into the gap.
       if (point === 'lock.break.rename') {
         intruder = await third.acquire('recover').catch(() => undefined);
@@ -354,12 +422,12 @@ test('of two breakers at once, one slow, and a third acquirer, only one holds th
     let slowAside = '';
     const slow: FsPort = {
       ...nodeFs,
-      async rename(from, to, point) {
+      async rename(from, to, point, pass) {
         if (point === 'lock.break.rename' && slowAside === '') {
           await sleep(30);
           slowAside = to;
         }
-        return nodeFs.rename(from, to, point);
+        return nodeFs.rename(from, to, point, pass);
       },
       async stat(target) {
         if (target === slowAside) await sleep(40);

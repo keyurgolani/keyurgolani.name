@@ -4,7 +4,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { BUNDLED_SAMPLE_NAMES } from './catalog-documents';
+import { BUNDLED_SAMPLE_NAMES } from '../lib/sample-identity';
 import { compose, STARTUP_REQUIREMENTS, type StartupRequirement } from './composition';
 import { readDeploymentConfig, type ConfigIssue, type Env } from './config';
 import { setDeploymentState } from './config-store';
@@ -55,7 +55,10 @@ test('read-only builds its catalog adapter and loads no owner module', async (t)
   assert.equal(composed.ok, true);
   if (!composed.ok) return;
   assert.ok(Object.isFrozen(composed.state));
-  assert.equal((await composed.state.catalog.getLive()).unit.portfolio.identity.name, 'Rowan Test');
+  assert.equal(
+    (await composed.state.catalog.getLive()).unit!.portfolio.identity.name,
+    'Rowan Test',
+  );
   assert.deepEqual(loadedOwnerModules(), []);
   assert.deepEqual(composed.state.degraded, []);
   // No Studio page finds a session here (#2).
@@ -97,8 +100,8 @@ test('demo builds the bundled sample and loads no owner module', async (t) => {
   assert.ok(composed.ok, JSON.stringify(composed.issues));
   assert.ok(Object.isFrozen(composed.state));
   const live = await composed.state.catalog.getLive();
-  assert.ok(BUNDLED_SAMPLE_NAMES.includes(live.unit.portfolio.identity.name));
-  assert.match(live.revisionId, /^sample-/);
+  assert.ok(BUNDLED_SAMPLE_NAMES.includes(live.unit!.portfolio.identity.name));
+  assert.match(live.revisionId ?? '', /^sample-/);
   assert.deepEqual(loadedOwnerModules(), []);
   assert.equal(composed.state.pages, undefined);
 
@@ -135,7 +138,7 @@ test('the tagged startup rows are named requirements for #2, #3, and #4', () => 
       ['data.directory', '#2, #3', 'owner', 'fatal', 'owner check'],
       ['documents.pair', '#4', 'owner read-only', 'fatal', 'check'],
       ['documents.shape', '#3', 'owner', 'fatal', 'pending'],
-      ['revision.integrity', '#3', 'owner', 'degraded', 'pending'],
+      ['revision.integrity', '#3', 'owner', 'degraded', 'owner check'],
     ],
   );
 });

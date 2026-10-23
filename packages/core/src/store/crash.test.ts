@@ -19,7 +19,7 @@ import { test, type TestContext } from 'node:test';
 import { newRevisionId, storePaths, type DraftId, type RevisionId } from './layout';
 import { thisProcess } from './lock';
 import { openStore, type Store } from './store';
-import { checkUnit, sha256, type UnitInput } from './unit';
+import { checkUnit, sha256, type UnitInput } from '../catalog/unit';
 import type { CheckReport, ChildTask, Step } from './test-support/child';
 import { crashingFs, recordingFs, type FsCall, type PointHit } from './test-support/crash-fs';
 import {

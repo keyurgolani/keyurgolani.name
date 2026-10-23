@@ -1,13 +1,19 @@
 import 'server-only';
-import type { AppearanceCatalog, ContentExtension, UnitValidator } from '@portfolio/schema';
+import type { RenderDrift, Rendering, UnitChecks } from '@portfolio/core';
+import {
+  validatePublicationUnit,
+  type AppearanceCatalog,
+  type ContentExtension,
+  type UnitValidator,
+} from '@portfolio/schema';
 import type { PairFiles } from '@portfolio/schema/node';
 import type { Profile } from './capabilities';
-import { openDocumentsCatalog, type OpenDocumentsResult } from './catalog-documents';
-import type { CatalogReader } from './catalog-port';
+import type { CatalogReader, LiveRevision } from './catalog-port';
 import { openSampleCatalog } from './catalog-sample';
+import { openSourceCatalog, type OpenSourceCatalogResult } from './catalog-source';
 import type { ConfigIssue, DeploymentConfig } from './config';
 import { configSummary, type CatalogAdapter } from './config-summary';
-import type { DeploymentState } from './config-store';
+import { setServable, type DeploymentState } from './config-store';
 import { createDispatcher, NO_BINDINGS, type Handler, type StudioBindings } from './dispatcher';
 import { listOperations, type ConfigSummary } from './operations';
 import type { GrantSessionPort, PreviewFixture, PreviewGrantsPort } from './preview-port';
@@ -16,12 +22,14 @@ import type { StudioPages } from './studio-port';
 import { liveVariantHealth } from './variant-health';
 
 // The composition root (#1, item 14). It builds what one profile needs and
-// nothing else: read-only gets the documents adapter, demo the bundled
-// sample, and only the owner branch loads owner code, through import().
-// startup.ts imports this module in every profile, so check:deps fails any
-// import of owner code here that isn't an import(). Around that it runs the
-// named startup requirements, the hook #2, #3, and #4 implement their
-// startup checks against.
+// nothing else: read-only reads its mounted documents through
+// @portfolio/core's SourceCatalogReader, demo the bundled sample, and owner
+// the revision store through RevisionCatalogReader (#3), which serves the
+// mounted documents while the store is empty. Only the owner branch loads
+// owner code, through import(). startup.ts imports this module in every
+// profile, so check:deps fails any import of owner code here that isn't an
+// import(). Around that it runs the named startup requirements, the hook #2,
+// #3, and #4 implement their startup checks against.
 
 /**
  * What an auth provider binds into the dispatcher (#2). @portfolio/core's
@@ -86,6 +94,9 @@ export const OWNER_PASSWORD_PROVIDER: AuthProviderFactory = Object.freeze({
 /** The providers this build registers; the first one serves. */
 export const AUTH_PROVIDERS: readonly AuthProviderFactory[] = [OWNER_PASSWORD_PROVIDER];
 
+/** The mounted documents, opened as a CatalogReader, or why they can't be. */
+export type OpenDocumentsResult = OpenSourceCatalogResult;
+
 export interface RequirementContext {
   readonly config: DeploymentConfig;
   readonly authProviders: readonly AuthProviderFactory[];
@@ -96,6 +107,12 @@ export interface RequirementContext {
    * the pair is checked once.
    */
   readonly documents?: OpenDocumentsResult;
+  /**
+   * Owner only: what the owner branch made once owner code loaded, for the
+   * owner checks to share, such as #3's revision store. Owner code knows its
+   * shape; here it's opaque.
+   */
+  readonly owner?: object;
 }
 
 export type RequirementCheck = (context: RequirementContext) => Promise<readonly ConfigIssue[]>;
@@ -195,8 +212,18 @@ export const STARTUP_REQUIREMENTS: readonly StartupRequirement[] = [
   },
   // Old-shape documents with no valid revision to fall back on: #3 adds the
   // revision check for owner, on top of documents.pair.
+  // #3's Slice 3 implements this one, with the first-start import, once
+  // documents.pair turns into a drift warning for a store with a revision.
   { id: 'documents.shape', issue: '#3', profiles: ['owner'], failure: 'fatal' },
-  { id: 'revision.integrity', issue: '#3', profiles: ['owner'], failure: 'degraded' },
+  // The store's repair, then the live revision as served (#3, item 21): a
+  // damaged one serves the last known good, and owner starts degraded.
+  {
+    id: 'revision.integrity',
+    issue: '#3',
+    profiles: ['owner'],
+    failure: 'degraded',
+    load: () => import('./owner/revision-integrity').then((module) => module.check),
+  },
 ];
 
 interface Checked {
@@ -255,6 +282,15 @@ export interface CompositionInput {
    * None until #5's fixtures ship with the build; tests pass their own.
    */
   readonly previewFixtures?: (id: string) => PreviewFixture | null;
+  /**
+   * The build's checks on a publication unit (#3), on the deployment's
+   * origin: unit-checks.ts's, which register() passes, with the variant
+   * registry behind them. Without them, a unit is checked with `catalog`,
+   * `extensions`, and `validators` alone, for publish and serving alike.
+   */
+  readonly unitChecks?: (origin: string) => UnitChecks;
+  /** Where a live manifest's rendering differs from the build's (#3, item 21). */
+  readonly renderDrift?: (rendering: Rendering) => readonly RenderDrift[];
 }
 
 export type Composition =
@@ -271,7 +307,8 @@ export async function compose(input: CompositionInput): Promise<Composition> {
   const { config } = input;
   const authProviders = input.authProviders ?? AUTH_PROVIDERS;
   const requirements = input.requirements ?? STARTUP_REQUIREMENTS;
-  // Until #3, owner serves the mounted documents too.
+  // read-only serves them, and owner's empty store does until #3's Slice 3
+  // imports them at first start.
   const documents =
     config.profile === 'owner' || config.profile === 'read-only' ? openDocuments(input) : undefined;
   const context: RequirementContext = { config, authProviders, documents };
@@ -312,9 +349,24 @@ export async function compose(input: CompositionInput): Promise<Composition> {
       let issues = early.issues;
       // The one place owner code loads.
       const owner = await import('./owner/index');
-      const late = await runRequirements(requirements, context, async (row) => row.load?.());
+      // The revision store (#3), which the owner requirements check and
+      // claim, and the reader visitors are served through. While the store
+      // is empty it serves the mounted documents, as owner did before it.
+      const store = owner.ownerStore({
+        config,
+        checks: unitChecks(input),
+        documents: documents.reader,
+        ...(input.renderDrift ? { renderDrift: input.renderDrift } : {}),
+        setServable,
+      });
+      const late = await runRequirements(requirements, { ...context, owner: store }, async (row) =>
+        row.load?.(),
+      );
       issues = [...issues, ...late.issues];
-      if (failed(late.issues)) return { ok: false, issues };
+      if (failed(late.issues)) {
+        store.release();
+        return { ok: false, issues };
+      }
       // The auth.provider requirement made sure of one.
       const factory = authProviders[0];
       if (!factory) throw new Error('The owner profile has no authentication provider.');
@@ -331,16 +383,17 @@ export async function compose(input: CompositionInput): Promise<Composition> {
             ...(input.previewFixtures ? { fixtures: input.previewFixtures } : {}),
           })
         : undefined;
-      const catalog: CatalogAdapter = 'documents';
-      const reader = documents.reader;
+      const catalog: CatalogAdapter = 'revisions';
+      const reader = store.reader;
       const bindings: StudioBindings = {
         ...NO_BINDINGS,
         handlers: {
           ...owner.ownerHandlers({
             config,
             catalog,
+            store,
             variantHealth: () =>
-              liveVariantHealth(async () => (await reader.getLive()).unit.site.appearance.variant),
+              liveVariantHealth(async () => selectedVariant(await reader.getLive())),
           }),
           ...provider.handlers,
           ...previews?.handlers,
@@ -364,20 +417,43 @@ export async function compose(input: CompositionInput): Promise<Composition> {
             : NO_BINDINGS.commitWithSession(context, commit),
       };
       return built(config, {
-        reader: documents.reader,
+        reader,
         adapter: catalog,
         bindings,
         issues,
         degraded: [...early.degraded, ...late.degraded],
         pages: provider.pages,
         ...(previews ? { previews: previews.port } : {}),
+        dataDirectory: () => store.probe(),
+        release: () => store.release(),
       });
     }
   }
 }
 
+/** The variant the live revision's site selects. It throws when nothing serves. */
+function selectedVariant(live: LiveRevision): string {
+  if (!live.unit) throw new Error('Nothing is servable.');
+  return live.unit.site.appearance.variant;
+}
+
+/**
+ * The build's checks on the deployment's origin, or, without them, #4's
+ * validator with the context the input gives, for publish and serving alike.
+ */
+function unitChecks(input: CompositionInput): UnitChecks {
+  if (input.unitChecks) return input.unitChecks(input.config.origin);
+  const context = {
+    catalog: input.catalog,
+    extensions: input.extensions,
+    validators: input.validators,
+    canonicalOrigin: input.config.origin,
+  };
+  return { validate: (pair) => validatePublicationUnit(pair, context), appVersion: '' };
+}
+
 function openDocuments(input: CompositionInput): OpenDocumentsResult {
-  return openDocumentsCatalog({
+  return openSourceCatalog({
     // readDeploymentConfig requires it for owner and read-only.
     sourceDir: input.config.sourceDir ?? '',
     mode: input.config.mode,
@@ -411,6 +487,10 @@ interface Built {
   readonly pages?: StudioPages;
   /** Owner only: the preview grants proxy.ts and the preview routes check (#7). */
   readonly previews?: PreviewGrantsPort;
+  /** Owner only: readiness's data-directory probe (#3). */
+  readonly dataDirectory?: () => Promise<boolean>;
+  /** Owner only: lets the data directory's server claim go as the process exits (#3). */
+  readonly release?: () => void;
 }
 
 function built(config: DeploymentConfig, parts: Built): Composition {
@@ -423,6 +503,8 @@ function built(config: DeploymentConfig, parts: Built): Composition {
     degraded: Object.freeze([...parts.degraded]),
     ...(parts.pages ? { pages: parts.pages } : {}),
     ...(parts.previews ? { previews: parts.previews } : {}),
+    ...(parts.dataDirectory ? { dataDirectory: parts.dataDirectory } : {}),
+    ...(parts.release ? { release: parts.release } : {}),
   });
   return { ok: true, state, issues: parts.issues, summary: configSummary(config, parts.adapter) };
 }

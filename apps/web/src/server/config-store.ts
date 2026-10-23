@@ -20,6 +20,10 @@ export interface DeploymentState {
   readonly pages?: StudioPages;
   /** How grant paths are checked and what they render (#7). Only owner's composition binds it. */
   readonly previews?: PreviewGrantsPort;
+  /** Owner only: whether the data directory passes its write, sync, and rename probe (#3), at most every 30 s. */
+  readonly dataDirectory?: () => Promise<boolean>;
+  /** Owner only: lets the data directory's server claim go, at once (#3). register() runs it as the process exits. */
+  readonly release?: () => void;
 }
 
 export const NOT_LOADED =
@@ -53,10 +57,11 @@ export function setDeploymentState(state: DeploymentState | undefined): void {
 
 /**
  * Whether visitor pages can render (#5, Slice 3, item 6). It's true until
- * something says otherwise. #3's CatalogReader sets it at startup and on
- * every getLive(), false while the catalog is empty or incompatible, and
- * proxy.ts answers each visitor page with a 503 meanwhile, since a page
- * can't set its own status.
+ * something says otherwise. #3's RevisionCatalogReader sets it, through the
+ * callback the composition root passes it, each time it decides what serves:
+ * false while nothing is servable, `empty` or `incompatible`, and proxy.ts
+ * answers each visitor page with a 503 meanwhile, since a page can't set its
+ * own status, once servableAgain() says it still isn't.
  */
 export function isServable(): boolean {
   return (globalThis as Holder)[SERVABLE] ?? true;
@@ -65,4 +70,38 @@ export function isServable(): boolean {
 /** Called by #3's CatalogReader, and by tests. */
 export function setServable(servable: boolean): void {
   (globalThis as Holder)[SERVABLE] = servable;
+}
+
+/** How long proxy.ts waits on the catalog before it answers 503 all the same. */
+export const RECHECK_MS = 1_000;
+
+/** The catalog read servableAgain() started, which every request meanwhile waits on. */
+let asking: Promise<boolean> | undefined;
+
+/**
+ * Whether visitor pages can render once the catalog has read again, for
+ * proxy.ts while isServable() says no: #3's reader sets the flag on each
+ * read, so a publish from another process shows on the next one. One read
+ * at a time, and false, never a throw, when it fails or takes longer than
+ * RECHECK_MS.
+ */
+export function servableAgain(): Promise<boolean> {
+  const catalog = getDeploymentState()?.catalog;
+  if (!catalog) return Promise.resolve(isServable());
+  asking ??= (async () => catalog.getLive())()
+    .then(
+      () => isServable(),
+      () => false,
+    )
+    .finally(() => {
+      asking = undefined;
+    });
+  const read = asking;
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(false), RECHECK_MS);
+    void read.then((servable) => {
+      clearTimeout(timer);
+      resolve(servable);
+    });
+  });
 }

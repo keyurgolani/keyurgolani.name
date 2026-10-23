@@ -64,7 +64,7 @@ test('read-only starts from a valid source directory', async (t) => {
   assert.ok(Object.isFrozen(result.state));
   assert.equal(result.state.config.origin, 'https://jane.test');
   const live = await result.state.catalog.getLive();
-  assert.equal(live.unit.portfolio.identity.name, 'Rowan Test');
+  assert.equal(live.unit!.portfolio.identity.name, 'Rowan Test');
 });
 
 test('owner refuses to start: no authentication provider is registered', async (t) => {
@@ -167,7 +167,7 @@ test('demo starts on the bundled sample, and never reads a source directory', as
   if (!result.ok) return;
   assert.equal(result.profile, 'demo');
   const live = await result.state.catalog.getLive();
-  assert.equal(live.unit.portfolio.identity.name, 'Anamika Devi');
+  assert.equal(live.unit!.portfolio.identity.name, 'Anamika Devi');
 
   const withSource = await start({
     ...PRODUCTION,
@@ -251,5 +251,5 @@ test('the store hands the frozen state to getLive() and the config readers', asy
   if (!result.ok) return;
   setDeploymentState(result.state);
   assert.equal(requireDeploymentConfig(), result.state.config);
-  assert.equal((await getLive()).unit.portfolio.identity.name, 'Rowan Test');
+  assert.equal((await getLive()).unit!.portfolio.identity.name, 'Rowan Test');
 });

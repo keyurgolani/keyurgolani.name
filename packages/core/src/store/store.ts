@@ -8,7 +8,7 @@ import { storePaths, type StorePaths } from './layout';
 import { publicationLock, type PublicationLock } from './lock';
 import { filesystemPublicationService, type PublicationService } from './publication';
 import { filesystemRevisionStore, type RevisionStore } from './revisions';
-import type { UnitChecks } from './unit';
+import type { UnitChecks } from '../catalog/unit';
 
 // The revision store (#3) over one data directory: the DraftStore,
 // RevisionStore, PublicationService, and AssetStore, sharing its paths and

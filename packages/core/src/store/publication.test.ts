@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { AsyncResource } from 'node:async_hooks';
+import { chmodSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { PORTFOLIO_SCHEMA_VERSION } from '@portfolio/schema';
@@ -7,12 +8,14 @@ import { memoryAuditSink } from '../audit/sink';
 import type { SessionHold } from '../auth/sessions';
 import { onStoreEvent, type StoreError, type StoreEvent, type StoreLogEntry } from './common';
 import { nodeFs, type FsPort } from './fs-port';
-import { newRevisionId, type RevisionId } from './layout';
+import { isRevisionId, newRevisionId, type RevisionId } from './layout';
 import { readEvents, readLive } from './pointer';
+import { preflight } from './preflight';
 import { IDEMPOTENCY_WINDOW, type HeldMove } from './publication';
-import { manifestFor, readManifest, readRevision, writeRevision } from './revisions';
+import { writeRevision } from './commit';
+import { manifestFor, readManifest, readRevision } from './revisions';
 import { openStore, type Store } from './store';
-import { checkUnit, sha256 } from './unit';
+import { checkUnit, sha256 } from '../catalog/unit';
 import {
   commentedVariant,
   contentVariant,
@@ -24,8 +27,11 @@ import {
   ownerSession,
   pairInput,
   publishInput,
+  registryChecks,
+  tempDir,
   testChecks,
 } from './test-support/fixtures';
+import { runChild } from './test-support/spawn';
 
 async function draftOf(store: Store, input = pairInput('engineering')) {
   const working = await store.drafts.getWorking();
@@ -356,6 +362,16 @@ test("a key on another request's event is idempotency_conflict, and nothing move
         { expectedLiveRevisionId: first, idempotencyKey: 'rollback-1' },
         'owner',
       ),
+    'a publish of the same draft version, from another live revision': () =>
+      owned(store).publish(
+        {
+          draftId: draft.draftId,
+          draftVersion: draft.version,
+          expectedLiveRevisionId: second,
+          idempotencyKey: 'publish-1',
+        },
+        'owner',
+      ),
     "a rollback with a publish's key": () =>
       owned(store).rollback(
         { targetRevisionId: second, expectedLiveRevisionId: first, idempotencyKey: 'publish-1' },
@@ -377,6 +393,62 @@ test("a key on another request's event is idempotency_conflict, and nothing move
     'owner',
   );
   assert.equal(own.kind, 'committed');
+});
+
+test("an event file that can't be read fails history, the key lookup, and repair with storage_unavailable, and nothing replaces it; the walk for the last known good passes over it", async (t) => {
+  const store = await newStore(t);
+  const first = await publishInput(store, pairInput('engineering'));
+  const draft = await draftOf(store, contentVariant(pairInput('engineering'), 'two'));
+  const input = {
+    draftId: draft.draftId,
+    draftVersion: draft.version,
+    expectedLiveRevisionId: first,
+    idempotencyKey: 'publish-two',
+  };
+  assert.equal((await owned(store).publish(input, 'owner')).kind, 'committed');
+  const third = await publishInput(store, contentVariant(pairInput('engineering'), 'three'));
+  const unavailable = (error: unknown) => (error as StoreError).code === 'storage_unavailable';
+  // seq 2's own file, which EACCES keeps from being read, as a restore can.
+  const kept = store.paths.event(2);
+  chmodSync(kept, 0o000);
+  t.after(() => {
+    try {
+      chmodSync(kept, 0o600);
+    } catch {
+      // Gone with the store.
+    }
+  });
+  await assert.rejects(store.publication.history(), unavailable);
+  await assert.rejects(store.publication.history({ offset: 0, limit: 50 }), unavailable);
+  await assert.rejects(store.publication.revisions(), unavailable);
+  // The retry's key is on seq 2: the lookup fails rather than miss it.
+  await assert.rejects(owned(store).publish(input, 'owner'), unavailable);
+
+  // The walk for the last known good passes over seq 2, to seq 1.
+  writeFileSync(path.join(store.paths.revision(third), 'documents', 'portfolio.yml'), '# no\n');
+  assert.equal(await store.publication.lastKnownGood(), first);
+  assert.equal((await store.publication.status()).servingRevisionId, first);
+
+  // Repair never replaces an event file at the live seq it can't read.
+  chmodSync(kept, 0o600);
+  const live = store.paths.event(3);
+  const before = statSync(live).ino;
+  chmodSync(live, 0o000);
+  t.after(() => {
+    try {
+      chmodSync(live, 0o600);
+    } catch {
+      // Gone with the store.
+    }
+  });
+  await assert.rejects(store.publication.repair(), unavailable);
+  assert.equal(statSync(live).ino, before);
+  chmodSync(live, 0o600);
+  assert.equal((await store.publication.repair()).eventWritten, false);
+  assert.deepEqual(
+    (await store.publication.history()).map((event) => event.seq),
+    [1, 2, 3],
+  );
 });
 
 test('rollback moves the pointer to an existing revision through the same commit point, keeps the replaced one, and leaves every draft unchanged', async (t) => {
@@ -781,17 +853,19 @@ test('a publish whose session ends before the pointer moves leaves the live revi
   const held = await ownerSession();
   const order: string[] = [];
   let logout: Promise<boolean> | undefined;
+  // The logout comes from outside the move, as another request's does.
+  const elsewhere = AsyncResource.bind((ask: () => Promise<boolean>) => ask());
   const watching: FsPort = {
     ...nodeFs,
-    async rename(from, to, point) {
+    async rename(from, to, point, pass) {
       if (point === 'publish.live.rename') {
-        logout = held.sessions.end(held.digest, 'logout').then((existed) => {
+        logout = elsewhere(() => held.sessions.end(held.digest, 'logout')).then((existed) => {
           order.push('logout');
           return existed;
         });
         await new Promise((resolve) => setTimeout(resolve, 20));
       }
-      await nodeFs.rename(from, to, point);
+      await nodeFs.rename(from, to, point, pass);
       if (point === 'publish.live.rename') order.push('moved');
     },
   };
@@ -803,6 +877,158 @@ test('a publish whose session ends before the pointer moves leaves the live revi
   assert.equal(await logout, true);
   assert.deepEqual(order, ['moved', 'logout']);
   assert.notEqual((await readLive(nodeFs, store.paths))?.revisionId, first);
+});
+
+test('an uninstalled variant on the live revision serves it as live, and a rollback to one is revision_incompatible', async (t) => {
+  const dataDir = tempDir(t);
+  // Published while the build registered the variant the fixture pairs select.
+  const before = await newStore(t, { dataDir, checks: registryChecks(['missing-variant']) });
+  const first = await publishInput(before, pairInput('engineering'));
+  const second = await publishInput(before, contentVariant(pairInput('engineering'), 'two'));
+  assert.equal(
+    (await before.publication.revisions()).every((summary) => summary.compatible),
+    true,
+  );
+
+  // A later build no longer registers it: the live revision still serves,
+  // on the fallback composition, and is its own last known good.
+  const after = openStore({ dataDir, checks: registryChecks([]) });
+  const status = await after.publication.status();
+  assert.deepEqual(
+    [status.state, status.liveRevisionId, status.servingRevisionId, status.reason],
+    ['live', second, second, undefined],
+  );
+  assert.equal(await after.publication.lastKnownGood(), second);
+  assert.equal((await after.revisions.health(second, 'serve')).state, 'ok');
+  assert.equal((await after.revisions.health(second, 'publish')).state, 'incompatible');
+
+  // Nothing with it can be made live again, though.
+  const rollback = await owned(after).rollback(
+    { targetRevisionId: first, expectedLiveRevisionId: second },
+    'owner',
+  );
+  assert.equal(rollback.kind, 'rejected');
+  if (rollback.kind !== 'rejected') return;
+  assert.deepEqual(
+    [rollback.code, rollback.reason, rollback.command],
+    ['revision_incompatible', 'variant.unavailable', `rollback --to ${first}`],
+  );
+  assert.deepEqual(
+    (await after.publication.revisions()).map((summary) => [
+      summary.revisionId,
+      summary.compatible,
+      summary.reason,
+    ]),
+    [
+      [second, false, 'incompatible:variant.unavailable'],
+      [first, false, 'incompatible:variant.unavailable'],
+    ],
+  );
+  assert.equal((await readLive(nodeFs, after.paths))?.revisionId, second);
+});
+
+/** A promise and the function that resolves it. */
+function deferred() {
+  let resolve!: () => void;
+  const promise = new Promise<void>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
+test('a publish whose session hold runs out of time before its commit point moves nothing, and the lock goes to a logout', async (t) => {
+  const store = await newStore(t);
+  const first = await publishInput(store, pairInput('engineering'));
+  const draft = await draftOf(store, contentVariant(pairInput('engineering'), 'two'));
+  const events = await readEvents(nodeFs, store.paths);
+  const held = await ownerSession({ commitTimeoutMs: 30 });
+  const reached = deferred();
+  const gate = deferred();
+  const order: string[] = [];
+  // The move stalls in its sync, before the final check, past the hold's 30 ms.
+  const stalling: FsPort = {
+    ...nodeFs,
+    async fsync(target, point) {
+      if (point === 'publish.live.fsync') {
+        reached.resolve();
+        await gate.promise;
+      }
+      return nodeFs.fsync(target, point);
+    },
+    async rename(from, to, point, pass) {
+      if (point === 'publish.live.rename') order.push('renamed');
+      return nodeFs.rename(from, to, point, pass);
+    },
+  };
+  const stalled = openStore({ dataDir: store.paths.root, checks: testChecks(), fs: stalling });
+  const publish = stalled.publication.publish(
+    { draftId: draft.draftId, draftVersion: draft.version, expectedLiveRevisionId: first },
+    'owner',
+    { holdSession: held.holdSession },
+  );
+  const failed = assert.rejects(publish, (error: Error & { code?: string }) => {
+    assert.equal(error.code, 'storage_unavailable');
+    return true;
+  });
+  await reached.promise;
+  // The logout gets the session's lock once the hold's time runs out, while
+  // the move is still stalled.
+  const logout = held.sessions.end(held.digest, 'logout').then((existed) => {
+    order.push('logout');
+    return existed;
+  });
+  assert.equal(await logout, true);
+  gate.resolve();
+  await failed;
+  assert.deepEqual(order, ['logout']);
+  assert.equal((await readLive(nodeFs, store.paths))?.revisionId, first);
+  assert.deepEqual(await readEvents(nodeFs, store.paths), events);
+  assert.equal((await store.drafts.getWorking())?.version, draft.version);
+  // The revision written for the move never went live, so it's gone again.
+  assert.deepEqual(await nodeFs.readdir(store.paths.revisions), [first]);
+});
+
+test('a logout queued behind a commit runs after it, never between its final check and the rename, even past the hold time', async (t) => {
+  const store = await newStore(t);
+  const first = await publishInput(store, pairInput('engineering'));
+  const draft = await draftOf(store, contentVariant(pairInput('engineering'), 'two'));
+  // Long enough to reach the final check on a loaded machine; the rename
+  // then outlasts the whole hold, however long that took.
+  const HOLD_MS = 1_000;
+  const held = await ownerSession({ commitTimeoutMs: HOLD_MS });
+  const order: string[] = [];
+  let logout: Promise<boolean> | undefined;
+  // The logout comes from outside the move, as another request's does.
+  const elsewhere = AsyncResource.bind((ask: () => Promise<boolean>) => ask());
+  const slow: FsPort = {
+    ...nodeFs,
+    async rename(from, to, point, pass) {
+      if (point === 'publish.live.rename') {
+        // Past the final check: the logout queues, and the rename takes
+        // longer than the hold.
+        logout = elsewhere(() => held.sessions.end(held.digest, 'logout')).then((existed) => {
+          order.push('logout');
+          return existed;
+        });
+        await new Promise((resolve) => setTimeout(resolve, HOLD_MS + 50));
+      }
+      await nodeFs.rename(from, to, point, pass);
+      if (point === 'publish.live.rename') order.push('renamed');
+    },
+  };
+  const watched = openStore({ dataDir: store.paths.root, checks: testChecks(), fs: slow });
+  const outcome = await watched.publication.publish(
+    { draftId: draft.draftId, draftVersion: draft.version, expectedLiveRevisionId: first },
+    'owner',
+    { holdSession: held.holdSession },
+  );
+  assert.equal(outcome.kind, 'committed');
+  assert.equal(await logout, true);
+  assert.deepEqual(order, ['renamed', 'logout']);
+  assert.equal(
+    (await readLive(nodeFs, store.paths))?.revisionId,
+    outcome.kind === 'committed' ? outcome.revisionId : undefined,
+  );
 });
 
 test("the owner's rollback and recover hold the session for the move too, and the operator's CLI needs none", async (t) => {
@@ -907,9 +1133,9 @@ test("what the pointer move did decides the outcome, not holdSession()'s answer"
     checks: testChecks(),
     fs: {
       ...nodeFs,
-      async rename(from, to, point) {
+      async rename(from, to, point, pass) {
         if (point === 'publish.live.rename') throw Object.assign(new Error('EIO'), { code: 'EIO' });
-        return nodeFs.rename(from, to, point);
+        return nodeFs.rename(from, to, point, pass);
       },
     },
   });
@@ -1024,9 +1250,12 @@ test('a commit whose lock was broken and retaken moves nothing and answers lock_
     draftVersion: draft.version,
     expectedLiveRevisionId: second,
   };
+  const revisions = await nodeFs.readdir(store.paths.revisions);
   const lost = await owned(breakingAt('publish.live.write')).publish(publish, 'owner');
   assert.equal(lost.kind === 'rejected' && lost.code, 'lock_lost');
   assert.equal((await store.lock.holder())?.holder, 'cli:backup');
+  // The revision it wrote stays: nothing is removed without the lock.
+  assert.equal((await nodeFs.readdir(store.paths.revisions)).length, revisions.length + 1);
   assert.ok(await store.lock.forceUnlock());
   const rollback = { targetRevisionId: first, expectedLiveRevisionId: second };
   const lostRollback = await owned(breakingAt('rollback.live.write')).rollback(rollback, 'owner');
@@ -1049,6 +1278,123 @@ test('a commit whose lock was broken and retaken moves nothing and answers lock_
   );
   // With the lock its own again, the same publish commits.
   assert.equal((await owned(store).publish(publish, 'owner')).kind, 'committed');
+});
+
+test('a repair or a publish that read live.json before another holder took the lock moves no committed event aside', async (t) => {
+  const logs: StoreLogEntry[] = [];
+  const log = (entry: StoreLogEntry) => logs.push(entry);
+  const store = await newStore(t, { log });
+  await publishInput(store, pairInput('engineering'));
+  const second = await publishInput(store, contentVariant(pairInput('engineering'), 'two'));
+  // What a holder that stalls reads: live.json at seq 2.
+  const stale = readFileSync(store.paths.live);
+  await publishInput(store, contentVariant(pairInput('engineering'), 'three'));
+  const live = readFileSync(store.paths.live, 'utf8');
+  // It reads that pointer, and meanwhile another process breaks its lock,
+  // takes it, and commits seq 3.
+  const stalled = () => {
+    let read = false;
+    return openStore({
+      dataDir: store.paths.root,
+      checks: testChecks(),
+      log,
+      fs: {
+        ...nodeFs,
+        async readFile(file) {
+          if (file !== store.paths.live || read) return nodeFs.readFile(file);
+          read = true;
+          writeFileSync(store.paths.lock, theirLock());
+          return stale;
+        },
+      },
+    });
+  };
+  await assert.rejects(stalled().publication.repair(), (error: StoreError) => {
+    assert.equal(error.code, 'storage_unavailable');
+    return true;
+  });
+  assert.ok(await store.lock.forceUnlock());
+  const draft = await draftOf(store, contentVariant(pairInput('engineering'), 'four'));
+  const lost = await owned(stalled()).publish(
+    { draftId: draft.draftId, draftVersion: draft.version, expectedLiveRevisionId: second },
+    'owner',
+  );
+  assert.equal(lost.kind === 'rejected' && lost.code, 'lock_lost');
+  assert.ok(await store.lock.forceUnlock());
+  // Seq 3 is still in the log, and nothing was moved aside or rewritten.
+  assert.deepEqual(
+    (await readEvents(nodeFs, store.paths)).map((event) => event.seq),
+    [1, 2, 3],
+  );
+  assert.deepEqual(
+    (await nodeFs.readdir(store.paths.events)).filter((name) => name.includes('.aside-')),
+    [],
+  );
+  assert.equal(readFileSync(store.paths.live, 'utf8'), live);
+  assert.equal(logs.filter((entry) => entry.event === 'store.lock.lost').length, 2);
+});
+
+test('a publish whose session ended removes its never-live revision only while the lock is still its own', async (t) => {
+  const logs: StoreLogEntry[] = [];
+  const log = (entry: StoreLogEntry) => logs.push(entry);
+  const store = await newStore(t, { log });
+  const first = await publishInput(store, pairInput('engineering'));
+  const draft = await draftOf(store, contentVariant(pairInput('engineering'), 'two'));
+  const ended = await ownerSession();
+  await ended.sessions.end(ended.digest, 'logout');
+  // Another process takes the lock once the revision is in place.
+  const breaking = openStore({
+    dataDir: store.paths.root,
+    checks: testChecks(),
+    log,
+    fs: {
+      ...nodeFs,
+      async rename(from, to, point, pass) {
+        await nodeFs.rename(from, to, point, pass);
+        if (point === 'publish.revision.rename') writeFileSync(store.paths.lock, theirLock());
+      },
+    },
+  });
+  const outcome = await breaking.publication.publish(
+    { draftId: draft.draftId, draftVersion: draft.version, expectedLiveRevisionId: first },
+    'owner',
+    { holdSession: ended.holdSession },
+  );
+  assert.equal(outcome.kind === 'rejected' && outcome.code, 'session_ended');
+  assert.ok(await store.lock.forceUnlock());
+  // The revision it wrote stays, and says so.
+  assert.equal((await nodeFs.readdir(store.paths.revisions)).length, 2);
+  assert.ok(logs.some((entry) => entry.event === 'store.publish.unpublished_left'));
+});
+
+test('a publish whose rename lands and then reports a failure keeps the revision live.json now names', async (t) => {
+  const store = await newStore(t);
+  const first = await publishInput(store, pairInput('engineering'));
+  const draft = await draftOf(store, contentVariant(pairInput('engineering'), 'two'));
+  // The rename lands, then fails, as a disk can: the move ran, so its
+  // revision may be live, and it stays.
+  const failing = openStore({
+    dataDir: store.paths.root,
+    checks: testChecks(),
+    fs: {
+      ...nodeFs,
+      async rename(from, to, point, pass) {
+        await nodeFs.rename(from, to, point, pass);
+        if (point === 'publish.live.rename') {
+          throw Object.assign(new Error('EIO after the rename'), { code: 'EIO' });
+        }
+      },
+    },
+  });
+  await assert.rejects(
+    owned(failing).publish(
+      { draftId: draft.draftId, draftVersion: draft.version, expectedLiveRevisionId: first },
+      'owner',
+    ),
+  );
+  const pointer = await readLive(nodeFs, store.paths);
+  assert.ok(pointer && pointer.revisionId !== first);
+  assert.equal((await readRevision(nodeFs, store.paths, pointer.revisionId)).ok, true);
 });
 
 /** An event that disagrees with live.json's, as a second holder of the lock writes one. */
@@ -1138,8 +1484,8 @@ test('a commit whose event file another event took writes its own over it, movin
   // Another event lands at the new seq as the pointer moves, as a second holder's would.
   const intruding: FsPort = {
     ...nodeFs,
-    async rename(from, to, point) {
-      await nodeFs.rename(from, to, point);
+    async rename(from, to, point, pass) {
+      await nodeFs.rename(from, to, point, pass);
       if (point === 'rollback.live.rename') {
         writeFileSync(store.paths.event(3), anotherEvent(3, second, first));
       }
@@ -1165,6 +1511,71 @@ test('a commit whose event file another event took writes its own over it, movin
   assert.deepEqual(mismatches(logs), [3]);
   assert.equal(
     logs.some((entry) => entry.event === 'store.rollback.event_deferred'),
+    false,
+  );
+});
+
+/** Every file under revisions/, by its path there, with its bytes' hash. */
+const revisionBytes = (store: Store) =>
+  filesUnder(store.paths.revisions).map((file) => [
+    file,
+    sha256(readFileSync(path.join(store.paths.revisions, file))),
+  ]);
+
+test('startup repair leaves a revision that was never live as it is, and the store publishes as if new', async (t) => {
+  // A first publish killed before its pointer: its revision, and no pointer or event.
+  const store = await newStore(t);
+  const child = await runChild({
+    kind: 'run',
+    dataDir: store.paths.root,
+    crash: { point: 'publish.live.write', nth: 1 },
+    steps: [{ op: 'publishDocuments', documents: pairInput('engineering') }],
+  });
+  assert.equal(child.signal, 'SIGKILL', child.stderr);
+  const [left] = readdirSync(store.paths.revisions).filter(isRevisionId);
+  assert.ok(left);
+  const before = revisionBytes(store);
+  const reopened = openStore({ dataDir: store.paths.root, checks: testChecks() });
+  await reopened.publication.repair();
+  assert.deepEqual(revisionBytes(store), before);
+  assert.equal((await reopened.publication.status()).liveRevisionId, null);
+  const first = await publishInput(reopened, pairInput('engineering'));
+  assert.equal((await reopened.publication.status()).liveRevisionId, first);
+  assert.ok(readdirSync(store.paths.revisions).includes(left));
+});
+
+test('a store that has published and lost live.json and events/ together keeps every revision through a restart, byte for byte', async (t) => {
+  // As a restore that left publication/ out, or an operator who cleared it, leaves it.
+  const store = await newStore(t);
+  const published = [
+    await publishInput(store, pairInput('engineering')),
+    await publishInput(store, contentVariant(pairInput('engineering'), 'two')),
+    await publishInput(store, contentVariant(pairInput('engineering'), 'three')),
+  ];
+  rmSync(store.paths.live);
+  rmSync(store.paths.events, { recursive: true });
+  const before = revisionBytes(store);
+  assert.deepEqual(
+    readdirSync(store.paths.revisions).filter(isRevisionId).sort(),
+    [...published].sort(),
+  );
+
+  // A restart: preflight lays events/ out again, and repair runs.
+  const problem = await preflight({ dataDir: store.paths.root });
+  assert.equal(problem, null);
+  const logs: StoreLogEntry[] = [];
+  const restarted = openStore({
+    dataDir: store.paths.root,
+    checks: testChecks(),
+    log: (entry) => logs.push(entry),
+  });
+  await restarted.publication.repair();
+  await restarted.publication.repair();
+  assert.deepEqual(revisionBytes(store), before);
+  // With no pointer and no history, it reads as an empty store, and nothing is lost.
+  assert.equal((await restarted.publication.status()).liveRevisionId, null);
+  assert.equal(
+    logs.some((entry) => entry.level === 'error'),
     false,
   );
 });

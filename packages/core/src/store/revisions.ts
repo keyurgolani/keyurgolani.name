@@ -1,8 +1,8 @@
 import path from 'node:path';
-import { canonicalize, type DocumentFormat } from '@portfolio/schema';
+import type { DocumentFormat } from '@portfolio/schema';
 import { recordOwnerModule } from '../load-trace';
-import { isStoreActor, type StoreActor } from './common';
-import type { CrashPoint, FsPort } from './fs-port';
+import { isPermanentReadError, isStoreActor, type StoreActor } from './common';
+import type { ReadFs } from './fs-port';
 import {
   isDraftId,
   isRevisionId,
@@ -18,6 +18,7 @@ import {
   DOCUMENT_NAMES,
   documentFileName,
   isSnapshotKind,
+  plainModel,
   sha256,
   unitHashOf,
   type DocumentName,
@@ -26,15 +27,16 @@ import {
   type UnitChecks,
   type UnitDiagnostic,
   type UnitDocument,
-} from './unit';
+} from '../catalog/unit';
 
 // The RevisionStore (#3, items 8, 11, 13, and 14): immutable catalog
 // revisions under revisions/<revisionId>/. Each holds its documents' text as
 // written and their normalized models, the snapshots derived at publish, and
 // manifest.json, written last. A revision is staged in
 // revisions/.staging-<id>/, each file and directory synced, read back and
-// checked against its hashes, then renamed into place; nothing changes it
-// after that. Reading a revision checks every hash again.
+// checked against its hashes, then renamed into place (commit.ts writes it);
+// nothing changes it after that. This module only reads, and reading a
+// revision checks every hash again.
 
 recordOwnerModule('core/store/revisions');
 
@@ -89,15 +91,27 @@ export interface Revision {
   readonly unit: Unit;
 }
 
-/** What's wrong with a revision's files. */
-export type RevisionDamage = 'missing' | 'hash_mismatch' | 'parse_failure';
+/**
+ * What's wrong with a revision's files. `unreadable`: a file or directory
+ * of it couldn't be read, for a link in its place, something that isn't a
+ * file or directory there, or a failure that may pass, such as EACCES or
+ * EMFILE.
+ */
+export type RevisionDamage = 'missing' | 'hash_mismatch' | 'parse_failure' | 'unreadable';
 
 export type RevisionRead =
   | { readonly ok: true; readonly revision: Revision }
-  | { readonly ok: false; readonly damage: RevisionDamage };
+  | {
+      readonly ok: false;
+      readonly damage: RevisionDamage;
+      /** Set when it may pass, such as for EACCES or EMFILE: a reader asks again soon. */
+      readonly transient?: true;
+    };
 
-const modelFile = (name: DocumentName) => `${name}.model.json`;
-const snapshotFile = (kind: string) => `${kind}.json`;
+/** The file a document's normalized model is in, under documents/. */
+export const modelFile = (name: DocumentName) => `${name}.model.json`;
+/** The file a snapshot is in, under snapshots/. */
+export const snapshotFile = (kind: string) => `${kind}.json`;
 
 /** The manifest for `unit`, from what the caller knows about how it came to be. */
 export function manifestFor(
@@ -144,77 +158,39 @@ export function manifestFor(
   });
 }
 
-async function writeSynced(
-  fs: FsPort,
-  file: string,
-  text: string,
-  point: CrashPoint,
-): Promise<void> {
-  await fs.writeFile(file, text, `${point}.write`);
-  await fs.fsync(file, `${point}.fsync`);
-}
+/** An object, not null or an array, whose fields can be read. */
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  value !== null && typeof value === 'object' && !Array.isArray(value);
 
-/**
- * Writes `revision` as revisions/<id>/: staged, each file and directory
- * synced, the manifest last, read back and checked, renamed into place, and
- * revisions/ synced. The caller holds the publication lock.
- */
-export async function writeRevision(
-  fs: FsPort,
-  paths: StorePaths,
-  revision: Revision,
-  operation: string,
-): Promise<void> {
-  const { manifest, unit } = revision;
-  const id = manifest.revisionId;
-  const staging = paths.staging(id);
-  const point = (step: string): CrashPoint => `${operation}.staging.${step}`;
-  const documents = path.join(staging, 'documents');
-  const snapshots = path.join(staging, 'snapshots');
-  await fs.mkdir(documents, point('mkdir'));
-  await fs.mkdir(snapshots, point('mkdir'));
-  for (const name of DOCUMENT_NAMES) {
-    const document = unit[name];
-    const entry = manifest.documents[name];
-    if (!document || !entry) continue;
-    await writeSynced(fs, path.join(documents, entry.file), document.sourceText, point(name));
-    await writeSynced(
-      fs,
-      path.join(documents, modelFile(name)),
-      canonicalize(document.model),
-      point(`${name}-model`),
-    );
-  }
-  for (const [kind, value] of Object.entries(unit.snapshots)) {
-    await writeSynced(
-      fs,
-      path.join(snapshots, snapshotFile(kind)),
-      canonicalize(value),
-      point(kind),
-    );
-  }
-  await fs.fsync(documents, point('documents.fsync'));
-  await fs.fsync(snapshots, point('snapshots.fsync'));
-  await writeSynced(
-    fs,
-    path.join(staging, 'manifest.json'),
-    `${JSON.stringify(manifest, null, 2)}\n`,
-    point('manifest'),
+/** A variant or pack as a manifest names one: string `id` and `version`. */
+const isVersioned = (value: unknown) =>
+  isRecord(value) && typeof value.id === 'string' && typeof value.version === 'string';
+
+/** A rendering every reader of it can walk: the variant, each pack, and every contract. */
+function isRendering(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    (value.variant === null || isVersioned(value.variant)) &&
+    Array.isArray(value.packs) &&
+    value.packs.every(isVersioned) &&
+    isRecord(value.contracts) &&
+    Object.values(value.contracts).every((version) => typeof version === 'string')
   );
-  await fs.fsync(staging, point('dir.fsync'));
-  const check = await readRevisionAt(fs, staging, id);
-  if (!check.ok) throw new Error(`A staged revision failed its own check: ${check.damage}.`);
-  await fs.rename(staging, paths.revision(id), `${operation}.revision.rename`);
-  await fs.fsync(paths.revisions, `${operation}.revisions.fsync`);
 }
 
 function asManifest(value: unknown, id: RevisionId): Manifest | null {
-  if (value === null || typeof value !== 'object') return null;
-  const manifest = value as Record<string, unknown>;
-  const documents = manifest.documents as Record<string, unknown> | undefined;
-  const snapshots = manifest.snapshots as Record<string, unknown> | undefined;
-  const source = manifest.source as Record<string, unknown> | undefined;
-  const rendering = manifest.rendering as Record<string, unknown> | undefined;
+  if (!isRecord(value)) return null;
+  const manifest = value;
+  if (
+    !isRecord(manifest.documents) ||
+    !isRecord(manifest.snapshots) ||
+    !isRecord(manifest.source)
+  ) {
+    return null;
+  }
+  const documents = manifest.documents;
+  const snapshots = manifest.snapshots;
+  const source = manifest.source;
   const documentOk = (entry: unknown, name: DocumentName) => {
     const document = entry as Record<string, unknown> | undefined;
     return (
@@ -254,19 +230,33 @@ function asManifest(value: unknown, id: RevisionId): Manifest | null {
         isSha256((entry as Record<string, unknown>)?.contentHash),
     ) &&
     isSha256(manifest.unitHash) &&
-    rendering !== undefined &&
-    Array.isArray(rendering.packs) &&
+    isRendering(manifest.rendering) &&
     Array.isArray(manifest.blobs) &&
     (manifest.blobs as unknown[]).every(isSha256);
   return ok ? (manifest as unknown as Manifest) : null;
 }
 
-async function readText(fs: FsPort, file: string): Promise<string | null> {
+/**
+ * A revision file that's there but can't be read: the revision is damaged,
+ * `unreadable`, for good when what's there is the reason, and for now when
+ * the failure may pass.
+ */
+class UnreadableError extends Error {
+  constructor(readonly transient: boolean) {
+    super("A revision file can't be read.");
+  }
+}
+
+/** The file's text, null when it isn't there, or an UnreadableError for any other failure. */
+async function readText(fs: ReadFs, file: string): Promise<string | null> {
   try {
     return (await fs.readFile(file)).toString('utf8');
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
-    throw error;
+    // A link in a file's place (ELOOP), since the store's reads never go
+    // through one, or a directory or a FIFO there, stays so; EACCES or
+    // EMFILE may pass.
+    throw new UnreadableError(!isPermanentReadError(error));
   }
 }
 
@@ -278,12 +268,54 @@ function parseJson(text: string): { ok: true; value: unknown } | { ok: false } {
   }
 }
 
-/** Reads and checks the revision in `dir`: every file there, and every hash right. */
+/**
+ * Whether each directory a revision's files are read through is one itself,
+ * never a link to one: revisions/, the revision's own, documents/, and
+ * snapshots/. A file's own read refuses a link only as its last component.
+ * One that isn't there leaves its files missing, as their reads find. One
+ * that can't be looked at throws an UnreadableError that may pass.
+ */
+async function throughDirectories(fs: ReadFs, dir: string): Promise<boolean> {
+  for (const each of [
+    path.dirname(dir),
+    dir,
+    path.join(dir, 'documents'),
+    path.join(dir, 'snapshots'),
+  ]) {
+    let found;
+    try {
+      found = await fs.lstat(each);
+    } catch (error) {
+      throw new UnreadableError(!isPermanentReadError(error));
+    }
+    if (found !== null && !found.isDirectory) return false;
+  }
+  return true;
+}
+
+/**
+ * Reads and checks the revision in `dir`: every file there, and every hash
+ * right. A file that's there but can't be read leaves it `unreadable`, and
+ * so does a link in place of a directory it's read through; `transient`
+ * when the failure may pass.
+ */
 export async function readRevisionAt(
-  fs: FsPort,
+  fs: ReadFs,
   dir: string,
   id: RevisionId,
 ): Promise<RevisionRead> {
+  try {
+    if (!(await throughDirectories(fs, dir))) return { ok: false, damage: 'unreadable' };
+    return await readRevisionFiles(fs, dir, id);
+  } catch (error) {
+    if (!(error instanceof UnreadableError)) throw error;
+    return error.transient
+      ? { ok: false, damage: 'unreadable', transient: true }
+      : { ok: false, damage: 'unreadable' };
+  }
+}
+
+async function readRevisionFiles(fs: ReadFs, dir: string, id: RevisionId): Promise<RevisionRead> {
   const manifestText = await readText(fs, path.join(dir, 'manifest.json'));
   if (manifestText === null) return { ok: false, damage: 'missing' };
   const parsed = parseJson(manifestText);
@@ -339,7 +371,7 @@ export async function readRevisionAt(
 }
 
 /** Reads and checks revisions/<id>/. */
-export function readRevision(fs: FsPort, paths: StorePaths, id: RevisionId): Promise<RevisionRead> {
+export function readRevision(fs: ReadFs, paths: StorePaths, id: RevisionId): Promise<RevisionRead> {
   return readRevisionAt(fs, paths.revision(id), id);
 }
 
@@ -348,23 +380,29 @@ export function readRevision(fs: FsPort, paths: StorePaths, id: RevisionId): Pro
  * one. Its files go unchecked: for a hash in a conflict, not for serving.
  */
 export async function readManifest(
-  fs: FsPort,
+  fs: ReadFs,
   paths: StorePaths,
   id: RevisionId,
 ): Promise<Manifest | null> {
   if (!isRevisionId(id)) return null;
-  const text = await readText(fs, path.join(paths.revision(id), 'manifest.json'));
+  let text: string | null;
+  try {
+    text = await readText(fs, path.join(paths.revision(id), 'manifest.json'));
+  } catch (error) {
+    if (error instanceof UnreadableError) return null;
+    throw error;
+  }
   if (text === null) return null;
   const parsed = parseJson(text);
   return parsed.ok ? asManifest(parsed.value, id) : null;
 }
 
 /** Every revision ID with a directory, staging and tombstones aside. */
-export async function revisionIds(fs: FsPort, paths: StorePaths): Promise<RevisionId[]> {
+export async function revisionIds(fs: ReadFs, paths: StorePaths): Promise<RevisionId[]> {
   return (await fs.readdir(paths.revisions)).filter(isRevisionId);
 }
 
-export async function isTombstoned(fs: FsPort, paths: StorePaths, id: RevisionId) {
+export async function isTombstoned(fs: ReadFs, paths: StorePaths, id: RevisionId) {
   return (await fs.stat(paths.tombstone(id))) !== null;
 }
 
@@ -374,10 +412,26 @@ export async function isTombstoned(fs: FsPort, paths: StorePaths, id: RevisionId
  * can't render (#3, item 14). `incompatible`: it renders, but this build
  * can't publish it, by its schema version, the contract, its packs, or a
  * blob that's gone (item 13). `removed`: retention left a tombstone.
+ *
+ * The validator checks the stored text, as the running build parses it,
+ * and that parse is what serves: `served` holds it, so the reader serves
+ * the very models the check passed, as read-only does from its mounted
+ * text. The revision's own models stay what the publishing build
+ * normalized, which its hashes cover and revision.get shows.
  */
 export type RevisionHealth =
-  | { readonly state: 'ok'; readonly revision: Revision }
-  | { readonly state: 'damaged'; readonly reason: string }
+  | {
+      readonly state: 'ok';
+      readonly revision: Revision;
+      /** The pair the validator passed: the stored text, as the running build parses it. */
+      readonly served: { readonly portfolio: unknown; readonly site: unknown };
+    }
+  | {
+      readonly state: 'damaged';
+      readonly reason: string;
+      /** Set when it may pass: a read failure such as EACCES or EMFILE. Ask again soon. */
+      readonly transient?: true;
+    }
   | {
       readonly state: 'incompatible';
       readonly reason: string;
@@ -389,18 +443,33 @@ export type RevisionHealth =
 const blocking = (diagnostic: { readonly severity: string }) =>
   diagnostic.severity === 'blocks-preview' || diagnostic.severity === 'blocks-publish';
 
+/**
+ * What a revision is checked for. `serve`: whether it renders as the live
+ * revision, with UnitChecks.validateLive, under which an unregistered
+ * variant only warns; damage, status(), the last-known-good walk, the
+ * reader, and verify ask this. `publish`: whether it may be made live, with
+ * UnitChecks.validate; rollback's and recover's targets and
+ * revision.list's `compatible` ask this.
+ */
+export type HealthPurpose = 'serve' | 'publish';
+
 export async function revisionHealth(
-  fs: FsPort,
+  fs: ReadFs,
   paths: StorePaths,
   id: RevisionId,
   checks: UnitChecks,
   hasBlob: (hash: Sha256) => Promise<boolean>,
+  purpose: HealthPurpose,
 ): Promise<RevisionHealth> {
   if (await isTombstoned(fs, paths, id)) return { state: 'removed' };
   const read = await readRevision(fs, paths, id);
-  if (!read.ok) return { state: 'damaged', reason: read.damage };
+  if (!read.ok) {
+    return read.transient
+      ? { state: 'damaged', reason: read.damage, transient: true }
+      : { state: 'damaged', reason: read.damage };
+  }
   const { revision } = read;
-  const result = checks.validate({
+  const pair = {
     portfolio: {
       text: revision.unit.portfolio.sourceText,
       format: revision.unit.portfolio.format,
@@ -411,7 +480,9 @@ export async function revisionHealth(
       format: revision.unit.site.format,
       name: revision.manifest.documents.site.file,
     },
-  });
+  };
+  const result =
+    purpose === 'serve' && checks.validateLive ? checks.validateLive(pair) : checks.validate(pair);
   const blockers = result.diagnostics.filter(blocking);
   // An older schema major renders after a migration, not as damage: one no
   // step reads (schema.version), or one the migration does (schema.outdated, #10).
@@ -437,7 +508,14 @@ export async function revisionHealth(
       return { state: 'incompatible', reason: 'asset_missing', revision, diagnostics: [] };
     }
   }
-  return { state: 'ok', revision };
+  // With no blocking finding the validator returns the pair; one that
+  // doesn't has nothing to serve.
+  if (!result.pair) return { state: 'damaged', reason: 'parse_failure' };
+  return {
+    state: 'ok',
+    revision,
+    served: { portfolio: plainModel(result.pair.portfolio), site: plainModel(result.pair.site) },
+  };
 }
 
 /** The RevisionStore port: reading revisions. Only the PublicationService writes them. */
@@ -446,7 +524,8 @@ export interface RevisionStore {
   manifest(revisionId: RevisionId): Promise<Manifest | null>;
   /** Every revision with a directory. */
   list(): Promise<RevisionId[]>;
-  health(revisionId: RevisionId): Promise<RevisionHealth>;
+  /** What the running build makes of a revision, for serving or for publishing it. */
+  health(revisionId: RevisionId, purpose: HealthPurpose): Promise<RevisionHealth>;
 }
 
 export function filesystemRevisionStore({
@@ -455,7 +534,7 @@ export function filesystemRevisionStore({
   checks,
   hasBlob,
 }: {
-  readonly fs: FsPort;
+  readonly fs: ReadFs;
   readonly paths: StorePaths;
   readonly checks: UnitChecks;
   readonly hasBlob: (hash: Sha256) => Promise<boolean>;
@@ -467,9 +546,9 @@ export function filesystemRevisionStore({
         : Promise.resolve({ ok: false, damage: 'missing' }),
     manifest: (revisionId: RevisionId) => readManifest(fs, paths, revisionId),
     list: () => revisionIds(fs, paths),
-    health: (revisionId: RevisionId): Promise<RevisionHealth> =>
+    health: (revisionId: RevisionId, purpose: HealthPurpose): Promise<RevisionHealth> =>
       isRevisionId(revisionId)
-        ? revisionHealth(fs, paths, revisionId, checks, hasBlob)
+        ? revisionHealth(fs, paths, revisionId, checks, hasBlob, purpose)
         : Promise.resolve({ state: 'damaged', reason: 'missing' }),
   });
 }

@@ -301,7 +301,10 @@ function readyBody(profile: Profile) {
     checks: [
       { id: 'catalog', status: 'ok' },
       { id: 'packs', status: packs },
-      ...(profile === 'owner' ? [] : [{ id: 'owner-modules', status: 'ok' }]),
+      // Owner probes its data directory (#3, item 23); the others check no owner code loaded.
+      ...(profile === 'owner'
+        ? [{ id: 'data-directory', status: 'ok' }]
+        : [{ id: 'owner-modules', status: 'ok' }]),
     ],
   };
 }
@@ -750,7 +753,10 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
     'an unknown operation gets the same 404 envelope',
     { annotation: [{ type: 'route', description: '/api/studio/[name]' }, annotation] },
     async ({ request }) => {
-      for (const name of ['publish', 'draft.write', 'no.such.operation']) {
+      // publish, where the profile lacks it: owner registers it (#3), and
+      // its own row above checks it fails closed.
+      const absentPublish = accessIn(profile, 'publish') === 'absent' ? ['publish'] : [];
+      for (const name of [...absentPublish, 'draft.write', 'no.such.operation']) {
         const response = await request.post(`/api/studio/${name}`, { data: {} });
         expect(response.status(), name).toBe(404);
         const { error } = (await response.json()) as { error: Record<string, string> };

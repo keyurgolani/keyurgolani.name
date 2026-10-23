@@ -3,6 +3,7 @@ import type { Site } from '@portfolio/schema';
 import { PresentationBoundary } from '~/lib/experience-document';
 import { compositionFor } from '~/lib/variants';
 import { getDeploymentState } from '~/server/config-store';
+import { getLive } from '~/server/live-revision';
 import { capabilityPolicy, type NavLink } from '~/server/policy';
 
 // What every 404 shows, inside the site's layout or the global 404 page's
@@ -15,12 +16,15 @@ import { capabilityPolicy, type NavLink } from '~/server/policy';
 // the preview's CSP, whose connect-src lets no request through (#7).
 const HOME: readonly NavLink[] = [{ href: '/', label: 'Home' }];
 
-/** The live site document, or null before startup and while the catalog can't serve. */
+/**
+ * The live site document, or null before startup and while the catalog
+ * can't serve: the request's own read, so a 404 inside the site's layout
+ * renders from the layout's revision.
+ */
 async function liveSite(): Promise<Site | null> {
-  const state = getDeploymentState();
-  if (!state) return null;
+  if (!getDeploymentState()) return null;
   try {
-    return (await state.catalog.getLive()).unit.site;
+    return (await getLive()).unit?.site ?? null;
   } catch {
     return null;
   }

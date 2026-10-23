@@ -12,6 +12,7 @@ import {
   newSessionToken,
   sessionDigest,
 } from '@portfolio/core/owner';
+import { validatePublicationUnit } from '@portfolio/schema';
 import { authorize, type Authorized } from '../authorize';
 import { accessIn, CAPABILITIES, PROFILES, type Profile } from '../capabilities';
 import { compose, OWNER_PASSWORD_PROVIDER } from '../composition';
@@ -20,7 +21,7 @@ import { setDeploymentState, type DeploymentState } from '../config-store';
 import type { Handler, HandlerContext } from '../dispatcher';
 import { listOperations, type Operation } from '../operations';
 import { provider } from './auth';
-import { ownerHandlers, ownerPreviews } from './index';
+import { ownerHandlers, ownerPreviews, ownerStore } from './index';
 import { mintSession } from './session-mint';
 
 // studio-3 and publish-1 (#2): every protected entry in the registry, read
@@ -55,13 +56,59 @@ const ENVIRONMENT = {
   motion: 'system',
   enhancement: 'on',
 };
-/** A body each command's input schema takes, where `{}` isn't one. */
-const INPUT: Record<string, unknown> = {
+const REVISION = `rev_${'a'.repeat(32)}`;
+const DRAFT = `drf_${'b'.repeat(32)}`;
+const DOCUMENTS = {
+  portfolio: { format: 'yaml', sourceText: 'schemaVersion: 2\n' },
+  site: { format: 'yaml', sourceText: 'schemaVersion: 2\n' },
+};
+/** Input each entry's schema takes, where `{}` isn't any: a query's goes in its search parameters. */
+const INPUT: Record<string, Record<string, unknown>> = {
   'auth.sessions.revoke': { ref: '0123abcd' },
   'preview.grant.mint': { subject: { fixture: 'complete' }, environment: ENVIRONMENT },
   'preview.grant.renew': { grant: 'A'.repeat(22) },
   'preview.grant.revoke': { grant: 'A'.repeat(22) },
   'preview.grant.status': { grant: 'A'.repeat(22) },
+  'revision.get': { revisionId: REVISION },
+  'draft.get': { draftId: DRAFT },
+  'draft.save': { draftId: DRAFT, expectedVersion: 1, documents: DOCUMENTS },
+  'draft.applyEdits': {
+    draftId: DRAFT,
+    expectedVersion: 1,
+    edits: [{ document: 'portfolio', pointer: '/locale', op: 'set', value: 'en' }],
+  },
+  'draft.rebase': {
+    draftId: DRAFT,
+    expectedVersion: 1,
+    documents: DOCUMENTS,
+    baseRevisionId: null,
+  },
+  'draft.discard': { draftId: DRAFT },
+  publish: { draftId: DRAFT, draftVersion: 1, expectedLiveRevisionId: null },
+  rollback: { targetRevisionId: REVISION, expectedLiveRevisionId: null },
+  recover: { targetRevisionId: REVISION, expectedLiveRevisionId: null },
+};
+/**
+ * What an entry answers once every guard passes, where that's an error: a
+ * sign-in with no password is a credential failure, and in this empty
+ * store the draft and the revision these name aren't there. Either way, it ran.
+ */
+const RAN: Record<string, string> = {
+  'auth.login': 'credentials_rejected',
+  ...Object.fromEntries(
+    [
+      'revision.get',
+      'draft.get',
+      'draft.create',
+      'draft.save',
+      'draft.applyEdits',
+      'draft.rebase',
+      'draft.discard',
+      'publish',
+      'rollback',
+      'recover',
+    ].map((name) => [name, 'not_found']),
+  ),
 };
 
 const protectedEntries = () =>
@@ -171,11 +218,16 @@ async function send(profile: Profile, operation: Operation, sent: Sent = {}) {
     const csrf = sent.csrf === undefined ? (token ? csrfToken(token) : null) : sent.csrf;
     if (csrf !== null) headers.set('x-csrf-token', csrf);
   }
+  const input = INPUT[operation.name] ?? {};
+  const query =
+    command || Object.keys(input).length === 0
+      ? ''
+      : `?${new URLSearchParams(input as Record<string, string>)}`;
   const response = await state.dispatch(
-    new Request(`${ORIGIN}/api/studio/${operation.name}`, {
+    new Request(`${ORIGIN}/api/studio/${operation.name}${query}`, {
       method: command ? 'POST' : 'GET',
       headers,
-      body: command ? JSON.stringify(INPUT[operation.name] ?? {}) : undefined,
+      body: command ? JSON.stringify(input) : undefined,
     }),
     operation.name,
   );
@@ -255,9 +307,7 @@ test('every protected registry entry is denied without a session, the origin, th
   for (const operation of entries) {
     const token = await signedIn();
     const answer = await send('owner', operation, { token });
-    // A sign-in with no password is a credential failure: it ran.
-    const ran = operation.name === 'auth.login' ? 'credentials_rejected' : null;
-    assert.equal(answer.code, ran, operation.name);
+    assert.equal(answer.code, RAN[operation.name] ?? null, operation.name);
     await signOut(token);
     // Past the millisecond of a revoke-all, so the next session counts.
     await new Promise((resolve) => setTimeout(resolve, 2));
@@ -270,7 +320,13 @@ test('every protected registry entry is denied without a session, the origin, th
   const handlers: Readonly<Record<string, Handler>> = {
     ...ownerHandlers({
       config,
-      catalog: 'documents',
+      catalog: 'revisions',
+      store: ownerStore({
+        config,
+        checks: { validate: (pair) => validatePublicationUnit(pair), appVersion: 'test' },
+        documents: deployed.get('owner')!.state.catalog,
+        setServable: () => {},
+      }),
       variantHealth: async () => ({ status: 'ok', requested: 'any', rendered: 'any' }),
     }),
     ...auth.handlers,

@@ -2,7 +2,7 @@ import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import type { AuditType } from '../audit/record.mjs';
 import type { AuditSink } from '../audit/sink';
-import { isSessionHeld, type SessionHold } from '../auth/sessions';
+import { enterCommitPoint, isSessionHeld, type SessionHold } from '../auth/sessions';
 import { recordOwnerModule } from '../load-trace';
 import type { AssetStore } from './assets';
 import {
@@ -30,6 +30,14 @@ import {
   type Sha256,
   type StorePaths,
 } from './layout';
+import {
+  reconcileEvents,
+  writeLive,
+  writeLiveEvent,
+  writeRevision,
+  type Reconciled,
+} from './commit';
+import { healthCache, type HealthVerdict } from './health-cache';
 import { LOCK_STALE_MS, LockLostError, type PublicationLock } from './lock';
 import {
   DamagedPointerError,
@@ -37,24 +45,11 @@ import {
   readEvent,
   readEvents,
   readLive,
-  reconcileEvents,
-  writeLive,
-  writeLiveEvent,
   type EventType,
   type LivePointer,
   type PublicationEvent,
-  type Reconciled,
 } from './pointer';
-import {
-  manifestFor,
-  readManifest,
-  readRevision,
-  revisionHealth,
-  revisionIds,
-  writeRevision,
-  type Manifest,
-  type RevisionHealth,
-} from './revisions';
+import { manifestFor, readManifest, readRevision, revisionIds, type Manifest } from './revisions';
 import {
   checkUnit,
   DOCUMENT_NAMES,
@@ -62,7 +57,7 @@ import {
   type Unit,
   type UnitChecks,
   type UnitDiagnostic,
-} from './unit';
+} from '../catalog/unit';
 
 // The PublicationService (#3, items 11 to 14): the only code that moves the
 // published pointer. Publish, rollback, and recover each run under the
@@ -78,10 +73,13 @@ import {
 // the step. For the owner, the pointer move alone runs inside #2's
 // commitWithSession(), through the holdSession() the caller passes, so a
 // session that ended first never moves the pointer, and a logout waits only
-// for the move. What the move did decides the outcome, not what
-// holdSession() answers, and a publish whose move never ran removes the
-// revision it wrote. A key names one request: on another request's event it
-// is idempotency_conflict.
+// for the move. The hold is checked once more just before the rename
+// (enterCommitPoint()), so a move whose hold ran out of time renames
+// nothing, and one past that check finishes before a logout lands. What the
+// move did decides the outcome, not what holdSession() answers, and a
+// publish whose move never ran, or ran out of time before its commit point,
+// removes the revision it wrote. A key names one request: on another
+// request's event it is idempotency_conflict.
 
 recordOwnerModule('core/store/publication');
 
@@ -209,6 +207,12 @@ export interface RollbackInput {
   readonly reason?: string;
 }
 
+/** A page of a list: `limit` items from `offset`, 0 first. Without one, the whole list. */
+export interface ListPage {
+  readonly offset?: number;
+  readonly limit?: number;
+}
+
 export interface RecoverInput {
   /** Defaults to the last known good. */
   readonly targetRevisionId?: RevisionId;
@@ -236,10 +240,17 @@ export interface PublicationService {
     context?: PublicationContext,
   ): Promise<PublicationOutcome>;
   status(): Promise<LiveStatus>;
-  /** Every event, in seq order. */
-  history(): Promise<readonly PublicationEvent[]>;
-  /** Every revision, the most recently live first. */
-  revisions(): Promise<readonly RevisionSummary[]>;
+  /**
+   * Every event, in seq order. A page reads only its own events: seq
+   * offset + 1 on, up to `limit` of them.
+   */
+  history(page?: ListPage): Promise<readonly PublicationEvent[]>;
+  /**
+   * Every revision, the most recently live first. A page checks only its
+   * own revisions' health, after ordering them all by what their events and
+   * manifests say.
+   */
+  revisions(page?: ListPage): Promise<readonly RevisionSummary[]>;
   revision(revisionId: RevisionId): Promise<RevisionDetail | null>;
   /** The most recently live revision this build can serve, or null. */
   lastKnownGood(): Promise<RevisionId | null>;
@@ -298,6 +309,16 @@ function checkOptional(input: { readonly idempotencyKey?: string; readonly reaso
   }
 }
 
+/** A page's bounds, checked: a whole offset, and a limit of 1 or more. */
+function pageOf(page: ListPage): { readonly offset: number; readonly limit: number } {
+  const offset = page.offset ?? 0;
+  const limit = page.limit ?? Number.MAX_SAFE_INTEGER;
+  if (!Number.isSafeInteger(offset) || offset < 0 || !Number.isSafeInteger(limit) || limit < 1) {
+    throw new TypeError('A page is a whole offset from 0 and a limit of 1 or more.');
+  }
+  return { offset, limit };
+}
+
 const expectation = (value: unknown): RevisionId | null => {
   if (value === null || isRevisionId(value)) return value;
   throw new TypeError('The expected live revision is a revision ID or null.');
@@ -315,7 +336,7 @@ export function filesystemPublicationService({
 }: PublicationOptions): PublicationService {
   const stamp = () => new Date(now()).toISOString();
   const hasBlob = (hash: Sha256) => assets.has(hash);
-  const health = (id: RevisionId) => revisionHealth(fs, paths, id, checks, hasBlob);
+  const health = healthCache({ fs, paths, checks, hasBlob });
 
   async function readPointer(): Promise<LivePointer | null> {
     try {
@@ -346,12 +367,15 @@ export function filesystemPublicationService({
    * Step 1's start: the pointer, with the log made to agree with it, since
    * live.json wins. The live event's own file is written if a crash left it
    * out, and an event file that disagrees, at the live seq or above it, is
-   * moved aside first.
+   * moved aside first, while the lock is still this operation's.
    */
   async function livePointer(operation: string): Promise<LivePointer | null> {
     const pointer = await readPointer();
     if (!pointer) return null;
-    logReconciled(pointer, await reconcileEvents(fs, paths, pointer, `${operation}.repair`));
+    const reconciled = await reconcileEvents(fs, paths, pointer, `${operation}.repair`, () =>
+      lock.fence(),
+    );
+    logReconciled(pointer, reconciled);
     return pointer;
   }
 
@@ -396,9 +420,13 @@ export function filesystemPublicationService({
     };
   }
 
-  /** Removes the revision a publish wrote for a pointer move that never ran: it was never live. */
+  /**
+   * Removes the revision a publish wrote for a pointer move that never ran:
+   * it was never live. Only while the lock is still this publish's.
+   */
   async function dropUnpublished(id: RevisionId): Promise<void> {
     try {
+      await lock.fence();
       await fs.remove(paths.revision(id), 'publish.unpublished.remove');
       await fs.fsync(paths.revisions, 'publish.unpublished.fsync');
     } catch {
@@ -420,10 +448,12 @@ export function filesystemPublicationService({
     // What the move did decides the outcome, whatever holdSession() answers:
     // whether it ran, and then whether it moved the pointer or found the
     // lock someone else's. The lock must still be this operation's as the
-    // pointer moves.
+    // pointer moves, and for the owner, the session's hold too.
     let ran = false;
     let moved = false;
-    const move = async () => {
+    // The hold ran out of time before the commit point: the rename never started.
+    let missed = false;
+    const move = async (beforeCommit?: () => void) => {
       ran = true;
       try {
         await writeLive(
@@ -432,6 +462,7 @@ export function filesystemPublicationService({
           { seq: event.seq, revisionId: event.revisionId, unitHash, event },
           operation,
           () => lock.fence(),
+          beforeCommit,
         );
         moved = true;
       } catch (error) {
@@ -441,7 +472,10 @@ export function filesystemPublicationService({
     if (event.actor === 'operator') {
       await move();
     } else {
-      // The owner's session holds through the move and nothing else.
+      // The owner's session holds through the move and nothing else, and is
+      // checked once more just before the rename: a hold whose time ran out
+      // meanwhile moves nothing, and one that passes keeps the session's
+      // lock until the rename is done.
       requireHold(event.actor, context);
       // What failed inside the hold stands, even where holdSession() swallowed it.
       const thrown: unknown[] = [];
@@ -452,15 +486,24 @@ export function filesystemPublicationService({
             if (!isSessionHeld(hold)) {
               throw new TypeError("The owner's session isn't held through the pointer move.");
             }
-            await move();
+            await move(() => {
+              if (!enterCommitPoint(hold)) {
+                missed = true;
+                throw new StoreError(
+                  'storage_unavailable',
+                  'The pointer move ran out of time before its commit point, so nothing moved.',
+                );
+              }
+            });
           } catch (error) {
             thrown.push(error);
             throw error;
           }
         });
       } finally {
-        // No move ran, so the revision a publish wrote for it never went live.
-        if (!ran && draft) await dropUnpublished(event.revisionId);
+        // No move ran, or none got to its rename, so the revision a publish
+        // wrote for it never went live.
+        if ((!ran || missed) && draft) await dropUnpublished(event.revisionId);
       }
       if (thrown.length > 0) throw thrown[0];
       if (!ran) {
@@ -532,11 +575,18 @@ export function filesystemPublicationService({
     let stage = 'lock';
     const durationMs = () => Math.round(performance.now() - started);
     try {
-      const outcome = await lock.withLock(operation, () => {
+      const outcome = await lock.withLock(operation, async () => {
         stage = 'check';
-        return body((name) => {
-          stage = name;
-        });
+        try {
+          return await body((name) => {
+            stage = name;
+          });
+        } catch (error) {
+          if (!(error instanceof LockLostError)) throw error;
+          // Broken and retaken before this moved anything, as step 1 found.
+          log({ level: 'error', event: 'store.lock.lost', stage, code: 'lock_lost' });
+          return rejected('lock_lost');
+        }
       });
       if (outcome.kind === 'committed') {
         log({
@@ -571,7 +621,7 @@ export function filesystemPublicationService({
   }
 
   /** Whether `health` lets a rollback or recover make its revision live, and if not, why. */
-  function targetProblem(id: RevisionId, found: RevisionHealth): PublicationRejection | null {
+  function targetProblem(id: RevisionId, found: HealthVerdict): PublicationRejection | null {
     switch (found.state) {
       case 'ok':
         return null;
@@ -618,10 +668,10 @@ export function filesystemPublicationService({
       const target = input.targetRevisionId ?? (await walkLastKnownGood(pointer));
       if (!target || !(await fs.stat(paths.revision(target)))) return rejected('not_found');
       if (target === pointer?.revisionId) return rejected('nothing_to_publish');
-      const found = await health(target);
+      const found = await health(target, 'publish');
       const problem = targetProblem(target, found);
       if (problem) return problem;
-      const unitHash = found.state === 'ok' ? found.revision.unit.unitHash : null;
+      const unitHash = found.state === 'ok' ? found.unitHash : null;
       if (!unitHash) return rejected('revision_incompatible');
       stage('commit');
       const event: PublicationEvent = {
@@ -638,28 +688,33 @@ export function filesystemPublicationService({
     });
   }
 
-  /** The most recently live revisions first, each once: the pointer's, then by seq. */
+  /**
+   * The most recently live revisions first, each once: the pointer's, then
+   * by seq. The walk for the last known good passes over an event file it
+   * can't read, as the reader's does; every other read of the log fails on
+   * one, as history does.
+   */
   async function liveOrder(pointer: LivePointer | null): Promise<RevisionId[]> {
     const order: RevisionId[] = [];
     const add = (id: RevisionId) => {
       if (!order.includes(id)) order.push(id);
     };
     if (pointer) add(pointer.revisionId);
-    const events = await readEvents(fs, paths);
+    const events = await readEvents(fs, paths, { unreadable: () => {} });
     for (let index = events.length - 1; index >= 0; index--) add(events[index]!.revisionId);
     return order;
   }
 
   async function walkLastKnownGood(pointer: LivePointer | null): Promise<RevisionId | null> {
     for (const id of await liveOrder(pointer)) {
-      if ((await health(id)).state === 'ok') return id;
+      if ((await health(id, 'serve')).state === 'ok') return id;
     }
     return null;
   }
 
   async function summary(id: RevisionId, seqs: ReadonlyMap<RevisionId, number>) {
     const manifest = await readManifest(fs, paths, id);
-    const found = await health(id);
+    const found = await health(id, 'publish');
     const seq = seqs.get(id);
     const result: RevisionSummary = {
       revisionId: id,
@@ -860,7 +915,7 @@ export function filesystemPublicationService({
             unitHash: null,
           };
         }
-        const found = await health(pointer.revisionId);
+        const found = await health(pointer.revisionId, 'serve');
         const base = {
           liveRevisionId: pointer.revisionId,
           seq: pointer.seq,
@@ -878,10 +933,22 @@ export function filesystemPublicationService({
       }
     },
 
-    async history() {
+    async history(page) {
+      const bounds = page ? pageOf(page) : undefined;
       try {
-        const events = await readEvents(fs, paths);
         const pointer = await readPointer();
+        if (bounds) {
+          // Seqs run from 1 to the pointer's, so a page reads its own range.
+          const { offset, limit } = bounds;
+          const last = Math.min(pointer?.seq ?? 0, offset + limit);
+          const events: PublicationEvent[] = [];
+          for (let seq = offset + 1; seq <= last; seq++) {
+            const event = seq === pointer?.seq ? pointer.event : await readEvent(fs, paths, seq);
+            if (event) events.push(event);
+          }
+          return events;
+        }
+        const events = await readEvents(fs, paths);
         if (pointer && !events.some((event) => event.seq === pointer.seq)) {
           events.push(pointer.event);
         }
@@ -891,17 +958,24 @@ export function filesystemPublicationService({
       }
     },
 
-    async revisions() {
+    async revisions(page) {
+      const { offset, limit } = pageOf(page ?? {});
       try {
         const seqs = await latestSeqs();
-        const list: RevisionSummary[] = [];
-        for (const id of await revisionIds(fs, paths)) list.push((await summary(id, seqs)).result);
-        return list.sort(
+        const ids = await revisionIds(fs, paths);
+        const created = new Map<RevisionId, string>();
+        for (const id of ids) created.set(id, (await readManifest(fs, paths, id))?.createdAt ?? '');
+        ids.sort(
           (a, b) =>
-            (b.seq ?? 0) - (a.seq ?? 0) ||
-            (b.createdAt ?? '').localeCompare(a.createdAt ?? '') ||
-            a.revisionId.localeCompare(b.revisionId),
+            (seqs.get(b) ?? 0) - (seqs.get(a) ?? 0) ||
+            created.get(b)!.localeCompare(created.get(a)!) ||
+            a.localeCompare(b),
         );
+        const list: RevisionSummary[] = [];
+        for (const id of ids.slice(offset, page ? offset + limit : undefined)) {
+          list.push((await summary(id, seqs)).result);
+        }
+        return list;
       } catch (error) {
         throw storageError(error);
       }
@@ -971,7 +1045,7 @@ export function filesystemPublicationService({
           // The log agrees with live.json, which wins.
           const pointer = await readPointer();
           const reconciled = pointer
-            ? await reconcileEvents(fs, paths, pointer, 'repair')
+            ? await reconcileEvents(fs, paths, pointer, 'repair', () => lock.fence())
             : { aside: [], written: false };
           if (pointer) logReconciled(pointer, reconciled);
           const eventWritten = reconciled.written;
@@ -986,8 +1060,21 @@ export function filesystemPublicationService({
               draftRemoved = true;
             }
           }
+          // Repair removes no revision. With no pointer and no history, one
+          // may be a first publish's that failed before its pointer, or all
+          // a store has left after its log was lost; the store is empty
+          // either way, and each stays as it is.
           return { stagingRemoved, tempsRemoved, eventWritten, eventsAside, draftRemoved };
         } catch (error) {
+          if (error instanceof LockLostError) {
+            // Another holder took the lock: the log is theirs to make agree now.
+            log({ level: 'error', event: 'store.lock.lost', stage: 'repair', code: 'lock_lost' });
+            throw new StoreError(
+              'storage_unavailable',
+              'Another holder took the publication lock during repair, so it stopped.',
+              { cause: error },
+            );
+          }
           throw storageError(error);
         }
       });

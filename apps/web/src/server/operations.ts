@@ -1,5 +1,31 @@
 import { z } from 'zod';
 import { CAPABILITIES, PROFILES, type Capability } from './capabilities';
+import {
+  AssetMissingDetails,
+  CommittedSchema,
+  DiagnosticsDetails,
+  DraftConflictDetails,
+  DraftCreateInput,
+  DraftDiscardInput,
+  DraftEditsInput,
+  DraftIdSchema,
+  DraftOutputSchema,
+  DraftRebaseInput,
+  DraftSaveInput,
+  DraftSchema,
+  HistoryListSchema,
+  IncompatibleDetails,
+  LiveConflictDetails,
+  LiveSchema,
+  moveInput,
+  PageInput,
+  PublishInputSchema,
+  RevisionDetailSchema,
+  RevisionIdSchema,
+  RevisionListSchema,
+  ServingRevisionIdSchema,
+  ServingStateSchema,
+} from './store-schemas';
 
 // The operation registry (#1, item 10): every query and command the Studio
 // transport, /api/studio/[name], can run. Entries are data. They import no
@@ -21,14 +47,38 @@ export const ERRORS = {
   request_origin_rejected: { status: 403, message: "The request didn't come from this site." },
   capability_denied: { status: 403, message: "This session can't use that operation." },
   invalid_input: { status: 400, message: "The input doesn't match the operation." },
+  // #7: preview.grant.mint, for a draft that moved past the version it names.
   version_conflict: { status: 409, message: 'The content changed since it was read.' },
+  // #3's store, checked under the publication lock, in place of #1's version_conflict.
+  draft_conflict: { status: 409, message: 'The draft changed since it was read.' },
+  live_conflict: { status: 409, message: 'The live revision changed since it was read.' },
+  nothing_to_publish: { status: 409, message: 'The draft is the same as the live revision.' },
+  validation_failed: { status: 422, message: "The content doesn't validate." },
+  revision_incompatible: { status: 422, message: "This build can't make that revision live." },
+  asset_missing: { status: 422, message: "A file the content references isn't stored." },
+  payload_too_large: { status: 413, message: 'A document is over the 1 MiB limit.' },
+  // #3: a key already used for another request.
+  idempotency_conflict: {
+    status: 422,
+    message: 'That idempotency key went with another request.',
+  },
+  // #3: both with Retry-After. Nothing moved, so a retry is safe.
+  lock_timeout: { status: 503, message: 'Another publication is running. Try again shortly.' },
+  lock_lost: { status: 503, message: 'Another publication took over. Try again shortly.' },
+  storage_unavailable: { status: 503, message: "The data directory can't be used right now." },
+  storage_full: { status: 507, message: 'The data directory is full.' },
+  // #3: this server's claim on the data directory went to another owner server.
+  data_dir_in_use: {
+    status: 503,
+    message: 'Another owner server holds the data directory. Stop it, or restart this one.',
+  },
   // #2: auth.login. Every credential failure answers this one, whatever was wrong.
   credentials_rejected: { status: 401, message: "That password didn't work." },
   // #2: auth.login, with Retry-After.
   rate_limited: { status: 429, message: 'Too many attempts. Try again later.' },
   // #2: auth.login when the session store can't be written. No cookie goes with it.
   unavailable: { status: 503, message: "That can't be done right now. Try again soon." },
-  // #7: preview.grant.mint for a draft, revision, or fixture the store doesn't hold.
+  // #3's store, and #7's preview.grant.mint: a draft, revision, or fixture it doesn't hold.
   not_found: { status: 404, message: "That draft, revision, or fixture doesn't exist." },
   internal_error: {
     status: 500,
@@ -58,14 +108,18 @@ export interface Operation {
   readonly session: boolean;
   /** Origin and CSRF checks (#2). Every command has them; no query does. */
   readonly originCheck: boolean;
-  /** The version the input names, checked before the handler runs (#3). */
-  readonly expects?: 'draft-version' | 'live-revision';
   /** A command's body types. Default JSON only; #2's auth.login adds form posts. */
   readonly bodyTypes?: readonly BodyType[];
   /** A command's body cap in bytes. Default MAX_BODY_BYTES; #2's auth.login takes 4 KB. */
   readonly maxBodyBytes?: number;
   /** Every error code the dispatcher or the handler can answer this operation with. */
   readonly errors: readonly ErrorCode[];
+  /**
+   * The payload in `error.details`, by code (#3, amending #1 item 5): only
+   * for an owner session, only on a 409 or a 422, and only once it passes
+   * its schema. Every other error body is the fixed one.
+   */
+  readonly details?: Readonly<Partial<Record<ErrorCode, z.ZodType>>>;
 }
 
 const SecretState = z.enum(['set', 'unset']);
@@ -88,7 +142,7 @@ export const ConfigSummarySchema = z
         })
         .strict(),
     ),
-    adapters: z.object({ catalog: z.enum(['documents', 'sample']) }).strict(),
+    adapters: z.object({ catalog: z.enum(['documents', 'sample', 'revisions']) }).strict(),
     secrets: z
       .object({ PORTFOLIO_AUTH_PASSWORD_HASH: SecretState, GITHUB_TOKEN: SecretState })
       .strict(),
@@ -113,9 +167,56 @@ export const VariantHealthSchema = z.union([
   z.object({ status: z.literal('fail'), requested: z.string().nullable() }).strict(),
 ]);
 
-/** What config.status answers: the summary, and how the live site's variant renders. */
+/**
+ * What serves (#3, item 23): the state, the revision the pointer names, the
+ * one served (the mounted documents' `doc-` one while the store is empty),
+ * and where the live manifest's rendering differs from the build's.
+ */
+export const CatalogStatusSchema = z
+  .object({
+    state: ServingStateSchema,
+    liveRevisionId: RevisionIdSchema.nullable(),
+    servingRevisionId: ServingRevisionIdSchema.nullable(),
+    renderDrift: z
+      .array(
+        z
+          .object({
+            kind: z.enum(['variant', 'pack', 'contract']),
+            id: z.string(),
+            revision: z.string(),
+            build: z.string().nullable(),
+          })
+          .strict(),
+      )
+      .nullable(),
+  })
+  .strict();
+
+/**
+ * Whether owner writes go through (#3): `stopped`, with why, while another
+ * owner server holds the data directory (`data_dir_in_use`), while this one
+ * hasn't claimed it yet (`data_dir_unclaimed`), or while startup repair
+ * still fails (`store_repair_failed`). Visitors are served either way.
+ */
+export const WriteStateSchema = z.union([
+  z.object({ state: z.literal('open') }).strict(),
+  z
+    .object({
+      state: z.literal('stopped'),
+      code: z.enum(['data_dir_in_use', 'data_dir_unclaimed', 'store_repair_failed']),
+    })
+    .strict(),
+]);
+export type WriteState = z.infer<typeof WriteStateSchema>;
+
+/**
+ * What config.status answers: the summary, how the live site's variant
+ * renders, what serves, and whether owner writes go through.
+ */
 export const ConfigStatusSchema = ConfigSummarySchema.extend({
   variant: VariantHealthSchema,
+  catalog: CatalogStatusSchema,
+  writes: WriteStateSchema,
 }).strict();
 export type ConfigStatus = z.infer<typeof ConfigStatusSchema>;
 
@@ -255,6 +356,188 @@ const SESSION_COMMAND_ERRORS: readonly ErrorCode[] = [
   'internal_error',
 ];
 const NO_INPUT = z.object({}).strict();
+
+// #3's store entries (item 22). A store query can find the data directory
+// unreadable; a store write can also wait out the lock, lose it to another
+// holder before it moves anything, find the disk full, or find another
+// owner server holding the directory.
+const STORE_FAILURES: readonly ErrorCode[] = [
+  'lock_timeout',
+  'lock_lost',
+  'storage_unavailable',
+  'storage_full',
+  'data_dir_in_use',
+];
+/** Every outcome a draft command can return. */
+const DRAFT_OUTCOMES: readonly ErrorCode[] = [
+  'draft_conflict',
+  'live_conflict',
+  'payload_too_large',
+  'asset_missing',
+  'validation_failed',
+  'not_found',
+];
+const DRAFT_DETAILS = {
+  draft_conflict: DraftConflictDetails,
+  live_conflict: LiveConflictDetails,
+  validation_failed: DiagnosticsDetails,
+  asset_missing: AssetMissingDetails,
+};
+/** The largest draft body: three documents of 1 MiB, with room for JSON's escapes. */
+const DRAFT_BODY_BYTES = 4 * 1024 * 1024;
+
+function storeQuery(
+  name: string,
+  capability: Capability,
+  input: z.ZodType,
+  output: z.ZodType,
+  errors: readonly ErrorCode[] = [],
+): Operation {
+  return {
+    name,
+    kind: 'query',
+    capability,
+    input,
+    output,
+    session: true,
+    originCheck: false,
+    errors: [...SESSION_QUERY_ERRORS, 'storage_unavailable', ...errors],
+  };
+}
+
+function storeCommand(
+  name: string,
+  capability: Capability,
+  input: z.ZodType,
+  output: z.ZodType,
+  errors: readonly ErrorCode[],
+  details: Operation['details'],
+  maxBodyBytes?: number,
+): Operation {
+  return {
+    name,
+    kind: 'command',
+    capability,
+    input,
+    output,
+    session: true,
+    originCheck: true,
+    errors: [...SESSION_COMMAND_ERRORS, ...errors, ...STORE_FAILURES],
+    details,
+    ...(maxBodyBytes === undefined ? {} : { maxBodyBytes }),
+  };
+}
+
+const STORE_OPERATIONS: readonly Operation[] = [
+  // history.read
+  storeQuery('live.get', 'history.read', NO_INPUT, LiveSchema),
+  storeQuery('revision.list', 'history.read', PageInput, RevisionListSchema),
+  storeQuery(
+    'revision.get',
+    'history.read',
+    z.object({ revisionId: RevisionIdSchema }).strict(),
+    RevisionDetailSchema,
+    ['not_found'],
+  ),
+  storeQuery('history.list', 'history.read', PageInput, HistoryListSchema),
+  // draft.read
+  storeQuery(
+    'draft.getWorking',
+    'draft.read',
+    NO_INPUT,
+    z.object({ draft: DraftSchema.nullable() }).strict(),
+  ),
+  storeQuery(
+    'draft.get',
+    'draft.read',
+    z.object({ draftId: DraftIdSchema }).strict(),
+    DraftOutputSchema,
+    ['not_found'],
+  ),
+  // draft.write. draft.importSource is Slice 3's.
+  storeCommand(
+    'draft.create',
+    'draft.write',
+    DraftCreateInput,
+    DraftOutputSchema,
+    DRAFT_OUTCOMES,
+    DRAFT_DETAILS,
+  ),
+  storeCommand(
+    'draft.save',
+    'draft.write',
+    DraftSaveInput,
+    DraftOutputSchema,
+    DRAFT_OUTCOMES,
+    DRAFT_DETAILS,
+    DRAFT_BODY_BYTES,
+  ),
+  storeCommand(
+    'draft.applyEdits',
+    'draft.write',
+    DraftEditsInput,
+    DraftOutputSchema,
+    DRAFT_OUTCOMES,
+    DRAFT_DETAILS,
+    DRAFT_BODY_BYTES,
+  ),
+  storeCommand(
+    'draft.rebase',
+    'draft.write',
+    DraftRebaseInput,
+    DraftOutputSchema,
+    DRAFT_OUTCOMES,
+    DRAFT_DETAILS,
+    DRAFT_BODY_BYTES,
+  ),
+  storeCommand(
+    'draft.discard',
+    'draft.write',
+    DraftDiscardInput,
+    z.object({ discarded: DraftIdSchema }).strict(),
+    ['draft_conflict', 'not_found'],
+    { draft_conflict: DraftConflictDetails },
+  ),
+  // publish
+  storeCommand(
+    'publish',
+    'publish',
+    PublishInputSchema,
+    CommittedSchema,
+    [
+      'live_conflict',
+      'draft_conflict',
+      'nothing_to_publish',
+      'validation_failed',
+      'asset_missing',
+      'not_found',
+      'idempotency_conflict',
+    ],
+    {
+      live_conflict: LiveConflictDetails,
+      draft_conflict: DraftConflictDetails,
+      validation_failed: DiagnosticsDetails,
+      asset_missing: AssetMissingDetails,
+    },
+  ),
+  // rollback
+  ...(['rollback', 'recover'] as const).map((name) =>
+    storeCommand(
+      name,
+      'rollback',
+      moveInput(name === 'rollback' ? 'required' : 'optional'),
+      CommittedSchema,
+      [
+        'live_conflict',
+        'nothing_to_publish',
+        'revision_incompatible',
+        'not_found',
+        'idempotency_conflict',
+      ],
+      { live_conflict: LiveConflictDetails, revision_incompatible: IncompatibleDetails },
+    ),
+  ),
+];
 
 const OPERATIONS: readonly Operation[] = [
   {
@@ -409,6 +692,9 @@ const OPERATIONS: readonly Operation[] = [
     originCheck: true,
     errors: SESSION_COMMAND_ERRORS,
   },
+  // #3's store: its queries (history.read, draft.read) and commands
+  // (draft.write, publish, rollback).
+  ...STORE_OPERATIONS,
 ];
 
 export function listOperations(): readonly Operation[] {

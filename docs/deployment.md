@@ -190,9 +190,11 @@ The server reads the hash from the file `PORTFOLIO_AUTH_PASSWORD_HASH_FILE` name
 
 ### The data directory
 
-`owner` keeps its sessions, its preview grants, and its audit log in `PORTFOLIO_DATA_DIR`, the `portfolio-data` volume at `/var/lib/portfolio` in `compose.owner.yml`. At startup it creates `ephemeral/auth/sessions/` and `audit/` there with mode `0700`, and checks that it can write, sync, and rename a file, the way it writes session records. It refuses to start when the variable is unset, names no directory, or names one the server's user (uid 1001) can't reach or write. It makes `ephemeral/preview/` the same way the first time Studio opens a preview. Run one server per data directory.
+`owner` keeps its sessions, its preview grants, and its audit log in `PORTFOLIO_DATA_DIR`, the `portfolio-data` volume at `/var/lib/portfolio` in `compose.owner.yml`. At startup it creates `ephemeral/auth/sessions/` and `audit/` there with mode `0700`, and checks that it can write, sync, and rename a file, the way it writes session records. It refuses to start when the variable is unset, names no directory, or names one the server's user (uid 1001) can't reach or write, that another user owns or others can write, or where a store directory such as `drafts/` is a symbolic link. It makes `ephemeral/preview/` the same way the first time Studio opens a preview. Run one server per data directory: the running one holds `publication/server.json`, and lets it go as it stops, and a second server refuses to start while that claim is fresh. When the CLI holds the publication lock through startup, as through a backup, the server starts anyway, serves visitors, and claims the directory once the lock is free. Until it has, and while another server holds the directory, owner writes answer 503, and `config.status` says why under `writes`. Under `pnpm dev`, an unset `PORTFOLIO_DATA_DIR` is `.data/` at the workspace root, which git and Docker ignore.
 
 `ephemeral/` holds sessions, auth state, and preview grants only, and never belongs in a backup. A restore that brings it back also brings back sessions revoked since the backup was taken, so run [`revoke-sessions`](#revoking-sessions) after any restore of the volume.
+
+Keep `publication/` in every backup with `revisions/`: it holds `live.json` and `events/`. A store that has lost both serves the mounted documents, as an empty one does, unless `revisions/` holds a tombstone, and startup leaves every revision in it as it is.
 
 ### Signing in
 
@@ -270,6 +272,10 @@ Before it takes a request, the server validates its settings and the two documen
 | A password hash file that group or others can write                                                                                                                                                         | owner            | refuses to start                                                                                    |
 | A password hash that is missing, not a scrypt PHC string, or outside `ln=17, r=8, p=1` to `ln=18, r=16, p=4`                                                                                                | owner            | refuses to start                                                                                    |
 | `PORTFOLIO_DATA_DIR` unset, naming no directory, or naming one the server can't reach or write                                                                                                              | owner            | refuses to start                                                                                    |
+| `PORTFOLIO_DATA_DIR` another user owns or others can write, or holding a store directory that is a symbolic link                                                                                            | owner            | refuses to start                                                                                    |
+| Another owner server holding `PORTFOLIO_DATA_DIR`: its claim is under 45 s old, and its process runs                                                                                                        | owner            | refuses to start                                                                                    |
+| The publication lock busy through startup, as while the CLI takes a backup                                                                                                                                  | owner            | starts and warns (`data_dir_unclaimed`); owner writes wait until it claims the directory            |
+| `publication/` the claim can't read or write through startup, as on a full volume or with a link at `publication/lock`                                                                                      | owner            | starts and warns (`data_dir_claim_failed`); owner writes wait until it claims the directory         |
 | `PORTFOLIO_AUTH_SESSION_IDLE_MINUTES` outside 5 to 120, or `PORTFOLIO_AUTH_SESSION_MAX_HOURS` outside 1 to 24                                                                                               | owner            | refuses to start                                                                                    |
 | `PORTFOLIO_PREVIEW_GRANT_IDLE_TTL_SECONDS` outside 60 to 3600, `PORTFOLIO_PREVIEW_GRANT_MAX_TTL_SECONDS` outside 300 to 43200, either not a whole number, or an idle limit over the cap                     | owner            | refuses to start                                                                                    |
 | `PORTFOLIO_TRUSTED_PROXY_HOPS` of `0`                                                                                                                                                                       | owner            | starts, and warns that sign-in has only its global limits                                           |
@@ -298,30 +304,45 @@ Data under an `extensions` key, or a section whose `kind` is `<npm package name>
 }
 ```
 
-`capabilities` lists every capability the profile grants. The checks are `catalog` (the document pair loads), `packs` (the site's variant loads, `degraded` while the fallback composition renders in place of a variant this build doesn't register), and, under `demo` and `read-only`, `owner-modules` (no Studio, storage, or sign-in code has loaded). A failed check makes it 503 with `"status": "unavailable"`. When a check is degraded, or a startup requirement fell back to a degraded mode, it's 200 with `"status": "degraded"`. While the site selects a variant this build doesn't register, the bundled sample's `editorial-evidence` included until #13, readiness says `degraded`. Neither endpoint returns a path, a value, or portfolio content, and both send `Cache-Control: no-store`.
+`capabilities` lists every capability the profile grants. The checks are `catalog` (something can be served: under `owner`, `degraded` while the last known good stands in for a live revision that can't be served, and a failure when no published revision can be served), `packs` (the site's variant loads, `degraded` while the fallback composition renders in place of a variant this build doesn't register), under `demo` and `read-only`, `owner-modules` (no Studio, storage, or sign-in code has loaded), and under `owner`, `data-directory` (the data directory takes a write, a sync, and a rename, tried at most every 30 seconds). A failed check makes it 503 with `"status": "unavailable"`. When a check is degraded, or a startup requirement fell back to a degraded mode, it's 200 with `"status": "degraded"`. While the site selects a variant this build doesn't register, the bundled sample's `editorial-evidence` included until #13, readiness says `degraded`. Neither endpoint returns a path, a value, or portfolio content, and both send `Cache-Control: no-store`.
 
 ## Logs
 
-The app writes its log as one JSON object per line on stdout, with `ts`, `level`, and `event`, and only these other fields: `requestId`, `profile`, `route` (the route pattern, never the URL), `operation`, `capability`, `status`, `code`, `key`, and `digest`. `config.fatal` and `config.warning` add `file` (relative to the source directory), `document`, `path`, `line`, `column`, `stableId`, `message`, and `remediation`. No line of the app's carries a request body, a cookie, `Authorization`, a raw URL, or a secret value.
+The app writes its log as one JSON object per line on stdout, with `ts`, `level`, and `event`, and only these other fields: `requestId`, `profile`, `route` (the route pattern, never the URL), `operation`, `capability`, `status`, `code`, `key`, and `digest`. `config.fatal` and `config.warning` add `file` (relative to the source directory), `document`, `path`, `line`, `column`, `stableId`, `message`, and `remediation`. Under `owner`, the revision store's `store.*` lines add `revisionId`, `servingRevisionId`, `seq`, `stage`, `durationMs`, and `drift`, never content. No line of the app's carries a request body, a cookie, `Authorization`, a raw URL, or a secret value.
 
 Next writes its own lines to the same streams, as plain text: its startup banner on stdout (`▲ Next.js`, the address, `✓ Ready`), and on stderr, the message and stack of each error it catches, next to the app's `request.error` line, and a line naming the request URL when a request handler crashes. Those can name server paths and request URLs. None of them is JSON, so a log pipeline keeps the app's lines by parsing each line as a JSON object.
 
-| Event                     | When                                                                                                                          |
-| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `config.fatal`            | A startup check failed. The server exits 1 after the last one.                                                                |
-| `config.warning`          | A startup check found something to fix that doesn't stop the server.                                                          |
-| `deployment.config`       | Once, at startup: the redacted settings summary.                                                                              |
-| `request.error`           | A page or route failed. `digest` is the reference code the error page shows the visitor.                                      |
-| `operation.failed`        | A Studio operation failed. Its response carries the same `requestId`.                                                         |
-| `feed.failed`             | `/feed.xml` couldn't be built: `code` is `catalog_unavailable` or `render_failed`. Its response carries the same `requestId`. |
-| `session.read_failed`     | `owner`: the session store couldn't be read. The request gets no session, and its cookie stays.                               |
-| `session.touch_failed`    | `owner`: a session's last use couldn't be written. The request goes on.                                                       |
-| `session.listener_failed` | `owner`: something told of an ended session failed. The session ended anyway.                                                 |
-| `audit.write_failed`      | `owner`: an audit line couldn't be written. `code` is its type. No decision changes.                                          |
-| `login.store_failed`      | `owner`: a sign-in's session couldn't be stored. It gets 503 `unavailable`, or a form post `state=error`, and no cookie.      |
-| `logout.store_failed`     | `owner`: a sign-out couldn't end its session. The browser is signed out, and the session ends at its idle limit.              |
+| Event                        | When                                                                                                                          |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `config.fatal`               | A startup check failed. The server exits 1 after the last one.                                                                |
+| `config.warning`             | A startup check found something to fix that doesn't stop the server.                                                          |
+| `deployment.config`          | Once, at startup: the redacted settings summary.                                                                              |
+| `request.error`              | A page or route failed. `digest` is the reference code the error page shows the visitor.                                      |
+| `operation.failed`           | A Studio operation failed. Its response carries the same `requestId`.                                                         |
+| `feed.failed`                | `/feed.xml` couldn't be built: `code` is `catalog_unavailable` or `render_failed`. Its response carries the same `requestId`. |
+| `session.read_failed`        | `owner`: the session store couldn't be read. The request gets no session, and its cookie stays.                               |
+| `session.touch_failed`       | `owner`: a session's last use couldn't be written. The request goes on.                                                       |
+| `session.listener_failed`    | `owner`: something told of an ended session failed. The session ended anyway.                                                 |
+| `audit.write_failed`         | `owner`: an audit line couldn't be written. `code` is its type. No decision changes.                                          |
+| `login.store_failed`         | `owner`: a sign-in's session couldn't be stored. It gets 503 `unavailable`, or a form post `state=error`, and no cookie.      |
+| `logout.store_failed`        | `owner`: a sign-out couldn't end its session. The browser is signed out, and the session ends at its idle limit.              |
+| `store.publish.committed`    | `owner`: a publish moved the live pointer, with `revisionId`, `seq`, and `durationMs`. Rollback and recover log their own.    |
+| `store.publish.failed`       | `owner`: a publish didn't move it: `stage` is where it stopped and `code` why. Rollback and recover log their own.            |
+| `store.catalog.degraded`     | `owner`: the live revision can't be served, so `servingRevisionId`, the last known good, is. `code` says why.                 |
+| `store.catalog.incompatible` | `owner`: no published revision can be served, so visitors get 503. `code` says why.                                           |
+| `store.pointer.missing`      | `owner`: `live.json` is gone from a store that has published. The last known good serves, `pointer_damaged`.                  |
+| `store.render-drift`         | `owner`: the live revision's variant, packs, or contracts differ from this build's: `drift` lists each ID and both versions.  |
+| `store.repair.failed`        | `owner`: startup repair didn't finish. Visitors are served what can be served, and owner writes wait for the repair.          |
+| `store.writes.stopped`       | `owner`: a Studio write stopped with `code`: the claim isn't this server's, or the repair still fails. Each tries both first. |
+| `store.repair.finished`      | `owner`: a write finished the repair startup couldn't, and owner writes go on.                                                |
+| `store.server.claim_waiting` | `owner`: the publication lock stayed busy, so the server hasn't claimed the data directory yet. It tries again, with backoff. |
+| `store.server.claim_failed`  | `owner`: the claim couldn't read or write `publication/`, and `code` says why. It tries again, with backoff.                  |
+| `store.server.claimed`       | `owner`: the server claimed the data directory once it could, and owner writes go on.                                         |
+| `store.server.claim_refused` | `owner`: another owner server holds the data directory. Owner writes answer 503 `data_dir_in_use` and try the claim again.    |
+| `store.server.claim_lost`    | `owner`: another owner server took this one's claim. Owner writes stop until this one claims the directory again.             |
+| `store.lock.lost`            | `owner`: another holder took the publication lock while this server held it. Nothing moved; the write answered `lock_lost`.   |
 
-`deployment.config` adds `origin`, `previewOrigin`, `proxyHops`, `capabilities`, `adapters` (which catalog the profile reads), and `secrets`, each secret only as `set` or `unset`. The owner-session `config.status` operation returns the same summary; no anonymous route does.
+`deployment.config` adds `origin`, `previewOrigin`, `proxyHops`, `capabilities`, `adapters` (which catalog the profile reads), and `secrets`, each secret only as `set` or `unset`. The owner-session `config.status` operation returns the same summary, with how the live site's variant renders, `catalog`: the serving state, the revision `live.json` names, the one served, and any render drift, and `writes`: `open`, or `stopped` with `data_dir_in_use`, `data_dir_unclaimed`, or `store_repair_failed`. No anonymous route does.
 
 ## Response headers
 

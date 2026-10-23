@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto';
+import { closeSync, constants, fstatSync, openSync, readFileSync, rmSync } from 'node:fs';
 import { recordOwnerModule } from '../load-trace';
 import { storageError, type StoreLog } from './common';
 import { nodeFs, type FsPort } from './fs-port';
@@ -21,11 +22,15 @@ import {
 // lock's own test (item 10). Each refresh reads the file first, and once it
 // isn't this claim's, the server logs store.server.claim_lost, stops
 // refreshing, and every lock over the directory in this process refuses, so
-// it writes nothing more there. A refresh only touches the file, so a claim
-// another server made meanwhile always stands, and a removed file never
-// comes back. Refreshes run one at a time, and release() waits for one under
-// way. The CLI doesn't claim it: it runs alongside the server, under the
-// publication lock. The startup hook releases the claim on SIGTERM.
+// it writes nothing more there, until a new claim of its own stands. A
+// refresh only touches the file, so a claim another server made meanwhile
+// always stands, and a removed file never comes back. Refreshes run one at a
+// time, and release() waits for one under way. A process holds one claim per
+// data directory: a second claimServer() over it, as a composition built
+// twice makes, gets the one that stands, never a record of its own over it,
+// which the first would read as another server's. The CLI doesn't claim it:
+// it runs alongside the server, under the publication lock. The startup
+// hook releases the claim as the process exits, which a SIGTERM ends in.
 
 recordOwnerModule('core/store/server-claim');
 
@@ -43,8 +48,16 @@ export interface ServerClaim {
   readonly record: ServerRecord;
   /** Whether another server took the claim over, so this one may write nothing more. */
   readonly lost: boolean;
+  /** Whether it's still the directory's: neither lost nor released. */
+  readonly held: boolean;
   /** Stops refreshing and removes server.json, if it's still this claim's. */
   release(): Promise<void>;
+  /**
+   * The same, at once, for a process that's exiting, where nothing waits for
+   * a promise: the startup hook runs it on exit, which Next's own SIGTERM
+   * handling ends in.
+   */
+  releaseSync(): void;
 }
 
 export type ClaimResult =
@@ -52,6 +65,7 @@ export type ClaimResult =
   | { readonly ok: false; readonly code: 'data_dir_in_use'; readonly holder: ServerRecord };
 
 export interface ClaimOptions {
+  /** Defaults to the real filesystem; tests pass a crashing one. */
   readonly fs?: FsPort;
   readonly paths: StorePaths;
   /** The lock the claim is made under, the store's own; by default one over `paths`. */
@@ -64,7 +78,32 @@ export interface ClaimOptions {
 
 type Found = { readonly record: Partial<ServerRecord> | null; readonly mtimeMs: number };
 
-export async function claimServer({
+// The latest claim this process made over each data directory, by its
+// resolved root, on globalThis since Next can load a server module twice.
+const CLAIMS = Symbol.for('keyurgolani.portfolio.store-server-claims');
+type ClaimsHolder = typeof globalThis & { [CLAIMS]?: Map<string, Promise<ClaimResult>> };
+const claims = (): Map<string, Promise<ClaimResult>> =>
+  ((globalThis as ClaimsHolder)[CLAIMS] ??= new Map());
+
+/**
+ * Claims the data directory for this server: the claim this process already
+ * holds over it, while that one stands, or a new one, made under the lock,
+ * once none does. Calls over one directory take turns, so two at once get
+ * the same claim.
+ */
+export function claimServer(options: ClaimOptions): Promise<ClaimResult> {
+  const root = options.paths.root;
+  const before = claims().get(root);
+  const attempt = (async (): Promise<ClaimResult> => {
+    const standing = await before?.catch(() => null);
+    if (standing?.ok && standing.claim.held) return standing;
+    return claimAnew(options);
+  })();
+  claims().set(root, attempt);
+  return attempt;
+}
+
+async function claimAnew({
   fs = nodeFs,
   paths,
   lock,
@@ -119,7 +158,9 @@ export async function claimServer({
 
   let claimed: ClaimResult | ServerRecord;
   try {
-    // Under the lock, the look and the write are one step to every other claimant.
+    // Under the lock, the look and the write are one step to every other
+    // claimant. It's taken even while an earlier claim of this process's is
+    // lost, which only a claim that stands again clears.
     claimed = await (lock ?? publicationLock({ fs, paths, now, log })).withLock(
       'server.claim',
       async (): Promise<ClaimResult | ServerRecord> => {
@@ -136,6 +177,7 @@ export async function claimServer({
         }
         return write();
       },
+      { claiming: true },
     );
   } catch (error) {
     throw storageError(error);
@@ -187,6 +229,9 @@ export async function claimServer({
       get lost() {
         return lost;
       },
+      get held() {
+        return !lost && !released;
+      },
       async release() {
         released = true;
         clearInterval(timer);
@@ -194,6 +239,31 @@ export async function claimServer({
         await refreshing;
         try {
           if (ours(await read())) await fs.remove(paths.server, 'server.release');
+        } catch {
+          // Gone already, or not readable: nothing of this claim's to remove.
+        }
+      },
+      releaseSync() {
+        // On exit nothing waits, and nothing under way finishes after it.
+        released = true;
+        clearInterval(timer);
+        try {
+          // Never through a link, nor from a FIFO, which would hold the exit
+          // until a writer came: as the store's own reads.
+          const fd = openSync(
+            paths.server,
+            constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
+          );
+          let text: string;
+          try {
+            if (!fstatSync(fd).isFile()) return;
+            text = readFileSync(fd, 'utf8');
+          } finally {
+            closeSync(fd);
+          }
+          if ((JSON.parse(text) as Partial<ServerRecord>).nonce === nonce) {
+            rmSync(paths.server, { force: true });
+          }
         } catch {
           // Gone already, or not readable: nothing of this claim's to remove.
         }

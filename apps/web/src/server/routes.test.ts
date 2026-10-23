@@ -1495,3 +1495,70 @@ test('an entry can serve fewer profiles than its capability allows', () => {
   assert.equal(resolve('read-only', '/archive').status, 'absent');
   assert.equal(resolve('demo', '/archive').status, 'absent');
 });
+
+/** Every module under `dir`, tests aside. */
+function sourceModules(dir = SRC): string[] {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const file = path.join(dir, entry.name);
+    if (entry.isDirectory()) return sourceModules(file);
+    return PAGE_FILE.test(entry.name) && !/\.test\.tsx?$/.test(entry.name) ? [file] : [];
+  });
+}
+
+/**
+ * The modules under src/server/ that `file` loads at run time, through its
+ * relative and `~/` imports and theirs. `text` stands in for the file's own.
+ */
+function serverModulesReached(file: string, text?: string): string[] {
+  const server = `${path.join(SRC, 'server')}${path.sep}`;
+  const seen = new Set<string>();
+  const visit = (current: string, source: ts.SourceFile) => {
+    for (const specifier of runtimeImports(source)) {
+      const target = specifier === null ? null : resolveImport(current, specifier);
+      if (target === null || seen.has(target)) continue;
+      seen.add(target);
+      visit(target, parse(target));
+    }
+  };
+  visit(file, parse(file, text));
+  return [...seen]
+    .filter((found) => found.startsWith(server))
+    .map((found) => path.relative(SRC, found));
+}
+
+/**
+ * The one server module a client one may load: #2's returnTo checks, pure
+ * string work, which the sign-in form shares with proxy.ts and owner code.
+ */
+const CLIENT_SAFE_SERVER = new Set(['server/return-to.ts']);
+
+test("no 'use client' module under apps/web/src reaches src/server/, live-revision.ts included", () => {
+  // server/live-revision.ts imports nothing server-only, so the 404 chrome
+  // can read it outside the react-server condition. This keeps it, and the
+  // rest of server/, out of every client bundle in its place.
+  const clients = sourceModules().filter((file) => isClientModule(parse(file)));
+  assert.ok(clients.length >= 5, `${clients.length} client modules`);
+  for (const client of clients) {
+    assert.deepEqual(
+      serverModulesReached(client).filter((found) => !CLIENT_SAFE_SERVER.has(found)),
+      [],
+      path.relative(SRC, client),
+    );
+  }
+  // What the check refuses: server code, however far down.
+  const probe = path.join(SRC, 'lib', 'probe.tsx');
+  assert.deepEqual(
+    serverModulesReached(
+      probe,
+      "'use client';\nimport { getLive } from '~/server/live-revision';\n",
+    ),
+    ['server/live-revision.ts', 'server/config-store.ts'],
+  );
+  assert.deepEqual(
+    serverModulesReached(
+      probe,
+      "'use client';\nimport type { LiveRevision } from '~/server/catalog-port';\n",
+    ),
+    [],
+  );
+});

@@ -1,4 +1,5 @@
 import type { Principal } from '../auth/provider';
+import type { RenderDrift } from '../catalog/port';
 import { recordOwnerModule } from '../load-trace';
 
 // What the revision store's modules share (#3): who acts, the errors that
@@ -21,7 +22,12 @@ export const isStoreActor = (value: unknown): value is StoreActor =>
  * returns. Each has its HTTP status in #3's item 22: `lock_timeout` and
  * `storage_unavailable` are 503, `storage_full` 507.
  */
-export type StoreErrorCode = 'lock_timeout' | 'storage_unavailable' | 'storage_full';
+/**
+ * `data_dir_in_use`: another owner server took this process's claim on the
+ * data directory, so it writes nothing more there.
+ */
+export type StoreErrorCode =
+  'lock_timeout' | 'storage_unavailable' | 'storage_full' | 'data_dir_in_use';
 
 export class StoreError extends Error {
   readonly code: StoreErrorCode;
@@ -30,6 +36,17 @@ export class StoreError extends Error {
     this.name = 'StoreError';
     this.code = code;
   }
+}
+
+/**
+ * Whether a read failed for what's there, so asking again can't help: a
+ * link in a file's place (ELOOP), or a directory or anything else that
+ * isn't a regular file (EISDIR, ENOTDIR, EFTYPE). Any other failure, such
+ * as EACCES, EMFILE, or EIO, may pass.
+ */
+export function isPermanentReadError(error: unknown): boolean {
+  const code = (error as NodeJS.ErrnoException)?.code;
+  return code === 'ELOOP' || code === 'EISDIR' || code === 'ENOTDIR' || code === 'EFTYPE';
 }
 
 /** A file system failure as the store reports it: a full disk is its own code. */
@@ -49,10 +66,14 @@ export interface StoreLogEntry {
   /** Such as `store.publish.committed`. */
   readonly event: string;
   readonly revisionId?: string;
+  /** For `store.catalog.degraded`: the last known good, served in the live revision's place. */
+  readonly servingRevisionId?: string;
   readonly seq?: number;
   readonly stage?: string;
   readonly durationMs?: number;
   readonly code?: string;
+  /** For `store.render-drift`: the IDs and versions that differ from the build's. */
+  readonly drift?: readonly RenderDrift[];
 }
 export type StoreLog = (entry: StoreLogEntry) => void;
 

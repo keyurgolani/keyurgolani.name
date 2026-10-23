@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import type { AuditSink, OwnerLog } from '../audit/sink';
 import { recordOwnerModule } from '../load-trace';
 import { DIGEST } from './session-files.mjs';
@@ -31,6 +32,14 @@ export const SESSION_LIFETIME_RANGE = Object.freeze({
 export const MAX_SESSIONS = 5;
 /** How often a busy session writes lastSeenAt. */
 export const TOUCH_INTERVAL_MS = 60_000;
+/**
+ * How long a commit may hold its session before the hold lapses (#3). The
+ * commit it holds is #3's pointer move alone: one small file written and
+ * synced before its final check. A local fsync takes milliseconds, and a
+ * disk deep in writeback a second or two; 10 s is well past both, and still
+ * short enough that a logout queued behind a stuck commit lands soon.
+ */
+export const COMMIT_TIMEOUT_MS = 10_000;
 
 /** Headers, as a Request or Next's headers() holds them. */
 export interface HeaderReader {
@@ -120,7 +129,9 @@ declare const held: unique symbol;
  * Proof that a command holds its session's lock, with the session read again
  * and still counting, for as long as its commit runs. Only
  * Sessions.holding() makes one, and it counts only until that commit
- * returns, so #3's pointer advance can ask for it with assertSessionHeld().
+ * returns or its time runs out, so #3's pointer advance can ask for it with
+ * assertSessionHeld(), and once more with enterCommitPoint() just before it
+ * commits.
  */
 export interface SessionHold {
   /** The session, as an audit record names it. */
@@ -128,20 +139,57 @@ export interface SessionHold {
   readonly [held]: true;
 }
 
+/**
+ * Where a hold's commit is: `held` while it runs, `committing` once it
+ * passed its final check, and `lapsed` once its time ran out first.
+ */
+type HoldPhase = 'held' | 'committing' | 'lapsed';
+
 // Holds in force, on a globalThis symbol: the provider that makes one and the
 // store that checks it can sit in different server bundles.
 const HOLDS = Symbol.for('keyurgolani.portfolio.session-holds');
-type HoldHolder = typeof globalThis & { [HOLDS]?: WeakSet<object> };
-const holds = (): WeakSet<object> => ((globalThis as HoldHolder)[HOLDS] ??= new WeakSet());
+type HoldHolder = typeof globalThis & { [HOLDS]?: WeakMap<object, { phase: HoldPhase }> };
+const holds = (): WeakMap<object, { phase: HoldPhase }> =>
+  ((globalThis as HoldHolder)[HOLDS] ??= new WeakMap());
+const holdOf = (value: unknown) =>
+  typeof value === 'object' && value !== null ? holds().get(value) : undefined;
 
-/** Whether `value` is a SessionHold whose commit is still running. */
+/** Whether `value` is a SessionHold whose commit is still running, and hasn't run out of time. */
 export function isSessionHeld(value: unknown): value is SessionHold {
-  return typeof value === 'object' && value !== null && holds().has(value);
+  const hold = holdOf(value);
+  return hold !== undefined && hold.phase !== 'lapsed';
 }
 
 /** Throws unless `value` is a SessionHold whose commit is still running. */
 export function assertSessionHeld(value: unknown): asserts value is SessionHold {
   if (!isSessionHeld(value)) throw new Error('The command does not hold a session that counts.');
+}
+
+/**
+ * A commit point's final check, made just before the step that commits,
+ * such as #3's rename of live.json: true while `value` is a hold that still
+ * counts. From then on the session's lock waits for the commit to return,
+ * past the commit timeout too, so nothing that ends the session lands
+ * between this check and the commit. False once the hold lapsed or its
+ * commit returned: the caller must not commit.
+ */
+export function enterCommitPoint(value: unknown): boolean {
+  const hold = holdOf(value);
+  if (hold === undefined || hold.phase === 'lapsed') return false;
+  hold.phase = 'committing';
+  return true;
+}
+
+/**
+ * What a task gets when it asks for a session's lock that its own async
+ * context already holds, such as sessions.list() from inside a commit: it
+ * would wait on itself forever, so it fails at once instead.
+ */
+export class SessionReentryError extends Error {
+  constructor() {
+    super("A task asked for a session's lock that it already holds.");
+    this.name = 'SessionReentryError';
+  }
 }
 
 /** What holding() did: ran the commit, or found the session no longer counts. */
@@ -180,10 +228,15 @@ export interface Sessions {
    * while it still counts, runs `commit` without letting go, so a logout, a
    * revocation, an eviction, or revoke-all in this process waits for the
    * commit, and one that came first stops it before it runs. `commit` gets
-   * a SessionHold, good only until it returns, and must not call back into
-   * this session, which would wait on itself. revoke-sessions runs in
-   * another process, outside this lock: a commit already running when it
-   * writes still finishes, and the next request is refused.
+   * a SessionHold, good only until it returns. Asking for this session's
+   * lock from inside `commit` fails at once with SessionReentryError. A
+   * commit still running after COMMIT_TIMEOUT_MS loses its hold, and the
+   * lock goes to whatever waits: from then on enterCommitPoint() refuses it,
+   * so it can't commit. One already past enterCommitPoint() keeps the lock
+   * until it returns. holding() itself returns once `commit` has, and passes
+   * on what it threw. revoke-sessions runs in another process, outside this
+   * lock: a commit already running when it writes still finishes, and the
+   * next request is refused.
    */
   holding<T>(
     token: string | null | undefined,
@@ -222,6 +275,8 @@ export interface SessionsOptions {
   readonly lifetime?: SessionLifetime;
   readonly now?: () => number;
   readonly log?: OwnerLog;
+  /** How long a commit holds its session before the hold lapses: COMMIT_TIMEOUT_MS. */
+  readonly commitTimeoutMs?: number;
 }
 
 const NONE = Object.freeze({ status: 'none' as const });
@@ -230,12 +285,21 @@ const ended = (reason: EndedReason) => Object.freeze({ status: 'ended' as const,
 
 /**
  * Runs tasks one after another per key, so a touch never writes back a
- * session that a logout, a revocation, or a sign-in has just ended.
+ * session that a logout, a revocation, or a sign-in has just ended. Each
+ * task runs knowing, through its async context, the keys it holds: one that
+ * asks for a key it already holds would wait on itself, so it fails at once
+ * with SessionReentryError. A task holds its key until the promise it
+ * returns settles.
  */
 function serializer() {
   const tails = new Map<string, Promise<void>>();
+  const holding = new AsyncLocalStorage<ReadonlySet<string>>();
   return function run<T>(key: string, task: () => Promise<T>): Promise<T> {
-    const result = (tails.get(key) ?? Promise.resolve()).then(task);
+    const held = holding.getStore();
+    if (held?.has(key)) return Promise.reject(new SessionReentryError());
+    const keys = new Set(held);
+    keys.add(key);
+    const result = (tails.get(key) ?? Promise.resolve()).then(() => holding.run(keys, task));
     const tail = result.then(
       () => undefined,
       () => undefined,
@@ -258,6 +322,7 @@ export function createSessions({
   lifetime = SESSION_LIFETIME,
   now = Date.now,
   log = () => {},
+  commitTimeoutMs = COMMIT_TIMEOUT_MS,
 }: SessionsOptions): Sessions {
   const idleMs = lifetime.idleMinutes * 60_000;
   const maxMs = lifetime.maxHours * 3_600_000;
@@ -388,28 +453,65 @@ export function createSessions({
       if (token === undefined || token === null || token === '') return NONE;
       if (!isSessionToken(token)) return ended('malformed');
       const digest = sessionDigest(token);
-      return run(digest, async (): Promise<Holding<T>> => {
-        let record: SessionRecord | null;
-        try {
-          record = await store.get(digest);
-          if (!record) return ended('unknown');
-          const reason = problem(record, await store.revokedBefore(), now());
-          if (reason) {
-            await dropHeld(digest);
-            return ended(reason);
+      type Settled =
+        { readonly ok: true; readonly value: T } | { readonly ok: false; error: unknown };
+      // The lock is held from the read until the commit returns, or until its
+      // time runs out first, whichever is sooner; holding() itself waits for
+      // the commit either way.
+      const locked = await run(
+        digest,
+        async (): Promise<
+          | Exclude<Holding<T>, { readonly status: 'valid' }>
+          | { readonly status: 'held'; readonly record: SessionRecord; settled: Promise<Settled> }
+        > => {
+          let record: SessionRecord | null;
+          try {
+            record = await store.get(digest);
+            if (!record) return ended('unknown');
+            const reason = problem(record, await store.revokedBefore(), now());
+            if (reason) {
+              await dropHeld(digest);
+              return ended(reason);
+            }
+          } catch {
+            log({ level: 'error', event: 'session.read_failed' });
+            return UNAVAILABLE;
           }
-        } catch {
-          log({ level: 'error', event: 'session.read_failed' });
-          return UNAVAILABLE;
-        }
-        const hold = Object.freeze({ sessionRef: sessionRef(digest) }) as unknown as SessionHold;
-        holds().add(hold);
-        try {
-          const value = (await commit(hold, record)) as T;
-          return Object.freeze({ status: 'valid' as const, value, record });
-        } finally {
-          holds().delete(hold);
-        }
+          const hold = Object.freeze({ sessionRef: sessionRef(digest) }) as unknown as SessionHold;
+          const state: { phase: HoldPhase } = { phase: 'held' };
+          holds().set(hold, state);
+          const current = record;
+          const settled = (async (): Promise<Settled> => {
+            try {
+              return { ok: true, value: (await commit(hold, current)) as T };
+            } catch (error) {
+              return { ok: false, error };
+            } finally {
+              holds().delete(hold);
+            }
+          })();
+          let timer: ReturnType<typeof setTimeout> | undefined;
+          const lapsed = new Promise<void>((resolve) => {
+            timer = setTimeout(() => {
+              // A commit past its final check keeps the lock until it returns.
+              if (state.phase !== 'held') return;
+              state.phase = 'lapsed';
+              log({ level: 'error', event: 'session.commit_timeout' });
+              resolve();
+            }, commitTimeoutMs);
+          });
+          await Promise.race([settled, lapsed]);
+          clearTimeout(timer);
+          return { status: 'held', record: current, settled };
+        },
+      );
+      if (locked.status !== 'held') return locked;
+      const settled = await locked.settled;
+      if (!settled.ok) throw settled.error;
+      return Object.freeze({
+        status: 'valid' as const,
+        value: settled.value,
+        record: locked.record,
       });
     },
 

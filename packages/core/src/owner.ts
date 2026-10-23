@@ -1,6 +1,8 @@
-// @portfolio/core/owner: the package's only entry, and all of it owner code
-// (#1, item 14). Only the web app's server/owner/ modules import it, which
-// check:deps enforces, so demo and read-only never load it.
+// @portfolio/core/owner: the owner code (#1, item 14). Only the web app's
+// server/owner/ modules and the composition root's owner branch import it,
+// which check:deps enforces, so demo and read-only never load it. What every
+// profile may load is @portfolio/core, src/index.ts. Server code only.
+import 'server-only';
 import { recordOwnerModule } from './load-trace';
 
 recordOwnerModule('core/owner');
@@ -34,11 +36,14 @@ export {
 export {
   assertSessionHeld,
   browserFamily,
+  COMMIT_TIMEOUT_MS,
   createSessions,
+  enterCommitPoint,
   isSessionHeld,
   MAX_SESSIONS,
   SESSION_LIFETIME,
   SESSION_LIFETIME_RANGE,
+  SessionReentryError,
   slides,
   TOUCH_INTERVAL_MS,
   type Activity,
@@ -80,7 +85,7 @@ export {
   type OwnerLog,
 } from './audit/sink';
 export { limitSource, sourcePrefix } from './audit/source';
-export { authPaths, prepareAuthDirectories } from './data/layout.mjs';
+export { authPaths, ensurePrivateDir, prepareAuthDirectories } from './data/layout.mjs';
 
 // Preview grants (#7, Slice 2), beside the sessions they're bound to.
 export {
@@ -124,9 +129,17 @@ export {
   type Renewal,
 } from './preview/grants';
 
-// The revision store (#3, Slice 1). Nothing wires it yet: owner reads the
-// documents adapter until Slice 3's first-start import.
+// The revision store (#3). Owner serves it through RevisionCatalogReader
+// once it holds a published revision; until Slice 3's first-start import, an
+// empty one serves the mounted documents.
 export { openStore, type Store, type StoreOptions } from './store/store';
+export {
+  revisionCatalogReader,
+  UNIT_CACHE_SIZE,
+  type RevisionCatalogOptions,
+  type RevisionCatalogReader,
+} from './store/reader';
+export { nodeReadFs } from './store/read-fs';
 export {
   onStoreEvent,
   StoreError,
@@ -139,7 +152,7 @@ export {
 } from './store/common';
 // The port's types only: openStore() defaults to node:fs, and apps/web gets
 // no port it could write files through.
-export { type CrashPoint, type FileStats, type FsPort } from './store/fs-port';
+export { type CrashPoint, type FileStats, type FsPort, type ReadFs } from './store/fs-port';
 export {
   isDraftId,
   isRevisionId,
@@ -168,6 +181,7 @@ export {
 export { preflight, type PreflightCode, type PreflightOptions } from './store/preflight';
 export {
   EVENT_TYPES,
+  hasHistory,
   isIdempotencyKey,
   type EventType,
   type LivePointer,
@@ -183,8 +197,9 @@ export {
   type UnitDocument,
   type UnitInput,
   type Versioned,
-} from './store/unit';
+} from './catalog/unit';
 export {
+  type HealthPurpose,
   type Manifest,
   type ManifestDocument,
   type RevisionHealth,
@@ -209,6 +224,7 @@ export { type AssetStat, type AssetStore } from './store/assets';
 export {
   IDEMPOTENCY_WINDOW,
   type HeldMove,
+  type ListPage,
   type LiveStatus,
   type PublicationContext,
   type PublicationOutcome,

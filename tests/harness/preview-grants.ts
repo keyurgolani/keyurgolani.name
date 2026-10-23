@@ -6,18 +6,17 @@
 // commands write drafts (#3, Slice 2), the drafts and revisions grants
 // render are seeded straight into the server's data directory, as the
 // operator's CLI writes them; the server reads them at its next request.
+// The store's code is server code, so each seed or publish runs in a child
+// process under the react-server condition (preview-store.ts).
+import { spawn } from 'node:child_process';
 import { readFileSync } from 'node:fs';
+import { createInterface } from 'node:readline';
+import { fileURLToPath } from 'node:url';
 import { expect, type Frame, type Page, type Response } from '@playwright/test';
-import {
-  openStore,
-  preflight,
-  type Draft,
-  type RevisionId,
-  type Store,
-} from '../../packages/core/src/owner';
-import { validatePublicationUnit } from '../../packages/schema/src/index';
+import type { Draft, RevisionId } from '../../packages/core/src/owner';
 import { DEFAULT_SITE } from './app-server.mjs';
 import type { App } from './fixtures';
+import type { StoreAnswer, StoreStep, StoreTask } from './preview-store';
 
 /** The environment a frame starts in, as Slice 4's controls leave it. */
 export const ENVIRONMENT = {
@@ -36,47 +35,81 @@ const unit = (portfolio: string, site = readFileSync(DEFAULT_SITE, 'utf8')) => (
   site: { format: 'yaml' as const, sourceText: site },
 });
 
-/** The server's revision store, opened as the operator's CLI opens it. */
-export async function storeOf(app: App): Promise<Store> {
-  const dataDir = app.env.PORTFOLIO_DATA_DIR;
-  if (!dataDir) throw new Error('The app runs with no data directory.');
-  const problem = await preflight({ dataDir });
-  if (problem) throw new Error(`preflight: ${problem}`);
-  return openStore({
-    dataDir,
-    checks: { validate: (pair) => validatePublicationUnit(pair), appVersion: 'test' },
+const REPO_ROOT = fileURLToPath(new URL('../..', import.meta.url));
+const STORE_STEP = fileURLToPath(new URL('preview-store.ts', import.meta.url));
+
+/**
+ * The worker's store process, started as the worker loads this file. A
+ * step then takes what the store's own work takes, as it did in the worker:
+ * a new process for each, about half a second, left a Studio page quiet long
+ * enough that Playwright counted it idle before its grant's frame mounted,
+ * and never again after, so a wait for `networkidle` there never ended.
+ */
+const store = (() => {
+  const child = spawn(
+    process.execPath,
+    ['--conditions=react-server', '--import', 'tsx', STORE_STEP],
+    {
+      cwd: REPO_ROOT,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    },
+  );
+  const waiting = new Map<number, { resolve(value: unknown): void; reject(error: Error): void }>();
+  let next = 0;
+  let stderr = '';
+  let ended: string | null = null;
+  child.stderr.setEncoding('utf8').on('data', (chunk: string) => {
+    stderr += chunk;
   });
+  createInterface({ input: child.stdout }).on('line', (line) => {
+    const answer = JSON.parse(line) as StoreAnswer;
+    const step = waiting.get(answer.id);
+    waiting.delete(answer.id);
+    if (answer.ok) step?.resolve(answer.value);
+    else step?.reject(new Error(answer.error));
+  });
+  child.on('exit', (code, signal) => {
+    ended = `preview-store.ts exited ${code ?? signal}: ${stderr.trim()}`;
+    for (const step of waiting.values()) step.reject(new Error(ended));
+    waiting.clear();
+  });
+  child.stdin.on('error', () => {});
+  // It ends with the worker, as its input closes, and keeps no worker running.
+  child.unref();
+  for (const stream of [child.stdin, child.stdout, child.stderr]) {
+    (stream as unknown as { unref(): void }).unref();
+  }
+  return (task: Omit<StoreTask, 'id'>) =>
+    new Promise<unknown>((resolve, reject) => {
+      if (ended) return reject(new Error(ended));
+      const id = next++;
+      waiting.set(id, { resolve, reject });
+      child.stdin.write(`${JSON.stringify({ ...task, id })}\n`);
+    });
+})();
+
+/** Runs `step` on the server's data directory in the store process, and returns what it answered. */
+function storeStep(app: App, step: StoreStep): Promise<unknown> {
+  const dataDir = app.env.PORTFOLIO_DATA_DIR;
+  if (!dataDir) return Promise.reject(new Error('The app runs with no data directory.'));
+  return store({ dataDir, step });
 }
 
 /** The working draft, made or replaced, holding a portfolio named `name` and `site`'s text. */
 export async function seedDraft(app: App, name: string, site?: string): Promise<Draft> {
-  const store = await storeOf(app);
-  const working = await store.drafts.getWorking();
-  const outcome = await store.drafts.create(
-    {
-      documents: unit(portfolioNamed(name), site),
-      ...(working ? { expectedVersion: working.version } : {}),
-    },
-    'operator',
-  );
-  if (outcome.kind !== 'saved') throw new Error(`draft: ${JSON.stringify(outcome)}`);
-  return outcome.draft;
+  return (await storeStep(app, {
+    op: 'seed',
+    documents: unit(portfolioNamed(name), site),
+  })) as Draft;
 }
 
 /** Publishes `draft` as the operator would, which removes it. Returns the new revision. */
 export async function publish(app: App, draft: Draft): Promise<RevisionId> {
-  const store = await storeOf(app);
-  const live = await store.publication.status();
-  const outcome = await store.publication.publish(
-    {
-      draftId: draft.draftId,
-      draftVersion: draft.version,
-      expectedLiveRevisionId: live.liveRevisionId,
-    },
-    'operator',
-  );
-  if (outcome.kind !== 'committed') throw new Error(`publish: ${JSON.stringify(outcome)}`);
-  return outcome.revisionId;
+  return (await storeStep(app, {
+    op: 'publish',
+    draftId: draft.draftId,
+    draftVersion: draft.version,
+  })) as RevisionId;
 }
 
 /** Signs in through the form, from a fresh page, and returns the session's CSRF token. */

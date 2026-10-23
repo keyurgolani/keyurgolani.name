@@ -1,5 +1,6 @@
 import 'server-only';
 import path from 'node:path';
+import { contentHash, unitHashOf } from '@portfolio/core';
 import type { AppearanceCatalog, ContentExtension, UnitValidator } from '@portfolio/schema';
 import { readPair, readUnitFiles, type PairFiles } from '@portfolio/schema/node';
 import type { CatalogReader, LiveRevision } from './catalog-port';
@@ -9,10 +10,11 @@ import { frozenUnit, pairDigest, recordIssue } from './pair-records';
 // The sample adapter (#1, item 16): the CatalogReader for `demo`. It reads
 // the bundled pair, portfolio.example.yml and site.example.yml, once at
 // startup, validates them as a pair, reads the snapshots bundled beside them
-// (#10: snapshots/github.json), and freezes it all. The standalone output
-// ships them through outputFileTracingIncludes. It never reads
-// PORTFOLIO_SOURCE_DIR, and nothing it renders fetches: a github section
-// shows the bundled snapshot's values.
+// (#10: snapshots/github.json), and freezes it all, in the port's shape (#3):
+// always live. The standalone output ships them through
+// outputFileTracingIncludes. It never reads PORTFOLIO_SOURCE_DIR, and
+// nothing it renders fetches: a github section shows the bundled snapshot's
+// values.
 
 export interface SampleCatalogOptions {
   /** The bundled examples. */
@@ -91,9 +93,21 @@ export function openSampleCatalog({
       ],
     };
   }
+  const unit = frozenUnit(pair.portfolio, pair.site, unitFiles);
   const live: LiveRevision = Object.freeze({
+    state: 'live' as const,
     revisionId: `sample-${pairDigest(sources)}`,
-    unit: frozenUnit(pair.portfolio, pair.site, unitFiles),
+    unitHash: unitHashOf(
+      {
+        portfolio: { contentHash: contentHash(unit.portfolio) },
+        site: { contentHash: contentHash(unit.site) },
+        ...(unit.media === undefined ? {} : { media: { contentHash: contentHash(unit.media) } }),
+      },
+      Object.fromEntries(
+        Object.entries(unit.snapshots).map(([kind, value]) => [kind, contentHash(value)]),
+      ),
+    ),
+    unit,
   });
   const names = { portfolio: sources.portfolio.name, site: sources.site.name };
   return {

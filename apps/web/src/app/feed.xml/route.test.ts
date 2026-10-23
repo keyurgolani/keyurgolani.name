@@ -89,7 +89,10 @@ test('a server with no deployment state serves no feed', async () => {
 });
 
 /** A live revision of a portfolio in `locale`, on a site whose feed is `feed`. */
-function revision(locale: string, feed: boolean): Awaited<ReturnType<CatalogReader['getLive']>> {
+function revision(
+  locale: string,
+  feed: boolean,
+): Extract<Awaited<ReturnType<CatalogReader['getLive']>>, { unit: object }> {
   const portfolio = parsePortfolio(
     `schemaVersion: 3\nlocale: ${locale}\ndirection: ltr\nidentity:\n  name: Rowan Test\nworks:\n  - { id: first-essay, title: First essay, medium: writing, url: 'https://rowan.test/first', publishedAt: '2026-01-02' }\nsections:\n  - kind: works\n    id: essays\n    items: [first-essay]\n`,
     'yaml',
@@ -102,10 +105,13 @@ function revision(locale: string, feed: boolean): Awaited<ReturnType<CatalogRead
     'yaml',
   );
   assert.ok(portfolio.ok && site.ok);
-  return {
+  const live = {
+    state: 'live' as const,
     revisionId: 'doc-test',
+    unitHash: 'sha256:test',
     unit: { portfolio: portfolio.value, site: site.value, snapshots: {} },
   };
+  return live;
 }
 
 test("the channel's language is the portfolio's locale", async (t) => {

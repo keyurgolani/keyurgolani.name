@@ -1,6 +1,14 @@
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, readFileSync, statSync, utimesSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  lstatSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  utimesSync,
+  writeFileSync,
+} from 'node:fs';
 import { hostname } from 'node:os';
 import { test } from 'node:test';
 import type { StoreError, StoreLogEntry } from './common';
@@ -9,7 +17,7 @@ import { storePaths } from './layout';
 import { processStartTime } from './lock';
 import { preflight } from './preflight';
 import { claimServer, SERVER_FRESH_MS } from './server-claim';
-import { newStore, pairInput, tempDir } from './test-support/fixtures';
+import { fifoAt, newStore, pairInput, tempDir, within } from './test-support/fixtures';
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -160,7 +168,7 @@ test('a claim another server took over is lost at its next refresh: it stops, an
   );
   // It stopped refreshing, so the other server's claim stands.
   assert.equal(JSON.parse(readFileSync(store.paths.server, 'utf8')).nonce, 'theirs');
-  const refused = (error: unknown) => (error as StoreError).code === 'storage_unavailable';
+  const refused = (error: unknown) => (error as StoreError).code === 'data_dir_in_use';
   await assert.rejects(store.lock.acquire('publish'), refused);
   await assert.rejects(
     store.drafts.create({ documents: pairInput('engineering') }, 'owner'),
@@ -169,6 +177,65 @@ test('a claim another server took over is lost at its next refresh: it stops, an
   // Released, it leaves the other server's file alone.
   await claimed.claim.release();
   assert.equal(JSON.parse(readFileSync(store.paths.server, 'utf8')).nonce, 'theirs');
+});
+
+test('a second claim in this process gets the one that stands, and never writes a record over it', async (t) => {
+  const store = await newStore(t);
+  const first = await claimServer({ paths: store.paths, lock: store.lock, refreshMs: 20 });
+  if (!first.ok) return assert.fail();
+  t.after(() => first.claim.release());
+  const written = readFileSync(store.paths.server, 'utf8');
+  // As a composition built twice makes: one after the other, and two at once.
+  const again = await claimServer({ paths: store.paths, lock: store.lock });
+  const both = await Promise.all([
+    claimServer({ paths: store.paths, lock: store.lock }),
+    claimServer({ paths: store.paths, lock: store.lock }),
+  ]);
+  for (const result of [again, ...both]) assert.equal(result.ok && result.claim, first.claim);
+  assert.equal(readFileSync(store.paths.server, 'utf8'), written);
+  // Refreshes later, it's still this server's, and its writes go on.
+  await sleep(100);
+  assert.equal(first.claim.lost, false);
+  const created = await store.drafts.create({ documents: pairInput('engineering') }, 'owner');
+  assert.equal(created.kind, 'saved');
+});
+
+test('a lost claim stays lost while the other server runs, and a new claim, once the directory is free, lets this server write again', async (t) => {
+  const store = await newStore(t);
+  const claimed = await claimServer({ paths: store.paths, lock: store.lock, refreshMs: 20 });
+  if (!claimed.ok) return assert.fail();
+  const child = otherProcess(t);
+  await sleep(100);
+  const theirs = {
+    pid: child.pid,
+    startTime: processStartTime(child.pid!),
+    hostname: hostname(),
+    at: new Date().toISOString(),
+    nonce: 'theirs',
+  };
+  writeFileSync(store.paths.server, JSON.stringify(theirs));
+  await sleep(100);
+  assert.equal(claimed.claim.lost, true);
+  const file = readFileSync(store.paths.server, 'utf8');
+  // While theirs is fresh, a new claim is refused, and their file is left as it is.
+  const refused = await claimServer({ paths: store.paths, lock: store.lock });
+  assert.equal(!refused.ok && refused.code, 'data_dir_in_use');
+  assert.equal(!refused.ok && refused.holder.nonce, 'theirs');
+  assert.equal(readFileSync(store.paths.server, 'utf8'), file);
+  await assert.rejects(
+    store.drafts.create({ documents: pairInput('engineering') }, 'owner'),
+    (error: StoreError) => error.code === 'data_dir_in_use' && /Stop it/.test(error.message),
+  );
+  // The other server stopped refreshing: the next claim is this server's, and so are its writes.
+  const old = (Date.now() - SERVER_FRESH_MS - 5_000) / 1000;
+  utimesSync(store.paths.server, old, old);
+  const taken = await claimServer({ paths: store.paths, lock: store.lock });
+  if (!taken.ok) return assert.fail();
+  t.after(() => taken.claim.release());
+  assert.notEqual(taken.claim.record.nonce, claimed.claim.record.nonce);
+  assert.equal(taken.claim.held, true);
+  const created = await store.drafts.create({ documents: pairInput('engineering') }, 'owner');
+  assert.equal(created.kind, 'saved');
 });
 
 test("a server knows its claim by its nonce: release leaves a claim in its own pid's name that isn't this one", async (t) => {
@@ -188,4 +255,54 @@ test("a server knows its claim by its nonce: release leaves a claim in its own p
   const again = await claimServer({ paths });
   assert.equal(again.ok, true);
   if (again.ok) await again.claim.release();
+});
+
+test("releaseSync lets this server's claim go at once, stops its refresh, and leaves another server's alone", async (t) => {
+  const paths = await pathsIn(t);
+  const claimed = await claimServer({ fs: nodeFs, paths, refreshMs: 20 });
+  if (!claimed.ok) return assert.fail();
+  claimed.claim.releaseSync();
+  assert.equal(existsSync(paths.server), false);
+  await new Promise((resolve) => setTimeout(resolve, 80));
+  assert.equal(existsSync(paths.server), false, 'the refresh stopped');
+
+  // A claim another server took since is its own.
+  const again = await claimServer({ fs: nodeFs, paths });
+  if (!again.ok) return assert.fail();
+  const other = { ...again.claim.record, pid: again.claim.record.pid + 1, nonce: 'other' };
+  writeFileSync(paths.server, JSON.stringify(other));
+  again.claim.releaseSync();
+  assert.deepEqual(JSON.parse(readFileSync(paths.server, 'utf8')), other);
+});
+
+test("a FIFO at server.json holds up neither release nor the exit's releaseSync: each leaves it as it is, at once", async (t) => {
+  const paths = await pathsIn(t);
+  const claimed = await claimServer({ fs: nodeFs, paths });
+  if (!claimed.ok) return assert.fail();
+  rmSync(paths.server);
+  const release = fifoAt(paths.server);
+  // Nothing on this thread can end a releaseSync that waits on the FIFO,
+  // so another process opens it to write a second from now, which lets
+  // such a read go: late, and so a failure rather than a hang.
+  const fifo = JSON.stringify(paths.server);
+  const writer = spawn(
+    process.execPath,
+    [
+      '-e',
+      `setTimeout(() => { const fs = require('node:fs'); try { fs.closeSync(fs.openSync(${fifo}, fs.constants.O_WRONLY | fs.constants.O_NONBLOCK)); } catch {} }, 1000)`,
+    ],
+    { stdio: 'ignore' },
+  );
+  t.after(() => writer.kill('SIGKILL'));
+  try {
+    let started = Date.now();
+    claimed.claim.releaseSync();
+    assert.ok(Date.now() - started < 500, 'releaseSync waited for a writer');
+    started = Date.now();
+    await within(2_000, claimed.claim.release());
+    assert.ok(Date.now() - started < 500, 'release waited for a writer');
+    assert.ok(lstatSync(paths.server).isFIFO(), 'left as it is');
+  } finally {
+    release();
+  }
 });

@@ -3,7 +3,7 @@ import { readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { text } from 'node:stream/consumers';
 import { test } from 'node:test';
-import { sha256 } from './unit';
+import { sha256 } from '../catalog/unit';
 import { newStore } from './test-support/fixtures';
 
 test('put stores bytes under their hash at 0600, once, and has, stat, and open find them', async (t) => {

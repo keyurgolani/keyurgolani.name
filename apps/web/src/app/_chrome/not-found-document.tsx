@@ -1,6 +1,7 @@
 import { themeInitScript } from '@portfolio/kit';
 import { startingTheme } from '~/lib/starting-theme';
 import { getDeploymentState } from '~/server/config-store';
+import { getLive } from '~/server/live-revision';
 import { NotFoundBody } from './not-found-body';
 
 // The global 404's own document (#2): in the portfolio's language and
@@ -10,12 +11,11 @@ import { NotFoundBody } from './not-found-body';
 // locale, direction, and display mode, and falls back to neutral ones before
 // startup and while the catalog can't serve.
 
-/** The live pair's portfolio and site, as far as the document needs them, or null. */
+/** The live pair's portfolio and site, as far as the document needs them, or null: the request's own read. */
 async function livePair() {
-  const state = getDeploymentState();
-  if (!state) return null;
+  if (!getDeploymentState()) return null;
   try {
-    return (await state.catalog.getLive()).unit;
+    return (await getLive()).unit;
   } catch {
     return null;
   }
