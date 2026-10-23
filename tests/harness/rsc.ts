@@ -24,12 +24,16 @@ const { computeCacheBustingSearchParam } = createRequire(path.join(WEB, 'package
 
 /** `target` with the `_rsc` value Next expects for a request with `headers`. */
 export async function withRscHash(target: string, headers: Record<string, string>) {
-  const prefetch = headers['next-router-prefetch'];
+  // Node reads header names in lowercase, as base-server does.
+  const sent = Object.fromEntries(
+    Object.entries(headers).map(([name, value]) => [name.toLowerCase(), value]),
+  );
+  const prefetch = sent['next-router-prefetch'];
   const hash = await computeCacheBustingSearchParam(
     prefetch === '1' || prefetch === '2' || prefetch === '3' ? prefetch : undefined,
-    headers['next-router-segment-prefetch'],
-    headers['next-router-state-tree'],
-    headers['next-url'],
+    sent['next-router-segment-prefetch'] || undefined,
+    sent['next-router-state-tree'],
+    sent['next-url'],
   );
   return `${target}${target.includes('?') ? '&' : '?'}_rsc=${hash}`;
 }
