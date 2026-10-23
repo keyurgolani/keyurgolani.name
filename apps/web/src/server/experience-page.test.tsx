@@ -50,7 +50,9 @@ const PAIR = (() => {
 function revision(variant: string): LiveRevision {
   const site = { ...PAIR.site, appearance: { ...PAIR.site.appearance, variant } };
   return {
+    state: 'live',
     revisionId: `doc-${variant}`,
+    unitHash: `hash-${variant}`,
     unit: { portfolio: PAIR.portfolio, site, snapshots: {} },
   };
 }
