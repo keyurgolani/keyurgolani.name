@@ -107,7 +107,9 @@ export async function createAuthSession({
     if (response.status === 429) {
       const wait = retryAfterSeconds(response.headers.get('retry-after')) ?? 1;
       if (wait > maxWaitSeconds) {
-        throw new Error(`auth.login asked to wait ${wait}s, over the ${maxWaitSeconds}s the setup waits.`);
+        throw new Error(
+          `auth.login asked to wait ${wait}s, over the ${maxWaitSeconds}s the setup waits.`,
+        );
       }
       await response.body?.cancel();
       await sleep(wait * 1000);

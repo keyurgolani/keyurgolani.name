@@ -54,7 +54,8 @@ const limited = (seconds: string) => (response: http.ServerResponse) => {
 const signedIn = (response: http.ServerResponse) => {
   response.writeHead(200, {
     'content-type': 'application/json',
-    'set-cookie': 'studio_session=s3ss10n-value-0123456789abcdefghijklmnopqrstuvw; Path=/; HttpOnly; SameSite=Strict; Max-Age=3600',
+    'set-cookie':
+      'studio_session=s3ss10n-value-0123456789abcdefghijklmnopqrstuvw; Path=/; HttpOnly; SameSite=Strict; Max-Age=3600',
   });
   response.end(JSON.stringify({ data: { csrfToken: 'csrf-token-value' } }));
 };
@@ -144,7 +145,12 @@ test('a wrong password, a Retry-After past the limit, or a 200 with no session f
   const always = await standIn([limited('0')]);
   try {
     await assert.rejects(
-      createAuthSession({ origin: always.origin, password: 'x', attempts: 3, sleep: async () => {} }),
+      createAuthSession({
+        origin: always.origin,
+        password: 'x',
+        attempts: 3,
+        sleep: async () => {},
+      }),
       /still rate limited after 3 attempts/,
     );
     assert.equal(always.seen.length, 3);
@@ -163,14 +169,17 @@ test('Retry-After takes seconds or an HTTP date', () => {
 });
 
 test('a Set-Cookie header becomes a cookie for the origin', () => {
-  assert.deepEqual(parseSetCookie('a=b=c; Path=/studio; Secure; SameSite=None', 'https://jane.test'), {
-    name: 'a',
-    value: 'b=c',
-    domain: 'jane.test',
-    path: '/studio',
-    expires: -1,
-    httpOnly: false,
-    secure: true,
-    sameSite: 'None',
-  });
+  assert.deepEqual(
+    parseSetCookie('a=b=c; Path=/studio; Secure; SameSite=None', 'https://jane.test'),
+    {
+      name: 'a',
+      value: 'b=c',
+      domain: 'jane.test',
+      path: '/studio',
+      expires: -1,
+      httpOnly: false,
+      secure: true,
+      sameSite: 'None',
+    },
+  );
 });
