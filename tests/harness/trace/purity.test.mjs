@@ -420,6 +420,17 @@ test("the error page's fallback packs may be named in a document boundary's payl
     named({ dom: { ...page.dom, boundary, stylesheets: [...page.dom.stylesheets, parchment] } }),
     [notRendered],
   );
+  // Another pack on the same kind, named but never loaded, is no error pack.
+  const night = `${APP}/_portfolio/pack/night-ink.ffffffffffff.css`;
+  assert.deepEqual(
+    named({
+      references: { ...page.references, unitFiles: [...page.references.unitFiles, night] },
+      dom: { ...page.dom, boundary: { ...boundary, 'data-color-scheme': 'warm-parchment' } },
+    }),
+    [
+      "/_portfolio/pack/night-ink.ffffffffffff.css is color-scheme night-ink's, which the page doesn't render.",
+    ],
+  );
   // Without errorPacks, or outside a document boundary, it's any other unit's.
   assert.deepEqual(named({ errorPacks: undefined }), [notRendered]);
   assert.ok(
