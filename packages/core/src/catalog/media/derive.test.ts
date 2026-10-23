@@ -1,5 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
 import { deriveImage, loadSharp, renditionWidths, type DerivedImage } from './derive';
 import { MEDIA_LIMITS, MediaSourceError } from './limits';
@@ -175,3 +180,216 @@ test('the same source derives the same renditions, byte for byte', async () => {
   );
   assert.equal(first.dominantColor, second.dominantColor);
 });
+
+type Factory = Awaited<ReturnType<typeof factory>>;
+
+/**
+ * `real`, watched: each pipeline's time limit, and how many of its decodes
+ * and encodes run at once across every derivation. `change` alters what one
+ * call answers, as a source libvips reads differently would.
+ */
+function watched(
+  real: Factory,
+  change: { failFirstEncode?: boolean; metadata?: Record<string, unknown> } = {},
+) {
+  const seen = { timeouts: [] as number[], active: 0, most: 0, encodes: 0 };
+  const wrap = (pipeline: object): object =>
+    new Proxy(pipeline, {
+      get(target, key) {
+        const value = Reflect.get(target, key, target) as unknown;
+        if (typeof value !== 'function') return value;
+        const call = value as (...args: unknown[]) => unknown;
+        if (key === 'timeout') {
+          return (options: { seconds: number }) => {
+            seen.timeouts.push(options.seconds);
+            return wrap(call.call(target, options) as object);
+          };
+        }
+        if (key === 'toBuffer' || key === 'metadata' || key === 'stats') {
+          return async (...args: unknown[]) => {
+            seen.active += 1;
+            seen.most = Math.max(seen.most, seen.active);
+            try {
+              await new Promise((resolve) => setTimeout(resolve, 5));
+              if (key === 'toBuffer' && change.failFirstEncode && seen.encodes++ === 0) {
+                throw new Error('timeout: 12% complete');
+              }
+              const answer = await call.apply(target, args);
+              return key === 'metadata' && change.metadata
+                ? { ...(answer as object), ...change.metadata }
+                : answer;
+            } finally {
+              seen.active -= 1;
+            }
+          };
+        }
+        return (...args: unknown[]) => {
+          const out = call.apply(target, args);
+          return out === target ? wrap(out as object) : out;
+        };
+      },
+    });
+  const sharpFn = ((...args: Parameters<Factory>) =>
+    wrap(real(...args)) as ReturnType<Factory>) as Factory;
+  return { sharp: sharpFn, seen };
+}
+
+test('libvips runs one thread, and one derivation runs at a time', async () => {
+  const real = await factory();
+  assert.equal(sharp.concurrency(), 1);
+  const { sharp: sharpFn, seen } = watched(real);
+  const sources = await Promise.all([
+    jpeg({ width: 1000, height: 600 }),
+    png({ width: 900, height: 900, alpha: true }),
+    webp({ width: 700, height: 500 }),
+  ]);
+  await Promise.all(sources.map((source) => deriveImage(sharpFn, source)));
+  assert.equal(seen.most, 1, 'no two decodes or encodes ever ran at once');
+});
+
+test('every pipeline runs under its time limit, and one past it is refused as a timeout', async () => {
+  const real = await factory();
+  const source = await jpeg({ width: 1000, height: 600 });
+  const { sharp: sharpFn, seen } = watched(real);
+  await deriveImage(sharpFn, source);
+  // The decode, the stats, and each rendition: every one carries the limit.
+  assert.equal(seen.timeouts.length, 2 + 2 * renditionWidths(1000).length);
+  assert.ok(seen.timeouts.every((seconds) => seconds === 30));
+  const slow = watched(real, { failFirstEncode: true });
+  await assert.rejects(deriveImage(slow.sharp, source), refusal('refused', 'timeout'));
+});
+
+test('a progressive JPEG or interlaced PNG gets the lower cap, from its header', async () => {
+  const sharpFn = await factory();
+  const base = await png({ width: 100, height: 50 });
+  const progressive = new Uint8Array(await sharp(base).jpeg({ progressive: true }).toBuffer());
+  const interlaced = new Uint8Array(await sharp(base).png({ progressive: true }).toBuffer());
+  const baseline = new Uint8Array(await sharp(base).jpeg().toBuffer());
+  for (const source of [progressive, interlaced]) {
+    await deriveImage(sharpFn, source, { maxProgressivePixels: 5000 });
+    await assert.rejects(
+      deriveImage(sharpFn, source, { maxProgressivePixels: 4999 }),
+      refusal('refused', 'pixels'),
+    );
+  }
+  // A baseline JPEG has only the full cap.
+  await deriveImage(sharpFn, baseline, { maxProgressivePixels: 4999 });
+  assert.equal(MEDIA_LIMITS.progressivePixels, 40_000_000);
+});
+
+test('an animated source derives single-frame renditions of its first frame', async () => {
+  const sharpFn = await factory();
+  const frame = (r: number) =>
+    sharp({ create: { width: 64, height: 32, channels: 3, background: { r, g: 0, b: 0 } } })
+      .png()
+      .toBuffer();
+  const animated = new Uint8Array(
+    await sharp(await Promise.all([frame(255), frame(0), frame(128)]), {
+      join: { animated: true },
+    })
+      .webp()
+      .toBuffer(),
+  );
+  assert.equal((await sharp(animated).metadata()).pages, 3, 'the source has three frames');
+  const derived = await deriveImage(sharpFn, animated);
+  assert.deepEqual([derived.width, derived.height], [64, 32]);
+  for (const rendition of derived.renditions) {
+    const meta = await sharp(rendition.bytes).metadata();
+    assert.ok((meta.pages ?? 1) === 1, `${rendition.name}: one frame`);
+    assert.deepEqual([rendition.width, rendition.height], [64, 32], rendition.name);
+  }
+  // The first frame's red, never the other frames' black or dark red.
+  assert.ok(Number.parseInt(derived.dominantColor.slice(1, 3), 16) > 0xc0, derived.dominantColor);
+});
+
+test('a truncated image is refused, never decoded as far as it goes', async () => {
+  const sharpFn = await factory();
+  for (const whole of [
+    await jpeg({ width: 800, height: 600 }),
+    await png({ width: 800, height: 600 }),
+  ]) {
+    const cut = whole.subarray(0, Math.floor(whole.length * 0.6));
+    await assert.rejects(deriveImage(sharpFn, cut), refusal('invalid'));
+  }
+});
+
+test('HEIF that is not AV1 is refused, as its header says', async () => {
+  const real = await factory();
+  const source = await avif({ width: 64, height: 64 });
+  await deriveImage(real, source);
+  const hevc = watched(real, { metadata: { compression: 'hevc' } });
+  await assert.rejects(deriveImage(hevc.sharp, source), refusal('refused', 'type'));
+});
+
+test('at the caps, a derivation stays under 1 GiB and well inside its time limit', async (t) => {
+  // The review's sources at 10000 × 10000, in a process of their own so its
+  // peak resident memory is the derivation's: the progressive and the
+  // interlaced one refused from the header, and WebP, and an interlaced
+  // 16-bit PNG at 40 megapixels, derived.
+  const dir = mkdtempSync(path.join(tmpdir(), 'derive-caps-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const solid = (width: number, height: number, channels: 3 | 4) =>
+    sharp({
+      create: { width, height, channels, background: { r: 10, g: 200, b: 30, alpha: 0.5 } },
+    });
+  const sources = {
+    'jpeg-progressive': solid(10_000, 10_000, 3).jpeg({ progressive: true, quality: 50 }),
+    'png16-interlaced': solid(10_000, 10_000, 4)
+      .toColourspace('rgb16')
+      .png({ progressive: true, compressionLevel: 9 }),
+    webp: solid(10_000, 10_000, 3).webp({ quality: 10, effort: 0 }),
+    'png16-interlaced-40mp': solid(6300, 6300, 4)
+      .toColourspace('rgb16')
+      .png({ progressive: true, compressionLevel: 9 }),
+  };
+  const files: string[] = [];
+  for (const [name, pipeline] of Object.entries(sources)) {
+    const file = path.join(dir, name);
+    writeFileSync(file, await pipeline.toBuffer());
+    files.push(file);
+  }
+  const child = spawnSync(
+    process.execPath,
+    ['--conditions=react-server', '--import', 'tsx', '--input-type=module', '-e', CAPS_CHILD],
+    {
+      cwd: fileURLToPath(new URL('../../..', import.meta.url)),
+      env: { ...process.env, DERIVE_URL: new URL('./derive.ts', import.meta.url).href },
+      input: JSON.stringify(files),
+      encoding: 'utf8',
+      timeout: 120_000,
+    },
+  );
+  assert.equal(child.status, 0, child.stderr);
+  const { results, peakMiB } = JSON.parse(child.stdout) as {
+    results: { code: string | null; ms: number }[];
+    peakMiB: number;
+  };
+  assert.deepEqual(
+    results.map(({ code }) => code),
+    ['pixels', 'pixels', null, null],
+  );
+  for (const { ms } of results) assert.ok(ms < 30_000, `${ms} ms`);
+  assert.ok(peakMiB < 1024, `peak RSS ${peakMiB} MiB`);
+});
+
+/** The child's half: derive each file in turn, and say how each went and the peak RSS. */
+const CAPS_CHILD = `
+const { deriveImage, loadSharp } = await import(process.env.DERIVE_URL);
+const { readFileSync } = await import('node:fs');
+const files = JSON.parse(readFileSync(0, 'utf8'));
+const loaded = await loadSharp();
+if (!loaded.ok) throw new Error('sharp did not load');
+let peak = process.memoryUsage().rss;
+const tick = setInterval(() => { peak = Math.max(peak, process.memoryUsage().rss); }, 10);
+const results = [];
+for (const file of files) {
+  const started = Date.now();
+  let code = null;
+  try { await deriveImage(loaded.sharp, new Uint8Array(readFileSync(file))); }
+  catch (error) { code = String(error.code); }
+  results.push({ code, ms: Date.now() - started });
+}
+clearInterval(tick);
+peak = Math.max(peak, process.memoryUsage().rss);
+console.log(JSON.stringify({ results, peakMiB: Math.round(peak / 1048576) }));
+`;

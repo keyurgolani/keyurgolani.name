@@ -10,6 +10,11 @@ export const MEDIA_LIMITS = Object.freeze({
   sourceBytes: 20 * 1024 * 1024,
   /** The most pixels a source may decode to. */
   pixels: 100_000_000,
+  /**
+   * The most a progressive JPEG or an interlaced PNG may decode to: libvips
+   * holds it whole, so a 16-bit RGBA one at 100 megapixels took 1.1 GiB.
+   */
+  progressivePixels: 40_000_000,
   /** How long one remote fetch may take, redirects and DNS included. */
   remoteTimeoutMs: 15_000,
   /** How many redirects one remote fetch may follow. */
