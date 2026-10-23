@@ -3,7 +3,8 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 import { judge, type MetaCase } from './meta/cases';
-import { RELEASE_CASES } from './meta/release-cases';
+import { TIMING_GATE } from './lib/perf/timing';
+import { OVER, RELEASE_CASES, releaseOutcome, WITHIN } from './meta/release-cases';
 import { MATRIX_GATE, parseReleaseArgs, RELEASE_GATES } from './release';
 
 // pnpm quality:release (#11, 11-4): the full matrix and the release gates
@@ -41,6 +42,19 @@ test('the matrix is the first release gate, and the release script runs the full
     readFileSync(new URL('./release.ts', import.meta.url), 'utf8'),
     /'full', '--', EXTERNAL_VARIANT_FLAG/,
   );
+});
+
+test("a release fails on a timing breach: 11-3's timing gate follows the matrix in RELEASE_GATES", async () => {
+  assert.deepEqual(RELEASE_GATES, [MATRIX_GATE, TIMING_GATE]);
+  const passed = { ok: true, failures: [], flaky: [], counts: {} };
+  const within = await releaseOutcome(passed, RELEASE_GATES, WITHIN);
+  assert.deepEqual(within, { passed: true, findings: [] });
+  const over = await releaseOutcome(passed, RELEASE_GATES, OVER);
+  assert.equal(over.passed, false);
+  assert.ok(over.findings.length > 0);
+  for (const finding of over.findings) assert.match(finding, /^timing timing-over: /);
+  // Without the timing gate, the same breach would pass.
+  assert.equal((await releaseOutcome(passed, [MATRIX_GATE], OVER)).passed, true);
 });
 
 test('each release case goes the way it should', async () => {

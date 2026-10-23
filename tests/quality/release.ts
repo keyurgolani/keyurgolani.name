@@ -10,9 +10,9 @@
 //   shard's reports artifact, which `pnpm quality:merge` reads
 //   (lib/shards.ts), and --shards names how many the run had.
 //
-// RELEASE_GATES is the seam for gates only a release run holds. The matrix
-// is the first. #11's 11-3 adds the timing gate here: the median of the
-// lab vitals against the thresholds file, which PR runs only report.
+// RELEASE_GATES holds the gates only a release run holds: the matrix
+// first, then 11-3's timing gate, the median of each perf cell's lab vitals
+// against the thresholds file, which PR and scheduled runs only report.
 //
 // It writes reports/quality/release.json, and under ci/run.mjs each
 // failure is a failure record naming its gate. Exits 1 on any failure, 2 on
@@ -31,6 +31,7 @@ import {
   writeFailureRecord,
 } from '../../ci/lib/reports.mjs';
 import { RECORD_VERSION } from './lib/failure-records';
+import { TIMING_GATE } from './lib/perf/timing';
 import type { Failure, Verdict } from './lib/verdict';
 import { mergeRun } from './merge';
 import { EXTERNAL_VARIANT_FLAG } from './run';
@@ -56,10 +57,12 @@ export const MATRIX_GATE: ReleaseGate = {
 };
 
 /**
- * Every release gate, in order. 11-3 adds its timing gate after the matrix:
- * `{ id: 'timing', description: ..., run: ({ reports }) => ... }`.
+ * Every release gate, in order: the matrix, then 11-3's timing gate, which
+ * fails a median past its ceiling's release tolerance in the run's
+ * summary.json (lib/perf/timing.ts). A sharded release reads the summary
+ * quality:merge joins from every shard.
  */
-export const RELEASE_GATES: readonly ReleaseGate[] = [MATRIX_GATE];
+export const RELEASE_GATES: readonly ReleaseGate[] = [MATRIX_GATE, TIMING_GATE];
 
 export interface ReleaseVerdict {
   readonly ok: boolean;

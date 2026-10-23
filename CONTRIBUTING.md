@@ -111,7 +111,7 @@ A PR runs the sentinels: each composition's published default appearance, each t
 
 `pnpm quality:full` plans every cell in every viewport and row, every pair the [37] rule could direct, and the visual cells, which run only in the pinned Playwright image. `-- --shard=<n>/<m>` runs one shard, and `-- --external-variant` runs it against a worktree with the reference variant installed, as the nightly run does. A shard judges only what it holds; `pnpm quality:merge -- <dir> --shards <m>` reads every shard's reports under `<dir>` and judges the run whole: zero tests, the plan's coverage, empty projects, the canary probe, and registered targets with no result, across every shard, and a missing, unjudged, or mismatched shard.
 
-`pnpm quality:release` is the gate #12's release-candidate pipeline runs, as `pnpm ci:quality-release`: `quality:full -- --external-variant` whole, then each release gate in `RELEASE_GATES` (`tests/quality/release.ts`) over its verdict. The matrix is the first gate; #11's timing gate joins it there. `-- --merged <dir> --shards <m>` judges a sharded run's reports instead of running the matrix.
+`pnpm quality:release` is the gate #12's release-candidate pipeline runs, as `pnpm ci:quality-release`: `quality:full -- --external-variant` whole, then each release gate in `RELEASE_GATES` (`tests/quality/release.ts`) over its verdict. The matrix is the first gate, then 11-3's timing gate, which fails a perf cell's median past its ceiling's release tolerance. `-- --merged <dir> --shards <m>` judges a sharded run's reports instead of running the matrix.
 
 ### Manual runs
 
