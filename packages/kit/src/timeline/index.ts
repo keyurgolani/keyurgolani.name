@@ -3,6 +3,7 @@
  *
  * Pure data utilities (no React, no DOM, no time):
  *   - assignTimelineLanes — overlap-free side+slot allocation
+ *   - threadLanes — lanes from a chronology's authored threads (#14)
  *   - computeDensityProjection — topology-driven Y mapping
  *   - invertProjection — newest-at-top transformation
  *   - buildBranchPath — fork/trunk/merge SVG path strings
@@ -34,6 +35,14 @@ export {
   type DensityProjectionOptions,
   type TimelineProjection,
 } from './density';
+
+export {
+  laneCount,
+  threadLanes,
+  type ThreadedEntry,
+  type ThreadLane,
+  type ThreadLanesOptions,
+} from './threads';
 
 export { buildBranchPath, buildAxisPath, type BranchPath, type BranchPathOptions } from './paths';
 

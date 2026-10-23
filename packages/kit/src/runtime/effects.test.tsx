@@ -34,14 +34,25 @@ test('the typing animation shows its first text whole on the server, under any p
       </MotionPolicyProvider>,
     );
     assert.match(html, /<span>Builds things<\/span>/);
+    // No live region announces it as it types, and no label of the kit's own.
+    assert.doesNotMatch(html, /aria-live|role="status"|aria-label|Currently displaying/);
+    assert.match(html, /<span class="kc-typing__caret" aria-hidden="true">/);
   }
 });
 
 test('the counter and the cursor render as the server can know them', () => {
-  // The ramp starts from 0 once the runtime runs; its label always says the value.
-  const counter = renderToStaticMarkup(<AnimatedCounter end={42} suffix="+" />);
-  assert.match(counter, /aria-label="42\+"/);
-  assert.match(counter, />0\+</);
+  // The server shows the real value, under any policy (#14); the ramp from 0
+  // shows only once the runtime runs it. Its label always says the value.
+  for (const policy of ['respect-os', 'reduce'] as const) {
+    const counter = renderToStaticMarkup(
+      <MotionPolicyProvider policy={policy}>
+        <AnimatedCounter end={42} suffix="+" />
+      </MotionPolicyProvider>,
+    );
+    assert.match(counter, /aria-label="42\+"/);
+    assert.match(counter, />42\+</);
+    assert.doesNotMatch(counter, />0\+</);
+  }
   // The server can't see a pointer, and the runtime is static there.
   assert.equal(renderToStaticMarkup(<MagneticCursor />), '');
 });
