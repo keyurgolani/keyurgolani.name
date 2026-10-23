@@ -189,6 +189,12 @@ test("sharp loads from a build's external link, as the bundled CLI finds it", (t
   );
   symlinkSync(real, path.join(externals, 'sharp-0123abcd'));
   const sharp = sharpFromDirectory(externals) as { versions: { sharp: string } };
-  assert.equal(sharp.versions.sharp, '0.34.5');
+  // The version @portfolio/core pins.
+  const pinned = (
+    JSON.parse(readFileSync(new URL('../../../package.json', import.meta.url), 'utf8')) as {
+      dependencies: { sharp: string };
+    }
+  ).dependencies.sharp;
+  assert.equal(sharp.versions.sharp, pinned);
   assert.throws(() => sharpFromDirectory(base));
 });

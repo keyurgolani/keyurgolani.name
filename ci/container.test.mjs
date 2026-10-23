@@ -382,7 +382,11 @@ test("the sharp check loads the build's one sharp external from the server's chu
     const loaded = await check();
     assert.equal(loaded.ok, true, JSON.stringify(loaded));
     assert.equal(loaded.name, 'sharp-0123abcd');
-    assert.equal(loaded.sharp, '0.34.5');
+    // The version @portfolio/core pins.
+    const pinned = JSON.parse(
+      readFileSync(path.join(ROOT, 'packages', 'core', 'package.json'), 'utf8'),
+    ).dependencies.sharp;
+    assert.equal(loaded.sharp, pinned);
     assert.deepEqual([loaded.format, loaded.width], ['webp', 32]);
     // Two externals is a build this check can't read.
     symlinkSync(
