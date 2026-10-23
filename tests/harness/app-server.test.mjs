@@ -129,16 +129,26 @@ test('a copy a vanishing file breaks goes once more from scratch, and no more', 
   const vanished = (message) => Object.assign(new Error(message), { code: 'ENOENT' });
 
   let calls = 0;
-  copyTree('from', to, { recursive: true }, (from, dest, options) => {
-    calls += 1;
-    assert.deepEqual([from, dest, options], ['from', to, { recursive: true }]);
-    mkdirSync(dest, { recursive: true });
-    if (calls === 1) {
-      writeFileSync(path.join(dest, 'outdated.css'), 'half');
-      throw vanished('vanished');
-    }
-    writeFileSync(path.join(dest, 'current.css'), 'whole');
-  });
+  let failedAt = 0;
+  copyTree(
+    'from',
+    to,
+    { recursive: true },
+    (from, dest, options) => {
+      calls += 1;
+      assert.deepEqual([from, dest, options], ['from', to, { recursive: true }]);
+      mkdirSync(dest, { recursive: true });
+      if (calls === 1) {
+        writeFileSync(path.join(dest, 'outdated.css'), 'half');
+        failedAt = performance.now();
+        throw vanished('vanished');
+      }
+      // It waits for the run that removed the file to finish removing.
+      assert.ok(performance.now() - failedAt >= 50, 'it went again at once');
+      writeFileSync(path.join(dest, 'current.css'), 'whole');
+    },
+    50,
+  );
   assert.equal(calls, 2);
   assert.deepEqual(readdirSync(to), ['current.css']);
 

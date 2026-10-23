@@ -108,18 +108,23 @@ async function onFreePort(attempt, firstPort) {
   }
 }
 
+// How long a copy a vanishing file broke waits before it goes again, so the
+// run that removed the file is done removing.
+const COPY_RETRY_MS = 200;
+
 /**
  * Copies a tree as cpSync() does, and once more, from scratch, when a file
  * vanishes mid-copy: registry generation in another process can replace
  * public/'s compiled files while a harness starts, removing an outdated one
  * between the copy's listing and its read.
  */
-export function copyTree(from, to, options, copy = cpSync) {
+export function copyTree(from, to, options, copy = cpSync, pauseMs = COPY_RETRY_MS) {
   try {
     copy(from, to, options);
   } catch (error) {
     if (error?.code !== 'ENOENT') throw error;
     rmSync(to, { recursive: true, force: true });
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, pauseMs);
     copy(from, to, options);
   }
 }
