@@ -68,10 +68,9 @@ test(
         'href',
         `${app.origin}/`,
       );
-      await expect(page.locator('head meta[property="og:url"]'), route).toHaveAttribute(
-        'content',
-        `${app.origin}/`,
-      );
+      // Next writes the root's og:url without its slash: the same URL.
+      const ogUrl = await page.locator('head meta[property="og:url"]').getAttribute('content');
+      expect(new URL(ogUrl ?? '').href, route).toBe(`${app.origin}/`);
     }
     const sitemap = await (await request.get('/sitemap.xml')).text();
     expect([...sitemap.matchAll(/<loc>([^<]*)<\/loc>/g)].map(([, url]) => url)).toEqual([

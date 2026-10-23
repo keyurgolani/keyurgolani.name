@@ -99,7 +99,11 @@ async function homeHead(request: APIRequestContext, server: Server) {
   ] as const) {
     const page = await head(request, `${server.origin}${route}`, headers);
     expect(page.canonical, route).toEqual([`${ORIGIN}/`]);
-    expect(page.ogUrl, route).toEqual([`${ORIGIN}/`]);
+    // Next writes the root's og:url without its slash: the same URL.
+    expect(
+      page.ogUrl.map((url) => new URL(url!).href),
+      route,
+    ).toEqual([`${ORIGIN}/`]);
     expect(page.ogImage.length, route).toBe(1);
     expect(new URL(page.ogImage[0]!).origin, route).toBe(ORIGIN);
     const person = page.jsonLd.find((block) => block['@type'] === 'Person');
