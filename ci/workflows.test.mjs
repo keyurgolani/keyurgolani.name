@@ -3,7 +3,7 @@
 // reads them, and the scheduled workflow's timeouts and permissions.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse } from 'yaml';
@@ -20,18 +20,153 @@ const usesCache = (step) =>
   (step.uses ?? '').startsWith('./.github/actions/install') ||
   (/^actions\/setup-node@/.test(step.uses ?? '') && step.with?.['package-manager-cache'] !== false);
 
+const PUBLISH_JOBS = ['publish-build', 'publish-merge', 'publish-smoke', 'publish'];
+
 test('publish reads no cache: no cache action, no shared install, no setup-node cache', () => {
-  const steps = CI.jobs.publish.steps;
-  assert.ok(steps.length > 0);
-  assert.deepEqual(
-    steps.filter(usesCache).map((s) => s.name ?? s.uses),
-    [],
-  );
+  for (const id of PUBLISH_JOBS) {
+    const steps = CI.jobs[id].steps;
+    assert.ok(steps.length > 0, id);
+    assert.deepEqual(
+      steps.filter(usesCache).map((s) => s.name ?? s.uses),
+      [],
+      id,
+    );
+    for (const step of steps.filter((s) => /^docker\/setup-buildx-action@/.test(s.uses ?? ''))) {
+      assert.equal(step.with['cache-binary'], false, id);
+    }
+  }
   // Nor does the Docker build pull a cache in.
-  const build = steps.find((s) => /docker\/build-push-action@/.test(s.uses ?? ''));
+  const build = CI.jobs['publish-build'].steps.find((s) =>
+    /docker\/build-push-action@/.test(s.uses ?? ''),
+  );
   assert.ok(build);
   assert.equal(build.with['cache-from'], undefined);
   assert.equal(build.with['cache-to'], undefined);
+});
+
+test('publish runs only on a push to main, and only its own jobs follow gate', () => {
+  const MAIN_PUSH = "${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}";
+  const after = Object.entries(CI.jobs)
+    .filter(([, job]) =>
+      [job.needs ?? []].flat().some((n) => PUBLISH_JOBS.includes(n) || n === 'gate'),
+    )
+    .map(([id]) => id);
+  assert.deepEqual(after.sort(), [...PUBLISH_JOBS].sort());
+  assert.deepEqual(CI.jobs['publish-build'].needs, ['gate']);
+  assert.deepEqual(CI.jobs['publish-merge'].needs, ['publish-build']);
+  assert.deepEqual(CI.jobs['publish-smoke'].needs, ['publish-merge']);
+  assert.deepEqual(CI.jobs.publish.needs, ['publish-merge', 'publish-smoke']);
+  for (const id of PUBLISH_JOBS) {
+    assert.equal(CI.jobs[id].if, MAIN_PUSH, id);
+  }
+  for (const id of CI.jobs.gate.needs) assert.ok(!PUBLISH_JOBS.includes(id), id);
+  // Write access is the publish jobs' own; every other job keeps contents: read.
+  const writers = Object.entries(CI.jobs)
+    .filter(([, job]) => Object.values(job.permissions ?? {}).includes('write'))
+    .map(([id]) => id);
+  assert.deepEqual(writers.sort(), ['publish', 'publish-build', 'publish-merge']);
+  assert.deepEqual(CI.jobs['publish-build'].permissions, {
+    contents: 'read',
+    packages: 'write',
+  });
+  assert.deepEqual(CI.jobs['publish-merge'].permissions, {
+    contents: 'read',
+    packages: 'write',
+  });
+  assert.deepEqual(CI.jobs['publish-smoke'].permissions, { contents: 'read', packages: 'read' });
+  assert.deepEqual(CI.jobs.publish.permissions, { contents: 'read', packages: 'write' });
+  // Only the tagging job sees the Docker Hub secrets.
+  for (const id of ['publish-build', 'publish-merge', 'publish-smoke']) {
+    assert.doesNotMatch(JSON.stringify(CI.jobs[id]), /DOCKERHUB/, id);
+  }
+});
+
+test('publish builds each platform natively, by digest, with a 25-minute step timeout', () => {
+  const job = CI.jobs['publish-build'];
+  const builds = job.steps.filter((s) => /^docker\/build-push-action@/.test(s.uses ?? ''));
+  assert.equal(builds.length, 1);
+  const [build] = builds;
+  assert.equal(build['timeout-minutes'], 25);
+  assert.equal(build.with.platforms, 'linux/${{ matrix.arch }}');
+  assert.match(build.with.outputs, /push-by-digest=true/);
+  assert.doesNotMatch(build.with.outputs, /:sha-|tags=/);
+  assert.equal(build.with.tags, undefined, 'a leg pushes no tag');
+  // The provenance and SBOM settings publish always had: none.
+  assert.equal(build.with.provenance, false);
+  assert.equal(build.with.sbom, undefined);
+  assert.equal(build.env.BUILDX_METADATA_PROVENANCE, 'disabled');
+  const buildx = job.steps.find((s) => /^docker\/setup-buildx-action@/.test(s.uses ?? ''));
+  assert.ok(buildx.with['driver-opts'].split('\n').includes('provenance-add-gha=false'));
+  assert.equal(job.outputs['digest-amd64'], '${{ steps.digest.outputs.digest-amd64 }}');
+  assert.equal(job.outputs['digest-arm64'], '${{ steps.digest.outputs.digest-arm64 }}');
+  // Every docker build in ci.yml has a step timeout.
+  for (const [id, j] of Object.entries(CI.jobs)) {
+    for (const step of (j.steps ?? []).filter((s) => /build-push-action@/.test(s.uses ?? ''))) {
+      assert.ok(Number.isInteger(step['timeout-minutes']) && step['timeout-minutes'] <= 25, id);
+    }
+  }
+});
+
+test('only ci.yml publish-merge merges --unattested, and no release job ever does', () => {
+  const RELEASE_SOURCE = readFileSync(path.join(ROOT, '.github/workflows/release.yml'), 'utf8');
+  assert.doesNotMatch(RELEASE_SOURCE, /unattested|sha-publish/i);
+  const files = readdirSync(path.join(ROOT, '.github/workflows')).filter((f) => /\.ya?ml$/.test(f));
+  const callers = [];
+  for (const file of files) {
+    const workflow = read(`.github/workflows/${file}`);
+    if (/unattested|sha-publish/i.test(JSON.stringify(workflow.env ?? {})))
+      callers.push(`${file}:env`);
+    for (const [id, job] of Object.entries(workflow.jobs)) {
+      // The job's env and every step's run and env, wherever a flag could hide.
+      if (/unattested|sha-publish/i.test(JSON.stringify(job.env ?? {})))
+        callers.push(`${file}:${id}:env`);
+      for (const step of job.steps ?? []) {
+        const text = JSON.stringify({ run: step.run, env: step.env, with: step.with });
+        if (/unattested|sha-publish/i.test(text))
+          callers.push(`${file}:${id}:${step.id ?? step.name}`);
+      }
+    }
+  }
+  assert.deepEqual(callers, ['ci.yml:publish-merge:merge']);
+  // And the shared actions never pass it either.
+  for (const action of readdirSync(path.join(ROOT, '.github/actions'))) {
+    const text = readFileSync(path.join(ROOT, '.github/actions', action, 'action.yml'), 'utf8');
+    assert.doesNotMatch(text, /unattested|sha-publish/i, action);
+  }
+});
+
+test('publish merges the legs with the release helper, and tags only the merged digest', () => {
+  const merge = CI.jobs['publish-merge'].steps.find((s) => s.id === 'merge');
+  assert.equal(
+    merge.run,
+    'node ci/release/merge-index.mjs --unattested --purpose sha-publish "$IMAGE_NAME" "$AMD64" "$ARM64"',
+  );
+  assert.equal(merge.env.AMD64, '${{ needs.publish-build.outputs.digest-amd64 }}');
+  assert.equal(merge.env.ARM64, '${{ needs.publish-build.outputs.digest-arm64 }}');
+  assert.equal(CI.jobs['publish-merge'].outputs.digest, '${{ steps.merge.outputs.digest }}');
+  const MERGED = '${{ needs.publish-merge.outputs.digest }}';
+  // Both platforms are smoke-tested from the merged digest.
+  const smoke = CI.jobs['publish-smoke'].steps.find((s) => s.run === 'pnpm ci:image');
+  assert.equal(smoke.env.SMOKE_IMAGE, `\${{ env.IMAGE_NAME }}@${MERGED}`);
+  assert.equal(smoke.env.IMAGE_PLATFORM, 'linux/${{ matrix.arch }}');
+  // The one step that tags, in publish, tags the merged digest and checks it.
+  const tagging = Object.entries(CI.jobs).flatMap(([id, job]) =>
+    (job.steps ?? [])
+      .filter((s) => /imagetools create --tag/.test(s.run ?? ''))
+      .map((s) => [id, s]),
+  );
+  assert.deepEqual(
+    tagging.map(([id, s]) => `${id}:${s.name}`),
+    ['publish:Tag the tested digest sha-<short>'],
+  );
+  const [[, tag]] = tagging;
+  assert.equal(tag.env.DIGEST, MERGED);
+  assert.match(tag.run, /imagetools create --tag "\$target" "\$IMAGE_NAME@\$DIGEST"/);
+  assert.match(tag.run, /"\$pushed" != "\$DIGEST"/);
+  assert.equal(tag.env.TAG, '${{ steps.meta.outputs.version }}');
+  const meta = CI.jobs.publish.steps.find((s) => s.id === 'meta');
+  assert.equal(meta.with.tags.trim(), 'type=sha,format=short');
+  assert.equal(meta.with.flavor.trim(), 'latest=false');
 });
 
 test('no cache holds node_modules, a build output, or a generated registry', () => {
@@ -104,7 +239,7 @@ test('no workflow has a manual trigger', () => {
   }
 });
 
-test('every job runs on a pinned GitHub-hosted Ubuntu, and arm64 only where a release leg builds it natively', () => {
+test('every job runs on a pinned GitHub-hosted Ubuntu, and arm64 only where a leg runs it natively', () => {
   const RELEASE = read('.github/workflows/release.yml');
   const legs = [];
   for (const [file, workflow] of [
@@ -123,16 +258,21 @@ test('every job runs on a pinned GitHub-hosted Ubuntu, and arm64 only where a re
       } else {
         assert.equal(job['runs-on'], 'ubuntu-24.04', `${file}:${id}`);
       }
-      // No release job emulates another platform. ci.yml's publish still
-      // builds arm64 under QEMU.
-      if (file === 'release.yml') {
-        for (const step of job.steps ?? []) {
-          assert.doesNotMatch(step.uses ?? '', /setup-qemu-action/, `${file}:${id}`);
-        }
+      // No job emulates another platform.
+      for (const step of job.steps ?? []) {
+        assert.doesNotMatch(step.uses ?? '', /setup-qemu-action/, `${file}:${id}`);
       }
     }
   }
-  assert.deepEqual(legs.sort(), ['release.yml:dry-run-build', 'release.yml:rc-build']);
+  assert.deepEqual(legs.sort(), [
+    'ci.yml:publish-build',
+    'ci.yml:publish-smoke',
+    'release.yml:dry-run-build',
+    'release.yml:rc-build',
+  ]);
+  // Nor does any step reach binfmt or QEMU some other way.
+  const source = readFileSync(path.join(ROOT, '.github/workflows/ci.yml'), 'utf8');
+  assert.doesNotMatch(source, /setup-qemu-action|binfmt|qemu/i);
 });
 
 test('every ci.yml job sets timeout-minutes', () => {

@@ -24,7 +24,16 @@ import { fileURLToPath } from 'node:url';
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 /** Jobs that aren't checks: they run on every event and read the selection. */
-export const CONTROL_JOBS = ['changes', 'selected', 'gate', 'publish'];
+export const CONTROL_JOBS = [
+  'changes',
+  'selected',
+  'gate',
+  // On a push to main, after gate: never selected, never in gate's needs.
+  'publish-build',
+  'publish-merge',
+  'publish-smoke',
+  'publish',
+];
 
 /** Every check job in ci.yml, and the ones other lanes are adding. */
 export const CHECK_JOBS = [
