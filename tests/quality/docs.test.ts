@@ -55,11 +55,13 @@ test('the fork-safe PR check names what the workflows upload and what the owner 
   const ci = parse(read('.github/workflows/ci.yml')) as {
     jobs: Record<string, { steps: { uses?: string; with?: { name?: string } }[] }>;
   };
-  for (const job of ['quality-pr', 'quality-meta']) {
+  for (const job of ['quality-pr', 'quality-pr-verdict', 'quality-meta']) {
     const upload = ci.jobs[job]!.steps.find((step) =>
       /^actions\/upload-artifact@/.test(step.uses ?? ''),
     );
-    assert.ok(section.includes(`\`${upload!.with!.name}\``), `it names ${upload!.with!.name}`);
+    // A shard's artifact, as the check names it: <n> for its shard.
+    const name = upload!.with!.name!.replace('${{ matrix.shard }}', '<n>');
+    assert.ok(section.includes(`\`${name}\``), `it names ${name}`);
   }
   for (const phrase of [
     'second GitHub account',
