@@ -22,17 +22,6 @@ test(
       'data-variant',
       'fixture-chapters',
     );
-    // The link is a client navigation (#6, Slice 2): Next's router fetches
-    // the view's payload, which the rewrite serves from the variant's
-    // segment, and the document stays the one that loaded.
-    await page.evaluate(() => {
-      (window as unknown as { kgnLoaded?: boolean }).kgnLoaded = true;
-    });
-    const payload = page.waitForResponse(
-      (response) =>
-        response.request().headers()['rsc'] === '1' &&
-        new URL(response.url()).pathname === '/sample/chapters/about',
-    );
     await page
       .getByRole('navigation', { name: 'Chapters' })
       .getByRole('link', { name: 'About', exact: true })
@@ -40,16 +29,27 @@ test(
     await expect(page).toHaveURL(`${app.origin}/sample/chapters/about${CHAPTERS}`);
     const heading = page.getByRole('heading', { level: 1 });
     await expect(heading).toHaveText('About');
-    const flight = await payload;
-    expect(flight.status()).toBe(200);
-    expect(flight.headers()['x-nextjs-rewritten-path']).toBe(
-      '/_experience/fixture-chapters/sample/chapters/about',
-    );
-    expect(flight.headers()['x-nextjs-rewritten-query'] ?? '').toBe('');
-    expect(
-      await page.evaluate(() => (window as unknown as { kgnLoaded?: boolean }).kgnLoaded),
-      'no document load',
-    ).toBe(true);
+    // A variant's links are plain anchors, so that was a document load. Next's
+    // router asks for the same view's payload with RSC: 1 when it navigates
+    // or prefetches, and the rewrite serves it from the variant's segment
+    // (#6, Slice 2): x-nextjs-rewritten-path names the segment and the view,
+    // never the query, which the router keeps from the URL it asked for.
+    const router: Record<string, string>[] = [
+      { rsc: '1' },
+      { rsc: '1', 'next-router-prefetch': '1' },
+    ];
+    for (const headers of router) {
+      const flight = await page.request.get(`/sample/chapters/about${CHAPTERS}`, {
+        headers,
+        maxRedirects: 0,
+      });
+      expect(flight.status()).toBe(200);
+      expect(flight.headers()['content-type']).toMatch(/^text\/x-component/);
+      expect(flight.headers()['x-nextjs-rewritten-path']).toBe(
+        '/_experience/fixture-chapters/sample/chapters/about',
+      );
+      expect(flight.headers()['x-nextjs-rewritten-query'] ?? '').toBe('');
+    }
     expect((await page.reload())?.status()).toBe(200);
     await expect(heading).toHaveText('About');
     await expect(page.locator('head link[rel="canonical"]')).toHaveAttribute(
