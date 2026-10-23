@@ -293,6 +293,7 @@ async function block(page: Page, pattern: RegExp): Promise<() => readonly string
 /** That the blocked mode refused a font, where the trace's site publishes one. */
 function expectFontRefused(refused: () => readonly string[]) {
   const target = test.info().project.metadata as unknown as TraceTarget;
+  console.log(`[trace] fonts blocked: ${refused().length} font file(s) refused`);
   if (target.publishesFont) expect(refused().length, 'font files refused').toBeGreaterThan(0);
 }
 
