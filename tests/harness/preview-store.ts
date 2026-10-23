@@ -1,10 +1,13 @@
-// The preview specs' store steps (#7, Slice 2), each in a process of its own.
+// The preview specs' store steps (#7, Slice 2), in a process of their own.
 // @portfolio/core/owner imports server-only, which loads only under the
 // react-server condition, as in Next's server, and a Playwright worker runs
-// plain Node. So preview-grants.ts runs a step here under that condition:
-// the task as JSON in argv[2], what the step returns as one JSON line out.
+// plain Node. So preview-grants.ts starts this file under that condition,
+// once per worker, as the worker loads it, and sends it one task per line.
+// It runs them in turn, answers each with one JSON line, its id and what the
+// step returned or why it failed, and ends with its input.
 //
-//   node --conditions=react-server --import tsx preview-store.ts '{"dataDir":"...","step":{...}}'
+//   node --conditions=react-server --import tsx preview-store.ts
+import { createInterface } from 'node:readline';
 import { openStore, preflight, type DraftId, type UnitInput } from '../../packages/core/src/owner';
 import { validatePublicationUnit } from '../../packages/schema/src/index';
 
@@ -15,9 +18,14 @@ export type StoreStep =
   | { readonly op: 'publish'; readonly draftId: DraftId; readonly draftVersion: number };
 
 export interface StoreTask {
+  readonly id: number;
   readonly dataDir: string;
   readonly step: StoreStep;
 }
+
+export type StoreAnswer =
+  | { readonly id: number; readonly ok: true; readonly value: unknown }
+  | { readonly id: number; readonly ok: false; readonly error: string };
 
 /** The server's revision store, opened as the operator's CLI opens it. */
 async function storeOf(dataDir: string) {
@@ -29,7 +37,7 @@ async function storeOf(dataDir: string) {
   });
 }
 
-async function run({ dataDir, step }: StoreTask): Promise<unknown> {
+async function run({ dataDir, step }: Omit<StoreTask, 'id'>): Promise<unknown> {
   const store = await storeOf(dataDir);
   if (step.op === 'seed') {
     const working = await store.drafts.getWorking();
@@ -56,12 +64,20 @@ async function run({ dataDir, step }: StoreTask): Promise<unknown> {
   return outcome.revisionId;
 }
 
-run(JSON.parse(process.argv[2] ?? '{}') as StoreTask).then(
-  (result) => {
-    process.stdout.write(`${JSON.stringify(result)}\n`);
-  },
-  (error: unknown) => {
-    process.stderr.write(`${String((error as Error).stack ?? error)}\n`);
-    process.exitCode = 1;
-  },
-);
+let turn = Promise.resolve();
+const lines = createInterface({ input: process.stdin });
+lines.on('line', (line) => {
+  const task = JSON.parse(line) as StoreTask;
+  turn = turn.then(async () => {
+    let answer: StoreAnswer;
+    try {
+      answer = { id: task.id, ok: true, value: await run(task) };
+    } catch (error) {
+      answer = { id: task.id, ok: false, error: String((error as Error).stack ?? error) };
+    }
+    process.stdout.write(`${JSON.stringify(answer)}\n`);
+  });
+});
+lines.on('close', () => {
+  void turn.then(() => process.exit(0));
+});
