@@ -30,7 +30,7 @@ import type { SharpLoad } from './derive';
 import { mediaIngestion, type IngestInput, type MediaIngestionOptions } from './ingest';
 import { localMediaRoot } from './local';
 import { remoteImageFetcher, type RemoteTransport } from './remote';
-import { cameraJpeg, carries, jpeg, png } from './test-support/images';
+import { cameraJpeg, carries, jpeg, png } from '../../store/test-support/images';
 
 // Ingestion at draft save (#10, items 5 and 6, and VR2's identity half):
 // an asset keeps its id and its place across a rename, a replacement, a

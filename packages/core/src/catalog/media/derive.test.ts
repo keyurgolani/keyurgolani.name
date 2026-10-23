@@ -14,7 +14,7 @@ import {
   pngClaiming,
   tiff,
   webp,
-} from './test-support/images';
+} from '../../store/test-support/images';
 
 // Derivation (#10, slice 2 item 4): renditions apply the EXIF orientation
 // and carry no EXIF, XMP, IPTC, or GPS; the original is never one of them.

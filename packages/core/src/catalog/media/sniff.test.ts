@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { sniffImageType } from './sniff';
-import { avif, gif, jpeg, png, tiff, webp } from './test-support/images';
+import { avif, gif, jpeg, png, tiff, webp } from '../../store/test-support/images';
 
 // A source's type comes from its bytes alone (#10, slice 2 item 3).
 

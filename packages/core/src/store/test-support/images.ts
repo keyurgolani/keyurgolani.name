@@ -1,13 +1,13 @@
 import { crc32 } from 'node:zlib';
 import sharp from 'sharp';
-import { recordOwnerModule } from '../../../load-trace';
+import { recordOwnerModule } from '../../load-trace';
 
 // Test images, made here from nothing (MIT, like the repository): solid or
 // two-tone pictures from sharp, and the metadata a camera writes spliced in
 // by hand, so a test knows exactly what a source carries. Nothing is
 // downloaded.
 
-recordOwnerModule('core/catalog/media/test-support/images');
+recordOwnerModule('core/store/test-support/images');
 
 export interface Picture {
   readonly width: number;

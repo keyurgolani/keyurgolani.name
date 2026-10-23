@@ -28,7 +28,7 @@ import { openStore } from './store/store';
 import { importSourceHash, sha256, type UnitInput } from './catalog/unit';
 import { cli, line } from './store/test-support/cli';
 import { startChild } from './store/test-support/spawn';
-import { jpeg } from './catalog/media/test-support/images';
+import { jpeg } from './store/test-support/images';
 import type { RemoteFetcher } from './catalog/media/remote';
 import {
   contentVariant,

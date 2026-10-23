@@ -18,7 +18,7 @@ import { mediaBlobs, parseMediaDocument } from '@portfolio/schema';
 import { sharpFromDirectory } from './derive';
 import { localMediaRoot } from './local';
 import { deriveStartupMedia, directoryBlobStore, MediaCacheError } from './startup';
-import { jpeg, png } from './test-support/images';
+import { jpeg, png } from '../../store/test-support/images';
 
 // Startup derivation for read-only and demo (#10, Risk 3): the media
 // document derives once, into a cache of the server user's own, and the log
