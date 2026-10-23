@@ -48,7 +48,13 @@ export interface ActionProps {
   /** A hook for the variant's layout. Never for state or appearance. */
   readonly className?: string;
   readonly hidden?: boolean;
-  /** From a client component. In a plate it never goes on. */
+  /**
+   * From a client component. In a plate it never goes on. Whether it's given
+   * decides which half renders: a plain button given one becomes the client
+   * half, so a handler that comes and goes swaps the element and loses its
+   * focus. To do something on a click only some of the time, pass one
+   * handler for the action's whole life and decide inside it.
+   */
   readonly onClick?: (event: MouseEvent<HTMLElement>) => void;
   readonly ref?: Ref<HTMLButtonElement & HTMLAnchorElement>;
   /**

@@ -38,14 +38,28 @@ export default function FallbackComposition({ input }: { readonly input: Variant
     <>
       <header className="fc-header">
         {named.length > 0 ? (
-          <nav className="fc-nav" aria-labelledby={label}>
+          // #19's navigation primitive's markup, its slots, which the platform
+          // stylesheet styles and sizes: each link a target of 24 by 24 CSS px,
+          // and 32 by 32 at 768 px wide and below. Written out rather than
+          // through <Navigation>, a client component, so the composition stays
+          // a server module that loads anywhere the host checks it.
+          <nav
+            className="fc-nav"
+            data-ui-slot="navigation"
+            data-orientation="horizontal"
+            aria-labelledby={label}
+          >
             <span id={label} lang={uiLang} hidden>
               Sections
             </span>
-            <ul role="list">
+            <ul data-ui-slot="navigation.list">
               {named.map(({ section }) => (
-                <li key={section.id}>
-                  <a href={`#${ids.prefix}${section.id}`} lang={section.lang}>
+                <li key={section.id} data-ui-slot="navigation.item">
+                  <a
+                    data-ui-slot="navigation.link"
+                    href={`#${ids.prefix}${section.id}`}
+                    lang={section.lang}
+                  >
                     {section.title}
                   </a>
                 </li>

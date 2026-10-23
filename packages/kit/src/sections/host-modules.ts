@@ -23,6 +23,12 @@ export interface HostModules {
   readonly extensionRenderers?: Readonly<Record<string, SectionRenderer<ExtensionSection>>>;
   /** Each declared enhancement's loader, keyed `<variant id>/<enhancement id>`. */
   readonly enhancementLoaders?: Readonly<Record<string, EnhancementLoader>>;
+  /**
+   * What fills every VisitorControlSlot (#19, Slice 4): the host's visitor
+   * appearance control, which takes no props and renders nothing where the
+   * page has no control to show, as in a preview.
+   */
+  readonly visitorControl?: ComponentType;
 }
 
 const ENHANCEMENT_KEY = /^[a-z][a-z0-9-]*\/[a-z][a-z0-9-]*$/;
@@ -44,6 +50,7 @@ export function registerHostModules(modules: HostModules): void {
   registered = {
     extensionRenderers: { ...modules.extensionRenderers },
     enhancementLoaders: { ...modules.enhancementLoaders },
+    ...(modules.visitorControl ? { visitorControl: modules.visitorControl } : {}),
   };
 }
 

@@ -55,6 +55,8 @@ export const CAPABILITY_MATRIX = {
   'sandbox.view': { demo: 'public' }, // #9
   'health.read': { owner: 'public', demo: 'public', 'read-only': 'public' },
   'ready.read': { owner: 'public', demo: 'public', 'read-only': 'public' },
+  // A visitor's appearance preference cookie (#19, Slice 4). Demo's appearance is the query's.
+  'appearance.preference': { owner: 'public', 'read-only': 'public' },
   'auth.session': { owner: 'public' }, // #2
   // Under demo these are browser-local (#9) and never reach the server.
   'source.read': { owner: 'session' },

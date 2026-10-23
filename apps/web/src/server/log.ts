@@ -54,6 +54,9 @@ const MEDIA = ['assetId', 'sha256', 'reason'] as const;
 const EXTRA: Readonly<Record<string, readonly string[]>> = {
   'config.fatal': FINDING,
   'config.warning': FINDING,
+  // A pack of the serving revision that falls back (#19, Slice 4): its axis
+  // in `key`, its code, and the diagnostic's fixed text, once per revision.
+  'appearance.fallback': ['revisionId', 'message', 'remediation'],
   'preview.grant.minted': GRANT,
   'preview.grant.superseded': GRANT,
   'preview.grant.session_ended': GRANT,

@@ -72,10 +72,15 @@ test(
     await expect(root).toHaveCount(1);
     await expect(root).toHaveAttribute('data-variant', 'fallback');
     await expect(root).toHaveAttribute('data-requested-variant', 'missing-variant');
-    await expect(root).toHaveAttribute('data-motion-policy', 'reduce');
+    await expect(root).toHaveAttribute('data-motion', 'reduced');
+    await expect(root).toHaveAttribute('data-display-mode', 'dark');
     await expect(page.locator('html')).toHaveAttribute('lang', 'en-GB');
     await expect(page.locator('html')).toHaveAttribute('dir', 'ltr');
-    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+    // <html> carries the language and direction alone: the document boundary is the appearance (#19, Slice 4).
+    expect(await page.locator('html').evaluate((html) => html.getAttributeNames().sort())).toEqual([
+      'dir',
+      'lang',
+    ]);
     // No hidden or unregistered section is on the page, and nothing links to one.
     for (const id of [
       'drafts',
@@ -106,7 +111,8 @@ test(
   'the first paint, before hydration, is already in the display mode',
   { annotation: [{ type: 'route', description: '/' }, READ_ONLY] },
   async ({ page }) => {
-    // With its bundles refused the page never hydrates, so only the inline theme script runs.
+    // With its bundles refused the page never hydrates and no script runs:
+    // the server's document boundary already says the mode (#19, Slice 4).
     const refused: string[] = [];
     await page.route(/\/_next\/static\/.+\.js(?:\?.*)?$/, (route) => {
       refused.push(route.request().url());
@@ -114,7 +120,10 @@ test(
     });
     await page.goto('/', { waitUntil: 'load' });
     expect(refused.length).toBeGreaterThan(0);
-    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+    await expect(page.locator('[data-appearance-boundary="document"]')).toHaveAttribute(
+      'data-display-mode',
+      'dark',
+    );
   },
 );
 

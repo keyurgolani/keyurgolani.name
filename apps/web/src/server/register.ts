@@ -1,6 +1,7 @@
 import 'server-only';
 import path from 'node:path';
 import type { UnitChecks } from '@portfolio/core';
+import { APPEARANCE_REGISTRY } from '~/lib/appearance-registry';
 import { CONTENT_EXTENSIONS, liveContext, REGISTRY } from '~/lib/variants';
 import webPackage from '../../package.json';
 import { issueLogLine, type ConfigIssue, type Profile } from './config';
@@ -19,6 +20,7 @@ import { buildUnitChecks, renderDrift } from './unit-checks';
 export function deploymentUnitChecks(origin: string): UnitChecks {
   return buildUnitChecks({
     registry: REGISTRY,
+    appearance: APPEARANCE_REGISTRY,
     extensions: CONTENT_EXTENSIONS,
     origin,
     appVersion: webPackage.version,
@@ -36,10 +38,10 @@ export async function registerDeployment(): Promise<Registration> {
   const cwd = process.cwd();
   // The image and `next dev` both keep them two levels above apps/web.
   const example = (name: string) => path.resolve(/*turbopackIgnore: true*/ cwd, '..', '..', name);
-  // What this build registers (#5): the interim appearance catalog, the
+  // What this build registers (#5, #19): the appearance registries, the
   // content extensions, and the contract's live checks, under which a
   // selection this build doesn't register is a warning and the fallback
-  // composition renders.
+  // composition, or an axis's fallback pack, renders.
   const { catalog, extensions, validators } = liveContext();
   const result: StartupResult = await runStartup({
     env: process.env,

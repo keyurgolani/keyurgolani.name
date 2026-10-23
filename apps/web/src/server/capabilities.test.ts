@@ -45,6 +45,7 @@ const TABLE: ReadonlyArray<readonly [Capability, owner: Cell, demo: Cell, readOn
   ['sandbox.view', 'absent', 'public', 'absent'],
   ['health.read', 'public', 'public', 'public'],
   ['ready.read', 'public', 'public', 'public'],
+  ['appearance.preference', 'public', 'absent', 'public'],
   ['auth.session', 'public', 'absent', 'absent'],
   ['source.read', 'session', 'absent', 'absent'],
   ['draft.read', 'session', 'absent', 'absent'],

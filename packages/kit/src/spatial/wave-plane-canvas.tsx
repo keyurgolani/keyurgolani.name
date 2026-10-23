@@ -3,10 +3,16 @@
 import { useCallback, useEffect, useRef } from 'react';
 import type { MotionPolicy } from '@portfolio/schema';
 import { useEnhancementRuntime, useFrameLoop } from '../runtime';
+import { channels, useBoundaryColors } from './boundary-colors';
+
+type Stop = [number, number, number];
+
+/** The boundary's canvas, accent, and signature end, the wave's stops unless given (#19, Slice 4). */
+const WAVE_ROLES = ['canvas', 'accent', 'signature-end'] as const;
 
 interface WavePlaneCanvasProps {
   motionPreference?: MotionPolicy;
-  /** Three RGB color stops [r,g,b] each 0-1. */
+  /** Three RGB color stops [r,g,b] each 0-1. The boundary's canvas, accent, and signature end unless given. */
   colorA?: [number, number, number];
   colorB?: [number, number, number];
   colorC?: [number, number, number];
@@ -99,9 +105,9 @@ void main() {
  */
 export function WavePlaneCanvas({
   motionPreference = 'respect-os',
-  colorA = [0.04, 0.07, 0.13],
-  colorB = [0.18, 0.32, 0.55],
-  colorC = [0.55, 0.7, 0.95],
+  colorA,
+  colorB,
+  colorC,
   speed = 1,
   amplitude = 0.4,
   frequency = 1.4,
@@ -124,11 +130,19 @@ export function WavePlaneCanvas({
   const scene = useRef<((elapsed: number) => void) | null>(null);
   // How far the wave has run, kept across pauses so it picks up where it stopped.
   const elapsed = useRef(0);
+  // The stops, once the boundary's colors are read: a new appearance builds the scene again.
+  const boundary = useBoundaryColors(canvasRef, WAVE_ROLES);
+  const a = colorA ?? channels(boundary?.canvas ?? null);
+  const b = colorB ?? channels(boundary?.accent ?? null);
+  const c = colorC ?? channels(boundary?.['signature-end'] ?? null);
+  const stops: readonly [Stop, Stop, Stop] | null = a && b && c ? [a, b, c] : null;
+  const stopsKey = stops ? JSON.stringify(stops) : '';
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas || stopsKey === '') return;
+    const [colorA, colorB, colorC] = JSON.parse(stopsKey) as [Stop, Stop, Stop];
 
     const gl = canvas.getContext('webgl2', { antialias: false, alpha: false });
     if (!gl) {
@@ -216,10 +230,12 @@ export function WavePlaneCanvas({
       gl.deleteShader(fs);
       gl.deleteBuffer(buffer);
     };
-  }, [colorA, colorB, colorC, speed, amplitude, frequency]);
+  }, [stopsKey, speed, amplitude, frequency]);
 
-  // Without WebGL2, nothing draws, so no loop runs at all.
-  useFrameLoop({ state: runtime.eligible ? runtime.state : 'static' }, (_, delta) => {
+  // Without WebGL2, nothing draws, so no loop runs at all, and none runs
+  // before the boundary's colors are read, when there's no scene yet.
+  const ready = runtime.eligible && stopsKey !== '';
+  useFrameLoop({ state: ready ? runtime.state : 'static' }, (_, delta) => {
     const draw = scene.current;
     // A program that never compiled ends the loop.
     if (!draw) return false;

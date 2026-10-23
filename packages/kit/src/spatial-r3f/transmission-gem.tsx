@@ -1,11 +1,15 @@
 'use client';
 
 import { useRef } from 'react';
-import { useFrame } from '@react-three/fiber';
+import { useFrame, useThree } from '@react-three/fiber';
 import { Float, MeshTransmissionMaterial } from '@react-three/drei';
 import * as THREE from 'three';
+import { useBoundaryColors } from '../spatial/boundary-colors';
 import { useSceneAnimates } from './scene-runtime';
 import type { MotionPolicy } from '@portfolio/schema';
+
+/** The boundary's accent for the core, and its primary text for the glass, unless given (#19, Slice 4). */
+const GEM_ROLES = ['accent', 'text-primary'] as const;
 
 interface TransmissionGemProps {
   motionPreference?: MotionPolicy;
@@ -15,11 +19,11 @@ interface TransmissionGemProps {
   detail?: number;
   /** Radius. */
   radius?: number;
-  /** Inner emissive core glow ('none', or hex). */
+  /** Inner emissive core glow: a color, or null for none. The boundary's accent unless given. */
   coreGlow?: string | null;
   /** Position. */
   position?: [number, number, number];
-  /** Glass tint color. */
+  /** Glass tint color. The boundary's primary text color unless given. */
   color?: string;
   /** Idle rotation speed. */
   rotationSpeed?: number;
@@ -36,12 +40,17 @@ export function TransmissionGem({
   geometry = 'icos',
   detail = 4,
   radius = 1.5,
-  coreGlow = '#88e0ff',
+  coreGlow,
   position = [0, 0, 0],
-  color = '#ffffff',
+  color,
   rotationSpeed = 0.06,
 }: TransmissionGemProps) {
   const groupRef = useRef<THREE.Group>(null);
+  const canvas = useRef(useThree((three) => three.gl.domElement));
+  const boundary = useBoundaryColors(canvas, GEM_ROLES);
+  // `null` turns the core off; until the boundary's colors are read, there's none to draw.
+  const glow = coreGlow === undefined ? (boundary?.accent ?? null) : coreGlow;
+  const tint = color ?? boundary?.['text-primary'] ?? undefined;
   // In a SpatialCanvas, useFrame runs only while its runtime is active.
   const animate = useSceneAnimates(motionPreference);
 
@@ -79,13 +88,13 @@ export function TransmissionGem({
             distortionScale={0.4}
             temporalDistortion={animate ? 0.06 : 0}
             roughness={0}
-            color={color}
+            {...(tint ? { color: tint } : {})}
           />
         </mesh>
-        {coreGlow ? (
+        {glow ? (
           <mesh scale={radius * 0.4}>
             <sphereGeometry args={[1, 16, 16]} />
-            <meshBasicMaterial color={coreGlow} toneMapped={false} />
+            <meshBasicMaterial color={glow} toneMapped={false} />
           </mesh>
         ) : null}
       </group>

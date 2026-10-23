@@ -54,8 +54,8 @@ const SITE = readFileSync(EXAMPLES.site, 'utf8');
 const CATALOG: AppearanceCatalog = {
   ids(axis) {
     const ids: Record<string, string[]> = {
-      colorScheme: ['warm', 'noir'],
-      typography: ['classic', 'modernist'],
+      colorScheme: ['warm-parchment', 'noir'],
+      typography: ['humanist-ui', 'modernist'],
       displayMode: ['system', 'light', 'dark', 'high-contrast'],
     };
     return ids[axis] ?? null;
@@ -257,7 +257,7 @@ test('each record becomes an issue: located, with its remediation, never quoting
   assert.match(portfolio[0]!.message, /Did you mean tagline\?/);
   assert.ok((portfolio[0]!.remediation ?? '').length > 0);
 
-  const site = SITE.replace('colorScheme: warm', 'colorScheme: canary-scheme');
+  const site = SITE.replace('colorScheme: warm-parchment', 'colorScheme: canary-scheme');
   const appearance = fatal(open(tempDir(t, pair(PORTFOLIO, site)), 'production'));
   assert.deepEqual(located(appearance), [
     {
@@ -270,7 +270,7 @@ test('each record becomes an issue: located, with its remediation, never quoting
       column: 16,
     },
   ]);
-  assert.equal(appearance[0]!.remediation, 'Use one of: warm, noir.');
+  assert.equal(appearance[0]!.remediation, 'Use one of: warm-parchment, noir.');
   assert.ok(!JSON.stringify([...portfolio, ...appearance]).includes('canary'));
 });
 
@@ -379,7 +379,7 @@ test('a valid pair becomes one frozen revision, named by a hash over both docume
   assert.ok(read.ok);
   assert.equal(live.revisionId, `doc-${pairDigest(read.sources)}`);
   assert.equal(live.unit!.portfolio.identity.name, 'Rowan Test');
-  assert.equal(live.unit!.site.appearance.colorScheme, 'warm');
+  assert.equal(live.unit!.site.appearance.colorScheme, 'warm-parchment');
   for (const frozen of [
     live,
     live.unit,
@@ -391,7 +391,10 @@ test('a valid pair becomes one frozen revision, named by a hash over both docume
   assert.ok(Object.isFrozen(result.reader));
   assert.equal(await result.reader.getLive(), live);
   // A change to the site document alone is a new revision.
-  const other = tempDir(t, pair(PORTFOLIO, SITE.replace('colorScheme: warm', 'colorScheme: noir')));
+  const other = tempDir(
+    t,
+    pair(PORTFOLIO, SITE.replace('colorScheme: warm-parchment', 'colorScheme: noir')),
+  );
   const changed = open(other, 'production');
   assert.ok(changed.ok);
   assert.notEqual((await changed.reader.getLive()).revisionId, live.revisionId);
@@ -536,7 +539,7 @@ test('under next dev an edit to either document re-validates, and an invalid one
   assert.equal(edited.unit!.portfolio.identity.name, 'Rowan Edited');
   assert.notEqual(edited.revisionId, first.revisionId);
 
-  rewrite(site, SITE.replace('colorScheme: warm', 'colorScheme: retro'), 3_000);
+  rewrite(site, SITE.replace('colorScheme: warm-parchment', 'colorScheme: retro'), 3_000);
   await assert.rejects(result.reader.getLive(), (error: Error) => {
     assert.ok(!error.message.includes(dir));
     return true;

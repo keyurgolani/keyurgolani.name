@@ -91,7 +91,10 @@ test(
           found.selectors.filter((selector) => HOST_SELECTOR.test(selector)),
           `${path}: host CSS`,
         ).toEqual([]);
-        expect(found.selectors.some((selector) => selector.includes('host-skip-link'))).toBe(true);
+        expect(
+          found.selectors.some((selector) => selector.includes('[data-ui-slot="skip-link"]')),
+          "the skip link's focus ring",
+        ).toBe(true);
         expect(found.forms + found.passwordFields, `${path}: Studio's forms`).toBe(0);
         // No theme script: a preview document has none.
         expect(

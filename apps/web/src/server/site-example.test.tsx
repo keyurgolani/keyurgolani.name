@@ -23,15 +23,10 @@ test('the bundled examples are a pair with no blocking record, against this buil
     result.diagnostics.map(({ code, severity, pointer }) => [code, severity, pointer]),
     [['variant.unavailable', 'warning', '/appearance/variant']],
   );
-  // The variant is the contract's to check, and display modes the catalog's;
-  // the other appearance axes have no registry until #19.
-  assert.deepEqual(result.notChecked, [
-    'origin.sample',
-    'origin.stale',
-    'site.appearance.colorScheme',
-    'site.appearance.designLanguage',
-    'site.appearance.typography',
-  ]);
+  // The variant is the contract's to check, and every other appearance axis
+  // #19's appearance check's: the bundled site selects the platform's
+  // fallback packs, which this build registers, so none of them warns.
+  assert.deepEqual(result.notChecked, ['origin.sample', 'origin.stale']);
 });
 
 test('the site example selects the owner default, with the approved visitor controls', () => {
@@ -41,8 +36,8 @@ test('the site example selects the owner default, with the approved visitor cont
   assert.deepEqual(appearance, {
     variant: 'editorial-evidence',
     designLanguage: 'platform-neutral',
-    colorScheme: 'warm',
-    typography: 'classic',
+    colorScheme: 'warm-parchment',
+    typography: 'humanist-ui',
     displayMode: 'system',
   });
   assert.deepEqual(visitorControls, {
@@ -54,6 +49,6 @@ test('the site example selects the owner default, with the approved visitor cont
   });
   assert.equal(motionPolicy, 'respect-os');
   assert.deepEqual(features, { feed: true, productAttribution: false });
-  // No catalog says which generator a scheme has, so the example names none.
+  // warm-parchment is an authored scheme, so the example gives no generator input.
   assert.equal(result.pair.site.appearanceInputs, undefined);
 });

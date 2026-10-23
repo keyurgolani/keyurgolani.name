@@ -104,6 +104,12 @@
   margin-block-start: 0.5rem;
 }
 
+/* A link among a meta line's parts, such as a quote's source, wraps as one
+   box, so its focus ring is one ring around it, never one piece per line. */
+:where([data-variant] [data-renderer='shared'] .pf-meta a) {
+  display: inline-block;
+}
+
 :where([data-variant] [data-renderer='shared'] blockquote) {
   padding-inline-start: 1rem;
 }

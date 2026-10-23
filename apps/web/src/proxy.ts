@@ -12,6 +12,7 @@ import { isExperiencePath, segmentFor } from './server/experience';
 import { isPreviewPath, previewCsp, previewHeaders } from './server/preview-headers';
 import { PORTFOLIO_FILES } from './server/portfolio-files';
 import { READY_PATH, STARTING, STARTING_HEADERS } from './server/ready-starting';
+import { unavailablePage } from './server/unavailable-page';
 import { EXPERIENCE_HEADER } from './server/route-header';
 import { safeReturnTo, signInLocation } from './server/return-to';
 import {
@@ -259,6 +260,12 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   const experience = decision.status === 'served' && decision.entry.experience === true;
   const readOnly = decision.status === 'served' && decision.entry.readOnly === true;
   if ((experience || readOnly) && !pageLoad) return methodNotAllowed(requestId, extra);
+  // A route handler that takes fewer methods than every one, as the table
+  // lists them, such as POST /api/appearance (#19, Slice 4).
+  const methods = decision.status === 'served' ? decision.entry.methods : undefined;
+  if (methods && !(methods as readonly string[]).includes(request.method)) {
+    return methodNotAllowed(requestId, extra, methods.join(', '));
+  }
 
   const headers = forwarded(request, requestId, { csp, preview });
   // The table's decision, in place of anything the client sent.
@@ -286,12 +293,16 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
 
 /**
  * A visitor page (#6, Slice 2), or a read-only route such as #10's
- * renditions, asked for with a method other than GET or HEAD: plain text,
- * as an operation called with the wrong method gets, with the methods the
- * route takes.
+ * renditions, asked for with a method other than GET or HEAD, or a route
+ * handler with one its entry doesn't list: plain text, as an operation
+ * called with the wrong method gets, with the methods it takes.
  */
-function methodNotAllowed(requestId: string, extra: Record<string, string>): NextResponse {
-  return plain(405, 'Method not allowed.', requestId, { ...extra, allow: 'GET, HEAD' });
+function methodNotAllowed(
+  requestId: string,
+  extra: Record<string, string>,
+  allow = 'GET, HEAD',
+): NextResponse {
+  return plain(405, 'Method not allowed.', requestId, { ...extra, allow });
 }
 
 /** Whether `profile` serves a Studio page, by the route table. */
@@ -576,24 +587,8 @@ function plain(
  * validation text, path, or Studio link, which crawlers are asked to come
  * back for rather than index.
  */
-const UNAVAILABLE_PAGE = [
-  '<!doctype html>',
-  '<html lang="en">',
-  '<head>',
-  '<meta charset="utf-8">',
-  '<meta name="viewport" content="width=device-width, initial-scale=1">',
-  '<meta name="robots" content="noindex">',
-  '<title>Temporarily unavailable</title>',
-  '</head>',
-  '<body>',
-  '<main>',
-  '<h1>Temporarily unavailable</h1>',
-  '<p>This site is being updated. Try again in a few minutes.</p>',
-  '</main>',
-  '</body>',
-  '</html>',
-  '',
-].join('\n');
+/** The static 503's page, in the fallback packs' boundary (server/unavailable-page.ts). */
+const UNAVAILABLE_PAGE = unavailablePage();
 
 function unavailable(requestId: string): NextResponse {
   return new NextResponse(UNAVAILABLE_PAGE, {

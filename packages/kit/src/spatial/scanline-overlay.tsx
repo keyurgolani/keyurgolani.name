@@ -38,7 +38,9 @@ interface ScanlineOverlayProps {
  */
 export function ScanlineOverlay({
   motionPreference = 'respect-os',
-  scanlineColor = 'rgba(255, 255, 255, 0.06)',
+  // The boundary's own colors (#19, Slice 4), so the lines and the vignette
+  // follow the scheme and the display mode.
+  scanlineColor = 'color-mix(in oklab, var(--color-text-primary) 6%, transparent)',
   scanlineSpacing = 3,
   scrollSpeed = 8,
   chromaticAberration = false,
@@ -75,7 +77,7 @@ export function ScanlineOverlay({
             pointerEvents: 'none',
             zIndex: zIndex - 1,
             background:
-              'radial-gradient(ellipse at center, transparent 0%, transparent 55%, rgba(0,0,0,0.5) 100%)',
+              'radial-gradient(ellipse at center, transparent 0%, transparent 55%, color-mix(in oklab, var(--color-scrim) 50%, transparent) 100%)',
           }}
         />
       ) : null}
@@ -99,7 +101,7 @@ export function ScanlineOverlay({
         }
         ${
           chromaticAberration
-            ? `[data-crt-filter] { filter: drop-shadow(1px 0 0 rgba(255,0,80,0.35)) drop-shadow(-1px 0 0 rgba(0,200,255,0.35)); }`
+            ? `[data-crt-filter] { filter: drop-shadow(1px 0 0 color-mix(in oklab, var(--color-data-categorical-1) 35%, transparent)) drop-shadow(-1px 0 0 color-mix(in oklab, var(--color-data-categorical-2) 35%, transparent)); }`
             : ''
         }
       `}</style>

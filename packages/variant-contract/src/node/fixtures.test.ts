@@ -29,8 +29,8 @@ const SCHEMA_PAIRS = fileURLToPath(
 
 /** The color schemes and typography presets the fixtures name, and every display mode, as #4's tests list them. */
 const IDS = {
-  colorScheme: ['warm', 'noir', 'ink-and-paper', 'nebula', 'aurora', 'solar'],
-  typography: ['classic', 'modernist', 'geometric', 'humanist'],
+  colorScheme: ['warm', 'warm-parchment', 'noir', 'ink-and-paper', 'nebula', 'aurora', 'solar'],
+  typography: ['classic', 'humanist-ui', 'modernist', 'geometric', 'humanist'],
   displayMode: ['system', 'light', 'dark', 'high-contrast'],
 } as const;
 const CATALOG: AppearanceCatalog = {

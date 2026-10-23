@@ -33,7 +33,8 @@ export function SpotlightMask({
   radius = 280,
   intensity = 0.88,
   damping = 0.22,
-  shade = '#000',
+  // The boundary's scrim (#19, Slice 4), whatever the scheme.
+  shade = 'var(--color-scrim)',
   reducedFallback = 'static-center',
 }: SpotlightMaskProps) {
   const runtime = useEnhancementRuntime({

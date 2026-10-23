@@ -50,11 +50,7 @@
 
 .host-chrome__reference {
   font-size: 0.875rem;
-  color: #6b6863;
-}
-
-html[data-theme='dark'] .host-chrome__reference {
-  color: #a19c94;
+  color: var(--color-text-secondary, #6b6863);
 }
 
 /* The host's focus ring on its own pages (#11, WCAG 2.4.7 and 1.4.11), as

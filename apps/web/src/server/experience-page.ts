@@ -2,7 +2,8 @@ import 'server-only';
 import type { ComponentType } from 'react';
 import { notFound, redirect } from 'next/navigation';
 import type { VariantRegistry } from '@portfolio/variant-contract';
-import { ExperienceDocument, type VariantLoader } from '~/lib/experience-document';
+import { visitorControlModel } from '~/lib/document-appearance';
+import { ExperienceDocument, hostLang, type VariantLoader } from '~/lib/experience-document';
 import { sampleSelection, type SearchParams } from '~/lib/sample';
 import { REGISTRY } from '~/lib/variants';
 import { resolveVisitorPath, type VisitorPath } from '~/lib/visitor-routes';
@@ -10,6 +11,7 @@ import { requireDeploymentConfig } from './config-store';
 import { SAMPLE_PATTERN, segmentFor } from './experience';
 import { getPublicView } from './public-view';
 import { resolveRoute } from './routes';
+import { visitorPageAppearance } from './visitor-appearance';
 
 // Every visitor page renders through here (#5, Slice 4; #6, Slice 2), in the
 // experience segment of the variant it renders: registry generation writes
@@ -85,9 +87,22 @@ export function experiencePage(
     if (here !== id || rendered !== id) redirect(`${asked}${query.size > 0 ? `?${query}` : ''}`);
     if (route.kind === 'not-found') notFound();
     if (route.kind === 'redirect') redirect(route.location);
+    const appearance = await visitorPageAppearance(
+      route.view.site,
+      route.composition.rendered.manifest.id,
+      search,
+    );
+    const lang = hostLang(route.view);
     return ExperienceDocument({
       unit: route.view,
       selection: route.composition,
+      appearance,
+      // The slot's control comes back to the page as the visitor asked for it.
+      control: {
+        model: visitorControlModel(route.view.site, profile, appearance),
+        returnTo: `${asked}${query.size > 0 ? `?${query}` : ''}`,
+        ...(lang ? { lang } : {}),
+      },
       load,
       hostModules,
       linkBase: { basePath: path.basePath, query: path.query },

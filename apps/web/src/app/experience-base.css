@@ -4,75 +4,53 @@
 /* What every portfolio document loads (#7, Slice 1): the site's layout, the
    preview's, and the 404 page a URL no route matches gets. Studio's layout
    loads it too, under host-chrome.css, which nothing else loads. Every rule
-   below is unlayered for now, and unlayered rules win over layered ones, so
-   the order above changes nothing until #19 puts rules in its layers. */
+   sits in the reset layer (#19, Slice 4), under the packs, the variant's
+   layout, and the accessibility layer. It sets no color, font, or theme: the
+   document boundary's packs do, from the platform stylesheet's :root:has()
+   rules, on the root as on the boundary, so the canvas never paints a color
+   the selection didn't pick. */
 
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-}
+@layer reset {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
 
-html,
-body {
-  margin: 0;
-  padding: 0;
-  min-height: 100%;
-}
+  html,
+  body {
+    margin: 0;
+    padding: 0;
+    min-height: 100%;
+  }
 
-html {
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  background: #fbfaf6;
-  color: #1a1a1a;
-}
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
 
-html[data-theme='dark'] {
-  background: #0c0b0a;
-  color: #ebe7df;
-}
+  a {
+    color: inherit;
+  }
 
-body {
-  font-family:
-    system-ui,
-    -apple-system,
-    'Segoe UI',
-    sans-serif;
-}
+  img,
+  svg,
+  video {
+    max-width: 100%;
+    height: auto;
+  }
 
-a {
-  color: inherit;
-}
-
-img,
-svg,
-video {
-  max-width: 100%;
-  height: auto;
-}
-
-::selection {
-  background: rgba(181, 74, 50, 0.18);
-}
-
-html[data-theme='dark'] ::selection {
-  background: rgba(224, 149, 120, 0.28);
-}
-
-/* The skip link before each composition: out of sight until it has focus. */
-
-.host-skip-link:not(:focus) {
-  position: absolute;
-  inline-size: 1px;
-  block-size: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
-}
-
-.host-skip-link:focus {
-  display: inline-block;
-  padding: 0.5rem 1rem;
+  /* The host's focus ring (#11, 11-2), inside every page's document
+     boundary, the error and 404 pages' included, and never on Studio's
+     working UI, whose own focus styles win. The platform stylesheet's ring,
+     in the scheme's focus color, is over it in a later layer, and alone on
+     the 503, which loads only the packs. host-chrome.css rings Studio's own
+     error pages. The boundary's skip link is the first stop. */
+  :where([data-variant]) :focus-visible,
+  [data-ui-slot='skip-link']:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
+  }
 }
 
 /* The kit runtime's pause (#6, items 6 and 7): while an effect's runtime
@@ -83,20 +61,5 @@ html[data-theme='dark'] ::selection {
   [data-activity='paused'],
   [data-activity='paused'] * {
     animation-play-state: paused;
-  }
-}
-
-/* The focus ring every portfolio document starts from (#11, WCAG 2.4.7 and
-   1.4.11): Chromium's own is a 1px orange ring on phones, under 3:1 on the
-   neutral canvas. It sits in the reset layer, so a variant's own focus style,
-   unlayered, and #19's accessibility layer both win over it. It reaches only
-   the portfolio inside its boundary and the skip link before it: Studio loads
-   this file too, and keeps its own focus styles. host-chrome.css rings the
-   host's own pages. */
-@layer reset {
-  :where([data-variant]) :focus-visible,
-  .host-skip-link:focus-visible {
-    outline: 2px solid currentColor;
-    outline-offset: 2px;
   }
 }

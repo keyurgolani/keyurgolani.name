@@ -30,6 +30,8 @@ import {
   Tooltip,
   type SlotName,
 } from '.';
+import type { BoundaryAttributes } from '../boundary';
+import { BoundaryRoot } from '../react/boundary-root';
 import { TabList } from './tabs';
 
 // @portfolio/appearance/primitives (#19, Slice 3, item 2), rendered with
@@ -356,6 +358,49 @@ test('Field labels its control, describes it with its help and error, and marks 
     one(html(<Field id="body" label="Body" multiline />), 'field.control').tag,
     'textarea',
   );
+});
+
+/** A plate's boundary attributes, as boundaryAttributes() gives them, for a primitive inside one. */
+const PLATE_ATTRIBUTES = {
+  'data-appearance-boundary': 'plate',
+  'data-motion': 'static',
+} as unknown as BoundaryAttributes;
+
+test('a Field whose onChange arrives after hydration is the element the server rendered, in a document and in a plate', () => {
+  // The server renders it with no handler yet; the client renders it again
+  // with one once it has hydrated. The markup is the same either way, so the
+  // handler goes on the element that's there, and nothing remounts it or
+  // takes its focus.
+  const onChange = () => {};
+  for (const props of [
+    { id: 'late-note', label: 'Late note', defaultValue: 'draft' },
+    { id: 'late-note', label: 'Late note', value: 'draft' },
+    { id: 'late-body', label: 'Late body', multiline: true, defaultValue: 'draft' },
+  ]) {
+    const before = html(<Field {...props} />);
+    assert.equal(html(<Field {...props} onChange={onChange} />), before, props.id);
+    assert.equal(
+      html(
+        <BoundaryRoot
+          kind="plate"
+          ids={{ prefix: 'pl-', main: 'main' }}
+          attributes={PLATE_ATTRIBUTES}
+        >
+          <Field {...props} onChange={onChange} />
+        </BoundaryRoot>,
+      ),
+      html(
+        <BoundaryRoot
+          kind="plate"
+          ids={{ prefix: 'pl-', main: 'main' }}
+          attributes={PLATE_ATTRIBUTES}
+        >
+          <Field {...props} />
+        </BoundaryRoot>,
+      ),
+      `${props.id} in a plate`,
+    );
+  }
 });
 
 test('Checkbox sits inside its label, so the whole row is its target, and names its description', () => {
@@ -685,6 +730,15 @@ test('the landmark primitives render their native elements outside a plate', () 
     '',
   );
   assert.throws(() => html(<Region {...({} as { label: string })}>x</Region>), /needs a name/);
+  // A Navigation named by another element, for a name in another language than its links'.
+  const named = one(
+    html(
+      <Navigation labelledBy="sections-label" items={[{ href: '#a', label: 'A', lang: 'fr' }]} />,
+    ),
+    'navigation',
+  );
+  assert.equal(named.attributes['aria-labelledby'], 'sections-label');
+  assert.equal(named.attributes['aria-label'], undefined);
 });
 
 test('the skip link points at the main, out of sight until focused', () => {

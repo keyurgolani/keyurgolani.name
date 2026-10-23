@@ -17,10 +17,11 @@ import { expect, test } from './fixtures';
 //   holds, and the boundaries' motion tokens are the reduced ones.
 // - The compiled-CSS audit: no stylesheet the quality build compiled, the
 //   host's or a pack's, has a universal !important motion kill switch.
-// - The host's focus ring (apps/web/src/app/experience-base.css): on a phone,
-//   where Chromium's own ring is under 3:1, a page's skip link and the 404
-//   page's first link ring in currentColor, and a variant's own focus style,
-//   which is unlayered, wins over it. The host's own pages, which only
+// - The focus ring on a phone, where Chromium's own is under 3:1: the skip
+//   link that starts every document boundary, the 404's included, rings in
+//   the platform stylesheet's ring, in the scheme's focus color, over the
+//   host's currentColor one (apps/web/src/app/experience-base.css), and a
+//   variant's own focus style, which is unlayered, wins over both. The host's own pages, which only
 //   Studio's layout styles, ring through host-chrome.css; an element outside
 //   the boundary, as Studio's are, keeps the browser's own ring. A preview
 //   document is the same ExperienceDocument tree as /, so / stands for it.
@@ -96,25 +97,38 @@ test.describe("the host's focus ring on a phone", () => {
       };
     });
 
-  for (const [route, status, first] of [
-    ['/', 200, 'the skip link'],
-    [NOT_FOUND_PATH, 404, 'the first link'],
+  /** The boundary's focus color, as an element in it resolves `--color-focus`. */
+  const focusColor = (page: import('@playwright/test').Page) =>
+    page.evaluate(() => {
+      const probe = document.createElement('span');
+      probe.style.color = 'var(--color-focus)';
+      document.querySelector('[data-appearance-boundary="document"]')!.append(probe);
+      const color = getComputedStyle(probe).color;
+      probe.remove();
+      return color;
+    });
+
+  for (const [route, status] of [
+    ['/', 200],
+    [NOT_FOUND_PATH, 404],
   ] as const) {
     test(
-      `${first} on ${route} rings in its own color, at 3:1 or more`,
+      `the skip link on ${route}, its first stop, rings in the scheme's focus color, at 3:1 or more`,
       { annotation: [{ type: 'route', description: route }, READ_ONLY] },
       async ({ page }) => {
         expect((await page.goto(route))?.status()).toBe(status);
         await page.keyboard.press('Tab');
         const active = await inPage<Active>(page, { kind: 'active' });
         expect(active.none).toBe(false);
-        if (route === '/') {
-          expect(await page.evaluate(() => document.activeElement?.className)).toBe(
-            'host-skip-link',
-          );
-        }
+        // The document boundary's skip link (#19, Slice 4), the 404's too,
+        // which the platform stylesheet's ring reaches over the host's.
+        expect(
+          await page.evaluate(() => document.activeElement?.getAttribute('data-ui-slot')),
+        ).toBe('skip-link');
         const ring = await outline(page);
-        expect(ring).toEqual({ style: 'solid', width: '2px', color: ring.text, text: ring.text });
+        expect(ring.style).toBe('solid');
+        expect(parseFloat(ring.width)).toBeGreaterThanOrEqual(2);
+        expect(ring.color).toBe(await focusColor(page));
         expect(await focusFindings(page, active)).toEqual([]);
       },
     );

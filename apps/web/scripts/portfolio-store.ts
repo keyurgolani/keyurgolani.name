@@ -24,7 +24,8 @@ import { readPairBytes } from '@portfolio/schema/node';
 import { runCli } from '../../../packages/core/src/cli';
 import { CONTENT_EXTENSIONS } from '../src/lib/generated/registry.extensions';
 import { VARIANTS } from '../src/lib/generated/registry.meta';
-import { createAppearanceCatalog } from '../src/server/appearance-catalog';
+import { appearanceCatalog } from '../src/lib/appearance-checks';
+import { APPEARANCE_REGISTRY } from '../src/lib/appearance-registry';
 import { buildUnitChecks } from '../src/server/unit-checks';
 import webPackage from '../package.json' with { type: 'json' };
 
@@ -94,6 +95,7 @@ export function storeChecks(env: Env): UnitChecks {
   const canonical = storeOrigin(env);
   return buildUnitChecks({
     registry: VARIANTS,
+    appearance: APPEARANCE_REGISTRY,
     extensions: CONTENT_EXTENSIONS,
     ...(canonical ? { origin: canonical } : {}),
     appVersion: webPackage.version,
@@ -111,7 +113,7 @@ function isMain(): boolean {
   }
 }
 
-const context = { catalog: createAppearanceCatalog(), extensions: CONTENT_EXTENSIONS };
+const context = { catalog: appearanceCatalog(APPEARANCE_REGISTRY), extensions: CONTENT_EXTENSIONS };
 
 // No top-level await: tsx runs this file as CommonJS, since apps/web isn't a module package.
 /** The checks, or null once it said why it can't run, as a usage error. */

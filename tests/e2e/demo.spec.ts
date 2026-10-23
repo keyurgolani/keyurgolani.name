@@ -50,8 +50,13 @@ test(
         /canary|fallback|editorial|variant|studio|config/i,
         { useInnerText: true },
       );
+      // Its boundary's skip link goes to its own main, and the page links home alone.
+      await expect(page.locator('[data-ui-slot="skip-link"]'), query).toHaveAttribute(
+        'href',
+        '#main',
+      );
       const links = await page
-        .locator('a[href]')
+        .locator('a[href]:not([data-ui-slot="skip-link"])')
         .evaluateAll((anchors) => anchors.map((anchor) => anchor.getAttribute('href')));
       expect(links, query).toEqual(['/']);
     }

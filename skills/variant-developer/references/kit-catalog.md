@@ -49,7 +49,7 @@ If they disagree, the source wins.
 | `shouldReduceMotion`      | `(policy: MotionPolicy, osReduce) => boolean`   | Synchronous server-side check or non-hook contexts.                             |
 | `ResolvedMotion` (type)   | `'reduce' \| 'full'`                            | Annotating motion-aware props.                                                  |
 
-`MotionPolicy` is `respect-os` (the default: follow `prefers-reduced-motion`) or `reduce`. No policy animates past an OS reduce preference. The site's policy reaches a variant as `input.presentation.motionPolicy`, and the host's presentation boundary carries it as `data-motion-policy`, so a stylesheet can reduce CSS motion under `reduce` as it does under `prefers-reduced-motion`. A variant wraps its client parts in `MotionPolicyProvider` with it, so every `useMotionPreference()` below reads it. A `policy` given to the hook, or a component's `motionPreference` prop, can only add a `reduce`: neither undoes the site's. The preference says whether motion is allowed, not whether an effect may run now: run the effect on the runtime below.
+`MotionPolicy` is `respect-os` (the default: follow `prefers-reduced-motion`) or `reduce`. No policy animates past an OS reduce preference. The site's policy reaches a variant as `input.presentation.motionPolicy`, and the host's document boundary carries the motion that renders as `data-motion`, `full`, `reduced`, or `static`, so a stylesheet can reduce CSS motion under it as it does under `prefers-reduced-motion`. A variant wraps its client parts in `MotionPolicyProvider` with it, so every `useMotionPreference()` below reads it. A `policy` given to the hook, or a component's `motionPreference` prop, can only add a `reduce`: neither undoes the site's. The preference says whether motion is allowed, not whether an effect may run now: run the effect on the runtime below.
 
 ## Runtime (`@portfolio/kit/runtime`)
 
@@ -64,18 +64,9 @@ If they disagree, the source wins.
 | `runtimeAnimation`                                                                                                                                                | `(state: RuntimeState, { name, seconds, timing? }) => CSSProperties`       | Animating inline with CSS keyframes: spread it into the element's `style`. Nothing while `static`, paused in place while `paused`, running while `active`. Never write an `animation` shorthand inline: it resets the play-state the pause sets.                                                                                                                                                                                                                                                                                                                      |
 | `EnhancementRuntime`, `RuntimeOptions`, `FrameCallback`, `RuntimeState`, `RuntimeReason`, `MotionControlProps`, `MotionControlStatus`, `RuntimeAnimation` (types) | —                                                                          | Typing what the runtime gives and takes.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 
-## Theme system (`@portfolio/kit`)
+## Display modes and tokens
 
-Display modes are the appearance system's (#19). The host's layout paints the starting theme with `themeInitScript`; no page wraps a variant in `ThemeProvider` now, and a variant renders no theme toggle: #19's visitor control, in the `VisitorControlSlot`, replaces each variant's own. The provider stays for that control and for the `legacy/` packages.
-
-| Export                 | Signature                                                            | Use when                                                                                                                                                             |
-| ---------------------- | -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ThemeProvider`        | React component `{ children, defaultPreference?, supportedThemes? }` | Holding a visitor's theme choice for a toggle: #19's visitor control, not a variant.                                                                                 |
-| `useTheme`             | `() => { preference, resolved, setPreference }`                      | Reading or changing the active theme inside a `ThemeProvider`.                                                                                                       |
-| `themeInitScript`      | `(defaultPreference?: ThemePreference) => string`                    | Inline `<script>` in `app/layout.tsx` to avoid theme flash on first paint: the stored choice, else the page's starting theme (the site's display mode).              |
-| `THEME_INIT_SCRIPT`    | string                                                               | `themeInitScript()` for a page that starts from `system`.                                                                                                            |
-| `resolveTheme`         | `(preference, supported, systemMatch) => ResolvedTheme`              | Resolving the active theme given a preference, a supported-themes list, and a system-preference callback; falls back to light/dark when bright/black are not listed. |
-| `ResolvedTheme` (type) | `'light' \| 'dark' \| 'bright' \| 'black'`                           | Annotating resolved theme props.                                                                                                                                     |
+The kit has no theme module and no tokens of its own. Display modes, colors, type, and the rest are the appearance axes' (#19): the host renders each page's document boundary from the published selection and the visitor's choice, the packs set the `--color-*`, `--ui-*`, and `--type-*` properties on it, and the visitor's appearance control renders in the `VisitorControlSlot`. A variant reads those properties from CSS and renders no theme toggle.
 
 ## The manifest and the render input (`@portfolio/variant-contract`)
 
@@ -95,17 +86,9 @@ The kit has no manifest types any more. `VariantManifest`, `VariantRenderInput`,
 | `cn`                | `(...inputs: ClassValue[]) => string` | Joining conditional class names (alias of `clsx`). |
 | `ClassValue` (type) | re-exported from `clsx`               | Typing className accumulators.                     |
 
-## Tokens (`@portfolio/kit`)
-
-| Export            | Signature                                | Use when                                                                                                                                               |
-| ----------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `TOKENS`          | `Readonly<Record<TokenKey, '--<name>'>>` | The v1 host token names (surface, ink, accent, rule, fontDisplay). No page sets them: #19's tokens replace them, under the manifest's `tokenContract`. |
-| `tokenVar`        | `(key: TokenKey) => 'var(--<name>)'`     | Inlining a token in a style object.                                                                                                                    |
-| `TokenKey` (type) | union of token keys                      | Restricting helper inputs to known tokens.                                                                                                             |
-
 ## Re-exported schema types (`@portfolio/kit`)
 
-`Portfolio`, `Section`, `SectionKind`, `MotionPolicy`, `Identity`, `Link`, `Placement`, `Period` — re-exported for ergonomic imports inside variants without depending directly on `@portfolio/schema`. `ThemePreference` is the kit's own type, exported from its theme module.
+`Portfolio`, `Section`, `SectionKind`, `MotionPolicy`, `Identity`, `Link`, `Placement`, `Period` — re-exported for ergonomic imports inside variants without depending directly on `@portfolio/schema`.
 
 ## Animated text + counters (`@portfolio/kit`)
 
@@ -194,13 +177,15 @@ The kit has no manifest types any more. `VariantManifest`, `VariantRenderInput`,
 ## Spatial (2D / canvas) primitives (`@portfolio/kit/spatial`)
 
 > Only useful when manifest.performanceTier is `medium` or higher (or `light` for the no-canvas primitives like ParallaxLayer / HolographicPanel).
+>
+> Every color one of these takes is the document boundary's unless you pass one (#19): the CSS ones read the `--color-*` tokens, and the canvas ones, ParticleField2D, WavePlaneCanvas, SpatialCanvas, and TransmissionGem, read them from their nearest boundary once they've mounted, and again when the appearance there changes, with no frame loop of their own.
 
 | Export                                                       | Signature                                                                                                   | Use when                                                                                                                                                                                     |
 | ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `useSpatialContract`                                         | `(opts?: UseSpatialContractOptions) => SpatialContractValues`                                               | Single hook that resolves motion + perf budget for spatial primitives, on the kit runtime: loop through `useFrameLoop(contract.runtime, ...)`. Every spatial variant should go through this. |
 | `MagneticCursor`                                             | component `{ motionPreference?, dotSize?, haloSize?, color?, haloDamping?, hideSystemCursor? }`             | Custom cursor with springy halo (light tier).                                                                                                                                                |
 | `SpotlightMask`                                              | component `{ motionPreference?, radius?, intensity?, damping?, shade?, reducedFallback? }`                  | Cursor-tracked dark overlay with a hole revealing content.                                                                                                                                   |
-| `HolographicPanel`                                           | component `{ children, tone?, scanlines?, glow?, blur?, borderWeight? }`                                    | Glassmorphic / pearl panel container (light tier).                                                                                                                                           |
+| `HolographicPanel`                                           | component `{ children, scanlines?, glow?, blur?, borderWeight? }`                                           | Glass panel container in the boundary's overlay surface, border, text, and card radius (light tier).                                                                                         |
 | `AuroraGradient`                                             | component `{ colors?, speed?, blend?, opacity?, position?, zIndex?, grain?, motionPreference? }`            | Animated multi-stop gradient backdrop.                                                                                                                                                       |
 | `ParallaxLayer`                                              | component `{ children, scrollSpeed?, mouseInfluence?, depth?, motionPreference?, ... }`                     | Single-layer scroll/pointer parallax wrapper.                                                                                                                                                |
 | `ParticleField2D`                                            | component `{ density?, maxParticles?, particleSize?, lineColor?, connectDistance?, cursorRadius?, ... }`    | 2D-canvas particle network (medium tier).                                                                                                                                                    |

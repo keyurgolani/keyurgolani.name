@@ -81,11 +81,27 @@ const BACKDROP_MIX = {
   call: 'color-mix(in srgb, var(--color-scrim) 62%, transparent)',
 } as const;
 
-/** A literal percentage, such as 62%, .5%, or 6.2e1%, standing on its own. */
-const LITERAL_PERCENTAGE = /(?<![\w.-])(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?%/i;
+/**
+ * A literal percentage, such as 62%, .5%, 6.2e1%, or -62%, standing on its
+ * own. A minus sign is part of the number, so it can't hide one: only a
+ * word character or a dot before the digits makes them part of something
+ * else, such as a token's name.
+ */
+const LITERAL_PERCENTAGE = /(?<![\w.])-?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?%/i;
 
 test('the literal percentage check finds every spelling of one, and no token', () => {
-  for (const literal of ['62%', '0.5%', '.5%', '6.2e1%', '62E0%', '1e+2%', '6.2e-1%']) {
+  for (const literal of [
+    '62%',
+    '0.5%',
+    '.5%',
+    '6.2e1%',
+    '62E0%',
+    '1e+2%',
+    '6.2e-1%',
+    '-62%',
+    '-.5%',
+    '+62%',
+  ]) {
     assert.match(
       `color-mix(in srgb, var(--color-scrim) ${literal}, transparent)`,
       LITERAL_PERCENTAGE,
@@ -95,6 +111,7 @@ test('the literal percentage check finds every spelling of one, and no token', (
   for (const token of [
     'color-mix(in srgb, var(--color-scrim) var(--ui-surface-opacity), transparent)',
     'color-mix(in srgb, var(--color-x2) calc(var(--ui-a1) * 1), transparent)',
+    'color-mix(in srgb, var(--color-x2) calc(var(--ui-a1) - 1px), transparent)',
   ]) {
     assert.doesNotMatch(token, LITERAL_PERCENTAGE, token);
   }

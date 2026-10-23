@@ -95,6 +95,11 @@ export interface RouteEntry {
    * to sign-in.
    */
   readonly grant?: 'document' | 'asset';
+  /**
+   * The methods a route handler takes, when it's fewer than every method.
+   * proxy.ts answers any other with a 405 naming them, before Next does.
+   */
+  readonly methods?: readonly 'POST'[];
 }
 
 // What visitors read the site through at its root, which the demo profile
@@ -264,6 +269,15 @@ const ROUTES = [
   { pattern: '/api/health', kind: 'handler', capability: 'health.read' },
   { pattern: '/api/ready', kind: 'handler', capability: 'ready.read' },
   { pattern: '/api/studio/[name]', kind: 'handler', capability: 'operations' },
+  // A visitor's appearance preference (#19, Slice 4). It reads nothing of
+  // the published site, so it isn't a visitor route, and answers while the
+  // catalog can't serve too.
+  {
+    pattern: '/api/appearance',
+    kind: 'handler',
+    capability: 'appearance.preference',
+    methods: ['POST'],
+  },
   // #19 Slice 3's fixture page, app/(fixtures)/%5Ffixtures/appearance, which
   // Next serves at _fixtures: every primitive state, and plates of other
   // selections, for tests/appearance. Its capability is in every profile of a

@@ -75,6 +75,7 @@ test('the summary names each granted capability and its access, and nothing else
       { id: 'feed.read', access: 'public' },
       { id: 'health.read', access: 'public' },
       { id: 'ready.read', access: 'public' },
+      { id: 'appearance.preference', access: 'public' },
       ...fixtures,
     ],
   });

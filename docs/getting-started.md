@@ -75,7 +75,7 @@ appearance:
 motionPolicy: reduce # respect-os | reduce
 ```
 
-`displayMode` is the theme a visit starts in; `high-contrast` starts at `system` until #19 renders it. This build records the design language, color scheme, and typography without checking them. `visitorControls` in `site.yml` already records which appearance fields visitors may change, for #19's visitor control. [configuration.md](configuration.md#the-site-document) covers every field.
+`displayMode` is the mode a visit starts in, and `colorScheme`, `typography`, and `designLanguage` name the platform's packs: `warm-parchment`, `humanist-ui`, and `platform-neutral`. `visitorControls` in `site.yml` says which of them visitors may change for themselves, in the Appearance control on every page. [configuration.md](configuration.md#the-site-document) covers every field.
 
 To see the bundled sample in any registered variant, run the dev server under the `demo` profile:
 
