@@ -1,6 +1,7 @@
 import { Marked, type MarkedToken, type Token, type Tokens } from 'marked';
 import { isAllowedUrl } from '@portfolio/schema';
 import { escapeHtml } from './html-escape';
+import { lexBlocks } from './markdown-lexer';
 
 // Markdown from the content, as HTML that RichText injects with
 // dangerouslySetInnerHTML. marked only tokenizes: every tag is written here,
@@ -22,6 +23,9 @@ import { escapeHtml } from './html-escape';
 //   lines, or the phrase inline. marked recurses once per level of nesting, so
 //   a deep enough quote or run of emphasis runs it out of stack, and that
 //   mustn't take the page's render down with it.
+// - When a lazy line makes marked lex a quote's content again, the inline
+//   text of the first lexing isn't lexed as well (markdown-lexer.ts), so a
+//   field's marks cost the same however deep its quotes.
 //
 // No Node API and no DOM: #7's preview frame and #9's browser render call it.
 
@@ -32,7 +36,7 @@ export function renderMarkdown(source: string | undefined | null): string {
   if (!source) return '';
   try {
     // A copy of the options per call: the lexer keeps its tokenizer on them.
-    return blocks(markdown.lexer(withoutNul(source), { ...markdown.defaults }), true);
+    return blocks(lexBlocks(withoutNul(source), { ...markdown.defaults }), true);
   } catch {
     return paragraphsOf(source);
   }
