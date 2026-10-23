@@ -1,7 +1,8 @@
-// The headers every response carries, by path (#1 item 22, #2, #7): the
-// baseline next.config.ts sends, Studio's own, and the preview's. Under a
-// profile with a Studio page, Studio pages get a nonce CSP from proxy.ts in
-// place of the baseline one, and Referrer-Policy: same-origin and
+// The headers every response carries, by path (#1 item 22, #2, #6, #7):
+// the baseline next.config.ts sends, the public site's nonce CSP proxy.ts
+// sends in place of its CSP (#6, item 8), Studio's own, and the preview's.
+// Under a profile with a Studio page, Studio pages get Studio's nonce CSP
+// from proxy.ts in place of the public one, and Referrer-Policy: same-origin and
 // Cross-Origin-Resource-Policy: same-origin; under another profile they get
 // what any path gets. Studio's transport gets same-origin for both in every
 // profile, and every Studio response asks for no-store. Every preview path,
@@ -12,11 +13,20 @@
 // headers.test.ts and proxy.test.ts check next.config.ts and proxy.ts
 // themselves.
 
-/** The headers every path outside Studio and preview carries. */
+/**
+ * The public site's CSP in production (#6, item 8), with its nonce: 16
+ * random bytes in base64. Every response proxy.ts sends outside Studio and
+ * preview carries it, Studio's transport included.
+ */
+export const PUBLIC_CSP =
+  /^default-src 'self'; script-src 'self' 'nonce-([A-Za-z0-9+/]{22}==)' 'strict-dynamic'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; media-src 'self'; connect-src 'self'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'$/;
+
+/** The headers a path outside Studio and preview carries, its policy with one nonce for the example. */
 export const BASELINE_HEADERS = Object.freeze({
   'x-content-type-options': 'nosniff',
   'referrer-policy': 'strict-origin-when-cross-origin',
-  'content-security-policy': "frame-ancestors 'none'; img-src 'self' data:; media-src 'self'",
+  'content-security-policy':
+    "default-src 'self'; script-src 'self' 'nonce-MVlEoQyHU2PoMq1Imu8oSA==' 'strict-dynamic'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; media-src 'self'; connect-src 'self'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
 });
 
 /** A Studio page's CSP in production, with its nonce: 16 random bytes in base64. */
@@ -98,6 +108,12 @@ export function headerProblems(pathname, headers, { studio: served = true, origi
   const expect = (/** @type {string} */ name, /** @type {string | undefined} */ value) => {
     if (headers[name] !== value) problems.push(`${name} is ${headers[name]}, not ${value}`);
   };
+  const publicPolicy = () => {
+    const csp = headers['content-security-policy'];
+    if (csp === undefined || !PUBLIC_CSP.test(csp)) {
+      problems.push(`content-security-policy is ${csp}, not the public site's nonce CSP`);
+    }
+  };
   expect('x-content-type-options', 'nosniff');
   expect('access-control-allow-origin', isSharedAsset(pathname) ? '*' : undefined);
   const studio = served && isStudioPath(pathname);
@@ -124,10 +140,10 @@ export function headerProblems(pathname, headers, { studio: served = true, origi
   } else if (transport) {
     expect('referrer-policy', 'same-origin');
     expect('cross-origin-resource-policy', 'same-origin');
-    expect('content-security-policy', BASELINE_HEADERS['content-security-policy']);
+    publicPolicy();
   } else {
     expect('referrer-policy', BASELINE_HEADERS['referrer-policy']);
-    expect('content-security-policy', BASELINE_HEADERS['content-security-policy']);
+    publicPolicy();
     expect('cross-origin-resource-policy', undefined);
   }
   // A dynamic page's Cache-Control is Next's, which has no-store among its

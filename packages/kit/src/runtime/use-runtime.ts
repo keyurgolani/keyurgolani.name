@@ -22,8 +22,9 @@ export interface RuntimeOptions {
   readonly rootMargin?: string;
   /**
    * The effect's own motion policy, as its `motionPreference` prop gives it.
-   * It can only add a `reduce`: the boundary's policy, a MotionPolicyProvider
-   * above it, and the OS each reduce motion as well.
+   * It can only add a `reduce`: a MotionPolicyProvider above it, the
+   * boundary's motion, which carries the site's policy (#19, Slice 4), and
+   * the OS each reduce motion as well.
    */
   readonly motionPolicy?: MotionPolicy;
 }
@@ -41,28 +42,30 @@ export interface EnhancementRuntime extends RuntimeStatus {
 
 const noSubscription = () => () => {};
 
-/** The boundary's motion attributes: the site's policy and a preview's environment. */
+/**
+ * The boundary's motion: its data-motion, `full`, or `reduced` under the
+ * site's `reduce` policy or a preview's reduced environment, or `static`.
+ */
 export interface BoundaryMotion {
-  readonly policy: string | null;
   readonly motion: string | null;
 }
 
-const NO_BOUNDARY: BoundaryMotion = { policy: null, motion: null };
+const NO_BOUNDARY: BoundaryMotion = { motion: null };
 
-/** The boundary's two attributes as one string, so a snapshot that hasn't changed compares equal. */
+/**
+ * The boundary's data-motion as a snapshot: a string, so one that hasn't
+ * changed compares equal, or '' with no boundary. A boundary with no
+ * data-motion snapshots as `null`'s JSON, so it still counts as read.
+ */
 function boundaryKey(element: Element | null): string {
   if (!element) return '';
-  return JSON.stringify([
-    element.getAttribute('data-motion-policy'),
-    element.getAttribute('data-motion'),
-  ]);
+  return JSON.stringify(element.getAttribute('data-motion'));
 }
 
 function boundaryFrom(key: string | null): BoundaryMotion | null {
   if (key === null) return null;
   if (key === '') return NO_BOUNDARY;
-  const [policy, motion] = JSON.parse(key) as [string | null, string | null];
-  return { policy, motion };
+  return { motion: JSON.parse(key) as string | null };
 }
 
 function boundaryOf(root: Element | null): Element | null {
@@ -84,7 +87,7 @@ export function useBoundaryMotion(root: Element | null): BoundaryMotion | null {
       const observer = new MutationObserver(change);
       observer.observe(element, {
         attributes: true,
-        attributeFilter: ['data-motion-policy', 'data-motion'],
+        attributeFilter: ['data-motion'],
       });
       return () => observer.disconnect();
     },
@@ -119,11 +122,9 @@ export function useEnhancementRuntime(options: RuntimeOptions = {}): Enhancement
   const boundary = useBoundaryMotion(root);
   const [failed, setFailed] = useState(false);
   const provided = useProvidedMotionPolicy();
-  // Any one policy at `reduce` reduces: none can undo another's.
-  const policy =
-    options.motionPolicy === 'reduce' || provided === 'reduce'
-      ? 'reduce'
-      : (boundary?.policy ?? null);
+  // Any one policy at `reduce` reduces: none can undo another's. The site's
+  // reaches the runtime as the boundary's data-motion.
+  const policy = options.motionPolicy === 'reduce' || provided === 'reduce' ? 'reduce' : null;
 
   // In view, both ways, for as long as the effect is mounted. An effect
   // with no root, or a browser with no IntersectionObserver, counts as in

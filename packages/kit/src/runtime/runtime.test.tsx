@@ -70,6 +70,26 @@ test('reduced motion from the OS, the site policy, or a preview environment make
   assert.equal(motionReduced({ ...RUNNING, environmentMotion: 'full' }), false);
 });
 
+test("the site's reduce reaches the runtime as the boundary's data-motion, with no policy of the effect's own, and MotionControl given it renders nothing (#6, #19 Slice 4)", () => {
+  // The document boundary renders the site's `reduce` as data-motion="reduced".
+  for (const environmentMotion of ['reduced', 'static']) {
+    assert.deepEqual(resolveRuntime({ ...RUNNING, policy: null, environmentMotion }), {
+      state: 'static',
+      reason: 'reduced',
+    });
+  }
+  assert.equal(renderToStaticMarkup(<MotionControl policy="reduce" />), '');
+  // Nothing in the kit reads the attribute the boundary no longer renders.
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const sources = readdirSync(here, { recursive: true })
+    .map(String)
+    .filter((file) => /\.tsx?$/.test(file) && !/\.test\.tsx?$/.test(file));
+  assert.ok(sources.includes('use-runtime.ts'), sources.join(' '));
+  for (const file of sources) {
+    assert.doesNotMatch(readFileSync(path.join(here, file), 'utf8'), /data-motion-policy/, file);
+  }
+});
+
 test('a hidden document, an offscreen root, the visitor, and an unfocused or hidden preview frame each pause it', () => {
   const cases: [Partial<RuntimeInputs>, string][] = [
     [{ documentVisible: false }, 'hidden'],

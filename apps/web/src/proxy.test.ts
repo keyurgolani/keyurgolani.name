@@ -493,9 +493,72 @@ test('build assets and optimized images go through the proxy too', async () => {
 const STUDIO_CSP =
   /^default-src 'self'; script-src 'self' 'nonce-([A-Za-z0-9+/]{22}==)' 'strict-dynamic'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; frame-src 'self'; frame-ancestors 'none'; form-action 'self'; base-uri 'none'; object-src 'none'$/;
 
+/** The public site's policy (#6, item 8), its nonce captured. */
+const PUBLIC_CSP =
+  /^default-src 'self'; script-src 'self' 'nonce-([A-Za-z0-9+/]{22}==)' 'strict-dynamic'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; media-src 'self'; connect-src 'self'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'$/;
+
 function studio(path: string, headers: Record<string, string> = {}, method = 'GET'): NextRequest {
   return new NextRequest(`https://rowan.test${path}`, { method, headers });
 }
+
+test('every public response, in every profile, gets the public policy with a nonce of its own, which the page Next renders reads too, and no unsafe-inline script (#6, item 8)', async (t) => {
+  for (const profile of PROFILES) {
+    deploy(t, profile);
+    const nonces = new Set<string>();
+    const paths = [
+      '/',
+      '/',
+      '/robots.txt',
+      '/feed.xml',
+      '/api/health',
+      '/media/x',
+      '/no-such-page',
+    ];
+    for (const path of [...paths, ...(profile === 'demo' ? ['/sample', '/studio'] : [])]) {
+      const what = `${profile} ${path}`;
+      const response = await proxy(request(path));
+      const csp = response.headers.get('content-security-policy') ?? '';
+      const nonce = PUBLIC_CSP.exec(csp)?.[1];
+      assert.ok(nonce, `${what}: ${csp}`);
+      nonces.add(nonce);
+      const scripts = csp.split('; ').find((directive) => directive.startsWith('script-src '));
+      assert.doesNotMatch(scripts ?? '', /'unsafe-inline'|'unsafe-eval'|\*|https?:/, what);
+      const forwarded = response.headers.get('x-middleware-request-content-security-policy');
+      if (response.headers.get('x-middleware-next') === '1') assert.equal(forwarded, csp, what);
+    }
+    assert.equal(
+      nonces.size,
+      paths.length + (profile === 'demo' ? 2 : 0),
+      `${profile}: a nonce came twice`,
+    );
+  }
+});
+
+test('the plain answers proxy.ts writes itself keep the public policy: a 405, a plain 404, and the 503 while nothing serves (#6, item 8)', async (t) => {
+  deploy(t, 'read-only');
+  for (const [method, path] of [
+    ['POST', '/'],
+    ['DELETE', '/no-such-page'],
+    ['PUT', '/media/x'],
+  ] as const) {
+    const response = await proxy(new NextRequest(`https://rowan.test${path}`, { method }));
+    assert.ok(response.status === 405 || response.status === 404, `${method} ${path}`);
+    assert.match(
+      response.headers.get('content-security-policy') ?? '',
+      PUBLIC_CSP,
+      `${method} ${path}`,
+    );
+  }
+});
+
+test("before startup a public path's 503 keeps the public policy (#6, item 8)", async () => {
+  setDeploymentState(undefined);
+  for (const path of ['/', '/feed.xml']) {
+    const response = await proxy(request(path));
+    assert.equal(response.status, 503, path);
+    assert.match(response.headers.get('content-security-policy') ?? '', PUBLIC_CSP, path);
+  }
+});
 
 test('every /studio response gets a nonce CSP of its own, which the page Next renders reads too', async (t) => {
   deploy(t, 'owner');
@@ -510,9 +573,10 @@ test('every /studio response gets a nonce CSP of its own, which the page Next re
     assert.equal(response.headers.get('x-middleware-request-content-security-policy'), csp, path);
   }
   assert.equal(nonces.size, 3, 'a nonce came twice');
-  // Only /studio: its transport, and a path that only starts the same, get none.
+  // Only /studio: its transport, and a path that only starts the same, get the public policy.
   for (const path of ['/', '/api/studio/auth.session', '/studios', '/sample']) {
-    assert.equal((await proxy(studio(path))).headers.get('content-security-policy'), null, path);
+    const csp = (await proxy(studio(path))).headers.get('content-security-policy') ?? '';
+    assert.match(csp, PUBLIC_CSP, path);
   }
 });
 
@@ -559,17 +623,19 @@ test("under owner the plain 404 for a missing /studio path, to a method but GET 
 /** What Next sends with its 404 page for a path no route matches. */
 const UNKNOWN_PATH_CACHE_CONTROL = 'private, no-cache, no-store, max-age=0, must-revalidate';
 
-/** None of Studio's own headers, on the response or on the request Next routes. */
+/** None of Studio's own headers, on the response or on the request Next routes: the public policy in place of its CSP. */
 function noStudioHeaders(response: Response, what: string): void {
   for (const name of [
-    'content-security-policy',
     'referrer-policy',
     'cross-origin-resource-policy',
-    'x-middleware-request-content-security-policy',
     'x-middleware-request-x-studio-path',
   ]) {
     assert.equal(response.headers.get(name), null, `${what}: ${name}`);
   }
+  const csp = response.headers.get('content-security-policy') ?? '';
+  assert.match(csp, PUBLIC_CSP, `${what}: content-security-policy`);
+  const forwarded = response.headers.get('x-middleware-request-content-security-policy');
+  if (forwarded !== null) assert.equal(forwarded, csp, `${what}: the request's policy`);
 }
 
 /** The Studio pages the table lists, in each spelling it reads as theirs. */
@@ -1211,7 +1277,7 @@ test('a trailing slash is a 308 to the path without it, under the headers its pa
   // Elsewhere, the 308 Next sent, with that path's own headers.
   const work = await redirect('/work/x/?a=1', '/work/x?a=1');
   assert.equal(work.headers.get('cache-control'), null);
-  assert.equal(work.headers.get('content-security-policy'), null);
+  assert.match(work.headers.get('content-security-policy') ?? '', PUBLIC_CSP);
   const studio = await redirect('/studio/', '/studio');
   assert.match(studio.headers.get('content-security-policy') ?? '', STUDIO_CSP);
   assert.equal(segment(await proxy(request('/'))), 'fallback');
@@ -1230,7 +1296,7 @@ test("before startup a preview path's 503 keeps the preview's headers, and nothi
     assert.deepEqual(previewHeaderProblems(response), [], path);
   }
   const other = await proxy(request('/'));
-  assert.equal(other.headers.get('content-security-policy'), null);
+  assert.match(other.headers.get('content-security-policy') ?? '', PUBLIC_CSP);
   assert.equal(other.headers.get('cache-control'), 'no-store');
 });
 
@@ -1727,14 +1793,16 @@ test("a Content-Security-Policy or Content-Security-Policy-Report-Only header th
       assert.ok(passed.includes('x-request-id'), what);
       assert.ok(!passed.includes('content-security-policy-report-only'), what);
       const policy = response.headers.get('x-middleware-request-content-security-policy');
-      if (profile === 'owner' && path === '/studio/sign-in') {
-        // Studio's own policy, with its own nonce, the one its response sends.
-        assert.equal(policy, response.headers.get('content-security-policy'), what);
-        assert.doesNotMatch(policy ?? '', /clientchosen/, what);
-      } else {
-        assert.ok(!passed.includes('content-security-policy'), what);
-        assert.equal(policy, null, what);
-      }
+      // Studio's own policy, or the public site's, each with its own nonce,
+      // the one its response sends.
+      assert.ok(passed.includes('content-security-policy'), what);
+      assert.equal(policy, response.headers.get('content-security-policy'), what);
+      assert.match(
+        policy ?? '',
+        profile === 'owner' && path === '/studio/sign-in' ? STUDIO_CSP : PUBLIC_CSP,
+        what,
+      );
+      assert.doesNotMatch(policy ?? '', /clientchosen/, what);
     }
   }
 });

@@ -1,4 +1,5 @@
 import type { RuntimeMode } from './config';
+import { MEDIA_DIRECTIVES } from './public-headers';
 
 // What proxy.ts sends on every response under /preview and /preview-assets
 // (#7, Slice 1, item 5), status pages, 404s, and the plain answers included:
@@ -59,8 +60,7 @@ export function previewCsp(nonce: string, { mode, studioOrigin }: PreviewPolicyO
     `style-src 'self' ${development ? "'unsafe-inline'" : `'nonce-${nonce}'`}`,
     "style-src-attr 'unsafe-inline'",
     "font-src 'self'",
-    "img-src 'self' data:",
-    "media-src 'self'",
+    ...MEDIA_DIRECTIVES,
     // Hot reloading's socket and the dev overlay's requests, under next dev only.
     `connect-src ${development ? "'self'" : "'none'"}`,
     "frame-src 'none'",

@@ -23,6 +23,28 @@ test('outside Studio a response needs the baseline headers, no resource policy, 
   assert.notDeepEqual(headerProblems('/feed.xml', { 'x-content-type-options': 'nosniff' }), []);
 });
 
+test("outside Studio and preview a response needs the public site's nonce CSP, never the baseline or one that runs inline script (#6, item 8)", () => {
+  const csp = BASELINE_HEADERS['content-security-policy'];
+  for (const value of [
+    undefined,
+    "frame-ancestors 'none'; img-src 'self' data:; media-src 'self'",
+    csp.replace("'strict-dynamic'", "'strict-dynamic' 'unsafe-inline'"),
+    csp.replace("'strict-dynamic'", "'strict-dynamic' 'unsafe-eval'"),
+    csp.replace("img-src 'self' data:", "img-src 'self' data: https:"),
+    csp.replace("object-src 'none'", "object-src 'self'"),
+    csp.replace("frame-ancestors 'none'", 'frame-ancestors *'),
+    csp.replace(/'nonce-[^']+'/, "'nonce-short'"),
+  ]) {
+    for (const path of ['/', '/feed.xml', '/api/studio/auth.session']) {
+      assert.notDeepEqual(
+        headerProblems(path, { ...BASELINE_HEADERS, 'content-security-policy': value }),
+        [],
+        `${path}: ${value}`,
+      );
+    }
+  }
+});
+
 const STUDIO_PAGE = {
   'x-content-type-options': 'nosniff',
   'referrer-policy': 'same-origin',

@@ -58,6 +58,11 @@ export interface TraceTarget {
   readonly name: string;
   /** What the site document selects, or the label --selection gave an outside server. */
   readonly selection: string;
+  /**
+   * Whether the site publishes TRACE_TYPOGRAPHY, whose font a page then
+   * loads, so the fonts-blocked modes must refuse at least one (#6).
+   */
+  readonly publishesFont: boolean;
   /** The composition that renders, when the trace knows it. */
   readonly composition: string | null;
   readonly profile: string | null;
@@ -125,7 +130,17 @@ export function traceTargets(
 ): TraceTarget[] {
   if (options.baseUrl) {
     const label = options.selection ?? 'external';
-    return [{ name: label, selection: label, composition: null, profile: null, fixture: null }];
+    // An outside server's site is its own, so nothing says it publishes the font.
+    return [
+      {
+        name: label,
+        selection: label,
+        publishesFont: false,
+        composition: null,
+        profile: null,
+        fixture: null,
+      },
+    ];
   }
   const entries = matrix().entries.filter((entry) => entry.kind === 'variant');
   const chosen =
@@ -153,6 +168,7 @@ export function traceTargets(
       return {
         name: profile === 'read-only' ? entry.id : `${entry.id} (${profile})`,
         selection: entry.selection.variant,
+        publishesFont: app !== own,
         composition: entry.id,
         profile,
         fixture: TRACE_FIXTURE,
