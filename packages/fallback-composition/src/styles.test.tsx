@@ -18,4 +18,5 @@ test('every section link is at least 24 by 24 CSS px, its label centered', () =>
   assert.match(links, /min-inline-size: 1\.5rem;/);
   assert.match(links, /display: inline-flex;/);
   assert.match(links, /align-items: center;/);
+  assert.match(links, /justify-content: center;/);
 });
