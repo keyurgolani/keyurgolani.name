@@ -34,7 +34,7 @@ A selector without the scope, a page-wide at-rule such as `@font-face`, `@page`,
 
 Every variant's keyframes share the page too, so name yours after your id: `@keyframes <id>-drift` (`audit.css-keyframes`).
 
-The one stylesheet is the file your `./styles.css` export names. Don't import CSS from components (`audit.css-import`), or render a `<style>`, `<link>`, or `<script>` (`audit.raw-element`). `@import` only your own files, by relative path: not another host's (`audit.css-remote-import`) or another package's (`audit.css-bare-import`). Ship every `url()` asset in the package (`audit.css-remote-url`).
+The one stylesheet is the file your `./styles.css` export names. Registry generation compiles it, with your own `@import`s inlined and the kit's shared renderers' layout first, inside the `variant-layout` cascade layer, so a rule of yours for the same element beats the kit's, and copies each image your `url()`s name into the host by content hash. The host links it only on the pages that render you. Don't import CSS from components (`audit.css-import`), or render a `<style>`, `<link>`, or `<script>` (`audit.raw-element`). `@import` only your own files, by relative path: not another host's (`audit.css-remote-import`) or another package's (`audit.css-bare-import`). Ship every `url()` asset in the package (`audit.css-remote-url`).
 
 ## Logical properties
 

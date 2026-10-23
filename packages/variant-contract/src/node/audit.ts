@@ -43,7 +43,7 @@ export const AUDIT_CODES = {
   'audit.raw-element':
     'Render no <style>, <link>, or <script>: styles go in your stylesheet, code in your modules, and the host owns the document head.',
   'audit.css-import':
-    'Put the styles in the stylesheet your ./styles.css export names. The host imports it.',
+    'Put the styles in the stylesheet your ./styles.css export names. Registry generation compiles it, and the host links it on the pages that render you.',
   'audit.client-input':
     'Pass a client component only the data it renders, so the rest stays out of the page payload.',
   'audit.css-unscoped':

@@ -29,7 +29,7 @@ The contract (version 2.0, `@portfolio/variant-contract`):
 
 - **`manifest.json`** at the package root declares the variant: id, name, one-sentence promise, composition family, motion intent, performance tier, the kinds it renders bespoke, its routes, controls, content slots, enhancements, text directions, and provenance. `package.json` points at it with `"portfolio": { "kind": "variant", "manifest": "./manifest.json" }`. See `references/manifest-contract.md`.
 - **The default export** of the package's `.` entry is a component that takes `{ input: VariantRenderInput }`: the visible content (no hidden section, no unregistered extension data), the presentation settings, control values, the route, ids, and a fixed time and seed. It renders synchronously from that input alone.
-- **`./styles.css`**, an export the host imports once. Every selector sits under `[data-variant='<id>']`.
+- **`./styles.css`**, an export registry generation compiles into one stylesheet, inside #19's `variant-layout` layer, and the host links only on the pages that render the variant. Every selector sits under `[data-variant='<id>']`. `package.json` declares `"sideEffects": false`, as the scaffold's does.
 
 Installing a variant is a dependency of `@portfolio/web` and nothing else: `pnpm --filter @portfolio/web add @portfolio/variant-<id>@workspace:*`. `apps/web/scripts/build-registry.ts` (run by `predev`, `prebuild`, `typecheck`, `test`, and `check:variants`) checks every variant among the host's direct dependencies and writes the gitignored `apps/web/src/lib/generated/` modules the host imports. A package it can't register stops the build with a diagnostic naming the package, the file, the pointer, and the fix.
 
@@ -244,12 +244,12 @@ For the full catalog with reproductions and fixes, load `references/common-bugs.
 ### Registry
 
 - A 404 at `/preview/dev/<id>/complete` or `/sample?variant=<id>` means the build doesn't register the id. Run `pnpm check:variants --package @portfolio/variant-<id>`; it says why.
-- The registry is generated, not committed. `pnpm dev` and `pnpm build` regenerate it; after adding or removing a dependency mid-session, run `pnpm --filter @portfolio/web build:registry`.
+- The registry is generated, not committed. `pnpm dev` and `pnpm build` regenerate it; after adding or removing a dependency mid-session, or editing your stylesheet, run `pnpm --filter @portfolio/web build:registry`.
 - The id `fallback`, the five composition ids (#13 to #17), and `missing-variant` are reserved. A package outside `@portfolio` starts its id with its scope: `@acme/ocean` is `acme-ocean`.
 
 ### CSS
 
-- Every variant's stylesheet loads on every page. A selector without `[data-variant='<id>']` restyles someone else's composition, and so does a page-wide at-rule such as `@font-face` or `@page`; the audit refuses both.
+- Your stylesheet loads only on the pages that render you, but a page can show another variant's boundary beside yours, such as #19's plates. A selector without `[data-variant='<id>']` restyles someone else's composition, and so does a page-wide at-rule such as `@font-face` or `@page`; the audit refuses both.
 - Layout only. A color, font, or theme block in a variant fights #19's tokens.
 - No `@import` from another host, and no CSS imported from modules.
 - BEM-style classes with a short prefix of your own (`fc-` is the fallback's).

@@ -17,11 +17,11 @@
 
 ### Why
 
-The host imports each registered variant's stylesheet through `apps/web/src/lib/generated/registry.styles.ts`, which registry generation writes from the file your `./styles.css` export names. A missing export, an export pointing at the wrong file, or rules that don't start with `[data-variant='<id>']` all leave your layout off the page.
+Registry generation compiles the file your `./styles.css` export names into `apps/web/public/_portfolio/variant/<id>.<hash>.css`, and the host links it on the pages that render your variant. A missing export, an export pointing at the wrong file, or rules that don't start with `[data-variant='<id>']` all leave your layout off the page.
 
 ### Fix
 
-Run `pnpm check:variants --package @portfolio/variant-<id>`. It names a missing export or file, and every unscoped selector. `pnpm dev` regenerates the registry when it starts; after changing `package.json` mid-session, run `pnpm --filter @portfolio/web build:registry` or restart it.
+Run `pnpm check:variants --package @portfolio/variant-<id>`. It names a missing export or file, and every unscoped selector. `pnpm dev` regenerates the registry when it starts; after changing `package.json` or your stylesheet mid-session, run `pnpm --filter @portfolio/web build:registry` or restart it.
 
 ## 2. A scoped element rule outranks a class
 
