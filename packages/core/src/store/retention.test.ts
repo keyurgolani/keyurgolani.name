@@ -351,3 +351,17 @@ test('a run whose lock another process took removes no revision, and leaves a ha
   assert.equal(existsSync(store.paths.tombstone(ids[0]!)), false);
   assert.ok(existsSync(store.paths.revision(ids[2]!)), 'the next run finishes it');
 });
+
+test('retention keeps a blob an upload just brought in again, however old the file was', async (t) => {
+  const store = await newStore(t);
+  const again = await store.assets.put(Buffer.from('uploaded twice'), 'image/png');
+  const once = await store.assets.put(Buffer.from('uploaded once'), 'image/png');
+  const now = Date.now();
+  const old = new Date(now - 2 * DAY);
+  for (const blob of [again, once]) utimesSync(store.paths.blob(blob.sha256), old, old);
+  // The owner uploads the same bytes again, and no draft references them yet.
+  assert.deepEqual(await store.assets.put(Buffer.from('uploaded twice'), 'image/png'), again);
+  await retention(store, {}, now);
+  assert.ok(existsSync(store.paths.blob(again.sha256)), 'the blob uploaded again stays');
+  assert.equal(existsSync(store.paths.blob(once.sha256)), false, 'the old one goes');
+});

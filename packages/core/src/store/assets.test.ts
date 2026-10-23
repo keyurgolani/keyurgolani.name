@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync, statSync } from 'node:fs';
+import { readFileSync, statSync, utimesSync } from 'node:fs';
 import path from 'node:path';
 import { text } from 'node:stream/consumers';
 import { test } from 'node:test';
@@ -24,10 +24,14 @@ test('put stores bytes under their hash at 0600, once, and has, stat, and open f
   const stream = await store.assets.open(stored.sha256);
   assert.ok(stream);
   assert.equal(await text(stream), 'a picture of a lighthouse');
-  // The same bytes again change nothing.
-  const mtime = statSync(file).mtimeMs;
+  // The same bytes again write nothing, and only bring the blob's mtime to
+  // now, as an upload's: retention's grace counts from it.
+  const day = 24 * 60 * 60;
+  const old = Date.now() / 1000 - 2 * day;
+  utimesSync(file, old, old);
   assert.deepEqual(await store.assets.put(Buffer.from(bytes), 'image/png'), stored);
-  assert.equal(statSync(file).mtimeMs, mtime);
+  assert.ok(statSync(file).mtimeMs > (old + day) * 1000, 'the mtime is now');
+  assert.deepEqual(readFileSync(file), bytes);
   assert.deepEqual((await import('node:fs')).readdirSync(path.dirname(file)), [
     stored.sha256.slice(7),
   ]);
