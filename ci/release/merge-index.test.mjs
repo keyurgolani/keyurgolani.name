@@ -79,12 +79,28 @@ test('a merged index that resolves to another digest fails', () => {
   assert.throws(() => mergeIndex(IMAGE, [AMD64, ARM64], docker.run), /resolves to sha256:9/);
 });
 
-test('a merge missing a platform or its attestation fails before anything is pushed', () => {
-  const [amd64Image, amd64Attestation, arm64Image] = JSON.parse(MERGED).manifests;
+test('a merge without exactly one attested image per platform fails before anything is pushed', () => {
+  const [amd64Image, amd64Attestation, arm64Image, arm64Attestation] = JSON.parse(MERGED).manifests;
+  const arm64 = [arm64Image, arm64Attestation];
   const cases = [
     [[amd64Image, amd64Attestation], /0 linux\/arm64 images, not 1/],
     [[amd64Image, amd64Attestation, arm64Image], /no attestation manifest for linux\/arm64/],
     [[amd64Image, arm64Image], /no attestation manifest for linux\/amd64/],
+    // A second amd64 image, attested too.
+    [
+      [amd64Image, amd64Attestation, ...leg('amd64', digestOf(5), digestOf(6)), ...arm64],
+      /2 linux\/amd64 images, not 1/,
+    ],
+    // Two attestation manifests for one image.
+    [
+      [amd64Image, amd64Attestation, { ...amd64Attestation, digest: digestOf(7) }, ...arm64],
+      /2 attestation manifests for linux\/amd64, not 1/,
+    ],
+    // A platform no leg builds.
+    [
+      [amd64Image, amd64Attestation, ...arm64, ...leg('386', digestOf(8), digestOf(9))],
+      /a linux\/386 image, which no leg builds/,
+    ],
   ];
   for (const [manifests, reason] of cases) {
     const docker = fakeDocker({ index: JSON.stringify({ manifests }) });

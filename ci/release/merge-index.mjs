@@ -26,25 +26,39 @@ import { manifestDigest, retagProblems } from './retag.mjs';
 const REFERENCE_TYPE = 'vnd.docker.reference.type';
 const REFERENCE_DIGEST = 'vnd.docker.reference.digest';
 
-/** Why the merged index falls short, one line each, or none. */
+const isAttestation = (m) => m.annotations?.[REFERENCE_TYPE] === 'attestation-manifest';
+const platformOf = (m) => `${m.platform?.os}/${m.platform?.architecture}`;
+
+/**
+ * Why the merged index falls short, one line each, or none. It must hold
+ * exactly one image for each of `platforms` and none for any other, and
+ * exactly one attestation manifest for each image.
+ */
 export function indexProblems(index, platforms = PLATFORMS) {
   const manifests = Array.isArray(index?.manifests) ? index.manifests : [];
+  const images = manifests.filter((m) => !isAttestation(m));
   const problems = [];
+  for (const image of images) {
+    if (!platforms.includes(platformOf(image))) {
+      problems.push(`the merged index has a ${platformOf(image)} image, which no leg builds`);
+    }
+  }
   for (const platform of platforms) {
-    const [os, architecture] = platform.split('/');
-    const images = manifests.filter(
-      (m) => m.platform?.os === os && m.platform?.architecture === architecture,
-    );
-    if (images.length !== 1) {
-      problems.push(`the merged index has ${images.length} ${platform} images, not 1`);
+    const matching = images.filter((m) => platformOf(m) === platform);
+    if (matching.length !== 1) {
+      problems.push(`the merged index has ${matching.length} ${platform} images, not 1`);
       continue;
     }
-    const attested = manifests.some(
-      (m) =>
-        m.annotations?.[REFERENCE_TYPE] === 'attestation-manifest' &&
-        m.annotations?.[REFERENCE_DIGEST] === images[0].digest,
+    const attestations = manifests.filter(
+      (m) => isAttestation(m) && m.annotations?.[REFERENCE_DIGEST] === matching[0].digest,
     );
-    if (!attested) problems.push(`the merged index has no attestation manifest for ${platform}`);
+    if (attestations.length === 0) {
+      problems.push(`the merged index has no attestation manifest for ${platform}`);
+    } else if (attestations.length !== 1) {
+      problems.push(
+        `the merged index has ${attestations.length} attestation manifests for ${platform}, not 1`,
+      );
+    }
   }
   return problems;
 }
