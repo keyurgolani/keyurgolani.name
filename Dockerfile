@@ -13,8 +13,9 @@ WORKDIR /repo
 # symlinks correctly. We copy the whole directories rather than enumerating
 # variant packages individually, so adding a new variant doesn't require a
 # Dockerfile edit. Source code is small enough that the cache impact is
-# negligible.
-COPY pnpm-workspace.yaml package.json .npmrc pnpm-lock.yaml ./
+# negligible. .pnpmfile.cjs comes too: the lockfile records its checksum, and
+# a frozen install without it fails.
+COPY pnpm-workspace.yaml package.json .npmrc pnpm-lock.yaml .pnpmfile.cjs ./
 COPY apps apps
 COPY packages packages
 
