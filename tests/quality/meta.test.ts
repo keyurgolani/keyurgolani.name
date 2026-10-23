@@ -1,0 +1,116 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
+import { judge, META_CASES, type MetaCase } from './meta/cases';
+
+// pnpm quality:meta's frame (#11, Slice 1): a table of cases, each a known-bad
+// or known-good input to one gate, judged so a known-bad input passes the
+// frame only when it fails its gate for the reason it names.
+
+const knownBad: MetaCase = {
+  id: 'trial/bad',
+  gate: 'trial',
+  input: 'a known-bad input',
+  expect: 'fail',
+  reason: /^the reason/,
+  run: () => ({ passed: false, findings: [] }),
+};
+const knownGood: MetaCase = { ...knownBad, id: 'trial/good', expect: 'pass', reason: undefined };
+
+test('a known-bad case holds only when its gate fails it, with every finding naming its reason', () => {
+  assert.equal(
+    judge(knownBad, { passed: false, findings: ['the reason, once', 'the reason, twice'] }),
+    null,
+  );
+  assert.equal(
+    judge(knownBad, { passed: true, findings: [] }),
+    'it should fail, and the gate passed it.',
+  );
+  assert.equal(
+    judge(knownBad, { passed: false, findings: [] }),
+    'the gate failed it without a finding, so no reason shows.',
+  );
+  assert.equal(
+    judge(knownBad, { passed: false, findings: ['the reason', 'another reason'] }),
+    'it failed for another reason than /^the reason/: another reason',
+  );
+  assert.equal(
+    judge({ ...knownBad, reason: undefined }, { passed: false, findings: ['x'] }),
+    'a known-bad case names the reason it must fail for.',
+  );
+});
+
+test('a known-good case holds only when its gate passes it with no finding', () => {
+  assert.equal(judge(knownGood, { passed: true, findings: [] }), null);
+  assert.equal(
+    judge(knownGood, { passed: false, findings: ['a problem'] }),
+    'it should pass, and the gate failed it: a problem',
+  );
+  assert.equal(
+    judge(knownGood, { passed: true, findings: ['a warning that counts'] }),
+    'it passed with findings: a warning that counts',
+  );
+});
+
+test('every gate so far has a known-bad case and a known-good one, and each id is unique', () => {
+  const ids = META_CASES.map(({ id }) => id);
+  assert.deepEqual(ids, [...new Set(ids)]);
+  for (const metaCase of META_CASES) {
+    assert.match(metaCase.id, new RegExp(`^${metaCase.gate}/[a-z0-9-]+$`), metaCase.id);
+    if (metaCase.expect === 'fail') assert.ok(metaCase.reason, metaCase.id);
+  }
+  const gates = [...new Set(META_CASES.map(({ gate }) => gate))];
+  assert.deepEqual(gates, ['workflows', 'exceptions', 'appearance', 'fixture-gate']);
+  for (const gate of gates) {
+    const cases = META_CASES.filter((metaCase) => metaCase.gate === gate);
+    assert.ok(
+      cases.some(({ expect }) => expect === 'fail'),
+      `${gate} has no known-bad case`,
+    );
+    assert.ok(
+      cases.some(({ expect }) => expect === 'pass'),
+      `${gate} has no known-good case`,
+    );
+  }
+  // The inputs the brief names: one workflow per rule, the six exception
+  // inputs, the low-contrast pack, and the leak.
+  for (const id of [
+    'workflows/repository',
+    'workflows/pull-request-target',
+    'workflows/write-permissions',
+    'workflows/secrets',
+    'exceptions/repository',
+    'exceptions/expired',
+    'exceptions/wildcard',
+    'exceptions/non-waivable',
+    'exceptions/over-90-days',
+    'exceptions/missing-scope',
+    'exceptions/quarantine-over-14-days',
+    'exceptions/low-contrast',
+    'appearance/tier-packs',
+    'appearance/low-contrast',
+    'fixture-gate/production',
+    'fixture-gate/leak',
+  ]) {
+    assert.ok(ids.includes(id), id);
+  }
+});
+
+test('pnpm quality:meta passes on the repository, every case going the way it should', () => {
+  const tsx = createRequire(import.meta.url).resolve('tsx/cli');
+  const script = fileURLToPath(new URL('./meta/run.ts', import.meta.url));
+  const run = spawnSync(process.execPath, [tsx, script], { encoding: 'utf8' });
+  assert.equal(run.status, 0, `${run.stdout}\n${run.stderr}`);
+  const ok = run.stdout.split('\n').filter((line) => line.startsWith('[quality:meta] ok '));
+  assert.equal(ok.length, META_CASES.length);
+  assert.match(
+    run.stdout,
+    new RegExp(
+      `\\[quality:meta\\] ${META_CASES.length} cases over 4 gates: ${META_CASES.filter(({ expect }) => expect === 'fail').length} known-bad inputs failing for the reason each names, and ${META_CASES.filter(({ expect }) => expect === 'pass').length} known-good inputs passing\\.`,
+    ),
+  );
+  const usage = spawnSync(process.execPath, [tsx, script, '--all'], { encoding: 'utf8' });
+  assert.equal(usage.status, 2);
+});
