@@ -20,7 +20,10 @@ function png(width: number, height: number, filler = 8): Uint8Array {
   const view = new DataView(bytes.buffer);
   bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 0);
   view.setUint32(8, 13);
-  bytes.set([...'IHDR'].map((c) => c.charCodeAt(0)), 12);
+  bytes.set(
+    [...'IHDR'].map((c) => c.charCodeAt(0)),
+    12,
+  );
   view.setUint32(16, width);
   view.setUint32(20, height);
   return bytes;
@@ -28,10 +31,19 @@ function png(width: number, height: number, filler = 8): Uint8Array {
 
 function riff(chunk: string, body: number[]): Uint8Array {
   const bytes = new Uint8Array(20 + Math.max(body.length, 12));
-  bytes.set([...'RIFF'].map((c) => c.charCodeAt(0)), 0);
+  bytes.set(
+    [...'RIFF'].map((c) => c.charCodeAt(0)),
+    0,
+  );
   new DataView(bytes.buffer).setUint32(4, bytes.length - 8, true);
-  bytes.set([...'WEBP'].map((c) => c.charCodeAt(0)), 8);
-  bytes.set([...chunk].map((c) => c.charCodeAt(0)), 12);
+  bytes.set(
+    [...'WEBP'].map((c) => c.charCodeAt(0)),
+    8,
+  );
+  bytes.set(
+    [...chunk].map((c) => c.charCodeAt(0)),
+    12,
+  );
   bytes.set(body, 20);
   return bytes;
 }
@@ -50,7 +62,18 @@ function vp8l(width: number, height: number) {
 function vp8x(width: number, height: number) {
   const w = width - 1;
   const h = height - 1;
-  return riff('VP8X', [0, 0, 0, 0, w & 0xff, (w >> 8) & 0xff, w >> 16, h & 0xff, (h >> 8) & 0xff, h >> 16]);
+  return riff('VP8X', [
+    0,
+    0,
+    0,
+    0,
+    w & 0xff,
+    (w >> 8) & 0xff,
+    w >> 16,
+    h & 0xff,
+    (h >> 8) & 0xff,
+    h >> 16,
+  ]);
 }
 
 test('imageSize reads a PNG and each WebP encoding, and nothing else', () => {
@@ -58,7 +81,10 @@ test('imageSize reads a PNG and each WebP encoding, and nothing else', () => {
   assert.deepEqual(imageSize(vp8(720, 450)), { format: 'webp', width: 720, height: 450 });
   assert.deepEqual(imageSize(vp8l(1440, 900)), { format: 'webp', width: 1440, height: 900 });
   assert.deepEqual(imageSize(vp8x(2880, 1800)), { format: 'webp', width: 2880, height: 1800 });
-  assert.equal(imageSize(new TextEncoder().encode('GIF89a and then some bytes to pad it out')), null);
+  assert.equal(
+    imageSize(new TextEncoder().encode('GIF89a and then some bytes to pad it out')),
+    null,
+  );
   assert.equal(imageSize(png(1, 1).subarray(0, 20)), null);
   // A lossy frame without its start code isn't one.
   const broken = vp8(720, 450);
@@ -121,8 +147,7 @@ test('a variant lists its stills in ASSET_MANIFEST with their size, served from 
     );
     // Nothing but a still goes there.
     assert.throws(
-      () =>
-        writeServedFiles(target, [{ ...files[0]!, name: 'acme-stills.css' }], 'still', staging),
+      () => writeServedFiles(target, [{ ...files[0]!, name: 'acme-stills.css' }], 'still', staging),
       /isn't a still's name/,
     );
   } finally {
@@ -135,14 +160,21 @@ test("a still the package can't ship is a record, and the variant doesn't regist
   fs.writeFileSync(path.join(outside, 'still.webp'), vp8x(1440, 900));
   try {
     const cases: [Record<string, string | Uint8Array>, unknown, RegExp][] = [
-      [{ 'stills/720.png': png(720, 450) }, STILLS, /names \.\/stills\/1440\.webp, which the package doesn't have/],
+      [
+        { 'stills/720.png': png(720, 450) },
+        STILLS,
+        /names \.\/stills\/1440\.webp, which the package doesn't have/,
+      ],
       [
         { 'stills/1440.webp': vp8x(1280, 800), 'stills/720.png': png(720, 450) },
         STILLS,
         /declares 1440x900, and \.\/stills\/1440\.webp is 1280x800/,
       ],
       [
-        { 'stills/1440.webp': 'not an image at all, just some text', 'stills/720.png': png(720, 450) },
+        {
+          'stills/1440.webp': 'not an image at all, just some text',
+          'stills/720.png': png(720, 450),
+        },
         STILLS,
         /isn't a PNG or WebP image/,
       ],
@@ -156,7 +188,9 @@ test("a still the package can't ship is a record, and the variant doesn't regist
       ],
     ];
     for (const [files, stills, message] of cases) {
-      const result = await readRegistry({ hostDir: testHost([FALLBACK, withStills(files, stills)]) });
+      const result = await readRegistry({
+        hostDir: testHost([FALLBACK, withStills(files, stills)]),
+      });
       assert.equal(result.ok, false, String(message));
       const record = result.diagnostics.find(({ code }) => code === 'registry.still-invalid');
       assert.ok(record, `${message}: ${JSON.stringify(result.diagnostics)}`);

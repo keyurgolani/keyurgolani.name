@@ -53,8 +53,22 @@ type Operation = Operations.Operation;
 
 /** Where the registry writes #19's compiled packs, which the app serves under /_portfolio/pack/. */
 const PACKS = fileURLToPath(new URL('../../apps/web/public/_portfolio/pack/', import.meta.url));
-/** Where it writes the fonts typography profiles ship (#6, item 7), served under /_portfolio/font/. */
-const FONTS = fileURLToPath(new URL('../../apps/web/public/_portfolio/font/', import.meta.url));
+/** Every directory of content-hashed files it writes under public/_portfolio/ (#6). */
+const SERVED_DIRS = ['pack', 'font', 'variant', 'asset', 'still'] as const;
+/** What each of those files is served with (#6, item 8): apps/web/src/server/cache-rules.ts. */
+export const IMMUTABLE = 'public, max-age=31536000, immutable';
+
+/** Each file the registry wrote under public/_portfolio/, by the path it's served at. */
+export function portfolioFiles(): string[] {
+  return SERVED_DIRS.flatMap((dir) => {
+    const at = fileURLToPath(new URL(`../../apps/web/public/_portfolio/${dir}/`, import.meta.url));
+    return existsSync(at)
+      ? readdirSync(at, { withFileTypes: true })
+          .filter((entry) => entry.isFile())
+          .map(({ name }) => `/_portfolio/${dir}/${name}`)
+      : [];
+  });
+}
 
 /** A _FILE every profile reads, in a canary-named directory. */
 const ENV_FILES: AppOptions['envFiles'] = {
@@ -1273,16 +1287,23 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
         .filter((entry) => entry.isFile())
         .map(({ name }) => `/_portfolio/pack/${name}`);
       expect(packs.length, 'compiled packs').toBeGreaterThan(0);
-      // Their fonts, which only a profile that ships one writes, such as the appearance fixtures'.
-      const fonts = existsSync(FONTS)
-        ? readdirSync(FONTS, { withFileTypes: true })
-            .filter((entry) => entry.isFile())
-            .map(({ name }) => `/_portfolio/font/${name}`)
-        : [];
-      for (const asset of [...assets, ...packs, ...fonts]) {
+      // Every content-hashed file the registry wrote there (#6): their fonts,
+      // which only a profile that ships one writes, such as the appearance
+      // fixtures', the variants' stylesheets, the images those name, and the
+      // catalog stills, which the fallback composition always has.
+      const served = portfolioFiles();
+      expect(
+        served.filter((file) => file.startsWith('/_portfolio/still/')).length,
+        'stills',
+      ).toBeGreaterThan(0);
+      for (const asset of [...assets, ...served]) {
         const response = await request.get(asset, { maxRedirects: 0 });
         expect(response.status(), asset).toBe(200);
         expect(response.headers()['access-control-allow-origin'], asset).toBe('*');
+        // A year, immutable, under the URL its content hash names (#6, item 8).
+        if (asset.startsWith('/_portfolio/')) {
+          expect(response.headers()['cache-control'], asset).toBe(IMMUTABLE);
+        }
         expectProfileHeaders(profile, response, asset);
       }
       // A build asset that doesn't exist goes on to a 404 page, the site's,
@@ -1303,6 +1324,9 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
         ['/_next/static', 'GET'],
         [packs[0]!, 'POST'],
         ['/_portfolio/pack/no-such.css', 'GET'],
+        // A content-hashed name the registry never wrote, which next.config.ts's rule matches.
+        ['/_portfolio/pack/warm-parchment.000000000000.css', 'GET'],
+        [packs[0]!.toUpperCase(), 'GET'],
         [packs[0]!.replace('/_portfolio/', '/_PORTFOLIO/'), 'GET'],
         [packs[0]!.replace('/_portfolio/', '/%5Fportfolio/'), 'GET'],
         [packs[0]!.replace('/pack/', '/PACK/'), 'GET'],
@@ -1313,6 +1337,8 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
         const response = await request.fetch(target, { method, maxRedirects: 0 });
         expect(response.status(), `${method} ${target}`).toBe(404);
         expect(await response.text(), `${method} ${target}`).toBe('Not found.');
+        // Never cached, so the URL can serve a file a later build writes.
+        expect(response.headers()['cache-control'], `${method} ${target}`).toBe('no-store');
         expectProfileHeaders(profile, response, `${method} ${target}`);
       }
     },
