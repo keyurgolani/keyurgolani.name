@@ -1,0 +1,26 @@
+{
+  "id": "fixture-environment",
+  "name": "Environment fixture",
+  "promise": "Every section in one column, styled only by the environment a preview sets.",
+  "description": "The preview's environment fixture (#7, Slice 4). It renders every section through the kit's shared renderers and styles only against the environment attributes on its boundary: the display mode, contrast, motion, and enhancement, with system colors and the system font stack. A mark that moves shows motion, and an enhancement shows the page's scripts ran. It registers only when PREVIEW_FIXTURES=1.",
+  "contract": "2.0",
+  "schemas": { "portfolio": { "min": 3, "max": 3 }, "site": { "min": 2, "max": 2 } },
+  "tokenContract": 1,
+  "compositionFamily": "document",
+  "motionIntent": "subtle",
+  "performanceTier": "light",
+  "renderedKinds": [],
+  "unsupportedKinds": [],
+  "contentSlots": [],
+  "routes": { "home": "shared", "work": "shared", "views": [] },
+  "controls": { "version": 1, "items": [], "migrations": [] },
+  "enhancements": [{ "id": "mark", "export": "./enhancements/mark", "requires": [] }],
+  "visitorControl": { "placement": "header" },
+  "textDirection": ["ltr", "rtl"],
+  "provenance": {
+    "provisional": true,
+    "sources": [
+      { "source": "The fallback composition's single column", "disposition": "preserved" }
+    ]
+  }
+}

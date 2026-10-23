@@ -488,8 +488,102 @@ test('the preview origin must be a bare origin that differs from the canonical o
   assert.deepEqual(findings(invalid), ['PORTFOLIO_PREVIEW_ORIGIN:invalid']);
   const same = read({ ...owner, PORTFOLIO_PREVIEW_ORIGIN: 'https://jane.test' });
   assert.deepEqual(findings(same), ['PORTFOLIO_PREVIEW_ORIGIN:same_as_origin']);
-  const valid = read({ ...owner, PORTFOLIO_PREVIEW_ORIGIN: 'https://preview.jane.test' });
-  assert.equal(valid.ok && valid.config.previewOrigin, 'https://preview.jane.test');
+  const valid = read({ ...owner, PORTFOLIO_PREVIEW_ORIGIN: 'https://jane-preview.test' });
+  assert.equal(valid.ok && valid.config.previewOrigin, 'https://jane-preview.test');
+  assert.deepEqual(findings(valid, 'warning'), []);
+});
+
+test("a preview origin on the deployment's own host is refused on any port, and one on its site is refused over http and warned of over https (#7, Slice 4)", () => {
+  const owner = { ...BASE, PORTFOLIO_PROFILE: 'owner' };
+  // The same host, on another port or scheme: cookies don't keep ports apart.
+  for (const [canonical, preview] of [
+    ['https://jane.test', 'https://jane.test:8443'],
+    ['https://jane.test', 'http://jane.test'],
+    ['http://127.0.0.1:3000', 'http://127.0.0.1:3001'],
+  ] as const) {
+    const result = read({
+      ...owner,
+      NODE_ENV: 'development',
+      PORTFOLIO_ORIGIN: canonical,
+      PORTFOLIO_PREVIEW_ORIGIN: preview,
+    });
+    assert.deepEqual(findings(result), ['PORTFOLIO_PREVIEW_ORIGIN:same_host'], preview);
+  }
+  // The same host with a trailing dot.
+  const dotted = read({
+    ...owner,
+    PORTFOLIO_ORIGIN: 'https://jane.name',
+    PORTFOLIO_PREVIEW_ORIGIN: 'https://jane.name.',
+  });
+  assert.deepEqual(findings(dotted), ['PORTFOLIO_PREVIEW_ORIGIN:same_host']);
+  // The same site: a subdomain, the parent, or hosts whose last two labels
+  // match, however deep, and with a trailing dot.
+  const sameSite = [
+    ['jane.test', 'preview.jane.test'],
+    ['preview.jane.test', 'jane.test'],
+    ['www.jane.test', 'preview.jane.test'],
+    ['localhost', 'preview.localhost'],
+    ['www.jane.name', 'preview.studio.jane.name'],
+    ['studio.jane.name', 'p.x.jane.name'],
+    ['a.b.jane.co.uk', 'c.jane.co.uk'],
+    ['jane.name', 'preview.jane.name.'],
+  ] as const;
+  // Over http on either side, which only a loopback origin may use, refused:
+  // a frame there can set cookies for Studio's host, or Studio's cookie
+  // goes over http to begin with.
+  for (const [canonical, preview] of [
+    ['http://localhost:3000', 'http://preview.localhost:3000'],
+    ['http://preview.localhost:3000', 'http://localhost:3001'],
+    ['http://localhost:3000', 'https://preview.localhost'],
+  ] as const) {
+    const plain = read({
+      ...owner,
+      NODE_ENV: 'development',
+      PORTFOLIO_ORIGIN: canonical,
+      PORTFOLIO_PREVIEW_ORIGIN: preview,
+    });
+    assert.deepEqual(
+      findings(plain).filter((each) => each.startsWith('PORTFOLIO_PREVIEW')),
+      ['PORTFOLIO_PREVIEW_ORIGIN:same_site'],
+      `${canonical} with ${preview}`,
+    );
+  }
+  for (const [canonical, preview] of sameSite) {
+    // Over https, a warning, and it starts.
+    const secure = read({
+      ...owner,
+      PORTFOLIO_ORIGIN: `https://${canonical}`,
+      PORTFOLIO_PREVIEW_ORIGIN: `https://${preview}`,
+    });
+    assert.deepEqual(findings(secure), [], `https ${preview}`);
+    assert.deepEqual(
+      findings(secure, 'warning').filter((each) => each.startsWith('PORTFOLIO_PREVIEW')),
+      ['PORTFOLIO_PREVIEW_ORIGIN:same_site'],
+      `https ${preview}`,
+    );
+    assert.equal(secure.ok && secure.config.previewOrigin, `https://${preview}`);
+  }
+  // Another site starts with no warning: another registrable domain, or a
+  // name beside an IP address, as the browser tests run it.
+  for (const [canonical, preview] of [
+    ['https://jane.test', 'https://jane-preview.test'],
+    ['https://jane.name', 'https://other.name'],
+    ['http://127.0.0.1:3000', 'http://preview.localhost:3000'],
+  ] as const) {
+    const result = read({
+      ...owner,
+      NODE_ENV: 'development',
+      PORTFOLIO_ORIGIN: canonical,
+      PORTFOLIO_PREVIEW_ORIGIN: preview,
+    });
+    assert.deepEqual(findings(result), [], preview);
+    assert.deepEqual(
+      findings(result, 'warning').filter((each) => each.startsWith('PORTFOLIO_PREVIEW')),
+      [],
+      preview,
+    );
+    assert.equal(result.ok && result.config.previewOrigin, preview);
+  }
 });
 
 test('PORTFOLIO_PATH and NEXT_PUBLIC_BASE_URL are fatal and name their replacement', () => {
@@ -563,7 +657,7 @@ test('owner keeps its reserved keys and secrets', () => {
     PORTFOLIO_DATA_DIR: '/var/lib/portfolio',
     PORTFOLIO_AUTH_PASSWORD_HASH: 'test-hash',
     GITHUB_TOKEN: 'test-token',
-    PORTFOLIO_PREVIEW_ORIGIN: 'https://preview.jane.test',
+    PORTFOLIO_PREVIEW_ORIGIN: 'https://jane-preview.test',
   });
   assert.equal(result.ok, true);
   if (!result.ok) return;

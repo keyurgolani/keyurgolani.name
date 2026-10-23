@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react';
 import type { Metadata } from 'next';
+import { environmentSelection } from '~/lib/environment';
 import { requireDeploymentConfig } from '~/server/config-store';
 import { grantChannel, openGrant } from '~/server/preview-page';
-import type { GrantChannel } from '~/server/preview-port';
+import type { GrantChannel, OpenedGrant } from '~/server/preview-port';
 import { PreviewAgent } from '~/preview/agent';
 import type { FrameChannelOptions } from '~/preview/frame-channel';
 import { PREVIEW_ROBOTS, PreviewDocument, previewMetadata } from '../../document';
@@ -31,14 +32,22 @@ async function opened(params: Params['params']) {
   return openGrant(grant).catch(() => null);
 }
 
-/** The agent's channel to Studio for the frame of `grant`. */
-function channelOf(grant: string, { nonce, renderedVersion }: GrantChannel): FrameChannelOptions {
+/**
+ * The agent's channel to Studio for the frame of `grant`, and what its site
+ * publishes, which the agent sets Studio's `environment` against (Slice 4).
+ */
+function channelOf(
+  grant: string,
+  { nonce, renderedVersion }: GrantChannel,
+  view?: OpenedGrant['view'],
+): FrameChannelOptions {
   return {
     mode: 'server',
     studioOrigin: requireDeploymentConfig().origin,
     linkBase: `/preview/${grant}`,
     nonce,
     renderedVersion,
+    ...(view ? { selection: environmentSelection(view.site) } : {}),
   };
 }
 
@@ -69,7 +78,7 @@ export default async function GrantLayout({
     <PreviewDocument
       unit={grant.view}
       origin={requireDeploymentConfig().origin}
-      channel={channelOf(token, grant)}
+      channel={channelOf(token, grant, grant.view)}
     >
       {children}
     </PreviewDocument>

@@ -305,18 +305,56 @@ module.exports = {
       name: 'preview-agent-imports-the-frame-channel-only',
       severity: 'error',
       comment:
-        'The preview agent (#7, Slice 3) runs in every preview document, so it, the status ' +
-        "report, and the frame's half of the channel import that half, the protocol, and React, " +
-        "and nothing else: never Studio's half, which would ship in the frame (threat " +
-        'preview-3). An allowlist, so an import of anything else fails it, relative or ' +
-        'spelled with ~/.',
-      from: { path: '^apps/web/src/preview/(?:agent|report-status|frame-channel)\\.tsx?$' },
+        'The preview agent (#7, Slice 3) runs in every preview document, so every module in ' +
+        "src/preview but the protocol and Studio's half, the agent, the status report and " +
+        "texts, and the frame's half of the channel among them, imports the frame's half, the " +
+        "protocol, React, and Slice 4's environment function, and nothing else: never Studio's " +
+        'half, which would ship in the frame (threat preview-3). An allowlist, so an import ' +
+        'of anything else fails it, relative or spelled with ~/. Tests may import anything.',
+      from: {
+        path: '^apps/web/src/preview/',
+        pathNot: ['\\.test\\.tsx?$', '^apps/web/src/preview/(?:protocol|studio-channel)\\.ts$'],
+      },
       to: {
         pathNot: [
           '^apps/web/src/preview/(?:frame-channel|protocol)\\.ts$',
+          '^apps/web/src/lib/environment\\.ts$',
           '^node_modules/(?:\\.pnpm/react@|react/)',
         ],
       },
+    },
+    {
+      name: 'preview-documents-never-import-studios-half',
+      severity: 'error',
+      comment:
+        "A backstop to the two allowlists (#7, Slice 4): no module of the agent's side of " +
+        "src/preview, and nothing in app/(preview), imports Studio's half of the channel by " +
+        'any path that ends in its name, however the path gets there, ~/lib/../preview/ and ' +
+        '~/./preview/ included. Tests may import anything.',
+      from: {
+        path: ['^apps/web/src/preview/', '^apps/web/src/app/\\(preview\\)/'],
+        pathNot: ['\\.test\\.tsx?$', '^apps/web/src/preview/studio-channel\\.ts$'],
+      },
+      to: { path: '(?:^|/)studio-channel(?:\\.ts|\\.tsx)?$' },
+    },
+    {
+      name: 'environment-imports-schema-types-only',
+      severity: 'error',
+      comment:
+        'The environment function (#7, Slice 4) runs in the preview agent and in Studio, so ' +
+        "it imports the schema's types and nothing at run time.",
+      from: { path: '^apps/web/src/lib/environment\\.ts$' },
+      to: {
+        pathNot: '^packages/schema/src/(?!node\\.ts$|migrate/)',
+      },
+    },
+    {
+      name: 'environment-imports-nothing-at-run-time',
+      severity: 'error',
+      comment:
+        'What the environment function imports from the schema is types alone (#7, Slice 4).',
+      from: { path: '^apps/web/src/lib/environment\\.ts$' },
+      to: { dependencyTypesNot: ['type-only'] },
     },
     {
       name: 'preview-documents-import-only-the-agent-side',

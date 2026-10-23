@@ -26,6 +26,8 @@ export interface StudioFetchOptions {
   readonly csrfToken?: string;
   /** A query's input, as search parameters. */
   readonly query?: Readonly<Record<string, string>>;
+  /** Lets the request outlive the page, as a command sent on pagehide must. */
+  readonly keepalive?: boolean;
 }
 
 /** The part of a BroadcastChannel a tab uses: one per tab, to post and to listen. */
@@ -50,7 +52,7 @@ export interface StudioFetchEnv {
 export function createStudioFetch(env: StudioFetchEnv) {
   return async function studioFetch(
     name: string,
-    { body, csrfToken, query }: StudioFetchOptions = {},
+    { body, csrfToken, query, keepalive }: StudioFetchOptions = {},
   ): Promise<Response> {
     const command = body !== undefined;
     const search = query ? `?${new URLSearchParams(query)}` : '';
@@ -63,6 +65,7 @@ export function createStudioFetch(env: StudioFetchEnv) {
       body: command ? JSON.stringify(body) : undefined,
       credentials: 'same-origin',
       cache: 'no-store',
+      ...(keepalive ? { keepalive: true } : {}),
     });
     if (response.status === 401) {
       env.channel.postMessage(SIGNED_OUT);
@@ -110,6 +113,33 @@ export function leaveOnSignOut(
   };
   env.channel.addEventListener('message', listener);
   return () => env.channel.removeEventListener('message', listener);
+}
+
+/**
+ * Calls `listener` when another tab signs out or loses its session, and
+ * leaves the page where it is: a page that keeps local work, such as
+ * /studio/preview (#7, Slice 4), says the session expired instead of going
+ * to sign-in. Returns the unsubscribe.
+ */
+export function onSignedOut(
+  listener: () => void,
+  env: Pick<StudioFetchEnv, 'channel'> = browser(),
+): () => void {
+  const handle = (event: MessageEvent) => {
+    if (event.data === SIGNED_OUT) listener();
+  };
+  env.channel.addEventListener('message', handle);
+  return () => env.channel.removeEventListener('message', handle);
+}
+
+/**
+ * Tells every other Studio tab the session ended, as a 401 does, for a page
+ * that learns it another way: /studio/preview (#7, Slice 4), when a grant's
+ * status says its session ended. Never for what another tab said, or two
+ * tabs would tell each other forever.
+ */
+export function announceSignedOut(env: Pick<StudioFetchEnv, 'channel'> = browser()): void {
+  env.channel.postMessage(SIGNED_OUT);
 }
 
 /** Where a page goes once its own sign-out succeeds. */

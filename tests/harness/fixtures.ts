@@ -70,11 +70,19 @@ export interface AppOptions {
   publicFiles?: Record<string, string | Uint8Array>;
   /** Files added to the source directory beside the documents, by path, such as `snapshots/github.json` (#10). */
   sourceFiles?: Record<string, string | Uint8Array>;
+  /**
+   * A host for PORTFOLIO_PREVIEW_ORIGIN on the server's own port, such as
+   * preview.localhost, which the browser resolves to loopback (#7, Slice 4).
+   * Requests to that origin go through, as the app's own do.
+   */
+  previewHost?: string;
 }
 
 export interface App {
   origin: string;
   port: number;
+  /** PORTFOLIO_PREVIEW_ORIGIN, when the app has one. */
+  previewOrigin?: string;
   /** The directory the server runs from, holding its build copy and `sourceDir`. */
   root: string;
   /** The server's PORTFOLIO_SOURCE_DIR unless `env` names another. */
@@ -146,7 +154,8 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
       const appHost = new URL(app.origin).host;
       await context.route('**/*', (route) => {
         const url = route.request().url();
-        if (new URL(url).origin === app.origin) return route.continue();
+        const { origin } = new URL(url);
+        if (origin === app.origin || origin === app.previewOrigin) return route.continue();
         blocked.push(url);
         return route.abort('blockedbyclient');
       });

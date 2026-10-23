@@ -56,8 +56,12 @@ interface Calls {
   readonly connection: boolean[];
 }
 
-/** A channel to a stand-in frame, with every callback recorded and the drop hook set. */
-function setup(t: TestContext, clock = { now: 0 }) {
+/**
+ * A channel to a stand-in frame, with every callback recorded and the drop
+ * hook set. With `frameOrigin`, the frame has an origin of its own, as an
+ * owner frame on the preview origin does, and its messages come from it.
+ */
+function setup(t: TestContext, clock = { now: 0 }, frameOrigin?: string) {
   const host = new FakeWindow();
   const iframe = Object.assign(new FakeWindow(), {
     ownerDocument: { defaultView: host },
@@ -88,6 +92,7 @@ function setup(t: TestContext, clock = { now: 0 }) {
     nonce: NONCE,
     on,
     now: () => clock.now,
+    ...(frameOrigin === undefined ? {} : { frameOrigin }),
   });
   const ports: MessagePort[] = [];
   t.after(() => {
@@ -95,9 +100,12 @@ function setup(t: TestContext, clock = { now: 0 }) {
     for (const port of ports) port.close();
     globalThis.__kgnPreviewDrop = undefined;
   });
-  /** The frame's window posts `data` to Studio's. */
-  const fromFrame = (data: unknown, source: unknown = iframe.contentWindow) =>
-    host.fire('message', { data, source, origin: 'null', ports: [] });
+  /** The frame's window posts `data` to Studio's, from `origin`. */
+  const fromFrame = (
+    data: unknown,
+    source: unknown = iframe.contentWindow,
+    origin = frameOrigin ?? 'null',
+  ) => host.fire('message', { data, source, origin, ports: [] });
   const hello = (nonce = NONCE, instance = DOC_A) =>
     fromFrame(envelope('hello', { nonce, instance }, 1));
   /** The port Studio's last connect carried, the frame's end. */
@@ -157,6 +165,29 @@ test("Studio takes hello only from its frame's own window with the frame's curre
   assert.equal(iframe.contentWindow.posted.length, 2);
   assert.deepEqual(calls.connection, [true, false, true]);
   for (const port of iframe.contentWindow.posted.at(-1)!.ports) port.close();
+  await tick();
+});
+
+test('a frame with an origin of its own, an owner frame on the preview origin, has its hello taken only from that origin and its connect sent to it alone (#7, Slice 4)', async (t) => {
+  const PREVIEW = 'https://preview.rowan.test';
+  const { iframe, channel, drops, fromFrame } = setup(t, { now: 0 }, PREVIEW);
+  const hello = envelope('hello', { nonce: NONCE, instance: DOC_A }, 1);
+  // An opaque document in the frame, the Studio origin, and another site:
+  // the right window and nonce, but not the frame's origin.
+  for (const origin of ['null', 'https://rowan.test', 'https://evil.test']) {
+    fromFrame(hello, iframe.contentWindow, origin);
+  }
+  assert.equal(channel.connected, false);
+  assert.deepEqual(
+    drops.map(({ reason }) => reason),
+    ['origin', 'origin', 'origin'],
+  );
+  fromFrame(hello);
+  assert.equal(channel.connected, true);
+  const { posted } = iframe.contentWindow;
+  assert.equal(posted.length, 1);
+  assert.equal(posted[0]!.targetOrigin, PREVIEW);
+  for (const port of posted[0]!.ports) port.close();
   await tick();
 });
 

@@ -16,10 +16,17 @@ import {
   type ToStudioPayload,
   type ToStudioType,
 } from './protocol';
+import {
+  DEFAULT_SELECTION,
+  ENVIRONMENT_ATTRIBUTES,
+  environmentAttributes,
+  type EnvironmentSelection,
+} from '../lib/environment';
 
 // The frame's half of the preview channel (#7, Slice 3), which the preview
-// agent runs: the handshake, the port, the link guard, scrolling, and the
-// lifecycle state, with no DOM, CSS, or UI of its own. It does nothing when
+// agent runs: the handshake, the port, the link guard, scrolling, the
+// lifecycle state, and the environment Studio's controls set on the
+// presentation boundary (Slice 4), with no DOM, CSS, or UI of its own. It does nothing when
 // the document isn't in a frame, so the dev fixture route still renders top
 // level. It reads its settings from what the server rendered, and in local
 // mode the nonce from the fragment Studio set, never from the query.
@@ -30,10 +37,11 @@ import {
 // other link is cancelled and sent to Studio as `link`: other sites,
 // mailto: and tel:, downloads, and the site's own pages outside the grant.
 // The guard reads clicks and middle clicks on window, in the capture phase,
-// so no listener in the page can keep a link from it. Where the frame's
-// document has the Navigation API, which an opaque origin doesn't, its
-// `navigate` event backs the guard up for what a click doesn't show: a link
-// in a closed shadow root, and a script's own navigation.
+// so no listener on the document or below can keep a link from it. Where
+// the frame's document has the Navigation API, which an opaque origin
+// doesn't, its `navigate` event backs the guard up for what a click doesn't
+// show: a link in a closed shadow root, a script's own navigation, a
+// reload, and a history change.
 
 export interface FrameChannelOptions {
   readonly mode: 'server' | 'local';
@@ -45,6 +53,12 @@ export interface FrameChannelOptions {
   readonly nonce?: string;
   /** What `ready` says the frame renders: a draft grant's pinned version, or null. */
   readonly renderedVersion: number | null;
+  /**
+   * What the frame's site publishes, which Studio's `environment` sets the
+   * boundary against (Slice 4). Without one, the system's own display mode
+   * and motion.
+   */
+  readonly selection?: EnvironmentSelection;
 }
 
 /**
@@ -172,8 +186,25 @@ const elsewhere = (event: MouseEvent) =>
  */
 interface NavigateEventLike extends Event {
   readonly navigationType: string;
-  readonly destination: { readonly url: string; readonly sameDocument: boolean };
+  readonly destination: { readonly url: string };
   readonly downloadRequest: string | null;
+}
+
+/**
+ * Sets the environment Studio's controls chose on the document's
+ * presentation boundary, the outermost element with data-variant, through
+ * environmentAttributes(), as the server rendered the grant's. A document
+ * with no boundary, such as a status page, has nothing to set.
+ */
+export function setEnvironment(
+  document: Document,
+  selection: EnvironmentSelection,
+  environment: ToFramePayload<'environment'>,
+): void {
+  const boundary = document.querySelector('[data-variant]');
+  if (!boundary) return;
+  const attributes = environmentAttributes(selection, environment);
+  for (const name of ENVIRONMENT_ATTRIBUTES) boundary.setAttribute(name, attributes[name]);
 }
 
 /** The element of the section `anchor` names, found by its data-section-id. */
@@ -305,8 +336,11 @@ export function startFrameChannel(win: Window, options: FrameChannelOptions): ((
     if (LOCAL_ONLY.has(message.type) && mode !== 'local') return drop('type', message.type);
     switch (message.type) {
       case 'environment':
-        // Slice 4 applies it to the presentation boundary.
-        return;
+        return setEnvironment(
+          win.document,
+          options.selection ?? DEFAULT_SELECTION,
+          message.payload,
+        );
       case 'scroll-to':
         return scrollTo(message.payload);
       case 'navigate': {
@@ -381,16 +415,16 @@ export function startFrameChannel(win: Window, options: FrameChannelOptions): ((
 
   /**
    * The backstop: a navigation of the frame that no click the guard saw
-   * started, such as a link in a closed shadow root or a script's
-   * location.assign(). It goes on to the grant's own paths, and else is
-   * cancelled and sent to Studio as a link, as a click on it would be. Back,
-   * forward, a reload, and a move within the document go where the frame
-   * already is or has been.
+   * started, such as a link in a closed shadow root, a script's
+   * location.assign(), a reload, or a pushState() or replaceState(). It
+   * goes on to the grant's own paths and fragments, and else is cancelled
+   * and sent to Studio as a link, as a click on it would be. Only back and
+   * forward go on unread: they go where the frame has been, and with every
+   * other move held to the grant, that's the grant's paths alone.
    */
   const onNavigate = (event: Event) => {
     const { navigationType, destination, downloadRequest } = event as NavigateEventLike;
-    if (navigationType === 'traverse' || navigationType === 'reload') return;
-    if (destination.sameDocument) return;
+    if (navigationType === 'traverse') return;
     let url: URL;
     try {
       url = new URL(destination.url);

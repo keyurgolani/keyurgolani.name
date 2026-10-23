@@ -2,9 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
+  announceSignedOut,
   AUTH_REQUIRED,
   createStudioFetch,
   leaveOnSignOut,
+  onSignedOut,
   SESSION_CHANNEL,
   SIGNED_OUT,
   SIGNED_OUT_LOCATION,
@@ -77,7 +79,24 @@ test('a command goes as JSON with its CSRF token, and a query as a GET with its 
   for (const call of browser.seen.calls) {
     assert.equal(call.init.credentials, 'same-origin');
     assert.equal(call.init.cache, 'no-store');
+    assert.equal(call.init.keepalive, undefined);
   }
+});
+
+test('a command sent with keepalive outlives the page, and keeps its CSRF token (#7, Slice 4)', async () => {
+  const browser = env(ok);
+  await createStudioFetch(browser)('preview.grant.revoke', {
+    body: { grant: 'G'.repeat(22) },
+    csrfToken: 't'.repeat(43),
+    keepalive: true,
+  });
+  const [command] = browser.seen.calls;
+  assert.equal(command?.init.method, 'POST');
+  assert.equal(command?.init.keepalive, true);
+  assert.deepEqual(command?.init.headers, {
+    'content-type': 'application/json',
+    'x-csrf-token': 't'.repeat(43),
+  });
 });
 
 test('on a 401 it signs the other tabs out and goes to sign-in, unless a listener cancels the event', async () => {
@@ -159,6 +178,55 @@ test('another tab signing out sends this one to sign-in, keeping where it was', 
   } finally {
     stop();
     channel.close();
+    other.close();
+  }
+});
+
+test('another tab signing out tells a page that keeps local work, and leaves it where it is (#7, Slice 4)', async () => {
+  let heard = 0;
+  const channel = new BroadcastChannel(SESSION_CHANNEL);
+  const stop = onSignedOut(() => (heard += 1), { channel });
+  const other = new BroadcastChannel(SESSION_CHANNEL);
+  try {
+    other.postMessage('something else');
+    other.postMessage(SIGNED_OUT);
+    await delivered();
+    assert.equal(heard, 1);
+    // The tab's own sign-out never comes back to it.
+    channel.postMessage(SIGNED_OUT);
+    await delivered();
+    assert.equal(heard, 1);
+    stop();
+    other.postMessage(SIGNED_OUT);
+    await delivered();
+    assert.equal(heard, 1, 'it listened after it stopped');
+  } finally {
+    stop();
+    channel.close();
+    other.close();
+  }
+});
+
+test('a page that learns its session ended another way, a preview grant that says so, tells every other tab and never itself (#7, Slice 4)', async () => {
+  const navigations: string[] = [];
+  let heard = 0;
+  const preview = new BroadcastChannel(SESSION_CHANNEL);
+  const stop = onSignedOut(() => (heard += 1), { channel: preview });
+  const other = new BroadcastChannel(SESSION_CHANNEL);
+  const leave = leaveOnSignOut({
+    channel: other,
+    here: () => '/studio/drafts',
+    navigate: (location) => navigations.push(location),
+  });
+  try {
+    announceSignedOut({ channel: preview });
+    await delivered();
+    assert.deepEqual(navigations, ['/studio/sign-in?state=signed_out&returnTo=%2Fstudio%2Fdrafts']);
+    assert.equal(heard, 0);
+  } finally {
+    stop();
+    leave();
+    preview.close();
     other.close();
   }
 });

@@ -48,7 +48,10 @@ export const SCROLLED_PER_SECOND = 10;
 export const DROP_REASONS = [
   /** From a window that isn't the other side's. */
   'source',
-  /** A `connect` from an origin that isn't Studio's. */
+  /**
+   * From an origin that isn't the other side's: a `connect` not from
+   * Studio's, or a `hello` not from a frame's own origin, when it has one.
+   */
   'origin',
   /** A `hello` with a nonce that isn't the frame's current one. */
   'nonce',

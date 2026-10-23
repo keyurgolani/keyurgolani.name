@@ -32,6 +32,7 @@
     "@portfolio/fixture-variant-light": "workspace:*",
     "@portfolio/fixture-variant-medium": "workspace:*",
     "@portfolio/kit": "workspace:*",
+    "@portfolio/preview-fixtures": "workspace:*",
     "@portfolio/quality-fixtures-languages": "workspace:*",
     "@portfolio/quality-fixtures-schemes": "workspace:*",
     "@portfolio/quality-fixtures-schemes-meta": "workspace:*",

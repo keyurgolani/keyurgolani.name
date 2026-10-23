@@ -376,6 +376,46 @@ jobs:
           if-no-files-found: ignore
           retention-days: ${{ env.REPORT_RETENTION_DAYS }}
 
+  # The preview's fixture renders (#7, Slice 4) need fixture-environment,
+  # which only a build made with PREVIEW_FIXTURES=1 registers, so they build
+  # a fixture host of their own, as the appearance specs do. Every render's
+  # screenshot stays in the reports artifact, under
+  # reports/preview-fixtures/screenshots.
+  preview-fixtures-browser:
+    name: preview-fixtures-browser
+    needs: [changes]
+    if: ${{ contains(fromJSON(needs.changes.outputs.jobs), 'preview-fixtures-browser') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+      options: --user 1001 --ipc=host --init
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install
+        id: install
+        uses: ./.github/actions/install
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: pnpm store cache hit
+        if: ${{ steps.install.outputs.store-hit == 'true' }}
+        run: echo "pnpm store restored under this lockfile's hash"
+      - name: pnpm ci:preview-fixtures-browser
+        run: pnpm ci:preview-fixtures-browser
+      - name: Failure summary
+        if: ${{ always() }}
+        run: node ci/summarize.mjs
+      - name: Upload reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-preview-fixtures-browser
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: ${{ env.REPORT_RETENTION_DAYS }}
+
   # The variant source audit (#5, Slice 3): registry generation, then every
   # registered variant's code and styles, and the kit modules they reach.
   check-variants:
@@ -618,6 +658,7 @@ jobs:
         browser,
         routes,
         appearance-browser,
+        preview-fixtures-browser,
         check-variants,
         variants,
         external-variant,
@@ -650,6 +691,7 @@ jobs:
         browser,
         routes,
         appearance-browser,
+        preview-fixtures-browser,
         check-variants,
         variants,
         external-variant,

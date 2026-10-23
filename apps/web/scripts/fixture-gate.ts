@@ -37,6 +37,13 @@ export const FIXTURE_ROWS: readonly FixtureRow[] = [
     directories: ['packages/appearance-fixtures-*'],
     values: ['1'],
   },
+  // #7's environment fixture, fixture-environment, which preview renders style against.
+  {
+    flag: 'PREVIEW_FIXTURES',
+    key: 'preview',
+    directories: ['packages/preview-fixtures'],
+    values: ['1'],
+  },
   // #11, Slice 1, item 9: the nine tier fixture packs, which the quality
   // build sets QUALITY_FIXTURES=1 for, and quality:meta's build too.
   {

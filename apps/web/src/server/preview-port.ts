@@ -82,6 +82,16 @@ export interface PreviewGrantsPort {
    * Studio so with the log's reference.
    */
   channel(grant: string): Promise<GrantChannel | null>;
+  /**
+   * What /studio/preview offers to preview (Slice 4): the working draft's
+   * latest version and the live revision, each with the variant its site
+   * selects. They're read under preview.grant, authorized again from the
+   * page's session, as a grant's own reads are from its bound one, so this
+   * module needn't import authorize.ts, which reads the config store that
+   * holds this port. Empty when there's neither, or the session doesn't
+   * reach preview.grant.
+   */
+  previewable(session: Session | null): Promise<readonly Previewable[]>;
 }
 
 /** What a frame's agent needs to open its channel to Studio. */
@@ -89,3 +99,16 @@ export interface GrantChannel {
   readonly nonce: string;
   readonly renderedVersion: number | null;
 }
+
+/** Something a grant can be minted of, as Studio's content control offers it. */
+export type Previewable =
+  | {
+      readonly kind: 'draft';
+      readonly subject: { readonly draft: string; readonly version: number };
+      readonly variant: string | null;
+    }
+  | {
+      readonly kind: 'revision';
+      readonly subject: { readonly revision: string };
+      readonly variant: string | null;
+    };

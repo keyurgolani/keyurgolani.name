@@ -6,6 +6,7 @@ import type { Frame, Page, Request } from '@playwright/test';
 import {
   AGENT_MARKER,
   isPreviewFrame,
+  QUIET_MS,
   scriptsDuring,
   STUDIO_HALF_MARKER,
 } from '../harness/agent-chunks';
@@ -381,49 +382,13 @@ test(
 );
 
 test(
-  "where the frame's document has an origin, and so the Navigation API, the guard's backstop cancels what no click showed it, a link in a closed shadow root and a script's location.assign(), and lets the grant's own paths load; an opaque frame has the API's events off, and there Studio's frame-src keeps another site out (#7, Slice 3)",
+  "an opaque frame's Navigation API has no entries and fires no events, so the guard's backstop has nothing to listen to there, and Studio's frame-src keeps another site out before any request goes out (#7, Slice 3)",
   { annotation: [GRANT] },
   async ({ page, app, blockedRequests }) => {
-    // allow-same-origin, as Slice 4 gives owner frames on a configured
-    // preview origin. This test page is on Studio's.
-    const { csrf, draft, grant, frame } = await mounted(
-      page,
-      app,
-      'Backstop Person',
-      'allow-scripts allow-same-origin',
-    );
-    const frameUrl = frame.url();
-    await frame.evaluate(() => {
-      const host = document.createElement('div');
-      host.id = 'closed-host';
-      const root = host.attachShadow({ mode: 'closed' });
-      const link = document.createElement('a');
-      link.href = 'https://example.test/shadow';
-      link.textContent = 'A link in a closed shadow root';
-      // The whole host, so a click on it is on the link.
-      link.style.display = 'block';
-      root.append(link);
-      document.body.prepend(host);
-    });
-    await frame.locator('#closed-host').click();
-    await frame.evaluate(() => location.assign('https://example.test/assign'));
-    await frame.evaluate(() => location.assign('/'));
-    await expect.poll(() => eventsOf(page, 'link')).toHaveLength(3);
-    const origin = new URL(app.origin).origin;
-    expect(await eventsOf(page, 'link')).toEqual([
-      { href: 'https://example.test/shadow', kind: 'external' },
-      { href: 'https://example.test/assign', kind: 'external' },
-      { href: `${origin}/`, kind: 'live' },
-    ]);
-    expect(blockedRequests.filter((url) => url.startsWith('https://example.test/'))).toEqual([]);
-    expect(frame.url()).toBe(frameUrl);
-    expect(await eventsOf(page, 'ready')).toHaveLength(1);
-    // The grant's own path loads, and its document says hello.
-    await frame.evaluate((href) => {
-      setTimeout(() => location.assign(href), 0);
-    }, `/preview/${grant}`);
-    await expect.poll(() => eventsOf(page, 'ready')).toHaveLength(2);
-
+    // Under Studio's own sandbox the document's origin is opaque. A frame
+    // with an origin of its own, and so the backstop, is an owner frame on
+    // the preview origin, which studio-preview-origin.spec.ts runs on a
+    // second origin, as a deployment does.
     const api = () => {
       const navigation = (
         window as unknown as { navigation?: { entries(): unknown[]; currentEntry: unknown } }
@@ -434,18 +399,7 @@ test(
         current: navigation?.currentEntry !== null && navigation?.currentEntry !== undefined,
       };
     };
-    const loaded = await frameAt(page, `/preview/${grant}`);
-    const withOrigin = await loaded.evaluate(api);
-    expect(withOrigin).toMatchObject({ origin, current: true });
-    expect(withOrigin.entries).toBeGreaterThan(0);
-
-    // Under Studio's own sandbox the document's origin is opaque, and the
-    // Navigation API there has no entries and fires no events, so the
-    // backstop has nothing to listen to (threat preview-5).
-    const opaque = await mintFrame(page, csrf, { draft: draft.draftId, version: draft.version });
-    await mount(page, `/preview/${opaque.grant}`, opaque.nonce);
-    await expect.poll(() => eventsOf(page, 'ready')).toHaveLength(3);
-    const opaqueFrame = await frameAt(page, `/preview/${opaque.grant}`);
+    const { frame: opaqueFrame } = await mounted(page, app, 'Backstop Person');
     expect(await opaqueFrame.evaluate(api)).toEqual({ origin: 'null', entries: 0, current: false });
     // There a link in a closed shadow root gets past the guard, and Studio's
     // frame-src is what keeps another site out of the frame: the navigation
@@ -470,7 +424,7 @@ test(
     expect(violation?.directive).toBe('frame-src');
     expect(violation?.blocked).toMatch(/^https:\/\/example\.test/);
     expect(blockedRequests.filter((url) => url.startsWith('https://example.test/'))).toEqual([]);
-    expect(await eventsOf(page, 'link')).toHaveLength(3);
+    expect(await eventsOf(page, 'link')).toEqual([]);
   },
 );
 
@@ -487,14 +441,16 @@ test(
       draft: draft.draftId,
       version: draft.version,
     });
-    // Every Studio request from here on, from the page and from the frame,
-    // starting before the frame mounts, so a call on its ready counts.
+    // Every Studio request from here on, from the page, the frame, and any
+    // other page or worker of the context, starting before the frame
+    // mounts, so a call on its ready counts.
     const fromPage: string[] = [];
     const fromFrame: Request[] = [];
     let recording = true;
-    page.on('request', (request) => {
+    page.context().on('request', (request) => {
       if (!recording || !request.url().includes('/api/studio/')) return;
-      if (request.frame() === page.mainFrame()) fromPage.push(request.url());
+      const inPage = request.serviceWorker() === null && request.frame() === page.mainFrame();
+      if (inPage) fromPage.push(request.url());
       else fromFrame.push(request);
     });
     await mount(page, `/preview/${grant}`, nonce);
@@ -711,5 +667,36 @@ test(
       `The preview agent's own chunks: ${agentOnly.length}, ${gzipped} bytes gzipped.\n${each.join('\n')}`,
     );
     expect(gzipped).toBeGreaterThan(0);
+  },
+);
+
+test(
+  'what a frame loads is all counted when the Studio page went quiet before the frame mounted, and counting it ends a quiet window after the last request (#7, Slice 3)',
+  { annotation: [GRANT] },
+  async ({ page, app }) => {
+    await recordDrops(page);
+    let loaded = 0;
+    const frameScripts = await scriptsDuring(
+      page,
+      async () => {
+        const csrf = await openStudioPage(page, app, secret.password);
+        const draft = await seedDraft(app, 'Gap Person');
+        const { grant, nonce } = await mintFrame(page, csrf, {
+          draft: draft.draftId,
+          version: draft.version,
+        });
+        // Longer than Playwright's networkidle window, so the page has gone
+        // network idle before the frame exists.
+        await page.waitForTimeout(1_500);
+        await mount(page, `/preview/${grant}`, nonce);
+        await expect.poll(() => eventsOf(page, 'ready')).toHaveLength(1);
+        loaded = Date.now();
+      },
+      isPreviewFrame,
+    );
+    const waited = Date.now() - loaded;
+    expect(waited).toBeGreaterThanOrEqual(QUIET_MS);
+    expect(waited).toBeLessThan(5_000);
+    expect([...frameScripts.values()].some((body) => body.includes(AGENT_MARKER))).toBe(true);
   },
 );

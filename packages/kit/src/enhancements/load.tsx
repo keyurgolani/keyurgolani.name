@@ -89,9 +89,20 @@ function useMounted(): boolean {
 }
 
 /**
+ * Whether the page's presentation boundary, its outermost element with
+ * data-variant, turns enhancements off with data-enhancement="off", as a
+ * preview's environment does (#7, Slice 4). The page then reads as it does
+ * when every enhancement fails.
+ */
+export function enhancementsOff(document: Pick<Document, 'querySelector'> | undefined): boolean {
+  return document?.querySelector('[data-variant]')?.getAttribute('data-enhancement') === 'off';
+}
+
+/**
  * Nothing on the server or while hydrating, then the enhancement. It throws,
  * for the boundary to catch, when the variant doesn't declare `id` or when
- * globalThis.__portfolioFailEnhancements is set.
+ * globalThis.__portfolioFailEnhancements is set, and renders nothing when the
+ * page's boundary turns enhancements off.
  */
 export function MountedEnhancement({ input, id }: { input: VariantRenderInput; id: string }) {
   const mounted = useMounted();
@@ -99,6 +110,7 @@ export function MountedEnhancement({ input, id }: { input: VariantRenderInput; i
   if (!input.capabilities.enhancements.some((declared) => declared.id === id)) {
     throw new Error(`${input.variant} declares no enhancement ${id}.`);
   }
+  if (enhancementsOff(globalThis.document)) return null;
   if (globalThis.__portfolioFailEnhancements) {
     throw new Error('Every enhancement fails: globalThis.__portfolioFailEnhancements is set.');
   }

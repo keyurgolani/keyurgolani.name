@@ -2,6 +2,7 @@ import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import { setTimeout as wait } from 'node:timers/promises';
 import { isDeepStrictEqual } from 'node:util';
+import { environmentAttributes } from '../lib/environment';
 import { envelope, LIMITS, type PreviewDrop } from './protocol';
 import {
   classifyLink,
@@ -104,6 +105,8 @@ class FakeFrame extends FakeTarget {
   readonly sections: FakeSection[] = [];
   /** The Navigation API, where a test gives the frame one: an opaque origin has none. */
   navigation?: FakeTarget;
+  /** The presentation boundary's attributes, as the channel sets them. */
+  readonly boundary: Record<string, string> = {};
   constructor(href: string) {
     super();
     this.url = new URL(href);
@@ -112,6 +115,14 @@ class FakeFrame extends FakeTarget {
     return {
       readyState: 'complete',
       baseURI: this.url.href,
+      querySelector: (selector: string) => {
+        assert.equal(selector, '[data-variant]');
+        return {
+          setAttribute: (name: string, value: string) => {
+            this.boundary[name] = value;
+          },
+        };
+      },
       querySelectorAll: (selector: string) => {
         assert.equal(selector, '[data-section-id]');
         return this.sections.map((section) => ({
@@ -471,6 +482,32 @@ test("the agent takes connect only from its parent window, from Studio's origin,
   assert.deepEqual(received, [{ ...envelope('ready', { renderedVersion: 4, route: '/' }, 2) }]);
 });
 
+test("Studio's environment goes on the boundary through environmentAttributes, against what the grant's site publishes, so motion only reduces (#7, Slice 4)", async (t) => {
+  const selection = { displayMode: 'light', motionPolicy: 'reduce' } as const;
+  const { win, connect, send } = setup(t, { ...SERVER, selection });
+  await wait(5);
+  const port = connect();
+  await wait(5);
+  for (const environment of [
+    { displayMode: 'system', contrast: 'system', motion: 'system', enhancement: 'on' },
+    { displayMode: 'high-contrast', contrast: 'more', motion: 'reduce', enhancement: 'off' },
+  ] as const) {
+    send(port, 'environment', environment);
+    await wait(5);
+    assert.deepEqual(win.boundary, environmentAttributes(selection, environment));
+  }
+  // The site reduces motion, so system keeps it reduced, and system keeps the published mode.
+  send(port, 'environment', {
+    displayMode: 'system',
+    contrast: 'system',
+    motion: 'system',
+    enhancement: 'on',
+  });
+  await wait(5);
+  assert.equal(win.boundary['data-motion'], 'reduced');
+  assert.equal(win.boundary['data-display-mode'], 'light');
+});
+
 test("the agent reads Studio's messages over the port, and drops what the protocol refuses with no side effect (#7, Slice 3)", async (t) => {
   const { win, drops, received, send, handshake } = setup(t);
   const port = await handshake();
@@ -518,6 +555,7 @@ test("the agent reads Studio's messages over the port, and drops what the protoc
   assert.equal(win.scrolls.length, 0);
   assert.equal(win.events.length, 0);
   assert.equal(received.length, 0);
+  assert.deepEqual(win.boundary, {});
   // And each valid one does what it says.
   send(port, 'environment', {
     displayMode: 'dark',
@@ -530,6 +568,13 @@ test("the agent reads Studio's messages over the port, and drops what the protoc
   send(port, 'navigate', { route: '/work/small-traces' });
   await until(() => received.length >= 2, 'rect and navigated');
   assert.equal(drops.length, 11);
+  // The environment on the boundary, against the system's own display mode and motion (Slice 4).
+  assert.deepEqual(win.boundary, {
+    'data-display-mode': 'dark',
+    'data-contrast': 'more',
+    'data-motion': 'reduced',
+    'data-enhancement': 'off',
+  });
   assert.equal(win.events.length, 1);
   assert.equal(win.events[0]!.type, LIFECYCLE_EVENT);
   assert.deepEqual(win.events[0]!.detail, { state: 'hidden', focused: false });
@@ -771,7 +816,7 @@ test('a middle click and a click with a modifier key go through the guard too, a
   assert.deepEqual(win.assigned, [`${STUDIO}${BASE}/work/b`]);
 });
 
-test('where the frame has the Navigation API, a navigation no click showed the guard goes on under the grant, and anywhere else is cancelled and sent to Studio as a link (#7, Slice 3)', async (t) => {
+test('where the frame has the Navigation API, a navigation no click showed the guard, a reload and a history change among them, goes on under the grant, anywhere else is cancelled and sent to Studio as a link, and only back and forward go on unread (#7, Slices 3 and 4)', async (t) => {
   const { win, received, handshake, stop } = setup(t, SERVER, `${STUDIO}${BASE}/work/a`, {
     navigation: true,
   });
@@ -785,15 +830,24 @@ test('where the frame has the Navigation API, a navigation no click showed the g
     ['a download', `${STUDIO}${BASE}/paper.pdf`, { downloadRequest: 'paper.pdf' }],
     ['a data: document', 'data:text/html,hi', {}],
     ['back', 'https://example.test/back', { navigationType: 'traverse', cancelable: false }],
-    ['a reload', `${STUDIO}${BASE}/work/a`, { navigationType: 'reload' }],
+    ['back, cancelable', `${STUDIO}/studio`, { navigationType: 'traverse' }],
+    ["a reload of the grant's page", `${STUDIO}${BASE}/work/a`, { navigationType: 'reload' }],
+    ['a reload outside the grant', `${STUDIO}/studio`, { navigationType: 'reload' }],
     ['a fragment', `${STUDIO}${BASE}/work/a#contact`, { sameDocument: true }],
+    ['a pushState under the grant', `${STUDIO}${BASE}/work/c`, { sameDocument: true }],
+    ['a pushState outside the grant', `${STUDIO}/studio/drafts`, { sameDocument: true }],
+    [
+      'a replaceState outside the grant',
+      `${STUDIO}/studio/history`,
+      { sameDocument: true, navigationType: 'replace' },
+    ],
     ['one it may not cancel', 'https://example.test/late', { cancelable: false }],
   ] as const) {
     const event = navigateEvent(url, init);
     win.navigation!.fire('navigate', event);
     outcomes.push([label, event.defaultPrevented]);
   }
-  await until(() => received.length >= 3, 'the links');
+  await until(() => received.length >= 6, 'the links');
   assert.deepEqual(outcomes, [
     ['another site', true],
     ["the site's own page", true],
@@ -801,8 +855,13 @@ test('where the frame has the Navigation API, a navigation no click showed the g
     ['a download', true],
     ['a data: document', true],
     ['back', false],
-    ['a reload', false],
+    ['back, cancelable', false],
+    ["a reload of the grant's page", false],
+    ['a reload outside the grant', true],
     ['a fragment', false],
+    ['a pushState under the grant', false],
+    ['a pushState outside the grant', true],
+    ['a replaceState outside the grant', true],
     ['one it may not cancel', false],
   ]);
   assert.deepEqual(
@@ -811,10 +870,15 @@ test('where the frame has the Navigation API, a navigation no click showed the g
       ['link', { href: 'https://example.test/assign', kind: 'external' }],
       ['link', { href: `${STUDIO}/`, kind: 'live' }],
       ['link', { href: `${STUDIO}${BASE}/paper.pdf`, kind: 'download' }],
+      ['link', { href: `${STUDIO}/studio`, kind: 'live' }],
+      ['link', { href: `${STUDIO}/studio/drafts`, kind: 'live' }],
+      ['link', { href: `${STUDIO}/studio/history`, kind: 'live' }],
     ],
   );
-  // Stopped, the channel leaves the Navigation API as it found it.
+  // Stopped, the channel leaves the window and the Navigation API as it
+  // found them: no click, middle click, message, scroll, or load listener.
   stop?.();
+  assert.deepEqual([...win.listeners.keys()], []);
   assert.equal(win.navigation!.listeners.size, 0);
 });
 

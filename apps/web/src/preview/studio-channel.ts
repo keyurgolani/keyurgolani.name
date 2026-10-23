@@ -17,9 +17,10 @@ import {
 // Studio's half of the preview channel (#7, Slice 3): one frame's handshake,
 // its port, and what comes over it, with no React and no UI, so Slice 4's
 // PreviewSurface wraps it. It takes `hello` only from the frame's own
-// contentWindow with the frame's current nonce, answers `connect` with a
-// fresh MessagePort, and reads the port with protocol.ts. It never calls
-// /api/studio: nothing the frame sends leads to a Studio query or command.
+// contentWindow with the frame's current nonce, and from the frame's origin
+// when it has one, answers `connect` with a fresh MessagePort, and reads the
+// port with protocol.ts. It never calls /api/studio: nothing the frame
+// sends leads to a Studio query or command.
 //
 // A frame's document can change without Studio: a link the agent follows,
 // a reload. Studio can't tell which document a `load` event is for, so
@@ -54,6 +55,13 @@ export interface StudioChannelOptions {
   readonly on?: StudioChannelEvents;
   /** The clock the `scrolled` rate is kept by, in milliseconds. */
   readonly now?: () => number;
+  /**
+   * The frame's origin, when it has one: an `owner` frame on the preview
+   * origin, with `allow-same-origin` (Slice 4). Studio then takes `hello`
+   * only from it and sends `connect` to it alone. Without it the frame's
+   * origin is opaque, and `connect` goes to `'*'`.
+   */
+  readonly frameOrigin?: string;
 }
 
 export interface StudioChannel {
@@ -77,7 +85,7 @@ export interface StudioChannel {
 
 /** Opens Studio's side of the channel to `iframe`. Call it before the frame loads. */
 export function openStudioChannel(options: StudioChannelOptions): StudioChannel {
-  const { iframe, on = {}, now = () => Date.now() } = options;
+  const { iframe, on = {}, now = () => Date.now(), frameOrigin } = options;
   const host = iframe.ownerDocument.defaultView;
   if (!host) throw new Error('The frame is in no window.');
   let nonce = options.nonce;
@@ -128,14 +136,18 @@ export function openStudioChannel(options: StudioChannelOptions): StudioChannel 
     port = channel.port1;
     portInstance = instance;
     port.onmessage = (event: MessageEvent) => fromPort(event.data);
-    // The frame's origin is opaque, so no target origin names it: the window
-    // and the nonce said which frame this is, and the port goes to it.
-    iframe.contentWindow?.postMessage(envelope('connect', {}, ++seq), '*', [channel.port2]);
+    // An opaque frame's origin has no name, so `'*'`: the window and the
+    // nonce said which frame this is, and the port goes to it. A frame with
+    // an origin gets it only while its document is still on that origin.
+    iframe.contentWindow?.postMessage(envelope('connect', {}, ++seq), frameOrigin ?? '*', [
+      channel.port2,
+    ]);
     on.connection?.(true);
   };
 
   const fromWindow = (event: MessageEvent) => {
     if (event.source === null || event.source !== iframe.contentWindow) return drop('source');
+    if (frameOrigin !== undefined && event.origin !== frameOrigin) return drop('origin');
     const read = readMessage(event.data, STUDIO_HANDSHAKE);
     if (!read.ok) return drop(read.reason, read.type, nonceOf(event.data) === nonce);
     if (read.message.payload.nonce !== nonce) return drop('nonce', 'hello');
@@ -196,7 +208,6 @@ export function openStudioChannel(options: StudioChannelOptions): StudioChannel 
     },
     reset(next) {
       nonce = next;
-      mismatchShown = false;
       closePort();
     },
     close() {

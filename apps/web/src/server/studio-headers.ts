@@ -69,9 +69,10 @@ export function newNonce(): string {
 /**
  * The policy for one Studio response. `next dev` needs 'unsafe-eval', which
  * React uses there to rebuild server error stacks. A production build never
- * gets it.
+ * gets it. Studio frames its own origin's previews, and a configured preview
+ * origin's (#7, Slice 4), and nothing else.
  */
-export function studioCsp(nonce: string, mode: RuntimeMode): string {
+export function studioCsp(nonce: string, mode: RuntimeMode, previewOrigin?: string): string {
   const evaluation = mode === 'development' ? " 'unsafe-eval'" : '';
   return [
     "default-src 'self'",
@@ -79,7 +80,7 @@ export function studioCsp(nonce: string, mode: RuntimeMode): string {
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
     "connect-src 'self'",
-    "frame-src 'self'",
+    previewOrigin === undefined ? "frame-src 'self'" : `frame-src 'self' ${previewOrigin}`,
     "frame-ancestors 'none'",
     "form-action 'self'",
     "base-uri 'none'",

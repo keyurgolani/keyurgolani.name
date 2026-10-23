@@ -129,9 +129,10 @@ test(
     await expect(boundary).toHaveAttribute('data-contrast', 'more');
     await expect(boundary).toHaveAttribute('data-motion', 'reduced');
     await expect(boundary).toHaveAttribute('data-enhancement', 'off');
-    // motion=system leaves the reader's own setting alone.
+    // motion=system is full motion as far as the frame goes, so the reader's
+    // own setting decides, through the variant's prefers-reduced-motion.
     await open(page, `${path}?motion=system`);
-    await expect(page.locator('[data-variant]')).not.toHaveAttribute('data-motion', /.*/);
+    await expect(page.locator('[data-variant]')).toHaveAttribute('data-motion', 'full');
     expect(await violations(page)).toEqual([]);
     // next dev answers a path no route matches with the app's 404 page, as a
     // production build does, now that no visitor page has a catch-all route
