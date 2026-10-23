@@ -18,6 +18,11 @@
 // 1440x900. `full` plans every cell in every row. Slice 4 adds the 40-cell
 // cap and change mapping.
 
+// First: readBuildMeta() loads the generated registry, which imports
+// `server-only`; #73's shim resolves it to its empty module, as Next's
+// server bundles do. The planner, the specs, the checklist, and their
+// tests all read the registry through here.
+import '../../apps/web/scripts/server-only.cjs';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
