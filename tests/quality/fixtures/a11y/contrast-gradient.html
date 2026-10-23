@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Text over a gradient, known-bad</title>
+    <!--
+      axe can't measure text over a gradient, so it reports it incomplete.
+      The light end passes; the dark end, #8a8a8a under #6a6a6a text, is
+      far under 4.5:1.
+    -->
+    <style>
+      body {
+        font:
+          16px/1.5 system-ui,
+          sans-serif;
+        background: #fff;
+      }
+      .band {
+        background: linear-gradient(90deg, #ffffff, #8a8a8a);
+        color: #6a6a6a;
+        padding: 0.5rem;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>A banner that fades into its text</h1>
+      <p class="band">This sentence sits on a gradient that ends close to its own color.</p>
+    </main>
+  </body>
+</html>

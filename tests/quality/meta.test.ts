@@ -85,6 +85,17 @@ test('every gate so far has a known-bad case and a known-good one, and each id i
     'perf',
     'timing',
     'budgets',
+    'keyboard',
+    'focus',
+    'occlusion',
+    'hover',
+    'reflow',
+    'inventory',
+    'enhancement',
+    'motion',
+    'transparency',
+    'contrast',
+    'axe',
   ]);
   for (const gate of gates) {
     const cases = META_CASES.filter((metaCase) => metaCase.gate === gate);
@@ -151,6 +162,21 @@ test('every gate so far has a known-bad case and a known-good one, and each id i
     'timing/retried',
     'budgets/fixture-over-budget',
     'budgets/fixture-variant-light',
+    // Slice 2: VR1's known-bad fixtures but bundle size, and each new row's ignored emulation.
+    'focus/no-indicator',
+    'contrast/gradient',
+    'axe/color-contrast',
+    'motion/spinner',
+    'motion/boundary-over-os',
+    'motion/kill-switch',
+    'reflow/fixed-width',
+    'axe/target-size',
+    'axe/button-name',
+    'enhancement/needs-canvas',
+    'runner/ignored-high-contrast-ignored',
+    'runner/ignored-reduced-transparency-ignored',
+    'runner/ignored-print-ignored',
+    'runner/ignored-no-javascript-ignored',
   ]) {
     assert.ok(ids.includes(id), id);
   }
@@ -171,7 +197,7 @@ test('pnpm quality:meta --no-browser passes on the repository, every case it run
   assert.match(
     run.stdout,
     new RegExp(
-      `\\[quality:meta\\] ${cases.length} cases over 8 gates: ${cases.filter(({ expect }) => expect === 'fail').length} known-bad inputs failing for the reason each names, and ${cases.filter(({ expect }) => expect === 'pass').length} known-good inputs passing\\.\\n\\[quality:meta\\] --no-browser left out ${left} cases that launch Chromium\\.`,
+      `\\[quality:meta\\] ${cases.length} cases over ${new Set(cases.map(({ gate }) => gate)).size} gates: ${cases.filter(({ expect }) => expect === 'fail').length} known-bad inputs failing for the reason each names, and ${cases.filter(({ expect }) => expect === 'pass').length} known-good inputs passing\\.\\n\\[quality:meta\\] --no-browser left out ${left} cases that launch Chromium\\.`,
     ),
   );
   for (const args of [['--all'], ['--no-browser', '--all']]) {

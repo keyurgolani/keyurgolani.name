@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A boundary that reads its mode from the query</title>
+    <!-- As #19's primitives page does: the `mode` query picks the display mode, or the page ignores it when ?ignore is set. -->
+  </head>
+  <body>
+    <div data-appearance-boundary="document" data-display-mode="light" id="boundary">
+      <main><h1>Display mode</h1></main>
+    </div>
+    <script>
+      const query = new URLSearchParams(location.search);
+      if (query.has('mode') && !query.has('ignore')) {
+        document.getElementById('boundary').dataset.displayMode = query.get('mode');
+      }
+    </script>
+  </body>
+</html>

@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>The boundary over the OS, known-bad</title>
+    <!--
+      Reduced motion keyed only on the boundary's attribute: a preview or a
+      site that says full wins over the visitor's OS setting.
+    -->
+    <style>
+      [data-appearance-boundary] {
+        --ui-state-hover-transform: translateY(-2px);
+        --ui-state-active-transform: scale(0.98);
+        --ui-motion-emphasis: pulse;
+      }
+      [data-appearance-boundary][data-motion='reduced'] {
+        --ui-state-hover-transform: none;
+        --ui-state-active-transform: none;
+        --ui-motion-emphasis: none;
+      }
+      [data-appearance-boundary] a {
+        display: inline-block;
+        transition: transform 150ms;
+      }
+      [data-appearance-boundary] a:hover {
+        transform: var(--ui-state-hover-transform);
+      }
+    </style>
+  </head>
+  <body>
+    <div data-appearance-boundary="document" data-motion="full" data-enhancement="on">
+      <main>
+        <h1>Motion the OS can't stop</h1>
+        <p><a href="#one">A link that lifts on hover</a></p>
+      </main>
+    </div>
+  </body>
+</html>
