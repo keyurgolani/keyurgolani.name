@@ -21,7 +21,9 @@ import {
 // reviewed exception covers exactly its file and rule, and an exception no
 // finding needs fails.
 
-const rulesIn = (css: string) => auditStylesheetText(css).map(({ rule }) => rule);
+/** The rules a variant's stylesheet breaks. */
+const rulesIn = (css: string) =>
+  auditStylesheetText(css, { variant: true }).map(({ rule }) => rule);
 const rule = (css: string) => `[data-variant='acme'] .x {\n  ${css}\n}\n`;
 
 /** Each rule's known-bad declarations, and what it accepts in their place. */
@@ -37,11 +39,27 @@ const CASES: Record<
       'fill: oklch(0.5 0.1 200);',
       'outline-color: hsl(10 50% 50%);',
       'color: color(display-p3 1 0 0);',
+      'color: red;',
+      'border: 1px solid black;',
+      'background-color: CanvasText;',
+      'color: var(--color-text-primary, white);',
     ],
-    good: ['color: var(--color-text-primary);', 'color: currentColor;', 'background: transparent;'],
+    good: [
+      'color: var(--color-text-primary);',
+      'color: currentColor;',
+      'background: transparent;',
+      'color: inherit;',
+      'border-color: var(--color-red-accent);',
+      'grid-template-areas: "red blue";',
+    ],
   },
   'font-family': {
-    bad: ['font-family: Georgia, serif;', 'font: 1rem/1.5 system-ui;'],
+    bad: [
+      'font-family: Georgia, serif;',
+      'font: 1rem/1.5 system-ui;',
+      'font-family: var(--brand-font);',
+      'font-family: var(--type-body-font-family, Georgia);',
+    ],
     good: ['font-family: var(--type-body-font-family);', 'font: inherit;'],
   },
   'font-face': { bad: ['}\n@font-face { font-family: x; src: url(x.woff2); }\n.y {'], good: [] },
@@ -51,7 +69,14 @@ const CASES: Record<
     good: ['box-shadow: var(--ui-shadow-card);', 'box-shadow: none;', 'text-shadow: none;'],
   },
   radius: {
-    bad: ['border-radius: 8px;', 'border-start-start-radius: 0.5rem;', 'border-radius: 50%;'],
+    bad: [
+      'border-radius: 8px;',
+      'border-start-start-radius: 0.5rem;',
+      'border-radius: 50%;',
+      'border-radius: var(--x, 999px);',
+      'border-radius: var(--ui-radius-card, 4px);',
+      '-moz-border-radius: 4px;',
+    ],
     good: [
       'border-radius: var(--ui-radius-card);',
       'border-radius: 0;',
@@ -59,7 +84,12 @@ const CASES: Record<
     ],
   },
   blur: {
-    bad: ['backdrop-filter: blur(8px);', 'filter: saturate(1.2) blur(2px);'],
+    bad: [
+      'backdrop-filter: blur(8px);',
+      'filter: saturate(1.2) blur(2px);',
+      '-webkit-backdrop-filter: blur(8px);',
+      'backdrop-filter: blur(var(--ui-backdrop-blur, 12px));',
+    ],
     good: ['backdrop-filter: blur(var(--ui-backdrop-blur));', 'filter: none;'],
   },
   timing: {
@@ -68,12 +98,20 @@ const CASES: Record<
       'animation: acme-drift 12s linear infinite;',
       'transition-duration: .3s;',
       'animation-delay: 1s;',
+      'transition-duration: 1.5S;',
+      'animation-delay: 1e3ms;',
+      'transition: opacity var(--ui-motion-fast, 200ms);',
+      'transition: opacity var(--color-accent);',
     ],
     good: [
       'transition: opacity var(--ui-motion-fast) var(--ui-motion-easing);',
       'animation-duration: var(--ui-motion-slow);',
       'transition: none;',
     ],
+  },
+  'custom-property': {
+    bad: ['--acme-tint: 1;', '--brand-gap: 2rem;'],
+    good: ['--layout-gutter: 2rem;', 'gap: var(--layout-gutter);'],
   },
 };
 
@@ -263,6 +301,7 @@ test("the report names each finding's line and remedy, each exception nothing ne
   try {
     const report = sourceAuditReport(root);
     assert.deepEqual(report.lines, [
+      `packages/variant-acme/src/styles.css:2 color-literal: box-shadow: 0 1px 2px black; ${SOURCE_AUDIT_REMEDIES['color-literal']}`,
       `packages/variant-acme/src/styles.css:2 shadow: box-shadow: 0 1px 2px black; ${SOURCE_AUDIT_REMEDIES.shadow}`,
       `${AUDIT_EXCEPTIONS_FILE} excepts packages/kit/src/gone.tsx from color-literal, which no finding needs anymore. Remove the exception.`,
     ]);
@@ -287,4 +326,121 @@ test('the repository passes its own audit: every finding has a reviewed exceptio
     fs.readFileSync(path.join(root, AUDIT_EXCEPTIONS_FILE), 'utf8'),
   ) as { reviewer: string }[];
   assert.ok(exceptions.length > 0 && exceptions.length === report.exceptions);
+});
+
+test('a declaration counts whole across the lines Prettier splits it over, on the line it starts', () => {
+  const css = [
+    "[data-variant='acme'] .x {",
+    '  transition:',
+    '    opacity 200ms ease,',
+    '    transform var(--ui-motion-fast);',
+    '  box-shadow:',
+    '    0 1px 2px var(--color-shadow),',
+    '    var(--ui-shadow-card);',
+    '  font-family:',
+    '    Georgia,',
+    '    serif;',
+    '}',
+    '',
+  ].join('\n');
+  assert.deepEqual(
+    auditStylesheetText(css).map(({ line, rule: name }) => `${line} ${name}`),
+    ['2 timing', '5 shadow', '8 font-family'],
+  );
+  // A data: URL's semicolon ends nothing.
+  assert.deepEqual(
+    rulesIn(rule("background-image: url('data:image/svg+xml;utf8,<svg/>');\n  color: #fff;")),
+    ['color-literal'],
+  );
+});
+
+test("a --layout-* property passes where it's read only when its own value passes", () => {
+  const sheet = (layout: string, use: string) =>
+    `[data-variant='acme'] { --layout-corner: ${layout}; }\n[data-variant='acme'] .x { ${use} }\n`;
+  assert.deepEqual(rulesIn(sheet('8px', 'border-radius: var(--layout-corner);')), ['radius']);
+  assert.deepEqual(
+    rulesIn(sheet('var(--ui-radius-card)', 'border-radius: var(--layout-corner);')),
+    [],
+  );
+  assert.deepEqual(rulesIn(sheet('300ms', 'transition: opacity var(--layout-corner);')), [
+    'timing',
+  ]);
+  assert.deepEqual(rulesIn(sheet('2rem', 'border-radius: var(--layout-nowhere);')), ['radius']);
+});
+
+test('custom-property: only a variant stylesheet is held to --layout-* properties', () => {
+  assert.deepEqual(
+    auditStylesheetText(rule('--kit-gap: 1rem;')).map(({ rule: name }) => name),
+    [],
+  );
+  assert.deepEqual(rulesIn(rule('--kit-gap: 1rem;')), ['custom-property']);
+});
+
+test('code: a string under a style key, in a style attribute, or in a stylesheet meets the stylesheet rules', () => {
+  const found = (source: string) =>
+    auditCodeText(source)
+      .map(({ rule: name }) => name)
+      .sort();
+  for (const [source, expected] of [
+    ["const s = { boxShadow: '0 1px 2px var(--color-shadow)' };", ['shadow']],
+    ["const s = { borderRadius: '8px' };", ['radius']],
+    ["const s = { filter: 'blur(4px)' };", ['blur']],
+    ["const s = { WebkitBackdropFilter: 'blur(4px)' };", ['blur']],
+    ["const s = { transition: 'opacity 0.2s ease' };", ['timing']],
+    ['const s = { animation: `spin ${speed}s linear` };', []],
+    ["const s = { fontFamily: 'Georgia, serif' };", ['font-family']],
+    ["const s = { 'border-radius': '4px' };", ['radius']],
+    ["el.style.boxShadow = '0 0 4px var(--color-accent)';", ['shadow']],
+    ["el.style['transition'] = 'opacity 1s';", ['timing']],
+    ["const css = 'border-radius: 6px; transition: opacity 1s';", ['radius', 'timing']],
+    ['const sheet = `.x { border-radius: 8px; }`;', ['radius']],
+    ["const s = { borderRadius: 'var(--ui-radius-card)' };", []],
+    ["const s = { transition: 'opacity var(--ui-motion-fast) var(--ui-motion-easing)' };", []],
+    ['const s = { backdropFilter: `blur(${glass}) saturate(140%)` };', []],
+    ["const note = 'Note: one thing';", []],
+  ] as const) {
+    assert.deepEqual(found(source), [...expected].sort(), source);
+  }
+  // A stylesheet in a template literal reports the line each rule is on.
+  const lines = auditCodeText(
+    ['const sheet = `', '  .x {', '    border-radius: 8px;', '  }', '`;', ''].join('\n'),
+  ).map(({ line, rule: name }) => `${line} ${name}`);
+  assert.deepEqual(lines, ['3 radius']);
+});
+
+test('code: what an interpolation holds is code, so a string in it is checked, and a template across lines is one string', () => {
+  const found = (source: string) => auditCodeText(source).map(({ rule: name }) => name);
+  for (const source of [
+    "const a = `${c ?? '#ff0000'}`;",
+    "const a = `${'#fff'}`;",
+    "const a = `${x ? 'rgb(1 2 3)' : y}`;",
+    'const a = `${fallback("rgb(1 2 3)")}`;',
+    'const a = `\n  color: #fff;\n`;',
+    'const a = `${`${"#abc"}`}`;',
+  ]) {
+    assert.deepEqual(found(source), ['color-literal'], source);
+  }
+  assert.deepEqual(found('return `rgba(${r}, ${g}, ${b}, ${alpha})`;'), []);
+  assert.deepEqual(found('const r = /["\'`]/;\nconst x = `${y}`;\n'), []);
+});
+
+test('code: a named color assigned to a canvas or a color style key is a color literal, and a word that names one is not', () => {
+  const found = (source: string) => auditCodeText(source).map(({ rule: name }) => name);
+  for (const source of [
+    "ctx.fillStyle = 'black';",
+    "ctx.strokeStyle = 'White';",
+    "const s = { color: 'red' };",
+    "const s = { backgroundColor: 'canvas' };",
+    "el.style.color = 'blue';",
+  ]) {
+    assert.deepEqual(found(source), ['color-literal'], source);
+  }
+  for (const source of [
+    "const label = 'red';",
+    "const s = { color: 'currentColor' };",
+    "const s = { color: 'transparent' };",
+    "const s = { color: 'var(--color-text-primary)' };",
+  ]) {
+    assert.deepEqual(found(source), [], source);
+  }
 });

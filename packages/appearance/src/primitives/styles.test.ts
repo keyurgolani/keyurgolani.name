@@ -9,6 +9,7 @@ import {
   TYPOGRAPHY_ROLES,
 } from '../tokens';
 import { LAYER_ORDER } from '../layers';
+import { NAMED_COLORS } from '../node/source-audit';
 import { SLOT_VALUES } from '../slots';
 
 // The primitives' stylesheet (#19, Slice 3, item 2) holds no appearance of
@@ -58,8 +59,8 @@ test('it starts with the layer order, and every rule sits in the reset or utilit
 });
 
 test('no color literal: colors come from the scheme', () => {
-  const NAMED =
-    /\b(?:black|white|red|green|blue|gray|grey|silver|canvas|canvastext|highlight|buttonface|buttontext)\b/i;
+  // The source audit's list, so the primitives and the variants answer to one.
+  const NAMED = new RegExp(`\\b(?:${NAMED_COLORS.join('|')})\\b`, 'i');
   for (const { property, value } of DECLARATIONS) {
     assert.doesNotMatch(value, /#[0-9a-f]{3,8}\b/i, `${property}: ${value}`);
     assert.doesNotMatch(
@@ -73,8 +74,9 @@ test('no color literal: colors come from the scheme', () => {
 
 /**
  * The one color mix whose amount is a literal, and its rule: the approved
- * prototype's backdrop; no contract-1 token carries scrim opacity; slice 5
- * records it in audit-exceptions.json.
+ * prototype's backdrop; no contract-1 token carries scrim opacity. The
+ * source audit doesn't read the primitives, so audit-exceptions.json holds
+ * nothing for it; a wider audit that does is deferred (#102).
  */
 const BACKDROP_MIX = {
   rule: "[data-ui-slot='dialog']::backdrop",

@@ -4,30 +4,46 @@
 // font, or a material of its own past review. It flags:
 //
 // - `color-literal`: a hex color, `rgb()`, `hsl()`, `hwb()`, `lab()`,
-//   `lch()`, `oklab()`, `oklch()`, or `color()`, in a stylesheet or in a
-//   string in code, such as a canvas fill or an inline style, unless every
-//   argument of the function is a template interpolation, a color read
-//   from somewhere else;
+//   `lch()`, `oklab()`, `oklch()`, or `color()`, and a named color such as
+//   `red` or `canvastext` where a color goes, in a stylesheet or in a
+//   string in code, such as a canvas fill or an inline style. A color
+//   function whose every argument is a template interpolation, a color the
+//   code read from somewhere else, passes, and the code inside each
+//   interpolation is read for strings of its own;
 // - `font-family`: a `font-family` or `font` that isn't a `var(--type-*)`;
 // - `font-face`: an `@font-face`, which only a typography pack declares;
 // - `import`: an `@import`;
-// - `shadow`: a `box-shadow` or `text-shadow` that isn't `none` or a token;
+// - `shadow`: a `box-shadow` or `text-shadow` that isn't `none` or a
+//   `var(--ui-*)`;
 // - `radius`: a nonzero `border-radius`, or one of its longhands, that isn't
-//   a token;
-// - `blur`: a `blur()` in a `filter` or `backdrop-filter` that isn't a token;
+//   a `var(--ui-*)`;
+// - `blur`: a `blur()` in a `filter` or `backdrop-filter` that isn't a
+//   `var(--ui-*)`;
 // - `timing`: a duration or a delay in `transition` or `animation`, or one
-//   of their longhands, written as a literal time;
+//   of their longhands, written as a literal time, or read from anything
+//   but a `var(--ui-*)`;
 // - `legacy-property`: the retired v1 properties, `--paper`, `--ink`, and
-//   any `--kc-` or `--vt-` one.
+//   any `--kc-` or `--vt-` one;
+// - `custom-property`: in a variant's stylesheet, a custom property of its
+//   own that isn't a `--layout-*` one.
+//
+// A `var()` passes only where it names the right token, or a --layout-*
+// property the file declares whose own value passes, and its fallback, if
+// it has one, passes too. A declaration counts whole, across every line
+// Prettier splits it over, on the line it starts, and a -webkit- or -moz-
+// prefix doesn't hide a property. In code, a string under one of those
+// properties' style keys, such as `boxShadow` or `transition`, in a style
+// attribute's text, or in a stylesheet's, such as a <style> element's,
+// meets the same rules.
 //
 // A reviewed exception in packages/appearance/audit-exceptions.json names a
 // file, a rule, why the file may break it, and who reviewed it, such as a
 // photograph's own colors. An exception no finding needs anymore fails the
 // audit too, so the list only ever holds what's still true.
 //
-// It's a lint over code the build already trusts: it reads text, line by
-// line, without running anything, and it skips tests, fixtures, and test
-// support, which hold known-bad values on purpose.
+// It's a lint over code the build already trusts: it reads text, without
+// running anything, and it skips tests, fixtures, and test support, which
+// hold known-bad values on purpose.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -42,6 +58,7 @@ export const SOURCE_AUDIT_RULES = [
   'blur',
   'timing',
   'legacy-property',
+  'custom-property',
 ] as const;
 export type SourceAuditRule = (typeof SOURCE_AUDIT_RULES)[number];
 
@@ -58,6 +75,8 @@ export const SOURCE_AUDIT_REMEDIES: Readonly<Record<SourceAuditRule, string>> = 
   blur: "Use the design language's blur, var(--ui-backdrop-blur).",
   timing: 'Take durations from the design language: var(--ui-motion-fast), -standard, or -slow.',
   'legacy-property': "The v1 properties are gone: read #19's --color-, --ui-, and --type- tokens.",
+  'custom-property':
+    'A variant declares --layout-* properties alone: read the --color-, --ui-, and --type- tokens for the rest.',
 };
 
 export interface SourceAuditFinding {
@@ -115,28 +134,320 @@ const COLOR_FUNCTION = /(?<![\w-])(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\
 /** A hex color: three, four, six, or eight digits, not part of a longer word. */
 const HEX = /(?<![\w&-])#(?:[0-9a-f]{8}|[0-9a-f]{6}|[0-9a-f]{3,4})(?![\w-])/i;
 const LEGACY = /--(?:paper|ink)(?![\w-])|--(?:kc|vt)-[\w-]+/;
-const TIME = /(?<![\w.-])\d*\.?\d+m?s(?![\w-])/;
+/** A literal time: `2s`, `.4s`, `1.5S`, `200ms`, `1e3ms`. */
+const TIME = /(?<![\w.-])(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?m?s(?![\w-])/i;
 /** A hex color in a string in code: the whole string, or a value after a space, colon, comma, or parenthesis, as CSS text has it. */
 const HEX_IN_CODE = /(?:^|[\s:,(])#(?:[0-9a-f]{8}|[0-9a-f]{6}|[0-9a-f]{3,4})(?![\w-])/i;
 
-/** `value` with each template interpolation, `${...}`, as one placeholder, `\u00b7`. */
-function withoutInterpolations(value: string): string {
+/**
+ * The named colors the audit refuses, the list primitives/styles.test.ts
+ * holds the shared primitives to: the plain names, and the system colors a
+ * forced-colors stylesheet is the place for. `transparent`, `currentColor`,
+ * and the CSS-wide keywords stay allowed.
+ */
+export const NAMED_COLORS = [
+  'black',
+  'white',
+  'red',
+  'green',
+  'blue',
+  'gray',
+  'grey',
+  'silver',
+  'canvas',
+  'canvastext',
+  'highlight',
+  'buttonface',
+  'buttontext',
+] as const;
+const NAMED = new RegExp(`(?<![\\w-])(?:${NAMED_COLORS.join('|')})(?![\\w-])`, 'i');
+
+/** The properties whose value is a color, where a named color is one. */
+const COLOR_PROPERTY =
+  /^(?:color|background(?:-color)?|border(?:-(?:top|right|bottom|left|block|inline|block-start|block-end|inline-start|inline-end))?(?:-color)?|outline(?:-color)?|fill|stroke|caret-color|accent-color|column-rule(?:-color)?|text-decoration(?:-color)?|text-emphasis(?:-color)?|box-shadow|text-shadow|stop-color|flood-color|lighting-color)$/;
+const RADIUS = /^border(?:-(?:top|bottom|start|end)-(?:left|right|start|end))?-radius$/;
+const TIMING = /^(?:transition|animation)(?:-duration|-delay)?$/;
+const WIDE = 'inherit|initial|unset|revert|revert-layer';
+/** A template interpolation's placeholder: a value the code reads from elsewhere. */
+const SLOT = '·';
+
+/** `css` without its comments, keeping every newline, so line numbers hold. */
+function withoutComments(css: string): string {
+  return css.replace(/\/\*[\s\S]*?\*\//g, (comment) => comment.replace(/[^\n]/g, ' '));
+}
+
+/** Each `var(--name[, fallback])` in `value`, with where it sits, its parentheses balanced. */
+function varsIn(
+  value: string,
+): { start: number; end: number; name: string; fallback: string | null }[] {
+  const found: { start: number; end: number; name: string; fallback: string | null }[] = [];
+  const opener = /(?<![\w-])var\(\s*(--[\w-]+)\s*(,)?/gi;
+  for (let match = opener.exec(value); match; match = opener.exec(value)) {
+    let depth = 1;
+    let i = match.index + match[0].length;
+    const fallbackStart = i;
+    for (; i < value.length && depth > 0; i++) {
+      if (value[i] === '(') depth++;
+      else if (value[i] === ')') depth--;
+    }
+    found.push({
+      start: match.index,
+      end: i,
+      name: match[1]!,
+      fallback: match[2] ? value.slice(fallbackStart, i - 1).trim() : null,
+    });
+    opener.lastIndex = i;
+  }
+  return found;
+}
+
+/** `value` with each `var()` replaced, outermost first, by what `replace` gives it. */
+function replaceVars(
+  value: string,
+  replace: (found: { name: string; fallback: string | null }) => string,
+): string {
   let out = '';
-  let depth = 0;
-  for (let i = 0; i < value.length; i++) {
-    const char = value[i]!;
-    if (depth === 0 && char === '$' && value[i + 1] === '{') {
-      depth = 1;
-      i++;
-      out += '\u00b7';
-    } else if (depth > 0) {
-      if (char === '{') depth++;
-      else if (char === '}') depth--;
-    } else {
-      out += char;
+  let at = 0;
+  for (const found of varsIn(value)) {
+    out += value.slice(at, found.start) + replace(found);
+    at = found.end;
+  }
+  return out + value.slice(at);
+}
+
+/** What a stylesheet's checks know beyond one declaration: its own --layout-* values, and whose file it is. */
+interface DeclarationContext {
+  /** Each --layout-* property the file declares, by name, with its value. */
+  readonly layout: ReadonlyMap<string, string>;
+  /** A variant package's stylesheet, where a custom property of its own is a --layout-* one alone. */
+  readonly variant: boolean;
+}
+
+/**
+ * Whether `value` reads only tokens and the `keywords`: every `var()` names
+ * a property with one of `prefixes`, or a --layout-* one whose own value
+ * passes, and its fallback, if it has one, passes too; nothing is left but
+ * keywords, commas, and a template's interpolations.
+ */
+function onlyTokens(
+  value: string,
+  prefixes: readonly string[],
+  keywords: RegExp,
+  context: DeclarationContext,
+  seen: ReadonlySet<string> = new Set(),
+): boolean {
+  let ok = true;
+  const rest = replaceVars(value, ({ name, fallback }) => {
+    const named =
+      prefixes.some((prefix) => name.startsWith(prefix)) ||
+      (name.startsWith('--layout-') &&
+        !seen.has(name) &&
+        context.layout.has(name) &&
+        onlyTokens(
+          context.layout.get(name)!,
+          prefixes,
+          keywords,
+          context,
+          new Set([...seen, name]),
+        ));
+    if (!named) ok = false;
+    if (fallback !== null && !onlyTokens(fallback, prefixes, keywords, context, seen)) ok = false;
+    return ' ';
+  });
+  const words = rest.split(/[\s,]+/).filter((word) => word !== '' && word !== SLOT);
+  return ok && words.every((word) => keywords.test(word));
+}
+
+/** `value` with each `var()` as its fallback, all the way down, or nothing where it has none. */
+function fallbacksOf(value: string): string {
+  return replaceVars(value, ({ fallback }) =>
+    fallback === null ? ' ' : ` ${fallbacksOf(fallback)} `,
+  );
+}
+
+/** The property a declaration sets, lowercase and without a -webkit- or -moz- prefix. */
+function propertyName(raw: string): string {
+  const name = raw.trim().toLowerCase();
+  return name.startsWith('--') ? raw.trim() : name.replace(/^-(?:webkit|moz)-/, '');
+}
+
+/** The rules one declaration breaks. */
+function declarationRules(
+  rawProperty: string,
+  rawValue: string,
+  context: DeclarationContext,
+): SourceAuditRule[] {
+  const rules: SourceAuditRule[] = [];
+  const property = propertyName(rawProperty);
+  const value = rawValue.trim();
+  if (value === '') return rules;
+  if (LEGACY.test(property) || LEGACY.test(value)) rules.push('legacy-property');
+  const custom = property.startsWith('--');
+  const layout = property.startsWith('--layout-');
+  if (custom && !layout && context.variant) rules.push('custom-property');
+  // A named color, past the names of the properties var() reads.
+  const named = NAMED.test(replaceVars(value, ({ fallback }) => ` ${fallback ?? ''} `));
+  if (
+    HEX.test(value) ||
+    literalColorFunction(value) ||
+    ((COLOR_PROPERTY.test(property) || layout) && named)
+  ) {
+    rules.push('color-literal');
+  }
+  // A layout property of the variant's own holds a length, never appearance:
+  // the rules below read it where a declaration uses it.
+  if (custom) return rules;
+  const wide = new RegExp(`^(?:${WIDE})$`, 'i');
+  if (
+    (property === 'font-family' || property === 'font') &&
+    !onlyTokens(value, ['--type-'], wide, context)
+  ) {
+    rules.push('font-family');
+  }
+  if (
+    (property === 'box-shadow' || property === 'text-shadow') &&
+    !onlyTokens(value, ['--ui-'], new RegExp(`^(?:none|${WIDE})$`, 'i'), context)
+  ) {
+    rules.push('shadow');
+  }
+  if (
+    RADIUS.test(property) &&
+    !onlyTokens(value, ['--ui-'], new RegExp(`^(?:0(?:px|rem|em|%)?|${WIDE})$`, 'i'), context)
+  ) {
+    rules.push('radius');
+  }
+  if (property === 'filter' || property === 'backdrop-filter') {
+    for (const match of value.matchAll(/(?<![\w-])blur\(/gi)) {
+      let depth = 1;
+      let i = match.index + match[0].length;
+      const start = i;
+      for (; i < value.length && depth > 0; i++) {
+        if (value[i] === '(') depth++;
+        else if (value[i] === ')') depth--;
+      }
+      if (!onlyTokens(value.slice(start, i - 1), ['--ui-'], /^0(?:px)?$/, context)) {
+        rules.push('blur');
+        break;
+      }
     }
   }
-  return out;
+  if (TIMING.test(property)) {
+    const literal =
+      TIME.test(value.replace(/var\(\s*--[\w-]+/g, 'var(')) || TIME.test(fallbacksOf(value));
+    const tokens = varsIn(value).every(
+      ({ name }) =>
+        name.startsWith('--ui-') ||
+        (name.startsWith('--layout-') &&
+          context.layout.has(name) &&
+          !TIME.test(fallbacksOf(context.layout.get(name)!)) &&
+          !TIME.test(context.layout.get(name)!.replace(/var\([^()]*\)/g, ' '))),
+    );
+    if (literal || !tokens) rules.push('timing');
+  }
+  return [...new Set(rules)];
+}
+
+/** One statement of a stylesheet: a declaration, an at-rule ending in `;`, or a block's prelude. */
+interface Statement {
+  readonly kind: 'declaration' | 'at-rule' | 'prelude';
+  readonly text: string;
+  /** Where its first character is, in the text it came from. */
+  readonly offset: number;
+}
+
+/**
+ * The statements of `css`, comments gone: what comes before each `{` is a
+ * prelude, and what ends at a `;` or `}` a declaration or an at-rule, a
+ * declaration across as many lines as it takes. Quotes and parentheses, a
+ * data: URL's `;` among them, end nothing.
+ */
+function statementsOf(css: string): Statement[] {
+  const text = withoutComments(css);
+  const statements: Statement[] = [];
+  let start = 0;
+  let depth = 0;
+  const flush = (end: number, closer: string) => {
+    const raw = text.slice(start, end);
+    const lead = raw.length - raw.trimStart().length;
+    const body = raw.trim();
+    if (body !== '') {
+      const kind = closer === '{' ? 'prelude' : body.startsWith('@') ? 'at-rule' : 'declaration';
+      statements.push({ kind, text: body, offset: start + lead });
+    }
+    start = end + 1;
+  };
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i]!;
+    if (char === '"' || char === "'") {
+      for (i++; i < text.length && text[i] !== char; i++) if (text[i] === '\\') i++;
+    } else if (char === '(') depth++;
+    else if (char === ')') depth = Math.max(0, depth - 1);
+    else if (depth === 0 && (char === '{' || char === ';' || char === '}')) flush(i, char);
+  }
+  flush(text.length, '');
+  return statements;
+}
+
+/** The line `offset` is on, in a text whose line starts are `starts`. */
+function lineAt(starts: readonly number[], offset: number): number {
+  let low = 0;
+  let high = starts.length - 1;
+  while (low < high) {
+    const middle = (low + high + 1) >> 1;
+    if (starts[middle]! <= offset) low = middle;
+    else high = middle - 1;
+  }
+  return low + 1;
+}
+
+function lineStarts(text: string): number[] {
+  const starts = [0];
+  for (let i = 0; i < text.length; i++) if (text[i] === '\n') starts.push(i + 1);
+  return starts;
+}
+
+type Found = { line: number; rule: SourceAuditRule; found: string };
+
+/** What the stylesheet audit takes beyond the text: whether a variant package holds it. */
+export interface StylesheetOptions {
+  readonly variant?: boolean;
+}
+
+/** The findings in one stylesheet's text, each on the line its statement starts. */
+export function auditStylesheetText(text: string, options: StylesheetOptions = {}): Found[] {
+  const statements = statementsOf(text);
+  const layout = new Map<string, string>();
+  for (const { kind, text: body } of statements) {
+    const colon = body.indexOf(':');
+    if (kind === 'declaration' && colon > 0 && body.startsWith('--layout-')) {
+      layout.set(body.slice(0, colon).trim(), body.slice(colon + 1).trim());
+    }
+  }
+  const context: DeclarationContext = { layout, variant: options.variant === true };
+  const starts = lineStarts(text);
+  const lines = text.split('\n');
+  const findings: Found[] = [];
+  for (const { kind, text: body, offset } of statements) {
+    const line = lineAt(starts, offset);
+    const report = (rule: SourceAuditRule) =>
+      findings.push({ line, rule, found: lines[line - 1]!.trim() });
+    if (kind === 'prelude') {
+      if (/^@font-face\b/i.test(body)) report('font-face');
+      if (LEGACY.test(body)) report('legacy-property');
+      continue;
+    }
+    if (kind === 'at-rule') {
+      if (/^@import\b/i.test(body)) report('import');
+      if (LEGACY.test(body)) report('legacy-property');
+      continue;
+    }
+    const colon = body.indexOf(':');
+    if (colon <= 0) continue;
+    for (const rule of declarationRules(body.slice(0, colon), body.slice(colon + 1), context)) {
+      report(rule);
+    }
+  }
+  return findings;
 }
 
 /**
@@ -144,119 +455,212 @@ function withoutInterpolations(value: string): string {
  * One whose every argument is an interpolation, such as
  * `rgba(${r}, ${g}, ${b}, ${alpha})`, writes out a color the code read from
  * somewhere else, such as a boundary's computed `--color-<role>`, so it
- * names no color itself.
+ * names no color itself. What the interpolations hold is code, which the
+ * audit reads for strings of its own.
  */
-function literalColorFunction(value: string): boolean {
-  const text = withoutInterpolations(value);
+function literalColorFunction(text: string): boolean {
   for (const match of text.matchAll(new RegExp(COLOR_FUNCTION.source, 'gi'))) {
     const start = match.index + match[0].length;
     const end = text.indexOf(')', start);
     const args = text.slice(start, end === -1 ? undefined : end);
-    if (/[^\s,/\u00b7]/.test(args)) return true;
+    if (/[^\s,/·]/.test(args)) return true;
   }
   return false;
 }
 
-/** `css` without its comments, keeping every newline, so line numbers hold. */
-function withoutComments(css: string): string {
-  return css.replace(/\/\*[\s\S]*?\*\//g, (comment) => comment.replace(/[^\n]/g, ' '));
+/** One string in code: its text, interpolations as placeholders, where it starts, and the code just before it. */
+interface CodeString {
+  readonly value: string;
+  readonly offset: number;
+  readonly before: string;
 }
 
-/** Whether a value reads only tokens and keywords: no literal of its own past `var()`. */
-function onlyTokens(value: string, keywords: RegExp): boolean {
-  const rest = value.replace(/var\([^()]*(?:\([^()]*\)[^()]*)*\)/g, ' ').trim();
-  return rest === '' || keywords.test(rest);
+/**
+ * Every string literal in `code`, comments and regular expressions aside: a
+ * quoted string, and a template literal across as many lines as it takes,
+ * each interpolation in it read as code in turn, so a string inside one is
+ * a string too.
+ */
+function stringsOf(code: string): CodeString[] {
+  const found: CodeString[] = [];
+  /** Reads code from `i` until an unmatched `}` (inside an interpolation) or the end; returns where it stopped. */
+  const readCode = (from: number, inInterpolation: boolean): number => {
+    let depth = 0;
+    let i = from;
+    let last = '';
+    while (i < code.length) {
+      const char = code[i]!;
+      const next = code[i + 1];
+      if (char === '/' && next === '/') {
+        while (i < code.length && code[i] !== '\n') i++;
+        continue;
+      }
+      if (char === '/' && next === '*') {
+        const end = code.indexOf('*/', i + 2);
+        i = end === -1 ? code.length : end + 2;
+        continue;
+      }
+      if (char === '/' && (last === '' || /[(,=:[!&|?{};+\-*%<>~^]/.test(last))) {
+        // A regular expression literal.
+        let inClass = false;
+        for (i++; i < code.length && code[i] !== '\n'; i++) {
+          if (code[i] === '\\') i++;
+          else if (code[i] === '[') inClass = true;
+          else if (code[i] === ']') inClass = false;
+          else if (code[i] === '/' && !inClass) break;
+        }
+        i++;
+        last = '/';
+        continue;
+      }
+      if (char === '"' || char === "'") {
+        const start = i;
+        for (i++; i < code.length && code[i] !== char && code[i] !== '\n'; i++) {
+          if (code[i] === '\\') i++;
+        }
+        found.push({
+          value: code.slice(start + 1, i),
+          offset: start,
+          before: code.slice(Math.max(0, start - 80), start),
+        });
+        i++;
+        last = 'a';
+        continue;
+      }
+      if (char === '`') {
+        const start = i;
+        let text = '';
+        for (i++; i < code.length && code[i] !== '`'; i++) {
+          if (code[i] === '\\') {
+            text += code[i]! + (code[i + 1] ?? '');
+            i++;
+          } else if (code[i] === '$' && code[i + 1] === '{') {
+            text += SLOT;
+            i = readCode(i + 2, true);
+          } else {
+            text += code[i];
+          }
+        }
+        found.push({
+          value: text,
+          offset: start,
+          before: code.slice(Math.max(0, start - 80), start),
+        });
+        i++;
+        last = 'a';
+        continue;
+      }
+      if (char === '{') depth++;
+      if (char === '}') {
+        if (depth === 0 && inInterpolation) return i;
+        depth--;
+      }
+      if (!/\s/.test(char)) last = /[\w$)\]]/.test(char) ? 'a' : char;
+      i++;
+    }
+    return i;
+  };
+  readCode(0, false);
+  return found.sort((a, b) => a.offset - b.offset);
 }
 
-/** The findings in one stylesheet's text. */
-export function auditStylesheetText(
-  text: string,
-): { line: number; rule: SourceAuditRule; found: string }[] {
-  const findings: { line: number; rule: SourceAuditRule; found: string }[] = [];
-  const lines = withoutComments(text).split('\n');
-  lines.forEach((source, index) => {
-    const line = index + 1;
-    const report = (rule: SourceAuditRule) => findings.push({ line, rule, found: source.trim() });
-    if (/@font-face\b/i.test(source)) report('font-face');
-    if (/@import\b/i.test(source)) report('import');
-    if (LEGACY.test(source)) report('legacy-property');
-    for (const match of source.matchAll(/(?<![\w-])([a-z-]+)\s*:\s*([^;{}]*)/gi)) {
-      const property = match[1]!.toLowerCase();
-      const value = match[2]!.trim();
-      if (value === '') continue;
-      if (HEX.test(value) || COLOR_FUNCTION.test(value)) report('color-literal');
-      // A layout property of the variant's own holds a length, never appearance.
-      if (property.startsWith('--layout-')) continue;
-      if (
-        (property === 'font-family' || property === 'font') &&
-        !onlyTokens(value, /^(?:inherit|initial|unset|revert|revert-layer)$/)
-      ) {
-        report('font-family');
-      }
-      if (
-        (property === 'box-shadow' || property === 'text-shadow') &&
-        !onlyTokens(value, /^(?:none|inherit|initial|unset|revert|revert-layer)$/)
-      ) {
-        report('shadow');
-      }
-      if (
-        /^border(?:-(?:start|end|top|bottom)-(?:start|end|left|right))?-radius$/.test(property) &&
-        !onlyTokens(value, /^(?:0(?:px|rem|em|%)?|inherit|initial|unset|revert|revert-layer)$/)
-      ) {
-        report('radius');
-      }
-      if (
-        (property === 'filter' || property === 'backdrop-filter') &&
-        /(?<![\w-])blur\(\s*(?!var\()/.test(value)
-      ) {
-        report('blur');
-      }
-      if (
-        /^(?:transition|animation)(?:-duration|-delay)?$/.test(property) &&
-        TIME.test(value.replace(/var\([^()]*\)/g, ' '))
-      ) {
-        report('timing');
+/** The CSS property a string in code is the value of, by the code before it, or null. */
+function styleKeyBefore(before: string): string | null {
+  const match =
+    /(?:^|[{,\s(])(?:(['"])(-?[a-zA-Z][\w-]*)\1|([a-zA-Z_$][\w$]*))\s*:\s*\(?\s*$/.exec(before) ??
+    /\.style\.([a-zA-Z]+)\s*=\s*$/.exec(before) ??
+    /\.style\[\s*['"]([\w-]+)['"]\s*\]\s*=\s*$/.exec(before);
+  if (!match) return null;
+  const key = match[2] ?? match[3] ?? match[1];
+  if (!key) return null;
+  // camelCase to kebab-case, WebkitBackdropFilter to -webkit-backdrop-filter.
+  return key.includes('-')
+    ? key
+    : key
+        .replace(/^(Webkit|Moz)(?=[A-Z])/, (vendor) => `-${vendor.toLowerCase()}`)
+        .replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)
+        .toLowerCase();
+}
+
+/** Whether the code before a string assigns it to a canvas's or an element's color. */
+const COLOR_ASSIGNMENT = /(?:fillStyle|strokeStyle|shadowColor|\.style\.[a-zA-Z]*[cC]olor)\s*=\s*$/;
+
+/** The findings in one module's text: what its strings hold, as CSS, as a style value, or as a color. */
+export function auditCodeText(text: string): Found[] {
+  const starts = lineStarts(text);
+  const lines = text.split('\n');
+  const findings: Found[] = [];
+  const context: DeclarationContext = { layout: new Map(), variant: false };
+  for (const { value, offset, before } of stringsOf(text)) {
+    const line = lineAt(starts, offset);
+    const report = (rule: SourceAuditRule, at = line) =>
+      findings.push({ line: at, rule, found: lines[at - 1]!.trim() });
+    if (HEX_IN_CODE.test(value) || literalColorFunction(value)) report('color-literal');
+    if (LEGACY.test(value)) report('legacy-property');
+    const property = styleKeyBefore(before);
+    const assigned = COLOR_ASSIGNMENT.test(before);
+    if (
+      (assigned || (property !== null && COLOR_PROPERTY.test(propertyName(property)))) &&
+      new RegExp(`^\\s*${NAMED.source}\\s*$`, 'i').test(value)
+    ) {
+      report('color-literal');
+    }
+    if (property !== null) {
+      for (const rule of declarationRules(property, value, context)) {
+        if (rule !== 'custom-property') report(rule);
       }
     }
+    // CSS in a string: a style attribute's declarations, or a stylesheet,
+    // such as a <style> element's text, each finding on its own line.
+    if (/[{}]/.test(value) && /:/.test(value)) {
+      for (const finding of auditStylesheetText(value)) {
+        report(finding.rule, line + finding.line - 1);
+      }
+    } else if (property === null && /(?:^|;)\s*-?[a-z][a-z-]*\s*:/i.test(value)) {
+      for (const declaration of value.split(';')) {
+        const colon = declaration.indexOf(':');
+        if (colon <= 0) continue;
+        const name = declaration.slice(0, colon).trim();
+        if (!/^-?[a-z][a-z-]*$/i.test(name)) continue;
+        for (const rule of declarationRules(name, declaration.slice(colon + 1), context)) {
+          if (rule !== 'custom-property') report(rule);
+        }
+      }
+    }
+  }
+  // One finding per line and rule.
+  const seen = new Set<string>();
+  return findings.filter(({ line, rule }) => {
+    const key = `${line} ${rule}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
   });
-  return findings;
 }
 
-/** The findings in one module's text: color literals and legacy properties in its strings. */
-export function auditCodeText(
-  text: string,
-): { line: number; rule: SourceAuditRule; found: string }[] {
-  const findings: { line: number; rule: SourceAuditRule; found: string }[] = [];
-  // Comments go first, keeping newlines, so prose such as "#10b's route" never counts.
-  const code = text
-    .replace(/\/\*[\s\S]*?\*\//g, (comment) => comment.replace(/[^\n]/g, ' '))
-    .replace(/(^|[^:'"`\\])\/\/.*$/gm, '$1');
-  code.split('\n').forEach((source, index) => {
-    const line = index + 1;
-    for (const [, , literal] of source.matchAll(/(['"`])((?:\\.|(?!\1).)*)\1/g)) {
-      const value = literal ?? '';
-      if (HEX_IN_CODE.test(value) || literalColorFunction(value)) {
-        findings.push({ line, rule: 'color-literal', found: source.trim() });
-      }
-      if (LEGACY.test(value))
-        findings.push({ line, rule: 'legacy-property', found: source.trim() });
-      if (/@font-face\b/i.test(value))
-        findings.push({ line, rule: 'font-face', found: source.trim() });
-    }
-  });
-  return findings;
+/** Whether `dir` is a variant package: its package.json says portfolio.kind is variant. */
+function isVariantPackage(dir: string): boolean {
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8')) as {
+      portfolio?: { kind?: string };
+    };
+    return pkg.portfolio?.kind === 'variant';
+  } catch {
+    return false;
+  }
 }
 
 /** Every finding in `dirs`, each path relative to `root`. */
 export function auditSources(root: string, dirs: readonly string[]): SourceAuditFinding[] {
-  return dirs.flatMap((dir) =>
-    auditedFiles(dir).flatMap((file) => {
+  return dirs.flatMap((dir) => {
+    const variant = isVariantPackage(dir);
+    return auditedFiles(dir).flatMap((file) => {
       const text = fs.readFileSync(file, 'utf8');
       const relative = path.relative(root, file).split(path.sep).join('/');
-      const found = CSS.test(file) ? auditStylesheetText(text) : auditCodeText(text);
+      const found = CSS.test(file) ? auditStylesheetText(text, { variant }) : auditCodeText(text);
       return found.map((finding) => ({ path: relative, ...finding }));
-    }),
-  );
+    });
+  });
 }
 
 /** A reason that says nothing, which no review accepts. */

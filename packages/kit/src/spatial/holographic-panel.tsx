@@ -7,7 +7,7 @@ interface HolographicPanelProps extends HTMLAttributes<HTMLDivElement> {
   scanlines?: boolean;
   /** Glow color around the edge. The boundary's accent unless given. */
   glow?: string;
-  /** Override blur amount (px). */
+  /** Override blur amount (px). The design language's backdrop blur unless given. */
   blur?: number;
   /** Border thickness. */
   borderWeight?: 1 | 2;
@@ -29,17 +29,18 @@ export function HolographicPanel({
   children,
   scanlines = false,
   glow,
-  blur = 18,
+  blur,
   borderWeight = 1,
   className,
   style,
   ...rest
 }: HolographicPanelProps) {
   const highlight = 'color-mix(in oklab, var(--color-text-primary) 6%, transparent)';
+  const glass = blur === undefined ? 'var(--ui-backdrop-blur)' : `${blur}px`;
   const base: CSSProperties = {
     position: 'relative',
-    backdropFilter: `blur(${blur}px) saturate(140%)`,
-    WebkitBackdropFilter: `blur(${blur}px) saturate(140%)`,
+    backdropFilter: `blur(${glass}) saturate(140%)`,
+    WebkitBackdropFilter: `blur(${glass}) saturate(140%)`,
     background:
       'linear-gradient(180deg, color-mix(in oklab, var(--color-surface-overlay) 55%, transparent) 0%, color-mix(in oklab, var(--color-surface-overlay) 45%, transparent) 100%)',
     border: `${borderWeight}px solid var(--color-border-subtle)`,

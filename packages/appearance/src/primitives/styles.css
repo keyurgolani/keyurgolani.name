@@ -627,7 +627,9 @@
    * The page behind a modal dialog, under the scheme's scrim and the
    * language's blur, which reduced transparency takes to 0px. The 62% is the
    * approved prototype's backdrop; no contract-1 token carries scrim
-   * opacity; slice 5 records it in audit-exceptions.json.
+   * opacity. The source audit reads variants and the kit, not this
+   * package, so it needs no exception there; a wider audit that reads the
+   * primitives too is deferred (#102).
    */
   [data-ui-slot='dialog']::backdrop {
     background-color: color-mix(in srgb, var(--color-scrim) 62%, transparent);

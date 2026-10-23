@@ -102,7 +102,7 @@ export function SpotlightMask({
         zIndex: 1,
         background: `radial-gradient(circle ${radius}px at var(--mx, 50%) var(--my, 50%), transparent 0, transparent ${radius * 0.6}px, ${shade} ${radius * 1.6}px)`,
         opacity: intensity,
-        transition: 'opacity 0.3s ease',
+        transition: 'opacity var(--ui-motion-standard) var(--ui-motion-easing)',
         willChange: 'background',
       }}
     />
