@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import {
   canonicalLockfileProblem,
@@ -121,6 +121,26 @@ test("a key that was only rewritten (#82's shape) still fails, and says re-run, 
   assert.doesNotMatch(problem, /commit/);
 });
 
+test('the peer cycle wording needs git status to show the lockfile alone', () => {
+  for (const other of [' M apps/web/package.json', '?? apps/web/acme.txt']) {
+    const status = [other, LOCKFILE_MODIFIED];
+    const removal = removalProblem({ status, before: BEFORE, after: PEER_REWRITE });
+    assert.equal(removal, 'the remove leaves nothing changed', other);
+    const refresh = canonicalLockfileProblem({ status, before: PEER_REWRITE, after: BEFORE });
+    assert.equal(refresh, 'the lockfile refresh changes nothing but pnpm-lock.yaml', other);
+    // A real lockfile change beside it is still named.
+    const after = withReference(PEER_REWRITE);
+    assert.match(
+      removalProblem({ status, before: BEFORE, after }),
+      /^the remove leaves nothing changed\. pnpm-lock\.yaml differs in .*@acme\/reference/,
+    );
+    assert.match(
+      canonicalLockfileProblem({ status, before: BEFORE, after }),
+      /^the lockfile refresh changes nothing but pnpm-lock\.yaml\. pnpm-lock\.yaml differs in /,
+    );
+  }
+});
+
 test('a committed lockfile pnpm does not write fails early, with the cause', () => {
   // #85's shape: committed with a peer key the refresh writes another way.
   // It opens with re-run, since one run can't tell a stale key from a cycle,
@@ -238,10 +258,24 @@ test('the committed lockfile has no peer cycle, which pnpm could write two ways'
   assert.deepEqual(peerCycles(committed), [], 'a new cycle needs a hook like .pnpmfile.cjs has');
 });
 
+// .pnpmfile.cjs runs on every install, and pnpm checksums it only while it
+// exports hooks, so these pin what it exports and what it changes.
+const pnpmfile = require('../.pnpmfile.cjs');
+const { readPackage } = pnpmfile.hooks;
+const RESOLVER = 'eslint-import-resolver-typescript';
+
+test('.pnpmfile.cjs exports one readPackage hook and one dropped peer, nothing else', () => {
+  assert.deepEqual(Object.keys(pnpmfile).sort(), ['DROPPED_PEERS', 'hooks']);
+  // Not afterAllResolved, updateConfig (which can turn strictDepBuilds off), or anything new.
+  assert.deepEqual(Object.keys(pnpmfile.hooks), ['readPackage']);
+  assert.deepEqual(pnpmfile.DROPPED_PEERS, [[RESOLVER, 'eslint-plugin-import']]);
+});
+
 test(".pnpmfile.cjs drops the resolver's optional peer on eslint-plugin-import, and nothing else", () => {
-  const { hooks } = require('../.pnpmfile.cjs');
-  const resolver = hooks.readPackage({
-    name: 'eslint-import-resolver-typescript',
+  const resolver = readPackage({
+    name: RESOLVER,
+    version: '3.10.1',
+    dependencies: { 'eslint-plugin-import': '*' },
     peerDependencies: { eslint: '*', 'eslint-plugin-import': '*', 'eslint-plugin-import-x': '*' },
     peerDependenciesMeta: {
       'eslint-plugin-import': { optional: true },
@@ -251,10 +285,68 @@ test(".pnpmfile.cjs drops the resolver's optional peer on eslint-plugin-import, 
   assert.deepEqual(resolver.peerDependencies, { eslint: '*', 'eslint-plugin-import-x': '*' });
   // pnpm reads an optional peerDependenciesMeta entry as a peer on its own.
   assert.deepEqual(resolver.peerDependenciesMeta, { 'eslint-plugin-import-x': { optional: true } });
+  assert.deepEqual(resolver.dependencies, { 'eslint-plugin-import': '*' }, 'dependencies stay');
+  // Another package with the same peer keeps it.
   const utils = {
     name: 'eslint-module-utils',
-    peerDependencies: { 'eslint-import-resolver-typescript': '*' },
-    peerDependenciesMeta: { 'eslint-import-resolver-typescript': { optional: true } },
+    version: '2.14.0',
+    peerDependencies: { [RESOLVER]: '*', 'eslint-plugin-import': '*' },
+    peerDependenciesMeta: {
+      [RESOLVER]: { optional: true },
+      'eslint-plugin-import': { optional: true },
+    },
   };
-  assert.deepEqual(hooks.readPackage(structuredClone(utils)), utils);
+  assert.deepEqual(readPackage(structuredClone(utils)), utils);
+});
+
+test('.pnpmfile.cjs stops the install on a resolver version nobody checked', () => {
+  for (const version of ['3.10.2', '4.0.0', '3.9.0']) {
+    const pkg = { name: RESOLVER, version, peerDependencies: { 'eslint-plugin-import': '*' } };
+    assert.throws(
+      () => readPackage(pkg),
+      new RegExp(
+        `checked for 3\\.10\\.1, but this install resolves ${version.replaceAll('.', '\\.')}\\. Re-check`,
+      ),
+    );
+  }
+});
+
+/** Every manifest in node_modules/.pnpm, scoped packages included. */
+function installedManifests() {
+  const store = new URL('../node_modules/.pnpm/', import.meta.url);
+  const manifests = [];
+  for (const entry of readdirSync(store, { withFileTypes: true })) {
+    if (!entry.isDirectory() || entry.name === 'node_modules') continue;
+    const modules = new URL(`${entry.name}/node_modules/`, store);
+    if (!existsSync(modules)) continue;
+    for (const name of readdirSync(modules)) {
+      const names = name.startsWith('@')
+        ? readdirSync(new URL(`${name}/`, modules)).map((scoped) => `${name}/${scoped}`)
+        : [name];
+      for (const pkg of names) {
+        const file = new URL(`${pkg}/package.json`, modules);
+        if (existsSync(file)) manifests.push(JSON.parse(readFileSync(file, 'utf8')));
+      }
+    }
+  }
+  return manifests;
+}
+
+test('.pnpmfile.cjs changes no installed manifest but the resolver, and only by its two keys', () => {
+  const manifests = installedManifests();
+  assert.ok(manifests.length > 500, `read ${manifests.length} installed manifests`);
+  let resolvers = 0;
+  for (const manifest of manifests) {
+    const after = readPackage(structuredClone(manifest));
+    if (manifest.name !== RESOLVER) {
+      assert.deepEqual(after, manifest, `${manifest.name}@${manifest.version} is unchanged`);
+      continue;
+    }
+    resolvers += 1;
+    const expected = structuredClone(manifest);
+    delete expected.peerDependencies['eslint-plugin-import'];
+    delete expected.peerDependenciesMeta['eslint-plugin-import'];
+    assert.deepEqual(after, expected);
+  }
+  assert.ok(resolvers >= 1, 'the resolver is installed');
 });

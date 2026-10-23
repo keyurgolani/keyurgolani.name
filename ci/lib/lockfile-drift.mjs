@@ -250,11 +250,15 @@ export function peerCycles(text) {
   return cycles.sort();
 }
 
-/** The lockfile's differences, or the cycle shape when nested peer suffixes alone moved. */
-function lockfileChange(before, after) {
+/** The lockfile's differences, or null when nested peer suffixes alone moved. */
+function lockfileChange(status, before, after) {
+  if (!status.includes(LOCKFILE_MODIFIED)) return null;
   const drift = lockfileDrift(before, after);
   return drift.length === 0 ? null : `pnpm-lock.yaml differs in ${drift.join('; ')}`;
 }
+
+/** git status shows the lockfile modified, and nothing else: the one status the cycle shape fits. */
+const lockfileAlone = (status) => status.length === 1 && status[0] === LOCKFILE_MODIFIED;
 
 /**
  * Why the committed lockfile isn't what pnpm writes, after LOCKFILE_REFRESH
@@ -267,10 +271,11 @@ function lockfileChange(before, after) {
  */
 export function canonicalLockfileProblem({ status, before, after }) {
   if (status.length === 0) return null;
-  if (!status.includes(LOCKFILE_MODIFIED)) {
-    return 'the lockfile refresh changes nothing but pnpm-lock.yaml';
+  const change = lockfileChange(status, before, after);
+  if (!lockfileAlone(status)) {
+    const expected = 'the lockfile refresh changes nothing but pnpm-lock.yaml';
+    return change ? `${expected}. ${change}` : expected;
   }
-  const change = lockfileChange(before, after);
   if (change === null) {
     return (
       `${CYCLE_SHAPE} Re-run. If it repeats, pnpm-lock.yaml isn't what pnpm writes: ` +
@@ -292,7 +297,7 @@ export function canonicalLockfileProblem({ status, before, after }) {
 export function removalProblem({ status, before, after }) {
   if (status.length === 0) return null;
   const expected = 'the remove leaves nothing changed';
-  if (!status.includes(LOCKFILE_MODIFIED)) return expected;
-  const change = lockfileChange(before, after);
-  return `${expected}. ${change ?? `${CYCLE_SHAPE} Re-run it`}`;
+  const change = lockfileChange(status, before, after);
+  if (change) return `${expected}. ${change}`;
+  return lockfileAlone(status) ? `${expected}. ${CYCLE_SHAPE} Re-run it` : expected;
 }

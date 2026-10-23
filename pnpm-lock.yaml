@@ -7,7 +7,7 @@ settings:
 overrides:
   source-map-js: 1.2.2
 
-pnpmfileChecksum: sha256-TUCd+HZrVc8+iuOvHW7BVwZjpGFRqqcJW36sQhAv4FU=
+pnpmfileChecksum: sha256-UBY1qYSRRfpCa8TuUEbQO4q+nwpGPfH8Bj5mzdvToks=
 
 importers:
 
