@@ -33,7 +33,12 @@ test('the typing animation shows its first text whole on the server, under any p
         <TypingAnimation texts={['Builds things', 'Writes things']} />
       </MotionPolicyProvider>,
     );
-    assert.match(html, /<span>Builds things<\/span>/);
+    // The animated text is hidden from assistive technology, which reads every text once instead.
+    assert.match(html, /<span aria-hidden="true">Builds things<\/span>/);
+    assert.match(
+      html,
+      /<span style="[^"]*clip-path:inset\(50%\)[^"]*">Builds things and Writes things<\/span>/,
+    );
     // No live region announces it as it types, and no label of the kit's own.
     assert.doesNotMatch(html, /aria-live|role="status"|aria-label|Currently displaying/);
     assert.match(html, /<span class="kc-typing__caret" aria-hidden="true">/);

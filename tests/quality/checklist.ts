@@ -37,6 +37,16 @@ export const CHECKLIST_VERSION = 2;
 export const FLASH_ITEM =
   'Nothing flashes more than three times in any one second, on any route, in any state, with motion on and off (WCAG 2.3.1).';
 
+/**
+ * The interactions item when none is registered. A registered dialog or
+ * disclosure has to show on every cell of its route, whatever the state or
+ * viewport, so a composition whose menu dialog shows only on a phone, or
+ * whose disclosures depend on the content, registers none yet; the tester
+ * still checks each one the page has, so a page with them can pass.
+ */
+export const NONE_REGISTERED =
+  "None registered: with the keyboard, open each dialog and disclosure the page has, if any. A dialog takes focus, Escape closes it, and focus returns to its control; a disclosure announces whether it's expanded. Nothing needs a drag, and each status change is announced.";
+
 /** One thing to check, by an id a record answers it by. */
 export interface ChecklistItem {
   readonly id: string;
@@ -125,7 +135,7 @@ export function checklistItems(
           {
             id: 'interaction:none',
             section: 'Interactions' as const,
-            text: 'None registered: confirm the page has no dialog, disclosure, drag, or status change.',
+            text: NONE_REGISTERED,
           },
         ]),
     ...(target.primaryActions.length > 0

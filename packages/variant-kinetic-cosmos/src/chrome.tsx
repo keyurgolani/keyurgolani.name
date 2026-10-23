@@ -41,6 +41,32 @@ function SectionList({
   );
 }
 
+/** Every id the owner's content holds, anywhere in it: any of them can be an element's id on the page. */
+function contentIds(value: unknown, found: Set<string>): Set<string> {
+  if (Array.isArray(value)) {
+    for (const item of value) contentIds(item, found);
+  } else if (value !== null && typeof value === 'object') {
+    for (const [key, item] of Object.entries(value)) {
+      if (key === 'id' && typeof item === 'string') found.add(item);
+      else contentIds(item, found);
+    }
+  }
+  return found;
+}
+
+/**
+ * The menu dialog's local id. #19's Dialog takes a local id, one hyphen at
+ * a time, which is the same form an owner's section and record ids have, so
+ * it's `kc-menu` unless the content already holds that id, and otherwise
+ * the first of `kc-menu-2`, `kc-menu-3`, and on, that it doesn't.
+ */
+export function menuId(portfolio: VariantRenderInput['portfolio']): string {
+  const taken = contentIds(portfolio, new Set());
+  let id = 'kc-menu';
+  for (let n = 2; taken.has(id); n += 1) id = `kc-menu-${n}`;
+  return id;
+}
+
 export function Chrome({
   input,
   links,
@@ -77,7 +103,7 @@ export function Chrome({
           />
           <div className="kc-menu">
             <Dialog
-              id="kc-menu"
+              id={menuId(portfolio)}
               trigger={<span lang={uiLang}>Sections</span>}
               title={<span lang={uiLang}>Sections</span>}
               closeLabel="Close"

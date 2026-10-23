@@ -184,6 +184,11 @@
   gap: 0.25rem;
 }
 
+/* Where an untitled piece comes from, after what it says. */
+[data-variant='kinetic-cosmos'] .kc-evidence__source {
+  color: var(--color-text-secondary);
+}
+
 [data-variant='kinetic-cosmos'] .kc-evidence__record {
   margin: 0;
   padding-block: 0 var(--ui-space-surface-block);

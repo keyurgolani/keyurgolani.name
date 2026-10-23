@@ -6,7 +6,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { PresentationBoundary } from '@portfolio/appearance/react';
 import { PLATFORM_DEFAULTS } from '@portfolio/appearance';
 import { threadLanes } from '@portfolio/kit/timeline';
-import { chronologyOf } from '@portfolio/kit/sections';
+import { chronologyOf, evidenceOf, present } from '@portfolio/kit/sections';
+import { renderInlineMarkdown } from '@portfolio/kit/markdown';
 import { composeSchemas, resolvePortfolioView, type ParsedPair } from '@portfolio/schema';
 import { readPair } from '@portfolio/schema/node';
 import {
@@ -15,7 +16,11 @@ import {
   type VariantManifest,
   type VariantRenderInput,
 } from '@portfolio/variant-contract';
-import { contractFixture, HIDDEN_CANARY } from '@portfolio/variant-contract/node';
+import {
+  CONTRACT_FIXTURES,
+  contractFixture,
+  HIDDEN_CANARY,
+} from '@portfolio/variant-contract/node';
 import KineticCosmos from '.';
 
 // Kinetic Cosmos (#14), the still composition: its manifest holds the
@@ -145,6 +150,88 @@ test('each piece of evidence is a disclosure whose summary names it, with no hea
     assert.doesNotMatch(object!, /<details[^>]*\sopen/);
     assert.match(object!, /data-ui-slot="disclosure.content"><ul class="kc-evidence__record"/);
   }
+});
+
+/** `markup` as the text it reads as: no tags, and the entities React writes decoded. */
+const text = (markup: string) =>
+  markup
+    .replace(/<[^>]+>/g, '')
+    .replace(/&#x27;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+test("every evidence summary, its accessible name, holds its record's title or statement, in every contract fixture", () => {
+  let checked = 0;
+  for (const { name } of CONTRACT_FIXTURES) {
+    const input = fixtureInput(name);
+    const markup = html(input);
+    const sections = [
+      ...markup.matchAll(
+        /<section id="([^"]+)"[^>]*data-kind="evidence"[\s\S]*?<ul class="kc-evidence" role="list">([\s\S]*?)<\/ul><\/section>/g,
+      ),
+    ];
+    for (const [, id, objects] of sections) {
+      const section = input.portfolio.sections.find((each) => each.id === id)!;
+      const entries = evidenceOf(section as never, input);
+      const summaries = [
+        ...objects!.matchAll(/<summary data-ui-slot="disclosure.summary">([\s\S]*?)<\/summary>/g),
+      ].map(([, summary]) => text(summary!));
+      assert.equal(summaries.length, entries.length, `${name} ${id}`);
+      entries.forEach((entry, index) => {
+        const subject = present(entry.title)
+          ? entry.title
+          : present(entry.statement)
+            ? text(renderInlineMarkdown(entry.statement))
+            : undefined;
+        if (subject === undefined) return;
+        checked += 1;
+        assert.ok(
+          summaries[index]!.includes(subject),
+          `${name} ${entry.id}: "${summaries[index]}" says nothing of "${subject}"`,
+        );
+      });
+    }
+  }
+  assert.ok(checked > 5, `${checked} summaries checked`);
+});
+
+test("a metric with no title says what it counts, its source after it, as complete's tenure does", () => {
+  const input = fixtureInput('complete');
+  const tenure = input.portfolio.evidence.find(
+    (entry) =>
+      entry.metric?.value !== undefined && !present(entry.title) && present(entry.statement),
+  );
+  assert.ok(tenure, 'a metric with a statement and no title');
+  const markup = html(input);
+  const object = new RegExp(`<li id="${tenure.id}"[\\s\\S]*?</summary>`).exec(markup);
+  assert.ok(object, tenure.id);
+  assert.match(object[0], /class="kc-evidence__figure"/);
+  assert.ok(text(object[0]).includes(text(renderInlineMarkdown(tenure.statement!))), object[0]);
+});
+
+test('a section the owner calls kc-menu takes that id, and the menu dialog takes another, so none repeats', () => {
+  const portfolio = PortfolioSchema.parse({
+    schemaVersion: 3,
+    locale: 'en',
+    direction: 'ltr',
+    identity: { name: 'Rowan Kinetic', tagline: 'Builds calm software.' },
+    contact: { message: 'Write any time.' },
+    sections: [
+      { kind: 'hero', id: 'top' },
+      { kind: 'contact', id: 'kc-menu', title: 'Contact' },
+    ],
+  });
+  const site = readPair(contractFixture('complete').files);
+  assert.ok(site.ok);
+  const markup = html(inputOf({ portfolio, site: site.pair.site } as ParsedPair));
+  const all = ids(markup);
+  assert.equal(new Set(all).size, all.length, `ids repeat: ${all.join(' ')}`);
+  assert.match(markup, /<section id="kc-menu"/);
+  assert.match(markup, /<dialog[^>]*id="kc-menu-2"/);
 });
 
 test("each chronology is one list, in the section's order, each entry in its authored thread's lane", () => {

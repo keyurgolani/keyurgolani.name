@@ -40,12 +40,12 @@ The first pull request moves nothing: no frame loop, timer, transition of its ow
 
 ## Section coverage map
 
-| Kind         | Treatment | Notes                                                                                 |
-| ------------ | --------- | ------------------------------------------------------------------------------------- |
-| `hero`       | bespoke   | The orbital opening: the shared hero's words in front of a still orbit.               |
-| `evidence`   | bespoke   | Each record a disclosure, its face the owner's own name or figure, the record inside. |
-| `chronology` | bespoke   | One ordered list, each entry in its thread's lane through `threadLanes`.              |
-| every other  | shared    | The kit's shared renderers, inside the composition's spacing.                         |
+| Kind         | Treatment | Notes                                                                                         |
+| ------------ | --------- | --------------------------------------------------------------------------------------------- |
+| `hero`       | bespoke   | The orbital opening: the shared hero's words in front of a still orbit.                       |
+| `evidence`   | bespoke   | Each record a disclosure, its face its title, or its figure and statement, the record inside. |
+| `chronology` | bespoke   | One ordered list, each entry in its thread's lane through `threadLanes`.                      |
+| every other  | shared    | The kit's shared renderers, inside the composition's spacing.                                 |
 
 ## Controls and content slots
 
@@ -66,7 +66,7 @@ N/A: the first pull request has no owner-tunable choice and no slot. The orbit's
 
 - Focus order: the boundary's skip link, the section links or the menu button, the visitor control, then the main in reading order.
 - The menu is a native modal dialog: named by its title, Escape closes it, focus stays inside, and focus goes back to the button. Scrolling stops in CSS, never through `document.body`.
-- Evidence disclosures are native: the summary is the accessible name and says whether it's open, focus stays on it, and no heading sits inside it.
+- Evidence disclosures are native: the summary is the accessible name, the record's title or else what it says, with any figure before it, so a figure never stands alone. It says whether it's open, focus stays on it, and no heading sits inside it.
 - The chronology's DOM order is its visual order on every screen, so Tab follows reading order. Nothing is positioned off its axis or clipped.
 - Decoration is hidden from assistive technology. The host's two words, Sections and Close, carry `lang="en"` in a portfolio in another language.
 

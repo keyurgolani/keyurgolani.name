@@ -63,7 +63,7 @@ items:
     check: "/work/project-name (last-known-good): headings, landmarks, and every control's name and state read correctly, and the reading order matches the visual order."
     result: todo
   - id: interaction:none
-    check: 'None registered: confirm the page has no dialog, disclosure, drag, or status change.'
+    check: "None registered: with the keyboard, open each dialog and disclosure the page has, if any. A dialog takes focus, Escape closes it, and focus returns to its control; a disclosure announces whether it's expanded. Nothing needs a drag, and each status change is announced."
     result: todo
   - id: action:none
     check: None registered.

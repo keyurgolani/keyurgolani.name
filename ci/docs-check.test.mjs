@@ -231,6 +231,33 @@ test('external links fail on 4xx and 5xx and network errors, and only warn on 40
   );
 });
 
+test('the tree check reports a legacy/ path in code that the tree no longer has', () => {
+  const root = tree({
+    ...PACKAGES,
+    'README.md': [
+      '# Title',
+      'See `legacy/variant-old/src/gone.tsx` and `legacy/variant-kept/src/here.tsx`.',
+      '```',
+      'cat legacy/variant-old/README.md',
+      '```',
+      'Globs such as `legacy/**` name no one file.',
+    ].join('\n'),
+    'legacy/variant-kept/src/here.tsx': 'x',
+  });
+  try {
+    const { problems } = checkDocs({ root, files: ['README.md'] });
+    assert.deepEqual(
+      problems.map((p) => [p.line, p.message]),
+      [
+        [2, 'legacy/variant-old/src/gone.tsx names no file in the tree'],
+        [4, 'legacy/variant-old/README.md names no file in the tree'],
+      ],
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("the repository's own docs pass", () => {
   const { problems } = checkDocs();
   assert.deepEqual(
