@@ -8,7 +8,7 @@ import {
   RichText,
 } from '@portfolio/kit/sections';
 import { routeHref, type VariantRenderInput } from '@portfolio/variant-contract';
-import { hasPage, present } from './model';
+import { isRoutedWork, present } from './model';
 import { regionContext, Words } from './parts';
 
 // The work plates (#13): the signature on the largest plate, and each
@@ -16,7 +16,7 @@ import { regionContext, Words } from './parts';
 // it has one, and is text-led when it doesn't, with no empty frame. Its
 // evidence notes sit beside it on wide screens and below it on narrow ones,
 // in source order either way, so print and a page with no styles read the
-// same. A work with a page links to it.
+// same. A work with a page of its own, a case study at a slug, links to it.
 
 /** How many of a work's evidence records a plate notes. Its page shows them all. */
 const NOTES = 3;
@@ -34,7 +34,10 @@ export function Plate({
   const titleId = `${input.ids.prefix}ee--title-${work.id}`;
   const cover = placedMedia(work.cover, ctx);
   const notes = evidenceByIds(work.evidence, input).slice(0, NOTES);
-  const page = hasPage(work) ? routeHref(input, { route: 'work', slug: work.slug }) : undefined;
+  const page = isRoutedWork(work)
+    ? routeHref(input, { route: 'work', slug: work.slug })
+    : undefined;
+  const notesLabel = `${input.ids.prefix}ee--notes-${work.id}`;
   const meta = [work.role, work.organization].filter(present);
   return (
     <Surface
@@ -75,7 +78,7 @@ export function Plate({
         {present(work.summary) ? (
           <RichText source={work.summary} className="ee-plate__summary" input={input} />
         ) : null}
-        {page && work.caseStudy ? (
+        {page ? (
           <p className="ee-plate__action">
             <Action
               href={page}
@@ -103,7 +106,10 @@ export function Plate({
         </div>
       ) : null}
       {notes.length > 0 ? (
-        <aside className="ee-plate__notes" aria-label="Evidence notes">
+        <aside className="ee-plate__notes" aria-labelledby={`${notesLabel} ${titleId}`}>
+          <span id={notesLabel} hidden>
+            <Words input={input}>Evidence for</Words>
+          </span>
           <ul className="pf-evidence" role="list">
             {notes.map((entry) => (
               <EvidenceEntry key={entry.id} entry={entry} ctx={{ ...ctx, itemLevel: 4 }} />

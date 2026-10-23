@@ -95,10 +95,15 @@ test('no source or style runs motion, or anything a page needs JavaScript for', 
     [/position\s*:\s*(?:fixed|sticky)/, 'a fixed or sticky bar'],
     [/@font-face|@import|font-family\s*:(?!\s*var\(--type-)/, 'a font or an import of its own'],
     [/--(?:paper|ink|kc-|vt-)/, "a retired variant's property"],
+  ];
+  // A hex color only means one in a stylesheet: in code, #10b is an issue.
+  const styleOnly: [RegExp, string][] = [
     [/#[0-9a-f]{3,8}\b|\brgba?\(|\bhsla?\(|\boklch\(/i, 'a color literal'],
   ];
   const found = ownFiles().flatMap(({ file, text }) =>
-    banned.filter(([pattern]) => pattern.test(text)).map(([, what]) => `${file}: ${what}`),
+    [...banned, ...(file.endsWith('.css') ? styleOnly : [])]
+      .filter(([pattern]) => pattern.test(text))
+      .map(([, what]) => `${file}: ${what}`),
   );
   assert.deepEqual(found, []);
 });

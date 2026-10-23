@@ -63,7 +63,6 @@
   list-style: none;
 }
 
-[data-variant='editorial-evidence'] .ee-nav a[aria-current='page'],
 [data-variant='editorial-evidence'] .ee-masthead__name[aria-current='page'] {
   text-decoration: none;
 }

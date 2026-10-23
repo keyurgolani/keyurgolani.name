@@ -4,7 +4,7 @@ import path from 'node:path';
 import type { AppearanceCatalog, ParsedPair, UnitInput } from '@portfolio/schema';
 import { loadPair, readUnitFiles } from '@portfolio/schema/node';
 import { CONTRACT_FIXTURES, FIXTURES_DIR, HIDDEN_CANARY } from '@portfolio/variant-contract/node';
-import { homeModel } from '../model';
+import { homeModel, isRoutedWork } from '../model';
 import { at, count, fragmentLinks, idsIn, inputFor, render } from './harness';
 
 // Every contract fixture through Editorial Evidence (#13), as the server
@@ -51,6 +51,12 @@ for (const { name } of CONTRACT_FIXTURES) {
 
     // The signature artifact comes before any supporting record.
     const model = homeModel(input);
+    // Every section the page folds away keeps its id on it, so a link to it lands.
+    for (const [where, folded] of Object.entries(model.folded)) {
+      for (const id of folded) {
+        assert.ok(ids.includes(`${input.ids.prefix}${id}`), `${name}: folded ${where} ${id}`);
+      }
+    }
     if (model.signature) {
       const signature = at(html, 'ee-plate--signature');
       for (const later of ['ee-plate--flagship', 'ee-proof', 'ee-archive']) {
@@ -61,9 +67,9 @@ for (const { name } of CONTRACT_FIXTURES) {
       const between = html.slice(at(html, 'class="ee-region ee-work"'), signature);
       assert.doesNotMatch(between, /data-section-id=/, name);
     }
-    // Every work with a page has one that renders, with its title as the one h1.
+    // Every routed work has a page that renders, with its title as the one h1.
     for (const work of input.portfolio.works) {
-      if (work.slug === undefined) continue;
+      if (!isRoutedWork(work)) continue;
       const page = render(pair, { unit, route: { route: 'work', slug: work.slug } });
       assert.equal(count(page, /<h1\b/g), 1, `${name} ${work.slug}`);
       assert.doesNotMatch(page, new RegExp(HIDDEN_CANARY));

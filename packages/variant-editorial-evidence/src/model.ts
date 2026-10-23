@@ -1,4 +1,4 @@
-import type { Evidence, Section, Work } from '@portfolio/schema';
+import type { CaseStudy, Evidence, Section, Work } from '@portfolio/schema';
 import { evidenceByIds, sectionShows, worksByIds } from '@portfolio/kit/sections';
 import type { VariantRenderInput } from '@portfolio/variant-contract';
 
@@ -39,13 +39,15 @@ export interface HomeModel {
   /**
    * Sections the page folds into its own regions, by where they went, so a
    * link to one, such as a hero's `#work`, still lands: the thesis section
-   * on the opening's thesis, a works section the plates show whole on the
-   * Selected work region, and an evidence section the proof strip shows
-   * whole on the Proof region.
+   * on the opening's thesis, a works section the plates and the archive
+   * show whole on the region its first work went to, Selected work or
+   * Archive, and an evidence section the proof strip shows whole on the
+   * Proof region.
    */
   readonly folded: {
     readonly thesis: readonly string[];
     readonly work: readonly string[];
+    readonly archive: readonly string[];
     readonly proof: readonly string[];
   };
 }
@@ -76,7 +78,12 @@ export function homeModel(input: Pick<VariantRenderInput, 'portfolio'>): HomeMod
 
   const proof = evidenceByIds(portfolio.proof, input);
   const proven = new Set(proof.map(({ id }) => id));
-  const folded = { thesis: [] as string[], work: [] as string[], proof: [] as string[] };
+  const folded = {
+    thesis: [] as string[],
+    work: [] as string[],
+    archive: [] as string[],
+    proof: [] as string[],
+  };
   const sections = portfolio.sections.flatMap((section): ViewSection[] => {
     if (section === hero) return [];
     // The opening already shows the thesis.
@@ -89,7 +96,7 @@ export function homeModel(input: Pick<VariantRenderInput, 'portfolio'>): HomeMod
       if (items.length === section.items.length) return [section];
       const rest = { ...section, items } as ViewSection;
       if (items.length > 0 && sectionShows(rest, input)) return [rest];
-      folded.work.push(section.id);
+      (plated.has(section.items[0]) ? folded.work : folded.archive).push(section.id);
       return [];
     }
     if (section.kind === 'evidence' && proven.size > 0) {
@@ -116,12 +123,40 @@ export function homeModel(input: Pick<VariantRenderInput, 'portfolio'>): HomeMod
   };
 }
 
-/** The public work at `slug`, if there is one. */
-export function workAt(slug: string, portfolio: Portfolio): Work | undefined {
-  return portfolio.works.find((work) => work.slug === slug);
+/** A work with its own page: a case study, at its slug. */
+export type RoutedWork = Work & { readonly caseStudy: CaseStudy; readonly slug: string };
+
+/**
+ * Whether the work has its own page at /work/<slug>: a case study and a
+ * slug, the rule #10b's route serves by. A copy of the kit's isRoutedWork()
+ * until #10b lands on next, when this switches to it.
+ */
+export function isRoutedWork(work: Work): work is RoutedWork {
+  return work.caseStudy !== undefined && work.slug !== undefined;
 }
 
-/** Whether the work has a page of its own: a slug, which a case study needs. */
-export function hasPage(work: Work): work is Work & { readonly slug: string } {
-  return work.slug !== undefined;
+/** The routed work at `slug`, if the view has one. */
+export function routedWorkAt(slug: string, portfolio: Portfolio): RoutedWork | undefined {
+  return portfolio.works.find(
+    (work): work is RoutedWork => isRoutedWork(work) && work.slug === slug,
+  );
+}
+
+/** Where a work shows on the home page, for a way back to it. */
+export type Placement =
+  | { readonly kind: 'plate' }
+  | { readonly kind: 'archive' }
+  | { readonly kind: 'section'; readonly section: ViewSection }
+  | { readonly kind: 'none' };
+
+/** Where the home page shows `work`: on a plate, in the archive, in a section of the reading order, or nowhere. */
+export function placementOf(work: Work, model: HomeModel): Placement {
+  if (model.signature?.id === work.id || model.flagships.some(({ id }) => id === work.id)) {
+    return { kind: 'plate' };
+  }
+  if (model.archive.some(({ id }) => id === work.id)) return { kind: 'archive' };
+  const section = model.sections.find(
+    (each) => each.kind === 'works' && each.items.includes(work.id),
+  );
+  return section ? { kind: 'section', section } : { kind: 'none' };
 }

@@ -49,8 +49,16 @@ test('the signature plate precedes the flagships, the proof strip, and every sup
     /ee-plate--signature[\s\S]*?loading="eager"|ee-plate--signature[\s\S]*?ee-plate__artifact/,
   );
   const notes =
-    /ee-plate__notes" aria-label="Evidence notes">([\s\S]*?)<\/aside>/.exec(html)?.[1] ?? '';
+    /ee-plate__notes" aria-labelledby="ee--notes-ledger ee--title-ledger">([\s\S]*?)<\/aside>/.exec(
+      html,
+    )?.[1] ?? '';
   assert.equal(count(notes, /<li\b/g), 3);
+  // Each plate's notes are named for it: Evidence for, then its title.
+  assert.match(html, /<span id="ee--notes-ledger" hidden="">Evidence for<\/span>/);
+  const labels = [...html.matchAll(/class="ee-plate__notes" aria-labelledby="([^"]+)"/g)].map(
+    ([, label]) => label,
+  );
+  assert.equal(new Set(labels).size, labels.length);
 });
 
 test('what the plates, the proof strip, or the archive show is left out of the reading order, which keeps the rest', () => {
@@ -134,8 +142,12 @@ test('a work with a case study links to its page from its plate, by its title an
     html,
     /<a[^>]*aria-describedby="ee--title-ledger"[^>]*href="\/work\/ledger"[^>]*>[\s\S]*?Read the case study/,
   );
-  // A slug alone links the title; only a case study adds the action.
-  assert.match(html, /<a href="\/work\/atlas">Atlas<\/a>/);
+  // A slug alone is no page (#10b routes a case study at a slug), so it links nowhere.
+  assert.match(html, /<h3 id="ee--title-atlas"[^>]*>Atlas<\/h3>/);
+  assert.doesNotMatch(html, /href="\/work\/atlas"/);
+  // Every work link on home is a routed work's.
+  const linked = [...html.matchAll(/href="\/work\/([^"?#]+)"/g)].map(([, slug]) => slug);
+  assert.deepEqual([...new Set(linked)].sort(), ['ledger']);
   assert.equal(count(html, /Read the case study/g), 1);
 });
 
@@ -158,14 +170,34 @@ test("a case study's page: the breadcrumb, the work's title as its one h1, its f
   assert.doesNotMatch(html, /aria-current="page">Rowan Vale/);
 });
 
-test('a work with a slug and no case study gets its entry on its page, and an unknown slug says so', () => {
-  const atlas = render(pairOf(CURATED), { route: { route: 'work', slug: 'atlas' } });
-  assert.equal(count(atlas, /<h1\b/g), 1);
-  assert.match(atlas, /<h1[^>]*>Atlas<\/h1>/);
-  assert.match(atlas, /Back to work/);
-  const missing = render(pairOf(CURATED), { route: { route: 'work', slug: 'nowhere' } });
-  assert.equal(count(missing, /<h1\b/g), 1);
-  assert.match(missing, /This work isn(?:&#x27;|')t here/);
+test('a slug with no case study, like one that names nothing, gets no page: the page says so and links home', () => {
+  for (const slug of ['atlas', 'nowhere']) {
+    const html = render(pairOf(CURATED), { route: { route: 'work', slug } });
+    assert.equal(count(html, /<h1\b/g), 1, slug);
+    assert.match(html, /This work isn(?:&#x27;|')t here/, slug);
+    assert.doesNotMatch(html, /pf-case-study|pf-work/, slug);
+    assert.match(html, /<a[^>]*href="\/"[^>]*><span[^>]*>Back home/, slug);
+  }
+});
+
+test("a work's page leads back to where home shows it: its plate, the archive, or its section", () => {
+  const crumbsOf = (html: string) =>
+    [
+      ...(/<nav class="ee-breadcrumb"[\s\S]*?<\/nav>/.exec(html)?.[0] ?? '').matchAll(
+        /<li>([\s\S]*?)<\/li>/g,
+      ),
+    ].map(([, item]) => item!.replace(/<[^>]+>/g, ''));
+  const zine = render(pairOf(CURATED), { route: { route: 'work', slug: 'zine' } });
+  assert.deepEqual(crumbsOf(zine), ['Home', 'Archive', 'A zine']);
+  assert.match(zine, /<a href="\/#ee--archive">Archive<\/a>/);
+  assert.match(zine, /<a[^>]*href="\/#ee--archive"[^>]*>[\s\S]*?Back to the archive/);
+  const notes = render(pairOf(CURATED), { route: { route: 'work', slug: 'notes' } });
+  assert.deepEqual(crumbsOf(notes), ['Home', 'Work', 'Field notes']);
+  assert.match(notes, /<a href="\/#work"><span>Work<\/span><\/a>/);
+  assert.match(notes, /<a[^>]*href="\/#notes"[^>]*>[\s\S]*?Back to work/);
+  // Each way back lands on home.
+  const home = idsIn(curated());
+  for (const id of ['ee--archive', 'work', 'notes']) assert.ok(home.includes(id), id);
 });
 
 test('one artifact: the name, then the signature on its own, text-led with no empty frame', () => {
@@ -222,6 +254,9 @@ test("a link to a section the page folds away still lands: a hero's #work, and t
     for (const fragment of ['work', 'thesis']) {
       assert.ok(ids.includes(fragment), `${signature} ${fragment}`);
     }
+    // A section emptied into the archive anchors there, not on Selected work.
+    const archive = /<section id="ee--archive"[\s\S]*?<\/section>/.exec(html)?.[0] ?? '';
+    assert.equal(archive.includes('id="work"'), !signature, `${signature}: work in the archive`);
     for (const fragment of fragmentLinks(html)) assert.ok(ids.includes(fragment), fragment);
   }
 });

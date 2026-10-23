@@ -44,9 +44,16 @@ export const CURATED = {
     { id: 'atlas', slug: 'atlas', title: 'Atlas', medium: 'interface', summary: 'A map of services.' },
     { id: 'harbor', title: 'Harbor', medium: 'software', summary: 'A release train.' },
     { id: 'kiln', title: 'Kiln', medium: 'research', summary: 'Build caching, measured.' },
-    { id: 'notes', title: 'Field notes', medium: 'writing', summary: 'Essays on operations.' },
+    {
+      id: 'notes',
+      slug: 'notes',
+      title: 'Field notes',
+      medium: 'writing',
+      summary: 'Essays on operations.',
+      caseStudy: { context: 'Written on call.' },
+    },
     { id: 'old-site', title: 'The old site', medium: 'interface' },
-    { id: 'zine', title: 'A zine', medium: 'writing' },
+    { id: 'zine', slug: 'zine', title: 'A zine', medium: 'writing', caseStudy: { role: 'Editor.' } },
   ],
   evidence: [
     { id: 'uptime', type: 'metric', title: 'Uptime', metric: { value: 99.95, unit: '%' } },

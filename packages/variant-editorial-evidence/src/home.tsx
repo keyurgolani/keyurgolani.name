@@ -146,9 +146,7 @@ export function Home({ input }: { input: VariantRenderInput }) {
             heading={<Words input={input}>Archive</Words>}
             className="ee-region ee-archive"
           >
-            {model.signature || model.flagships.length > 0 ? null : (
-              <Anchors input={input} ids={model.folded.work} />
-            )}
+            <Anchors input={input} ids={model.folded.archive} />
             <Disclosure
               className="ee-archive__disclosure"
               summary={
