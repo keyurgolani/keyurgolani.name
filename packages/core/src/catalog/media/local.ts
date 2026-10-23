@@ -12,6 +12,16 @@ import { MEDIA_LIMITS, MediaSourceError, refused } from './limits';
 // is fine. What's read is a regular file, opened without following a final
 // link and without waiting on a FIFO, and at most 20 MiB. Nothing here
 // writes, and nothing mounts the root into public/.
+//
+// realpath() and open() are two steps, and O_NOFOLLOW covers only the last
+// component, so a directory swapped for a link between them could still
+// lead outside. Once the file is open, its descriptor's own path is checked
+// against the root too: /proc/self/fd/<fd> on Linux, where the server runs.
+// Where there is no /proc, as on macOS, that check can't be made, and the
+// read-only mount (Compose mounts the root `:ro`, and startup warns when the
+// server can write there) is the control. A hard link inside the root reads
+// its target, wherever that is: only someone who can write the root can make
+// one, and the read-only mount is the control there too.
 
 export interface LocalMediaRoot {
   /** The bytes at `source` under the root, or a MediaSourceError that says why not. */
@@ -21,6 +31,18 @@ export interface LocalMediaRoot {
 export interface LocalMediaRootOptions {
   /** The most bytes a source may hold. Defaults to 20 MiB. */
   readonly maxBytes?: number;
+  /** Where an open descriptor's file really is, or null where that can't be told. Tests' own. */
+  readonly openedPath?: (fd: number) => Promise<string | null>;
+}
+
+/** /proc/self/fd/<fd>'s target, on Linux; null where there is no /proc. */
+export async function procOpenedPath(fd: number): Promise<string | null> {
+  try {
+    return await realpath(`/proc/self/fd/${fd}`);
+  } catch (error) {
+    if (code(error) === 'ENOENT' || code(error) === 'ENOTDIR') return null;
+    throw error;
+  }
 }
 
 const code = (error: unknown) => (error as NodeJS.ErrnoException)?.code;
@@ -36,7 +58,7 @@ function inside(root: string, target: string): boolean {
 
 export function localMediaRoot(
   root: string,
-  { maxBytes = MEDIA_LIMITS.sourceBytes }: LocalMediaRootOptions = {},
+  { maxBytes = MEDIA_LIMITS.sourceBytes, openedPath = procOpenedPath }: LocalMediaRootOptions = {},
 ): LocalMediaRoot {
   if (!path.isAbsolute(root)) throw new TypeError('The media root is an absolute path.');
   return {
@@ -67,7 +89,8 @@ export function localMediaRoot(
       }
       let handle;
       try {
-        // O_NOFOLLOW: a link swapped in since realpath() isn't followed.
+        // O_NOFOLLOW: the file itself, if a link was swapped in for it since
+        // realpath(), isn't followed. A directory above it is: see below.
         // O_NONBLOCK: a FIFO can't hold the read open.
         handle = await open(real, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
       } catch (error) {
@@ -76,6 +99,16 @@ export function localMediaRoot(
         throw new MediaSourceError('unreachable', 'read_failed', "The file can't be read.");
       }
       try {
+        // What was opened, wherever the path led by now, is under the root.
+        let opened: string | null;
+        try {
+          opened = await openedPath(handle.fd);
+        } catch {
+          throw new MediaSourceError('unreachable', 'read_failed', "The file can't be read.");
+        }
+        if (opened !== null && !inside(realRoot, opened)) {
+          throw refused('path_escape', 'The path leaves the media root through a link.');
+        }
         const stats = await handle.stat();
         if (!stats.isFile())
           throw refused('not_a_file', 'The path names something other than a file.');

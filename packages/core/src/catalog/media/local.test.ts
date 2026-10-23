@@ -2,10 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { open } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { MediaSourceError } from './limits';
-import { localMediaRoot } from './local';
+import { localMediaRoot, procOpenedPath } from './local';
 
 // Local sources (#10, slice 2 item 3): a path resolves only under the media
 // root. Absolute paths, `..`, and links whose real path leaves the root are
@@ -85,6 +86,36 @@ test('a link whose real path leaves the root is refused; one that stays inside i
   }
   assert.equal(Buffer.from(await media.read('atlas/alias.jpg')).toString(), 'cover bytes');
   assert.equal(Buffer.from(await media.read('plates/plate.png')).toString(), 'plate bytes');
+});
+
+test('what was opened is checked against the root too, as a directory swapped for a link would lead elsewhere', async (t) => {
+  const { base, root } = fixture(t);
+  const opened: number[] = [];
+  // The open landed outside the root, as it would through a directory swapped in
+  // between realpath() and open().
+  const swapped = localMediaRoot(root, {
+    openedPath: async (fd) => {
+      opened.push(fd);
+      return path.join(realpathSync(base), 'secret.txt');
+    },
+  });
+  await assert.rejects(swapped.read('atlas/cover.jpg'), refusal('refused', 'path_escape'));
+  assert.equal(opened.length, 1);
+  // Where it landed inside, or where that can't be told, the file reads.
+  const inside = localMediaRoot(root, {
+    openedPath: async () => path.join(realpathSync(root), 'atlas', 'cover.jpg'),
+  });
+  assert.equal(Buffer.from(await inside.read('atlas/cover.jpg')).toString(), 'cover bytes');
+  const untold = localMediaRoot(root, { openedPath: async () => null });
+  assert.equal(Buffer.from(await untold.read('atlas/cover.jpg')).toString(), 'cover bytes');
+
+  // The real check: /proc/self/fd on Linux, where the server runs; nothing elsewhere.
+  const handle = await open(path.join(root, 'atlas', 'cover.jpg'));
+  t.after(() => handle.close());
+  assert.equal(
+    await procOpenedPath(handle.fd),
+    process.platform === 'linux' ? realpathSync(path.join(root, 'atlas', 'cover.jpg')) : null,
+  );
 });
 
 test('a root reached through a link still contains what is under it', async (t) => {
