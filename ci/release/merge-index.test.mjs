@@ -141,3 +141,27 @@ test("the dry run loads a leg's OCI layout into the registry by digest", () => {
     /resolves to/,
   );
 });
+
+test("--unattested (ci.yml's publish) merges plain platform images, and still wants both", () => {
+  const [amd64Image, , arm64Image] = JSON.parse(MERGED).manifests;
+  const plain = JSON.stringify({ manifests: [amd64Image, arm64Image] }, null, 2);
+  const plainDigest = `sha256:${createHash('sha256').update(plain).digest('hex')}`;
+  const docker = fakeDocker({ index: plain });
+  assert.equal(
+    mergeIndex(IMAGE, [AMD64, ARM64], docker.run, { attested: false }),
+    plainDigest,
+  );
+  assert.equal(docker.calls.length, 3);
+  // The release legs still need their attestations.
+  assert.throws(
+    () => mergeIndex(IMAGE, [AMD64, ARM64], fakeDocker({ index: plain }).run),
+    /no attestation manifest/,
+  );
+  const one = fakeDocker({ index: JSON.stringify({ manifests: [amd64Image] }) });
+  assert.throws(
+    () => mergeIndex(IMAGE, [AMD64, ARM64], one.run, { attested: false }),
+    /0 linux\/arm64 images, not 1/,
+  );
+  assert.equal(one.calls.length, 1, 'only the dry run ran');
+  assert.deepEqual(indexProblems(JSON.parse(plain), undefined, { attested: false }), []);
+});

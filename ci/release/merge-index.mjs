@@ -3,6 +3,7 @@
 // index, and pushes it by digest with no tag (docs/releasing.md).
 //
 //   node ci/release/merge-index.mjs <image> <sha256:amd64-index> <sha256:arm64-index>
+//   node ci/release/merge-index.mjs --unattested <image> <sha256:amd64> <sha256:arm64>
 //   node ci/release/merge-index.mjs --load <image> <sha256:index> oci-layout://<dir>@<sha256:index>
 //
 // --load is the dry run's: it pushes one leg's OCI layout to the runner's
@@ -32,9 +33,10 @@ const platformOf = (m) => `${m.platform?.os}/${m.platform?.architecture}`;
 /**
  * Why the merged index falls short, one line each, or none. It must hold
  * exactly one image for each of `platforms` and none for any other, and
- * exactly one attestation manifest for each image.
+ * exactly one attestation manifest for each image, unless `attested` is
+ * false, as for main's unattested sha images.
  */
-export function indexProblems(index, platforms = PLATFORMS) {
+export function indexProblems(index, platforms = PLATFORMS, { attested = true } = {}) {
   const manifests = Array.isArray(index?.manifests) ? index.manifests : [];
   const images = manifests.filter((m) => !isAttestation(m));
   const problems = [];
@@ -49,6 +51,7 @@ export function indexProblems(index, platforms = PLATFORMS) {
       problems.push(`the merged index has ${matching.length} ${platform} images, not 1`);
       continue;
     }
+    if (!attested) continue;
     const attestations = manifests.filter(
       (m) => isAttestation(m) && m.annotations?.[REFERENCE_DIGEST] === matching[0].digest,
     );
@@ -67,9 +70,10 @@ const docker = (args) => execFileSync('docker', args, { encoding: 'utf8' });
 
 /**
  * Merges `image@digest` for each leg and pushes the result by digest.
- * `run` is the docker CLI, replaced in tests.
+ * `run` is the docker CLI, replaced in tests. `attested: false` drops the
+ * attestation manifest requirement, for legs built without provenance.
  */
-export function mergeIndex(image, digests, run = docker) {
+export function mergeIndex(image, digests, run = docker, { attested = true } = {}) {
   const problems = digests.flatMap((digest) => retagProblems(image, digest, ['merge']));
   if (digests.length !== PLATFORMS.length) {
     problems.push(`${digests.length} digests for ${PLATFORMS.length} platforms`);
@@ -78,7 +82,7 @@ export function mergeIndex(image, digests, run = docker) {
   const sources = digests.map((digest) => `${image}@${digest}`);
   // buildx prints the index it would push, then a newline.
   const text = run(['buildx', 'imagetools', 'create', '--dry-run', ...sources]).replace(/\n$/, '');
-  const merged = indexProblems(JSON.parse(text));
+  const merged = indexProblems(JSON.parse(text), PLATFORMS, { attested });
   if (merged.length) throw new Error(merged.join('; '));
   const digest = `sha256:${createHash('sha256').update(text).digest('hex')}`;
   run(['buildx', 'imagetools', 'create', '--tag', `${image}@${digest}`, ...sources]);
@@ -127,8 +131,9 @@ function main(argv) {
     console.log(`${image}@${loadIndex(image, digest, source)}`);
     return 0;
   }
-  const [image, ...digests] = argv;
-  const digest = mergeIndex(image, digests);
+  const attested = argv[0] !== '--unattested';
+  const [image, ...digests] = attested ? argv : argv.slice(1);
+  const digest = mergeIndex(image, digests, docker, { attested });
   console.log(`${image}@${digest}`);
   if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `digest=${digest}\n`);
   return 0;
