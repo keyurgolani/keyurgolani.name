@@ -1205,6 +1205,54 @@ test("the dev fixture route's gate is fixed as the code compiles: PREVIEW_DEV is
   );
 });
 
+test("the policies relax only by the mode the code compiled in: COMPILED_MODE is the compiled NODE_ENV and nothing else, and the proxy hands it to both Studio's policy and the preview's (#7)", () => {
+  const compiled = parse(path.join(SRC, 'server/compiled-mode.ts'));
+  const initializers: string[] = [];
+  const findMode = (node: ts.Node) => {
+    if (
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.name.text === 'COMPILED_MODE'
+    ) {
+      initializers.push(node.initializer?.getText(compiled) ?? '');
+    }
+    ts.forEachChild(node, findMode);
+  };
+  findMode(compiled);
+  assert.deepEqual(initializers, [
+    "process.env.NODE_ENV === 'development' ? 'development' : 'production'",
+  ]);
+  // The proxy's two policies take it as their mode, and nothing else that could relax them.
+  const proxy = parse(path.join(SRC, 'proxy.ts'));
+  const modes: Record<string, string[]> = { studioCsp: [], previewCsp: [] };
+  const findCalls = (node: ts.Node) => {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text in modes
+    ) {
+      const name = node.expression.text;
+      const [, second] = node.arguments;
+      if (name === 'studioCsp') modes[name]!.push(second?.getText(proxy) ?? '');
+      else if (second && ts.isObjectLiteralExpression(second)) {
+        for (const property of second.properties) {
+          if (property.name?.getText(proxy) === 'mode' && ts.isPropertyAssignment(property)) {
+            modes[name]!.push(property.initializer.getText(proxy));
+          }
+        }
+      }
+    }
+    ts.forEachChild(node, findCalls);
+  };
+  findCalls(proxy);
+  // Each relaxes by COMPILED_MODE, and the starting 503's preview policy,
+  // with no deployment to read, is the strict one.
+  assert.deepEqual(modes, {
+    studioCsp: ['COMPILED_MODE'],
+    previewCsp: ["'production'", 'COMPILED_MODE'],
+  });
+});
+
 test('no visitor route sits under /preview, since the outage 503 carries none of the preview headers (#7)', () => {
   // proxy.ts answers a visitor route with its static 503 while the catalog
   // can't serve, and that answer has only the baseline headers.

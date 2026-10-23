@@ -47,18 +47,32 @@ function runtimeImports(file: string): { files: string[]; packages: string[] } {
     else if (specifier.startsWith('@portfolio/')) {
       const [, name, ...rest] = specifier.split('/');
       base = workspaceExport(name!, rest.length > 0 ? `./${rest.join('/')}` : '.');
-      if (!base) packages.push(specifier);
+      if (!base)
+        throw new Error(`${relative(file)} imports ${specifier}, which no package exports`);
     } else {
       packages.push(specifier.startsWith('@') ? specifier : specifier.split('/')[0]!);
-      base = null;
+      continue;
     }
-    if (!base) continue;
-    const resolved = ['', '.ts', '.tsx', '/index.ts', '/index.tsx']
-      .map((suffix) => `${base}${suffix}`)
-      .find((candidate) => /\.tsx?$/.test(candidate) && existsSync(candidate));
-    if (resolved) files.push(resolved);
+    files.push(resolve(file, specifier, base));
   }
   return { files, packages };
+}
+
+/**
+ * The file `base` names, as the bundler finds it: as written, with a
+ * TypeScript extension or an index, or a `.js` or `.mjs` specifier's
+ * TypeScript source. An import the walk can't find would be an edge it never
+ * follows, so it fails rather than skip one.
+ */
+function resolve(file: string, specifier: string, base: string): string {
+  const sources = /\.m?js$/.test(base) ? [base.replace(/\.(m?)js$/, '.$1ts'), base] : [];
+  const found = [
+    ...sources,
+    ...['', '.ts', '.tsx', '/index.ts', '/index.tsx'].map((suffix) => `${base}${suffix}`),
+  ].find((candidate) => /\.(?:m?tsx?|m?js|cjs)$/.test(candidate) && existsSync(candidate));
+  if (!found)
+    throw new Error(`${relative(file)} imports ${specifier}, which the walk can't resolve`);
+  return found;
 }
 
 /** Every file `entry` loads at run time, itself included, and every outside package they name. */
