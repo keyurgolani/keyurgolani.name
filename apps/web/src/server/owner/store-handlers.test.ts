@@ -298,9 +298,6 @@ async function seeded(t: TestContext): Promise<Seeded> {
   const owner = ownerStore({
     config: configFor(dataDir),
     checks: CHECKS,
-    documents: {
-      getLive: async () => ({ state: 'empty', revisionId: null, unitHash: null, unit: null }),
-    },
     setServable: () => {},
   });
   t.after(() => owner.release());
@@ -539,10 +536,6 @@ async function until(done: () => boolean): Promise<void> {
   }
 }
 
-const EMPTY = {
-  getLive: async () => ({ state: 'empty' as const, revisionId: null, unitHash: null, unit: null }),
-};
-
 test('with the lock busy through startup, owner starts and serves, and its writes wait until the claim and the repair are done in the background', async (t) => {
   deploy(t);
   const logged = t.mock.method(console, 'log', () => {});
@@ -551,7 +544,6 @@ test('with the lock busy through startup, owner starts and serves, and its write
   const owner = ownerStore({
     config: configFor(dataDir),
     checks: CHECKS,
-    documents: EMPTY,
     setServable: () => {},
     timing: { lockWaitMs: 50, claimRetryMs: [20, 40] },
   });
@@ -610,7 +602,6 @@ test("with something other than a regular file at publication/lock, startup's cl
   const owner = ownerStore({
     config: configFor(dataDir),
     checks: CHECKS,
-    documents: EMPTY,
     setServable: () => {},
     timing: { lockWaitMs: 50, claimRetryMs: [20, 40] },
   });
@@ -653,7 +644,6 @@ test('a write after another server took the claim answers data_dir_in_use, and c
   const owner = ownerStore({
     config: configFor(dataDir),
     checks: CHECKS,
-    documents: EMPTY,
     setServable: () => {},
     timing: { claimRefreshMs: 20 },
   });
@@ -712,7 +702,6 @@ test("owner opens the store at the data directory's real path, whatever spelling
   const owner = ownerStore({
     config: configFor(path.join(linked, '.', '')),
     checks: CHECKS,
-    documents: EMPTY,
     setServable: () => {},
   });
   assert.equal(owner.store.paths.root, realpathSync(dataDir));
@@ -727,7 +716,6 @@ test("owner starts degraded, never stopped, over a live manifest a reader can't 
     const owner = ownerStore({
       config: configFor(dataDir),
       checks: CHECKS,
-      documents: EMPTY,
       setServable: () => {},
       // Walks every field, as apps/web's renderDrift does.
       renderDrift: (rendering) => [

@@ -26,6 +26,7 @@ import readline from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import { startEgressTrap } from './egress-trap.mjs';
 import { freePort, getText, waitFor } from './net.mjs';
+import { seedOwnerStore } from './owner-store.mjs';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const WEB = path.join(REPO_ROOT, 'apps', 'web');
@@ -123,6 +124,9 @@ async function onFreePort(attempt, firstPort) {
  *   relative to the app's root, and the variable gets the absolute path
  * @param {string} [options.dataName] a data directory to make under the app's root,
  *   mode 0700, as PORTFOLIO_DATA_DIR, which owner needs; none by default
+ * @param {boolean} [options.seed] with `dataName`, publish the source pair into it as
+ *   revision 1 first (owner-store.mjs), since owner's first start refuses a site whose
+ *   variant this build doesn't register (default true)
  * @param {string} [options.logFile] where the server's stdout and stderr go
  * @param {number} [options.port] the port to try first, instead of a free one, so a
  *   test can hold it and check that a start on a taken port moves to another
@@ -145,6 +149,7 @@ export async function startApp({
   sourceName = 'config',
   envFiles = {},
   dataName,
+  seed = true,
   logFile,
   port: firstPort,
   web = WEB,
@@ -201,6 +206,7 @@ export async function startApp({
   if (dataName) {
     fileEnv.PORTFOLIO_DATA_DIR = path.join(root, dataName);
     mkdirSync(fileEnv.PORTFOLIO_DATA_DIR, { mode: 0o700 });
+    if (seed) seedOwnerStore(fileEnv.PORTFOLIO_DATA_DIR, sourceDir);
   }
 
   // next dev flushes its telemetry queue on exit from a detached process,

@@ -28,7 +28,9 @@ import { isTombstoned, readManifest, readRevision, revisionHealth } from './revi
 // reader serves the last known good in its place, `degraded`, with the
 // reason: the most recently live revision that serves, without a
 // tombstone. With none, it's `incompatible`. With no pointer it's `empty`,
-// unless the store has published before, when the pointer is damaged. It
+// as owner's store is until its first-start import commits, unless the
+// store has published before, when the pointer is damaged. Visitors get 503
+// while it's `incompatible` or `empty`. It
 // never rewrites the pointer: it gets the reads of node:fs and nothing
 // else, and imports no module that writes. It keeps up to four served units
 // by revision ID; as the pointer moves to a kept one, its tombstone, its
@@ -57,11 +59,6 @@ export interface RevisionCatalogOptions {
   readonly dataDir: string;
   /** The build's checks. A revision is checked as served. */
   readonly checks: UnitChecks;
-  /**
-   * What serves while nothing is published. Until #3's Slice 3 imports the
-   * mounted documents at first start, owner's empty store serves them.
-   */
-  readonly whenEmpty?: CatalogReader;
   /** How a live manifest's rendering differs from the build's; none when it doesn't. */
   readonly renderDrift?: (rendering: Rendering) => readonly RenderDrift[];
   /** Told whether anything is servable each time the reader decides. */
@@ -92,17 +89,22 @@ interface Seen {
 
 const NOTHING = { revisionId: null, unitHash: null, unit: null } as const;
 
-/**
- * The decision for a store that has never published: whenEmpty answers,
- * asked on every request, since it keeps its own watch.
- */
-const EMPTY = Symbol('empty');
-type Found = Decision | typeof EMPTY;
+/** The decision for a store that has never published: nothing serves. */
+const EMPTY: Decision = {
+  live: { state: 'empty', ...NOTHING },
+  status: {
+    state: 'empty',
+    liveRevisionId: null,
+    seq: null,
+    unitHash: null,
+    servingRevisionId: null,
+    renderDrift: null,
+  },
+};
 
 export function revisionCatalogReader({
   dataDir,
   checks,
-  whenEmpty,
   renderDrift,
   setServable = () => {},
   log = () => {},
@@ -119,7 +121,7 @@ export function revisionCatalogReader({
   // store's events/ and revisions/, shared by every request that finds the same.
   // Until when it's kept: for good, unless it met a failure that may pass.
   let decided:
-    { readonly key: string; readonly decision: Promise<Found>; until: number } | undefined;
+    { readonly key: string; readonly decision: Promise<Decision>; until: number } | undefined;
   let lastState: CatalogStatus['state'] | undefined;
   let lastDrift: string | undefined;
   // As the AssetStore finds one: a regular file under its hash, never a
@@ -233,23 +235,7 @@ export function revisionCatalogReader({
     }
   }
 
-  /** What serves while the store has never published: whenEmpty's answer, or nothing. */
-  async function empty(): Promise<Decision> {
-    const base = { liveRevisionId: null, seq: null, unitHash: null };
-    if (!whenEmpty) {
-      return {
-        live: { state: 'empty', ...NOTHING },
-        status: { state: 'empty', ...base, servingRevisionId: null, renderDrift: null },
-      };
-    }
-    const live = await whenEmpty.getLive();
-    return {
-      live,
-      status: { state: live.state, ...base, servingRevisionId: live.revisionId, renderDrift: null },
-    };
-  }
-
-  async function decide(): Promise<Found> {
+  async function decide(): Promise<Decision> {
     const seen: Seen = { transient: false };
     const done = (decision: Decision): Decision =>
       seen.transient ? { ...decision, transient: true } : decision;
@@ -265,7 +251,7 @@ export function revisionCatalogReader({
     if (!pointer && reason === undefined) {
       if (!(await hasHistory(fs, paths))) return EMPTY;
       // live.json is gone from a store that has published, as after a bad
-      // restore: the last known good serves, never whenEmpty's documents.
+      // restore: the last known good serves, and nothing imports over it.
       reason = 'pointer_damaged';
       log({ level: 'error', event: 'store.pointer.missing', code: 'pointer_damaged' });
     }
@@ -384,7 +370,7 @@ export function revisionCatalogReader({
 
   async function current(): Promise<Decision> {
     const key = await pointerKey();
-    let decision: Promise<Found>;
+    let decision: Promise<Decision>;
     if (decided?.key === key && now() < decided.until) {
       decision = decided.decision;
     } else {
@@ -396,12 +382,10 @@ export function revisionCatalogReader({
       // One that met a failure that may pass, or failed, is decided again
       // by the first request once TRANSIENT_MS has passed.
       void decision.then((found) => {
-        if (found !== EMPTY && found.transient) entry.until = now() + TRANSIENT_MS;
+        if (found.transient) entry.until = now() + TRANSIENT_MS;
       });
     }
-    const found = await decision;
-    // An empty store asks whenEmpty every time, which keeps its own watch.
-    const done = found === EMPTY ? await empty().catch(failure) : found;
+    const done = await decision;
     // The latest decision sets the flag on every call, a kept one included,
     // so nothing else has to ask the reader again for visitors to see it.
     // One a newer pointer overtook while it ran says nothing.

@@ -16,8 +16,6 @@ export const RevisionIdSchema = z.string().regex(/^rev_[0-9a-f]{32}$/);
 export const DraftIdSchema = z.string().regex(/^drf_[0-9a-f]{32}$/);
 /** A SHA-256 digest as the store writes one. */
 export const Sha256Schema = z.string().regex(/^sha256:[0-9a-f]{64}$/);
-/** What serves: a revision, or the mounted documents (`doc-` and 12 hex digits) while the store is empty. */
-export const ServingRevisionIdSchema = z.string().regex(/^(?:rev_[0-9a-f]{32}|doc-[0-9a-f]{12})$/);
 export const ServingStateSchema = z.enum(['live', 'degraded', 'incompatible', 'empty']);
 
 const Actor = z.enum(['owner', 'operator']);
@@ -220,7 +218,7 @@ export const LiveSchema = z
   .object({
     state: ServingStateSchema,
     liveRevisionId: RevisionIdSchema.nullable(),
-    servingRevisionId: ServingRevisionIdSchema.nullable(),
+    servingRevisionId: RevisionIdSchema.nullable(),
     seq: z.number().int().min(1).nullable(),
     unitHash: Sha256Schema.nullable(),
   })

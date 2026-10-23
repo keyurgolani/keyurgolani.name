@@ -34,9 +34,6 @@ const dataDir = mkdtempSync(path.join(tmpdir(), 'owner-handlers-'));
 const store = ownerStore({
   config: { ...config, dataDir },
   checks: { validate: (pair) => validatePublicationUnit(pair), appVersion: 'test' },
-  documents: {
-    getLive: async () => ({ state: 'empty', revisionId: null, unitHash: null, unit: null }),
-  },
   setServable: () => {},
 });
 const handlers = ownerHandlers({

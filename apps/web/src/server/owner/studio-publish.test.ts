@@ -61,7 +61,10 @@ function documents(name: string) {
   };
 }
 
-/** One revision, published from beside the server as the CLI would: Studio can't start a store. */
+/**
+ * One revision, published from beside the server as the CLI would, over the
+ * one owner's first start imported from the mounted pair.
+ */
 async function seed(): Promise<string> {
   const core = await import('@portfolio/core/owner');
   const side = core.openStore({
@@ -73,8 +76,10 @@ async function seed(): Promise<string> {
   });
   const created = await side.drafts.create({ documents: documents('Rowan First') }, 'owner');
   assert.ok(created.kind === 'saved');
+  const imported = (await side.publication.status()).liveRevisionId;
+  assert.ok(imported);
   const outcome = await side.publication.publish(
-    { draftId: created.draft.draftId, draftVersion: 1, expectedLiveRevisionId: null },
+    { draftId: created.draft.draftId, draftVersion: 1, expectedLiveRevisionId: imported },
     'operator',
   );
   assert.ok(outcome.kind === 'committed', JSON.stringify(outcome));
@@ -265,7 +270,7 @@ test('two sessions publishing with one expectation: exactly one commits, and the
   const won = responses.find((response) => response.status === 200)!;
   const lost = responses.find((response) => response.status === 409)!;
   const committed = await data<{ revisionId: string; seq: number }>(won);
-  assert.equal(committed.seq, 2);
+  assert.equal(committed.seq, 3);
   const { error } = (await lost.json()) as {
     error: { code: string; details: Record<string, unknown> };
   };

@@ -2,7 +2,8 @@
 // an internal network behind a Caddy HTTPS proxy that issues its certificate
 // from its own local CA (`tls internal`). `pnpm ci:proxy` smoke-tests it, and
 // #2's security suite runs through it under owner (`test:security:proxy`),
-// with compose.owner.yml on top.
+// with compose.owner.yml on top, on a data volume seeded with the fixture
+// pair (owner-store.mjs).
 //
 //   const stack = await startProxyStack({ image: 'portfolio:ci' });
 //   const res = await stack.request('/api/health');
@@ -14,6 +15,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { send } from './http-client.mjs';
 import { freePort, waitFor } from './net.mjs';
+import { COPY_SEED_INTO_VOLUME, seedOwnerStore } from './owner-store.mjs';
 
 const HARNESS = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(HARNESS, '..', '..');
@@ -62,7 +64,12 @@ export async function startProxyStack({
   // Finch also only takes --env-file after -f.
   const env = [`PORTFOLIO_IMAGE=${image}`, `FIXTURE_SOURCE_DIR=${sourceDir}`, `PROXY_PORT=${port}`];
   const files = ['-f', COMPOSE_FILE];
+  // Owner's first start refuses the fixture's unregistered variant, so its
+  // volume starts with the pair published into it.
+  const seedDir = path.join(stateDir, 'owner-seed');
   if (owner) {
+    mkdirSync(seedDir, { mode: 0o700 });
+    seedOwnerStore(seedDir, sourceDir);
     const secretDir = path.join(stateDir, 'owner-secret');
     mkdirSync(secretDir, { recursive: true });
     // 0400, as docs/deployment.md asks of the real one. CI's runner is uid
@@ -113,6 +120,29 @@ export async function startProxyStack({
     );
 
   try {
+    if (owner) {
+      // As root, once, before the server's first start: into the project's data volume, for uid 1001.
+      const seeded = compose(
+        [
+          'run',
+          '--rm',
+          '--no-deps',
+          '-T',
+          '-u',
+          '0',
+          '-v',
+          `${seedDir}:/seed:ro`,
+          'app',
+          'node',
+          '-e',
+          COPY_SEED_INTO_VOLUME,
+        ],
+        { stdio: 'inherit' },
+      );
+      if (seeded.status !== 0) {
+        throw new Error(`${cli} compose run couldn't seed the owner volume for project ${project}`);
+      }
+    }
     if (compose(['up', '-d'], { stdio: 'inherit' }).status !== 0) {
       throw new Error(`${cli} compose up failed for project ${project}`);
     }

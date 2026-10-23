@@ -136,9 +136,9 @@ test('the tagged startup rows are named requirements for #2, #3, and #4', () => 
       ['auth.secret', '#2', 'owner', 'fatal', 'owner check'],
       ['auth.limits', '#2', 'owner', 'fatal', 'check'],
       ['data.directory', '#2, #3', 'owner', 'fatal', 'owner check'],
-      ['documents.pair', '#4', 'owner read-only', 'fatal', 'check'],
-      ['documents.shape', '#3', 'owner', 'fatal', 'pending'],
+      ['documents.pair', '#4', 'read-only', 'fatal', 'check'],
       ['revision.integrity', '#3', 'owner', 'degraded', 'owner check'],
+      ['documents.shape', '#3', 'owner', 'fatal', 'owner check'],
     ],
   );
 });
