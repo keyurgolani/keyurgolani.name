@@ -1,0 +1,39 @@
+# Exceptions to #11's quality gates (Slice 1, item 12). pnpm quality:exceptions
+# validates this file, and the exceptions block of #6's runtime-budgets.json,
+# with tests/quality/lib/exceptions.ts.
+#
+# An exception waives one rule of one gate for an exact scope: every field
+# the gate varies on, each named outright and never wildcarded, and no other.
+# Its kind says what it waives: a floor above AA (above-aa), a contrast rule
+# on decorative content, named by selector (decorative), a timing ceiling
+# (timing), or a flaky interaction test owned by the surface's owner
+# (quarantine, 14 days at most). Budget exceptions live in runtime-budgets.json.
+# WCAG A and AA failures on essential content can't be excepted, in any tier.
+# expires is at most 90 days after created, and an expired entry fails.
+#
+#   exceptions:
+#     - id: login-primary-target
+#       kind: above-aa
+#       gate: targets
+#       rule: primary
+#       owner: keyurgolani
+#       rationale: Why the floor can't hold yet.
+#       affectedUsers: Who meets the smaller control.
+#       fallback: What they can use instead.
+#       trackingIssue: '#8'
+#       created: '2026-10-22'
+#       expires: '2026-12-01'
+#       scope:
+#         surface: login
+#         route: /studio/login
+#         tuple: platform-neutral/warm-parchment/humanist-ui/light
+#         viewport: 390x844
+#         inputMode: touch
+#
+# A confirmed axe false positive goes under falsePositives, with the axe rule,
+# the selector, the quality/manual-runs/ record proving the criterion passes,
+# and the axe-core version it was confirmed under. It lapses on an axe upgrade.
+
+version: 1
+exceptions: []
+falsePositives: []

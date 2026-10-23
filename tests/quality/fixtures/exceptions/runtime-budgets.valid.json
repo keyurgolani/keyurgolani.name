@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "description": "Known good (#11, Slice 1, item 12): a copy of runtime-budgets.json, trimmed to what pnpm quality:exceptions reads, with the exceptions block #6's file doesn't have yet. One budget exception, valid on the fixtures' run date, 2026-11-01.",
+  "exceptions": [
+    {
+      "id": "fallback-js-bytes",
+      "kind": "budget",
+      "gate": "budget",
+      "rule": "limit",
+      "owner": "keyurgolani",
+      "rationale": "The fallback route ships yaml and zod until #6 slice 2 moves them off it.",
+      "affectedUsers": "Visitors on slow connections, who download about 57 KB more.",
+      "fallback": "The page renders from the server; the extra script only delays hydration.",
+      "trackingIssue": "#6",
+      "created": "2026-10-22",
+      "expires": "2026-12-20",
+      "scope": { "unit": "fallback", "metric": "jsBytes" }
+    }
+  ]
+}

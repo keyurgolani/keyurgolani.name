@@ -39,6 +39,7 @@
     "check:workflows": "node ci/check-workflows.mjs",
     "check:source-maps": "node ci/check-source-maps.mjs",
     "check:standalone": "node ci/check-standalone.mjs",
+    "quality:exceptions": "tsx tests/quality/exceptions.ts",
     "ci:format": "node ci/run.mjs format -- pnpm format:check",
     "ci:lint": "node ci/run.mjs lint -- pnpm lint",
     "ci:typecheck": "node ci/run.mjs typecheck -- pnpm typecheck",

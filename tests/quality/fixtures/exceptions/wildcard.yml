@@ -1,0 +1,21 @@
+# Known bad: a scope that wildcards a route, where it must name one.
+version: 1
+exceptions:
+  - id: studio-primary-targets
+    kind: above-aa
+    gate: targets
+    rule: primary
+    owner: keyurgolani
+    rationale: Studio's primary buttons are 40px tall at 390px until #8's sticky bar lands.
+    affectedUsers: Touch users on narrow phones, who get a 40px target where 44px is the floor.
+    fallback: The buttons still clear the 24px and 32px floors.
+    trackingIssue: '#8'
+    created: '2026-10-20'
+    expires: '2026-12-15'
+    scope:
+      surface: login
+      route: /studio/*
+      tuple: platform-neutral/warm-parchment/humanist-ui/light
+      viewport: 390x844
+      inputMode: touch
+falsePositives: []
