@@ -209,6 +209,7 @@ test('every gate so far has a known-bad case and a known-good one, and each id i
     'merged-verdict/shard-job-cancelled',
     'merged-verdict/shard-job-skipped',
     'merged-verdict/missing-shard-pr-skipped',
+    'merged-verdict/missing-shard-pr-cancelled',
     'merged-verdict/shard-mismatch-pr-count',
     'release/matrix-failed',
     'release/release-gate-failed',

@@ -149,7 +149,8 @@ test("shardFiles gives each project its own spec files, and none of another shar
 function wall(groups: readonly ShardGroup[], workers = 2): number {
   const load = Array.from({ length: workers }, () => 0);
   for (const group of [...groups].sort((a, b) => b.weight - a.weight)) {
-    load[load.indexOf(Math.min(...load))] += group.weight;
+    const freer = load.indexOf(Math.min(...load));
+    load[freer] = load[freer]! + group.weight;
   }
   return Math.max(...load);
 }
