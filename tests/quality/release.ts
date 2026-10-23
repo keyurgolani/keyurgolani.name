@@ -19,7 +19,7 @@
 // a usage error.
 
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -139,21 +139,70 @@ export function parseReleaseArgs(argv: readonly string[]): { merged?: string; sh
 
 const TSX_CLI = createRequire(import.meta.url).resolve('tsx/cli');
 
-/** quality:full whole, against the reference variant's worktree, and its verdict. */
-function runMatrix(): Verdict | null {
-  const result = spawnSync(
+/** How the matrix's run ended: its exit status, or null when it couldn't start or was killed. */
+export interface MatrixExit {
+  readonly status: number | null;
+  readonly error?: string;
+}
+
+/**
+ * The matrix's verdict from the verdict.json its run wrote, held to how the
+ * run ended: null when it wrote none, and a failure when its exit status
+ * and its verdict disagree, or it didn't start.
+ */
+export function matrixVerdict(exit: MatrixExit, reports: string = reportsDir()): Verdict | null {
+  let verdict: Verdict;
+  try {
+    verdict = JSON.parse(
+      readFileSync(path.join(reports, 'quality', 'verdict.json'), 'utf8'),
+    ) as Verdict;
+  } catch {
+    return null;
+  }
+  if (typeof verdict?.ok !== 'boolean' || !Array.isArray(verdict.failures)) return null;
+  const disagree =
+    exit.error !== undefined
+      ? `The matrix's run didn't start or finish: ${exit.error}`
+      : exit.status === null
+        ? "The matrix's run was killed before it exited, so its verdict.json can't be trusted."
+        : (exit.status === 0) !== verdict.ok
+          ? `The matrix's run exited ${exit.status}, and its verdict.json says it ${verdict.ok ? 'passed' : 'failed'}.`
+          : null;
+  if (!disagree) return verdict;
+  return {
+    ...verdict,
+    ok: false,
+    failures: [...verdict.failures, { rule: 'matrix-exit', message: disagree }],
+  };
+}
+
+/** Runs a command, as spawnSync does: injectable, so a test can stand in for the matrix. */
+export type Spawn = (
+  command: string,
+  args: readonly string[],
+  options: { cwd: string; stdio: 'inherit'; env: NodeJS.ProcessEnv },
+) => { status: number | null; error?: Error };
+
+/**
+ * quality:full whole, against the reference variant's worktree, and its
+ * verdict. An old verdict.json is deleted first, so a run that writes none
+ * never reads as the last one's.
+ */
+export function runMatrix(
+  spawn: Spawn = spawnSync as unknown as Spawn,
+  reports: string = reportsDir(),
+): Verdict | null {
+  rmSync(path.join(reports, 'quality', 'verdict.json'), { force: true });
+  const result = spawn(
     process.execPath,
     [TSX_CLI, path.join('tests', 'quality', 'run.ts'), 'full', '--', EXTERNAL_VARIANT_FLAG],
     { cwd: REPO_ROOT, stdio: 'inherit', env: process.env },
   );
   if (result.error) console.error(`[quality:release] ${result.error.message}`);
-  try {
-    return JSON.parse(
-      readFileSync(path.join(reportsDir(), 'quality', 'verdict.json'), 'utf8'),
-    ) as Verdict;
-  } catch {
-    return null;
-  }
+  return matrixVerdict(
+    { status: result.status, ...(result.error ? { error: result.error.message } : {}) },
+    reports,
+  );
 }
 
 async function main(argv: readonly string[]): Promise<number> {
