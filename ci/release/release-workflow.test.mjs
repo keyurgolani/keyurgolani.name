@@ -15,8 +15,15 @@ const WORKFLOW = parse(SOURCE);
 const JOBS = WORKFLOW.jobs;
 const TAG_IF =
   /^\$\{\{ github\.ref_type == 'tag'( && needs\.classify\.outputs\.kind == '(rc|final)')? \}\}$/;
-const RC_JOBS = ['rc-verify', 'rc-build', 'rc-scan', 'rc-tag', 'rc-release'];
+const RC_JOBS = ['rc-verify', 'rc-build', 'rc-merge', 'rc-scan', 'rc-tag', 'rc-release'];
 const FINAL_JOBS = ['promote-verify', 'promote-scan', 'promote', 'promote-release'];
+const DRY_RUN_JOBS = ['dry-run-build', 'dry-run'];
+// Each platform's build leg, and the job that merges the two legs' indexes.
+const BUILD_JOBS = { 'dry-run-build': 'dry-run', 'rc-build': 'rc-merge' };
+const LEGS = [
+  { arch: 'amd64', runner: 'ubuntu-24.04' },
+  { arch: 'arm64', runner: 'ubuntu-24.04-arm' },
+];
 const stepsOf = (id) => JOBS[id].steps ?? [];
 const uses = (id, action) => stepsOf(id).filter((s) => (s.uses ?? '').startsWith(`${action}@`));
 const writes = (job) =>
@@ -52,14 +59,15 @@ test('the workflow token is contents: read, and each write is a tag-gated job of
       .map(([id, job]) => [id, writes(job)]),
   );
   assert.deepEqual(holders, {
-    'rc-build': ['attestations', 'id-token', 'packages'],
+    'rc-build': ['packages'],
+    'rc-merge': ['attestations', 'id-token', 'packages'],
     'rc-tag': ['packages'],
     'rc-release': ['contents'],
     promote: ['packages'],
     'promote-release': ['contents'],
   });
   for (const id of Object.keys(JOBS)) {
-    if (id === 'dry-run') continue;
+    if (DRY_RUN_JOBS.includes(id)) continue;
     assert.match(JOBS[id].if, TAG_IF, `${id} runs on tag pushes only`);
   }
   for (const id of RC_JOBS) assert.match(JOBS[id].if, /kind == 'rc'/, id);
@@ -67,16 +75,27 @@ test('the workflow token is contents: read, and each write is a tag-gated job of
 });
 
 test('the dry run holds contents: read, no secret, and never reaches GHCR', () => {
-  const job = JOBS['dry-run'];
-  assert.equal(job.if, "${{ github.event_name == 'pull_request' }}");
-  assert.equal(job.permissions, undefined, "it keeps the workflow's contents: read");
-  const text = JSON.stringify(job);
-  assert.doesNotMatch(text, /secrets\.|github\.token|GITHUB_TOKEN|GH_TOKEN/);
-  assert.doesNotMatch(text, /ghcr\.io/);
-  assert.deepEqual(uses('dry-run', 'docker/login-action'), []);
-  assert.deepEqual(uses('dry-run', 'actions/attest-build-provenance'), []);
-  assert.doesNotMatch(text, /gh release|gh attestation/);
+  assert.equal(JOBS['dry-run-build'].if, "${{ github.event_name == 'pull_request' }}");
+  // After a failed leg too, so the dependency scan still reports.
+  assert.deepEqual(JOBS['dry-run'].needs, ['dry-run-build']);
+  assert.equal(JOBS['dry-run'].if, "${{ !cancelled() && github.event_name == 'pull_request' }}");
+  for (const id of DRY_RUN_JOBS) {
+    const text = JSON.stringify(JOBS[id]);
+    assert.equal(JOBS[id].permissions, undefined, `${id} keeps the workflow's contents: read`);
+    assert.doesNotMatch(text, /secrets\.|github\.token|GITHUB_TOKEN|GH_TOKEN/, id);
+    assert.doesNotMatch(text, /ghcr\.io/, id);
+    assert.deepEqual(uses(id, 'docker/login-action'), [], id);
+    assert.deepEqual(uses(id, 'actions/attest-build-provenance'), [], id);
+    assert.doesNotMatch(text, /gh release|gh attestation/, id);
+  }
+  // The legs hand over their OCI layouts as one-day artifacts.
+  const [layout] = uses('dry-run-build', 'actions/upload-artifact');
+  assert.equal(layout.with.name, 'oci-dry-run-${{ matrix.arch }}');
+  assert.equal(layout.with['retention-days'], 1);
+  assert.equal(uses('dry-run', 'actions/download-artifact')[0].with.pattern, 'oci-dry-run-*');
+  assert.equal(JOBS['dry-run-build'].services, undefined, 'the legs need no registry');
   // Its registry is the service on the runner, published on loopback only.
+  const job = JOBS['dry-run'];
   assert.equal(job.env.IMAGE, 'localhost:5000/portfolio');
   assert.match(job.services.registry.image, /^registry:2\.\d+\.\d+@sha256:[0-9a-f]{64}$/);
   assert.deepEqual(job.services.registry.ports, ['127.0.0.1:5000:5000']);
@@ -84,30 +103,87 @@ test('the dry run holds contents: read, no secret, and never reaches GHCR', () =
   assert.doesNotMatch(JSON.stringify(WORKFLOW.env), /secrets/);
 });
 
-test('every build is one multi-arch push by digest with mode=max provenance and an SBOM', () => {
-  for (const id of ['dry-run', 'rc-build']) {
+test('each platform builds once, natively on its own runner, with mode=max provenance and an SBOM', () => {
+  for (const id of Object.keys(BUILD_JOBS)) {
+    const job = JOBS[id];
+    assert.deepEqual(job.strategy.matrix, { include: LEGS }, id);
+    assert.equal(job['runs-on'], '${{ matrix.runner }}', id);
     const builds = uses(id, 'docker/build-push-action');
     assert.equal(builds.length, 1, `${id} builds once`);
     const { with: input } = builds[0];
-    assert.equal(input.platforms, '${{ env.PLATFORMS }}');
+    assert.equal(input.platforms, 'linux/${{ matrix.arch }}', "one platform, the runner's own");
     assert.equal(input.provenance, 'mode=max');
     assert.equal(input.sbom, true);
-    assert.match(input.outputs, /push-by-digest=true/);
     assert.doesNotMatch(input.outputs, /:[\w.-]+,|tags=/, 'no tag at build time');
     assert.equal(input.tags, undefined);
     assert.equal(input['cache-from'], undefined);
     assert.equal(input['cache-to'], undefined);
+    // Each leg hands its digest on under its own name.
+    assert.deepEqual(job.outputs, {
+      'digest-amd64': '${{ steps.digest.outputs.digest-amd64 }}',
+      'digest-arm64': '${{ steps.digest.outputs.digest-arm64 }}',
+    });
+    const record = stepsOf(id).find((s) => s.id === 'digest');
+    assert.equal(record.env.DIGEST, '${{ steps.build.outputs.digest }}');
+    assert.equal(record.run, 'echo "digest-$ARCH=$DIGEST" >> "$GITHUB_OUTPUT"');
   }
+  // The candidate's legs push to GHCR by digest; the dry run's write layouts.
+  assert.match(uses('rc-build', 'docker/build-push-action')[0].with.outputs, /push-by-digest=true/);
+  assert.equal(
+    uses('dry-run-build', 'docker/build-push-action')[0].with.outputs,
+    'type=oci,dest=${{ runner.temp }}/oci,tar=false',
+  );
   assert.equal(WORKFLOW.env.PLATFORMS, 'linux/amd64,linux/arm64');
-  const attest = uses('rc-build', 'actions/attest-build-provenance');
-  assert.equal(attest.length, 1);
-  assert.equal(attest[0].with['subject-digest'], '${{ steps.build.outputs.digest }}');
   // Nothing else builds an image.
   for (const id of Object.keys(JOBS)) {
-    if (id === 'dry-run' || id === 'rc-build') continue;
+    if (id in BUILD_JOBS) continue;
     assert.deepEqual(uses(id, 'docker/build-push-action'), [], id);
     assert.doesNotMatch(JSON.stringify(JOBS[id]), /docker (build|push) |buildx build /, id);
   }
+});
+
+test('no job emulates a platform: QEMU is gone', () => {
+  assert.doesNotMatch(SOURCE, /setup-qemu-action|binfmt|qemu/i);
+});
+
+test('the merge job merges both legs by digest, then checks and attests the merged index', () => {
+  for (const [leg, id] of Object.entries(BUILD_JOBS)) {
+    assert.ok(JOBS[id].needs.includes(leg), `${id} needs ${leg}`);
+    const steps = stepsOf(id);
+    const merge = steps.findIndex((s) => s.id === 'merge');
+    assert.ok(merge >= 0, id);
+    assert.equal(steps[merge].env.AMD64, `\${{ needs.${leg}.outputs.digest-amd64 }}`);
+    assert.equal(steps[merge].env.ARM64, `\${{ needs.${leg}.outputs.digest-arm64 }}`);
+    assert.match(
+      steps[merge].run,
+      /^node ci\/release\/merge-index\.mjs "\$IMAGE" "\$AMD64" "\$ARM64"$/m,
+    );
+    // The merge runs on buildx's pinned imagetools, as every setup-buildx.
+    const buildx = steps.findIndex((s) => /^docker\/setup-buildx-action@/.test(s.uses ?? ''));
+    assert.ok(buildx >= 0 && buildx < merge, `${id} sets up buildx before the merge`);
+    // The provenance and SBOM check reads the merged index.
+    const check = steps.find((s) => /attestations\.mjs/.test(s.run ?? ''));
+    assert.ok(steps.indexOf(check) > merge, id);
+    assert.equal(check.env.DIGEST, '${{ steps.merge.outputs.digest }}', id);
+    assert.equal(JOBS[id].env?.DIGEST, undefined, id);
+  }
+  assert.deepEqual(JOBS['rc-merge'].outputs, { digest: '${{ steps.merge.outputs.digest }}' });
+  // The attestation is on the merged digest, and only there.
+  const attests = Object.keys(JOBS).flatMap((id) =>
+    uses(id, 'actions/attest-build-provenance').map((s) => ({ id, ...s.with })),
+  );
+  assert.equal(attests.length, 1);
+  assert.equal(attests[0].id, 'rc-merge');
+  assert.equal(attests[0]['subject-digest'], '${{ steps.merge.outputs.digest }}');
+  // Everything after the merge takes the merged digest.
+  assert.equal(JOBS['rc-scan'].env.DIGEST, '${{ needs.rc-merge.outputs.digest }}');
+  for (const id of ['rc-tag', 'rc-release']) {
+    const digests = stepsOf(id)
+      .map((s) => s.env?.DIGEST)
+      .filter(Boolean);
+    assert.deepEqual(digests, ['${{ needs.rc-merge.outputs.digest }}'], id);
+  }
+  assert.doesNotMatch(SOURCE, /needs\.rc-build\.outputs\.digest[^-]/);
 });
 
 test('no release job reads or writes a cache', () => {
@@ -159,9 +235,11 @@ test('each step waits on the one before it', () => {
   const needs = (id) => [...(JOBS[id].needs ?? [])].sort();
   assert.deepEqual(needs('rc-verify'), ['classify']);
   assert.deepEqual(needs('rc-build'), ['classify', 'rc-verify']);
-  assert.deepEqual(needs('rc-scan'), ['classify', 'rc-build']);
-  assert.deepEqual(needs('rc-tag'), ['classify', 'rc-build', 'rc-scan']);
-  assert.deepEqual(needs('rc-release'), ['classify', 'rc-build', 'rc-scan', 'rc-tag']);
+  assert.deepEqual(needs('rc-merge'), ['classify', 'rc-build']);
+  assert.deepEqual(needs('rc-scan'), ['classify', 'rc-merge']);
+  assert.deepEqual(needs('rc-tag'), ['classify', 'rc-merge', 'rc-scan']);
+  assert.deepEqual(needs('rc-release'), ['classify', 'rc-merge', 'rc-scan', 'rc-tag']);
+  assert.deepEqual(needs('dry-run'), ['dry-run-build']);
   assert.deepEqual(needs('promote-verify'), ['classify']);
   assert.deepEqual(needs('promote-scan'), ['classify', 'promote-verify']);
   assert.deepEqual(needs('promote'), ['classify', 'promote-scan', 'promote-verify']);
@@ -186,7 +264,7 @@ test('every job sets timeout-minutes, and no checkout keeps its credentials', ()
 });
 
 test('each image build has its own 25-minute timeout, inside the job timeout', () => {
-  for (const id of ['dry-run', 'rc-build']) {
+  for (const id of Object.keys(BUILD_JOBS)) {
     const [build] = uses(id, 'docker/build-push-action');
     assert.equal(build.id, 'build', id);
     assert.equal(build['timeout-minutes'], 25, id);
@@ -309,7 +387,7 @@ test('every setup-buildx pins its buildx version, and no build uploads a build r
   assert.ok(buildx.length >= 4);
   for (const step of buildx) assert.match(step.with.version, /^v\d+\.\d+\.\d+$/);
   assert.equal(new Set(buildx.map((s) => s.with.version)).size, 1);
-  for (const id of ['dry-run', 'rc-build']) {
+  for (const id of Object.keys(BUILD_JOBS)) {
     for (const step of uses(id, 'docker/build-push-action')) {
       assert.equal(step.env.DOCKER_BUILD_RECORD_UPLOAD, 'false', id);
       // buildx's metadata provenance prints the event payload in the log.
@@ -338,5 +416,5 @@ test('every setup-buildx pins its buildx version, and no build uploads a build r
       }
     }
   }
-  assert.equal(inspected, 6, 'dry-run, rc-build, and promote-scan each read both');
+  assert.equal(inspected, 6, 'dry-run, rc-merge, and promote-scan each read both');
 });

@@ -10,10 +10,11 @@ Pushing `vX.Y.Z-rc.N` runs these jobs in order, and each one stops the release w
 
 1. **classify** reads the tag. Anything but `vX.Y.Z-rc.N` or `vX.Y.Z` fails here.
 2. **rc-verify** refuses the tag unless its commit is on `main` and has a green complete `ci` run: a `ci.yml` run for the push to `main` on exactly that commit, where `gate` passed and the run concluded success. `gate` passes only on a complete run, so a draft PR's selected run never counts, and a PR's run doesn't either, since its `gate` checked a merge commit. It reads both through the API with `contents: read` and `actions: read` ([`ci/release/verify-rc.mjs`](../ci/release/verify-rc.mjs)).
-3. **rc-build** builds `linux/amd64` and `linux/arm64` once, arm64 under QEMU, with BuildKit's SLSA provenance at `mode=max` and an SPDX SBOM for each platform in the index. It pushes the index to `ghcr.io/<owner>/<repo>` by digest, with no tag, checks that both platforms carry the provenance and an SBOM ([`ci/release/attestations.mjs`](../ci/release/attestations.mjs)), and attests the digest with `actions/attest-build-provenance`, which signs the provenance through Sigstore and stores it with GitHub and on GHCR. The check runs after the push, so when it fails the digest is already on GHCR, untagged and never promoted: delete that package version in the package settings.
-4. **rc-scan** runs Grype on that digest, once per platform, and on the production dependencies ([Scans](#scans)).
-5. **rc-tag** tags the scanned digest `X.Y.Z-rc.N` on GHCR, and checks the tag resolves to it.
-6. **rc-release** creates the GitHub pre-release, with notes that name the pull source by digest and the two SBOMs attached.
+3. **rc-build** builds `linux/amd64` on `ubuntu-24.04` and `linux/arm64` on `ubuntu-24.04-arm`, once each and natively, with BuildKit's SLSA provenance at `mode=max` and an SPDX SBOM. Each leg pushes its platform's index to `ghcr.io/<owner>/<repo>` by digest, with no tag.
+4. **rc-merge** merges the two indexes into one with `docker buildx imagetools create`, which keeps each platform's attestation manifest, and pushes it by digest, with no tag ([`ci/release/merge-index.mjs`](../ci/release/merge-index.mjs)). It checks that both platforms carry the provenance and an SBOM ([`ci/release/attestations.mjs`](../ci/release/attestations.mjs)), and attests the merged digest with `actions/attest-build-provenance`, which signs the provenance through Sigstore and stores it with GitHub and on GHCR. The check runs after the push, so when it fails the digests are already on GHCR, untagged and never promoted: delete those package versions in the package settings.
+5. **rc-scan** runs Grype on the merged digest, once per platform, and on the production dependencies ([Scans](#scans)).
+6. **rc-tag** tags the scanned digest `X.Y.Z-rc.N` on GHCR, and checks the tag resolves to it.
+7. **rc-release** creates the GitHub pre-release, with notes that name the pull source by digest and the two SBOMs attached.
 
 ## Promotion
 
@@ -35,17 +36,18 @@ The workflow's token is `contents: read`. Each job that writes gets only what it
 
 | Job               | Writes                                 |
 | ----------------- | -------------------------------------- |
-| `rc-build`        | `packages`, `id-token`, `attestations` |
+| `rc-build`        | `packages`                             |
+| `rc-merge`        | `packages`, `id-token`, `attestations` |
 | `rc-tag`          | `packages`                             |
 | `rc-release`      | `contents`, for the pre-release        |
 | `promote`         | `packages`                             |
 | `promote-release` | `contents`, for the release            |
 
-`rc-verify` and `promote-verify` add `actions: read`, `rc-scan` and `promote-scan` add `packages: read` to pull the private package, and `promote-scan` adds `attestations: read`. No job reads or writes a cache: the installs are fresh, setup-node, setup-buildx, and setup-qemu run with their caches off, and no build names `cache-from`. No job uses a repository secret.
+`rc-verify` and `promote-verify` add `actions: read`, `rc-scan` and `promote-scan` add `packages: read` to pull the private package, and `promote-scan` adds `attestations: read`. No job reads or writes a cache: the installs are fresh, setup-node and setup-buildx run with their caches off, and no build names `cache-from`. No job uses a repository secret.
 
 ## The dry run
 
-A pull request into `next` or `main` that changes `release.yml`, `ci/release/`, the `Dockerfile`, `.dockerignore`, `.grype.yaml`, or `pnpm-lock.yaml` runs the `dry-run` job. It builds both platforms with the same provenance and SBOM settings into a `registry:2` container on the runner, published on its loopback only, checks the attestations there, runs both scans, tags the digest `0.0.0-rc.1` and then promotes it to `0.0.0`, `0.0`, `0`, and `latest` in that registry, and renders the notes into the job summary. It holds `contents: read` and no secret, never logs in to GHCR, and attests nothing, since signing needs `id-token: write`.
+A pull request into `next` or `main` that changes `release.yml`, `ci/release/`, the `Dockerfile`, `.dockerignore`, `.grype.yaml`, or `pnpm-lock.yaml` runs the dry run. `dry-run-build` builds each platform natively on the same runners as `rc-build`, with the same provenance and SBOM settings, into an OCI layout it keeps as a one-day artifact. `dry-run` pushes both layouts by digest into a `registry:2` container on its runner, published on its loopback only, merges them there with the same helper as `rc-merge`, checks the attestations on the merged index, runs both scans, tags the digest `0.0.0-rc.1` and then promotes it to `0.0.0`, `0.0`, `0`, and `latest` in that registry, and renders the notes into the job summary. It holds `contents: read` and no secret, never logs in to GHCR, and attests nothing, since signing needs `id-token: write`.
 
 Grype downloads its vulnerability database on the runner. The dry run is not a required check: `gate` is the only one.
 
@@ -100,7 +102,7 @@ An entry matches a finding by its id, or one of the aliases Grype lists, in the 
 - **Apply the two tag rulesets.** [`release-tags.json`](../.github/rulesets/release-tags.json) keeps release tags (`v[0-9]*`) from moving or being deleted, with no bypass. [`release-tag-creation.json`](../.github/rulesets/release-tag-creation.json) lets only a repository admin create one. They're separate so the admin bypass on creation never reaches the other rules.
 
 - **Decide GHCR visibility.** The package is private, so every pull, the notes' included, needs `docker login ghcr.io` with a token that has `read:packages`. Making it public in the package's settings lets anyone pull by digest.
-- **Environments.** The release jobs don't use one. To require an approval before an image is published, add a `release` environment with required reviewers and name it on `rc-build` and `promote`.
+- **Environments.** The release jobs don't use one. To require an approval before an image is published, add a `release` environment with required reviewers and name it on `rc-build`, `rc-merge`, and `promote`.
 
 ## Pull by digest
 

@@ -69,7 +69,14 @@ export function mergeIndex(image, digests, run = docker) {
   const digest = `sha256:${createHash('sha256').update(text).digest('hex')}`;
   run(['buildx', 'imagetools', 'create', '--tag', `${image}@${digest}`, ...sources]);
   const resolved = manifestDigest(
-    run(['buildx', 'imagetools', 'inspect', `${image}@${digest}`, '--format', '{{json .Manifest}}']),
+    run([
+      'buildx',
+      'imagetools',
+      'inspect',
+      `${image}@${digest}`,
+      '--format',
+      '{{json .Manifest}}',
+    ]),
   );
   if (resolved !== digest) throw new Error(`${image}@${digest} resolves to ${resolved}`);
   return digest;
@@ -87,7 +94,14 @@ export function loadIndex(image, digest, source, run = docker) {
   if (problems.length) throw new Error(problems.join('; '));
   run(['buildx', 'imagetools', 'create', '--tag', `${image}@${digest}`, source]);
   const resolved = manifestDigest(
-    run(['buildx', 'imagetools', 'inspect', `${image}@${digest}`, '--format', '{{json .Manifest}}']),
+    run([
+      'buildx',
+      'imagetools',
+      'inspect',
+      `${image}@${digest}`,
+      '--format',
+      '{{json .Manifest}}',
+    ]),
   );
   if (resolved !== digest) throw new Error(`${image}@${digest} resolves to ${resolved}`);
   return digest;
