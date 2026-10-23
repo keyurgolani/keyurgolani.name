@@ -1,17 +1,20 @@
 import { readFileSync } from 'node:fs';
 import { DEFAULT_PORTFOLIO, DEFAULT_SITE } from '../harness/app-server.mjs';
 import { expect, test } from '../harness/fixtures';
-import { expectNotFound, sha256, solidPng } from '../harness/media';
+import { draftWithCover, expectNotFound } from '../harness/media';
 import { ownerSecret } from '../harness/owner-secret.mjs';
 import { mintDraft, publish, seedDraftWith, signIn } from '../harness/preview-grants';
 import { ownerApp } from '../harness/profile-matrix';
+import { expectFrameImage } from '../harness/studio-preview';
 
 // #10's draft media under owner, against the built server: a draft's
 // renditions serve only under its preview grant, private and no-store, and
-// from /media only once it's published, when the grant ends. The draft is
-// the harness fixture with its work cover a local file, its renditions
-// seeded into the store as ingestion would put them. The images are made
-// here, from nothing.
+// from /media only once it's published, when the grant ends; and Studio's
+// preview frame renders them, under the preview CSP. The draft is the
+// harness fixture with its work cover a local file, its rendition seeded
+// into the store as ingestion would put it. The images are made here, from
+// nothing. media-preview-origin.spec.ts renders the frame on a preview
+// origin of its own.
 
 const MEDIA = { type: 'route', description: '/media/[...path]' };
 const ASSETS = { type: 'route', description: '/preview-assets/[grant]/[...path]' };
@@ -20,58 +23,17 @@ const OWNER = { type: 'profile', description: 'owner' };
 const secret = ownerSecret();
 test.use({ appOptions: ownerApp(secret.hash) });
 
+const draft = () =>
+  draftWithCover(readFileSync(DEFAULT_PORTFOLIO, 'utf8'), readFileSync(DEFAULT_SITE, 'utf8'));
+
 test(
   "a draft's media serves under its grant alone, private and no-store, and from /media once published",
   { annotation: [ASSETS, MEDIA, OWNER] },
   async ({ page, app, request }) => {
     const csrf = await signIn(page, app, secret.password);
-    const rendition = solidPng(480, 300, [60, 120, 60]);
-    const blob = sha256(rendition);
-    const original = sha256(solidPng(960, 600, [60, 120, 60]));
-    const documents = {
-      portfolio: {
-        format: 'yaml' as const,
-        sourceText: readFileSync(DEFAULT_PORTFOLIO, 'utf8').replace(
-          'https://media.rowan.test/fixture-garden.png',
-          'fixture-garden.png',
-        ),
-      },
-      site: { format: 'yaml' as const, sourceText: readFileSync(DEFAULT_SITE, 'utf8') },
-      media: {
-        format: 'json' as const,
-        sourceText: JSON.stringify({
-          assets: [
-            {
-              assetId: 'fixture-garden-cover',
-              sha256: original,
-              mime: 'image/png',
-              bytes: 4096,
-              width: 960,
-              height: 600,
-              renditions: [
-                {
-                  name: 'w480-a1',
-                  ext: 'png',
-                  mime: 'image/png',
-                  bytes: rendition.length,
-                  width: 480,
-                  sha256: blob,
-                },
-              ],
-              derivedAt: '2026-10-23T08:00:00Z',
-              algorithmVersion: 1,
-              source: { kind: 'local', path: 'fixture-garden.png' },
-              availability: { state: 'available' },
-            },
-          ],
-        }),
-      },
-    };
-    const draft = await seedDraftWith(app, documents, [
-      { bytes: rendition, mediaType: 'image/png' },
-    ]);
-    const grant = await mintDraft(page, csrf, draft);
-    const file = `fixture-garden-cover/${original}/w480-a1.png`;
+    const { documents, blobs, rendition, original, file } = draft();
+    const seeded = await seedDraftWith(app, documents, blobs);
+    const grant = await mintDraft(page, csrf, seeded);
     const asImage = { 'sec-fetch-dest': 'image' };
 
     const served = await request.get(`/preview-assets/${grant}/${file}`, { headers: asImage });
@@ -95,7 +57,7 @@ test(
     }
 
     // Published: /media serves it, for a year, the page names it, and the draft's grant ends.
-    await publish(app, draft);
+    await publish(app, seeded);
     const live = await request.get(`/media/${file}`);
     expect(live.status()).toBe(200);
     expect(live.headers()['cache-control']).toBe('public, max-age=31536000, immutable');
@@ -104,5 +66,15 @@ test(
     const ended = await request.get(`/preview-assets/${grant}/${file}`, { headers: asImage });
     expect(ended.status()).toBe(404);
     expect(ended.headers()['content-type']).toMatch(/^text\/html/);
+  },
+);
+
+test(
+  "Studio's preview frame renders the draft's image from its grant's /preview-assets, under the preview CSP",
+  { annotation: [ASSETS, OWNER] },
+  async ({ page, app }) => {
+    const { documents, blobs, file } = draft();
+    await seedDraftWith(app, documents, blobs);
+    await expectFrameImage(page, app, secret.password, file, app.origin);
   },
 );

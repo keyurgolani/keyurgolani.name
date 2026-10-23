@@ -40,6 +40,63 @@ export const renditionsOf = (html: string, assetId: string) => [
   ...new Set(html.match(new RegExp(`/media/${assetId}/[0-9a-f]{64}/[a-z0-9-]+\\.[a-z0-9]+`, 'g'))),
 ];
 
+/**
+ * A draft of the harness fixture whose work cover is a local file, with the
+ * one rendition its media document names, as ingestion would have put it in
+ * the store: the documents, the blob, and the rendition's path below a
+ * media base.
+ */
+export function draftWithCover(portfolioText: string, siteText: string) {
+  const rendition = solidPng(480, 300, [60, 120, 60]);
+  const original = sha256(solidPng(960, 600, [60, 120, 60]));
+  const documents = {
+    portfolio: {
+      format: 'yaml' as const,
+      sourceText: portfolioText.replace(
+        'https://media.rowan.test/fixture-garden.png',
+        'fixture-garden.png',
+      ),
+    },
+    site: { format: 'yaml' as const, sourceText: siteText },
+    media: {
+      format: 'json' as const,
+      sourceText: JSON.stringify({
+        assets: [
+          {
+            assetId: 'fixture-garden-cover',
+            sha256: original,
+            mime: 'image/png',
+            bytes: 4096,
+            width: 960,
+            height: 600,
+            renditions: [
+              {
+                name: 'w480-a1',
+                ext: 'png',
+                mime: 'image/png',
+                bytes: rendition.length,
+                width: 480,
+                sha256: sha256(rendition),
+              },
+            ],
+            derivedAt: '2026-10-23T08:00:00Z',
+            algorithmVersion: 1,
+            source: { kind: 'local', path: 'fixture-garden.png' },
+            availability: { state: 'available' },
+          },
+        ],
+      }),
+    },
+  };
+  return {
+    documents,
+    rendition,
+    original,
+    blobs: [{ bytes: rendition, mediaType: 'image/png' }],
+    file: `fixture-garden-cover/${original}/w480-a1.png`,
+  };
+}
+
 /** /media's answer for anything it doesn't serve: one 404, never cached. */
 export async function expectNotFound(response: APIResponse, label: string): Promise<void> {
   expect(response.status(), label).toBe(404);

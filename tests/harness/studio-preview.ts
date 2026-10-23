@@ -69,6 +69,50 @@ export async function openPreview(
   return { csrf, frame: await grantFrame(page) };
 }
 
+/**
+ * Signs in, opens /studio/preview on the working draft, already seeded with
+ * media, and checks its frame on `origin` renders the work cover's image
+ * from `file` below its grant's /preview-assets (#10): loaded, 200, and no
+ * CSP refusal in the page or the frame.
+ */
+export async function expectFrameImage(
+  page: Page,
+  app: App,
+  password: string,
+  file: string,
+  origin: string,
+): Promise<void> {
+  const refusals: string[] = [];
+  page.on('console', (message) => {
+    if (/Content Security Policy/i.test(message.text())) refusals.push(message.text());
+  });
+  const loaded: string[] = [];
+  page.on('response', (response) => {
+    const url = new URL(response.url());
+    if (url.pathname.startsWith('/preview-assets/') && response.status() === 200) {
+      loaded.push(`${url.origin}${url.pathname}`);
+    }
+  });
+  await signIn(page, app, password);
+  await page.goto(PREVIEW_PAGE);
+  await expect(stage(page)).toHaveAttribute('data-phase', 'ready');
+  const frame = await grantFrame(page);
+  expect(new URL(frame.url()).origin).toBe(origin);
+  const grant = new URL(frame.url()).pathname.split('/')[2]!;
+  const image = frame.locator('img[alt="Rows of identical seedlings"]');
+  await expect(image).toBeVisible();
+  await expect
+    .poll(() =>
+      image.evaluate((element: HTMLImageElement) => element.complete && element.naturalWidth),
+    )
+    .toBeGreaterThan(0);
+  expect(await image.evaluate((element: HTMLImageElement) => element.currentSrc)).toBe(
+    `${origin}/preview-assets/${grant}/${file}`,
+  );
+  expect(loaded).toContain(`${origin}/preview-assets/${grant}/${file}`);
+  expect(refusals).toEqual([]);
+}
+
 /** Every grant command the page sends from now on, by name. */
 export function recordGrantCommands(page: Page): string[] {
   const names: string[] = [];
