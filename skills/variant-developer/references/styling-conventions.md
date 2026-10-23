@@ -1,20 +1,48 @@
 # Styling conventions
 
-> The scope, the layout-only rule, logical properties, and class naming
-> every variant follows. Loaded in Phase 2 Wave 1 when writing styles.css,
-> and when adding bespoke renderers in Wave 2.
+> The scope, the layout-only rule, the tokens and primitives, logical
+> properties, and class naming every variant follows. Loaded in Phase 2 Wave 1
+> when writing styles.css, and when adding bespoke renderers in Wave 2.
+> `docs/appearance.md` is the contract behind it.
 
 ## Composition only
 
-A variant's stylesheet arranges: spacing, grid and flow, sizing, ordering, stacking, overflow, and how structure responds to the viewport. It doesn't choose color, fonts, type scale, materials, borders and radii as a look, interaction states, or motion timing. Those are the appearance system's (#19), and its tokens apply at the presentation boundary the host renders around you.
+A variant's stylesheet arranges: spacing, grid and flow, sizing, ordering, stacking, overflow, and how structure responds to the viewport. It doesn't choose color, fonts, type scale, materials, borders and radii as a look, interaction states, or motion timing. Those are the appearance axes' (#19): the color scheme's, the design language's, and the typography profile's, set as custom properties on the presentation boundary the host renders around you.
 
-Until #19 ships, the page shows the host's neutral defaults. That's expected: judge Wave 1 by structure, not by color.
+Your stylesheet compiles into the `variant-layout` cascade layer, after the scheme, language, and typography layers and before the utilities and accessibility ones:
+
+```css
+@layer reset, scheme, language, typography, variant-layout, utilities, accessibility;
+```
+
+So a rule of yours arranges anything, and a utility (the outline focus ring, a control's touch target) or an accessibility override (reduced motion, forced colors, reduced transparency) still wins over it. Judge every wave under more than one selection: the layout should hold under every design language, color scheme, typography profile, and display mode.
 
 The audit holds you to it (`audit.css-appearance`): a raw color (`#hex`, `rgb()`, `oklch()`, a named color), a `font-family` or `font`, a border radius, or a shadow is refused unless it reads a `var(--...)` token. `currentColor`, `transparent`, a zero radius, `none`, and CSS-wide keywords pass. The kit's shared stylesheet and the fallback pass the same rule.
 
+## Read the tokens
+
+Everything that isn't arrangement reads a token:
+
+| You need                      | Read                                                                                                  |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------- |
+| A text or background color    | `var(--color-<role>)`: `text-primary`, `text-secondary` for quiet text, `surface-prominent`, `accent` |
+| A rule between things         | `border-block-start: var(--ui-border-divider)`, which carries its own color                           |
+| A radius or a shadow          | `var(--ui-radius-card)`, `var(--ui-radius-media)`, `var(--ui-shadow-card)`                            |
+| A duration or an easing       | `var(--ui-motion-fast)`, `var(--ui-motion-standard)`, `var(--ui-motion-easing)`                       |
+| A hover or active movement    | `transform: var(--ui-state-hover-transform)`, which reduced motion sets to `none`                     |
+| A text role                   | `data-type-role="display"` in the markup, or `var(--type-display-font-size)` and its fields in a rule |
+| A reading width               | `max-inline-size: var(--type-measure-body)`                                                           |
+| Spacing or a breakpoint value | your own `--layout-*` property, or a plain length                                                     |
+
+`--layout-*` is the only prefix you define. Quiet text is `--color-text-secondary` or `--color-text-muted`, never a lower `opacity`, which drops below the contrast the scheme was gated for. Don't key a rule on a pack's attribute (`[data-color-scheme]`, `[data-design-language]`, `[data-typography]`, `[data-display-mode]`): a composition reads the same under every pack, and the pack's tokens are already resolved for the mode.
+
+## Use the primitives
+
+Render a control, a surface, a disclosure, or a badge with the shared primitive from `@portfolio/appearance/primitives` rather than your own markup: `Action` (a button, or a link with `href`), `Surface`, `Badge`, `Disclosure` (a native `details`), `Field`, `Checkbox`, `Radio`, `Select`, `Tabs`, `Dialog`, `Tooltip`, `Toast`, `Media`, `DataDisplay`, and the landmarks. You pick the primitive and its emphasis (`primary`, `secondary`, or `quiet`; `subtle`, `default`, `prominent`, or `overlay`); the design language styles it through its `data-ui-slot` parts. Arrange a primitive from your scope, by the `className` it takes, but never restyle a `[data-ui-slot]` part: that's the language's.
+
 ## Scope every selector
 
-The host imports every registered variant's stylesheet on every page for now (#6 loads each where it renders), so every selector starts with `[data-variant='<id>']`:
+A page can show more than one boundary, such as a catalog plate beside the page's own, so every selector starts with `[data-variant='<id>']`:
 
 ```css
 [data-variant='acme-ocean'] {
