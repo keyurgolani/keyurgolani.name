@@ -20,8 +20,10 @@ import { expect, test } from './fixtures';
 // - The host's focus ring (apps/web/src/app/experience-base.css): on a phone,
 //   where Chromium's own ring is under 3:1, a page's skip link and the 404
 //   page's first link ring in currentColor, and a variant's own focus style,
-//   which is unlayered, wins over it. An element outside the portfolio's
-//   boundary, as Studio's are, keeps the browser's own ring.
+//   which is unlayered, wins over it. A host page with no boundary, as a 404
+//   without a live site, rings too; an element outside both, as Studio's
+//   are, keeps the browser's own ring. A preview document is the same
+//   ExperienceDocument tree as /, so / stands for it.
 // - The Extended tier on a 320px phone: its display headline wraps, its
 //   table scrolls inside its figure, and no number breaks across lines.
 
@@ -155,6 +157,24 @@ test.describe("the host's focus ring on a phone", () => {
       );
       const ring = await outline(page);
       expect(`${ring.style} ${ring.width}`).not.toBe('solid 2px');
+    },
+  );
+
+  test(
+    "a host page with no boundary, as a 404 without a live site, rings in the host's ring",
+    { annotation: [{ type: 'route', description: '/' }, READ_ONLY] },
+    async ({ page }) => {
+      await page.goto('/');
+      await page.keyboard.press('Tab');
+      await page.evaluate(() => {
+        const main = document.createElement('main');
+        main.className = 'host-chrome';
+        main.innerHTML = '<a href="#home">Home</a>';
+        document.body.append(main);
+        main.querySelector('a')!.focus();
+      });
+      const ring = await outline(page);
+      expect(ring).toEqual({ style: 'solid', width: '2px', color: ring.text, text: ring.text });
     },
   );
 });
