@@ -1,0 +1,39 @@
+/*
+ * Kinetic Cosmos's layout. Composition only: spacing and arrangement, with color,
+ * type, and motion left to #19's appearance axes. Every rule sits under
+ * [data-variant='kinetic-cosmos'], and every property is logical.
+ */
+
+[data-variant='kinetic-cosmos'] {
+  display: block;
+  box-sizing: border-box;
+  max-inline-size: 46rem;
+  margin-inline: auto;
+  padding-block: 1.5rem 4rem;
+  padding-inline: 1.25rem;
+  /* A word too long for the line, such as a name or a URL, breaks rather than widening the page. */
+  overflow-wrap: anywhere;
+}
+
+[data-variant='kinetic-cosmos'] .kc-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-block-end: 3rem;
+}
+
+/*
+ * The section links are #19's navigation primitive, which the platform
+ * stylesheet sizes: a target of at least 24 by 24 CSS px, WCAG 2.2's AA
+ * floor (2.5.8), and 32 by 32 at 768 px wide and below. The composition
+ * spaces the list and sets no size of its own on a link.
+ */
+[data-variant='kinetic-cosmos'] .kc-nav [data-ui-slot='navigation.list'] {
+  gap: 0.25rem 1.25rem;
+}
+
+[data-variant='kinetic-cosmos'] .kc-name {
+  margin-block: 0 2rem;
+}

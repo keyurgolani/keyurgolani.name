@@ -1,0 +1,58 @@
+{
+  "id": "kinetic-cosmos",
+  "name": "Kinetic Cosmos",
+  "promise": "Replace this with the composition idea from DESIGN.md, in one sentence.",
+  "description": "Replace this with what the composition does with the portfolio, from DESIGN.md.",
+  "contract": "2.0",
+  "schemas": {
+    "portfolio": {
+      "min": 3,
+      "max": 3
+    },
+    "site": {
+      "min": 2,
+      "max": 2
+    }
+  },
+  "tokenContract": 1,
+  "compositionFamily": "document",
+  "motionIntent": "still",
+  "performanceTier": "light",
+  "budgets": {
+    "js": 2048,
+    "css": 2048,
+    "image": 0,
+    "font": 0,
+    "animation": 0,
+    "enhancement": 0
+  },
+  "renderedKinds": [],
+  "unsupportedKinds": [],
+  "contentSlots": [],
+  "routes": {
+    "home": "shared",
+    "work": "shared",
+    "views": []
+  },
+  "controls": {
+    "version": 1,
+    "items": [],
+    "migrations": []
+  },
+  "visitorControl": {
+    "placement": "header"
+  },
+  "textDirection": [
+    "ltr",
+    "rtl"
+  ],
+  "provenance": {
+    "provisional": true,
+    "sources": [
+      {
+        "source": "The fallback composition",
+        "disposition": "preserved"
+      }
+    ]
+  }
+}
