@@ -18,6 +18,7 @@
 import type { Page } from '@playwright/test';
 import { expect, installProbe, nextFrames, readProbes, startProbes, test } from './fixtures';
 import type { TraceTarget } from './targets';
+import { loadThresholds } from '../../quality/thresholds';
 
 const FIXTURE = 'fixture-variant-medium';
 /** How long each mode holds, as the scope's 5 s of trace. */
@@ -294,38 +295,91 @@ test("the page's layout shift, with fonts and media blocked and without, is reco
   page,
 }, testInfo) => {
   await page.addInitScript(() => {
-    const shifts: number[] = [];
-    (window as unknown as { __shifts: number[] }).__shifts = shifts;
+    /** What moved, as a reader of the record can find it. */
+    const describe = (node: Node | null) => {
+      if (!node) return null;
+      if (!(node instanceof Element))
+        return `${node.nodeName}: ${(node.textContent ?? '').trim().slice(0, 40)}`;
+      const id = node.id ? `#${node.id}` : '';
+      const classes = [...node.classList].map((name) => `.${name}`).join('');
+      const slot = node.getAttribute('data-ui-slot');
+      const text = (node.textContent ?? '').trim().replace(/\s+/g, ' ').slice(0, 40);
+      return `${node.localName}${id}${classes}${slot ? `[data-ui-slot=${slot}]` : ''}: ${text}`;
+    };
+    const rect = (r: DOMRectReadOnly) => [r.x, r.y, r.width, r.height].map(Math.round);
+    const shifts: { at: number; value: number; sources: unknown[] }[] = [];
+    (window as unknown as { __shifts: typeof shifts }).__shifts = shifts;
     new PerformanceObserver((list) => {
       for (const entry of list.getEntries() as (PerformanceEntry & {
         value: number;
         hadRecentInput: boolean;
+        sources?: {
+          node: Node | null;
+          previousRect: DOMRectReadOnly;
+          currentRect: DOMRectReadOnly;
+        }[];
       })[]) {
-        if (!entry.hadRecentInput) shifts.push(entry.value);
+        if (entry.hadRecentInput) continue;
+        shifts.push({
+          at: Math.round(entry.startTime),
+          value: entry.value,
+          sources: (entry.sources ?? []).map((source) => ({
+            node: describe(source.node),
+            from: rect(source.previousRect),
+            to: rect(source.currentRect),
+          })),
+        });
       }
     }).observe({ type: 'layout-shift', buffered: true });
   });
-  const cls = async () => {
+  const shifts = async () => {
     await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => undefined);
     await page.waitForTimeout(1_000);
-    return page.evaluate(() =>
-      (window as unknown as { __shifts: number[] }).__shifts.reduce((sum, value) => sum + value, 0),
+    return page.evaluate(
+      () =>
+        (window as unknown as { __shifts: { at: number; value: number; sources: unknown[] }[] })
+          .__shifts,
     );
   };
+  const total = (list: { value: number }[]) => list.reduce((sum, { value }) => sum + value, 0);
   await load(page);
-  const loaded = await cls();
+  const loadedShifts = await shifts();
   await block(page, /\/_portfolio\/(?:asset|font)\/|\.woff2?(?:$|\?)/);
   await page.reload({ waitUntil: 'load' });
-  const blocked = await cls();
+  const blockedShifts = await shifts();
+  const loaded = total(loadedShifts);
+  const blocked = total(blockedShifts);
   await testInfo.attach('layout-shift.json', {
-    body: JSON.stringify({ loaded, fontsAndMediaBlocked: blocked }, null, 2),
+    body: JSON.stringify(
+      {
+        loaded,
+        fontsAndMediaBlocked: blocked,
+        shifts: { loaded: loadedShifts, fontsAndMediaBlocked: blockedShifts },
+      },
+      null,
+      2,
+    ),
     contentType: 'application/json',
   });
   console.log(
     `[trace] layout shift: ${loaded.toFixed(4)} loaded, ${blocked.toFixed(4)} with fonts and media blocked`,
   );
-  // #11 sets the threshold by tier. The fixture measures none either way,
-  // with font-display: swap and its fallback stack, so any shift is new.
-  expect(loaded).toBe(0);
+  for (const [label, list] of [
+    ['loaded', loadedShifts],
+    ['blocked', blockedShifts],
+  ] as const) {
+    for (const shift of list) {
+      console.log(
+        `[trace] layout shift ${label} at ${shift.at} ms: ${shift.value.toFixed(6)} ${JSON.stringify(shift.sources)}`,
+      );
+    }
+  }
+  // With fonts and media blocked the page renders in its fallback stack from
+  // the first paint, so nothing may move at all. With them loaded the
+  // trace's font swaps in (font-display: swap), and the text reflowing as it
+  // does is what a visitor sees too: that's held to #11's CLS limit
+  // (quality/thresholds.json), not to zero, which predated the font loading
+  // on a public page (#19, Slice 4).
+  expect(loaded).toBeLessThanOrEqual(loadThresholds().vitals.cls);
   expect(blocked).toBe(0);
 });
