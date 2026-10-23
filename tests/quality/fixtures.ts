@@ -20,7 +20,8 @@ import { test as base } from '../harness/fixtures';
 import { startApp } from '../harness/app-server.mjs';
 import { pinPageClock } from './lib/clock';
 import { qualityWeb, runCanary } from './lib/env';
-import { HOST_MARKERS, standInMarkers, type MarkedResponse } from './lib/markers';
+import { egressFailure, installBrowserPolicy } from './lib/egress';
+import type { MarkedResponse } from './lib/markers';
 import { appOptionsFor, type CellServer } from './lib/server';
 import { recordVitals } from './lib/vitals';
 
@@ -83,46 +84,15 @@ export const test = base.extend<QualityTestFixtures, QualityWorkerFixtures>({
 
   // The harness's own is auto, and so is this, which replaces it.
   blockedRequests: async ({ context, app }, provide, testInfo) => {
-    const blocked: string[] = [];
-    const appHost = new URL(app.origin).host;
-    await context.route('**/*', async (route) => {
-      const url = route.request().url();
-      let origin: string | null = null;
-      try {
-        origin = new URL(url).origin;
-      } catch {
-        origin = null;
-      }
-      if (origin !== app.origin) {
-        blocked.push(url);
-        return route.abort('blockedbyclient');
-      }
-      if (HOST_MARKERS === 'host') return route.continue();
-      const response = await route.fetch({ maxRedirects: 0 });
-      const { headers, body } = standInMarkers(response.headers(), await response.body());
-      return route.fulfill({ status: response.status(), headers, body });
-    });
-    await context.routeWebSocket(/.*/, (ws) => {
-      if (new URL(ws.url()).host === appHost) ws.connectToServer();
-      else {
-        blocked.push(ws.url());
-        ws.close();
-      }
-    });
+    const blocked = await installBrowserPolicy(context, app.origin);
     await provide(blocked);
-    if (blocked.length > 0) {
+    const failure = egressFailure(blocked);
+    if (failure) {
       await testInfo.attach('blocked-requests.txt', {
         body: `${blocked.join('\n')}\n`,
         contentType: 'text/plain',
       });
-      throw new Error(
-        [
-          `The page requested ${blocked.length} URL(s) outside the app: ${[...new Set(blocked)].join(', ')}`,
-          '',
-          'Expected: no request outside the app under test',
-          `Received: ${blocked.join(', ')}`,
-        ].join('\n'),
-      );
+      throw new Error(failure);
     }
   },
 

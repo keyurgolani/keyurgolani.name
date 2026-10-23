@@ -15,6 +15,7 @@ import path from 'node:path';
 import { defineConfig, devices } from '@playwright/test';
 import { reportsDir } from '../../ci/lib/reports.mjs';
 import base from '../../playwright.config';
+import { TRACE_LAUNCH_ARGS } from '../harness/trace/policy.mjs';
 import { runCanary } from './lib/env';
 import { RUN_ENGINES, type Engine } from './lib/matrix';
 import { HARNESS_SERVER, planServers } from './lib/server';
@@ -31,6 +32,12 @@ const DEVICES: Readonly<Record<Engine, (typeof devices)[string]>> = {
   webkit: devices['Desktop Safari'],
 };
 
+/** Each engine's device, and for Chromium, #6's trace policy: no name but loopback resolves, and no proxy is used. */
+const engineUse = (engine: Engine) => ({
+  ...DEVICES[engine],
+  ...(engine === 'chromium' ? { launchOptions: { args: [...TRACE_LAUNCH_ARGS] } } : {}),
+});
+
 const cellSpecs = ['cells.spec.ts', ...(plan.mode === 'full' ? ['visual.spec.ts'] : [])];
 
 export default defineConfig({
@@ -46,13 +53,13 @@ export default defineConfig({
     {
       name: `${engine} harness`,
       testMatch: ['harness.spec.ts', 'canary.spec.ts'],
-      use: { ...DEVICES[engine], cellServer: HARNESS_SERVER },
+      use: { ...engineUse(engine), cellServer: HARNESS_SERVER },
     },
     ...planServers(plan).map(({ id, label, server }) => ({
       name: `${engine} ${id}`,
       testMatch: cellSpecs,
       grep: new RegExp(`@server-${id}(?![0-9a-f])`),
-      use: { ...DEVICES[engine], cellServer: server },
+      use: { ...engineUse(engine), cellServer: server },
       metadata: { server: label },
     })),
   ]),
