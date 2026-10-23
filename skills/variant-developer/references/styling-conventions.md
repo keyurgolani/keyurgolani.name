@@ -106,10 +106,17 @@ Reduced motion comes from the presentation boundary, not from a media query in y
   animation: ao-drift 12s linear infinite;
 }
 
-[data-variant='acme-ocean']:is([data-motion='reduced'], [data-motion='static']) .ao-drift {
+[data-variant='acme-ocean']:is(
+    [data-motion='reduced'],
+    [data-motion='static'],
+    [data-motion-policy='reduce']
+  )
+  .ao-drift {
   animation: none;
 }
 ```
+
+`[data-motion]` and the `--ui-motion-*` tokens reach the public pages only with #19 slice 4, which renders the presentation boundary there. Until then a public page's boundary carries only `data-motion-policy`, so the rule keys on `[data-motion-policy='reduce']` too.
 
 CSS doesn't reach script motion: run it on `@portfolio/kit/runtime` (`references/common-bugs.md` §8), which is static under reduced motion and before the page mounts, so without JavaScript it never starts.
 
