@@ -18,8 +18,21 @@
 // composition and on each tier pack's sentinel, so each tier's packs meet
 // the contrast, focus, forced-colors, reduced-motion, and
 // reduced-transparency rows on every PR (#11, Slice 2, the owner's [37]).
-// `full` plans every cell in every row. Slice 4 adds the 40-cell cap and
-// change mapping.
+// `full` plans every cell in every row.
+//
+// The owner's [37] change-directed rule (11-4): a changed variant runs
+// against every stable design language, and a changed language against
+// every stable variant, each pair in the first tuple the resolver renders as
+// asked, from the platform defaults on. lib/changes.ts maps a run's changed
+// paths to the variants and languages they belong to. A PR plans those
+// cells beside the sentinels, at every viewport in the default row and in
+// every row at 1440x900, as the tier packs' sentinels run, and each cell
+// names the axis that brought it in, so its failures do too. `full` plans
+// them as if every variant and language changed, so the scheduled and
+// release runs hold every pair a PR could. Stable languages are the
+// shipping (non-fixture) design languages of the stable tier; variants
+// carry no tier, so every registered non-fixture composition counts as
+// stable. The 40-cell PR cap and its sentinel ordering wait in the backlog.
 
 // First: readBuildMeta() loads the generated registry, which imports
 // `server-only`; #73's shim resolves it to its empty module, as Next's
@@ -43,6 +56,7 @@ import {
   contractFixture,
   type ContractFixture,
 } from '../../packages/variant-contract/src/node/fixtures';
+import type { Change, ChangeAxis } from './lib/changes';
 import { pairwise, tupleKey, type Coverage, type Tuple } from './coverage';
 import {
   DEFAULT_ROW,
@@ -105,10 +119,18 @@ export interface Cell {
   readonly source: ContractFixture['name'];
   /** The tier pack the cell is the sentinel of, if any. */
   readonly pack?: string;
+  /** The changed variants and languages that brought it in, by the [37] rule. */
+  readonly changed?: readonly ChangedBy[];
   /** In the PR set. */
   readonly sentinel: boolean;
   /** Includes a fixture pack or variant, so it stays out of the zero-exception close run. */
   readonly fixture: boolean;
+}
+
+/** A changed variant or language a cell runs for. */
+export interface ChangedBy {
+  readonly axis: ChangeAxis;
+  readonly id: string;
 }
 
 export interface PlannedTest {
@@ -137,6 +159,8 @@ export interface Plan {
   readonly targets: readonly { readonly kind: CellKind; readonly id: string }[];
   /** Every reason a planned test may skip with. */
   readonly reasons: readonly string[];
+  /** The changed variants and languages the [37] rule planned cells for. */
+  readonly changes: readonly Change[];
 }
 
 /** A tuple for `variant` with the platform's default packs, in `displayMode`. */
@@ -220,9 +244,31 @@ export interface PlanInput {
   readonly meta: BuildMeta;
   readonly registrations: Registrations;
   readonly mode: RunMode;
+  /** The variants and languages a PR changes (lib/changes.ts). `full` plans every one. */
+  readonly changes?: readonly Change[];
 }
 
-export function planCells({ meta, registrations, mode }: PlanInput): Plan {
+/** The [37] rule's pairs: each changed variant with each stable language, each changed language with each stable variant. */
+export function changePairs(
+  changes: readonly Pick<Change, 'axis' | 'id'>[],
+  stable: { readonly variants: readonly string[]; readonly designLanguages: readonly string[] },
+): { readonly variant: string; readonly designLanguage: string; readonly by: ChangedBy }[] {
+  return changes.flatMap((change) =>
+    change.axis === 'variant'
+      ? stable.designLanguages.map((designLanguage) => ({
+          variant: change.id,
+          designLanguage,
+          by: { axis: change.axis, id: change.id },
+        }))
+      : stable.variants.map((variant) => ({
+          variant,
+          designLanguage: change.id,
+          by: { axis: change.axis, id: change.id },
+        })),
+  );
+}
+
+export function planCells({ meta, registrations, mode, changes = [] }: PlanInput): Plan {
   const registry = createAppearanceRegistry(meta);
   const variants = meta.VARIANTS.map(({ manifest }) => manifest).filter(
     (manifest) => !manifest.id.startsWith('fixture-'),
@@ -267,8 +313,18 @@ export function planCells({ meta, registrations, mode }: PlanInput): Plan {
   const add = (cell: Omit<Cell, 'id'>) => {
     const id = `${cell.kind}:${cell.target} ${cell.state} ${cell.path} ${tupleLabel(cell.tuple)}`;
     const existing = cells.get(id);
-    // A cell planned twice is a sentinel if either plan says so.
-    cells.set(id, { ...cell, id, sentinel: cell.sentinel || existing?.sentinel === true });
+    // A cell planned twice is a sentinel if either plan says so, and keeps every reason it was planned for.
+    const changed = [...(existing?.changed ?? []), ...(cell.changed ?? [])].filter(
+      (by, index, all) =>
+        all.findIndex((other) => other.axis === by.axis && other.id === by.id) === index,
+    );
+    cells.set(id, {
+      ...cell,
+      id,
+      sentinel: cell.sentinel || existing?.sentinel === true,
+      pack: cell.pack ?? existing?.pack,
+      changed: changed.length > 0 ? changed : undefined,
+    });
   };
   const fixtureIn = (tuple: Tuple) =>
     tuple.variant.startsWith('fixture-') ||
@@ -341,6 +397,78 @@ export function planCells({ meta, registrations, mode }: PlanInput): Plan {
     }
   }
 
+  // The [37] rule's cells: every changed variant against every stable
+  // language, and every changed language against every stable variant.
+  const stablePacks = (kind: string) =>
+    (meta.PACKS ?? [])
+      .filter((pack) => pack.kind === kind && !pack.fixture && pack.manifest.tier === 'stable')
+      .map((pack) => pack.manifest.id)
+      .sort();
+  const preferred = (kind: string, platform: string) => [
+    ...new Set([platform, ...stablePacks(kind), ...packIds(kind).sort()]),
+  ];
+  const schemes = preferred('color-scheme', PLATFORM_DEFAULTS.colorScheme);
+  const typographies = preferred('typography', PLATFORM_DEFAULTS.typography);
+  const modes = ['system', ...DISPLAY_MODES.filter((each) => each !== 'system')];
+  const languageIds = new Set(
+    (meta.PACKS ?? [])
+      .filter((pack) => pack.kind === 'design-language' && pack.manifest.tier !== 'research')
+      .map((pack) => pack.manifest.id),
+  );
+  const directed =
+    mode === 'full'
+      ? [
+          ...variants.map((manifest) => ({ axis: 'variant' as const, id: manifest.id })),
+          ...packIds('design-language')
+            .filter((id) => languageIds.has(id))
+            .sort()
+            .map((id) => ({ axis: 'designLanguage' as const, id })),
+        ]
+      : changes.filter((change) =>
+          change.axis === 'variant'
+            ? variants.some((manifest) => manifest.id === change.id)
+            : languageIds.has(change.id),
+        );
+  for (const { variant, designLanguage, by } of changePairs(directed, {
+    variants: variants.map((manifest) => manifest.id),
+    designLanguages: stablePacks('design-language'),
+  })) {
+    const manifest = variants.find((each) => each.id === variant)!;
+    let tuple: Tuple | undefined;
+    search: for (const displayMode of modes) {
+      for (const colorScheme of schemes) {
+        for (const typography of typographies) {
+          const candidate = { variant, designLanguage, colorScheme, typography, displayMode };
+          if (accepts(registry, candidate, 'read-only')) {
+            tuple = candidate;
+            break search;
+          }
+        }
+      }
+    }
+    if (!tuple) {
+      throw new Error(
+        `The ${by.axis === 'variant' ? 'changed variant' : 'changed design language'} ${by.id} meets ${by.axis === 'variant' ? `the stable design language ${designLanguage}` : `the stable variant ${variant}`} in no tuple the resolver renders as asked, so the [37] rule can't run it.`,
+      );
+    }
+    add({
+      kind: 'composition',
+      target: variant,
+      owner: variant === FALLBACK_ID ? '#5' : `the ${variant} composition`,
+      profile: 'read-only',
+      performanceTier: manifest.performanceTier,
+      tuple,
+      path: '/',
+      route: '/',
+      state: APPEARANCE_STATE.id,
+      expectedStatus: APPEARANCE_STATE.status,
+      source: APPEARANCE_STATE.source,
+      sentinel: false,
+      fixture: fixtureIn(tuple),
+      changed: [by],
+    });
+  }
+
   for (const surface of registrations.surfaces) {
     const tuple = defaultTuple(FALLBACK_ID, 'system');
     surface.routes.forEach((route, routeIndex) => {
@@ -384,7 +512,8 @@ export function planCells({ meta, registrations, mode }: PlanInput): Plan {
   };
 
   const ordered = [...cells.values()].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
-  const selected = mode === 'full' ? ordered : ordered.filter((cell) => cell.sentinel);
+  const selected =
+    mode === 'full' ? ordered : ordered.filter((cell) => cell.sentinel || cell.changed);
   const firstDefault = selected.find(
     (cell) =>
       cell.kind === 'composition' &&
@@ -400,7 +529,8 @@ export function planCells({ meta, registrations, mode }: PlanInput): Plan {
         const planned =
           mode === 'full' ||
           row === DEFAULT_ROW ||
-          ((cell === firstDefault || cell.pack !== undefined) && viewport === VIEWPORTS[0]);
+          ((cell === firstDefault || cell.pack !== undefined || cell.changed !== undefined) &&
+            viewport === VIEWPORTS[0]);
         if (!planned) continue;
         const fields = { route: cell.route, state: cell.state, viewport: viewport.id, row: row.id };
         const exclusions = exclusionsFor(cell);
@@ -443,5 +573,6 @@ export function planCells({ meta, registrations, mode }: PlanInput): Plan {
       ...registrations.surfaces.map((surface) => ({ kind: 'surface' as const, id: surface.id })),
     ],
     reasons: [...reasons].sort(),
+    changes: mode === 'full' ? directed.map((each) => ({ ...each, paths: [] })) : directed,
   };
 }

@@ -32,12 +32,14 @@ import { elementDetailsScript, resolvedTokensScript, type ElementDetails } from 
 import type { CellFailure } from './failure-records';
 import {
   axeFailures,
+  changeDiagnostic,
   colorPropertyFor,
   nodeSelector,
   RECORDS_ATTACHMENT,
   runnerFailure,
   type AxeResults,
   type CellContext,
+  type ResolvedTokens,
 } from './records';
 import { loadRegistrations, type Interaction } from './registration';
 import { APPEARANCE_STATE } from './state-fixtures';
@@ -290,7 +292,7 @@ export async function runCell({
     });
   }
   const vitals = await readVitals(page);
-  const tokens = await page.evaluate(resolvedTokensScript, [...TOKEN_PROPERTIES]);
+  const tokens: ResolvedTokens = await page.evaluate(resolvedTokensScript, [...TOKEN_PROPERTIES]);
 
   // On disk in the test's output directory, which the reports artifact
   // uploads, passed or not: axe's JSON, the vitals, and the resolved tokens.
@@ -304,6 +306,8 @@ export async function runCell({
   await keep('axe.json', { violations: results.violations, incomplete: results.incomplete });
   await keep('vitals.json', vitals);
   await keep('resolved-tokens.json', tokens);
+  // What a change-directed cell's failures name its tokens from (the [37] rule).
+  const tokenPages = [{ route: cell.route, tokens, file: written.at(-1)! }];
 
   const context: CellContext = { cell, viewport, row, artifacts: written };
   const found: CellFailure[] = [];
@@ -383,6 +387,11 @@ export async function runCell({
         findings.push({ gate: 'runner', rule: 'media-emulation', actual: problem });
       findings.push(...(owed.has('motion') ? await motionFindings(page) : []));
       const { results: axe, contrast: resampled } = await audit(page, row);
+      const primitiveTokens: ResolvedTokens = await page.evaluate(resolvedTokensScript, [
+        ...TOKEN_PROPERTIES,
+      ]);
+      await keep('primitives-resolved-tokens.json', primitiveTokens);
+      tokenPages.push({ route: PRIMITIVES_ROUTE, tokens: primitiveTokens, file: written.at(-1)! });
       const primitiveContext: CellContext = {
         ...context,
         cell: { ...cell, target: PRIMITIVES_SURFACE, kind: 'surface', route: PRIMITIVES_ROUTE },
@@ -426,6 +435,10 @@ export async function runCell({
   await keep(RECORDS_ATTACHMENT, failures);
   if (owed.has('motion')) ran.add('motion');
   testInfo.annotations.push({ type: CHECKS_ANNOTATION, description: [...ran].join(' ') });
+  // A change-directed cell's failures name the changed axis, and the tokens it resolved.
+  const diagnostic = changeDiagnostic(cell, tokenPages);
+  if (diagnostic) testInfo.annotations.push({ type: 'changed', description: diagnostic });
+  const about = (what: string) => (diagnostic ? `${what}. ${diagnostic}` : what);
 
   expect.soft(status, `${cell.path} answers ${cell.expectedStatus}`).toBe(cell.expectedStatus);
   expect.soft(emulation, `the ${row.id} row's media emulation`).toEqual([]);
@@ -433,7 +446,7 @@ export async function runCell({
   expect
     .soft(
       results.violations.map((rule) => `${rule.id}: ${rule.nodes.length} element(s), ${rule.help}`),
-      'axe, WCAG 2.2 AA',
+      about('axe, WCAG 2.2 AA'),
     )
     .toEqual([]);
   expect
@@ -442,7 +455,7 @@ export async function runCell({
         (failure) =>
           `${failure.check} ${failure.rule} on ${failure.surface} at ${failure.viewport}${failure.element?.selector ? `, ${failure.element.selector}` : ''}: ${failure.actual}`,
       ),
-      "Slice 2's suites",
+      about("Slice 2's suites"),
     )
     .toEqual([]);
 }

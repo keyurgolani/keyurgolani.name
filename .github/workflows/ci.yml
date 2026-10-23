@@ -628,7 +628,11 @@ jobs:
   # workspace, judged fail-closed by tests/quality/run.ts. The reports are
   # scrubbed of cookies, Authorization, and CSRF values however the run
   # ended, the run fails if its canary is left in any, and they upload only
-  # when the scrub step succeeds. Nothing in the checkout is built.
+  # when the scrub step succeeds. Nothing in the checkout is built. The PR
+  # set adds the cells the owner's [37] rule directs from the paths the
+  # merge changes (tests/quality/lib/changes.ts): the checkout keeps the
+  # merge commit's first parent, the base tip, which QUALITY_CHANGED_BASE
+  # names.
   quality-pr:
     name: quality-pr
     needs: [changes]
@@ -645,6 +649,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 2
       - name: Install
         id: install
         uses: ./.github/actions/install
@@ -658,6 +663,7 @@ jobs:
         env:
           QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary
           QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets
+          QUALITY_CHANGED_BASE: HEAD^1
       # The reports upload only when this succeeds: it deletes what it can't
       # read, and fails when it did, or when the canary is still in any.
       - name: Scrub reports

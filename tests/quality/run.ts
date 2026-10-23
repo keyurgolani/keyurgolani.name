@@ -47,6 +47,7 @@ import type { Plan, RunMode } from './cells';
 import { plantCanary, readSecrets, scanArtifacts, scrubArtifacts } from './lib/artifacts.mjs';
 import { missingBrowsers } from './lib/browsers.mjs';
 import { buildQualityHost, QUALITY_BUILD_ENV } from './lib/build.mjs';
+import { changedFiles } from './lib/changes';
 import { cleanupOnInterrupt } from './lib/interrupt.mjs';
 import { buildReferenceHost, installReference, removeReference } from '../external-variant/run.mjs';
 import { RUN_ENGINES } from './lib/matrix';
@@ -152,6 +153,10 @@ function planRecord(plan: Plan) {
     tests: plan.tests.length,
     targets: plan.targets,
     reasons: plan.reasons,
+    changes: plan.changes,
+    changed: plan.cells
+      .filter((cell) => cell.changed)
+      .map((cell) => ({ cell: cell.id, by: cell.changed })),
     coverage: {
       rows: plan.coverage.rows,
       tuples: plan.coverage.tuples,
@@ -244,12 +249,18 @@ async function main(argv: readonly string[]): Promise<number> {
       host = built;
       web = built.web;
     }
+    // The changed paths, read once, so every Playwright process plans the same cells.
+    const changed = options.mode === 'pr' ? changedFiles() : null;
+    if (changed) {
+      console.log(`[quality] ${changed.files.length} changed path(s), from ${changed.source}`);
+    }
     const env = {
       ...process.env,
       QUALITY_WEB: web,
       QUALITY_MODE: options.mode,
       QUALITY_CANARY: canary,
       QUALITY_SECRETS_FILE: secretsFile,
+      ...(changed ? { QUALITY_CHANGED_FILES: JSON.stringify(changed.files) } : {}),
     };
     plan = await loadPlan(env);
     writeFileSync(
@@ -257,6 +268,12 @@ async function main(argv: readonly string[]): Promise<number> {
       `${JSON.stringify(planRecord(plan), null, 2)}\n`,
     );
     console.log(`[quality] ${plan.cells.length} cells, ${plan.tests.length} tests planned`);
+    for (const { axis, id } of plan.changes) {
+      const cells = plan.cells.filter((cell) =>
+        cell.changed?.some((by) => by.axis === axis && by.id === id),
+      ).length;
+      console.log(`[quality] the [37] rule: ${axis} ${id} changed, in ${cells} cell(s)`);
+    }
     if (missing.length === 0) {
       const result = spawnSync(
         process.execPath,
