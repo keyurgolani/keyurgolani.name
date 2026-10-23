@@ -194,6 +194,8 @@ The server reads the hash from the file `PORTFOLIO_AUTH_PASSWORD_HASH_FILE` name
 
 `ephemeral/` holds sessions, auth state, and preview grants only, and never belongs in a backup. A restore that brings it back also brings back sessions revoked since the backup was taken, so run [`revoke-sessions`](#revoking-sessions) after any restore of the volume.
 
+Keep `publication/` in every backup with `revisions/`: it holds `live.json` and `events/`. A store that has lost both serves the mounted documents, as an empty one does, unless `revisions/` holds a tombstone, and startup leaves every revision in it as it is.
+
 ### Signing in
 
 A sign-in posts the password to `/api/studio/auth.login`, as JSON or as a form post, from the site's own origin: the request needs an `Origin` exactly equal to `PORTFOLIO_ORIGIN`. A JSON sign-in gets the session in the JSON envelope, and a form post a 303: to where the owner was going, or back to `/studio/sign-in` with a `state` saying why. The sign-in page at that path makes the form post, and works without JavaScript; with it, the page posts JSON and shows each state in place, and a toggle can show the password. It asks for the password alone, with the username fixed to `owner` for password managers. Under `demo` and `read-only` the page answers as a path no route matches, with the same 404 page and headers, and every auth route answers the 404 envelope of an operation the profile lacks. Where the owner was going is `returnTo`, a path under `/studio` other than the sign-in page itself, from the form's `returnTo` field, or else the `returnTo` in the URL, and `/studio` when it's missing or unsafe. Every wrong, missing, or malformed password costs one verification and gets the same answer.
@@ -331,7 +333,6 @@ Next writes its own lines to the same streams, as plain text: its startup banner
 | `store.pointer.missing`      | `owner`: `live.json` is gone from a store that has published. The last known good serves, `pointer_damaged`.                  |
 | `store.render-drift`         | `owner`: the live revision's variant, packs, or contracts differ from this build's: `drift` lists each ID and both versions.  |
 | `store.repair.failed`        | `owner`: startup repair didn't finish. Visitors are served what can be served, and owner writes wait for the repair.          |
-| `store.repair.unpublished`   | `owner`: startup repair removed a revision that was never live, left by a first publish that failed or crashed.               |
 | `store.writes.stopped`       | `owner`: a Studio write stopped with `code`: the claim isn't this server's, or the repair still fails. Each tries both first. |
 | `store.repair.finished`      | `owner`: a write finished the repair startup couldn't, and owner writes go on.                                                |
 | `store.server.claim_waiting` | `owner`: the publication lock stayed busy, so the server hasn't claimed the data directory yet. It tries again, with backoff. |

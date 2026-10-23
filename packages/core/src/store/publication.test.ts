@@ -10,6 +10,7 @@ import { onStoreEvent, type StoreError, type StoreEvent, type StoreLogEntry } fr
 import { nodeFs, type FsPort } from './fs-port';
 import { isRevisionId, newRevisionId, type RevisionId } from './layout';
 import { readEvents, readLive } from './pointer';
+import { preflight } from './preflight';
 import { IDEMPOTENCY_WINDOW, type HeldMove } from './publication';
 import { writeRevision } from './commit';
 import { manifestFor, readManifest, readRevision } from './revisions';
@@ -770,7 +771,6 @@ test('startup repair deletes staging directories, writes a missing event file fr
     eventWritten: true,
     eventsAside: 0,
     draftRemoved: true,
-    unpublishedRemoved: 0,
   });
   assert.equal((await readEvents(nodeFs, store.paths)).length, 2);
   assert.equal(await store.drafts.getWorking(), null);
@@ -780,7 +780,6 @@ test('startup repair deletes staging directories, writes a missing event file fr
     eventWritten: false,
     eventsAside: 0,
     draftRemoved: false,
-    unpublishedRemoved: 0,
   });
 });
 
@@ -1516,7 +1515,14 @@ test('a commit whose event file another event took writes its own over it, movin
   );
 });
 
-test('startup repair removes a revision that was never live, with no pointer and no history, and keeps one a store that has published needs', async (t) => {
+/** Every file under revisions/, by its path there, with its bytes' hash. */
+const revisionBytes = (store: Store) =>
+  filesUnder(store.paths.revisions).map((file) => [
+    file,
+    sha256(readFileSync(path.join(store.paths.revisions, file))),
+  ]);
+
+test('startup repair leaves a revision that was never live as it is, and the store publishes as if new', async (t) => {
   // A first publish killed before its pointer: its revision, and no pointer or event.
   const store = await newStore(t);
   const child = await runChild({
@@ -1528,27 +1534,48 @@ test('startup repair removes a revision that was never live, with no pointer and
   assert.equal(child.signal, 'SIGKILL', child.stderr);
   const [left] = readdirSync(store.paths.revisions).filter(isRevisionId);
   assert.ok(left);
+  const before = revisionBytes(store);
+  const reopened = openStore({ dataDir: store.paths.root, checks: testChecks() });
+  await reopened.publication.repair();
+  assert.deepEqual(revisionBytes(store), before);
+  assert.equal((await reopened.publication.status()).liveRevisionId, null);
+  const first = await publishInput(reopened, pairInput('engineering'));
+  assert.equal((await reopened.publication.status()).liveRevisionId, first);
+  assert.ok(readdirSync(store.paths.revisions).includes(left));
+});
+
+test('a store that has published and lost live.json and events/ together keeps every revision through a restart, byte for byte', async (t) => {
+  // As a restore that left publication/ out, or an operator who cleared it, leaves it.
+  const store = await newStore(t);
+  const published = [
+    await publishInput(store, pairInput('engineering')),
+    await publishInput(store, contentVariant(pairInput('engineering'), 'two')),
+    await publishInput(store, contentVariant(pairInput('engineering'), 'three')),
+  ];
+  rmSync(store.paths.live);
+  rmSync(store.paths.events, { recursive: true });
+  const before = revisionBytes(store);
+  assert.deepEqual(
+    readdirSync(store.paths.revisions).filter(isRevisionId).sort(),
+    [...published].sort(),
+  );
+
+  // A restart: preflight lays events/ out again, and repair runs.
+  const problem = await preflight({ dataDir: store.paths.root });
+  assert.equal(problem, null);
   const logs: StoreLogEntry[] = [];
-  const reopened = openStore({
+  const restarted = openStore({
     dataDir: store.paths.root,
     checks: testChecks(),
     log: (entry) => logs.push(entry),
   });
-  const report = await reopened.publication.repair();
-  assert.equal(report.unpublishedRemoved, 1);
-  assert.deepEqual(readdirSync(store.paths.revisions), []);
-  assert.deepEqual(
-    logs.filter((entry) => entry.event === 'store.repair.unpublished'),
-    [{ level: 'warn', event: 'store.repair.unpublished', revisionId: left }],
+  await restarted.publication.repair();
+  await restarted.publication.repair();
+  assert.deepEqual(revisionBytes(store), before);
+  // With no pointer and no history, it reads as an empty store, and nothing is lost.
+  assert.equal((await restarted.publication.status()).liveRevisionId, null);
+  assert.equal(
+    logs.some((entry) => entry.level === 'error'),
+    false,
   );
-  // And the store publishes as if new.
-  const first = await publishInput(reopened, pairInput('engineering'));
-  assert.equal((await reopened.publication.status()).liveRevisionId, first);
-
-  // With history and no pointer, every revision stays: the last known good is among them.
-  const published = await newStore(t);
-  const only = await publishInput(published, pairInput('engineering'));
-  rmSync(published.paths.live);
-  assert.equal((await published.publication.repair()).unpublishedRemoved, 0);
-  assert.ok(readdirSync(published.paths.revisions).includes(only));
 });

@@ -219,11 +219,12 @@ const TOMBSTONE = '.tombstone.json';
  * Whether the store has published before: events/ holds an event, or one
  * moved aside, or revisions/ the tombstone of a revision. A revision alone
  * isn't: every publish writes its revision before its pointer and its
- * event after it, and repair writes a missing event from live.json, so a
- * revision with neither was never live, as a first publish that failed or
- * crashed in between leaves one. Without live.json, a store that has
- * published is one whose pointer is damaged, never an empty one (#3, item
- * 1). Slice 3's first-start import goes by the same rule.
+ * event after it, so a first publish that failed or crashed in between
+ * leaves one with neither. Without live.json, a store that has published is
+ * one whose pointer is damaged, never an empty one (#3, item 1). Slice 3's
+ * first-start import goes by the same rule. A store whose live.json and
+ * events/ were both lost looks empty by it too, which is why nothing
+ * removes a revision for having neither.
  */
 export async function hasHistory(fs: ReadFs, paths: StorePaths): Promise<boolean> {
   if ((await fs.readdir(paths.events)).some((name) => LOGGED.test(name))) return true;

@@ -41,7 +41,6 @@ import { healthCache, type HealthVerdict } from './health-cache';
 import { LOCK_STALE_MS, LockLostError, type PublicationLock } from './lock';
 import {
   DamagedPointerError,
-  hasHistory,
   isIdempotencyKey,
   readEvent,
   readEvents,
@@ -176,12 +175,6 @@ export interface RepairReport {
   readonly eventsAside: number;
   /** Whether the draft the live revision was published from was still there, and is gone now. */
   readonly draftRemoved: boolean;
-  /**
-   * Revisions removed because none was ever live: with no pointer and no
-   * history, as a first publish that failed or crashed before its pointer
-   * leaves one.
-   */
-  readonly unpublishedRemoved: number;
 }
 
 /** What holdSession() did with the pointer move: ran it, or found the session ended first. */
@@ -1067,30 +1060,11 @@ export function filesystemPublicationService({
               draftRemoved = true;
             }
           }
-          // With no pointer and no history, no revision was ever live: a
-          // first publish that failed or crashed before its pointer left it.
-          let unpublishedRemoved = 0;
-          if (
-            !pointer &&
-            (await realDirectory(paths.revisions)) &&
-            !(await hasHistory(fs, paths))
-          ) {
-            for (const id of await revisionIds(fs, paths)) {
-              await lock.fence();
-              await fs.remove(paths.revision(id), 'repair.unpublished.remove');
-              log({ level: 'warn', event: 'store.repair.unpublished', revisionId: id });
-              unpublishedRemoved += 1;
-            }
-            if (unpublishedRemoved > 0) await fs.fsync(paths.revisions, 'repair.unpublished.fsync');
-          }
-          return {
-            stagingRemoved,
-            tempsRemoved,
-            eventWritten,
-            eventsAside,
-            draftRemoved,
-            unpublishedRemoved,
-          };
+          // Repair removes no revision. With no pointer and no history, one
+          // may be a first publish's that failed before its pointer, or all
+          // a store has left after its log was lost; the store is empty
+          // either way, and each stays as it is.
+          return { stagingRemoved, tempsRemoved, eventWritten, eventsAside, draftRemoved };
         } catch (error) {
           if (error instanceof LockLostError) {
             // Another holder took the lock: the log is theirs to make agree now.
