@@ -1,0 +1,618 @@
+# Releases (docs/releasing.md). The owner pushes the tags; nothing else
+# starts a release, and there is no manual trigger.
+#
+# A release candidate, vX.Y.Z-rc.N: rc-verify refuses a commit that isn't on
+# main or has no green complete ci run, rc-build builds amd64 and arm64 once
+# with BuildKit provenance (mode=max) and an SBOM, pushes the index to GHCR
+# by digest with no tag, and attests it, and rc-scan runs Grype on that
+# digest and on the production dependencies. Only then does rc-tag tag the
+# digest X.Y.Z-rc.N and rc-release write the pre-release notes.
+#
+# A final release, vX.Y.Z on the newest candidate's commit: promote-verify
+# refuses unless that candidate's release run passed its scan, promote-scan
+# verifies the candidate digest's attestation and scans it again, and
+# promote points X.Y.Z (and X.Y, X, and latest, unless a newer release holds
+# them) at the same digest with no rebuild. promote is the only job that
+# moves latest.
+#
+# The dry run: a pull request that changes this workflow, the release
+# helpers, the image inputs, the Grype config, or the lockfile builds both
+# platforms into a registry on the runner, checks the provenance and SBOM
+# there, runs both scans, and rehearses the candidate tag and the promotion
+# against that registry. It holds contents: read and no secret, and never
+# reaches GHCR.
+#
+# Every job's write permission is its own, behind an if: that limits it to
+# tag pushes. No job reads or writes a cache: setup-node, setup-buildx, and
+# setup-qemu run with their caches off, the installs are fresh, and no build
+# names cache-from or cache-to.
+name: release
+
+on:
+  push:
+    tags: ['v[0-9]*']
+  pull_request:
+    branches: [main, next]
+    paths:
+      - .github/workflows/release.yml
+      - ci/release/**
+      - Dockerfile
+      - .dockerignore
+      - .grype.yaml
+      - pnpm-lock.yaml
+
+permissions:
+  contents: read
+
+concurrency:
+  # A PR cancels its superseded dry runs. A tag gets its own group and is
+  # never cancelled.
+  group: ${{ github.event_name == 'pull_request' && format('release-pr-{0}', github.event.pull_request.number) || format('release-{0}', github.ref) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # The Node release the image ships (pnpm check:pins).
+  NODE_VERSION: 22.23.3
+  TZ: UTC
+  PLATFORMS: linux/amd64,linux/arm64
+
+jobs:
+  # ---- the dry run, on pull requests --------------------------------------
+
+  dry-run:
+    name: dry-run
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    # The workflow's contents: read, and no secret.
+    services:
+      # The stand-in for GHCR, published on the runner's loopback only.
+      registry:
+        image: registry:2.8.3@sha256:a3d8aaa63ed8681a604f1dea0aa03f100d5895b6a58ace528858a7b332415373
+        ports:
+          - 127.0.0.1:5000:5000
+    env:
+      IMAGE: localhost:5000/portfolio
+      BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      REPORTS: reports/release
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # The base commit's lockfile is the dependency scan's baseline.
+          fetch-depth: 0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - name: Enable pnpm
+        run: corepack enable
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Check the scan exceptions
+        run: node ci/release/scan-gate.mjs exceptions
+      # arm64 builds under QEMU until native arm64 runners replace it.
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+        with:
+          image: docker.io/tonistiigi/binfmt:qemu-v10.2.3@sha256:400a4873b838d1b89194d982c45e5fb3cda4593fbfd7e08a02e76b03b21166f0
+          platforms: arm64
+          cache-image: false
+      # The host network lets BuildKit push to the registry on loopback.
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        with:
+          driver-opts: |
+            image=moby/buildkit:v0.34.0@sha256:b059f8d7226d0b326bc871af489a5dddf65e36af4d20d14251b072974d9ee87c
+            network=host
+          cache-binary: false
+      - name: Build both platforms and push by digest
+        id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: ${{ env.PLATFORMS }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
+          provenance: mode=max
+          sbom: true
+      - name: Check the provenance and the SBOMs
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          mkdir -p "$REPORTS"
+          docker buildx imagetools inspect "$IMAGE@$DIGEST" --format '{{ json .Provenance }}' > "$REPORTS/provenance.json"
+          docker buildx imagetools inspect "$IMAGE@$DIGEST" --format '{{ json .SBOM }}' > "$REPORTS/sbom.json"
+          node ci/release/attestations.mjs "$REPORTS/provenance.json" "$REPORTS/sbom.json" --write-sboms="$REPORTS"
+      - name: Install Grype
+        run: |
+          node ci/release/install-grype.mjs "$RUNNER_TEMP/grype"
+          echo "$RUNNER_TEMP/grype" >> "$GITHUB_PATH"
+      # The first scan downloads Grype's vulnerability database.
+      - name: Scan the image
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+          GRYPE_REGISTRY_INSECURE_USE_HTTP: 'true'
+        run: |
+          for platform in ${PLATFORMS//,/ }; do
+            grype "registry:$IMAGE@$DIGEST" --platform "$platform" -o json --file "$REPORTS/grype-image-${platform//\//-}.json"
+          done
+          node ci/release/scan-gate.mjs image "$REPORTS"/grype-image-*.json
+      - name: Scan the production dependencies against the base
+        if: ${{ !cancelled() }}
+        run: |
+          node ci/release/prod-deps.mjs pnpm-lock.yaml "$REPORTS/prod-deps.cdx.json"
+          git show "$BASE_SHA:pnpm-lock.yaml" > "$RUNNER_TEMP/base-pnpm-lock.yaml"
+          node ci/release/prod-deps.mjs "$RUNNER_TEMP/base-pnpm-lock.yaml" "$REPORTS/base-prod-deps.cdx.json"
+          grype "sbom:$REPORTS/prod-deps.cdx.json" -o json --file "$REPORTS/grype-deps.json"
+          grype "sbom:$REPORTS/base-prod-deps.cdx.json" -o json --file "$REPORTS/grype-base-deps.json"
+          node ci/release/scan-gate.mjs deps "$REPORTS/grype-deps.json" "$REPORTS/grype-base-deps.json"
+      # The candidate tag, then the promotion's tags, on the same digest in
+      # the runner's registry, each checked to resolve to it.
+      - name: Rehearse the candidate tag and the promotion
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          node ci/release/retag.mjs "$IMAGE" "$DIGEST" 0.0.0-rc.1
+          targets=$(node --input-type=module -e "import { promotionTargets } from './ci/release/tags.mjs'; console.log(promotionTargets('v0.0.0', []).join(','))")
+          node ci/release/retag.mjs "$IMAGE" "$DIGEST" "$targets"
+      - name: Render the release notes
+        env:
+          TAG: v0.0.0-rc.1
+          DIGEST: ${{ steps.build.outputs.digest }}
+          SHA: ${{ github.sha }}
+          REPOSITORY: ${{ github.repository }}
+          DRY_RUN: '1'
+        run: |
+          node ci/release/notes.mjs > "$REPORTS/notes.md"
+          { echo '### Release notes (dry run)'; echo; cat "$REPORTS/notes.md"; } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-release-dry-run
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # ---- every tag ----------------------------------------------------------
+
+  # Which release the tag is: a candidate or a final, or neither, which fails.
+  classify:
+    name: classify
+    if: ${{ github.ref_type == 'tag' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      kind: ${{ steps.tag.outputs.kind }}
+      version: ${{ steps.tag.outputs.version }}
+      rc-tag: ${{ steps.tag.outputs.rc-tag }}
+      image: ${{ steps.tag.outputs.image }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: ci/release/
+      - name: Read the tag
+        id: tag
+        env:
+          TAG: ${{ github.ref_name }}
+          REPOSITORY: ${{ github.repository }}
+        run: node ci/release/tags.mjs
+
+  # ---- a release candidate, vX.Y.Z-rc.N -----------------------------------
+
+  rc-verify:
+    name: rc-verify
+    needs: [classify]
+    if: ${{ github.ref_type == 'tag' && needs.classify.outputs.kind == 'rc' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read # check out the helper, and compare the commit with main
+      actions: read # read ci's runs on the commit
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: ci/release/
+      - name: Refuse a commit off main or without a green complete ci run
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+        run: node ci/release/verify-rc.mjs
+
+  rc-build:
+    name: rc-build
+    needs: [classify, rc-verify]
+    if: ${{ github.ref_type == 'tag' && needs.classify.outputs.kind == 'rc' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: read # check out the tagged commit
+      packages: write # push the index, and its attestation, to GHCR
+      id-token: write # sign the provenance attestation
+      attestations: write # store the provenance attestation
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
+    env:
+      IMAGE: ${{ needs.classify.outputs.image }}
+      REPORTS: reports/release
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+        with:
+          image: docker.io/tonistiigi/binfmt:qemu-v10.2.3@sha256:400a4873b838d1b89194d982c45e5fb3cda4593fbfd7e08a02e76b03b21166f0
+          platforms: arm64
+          cache-image: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        with:
+          driver-opts: image=moby/buildkit:v0.34.0@sha256:b059f8d7226d0b326bc871af489a5dddf65e36af4d20d14251b072974d9ee87c
+          cache-binary: false
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Build both platforms once and push by digest
+        id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: ${{ env.PLATFORMS }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ needs.classify.outputs.version }}
+          outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
+          provenance: mode=max
+          sbom: true
+      - name: Check the provenance and the SBOMs
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          mkdir -p "$REPORTS"
+          docker buildx imagetools inspect "$IMAGE@$DIGEST" --format '{{ json .Provenance }}' > "$REPORTS/provenance.json"
+          docker buildx imagetools inspect "$IMAGE@$DIGEST" --format '{{ json .SBOM }}' > "$REPORTS/sbom.json"
+          node ci/release/attestations.mjs "$REPORTS/provenance.json" "$REPORTS/sbom.json" --write-sboms="$REPORTS/sboms"
+      - name: Attest the build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+          create-storage-record: false
+      - name: Upload the SBOMs
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-sboms
+          path: ${{ env.REPORTS }}/sboms/
+          if-no-files-found: error
+          retention-days: 90
+
+  rc-scan:
+    name: rc-scan
+    needs: [classify, rc-build]
+    if: ${{ github.ref_type == 'tag' && needs.classify.outputs.kind == 'rc' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read # check out the commit and the previous release's lockfile
+      packages: read # pull the candidate from GHCR while the package is private
+    env:
+      IMAGE: ${{ needs.classify.outputs.image }}
+      DIGEST: ${{ needs.rc-build.outputs.digest }}
+      REPORTS: reports/release
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # The previous final release's lockfile is the dependency baseline.
+          fetch-depth: 0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - name: Enable pnpm
+        run: corepack enable
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Install Grype
+        run: |
+          node ci/release/install-grype.mjs "$RUNNER_TEMP/grype"
+          echo "$RUNNER_TEMP/grype" >> "$GITHUB_PATH"
+      - name: Scan the image
+        run: |
+          mkdir -p "$REPORTS"
+          for platform in ${PLATFORMS//,/ }; do
+            grype "registry:$IMAGE@$DIGEST" --platform "$platform" -o json --file "$REPORTS/grype-image-${platform//\//-}.json"
+          done
+          node ci/release/scan-gate.mjs image "$REPORTS"/grype-image-*.json
+      - name: Scan the production dependencies against the previous release
+        if: ${{ !cancelled() }}
+        run: |
+          mkdir -p "$REPORTS"
+          node ci/release/prod-deps.mjs pnpm-lock.yaml "$REPORTS/prod-deps.cdx.json"
+          grype "sbom:$REPORTS/prod-deps.cdx.json" -o json --file "$REPORTS/grype-deps.json"
+          previous=$(git describe --tags --abbrev=0 --match 'v[0-9]*' --exclude '*-rc.*' HEAD 2>/dev/null || true)
+          if [ -n "$previous" ]; then
+            echo "Baseline: $previous"
+            git show "$previous:pnpm-lock.yaml" > "$RUNNER_TEMP/base-pnpm-lock.yaml"
+            node ci/release/prod-deps.mjs "$RUNNER_TEMP/base-pnpm-lock.yaml" "$REPORTS/base-prod-deps.cdx.json"
+            grype "sbom:$REPORTS/base-prod-deps.cdx.json" -o json --file "$REPORTS/grype-base-deps.json"
+          else
+            echo "No final release yet, so every High or Critical finding is new."
+            echo '{"matches":[]}' > "$REPORTS/grype-base-deps.json"
+          fi
+          node ci/release/scan-gate.mjs deps "$REPORTS/grype-deps.json" "$REPORTS/grype-base-deps.json"
+      - name: Upload reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-release-scan
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: 90
+
+  # The scanned digest gets its candidate tag, X.Y.Z-rc.N.
+  rc-tag:
+    name: rc-tag
+    needs: [classify, rc-build, rc-scan]
+    if: ${{ github.ref_type == 'tag' && needs.classify.outputs.kind == 'rc' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read # check out the helper
+      packages: write # add the candidate tag on GHCR
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: ci/release/
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        with:
+          driver-opts: image=moby/buildkit:v0.34.0@sha256:b059f8d7226d0b326bc871af489a5dddf65e36af4d20d14251b072974d9ee87c
+          cache-binary: false
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Tag the scanned digest
+        env:
+          IMAGE: ${{ needs.classify.outputs.image }}
+          DIGEST: ${{ needs.rc-build.outputs.digest }}
+          RC_TAG: ${{ needs.classify.outputs.rc-tag }}
+        run: node ci/release/retag.mjs "$IMAGE" "$DIGEST" "$RC_TAG"
+
+  rc-release:
+    name: rc-release
+    needs: [classify, rc-build, rc-scan, rc-tag]
+    if: ${{ github.ref_type == 'tag' && needs.classify.outputs.kind == 'rc' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write # create the pre-release
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: ci/release/
+      - name: Download the SBOMs
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-sboms
+          path: ${{ runner.temp }}/sboms
+      - name: Create the pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+          IMAGE: ${{ needs.classify.outputs.image }}
+          DIGEST: ${{ needs.rc-build.outputs.digest }}
+          SHA: ${{ github.sha }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          SBOMS: ${{ runner.temp }}/sboms
+        run: |
+          node ci/release/notes.mjs > "$RUNNER_TEMP/notes.md"
+          gh release create "$TAG" --verify-tag --prerelease --latest=false --title "$TAG" --notes-file "$RUNNER_TEMP/notes.md" "$SBOMS"/*.spdx.json
+
+  # ---- a final release, vX.Y.Z --------------------------------------------
+
+  promote-verify:
+    name: promote-verify
+    needs: [classify]
+    if: ${{ github.ref_type == 'tag' && needs.classify.outputs.kind == 'final' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read # check out the tags
+      actions: read # read the candidate's release runs
+    outputs:
+      rc-tag: ${{ steps.check.outputs.rc-tag }}
+      source-ref: ${{ steps.check.outputs.source-ref }}
+      targets: ${{ steps.check.outputs.targets }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # Every tag, to find the candidates and the releases already out.
+          fetch-depth: 0
+      - name: Refuse unless the newest candidate on this commit passed its scan
+        id: check
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+        run: node ci/release/promote-check.mjs
+
+  promote-scan:
+    name: promote-scan
+    needs: [classify, promote-verify]
+    if: ${{ github.ref_type == 'tag' && needs.classify.outputs.kind == 'final' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read # check out the helpers
+      packages: read # read the candidate from GHCR while the package is private
+      attestations: read # read the candidate's provenance attestation
+    outputs:
+      digest: ${{ steps.digest.outputs.digest }}
+    env:
+      IMAGE: ${{ needs.classify.outputs.image }}
+      REPORTS: reports/release
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - name: Enable pnpm
+        run: corepack enable
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        with:
+          driver-opts: image=moby/buildkit:v0.34.0@sha256:b059f8d7226d0b326bc871af489a5dddf65e36af4d20d14251b072974d9ee87c
+          cache-binary: false
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Resolve the candidate's digest
+        id: digest
+        env:
+          RC_TAG: ${{ needs.promote-verify.outputs.rc-tag }}
+        run: |
+          digest=$(docker buildx imagetools inspect "$IMAGE:$RC_TAG" --format '{{ json .Manifest }}' | jq -r .digest)
+          if ! [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "::error title=promotion::$IMAGE:$RC_TAG has no digest"
+            exit 1
+          fi
+          echo "$IMAGE:$RC_TAG -> $digest"
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+      # The digest must be the one this workflow built from this commit for
+      # the candidate's tag, whatever its GHCR tag says now.
+      - name: Verify the candidate's provenance attestation
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DIGEST: ${{ steps.digest.outputs.digest }}
+          SOURCE_REF: ${{ needs.promote-verify.outputs.source-ref }}
+          SHA: ${{ github.sha }}
+        run: |
+          gh attestation verify "oci://$IMAGE@$DIGEST" \
+            --repo "$GITHUB_REPOSITORY" \
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml" \
+            --source-ref "$SOURCE_REF" \
+            --source-digest "$SHA" \
+            --deny-self-hosted-runners
+      - name: Check the provenance and the SBOMs
+        env:
+          DIGEST: ${{ steps.digest.outputs.digest }}
+        run: |
+          mkdir -p "$REPORTS"
+          docker buildx imagetools inspect "$IMAGE@$DIGEST" --format '{{ json .Provenance }}' > "$REPORTS/provenance.json"
+          docker buildx imagetools inspect "$IMAGE@$DIGEST" --format '{{ json .SBOM }}' > "$REPORTS/sbom.json"
+          node ci/release/attestations.mjs "$REPORTS/provenance.json" "$REPORTS/sbom.json"
+      - name: Install Grype
+        run: |
+          node ci/release/install-grype.mjs "$RUNNER_TEMP/grype"
+          echo "$RUNNER_TEMP/grype" >> "$GITHUB_PATH"
+      - name: Scan the image again
+        env:
+          DIGEST: ${{ steps.digest.outputs.digest }}
+        run: |
+          for platform in ${PLATFORMS//,/ }; do
+            grype "registry:$IMAGE@$DIGEST" --platform "$platform" -o json --file "$REPORTS/grype-image-${platform//\//-}.json"
+          done
+          node ci/release/scan-gate.mjs image "$REPORTS"/grype-image-*.json
+      - name: Upload reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-release-promote-scan
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: 90
+
+  # The one job that moves latest: the candidate's digest gets the final
+  # tags, with no rebuild.
+  promote:
+    name: promote
+    needs: [classify, promote-verify, promote-scan]
+    if: ${{ github.ref_type == 'tag' && needs.classify.outputs.kind == 'final' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read # check out the helper
+      packages: write # move the final tags on GHCR
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: ci/release/
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        with:
+          driver-opts: image=moby/buildkit:v0.34.0@sha256:b059f8d7226d0b326bc871af489a5dddf65e36af4d20d14251b072974d9ee87c
+          cache-binary: false
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Point the final tags at the candidate's digest
+        env:
+          IMAGE: ${{ needs.classify.outputs.image }}
+          DIGEST: ${{ needs.promote-scan.outputs.digest }}
+          TARGETS: ${{ needs.promote-verify.outputs.targets }}
+        run: node ci/release/retag.mjs "$IMAGE" "$DIGEST" "$TARGETS"
+
+  promote-release:
+    name: promote-release
+    needs: [classify, promote-verify, promote-scan, promote]
+    if: ${{ github.ref_type == 'tag' && needs.classify.outputs.kind == 'final' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write # create the release
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: ci/release/
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+          IMAGE: ${{ needs.classify.outputs.image }}
+          DIGEST: ${{ needs.promote-scan.outputs.digest }}
+          SHA: ${{ github.sha }}
+          REPOSITORY: ${{ github.repository }}
+          CANDIDATE: v${{ needs.promote-verify.outputs.rc-tag }}
+          TARGETS: ${{ needs.promote-verify.outputs.targets }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          node ci/release/notes.mjs > "$RUNNER_TEMP/notes.md"
+          newest=false
+          if [[ ",$TARGETS," == *",latest,"* ]]; then newest=true; fi
+          gh release create "$TAG" --verify-tag --latest="$newest" --title "$TAG" --notes-file "$RUNNER_TEMP/notes.md"
