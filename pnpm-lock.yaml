@@ -89,6 +89,9 @@ importers:
       '@portfolio/kit':
         specifier: workspace:*
         version: link:../../packages/kit
+      '@portfolio/preview-fixtures':
+        specifier: workspace:*
+        version: link:../../packages/preview-fixtures
       '@portfolio/quality-fixtures-languages':
         specifier: workspace:*
         version: link:../../packages/quality-fixtures-languages
@@ -349,6 +352,34 @@ importers:
       framer-motion:
         specifier: ^12.0.0
         version: 12.38.0(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+      react:
+        specifier: ^19.0.0
+        version: 19.2.5
+      react-dom:
+        specifier: ^19.0.0
+        version: 19.2.5(react@19.2.5)
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+
+  packages/preview-fixtures:
+    dependencies:
+      '@portfolio/kit':
+        specifier: workspace:*
+        version: link:../kit
+      '@portfolio/schema':
+        specifier: workspace:*
+        version: link:../schema
+      '@portfolio/variant-contract':
+        specifier: workspace:*
+        version: link:../variant-contract
+    devDependencies:
+      '@types/react':
+        specifier: ^19.0.0
+        version: 19.2.14
+      '@types/react-dom':
+        specifier: ^19.0.0
+        version: 19.2.3(@types/react@19.2.14)
       react:
         specifier: ^19.0.0
         version: 19.2.5

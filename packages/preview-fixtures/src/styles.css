@@ -1,0 +1,88 @@
+/*
+ * The environment fixture (#7, Slice 4): one readable column, styled only
+ * against the environment attributes on its boundary and the visitor
+ * preferences they stand in for, with system colors and the system font
+ * stack, and no @font-face. A display mode sets the color scheme the system
+ * colors follow, more contrast thickens the rules, and reduced motion stops
+ * the mark that moves. Every rule sits under [data-variant='fixture-environment'],
+ * and every property is logical.
+ */
+
+[data-variant='fixture-environment'] {
+  --fe-rule: 1px;
+  display: block;
+  box-sizing: border-box;
+  max-inline-size: 46rem;
+  margin-inline: auto;
+  padding-block: 1.5rem 4rem;
+  padding-inline: 1.25rem;
+  color-scheme: light dark;
+  background-color: Canvas;
+  color: CanvasText;
+  font-family: var(--fixture-environment-font, system-ui, sans-serif);
+  overflow-wrap: anywhere;
+}
+
+[data-variant='fixture-environment'][data-display-mode='light'] {
+  color-scheme: light;
+}
+
+[data-variant='fixture-environment'][data-display-mode='dark'] {
+  color-scheme: dark;
+}
+
+[data-variant='fixture-environment'][data-display-mode='high-contrast'] {
+  --fe-rule: 3px;
+  color-scheme: light;
+}
+
+[data-variant='fixture-environment'][data-contrast='more'] {
+  --fe-rule: 3px;
+}
+
+@media (prefers-contrast: more) {
+  [data-variant='fixture-environment'] {
+    --fe-rule: 3px;
+  }
+}
+
+[data-variant='fixture-environment'] .fe-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+  margin-block-end: 3rem;
+  padding-block-end: 1rem;
+  border-block-end: var(--fe-rule) solid CanvasText;
+}
+
+[data-variant='fixture-environment'] .fe-motion {
+  display: inline-block;
+  inline-size: 1rem;
+  block-size: 1rem;
+  background-color: CanvasText;
+  animation: fixture-environment-pulse 1.2s ease-in-out infinite alternate;
+}
+
+[data-variant='fixture-environment'][data-motion='reduced'] .fe-motion {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-variant='fixture-environment'] .fe-motion {
+    animation: none;
+  }
+}
+
+@keyframes fixture-environment-pulse {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.25;
+  }
+}
+
+[data-variant='fixture-environment'] .fe-name {
+  margin-block: 0 2rem;
+}

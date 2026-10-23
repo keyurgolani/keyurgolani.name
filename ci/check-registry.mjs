@@ -5,10 +5,11 @@
 // Slice 2), and the variants' compiled stylesheets with the images they name
 // and their experience segments (#6, Slice 2). It runs twice under each
 // fixture flag's values, APPEARANCE_FIXTURES=1 for the appearance fixture
-// packs, QUALITY_FIXTURES=1 and meta for #11's tier fixtures, and
-// BUDGET_FIXTURES=1 and over for the budget fixture variants, then twice with
-// none, so the checkout ends as a production build leaves it. The source
-// audit, `pnpm check:variants`, is CI's check-variants job (Slice 6).
+// packs, #7's PREVIEW_FIXTURES=1 for fixture-environment, QUALITY_FIXTURES=1
+// and meta for #11's tier fixtures, and BUDGET_FIXTURES=1 and over for the
+// budget fixture variants, then twice with none, so the checkout ends as a
+// production build leaves it. The source audit, `pnpm check:variants`, is
+// CI's check-variants job (Slice 6).
 import { spawnSync } from 'node:child_process';
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -51,6 +52,7 @@ const unflagged = Object.fromEntries(
 );
 const states = [
   { label: 'with APPEARANCE_FIXTURES=1', env: { ...unflagged, APPEARANCE_FIXTURES: '1' } },
+  { label: 'with PREVIEW_FIXTURES=1', env: { ...unflagged, PREVIEW_FIXTURES: '1' } },
   { label: 'with QUALITY_FIXTURES=1', env: { ...unflagged, QUALITY_FIXTURES: '1' } },
   { label: 'with QUALITY_FIXTURES=meta', env: { ...unflagged, QUALITY_FIXTURES: 'meta' } },
   { label: 'with BUDGET_FIXTURES=1', env: { ...unflagged, BUDGET_FIXTURES: '1' } },

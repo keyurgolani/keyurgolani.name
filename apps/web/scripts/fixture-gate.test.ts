@@ -83,6 +83,7 @@ test('every fixture package in the workspace maps to a row of the table', () => 
     'packages/budget-fixtures/fixture-over-budget',
     'packages/budget-fixtures/fixture-variant-light',
     'packages/budget-fixtures/fixture-variant-medium',
+    'packages/preview-fixtures',
     'packages/quality-fixtures-languages',
     'packages/quality-fixtures-schemes',
     'packages/quality-fixtures-schemes-meta',
@@ -337,10 +338,12 @@ test("the gate reads a fixture package's real directory, relative to its workspa
 });
 
 test('FIXTURE_FLAGS has one boolean per flag, true when its value admits any of its rows', () => {
-  const none = { appearance: false, quality: false, budget: false };
+  const none = { appearance: false, preview: false, quality: false, budget: false };
   assert.deepEqual(fixtureFlags({}), none);
   assert.deepEqual(fixtureFlags({ APPEARANCE_FIXTURES: '1' }), { ...none, appearance: true });
   assert.deepEqual(fixtureFlags({ APPEARANCE_FIXTURES: 'yes' }), none);
+  assert.deepEqual(fixtureFlags({ PREVIEW_FIXTURES: '1' }), { ...none, preview: true });
+  assert.deepEqual(fixtureFlags({ PREVIEW_FIXTURES: 'yes' }), none);
   // quality is true under either value, since each admits quality fixture packs into the build.
   assert.deepEqual(fixtureFlags({ QUALITY_FIXTURES: '1' }), { ...none, quality: true });
   assert.deepEqual(fixtureFlags({ QUALITY_FIXTURES: 'meta' }), { ...none, quality: true });
@@ -427,6 +430,131 @@ test('appearance-fixtures-schemes with its fixture mark removed fails generation
       assert.equal(result.ok, false);
       assert.ok(result.packs.every(({ packageName }) => packageName !== name));
     }
+  } finally {
+    fs.rmSync(scratch, { recursive: true, force: true });
+  }
+});
+
+test('PREVIEW_FIXTURES=1 admits packages/preview-fixtures, and nothing else maps to it (#7, Slice 4)', () => {
+  assert.deepEqual(fixtureRow('packages/preview-fixtures'), {
+    flag: 'PREVIEW_FIXTURES',
+    key: 'preview',
+    directories: ['packages/preview-fixtures'],
+    values: ['1'],
+  });
+  for (const directory of [
+    'packages/preview-fixtures-extra',
+    'packages/preview',
+    'packages/preview-fixtures/nested',
+    'tests/packages/preview-fixtures',
+  ]) {
+    assert.equal(fixtureRow(directory), undefined, directory);
+  }
+});
+
+const PREVIEW_FIXTURES = '@portfolio/preview-fixtures';
+
+/**
+ * A scratch host whose apps/web depends on copies of packages/preview-fixtures,
+ * named and marked as `copies` says, each linked as pnpm links a workspace package.
+ */
+function previewHost(
+  scratch: string,
+  copies: readonly { dir: string; name: string; fixture: boolean }[],
+): string {
+  const root = workspace(scratch, 'repo', ['apps/web/node_modules']);
+  const dependencies: Record<string, string> = {};
+  for (const { dir, name, fixture } of copies) {
+    const copy = path.join(root, 'packages', dir);
+    fs.cpSync(path.join(REPO_ROOT, 'packages', 'preview-fixtures'), copy, {
+      recursive: true,
+      filter: (source) => !source.split(path.sep).includes('node_modules'),
+    });
+    const pkg = JSON.parse(fs.readFileSync(path.join(copy, 'package.json'), 'utf8'));
+    pkg.name = name;
+    if (fixture) pkg.portfolio.fixture = true;
+    else delete pkg.portfolio.fixture;
+    fs.writeFileSync(path.join(copy, 'package.json'), JSON.stringify(pkg));
+    const link = path.join(root, 'apps', 'web', 'node_modules', ...name.split('/'));
+    fs.mkdirSync(path.dirname(link), { recursive: true });
+    fs.symlinkSync(copy, link, 'dir');
+    dependencies[name] = 'workspace:*';
+  }
+  const hostDir = path.join(root, 'apps', 'web');
+  fs.writeFileSync(
+    path.join(hostDir, 'package.json'),
+    JSON.stringify({ name: '@portfolio/web', dependencies }),
+  );
+  return hostDir;
+}
+
+test('preview-fixtures with no row for its directory fails generation, flag or not (#7, Slice 4)', async () => {
+  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'portfolio-fixture-gate-'));
+  try {
+    const hostDir = previewHost(scratch, [
+      { dir: 'preview-fixtures', name: PREVIEW_FIXTURES, fixture: true },
+    ]);
+    const rows = FIXTURE_ROWS.filter(({ flag }) => flag !== 'PREVIEW_FIXTURES');
+    for (const env of [{}, { PREVIEW_FIXTURES: '1' }]) {
+      const result = await readRegistry({
+        hostDir,
+        packs: packHooks(),
+        fixtures: fixtureGate(env, rows),
+      });
+      const own = result.diagnostics.filter((record) => record.package === PREVIEW_FIXTURES);
+      assert.deepEqual(
+        own.map(({ code, pointer }) => [code, pointer]),
+        [['registry.fixture-unmapped', '/portfolio/fixture']],
+        JSON.stringify(env),
+      );
+      assert.equal(result.ok, false);
+      assert.ok(result.variants.every(({ manifest }) => manifest.id !== 'fixture-environment'));
+    }
+    // With its row, the flag registers it, and without the flag nothing does.
+    const admitted = await readRegistry({
+      hostDir,
+      packs: packHooks(),
+      fixtures: fixtureGate({ PREVIEW_FIXTURES: '1' }),
+    });
+    assert.deepEqual(
+      admitted.variants.map(({ manifest }) => manifest.id),
+      ['fixture-environment'],
+    );
+    assert.deepEqual(admitted.fixtures, [
+      {
+        packageName: PREVIEW_FIXTURES,
+        flag: 'PREVIEW_FIXTURES',
+        admitted: true,
+        ids: ['fixture-environment'],
+      },
+    ]);
+    const unflagged = await readRegistry({
+      hostDir,
+      packs: packHooks(),
+      fixtures: fixtureGate({}),
+    });
+    assert.deepEqual(unflagged.variants, []);
+  } finally {
+    fs.rmSync(scratch, { recursive: true, force: true });
+  }
+});
+
+test('a build without PREVIEW_FIXTURES fails when fixture-environment reaches the registry another way (#7, Slice 4)', async () => {
+  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'portfolio-fixture-gate-'));
+  try {
+    const hostDir = previewHost(scratch, [
+      { dir: 'preview-fixtures', name: PREVIEW_FIXTURES, fixture: true },
+      // Another package that registers the fixture's id, outside every fixture directory.
+      { dir: 'environment-copy', name: '@portfolio/environment-copy', fixture: false },
+    ]);
+    const result = await readRegistry({ hostDir, packs: packHooks(), fixtures: fixtureGate({}) });
+    assert.equal(result.ok, false);
+    assert.deepEqual(
+      result.diagnostics
+        .filter(({ code }) => code === 'registry.fixture-leak')
+        .map(({ package: name, actual }) => [name, actual]),
+      [['@portfolio/environment-copy', 'fixture-environment']],
+    );
   } finally {
     fs.rmSync(scratch, { recursive: true, force: true });
   }
