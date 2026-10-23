@@ -541,7 +541,7 @@ The host uses Next.js fetch revalidation:
 
 - **GitHub data:** none fetched. A `github` section renders the snapshot beside the documents, `snapshots/github.json`, read at startup, and links the profile until one holds its section. #10's third slice refreshes it.
 - **Metadata:** rendered per request (`robots.txt`, `sitemap.xml`, the Open Graph image, and the feed), from the documents loaded at startup and `PORTFOLIO_ORIGIN`. `features.feed: false` in the site document turns the feed off.
-- **Media:** a rendition under `/media` is immutable and cached for a year; a new source gets a new address. Nothing else under `/media` is cached.
+- **Media:** a rendition under `/media` is immutable and cached for a year; a new source gets a new address. Nothing else under `/media` is cached. An image made private or removed stops serving at once, but browsers and any CDN or caching proxy keep the copies they already fetched for up to that year: purge `/media/<assetId>/` from the proxy's cache when one has to go now.
 - **Variant CSS:** every registered variant's stylesheet, bundled into the static assets and loaded on every page, until #6 loads each variant's where it renders.
 
 To force a refresh, redeploy or clear the Next.js cache:
@@ -555,6 +555,8 @@ rm -rf apps/web/.next/cache
 The Next.js app ships static assets under `_next/static/...`. Any CDN that respects `Cache-Control` headers will work. The Dockerfile doesn't bundle a CDN; that's the operator's choice.
 
 Never cache anything under `/preview` or `/preview-assets`, in any case, at a CDN or a proxy. Every answer the app sends there is `private, no-store`, but Next's 308 for a repeated slash or a backslash, such as `//preview/<grant>`, goes out before the app with no `Cache-Control`, and its body names the grant's path. Bypass the cache for every path that starts with `/preview` and every path holding `//` or a backslash.
+
+A CDN may cache `/media/` renditions, which are `public, max-age=31536000, immutable`. When an image is made private or removed, purge its `/media/<assetId>/` addresses there, or the CDN keeps serving the copies it holds ([Caching](#caching)).
 
 ## Checks before going live
 
