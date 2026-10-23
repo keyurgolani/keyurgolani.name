@@ -79,7 +79,24 @@ test('a command goes as JSON with its CSRF token, and a query as a GET with its 
   for (const call of browser.seen.calls) {
     assert.equal(call.init.credentials, 'same-origin');
     assert.equal(call.init.cache, 'no-store');
+    assert.equal(call.init.keepalive, undefined);
   }
+});
+
+test('a command sent with keepalive outlives the page, and keeps its CSRF token (#7, Slice 4)', async () => {
+  const browser = env(ok);
+  await createStudioFetch(browser)('preview.grant.revoke', {
+    body: { grant: 'G'.repeat(22) },
+    csrfToken: 't'.repeat(43),
+    keepalive: true,
+  });
+  const [command] = browser.seen.calls;
+  assert.equal(command?.init.method, 'POST');
+  assert.equal(command?.init.keepalive, true);
+  assert.deepEqual(command?.init.headers, {
+    'content-type': 'application/json',
+    'x-csrf-token': 't'.repeat(43),
+  });
 });
 
 test('on a 401 it signs the other tabs out and goes to sign-in, unless a listener cancels the event', async () => {

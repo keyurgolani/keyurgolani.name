@@ -24,14 +24,19 @@ type Reply = { status: number; data?: unknown } | Error;
 
 /** A session over a stand-in studioFetch that answers each operation from `replies`, in turn. */
 function setup(replies: Record<string, Reply[]>) {
-  const sent: Array<{ name: string; body: unknown; csrfToken?: string }> = [];
+  const sent: Array<{ name: string; body: unknown; csrfToken?: string; keepalive?: boolean }> = [];
   const states: GrantState[] = [];
   const timers: Array<{ run: () => void; ms: number; cleared: boolean }> = [];
   let minted = 0;
   const session = createGrantSession({
     csrfToken: 'csrf',
-    call: async (name, { body, csrfToken }) => {
-      sent.push({ name, body, ...(csrfToken ? { csrfToken } : {}) });
+    call: async (name, { body, csrfToken, keepalive }) => {
+      sent.push({
+        name,
+        body,
+        ...(csrfToken ? { csrfToken } : {}),
+        ...(keepalive ? { keepalive } : {}),
+      });
       const queue = replies[name] ?? [];
       let reply = queue.shift();
       if (reply === undefined && name === 'preview.grant.mint') {
@@ -279,6 +284,52 @@ test('of two mints that overlap, the older answer has its grant revoked, whichev
     assert.deepEqual(revoked, [{ grant: grantOf(1) }], order);
     session.stop();
   }
+});
+
+test('a mint answered after the session ended brings nothing back: the surface hears nothing more, and the grant ended with the session (#7, Slice 4)', async () => {
+  const { calls, call, active } = heldCalls();
+  const states: GrantState[] = [];
+  const session = createGrantSession({ call, csrfToken: 'csrf', onState: (s) => states.push(s) });
+  const minting = session.mint(REQUEST);
+  // Another tab signs out while the mint is out.
+  session.end();
+  calls[0]!.answer(active(1));
+  await minting;
+  await settled();
+  assert.deepEqual(states, [{ kind: 'minting' }, { kind: 'ended', announce: false }]);
+  // The server ended every grant of the session: no revoke, and no heartbeat.
+  assert.deepEqual(
+    calls.map(({ name }) => name),
+    ['preview.grant.mint'],
+  );
+  await session.mint(REQUEST);
+  await session.check();
+  assert.equal(states.length, 2);
+  assert.equal(calls.length, 1);
+});
+
+test('the page going revokes the grant with a request that outlives it, and holds none after (#7, Slice 4)', async () => {
+  const { session, sent, timers, names } = setup({});
+  await session.mint(REQUEST);
+  session.leave();
+  await settled();
+  assert.deepEqual(sent.at(-1), {
+    name: 'preview.grant.revoke',
+    body: { grant: grantOf(1) },
+    csrfToken: 'csrf',
+    keepalive: true,
+  });
+  assert.ok(timers.every(({ cleared }) => cleared));
+  // Nothing is held, so the frame going after revokes nothing more.
+  session.stop();
+  await settled();
+  assert.deepEqual(names(), ['preview.grant.mint', 'preview.grant.revoke']);
+  // Only the page going asks for keepalive: a frame's own revoke doesn't.
+  const other = setup({});
+  await other.session.mint(REQUEST);
+  other.session.stop();
+  await settled();
+  assert.equal(other.sent.at(-1)?.keepalive, undefined);
 });
 
 test('a 401 or session_ended ends the session, and nothing more goes out, and only session_ended is news for the other tabs (#7, Slice 4)', async () => {

@@ -368,6 +368,28 @@ test(
 );
 
 test(
+  'reloading /studio/preview revokes the grant the page held as it goes, so the reload holds only its own (#7, Slice 4)',
+  { annotation: [PAGE] },
+  async ({ page, app }) => {
+    const { csrf, frame } = await openPreview(page, app, secret.password, 'Reloading Person');
+    const before = new URL(frame.url()).pathname.split('/')[2]!;
+    // A reload unmounts nothing: only pagehide sees the page go.
+    await page.reload();
+    await expect(stage(page)).toHaveAttribute('data-phase', 'ready');
+    const after = new URL((await grantFrame(page)).url()).pathname.split('/')[2]!;
+    expect(after).not.toBe(before);
+    await expect
+      .poll(
+        async () =>
+          (await command(page, csrf, 'preview.grant.status', { grant: before })).body.data?.status,
+      )
+      .not.toBe('active');
+    const status = await command(page, csrf, 'preview.grant.status', { grant: after });
+    expect(status.body.data).toEqual({ status: 'active' });
+  },
+);
+
+test(
   'a grant whose status says its session ended does the same, and tells every other Studio tab, which no 401 has (#7, Slice 4)',
   { annotation: [PAGE, { type: 'route', description: '/studio' }] },
   async ({ page, app }) => {

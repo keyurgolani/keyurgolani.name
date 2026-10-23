@@ -4,7 +4,7 @@ import type { StudioFetchOptions } from '~/lib/studio-fetch';
 // when the frame is made and again for what it shows next, renew on a
 // heartbeat, ask for its status when a renewal fails or a load brings no
 // valid hello, mint again when it's superseded, expired, or unknown, and
-// revoke it when the frame goes. A version preview_blocked stops gets no
+// revoke it when the frame or the page goes. A version preview_blocked stops gets no
 // grant: the frame keeps the one it has, and nothing mints again until the
 // next save asks. Once the session ends, nothing more goes out. It sends
 // only #61's preview.grant commands, through studioFetch, with the page's
@@ -73,6 +73,12 @@ export interface GrantSession {
   check(): Promise<void>;
   /** The session ended: no request goes out from here on. */
   end(): void;
+  /**
+   * The page is going, as on pagehide: revokes the grant with a request that
+   * outlives the page, and holds none. A page back from the back-forward
+   * cache mints again.
+   */
+  leave(): void;
   /** Revokes the grant and stops, as the frame unmounts. */
   stop(): void;
 }
@@ -114,8 +120,9 @@ export function createGrantSession(options: GrantSessionOptions): GrantSession {
   /** Each mint's turn: the answer to an older one is dropped. */
   let turn = 0;
 
+  /** Tells the surface, until the frame goes or the session ends: nothing brings it back after. */
   const set = (state: GrantState) => {
-    if (!stopped) onState(state);
+    if (!stopped && !ended) onState(state);
   };
 
   const send = async (name: string, body: unknown): Promise<Answer | null> => {
@@ -136,7 +143,7 @@ export function createGrantSession(options: GrantSessionOptions): GrantSession {
     ended = true;
     clearTimer(timer);
     current = null;
-    set({ kind: 'ended', announce });
+    if (!stopped) onState({ kind: 'ended', announce });
   };
 
   const schedule = () => {
@@ -149,12 +156,15 @@ export function createGrantSession(options: GrantSessionOptions): GrantSession {
   /**
    * Revokes `held`, even once the frame has gone, so a grant nobody holds
    * never stays active. Once the session ends, the server has ended them all.
+   * `keepalive` lets the request outlive the page, as it goes.
    */
-  const revoke = (held: HeldGrant | null) => {
+  const revoke = (held: HeldGrant | null, keepalive = false) => {
     if (!held || ended) return;
-    void call('preview.grant.revoke', { body: { grant: held.grant }, csrfToken }).catch(
-      () => undefined,
-    );
+    const body = { grant: held.grant };
+    void call(
+      'preview.grant.revoke',
+      keepalive ? { body, csrfToken, keepalive } : { body, csrfToken },
+    ).catch(() => undefined);
   };
 
   async function mint(next: MintRequest): Promise<void> {
@@ -165,9 +175,10 @@ export function createGrantSession(options: GrantSessionOptions): GrantSession {
     if (!answer) return;
     const data = answer.data;
     const active = answer.status === 200 && data?.status === 'active';
-    // An answer nothing waits for now, since a newer mint took its turn or the
-    // frame has gone: the grant it made is revoked, never left to idle out.
-    if (mine !== turn || stopped) {
+    // An answer nothing waits for now, since a newer mint took its turn, the
+    // frame has gone, or the session ended: the grant it made is revoked,
+    // never left to idle out. Once the session ended, the server ended it too.
+    if (mine !== turn || stopped || ended) {
       if (active) revoke({ grant: data.grant as string, nonce: data.nonce as string });
       return;
     }
@@ -224,6 +235,11 @@ export function createGrantSession(options: GrantSessionOptions): GrantSession {
     mint,
     check,
     end: () => endSession(false),
+    leave() {
+      clearTimer(timer);
+      revoke(current, true);
+      current = null;
+    },
     stop() {
       clearTimer(timer);
       revoke(current);

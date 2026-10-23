@@ -26,6 +26,8 @@ export interface StudioFetchOptions {
   readonly csrfToken?: string;
   /** A query's input, as search parameters. */
   readonly query?: Readonly<Record<string, string>>;
+  /** Lets the request outlive the page, as a command sent on pagehide must. */
+  readonly keepalive?: boolean;
 }
 
 /** The part of a BroadcastChannel a tab uses: one per tab, to post and to listen. */
@@ -50,7 +52,7 @@ export interface StudioFetchEnv {
 export function createStudioFetch(env: StudioFetchEnv) {
   return async function studioFetch(
     name: string,
-    { body, csrfToken, query }: StudioFetchOptions = {},
+    { body, csrfToken, query, keepalive }: StudioFetchOptions = {},
   ): Promise<Response> {
     const command = body !== undefined;
     const search = query ? `?${new URLSearchParams(query)}` : '';
@@ -63,6 +65,7 @@ export function createStudioFetch(env: StudioFetchEnv) {
       body: command ? JSON.stringify(body) : undefined,
       credentials: 'same-origin',
       cache: 'no-store',
+      ...(keepalive ? { keepalive: true } : {}),
     });
     if (response.status === 401) {
       env.channel.postMessage(SIGNED_OUT);

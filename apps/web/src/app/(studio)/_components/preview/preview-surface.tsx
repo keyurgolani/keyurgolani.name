@@ -205,7 +205,17 @@ export function PreviewSurface(props: PreviewSurfaceProps) {
       run: () => void grants.mint(heldRequest(latest.current.props.request)),
     });
     void grants.mint(heldRequest(latest.current.props.request));
+    // A reload or a closed tab unmounts nothing, so the grant goes with the
+    // page, and a page back from the back-forward cache mints a new one.
+    const onPageHide = () => grants.leave();
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) void grants.mint(heldRequest(latest.current.props.request));
+    };
+    window.addEventListener('pagehide', onPageHide);
+    window.addEventListener('pageshow', onPageShow);
     return () => {
+      window.removeEventListener('pagehide', onPageHide);
+      window.removeEventListener('pageshow', onPageShow);
       throttle.current?.cancel();
       grants.stop();
       channel.current?.close();
