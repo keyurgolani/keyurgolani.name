@@ -308,6 +308,12 @@ export const A11Y_CASES: readonly MetaCase[] = [
   bad('fixed-footer', 'occlusion.html', 'occlusion', 'obscured', occlusion),
   bad('pointer-events-footer', 'occlusion-pointer.html', 'occlusion', 'obscured', occlusion),
   bad('scroll-shown-footer', 'occlusion-scroll.html', 'occlusion', 'obscured', occlusion),
+  {
+    ...good('occlusion', occlusion),
+    id: 'occlusion/grain-overlay',
+    input: 'tests/quality/fixtures/a11y/occlusion-grain.html',
+    run: () => onPage('occlusion-grain.html', occlusion),
+  },
   good('occlusion', occlusion),
   {
     ...bad('no-escape', 'dialog-escape.html', 'keyboard', 'escape', overlays),
@@ -423,6 +429,14 @@ export const A11Y_CASES: readonly MetaCase[] = [
   bad(
     'see-through-gradient',
     'transparency-gradient.html',
+    'transparency',
+    'opaque',
+    transparencyFindings,
+    { features: TRANSPARENCY },
+  ),
+  bad(
+    'nav-over-image',
+    'transparency-nav-over-image.html',
     'transparency',
     'opaque',
     transparencyFindings,

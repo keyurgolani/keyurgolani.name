@@ -27,7 +27,12 @@ export interface Active {
   readonly inView: boolean;
   /** What the point at its center (clamped to the viewport) hits: itself, a descendant, or its label. */
   readonly hitsItself: boolean;
+  /** The top layer over it, or ''. */
   readonly hit: string;
+  /** Every element that paints over its center, from the top. */
+  readonly layers: readonly string[];
+  /** One of them is near-opaque, so it covers the control whatever its pixels say. */
+  readonly opaque: boolean;
   /** How far its focus indicator reaches past its box, in CSS px. */
   readonly reach: number;
 }
@@ -200,23 +205,25 @@ function probe(request: ProbeRequest): unknown {
       const [vw, vh] = [innerWidth, innerHeight];
       const cx = Math.min(Math.max(box.x + box.width / 2, 0), vw - 1);
       const cy = Math.min(Math.max(box.y + box.height / 2, 0), vh - 1);
-      // The stack at the center, from the top: the first element that paints
-      // before the control (or its label) covers it. The caller forces
-      // pointer-events on, so a pointer-events: none layer is in the stack.
+      // The stack at the center, from the top: each element that paints
+      // before the control (or its label) is a layer over it. The caller
+      // forces pointer-events on, so a pointer-events: none layer is in the
+      // stack, and it decides from pixels whether faint layers, such as a
+      // grain overlay, really cover it; a near-opaque one does outright.
       let hit: Element | null = null;
-      let covered = false;
+      const layers: Element[] = [];
       for (const top of doc.elementsFromPoint(cx, cy)) {
         const label = top.closest('label') as HTMLLabelElement | null;
-        if (top === el || el.contains(top) || label?.control === el || top.contains(el)) {
-          hit = top;
-          break;
-        }
+        if (top === el || el.contains(top) || label?.control === el || top.contains(el)) break;
         if (paints(top)) {
-          hit = top;
-          covered = true;
-          break;
+          hit ??= top;
+          layers.push(top);
         }
       }
+      const opaque = layers.some((layer) => {
+        const s = getComputedStyle(layer);
+        return alphaOf(s.backgroundColor) * Number(s.opacity) >= 0.9;
+      });
       return {
         none: false,
         path: cssPath(el),
@@ -224,8 +231,10 @@ function probe(request: ProbeRequest): unknown {
         box,
         shown: shown(el),
         inView: box.x + box.width > 0 && box.y + box.height > 0 && box.x < vw && box.y < vh,
-        hitsItself: !covered,
+        hitsItself: layers.length === 0,
         hit: hit ? cssPath(hit) : '',
+        layers: layers.map(cssPath),
+        opaque,
         reach: ringReach(el),
       } satisfies Active;
     }

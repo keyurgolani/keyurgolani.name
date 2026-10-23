@@ -177,6 +177,57 @@ export interface KeyboardOptions {
   readonly occlusion?: boolean;
 }
 
+/** A pixel channel that moves more than this when the layers go is the layers' doing. */
+const COVER_CHANNEL = 32;
+/** The share of the control's pixels that must move for its layers to cover it. */
+const COVER_SHARE = 0.05;
+
+/**
+ * Whether the layers over the focused control really hide it: one is
+ * near-opaque, or taking them all away moves a real share of the control's
+ * pixels. A faint full-page grain or tint is over every control and hides
+ * none.
+ */
+async function layersCover(page: Page, active: Active): Promise<boolean> {
+  if (active.opaque) return true;
+  const viewport = page.viewportSize()!;
+  const x = Math.max(0, Math.floor(active.box.x));
+  const y = Math.max(0, Math.floor(active.box.y));
+  const width = Math.min(viewport.width, Math.ceil(active.box.x + active.box.width)) - x;
+  const height = Math.min(viewport.height, Math.ceil(active.box.y + active.box.height)) - y;
+  if (width < 1 || height < 1) return true;
+  const shot = async () =>
+    decodePng(
+      await page.screenshot({
+        clip: { x, y, width, height },
+        animations: 'disabled',
+        caret: 'hide',
+      }),
+    );
+  const covered = await shot();
+  await page.evaluate((paths) => {
+    const style = document.createElement('style');
+    style.dataset.qualityLift = '';
+    style.textContent = '[data-quality-lift] { opacity: 0 !important; }';
+    document.head.append(style);
+    for (const path of paths) document.querySelector(path)?.setAttribute('data-quality-lift', '');
+  }, active.layers);
+  const bare = await shot();
+  await page.evaluate(() => {
+    document.querySelector('style[data-quality-lift]')?.remove();
+    for (const el of document.querySelectorAll('[data-quality-lift]'))
+      el.removeAttribute('data-quality-lift');
+  });
+  let moved = 0;
+  const pixels = covered.width * covered.height;
+  for (let i = 0; i < pixels; i++) {
+    const a = pixel(covered, i);
+    const b = pixel(bare, i);
+    if (a.some((value, channel) => Math.abs(value - b[channel]!) > COVER_CHANNEL)) moved += 1;
+  }
+  return moved >= pixels * COVER_SHARE;
+}
+
 /** The keyboard walk, with the focus and occlusion checks at each stop as asked. */
 export async function keyboardFindings(
   page: Page,
@@ -235,7 +286,7 @@ export async function keyboardFindings(
       });
       continue;
     }
-    if (options.occlusion && !active.hitsItself) {
+    if (options.occlusion && !active.hitsItself && (await layersCover(page, active))) {
       findings.push({
         gate: 'occlusion',
         rule: 'obscured',

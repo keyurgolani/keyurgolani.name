@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A see-through navigation over a hero image, known-bad</title>
+    <!--
+      The navigation keeps a 60% fill under reduced transparency, over a hero
+      image that is its sibling, not its ancestor. The image covers whatever
+      fills the ancestors, so only taking it away shows the navigation through.
+    -->
+    <style>
+      body {
+        margin: 0;
+        font:
+          16px/1.5 system-ui,
+          sans-serif;
+        color: #111;
+        background: #fff;
+      }
+      header {
+        position: relative;
+        min-height: 12rem;
+      }
+      .hero {
+        position: absolute;
+        inset: 0;
+        background: repeating-linear-gradient(90deg, #345 0 12px, #a63 12px 24px);
+      }
+      [data-ui-slot='navigation'] {
+        position: relative;
+        padding: 1rem;
+        background: rgb(255 255 255 / 0.6);
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="hero"></div>
+      <nav data-ui-slot="navigation" aria-label="Sections">
+        <a href="#work">Work</a> <a href="#notes">Notes</a>
+      </nav>
+    </header>
+    <main>
+      <h1 id="work">A page under a frosted header</h1>
+      <p id="notes">Notes.</p>
+    </main>
+  </body>
+</html>

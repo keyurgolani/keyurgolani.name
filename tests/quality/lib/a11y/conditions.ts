@@ -449,7 +449,8 @@ const UNDER = ['rgb(255, 0, 255)', 'rgb(0, 255, 0)'];
 
 /**
  * Whether anything shows through the element `path` names: every ancestor
- * is filled with one color, then another, and a pixel inside the element's
+ * is filled with one color, then another, with everything beside them and
+ * their own pseudo-elements faded out, and a pixel inside the element's
  * corner radius and border that changes is what's behind coming through.
  */
 async function seeThrough(page: Page, path: string, inset: number): Promise<boolean> {
@@ -473,16 +474,25 @@ async function seeThrough(page: Page, path: string, inset: number): Promise<bool
   for (const fill of UNDER) {
     await page.evaluate(
       ({ at, color }) => {
+        // Every ancestor takes the fill, and everything beside the line from
+        // the root down to the surface goes, so a sibling's image under the
+        // surface can't pass for an opaque fill.
         const el = document.querySelector(at);
-        for (let up = el?.parentElement; up; up = up.parentElement)
+        for (let up = el?.parentElement, child: Element | null | undefined = el; up;) {
           up.setAttribute('data-quality-under', '');
+          for (const other of up.children)
+            if (other !== child && other.localName !== 'style' && other.localName !== 'link')
+              other.setAttribute('data-quality-aside', '');
+          child = up;
+          up = up.parentElement;
+        }
         let style = document.querySelector<HTMLStyleElement>('style[data-quality-under]');
         if (!style) {
           style = document.createElement('style');
           style.dataset.qualityUnder = '';
           document.head.append(style);
         }
-        style.textContent = `[data-quality-under] { background: ${color} !important; }`;
+        style.textContent = `[data-quality-under] { background: ${color} !important; } [data-quality-under]::before, [data-quality-under]::after, [data-quality-aside] { opacity: 0 !important; }`;
       },
       { at: path, color: fill },
     );
@@ -496,8 +506,10 @@ async function seeThrough(page: Page, path: string, inset: number): Promise<bool
   }
   await page.evaluate(() => {
     document.querySelector('style[data-quality-under]')?.remove();
-    for (const el of document.querySelectorAll('[data-quality-under]'))
+    for (const el of document.querySelectorAll('[data-quality-under], [data-quality-aside]')) {
       el.removeAttribute('data-quality-under');
+      el.removeAttribute('data-quality-aside');
+    }
   });
   const [a, b] = shots.map(decodePng);
   return a!.data.some((value, i) => value !== b!.data[i]);

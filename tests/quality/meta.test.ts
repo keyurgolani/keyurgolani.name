@@ -190,6 +190,8 @@ test('every gate so far has a known-bad case and a known-good one, and each id i
     'transparency/see-through-gradient',
     'contrast/past-forty',
     'runner/no-javascript-scripting-media',
+    'transparency/nav-over-image',
+    'occlusion/grain-overlay',
   ]) {
     assert.ok(ids.includes(id), id);
   }

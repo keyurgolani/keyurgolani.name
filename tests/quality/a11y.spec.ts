@@ -20,10 +20,10 @@ import { expect, test } from './fixtures';
 // - The host's focus ring (apps/web/src/app/experience-base.css): on a phone,
 //   where Chromium's own ring is under 3:1, a page's skip link and the 404
 //   page's first link ring in currentColor, and a variant's own focus style,
-//   which is unlayered, wins over it. A host page with no boundary, as a 404
-//   without a live site, rings too; an element outside both, as Studio's
-//   are, keeps the browser's own ring. A preview document is the same
-//   ExperienceDocument tree as /, so / stands for it.
+//   which is unlayered, wins over it. The host's own pages, which only
+//   Studio's layout styles, ring through host-chrome.css; an element outside
+//   the boundary, as Studio's are, keeps the browser's own ring. A preview
+//   document is the same ExperienceDocument tree as /, so / stands for it.
 // - The Extended tier on a 320px phone: its display headline wraps, its
 //   table scrolls inside its figure, and no number breaks across lines.
 
@@ -161,18 +161,24 @@ test.describe("the host's focus ring on a phone", () => {
   );
 
   test(
-    "a host page with no boundary, as a 404 without a live site, rings in the host's ring",
-    { annotation: [{ type: 'route', description: '/' }, READ_ONLY] },
+    "the host's own pages, Studio's 404 and error pages, ring in host-chrome.css's ring",
+    { annotation: [{ type: 'route', description: '/studio/[...]' }, READ_ONLY] },
     async ({ page }) => {
-      await page.goto('/');
+      // Only Studio's layout loads host-chrome.css, and this read-only server
+      // serves no Studio, so the compiled sheet is loaded into a page of its
+      // own, with the markup Studio's not-found.tsx renders.
+      const web = qualityWeb();
+      const sheets = cssFiles(path.join(web, '.next', 'static'))
+        .map((file) => readFileSync(file, 'utf8'))
+        .filter((css) => css.includes('--studio-sentinel'));
+      expect(sheets.length, 'the compiled host-chrome.css').toBeGreaterThan(0);
+      await page.setContent(
+        `<style>${sheets.join('\n')}</style><main class="host-chrome"><h1>Page not found</h1><p><a href="/">Go to the home page</a></p></main>`,
+      );
       await page.keyboard.press('Tab');
-      await page.evaluate(() => {
-        const main = document.createElement('main');
-        main.className = 'host-chrome';
-        main.innerHTML = '<a href="#home">Home</a>';
-        document.body.append(main);
-        main.querySelector('a')!.focus();
-      });
+      expect(await page.evaluate(() => document.activeElement?.textContent)).toBe(
+        'Go to the home page',
+      );
       const ring = await outline(page);
       expect(ring).toEqual({ style: 'solid', width: '2px', color: ring.text, text: ring.text });
     },
@@ -191,6 +197,19 @@ test.describe('the Extended tier on a 320px phone', () => {
         { waitUntil: 'load' },
       );
       const layout = await page.evaluate(() => {
+        // Six more numeric columns, so the table is wider than a 320px
+        // figure in any font, unless a number breaks to fit.
+        const figure = document.querySelector('[data-ui-slot="data-display"]')!;
+        for (const row of figure.querySelectorAll('tr')) {
+          const header = row.parentElement?.localName === 'thead';
+          for (let i = 0; i < 6; i++) {
+            const cell = document.createElement(header ? 'th' : 'td');
+            cell.dataset.uiSlot = header ? 'data-display.header' : 'data-display.cell';
+            cell.dataset.state = 'numeric';
+            cell.textContent = header ? `Q${i + 1}` : `${i + 1},234,567.89`;
+            row.append(cell);
+          }
+        }
         // The lines the element's text sits on, leaving out a bar drawn below it.
         const lines = (el: Element) => {
           const tops = new Set<number>();
@@ -203,9 +222,13 @@ test.describe('the Extended tier on a 320px phone', () => {
           }
           return tops.size;
         };
-        const figure = document.querySelector('[data-ui-slot="data-display"]')!;
+        const headline = document.querySelector('[data-type-role="display"]')!;
         return {
           scrollWidth: document.scrollingElement!.scrollWidth,
+          headline: {
+            right: Math.round(headline.getBoundingClientRect().right),
+            lines: lines(headline),
+          },
           tableScrolls: figure.scrollWidth > figure.clientWidth,
           numbers: [
             ...document.querySelectorAll(
@@ -217,6 +240,8 @@ test.describe('the Extended tier on a 320px phone', () => {
         };
       });
       expect(layout.scrollWidth, 'the page scrolls sideways').toBeLessThanOrEqual(320);
+      expect(layout.headline.right, 'the headline fits the line').toBeLessThanOrEqual(320);
+      expect(layout.headline.lines, 'the headline wraps').toBeGreaterThan(1);
       expect(layout.tableScrolls, 'the table scrolls inside its figure').toBe(true);
       expect(layout.numbers.length).toBeGreaterThan(0);
       expect(layout.numbers.filter((each) => each.lines > 1)).toEqual([]);
