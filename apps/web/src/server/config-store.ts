@@ -31,8 +31,13 @@ export const NOT_LOADED =
 
 const STORE: unique symbol = Symbol.for('keyurgolani.portfolio.deployment');
 const SERVABLE: unique symbol = Symbol.for('keyurgolani.portfolio.servable');
+const LIVE_COMPOSITION: unique symbol = Symbol.for('keyurgolani.portfolio.live-composition');
 
-type Holder = typeof globalThis & { [STORE]?: DeploymentState; [SERVABLE]?: boolean };
+type Holder = typeof globalThis & {
+  [STORE]?: DeploymentState;
+  [SERVABLE]?: boolean;
+  [LIVE_COMPOSITION]?: string;
+};
 
 export function getDeploymentState(): DeploymentState | undefined {
   return (globalThis as Holder)[STORE];
@@ -104,4 +109,22 @@ export function servableAgain(): Promise<boolean> {
       resolve(servable);
     });
   });
+}
+
+/**
+ * The composition the live revision renders (#6, Slice 2): the id of the
+ * variant its site selects, or the fallback composition's when this build
+ * doesn't register that one. The composition root's reader writes it on
+ * every getLive(), whichever reader the profile has, and register() reads
+ * the live revision once at startup, so it's set before the first request.
+ * proxy.ts picks a visitor page's experience segment from it, and the page
+ * there checks it again, so both read this one value. Undefined until then.
+ */
+export function liveComposition(): string | undefined {
+  return (globalThis as Holder)[LIVE_COMPOSITION];
+}
+
+/** Called by the composition root's reader on every getLive(), and by tests. */
+export function setLiveComposition(id: string | undefined): void {
+  (globalThis as Holder)[LIVE_COMPOSITION] = id;
 }

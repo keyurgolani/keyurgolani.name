@@ -1,5 +1,4 @@
 import type { AppearanceCatalog, ContentExtension, UnitValidator } from '@portfolio/schema';
-import type { VariantComponent } from '@portfolio/kit/sections';
 import {
   contractValidators,
   FALLBACK_ID,
@@ -10,7 +9,6 @@ import {
 } from '@portfolio/variant-contract';
 import { createAppearanceCatalog } from '../server/appearance-catalog';
 import { CONTENT_EXTENSIONS, EXTENSION_RENDERED_KINDS } from './generated/registry.extensions';
-import { VARIANT_LOADERS } from './generated/registry.loaders';
 import { ASSET_MANIFEST, VARIANTS } from './generated/registry.meta';
 
 // The variants and content extensions this build registers (#5, Slice 3),
@@ -20,6 +18,12 @@ import { ASSET_MANIFEST, VARIANTS } from './generated/registry.meta';
 // names is the fallback composition's. The metadata module is server-only
 // (#6), so `pnpm config:validate` and the tests that load this module
 // resolve server-only as Next's server does (scripts/server-only.cjs).
+//
+// Nothing here loads a variant (#6, Slice 2): a page whose server graph
+// reached every variant's loader would put every variant's client code in
+// its chunks. A visitor page loads only its own, in its experience segment;
+// the routes that render whichever variant a request names, #7's preview
+// frames among them, load it through lib/variant-loaders.ts.
 
 /** Every variant this build registers, the fallback composition included. */
 export const REGISTRY: VariantRegistry = VARIANTS;
@@ -60,13 +64,6 @@ export function compositionFor(
  */
 export function variantStylesheet(id: string): string | null {
   return findUnit(ASSET_MANIFEST, 'variant', id)?.stylesheet?.url ?? null;
-}
-
-/** A registered variant's component, loaded through the import() generation wrote for it. */
-export async function loadComposition(id: string): Promise<VariantComponent> {
-  const load = VARIANT_LOADERS[id];
-  if (!load) throw new Error('That variant is not registered in this build.');
-  return (await load()).default;
 }
 
 /**

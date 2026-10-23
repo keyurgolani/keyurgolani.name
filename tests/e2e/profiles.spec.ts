@@ -8,12 +8,15 @@ import { profileMatrix, READ_ONLY_APP } from '../harness/profile-matrix';
 // demo.spec.ts runs it for demo, and owner.spec.ts for owner with the
 // password provider (#2). The build's route manifests must list exactly the
 // table's routes, so a route Next serves from outside src/app, or at a URL
-// the table doesn't expect, fails here too.
+// the table doesn't expect, fails here too. The visitor pages have no route
+// of their own: each renders in its composition's experience segment, one
+// route per registered variant (#6, Slice 2).
 
 // apps/web has no "type": "module", so its modules are CommonJS to Node and
 // load through require().
 const require = createRequire(import.meta.url);
-const { listRoutes } = require('../../apps/web/src/server/routes.ts') as typeof Routes;
+const { listExperienceRoutes, listRoutes } =
+  require('../../apps/web/src/server/routes.ts') as typeof Routes;
 
 // The build's own entries in its route manifests, which no route file declares.
 const NEXT_ENTRIES = new Set([
@@ -41,7 +44,11 @@ test(
       ...Object.values(manifest('app-path-routes-manifest.json')),
       ...Object.keys(manifest('server/pages-manifest.json')),
     ].filter((url) => !NEXT_ENTRIES.has(url));
-    const table = new Set(listRoutes().map((entry) => entry.pattern));
+    const table = new Set(
+      [...listRoutes().filter((entry) => !entry.experience), ...listExperienceRoutes()].map(
+        (entry) => entry.pattern,
+      ),
+    );
     expect([...new Set(built)].sort()).toEqual([...table].sort());
   },
 );

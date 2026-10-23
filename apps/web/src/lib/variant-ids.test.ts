@@ -9,11 +9,15 @@ import { FALLBACK_ID, MISSING_VARIANT_ID, RESERVED_IDS } from '@portfolio/varian
 // the contract reserves for the platform's own packages nor the one fixtures
 // select to reach the fallback composition. The host reaches the fallback
 // through FALLBACK_VARIANT_ID, as lib/sample.ts and lib/variants.ts do, and
-// every other variant through the generated registry, which the scan leaves
-// out, as it does the tests.
+// every other variant through the generated registry and the experience
+// segments registry generation writes beside it (#6, Slice 2), which the
+// scan leaves out, as it does the tests.
 
 const SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const GENERATED = path.join(SRC, 'lib', 'generated');
+const GENERATED = new Set([
+  path.join(SRC, 'lib', 'generated'),
+  path.join(SRC, 'app', '(site)', '%5Fexperience'),
+]);
 const escape = (id: string) => id.replace(/[-]/g, '\\-');
 
 /** Every reserved id but the fallback's, which is a common word, and MISSING_VARIANT_ID. */
@@ -32,12 +36,12 @@ const fallback = () => new RegExp(`(['"\`])${escape(FALLBACK_ID)}\\1`, 'g');
 const named = (text: string) =>
   [...text.matchAll(token()), ...text.matchAll(fallback())].map(([written]) => written);
 
-/** Every source file under `dir`, but the tests and the generated registry. */
+/** Every source file under `dir`, but the tests and what registry generation writes. */
 function* sourceFiles(dir: string): Generator<string> {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const file = path.join(dir, entry.name);
     if (entry.isDirectory()) {
-      if (file !== GENERATED) yield* sourceFiles(file);
+      if (!GENERATED.has(file)) yield* sourceFiles(file);
     } else if (/\.(ts|tsx|mts|mjs|js|css)$/.test(entry.name) && !/\.test\.tsx?$/.test(entry.name)) {
       yield file;
     }

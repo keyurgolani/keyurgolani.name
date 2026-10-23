@@ -2,6 +2,8 @@ import 'server-only';
 import { cache } from 'react';
 import { notFound, redirect } from 'next/navigation';
 import { ExperienceDocument } from '~/lib/experience-document';
+import { ClientHostModules } from '~/lib/host-modules-client';
+import { variantLoader } from '~/lib/variant-loaders';
 import { resolveVisitorPath } from '~/lib/visitor-routes';
 import { getDeploymentState, requireDeploymentConfig } from './config-store';
 import type { GrantChannel, OpenedGrant } from './preview-port';
@@ -49,6 +51,10 @@ export async function previewPage(grant: string, route: readonly string[]) {
   return ExperienceDocument({
     unit: resolved.view,
     selection: resolved.composition,
+    // A draft can select any registered variant, so a frame loads the one it
+    // renders through every variant's loader: frames are owner-only (#6).
+    load: variantLoader(resolved.composition.rendered.manifest.id),
+    hostModules: ClientHostModules,
     linkBase: { basePath },
     route: resolved.target,
     origin: requireDeploymentConfig().origin,

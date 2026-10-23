@@ -45,7 +45,7 @@ const { accessIn, CAPABILITIES, INDEXABLE, PROFILES } =
   require('../../apps/web/src/server/capabilities.ts') as typeof Capabilities;
 const { fixtureFlags } = require('../../apps/web/scripts/fixture-gate.ts') as typeof FixtureGate;
 const { listOperations } = require('../../apps/web/src/server/operations.ts') as typeof Operations;
-const { listRoutes, RETIRED_PATTERNS, routeAccess } =
+const { listExperienceRoutes, listRoutes, RETIRED_PATTERNS, routeAccess } =
   require('../../apps/web/src/server/routes.ts') as typeof Routes;
 const { PREVIEW_STATUS_DOCUMENT, PREVIEW_STATUS_TYPE } =
   require('../../apps/web/src/preview/status.ts') as typeof PreviewStatus;
@@ -248,6 +248,43 @@ function unbuiltSpellings(): string[] {
         ...(path.indexOf('/', 1) > 0 ? [path.replace(/(?!^)\//g, '%2F')] : []),
       ];
     });
+}
+
+/**
+ * The visitor pages `profile` serves at a path that names one (#6, Slice 2):
+ * each renders in its composition's experience segment, through proxy.ts's
+ * rewrite, and exists for GET and HEAD alone.
+ */
+const visitorPages = (profile: Profile) =>
+  listRoutes()
+    .filter(
+      (entry) =>
+        entry.experience && routeAccess(profile, entry) !== 'absent' && !namesNothing(entry),
+    )
+    .map((entry) => concrete(entry.pattern));
+
+/**
+ * Each experience segment's path in every spelling a request may use (#6,
+ * Slice 2), with what a path no route matches answers it the same: as
+ * written, deeper, with a query and with `_rsc`, in another case, with a
+ * fixed segment percent-encoded, %5F among them, with its slashes encoded,
+ * and with an `.rsc` suffix. Only proxy.ts's own rewrite reaches one, so each
+ * answers every method as its counterpart under /no-such-page does.
+ */
+function experienceSpellings(): (readonly [target: string, unknown: string])[] {
+  return listExperienceRoutes().flatMap(({ pattern }) => {
+    const path = concrete(pattern);
+    return [
+      [path, '/no-such-page'],
+      [`${path}/work/tide-tables`, '/no-such-page/work/tide-tables'],
+      [`${path}?view=all`, '/no-such-page?view=all'],
+      [`${path}?_rsc=probe`, '/no-such-page?_rsc=probe'],
+      [path.toUpperCase(), '/NO-SUCH-PAGE'],
+      ...encodedSpellings(pattern).map((spelling) => [spelling, '/no-such-page'] as const),
+      [path.replace(/(?!^)\//g, '%2F'), '/no-such-page'],
+      [`${path}.rsc`, '/no-such-page.rsc'],
+    ] as const;
+  });
 }
 
 /** What the transport answers a visitor with no session, by the registry and the matrix. */
@@ -746,6 +783,86 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
         );
       }
       await expectUnknown(request, profile, spellings);
+    },
+  );
+
+  test(
+    'a visitor page answers GET and HEAD, its RSC payload and a prefetch of it, from its experience segment, and any other method with a 405 (#6, Slice 2)',
+    { annotation: [{ type: 'route', description: 'every visitor page' }, annotation] },
+    async ({ request }) => {
+      const targets = visitorPages(profile);
+      expect(targets, 'the home page at least').toContain('/');
+      for (const target of targets) {
+        for (const method of EVERY_METHOD) {
+          const what = `${method} ${target}`;
+          const response = await request.fetch(target, { method, maxRedirects: 0 });
+          expect(response.headers()['x-request-id'], what).toMatch(UUID);
+          expectProfileHeaders(profile, response, what);
+          if (method === 'GET' || method === 'HEAD') {
+            expect(response.status(), what).toBe(200);
+            expect(response.headers()['content-type'], what).toMatch(/^text\/html/);
+            continue;
+          }
+          // The page exists for GET: no Server Function, no render.
+          expect(response.status(), what).toBe(405);
+          expect(response.headers()['allow'], what).toBe('GET, HEAD');
+          expect(response.headers()['content-type'], what).toMatch(/^text\/plain/);
+          expect(response.headers()['cache-control'], what).toBe('no-store');
+          expect(await response.text(), what).toBe('Method not allowed.');
+        }
+        // Next's router asks for the page's payload, and prefetches it, with
+        // RSC: 1; the rewrite serves both from the same segment.
+        const router: Record<string, string>[] = [
+          { rsc: '1' },
+          { rsc: '1', 'next-router-prefetch': '1' },
+        ];
+        for (const headers of router) {
+          const what = `GET ${target} with ${Object.keys(headers).join(' and ')}`;
+          const response = await request.get(target, { headers, maxRedirects: 0 });
+          expect(response.status(), what).toBe(200);
+          expect(response.headers()['content-type'], what).toMatch(/^text\/x-component/);
+          expectProfileHeaders(profile, response, what);
+        }
+      }
+    },
+  );
+
+  test(
+    "no request reaches an experience segment but proxy.ts's own rewrite: its path, in any spelling and to any method, answers as /no-such-page does, and with a trailing slash gets the same 308 (#6, Slice 2)",
+    {
+      annotation: [
+        ...listExperienceRoutes().map(({ pattern }) => ({ type: 'route', description: pattern })),
+        annotation,
+      ],
+    },
+    async ({ request }) => {
+      const spellings = experienceSpellings();
+      expect(spellings.length, 'a segment for the fallback composition at least').toBeGreaterThan(
+        0,
+      );
+      for (const [target, unknown] of spellings) {
+        for (const method of EVERY_METHOD) {
+          const what = `${method} ${target}`;
+          const options = { method, maxRedirects: 0 };
+          const response = await request.fetch(target, options);
+          const expected = await request.fetch(unknown, options);
+          expect(response.status(), what).toBe(404);
+          expectProfileHeaders(profile, response, what);
+          expect(await shape(response, target), what).toEqual(await shape(expected, unknown));
+        }
+      }
+      for (const { pattern } of listExperienceRoutes()) {
+        const target = `${concrete(pattern)}/`;
+        for (const method of EVERY_METHOD) {
+          const what = `${method} ${target}`;
+          const response = await request.fetch(target, { method, maxRedirects: 0 });
+          const expected = await request.fetch('/no-such-page/', { method, maxRedirects: 0 });
+          expect(response.status(), what).toBe(expected.status());
+          expect(response.status(), what).toBe(308);
+          expect(response.headers()['location'], what).toBe(concrete(pattern));
+          expectProfileHeaders(profile, response, what);
+        }
+      }
     },
   );
 

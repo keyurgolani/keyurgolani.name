@@ -7,6 +7,7 @@ import {
   isServable,
   servableAgain,
 } from './server/config-store';
+import { EXPERIENCE_SEGMENT, isExperiencePath, segmentFor } from './server/experience';
 import { isPreviewPath, previewCsp, previewHeaders } from './server/preview-headers';
 import { READY_PATH, STARTING, STARTING_HEADERS } from './server/ready-starting';
 import { safeReturnTo, signInLocation } from './server/return-to';
@@ -77,6 +78,16 @@ import {
 // headers its path gets, so a preview path's is private, no-store, and its
 // answer never depends on a grant.
 //
+// A visitor page renders in the experience segment of the composition it
+// shows (#6, Slice 2), one route per registered variant, which imports that
+// variant alone, so the page's chunks hold no other variant's code. Once
+// every check above has let a GET or HEAD of one through, this rewrites it
+// to /_experience/<id> and the path, from memory alone: segmentFor() reads
+// the live composition config-store holds, and under demo, /sample's
+// `variant` parameter. Any other method to a visitor page gets a 405, since
+// the page exists for GET. A request for an experience segment's own path,
+// in any spelling and to any method, answers as a path no route matches.
+//
 // For Studio (#2), under a profile with a Studio page, it sends the nonce
 // CSP, Referrer-Policy: same-origin, and Cross-Origin-Resource-Policy:
 // same-origin on every /studio response, in any case or percent-encoding,
@@ -134,7 +145,10 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   // Only GET and HEAD load a page: any other method to a path no route
   // answers is the plain 404.
   const pageLoad = request.method === 'GET' || request.method === 'HEAD';
-  const decision = resolveRoute(deployment.profile, pathname, searchParams);
+  // Only this proxy's own rewrite reaches an experience segment (#6, Slice 2).
+  const decision: RouteDecision = isExperiencePath(pathname)
+    ? { status: 'missing' }
+    : resolveRoute(deployment.profile, pathname, searchParams);
   // Access-Control-Allow-Origin: * goes on everything next.config.ts matches
   // under these prefixes, so only a GET or HEAD of a file Next serves there,
   // spelled as Next serves it, and a route the table serves go on to Next.
@@ -209,11 +223,20 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
     return unknownPath(request, requestId, extra, { csp, preview });
   }
 
+  // A visitor page exists for GET and HEAD, which go to its experience segment.
+  const experience = decision.status === 'served' && decision.entry.experience === true;
+  if (experience && !pageLoad) return methodNotAllowed(requestId, extra);
+
   const headers = forwarded(request, requestId, { csp, preview });
   // The table's decision, in place of anything the client sent.
   headers.set(ROUTE_HEADER, decision.status);
   if (studio) headers.set(STUDIO_PATH_HEADER, `${pathname}${search}`);
-  const response = NextResponse.next({ request: { headers } });
+  const response =
+    experience && decision.status === 'served'
+      ? NextResponse.rewrite(experienceTarget(request, deployment.profile, decision.entry), {
+          request: { headers },
+        })
+      : NextResponse.next({ request: { headers } });
   response.headers.set('x-request-id', requestId);
   // A Studio path the table calls missing, under a profile with no Studio,
   // gets what any missing path gets, in place of next.config.ts's no-store.
@@ -222,6 +245,31 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   }
   for (const [name, value] of Object.entries(extra)) response.headers.set(name, value);
   return response;
+}
+
+/**
+ * Where a visitor page renders (#6, Slice 2): the experience segment
+ * segmentFor() picks, with the path and query the visitor sent below it.
+ */
+function experienceTarget(request: NextRequest, profile: Profile, entry: RouteEntry): URL {
+  const segment = segmentFor({
+    profile,
+    pattern: entry.pattern,
+    query: request.nextUrl.searchParams,
+  });
+  const target = request.nextUrl.clone();
+  const below = request.nextUrl.pathname === '/' ? '' : request.nextUrl.pathname;
+  target.pathname = `/${EXPERIENCE_SEGMENT}/${segment}${below}`;
+  return target;
+}
+
+/**
+ * A visitor page asked for with a method other than GET or HEAD (#6, Slice
+ * 2): plain text, as an operation called with the wrong method gets, with
+ * the methods the page takes.
+ */
+function methodNotAllowed(requestId: string, extra: Record<string, string>): NextResponse {
+  return plain(405, 'Method not allowed.', requestId, { ...extra, allow: 'GET, HEAD' });
 }
 
 /** Whether `profile` serves a Studio page, by the route table. */

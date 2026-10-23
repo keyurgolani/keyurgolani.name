@@ -7,13 +7,15 @@ import {
   type UnitValidator,
 } from '@portfolio/schema';
 import type { PairFiles } from '@portfolio/schema/node';
+import type { VariantRegistry } from '@portfolio/variant-contract';
+import { compositionFor, REGISTRY } from '~/lib/variants';
 import type { Profile } from './capabilities';
 import type { CatalogReader, LiveRevision } from './catalog-port';
 import { openSampleCatalog } from './catalog-sample';
 import { openSourceCatalog, type OpenSourceCatalogResult } from './catalog-source';
 import type { ConfigIssue, DeploymentConfig } from './config';
 import { configSummary, type CatalogAdapter } from './config-summary';
-import { setServable, type DeploymentState } from './config-store';
+import { setLiveComposition, setServable, type DeploymentState } from './config-store';
 import { createDispatcher, NO_BINDINGS, type Handler, type StudioBindings } from './dispatcher';
 import { listOperations, type ConfigSummary } from './operations';
 import type { GrantSessionPort, PreviewFixture, PreviewGrantsPort } from './preview-port';
@@ -493,12 +495,42 @@ interface Built {
   readonly release?: () => void;
 }
 
+/**
+ * `reader`, recording in config-store the composition each live revision
+ * renders, on every getLive() (#6, Slice 2): the id of the variant its site
+ * selects, or the fallback composition's when this build doesn't register
+ * that one. proxy.ts sends each visitor page to that composition's
+ * experience segment, and the page there checks the same value once it has
+ * read the revision. Every profile's reader goes through here, built()
+ * wraps whichever one compose() made: owner's RevisionCatalogReader,
+ * read-only's SourceCatalogReader, and demo's sample adapter. The id comes
+ * from the unit this getLive() returned, so it's never another read's; with
+ * nothing servable, an empty or incompatible store, it's unset, and
+ * visitor pages answer 503 meanwhile. Tests pass a registry of their own.
+ */
+export function recordingLive(
+  reader: CatalogReader,
+  registry: VariantRegistry = REGISTRY,
+): CatalogReader {
+  return Object.freeze({
+    async getLive() {
+      const live = await reader.getLive();
+      setLiveComposition(
+        live.unit
+          ? compositionFor(live.unit.site.appearance.variant, registry).rendered.manifest.id
+          : undefined,
+      );
+      return live;
+    },
+  });
+}
+
 function built(config: DeploymentConfig, parts: Built): Composition {
   // It reads the policy from the deployment register() stores, per request.
   const dispatch = createDispatcher({ ...parts.bindings, operations: listOperations() });
   const state = Object.freeze({
     config,
-    catalog: parts.reader,
+    catalog: recordingLive(parts.reader),
     dispatch,
     degraded: Object.freeze([...parts.degraded]),
     ...(parts.pages ? { pages: parts.pages } : {}),

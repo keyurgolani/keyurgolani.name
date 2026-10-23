@@ -15,7 +15,9 @@ import { SECTION_ID_MAX_LENGTH } from '@portfolio/schema/ids';
  * with APPEARANCE_FIXTURES=1 serves. `preview` and `preview-assets` are #7's
  * preview documents and the media they load. `_portfolio` is where the host
  * serves the files registry generation compiles: #19's packs, and #6's
- * variant stylesheets and the images they name.
+ * variant stylesheets and the images they name. `_experience` holds #6's
+ * experience segments, one route per variant, which only the host's own
+ * rewrite reaches.
  */
 export const RESERVED_SEGMENTS: readonly string[] = [
   'studio',
@@ -23,6 +25,7 @@ export const RESERVED_SEGMENTS: readonly string[] = [
   '_next',
   '_fixtures',
   '_portfolio',
+  '_experience',
   'sample',
   'reference',
   'preview',

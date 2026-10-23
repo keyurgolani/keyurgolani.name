@@ -1,5 +1,6 @@
 import 'server-only';
-import { compositionFor, loadComposition } from '~/lib/variants';
+import { variantLoader } from '~/lib/variant-loaders';
+import { compositionFor } from '~/lib/variants';
 
 // Whether the selected variant renders (#5, Slice 3, item 7), for #1's
 // readiness `packs` check and the owner's config.status. Only status and
@@ -22,7 +23,7 @@ export type LiveVariantHealth =
 export async function variantHealth(selected: string): Promise<VariantHealth> {
   const composition = compositionFor(selected);
   const rendered = composition.rendered.manifest.id;
-  await loadComposition(rendered);
+  await variantLoader(rendered)();
   return { status: composition.fallback ? 'degraded' : 'ok', requested: selected, rendered };
 }
 

@@ -86,17 +86,40 @@ module.exports = {
         'A variant reaches the host only through what registry generation writes (#6, Slice 2): ' +
         "each registered variant's import() in generated/registry.loaders.ts, which loads it only " +
         "when a page renders it, and its declared enhancements' in " +
-        'generated/registry.enhancements.ts. No other host module imports a variant package, ' +
-        "statically or with import(), so no page's chunks hold another variant's code. Tests may. " +
-        'A variant is a package whose package.json has portfolio.kind "variant".',
+        "generated/registry.enhancements.ts, and each variant's experience segment, " +
+        'app/(site)/%5Fexperience/<id>/, whose page and client host modules import that variant ' +
+        'alone. No other host module imports a variant package, statically or with import(), so ' +
+        "no page's chunks hold another variant's code. Tests may. A variant is a package whose " +
+        'package.json has portfolio.kind "variant".',
       from: {
         path: '^apps/web/',
         pathNot: [
           '^apps/web/src/lib/generated/registry\\.(?:loaders|enhancements)\\.ts$',
+          '^apps/web/src/app/\\(site\\)/%5Fexperience/[a-z][a-z0-9-]*/(?:\\[\\[\\.\\.\\.route\\]\\]/page|host-modules)\\.tsx$',
           '\\.test\\.(?:tsx?|mjs)$',
         ],
       },
       to: { path: `^packages/(?:${VARIANT_DIRS})/` },
+    },
+    {
+      name: 'visitor-pages-reach-no-other-variant',
+      severity: 'error',
+      comment:
+        'Turbopack gives a page one client chunk group of every client module its server graph ' +
+        "reaches, so a visitor page that reached every variant's loader would put every " +
+        "variant's client code on every visitor's wire (#6, Slice 2). Nothing in the site's route " +
+        "group, an experience segment's files among them, reaches the modules that load every " +
+        'variant or name every enhancement: generated/registry.loaders.ts and ' +
+        'registry.enhancements.ts, lib/variant-loaders.ts, and lib/host-modules-client.tsx. Only ' +
+        "#7's preview routes and the startup health check use those.",
+      from: { path: '^apps/web/src/app/\\(site\\)/', pathNot: '\\.test\\.tsx?$' },
+      to: {
+        path: [
+          '^apps/web/src/lib/generated/registry\\.(?:loaders|enhancements)\\.ts$',
+          '^apps/web/src/lib/(?:variant-loaders\\.ts|host-modules-client\\.tsx)$',
+        ],
+        reachable: true,
+      },
     },
     {
       name: 'variant-contract-root-stays-browser-safe',
@@ -220,11 +243,13 @@ module.exports = {
         "before startup (item 19), for Studio (#2) its headers, the session cookie's name, " +
         'and returnTo, and for preview (#7) its headers and its status document, none of which ' +
         'reads a session. A grant path is checked through the port the owner composition binds ' +
-        'into the frozen config, which reads the grant and its session by digest, never a cookie.',
+        'into the frozen config, which reads the grant and its session by digest, never a cookie. ' +
+        "A visitor page's experience segment (#6, Slice 2) comes from server/experience.ts, " +
+        'which reads only the live composition config-store holds and the query.',
       from: { path: '^apps/web/src/proxy\\.ts$' },
       to: {
         pathNot: [
-          '^apps/web/src/server/(capabilities|routes|config-store|ready-starting)\\.ts$',
+          '^apps/web/src/server/(capabilities|routes|config-store|ready-starting|experience)\\.ts$',
           '^apps/web/src/server/(studio-headers|session-cookie|return-to|preview-headers)\\.ts$',
           '^apps/web/src/preview/status\\.ts$',
           '^node_modules/(\\.pnpm/next@|next/)',

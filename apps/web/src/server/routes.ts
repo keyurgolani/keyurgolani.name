@@ -8,6 +8,7 @@ import { VARIANTS } from '../lib/generated/registry.meta';
 import { environmentValues } from '../lib/preview-environment';
 import { sampleSelection } from '../lib/sample';
 import { accessIn, PROFILES, type Access, type Capability, type Profile } from './capabilities';
+import { experiencePattern } from './experience';
 
 // The route table (#1, item 13): every page, route handler, and metadata
 // route in apps/web/src/app, each mapped to the capability it serves.
@@ -66,6 +67,19 @@ export interface RouteEntry {
    * page. An entry without it names every path it matches.
    */
   readonly names?: (path: RoutePath, installed: Installed) => boolean;
+  /**
+   * A visitor page that renders in the experience segment of the
+   * composition it shows (#6, Slice 2), so it has no route file of its own:
+   * proxy.ts rewrites each GET or HEAD for it to that segment, and answers
+   * any other method with a 405.
+   */
+  readonly experience?: true;
+  /**
+   * An experience segment's own route, a file registry generation writes,
+   * which only proxy.ts's rewrite reaches (#6, Slice 2). listRoutes() leaves
+   * them out: a request for one's own path names nothing.
+   */
+  readonly internal?: true;
   /**
    * A route a preview grant authorizes, by what it serves (#7, Slice 2): a
    * frame's `document`, or a draft-only `asset`. The grant in the path is
@@ -145,13 +159,21 @@ export function devPreviewRoute(on: boolean) {
 // A pattern may appear more than once, with a different capability for each
 // profile that serves it (such as a Studio page under owner and demo).
 const ROUTES = [
-  { pattern: '/', kind: 'page', capability: 'catalog.read', nav: 'Home', visitor: true },
+  {
+    pattern: '/',
+    kind: 'page',
+    capability: 'catalog.read',
+    nav: 'Home',
+    visitor: true,
+    experience: true,
+  },
   {
     pattern: '/[...view]',
     kind: 'page',
     capability: 'catalog.read',
     profiles: SITE_PROFILES,
     visitor: true,
+    experience: true,
     views: true,
     names: ({ segments }, installed) => namesPage(installed, segments),
   },
@@ -161,6 +183,7 @@ const ROUTES = [
     capability: 'catalog.read',
     profiles: SITE_PROFILES,
     visitor: true,
+    experience: true,
     names: () => false,
   },
   {
@@ -169,6 +192,7 @@ const ROUTES = [
     capability: 'catalog.read',
     profiles: SITE_PROFILES,
     visitor: true,
+    experience: true,
     names: () => false,
   },
   {
@@ -176,6 +200,7 @@ const ROUTES = [
     kind: 'page',
     capability: 'sample.read',
     visitor: true,
+    experience: true,
     // The variant ?variant= names, which the page renders, and a page below /sample.
     names: ({ segments, query }, installed) =>
       sampleSelection(variantParameter(query), installed) !== null &&
@@ -227,7 +252,24 @@ const ROUTES = [
   { pattern: '/_fixtures/appearance', kind: 'page', capability: 'appearance.fixtures' },
 ] as const satisfies readonly RouteEntry[];
 
-export type RoutePattern = (typeof ROUTES)[number]['pattern'];
+/**
+ * Each registered variant's experience segment (#6, Slice 2), the fallback
+ * composition's included: the route file registry generation writes at
+ * app/(site)/%5Fexperience/<id>/[[...route]]/page.tsx, which every profile
+ * serves through proxy.ts's rewrite of a visitor page, and only through it.
+ */
+const EXPERIENCE_ROUTES = VARIANTS.map(
+  ({ manifest }) =>
+    ({
+      pattern: experiencePattern(manifest.id),
+      kind: 'page',
+      capability: 'catalog.read',
+      internal: true,
+    }) as const satisfies RouteEntry,
+);
+
+export type RoutePattern =
+  (typeof ROUTES)[number]['pattern'] | ReturnType<typeof experiencePattern<string>>;
 
 /**
  * The URL pattern for a route path Next reports, such as onRequestError's
@@ -269,6 +311,11 @@ export function listRoutes(): readonly RouteEntry[] {
   return ROUTES;
 }
 
+/** The experience segments' routes (#6, Slice 2), which only proxy.ts's rewrite reaches. */
+export function listExperienceRoutes(): readonly RouteEntry[] {
+  return EXPERIENCE_ROUTES;
+}
+
 /** How `profile` grants `entry`: the access its capability has there, or absent. */
 export function routeAccess(profile: Profile, entry: RouteEntry): Access | 'absent' {
   if (entry.profiles && !entry.profiles.includes(profile)) return 'absent';
@@ -276,9 +323,9 @@ export function routeAccess(profile: Profile, entry: RouteEntry): Access | 'abse
   return accessIn(profile, entry.capability);
 }
 
-/** Whether `profile` serves the route `pattern` names. */
+/** Whether `profile` serves the route `pattern` names, an experience segment's included. */
 export function serves(profile: Profile, pattern: RoutePattern): boolean {
-  return ROUTES.some(
+  return [...ROUTES, ...EXPERIENCE_ROUTES].some(
     (entry) => entry.pattern === pattern && routeAccess(profile, entry) !== 'absent',
   );
 }
@@ -367,9 +414,13 @@ export function encodesFixedSegment(pattern: string, pathname: string): boolean 
     .some((part, index) => !part.startsWith('[') && sent[index] !== part);
 }
 
-/** Every route file's own path: each pattern the table lists, and Next's /_not-found. */
+/**
+ * Every route file's own path: each pattern the table lists, each experience
+ * segment's, and Next's /_not-found.
+ */
 const ROUTE_FILE_PATHS: ReadonlySet<string> = new Set([
   ...ROUTES.map((entry) => entry.pattern),
+  ...EXPERIENCE_ROUTES.map((entry) => entry.pattern),
   '/_not-found',
 ]);
 

@@ -13,12 +13,14 @@ out
 next-env.d.ts
 
 # generated: what `pnpm --filter @portfolio/web build:registry` writes (#5),
-# the appearance packs' compiled files it writes beside them (#19), and the
-# variants' compiled stylesheets with the images they name (#6)
+# the appearance packs' compiled files it writes beside them (#19), the
+# variants' compiled stylesheets with the images they name, and each
+# variant's experience segment (#6)
 apps/web/src/lib/generated/
 apps/web/public/_portfolio/pack/
 apps/web/public/_portfolio/variant/
 apps/web/public/_portfolio/asset/
+apps/web/src/app/(site)/%5Fexperience/
 
 # coverage / test
 coverage

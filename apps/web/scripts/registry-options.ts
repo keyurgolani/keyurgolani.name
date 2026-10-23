@@ -39,6 +39,11 @@ import {
   type StylesheetHooks,
   type WriteResult,
 } from '@portfolio/variant-contract/node';
+import {
+  renderExperienceSegments,
+  writeExperienceSegments,
+  type SegmentWriteResult,
+} from './experience-segments';
 import { fixtureFlags, fixtureGate } from './fixture-gate';
 
 export const HOST = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -51,6 +56,8 @@ export const PACK_OUT = path.join(HOST, 'public', '_portfolio', 'pack');
 export const VARIANT_OUT = path.join(HOST, 'public', '_portfolio', 'variant');
 /** The images those stylesheets name, which git ignores and the host serves at /_portfolio/asset/. */
 export const ASSET_OUT = path.join(HOST, 'public', '_portfolio', 'asset');
+/** Each variant's experience segment (#6), which git ignores and Next serves at /_experience/<id>. */
+export const EXPERIENCE_OUT = path.join(HOST, 'src', 'app', '(site)', '%5Fexperience');
 
 /** The cascade layer every variant rule goes in (#19). */
 const VARIANT_LAYER: AppearanceLayer = 'variant-layout';
@@ -145,9 +152,12 @@ export interface Generation {
   readonly variants?: readonly ServedFile[];
   /** The images those stylesheets name, when the registry has no errors. */
   readonly assets?: readonly ServedFile[];
+  /** Each variant's experience segment files, by path under EXPERIENCE_OUT, when the registry has no errors. */
+  readonly segments?: ReadonlyMap<string, string>;
   /** What writing changed, when it wrote. The served files are absent when it wrote modules only. */
   readonly written?: {
     readonly modules: WriteResult;
+    readonly segments: SegmentWriteResult;
     readonly served?: {
       readonly packs: PackWriteResult;
       readonly variants: PackWriteResult;
@@ -160,9 +170,9 @@ export interface GenerateOptions {
   /** Whether to write anything. */
   readonly write: boolean;
   /**
-   * Write the generated modules and leave public/ alone, as test and
-   * typecheck do: they read the modules, and only a build or `next dev`
-   * serves the compiled files (#6, Slice 2).
+   * Write the generated modules and the experience segments, and leave
+   * public/ alone, as test and typecheck do: they read the modules, and only
+   * a build or `next dev` serves the compiled files (#6, Slice 2).
    */
   readonly modulesOnly?: boolean;
 }
@@ -170,7 +180,8 @@ export interface GenerateOptions {
 /**
  * Reads the registry, and unless `write` is false, writes the files the host
  * serves, the packs', the variants' stylesheets, and their images, then the
- * generated modules that list them. A registry with errors writes nothing.
+ * generated modules that list them, and each variant's experience segment.
+ * A registry with errors writes nothing.
  */
 export async function generateRegistry(
   env: Environment,
@@ -182,7 +193,8 @@ export async function generateRegistry(
   const packs = packFiles(result);
   const variants = variantFiles(result);
   const assets = assetFiles(result);
-  const generated = { result, files, packs, variants, assets };
+  const segments = renderExperienceSegments(result);
+  const generated = { result, files, packs, variants, assets, segments };
   if (!write) return generated;
   const served = modulesOnly
     ? undefined
@@ -193,7 +205,11 @@ export async function generateRegistry(
       };
   return {
     ...generated,
-    written: { modules: writeRegistry(OUT, files), ...(served ? { served } : {}) },
+    written: {
+      modules: writeRegistry(OUT, files),
+      segments: writeExperienceSegments(EXPERIENCE_OUT, segments),
+      ...(served ? { served } : {}),
+    },
   };
 }
 

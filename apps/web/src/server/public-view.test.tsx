@@ -13,7 +13,8 @@ import {
 import { buildRenderInput } from '@portfolio/variant-contract';
 // The registry loads the variant packages, which need React's client build,
 // so this test runs without the react-server condition (a .test.tsx file).
-import { loadComposition, REGISTRY } from '~/lib/variants';
+import { variantLoader } from '~/lib/variant-loaders';
+import { REGISTRY } from '~/lib/variants';
 
 // #4 item 16 and #10 item 5: the published view is the only input to the
 // variants, so no hidden section, no record or asset only a hidden section
@@ -231,7 +232,7 @@ async function element(id: string, view: PublicView) {
     origin: 'https://rowan.test',
     requestTime: '2026-01-01T00:00:00Z',
   });
-  return createElement(await loadComposition(id), { input });
+  return createElement((await variantLoader(id)()).default, { input });
 }
 
 /** The pair's published view, as the host builds it. */
