@@ -86,22 +86,31 @@ There's no print capability flag. A visitor can always print, so leave the page 
 
 ## Reduced motion
 
-Under the site's `reduce` policy the boundary, the element that carries `data-variant`, also carries `data-motion-policy='reduce'`; under `respect-os`, the visitor's `prefers-reduced-motion` decides. Stop CSS motion under both:
+Reduced motion comes from the presentation boundary, not from a media query in your stylesheet. The boundary's `--ui-motion-*` and state tokens already follow every source of it: the OS setting from first paint, with or without JavaScript, the site's `reduce` policy, a visitor's pause, and a preview's override. Under reduced motion the hover and active transforms read `none` and entrances fade; a paused boundary, `[data-motion='static']`, also zeroes the durations. Short opacity and color feedback stays. So take timing and movement from the tokens, and stop motion of your own where the boundary says `[data-motion='reduced']` or `[data-motion='static']`:
 
 ```css
-@media (prefers-reduced-motion: reduce) {
-  [data-variant='acme-ocean'] * {
-    animation: none !important;
-    transition: none !important;
-    scroll-behavior: auto !important;
-  }
+/* Feedback: short opacity and color changes, on the boundary's timing. Reduced motion keeps them. */
+[data-variant='acme-ocean'] .ao-card {
+  transition-property: opacity, color, background-color, transform;
+  transition-duration: var(--ui-motion-fast);
+  transition-timing-function: var(--ui-motion-easing);
 }
 
-[data-variant='acme-ocean'][data-motion-policy='reduce'] * {
-  animation: none !important;
-  transition: none !important;
-  scroll-behavior: auto !important;
+/* Movement: the state token, which reduced motion sets to none. */
+[data-variant='acme-ocean'] .ao-card:hover {
+  transform: var(--ui-state-hover-transform);
+}
+
+/* Motion of your own: script starts it, and the boundary stops it. */
+[data-variant='acme-ocean'] .ao-drift.is-moving {
+  animation: ao-drift 12s linear infinite;
+}
+
+[data-variant='acme-ocean']:is([data-motion='reduced'], [data-motion='static']) .ao-drift {
+  animation: none;
 }
 ```
 
-CSS doesn't reach script motion: run it on `@portfolio/kit/runtime` (`references/common-bugs.md` §8). The motion contract (`tests/e2e/motion-contract.spec.ts`) checks the result.
+CSS doesn't reach script motion: run it on `@portfolio/kit/runtime` (`references/common-bugs.md` §8), which is static under reduced motion and before the page mounts, so without JavaScript it never starts.
+
+Don't write a universal kill switch, such as `[data-variant='acme-ocean'] * { animation: none !important; transition: none !important; }` under `prefers-reduced-motion`. It kills the feedback reduced motion keeps, and `pnpm quality:pr` audits the compiled CSS for it: a rule whose selector ends in `*`, `*::before`, or `*::after` and sets an animation or transition property with `!important` fails. Its reduced-motion row then checks the page itself: nothing moves, nothing else runs past 200 ms, and no frame callback runs from 1 s to 4 s after load. The motion contract (`tests/e2e/motion-contract.spec.ts`) checks script motion too.
