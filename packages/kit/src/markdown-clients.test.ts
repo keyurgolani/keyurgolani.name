@@ -14,11 +14,13 @@ import { build, type Plugin } from 'esbuild';
 const ROOT = fileURLToPath(new URL('../../../', import.meta.url));
 const RENDERER = 'packages/kit/src/markdown.ts';
 
-/** The client modules that reach the renderer, and why each may. */
-const CLIENT_CALLERS: Readonly<Record<string, string>> = {
-  'apps/web/src/lib/host-modules-client.tsx':
-    "registers the kit's section renderers in the browser for a render there, which today is render parity's test render and, later, #9's",
-};
+/**
+ * The client modules that reach the renderer, and why each may. None does
+ * today: host-modules-client.tsx imports the kit's host-modules subpath, not
+ * the sections barrel (#6, Slice 2), so the browser registry carries no
+ * renderer. #9's in-browser render adds itself here with its post-pass.
+ */
+const CLIENT_CALLERS: Readonly<Record<string, string>> = {};
 
 /** Every module under the workspace's sources whose first statement is 'use client', tests aside. */
 function clientModules(): string[] {
