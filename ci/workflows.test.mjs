@@ -104,6 +104,37 @@ test('no workflow has a manual trigger', () => {
   }
 });
 
+test('every job runs on a pinned GitHub-hosted Ubuntu, and arm64 only where a release leg builds it natively', () => {
+  const RELEASE = read('.github/workflows/release.yml');
+  const legs = [];
+  for (const [file, workflow] of [
+    ['ci.yml', CI],
+    ['scheduled.yml', SCHEDULED],
+    ['release.yml', RELEASE],
+  ]) {
+    for (const [id, job] of Object.entries(workflow.jobs)) {
+      if (job['runs-on'] === '${{ matrix.runner }}') {
+        legs.push(`${file}:${id}`);
+        const runners = job.strategy.matrix.include.map((leg) => [leg.arch, leg.runner]);
+        assert.deepEqual(runners, [
+          ['amd64', 'ubuntu-24.04'],
+          ['arm64', 'ubuntu-24.04-arm'],
+        ]);
+      } else {
+        assert.equal(job['runs-on'], 'ubuntu-24.04', `${file}:${id}`);
+      }
+      // No release job emulates another platform. ci.yml's publish still
+      // builds arm64 under QEMU.
+      if (file === 'release.yml') {
+        for (const step of job.steps ?? []) {
+          assert.doesNotMatch(step.uses ?? '', /setup-qemu-action/, `${file}:${id}`);
+        }
+      }
+    }
+  }
+  assert.deepEqual(legs.sort(), ['release.yml:dry-run-build', 'release.yml:rc-build']);
+});
+
 test('every ci.yml job sets timeout-minutes', () => {
   for (const [id, job] of Object.entries(CI.jobs)) {
     assert.ok(Number.isInteger(job['timeout-minutes']) && job['timeout-minutes'] > 0, id);
