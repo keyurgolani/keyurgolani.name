@@ -5,7 +5,10 @@
 // `pnpm exec playwright install chromium` once.
 //
 // Tests run against the built standalone server (`pnpm build` first) through
-// the fixtures in tests/harness/fixtures.ts.
+// the fixtures in tests/harness/fixtures.ts. Specs read the host's route
+// table and variant registry, which is server-only (#6), so every runner and
+// worker that loads this config resolves server-only as Next's server does.
+import './apps/web/scripts/server-only.cjs';
 import path from 'node:path';
 import { defineConfig, devices } from '@playwright/test';
 import { reportsDir } from './ci/lib/reports.mjs';

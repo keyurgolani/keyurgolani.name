@@ -34,8 +34,8 @@ The dev server hot-reloads on:
 
 - Changes to `config/portfolio.yml` and `config/site.yml` (on the next page load)
 - Changes to any file under `apps/web/src/`
-- Changes to any file under a registered variant's `src/`, such as `packages/fallback-composition/src/`
-- Changes to any file under `packages/kit/src/` or `packages/schema/src/`
+- Changes to any file under a registered variant's `src/`, such as `packages/fallback-composition/src/`, but its stylesheet: registry generation compiles that, so run `pnpm --filter @portfolio/web build:registry` after an edit to it, or restart `pnpm dev`
+- Changes to any file under `packages/kit/src/` or `packages/schema/src/`, but the kit's `sections/styles.css`, which registry generation compiles into each variant's stylesheet
 
 ## Make it yours
 

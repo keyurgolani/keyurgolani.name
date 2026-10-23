@@ -40,7 +40,7 @@ async function main(): Promise<number> {
     process.stderr.write(USAGE);
     return 2;
   }
-  const { result } = await generateRegistry(process.env, { write: true });
+  const { result } = await generateRegistry(process.env, { write: true, modulesOnly: true });
   const diagnostics =
     options.only && result.ok
       ? result.diagnostics.filter((record) => record.package === options.only)

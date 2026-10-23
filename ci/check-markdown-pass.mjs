@@ -3,7 +3,10 @@
 // browser none of it (#10). The pass leaves the renderer's markup as it is,
 // so no page test can tell whether it runs: this reads the build instead.
 // Every page under app/(site) and app/(preview) must load a server chunk
-// whose source map holds packages/kit/src/markdown-post-pass.ts, and nothing
+// whose source map holds packages/kit/src/markdown-post-pass.ts, at once or
+// through a chunk it loads on demand, as a variant's import() is (#6,
+// Slice 2: each experience segment loads its variant, and the kit's
+// sections with it, that way), and nothing
 // under .next/static may hold sanitize-html's code or a source map that
 // names it. CI runs it after pnpm ci:standalone.
 //
@@ -49,10 +52,29 @@ export function pageEntries(nextDir) {
   );
 }
 
-/** The server chunks a page entry loads, relative to `nextDir`. */
+/** The server chunks a page entry names at once: its R.c() calls. */
+const DIRECT = /R\.c\("(server\/chunks\/[^"]+)"\)/g;
+/** The server chunks a chunk loads on demand: Turbopack's a.l("server/chunks/...") for an import(). */
+const ON_DEMAND = /"(server\/chunks\/[^"]+\.js)"/g;
+
+/**
+ * The server chunks a page entry loads, relative to `nextDir`: the ones it
+ * names, and every one those load on demand that the build has, in turn.
+ */
 export function chunksOf(nextDir, page) {
   const text = readFileSync(path.join(nextDir, page), 'utf8');
-  return Array.from(text.matchAll(/R\.c\("(server\/chunks\/[^"]+)"\)/g), ([, chunk]) => chunk);
+  const found = Array.from(text.matchAll(DIRECT), ([, chunk]) => chunk);
+  const seen = new Set(found);
+  for (let index = 0; index < found.length; index += 1) {
+    const file = path.join(nextDir, found[index]);
+    if (!existsSync(file)) continue;
+    for (const [, chunk] of readFileSync(file, 'utf8').matchAll(ON_DEMAND)) {
+      if (seen.has(chunk) || !existsSync(path.join(nextDir, chunk))) continue;
+      seen.add(chunk);
+      found.push(chunk);
+    }
+  }
+  return found;
 }
 
 /** The sources a chunk's source map names, or null when it has none. */

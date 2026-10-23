@@ -14,6 +14,7 @@ import { parse as parseYaml } from 'yaml';
 import { isReservedSegment, validateManifest } from '@portfolio/variant-contract';
 import { LITERAL_SEGMENT } from '@portfolio/variant-contract/segments';
 import { fixtureFlags } from '../../scripts/fixture-gate';
+import { VARIANTS } from '../lib/generated/registry.meta';
 import { CAPABILITIES, FIXTURE_CAPABILITIES, PROFILES, type Profile } from './capabilities';
 import type { DeploymentConfig } from './config';
 import { setDeploymentState } from './config-store';
@@ -21,6 +22,7 @@ import { servedPattern } from './route-guard';
 import {
   devPreviewRoute,
   encodesFixedSegment,
+  listExperienceRoutes,
   listRoutes,
   ownedFirstSegments,
   PREVIEW_DEV,
@@ -152,7 +154,56 @@ function instantiate(pattern: string): string {
   return pattern.replace(/\[\[?\.{0,3}[^\]]+\]\]?/g, 'probe') || '/';
 }
 
+/** The variants this build registers, by id. */
+const REGISTERED = VARIANTS.map(({ manifest }) => manifest.id);
+
+/**
+ * Every variant package in the workspace, registered or not, by the id of
+ * each registered one and by name for the rest: what an experience segment
+ * may import one of.
+ */
+const VARIANT_PACKAGES: ReadonlyMap<string, string> = (() => {
+  const packages = new Map(VARIANTS.map(({ manifest, packageName }) => [manifest.id, packageName]));
+  for (const parent of ['', 'budget-fixtures']) {
+    let dirs: string[] = [];
+    try {
+      dirs = readdirSync(path.join(PACKAGES, parent));
+    } catch {
+      continue;
+    }
+    for (const dir of dirs) {
+      const file = path.join(PACKAGES, parent, dir, 'package.json');
+      if (!existsSync(file)) continue;
+      const manifest = JSON.parse(readFileSync(file, 'utf8')) as {
+        name: string;
+        portfolio?: { kind?: string };
+      };
+      if (
+        manifest.portfolio?.kind === 'variant' &&
+        ![...packages.values()].includes(manifest.name)
+      ) {
+        packages.set(manifest.name, manifest.name);
+      }
+    }
+  }
+  return packages;
+})();
+
+/** Every pattern the table lists. */
 const PATTERNS = [...new Set(listRoutes().map((entry) => entry.pattern))].sort();
+
+/**
+ * Every pattern a route file serves: the table's, but for the visitor pages
+ * that render in an experience segment and have no file of their own, and
+ * each experience segment's (#6, Slice 2).
+ */
+const FILE_PATTERNS = [
+  ...new Set(
+    [...listRoutes().filter((entry) => !entry.experience), ...listExperienceRoutes()].map(
+      (entry) => entry.pattern,
+    ),
+  ),
+].sort();
 
 /**
  * The fixture flags this run's environment asks for, as registry generation,
@@ -193,6 +244,8 @@ test("route files map to URLs as next build maps them, with Next's own helpers",
     ['/icon12.png', null],
     ['/layout.tsx', null],
     ['/feed.xml/route.test.ts', null],
+    // A %5F folder serves an underscore, where a _ folder is private (#6).
+    ['/(site)/%5Fexperience/fallback/[[...route]]/page.tsx', '/_experience/fallback/[[...route]]'],
   ];
   for (const [relative, url] of cases) {
     assert.equal(nextRoute(relative)?.pattern ?? null, url, relative);
@@ -207,12 +260,63 @@ test('every route file has an entry of its kind, and every entry has a route fil
   const files = routeFiles();
   assert.deepEqual(
     [...new Set(files.map((route) => route.pattern))].sort(),
-    PATTERNS,
+    FILE_PATTERNS,
     'apps/web/src/app and server/routes.ts list different routes',
   );
   for (const route of files) {
-    for (const entry of listRoutes().filter((candidate) => candidate.pattern === route.pattern)) {
+    for (const entry of [...listRoutes(), ...listExperienceRoutes()].filter(
+      (candidate) => candidate.pattern === route.pattern,
+    )) {
       assert.equal(entry.kind, route.kind, `${path.relative(SRC, route.file)} is a ${route.kind}`);
+    }
+  }
+});
+
+test('every visitor page renders in an experience segment, and every registered variant has one, which imports that variant alone (#6, Slice 2)', () => {
+  const experience = listRoutes().filter((entry) => entry.experience);
+  assert.deepEqual(
+    experience.map((entry) => entry.pattern),
+    ['/', '/[...view]', '/work/[slug]', '/work/[slug]/[...view]', '/sample/[[...path]]'],
+  );
+  for (const entry of experience) {
+    assert.equal(entry.kind, 'page', entry.pattern);
+    assert.equal(entry.visitor, true, entry.pattern);
+  }
+  assert.deepEqual(
+    listRoutes().filter((entry) => entry.kind === 'page' && entry.visitor && !entry.experience),
+    [],
+    'a visitor page outside the experience segments would load every variant',
+  );
+  const segments = listExperienceRoutes();
+  assert.deepEqual(
+    segments.map((entry) => entry.pattern),
+    REGISTERED.map((id) => `/_experience/${id}/[[...route]]`),
+  );
+  for (const entry of segments) {
+    assert.equal(entry.internal, true, entry.pattern);
+    assert.equal(entry.capability, 'catalog.read', entry.pattern);
+    for (const profile of PROFILES) assert.ok(serves(profile, entry.pattern as RoutePattern));
+  }
+  for (const id of REGISTERED) {
+    const dir = path.join(APP, '(site)', '%5Fexperience', id);
+    const imports = ['[[...route]]/page.tsx', 'host-modules.tsx'].flatMap((file) =>
+      parse(path.join(dir, file)).statements.flatMap((statement) =>
+        ts.isImportDeclaration(statement) && ts.isStringLiteral(statement.moduleSpecifier)
+          ? [statement.moduleSpecifier.text]
+          : [],
+      ),
+    );
+    const text = readFileSync(path.join(dir, '[[...route]]', 'page.tsx'), 'utf8');
+    const loaded = [...text.matchAll(/import\((["'])([^"']+)\1\)/g)].map((match) => match[2]);
+    const own = VARIANT_PACKAGES.get(id)!;
+    assert.deepEqual(loaded, [own], `${id}'s segment loads ${own} and nothing else`);
+    for (const specifier of imports) {
+      assert.ok(
+        ![...VARIANT_PACKAGES.values()].some(
+          (other) => other !== own && (specifier === other || specifier.startsWith(`${other}/`)),
+        ),
+        `${id}'s segment imports ${specifier}`,
+      );
     }
   }
 });
@@ -944,7 +1048,13 @@ function usesServer(file: string, text?: string): boolean {
 }
 
 test('no module in apps/web/src or packages/*/src declares a Server Function', () => {
-  const roots = [SRC, ...readdirSync(PACKAGES).map((name) => path.join(PACKAGES, name, 'src'))];
+  // packages/* and #6's packages/budget-fixtures/*, as pnpm-workspace.yaml lists them.
+  const fixtures = path.join(PACKAGES, 'budget-fixtures');
+  const roots = [
+    SRC,
+    ...readdirSync(PACKAGES).map((name) => path.join(PACKAGES, name, 'src')),
+    ...readdirSync(fixtures).map((name) => path.join(fixtures, name, 'src')),
+  ];
   const offenders = roots
     .flatMap((root) => (existsSync(root) ? sources(root) : []))
     .filter((file) => usesServer(file));

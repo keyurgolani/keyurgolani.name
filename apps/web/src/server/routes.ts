@@ -8,6 +8,7 @@ import { VARIANTS } from '../lib/generated/registry.meta';
 import { environmentValues } from '../lib/preview-environment';
 import { sampleSelection } from '../lib/sample';
 import { accessIn, PROFILES, type Access, type Capability, type Profile } from './capabilities';
+import { experiencePattern } from './experience';
 
 // The route table (#1, item 13): every page, route handler, and metadata
 // route in apps/web/src/app, each mapped to the capability it serves.
@@ -66,6 +67,19 @@ export interface RouteEntry {
    * page. An entry without it names every path it matches.
    */
   readonly names?: (path: RoutePath, installed: Installed) => boolean;
+  /**
+   * A visitor page that renders in the experience segment of the
+   * composition it shows (#6, Slice 2), so it has no route file of its own:
+   * proxy.ts marks each GET or HEAD for it with that segment, which
+   * next.config.ts rewrites it to, and answers any other method with a 405.
+   */
+  readonly experience?: true;
+  /**
+   * An experience segment's own route, a file registry generation writes,
+   * which only the rewrite of a request proxy.ts marks reaches (#6, Slice 2).
+   * listRoutes() leaves them out: a request for one's own path names nothing.
+   */
+  readonly internal?: true;
   /**
    * A route a preview grant authorizes, by what it serves (#7, Slice 2): a
    * frame's `document`, or a draft-only `asset`. The grant in the path is
@@ -145,13 +159,21 @@ export function devPreviewRoute(on: boolean) {
 // A pattern may appear more than once, with a different capability for each
 // profile that serves it (such as a Studio page under owner and demo).
 const ROUTES = [
-  { pattern: '/', kind: 'page', capability: 'catalog.read', nav: 'Home', visitor: true },
+  {
+    pattern: '/',
+    kind: 'page',
+    capability: 'catalog.read',
+    nav: 'Home',
+    visitor: true,
+    experience: true,
+  },
   {
     pattern: '/[...view]',
     kind: 'page',
     capability: 'catalog.read',
     profiles: SITE_PROFILES,
     visitor: true,
+    experience: true,
     views: true,
     names: ({ segments }, installed) => namesPage(installed, segments),
   },
@@ -161,6 +183,7 @@ const ROUTES = [
     capability: 'catalog.read',
     profiles: SITE_PROFILES,
     visitor: true,
+    experience: true,
     names: () => false,
   },
   {
@@ -169,6 +192,7 @@ const ROUTES = [
     capability: 'catalog.read',
     profiles: SITE_PROFILES,
     visitor: true,
+    experience: true,
     names: () => false,
   },
   {
@@ -176,6 +200,7 @@ const ROUTES = [
     kind: 'page',
     capability: 'sample.read',
     visitor: true,
+    experience: true,
     // The variant ?variant= names, which the page renders, and a page below /sample.
     names: ({ segments, query }, installed) =>
       sampleSelection(variantParameter(query), installed) !== null &&
@@ -227,7 +252,25 @@ const ROUTES = [
   { pattern: '/_fixtures/appearance', kind: 'page', capability: 'appearance.fixtures' },
 ] as const satisfies readonly RouteEntry[];
 
-export type RoutePattern = (typeof ROUTES)[number]['pattern'];
+/**
+ * Each registered variant's experience segment (#6, Slice 2), the fallback
+ * composition's included: the route file registry generation writes at
+ * app/(site)/%5Fexperience/<id>/[[...route]]/page.tsx, which every profile
+ * serves to a visitor page proxy.ts marks for it, through next.config.ts's
+ * rewrite, and to nothing else.
+ */
+const EXPERIENCE_ROUTES = VARIANTS.map(
+  ({ manifest }) =>
+    ({
+      pattern: experiencePattern(manifest.id),
+      kind: 'page',
+      capability: 'catalog.read',
+      internal: true,
+    }) as const satisfies RouteEntry,
+);
+
+export type RoutePattern =
+  (typeof ROUTES)[number]['pattern'] | ReturnType<typeof experiencePattern<string>>;
 
 /**
  * The URL pattern for a route path Next reports, such as onRequestError's
@@ -269,6 +312,11 @@ export function listRoutes(): readonly RouteEntry[] {
   return ROUTES;
 }
 
+/** The experience segments' routes (#6, Slice 2), which only a request proxy.ts marks reaches. */
+export function listExperienceRoutes(): readonly RouteEntry[] {
+  return EXPERIENCE_ROUTES;
+}
+
 /** How `profile` grants `entry`: the access its capability has there, or absent. */
 export function routeAccess(profile: Profile, entry: RouteEntry): Access | 'absent' {
   if (entry.profiles && !entry.profiles.includes(profile)) return 'absent';
@@ -276,9 +324,9 @@ export function routeAccess(profile: Profile, entry: RouteEntry): Access | 'abse
   return accessIn(profile, entry.capability);
 }
 
-/** Whether `profile` serves the route `pattern` names. */
+/** Whether `profile` serves the route `pattern` names, an experience segment's included. */
 export function serves(profile: Profile, pattern: RoutePattern): boolean {
-  return ROUTES.some(
+  return [...ROUTES, ...EXPERIENCE_ROUTES].some(
     (entry) => entry.pattern === pattern && routeAccess(profile, entry) !== 'absent',
   );
 }
@@ -367,9 +415,13 @@ export function encodesFixedSegment(pattern: string, pathname: string): boolean 
     .some((part, index) => !part.startsWith('[') && sent[index] !== part);
 }
 
-/** Every route file's own path: each pattern the table lists, and Next's /_not-found. */
+/**
+ * Every route file's own path: each pattern the table lists, each experience
+ * segment's, and Next's /_not-found.
+ */
 const ROUTE_FILE_PATHS: ReadonlySet<string> = new Set([
   ...ROUTES.map((entry) => entry.pattern),
+  ...EXPERIENCE_ROUTES.map((entry) => entry.pattern),
   '/_not-found',
 ]);
 
@@ -379,8 +431,8 @@ const ROUTE_FILE_PATHS: ReadonlySet<string> = new Set([
  * path whose slashes are encoded, as `/studio%2Fsign-in` decodes to
  * `/studio/sign-in`. The table reads such a path segment by segment and
  * finds it names nothing, but Next's file check finds the route file before
- * the afterFiles rewrite runs, and the views catch-all answers it with a 404
- * that needs JavaScript. proxy.ts sends it through the beforeFiles rewrite.
+ * the afterFiles rewrite runs. proxy.ts sends it through the beforeFiles
+ * rewrite.
  */
 export function spellsRouteFile(pathname: string): boolean {
   if (ROUTE_FILE_PATHS.has(pathname)) return true;
@@ -391,15 +443,7 @@ export function spellsRouteFile(pathname: string): boolean {
   }
 }
 
-/**
- * The request header proxy.ts sets to the route table's decision on every
- * request it passes to Next. next.config.ts rewrites one marked `missing`
- * to Next's /_not-found route, which renders the app's 404 page from the
- * server with its 404 status. A page can't: in Next 16 its notFound()
- * answers with an empty document that only JavaScript fills in. The rewrite
- * runs after Next looks in public/, so a file there is still served.
- */
-export const ROUTE_HEADER = 'x-portfolio-route';
+export { ROUTE_HEADER } from './route-header';
 
 /**
  * Every static first segment of an entry other than the views catch-all,

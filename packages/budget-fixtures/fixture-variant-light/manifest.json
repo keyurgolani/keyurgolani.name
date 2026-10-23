@@ -1,0 +1,20 @@
+{
+  "id": "fixture-variant-light",
+  "name": "Light budget fixture",
+  "promise": "Every section in one column, and one small client island.",
+  "description": "A budget test fixture, registered only in a build with BUDGET_FIXTURES=1, never in a release. It renders every section through the kit's shared renderers and adds one toggle, a client island of a few hundred bytes, so the trace can tell its code from another variant's.",
+  "contract": "2.0",
+  "schemas": { "portfolio": { "min": 3, "max": 3 }, "site": { "min": 2, "max": 2 } },
+  "tokenContract": 1,
+  "compositionFamily": "document",
+  "motionIntent": "still",
+  "performanceTier": "light",
+  "renderedKinds": [],
+  "unsupportedKinds": [],
+  "contentSlots": [],
+  "routes": { "home": "shared", "work": "shared", "views": [] },
+  "controls": { "version": 1, "items": [], "migrations": [] },
+  "visitorControl": { "placement": "header" },
+  "textDirection": ["ltr", "rtl"],
+  "provenance": { "provisional": false, "sources": [] }
+}

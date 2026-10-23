@@ -36,6 +36,9 @@ function options(entry: string): BuildOptions {
     alias: {
       '@host': path.join(WEB, 'src', 'lib'),
       '@host-server': path.join(WEB, 'src', 'server'),
+      // The server half reads the server-only variant registry (#6): it
+      // resolves server-only as Next's server bundles do, to its empty module.
+      'server-only': path.join(WEB, 'node_modules', 'server-only', 'empty.js'),
     },
     nodePaths: [path.join(WEB, 'node_modules')],
     // The variants' stylesheets are no part of what parity compares.

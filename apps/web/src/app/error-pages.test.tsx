@@ -1,20 +1,26 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import Module from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { themeInitScript } from '@portfolio/kit';
+import { themeInitScript } from '@portfolio/kit/theme-init';
+import { FALLBACK_ID, validateManifest, type VariantRegistry } from '@portfolio/variant-contract';
+import { REGISTRY, variantStylesheet } from '~/lib/variants';
 import { PROFILES } from '~/server/capabilities';
 import { setDeploymentState } from '~/server/config-store';
 import { capabilityPolicy } from '~/server/policy';
 import ErrorPage from './(site)/error';
-import NotFound from './(site)/not-found';
+import { NotFoundBody } from './_chrome/not-found-body';
 import { NotFoundDocument } from './_chrome/not-found-document';
 
 // What a visitor sees when a page fails or nothing lives at the address. No
 // page shows a path, validation text, or stack from the error, and each
-// links only home: no profile serves /admin any more.
+// links only home: no profile serves /admin any more. not-found.tsx reads
+// the request's experience segment and renders NotFoundBody with it, as
+// global-not-found.tsx reads its nonce and renders NotFoundDocument, so
+// these render the bodies.
 
 const HERE = path.basename(fileURLToPath(import.meta.url));
 
@@ -57,7 +63,7 @@ test('global-error.tsx brings its own document and shows only the digest', async
 });
 
 test('not-found.tsx links only home', async () => {
-  const html = renderToStaticMarkup(await NotFound());
+  const html = renderToStaticMarkup(await NotFoundBody());
   assert.match(html, /<h1>Page not found<\/h1>/);
   assertGeneric(html);
 });
@@ -97,9 +103,13 @@ test("the global 404's document is in the portfolio's language and direction, wi
     degraded: [],
   });
   const html = renderToStaticMarkup(await NotFoundDocument({ nonce: 'MVlEoQyHU2PoMq1Imu8oSA==' }));
+  // Inside the site's presentation boundary, with the stylesheet of the
+  // variant that renders (#6), which carries the request's nonce, as a
+  // preview's policy wants (#6, Slice 2).
+  const stylesheet = `<link rel="stylesheet" href="${variantStylesheet('fallback')}" nonce="MVlEoQyHU2PoMq1Imu8oSA==" data-precedence="variant"/>`;
   assert.ok(
     html.startsWith(
-      `<html lang="ar" dir="rtl"><head><script nonce="MVlEoQyHU2PoMq1Imu8oSA==">${themeInitScript('dark')}</script></head><body>`,
+      `<html lang="ar" dir="rtl"><head>${stylesheet}<script nonce="MVlEoQyHU2PoMq1Imu8oSA==">${themeInitScript('dark')}</script></head><body>`,
     ),
     html,
   );
@@ -109,7 +119,10 @@ test("the global 404's document is in the portfolio's language and direction, wi
   const preview = renderToStaticMarkup(
     await NotFoundDocument({ nonce: 'MVlEoQyHU2PoMq1Imu8oSA==', theme: false }),
   );
-  assert.ok(preview.startsWith('<html lang="ar" dir="rtl"><head></head><body>'), preview);
+  assert.ok(
+    preview.startsWith(`<html lang="ar" dir="rtl"><head>${stylesheet}</head><body>`),
+    preview,
+  );
   assert.ok(!preview.includes('<script'), preview);
   assert.match(preview, /<h1>Page not found<\/h1>/);
 });
@@ -154,7 +167,7 @@ test("not-found.tsx links the pages the profile's policy lists", async (t) => {
   for (const profile of PROFILES) {
     // A catalog that can't serve leaves the page without a boundary, and shows nothing from the error.
     deploy(profile);
-    const html = renderToStaticMarkup(await NotFound());
+    const html = renderToStaticMarkup(await NotFoundBody());
     assert.match(html, /^<main class="host-chrome">/);
     assertGeneric(html);
     const links = [...html.matchAll(/href="([^"]*)"/g)].map((match) => match[1]);
@@ -175,13 +188,62 @@ test("not-found.tsx renders inside the live site's presentation boundary, naming
     motionPolicy: 'reduce',
     sections: { 'canary-section': { hidden: true } },
   });
-  const html = renderToStaticMarkup(await NotFound());
+  const html = renderToStaticMarkup(await NotFoundBody());
   // The fallback composition stands in for the unregistered variant, which
-  // only the boundary's data attribute names, for the owner and the tests.
+  // only the boundary's data attribute names, for the owner and the tests,
+  // and the boundary links the fallback's stylesheet and no other (#6).
   const marker = 'data-requested-variant="canary-variant"';
-  assert.match(
+  const stylesheet = `<link rel="stylesheet" href="${variantStylesheet('fallback')}" data-precedence="variant"/>`;
+  assert.ok(
+    html.startsWith(
+      `${stylesheet}<div data-variant="fallback" data-requested-variant="canary-variant" data-motion-policy="reduce"><main class="host-chrome">`,
+    ),
     html,
-    /^<div data-variant="fallback" data-requested-variant="canary-variant" data-motion-policy="reduce"><main class="host-chrome">/,
   );
-  assertGeneric(html.replace(marker, ''));
+  assert.equal(html.split('rel="stylesheet"').length, 2, 'one stylesheet');
+  assertGeneric(html.replace(marker, '').replace(stylesheet, ''));
+});
+
+/** A registry of the fallback composition and the route tests' `chapters` fixture variant. */
+function withChapters(): VariantRegistry {
+  const read = (file: string) =>
+    JSON.parse(
+      readFileSync(
+        new URL(`../../../../tests/fixtures/variants/chapters/${file}`, import.meta.url),
+        'utf8',
+      ),
+    );
+  const { name: packageName, version } = read('package.json');
+  const result = validateManifest(read('manifest.json'), { packageName });
+  assert.ok(result.ok, JSON.stringify(result.diagnostics));
+  return [
+    REGISTRY.find(({ manifest }) => manifest.id === FALLBACK_ID)!,
+    { packageName, version, manifest: result.manifest },
+  ];
+}
+
+test("not-found.tsx renders in the composition of the request's experience segment where it isn't the live site's, naming no other stylesheet (#6, Slice 2)", async (t) => {
+  t.after(() => setDeploymentState(undefined));
+  deploy('demo', { appearance: { variant: 'canary-variant' }, motionPolicy: 'reduce' });
+  const registry = withChapters();
+  // Under demo, /sample?variant=fixture-chapters renders in its own segment, and
+  // its payload carries the site's 404 in that variant, not the live site's.
+  const html = renderToStaticMarkup(await NotFoundBody({ segment: 'fixture-chapters', registry }));
+  assert.ok(
+    html.startsWith(
+      '<div data-variant="fixture-chapters" data-motion-policy="reduce"><main class="host-chrome">',
+    ),
+    html,
+  );
+  // The fixture has no stylesheet in this build, and the fallback's goes unnamed.
+  assert.ok(!html.includes('rel="stylesheet"'), html);
+  // The segment of the live site, the fallback composition standing in, is the live site's boundary.
+  const live = renderToStaticMarkup(await NotFoundBody({ segment: 'fallback', registry }));
+  const stylesheet = `<link rel="stylesheet" href="${variantStylesheet('fallback')}" data-precedence="variant"/>`;
+  assert.ok(
+    live.startsWith(
+      `${stylesheet}<div data-variant="fallback" data-requested-variant="canary-variant" data-motion-policy="reduce">`,
+    ),
+    live,
+  );
 });

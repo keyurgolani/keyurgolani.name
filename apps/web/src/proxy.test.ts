@@ -10,10 +10,12 @@ import {
   getDeploymentState,
   RECHECK_MS,
   setDeploymentState,
+  setLiveComposition,
   setServable,
 } from './server/config-store';
 import type { PreviewGrantsPort } from './server/preview-port';
 import { readiness } from './server/readiness';
+import { EXPERIENCE_HEADER } from './server/route-header';
 import { ROUTE_HEADER } from './server/routes';
 import { PREVIEW_STATUS_DOCUMENT } from './preview/status';
 
@@ -22,7 +24,10 @@ import { PREVIEW_STATUS_DOCUMENT } from './preview/status';
 // has stored the deployment, with readiness's own body for /api/ready, a
 // static 503 page for visitor pages while the catalog can't serve (#5), and
 // the route table's decision on every request it passes on, so next.config.ts
-// sends a path no route renders to the app's 404 page (#5, Slice 4).
+// sends a path no route renders to the app's 404 page (#5, Slice 4). A
+// visitor page's GET or HEAD goes on marked with its composition's
+// experience segment, which next.config.ts rewrites it to, and any other
+// method to it is a 405 (#6, Slice 2).
 
 function deploy(t: TestContext, profile: Profile, previews?: PreviewGrantsPort): void {
   const read = readDeploymentConfig(
@@ -63,18 +68,36 @@ function grantsPort(admitted = new Set([ACTIVE])) {
   return { port, checked };
 }
 
+/**
+ * The marks only proxy.ts may set, as a client would send them: each test's
+ * request carries them, so a mark that leaks through fails it.
+ */
+const CLIENT_MARKS = {
+  'x-request-id': 'client-chosen',
+  [ROUTE_HEADER]: 'client-chosen',
+  [EXPERIENCE_HEADER]: 'acme-chosen',
+};
+
 function request(path: string, method = 'GET'): NextRequest {
-  return new NextRequest(`https://rowan.test${path}`, {
-    method,
-    headers: { 'x-request-id': 'client-chosen', [ROUTE_HEADER]: 'client-chosen' },
-  });
+  return new NextRequest(`https://rowan.test${path}`, { method, headers: CLIENT_MARKS });
 }
+
+/** Whether the request goes on to Next. proxy.ts rewrites none itself (#6, Slice 2). */
+const onward = (response: Response) => {
+  assert.equal(response.headers.get('x-middleware-rewrite'), null, 'proxy.ts rewrites nothing');
+  return response.headers.get('x-middleware-next') === '1';
+};
 
 /** The route table's decision as the request Next routes carries it, or null when it goes no further. */
 const decision = (response: Response) =>
-  response.headers.get('x-middleware-next') === '1'
-    ? response.headers.get(`x-middleware-request-${ROUTE_HEADER}`)
-    : null;
+  onward(response) ? response.headers.get(`x-middleware-request-${ROUTE_HEADER}`) : null;
+
+/**
+ * The experience segment the request Next routes names, which next.config.ts
+ * rewrites it to (#6, Slice 2), or null when it names none or goes no further.
+ */
+const segment = (response: Response) =>
+  onward(response) ? response.headers.get(`x-middleware-request-${EXPERIENCE_HEADER}`) : null;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
@@ -104,6 +127,8 @@ test('a served path passes through with a fresh request ID, whatever the client 
   for (const path of ['/', '/feed.xml', '/api/studio/config.status', '/_next/static/a.js']) {
     const response = await proxy(request(path));
     assert.equal(response.headers.get('x-middleware-next'), '1', path);
+    // The home page goes on marked with its experience segment (#6, Slice 2).
+    assert.equal(segment(response), path === '/' ? 'fallback' : null, path);
     const id = response.headers.get('x-request-id') ?? '';
     assert.match(id, UUID, path);
     // The id the route handler sees on the request is the same fresh one.
@@ -138,13 +163,14 @@ test('next.config.ts sends a request marked missing to the 404 page, after publi
   assert.ok(rewrites && !Array.isArray(rewrites), 'rewrites in phases');
   // afterFiles: Next has looked in public/ first. An unnamed group adds
   // nothing to the 404 page's query. The router prefetch rule for /_next/
-  // follows it, which headers.test.ts checks.
+  // follows it, and then the experience segments' rule (#6, Slice 2), which
+  // headers.test.ts checks.
   assert.deepEqual(rewrites.afterFiles?.[0], {
     source: '/(.*)',
     has: [{ type: 'header', key: ROUTE_HEADER, value: 'missing' }],
     destination: '/_not-found',
   });
-  assert.equal(rewrites.afterFiles?.length, 2);
+  assert.equal(rewrites.afterFiles?.length, 3);
 });
 
 test('a path no route renders goes on marked missing for GET and HEAD, in every profile (#5, Slice 4)', async (t) => {
@@ -201,7 +227,7 @@ test('under demo, a /sample path or ?variant= that names nothing is missing too'
 test("a route outside the profile's matrix is 404 early", async (t) => {
   deploy(t, 'demo');
   assert.equal((await proxy(request('/feed.xml'))).status, 404);
-  assert.equal((await proxy(request('/'))).headers.get('x-middleware-next'), '1');
+  assert.equal(segment(await proxy(request('/'))), 'fallback');
 });
 
 test('under demo every response asks crawlers not to index it, and elsewhere none does', async (t) => {
@@ -246,9 +272,9 @@ test("while the catalog can't serve, visitor pages are a static 503 page, and th
   assert.equal((await proxy(request('/admin'))).status, 404);
   // A path no route renders is the 404 page, whatever the catalog's state.
   assert.equal(decision(await proxy(request('/nowhere'))), 'missing');
-  // Servable again, the page passes through.
+  // Servable again, the page goes on to its experience segment.
   setServable(true);
-  assert.equal((await proxy(request('/'))).headers.get('x-middleware-next'), '1');
+  assert.equal(segment(await proxy(request('/'))), 'fallback');
 });
 
 test('demo serves /sample, a visitor page, under the same rule', async (t) => {
@@ -1097,7 +1123,7 @@ test('a trailing slash is a 308 to the path without it, under the headers its pa
   assert.equal(work.headers.get('content-security-policy'), null);
   const studio = await redirect('/studio/', '/studio');
   assert.match(studio.headers.get('content-security-policy') ?? '', STUDIO_CSP);
-  assert.equal((await proxy(request('/'))).headers.get('x-middleware-next'), '1');
+  assert.equal(segment(await proxy(request('/'))), 'fallback');
   // Under a profile with no grant route, a preview path's 308 is the same.
   deploy(t, 'demo');
   const demo = await redirect('/preview/x/', '/preview/x');
@@ -1178,5 +1204,150 @@ test('under the prefixes next.config.ts lets any origin read, only a GET or HEAD
     // A path that only starts the same is any other path.
     assert.equal(decision(await proxy(request('/_portfolios/x'))), 'missing', profile);
     assert.equal(decision(await proxy(request('/_next/statics/x'))), 'unlisted', profile);
+  }
+});
+
+/** A visitor page's request, with the client's own marks and Next's router headers, say. */
+function visitor(path: string, method = 'GET', headers: Record<string, string> = {}): NextRequest {
+  return new NextRequest(`https://rowan.test${path}`, {
+    method,
+    headers: { ...CLIENT_MARKS, ...headers },
+  });
+}
+
+test("a visitor page's GET or HEAD goes on marked with the experience segment of the live composition, from memory alone (#6, Slice 2)", async (t) => {
+  t.after(() => setLiveComposition(undefined));
+  for (const profile of ['owner', 'demo', 'read-only'] as const) {
+    // deploy()'s catalog fails the test if anything reads it.
+    deploy(t, profile);
+    for (const live of [undefined, 'fallback', 'acme-gone']) {
+      setLiveComposition(live);
+      for (const method of ['GET', 'HEAD']) {
+        const what = `${profile} ${method} with ${live}`;
+        const home = await proxy(visitor('/?utm=x', method));
+        // Only the fallback composition is registered here: any other id is its.
+        assert.equal(segment(home), 'fallback', what);
+        assert.equal(decision(home), 'served', what);
+        assert.match(home.headers.get('x-request-id') ?? '', UUID, what);
+        assert.equal(
+          home.headers.get('x-middleware-request-x-request-id'),
+          home.headers.get('x-request-id'),
+          what,
+        );
+        assert.equal(home.headers.get('x-robots-tag'), profile === 'demo' ? 'noindex' : null);
+      }
+    }
+  }
+  // Next's own requests for a page, its RSC payload and a prefetch of it, are
+  // marked the same. next.config.ts sends a prefetch with no RSC header to
+  // the 404 page before it reads the mark (headers.test.ts).
+  deploy(t, 'read-only');
+  const router: Record<string, string>[] = [
+    { rsc: '1' },
+    { rsc: '1', 'next-router-prefetch': '1' },
+    { 'next-router-prefetch': '1' },
+  ];
+  for (const headers of router) {
+    assert.equal(segment(await proxy(visitor('/', 'GET', headers))), 'fallback');
+  }
+  // Under demo, /sample and everything below it.
+  deploy(t, 'demo');
+  assert.equal(segment(await proxy(visitor('/sample'))), 'fallback');
+  // A ?variant= that names nothing registered is a path no route matches, as before.
+  assert.equal(segment(await proxy(visitor('/sample?variant=acme-gone'))), null);
+  assert.equal(decision(await proxy(visitor('/sample?variant=acme-gone'))), 'missing');
+});
+
+test("only proxy.ts names an experience segment: a client's own mark goes no further, on any path, to any method, in every profile (#6, Slice 2)", async (t) => {
+  const paths = [
+    '/',
+    '/no-such-page',
+    '/feed.xml',
+    '/studio',
+    '/api/health',
+    '/api/studio/config.status',
+    '/_next/static/a.js',
+    '/_experience/fallback',
+    '/preview/x',
+  ];
+  for (const profile of ['owner', 'demo', 'read-only'] as const) {
+    deploy(t, profile);
+    for (const path of paths) {
+      for (const method of ['GET', 'HEAD', 'POST']) {
+        const what = `${profile} ${method} ${path}`;
+        // visitor() sends CLIENT_MARKS, a well-formed id of the client's choosing among them.
+        const response = await proxy(visitor(path, method));
+        const page = path === '/' && method !== 'POST';
+        assert.equal(segment(response), page ? 'fallback' : null, what);
+        if (!onward(response)) continue;
+        // Next drops each request header the override list leaves out.
+        const kept = (response.headers.get('x-middleware-override-headers') ?? '').split(',');
+        assert.equal(kept.includes(EXPERIENCE_HEADER), page, what);
+      }
+    }
+  }
+});
+
+test('any other method to a visitor page is a plain 405 with the methods it takes, under the headers the path gets, in every profile (#6, Slice 2)', async (t) => {
+  for (const profile of ['owner', 'demo', 'read-only'] as const) {
+    deploy(t, profile);
+    const pages = profile === 'demo' ? ['/', '/sample'] : ['/'];
+    for (const path of pages) {
+      for (const method of ['POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS']) {
+        const what = `${profile} ${method} ${path}`;
+        const response = await proxy(visitor(path, method));
+        assert.equal(response.status, 405, what);
+        assert.equal(response.headers.get('allow'), 'GET, HEAD', what);
+        assert.equal(response.headers.get('cache-control'), 'no-store', what);
+        assert.match(response.headers.get('content-type') ?? '', /^text\/plain/, what);
+        assert.match(response.headers.get('x-request-id') ?? '', UUID, what);
+        assert.equal(response.headers.get('x-robots-tag'), profile === 'demo' ? 'noindex' : null);
+        assert.equal(segment(response), null, what);
+        assert.equal(decision(response), null, what);
+        assert.equal(await response.text(), 'Method not allowed.', what);
+      }
+    }
+  }
+  // While the catalog can't serve, the 503 comes first, as for every method before.
+  deploy(t, 'read-only');
+  setServable(false);
+  t.after(() => setServable(true));
+  assert.equal((await proxy(visitor('/', 'POST'))).status, 503);
+});
+
+test("a request for an experience segment's own path, in any spelling and to any method, is a path no route matches (#6, Slice 2)", async (t) => {
+  for (const profile of ['owner', 'demo', 'read-only'] as const) {
+    deploy(t, profile);
+    for (const path of [
+      '/_experience',
+      '/_experience/fallback',
+      '/_experience/fallback/work/tide-tables',
+      '/_experience/fallback?_rsc=probe',
+      '/%5Fexperience/fallback',
+      '/_EXPERIENCE/fallback',
+      '/_experience%2Ffallback',
+      '/_experience/fallback.rsc',
+      '/_experience/acme-gone/sample',
+    ]) {
+      for (const method of ['GET', 'HEAD']) {
+        const response = await proxy(visitor(path, method));
+        assert.equal(segment(response), null, `${profile} ${method} ${path}`);
+        assert.equal(decision(response), 'missing', `${profile} ${method} ${path}`);
+      }
+      for (const method of ['POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS']) {
+        const response = await proxy(visitor(path, method));
+        assert.equal(response.status, 404, `${profile} ${method} ${path}`);
+        assert.equal(await response.text(), 'Not found.');
+      }
+    }
+    // The segment's route file spelled out goes ahead of Next's file check, as any route file's does.
+    for (const path of [
+      '/_experience/fallback/[[...route]]',
+      '/_experience/fallback/%5B%5B...route%5D%5D',
+    ]) {
+      const response = await proxy(visitor(path));
+      assert.equal(response.headers.get('x-middleware-request-x-portfolio-not-found'), '1', path);
+      assert.equal(segment(response), null, path);
+    }
   }
 });

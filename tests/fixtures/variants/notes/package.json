@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
+  "sideEffects": false,
   "description": "A route test fixture (#5): every section, and a notes page listing them. Never installed in a release.",
   "main": "./src/index.tsx",
   "types": "./src/index.tsx",

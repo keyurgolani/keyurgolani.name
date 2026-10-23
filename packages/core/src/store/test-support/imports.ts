@@ -1,5 +1,5 @@
 // For the tests that check what a module reaches: the run-time imports of a
-// TypeScript or .mjs module by relative path, `import()` included, followed
+// TypeScript or .mjs module by relative path, a .cjs one among them, `import()` included, followed
 // the way Node and tsx resolve them. `import type` and `export type` load
 // nothing, so they don't count. A bare specifier, such as @portfolio/schema,
 // isn't followed, and neither is apps/web's generated registry, which only
@@ -46,7 +46,7 @@ export function relativeImports(file: string, { types = false } = {}): string[] 
       ...['.ts', '.tsx', '.mjs', '.js'].map((extension) => `${base}${extension}`),
       path.join(base, 'index.ts'),
       path.join(base, 'index.tsx'),
-    ].find((candidate) => /\.(?:tsx?|mjs|js)$/.test(candidate) && existsSync(candidate));
+    ].find((candidate) => /\.(?:tsx?|[cm]?js)$/.test(candidate) && existsSync(candidate));
     if (!resolved && GENERATED.test(base)) continue;
     if (!resolved) throw new Error(`${file}: can't resolve ${specifier}`);
     found.push(resolved);

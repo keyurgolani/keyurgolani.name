@@ -1,0 +1,20 @@
+{
+  "id": "fixture-over-budget",
+  "name": "Over-budget fixture",
+  "promise": "Every section in one column, carrying more code and styles than a light variant may.",
+  "description": "A budget test fixture, registered only in a build with BUDGET_FIXTURES=over, never in a release. It declares the light tier and ships about 40 KB of gzipped JavaScript and 16 KB of gzipped CSS of incompressible ballast, past the light tier's 30 KB and 10 KB, and its stylesheet imports one from another host, so #6's budget check has a record of each kind to report.",
+  "contract": "2.0",
+  "schemas": { "portfolio": { "min": 3, "max": 3 }, "site": { "min": 2, "max": 2 } },
+  "tokenContract": 1,
+  "compositionFamily": "document",
+  "motionIntent": "still",
+  "performanceTier": "light",
+  "renderedKinds": [],
+  "unsupportedKinds": [],
+  "contentSlots": [],
+  "routes": { "home": "shared", "work": "shared", "views": [] },
+  "controls": { "version": 1, "items": [], "migrations": [] },
+  "visitorControl": { "placement": "header" },
+  "textDirection": ["ltr", "rtl"],
+  "provenance": { "provisional": false, "sources": [] }
+}

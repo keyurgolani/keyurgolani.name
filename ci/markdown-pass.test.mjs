@@ -70,6 +70,27 @@ test('a site or preview page that loads no chunk with the post-pass fails, by na
   assert.match(checkMarkdownPass(unmapped), /loads a chunk with no source map/);
 });
 
+test('a page that loads the post-pass on demand, through a chunk it names, passes; one only a missing chunk would bring fails (#6, Slice 2)', (t) => {
+  // An experience segment imports its variant, and the kit's sections with it, on demand.
+  const lazy = {
+    ...WIRED,
+    'server/app/(site)/page.js': page('a.js'),
+    'server/chunks/ssr/a.js':
+      'a.v(b=>Promise.all(["server/chunks/ssr/d.js"].map(b=>a.l(b))).then(()=>b(1)))',
+    'server/chunks/ssr/d.js': 'a.l("server/chunks/ssr/b.js")',
+    'server/chunks/ssr/d.js.map': map('x.ts'),
+  };
+  assert.equal(checkMarkdownPass(nextTree(t, lazy)), null);
+  const missing = nextTree(t, {
+    ...lazy,
+    'server/chunks/ssr/a.js': 'a.l("server/chunks/ssr/gone.js")',
+  });
+  assert.match(
+    checkMarkdownPass(missing),
+    /server\/app\/\(site\)\/page\.js loads no chunk with the Markdown post-pass/,
+  );
+});
+
 test("sanitize-html's code or a map of it under static fails, and so does a missing build", (t) => {
   for (const marker of MARKERS) {
     const dir = nextTree(t, { ...WIRED, 'static/chunks/x.js': `a.${marker}=1` });

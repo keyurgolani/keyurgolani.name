@@ -67,6 +67,11 @@ export async function registerDeployment(): Promise<Registration> {
   // exits; Next's own SIGTERM handling ends in an exit (#3, item 21).
   const { release } = result.state;
   if (release) process.once('exit', release);
+  // The live revision, read once now, so the composition it renders is in
+  // config-store before the first request: proxy.ts reads it from memory to
+  // pick a visitor page's experience segment (#6, Slice 2). A revision that
+  // can't be read leaves it unset, and each page sets it as it reads one.
+  await result.state.catalog.getLive().catch(() => undefined);
   // The server keeps running, so stdout can take its time with these.
   for (const issue of result.issues) console.log(issueLogLine(issue, result.profile));
   log({ level: 'info', event: 'deployment.config', ...result.summary });

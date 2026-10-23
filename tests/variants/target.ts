@@ -65,8 +65,11 @@ export const FIXED_TIME = '2026-01-01T00:00:00.000Z';
 export const selection = (variant: RegisteredVariant) =>
   variant.manifest.id === FALLBACK_ID ? UNREGISTERED : variant.manifest.id;
 
+/** A registered variant, as far as a fixture's site document needs it: its id. */
+export type SelectedVariant = { readonly manifest: { readonly id: string } };
+
 /** The fixture's site document, selecting `variant`, as #7's dev fixture route selects it. */
-export function siteFor(fixture: ContractFixture, variant: RegisteredVariant): string {
+export function siteFor(fixture: ContractFixture, variant: SelectedVariant): string {
   return fixtureSiteSelecting(readFileSync(fixture.files.site, 'utf8'), variant.manifest.id);
 }
 
@@ -100,7 +103,7 @@ export function ownerAssets(fixture: ContractFixture): Record<string, string | U
  * read-only on the fixture, its site selecting `variant`, under the fixed
  * clock, with the snapshots and media document beside it.
  */
-export function fixtureApp(fixture: ContractFixture, variant: RegisteredVariant): AppOptions {
+export function fixtureApp(fixture: ContractFixture, variant: SelectedVariant): AppOptions {
   const dir = path.dirname(fixture.files.portfolio);
   return {
     web: WEB,

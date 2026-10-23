@@ -14,7 +14,13 @@ import {
   type StartupRequirement,
 } from './composition';
 import { readDeploymentConfig, type DeploymentConfig } from './config';
-import { setDeploymentState, type DeploymentState } from './config-store';
+import { compositionFor } from '~/lib/variants';
+import {
+  liveComposition,
+  setDeploymentState,
+  setLiveComposition,
+  type DeploymentState,
+} from './config-store';
 import { loadedOwnerModules } from './load-trace';
 import { listOperations } from './operations';
 import { listRoutes, resolveRoute, RETIRED_PATTERNS, routeAccess } from './routes';
@@ -233,6 +239,19 @@ async function sideStore() {
     },
   });
 }
+
+test("owner's revision store reader records the composition of the unit each getLive() returns (#6, Slice 2)", async (t) => {
+  t.after(() => setLiveComposition(undefined));
+  setLiveComposition('stale');
+  const live = await state.catalog.getLive();
+  assert.ok(live.unit, 'the empty store serves the mounted documents');
+  assert.equal(
+    liveComposition(),
+    compositionFor(live.unit.site.appearance.variant).rendered.manifest.id,
+  );
+  // The example site selects a variant this build doesn't register.
+  assert.equal(liveComposition(), 'fallback');
+});
 
 test('owner loads its modules only through the composition root', () => {
   // Owner code, then the auth.secret and data.directory checks, which load

@@ -7,8 +7,10 @@ import {
   isServable,
   servableAgain,
 } from './server/config-store';
+import { isExperiencePath, segmentFor } from './server/experience';
 import { isPreviewPath, previewCsp, previewHeaders } from './server/preview-headers';
 import { READY_PATH, STARTING, STARTING_HEADERS } from './server/ready-starting';
+import { EXPERIENCE_HEADER } from './server/route-header';
 import { safeReturnTo, signInLocation } from './server/return-to';
 import {
   encodesFixedSegment,
@@ -44,9 +46,9 @@ import {
 // goes on to Next marked missing, and next.config.ts sends it to the 404
 // page; any method but GET and HEAD gets the plain 404 here. So does a route
 // spelled with a fixed segment percent-encoded, such as /%66eed.xml, which
-// the table reads decoded but Next would hand to the views catch-all, and a
-// missing path that is a route file's own path, as sent or decoded whole,
-// such as /work/[slug] or /studio%2Fsign-in, which Next's file check finds.
+// the table reads decoded but Next matches as sent, and a missing path that
+// is a route file's own path, as sent or decoded whole, such as
+// /studio%2Fsign-in, which Next's file check finds.
 //
 // Every response under /preview and /preview-assets (#7), in any case or
 // percent-encoding, gets the preview's own CSP with a fresh nonce, which goes
@@ -76,6 +78,20 @@ import {
 // sent before next.config.ts turned its own off (#7): this one carries the
 // headers its path gets, so a preview path's is private, no-store, and its
 // answer never depends on a grant.
+//
+// A visitor page renders in the experience segment of the composition it
+// shows (#6, Slice 2), one route per registered variant, which imports that
+// variant alone, so the page's chunks hold no other variant's code. Once
+// every check above has let a GET or HEAD of one through, this names its
+// segment in x-portfolio-experience, from memory alone: segmentFor() reads
+// the live composition config-store holds, and under demo, /sample's
+// `variant` parameter. next.config.ts rewrites the request to
+// /_experience/<id> and the path once Next has looked in public/, and drops
+// nothing from its query. Any other method to a visitor page gets a 405,
+// since the page exists for GET. A request for an experience segment's own
+// path, in any spelling and to any method, answers as a path no route
+// matches, and a client's own x-portfolio-experience goes no further than
+// here.
 //
 // For Studio (#2), under a profile with a Studio page, it sends the nonce
 // CSP, Referrer-Policy: same-origin, and Cross-Origin-Resource-Policy:
@@ -134,7 +150,11 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   // Only GET and HEAD load a page: any other method to a path no route
   // answers is the plain 404.
   const pageLoad = request.method === 'GET' || request.method === 'HEAD';
-  const decision = resolveRoute(deployment.profile, pathname, searchParams);
+  // Only next.config.ts's rewrite of a request marked below reaches an
+  // experience segment (#6, Slice 2).
+  const decision: RouteDecision = isExperiencePath(pathname)
+    ? { status: 'missing' }
+    : resolveRoute(deployment.profile, pathname, searchParams);
   // Access-Control-Allow-Origin: * goes on everything next.config.ts matches
   // under these prefixes, so only a GET or HEAD of a file Next serves there,
   // spelled as Next serves it, and a route the table serves go on to Next.
@@ -175,10 +195,8 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
     return plain(404, 'Not found.', requestId, extra);
   }
   // A missing path that is a route file's own path, as sent or decoded
-  // whole, such as /work/[slug] or /studio%2Fsign-in: Next's file check
-  // finds the file before the afterFiles rewrite runs, and the views
-  // catch-all answers with a 404 that needs JavaScript. The beforeFiles
-  // rewrite comes first.
+  // whole, such as /studio%2Fsign-in: Next's file check finds the file
+  // before the afterFiles rewrite runs. The beforeFiles rewrite comes first.
   if (decision.status === 'missing' && spellsRouteFile(pathname)) {
     return unknownPath(request, requestId, extra, { csp, preview });
   }
@@ -200,19 +218,32 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
     return seeOther(new URL(location, deployment.origin), requestId, extra);
   }
   // A fixed segment spelled percent-encoded, as in /%66eed.xml: the table
-  // matched it decoded, but Next matches it as sent and would give the path
-  // to the views catch-all, whose 404 needs JavaScript. It answers as a path
-  // no route matches. A Studio 404 under owner keeps its nonce: the request
-  // carries the policy, which Next reads for the page's scripts.
+  // matched it decoded, but Next matches it as sent, so the entry's route
+  // never answers it. It answers as a path no route matches. A Studio 404
+  // under owner keeps its nonce: the request carries the policy, which Next
+  // reads for the page's scripts.
   if (decision.status === 'served' && encodesFixedSegment(decision.entry.pattern, pathname)) {
     if (!pageLoad) return plain(404, 'Not found.', requestId, extra);
     return unknownPath(request, requestId, extra, { csp, preview });
   }
 
+  // A visitor page exists for GET and HEAD, which go to its experience segment.
+  const experience = decision.status === 'served' && decision.entry.experience === true;
+  if (experience && !pageLoad) return methodNotAllowed(requestId, extra);
+
   const headers = forwarded(request, requestId, { csp, preview });
   // The table's decision, in place of anything the client sent.
   headers.set(ROUTE_HEADER, decision.status);
   if (studio) headers.set(STUDIO_PATH_HEADER, `${pathname}${search}`);
+  if (decision.status === 'served' && experience) {
+    // The segment next.config.ts rewrites the request to.
+    const segment = segmentFor({
+      profile: deployment.profile,
+      pattern: decision.entry.pattern,
+      query: searchParams,
+    });
+    headers.set(EXPERIENCE_HEADER, segment);
+  }
   const response = NextResponse.next({ request: { headers } });
   response.headers.set('x-request-id', requestId);
   // A Studio path the table calls missing, under a profile with no Studio,
@@ -222,6 +253,15 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   }
   for (const [name, value] of Object.entries(extra)) response.headers.set(name, value);
   return response;
+}
+
+/**
+ * A visitor page asked for with a method other than GET or HEAD (#6, Slice
+ * 2): plain text, as an operation called with the wrong method gets, with
+ * the methods the page takes.
+ */
+function methodNotAllowed(requestId: string, extra: Record<string, string>): NextResponse {
+  return plain(405, 'Method not allowed.', requestId, { ...extra, allow: 'GET, HEAD' });
 }
 
 /** Whether `profile` serves a Studio page, by the route table. */
@@ -392,10 +432,10 @@ function decodedPath(pathname: string): string {
 
 /**
  * The headers of the request Next routes: a fresh request ID, none of the
- * marks only proxy.ts may set, and `csp`, where a Studio or preview response
- * sends one, so Next reads its nonce. A preview's request goes on without
- * its Cookie header (#7, Slice 1, item 4), so no preview route can read the
- * session cookie or a visitor's preference.
+ * marks only proxy.ts may set, the experience segment among them, and `csp`,
+ * where a Studio or preview response sends one, so Next reads its nonce. A
+ * preview's request goes on without its Cookie header (#7, Slice 1, item 4),
+ * so no preview route can read the session cookie or a visitor's preference.
  */
 function forwarded(
   request: NextRequest,
@@ -407,6 +447,7 @@ function forwarded(
   headers.delete(STUDIO_PATH_HEADER);
   headers.delete(NOT_FOUND_HEADER);
   headers.delete(ROUTE_HEADER);
+  headers.delete(EXPERIENCE_HEADER);
   if (csp) headers.set('content-security-policy', csp);
   if (preview) headers.delete('cookie');
   return headers;

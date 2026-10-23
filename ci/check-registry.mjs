@@ -1,12 +1,14 @@
 #!/usr/bin/env node
 // The variant registry's check (#5, Slice 3): generation succeeds with no
 // diagnostic, two runs write the same bytes, and git tracks none of what it
-// writes: the generated modules, and the appearance packs' compiled files
-// (#19, Slice 2). It runs twice under each fixture flag's values,
-// APPEARANCE_FIXTURES=1 for the appearance fixture packs and
-// QUALITY_FIXTURES=1 and meta for #11's tier fixtures, then twice with none,
-// so the checkout ends as a production build leaves it. The source audit,
-// `pnpm check:variants`, is CI's check-variants job (Slice 6).
+// writes: the generated modules, the appearance packs' compiled files (#19,
+// Slice 2), and the variants' compiled stylesheets with the images they name
+// and their experience segments (#6, Slice 2). It runs twice under each
+// fixture flag's values, APPEARANCE_FIXTURES=1 for the appearance fixture
+// packs, QUALITY_FIXTURES=1 and meta for #11's tier fixtures, and
+// BUDGET_FIXTURES=1 and over for the budget fixture variants, then twice with
+// none, so the checkout ends as a production build leaves it. The source
+// audit, `pnpm check:variants`, is CI's check-variants job (Slice 6).
 import { spawnSync } from 'node:child_process';
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -14,20 +16,26 @@ import { FIXTURE_FLAG } from './lib/fixture-flags.mjs';
 import { currentGate, REPO_ROOT, reportError, writeFailureRecord } from './lib/reports.mjs';
 
 const GENERATED = 'apps/web/src/lib/generated';
-const PACKS = 'apps/web/public/_portfolio/pack';
+/** What the host serves from public/_portfolio/: packs, variant stylesheets, and their images. */
+const SERVED = ['pack', 'variant', 'asset'].map((dir) => `apps/web/public/_portfolio/${dir}`);
+/** Each variant's experience segment, a route per variant in the app directory (#6, Slice 2). */
+const SEGMENTS = 'apps/web/src/app/(site)/%5Fexperience';
 
 const run = (command, args, env) =>
   spawnSync(command, args, { cwd: REPO_ROOT, stdio: 'inherit', env }).status ?? 1;
 
-/** Every file's bytes in each directory, by path. */
+/** Every file's bytes under each directory, by path. */
 function snapshot() {
   const files = {};
-  for (const dir of [GENERATED, PACKS]) {
-    for (const name of readdirSync(path.join(REPO_ROOT, dir)).sort()) {
-      files[`${dir}/${name}`] = readFileSync(path.join(REPO_ROOT, dir, name)).toString('base64');
+  const walk = (dir) => {
+    for (const entry of readdirSync(path.join(REPO_ROOT, dir), { withFileTypes: true })) {
+      const file = `${dir}/${entry.name}`;
+      if (entry.isDirectory()) walk(file);
+      else files[file] = readFileSync(path.join(REPO_ROOT, file)).toString('base64');
     }
-  }
-  return files;
+  };
+  for (const dir of [GENERATED, ...SERVED, SEGMENTS]) walk(dir);
+  return Object.fromEntries(Object.entries(files).sort(([a], [b]) => a.localeCompare(b)));
 }
 
 function fail(message, record = {}) {
@@ -45,6 +53,8 @@ const states = [
   { label: 'with APPEARANCE_FIXTURES=1', env: { ...unflagged, APPEARANCE_FIXTURES: '1' } },
   { label: 'with QUALITY_FIXTURES=1', env: { ...unflagged, QUALITY_FIXTURES: '1' } },
   { label: 'with QUALITY_FIXTURES=meta', env: { ...unflagged, QUALITY_FIXTURES: 'meta' } },
+  { label: 'with BUDGET_FIXTURES=1', env: { ...unflagged, BUDGET_FIXTURES: '1' } },
+  { label: 'with BUDGET_FIXTURES=over', env: { ...unflagged, BUDGET_FIXTURES: 'over' } },
   { label: 'without a fixture flag', env: unflagged },
 ];
 
@@ -72,7 +82,7 @@ for (const { label, env } of states) {
   files = Object.keys(second).length;
 }
 
-const tracked = spawnSync('git', ['ls-files', '--', GENERATED, PACKS], {
+const tracked = spawnSync('git', ['ls-files', '--', GENERATED, ...SERVED, SEGMENTS], {
   cwd: REPO_ROOT,
   encoding: 'utf8',
 });

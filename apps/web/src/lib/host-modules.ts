@@ -1,4 +1,4 @@
-import { registerHostModules } from '@portfolio/kit/sections';
+import { registerHostModules } from '@portfolio/kit/host-modules';
 import { EXTENSION_RENDERERS } from './generated/registry.renderers';
 
 // The package code the kit reaches on the server (#5, Slice 3): each content

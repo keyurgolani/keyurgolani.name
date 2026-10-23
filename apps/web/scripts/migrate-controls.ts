@@ -19,6 +19,8 @@
 //
 // Relative paths are taken from the directory pnpm ran in (INIT_CWD).
 
+// First: REGISTRY comes from the server-only variant registry (#6).
+import './server-only.cjs';
 import { randomBytes } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';

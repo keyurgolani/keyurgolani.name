@@ -7,6 +7,7 @@ test('with no options, the trace runs the app under test and passes nothing on',
     baseUrl: null,
     allowThirdParty: false,
     selection: null,
+    profile: null,
     playwright: [],
   });
 });
@@ -49,6 +50,7 @@ test('--allow-third-party is for an outside server only, and takes no value', ()
     baseUrl: 'http://127.0.0.1:4000',
     allowThirdParty: true,
     selection: null,
+    profile: null,
     playwright: [],
   });
   assert.throws(() => parseTraceArgs(['--allow-third-party']), /needs --base-url/);
@@ -62,6 +64,20 @@ test('--selection is an id', () => {
   assert.equal(parseTraceArgs(['--selection', 'editorial']).selection, 'editorial');
   assert.equal(parseTraceArgs(['--selection=missing-variant']).selection, 'missing-variant');
   assert.throws(() => parseTraceArgs(['--selection', 'Not An Id']), /an id, such as editorial/);
+});
+
+test('--profile picks read-only or owner for the app under test, and an outside server runs its own', () => {
+  assert.equal(parseTraceArgs(['--profile', 'owner']).profile, 'owner');
+  assert.equal(parseTraceArgs(['--profile=read-only']).profile, 'read-only');
+  assert.throws(
+    () => parseTraceArgs(['--profile', 'demo']),
+    /--profile is read-only or owner; got demo/,
+  );
+  assert.throws(
+    () => parseTraceArgs(['--base-url', 'http://127.0.0.1:4000', '--profile', 'owner']),
+    /a --base-url server runs its own/,
+  );
+  assert.throws(() => readTraceEnv({ [ENV.profile]: 'demo' }), /--profile is read-only or owner/);
 });
 
 test('anything else, and everything after --, goes to Playwright', () => {
@@ -80,6 +96,7 @@ test('anything else, and everything after --, goes to Playwright', () => {
       baseUrl: null,
       allowThirdParty: false,
       selection: 'fallback',
+      profile: null,
       playwright: ['--grep', '1440', '--selection', 'x', '--list'],
     },
   );
@@ -99,14 +116,18 @@ test('the options reach the workers through the environment and back', () => {
     baseUrl: 'http://127.0.0.1:4000',
     allowThirdParty: true,
     selection: 'editorial',
+    profile: null,
     command: 'pnpm test:trace --base-url http://127.0.0.1:4000',
   });
   assert.deepEqual(readTraceEnv({}), {
     baseUrl: null,
     allowThirdParty: false,
     selection: null,
+    profile: null,
     command: 'pnpm test:trace',
   });
+  const owner = traceEnv(parseTraceArgs(['--profile', 'owner']), 'pnpm test:trace --profile owner');
+  assert.equal(readTraceEnv(owner).profile, 'owner');
   assert.throws(
     () => readTraceEnv({ [ENV.allowThirdParty]: '1' }),
     /needs PORTFOLIO_TRACE_BASE_URL/,

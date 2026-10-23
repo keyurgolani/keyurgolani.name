@@ -4,10 +4,18 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import type { VariantRegistry } from '@portfolio/variant-contract';
+import { REGISTRY } from '~/lib/variants';
 import { BUNDLED_SAMPLE_NAMES } from '../lib/sample-identity';
-import { compose, STARTUP_REQUIREMENTS, type StartupRequirement } from './composition';
+import type { LiveRevision } from './catalog-port';
+import {
+  compose,
+  recordingLive,
+  STARTUP_REQUIREMENTS,
+  type StartupRequirement,
+} from './composition';
 import { readDeploymentConfig, type ConfigIssue, type Env } from './config';
-import { setDeploymentState } from './config-store';
+import { liveComposition, setDeploymentState, setLiveComposition } from './config-store';
 import { loadedOwnerModules } from './load-trace';
 import { listOperations } from './operations';
 
@@ -249,4 +257,50 @@ test('a requirement for another profile never runs', async (t) => {
     requirements: [{ ...finding('fatal', [BROKEN]), profiles: ['owner'] }],
   });
   assert.equal(composed.ok, true);
+});
+
+test("every profile's reader records the composition each live revision renders, as proxy.ts reads it (#6, Slice 2)", async (t) => {
+  t.after(() => setLiveComposition(undefined));
+  const demo = readDeploymentConfig(
+    {
+      NODE_ENV: 'production',
+      PORTFOLIO_PROFILE: 'demo',
+      PORTFOLIO_ORIGIN: 'https://demo.rowan.test',
+    },
+    { cwd: '/' },
+  );
+  assert.ok(demo.ok, JSON.stringify(demo.issues));
+  for (const config of [deployment(t, { PORTFOLIO_PROFILE: 'read-only' }), demo.config]) {
+    setLiveComposition('stale');
+    const composed = await compose(inputs(config));
+    assert.equal(composed.ok, true, config.profile);
+    if (!composed.ok) continue;
+    await composed.state.catalog.getLive();
+    // Both pairs select a variant this build doesn't register, so the fallback composition renders.
+    assert.equal(liveComposition(), 'fallback', config.profile);
+  }
+  // A registered selection records its own id, on every read.
+  const registry: VariantRegistry = [
+    ...REGISTRY,
+    { ...REGISTRY[0]!, manifest: { ...REGISTRY[0]!.manifest, id: 'acme-tiles' } },
+  ];
+  let variant = 'acme-tiles';
+  const live = () => ({ unit: { site: { appearance: { variant } } } }) as unknown as LiveRevision;
+  const reader = recordingLive({ getLive: async () => live() }, registry);
+  await reader.getLive();
+  assert.equal(liveComposition(), 'acme-tiles');
+  variant = 'acme-gone';
+  await reader.getLive();
+  assert.equal(liveComposition(), 'fallback');
+  assert.ok(Object.isFrozen(reader));
+  // Nothing servable, as an empty or incompatible store answers: no composition.
+  for (const state of ['empty', 'incompatible'] as const) {
+    setLiveComposition('acme-tiles');
+    const none = recordingLive(
+      { getLive: async () => ({ state, revisionId: null, unitHash: null, unit: null }) },
+      registry,
+    );
+    assert.equal((await none.getLive()).state, state);
+    assert.equal(liveComposition(), undefined, state);
+  }
 });

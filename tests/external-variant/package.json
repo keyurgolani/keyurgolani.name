@@ -4,6 +4,7 @@
   "private": true,
   "description": "A third-party variant in the published format, which pnpm test:external-variant packs, installs in a temporary worktree, and removes (#5). Never installed in a release.",
   "type": "module",
+  "sideEffects": false,
   "files": [
     "dist",
     "manifest.json",

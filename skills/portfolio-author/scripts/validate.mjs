@@ -49,6 +49,8 @@ function findRepoRoot(start) {
 }
 
 const REPO_ROOT = findRepoRoot(fileURLToPath(import.meta.url));
+// The variant registry is server-only (#6): resolve server-only as Next's server does.
+await import(pathToFileURL(path.join(REPO_ROOT, 'apps/web/scripts/server-only.cjs')).href);
 /**
  * A module's exports by name. A CommonJS one arrives as `module.exports`
  * from Node 23 on, and as its default export on Node 22.

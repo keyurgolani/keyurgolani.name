@@ -2,7 +2,10 @@
 // `pnpm --filter @portfolio/web test:security:proxy`, or `pnpm ci:security-proxy`
 // in CI's image job. One worker, since each one starts the image behind
 // Caddy, and no browser: every request goes out through
-// tests/harness/http-client.mjs.
+// tests/harness/http-client.mjs. Its specs read the route table, whose
+// variant registry is server-only (#6), so it resolves server-only as Next's
+// server does.
+import '../../apps/web/scripts/server-only.cjs';
 import path from 'node:path';
 import { defineConfig } from '@playwright/test';
 import { reportsDir } from '../../ci/lib/reports.mjs';

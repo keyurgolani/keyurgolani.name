@@ -10,6 +10,12 @@
 // - With --base-url, `app` is that server: one the trace didn't start.
 // - Requests are recorded from page events, which redirect hops reach too,
 //   and WebSockets from the policy, which sees every one the page opens.
+// - The purity assertion (#6, Slice 2) reads the document's HTML and RSC
+//   payload, the DOM once the page settled, and the source-map attribution
+//   of every chunk the page downloaded or its document names, fetching the
+//   ones it didn't download (tests/harness/trace/purity.mjs).
+import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -17,14 +23,23 @@ import type { Browser, Page, Request } from '@playwright/test';
 import { expect, test as harness, type App } from '../harness/fixtures';
 import {
   attributeChunk,
+  frameworkChunk,
   gzipBytes,
   inlineSourceMap,
+  NEXT_POLYFILL,
   sourceMapUrl,
   workspacePackages,
 } from '../harness/trace/attribution.mjs';
 import { readTraceEnv } from '../harness/trace/options.mjs';
 import { installPolicy } from '../harness/trace/policy.mjs';
 import { installTraceProbe } from '../harness/trace/probe.mjs';
+import {
+  documentReferences,
+  forbiddenRules,
+  purityProblems,
+  sourceFiles,
+} from '../harness/trace/purity.mjs';
+import { WEB } from '../variants/target';
 import {
   aggregateProbes,
   attributionSummary,
@@ -191,14 +206,27 @@ export function watchRequests(page: Page, appOrigin: string, policy: TracePolicy
   };
 }
 
+/** next's legacy-browser polyfills, as the app under test's next package holds them. */
+const nextPolyfill = (() => {
+  let text: string | undefined;
+  return () => {
+    text ??= readFileSync(
+      createRequire(path.join(WEB, 'package.json')).resolve(NEXT_POLYFILL),
+      'utf8',
+    );
+    return text;
+  };
+})();
+
 /**
  * Each downloaded chunk's bytes by module and package, from the map its
  * sourceMappingURL names on the app's own origin, fetched with no redirect
  * followed. A build without maps attributes nothing, and lists each chunk
- * under withoutMap. Every map is fetched, one request after the other,
- * before any is parsed or attributed: a request sent right after a long
- * synchronous step can go out on a keep-alive connection the server closed
- * meanwhile.
+ * under withoutMap, but for next's legacy-browser polyfills, which Next
+ * ships whole with no map in every build (frameworkChunk). Every map is
+ * fetched, one request after the other, before any is parsed or attributed:
+ * a request sent right after a long synchronous step can go out on a
+ * keep-alive connection the server closed meanwhile.
  */
 export async function attribute(page: Page, downloads: readonly Download[]) {
   const bodies: (Buffer | null)[] = [];
@@ -226,7 +254,13 @@ export async function attribute(page: Page, downloads: readonly Download[]) {
       }
     }
     if (!map) {
-      withoutMap.push(download.url);
+      const framework = frameworkChunk({
+        url: download.url,
+        code: download.code,
+        polyfill: nextPolyfill(),
+      });
+      if (framework) chunks.push({ kind: download.kind, ...framework });
+      else withoutMap.push(download.url);
       return;
     }
     chunks.push({
@@ -308,4 +342,153 @@ export async function traceConditions(
     loadAverage: Math.round(os.loadavg()[0]! * 10) / 10,
     cpus: os.availableParallelism(),
   };
+}
+
+/** ASSET_MANIFEST, as registry generation wrote it for the build the trace starts (#6, Slice 2). */
+export function assetManifest(): { units: unknown[]; platform: unknown } {
+  const file = path.join(WEB, 'src', 'lib', 'generated', 'asset-manifest.json');
+  return JSON.parse(readFileSync(file, 'utf8')) as { units: unknown[]; platform: unknown };
+}
+
+let forbidden: ReturnType<typeof forbiddenRules> | undefined;
+
+/**
+ * runtime-budgets.json's forbidden block, checked against this checkout's
+ * files once per worker: a glob that matches none of them fails every page.
+ */
+export function forbiddenModules(): ReturnType<typeof forbiddenRules> {
+  forbidden ??= forbiddenRules(
+    JSON.parse(readFileSync(path.join(REPO_ROOT, 'runtime-budgets.json'), 'utf8')),
+    sourceFiles(REPO_ROOT),
+  );
+  return forbidden;
+}
+
+/** What the DOM holds once the page settled, for the purity assertion. */
+export function domEvidence(page: Page) {
+  return page.evaluate(() => {
+    const boundary =
+      document.querySelector('[data-appearance-boundary="document"]') ??
+      document.querySelector('[data-variant]');
+    const targets = <T>(selector: string, read: (element: Element) => T): T[] =>
+      [...document.querySelectorAll(selector)].map(read);
+    return {
+      boundary: boundary
+        ? Object.fromEntries(
+            [...boundary.attributes]
+              .filter(({ name }) => name.startsWith('data-'))
+              .map(({ name, value }) => [name, value]),
+          )
+        : null,
+      links: [
+        ...targets('a[href], area[href]', (element) => (element as HTMLAnchorElement).href),
+        ...targets('form[action]', (element) => (element as HTMLFormElement).action),
+        ...targets('[formaction]', (element) => (element as HTMLButtonElement).formAction),
+        ...targets('iframe[src]', (element) => (element as HTMLIFrameElement).src),
+      ],
+      stylesheets: targets(
+        'link[rel~="stylesheet"]',
+        (element) => (element as HTMLLinkElement).href,
+      ),
+      styleElements: targets('style', (element) => (element.textContent ?? '').trim().length),
+    };
+  });
+}
+
+/**
+ * The JS and CSS chunks the document names on the app's own origin that
+ * the page didn't download, fetched with no redirect followed, for
+ * attribution, and a problem for each that didn't load.
+ */
+export async function fetchReferenced(
+  page: Page,
+  urls: readonly string[],
+  downloads: readonly Download[],
+  appOrigin: string,
+): Promise<{ downloads: Download[]; problems: string[] }> {
+  const have = new Set(downloads.map(({ url }) => url));
+  const fetched: Download[] = [];
+  const problems: string[] = [];
+  for (const url of urls) {
+    if (have.has(url) || new URL(url).origin !== appOrigin) continue;
+    const { pathname } = new URL(url);
+    const kind = /\.css$/.test(pathname) ? 'css' : /\.m?js$/.test(pathname) ? 'js' : null;
+    if (!kind) continue;
+    const response = await page.request.get(url, { failOnStatusCode: false, maxRedirects: 0 });
+    if (!response.ok()) {
+      problems.push(`The document names ${pathname}, which answers ${response.status()}.`);
+      continue;
+    }
+    fetched.push({ url, kind, code: (await response.body()).toString('utf8') });
+  }
+  return { downloads: fetched, problems };
+}
+
+/**
+ * The purity assertion's verdict on the page `page` shows (#6, Slice 2),
+ * with the evidence it read, in brief: what the document names, what the
+ * DOM links and holds, and every problem, none on a pure page.
+ */
+export async function purityOf(
+  page: Page,
+  evidence: {
+    readonly html: string;
+    readonly composition: string;
+    readonly appOrigin: string;
+    readonly records: readonly ReturnType<typeof requestRecord>[];
+    readonly downloads: readonly Download[];
+    readonly attribution: Awaited<ReturnType<typeof attribute>>;
+  },
+) {
+  const references = documentReferences(evidence.html, page.url());
+  const dom = await domEvidence(page);
+  const extra = await fetchReferenced(
+    page,
+    references.chunks,
+    evidence.downloads,
+    evidence.appOrigin,
+  );
+  const referenced = await attribute(page, extra.downloads);
+  const rules = forbiddenModules();
+  const verdict = purityProblems({
+    manifest: assetManifest(),
+    composition: evidence.composition,
+    appOrigin: evidence.appOrigin,
+    requests: evidence.records,
+    chunks: [...evidence.attribution.chunks, ...referenced.chunks],
+    withoutMap: [...evidence.attribution.withoutMap, ...referenced.withoutMap],
+    references,
+    dom,
+    forbidden: rules.rules,
+    forbiddenProblems: [...rules.problems, ...extra.problems],
+  });
+  return {
+    ...verdict,
+    references: {
+      chunks: references.chunks.length,
+      notDownloaded: extra.downloads.map(({ url }) => new URL(url).pathname),
+      unitFiles: references.unitFiles.map((url) => new URL(url).pathname),
+      flight: references.flight,
+    },
+    dom: {
+      boundary: dom.boundary,
+      links: dom.links.length,
+      stylesheets: dom.stylesheets.map((url) => new URL(url).pathname),
+      styleElements: dom.styleElements.length,
+    },
+  };
+}
+
+/** The same-origin pages a page links to: paths, distinct, with no file extension, outside the build's and the API's. */
+export async function linkedPages(page: Page, appOrigin: string): Promise<string[]> {
+  const { links } = await domEvidence(page);
+  const pages = new Set<string>();
+  for (const link of links) {
+    const url = new URL(link);
+    if (url.origin !== appOrigin || url.pathname === new URL(page.url()).pathname) continue;
+    if (/^\/(?:_next|_portfolio|api|media)(?:\/|$)/.test(url.pathname)) continue;
+    if (/\.[a-z0-9]+$/i.test(url.pathname)) continue;
+    pages.add(`${url.pathname}${url.search}`);
+  }
+  return [...pages].sort();
 }

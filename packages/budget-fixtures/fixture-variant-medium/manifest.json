@@ -1,0 +1,21 @@
+{
+  "id": "fixture-variant-medium",
+  "name": "Medium budget fixture",
+  "promise": "Every section in one column, under a shader stage that rests on a still.",
+  "description": "A budget test fixture, registered only in a build with BUDGET_FIXTURES=1, never in a release. Above the sections, a WebGL2 fragment shader draws over a still the server renders, beside an infinite CSS animation, and one enhancement loads once its slot is in view. Its loop stops while the page is hidden or reduced motion is on.",
+  "contract": "2.0",
+  "schemas": { "portfolio": { "min": 3, "max": 3 }, "site": { "min": 2, "max": 2 } },
+  "tokenContract": 1,
+  "compositionFamily": "document",
+  "motionIntent": "kinetic",
+  "performanceTier": "medium",
+  "renderedKinds": [],
+  "unsupportedKinds": [],
+  "contentSlots": [],
+  "routes": { "home": "shared", "work": "shared", "views": [] },
+  "controls": { "version": 1, "items": [], "migrations": [] },
+  "enhancements": [{ "id": "glint", "export": "./enhancements/glint", "requires": [] }],
+  "visitorControl": { "placement": "header" },
+  "textDirection": ["ltr", "rtl"],
+  "provenance": { "provisional": false, "sources": [] }
+}

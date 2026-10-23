@@ -1,35 +1,50 @@
 // Registry generation (#5, Slice 3, item 1): reads @portfolio/web's direct
 // dependencies, checks every variant, content extension, and appearance pack
 // among them, and writes the modules the host imports into the gitignored
-// src/lib/generated/, and each pack's compiled files into the gitignored
-// public/_portfolio/pack/ (#19, Slice 2). It passes the generator #19's pack
-// validator and compiler and the fixture gate (registry-options.ts), so
-// @portfolio/variant-contract imports neither. predev, prebuild, typecheck,
-// test, and check:variants run it, and any error stops them. Installing
-// never runs it, so a broken package can't block `pnpm remove`.
+// src/lib/generated/, and the files the host serves into the gitignored
+// public/_portfolio/: each pack's compiled files in pack/ (#19, Slice 2), and
+// each variant's compiled stylesheet in variant/, with the images it names in
+// asset/ (#6, Slice 2), and each variant's experience segment, the route
+// visitor pages render in, into the gitignored app/(site)/%5Fexperience/
+// (experience-segments.ts). It passes the generator #19's pack validator and
+// compiler, the layer order, and the fixture gate (registry-options.ts), so
+// @portfolio/variant-contract imports none of them. predev, prebuild,
+// typecheck, test, and check:variants run it, and any error stops them.
+// Installing never runs it, so a broken package can't block `pnpm remove`.
 //
-//   tsx scripts/build-registry.ts [--check] [--format text|json]
+//   tsx scripts/build-registry.ts [--check | --modules-only] [--format text|json]
 //
-// --check reports without writing. --format json prints the whole result.
-// A fixture package registers only when its flag is set, such as
-// APPEARANCE_FIXTURES=1 (fixture-gate.ts).
+// --check reports without writing. --modules-only writes the generated
+// modules and the experience segments and leaves public/ alone, as typecheck
+// and test do, so only a build or `next dev` writes what the host serves. --format json prints the whole
+// result. A fixture package registers only when its flag is set, such as
+// APPEARANCE_FIXTURES=1 or BUDGET_FIXTURES=1 (fixture-gate.ts).
 
 import { formatRegistryDiagnostics } from '@portfolio/variant-contract/node';
 import { generateRegistry, plural, registrySummary } from './registry-options';
 
-const USAGE = 'Usage: tsx scripts/build-registry.ts [--check] [--format text|json]\n';
+const USAGE =
+  'Usage: tsx scripts/build-registry.ts [--check | --modules-only] [--format text|json]\n';
 
-function parse(args: readonly string[]): { check: boolean; format: 'text' | 'json' } | null {
+interface Options {
+  readonly check: boolean;
+  readonly modulesOnly: boolean;
+  readonly format: 'text' | 'json';
+}
+
+function parse(args: readonly string[]): Options | null {
   let check = false;
+  let modulesOnly = false;
   let format: 'text' | 'json' = 'text';
   for (let index = 0; index < args.length; index++) {
     const arg = args[index];
     if (arg === '--check') check = true;
+    else if (arg === '--modules-only') modulesOnly = true;
     else if (arg === '--format' && (args[index + 1] === 'text' || args[index + 1] === 'json')) {
       format = args[++index] as 'text' | 'json';
     } else return null;
   }
-  return { check, format };
+  return check && modulesOnly ? null : { check, modulesOnly, format };
 }
 
 async function main(): Promise<number> {
@@ -38,9 +53,13 @@ async function main(): Promise<number> {
     process.stderr.write(USAGE);
     return 2;
   }
-  const { result, files, packs, written } = await generateRegistry(process.env, {
-    write: !options.check,
-  });
+  const { result, files, packs, variants, assets, segments, written } = await generateRegistry(
+    process.env,
+    {
+      write: !options.check,
+      modulesOnly: options.modulesOnly,
+    },
+  );
 
   if (options.format === 'json') {
     const report = {
@@ -63,7 +82,19 @@ async function main(): Promise<number> {
       })),
       fixtures: result.fixtures,
       diagnostics: result.diagnostics,
-      ...(written ? { written: written.modules.written, packFiles: written.packs } : {}),
+      ...(written
+        ? {
+            written: written.modules.written,
+            segments: written.segments,
+            ...(written.served
+              ? {
+                  packFiles: written.served.packs,
+                  variantFiles: written.served.variants,
+                  assetFiles: written.served.assets,
+                }
+              : {}),
+          }
+        : {}),
     };
     process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
     return result.ok ? 0 : 1;
@@ -76,15 +107,27 @@ async function main(): Promise<number> {
     process.stderr.write(`[registry] ${plural(errors, 'error')}, so nothing was generated.\n`);
     return 1;
   }
+  const modules = written
+    ? `Wrote ${written.modules.written.length} of ${files!.size} files in src/lib/generated, ` +
+      `${written.segments.written.length} of ${segments!.size} in the experience segments`
+    : '';
+  const served = written?.served;
+  const stale =
+    (written?.segments.removed.length ?? 0) +
+    (served
+      ? served.packs.removed.length + served.variants.removed.length + served.assets.removed.length
+      : 0);
   process.stdout.write(
     `[registry] ${registrySummary(result)}. ` +
-      (written
-        ? `Wrote ${written.modules.written.length} of ${files!.size} files in src/lib/generated, ` +
-          `and ${written.packs.written.length} of ${packs!.length} in public/_portfolio/pack` +
-          (written.packs.removed.length > 0
-            ? `, removing ${plural(written.packs.removed.length, 'stale file')} there.\n`
-            : '.\n')
-        : 'Checked, and wrote nothing.\n'),
+      (!written
+        ? 'Checked, and wrote nothing.\n'
+        : !served
+          ? `${modules}, and nothing in public/` +
+            (stale > 0 ? `, removing ${plural(stale, 'stale file')}.\n` : '.\n')
+          : `${modules}, and in public/_portfolio ${served.packs.written.length} of ${packs!.length} in pack/, ` +
+            `${served.variants.written.length} of ${variants!.length} in variant/, and ` +
+            `${served.assets.written.length} of ${assets!.length} in asset/` +
+            (stale > 0 ? `, removing ${plural(stale, 'stale file')}.\n` : '.\n')),
   );
   return 0;
 }

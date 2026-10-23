@@ -1,5 +1,7 @@
 import { notFound } from 'next/navigation';
 import { ExperienceDocument } from '~/lib/experience-document';
+import { ClientHostModules } from '~/lib/host-modules-client';
+import { variantLoader } from '~/lib/variant-loaders';
 import {
   environmentAttributes,
   environmentQuery,
@@ -37,6 +39,8 @@ export default servedPage(
     return ExperienceDocument({
       unit: view,
       selection: composition,
+      load: variantLoader(composition.rendered.manifest.id),
+      hostModules: ClientHostModules,
       environment: environmentAttributes(values),
       linkBase: { basePath: `/preview/dev/${variant}/${fixture}`, query: environmentQuery(values) },
       route: { route: 'home' },

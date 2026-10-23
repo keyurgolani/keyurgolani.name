@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { createElement, isValidElement, type ReactElement } from 'react';
 import {
   parsePortfolio,
@@ -13,7 +13,8 @@ import {
 import { buildRenderInput } from '@portfolio/variant-contract';
 // The registry loads the variant packages, which need React's client build,
 // so this test runs without the react-server condition (a .test.tsx file).
-import { loadComposition, REGISTRY } from '~/lib/variants';
+import { variantLoader } from '~/lib/variant-loaders';
+import { REGISTRY } from '~/lib/variants';
 
 // #4 item 16 and #10 item 5: the published view is the only input to the
 // variants, so no hidden section, no record or asset only a hidden section
@@ -154,14 +155,22 @@ function pair(): ParsedPair {
   return { portfolio: portfolio.value, site: site.value };
 }
 
+/** Each workspace package's directory under packages/, where pnpm-workspace.yaml looks. */
+function packageDirs(): URL[] {
+  const packages = new URL('../../../../packages/', import.meta.url);
+  const under = (parent: URL) => readdirSync(parent).map((name) => new URL(`${name}/`, parent));
+  return [...under(packages), ...under(new URL('budget-fixtures/', packages))].filter((dir) =>
+    existsSync(new URL('package.json', dir)),
+  );
+}
+
 /** Every export of each `'use client'` module in the kit and the workspace's variant packages. */
 async function clientComponents(): Promise<Set<unknown>> {
-  const packages = new URL('../../../../packages/', import.meta.url);
   const found = new Set<unknown>();
-  for (const name of readdirSync(packages)) {
-    const manifest = JSON.parse(readFileSync(new URL(`${name}/package.json`, packages), 'utf8'));
-    if (name !== 'kit' && manifest.portfolio?.kind !== 'variant') continue;
-    const src = new URL(`${name}/src/`, packages);
+  for (const dir of packageDirs()) {
+    const manifest = JSON.parse(readFileSync(new URL('package.json', dir), 'utf8'));
+    if (manifest.name !== '@portfolio/kit' && manifest.portfolio?.kind !== 'variant') continue;
+    const src = new URL('src/', dir);
     for (const file of readdirSync(src, { recursive: true, encoding: 'utf8' })) {
       if (!/\.tsx?$/.test(file) || file.includes('.test.')) continue;
       const url = new URL(file, src);
@@ -223,7 +232,7 @@ async function element(id: string, view: PublicView) {
     origin: 'https://rowan.test',
     requestTime: '2026-01-01T00:00:00Z',
   });
-  return createElement(await loadComposition(id), { input });
+  return createElement((await variantLoader(id)()).default, { input });
 }
 
 /** The pair's published view, as the host builds it. */

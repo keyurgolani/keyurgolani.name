@@ -1,0 +1,31 @@
+/*
+ * fixture-variant-light (#6, Slice 2): one column, layout only, every rule
+ * under [data-variant='fixture-variant-light'].
+ */
+
+[data-variant='fixture-variant-light'] {
+  display: block;
+  box-sizing: border-box;
+  max-inline-size: 44rem;
+  margin-inline: auto;
+  padding-block: 1.5rem 4rem;
+  padding-inline: 1.25rem;
+  overflow-wrap: anywhere;
+}
+
+[data-variant='fixture-variant-light'] .fvl-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-block-end: 2rem;
+}
+
+[data-variant='fixture-variant-light'] .fvl-spotlight[aria-pressed='true'] {
+  padding-inline: 1rem;
+}
+
+[data-variant='fixture-variant-light'] .fvl-name {
+  margin-block: 0 2rem;
+}

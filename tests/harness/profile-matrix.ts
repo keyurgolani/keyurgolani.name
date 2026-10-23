@@ -45,7 +45,7 @@ const { accessIn, CAPABILITIES, INDEXABLE, PROFILES } =
   require('../../apps/web/src/server/capabilities.ts') as typeof Capabilities;
 const { fixtureFlags } = require('../../apps/web/scripts/fixture-gate.ts') as typeof FixtureGate;
 const { listOperations } = require('../../apps/web/src/server/operations.ts') as typeof Operations;
-const { listRoutes, RETIRED_PATTERNS, routeAccess } =
+const { listExperienceRoutes, listRoutes, RETIRED_PATTERNS, routeAccess } =
   require('../../apps/web/src/server/routes.ts') as typeof Routes;
 const { PREVIEW_STATUS_DOCUMENT, PREVIEW_STATUS_TYPE } =
   require('../../apps/web/src/preview/status.ts') as typeof PreviewStatus;
@@ -250,6 +250,43 @@ function unbuiltSpellings(): string[] {
     });
 }
 
+/**
+ * The visitor pages `profile` serves at a path that names one (#6, Slice 2):
+ * each renders in its composition's experience segment, which proxy.ts names
+ * and next.config.ts rewrites it to, and exists for GET and HEAD alone.
+ */
+const visitorPages = (profile: Profile) =>
+  listRoutes()
+    .filter(
+      (entry) =>
+        entry.experience && routeAccess(profile, entry) !== 'absent' && !namesNothing(entry),
+    )
+    .map((entry) => concrete(entry.pattern));
+
+/**
+ * Each experience segment's path in every spelling a request may use (#6,
+ * Slice 2), with what a path no route matches answers it the same: as
+ * written, deeper, with a query and with `_rsc`, in another case, with a
+ * fixed segment percent-encoded, %5F among them, with its slashes encoded,
+ * and with an `.rsc` suffix. Only a request proxy.ts marks reaches one, so
+ * each answers every method as its counterpart under /no-such-page does.
+ */
+function experienceSpellings(): (readonly [target: string, unknown: string])[] {
+  return listExperienceRoutes().flatMap(({ pattern }) => {
+    const path = concrete(pattern);
+    return [
+      [path, '/no-such-page'],
+      [`${path}/work/tide-tables`, '/no-such-page/work/tide-tables'],
+      [`${path}?view=all`, '/no-such-page?view=all'],
+      [`${path}?_rsc=probe`, '/no-such-page?_rsc=probe'],
+      [path.toUpperCase(), '/NO-SUCH-PAGE'],
+      ...encodedSpellings(pattern).map((spelling) => [spelling, '/no-such-page'] as const),
+      [path.replace(/(?!^)\//g, '%2F'), '/no-such-page'],
+      [`${path}.rsc`, '/no-such-page.rsc'],
+    ] as const;
+  });
+}
+
 /** What the transport answers a visitor with no session, by the registry and the matrix. */
 function expected(
   profile: Profile,
@@ -410,13 +447,27 @@ function withoutNonce(body: string, nonce: string | undefined): string {
 }
 
 /**
+ * An RSC payload with the id Next makes for each request it renders one for
+ * taken out. It keys the payload's viewport and metadata by it, as `<id>v`
+ * and `<id>m` (getFlightViewportKey and getFlightMetadataKey in Next's
+ * app-render), so two requests' payloads differ there and nowhere else.
+ */
+function withoutFlightRequestId(body: string): string {
+  const id = /"([A-Za-z0-9_-]{21})v"/.exec(body)?.[1];
+  return id && body.includes(`"${id}m"`) ? body.split(id).join('<request>') : body;
+}
+
+/**
  * A response as the checks that compare two paths' answers see it: its
  * status, its headers but the date and the request ID, and its body, with a
- * 404 page's own path taken out of Next's payload.
+ * 404 page's own path taken out of Next's payload, and an RSC payload's
+ * request id.
  */
 async function shape(response: APIResponse, target: string) {
   const text = await response.text();
-  const page = /^text\/html/.test(response.headers()['content-type'] ?? '') && text !== '';
+  const type = response.headers()['content-type'] ?? '';
+  const page = /^text\/html/.test(type) && text !== '';
+  const flight = /^text\/x-component/.test(type);
   return {
     status: response.status(),
     headers: Object.fromEntries(
@@ -424,7 +475,7 @@ async function shape(response: APIResponse, target: string) {
         ([name]) => !['date', 'x-request-id'].includes(name),
       ),
     ),
-    body: page ? withoutOwnPath(text, target) : text,
+    body: page ? withoutOwnPath(text, target) : flight ? withoutFlightRequestId(text) : text,
   };
 }
 
@@ -746,6 +797,100 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
         );
       }
       await expectUnknown(request, profile, spellings);
+    },
+  );
+
+  test(
+    'a visitor page answers GET and HEAD, its RSC payload and a prefetch of it, from its experience segment, and any other method with a 405 (#6, Slice 2)',
+    { annotation: [{ type: 'route', description: 'every visitor page' }, annotation] },
+    async ({ request }) => {
+      const targets = visitorPages(profile);
+      expect(targets, 'the home page at least').toContain('/');
+      for (const target of targets) {
+        for (const method of EVERY_METHOD) {
+          const what = `${method} ${target}`;
+          const response = await request.fetch(target, { method, maxRedirects: 0 });
+          expect(response.headers()['x-request-id'], what).toMatch(UUID);
+          expectProfileHeaders(profile, response, what);
+          if (method === 'GET' || method === 'HEAD') {
+            expect(response.status(), what).toBe(200);
+            expect(response.headers()['content-type'], what).toMatch(/^text\/html/);
+            continue;
+          }
+          // The page exists for GET: no Server Function, no render.
+          expect(response.status(), what).toBe(405);
+          expect(response.headers()['allow'], what).toBe('GET, HEAD');
+          expect(response.headers()['content-type'], what).toMatch(/^text\/plain/);
+          expect(response.headers()['cache-control'], what).toBe('no-store');
+          expect(await response.text(), what).toBe('Method not allowed.');
+        }
+        // Next's router asks for the page's payload, and prefetches it, with
+        // RSC: 1; both render in the same segment.
+        const router: Record<string, string>[] = [
+          { rsc: '1' },
+          { rsc: '1', 'next-router-prefetch': '1' },
+        ];
+        for (const headers of router) {
+          const what = `GET ${target} with ${Object.keys(headers).join(' and ')}`;
+          const response = await request.get(target, { headers, maxRedirects: 0 });
+          expect(response.status(), what).toBe(200);
+          expect(response.headers()['content-type'], what).toMatch(/^text\/x-component/);
+          expectProfileHeaders(profile, response, what);
+        }
+      }
+    },
+  );
+
+  test(
+    "no request reaches an experience segment but one proxy.ts marks: its path, in any spelling and to any method, answers as /no-such-page does, with a trailing slash it gets the same 308, and a client's own mark changes nothing (#6, Slice 2)",
+    {
+      annotation: [
+        ...listExperienceRoutes().map(({ pattern }) => ({ type: 'route', description: pattern })),
+        annotation,
+      ],
+    },
+    async ({ request }) => {
+      const spellings = experienceSpellings();
+      expect(spellings.length, 'a segment for the fallback composition at least').toBeGreaterThan(
+        0,
+      );
+      for (const [target, unknown] of spellings) {
+        for (const method of EVERY_METHOD) {
+          const what = `${method} ${target}`;
+          const options = { method, maxRedirects: 0 };
+          const response = await request.fetch(target, options);
+          const expected = await request.fetch(unknown, options);
+          expect(response.status(), what).toBe(404);
+          expectProfileHeaders(profile, response, what);
+          expect(await shape(response, target), what).toEqual(await shape(expected, unknown));
+        }
+      }
+      for (const { pattern } of listExperienceRoutes()) {
+        const target = `${concrete(pattern)}/`;
+        for (const method of EVERY_METHOD) {
+          const what = `${method} ${target}`;
+          const response = await request.fetch(target, { method, maxRedirects: 0 });
+          const expected = await request.fetch('/no-such-page/', { method, maxRedirects: 0 });
+          expect(response.status(), what).toBe(expected.status());
+          expect(response.status(), what).toBe(308);
+          expect(response.headers()['location'], what).toBe(concrete(pattern));
+          expectProfileHeaders(profile, response, what);
+        }
+      }
+      // A mark of the client's own, naming a segment this build has, goes no
+      // further than proxy.ts: a path no route matches is still the global
+      // 404 page, not a segment's.
+      const mark = { 'x-portfolio-experience': 'fallback' };
+      for (const target of ['/no-such-page', '/no-such-page/work/tide-tables?view=all']) {
+        for (const method of ['GET', 'HEAD'] as const) {
+          const what = `${method} ${target} with a mark of the client's`;
+          const options = { method, maxRedirects: 0 };
+          const marked = await request.fetch(target, { ...options, headers: mark });
+          const plain = await request.fetch(target, options);
+          expect(marked.status(), what).toBe(404);
+          expect(await shape(marked, target), what).toEqual(await shape(plain, target));
+        }
+      }
     },
   );
 
