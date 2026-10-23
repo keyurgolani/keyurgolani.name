@@ -566,6 +566,103 @@ jobs:
           if-no-files-found: ignore
           retention-days: ${{ env.REPORT_RETENTION_DAYS }}
 
+  # The quality cells (#11, Slice 1): the PR set (each composition's
+  # published default appearance, each tier fixture pack on the fallback
+  # composition, each state fixture, and each registered surface) against
+  # the standalone servers of a QUALITY_FIXTURES=1 build of a copy of the
+  # workspace, judged fail-closed by tests/quality/run.ts. The reports are
+  # scrubbed of cookies, Authorization, and CSRF values however the run
+  # ended, the run fails if its canary is left in any, and they upload only
+  # when the scrub step succeeds. Nothing in the checkout is built.
+  quality-pr:
+    name: quality-pr
+    needs: [changes]
+    if: ${{ contains(fromJSON(needs.changes.outputs.jobs), 'quality-pr') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+      options: --user 1001 --ipc=host --init
+    env:
+      # The image this job runs in, so the visual cells know they're in it.
+      QUALITY_CONTAINER: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install
+        id: install
+        uses: ./.github/actions/install
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: pnpm store cache hit
+        if: ${{ steps.install.outputs.store-hit == 'true' }}
+        run: echo "pnpm store restored under this lockfile's hash"
+      - name: pnpm ci:quality-pr
+        run: pnpm ci:quality-pr
+        env:
+          QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary
+          QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets
+      # The reports upload only when this succeeds: it deletes what it can't
+      # read, and fails when it did, or when the canary is still in any.
+      - name: Scrub reports
+        id: scrub
+        if: ${{ always() }}
+        run: node tests/quality/scrub.mjs
+        env:
+          QUALITY_CANARY_FILE: ${{ runner.temp }}/quality-canary
+          QUALITY_SECRETS_FILE: ${{ runner.temp }}/quality-secrets
+      - name: Failure summary
+        if: ${{ always() }}
+        run: node ci/summarize.mjs
+      - name: Upload reports
+        if: ${{ always() && steps.scrub.outcome == 'success' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-quality-pr
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: ${{ env.REPORT_RETENTION_DAYS }}
+
+  # The quality gates' own proof (#11): every gate's known-bad input fails
+  # it and its known-good one passes, the browser cases included, in the
+  # pinned Playwright image. It runs whole whenever the selection picks it:
+  # every complete run, and a draft that changes what its gates read.
+  quality-meta:
+    name: quality-meta
+    needs: [changes]
+    if: ${{ contains(fromJSON(needs.changes.outputs.jobs), 'quality-meta') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+      options: --user 1001 --ipc=host --init
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install
+        id: install
+        uses: ./.github/actions/install
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: pnpm store cache hit
+        if: ${{ steps.install.outputs.store-hit == 'true' }}
+        run: echo "pnpm store restored under this lockfile's hash"
+      - name: pnpm ci:quality-meta
+        run: pnpm ci:quality-meta
+      - name: Failure summary
+        if: ${{ always() }}
+        run: node ci/summarize.mjs
+      - name: Upload reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-quality-meta
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: ${{ env.REPORT_RETENTION_DAYS }}
+
   # The offline docs check (ci/docs-check.mjs): every relative link and
   # anchor in the repository's Markdown resolves, and every `pnpm <script>`
   # it names exists. Pure Node, so no install. The scheduled workflow checks
@@ -662,6 +759,8 @@ jobs:
         check-variants,
         variants,
         external-variant,
+        quality-pr,
+        quality-meta,
         image,
         docs,
       ]
@@ -695,6 +794,8 @@ jobs:
         check-variants,
         variants,
         external-variant,
+        quality-pr,
+        quality-meta,
         image,
         docs,
       ]

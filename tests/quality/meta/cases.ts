@@ -7,8 +7,8 @@
 //
 // The gates so far: the static workflow check, the exceptions validator,
 // check:appearance over the tier fixture packs and the low-contrast scheme,
-// and the fixture gate's leak check. Part B adds the runner's fail-closed
-// cases: append a group of MetaCase entries to META_CASES.
+// the fixture gate's leak check, and the quality runner's fail-closed
+// rules (runner-cases.ts).
 
 import fs from 'node:fs';
 import { spawnSync } from 'node:child_process';
@@ -36,6 +36,7 @@ import {
   KNOWN_BAD_WORKFLOWS,
   KNOWN_GOOD_WORKFLOWS,
 } from '../lib/workflow-fixtures';
+import { RUNNER_CASES } from './runner-cases';
 
 /** What a gate said about one input. */
 export interface MetaOutcome {
@@ -55,6 +56,8 @@ export interface MetaCase {
   readonly expect: 'pass' | 'fail';
   /** For a known-bad case: what every finding must say. */
   readonly reason?: RegExp;
+  /** It launches Chromium, so `pnpm quality:meta --no-browser` leaves it out. */
+  readonly browser?: boolean;
   readonly run: () => MetaOutcome | Promise<MetaOutcome>;
 }
 
@@ -399,10 +402,11 @@ export const FIXTURE_GATE_CASES: readonly MetaCase[] = [
   },
 ];
 
-/** Every case pnpm quality:meta runs. Part B appends the runner's fail-closed cases here. */
+/** Every case pnpm quality:meta runs. */
 export const META_CASES: readonly MetaCase[] = [
   ...WORKFLOW_CASES,
   ...EXCEPTION_CASES,
   ...APPEARANCE_CASES,
   ...FIXTURE_GATE_CASES,
+  ...RUNNER_CASES,
 ];

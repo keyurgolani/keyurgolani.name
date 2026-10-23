@@ -23,7 +23,7 @@
     "lint": "eslint --max-warnings=0 .",
     "typecheck": "pnpm -r typecheck && tsc -p tests --noEmit",
     "test": "pnpm -r test && pnpm test:scripts && pnpm test:quality",
-    "test:scripts": "node --test 'ci/**/*.test.mjs' 'skills/**/*.test.mjs' 'tests/harness/**/*.test.mjs'",
+    "test:scripts": "node --test 'ci/**/*.test.mjs' 'skills/**/*.test.mjs' 'tests/harness/**/*.test.mjs' 'tests/quality/**/*.test.mjs'",
     "test:quality": "tsx --test 'tests/quality/**/*.test.ts'",
     "test:routes": "playwright test --config tests/routes/playwright.config.ts",
     "test:variants": "playwright test --config tests/variants/playwright.config.ts",
@@ -33,6 +33,9 @@
     "test:trace": "node tests/trace/run.mjs",
     "test:trace:baseline": "node tests/trace/baseline.mjs",
     "test:shard": "node ci/shards.mjs run",
+    "quality:pr": "tsx tests/quality/run.ts pr",
+    "quality:full": "tsx tests/quality/run.ts full",
+    "quality:checklist": "tsx tests/quality/checklist.ts",
     "check:skills": "node skills/scripts/sync-checks.mjs",
     "check:registry": "node ci/check-registry.mjs",
     "check:variants": "pnpm --filter @portfolio/web check:variants",
@@ -71,6 +74,8 @@
     "ci:external-variant": "node ci/run.mjs external-variant -- pnpm test:external-variant",
     "ci:docs": "node ci/run.mjs docs -- node ci/docs-check.mjs",
     "ci:links": "node ci/run.mjs links -- node ci/docs-check.mjs --external",
+    "ci:quality-pr": "node ci/run.mjs quality-pr -- pnpm quality:pr",
+    "ci:quality-meta": "node ci/run.mjs quality-meta -- pnpm quality:meta",
     "ci:image": "node ci/run.mjs image -- node ci/image-smoke.mjs",
     "ci:proxy": "node ci/run.mjs proxy -- node ci/proxy-smoke.mjs",
     "ci:security-proxy": "node ci/run.mjs security-proxy -- node ci/test-security-proxy.mjs",
@@ -80,6 +85,7 @@
     "new-variant": "node skills/variant-developer/scripts/new-variant.mjs"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.14.0",
     "@playwright/test": "1.58.2",
     "@types/node": "^22.10.0",
     "ajv": "^8.20.0",
@@ -91,6 +97,7 @@
     "prettier": "3.9.10",
     "tsx": "^4.21.0",
     "typescript": "^5.7.2",
+    "web-vitals": "6.2.3",
     "yaml": "^2.8.4",
     "zod": "3.25.76"
   }
