@@ -33,7 +33,7 @@ function dirs(t: { after(fn: () => void): void }) {
   return { base, root, cache: path.join(base, 'cache') };
 }
 
-const portfolio = (...media: { id: string; source: string }[]) => ({
+const portfolio = (...media: { id: string; source: string; visibility?: string }[]) => ({
   media: media.map((entry) => ({ ...entry, kind: 'image' })),
 });
 
@@ -77,6 +77,35 @@ test('it derives every image into the cache and logs each asset revision with it
   }
   assert.equal(statSync(cache).mode & 0o077, 0);
   assert.ok(readFileSync((await derived.blobs.file(`sha256:${hash}`))!).equals(Buffer.from(cover)));
+});
+
+test('a private asset derives, and the log counts it but never names it or its hash', async (t) => {
+  const { root, cache } = dirs(t);
+  writeFileSync(path.join(root, 'work', 'cover.jpg'), await jpeg({ width: 800, height: 400 }));
+  writeFileSync(path.join(root, 'work', 'scan.png'), await png({ width: 300, height: 300 }));
+  const lines: Record<string, unknown>[] = [];
+  const derived = await deriveStartupMedia({
+    portfolio: portfolio(
+      { id: 'cover', source: 'work/cover.jpg' },
+      { id: 'private-scan', source: 'work/scan.png', visibility: 'private' },
+      { id: 'private-gone', source: 'work/gone.png', visibility: 'private' },
+    ),
+    root: localMediaRoot(root),
+    cacheDir: cache,
+    log: (entry) => lines.push({ ...entry }),
+  });
+  const scan = derived.document.assets.find(({ assetId }) => assetId === 'private-scan');
+  assert.ok(scan, 'the private asset derived');
+  const logged = JSON.stringify(lines);
+  assert.ok(logged.includes('cover'));
+  assert.ok(!logged.includes('private-scan') && !logged.includes('private-gone'));
+  assert.ok(!logged.includes(scan.sha256));
+  assert.ok(
+    lines.some(
+      ({ event, count, unused }) =>
+        event === 'media.private.ingested' && count === 1 && unused === 1,
+    ),
+  );
 });
 
 test('with no fetcher, as under demo, a remote source is never fetched', async (t) => {

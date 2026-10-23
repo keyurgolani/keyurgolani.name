@@ -72,14 +72,26 @@ export interface MediaIngestion {
 }
 
 /** One line for the server log: the asset's id, its hash, and codes, never a path, a URL, or bytes. */
-export interface MediaLogEntry {
-  readonly level: 'info' | 'warn' | 'error';
-  readonly event: 'media.asset.derived' | 'media.source.unused';
-  readonly assetId: string;
-  readonly sha256?: string;
-  readonly reason?: string;
-  readonly code?: string;
-}
+/**
+ * A log line about one public asset, or the count of private ones: a
+ * private asset's id and hash never reach the log.
+ */
+export type MediaLogEntry =
+  | {
+      readonly level: 'info' | 'warn' | 'error';
+      readonly event: 'media.asset.derived' | 'media.source.unused';
+      readonly assetId: string;
+      readonly sha256?: string;
+      readonly reason?: string;
+      readonly code?: string;
+    }
+  | {
+      readonly level: 'info';
+      readonly event: 'media.private.ingested';
+      /** Private assets derived, and private sources that couldn't be used. */
+      readonly count: number;
+      readonly unused: number;
+    };
 
 /**
  * Where ingestion writes blobs: owner's AssetStore, or read-only's and
@@ -106,6 +118,8 @@ export interface MediaIngestionOptions {
 interface Entry {
   readonly id: string;
   readonly source: MediaRecordSource;
+  /** Its id and hash stay out of the log. */
+  readonly private: boolean;
 }
 
 const hexOf = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
@@ -122,10 +136,13 @@ function imageEntries(portfolio: unknown): Entry[] {
     if (typeof id !== 'string' || !isSectionId(id) || seen.has(id)) continue;
     if (typeof source !== 'string') continue;
     seen.add(id);
+    const hidden = item.visibility === 'private';
     if (/^https:/i.test(source)) {
-      if (isHttpsMediaUrl(source)) entries.push({ id, source: { kind: 'remote', url: source } });
+      if (isHttpsMediaUrl(source)) {
+        entries.push({ id, source: { kind: 'remote', url: source }, private: hidden });
+      }
     } else if (isMediaRootPath(source)) {
-      entries.push({ id, source: { kind: 'local', path: source } });
+      entries.push({ id, source: { kind: 'local', path: source }, private: hidden });
     }
   }
   return entries;
@@ -234,13 +251,15 @@ export function mediaIngestion({
     const records: MediaRecord[] = [];
     const findings: MediaFinding[] = [];
     const derived: string[] = [];
+    const hidden = { count: 0, unused: 0 };
     let sharpLoad: SharpLoad | undefined;
 
     for (const entry of imageEntries(portfolio)) {
       const last = before.get(entry.id);
       const keep = (reason: MediaFinding['reason'], code: string, record = last) => {
         findings.push({ assetId: entry.id, reason, code, kept: record !== undefined });
-        log({ level: 'warn', event: 'media.source.unused', assetId: entry.id, reason, code });
+        if (entry.private) hidden.unused += 1;
+        else log({ level: 'warn', event: 'media.source.unused', assetId: entry.id, reason, code });
         if (record) records.push(record);
       };
       // An unchanged remote source that last read fine isn't fetched again.
@@ -277,11 +296,15 @@ export function mediaIngestion({
       try {
         records.push(await derive(entry, bytes, hash, sharpLoad.sharp));
         derived.push(entry.id);
-        log({ level: 'info', event: 'media.asset.derived', assetId: entry.id, sha256: hash });
+        if (entry.private) hidden.count += 1;
+        else log({ level: 'info', event: 'media.asset.derived', assetId: entry.id, sha256: hash });
       } catch (error) {
         if (!(error instanceof MediaSourceError)) throw error;
         keep(error.reason, error.code, last && unavailable(last, error.reason));
       }
+    }
+    if (hidden.count + hidden.unused > 0) {
+      log({ level: 'info', event: 'media.private.ingested', ...hidden });
     }
     return { document: { assets: records }, findings, derived };
   }

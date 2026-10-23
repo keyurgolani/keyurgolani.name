@@ -419,8 +419,9 @@ test('remote sources: fetched only when allowed, through the address checks, and
   assert.equal(fetches, 2);
 });
 
-test('a GPS-tagged source and a private canary reach no rendition and no visitor view', async (t) => {
-  const s = await setup(t);
+test('a GPS-tagged source and a private canary reach no rendition, no visitor view, and no log', async (t) => {
+  const lines: unknown[] = [];
+  const s = await setup(t, { log: (entry) => lines.push(entry) });
   await sources(s);
   const CANARY = 'private-canary-3b9e';
   s.put(
@@ -459,6 +460,15 @@ test('a GPS-tagged source and a private canary reach no rendition and no visitor
   assert.ok(!text.includes(nets.sha256));
   assert.ok(!text.includes(CANARY));
   assert.ok(!text.includes('images/harbor-2.jpg'));
+  // The log counts the private asset, and never names it or its hash.
+  const logged = JSON.stringify(lines);
+  assert.ok(logged.includes('ferry-at-dawn'), 'a public asset is named');
+  assert.ok(!logged.includes('nets-on-the-quay'));
+  assert.ok(!logged.includes(nets.sha256));
+  assert.deepEqual(
+    lines.filter((line) => (line as { event: string }).event === 'media.private.ingested'),
+    [{ level: 'info', event: 'media.private.ingested', count: 1, unused: 0 }],
+  );
 });
 
 test('one ingestion runs at a time', async (t) => {

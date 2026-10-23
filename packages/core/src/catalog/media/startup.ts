@@ -3,7 +3,7 @@ import { constants } from 'node:fs';
 import { lstat, mkdir, open, rename, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import type { MediaDocument } from '@portfolio/schema';
+import { isPlainObject, type MediaDocument } from '@portfolio/schema';
 import type { SharpLoad } from './derive';
 import {
   mediaIngestion,
@@ -158,7 +158,15 @@ export async function deriveStartupMedia({
     previous: null,
     fetchRemote: fetchRemote !== undefined,
   });
+  // A private asset's id and hash stay out of the log: ingestion counted them.
+  const media = isPlainObject(portfolio) ? portfolio.media : undefined;
+  const hidden = new Set(
+    (Array.isArray(media) ? media : [])
+      .filter((item) => isPlainObject(item) && item.visibility === 'private')
+      .map((item) => (item as { id?: unknown }).id),
+  );
   for (const record of document.assets) {
+    if (hidden.has(record.assetId)) continue;
     log({
       level: 'info',
       event: 'media.startup.asset',

@@ -65,6 +65,7 @@ const EXTRA: Readonly<Record<string, readonly string[]>> = {
   'media.startup.asset': MEDIA,
   'media.blob.missing': MEDIA,
   'media.startup.derived': ['count'],
+  'media.private.ingested': ['count', 'unused'],
   'deployment.config': [
     'origin',
     'previewOrigin',
