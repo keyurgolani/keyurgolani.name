@@ -19,6 +19,7 @@ import {
   enhancementFindings,
   inventoryFindings,
   reflowFindings,
+  scriptingMediaFindings,
   transparencyFindings,
 } from '../lib/a11y/conditions';
 import { incompleteContrastFindings } from '../lib/a11y/contrast';
@@ -49,6 +50,8 @@ interface PageOptions extends BrowserContextOptions {
   readonly features?: readonly { readonly name: string; readonly value: string }[];
   /** The media type, as the print row sets it. */
   readonly media?: 'print';
+  /** JavaScript off, through CDP, as run-cell.ts turns it off for the no-JavaScript row. */
+  readonly noScript?: boolean;
 }
 
 /**
@@ -60,7 +63,8 @@ async function onPage(
   check: (page: Page) => Promise<Finding[]>,
   options: PageOptions = {},
 ): Promise<MetaOutcome> {
-  const html = readFileSync(path.join(FIXTURES, file), 'utf8');
+  // A fixture's name, or a page built here.
+  const html = file.startsWith('<') ? file : readFileSync(path.join(FIXTURES, file), 'utf8');
   const server = createServer((request, response) => {
     const found = new URL(request.url ?? '/', 'http://stand-in').pathname === '/';
     response.writeHead(found ? 200 : 404, { 'content-type': 'text/html; charset=utf-8' });
@@ -71,7 +75,7 @@ async function onPage(
   const { chromium } = await import('playwright');
   const browser = await chromium.launch();
   try {
-    const { init, at, features, media, ...context } = options;
+    const { init, at, features, media, noScript, ...context } = options;
     const page = await (
       await browser.newContext({
         viewport: { width: 1440, height: 900 },
@@ -85,6 +89,10 @@ async function onPage(
     if (features) {
       const cdp = await page.context().newCDPSession(page);
       await cdp.send('Emulation.setEmulatedMedia', { media: '', features: [...features] });
+    }
+    if (noScript) {
+      const cdp = await page.context().newCDPSession(page);
+      await cdp.send('Emulation.setScriptExecutionDisabled', { value: true });
     }
     await page.goto(at ?? '/', { waitUntil: 'load' });
     await frames(page);
@@ -112,6 +120,27 @@ function bad(
     reason: new RegExp(`^${gate} (?:${rules}): `),
     browser: true,
     run: () => onPage(file, check, options),
+  };
+}
+
+/** A known-bad case on a page built here, every finding matching `reason`. */
+function builtCase(
+  id: string,
+  gate: string,
+  input: string,
+  html: string,
+  reason: RegExp,
+  check: (page: Page) => Promise<Finding[]>,
+  options?: PageOptions,
+): MetaCase {
+  return {
+    id: `${gate}/${id}`,
+    gate,
+    input,
+    expect: 'fail',
+    reason,
+    browser: true,
+    run: () => onPage(html, check, options),
   };
 }
 
@@ -166,6 +195,35 @@ const contrast = async (page: Page) =>
   incompleteContrastFindings(page, await axeFor(page).analyze());
 
 const REDUCED: BrowserContextOptions = { reducedMotion: 'reduce' };
+
+/** A page of `body`, built here for the cases that need many of one thing. */
+const built = (title: string, style: string, body: string) =>
+  `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${title}</title><style>:focus-visible { outline: 2px solid #000; outline-offset: 2px; } ${style}</style></head><body><main><h1>${title}</h1>${body}</main></body></html>`;
+
+/** More :hover subjects than the check takes, the one that reveals content last in the page. */
+const MANY_HOVERS = built(
+  'Many hover rules',
+  `${Array.from({ length: 45 }, (_, i) => `.h${i}:hover { color: #000; }`).join(' ')} .card .more { display: none; } .card:hover .more { display: block; }`,
+  `${Array.from({ length: 45 }, (_, i) => `<p class="h${i}">Item ${i}</p>`).join('')}<div class="card"><a href="#card">A card</a><p class="more">Only a pointer finds this.</p></div>`,
+);
+
+/** More controls that toggle something than the overlay check takes. */
+const MANY_TRIGGERS = built(
+  'Many toggles',
+  '',
+  Array.from(
+    { length: 21 },
+    (_, i) =>
+      `<button type="button" aria-expanded="false" onclick="this.setAttribute('aria-expanded', String(this.getAttribute('aria-expanded') !== 'true'))">Toggle ${i}</button>`,
+  ).join(''),
+);
+
+/** Forty-five light bands axe can't judge, and a dark one last: no cap stops the resampling before it. */
+const MANY_BANDS = built(
+  'Many bands',
+  'body { font: 16px/1.5 system-ui, sans-serif; background: #fff; } .ok { background: linear-gradient(90deg, #fff, #ddd); color: #111; } .bad { background: linear-gradient(90deg, #fff, #8a8a8a); color: #6a6a6a; }',
+  `${Array.from({ length: 45 }, (_, i) => `<p class="ok">Readable band ${i}.</p>`).join('')}<p class="bad">The last band fades into its text.</p>`,
+);
 const TRANSPARENCY = [
   { name: 'prefers-color-scheme', value: 'light' },
   { name: 'prefers-reduced-transparency', value: 'reduce' },
@@ -180,7 +238,7 @@ function emulationCase(rowId: string, applied: boolean): MetaCase {
   const { context } = row;
   const options: PageOptions = applied
     ? {
-        javaScriptEnabled: context.javaScriptEnabled ?? true,
+        noScript: context.javaScriptEnabled === false,
         media: context.media,
         features: context.features,
         at: context.displayMode ? `/?mode=${context.displayMode}` : '/',
@@ -233,8 +291,16 @@ export const A11Y_CASES: readonly MetaCase[] = [
   bad('no-indicator', 'focus-none.html', 'focus', 'visible', focus),
   bad('faint-indicator', 'focus-faint.html', 'focus', 'contrast', focus),
   bad('thin-indicator', 'focus-thin.html', 'focus', 'perimeter', focus),
+  {
+    ...good('focus', focus),
+    id: 'focus/ring-set-out',
+    input: 'tests/quality/fixtures/a11y/focus-offset.html',
+    run: () => onPage('focus-offset.html', focus),
+  },
   good('focus', focus),
   bad('fixed-footer', 'occlusion.html', 'occlusion', 'obscured', occlusion),
+  bad('pointer-events-footer', 'occlusion-pointer.html', 'occlusion', 'obscured', occlusion),
+  bad('scroll-shown-footer', 'occlusion-scroll.html', 'occlusion', 'obscured', occlusion),
   good('occlusion', occlusion),
   {
     ...bad('no-escape', 'dialog-escape.html', 'keyboard', 'escape', overlays),
@@ -248,14 +314,40 @@ export const A11Y_CASES: readonly MetaCase[] = [
     ...bad('leak', 'dialog-leak.html', 'keyboard', 'containment', overlays),
     id: 'keyboard/dialog-leak',
   },
+  {
+    ...bad('slow', 'dialog-slow.html', 'keyboard', 'escape', overlays),
+    id: 'keyboard/dialog-slow',
+  },
+  builtCase(
+    'too-many-triggers',
+    'runner',
+    'a page with 21 controls that toggle something, past the 20 the check takes',
+    MANY_TRIGGERS,
+    /^runner coverage: 21 on the page, so 1 went unchecked$/,
+    overlays,
+  ),
   { ...good('keyboard', overlays), id: 'keyboard/dialog-good' },
   bad('hover-only', 'hover-only.html', 'hover', 'parity', hoverFindings),
   bad('title-only', 'title-only.html', 'hover', 'title-only', hoverFindings),
+  builtCase(
+    'too-many-hovers',
+    'hover',
+    'a page with 46 :hover subjects, past the 40 the check takes, the one that reveals content last',
+    MANY_HOVERS,
+    /^(?:runner coverage: 46 on the page, so 6 went unchecked|hover parity: .*)$/,
+    hoverFindings,
+  ),
   good('hover', hoverFindings),
   bad('fixed-width', 'reflow-wide.html', 'reflow', 'reflow|zoom', (page) =>
     reflowFindings(page, '/'),
   ),
   bad('clipped', 'reflow-clipped.html', 'reflow', 'reflow|zoom|root-text', (page) =>
+    reflowFindings(page, '/'),
+  ),
+  bad('wider-than-320', 'reflow-narrow.html', 'reflow', 'reflow', (page) =>
+    reflowFindings(page, '/'),
+  ),
+  bad('undeclared-scroller', 'reflow-scroller.html', 'reflow', 'reflow|zoom|root-text', (page) =>
     reflowFindings(page, '/'),
   ),
   good('reflow', (page) => reflowFindings(page, '/')),
@@ -272,7 +364,12 @@ export const A11Y_CASES: readonly MetaCase[] = [
     init: MOTION_SAMPLER,
   }),
   good('motion', motionFindings, { ...REDUCED, init: MOTION_SAMPLER }),
-  bad('boundary-over-os', 'os-wins-bad.html', 'motion', 'os-wins', osWinsFindings, {
+  // Each OS-wins signal alone: the tokens, and the hover transform.
+  bad('tokens-over-os', 'os-wins-tokens.html', 'motion', 'os-wins', osWinsFindings, {
+    ...REDUCED,
+    init: MOTION_SAMPLER,
+  }),
+  bad('hover-over-os', 'os-wins-hover.html', 'motion', 'os-wins', osWinsFindings, {
     ...REDUCED,
     init: MOTION_SAMPLER,
   }),
@@ -307,8 +404,24 @@ export const A11Y_CASES: readonly MetaCase[] = [
     transparencyFindings,
     { features: TRANSPARENCY },
   ),
+  bad(
+    'see-through-gradient',
+    'transparency-gradient.html',
+    'transparency',
+    'opaque',
+    transparencyFindings,
+    { features: TRANSPARENCY },
+  ),
   good('transparency', transparencyFindings, { features: TRANSPARENCY }),
   bad('gradient', 'contrast-gradient.html', 'contrast', 'text|large-text', contrast),
+  builtCase(
+    'past-forty',
+    'contrast',
+    'forty-five bands axe reports incomplete, and a low-contrast one after them',
+    MANY_BANDS,
+    /^contrast text: \d\.\d+:1 against its worst background pixel$/,
+    contrast,
+  ),
   good('contrast', contrast),
   bad('button-name', 'axe-semantics.html', 'axe', 'button-name', axeRule('button-name')),
   bad('target-size', 'axe-semantics.html', 'axe', 'target-size', axeRule('target-size')),
@@ -322,4 +435,21 @@ export const A11Y_CASES: readonly MetaCase[] = [
   emulationCase('print', true),
   emulationCase('no-javascript', false),
   emulationCase('no-javascript', true),
+  {
+    id: 'runner/no-javascript-scripting-media',
+    gate: 'runner',
+    input: 'tests/quality/fixtures/a11y/no-script-media.html, styled by (scripting: none)',
+    expect: 'fail',
+    reason: /^runner media-emulation: a stylesheet styles by @media \(scripting: none\)/,
+    browser: true,
+    run: () => onPage('no-script-media.html', scriptingMediaFindings, { noScript: true }),
+  },
+  {
+    id: 'runner/no-javascript-no-scripting-media',
+    gate: 'runner',
+    input: 'tests/quality/fixtures/a11y/good.html, styled by no scripting query',
+    expect: 'pass',
+    browser: true,
+    run: () => onPage('good.html', scriptingMediaFindings, { noScript: true }),
+  },
 ];

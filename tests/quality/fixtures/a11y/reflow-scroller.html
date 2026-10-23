@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>An undeclared scroll region, known-bad</title>
+    <!-- A box that scrolls its text sideways, with no tab stop and no name, so a keyboard user can't reach what it hides. -->
+    <style>
+      body {
+        margin: 0;
+        font:
+          16px/1.5 system-ui,
+          sans-serif;
+      }
+      .strip {
+        overflow-x: auto;
+        white-space: nowrap;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>A strip that hides its end</h1>
+      <div class="strip">
+        <p>One long line of text that runs far past the edge of a phone's screen, out of reach.</p>
+      </div>
+    </main>
+  </body>
+</html>

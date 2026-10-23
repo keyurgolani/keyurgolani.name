@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A scripting media query, known-bad for the no-JavaScript row</title>
+    <!--
+      The no-JavaScript row turns script on for axe, which flips (scripting: none),
+      so a page that styles by it would be audited as it never renders. The row
+      fails closed on any such query until axe can run with JavaScript off.
+    -->
+    <style>
+      @media (scripting: none) {
+        .note {
+          display: block;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>A page that styles by scripting</h1>
+      <p class="note">Shown without JavaScript.</p>
+    </main>
+  </body>
+</html>

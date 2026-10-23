@@ -167,7 +167,8 @@ test('every gate so far has a known-bad case and a known-good one, and each id i
     'contrast/gradient',
     'axe/color-contrast',
     'motion/spinner',
-    'motion/boundary-over-os',
+    'motion/tokens-over-os',
+    'motion/hover-over-os',
     'motion/kill-switch',
     'reflow/fixed-width',
     'axe/target-size',
@@ -177,6 +178,18 @@ test('every gate so far has a known-bad case and a known-good one, and each id i
     'runner/ignored-reduced-transparency-ignored',
     'runner/ignored-print-ignored',
     'runner/ignored-no-javascript-ignored',
+    // The 11-2 review round: each fix's known-bad, or the known-good it stopped failing.
+    'focus/ring-set-out',
+    'occlusion/pointer-events-footer',
+    'occlusion/scroll-shown-footer',
+    'keyboard/dialog-slow',
+    'runner/too-many-triggers',
+    'hover/too-many-hovers',
+    'reflow/wider-than-320',
+    'reflow/undeclared-scroller',
+    'transparency/see-through-gradient',
+    'contrast/past-forty',
+    'runner/no-javascript-scripting-media',
   ]) {
     assert.ok(ids.includes(id), id);
   }

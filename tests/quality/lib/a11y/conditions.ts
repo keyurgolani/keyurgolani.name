@@ -23,6 +23,7 @@
 import type { CDPSession, Page, Request } from '@playwright/test';
 import { loadThresholds, viewportSize } from '../../../../quality/thresholds';
 import { frames, type Finding } from './interaction';
+import { decodePng } from '../pixels';
 import { inPage } from './probe';
 
 const thresholds = loadThresholds();
@@ -443,15 +444,158 @@ export async function reflowFindings(
   return findings;
 }
 
-/** The reduced-transparency check on the page as it stands. */
+/** The two fills put under a surface: a pixel inside it that changes between them is see-through. */
+const UNDER = ['rgb(255, 0, 255)', 'rgb(0, 255, 0)'];
+
+/**
+ * Whether anything shows through the element `path` names: every ancestor
+ * is filled with one color, then another, and a pixel inside the element's
+ * corner radius and border that changes is what's behind coming through.
+ */
+async function seeThrough(page: Page, path: string, inset: number): Promise<boolean> {
+  await page
+    .locator(path)
+    .first()
+    .scrollIntoViewIfNeeded({ timeout: 2_000 })
+    .catch(() => undefined);
+  const box = await inPage<{ x: number; y: number; width: number; height: number } | null>(page, {
+    kind: 'box',
+    path,
+  });
+  const viewport = page.viewportSize()!;
+  if (!box) return false;
+  const x = Math.max(0, Math.ceil(box.x + inset));
+  const y = Math.max(0, Math.ceil(box.y + inset));
+  const width = Math.min(viewport.width, Math.floor(box.x + box.width - inset)) - x;
+  const height = Math.min(viewport.height, Math.floor(box.y + box.height - inset)) - y;
+  if (width < 2 || height < 2) return false;
+  const shots: Uint8Array[] = [];
+  for (const fill of UNDER) {
+    await page.evaluate(
+      ({ at, color }) => {
+        const el = document.querySelector(at);
+        for (let up = el?.parentElement; up; up = up.parentElement)
+          up.setAttribute('data-quality-under', '');
+        let style = document.querySelector<HTMLStyleElement>('style[data-quality-under]');
+        if (!style) {
+          style = document.createElement('style');
+          style.dataset.qualityUnder = '';
+          document.head.append(style);
+        }
+        style.textContent = `[data-quality-under] { background: ${color} !important; }`;
+      },
+      { at: path, color: fill },
+    );
+    shots.push(
+      await page.screenshot({
+        clip: { x, y, width, height },
+        animations: 'disabled',
+        caret: 'hide',
+      }),
+    );
+  }
+  await page.evaluate(() => {
+    document.querySelector('style[data-quality-under]')?.remove();
+    for (const el of document.querySelectorAll('[data-quality-under]'))
+      el.removeAttribute('data-quality-under');
+  });
+  const [a, b] = shots.map(decodePng);
+  return a!.data.some((value, i) => value !== b!.data[i]);
+}
+
+interface Transparency {
+  readonly filters: readonly { path: string; detail: string }[];
+  readonly surfaces: readonly { path: string; inset: number }[];
+}
+
+/** The page's filters and see-through surfaces, as they stand, each path once. */
+async function transparencyNow(page: Page, seen: Set<string>): Promise<Finding[]> {
+  const findings: Finding[] = [];
+  const { filters, surfaces } = await inPage<Transparency>(page, { kind: 'transparency' });
+  const expected = 'no backdrop-filter, and Surface, Dialog, and Navigation opaque';
+  for (const filter of filters.filter((each) => !seen.has(each.path))) {
+    seen.add(filter.path);
+    findings.push({
+      gate: 'transparency',
+      rule: 'backdrop-filter',
+      path: filter.path,
+      expected,
+      actual: filter.detail,
+    });
+  }
+  for (const surface of surfaces.filter((each) => !seen.has(each.path))) {
+    seen.add(surface.path);
+    if (await seeThrough(page, surface.path, surface.inset)) {
+      findings.push({
+        gate: 'transparency',
+        rule: 'opaque',
+        path: surface.path,
+        expected,
+        actual: 'what is under it shows through',
+      });
+    }
+  }
+  return findings;
+}
+
+/**
+ * The reduced-transparency check: on the page as it stands, then with each
+ * control that opens something opened from the keyboard, a dialog's
+ * ::backdrop included, and closed again.
+ */
 export async function transparencyFindings(page: Page): Promise<Finding[]> {
-  return (
-    await inPage<{ rule: string; path: string; detail: string }[]>(page, { kind: 'transparency' })
-  ).map((problem) => ({
-    gate: 'transparency',
-    rule: problem.rule,
-    path: problem.path,
-    expected: 'no backdrop-filter, and Surface, Dialog, and Navigation opaque',
-    actual: problem.detail,
+  const seen = new Set<string>();
+  const findings = await transparencyNow(page, seen);
+  for (const trigger of await inPage<{ path: string }[]>(page, { kind: 'triggers' })) {
+    await page.evaluate(
+      (at) => (document.querySelector(at) as HTMLElement | null)?.focus(),
+      trigger.path,
+    );
+    await page.keyboard.press('Enter');
+    await frames(page, 150);
+    if ((await inPage<{ path: string }[]>(page, { kind: 'overlays' })).length > 0) {
+      findings.push(...(await transparencyNow(page, seen)));
+      await page.keyboard.press('Escape');
+      await frames(page, 100);
+    } else if (
+      (await inPage<string | null>(page, { kind: 'expanded', path: trigger.path })) === 'true'
+    ) {
+      await page.keyboard.press('Enter');
+      await frames(page);
+    }
+  }
+  return findings;
+}
+
+/**
+ * The no-JavaScript row's fail-closed rule: axe needs timers, so the row
+ * turns script on for axe alone, which flips (scripting: none). A page
+ * styled by a scripting query would be audited as it never renders, so any
+ * such query fails the row until axe can run with JavaScript off.
+ */
+export async function scriptingMediaFindings(page: Page): Promise<Finding[]> {
+  const queries = await page.evaluate(() => {
+    const found: string[] = [];
+    const walk = (rules: CSSRuleList) => {
+      for (const rule of rules) {
+        const condition = (rule as CSSConditionRule).conditionText ?? '';
+        if (/\bscripting\b/.test(condition)) found.push(condition);
+        if ((rule as CSSGroupingRule).cssRules) walk((rule as CSSGroupingRule).cssRules);
+      }
+    };
+    for (const sheet of document.styleSheets) {
+      try {
+        walk(sheet.cssRules);
+      } catch {
+        // The policy loads no sheet from another origin.
+      }
+    }
+    return found;
+  });
+  return queries.map((query) => ({
+    gate: 'runner',
+    rule: 'media-emulation',
+    expected: 'no scripting media query, while axe needs JavaScript on to run',
+    actual: `a stylesheet styles by @media ${query}, which axe's pass would flip`,
   }));
 }

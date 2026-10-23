@@ -48,6 +48,14 @@
       .card:focus-within .more {
         display: block;
       }
+      .scroller {
+        margin: 0;
+        overflow-x: auto;
+      }
+      .scroller table {
+        min-width: 30rem;
+        white-space: nowrap;
+      }
       .band {
         background: linear-gradient(90deg, #fff, #ddd);
         padding: 0.5rem;
@@ -95,6 +103,23 @@
           A long paragraph that wraps at any width, so nothing scrolls sideways at 320 pixels or at
           twice the text size.
         </p>
+        <figure class="scroller" tabindex="0">
+          <figcaption>Figures by year, in a region a keyboard scrolls</figcaption>
+          <table>
+            <tr>
+              <th scope="col">Year</th>
+              <th scope="col">Visitors</th>
+              <th scope="col">Downloads</th>
+              <th scope="col">Revenue</th>
+            </tr>
+            <tr>
+              <td>2026</td>
+              <td>1,234,567</td>
+              <td>8,901,234</td>
+              <td>12,048.72</td>
+            </tr>
+          </table>
+        </figure>
         <button type="button" aria-haspopup="dialog" id="open">Open the dialog</button>
         <dialog id="dialog" aria-labelledby="dialog-title">
           <h2 id="dialog-title">A dialog</h2>

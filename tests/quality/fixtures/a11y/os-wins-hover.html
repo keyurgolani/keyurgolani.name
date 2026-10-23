@@ -2,10 +2,11 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>The boundary over the OS, known-bad</title>
+    <title>A hover lift past the tokens, known-bad</title>
     <!--
-      Reduced motion keyed only on the boundary's attribute: a preview or a
-      site that says full wins over the visitor's OS setting.
+      The tokens follow the OS, but a link lifts on hover with a literal
+      transform of its own, so under OS reduce it still moves. The hover
+      transform is the only signal.
     -->
     <style>
       [data-appearance-boundary] {
@@ -13,24 +14,26 @@
         --ui-state-active-transform: scale(0.98);
         --ui-motion-emphasis: pulse;
       }
-      [data-appearance-boundary][data-motion='reduced'] {
-        --ui-state-hover-transform: none;
-        --ui-state-active-transform: none;
-        --ui-motion-emphasis: none;
+      @media (prefers-reduced-motion: reduce) {
+        [data-appearance-boundary] {
+          --ui-state-hover-transform: none;
+          --ui-state-active-transform: none;
+          --ui-motion-emphasis: none;
+        }
       }
       [data-appearance-boundary] a {
         display: inline-block;
         transition: transform 150ms;
       }
       [data-appearance-boundary] a:hover {
-        transform: var(--ui-state-hover-transform);
+        transform: translateY(-2px);
       }
     </style>
   </head>
   <body>
     <div data-appearance-boundary="document" data-motion="full" data-enhancement="on">
       <main>
-        <h1>Motion the OS can't stop</h1>
+        <h1>A link that lifts anyway</h1>
         <p><a href="#one">A link that lifts on hover</a></p>
       </main>
     </div>

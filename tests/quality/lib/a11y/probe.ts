@@ -28,6 +28,8 @@ export interface Active {
   /** What the point at its center (clamped to the viewport) hits: itself, a descendant, or its label. */
   readonly hitsItself: boolean;
   readonly hit: string;
+  /** How far its focus indicator reaches past its box, in CSS px. */
+  readonly reach: number;
 }
 
 export type ProbeRequest =
@@ -128,6 +130,59 @@ function probe(request: ProbeRequest): unknown {
     }
     return true;
   };
+  // Whether `el` puts anything on screen of its own: a fill, an image, a
+  // replaced element, or text. A transparent wrapper above a control
+  // covers nothing.
+  // A computed color's alpha: rgba(), or the slash form of color() and oklch().
+  const alphaOf = (color: string): number => {
+    if (color === 'transparent') return 0;
+    const match = /[,/]\s*([\d.]+)(%?)\)$/.exec(color);
+    if (!match || !/^rgba|\//.test(color)) return 1;
+    return match[2] ? Number(match[1]) / 100 : Number(match[1]);
+  };
+  const paints = (el: Element): boolean => {
+    const s = getComputedStyle(el);
+    return (
+      alphaOf(s.backgroundColor) > 0 ||
+      s.backgroundImage !== 'none' ||
+      el.matches('img, svg, video, canvas, iframe, input, select, textarea, button') ||
+      [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent!.trim())
+    );
+  };
+  // How far a focus indicator reaches past the box: the outline's width and
+  // offset, or the furthest outer box-shadow.
+  const ringReach = (el: Element): number => {
+    const s = getComputedStyle(el);
+    const outline =
+      s.outlineStyle === 'none'
+        ? 0
+        : (Number.parseFloat(s.outlineWidth) || 0) +
+          Math.max(0, Number.parseFloat(s.outlineOffset) || 0);
+    let shadow = 0;
+    for (const part of s.boxShadow === 'none' ? [] : s.boxShadow.split(/,(?![^(]*\))/)) {
+      if (/\binset\b/.test(part)) continue;
+      const [x = 0, y = 0, blur = 0, spread = 0] = (part.match(/-?[\d.]+px/g) ?? []).map(
+        Number.parseFloat,
+      );
+      shadow = Math.max(shadow, Math.max(Math.abs(x), Math.abs(y)) + blur + spread);
+    }
+    return Math.max(outline, shadow);
+  };
+  // A declared scroll region: it scrolls, a keyboard can reach it, and an
+  // author gave it a name (aria-label, aria-labelledby, or a figure's own
+  // figcaption, the name HTML gives a figure). Text inside doesn't count.
+  const declaredScroller = (el: Element): boolean => {
+    const s = getComputedStyle(el);
+    return (
+      /auto|scroll/.test(`${s.overflowX} ${s.overflowY}`) &&
+      (el as HTMLElement).tabIndex >= 0 &&
+      Boolean(
+        el.getAttribute('aria-label')?.trim() ||
+        el.getAttribute('aria-labelledby')?.trim() ||
+        (el.localName === 'figure' && el.querySelector(':scope > figcaption')),
+      )
+    );
+  };
   const FOCUSABLE =
     'a[href], area[href], button, input:not([type=hidden]), select, textarea, summary, iframe, audio[controls], video[controls], [contenteditable]:not([contenteditable=false]), [tabindex]';
   const OVERLAY =
@@ -145,8 +200,23 @@ function probe(request: ProbeRequest): unknown {
       const [vw, vh] = [innerWidth, innerHeight];
       const cx = Math.min(Math.max(box.x + box.width / 2, 0), vw - 1);
       const cy = Math.min(Math.max(box.y + box.height / 2, 0), vh - 1);
-      const hit = doc.elementFromPoint(cx, cy);
-      const label = hit?.closest('label') as HTMLLabelElement | null;
+      // The stack at the center, from the top: the first element that paints
+      // before the control (or its label) covers it. The caller forces
+      // pointer-events on, so a pointer-events: none layer is in the stack.
+      let hit: Element | null = null;
+      let covered = false;
+      for (const top of doc.elementsFromPoint(cx, cy)) {
+        const label = top.closest('label') as HTMLLabelElement | null;
+        if (top === el || el.contains(top) || label?.control === el || top.contains(el)) {
+          hit = top;
+          break;
+        }
+        if (paints(top)) {
+          hit = top;
+          covered = true;
+          break;
+        }
+      }
       return {
         none: false,
         path: cssPath(el),
@@ -154,8 +224,9 @@ function probe(request: ProbeRequest): unknown {
         box,
         shown: shown(el),
         inView: box.x + box.width > 0 && box.y + box.height > 0 && box.x < vw && box.y < vh,
-        hitsItself: Boolean(hit && (hit === el || el.contains(hit) || label?.control === el)),
+        hitsItself: !covered,
         hit: hit ? cssPath(hit) : '',
+        reach: ringReach(el),
       } satisfies Active;
     }
     case 'contains': {
@@ -195,7 +266,10 @@ function probe(request: ProbeRequest): unknown {
         )
         .map(cssPath);
     case 'hover-targets': {
+      // Revealing subjects first: a rule with a combinator after :hover shows
+      // or styles something else, which is what parity is about.
       const selectors = new Set<string>();
+      const revealing = new Set<string>();
       const walk = (rules: CSSRuleList) => {
         for (const rule of rules) {
           if ('cssRules' in rule && (rule as CSSGroupingRule).cssRules)
@@ -209,7 +283,7 @@ function probe(request: ProbeRequest): unknown {
             const subject = (end < 0 ? part : part.slice(0, at + end))
               .replace(/:hover/g, '')
               .trim();
-            if (subject) selectors.add(subject);
+            if (subject) (end < 0 ? selectors : revealing).add(subject);
           }
         }
       };
@@ -221,14 +295,14 @@ function probe(request: ProbeRequest): unknown {
         }
       }
       const targets = new Set<Element>();
-      for (const selector of selectors) {
+      for (const selector of [...revealing, ...selectors]) {
         try {
           for (const el of doc.querySelectorAll(selector)) if (shown(el)) targets.add(el);
         } catch {
           // A selector the engine keeps but querySelectorAll refuses, such as a pseudo-element.
         }
       }
-      return [...targets].slice(0, request.limit).map(cssPath);
+      return { paths: [...targets].slice(0, request.limit).map(cssPath), total: targets.size };
     }
     case 'title-only':
       return [...doc.querySelectorAll('[title]')]
@@ -307,16 +381,23 @@ function probe(request: ProbeRequest): unknown {
             [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent!.trim())) &&
           shown(el),
       );
-      for (const el of leaves.slice(0, 3000)) {
-        const r = el.getBoundingClientRect();
+      for (const el of leaves) {
+        // Inside a declared scroll region a leaf may sit past the viewport:
+        // the region scrolls it, and the region itself is judged instead.
+        let region: Element | null = null;
+        for (let up = el.parentElement; up && up !== doc.body; up = up.parentElement) {
+          if (declaredScroller(up)) region = up;
+        }
+        const r = (region ?? el).getBoundingClientRect();
         if (r.right > width + 1 || r.left < -1) {
           problems.push({
             rule: 'outside',
-            path: cssPath(el),
+            path: cssPath(region ?? el),
             detail: `${Math.round(r.left)}px to ${Math.round(r.right)}px, in a ${width}px viewport`,
           });
           continue;
         }
+        if (region) continue;
         const style = getComputedStyle(el);
         if (
           /hidden|clip/.test(`${style.overflowX} ${style.overflowY}`) &&
@@ -334,14 +415,6 @@ function probe(request: ProbeRequest): unknown {
           const s = getComputedStyle(up);
           const overflow = `${s.overflowX} ${s.overflowY}`;
           if (!/hidden|clip|auto|scroll/.test(overflow)) continue;
-          // A declared scroll region: it scrolls, a keyboard can reach it, and it has a name.
-          if (
-            /auto|scroll/.test(overflow) &&
-            ((up as HTMLElement).tabIndex >= 0 || up.querySelector(FOCUSABLE)) &&
-            nameOf(up)
-          )
-            break;
-          if (/auto|scroll/.test(overflow)) continue;
           const b = up.getBoundingClientRect();
           if (
             r.left < b.left - 1 ||
@@ -352,7 +425,9 @@ function probe(request: ProbeRequest): unknown {
             problems.push({
               rule: 'clipped',
               path: cssPath(el),
-              detail: `${cssPath(up)} clips it, with overflow ${overflow}`,
+              detail: /auto|scroll/.test(overflow)
+                ? `${cssPath(up)} scrolls it out of view, and no keyboard can reach a named region there`
+                : `${cssPath(up)} clips it, with overflow ${overflow}`,
             });
           }
           break;
@@ -361,45 +436,50 @@ function probe(request: ProbeRequest): unknown {
       return problems;
     }
     case 'transparency': {
-      const problems: { rule: string; path: string; detail: string }[] = [];
+      // What a backdrop filter blurs, on any element or an open dialog's
+      // ::backdrop, and the boxes of #19's Surface, Dialog, and Navigation,
+      // inside their corner radius and border, which the caller tests for
+      // see-through pixels by changing what's under them.
+      const filters: { path: string; detail: string }[] = [];
+      const filterOf = (style: CSSStyleDeclaration) =>
+        style.backdropFilter || style.getPropertyValue('-webkit-backdrop-filter');
+      const blurs = (filter: string) =>
+        Boolean(filter) && filter !== 'none' && !/^(?:blur\(0(?:px)?\)\s*)+$/.test(filter);
       for (const el of doc.querySelectorAll('*')) {
-        const style = getComputedStyle(el);
-        const filter = style.backdropFilter || style.getPropertyValue('-webkit-backdrop-filter');
-        // blur(0px), what reduced transparency sets the blur token to, filters nothing.
-        if (
-          filter &&
-          filter !== 'none' &&
-          !/^(?:blur\(0(?:px)?\)\s*)+$/.test(filter) &&
-          shown(el)
-        ) {
-          problems.push({
-            rule: 'backdrop-filter',
-            path: cssPath(el),
+        const filter = filterOf(getComputedStyle(el));
+        if (blurs(filter) && shown(el))
+          filters.push({ path: cssPath(el), detail: `backdrop-filter: ${filter}` });
+      }
+      for (const dialog of doc.querySelectorAll('dialog')) {
+        if (!dialog.matches(':modal')) continue;
+        const filter = filterOf(getComputedStyle(dialog, '::backdrop'));
+        if (blurs(filter))
+          filters.push({
+            path: `${cssPath(dialog)}::backdrop`,
             detail: `backdrop-filter: ${filter}`,
           });
-        }
-        if (
-          !el.matches(
-            '[data-ui-slot=surface], [data-ui-slot=dialog], [data-ui-slot=navigation], dialog, [role=dialog]',
-          )
-        )
-          continue;
-        const alpha = /rgba?\([^)]*[,/]\s*([\d.]+%?)\s*\)/.exec(style.backgroundColor)?.[1];
-        const value =
-          alpha === undefined
-            ? 1
-            : alpha.endsWith('%')
-              ? Number.parseFloat(alpha) / 100
-              : Number(alpha);
-        if (value > 0 && value < 1 && shown(el)) {
-          problems.push({
-            rule: 'opaque',
-            path: cssPath(el),
-            detail: `background-color ${style.backgroundColor} lets what's behind it through`,
-          });
-        }
       }
-      return problems;
+      const surfaces = [
+        ...doc.querySelectorAll(
+          '[data-ui-slot=surface], [data-ui-slot=dialog], [data-ui-slot=navigation], dialog[open], [role=dialog]',
+        ),
+      ]
+        // Only a part with a fill of its own: one with none isn't a material, translucent or not.
+        .filter((el) => {
+          const s = getComputedStyle(el);
+          return shown(el) && (s.backgroundImage !== 'none' || alphaOf(s.backgroundColor) > 0);
+        })
+        .map((el) => {
+          const s = getComputedStyle(el);
+          const radius = ['top-left', 'top-right', 'bottom-left', 'bottom-right'].map(
+            (corner) => Number.parseFloat(s.getPropertyValue(`border-${corner}-radius`)) || 0,
+          );
+          const border = ['top', 'right', 'bottom', 'left'].map(
+            (side) => Number.parseFloat(s.getPropertyValue(`border-${side}-width`)) || 0,
+          );
+          return { path: cssPath(el), inset: Math.max(...radius) + Math.max(...border) };
+        });
+      return { filters, surfaces };
     }
     case 'box': {
       const el = find(request.path);

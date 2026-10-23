@@ -45,6 +45,7 @@ import { readVitals } from './vitals';
 import {
   enhancementFindings,
   PRINT_IGNORE,
+  scriptingMediaFindings,
   inventoryFindings,
   reflowFindings,
   transparencyFindings,
@@ -213,12 +214,15 @@ async function suites(run: SuiteRun): Promise<Finding[]> {
 async function audit(page: Page, row: PreferenceRow) {
   const forced = row.context.forcedColors === 'active';
   const cdp = scriptless.get(page);
+  // Read before script turns on: a query axe's pass would flip fails the row.
+  const scripting = cdp ? await scriptingMediaFindings(page) : [];
   await cdp?.send('Emulation.setScriptExecutionDisabled', { value: false });
   try {
     const builder = axeFor(page);
     if (forced) builder.disableRules(['color-contrast']);
     const results: AxeResults = await builder.analyze();
-    return { results, contrast: forced ? [] : await incompleteContrastFindings(page, results) };
+    const contrast = forced ? [] : await incompleteContrastFindings(page, results);
+    return { results, contrast: [...scripting, ...contrast] };
   } finally {
     await cdp?.send('Emulation.setScriptExecutionDisabled', { value: true });
   }

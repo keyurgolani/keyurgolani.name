@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Tokens the OS can't reduce, known-bad</title>
+    <!--
+      The motion tokens reduce only on the boundary's attribute, so under OS
+      reduce with data-motion="full" they still say move. Nothing on the page
+      animates, so the tokens are the only signal.
+    -->
+    <style>
+      [data-appearance-boundary] {
+        --ui-state-hover-transform: translateY(-2px);
+        --ui-state-active-transform: scale(0.98);
+        --ui-motion-emphasis: pulse;
+      }
+      [data-appearance-boundary][data-motion='reduced'] {
+        --ui-state-hover-transform: none;
+        --ui-state-active-transform: none;
+        --ui-motion-emphasis: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div data-appearance-boundary="document" data-motion="full" data-enhancement="on">
+      <main>
+        <h1>Tokens the OS can't reach</h1>
+        <p>Nothing here moves.</p>
+      </main>
+    </div>
+  </body>
+</html>

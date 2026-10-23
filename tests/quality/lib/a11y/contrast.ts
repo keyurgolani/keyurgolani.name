@@ -18,9 +18,6 @@ const PX_PER_PT = 4 / 3;
 const HIDE =
   '[data-quality-glyphs], [data-quality-glyphs] * { color: transparent !important; -webkit-text-fill-color: transparent !important; text-shadow: none !important; text-decoration-color: transparent !important; }';
 
-/** At most this many incomplete elements are sampled in a page. */
-const LIMIT = 40;
-
 interface Sample {
   readonly color: string;
   readonly fontSize: number;
@@ -68,7 +65,7 @@ export async function incompleteContrastFindings(
     document.head.append(style);
   }, HIDE);
   try {
-    for (const node of nodes.slice(0, LIMIT)) {
+    for (const node of nodes) {
       const selector = nodeSelector(node);
       const unresolved = (actual: string) =>
         findings.push({

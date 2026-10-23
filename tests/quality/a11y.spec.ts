@@ -20,7 +20,10 @@ import { expect, test } from './fixtures';
 // - The host's focus ring (apps/web/src/app/experience-base.css): on a phone,
 //   where Chromium's own ring is under 3:1, a page's skip link and the 404
 //   page's first link ring in currentColor, and a variant's own focus style,
-//   which is unlayered, wins over it.
+//   which is unlayered, wins over it. An element outside the portfolio's
+//   boundary, as Studio's are, keeps the browser's own ring.
+// - The Extended tier on a 320px phone: its display headline wraps, its
+//   table scrolls inside its figure, and no number breaks across lines.
 
 const PRIMITIVES = { type: 'route', description: '/_fixtures/appearance' };
 const READ_ONLY = { type: 'profile', description: 'read-only' };
@@ -132,6 +135,64 @@ test.describe("the host's focus ring on a phone", () => {
         width: '3px',
         color: 'rgb(1, 2, 3)',
       });
+    },
+  );
+
+  test(
+    "the host's ring stays off an element outside the portfolio's boundary, as Studio's are",
+    { annotation: [{ type: 'route', description: '/' }, READ_ONLY] },
+    async ({ page }) => {
+      await page.goto('/');
+      await page.keyboard.press('Tab');
+      await page.evaluate(() => {
+        const button = document.createElement('button');
+        button.textContent = 'Outside';
+        document.body.append(button);
+        button.focus();
+      });
+      expect(await page.evaluate(() => document.activeElement?.matches(':focus-visible'))).toBe(
+        true,
+      );
+      const ring = await outline(page);
+      expect(`${ring.style} ${ring.width}`).not.toBe('solid 2px');
+    },
+  );
+});
+
+test.describe('the Extended tier on a 320px phone', () => {
+  test.use({ viewport: { width: 320, height: 568 } });
+
+  test(
+    'the display headline wraps, a table still scrolls in its region, and no number breaks',
+    { annotation: [PRIMITIVES, READ_ONLY] },
+    async ({ page }) => {
+      await page.goto(
+        '/_fixtures/appearance?language=fixture-language-extended&scheme=fixture-scheme-extended&type=fixture-typography-extended',
+        { waitUntil: 'load' },
+      );
+      const layout = await page.evaluate(() => {
+        const lines = (el: Element) => {
+          const range = document.createRange();
+          range.selectNodeContents(el);
+          return new Set([...range.getClientRects()].map((rect) => Math.round(rect.top))).size;
+        };
+        const figure = document.querySelector('[data-ui-slot="data-display"]')!;
+        return {
+          scrollWidth: document.scrollingElement!.scrollWidth,
+          tableScrolls: figure.scrollWidth > figure.clientWidth,
+          numbers: [
+            ...document.querySelectorAll(
+              '[data-type-role="numeric"], [data-ui-slot="data-display.cell"][data-state="numeric"]',
+            ),
+          ]
+            .filter((el) => (el.textContent ?? '').trim() !== '')
+            .map((el) => ({ text: el.textContent!.trim(), lines: lines(el) })),
+        };
+      });
+      expect(layout.scrollWidth, 'the page scrolls sideways').toBeLessThanOrEqual(320);
+      expect(layout.tableScrolls, 'the table scrolls inside its figure').toBe(true);
+      expect(layout.numbers.length).toBeGreaterThan(0);
+      expect(layout.numbers.filter((each) => each.lines > 1)).toEqual([]);
     },
   );
 });
