@@ -3,11 +3,12 @@
 // the login API (auth.login with a JSON body and the app's own Origin),
 // retried on 429 after the Retry-After it gives, and shared with the tests
 // as Playwright storage state. The session's cookie and CSRF token are
-// secrets the artifact scrub removes. The first Studio surface arrives with
+// secrets the artifact scrub removes by value: writeStorageState records
+// them in the run's QUALITY_SECRETS_FILE, which run.ts and CI's scrub read. The first Studio surface arrives with
 // #8; until then nothing registers `session`, and this is tested against a
 // stand-in for the login API.
 
-import { chmodSync, writeFileSync } from 'node:fs';
+import { appendFileSync, chmodSync, writeFileSync } from 'node:fs';
 
 /** auth.login, as the sign-in form posts it with JavaScript. */
 export const LOGIN_PATH = '/api/studio/auth.login';
@@ -130,13 +131,37 @@ export async function createAuthSession({
   throw new Error(`auth.login was still rate limited after ${attempts} attempts.`);
 }
 
-/** Writes the session's storage state for the tests, readable by this user alone. */
-export function writeStorageState(file: string, session: Session): void {
+/**
+ * Writes the session's storage state for the tests, readable by this user
+ * alone, and records its secrets for the scrub in `secretsFile`, the run's
+ * QUALITY_SECRETS_FILE.
+ */
+export function writeStorageState(
+  file: string,
+  session: Session,
+  secretsFile: string | undefined = process.env.QUALITY_SECRETS_FILE,
+): void {
   writeFileSync(file, `${JSON.stringify(session.storageState, null, 2)}\n`, { mode: 0o600 });
   chmodSync(file, 0o600);
+  recordSessionSecrets(session, secretsFile);
 }
 
 /** What the artifact scrub must remove for a session: its cookies' values and its CSRF token. */
 export function sessionSecrets(session: Session): string[] {
   return [...session.storageState.cookies.map((cookie) => cookie.value), session.csrfToken];
+}
+
+/**
+ * Adds the session's secrets to `file`, one JSON string a line, as
+ * lib/artifacts.mjs's readSecrets reads them. Throws without a file, so a
+ * session never runs with secrets the scrub doesn't know.
+ */
+export function recordSessionSecrets(session: Session, file: string | undefined): void {
+  if (!file) {
+    throw new Error(
+      "QUALITY_SECRETS_FILE isn't set, so the scrub wouldn't know this session's secrets.",
+    );
+  }
+  const lines = sessionSecrets(session).map((secret) => `${JSON.stringify(secret)}\n`);
+  appendFileSync(file, lines.join(''), { mode: 0o600 });
 }

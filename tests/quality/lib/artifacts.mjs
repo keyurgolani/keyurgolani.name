@@ -1,23 +1,22 @@
 // What the quality runs upload, scrubbed (#11, Slice 1, item 11): every
-// artifact under the reports directory, traces' zip entries included, loses
-// its cookie, Set-Cookie, Authorization, and CSRF values, and every value
-// the run knows is a secret. Each run plants a canary credential (a cookie,
-// an Authorization header, and a CSRF header on every request, and the
-// owner password of every owner server it starts), and the run fails if the
-// canary is in any artifact once the scrub is done. Pure Node: run.mjs
-// scrubs and scans after Playwright, however it ended, before CI uploads.
+// artifact under the reports directory, and everything packed in one (a
+// trace's zip entries, a zip in a zip, a gzip), loses its cookie,
+// Set-Cookie, Authorization, CSRF, and password values by rule, and every
+// value the run knows is a secret, such as a test session's cookies. Each
+// run plants a canary credential: a cookie, an Authorization header, and a
+// CSRF header on every request, and the owner password of every owner
+// server it starts. The scrub never takes the canary out by its value, so
+// it goes only when a rule takes it, and the scan after the scrub fails the
+// run if any is left: a credential in a form no rule knows fails the run.
+// A file the scrub can't read is deleted, and the run fails on that too.
+// Pure Node: run.ts scrubs and scans after Playwright, however it ended,
+// and CI's scrub step does again before it uploads.
 
 import { randomBytes } from 'node:crypto';
-import {
-  createWriteStream,
-  readdirSync,
-  readFileSync,
-  renameSync,
-  statSync,
-  writeFileSync,
-} from 'node:fs';
+import { readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
+import { gunzipSync, gzipSync } from 'node:zlib';
 import { encodings } from '../../harness/canaries.mjs';
 
 // The zip reader and writer Playwright itself writes traces with, from the
@@ -40,45 +39,74 @@ export const canaryPassword = (canary) => `${canary}-owner`;
 
 /** Headers whose values are credentials. */
 const SECRET_HEADERS = 'cookie|set-cookie|authorization|proxy-authorization|x-csrf-token';
+/** JSON fields whose values are credentials: those headers, the app's CSRF token, and a password. */
+const SECRET_FIELDS = `${SECRET_HEADERS}|csrf_?token|password`;
 
-const RULES = [
-  // A trace's header lists: {"name":"cookie","value":"..."}.
-  new RegExp(
-    `("name"\\s*:\\s*"(?:${SECRET_HEADERS})"\\s*,\\s*"value"\\s*:\\s*")((?:[^"\\\\]|\\\\.)*)(")`,
-    'gi',
-  ),
-  // Headers as an object: "authorization":"...".
-  new RegExp(`("(?:${SECRET_HEADERS})"\\s*:\\s*")((?:[^"\\\\]|\\\\.)*)(")`, 'gi'),
-  // The app's own token field: "csrfToken":"...".
-  /("csrf_?token"\s*:\s*")((?:[^"\\]|\\.)*)(")/gi,
-  // Header lines, as a log or an HTTP dump prints them.
-  new RegExp(`^(\\s*(?:${SECRET_HEADERS})\\s*:[ \\t]*)([^\\r\\n]+)()`, 'gim'),
-];
+// A quote at any escape depth: " in JSON, \" inside a JSON string (an RSC
+// payload, or summary.json holding an error), \\\" a level deeper.
+const Q = String.raw`\\*"`;
+// A quoted value, up to the quote that closes it at any depth.
+const VALUE = String.raw`((?:[^"\\]|(?!\\+")\\[\s\S])*)`;
 
-/** Every cookie's value in a trace's cookie lists: "cookies":[{"name":"a","value":"..."}]. */
-const COOKIE_LIST = /("cookies"\s*:\s*\[)([^\]]*)(\])/gi;
-const COOKIE_VALUE = /("value"\s*:\s*")((?:[^"\\]|\\.)*)(")/gi;
+/** Every cookie's value in a cookie list: "cookies":[{"name":"a","value":"..."}], at any depth. */
+const COOKIE_LIST = new RegExp(`(${Q}cookies${Q}\\s*:\\s*\\[)([^\\]]*)(\\])`, 'gi');
+const COOKIE_VALUE = new RegExp(`(${Q}value${Q}\\s*:\\s*${Q})${VALUE}(${Q})`, 'gi');
+
+const replaceValues = (rule) => (text) =>
+  text.replace(rule, (_, start, _value, end) => `${start}${SCRUBBED}${end}`);
 
 /**
- * `text` with every credential value replaced: each of `secrets` in every
- * encoding a response or a trace could hold it, and each value of a header
- * or field that carries one.
+ * The scrub's rules, by name, each a function from text to text. The canary
+ * goes only through these, so a credential in a form no rule knows stays in,
+ * and the scan after the scrub finds it. artifacts.test.mjs plants the
+ * canary in each form and shows the rule that takes it out is needed.
+ */
+export const RULES = Object.freeze({
+  // A header list entry: {"name":"cookie","value":"..."}, as traces keep them.
+  'header-pair': replaceValues(
+    new RegExp(
+      `(${Q}name${Q}\\s*:\\s*${Q}(?:${SECRET_HEADERS})${Q}\\s*,\\s*${Q}value${Q}\\s*:\\s*${Q})${VALUE}(${Q})`,
+      'gi',
+    ),
+  ),
+  // A field, "authorization":"..." or "csrfToken":"...", or \"csrfToken\":\"...\" in an RSC payload.
+  field: replaceValues(
+    new RegExp(`(${Q}(?:${SECRET_FIELDS})${Q}\\s*:\\s*${Q})${VALUE}(${Q})`, 'gi'),
+  ),
+  // A header line: as a log prints one, as a Playwright call log keeps one
+  // in a JSON string ("  cookie: ..."), as a list names one ("- authorization: ..."),
+  // or after an escaped newline in a JSON string (\n  x-csrf-token: ...).
+  'header-line': replaceValues(
+    new RegExp(
+      String.raw`((?:^|\\*"|\\+[nr])[ \t]*(?:-[ \t]*)?(?:${SECRET_HEADERS})[ \t]*:[ \t]*)((?:[^"\\\r\n]|(?!\\+"|\\+[nr])\\[\s\S])+)()`,
+      'gim',
+    ),
+  ),
+  // Each value in a cookie list.
+  'cookie-list': (text) =>
+    text.replace(
+      COOKIE_LIST,
+      (_, start, list, end) => `${start}${replaceValues(COOKIE_VALUE)(list)}${end}`,
+    ),
+});
+
+/**
+ * `text` with every credential value replaced: each of `secrets`, in every
+ * encoding a response or a trace could hold it, and the value of each
+ * header or field a rule names. `secrets` are values the run knows, such as
+ * a test session's cookies. The canary is never one of them.
  *
  * @param {string} text
- * @param {readonly string[]} secrets
+ * @param {readonly string[]} [secrets]
+ * @param {{ skip?: string }} [options] a rule to leave out, for the tests that show each one is needed
  */
-export function scrubText(text, secrets = []) {
+export function scrubText(text, secrets = [], { skip } = {}) {
   let out = text;
   for (const secret of secrets) {
+    if (!secret) continue;
     for (const form of encodings(secret)) out = out.split(form).join(SCRUBBED);
   }
-  for (const rule of RULES)
-    out = out.replace(rule, (_, start, _value, end) => `${start}${SCRUBBED}${end}`);
-  out = out.replace(
-    COOKIE_LIST,
-    (_, start, list, end) =>
-      `${start}${list.replace(COOKIE_VALUE, (__, a, _v, b) => `${a}${SCRUBBED}${b}`)}${end}`,
-  );
+  for (const [name, rule] of Object.entries(RULES)) if (name !== skip) out = rule(out);
   return out;
 }
 
@@ -88,7 +116,32 @@ export function isText(bytes) {
   return Buffer.from(bytes.toString('utf8'), 'utf8').equals(bytes);
 }
 
-const isZip = (bytes) => bytes.length >= 4 && bytes.readUInt32LE(0) === 0x04034b50;
+const starts = (bytes, magic) => magic.every((byte, index) => bytes[index] === byte);
+const isZip = (bytes) =>
+  bytes.length >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4b && [3, 5, 7].includes(bytes[2]);
+const isGzip = (bytes) => starts(bytes, [0x1f, 0x8b]);
+
+/** Packed formats the scrub can't open, by their first bytes. It deletes them. */
+const OPAQUE = [
+  ['7z', [0x37, 0x7a, 0xbc, 0xaf, 0x27, 0x1c]],
+  ['rar', [0x52, 0x61, 0x72, 0x21]],
+  ['bzip2', [0x42, 0x5a, 0x68]],
+  ['xz', [0xfd, 0x37, 0x7a, 0x58, 0x5a, 0x00]],
+  ['zstd', [0x28, 0xb5, 0x2f, 0xfd]],
+];
+
+/** The packed format the scrub can't open that `bytes` is, or null. */
+function opaqueFormat(bytes) {
+  for (const [name, magic] of OPAQUE) if (starts(bytes, magic)) return name;
+  if (bytes.length > 262 && bytes.toString('latin1', 257, 262) === 'ustar') return 'tar';
+  return null;
+}
+
+/** How deep packed artifacts may nest before the scrub gives up on one. */
+const MAX_DEPTH = 4;
+
+/** An artifact the scrub can't read, so it can't clean it. */
+class Unreadable extends Error {}
 
 /** Every file under `dir`, recursively, sorted. */
 export function filesUnder(dir) {
@@ -105,10 +158,10 @@ export function filesUnder(dir) {
     .sort();
 }
 
-/** Every entry of the zip `file`, as { name, bytes, mode, mtime }. */
-export function readZip(file) {
+/** Every entry of the zip in `bytes`, as { name, bytes, mtime }. */
+function unzip(bytes) {
   return new Promise((resolve, reject) => {
-    yauzl.open(file, { lazyEntries: true }, (error, zip) => {
+    yauzl.fromBuffer(bytes, { lazyEntries: true }, (error, zip) => {
       if (error) return reject(error);
       const entries = [];
       zip.on('error', reject);
@@ -135,65 +188,132 @@ export function readZip(file) {
   });
 }
 
-/** Writes `entries` as the zip `file`, through a temporary file beside it. */
-export function writeZip(file, entries) {
+/** Every entry of the zip `file`, as { name, bytes, mtime }. */
+export function readZip(file) {
+  return unzip(readFileSync(file));
+}
+
+/** `entries` as a zip's bytes. */
+export function zipBytes(entries) {
   return new Promise((resolve, reject) => {
-    const temporary = `${file}.${process.pid}.scrub`;
     const zip = new yazl.ZipFile();
     for (const { name, bytes, mtime } of entries) zip.addBuffer(bytes, name, { mtime });
-    const out = createWriteStream(temporary);
-    out.on('error', reject);
-    out.on('close', () => {
-      renameSync(temporary, file);
-      resolve();
-    });
-    zip.outputStream.pipe(out);
+    const chunks = [];
+    zip.outputStream.on('data', (chunk) => chunks.push(chunk));
+    zip.outputStream.on('error', reject);
+    zip.outputStream.on('end', () => resolve(Buffer.concat(chunks)));
     zip.end();
   });
 }
 
+/** Writes `bytes` to `file` through a temporary file beside it. */
+function replaceFile(file, bytes) {
+  const temporary = `${file}.${process.pid}.scrub`;
+  writeFileSync(temporary, bytes);
+  renameSync(temporary, file);
+}
+
+/** Writes `entries` as the zip `file`. */
+export async function writeZip(file, entries) {
+  replaceFile(file, await zipBytes(entries));
+}
+
 /**
- * Scrubs every artifact under `dir` in place: text files, and each text
- * entry of a zip, such as a trace's network log and response bodies.
- * Returns the files it changed.
+ * `bytes` scrubbed, whatever it packs: text, a zip's entries, a gzip's
+ * contents, each packing more in turn. Throws Unreadable for a packed
+ * artifact it can't open, so the caller deletes the whole file.
+ *
+ * @returns {Promise<Buffer | null>} the scrubbed bytes, or null when nothing changed
+ */
+async function scrubBytes(bytes, secrets, depth = 0) {
+  if (depth > MAX_DEPTH) throw new Unreadable(`it's packed more than ${MAX_DEPTH} deep`);
+  if (isZip(bytes)) {
+    let entries;
+    try {
+      entries = await unzip(bytes);
+    } catch (error) {
+      throw new Unreadable(`a zip the scrub can't read: ${error.message}`);
+    }
+    let touched = false;
+    const scrubbed = [];
+    for (const entry of entries) {
+      const clean = await scrubBytes(entry.bytes, secrets, depth + 1);
+      if (clean) touched = true;
+      scrubbed.push(clean ? { ...entry, bytes: clean } : entry);
+    }
+    return touched ? zipBytes(scrubbed) : null;
+  }
+  if (isGzip(bytes)) {
+    let inner;
+    try {
+      inner = gunzipSync(bytes);
+    } catch (error) {
+      throw new Unreadable(`a gzip the scrub can't read: ${error.message}`);
+    }
+    const clean = await scrubBytes(inner, secrets, depth + 1);
+    return clean ? gzipSync(clean) : null;
+  }
+  const opaque = opaqueFormat(bytes);
+  if (opaque) throw new Unreadable(`a ${opaque} archive, which the scrub can't open`);
+  if (!isText(bytes)) return null;
+  const text = bytes.toString('utf8');
+  const clean = scrubText(text, secrets);
+  return clean === text ? null : Buffer.from(clean, 'utf8');
+}
+
+/**
+ * Scrubs every artifact under `dir` in place: text files, and every text
+ * file packed in a zip or a gzip, nested or not, such as a trace's network
+ * log and response bodies. It never stops on one file. A file it can't
+ * read, or a packed artifact it can't open, is deleted and listed in
+ * `removed`, and the caller fails the run on any.
  *
  * @param {string} dir
- * @param {readonly string[]} secrets
+ * @param {readonly string[]} [secrets]
+ * @returns {Promise<{ changed: string[], removed: { file: string, reason: string }[] }>}
  */
 export async function scrubArtifacts(dir, secrets = []) {
   const changed = [];
+  const removed = [];
   for (const file of filesUnder(dir)) {
-    const bytes = readFileSync(file);
-    if (isZip(bytes)) {
-      const entries = await readZip(file);
-      let touched = false;
-      const scrubbed = entries.map((entry) => {
-        if (!isText(entry.bytes)) return entry;
-        const text = entry.bytes.toString('utf8');
-        const clean = scrubText(text, secrets);
-        if (clean === text) return entry;
-        touched = true;
-        return { ...entry, bytes: Buffer.from(clean, 'utf8') };
-      });
-      if (touched) {
-        await writeZip(file, scrubbed);
+    try {
+      const clean = await scrubBytes(readFileSync(file), secrets);
+      if (clean) {
+        replaceFile(file, clean);
         changed.push(file);
       }
-    } else if (isText(bytes)) {
-      const text = bytes.toString('utf8');
-      const clean = scrubText(text, secrets);
-      if (clean !== text) {
-        writeFileSync(file, clean);
-        changed.push(file);
-      }
+    } catch (error) {
+      rmSync(file, { force: true });
+      removed.push({ file, reason: error instanceof Unreadable ? error.message : String(error) });
     }
   }
-  return changed;
+  return { changed, removed };
+}
+
+/** Each place in `bytes`, or packed in it, a canary form is: [{ entry?, canary }], a nested entry as a/b. */
+async function findIn(bytes, forms, depth = 0, entry = undefined) {
+  const hits = [];
+  const found = forms.find(({ form }) => bytes.includes(form));
+  if (found) hits.push({ entry, canary: found.label });
+  if (depth > MAX_DEPTH) return hits;
+  try {
+    if (isZip(bytes)) {
+      for (const inner of await unzip(bytes)) {
+        const name = entry ? `${entry}/${inner.name}` : inner.name;
+        hits.push(...(await findIn(inner.bytes, forms, depth + 1, name)));
+      }
+    } else if (isGzip(bytes)) {
+      hits.push(...(await findIn(gunzipSync(bytes), forms, depth + 1, entry ?? '(gzip)')));
+    }
+  } catch {
+    // Unreadable: the scrub deletes it, and the run fails on that.
+  }
+  return hits;
 }
 
 /**
  * Every place under `dir` a canary is, in any encoding: each file, and each
- * entry of a zip, as { file, entry?, canary }. The canary is reported by
+ * entry packed in it, as { file, entry?, canary }. The canary is reported by
  * what it stands for, never by its value.
  *
  * @param {string} dir
@@ -204,21 +324,35 @@ export async function scanArtifacts(dir, canaries) {
     encodings(value).map((form) => ({ label, form: Buffer.from(form, 'utf8') })),
   );
   const hits = [];
-  const check = (bytes, where) => {
-    for (const { label, form } of forms) {
-      if (bytes.includes(form)) {
-        hits.push({ ...where, canary: label });
-        return;
-      }
-    }
-  };
   for (const file of filesUnder(dir)) {
     if (!statSync(file).isFile()) continue;
-    const bytes = readFileSync(file);
-    check(bytes, { file });
-    if (isZip(bytes)) {
-      for (const entry of await readZip(file)) check(entry.bytes, { file, entry: entry.name });
+    for (const { entry, canary } of await findIn(readFileSync(file), forms)) {
+      hits.push(entry ? { file, entry, canary } : { file, canary });
     }
   }
   return hits;
+}
+
+/**
+ * The secrets a run knows by value, one JSON string per line of `file`,
+ * such as a test session's cookies (lib/session.ts's recordSessionSecrets).
+ * None when there's no file.
+ *
+ * @param {string | undefined} file
+ * @returns {string[]}
+ */
+export function readSecrets(file) {
+  if (!file) return [];
+  let text;
+  try {
+    text = readFileSync(file, 'utf8');
+  } catch (error) {
+    if (error.code === 'ENOENT') return [];
+    throw error;
+  }
+  return text
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => JSON.parse(line))
+    .filter((value) => typeof value === 'string' && value.length > 0);
 }

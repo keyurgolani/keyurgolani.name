@@ -24,12 +24,17 @@ test(
     page.on('request', (request) => sent.push(request.headers()));
     await page.goto('/');
     expect(sent.length).toBeGreaterThan(0);
-    for (const headers of sent) {
-      expect(headers['authorization']).toBe(`Bearer ${canary}`);
-      expect(headers['x-csrf-token']).toBe(canary);
-    }
+    // Compared here, so the canary never becomes an expectation the trace records.
+    const carried = sent.filter(
+      (headers) =>
+        headers['authorization'] === `Bearer ${canary}` && headers['x-csrf-token'] === canary,
+    );
+    expect(carried.length, 'requests carrying the canary as Authorization and CSRF').toBe(
+      sent.length,
+    );
     const cookies = await page.context().cookies();
-    expect(cookies.find((cookie) => cookie.name === CANARY_COOKIE)?.value).toBe(canary);
+    const cookie = cookies.find((each) => each.name === CANARY_COOKIE)?.value === canary;
+    expect(cookie, 'the canary cookie').toBe(true);
     testInfo.annotations.push({ type: 'quality-canary-probe', description: 'trace on' });
   },
 );

@@ -4,6 +4,7 @@ import http from 'node:http';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import { readSecrets, SCRUBBED, scrubText } from './artifacts.mjs';
 import {
   createAuthSession,
   LOGIN_PATH,
@@ -93,9 +94,18 @@ test('a session is made through the login API, waiting out each 429 for its Retr
     const dir = mkdtempSync(path.join(tmpdir(), 'quality-session-'));
     try {
       const file = path.join(dir, 'state.json');
-      writeStorageState(file, session);
+      const secrets = path.join(dir, 'secrets');
+      writeStorageState(file, session, secrets);
       assert.equal(statSync(file).mode & 0o777, 0o600);
       assert.deepEqual(JSON.parse(readFileSync(file, 'utf8')), session.storageState);
+      // The scrub reads them back, and takes them out of an artifact by value.
+      assert.equal(statSync(secrets).mode & 0o777, 0o600);
+      assert.deepEqual(readSecrets(secrets), sessionSecrets(session));
+      assert.equal(
+        scrubText(`session ${cookie?.value} and token csrf-token-value`, readSecrets(secrets)),
+        `session ${SCRUBBED} and token ${SCRUBBED}`,
+      );
+      assert.throws(() => writeStorageState(file, session, undefined), /QUALITY_SECRETS_FILE/);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
