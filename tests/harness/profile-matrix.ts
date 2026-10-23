@@ -567,7 +567,7 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
     // rendition the live view keeps, as the probe doesn't, is its plain 404.
     const rendition = served && entry.pattern === MEDIA_PATTERN;
     const state = rendition
-      ? 'served, and a 404 that is never cached for a rendition the live view lacks'
+      ? 'served, a 404 that is never cached for a rendition the live view lacks, and a 405 to anything but GET and HEAD'
       : grant
         ? 'served only to an active grant, and the status document to anything else'
         : statusDocument
@@ -592,6 +592,15 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
           expect(response.headers()['cache-control']).toBe('no-store');
           expect(response.headers()['x-request-id']).toMatch(UUID);
           expectProfileHeaders(profile, response, 'GET');
+          // GET and HEAD alone: anything else is the proxy's 405.
+          for (const method of ['POST', 'PUT']) {
+            const refused = await request.fetch(concrete(entry.pattern), {
+              method,
+              maxRedirects: 0,
+            });
+            expect(refused.status(), method).toBe(405);
+            expect(refused.headers()['allow'], method).toBe('GET, HEAD');
+          }
           return;
         }
         if (grant || statusDocument) {

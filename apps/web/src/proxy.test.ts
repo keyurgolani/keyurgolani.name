@@ -1355,6 +1355,26 @@ test('any other method to a visitor page is a plain 405 with the methods it take
   assert.equal((await proxy(visitor('/', 'POST'))).status, 503);
 });
 
+test("#10's /media takes GET and HEAD alone: any other method is the same plain 405, in every profile, and GET goes on to its route", async (t) => {
+  const rendition = `/media/fixture-garden-cover/${'a'.repeat(64)}/w480-a1.webp`;
+  for (const profile of PROFILES) {
+    deploy(t, profile);
+    for (const method of ['POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS']) {
+      const what = `${profile} ${method}`;
+      const response = await proxy(visitor(rendition, method));
+      assert.equal(response.status, 405, what);
+      assert.equal(response.headers.get('allow'), 'GET, HEAD', what);
+      assert.equal(response.headers.get('cache-control'), 'no-store', what);
+      assert.equal(await response.text(), 'Method not allowed.', what);
+    }
+    for (const method of ['GET', 'HEAD']) {
+      const response = await proxy(visitor(rendition, method));
+      assert.equal(response.headers.get('x-middleware-next'), '1', `${profile} ${method}`);
+      assert.equal(segment(response), null, `${profile} ${method}`);
+    }
+  }
+});
+
 test("a request for an experience segment's own path, in any spelling and to any method, is a path no route matches (#6, Slice 2)", async (t) => {
   for (const profile of ['owner', 'demo', 'read-only'] as const) {
     deploy(t, profile);

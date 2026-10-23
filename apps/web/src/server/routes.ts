@@ -75,6 +75,12 @@ export interface RouteEntry {
    */
   readonly experience?: true;
   /**
+   * A route with a file of its own that serves GET and HEAD alone, such as
+   * #10's renditions: proxy.ts answers any other method with the same 405,
+   * `Allow: GET, HEAD`, as an experience page's.
+   */
+  readonly readOnly?: true;
+  /**
    * An experience segment's own route, a file registry generation writes,
    * which only the rewrite of a request proxy.ts marks reaches (#6, Slice 2).
    * listRoutes() leaves them out: a request for one's own path names nothing.
@@ -248,7 +254,13 @@ const ROUTES = [
   // A rendition of the live revision's media (#10, slice 2 item 5):
   // /media/<assetId>/<sha256>/<rendition>.<ext>. Every profile serves it, for
   // what its catalog serves, and anything the live view doesn't keep is 404.
-  { pattern: '/media/[...path]', kind: 'handler', capability: 'catalog.read', visitor: true },
+  {
+    pattern: '/media/[...path]',
+    kind: 'handler',
+    capability: 'catalog.read',
+    visitor: true,
+    readOnly: true,
+  },
   { pattern: '/api/health', kind: 'handler', capability: 'health.read' },
   { pattern: '/api/ready', kind: 'handler', capability: 'ready.read' },
   { pattern: '/api/studio/[name]', kind: 'handler', capability: 'operations' },
