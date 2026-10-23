@@ -4,18 +4,25 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import * as React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { composeSchemas, resolvePortfolioView, type ParsedPair } from '@portfolio/schema';
+import {
+  composeSchemas,
+  resolvePortfolioView,
+  routedSlugs,
+  type ParsedPair,
+} from '@portfolio/schema';
 import { readPair } from '@portfolio/schema/node';
 import {
   buildRenderInput,
   validateManifest,
+  type RouteTarget,
   type VariantManifest,
 } from '@portfolio/variant-contract';
 import FallbackComposition from '.';
 
 // The fallback composition (#5, Slice 3): its manifest is what the contract
 // pins for it, and it renders any portfolio as one main, one h1, one visitor
-// control slot, and every visible section through the shared renderers.
+// control slot, and every visible section through the shared renderers. On
+// a work's route (#10b) it renders that work's case study, at h1.
 
 // tsx compiles JSX to React.createElement calls, so the test supplies React.
 Object.assign(globalThis, { React });
@@ -70,12 +77,17 @@ function render(portfolio: unknown, idPrefix = '') {
   return markup(pair, idPrefix);
 }
 
-function markup(pair: ParsedPair, idPrefix = '') {
+function markup(
+  pair: ParsedPair,
+  idPrefix = '',
+  route: RouteTarget = { route: 'home' },
+  basePath: '' | '/sample' = '',
+) {
   const input = buildRenderInput({
     view: resolvePortfolioView(pair, {}, { mediaBase: '/media' }),
     manifest: MANIFEST,
-    route: { route: 'home' },
-    basePath: '',
+    route,
+    basePath,
     origin: 'https://rowan.test',
     requestTime: '2026-01-01T00:00:00Z',
     idPrefix,
@@ -225,6 +237,35 @@ test('every profession pair renders, both directions included, with the same str
     assert.equal(count(html, /data-visitor-control-slot/g), 1, practice);
     assert.doesNotMatch(html, /data-renderer="bespoke"/, practice);
   }
+});
+
+test("on a work's route, the work's case study is the page, at its one h1, with a link home (#10b)", () => {
+  const dir = new URL('../../schema/src/__fixtures__/pairs/engineering/yaml/', import.meta.url);
+  const result = readPair({
+    portfolio: fileURLToPath(new URL('portfolio.yml', dir)),
+    site: fileURLToPath(new URL('site.yml', dir)),
+  });
+  assert.ok(result.ok);
+  const view = resolvePortfolioView(result.pair, {}, { mediaBase: '/media' });
+  const [slug] = routedSlugs(view);
+  assert.ok(slug, 'the engineering pair has a routed case study');
+  const work = view.portfolio.works.find((each) => each.slug === slug)!;
+  const html = markup(result.pair, '', { route: 'work', slug }, '/sample');
+  assert.equal(count(html, /<main\b/g), 1);
+  assert.equal(count(html, /<h1\b/g), 1);
+  assert.match(
+    html,
+    /<p class="pf-case-study__label">Case study<\/p><h1 class="pf-case-study__title">/,
+  );
+  assert.ok(html.includes(`<article class="pf-case-study" data-work-id="${work.id}"`));
+  assert.equal(count(html, /data-visitor-control-slot/g), 1);
+  // No section renders on a work's page, and the way home keeps the link base.
+  assert.equal(count(html, /data-renderer=/g), 0);
+  assert.match(html, /<nav class="fc-nav"><a href="\/sample">/);
+  // A slug the view doesn't route is no work's page: the host never sends one here.
+  const home = markup(result.pair, '', { route: 'work', slug: 'no-such-work' });
+  assert.equal(count(home, /pf-case-study"/g), 0);
+  assert.ok(count(home, /data-renderer="shared"/g) > 0);
 });
 
 test('its stylesheet stays under [data-variant="fallback"] with logical properties and no appearance', () => {

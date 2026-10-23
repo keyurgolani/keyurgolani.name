@@ -1,4 +1,5 @@
 import type { Work } from '@portfolio/schema';
+import { routeHref } from '@portfolio/variant-contract';
 import { formatEpisodeDuration, formatTrackDuration } from '../../format';
 import { MediaFigure } from '../media';
 import { placedMedia } from '../placement';
@@ -23,7 +24,14 @@ import {
 } from '../primitives';
 import { RichText } from '../rich-text';
 import type { SectionOf, SectionRendererProps } from '../types';
-import { evidenceByIds, isArchived, isSignature, recordAnchor, worksOf } from '../view';
+import {
+  evidenceByIds,
+  isArchived,
+  isRoutedWork,
+  isSignature,
+  recordAnchor,
+  worksOf,
+} from '../view';
 import { EvidenceEntry } from './evidence';
 
 // The works a works section lists, in its order (#10, slice 1, item 7).
@@ -122,6 +130,13 @@ export function WorkEntry({
         </p>
       ) : null}
       <ItemTitle text={work.title} url={work.url} ctx={ctx} />
+      {isRoutedWork(work) ? (
+        <p className="pf-work__case-study">
+          <a href={routeHref(input, { route: 'work', slug: work.slug })}>
+            <Ui ctx={ctx}>Read the case study</Ui>
+          </a>
+        </p>
+      ) : null}
       <Meta
         parts={[
           work.role,
