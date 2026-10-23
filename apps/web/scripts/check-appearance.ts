@@ -1,4 +1,4 @@
-// `pnpm check:appearance [--fixture <name>] [--thresholds <file>]` (#19, Slice 2, item 8). It reads
+// `pnpm check:appearance [--fixture <name>] [--thresholds <file>] [--audit-exceptions <file>]` (#19, Slice 2, item 8). It reads
 // the registry as build:registry does, writing nothing, and runs the
 // computed gate over every registered combination of design language, color
 // scheme, typography, and display mode; the hierarchy check; and the layer
@@ -6,7 +6,10 @@
 // registers each known-bad input under packages/appearance/test/fixtures/
 // beside the build's packs, one at a time, and requires the gate to fail on
 // each for the reason it names, so a gate that passes everything fails here.
-// Any failure fails it.
+// Last, the source audit (#19, Slice 5, item 12) reads every variant package
+// and packages/kit/src for a palette, a font, or a material of their own,
+// less the reviewed exceptions in packages/appearance/audit-exceptions.json,
+// and an exception no finding needs fails too. Any failure fails it.
 //
 // --fixture <name> instead runs the gate with that one known-bad input
 // registered beside the build's packs, and fails when the gate does, as
@@ -15,7 +18,8 @@
 // The gate's targets come from quality/thresholds.json (#11, AC5), through
 // appearance-targets.ts. --thresholds <file> reads them from another copy of
 // that file instead, so a test can show the gate follows the file; no CI
-// command passes it. Fixture packs are skipped, except those a flag in
+// command passes it. --audit-exceptions <file> does the same for the source
+// audit's exceptions. Fixture packs are skipped, except those a flag in
 // GATED_FIXTURE_FLAGS admits: #11's tier fixtures stand in for Stable,
 // Extended, and Experimental packs, so they're gated as shipping packs, and
 // QUALITY_FIXTURES=meta's known-bad pack fails here for its reason.
@@ -34,6 +38,7 @@ import {
   layerOrderProblems,
   readKnownBadFixture,
   runKnownBad,
+  sourceAuditReport,
   stylesheetsUnder,
   unmetExpectations,
   type AppearanceCheck,
@@ -49,7 +54,8 @@ import { loadThresholds } from '../../../quality/thresholds';
 import { appearanceTargets } from './appearance-targets';
 import { generateRegistry, PACK_OUT, plural, renderOptions, REPO_ROOT } from './registry-options';
 
-const USAGE = 'Usage: tsx scripts/check-appearance.ts [--fixture <name>] [--thresholds <file>]\n';
+const USAGE =
+  'Usage: tsx scripts/check-appearance.ts [--fixture <name>] [--thresholds <file>] [--audit-exceptions <file>]\n';
 const TAG = '[check:appearance]';
 
 /**
@@ -72,6 +78,8 @@ interface Options {
   fixture?: string;
   /** A thresholds file to read the targets from, in place of quality/thresholds.json. */
   thresholds?: string;
+  /** An exceptions file for the source audit, in place of packages/appearance/audit-exceptions.json. */
+  auditExceptions?: string;
 }
 
 /** The options in `args`, each flag at most once with its value, or null. */
@@ -84,6 +92,8 @@ function parse(args: readonly string[]): Options | null {
     if (flag === '--fixture' && options.fixture === undefined) options.fixture = value;
     else if (flag === '--thresholds' && options.thresholds === undefined)
       options.thresholds = value;
+    else if (flag === '--audit-exceptions' && options.auditExceptions === undefined)
+      options.auditExceptions = value;
     else return null;
   }
   return options;
@@ -208,6 +218,10 @@ async function main(): Promise<number> {
   const unordered = layerOrderProblems([...compiled, ...sources]);
   const layered = [...compiled, ...sources].filter(({ css }) => /@layer\b/.test(css)).length;
   const misses = knownBadMisses(registry, meta, targets);
+  const audit = sourceAuditReport(
+    REPO_ROOT,
+    options.auditExceptions ? path.resolve(options.auditExceptions) : undefined,
+  );
 
   for (const { axis, id, reason } of check.skipped)
     process.stdout.write(`${TAG} Skipped ${axis} ${id}: ${reason}.\n`);
@@ -217,6 +231,7 @@ async function main(): Promise<number> {
       (file) => `${file} uses @layer and doesn't start with the layer order statement.`,
     ),
     ...misses,
+    ...audit.lines,
   ];
   for (const line of findings) process.stderr.write(`${TAG} ${line}\n`);
   if (findings.length > 0) {
@@ -232,7 +247,8 @@ async function main(): Promise<number> {
       `${plural(count('typography'), 'typography profile')}: ` +
       `${plural(check.combinations, 'combination')} and ${plural(check.pairs, 'pair')} checked, none failing; ` +
       `the hierarchy holds; ${plural(layered, 'layered stylesheet')}, each starting with the layer order; ` +
-      `${plural(knownBadNames().length, 'known-bad input')} in ${relative(KNOWN_BAD_DIR)}, each failing as it names.\n`,
+      `${plural(knownBadNames().length, 'known-bad input')} in ${relative(KNOWN_BAD_DIR)}, each failing as it names; ` +
+      `the source audit read ${plural(audit.files, 'file')}, with ${plural(audit.exceptions, 'reviewed exception')}, each still needed.\n`,
   );
   return 0;
 }

@@ -38,12 +38,12 @@ const TIER_PACKS = ['language', 'scheme', 'typography'].flatMap((axis) =>
   ['stable', 'extended', 'experimental'].map((tier) => `fixture-${axis}-${tier}`),
 );
 
-test('it passes on the fallback packs, and says what it checked', () => {
+test('it passes on the fallback packs, and says what it checked, the source audit included', () => {
   const run = check([]);
   assert.equal(run.status, 0, run.stderr);
   assert.match(
     run.stdout,
-    /1 design language, 1 color scheme, and 1 typography profile: 4 combinations and \d+ pairs checked, none failing; the hierarchy holds; \d+ layered stylesheets, each starting with the layer order; \d+ known-bad inputs in packages\/appearance\/test\/fixtures, each failing as it names\./,
+    /1 design language, 1 color scheme, and 1 typography profile: 4 combinations and \d+ pairs checked, none failing; the hierarchy holds; \d+ layered stylesheets, each starting with the layer order; \d+ known-bad inputs in packages\/appearance\/test\/fixtures, each failing as it names; the source audit read \d+ files, with \d+ reviewed exceptions?, each still needed\./,
   );
   assert.doesNotMatch(run.stdout, /Skipped/);
 });
@@ -136,12 +136,13 @@ test('an input that is not there, or an argument it does not take, is a usage er
   assert.equal(usage.status, 2);
   assert.match(
     usage.stderr,
-    /^Usage: tsx scripts\/check-appearance\.ts \[--fixture <name>\] \[--thresholds <file>\]/,
+    /^Usage: tsx scripts\/check-appearance\.ts \[--fixture <name>\] \[--thresholds <file>\] \[--audit-exceptions <file>\]/,
   );
   for (const args of [
     ['--thresholds'],
     ['--fixture', 'bad-contrast', '--fixture', 'bad-contrast'],
     ['--thresholds', THRESHOLDS_FILE, '--thresholds', THRESHOLDS_FILE],
+    ['--audit-exceptions'],
   ]) {
     assert.equal(check(args).status, 2, args.join(' '));
   }
@@ -182,4 +183,52 @@ test('its targets are the thresholds file it reads, and a file that does not loa
   assert.equal(broken.status, 1);
   assert.match(broken.stderr, /The thresholds don't load, so nothing was checked\./);
   assert.doesNotMatch(broken.stderr, / findings?\./);
+});
+
+test("the source audit fails what the reviewed exceptions don't cover, each finding with its line and remedy, and an exception nothing needs (#19, Slice 5)", (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'check-appearance-audit-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const reviewed = JSON.parse(
+    fs.readFileSync(
+      new URL('../../../packages/appearance/audit-exceptions.json', import.meta.url),
+      'utf8',
+    ),
+  ) as { path: string; rule: string; reason: string; reviewer: string }[];
+  const write = (name: string, value: unknown) => {
+    const file = path.join(dir, name);
+    fs.writeFileSync(file, JSON.stringify(value));
+    return file;
+  };
+
+  // With no exceptions, each reviewed file fails, by line, rule, and remedy.
+  const none = check(['--audit-exceptions', write('none.json', [])]);
+  assert.equal(none.status, 1, none.stdout);
+  const lines = findings(none.stderr);
+  for (const { path: file, rule } of reviewed) {
+    assert.ok(
+      lines.some(
+        (line) => line.startsWith(`[check:appearance] ${file}:`) && line.includes(` ${rule}: `),
+      ),
+      `${file} ${rule}\n${none.stderr}`,
+    );
+  }
+  assert.ok(
+    lines.some((line) => line.includes('Read the color scheme')),
+    none.stderr,
+  );
+
+  // One more exception than the findings need fails as stale.
+  const stale = check([
+    '--audit-exceptions',
+    write('stale.json', [...reviewed, { ...reviewed[0]!, path: 'packages/kit/src/gone.ts' }]),
+  ]);
+  assert.equal(stale.status, 1, stale.stdout);
+  const [only, ...rest] = findings(stale.stderr);
+  assert.deepEqual(rest, [], stale.stderr);
+  assert.match(
+    only ?? '',
+    new RegExp(
+      `stale\\.json excepts packages/kit/src/gone\\.ts from ${reviewed[0]!.rule}, which no finding needs anymore\\. Remove the exception\\.$`,
+    ),
+  );
 });

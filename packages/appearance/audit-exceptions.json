@@ -1,0 +1,32 @@
+[
+  {
+    "path": "packages/kit/src/github/colors.ts",
+    "rule": "color-literal",
+    "reason": "GitHub's own language colors, which the snapshot fetcher records beside each repository's language as data, so a card shows the color GitHub shows for it. They describe the repository, not the site's palette, as a photograph keeps its own colors.",
+    "reviewer": "#102 review"
+  },
+  {
+    "path": "packages/kit/src/social-brand/index.ts",
+    "rule": "color-literal",
+    "reason": "Each platform's own brand colors, for a link card that shows the platform's identity rather than the site's. No registered variant reads it yet; one that does takes the site's palette from the tokens and these for the platform's mark alone.",
+    "reviewer": "#102 review"
+  },
+  {
+    "path": "packages/budget-fixtures/fixture-over-budget/src/styles.css",
+    "rule": "import",
+    "reason": "A known-bad budget fixture (#6) that only BUDGET_FIXTURES=over registers: its remote @import and its ballast sheet are what the budget check has to report, so the audit has to let them stand here.",
+    "reviewer": "#102 review"
+  },
+  {
+    "path": "packages/budget-fixtures/fixture-variant-medium/src/styles.css",
+    "rule": "timing",
+    "reason": "A budget fixture (#6) that only BUDGET_FIXTURES=1 registers, whose infinite 2.4 s pulse is the CSS animation the medium tier's budget counts. It never ships, and the pulse stops under prefers-reduced-motion.",
+    "reviewer": "#102 review"
+  },
+  {
+    "path": "packages/preview-fixtures/src/styles.css",
+    "rule": "timing",
+    "reason": "The preview's environment fixture (#7), which only PREVIEW_FIXTURES=1 registers: its 1.2 s pulse is the animation the preview tests read by name, running in a full environment and gone in a reduced one, so it has to run on its own.",
+    "reviewer": "#102 review"
+  }
+]

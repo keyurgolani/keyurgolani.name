@@ -169,7 +169,7 @@ Run `references/audit-checklist.md` for the scripted gates and `references/quali
 1. `pnpm check:variants --package @portfolio/variant-<id>` exits 0: the registry registers it, and the source audit finds nothing. Either way it checks the kit modules the variant reaches and the kit's shared stylesheet; without `--package` it checks every registered variant.
 2. `pnpm typecheck` passes for the whole workspace.
 3. `pnpm exec eslint packages/variant-<id>` passes.
-4. `pnpm build` succeeds. The host build is the integration test.
+4. `pnpm build` succeeds. The host build is the integration test. Then `pnpm check:appearance` exits 0: its appearance source audit finds no color, font, `@import`, shadow, radius, blur, or timing of the variant's own (`references/styling-conventions.md`).
 5. `pnpm exec playwright test tests/e2e/motion-contract.spec.ts` passes for your composition.
 6. `node skills/variant-developer/scripts/kit-dedup.mjs packages/variant-<id>`: every candidate hoisted or marked `// LOCAL: <reason>`.
 7. `pnpm --filter @portfolio/kit test`, if you hoisted.

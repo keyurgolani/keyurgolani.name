@@ -5,7 +5,9 @@
 //
 // - `color-literal`: a hex color, `rgb()`, `hsl()`, `hwb()`, `lab()`,
 //   `lch()`, `oklab()`, `oklch()`, or `color()`, in a stylesheet or in a
-//   string in code, such as a canvas fill or an inline style;
+//   string in code, such as a canvas fill or an inline style, unless every
+//   argument of the function is a template interpolation, a color read
+//   from somewhere else;
 // - `font-family`: a `font-family` or `font` that isn't a `var(--type-*)`;
 // - `font-face`: an `@font-face`, which only a typography pack declares;
 // - `import`: an `@import`;
@@ -117,6 +119,44 @@ const TIME = /(?<![\w.-])\d*\.?\d+m?s(?![\w-])/;
 /** A hex color in a string in code: the whole string, or a value after a space, colon, comma, or parenthesis, as CSS text has it. */
 const HEX_IN_CODE = /(?:^|[\s:,(])#(?:[0-9a-f]{8}|[0-9a-f]{6}|[0-9a-f]{3,4})(?![\w-])/i;
 
+/** `value` with each template interpolation, `${...}`, as one placeholder, `\u00b7`. */
+function withoutInterpolations(value: string): string {
+  let out = '';
+  let depth = 0;
+  for (let i = 0; i < value.length; i++) {
+    const char = value[i]!;
+    if (depth === 0 && char === '$' && value[i + 1] === '{') {
+      depth = 1;
+      i++;
+      out += '\u00b7';
+    } else if (depth > 0) {
+      if (char === '{') depth++;
+      else if (char === '}') depth--;
+    } else {
+      out += char;
+    }
+  }
+  return out;
+}
+
+/**
+ * Whether a color function in a string in code holds a literal of its own.
+ * One whose every argument is an interpolation, such as
+ * `rgba(${r}, ${g}, ${b}, ${alpha})`, writes out a color the code read from
+ * somewhere else, such as a boundary's computed `--color-<role>`, so it
+ * names no color itself.
+ */
+function literalColorFunction(value: string): boolean {
+  const text = withoutInterpolations(value);
+  for (const match of text.matchAll(new RegExp(COLOR_FUNCTION.source, 'gi'))) {
+    const start = match.index + match[0].length;
+    const end = text.indexOf(')', start);
+    const args = text.slice(start, end === -1 ? undefined : end);
+    if (/[^\s,/\u00b7]/.test(args)) return true;
+  }
+  return false;
+}
+
 /** `css` without its comments, keeping every newline, so line numbers hold. */
 function withoutComments(css: string): string {
   return css.replace(/\/\*[\s\S]*?\*\//g, (comment) => comment.replace(/[^\n]/g, ' '));
@@ -195,7 +235,7 @@ export function auditCodeText(
     const line = index + 1;
     for (const [, , literal] of source.matchAll(/(['"`])((?:\\.|(?!\1).)*)\1/g)) {
       const value = literal ?? '';
-      if (HEX_IN_CODE.test(value) || COLOR_FUNCTION.test(value)) {
+      if (HEX_IN_CODE.test(value) || literalColorFunction(value)) {
         findings.push({ line, rule: 'color-literal', found: source.trim() });
       }
       if (LEGACY.test(value))
@@ -319,4 +359,63 @@ export function variantPackageDirs(packagesDir: string): string[] {
       visit(path.join(packagesDir, entry.name), 1);
   }
   return found.sort();
+}
+
+/** The reviewed exceptions, relative to the repository root. */
+export const AUDIT_EXCEPTIONS_FILE = 'packages/appearance/audit-exceptions.json';
+
+/** What the audit reads under `root`: every variant package in packages/, and the kit's source. */
+export function sourceAuditDirs(root: string): string[] {
+  return [
+    ...variantPackageDirs(path.join(root, 'packages')),
+    path.join(root, 'packages', 'kit', 'src'),
+  ];
+}
+
+export interface SourceAuditReport {
+  /** One line per finding no exception covers, exception no finding needs, and problem with the file. */
+  readonly lines: readonly string[];
+  /** How many files the audit read. */
+  readonly files: number;
+  /** How many reviewed exceptions the file holds. */
+  readonly exceptions: number;
+}
+
+/**
+ * The audit of the repository at `root`, against the exceptions in
+ * `exceptionsFile`, as `pnpm check:appearance` reports it: each finding
+ * with the line it's on and its remedy.
+ */
+export function sourceAuditReport(
+  root: string,
+  exceptionsFile = path.join(root, AUDIT_EXCEPTIONS_FILE),
+): SourceAuditReport {
+  const shown = path.relative(root, exceptionsFile).split(path.sep).join('/');
+  let exceptions: unknown;
+  try {
+    exceptions = JSON.parse(fs.readFileSync(exceptionsFile, 'utf8'));
+  } catch (error) {
+    return {
+      lines: [`${shown} doesn't read: ${(error as Error).message}`],
+      files: 0,
+      exceptions: 0,
+    };
+  }
+  const dirs = sourceAuditDirs(root);
+  const result = runSourceAudit(root, dirs, exceptions);
+  return {
+    lines: [
+      ...result.exceptionProblems.map((problem) => `${shown}: ${problem}`),
+      ...result.findings.map(
+        ({ path: file, line, rule, found }) =>
+          `${file}:${line} ${rule}: ${found} ${SOURCE_AUDIT_REMEDIES[rule]}`,
+      ),
+      ...result.unused.map(
+        ({ path: file, rule }) =>
+          `${shown} excepts ${file} from ${rule}, which no finding needs anymore. Remove the exception.`,
+      ),
+    ],
+    files: dirs.reduce((sum, dir) => sum + auditedFiles(dir).length, 0),
+    exceptions: Array.isArray(exceptions) ? exceptions.length : 0,
+  };
 }

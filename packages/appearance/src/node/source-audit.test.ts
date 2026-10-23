@@ -7,8 +7,11 @@ import {
   auditCodeText,
   auditStylesheetText,
   exceptionProblems,
+  AUDIT_EXCEPTIONS_FILE,
   runSourceAudit,
+  SOURCE_AUDIT_REMEDIES,
   SOURCE_AUDIT_RULES,
+  sourceAuditReport,
   variantPackageDirs,
   type SourceAuditRule,
 } from './source-audit';
@@ -124,6 +127,21 @@ test('code: a color in a string is refused, and a fragment or an issue number is
   assert.deepEqual(found("const fill = 'var(--color-accent)';"), []);
 });
 
+test('code: a color function built only from interpolated values names no color, and one with a literal of its own does', () => {
+  const found = (source: string) => auditCodeText(source).map(({ rule: name }) => name);
+  // A color the code read elsewhere, such as a boundary's --color-<role>, written out for a canvas.
+  assert.deepEqual(found('return `rgba(${r}, ${g}, ${b}, ${alpha})`;'), []);
+  assert.deepEqual(
+    found(
+      "el.style.background = `linear-gradient(rgb(${a.map((c) => c * 255).join(',')}) 0%, rgb(${b}) 100%)`;",
+    ),
+    [],
+  );
+  assert.deepEqual(found('const shade = `rgb(${r} ${g} ${b} / 50%)`;'), ['color-literal']);
+  assert.deepEqual(found('const red = `rgba(${r}, 0, 0, 1)`;'), ['color-literal']);
+  assert.deepEqual(found('const fill = `oklch(${l} 0.1 ${h})`;'), ['color-literal']);
+});
+
 test('each finding names its line, and every rule has a case here', () => {
   const [finding] = auditStylesheetText('.a {}\n.b {\n  color: #000;\n}\n');
   assert.equal(finding?.line, 3);
@@ -224,4 +242,49 @@ test('an exception needs a path, a real rule, a reason, and a reviewer, and noth
     assert.equal(exceptionProblems([bad]).length, 1, JSON.stringify(bad));
   }
   assert.equal(exceptionProblems([good, good]).length, 1, 'a repeat');
+});
+
+test("the report names each finding's line and remedy, each exception nothing needs, and a file that doesn't read", () => {
+  const exception = {
+    path: 'packages/kit/src/photo.tsx',
+    rule: 'color-literal',
+    reason: "The duotone is the photograph's own two colors, which no scheme sets.",
+    reviewer: 'keyurgolani',
+  };
+  const root = scratch({
+    'packages/variant-acme/package.json': JSON.stringify({ portfolio: { kind: 'variant' } }),
+    'packages/variant-acme/src/styles.css': rule('box-shadow: 0 1px 2px black;'),
+    'packages/kit/src/photo.tsx': "const duotone = '#2b241c';",
+    [AUDIT_EXCEPTIONS_FILE]: JSON.stringify([
+      exception,
+      { ...exception, path: 'packages/kit/src/gone.tsx' },
+    ]),
+  });
+  try {
+    const report = sourceAuditReport(root);
+    assert.deepEqual(report.lines, [
+      `packages/variant-acme/src/styles.css:2 shadow: box-shadow: 0 1px 2px black; ${SOURCE_AUDIT_REMEDIES.shadow}`,
+      `${AUDIT_EXCEPTIONS_FILE} excepts packages/kit/src/gone.tsx from color-literal, which no finding needs anymore. Remove the exception.`,
+    ]);
+    assert.equal(report.files, 2);
+    assert.equal(report.exceptions, 2);
+    fs.writeFileSync(path.join(root, AUDIT_EXCEPTIONS_FILE), '[{');
+    const broken = sourceAuditReport(root);
+    assert.equal(broken.lines.length, 1);
+    assert.match(broken.lines[0]!, new RegExp(`^${AUDIT_EXCEPTIONS_FILE} doesn't read: `));
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('the repository passes its own audit: every finding has a reviewed exception, and every exception a finding', () => {
+  const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '../../../..');
+  const report = sourceAuditReport(root);
+  assert.deepEqual(report.lines, []);
+  // Variant packages and the kit, not nothing.
+  assert.ok(report.files > 50, `${report.files} files`);
+  const exceptions = JSON.parse(
+    fs.readFileSync(path.join(root, AUDIT_EXCEPTIONS_FILE), 'utf8'),
+  ) as { reviewer: string }[];
+  assert.ok(exceptions.length > 0 && exceptions.length === report.exceptions);
 });
