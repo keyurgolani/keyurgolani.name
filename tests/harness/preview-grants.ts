@@ -6,18 +6,17 @@
 // commands write drafts (#3, Slice 2), the drafts and revisions grants
 // render are seeded straight into the server's data directory, as the
 // operator's CLI writes them; the server reads them at its next request.
+// The store's code is server code, so each seed or publish runs in a child
+// process under the react-server condition (preview-store.ts).
+import { execFile } from 'node:child_process';
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
 import { expect, type Frame, type Page, type Response } from '@playwright/test';
-import {
-  openStore,
-  preflight,
-  type Draft,
-  type RevisionId,
-  type Store,
-} from '../../packages/core/src/owner';
-import { validatePublicationUnit } from '../../packages/schema/src/index';
+import type { Draft, RevisionId } from '../../packages/core/src/owner';
 import { DEFAULT_SITE } from './app-server.mjs';
 import type { App } from './fixtures';
+import type { StoreStep, StoreTask } from './preview-store';
 
 /** The environment a frame starts in, as Slice 4's controls leave it. */
 export const ENVIRONMENT = {
@@ -36,47 +35,37 @@ const unit = (portfolio: string, site = readFileSync(DEFAULT_SITE, 'utf8')) => (
   site: { format: 'yaml' as const, sourceText: site },
 });
 
-/** The server's revision store, opened as the operator's CLI opens it. */
-export async function storeOf(app: App): Promise<Store> {
+const REPO_ROOT = fileURLToPath(new URL('../..', import.meta.url));
+const STORE_STEP = fileURLToPath(new URL('preview-store.ts', import.meta.url));
+
+/** Runs `step` on the server's data directory in a child, under react-server, and returns what it printed. */
+async function storeStep(app: App, step: StoreStep): Promise<unknown> {
   const dataDir = app.env.PORTFOLIO_DATA_DIR;
   if (!dataDir) throw new Error('The app runs with no data directory.');
-  const problem = await preflight({ dataDir });
-  if (problem) throw new Error(`preflight: ${problem}`);
-  return openStore({
-    dataDir,
-    checks: { validate: (pair) => validatePublicationUnit(pair), appVersion: 'test' },
-  });
+  const task: StoreTask = { dataDir, step };
+  const { stdout } = await promisify(execFile)(
+    process.execPath,
+    ['--conditions=react-server', '--import', 'tsx', STORE_STEP, JSON.stringify(task)],
+    { cwd: REPO_ROOT, encoding: 'utf8', timeout: 60_000 },
+  );
+  return JSON.parse(stdout.trim().split('\n').pop() ?? '');
 }
 
 /** The working draft, made or replaced, holding a portfolio named `name` and `site`'s text. */
 export async function seedDraft(app: App, name: string, site?: string): Promise<Draft> {
-  const store = await storeOf(app);
-  const working = await store.drafts.getWorking();
-  const outcome = await store.drafts.create(
-    {
-      documents: unit(portfolioNamed(name), site),
-      ...(working ? { expectedVersion: working.version } : {}),
-    },
-    'operator',
-  );
-  if (outcome.kind !== 'saved') throw new Error(`draft: ${JSON.stringify(outcome)}`);
-  return outcome.draft;
+  return (await storeStep(app, {
+    op: 'seed',
+    documents: unit(portfolioNamed(name), site),
+  })) as Draft;
 }
 
 /** Publishes `draft` as the operator would, which removes it. Returns the new revision. */
 export async function publish(app: App, draft: Draft): Promise<RevisionId> {
-  const store = await storeOf(app);
-  const live = await store.publication.status();
-  const outcome = await store.publication.publish(
-    {
-      draftId: draft.draftId,
-      draftVersion: draft.version,
-      expectedLiveRevisionId: live.liveRevisionId,
-    },
-    'operator',
-  );
-  if (outcome.kind !== 'committed') throw new Error(`publish: ${JSON.stringify(outcome)}`);
-  return outcome.revisionId;
+  return (await storeStep(app, {
+    op: 'publish',
+    draftId: draft.draftId,
+    draftVersion: draft.version,
+  })) as RevisionId;
 }
 
 /** Signs in through the form, from a fresh page, and returns the session's CSRF token. */

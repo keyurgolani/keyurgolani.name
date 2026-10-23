@@ -4,6 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import ts from 'typescript';
 import { closure } from './store/test-support/imports';
 
 // Owner code in @portfolio/core records its own name in the owner load trace
@@ -83,4 +84,26 @@ test('the public entry reaches no owner module, and loading it records nothing i
   );
   assert.equal(child.status, 0, child.stderr);
   assert.deepEqual(JSON.parse(child.stdout.trim().split('\n').pop()!), []);
+});
+
+// Both entries are server code (#3, item 19). Each imports server-only, which
+// throws outside the react-server condition Next's server runs under, so a
+// client bundle that reached either fails to build. The preview specs open a
+// store through the owner entry in a child under that condition
+// (tests/harness/preview-store.ts), not in the browser suite's own process.
+test('both entries import server-only', () => {
+  for (const entry of ['index.ts', 'owner.ts']) {
+    const file = path.join(SRC, entry);
+    const source = ts.createSourceFile(file, readFileSync(file, 'utf8'), ts.ScriptTarget.Latest);
+    const imports = source.statements.filter(ts.isImportDeclaration);
+    assert.ok(
+      imports.some(
+        (declaration) =>
+          declaration.importClause === undefined &&
+          ts.isStringLiteral(declaration.moduleSpecifier) &&
+          declaration.moduleSpecifier.text === 'server-only',
+      ),
+      `${entry} imports server-only`,
+    );
+  }
 });

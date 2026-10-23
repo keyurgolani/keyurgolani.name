@@ -1,9 +1,8 @@
 // @portfolio/core/owner: the owner code (#1, item 14). Only the web app's
 // server/owner/ modules and the composition root's owner branch import it,
 // which check:deps enforces, so demo and read-only never load it. What every
-// profile may load is @portfolio/core, src/index.ts. Unlike that entry, this
-// one doesn't import server-only: the browser suite's harness opens a store
-// through it, in Node, outside Next.
+// profile may load is @portfolio/core, src/index.ts. Server code only.
+import 'server-only';
 import { recordOwnerModule } from './load-trace';
 
 recordOwnerModule('core/owner');
