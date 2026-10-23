@@ -49,10 +49,8 @@ pnpm check:skills
 
 This verifies SKILL.md frontmatter (name pattern, description length, parent-dir match), checks that `section-kinds.md` hasn't drifted between the two skills, that `kit-catalog.md` covers every export from `@portfolio/kit`, and that `schema.md` mentions every kind in `ALL_SECTION_KINDS`.
 
-There's no active CI in this repo yet. When CI returns, hook `pnpm check:skills` into the same job as `pnpm typecheck`.
+CI's `static` job runs `pnpm check:skills` beside `pnpm typecheck`.
 
 ## Spec
 
-Design rationale, scope, and the long-form contract for both skills live in the spec:
-
-- [`../superpowers/specs/2026-05-03-portfolio-and-variant-skills-design.md`](../superpowers/specs/2026-05-03-portfolio-and-variant-skills-design.md)
+Design rationale, scope, and the long-form contract for both skills live in the spec, `superpowers/specs/2026-05-03-portfolio-and-variant-skills-design.md`, which isn't in this repository.

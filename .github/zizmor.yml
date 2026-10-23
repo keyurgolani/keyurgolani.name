@@ -1,0 +1,9 @@
+# zizmor's configuration (pnpm check:workflows).
+rules:
+  # self-repository wants GitHub's `$/` form for in-repository actions, but
+  # the pinned actionlint 1.7.12 (ci/workflow-linters.mjs) rejects `$/`, so
+  # ci.yml's steps keep `./.github/actions/install` until actionlint reads
+  # it. The rule stays on for every other workflow and action.
+  self-repository:
+    ignore:
+      - ci.yml

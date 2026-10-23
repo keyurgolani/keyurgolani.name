@@ -1,0 +1,366 @@
+{
+  "source": {
+    "workflow": "ci.yml",
+    "event": "pull_request",
+    "conclusion": "success",
+    "runIds": [
+      39904389605, 39903445815, 39903170369, 39902687342, 39902346806, 39902000273, 39901997471,
+      39901501477, 39901473094, 39901006332, 39900554776, 39900463741, 39899696152, 39899552772,
+      39899025004, 39898217540, 39894546651, 39890524511, 39889161760, 39887624836, 39886221138,
+      39885773584, 39884593272, 39877934697, 39875155011, 39845155261, 39844833600, 39817528841,
+      39815964022, 39815878595
+    ],
+    "from": "2026-10-22T16:40:18Z",
+    "to": "2026-10-23T05:11:31Z"
+  },
+  "runs": 30,
+  "wallSeconds": {
+    "median": 330,
+    "p90": 399,
+    "max": 469
+  },
+  "queueSeconds": {
+    "median": 2,
+    "p90": 27,
+    "max": 85
+  },
+  "jobs": [
+    {
+      "name": "unit",
+      "runs": 30,
+      "durationSeconds": {
+        "median": 317,
+        "p90": 370,
+        "max": 381
+      },
+      "queueSeconds": {
+        "median": 2,
+        "p90": 2,
+        "max": 35
+      },
+      "slowestSteps": [
+        {
+          "name": "pnpm ci:unit",
+          "medianSeconds": 298
+        },
+        {
+          "name": "Install",
+          "medianSeconds": 6
+        },
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "medianSeconds": 2
+        }
+      ]
+    },
+    {
+      "name": "external-variant",
+      "runs": 30,
+      "durationSeconds": {
+        "median": 278,
+        "p90": 312,
+        "max": 317
+      },
+      "queueSeconds": {
+        "median": 2,
+        "p90": 3,
+        "max": 20
+      },
+      "slowestSteps": [
+        {
+          "name": "pnpm ci:external-variant",
+          "medianSeconds": 236
+        },
+        {
+          "name": "Initialize containers",
+          "medianSeconds": 27
+        },
+        {
+          "name": "Install",
+          "medianSeconds": 6
+        }
+      ]
+    },
+    {
+      "name": "variants",
+      "runs": 30,
+      "durationSeconds": {
+        "median": 235,
+        "p90": 248,
+        "max": 265
+      },
+      "queueSeconds": {
+        "median": 2,
+        "p90": 2,
+        "max": 66
+      },
+      "slowestSteps": [
+        {
+          "name": "pnpm ci:variants",
+          "medianSeconds": 163
+        },
+        {
+          "name": "Initialize containers",
+          "medianSeconds": 27
+        },
+        {
+          "name": "pnpm ci:build",
+          "medianSeconds": 21
+        }
+      ]
+    },
+    {
+      "name": "browser",
+      "runs": 30,
+      "durationSeconds": {
+        "median": 231,
+        "p90": 252,
+        "max": 299
+      },
+      "queueSeconds": {
+        "median": 2,
+        "p90": 3,
+        "max": 7
+      },
+      "slowestSteps": [
+        {
+          "name": "pnpm ci:browser",
+          "medianSeconds": 166
+        },
+        {
+          "name": "Initialize containers",
+          "medianSeconds": 26
+        },
+        {
+          "name": "pnpm ci:build",
+          "medianSeconds": 22
+        }
+      ]
+    },
+    {
+      "name": "appearance-browser",
+      "runs": 25,
+      "durationSeconds": {
+        "median": 112,
+        "p90": 118,
+        "max": 125
+      },
+      "queueSeconds": {
+        "median": 2,
+        "p90": 3,
+        "max": 91
+      },
+      "slowestSteps": [
+        {
+          "name": "pnpm ci:appearance-browser",
+          "medianSeconds": 71
+        },
+        {
+          "name": "Initialize containers",
+          "medianSeconds": 26
+        },
+        {
+          "name": "Install",
+          "medianSeconds": 6
+        }
+      ]
+    },
+    {
+      "name": "image",
+      "runs": 30,
+      "durationSeconds": {
+        "median": 105,
+        "p90": 119,
+        "max": 129
+      },
+      "queueSeconds": {
+        "median": 2,
+        "p90": 2,
+        "max": 54
+      },
+      "slowestSteps": [
+        {
+          "name": "pnpm ci:image",
+          "medianSeconds": 54
+        },
+        {
+          "name": "pnpm ci:security-proxy",
+          "medianSeconds": 34
+        },
+        {
+          "name": "Install",
+          "medianSeconds": 6
+        }
+      ]
+    },
+    {
+      "name": "static",
+      "runs": 30,
+      "durationSeconds": {
+        "median": 102,
+        "p90": 113,
+        "max": 125
+      },
+      "queueSeconds": {
+        "median": 2,
+        "p90": 2,
+        "max": 67
+      },
+      "slowestSteps": [
+        {
+          "name": "pnpm ci:typecheck",
+          "medianSeconds": 41
+        },
+        {
+          "name": "pnpm ci:lint",
+          "medianSeconds": 18
+        },
+        {
+          "name": "pnpm ci:format",
+          "medianSeconds": 16
+        }
+      ]
+    },
+    {
+      "name": "routes",
+      "runs": 30,
+      "durationSeconds": {
+        "median": 97,
+        "p90": 104,
+        "max": 111
+      },
+      "queueSeconds": {
+        "median": 2,
+        "p90": 2,
+        "max": 18
+      },
+      "slowestSteps": [
+        {
+          "name": "pnpm ci:routes",
+          "medianSeconds": 56
+        },
+        {
+          "name": "Initialize containers",
+          "medianSeconds": 25
+        },
+        {
+          "name": "Install",
+          "medianSeconds": 6
+        }
+      ]
+    },
+    {
+      "name": "preview-fixtures-browser",
+      "runs": 1,
+      "durationSeconds": {
+        "median": 91,
+        "p90": 91,
+        "max": 91
+      },
+      "queueSeconds": {
+        "median": 2,
+        "p90": 2,
+        "max": 2
+      },
+      "slowestSteps": [
+        {
+          "name": "pnpm ci:preview-fixtures-browser",
+          "medianSeconds": 44
+        },
+        {
+          "name": "Initialize containers",
+          "medianSeconds": 31
+        },
+        {
+          "name": "Install",
+          "medianSeconds": 4
+        }
+      ]
+    },
+    {
+      "name": "build",
+      "runs": 30,
+      "durationSeconds": {
+        "median": 36,
+        "p90": 40,
+        "max": 43
+      },
+      "queueSeconds": {
+        "median": 2,
+        "p90": 2,
+        "max": 53
+      },
+      "slowestSteps": [
+        {
+          "name": "pnpm ci:build",
+          "medianSeconds": 20
+        },
+        {
+          "name": "Install",
+          "medianSeconds": 6
+        },
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "medianSeconds": 2
+        }
+      ]
+    },
+    {
+      "name": "check-variants",
+      "runs": 30,
+      "durationSeconds": {
+        "median": 16,
+        "p90": 20,
+        "max": 31
+      },
+      "queueSeconds": {
+        "median": 2,
+        "p90": 2,
+        "max": 91
+      },
+      "slowestSteps": [
+        {
+          "name": "Install",
+          "medianSeconds": 6
+        },
+        {
+          "name": "pnpm ci:check-variants",
+          "medianSeconds": 2
+        },
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "medianSeconds": 2
+        }
+      ]
+    },
+    {
+      "name": "gate",
+      "runs": 30,
+      "durationSeconds": {
+        "median": 5,
+        "p90": 7,
+        "max": 18
+      },
+      "queueSeconds": {
+        "median": 2,
+        "p90": 2,
+        "max": 93
+      },
+      "slowestSteps": [
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "medianSeconds": 1
+        },
+        {
+          "name": "Set up job",
+          "medianSeconds": 1
+        },
+        {
+          "name": "Complete job",
+          "medianSeconds": 0
+        }
+      ]
+    }
+  ],
+  "cache": {}
+}

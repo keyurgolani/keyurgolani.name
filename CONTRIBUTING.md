@@ -71,7 +71,7 @@ The [checks](#checks) below catch most of these. A change to either document's f
 
 ## Checks
 
-CI runs these on every pull request. Each CI step runs the matching `pnpm ci:<job>` script, so a failure prints the command that reproduces it.
+CI runs these on pull requests, as [CI](#ci) describes. Each CI step runs the matching `pnpm ci:<job>` script, or a shard of one, so a failure prints the command that reproduces it. `pnpm check:docs` checks every relative link, anchor, and `pnpm` script the Markdown names.
 
 ```sh
 pnpm format:check      # Prettier; pnpm format fixes it
@@ -108,6 +108,26 @@ Two more check the deployment profiles. `pnpm --filter @portfolio/web test:profi
 Two run the owner security suite (#2): sign-in, sessions, CSRF, origin checks, expiry, revocation, and a canary scan of every response, the server's output, and its data directory. `pnpm --filter @portfolio/web test:security` builds and runs it straight against the server over http, with no trusted proxy hop. `pnpm --filter @portfolio/web test:security:proxy` runs it against the image behind the HTTPS proxy fixture, with one trusted hop: build the image first with `pnpm ci:image`, and point `PORTFOLIO_IMAGE` at it if you gave it another tag. In CI the browser job runs the first one's spec with the rest of the browser suite, and the image job runs the second as `pnpm ci:security-proxy`.
 
 Tests use Node's built-in `node:test`, through `tsx` for TypeScript. A single file runs directly, for example `pnpm exec tsx --test packages/kit/src/format.test.ts`. In `apps/web`, `*.test.ts` files cover server modules and run with `--conditions=react-server`; `*.test.tsx` files render pages with `react-dom/server`, which needs the default conditions, so they run without it.
+
+## CI
+
+`.github/workflows/ci.yml` runs on every PR into `main` or `next` and every push to `main`. `gate` is the one required check.
+
+**Selection.** The first job, `changes`, runs `ci/select-jobs.mjs` and picks the check jobs a run needs from the paths the PR changes. A draft PR runs only those, for fast feedback, and the `selected` check says whether they passed. A PR that's ready for review, a PR into `main`, and a push run the complete product on every head. So does any change to a workflow or action file, the lockfile, a root config, the `Dockerfile` or `.dockerignore`, the selector, gate, or shard scripts, a CI script outside the container and docs ones, a deleted or moved package, or any path no rule maps. The step summary of `changes` lists each path's change class and each selected job's local command.
+
+**gate.** `gate` passes only on a complete run in which every job it needs succeeded, so path selection can't merge anything: a draft's run always fails `gate`, GitHub won't merge a draft, and marking it ready runs everything on the same head. A skipped, cancelled, or timed-out job fails `gate` too. A new job joins by adding `changes` to its `needs`, an `if:` on `contains(fromJSON(needs.changes.outputs.jobs), '<job>')`, and its id to `gate`'s and `selected`'s `needs` and to `CHECK_JOBS` and the rules in `ci/select-jobs.mjs`. `pnpm test` fails until it's mapped.
+
+**Check names.** `changes`, `static`, `unit (1/3)` to `unit (3/3)`, `build`, `browser (1/2)` and `browser (2/2)`, `routes`, `appearance-browser`, `check-variants`, `variants (1/2)` and `variants (2/2)`, `external-variant`, `image`, `docs`, `selected`, `gate`, and on `main` only, `publish`.
+
+**Shards.** `unit`, `browser`, and `variants` split by measured duration (`ci/shards.mjs`): by workspace package and root test script, by spec file, and by Playwright project. Items are read from the tree when the shard runs, so a new one is never left out, and `pnpm test:shard <suite> <i>/<n>` runs one shard locally. `ci/shard-durations.json` holds the durations; refresh it with `node ci/shards.mjs measure <suite> <log>...` from `gh run view --job <id> --log` output.
+
+**Caches.** Each check job installs through `.github/actions/install`, which restores and saves the pnpm store under the lockfile's hash. `build` also caches `apps/web/.next/cache` under the lockfile and a hash of the build inputs, and `browser` and `variants` restore it without writing it. Nothing caches `node_modules` or a generated registry, and `publish` installs without either cache.
+
+**The narrowest check.** `pnpm select-jobs` prints what a draft PR of your branch against `origin/next` would select, with each job's local command (`--base <ref>` for another base). Run those, or the single command for what you touched: `pnpm check:docs` for docs, `pnpm test` or one file with `node --test <file>` or `pnpm exec tsx --test <file>` for scripts and packages, `pnpm build && pnpm ci:browser <spec>` for one browser spec, `pnpm test:shard <suite> <i>/<n>` for one shard.
+
+**Scheduled checks.** `.github/workflows/scheduled.yml` runs on Mondays at 06:23 UTC: `pnpm check:docs`, then `pnpm check:links`, which requests each external link once and never a local, reserved, or live-site host. When a job doesn't succeed, including a timeout, the `report` job opens or comments on one rolling issue with the failed jobs, their local commands, and their failure records, and the first passing run closes it. Only `report` holds `issues: write`, and every job sets `timeout-minutes`. GitHub runs schedules only from the default branch, so it starts once it's on `main`, and it disables them after 60 days without activity in a public repository. Test the reporter with `node --test ci/report-issue.test.mjs`. Cross-product jobs, such as #11's appearance validation and #20's catalog provenance refresh, join it as the workflow's header describes.
+
+**Timings.** `ci/baseline.json` is CI's wall, queue, job, and step times before selection, caches, and shards, from 30 finished PR runs. `node ci/timings.mjs --limit 30` reads the same numbers, and the cache hit rate, from recent runs.
 
 ## Conventions
 

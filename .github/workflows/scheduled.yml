@@ -1,0 +1,98 @@
+# Weekly checks across the whole product, outside any PR. A failure opens or
+# updates one rolling issue, and the first passing run closes it
+# (ci/report-issue.mjs).
+#
+# GitHub runs schedules only from the default branch, so this starts once it
+# reaches main, and disables a public repository's schedules after 60 days
+# with no activity there. It has no manual trigger: test the reporter offline
+# with `node --test ci/report-issue.test.mjs`.
+#
+# Every job sets timeout-minutes. A job that hits it is reported as
+# cancelled or as failure, and the reporter counts anything but success as a
+# failure, so nothing hangs or ages silently. Only `report` holds `issues: write`.
+#
+# Cross-product jobs join here: #11's full appearance validation, and #20's
+# report-only catalog provenance refresh once its catalog exists. Each one
+# sets timeout-minutes, uploads its reports as reports-<job>, runs its check
+# as `pnpm ci:<job>` (the reporter names that as its local command), and goes
+# into report's needs.
+name: scheduled
+
+on:
+  schedule:
+    # Mondays at 06:23 UTC.
+    - cron: '23 6 * * 1'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: scheduled
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: 22.23.3
+  TZ: UTC
+
+jobs:
+  # The docs check, then every external link requested once. This job is the
+  # one place CI reaches outside hosts on purpose; it never requests a local,
+  # reserved, or live-site host (ci/docs-check.mjs).
+  links:
+    name: links
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - name: pnpm ci:docs
+        run: node ci/run.mjs docs -- node ci/docs-check.mjs
+      - name: pnpm ci:links
+        if: ${{ !cancelled() }}
+        run: node ci/run.mjs links -- node ci/docs-check.mjs --external
+      - name: Upload reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-links
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: 30
+
+  report:
+    name: report
+    needs: [links]
+    if: ${{ always() && github.event_name == 'schedule' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read # check out the reporter
+      issues: write # open, comment on, and close the rolling report
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            ci/report-issue.mjs
+            ci/summarize.mjs
+            ci/lib/
+          sparse-checkout-cone-mode: false
+      # A missing artifact mustn't stop the report: a job that never ran
+      # uploads none.
+      - name: Download the jobs' reports
+        continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: reports-*
+          path: ${{ runner.temp }}/reports
+      - name: Open, update, or close the report
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+          GITHUB_TOKEN: ${{ github.token }}
+          REPORTS: ${{ runner.temp }}/reports
+        run: node ci/report-issue.mjs --records "$REPORTS"

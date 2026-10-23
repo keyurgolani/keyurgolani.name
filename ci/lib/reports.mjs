@@ -77,7 +77,8 @@ export function readFailureRecords(dir = failuresDir()) {
 
 const inActions = () => process.env.GITHUB_ACTIONS === 'true';
 
-function escapeData(value) {
+/** A workflow command's message, with %, CR, and LF escaped. */
+export function escapeData(value) {
   return String(value).replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A');
 }
 
