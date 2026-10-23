@@ -8,6 +8,7 @@ import {
   checklistItems,
   FLASH_ITEM,
   formattedRecordTemplate,
+  NONE_REGISTERED,
   recordTemplate,
   registeredCompositions,
   templateFile,
@@ -54,7 +55,9 @@ test("a composition's checklist covers its routes and every state fixture", () =
   assert.match(text, /^# Manual checklist: fallback \(composition\)$/m);
   assert.ok(text.includes('- [ ] / (complete):'));
   assert.ok(text.includes('- [ ] /work/project-name (missing-media):'));
-  assert.ok(text.includes('None registered: confirm the page has no dialog'));
+  assert.ok(text.includes(NONE_REGISTERED));
+  // It never tells the tester a page has no dialog or disclosure, which Kinetic Cosmos's has.
+  assert.doesNotMatch(text, /has no dialog/);
   assert.ok(text.includes(FLASH_ITEM));
 });
 
@@ -76,10 +79,10 @@ test('every item has an id, once, which a record answers it by', () => {
 });
 
 test('an id nothing registers fails, naming what is registered', () => {
-  assert.deepEqual(compositions, ['fallback']);
+  assert.deepEqual(compositions, ['fallback', 'kinetic-cosmos']);
   assert.throws(
     () => checklist('studio', registrations, compositions),
-    /Nothing registers studio\. Registered: login, fallback\./,
+    /Nothing registers studio\. Registered: login, fallback, kinetic-cosmos\./,
   );
 });
 

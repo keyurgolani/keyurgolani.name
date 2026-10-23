@@ -14,7 +14,7 @@ function run(...args) {
   return { code: result.status, stdout: result.stdout, stderr: result.stderr };
 }
 
-/** Every pair warns while this build registers only the fallback composition (#5). */
+/** Every pair warns for a variant this build doesn't register, and names the one it does (#14). */
 const UNAVAILABLE = 'site.yml:3:12: variant.unavailable (warning) at /appearance/variant';
 
 test('the valid pair exits 0, with only the warning that the fallback composition renders', () => {
@@ -25,7 +25,7 @@ test('the valid pair exits 0, with only the warning that the fallback compositio
     [
       UNAVAILABLE,
       "  /appearance/variant names a variant this build doesn't register, so the fallback composition renders instead. It blocks publishing, not preview.",
-      '  Install its package with pnpm --filter @portfolio/web add <package> and rebuild. This build registers no variant yet.',
+      '  Install its package with pnpm --filter @portfolio/web add <package> and rebuild, or select one this build registers: kinetic-cosmos.',
       '',
       'portfolio.yml and site.yml are valid, with 1 warning.',
       '',

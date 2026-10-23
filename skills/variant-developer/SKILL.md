@@ -39,7 +39,8 @@ Reference packages:
 
 - **`packages/fallback-composition`**: the clone source and the smallest correct composition: every section in content order through the kit's shared renderers, one `<main>`, one visitor control slot. Read it before scaffolding.
 - **`packages/kit`**: `@portfolio/kit/sections` (`renderSection`, the shared renderers, `RichText`, `seededRandom`, `VisitorControlSlot`) and `@portfolio/kit/enhancements` (`Enhancement`), plus layout primitives and hooks. Use it. If you find yourself rewriting a helper that could live there, hoist it.
-- **`legacy/`**: the retired v1 Editorial and Kinetic Cosmos packages, outside the workspace, for #13 and #14 to port. Read them for ideas and inventory; never import them. Their themes, color schemes, and typography presets moved to #19.
+- **`legacy/`**: the retired v1 Editorial package, outside the workspace, for #13 to port. Read it for ideas and inventory; never import it. Its themes, color schemes, and typography presets moved to #19.
+- **`packages/variant-kinetic-cosmos`**: a port of v1 Kinetic Cosmos (#14), the first registered composition: bespoke renderers for three kinds, the rest shared, #19's Dialog and Disclosure, and the kit's `threadLanes`.
 
 ## 2. What the host does around a variant
 

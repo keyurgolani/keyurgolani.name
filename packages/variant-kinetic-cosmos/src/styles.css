@@ -1,0 +1,287 @@
+/*
+ * Kinetic Cosmos (#14), the still composition's layout. Composition only:
+ * arrangement, spacing, and the orbit's and the lanes' shapes. Every color,
+ * material, radius, and shadow is a token of #19's appearance packs, and the
+ * one signature is the design language's signature fill, on the opening's
+ * core. Every rule sits under [data-variant='kinetic-cosmos'], and every
+ * property is logical, so a right-to-left page reads the same. Nothing here
+ * moves: the motion layer, which follows, runs on #6's runtime.
+ */
+
+[data-variant='kinetic-cosmos'] {
+  display: block;
+  box-sizing: border-box;
+  max-inline-size: 72rem;
+  margin-inline: auto;
+  padding-block: 1.5rem 5rem;
+  padding-inline: clamp(1rem, 4vw, 2.5rem);
+  /* A word too long for the line, such as a name or a URL, breaks rather than widening the page. */
+  overflow-wrap: anywhere;
+}
+
+/* The chrome: the section links and the visitor control, from the first paint. */
+[data-variant='kinetic-cosmos'] .kc-chrome {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-block-end: 2rem;
+  padding-block-end: 1rem;
+  border-block-end: var(--ui-border-divider) solid var(--color-border-subtle);
+}
+
+/*
+ * The links are #19's navigation primitive, which the platform stylesheet
+ * sizes: at least 24 by 24 CSS px, and 32 by 32 at 768 px wide and below.
+ * The navigation always shows: on a large screen with the links, on a small
+ * one with the menu's button, so each set of links is in the tab order only
+ * while it shows.
+ */
+[data-variant='kinetic-cosmos'] .kc-chrome__links {
+  gap: 0.25rem 1.25rem;
+}
+
+[data-variant='kinetic-cosmos'] .kc-menu {
+  display: none;
+}
+
+[data-variant='kinetic-cosmos'] .kc-menu__links {
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+@media (max-width: 47.99rem) {
+  [data-variant='kinetic-cosmos'] .kc-chrome__links {
+    display: none;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-menu {
+    display: block;
+  }
+}
+
+[data-variant='kinetic-cosmos'] .kc-name {
+  margin-block: 0 2rem;
+}
+
+/* Sections breathe: a kinetic composition needs room, or its motion crowds the words. */
+[data-variant='kinetic-cosmos'] .kc-main > [data-renderer] {
+  margin-block: 0 4.5rem;
+}
+
+/*
+ * The orbital opening: the hero's words in front of a still orbit of three
+ * rings around a core. The orbit is decoration, behind the words and inside
+ * the opening's box, so nothing overflows the page.
+ */
+[data-variant='kinetic-cosmos'] .kc-opening {
+  position: relative;
+  display: grid;
+  align-items: center;
+  min-block-size: clamp(22rem, 60vh, 38rem);
+  padding-block: 3rem;
+  overflow: clip;
+}
+
+[data-variant='kinetic-cosmos'] .kc-opening__content {
+  position: relative;
+  max-inline-size: 40rem;
+}
+
+[data-variant='kinetic-cosmos'] .kc-orbit {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-end: -10%;
+  inline-size: min(36rem, 90%);
+  aspect-ratio: 1;
+  margin-block: auto;
+}
+
+[data-variant='kinetic-cosmos'] .kc-orbit__ring,
+[data-variant='kinetic-cosmos'] .kc-orbit__core {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  aspect-ratio: 1;
+  clip-path: circle(50%);
+}
+
+/* A ring is a circle's outline: a radial band in the border color, clear inside and out. */
+[data-variant='kinetic-cosmos'] .kc-orbit__ring {
+  background: radial-gradient(
+    closest-side,
+    transparent calc(100% - var(--ui-border-card) - 1px),
+    var(--color-border-default) calc(100% - var(--ui-border-card) - 1px),
+    var(--color-border-default) 100%,
+    transparent 100%
+  );
+}
+
+[data-variant='kinetic-cosmos'] .kc-orbit__ring--inner {
+  inline-size: 46%;
+}
+
+[data-variant='kinetic-cosmos'] .kc-orbit__ring--middle {
+  inline-size: 72%;
+}
+
+[data-variant='kinetic-cosmos'] .kc-orbit__ring--outer {
+  inline-size: 98%;
+}
+
+/* The one signature: the design language's signature fill, on the core alone. */
+[data-variant='kinetic-cosmos'] .kc-orbit__core {
+  inline-size: 18%;
+  background: var(--ui-signature-fill);
+}
+
+@media (max-width: 47.99rem) {
+  [data-variant='kinetic-cosmos'] .kc-opening {
+    min-block-size: 0;
+    padding-block: 2rem;
+  }
+
+  /* Decoration goes on a phone, rather than shrinking behind the words. */
+  [data-variant='kinetic-cosmos'] .kc-orbit {
+    display: none;
+  }
+}
+
+/*
+ * Evidence as objects: a grid of surfaces, each a disclosure whose summary
+ * is its face. Open, an object takes the whole row, so the record reads at
+ * a measure and nothing it holds is clipped.
+ */
+[data-variant='kinetic-cosmos'] .kc-evidence {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(16rem, 100%), 1fr));
+  gap: 1rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+[data-variant='kinetic-cosmos'] .kc-evidence__object {
+  background: var(--color-surface-default);
+  border: var(--ui-border-card) solid var(--color-border-subtle);
+  border-radius: var(--ui-radius-card);
+  box-shadow: var(--ui-shadow-card);
+}
+
+[data-variant='kinetic-cosmos'] .kc-evidence__object:has(details[open]) {
+  grid-column: 1 / -1;
+}
+
+[data-variant='kinetic-cosmos'] .kc-evidence__disclosure > summary {
+  padding-block: var(--ui-space-surface-block);
+  padding-inline: var(--ui-space-surface-inline);
+}
+
+[data-variant='kinetic-cosmos'] .kc-evidence__glance {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+/* Where an untitled piece comes from, after what it says. */
+[data-variant='kinetic-cosmos'] .kc-evidence__source {
+  color: var(--color-text-secondary);
+}
+
+[data-variant='kinetic-cosmos'] .kc-evidence__record {
+  margin: 0;
+  padding-block: 0 var(--ui-space-surface-block);
+  padding-inline: var(--ui-space-surface-inline);
+  list-style: none;
+}
+
+/*
+ * The branching chronology: one ordered list. On a large screen each lane
+ * is a column of the list, its rail drawn behind it, and an entry that
+ * forks from or merges into another lane is marked by a connector toward
+ * it; on a small screen it's one vertical list, every entry on its axis.
+ */
+[data-variant='kinetic-cosmos'] .kc-chronology {
+  display: grid;
+  gap: 1.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+[data-variant='kinetic-cosmos'] .kc-chronology > li {
+  position: relative;
+  padding-inline-start: 1.25rem;
+  border-inline-start: var(--ui-border-card) solid var(--color-border-default);
+}
+
+@media (min-width: 64rem) {
+  [data-variant='kinetic-cosmos'] .kc-chronology[data-lanes='2'] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-chronology[data-lanes='3'] {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-chronology[data-lanes='4'] {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  /* Each entry in its lane's column, in the list's order: a later one never sits above an earlier one. */
+  [data-variant='kinetic-cosmos'] .kc-chronology > li {
+    grid-column: 1;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-chronology > li[data-lane='1'] {
+    grid-column: 2;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-chronology > li[data-lane='2'] {
+    grid-column: 3;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-chronology > li[data-lane='3'] {
+    grid-column: 4;
+  }
+
+  /* A fork or a join: a connector from the entry's edge toward the lane it reaches. */
+  [data-variant='kinetic-cosmos'] .kc-chronology > li[data-branches-from-lane]::before,
+  [data-variant='kinetic-cosmos'] .kc-chronology > li[data-merges-into-lane]::after {
+    content: '';
+    position: absolute;
+    inset-inline-end: 100%;
+    inline-size: 1.5rem;
+    border-block-start: var(--ui-border-card) solid var(--color-border-strong);
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-chronology > li[data-branches-from-lane]::before {
+    inset-block-start: 0.75rem;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-chronology > li[data-merges-into-lane]::after {
+    inset-block-end: 0.75rem;
+  }
+}
+
+/* Print: the words in reading order, the links in full, the decoration and the menu's button gone. */
+@media print {
+  [data-variant='kinetic-cosmos'] .kc-orbit,
+  [data-variant='kinetic-cosmos'] .kc-menu {
+    display: none;
+  }
+
+  /* On paper the links print in full, whatever the page's width. */
+  [data-variant='kinetic-cosmos'] .kc-chrome__links {
+    display: flex;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-chronology {
+    grid-template-columns: none;
+  }
+
+  [data-variant='kinetic-cosmos'] .kc-chronology > li {
+    grid-column: auto;
+  }
+}

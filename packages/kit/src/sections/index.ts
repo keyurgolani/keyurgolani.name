@@ -10,6 +10,7 @@ export type { RenderSectionOptions } from './render-section';
 export { SHARED_RENDERERS } from './renderers';
 export { CaseStudy } from './renderers/case-study';
 export type { CaseStudyProps } from './renderers/case-study';
+export { ChronologyItem } from './renderers/chronology';
 export { EvidenceEntry } from './renderers/evidence';
 export { WorkEntry } from './renderers/works';
 export { MediaFigure, focalStyle } from './media';
@@ -36,7 +37,14 @@ export {
   worksOf,
 } from './view';
 export type { Placement, ViewSource } from './view';
-export { renderContext } from './primitives';
+export {
+  formatFigure,
+  hrefFor,
+  LinkText,
+  present,
+  renderContext,
+  SectionHeader,
+} from './primitives';
 export type { RenderContext } from './primitives';
 export { RichText } from './rich-text';
 export { seededRandom } from './seeded-random';

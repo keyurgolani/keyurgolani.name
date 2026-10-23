@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import type { MotionPolicy } from '@portfolio/schema';
+import { formatList } from './format';
 import { useEnhancementRuntime } from './runtime';
 
 export interface TypingAnimationProps {
@@ -27,6 +28,16 @@ export interface TypingAnimationProps {
 
 type Phase = 'typing' | 'pausing' | 'deleting';
 
+/** Out of sight, and still read: the full text a screen reader takes in place of the animated one. */
+const VISUALLY_HIDDEN: CSSProperties = {
+  position: 'absolute',
+  inlineSize: '1px',
+  blockSize: '1px',
+  overflow: 'hidden',
+  clipPath: 'inset(50%)',
+  whiteSpace: 'nowrap',
+};
+
 /**
  * Multi-text typing/deleting animation. Cycles forever through `texts`.
  *
@@ -36,10 +47,12 @@ type Phase = 'typing' | 'pausing' | 'deleting';
  * pause, then deletes it and types the next. It stops where it is while the
  * document is hidden, the text is offscreen, or the visitor paused motion.
  *
- * The component renders raw text into a `<span aria-live="polite">` plus
- * an optional caret span. Variants restyle via the `className` prop and
- * a CSS rule on `.kc-typing__caret` (or an equivalent caret class of their
- * choosing — the caret carries no class itself if you override the markup).
+ * The animated text is hidden from assistive technology, with no live
+ * region, so a screen reader never has a keystroke or half a word announced
+ * (#14); in its place, out of sight, is every text once, as a list. The
+ * optional caret span is hidden too. Variants restyle via the `className` prop and a CSS rule on
+ * `.kc-typing__caret` (or an equivalent caret class of their choosing — the
+ * caret carries no class itself if you override the markup).
  */
 export function TypingAnimation({
   texts,
@@ -111,15 +124,10 @@ export function TypingAnimation({
   const visible = still ? current : displayed;
 
   return (
-    <span
-      ref={attachRoot}
-      className={className}
-      role="status"
-      aria-live="polite"
-      aria-atomic="true"
-      aria-label={`Currently displaying: ${current}`}
-    >
-      <span>{visible}</span>
+    <span ref={attachRoot} className={className}>
+      {/* Every text once, for assistive technology, which never reads the one being typed. */}
+      <span style={VISUALLY_HIDDEN}>{formatList(texts)}</span>
+      <span aria-hidden="true">{visible}</span>
       {caret ? (
         <span className="kc-typing__caret" aria-hidden="true">
           |

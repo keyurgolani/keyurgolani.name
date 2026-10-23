@@ -28,6 +28,7 @@ test('the PR plan: each sentinel at every viewport in the default row, and every
     'fallback not-found /quality-no-such-page system',
     'fallback sparse / system',
     'fallback unavailable / system',
+    'kinetic-cosmos complete / system',
     'login signed-out /studio/sign-in system',
   ]);
   const extraRows = PREFERENCE_ROWS.length - 1;
@@ -53,6 +54,7 @@ test('the PR plan: each sentinel at every viewport in the default row, and every
   for (const reason of plan.reasons) assert.ok(isReason(reason), reason);
   assert.deepEqual(plan.targets, [
     { kind: 'composition', id: 'fallback' },
+    { kind: 'composition', id: 'kinetic-cosmos' },
     { kind: 'surface', id: 'login' },
   ]);
 });
@@ -270,19 +272,27 @@ test("a unit's notApplicable skips the cells it names with its reason, and an en
     registrations: { ...registrations, units },
     mode: 'full',
   });
-  const sparse = plan.tests.filter(
+  // The fallback composition's cells: its unit is the one that names them.
+  const fallback = plan.tests.filter((each) => each.cell.target === 'fallback');
+  const sparse = fallback.filter(
     (each) => each.cell.state === 'sparse' && each.viewport.id === '390x844',
   );
   assert.ok(sparse.length > 0);
   for (const each of sparse) assert.equal(each.skip, 'Sparse has nothing to reflow at 390.');
-  const forced = plan.tests.filter(
+  const forced = fallback.filter(
     (each) => each.row.id === 'forced-colors' && each.cell.kind === 'composition',
   );
   for (const each of forced)
     assert.deepEqual(each.engineSkips, { webkit: 'WebKit has no forced colors.' });
   assert.ok(plan.reasons.includes('Sparse has nothing to reflow at 390.'));
-  const other = plan.tests.filter(
+  const other = fallback.filter(
     (each) => each.cell.state === 'sparse' && each.viewport.id !== '390x844',
+  );
+  // Another composition's cells are its own unit's to exclude, and this one names none of them.
+  assert.ok(
+    plan.tests
+      .filter((each) => each.cell.target === 'kinetic-cosmos' && each.cell.state === 'sparse')
+      .every((each) => each.skip !== 'Sparse has nothing to reflow at 390.'),
   );
   for (const each of other) assert.equal(each.skip, undefined);
 });

@@ -130,6 +130,9 @@ importers:
       '@portfolio/variant-contract':
         specifier: workspace:*
         version: link:../../packages/variant-contract
+      '@portfolio/variant-kinetic-cosmos':
+        specifier: workspace:*
+        version: link:../../packages/variant-kinetic-cosmos
       next:
         specifier: 16.4.1
         version: 16.4.1(@babel/core@7.29.7)(@playwright/test@1.58.2)(@types/node@22.19.17)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
@@ -459,6 +462,37 @@ importers:
         version: 0.27.7
 
   packages/variant-editorial-evidence:
+    dependencies:
+      '@portfolio/appearance':
+        specifier: workspace:*
+        version: link:../appearance
+      '@portfolio/kit':
+        specifier: workspace:*
+        version: link:../kit
+      '@portfolio/schema':
+        specifier: workspace:*
+        version: link:../schema
+      '@portfolio/variant-contract':
+        specifier: workspace:*
+        version: link:../variant-contract
+    devDependencies:
+      '@types/react':
+        specifier: ^19.0.0
+        version: 19.2.14
+      '@types/react-dom':
+        specifier: ^19.0.0
+        version: 19.2.3(@types/react@19.2.14)
+      react:
+        specifier: ^19.0.0
+        version: 19.2.5
+      react-dom:
+        specifier: ^19.0.0
+        version: 19.2.5(react@19.2.5)
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+
+  packages/variant-kinetic-cosmos:
     dependencies:
       '@portfolio/appearance':
         specifier: workspace:*
