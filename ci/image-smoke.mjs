@@ -3,10 +3,11 @@
 // container on an internal network under the read-only profile, with the
 // harness fixture mounted read-only as its source directory, and checks from
 // inside the container: /api/health, the home page, the image's own
-// HEALTHCHECK command, what the image contains, that the server's user can
-// change nothing in the app tree, the owner CLI's hash-password and
-// revoke-sessions, that no package manager is left and the store's CLI still
-// runs, and that the container has no route out. Always removes
+// HEALTHCHECK command, that sharp loads and derives a rendition (#10), what
+// the image contains, that the server's user can change nothing in the app
+// tree, the owner CLI's hash-password and revoke-sessions, that no package
+// manager is left and the store's CLI still runs, and that the container has
+// no route out. Always removes
 // the container and network; keeps the image so later steps (the proxy
 // smoke) can run it.
 //
@@ -27,6 +28,7 @@ import {
   MAPS_SNIPPET,
   PROBE_SNIPPET,
   SCAN_SNIPPET,
+  SHARP_SNIPPET,
   WRITABLE_SNIPPET,
 } from './lib/container.mjs';
 import { MANAGER_COMMANDS, MANAGERS_SNIPPET } from './lib/package-managers.mjs';
@@ -296,6 +298,26 @@ async function smoke() {
     );
   }
   console.log('[image] GET / -> 200 with the mounted fixture');
+
+  // #10, Risk 1: sharp loads in the image, on node:22-alpine under pnpm's
+  // build-script policy, as the server's chunks load it, and derives a
+  // rendition, as the server's user.
+  const sharp = JSON.parse(
+    container(['exec', name, 'node', '-e', SHARP_SNIPPET, '/app/apps/web']).stdout || '{}',
+  );
+  if (!sharp.ok || sharp.format !== 'webp' || sharp.width !== 32) {
+    throw new SmokeFailure(
+      `sharp did not load or derive in the image (${sharp.error ?? 'no answer'})`,
+      {
+        test: 'sharp loads and derives a rendition in the image',
+        expected: 'a 32 pixel WebP from the server-side sharp external',
+        actual: sharp.error ?? `${sharp.format} ${sharp.width}`,
+      },
+    );
+  }
+  console.log(
+    `[image] sharp ${sharp.sharp} (libvips ${sharp.vips}) loads as the server's ${sharp.name} and derives a WebP rendition`,
+  );
 
   const scan = JSON.parse(
     container(['exec', name, 'node', '-e', SCAN_SNIPPET, '/app']).stdout || '{}',

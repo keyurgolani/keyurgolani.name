@@ -22,6 +22,7 @@ import {
   PROBE_SNIPPET,
   REQUESTS_SNIPPET,
   SCAN_SNIPPET,
+  SHARP_SNIPPET,
   TREE_SNIPPET,
   WRITABLE_SNIPPET,
   WRITE_SNIPPET,
@@ -344,6 +345,38 @@ test('the ownership check lists what a user could change in a tree', async () =>
     assert.deepEqual((await check(stranger[0], gid)).writable.sort(), ['apps/web', 'server.js']);
   } finally {
     rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("the sharp check loads the build's one sharp external from the server's chunks, and derives with it (#10)", async () => {
+  const app = mkdtempSync(path.join(tmpdir(), 'image-sharp-'));
+  try {
+    const check = async () =>
+      JSON.parse((await runNode(['-e', SHARP_SNIPPET, app], {})).stdout || '{}');
+    // No build output: nothing to load.
+    assert.deepEqual(await check(), {
+      ok: false,
+      error: '0 sharp externals under .next/node_modules',
+    });
+    // The link a build makes, to the sharp @portfolio/core depends on.
+    mkdirSync(path.join(app, '.next', 'node_modules'), { recursive: true });
+    symlinkSync(
+      path.join(ROOT, 'packages', 'core', 'node_modules', 'sharp'),
+      path.join(app, '.next', 'node_modules', 'sharp-0123abcd'),
+    );
+    const loaded = await check();
+    assert.equal(loaded.ok, true, JSON.stringify(loaded));
+    assert.equal(loaded.name, 'sharp-0123abcd');
+    assert.equal(loaded.sharp, '0.34.5');
+    assert.deepEqual([loaded.format, loaded.width], ['webp', 32]);
+    // Two externals is a build this check can't read.
+    symlinkSync(
+      path.join(ROOT, 'packages', 'core', 'node_modules', 'sharp'),
+      path.join(app, '.next', 'node_modules', 'sharp-4567cdef'),
+    );
+    assert.equal((await check()).ok, false);
+  } finally {
+    rmSync(app, { recursive: true, force: true });
   }
 });
 

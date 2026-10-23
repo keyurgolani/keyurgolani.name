@@ -244,7 +244,54 @@ function writeFromInside(dirs) {
   process.stdout.write(JSON.stringify(result));
 }
 
+/**
+ * Loads sharp the way owner's media ingestion does in a build (#10, Risk 1):
+ * Turbopack keeps it external and links it as `sharp-<hash>` under the
+ * app's .next/node_modules, which the server's chunks require from
+ * .next/server/chunks. It derives a 32 pixel WebP from a picture it makes,
+ * so the platform's libvips binary loads too. Prints JSON:
+ * { ok, name, sharp, vips, format, width } or { ok: false, error }.
+ */
+async function sharpFromInside(appDir) {
+  const fs = process.getBuiltinModule('node:fs');
+  const path = process.getBuiltinModule('node:path');
+  const { createRequire } = process.getBuiltinModule('node:module');
+  const out = (value) => process.stdout.write(JSON.stringify(value));
+  const externals = path.join(appDir, '.next', 'node_modules');
+  let names = [];
+  try {
+    names = fs.readdirSync(externals).filter((name) => /^sharp(?:-[0-9a-f]+)?$/.test(name));
+  } catch {
+    // No externals directory: no sharp to load.
+  }
+  if (names.length !== 1) {
+    out({ ok: false, error: `${names.length} sharp externals under .next/node_modules` });
+    return;
+  }
+  try {
+    const chunks = path.join(appDir, '.next', 'server', 'chunks', 'index.js');
+    const sharp = createRequire(chunks)(names[0]);
+    const background = { r: 51, g: 102, b: 153 };
+    const png = await sharp({ create: { width: 64, height: 32, channels: 3, background } })
+      .png()
+      .toBuffer();
+    const webp = await sharp(png).resize({ width: 32 }).webp().toBuffer();
+    const meta = await sharp(webp).metadata();
+    out({
+      ok: true,
+      name: names[0],
+      sharp: sharp.versions.sharp,
+      vips: sharp.versions.vips,
+      format: meta.format,
+      width: meta.width,
+    });
+  } catch (error) {
+    out({ ok: false, error: String(error?.code ?? error?.message ?? error).slice(0, 200) });
+  }
+}
+
 export const PROBE_SNIPPET = `(${probeFromInside.toString()})(process.argv[1])`;
+export const SHARP_SNIPPET = `(${sharpFromInside.toString()})(process.argv[1])`;
 export const WRITABLE_SNIPPET = `(${writableFromInside.toString()})(process.argv[1], Number(process.argv[2]), Number(process.argv[3]))`;
 export const REQUESTS_SNIPPET = `(${requestsFromInside.toString()})(process.getBuiltinModule('node:fs').readFileSync(0, 'utf8'))`;
 export const HOST_REQUESTS_SNIPPET = `(${hostRequestsFromInside.toString()})(process.getBuiltinModule('node:fs').readFileSync(0, 'utf8'))`;
