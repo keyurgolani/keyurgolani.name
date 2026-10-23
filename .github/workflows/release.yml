@@ -149,8 +149,10 @@ jobs:
           grype "sbom:$REPORTS/base-prod-deps.cdx.json" -o json --file "$REPORTS/grype-base-deps.json"
           node ci/release/scan-gate.mjs deps "$REPORTS/grype-deps.json" "$REPORTS/grype-base-deps.json"
       # The candidate tag, then the promotion's tags, on the same digest in
-      # the runner's registry, each checked to resolve to it.
+      # the runner's registry, each checked to resolve to it. This and the
+      # notes run after a failed scan too, so one run reports everything.
       - name: Rehearse the candidate tag and the promotion
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         env:
           DIGEST: ${{ steps.build.outputs.digest }}
         run: |
@@ -158,6 +160,7 @@ jobs:
           targets=$(node --input-type=module -e "import { promotionTargets } from './ci/release/tags.mjs'; console.log(promotionTargets('v0.0.0', []).join(','))")
           node ci/release/retag.mjs "$IMAGE" "$DIGEST" "$targets"
       - name: Render the release notes
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         env:
           TAG: v0.0.0-rc.1
           DIGEST: ${{ steps.build.outputs.digest }}
