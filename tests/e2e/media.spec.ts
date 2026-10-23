@@ -134,7 +134,10 @@ test(
       await request.get(`/media/fixture-garden-cover/${sha256(PUBLIC)}/${sha256(PUBLIC)}.png`),
       'the original',
     );
-    await expectNotFound(await request.get('/assets/fixture-garden.png'), '/assets');
+    // Nothing mounts into public/: /assets is the site's own 404, as any path no route has.
+    const assets = await request.get('/assets/fixture-garden.png');
+    expect(assets.status()).toBe(404);
+    expect(assets.headers()['content-type']).toMatch(/^text\/html/);
   },
 );
 
