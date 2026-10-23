@@ -98,6 +98,7 @@ test('every gate so far has a known-bad case and a known-good one, and each id i
     'axe',
     'merged-verdict',
     'release',
+    'manual-runs',
   ]);
   for (const gate of gates) {
     const cases = META_CASES.filter((metaCase) => metaCase.gate === gate);
@@ -202,6 +203,9 @@ test('every gate so far has a known-bad case and a known-good one, and each id i
     'merged-verdict/missing-shard',
     'release/matrix-failed',
     'release/release-gate-failed',
+    'manual-runs/repository',
+    'manual-runs/templates-filled',
+    'manual-runs/template-unfilled',
   ]) {
     assert.ok(ids.includes(id), id);
   }
