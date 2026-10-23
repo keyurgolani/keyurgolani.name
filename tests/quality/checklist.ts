@@ -210,6 +210,24 @@ export function recordTemplate(
   return `${header}\n${stringify(record, { lineWidth: 0 })}`;
 }
 
+/**
+ * recordTemplate's YAML as Prettier formats it under the repository's
+ * config, so what --record prints is committed and copied as it stands:
+ * pnpm format:check finds nothing to change.
+ */
+export async function formattedRecordTemplate(
+  id: string,
+  registrations: Registrations,
+  compositions: readonly string[],
+): Promise<string> {
+  const prettier = await import('prettier');
+  const options = (await prettier.resolveConfig(templateFile(id))) ?? {};
+  return prettier.format(recordTemplate(id, registrations, compositions), {
+    ...options,
+    parser: 'yaml',
+  });
+}
+
 /** The registered, non-fixture compositions of the checkout's host. */
 export async function registeredCompositions(): Promise<string[]> {
   const registry = await readRegistry({ hostDir: path.join(REPO_ROOT, 'apps', 'web') });
@@ -229,7 +247,7 @@ async function main(argv: readonly string[]): Promise<number> {
     const registrations = await loadRegistrations();
     const compositions = await registeredCompositions();
     text = record
-      ? recordTemplate(id, registrations, compositions)
+      ? await formattedRecordTemplate(id, registrations, compositions)
       : checklist(id, registrations, compositions);
   } catch (error) {
     console.error(`[checklist] ${(error as Error).message}`);

@@ -7,6 +7,7 @@ import {
   checklist,
   checklistItems,
   FLASH_ITEM,
+  formattedRecordTemplate,
   recordTemplate,
   registeredCompositions,
   templateFile,
@@ -87,10 +88,9 @@ test("each registered surface and composition has a committed VoiceOver with Saf
   for (const id of [...registrations.surfaces.map((surface) => surface.id), ...compositions]) {
     const committed = readFileSync(templateFile(id), 'utf8');
     const generated = recordTemplate(id, registrations, compositions);
-    // Prettier formats the committed file; what it says is the generator's, comments included.
+    // What --record prints is the committed file, byte for byte, as Prettier formats it.
+    assert.equal(await formattedRecordTemplate(id, registrations, compositions), committed, id);
     assert.deepEqual(parse(committed), parse(generated), id);
-    const comments = (text: string) => text.split('\n').filter((line) => line.startsWith('#'));
-    assert.deepEqual(comments(committed), comments(generated), id);
     const record = parse(committed) as Record<string, unknown> & {
       browser: { name: string };
       assistiveTechnology: { name: string };
