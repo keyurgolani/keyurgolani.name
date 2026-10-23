@@ -434,17 +434,31 @@ test('a new unit is checked by its tier or axis with no change to the check', ()
 
 test("a variant the trace didn't render, or rendered without source maps, is a record", () => {
   const a = variant('a');
-  assert.match(check([a], []).records[0].test, /no trace case renders variant a/);
+  const untraced = check([a], []).records;
+  assert.deepEqual(metrics(untraced), ['trace']);
+  assert.match(untraced[0].test, /no trace case renders variant a/);
+  // Stylesheets ship without maps, and ASSET_MANIFEST has their bytes; a script without one is unknown JS.
+  const stylesheets = [
+    `${ORIGIN}${a.stylesheet.url}`,
+    `${ORIGIN}/_portfolio/pack/_platform.0123456789ab.css`,
+  ];
+  assert.deepEqual(
+    check([a], [traceCase('a', { attribution: { chunks: [], withoutMap: stylesheets } })]).records,
+    [],
+  );
   const { records } = check(
     [a],
     [
       traceCase('a', {
-        attribution: { chunks: [], withoutMap: [`${ORIGIN}/_next/static/chunks/x.js`] },
+        attribution: {
+          chunks: [],
+          withoutMap: [...stylesheets, `${ORIGIN}/_next/static/chunks/x.js`],
+        },
       }),
     ],
   );
-  assert.equal(records.length, 1);
-  assert.match(records[0].test, /1 chunk\(s\) had no source map/);
+  assert.deepEqual(metrics(records), ['trace']);
+  assert.match(records[0].test, /1 script\(s\) had no source map/);
   assert.equal(records[0].asset, '/_next/static/chunks/x.js');
 });
 

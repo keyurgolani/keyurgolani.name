@@ -398,21 +398,29 @@ export function checkBudgets({
       if (rendering.length === 0) {
         records.push({
           unit,
-          metric: 'js',
+          metric: 'trace',
           test: `no trace case renders ${label(unit)}, so its JS and animation go unmeasured: trace every registered composition`,
           asset: manifestOf(unit),
         });
       }
+      // A stylesheet ships without a map, and its bytes come from ASSET_MANIFEST;
+      // a script without one leaves the unit's JS unknown.
       const unmapped = [
-        ...new Set(rendering.flatMap((entry) => entry.attribution?.withoutMap ?? [])),
+        ...new Set(
+          rendering.flatMap((entry) =>
+            (entry.attribution?.withoutMap ?? [])
+              .map((url) => pathOn(url, entry.origin ?? '') ?? url)
+              .filter((url) => /\.m?js$/i.test(url.replace(/[?#].*$/, ''))),
+          ),
+        ),
       ];
       const unattributed = rendering.filter((entry) => !entry.attribution?.chunks);
       if (unmapped.length > 0 || unattributed.length > 0) {
         records.push({
           unit,
-          metric: 'js',
-          test: `the trace couldn't attribute ${label(unit)}'s JS, since ${unmapped.length > 0 ? `${unmapped.length} chunk(s) had no source map` : 'a case has no attribution'}: ${NEEDS_MAPS}`,
-          asset: pathOn(unmapped[0] ?? '', rendering[0]?.origin ?? '') ?? manifestOf(unit),
+          metric: 'trace',
+          test: `the trace couldn't attribute ${label(unit)}'s JS, since ${unmapped.length > 0 ? `${unmapped.length} script(s) had no source map` : 'a case has no attribution'}: ${NEEDS_MAPS}`,
+          asset: unmapped[0] ?? manifestOf(unit),
         });
       }
     }
