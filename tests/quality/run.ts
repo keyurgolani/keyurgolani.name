@@ -14,13 +14,24 @@
 //      can't read is deleted and fails the run.
 //   5. The verdict (lib/verdict.ts) reads summary.json against the plan and
 //      fails closed; it goes into summary.json and verdict.json, and under
-//      ci/run.mjs each failure is a failure record.
+//      ci/run.mjs each failure is a failure record. It also holds the run
+//      to its perf cells (lib/perf/plan.ts), and summary.json gets the
+//      timing medians, which only a release run gates (lib/perf/timing.ts),
+//      and #6's budget results when the job has them (lib/perf/budgets.ts).
 //
 // Anything after the mode, or after `--`, goes to Playwright, such as
 // --shard=1/3 or --grep. The quality host is removed once the run is done.
 
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { createRequire } from 'node:module';
 import path from 'node:path';
@@ -41,6 +52,9 @@ import { buildReferenceHost, installReference, removeReference } from '../extern
 import { RUN_ENGINES } from './lib/matrix';
 import { RECORD_VERSION } from './lib/failure-records';
 import { judge, type Failure, type Verdict } from './lib/verdict';
+import { budgetResults } from './lib/perf/budgets';
+import { perfCells, perfCoverage } from './lib/perf/plan';
+import { timingMarkdown, timingTrend } from './lib/perf/timing';
 import { loadPlan, RUN_MODES } from './plan';
 import { SUMMARY_FILE, type Summary } from './reporter';
 
@@ -150,6 +164,11 @@ function planRecord(plan: Plan) {
       row: test.row.id,
       skip: test.skip ?? null,
       engineSkips: test.engineSkips,
+    })),
+    perf: perfCells(plan).map((cell) => ({
+      cell: cell.id,
+      target: `${cell.kind}:${cell.target}`,
+      tier: cell.performanceTier,
     })),
   };
 }
@@ -289,11 +308,25 @@ async function main(argv: readonly string[]): Promise<number> {
     missingBrowsers: missing,
     canary: { before, after },
   });
-  const failures = [...setup, ...judged.failures];
+  // Each perf cell ran once (#11, 11-3), fail-closed like the cells.
+  const perf = plan && summary ? perfCoverage(plan, engines, summary) : [];
+  const failures = [...setup, ...judged.failures, ...perf];
   const verdict: Verdict = { ...judged, ok: failures.length === 0, failures };
   writeFileSync(path.join(quality, 'verdict.json'), `${JSON.stringify(verdict, null, 2)}\n`);
+  // The timing medians, reported and never gating here, and #6's budget
+  // results when this job has them, read-only: the trace job gates those.
+  const timing = summary ? timingTrend(summary) : null;
   if (summary) {
-    writeFileSync(SUMMARY_FILE(), `${JSON.stringify({ ...summary, verdict }, null, 2)}\n`);
+    writeFileSync(
+      SUMMARY_FILE(),
+      `${JSON.stringify({ ...summary, verdict, timing, budgets: budgetResults(reportsDir()) }, null, 2)}\n`,
+    );
+  }
+  if (timing) {
+    for (const line of timing.overCeiling) console.log(`[quality] timing (reported only): ${line}`);
+    if (process.env.GITHUB_STEP_SUMMARY) {
+      appendFileSync(process.env.GITHUB_STEP_SUMMARY, `\n${timingMarkdown(timing)}`);
+    }
   }
   const gate = currentGate();
   // The run's own failures, each a 1.1 record naming the rule it broke.
