@@ -4,6 +4,7 @@
   "description": "A tier fixture: a Stable typography profile, a neo-grotesque system stack at humanist-ui's metrics, for the quality gates to run as a shipping Stable pack.",
   "tokenContract": 1,
   "tier": "stable",
+  "budgets": { "js": 0, "css": 1536, "image": 0, "font": 0, "animation": 0, "enhancement": 0 },
   "provenance": {
     "source": {
       "name": "Keyur Golani portfolio platform"
