@@ -379,7 +379,36 @@ export function readDeploymentConfig(env: Env, options: ReadConfigOptions): Read
         'PORTFOLIO_PREVIEW_ORIGIN must differ from PORTFOLIO_ORIGIN.',
       );
     } else {
-      previewOrigin = url.origin;
+      // A preview origin's frames get allow-same-origin (#7, Slice 4), so a
+      // frame's requests are its origin's. On the deployment's own site they
+      // carry the SameSite=Strict session cookie, and over http a frame can
+      // set cookies on its host's parent domain too.
+      const relation = origin === undefined ? null : siteRelation(new URL(origin), url);
+      if (relation === 'same-host') {
+        fatal(
+          'PORTFOLIO_PREVIEW_ORIGIN',
+          'same_host',
+          "PORTFOLIO_PREVIEW_ORIGIN must be on another host than PORTFOLIO_ORIGIN, on any port: cookies don't keep ports apart, so the session cookie would go with every frame's request. Use a host on another registrable domain, or leave it unset.",
+        );
+      } else if (
+        relation === 'same-site' &&
+        (url.protocol === 'http:' || origin?.startsWith('http:'))
+      ) {
+        fatal(
+          'PORTFOLIO_PREVIEW_ORIGIN',
+          'same_site',
+          "PORTFOLIO_PREVIEW_ORIGIN shares a site with PORTFOLIO_ORIGIN, and over http a frame there can set cookies for Studio's host and send its requests with the session cookie. Use a host on another registrable domain, or leave it unset.",
+        );
+      } else {
+        if (relation === 'same-site') {
+          warn(
+            'PORTFOLIO_PREVIEW_ORIGIN',
+            'same_site',
+            "PORTFOLIO_PREVIEW_ORIGIN shares a site with PORTFOLIO_ORIGIN, so a frame's requests are same-site and carry the SameSite=Strict session cookie: a frame can't read Studio's answers, but its requests reach Studio's queries signed in. Use a host on another registrable domain, or leave it unset.",
+          );
+        }
+        previewOrigin = url.origin;
+      }
     }
   }
 
@@ -530,6 +559,26 @@ export function parseBareOrigin(value: string): URL | null {
   }
   if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
   return url.origin === value ? url : null;
+}
+
+/**
+ * How a preview origin's host sits beside the deployment's (#7): the same
+ * host, whatever the ports; the same site, when one host is under the
+ * other or both are under one parent domain, such as preview.jane.name
+ * beside jane.name or www.jane.name; or neither, null. With no public suffix
+ * list, two hosts under one suffix such as co.uk count as one site too,
+ * which only errs toward refusing. An IP address has no parent domain.
+ */
+export function siteRelation(origin: URL, preview: URL): 'same-host' | 'same-site' | null {
+  const a = origin.hostname.toLowerCase();
+  const b = preview.hostname.toLowerCase();
+  if (a === b) return 'same-host';
+  if (a.endsWith(`.${b}`) || b.endsWith(`.${a}`)) return 'same-site';
+  const ip = (host: string) => /^\d{1,3}(?:\.\d{1,3}){3}$/.test(host) || host.startsWith('[');
+  if (ip(a) || ip(b)) return null;
+  const parent = (host: string) => host.split('.').slice(1).join('.');
+  const shared = parent(a);
+  return shared.includes('.') && shared === parent(b) ? 'same-site' : null;
 }
 
 export function isLoopback(hostname: string): boolean {

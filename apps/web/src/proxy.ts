@@ -79,7 +79,10 @@ import {
 // the preview prefixes or the shared asset prefixes, in any case or
 // percent-encoding, goes on as it would on the deployment's own origin, and
 // everything else gets what a path no route matches gets, before anything
-// else here. The Host header decides this and nothing else.
+// else here. It fails closed: only a Host naming PORTFOLIO_ORIGIN's host
+// gets the whole site, and any other, such as one a proxy in front rewrote,
+// gets the health checks and the plain 404. The Host header decides this
+// and nothing else.
 //
 // A path with a trailing slash gets a 308 to the path without it, as Next
 // sent before next.config.ts turned its own off (#7): this one carries the
@@ -141,11 +144,16 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   // answers is the plain 404.
   const pageLoad = request.method === 'GET' || request.method === 'HEAD';
   const preview = isPreviewPath(pathname);
-  // On the preview origin (#7, Slice 4), only frames and what they load.
-  if (onPreviewOrigin(request, deployment.previewOrigin) && !preview && !sharedAsset(pathname)) {
+  // On the preview origin (#7, Slice 4), only frames and what they load, and
+  // on a host the deployment doesn't name, only the health checks.
+  const host = hostOf(request, deployment.origin, deployment.previewOrigin);
+  if (host === 'preview' && !preview && !sharedAsset(pathname)) {
     return pageLoad
       ? unknownPath(request, requestId, extra, {})
       : plain(404, 'Not found.', requestId, extra);
+  }
+  if (host === 'other' && !HEALTH_PATHS.has(pathname)) {
+    return plain(404, 'Not found.', requestId, extra);
   }
   const studioPath = isStudioPath(pathname);
   const studio = studioPath && hasStudio(deployment.profile);
@@ -439,21 +447,34 @@ function sharedAsset(pathname: string): boolean {
   return SHARED_ASSETS.test(decodedPath(pathname));
 }
 
+/** The paths a request to a host the deployment doesn't name still reaches: the health checks. */
+const HEALTH_PATHS: ReadonlySet<string> = new Set(['/api/health', READY_PATH]);
+
 /**
- * Whether the request came to the preview origin's host (#7, Slice 4, item
- * 2), as its Host header names it. That header decides this alone: nothing
- * else here reads it.
+ * Which host the request came to (#7, Slice 4, item 2), as its Host header
+ * names it: the deployment's own, the preview origin's, or another. Without
+ * a preview origin every host is the deployment's, as before. With one, it
+ * fails closed: a host that's neither, such as one a proxy rewrote, is
+ * another. That header decides this alone: nothing else here reads it.
  */
-function onPreviewOrigin(request: NextRequest, previewOrigin: string | undefined): boolean {
-  if (previewOrigin === undefined) return false;
+function hostOf(
+  request: NextRequest,
+  origin: string,
+  previewOrigin: string | undefined,
+): 'site' | 'preview' | 'other' {
+  if (previewOrigin === undefined) return 'site';
   const host = request.headers.get('host');
-  if (!host) return false;
-  const preview = new URL(previewOrigin);
-  try {
-    return new URL(`${preview.protocol}//${host}`).host === preview.host;
-  } catch {
-    return false;
-  }
+  if (!host) return 'other';
+  const names = (target: string) => {
+    const url = new URL(target);
+    try {
+      return new URL(`${url.protocol}//${host}`).host === url.host;
+    } catch {
+      return false;
+    }
+  };
+  if (names(previewOrigin)) return 'preview';
+  return names(origin) ? 'site' : 'other';
 }
 
 /** `pathname` percent-decoded, or as sent when it doesn't decode. */

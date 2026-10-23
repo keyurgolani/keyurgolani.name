@@ -1454,10 +1454,12 @@ test('on the preview origin only a frame and what it loads go on, and every othe
       );
     }
   }
-  // Any other host is the deployment's own, as before: Studio keeps its
-  // headers, and frames its own origin and the preview origin alone.
-  for (const host of ['rowan.test', `${PREVIEW_HOST}:8443`, 'elsewhere.test']) {
+  // The deployment's own host, in any case or with its default port, gets
+  // the site: Studio keeps its headers, and frames its own origin and the
+  // preview origin alone.
+  for (const host of ['rowan.test', 'ROWAN.test', 'rowan.test:443']) {
     const own = await proxy(toHost(host, '/studio/sign-in'));
+    assert.equal(own.headers.get('x-middleware-next'), '1', host);
     assert.equal(own.headers.get('x-middleware-request-x-portfolio-not-found'), null, host);
     assert.match(
       own.headers.get('content-security-policy') ?? '',
@@ -1465,6 +1467,39 @@ test('on the preview origin only a frame and what it loads go on, and every othe
       host,
     );
   }
+  // Any other host, such as one a proxy in front rewrote, or the preview
+  // host on another port, fails closed: the health checks, and the plain
+  // 404 for everything else, the site, Studio, and the preview included.
+  for (const host of [
+    `${PREVIEW_HOST}:8443`,
+    'elsewhere.test',
+    '127.0.0.1:3000',
+    'rowan.test:8443',
+  ]) {
+    for (const path of ['/api/health', '/api/ready']) {
+      const health = await proxy(toHost(host, path));
+      assert.equal(health.headers.get('x-middleware-next'), '1', `${host} ${path}`);
+    }
+    for (const [path, method] of [
+      ['/', 'GET'],
+      ['/studio/sign-in', 'GET'],
+      ['/api/studio/auth.session', 'GET'],
+      ['/api/studio/auth.login', 'POST'],
+      [`/preview/${ACTIVE}`, 'GET'],
+      ['/_next/static/chunks/app.js', 'GET'],
+      ['/no-such-page', 'GET'],
+    ] as const) {
+      const response = await proxy(toHost(host, path, method, { 'sec-fetch-dest': 'iframe' }));
+      const what = `${host} ${method} ${path}`;
+      assert.equal(response.status, 404, what);
+      assert.equal(await response.text(), 'Not found.', what);
+      assert.equal(response.headers.get('x-middleware-next'), null, what);
+    }
+  }
+  // No Host header at all is another host too.
+  const bare = new NextRequest('https://rowan.test/studio/sign-in');
+  bare.headers.delete('host');
+  assert.equal((await proxy(bare)).status, 404);
 });
 
 test('without a preview origin a Host header changes nothing, and Studio frames its own origin alone (#7, Slice 4)', async (t) => {
