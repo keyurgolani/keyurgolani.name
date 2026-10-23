@@ -23,7 +23,8 @@
 //   has no perf cell for, or a target has no perf cell. It runs when the
 //   plan names its perf cells, as run.ts's and plan.json's do.
 // - unchecked-cell: a cell or visual test passed without every check its
-//   kind runs.
+//   kind runs, a cell test every check its row and viewport owe
+//   (checks.ts's requiredChecks).
 // - tests-failed, run-errors: a test failed, or something outside a test
 //   did (a load error, a worker's late egress).
 // - canary-leaked: an artifact holds the run's canary after the scrub.
@@ -38,7 +39,7 @@
 // run.ts writes it as a failure record.
 
 import type { Plan, PlannedTest } from '../cells';
-import { isReason, KIND_CHECKS, PERF_KIND, type TestKind } from './checks';
+import { isReason, KIND_CHECKS, PERF_KIND, requiredChecks, type TestKind } from './checks';
 import type { Summary, SummaryTest } from '../reporter';
 import { VISUAL_SKIP } from './visual';
 
@@ -46,11 +47,12 @@ import { VISUAL_SKIP } from './visual';
 export const HARNESS_SKIPS: readonly string[] = [];
 
 /** A planned test, as the verdict reads one. */
-export type VerdictTest = Pick<PlannedTest, 'skip' | 'engineSkips'> & {
-  readonly cell: Pick<PlannedTest['cell'], 'id'>;
-  readonly viewport: Pick<PlannedTest['viewport'], 'id'>;
-  readonly row: Pick<PlannedTest['row'], 'id'>;
-};
+export type VerdictTest = Pick<PlannedTest, 'skip' | 'engineSkips'> &
+  Partial<Pick<PlannedTest, 'conditions'>> & {
+    readonly cell: Pick<PlannedTest['cell'], 'id'>;
+    readonly viewport: Pick<PlannedTest['viewport'], 'id'>;
+    readonly row: Pick<PlannedTest['row'], 'id'>;
+  };
 
 export interface ArtifactHit {
   readonly file: string;
@@ -222,9 +224,11 @@ export function judge({ plan, engines, summary, missingBrowsers, canary }: Verdi
 
   for (const test of tests) {
     if (!test.kind || test.status !== 'passed') continue;
-    const missing = KIND_CHECKS[test.kind as TestKind].filter(
-      (check) => !test.checks.includes(check),
-    );
+    const owed =
+      test.kind === 'cell' && test.row && test.viewport
+        ? requiredChecks(test.row, test.viewport, plannedFor(test)?.conditions ?? true)
+        : KIND_CHECKS[test.kind as TestKind];
+    const missing = owed.filter((check) => !test.checks.includes(check));
     if (missing.length > 0) {
       fail('unchecked-cell', `${test.title} passed without its ${missing.join(', ')} check(s).`);
     }

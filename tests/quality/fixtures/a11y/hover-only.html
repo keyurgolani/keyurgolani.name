@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Hover-only content, known-bad</title>
+    <!-- Hover shows the card's details; focus on its link doesn't. -->
+    <style>
+      :focus-visible {
+        outline: 2px solid #000;
+        outline-offset: 2px;
+      }
+      .card {
+        padding: 1rem;
+        border: 1px solid #555;
+      }
+      .card .more {
+        display: none;
+      }
+      .card:hover .more {
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>A card that hides its details</h1>
+      <div class="card">
+        <a href="#card">A card</a>
+        <p class="more">Only a pointer finds this.</p>
+      </div>
+    </main>
+  </body>
+</html>

@@ -1,0 +1,23 @@
+# Known bad (#11, Slice 2): an exception for a disclosure that doesn't say
+# whether it's open, keyboard state, WCAG 4.1.2 at level A. No kind waives
+# an A rule.
+version: 1
+exceptions:
+  - id: login-password-toggle-state
+    kind: above-aa
+    gate: keyboard
+    rule: state
+    owner: keyurgolani
+    rationale: The toggle's label changes, so its pressed state seems redundant.
+    affectedUsers: Screen reader users.
+    fallback: The label says Show or Hide.
+    trackingIssue: '#11'
+    created: '2026-10-20'
+    expires: '2026-12-15'
+    scope:
+      surface: login
+      route: /studio/sign-in
+      tuple: platform-neutral/warm-parchment/humanist-ui/system
+      viewport: 1440x900
+      preferenceMode: default
+falsePositives: []

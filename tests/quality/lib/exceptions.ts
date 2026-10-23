@@ -122,9 +122,11 @@ export const EXCEPTION_GATES = {
       'high-contrast-non-text': 'above-aa',
       print: 'above-aa',
     },
-    // Not text: a pack's text roles carry the page's content, so decorative
-    // can't excuse a text contrast failure (the refusal names the way in).
-    decorative: ['large-text', 'non-text'],
+    // Not text, at either size: a pack's text roles carry the page's content,
+    // and large text is text under 1.4.3, so decorative can't excuse a text
+    // contrast failure (the refusal names the way in). Non-text keeps it, as
+    // 1.4.11 exempts decorative graphics.
+    decorative: ['non-text'],
   },
   focus: {
     description:
@@ -133,13 +135,16 @@ export const EXCEPTION_GATES = {
     rules: { visible: 'AA', contrast: 'AA', perimeter: 'above-aa' },
   },
   keyboard: {
-    description: 'Reachability, traps, Escape, focus return, and route focus (Slice 2).',
+    description:
+      "Reachability, traps, a dialog's or menu's containment, Escape, focus return, and expanded state, and route focus (Slice 2).",
     scope: [...CELL, 'preferenceMode'],
     rules: {
       reachable: 'A',
       trap: 'A',
+      containment: 'A',
       escape: 'A',
       'focus-return': 'A',
+      state: 'A',
       'route-focus': 'A',
       'hidden-focusable': 'A',
     },
@@ -219,6 +224,12 @@ export const EXCEPTION_GATES = {
       'kill-switch': 'floor',
       'os-wins': 'floor',
     },
+  },
+  transparency: {
+    description:
+      "Under prefers-reduced-transparency, no backdrop-filter, and Surface, Dialog, and Navigation opaque (Slice 2). The owner's direction holds every pack to it.",
+    scope: [...CELL, 'preferenceMode'],
+    rules: { opaque: 'floor', 'backdrop-filter': 'floor' },
   },
   enhancement: {
     description:
@@ -451,10 +462,10 @@ export function exceptionSchema(source: ExceptionSource, context: ExceptionConte
       if (!level) {
         fail(['rule'], `isn't a rule of ${entry.gate}, so it can't be excepted.`);
       } else if (entry.kind === 'decorative') {
-        if (entry.gate === 'contrast' && entry.rule === 'text') {
+        if (entry.gate === 'contrast' && (entry.rule === 'text' || entry.rule === 'large-text')) {
           fail(
             ['kind'],
-            "contrast text measures a pack's text roles, which carry the page's content, so decorative can't excuse it. Text that really is incidental goes in as a falsePositive, with the quality/manual-runs/ record that proves it.",
+            `contrast ${entry.rule} measures a pack's text roles, which carry the page's content, so decorative can't excuse it. Text that really is incidental goes in as a falsePositive, with the quality/manual-runs/ record that proves it.`,
           );
         } else if (level !== 'A' && level !== 'AA') {
           fail(

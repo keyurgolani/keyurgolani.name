@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Thin focus indicator, known-bad</title>
+    <!-- A dark ring, but 1px: under the 2px perimeter quality/thresholds.json sets. -->
+    <style>
+      body {
+        background: #fff;
+      }
+      button {
+        font: 16px system-ui;
+        padding: 4px 12px;
+        border: 0;
+        background: #fff;
+      }
+      button:focus-visible {
+        outline: 1px solid #000;
+        outline-offset: 3px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>A button with a thin ring</h1>
+      <button type="button">Save</button>
+    </main>
+  </body>
+</html>

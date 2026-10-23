@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Unreachable control, known-bad</title>
+    <style>
+      :focus-visible {
+        outline: 2px solid #000;
+        outline-offset: 2px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>A control Tab skips</h1>
+      <p>
+        <a href="#one" id="one">One</a> <button type="button" id="skipped">Skipped</button>
+        <button type="button" id="three">Three</button>
+      </p>
+    </main>
+    <script>
+      // Focus jumps past the middle control, so the keyboard never gets to it.
+      document
+        .getElementById('skipped')
+        .addEventListener('focus', () => document.getElementById('three').focus());
+    </script>
+  </body>
+</html>

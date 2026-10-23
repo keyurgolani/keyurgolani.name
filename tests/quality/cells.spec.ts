@@ -48,7 +48,15 @@ for (const cell of plan.cells) {
             ],
           },
           async ({ page }, testInfo) => {
-            await runCell({ page, cell, viewport, row, testInfo, expect });
+            await runCell({
+              page,
+              cell,
+              viewport,
+              row,
+              conditions: planned.conditions,
+              testInfo,
+              expect,
+            });
           },
         );
       });

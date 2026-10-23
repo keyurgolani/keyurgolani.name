@@ -40,6 +40,9 @@
     line-height: var(--type-display-line-height);
     letter-spacing: var(--type-display-letter-spacing);
     font-variation-settings: var(--type-display-font-variation-settings);
+    /* A display word can be wider than a 320px phone's line, and a grid or flex track
+       sizes to it: here alone a word may break to fit (WCAG 1.4.10). */
+    overflow-wrap: anywhere;
   }
 
   [data-type-role='headline'] {
@@ -263,6 +266,12 @@
   [data-ui-slot='action'][data-state='loading'] {
     opacity: var(--ui-state-loading-opacity);
     cursor: progress;
+  }
+
+  /* The opacity would dim the focus ring under 3:1 (WCAG 2.4.7, 1.4.11). Focused, a busy
+     action shows whole; its spinner and aria-busy still say it's working. */
+  [data-ui-slot='action'][data-state='loading']:focus-visible {
+    opacity: 1;
   }
 
   [data-ui-slot='action.icon'],

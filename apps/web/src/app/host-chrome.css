@@ -1,3 +1,6 @@
+/* #19 (appearance axes) owns this layer order; its check requires every layered stylesheet to start with this line. */
+@layer reset, scheme, language, typography, variant-layout, utilities, accessibility;
+
 /* Host chrome (#7, Slice 1): the host's own error and not-found pages, which
    only Studio's layout loads. No site or preview document loads this file.
    The sentinel is how tests tell: a document that never loaded it has no
@@ -52,4 +55,15 @@
 
 html[data-theme='dark'] .host-chrome__reference {
   color: #a19c94;
+}
+
+/* The host's focus ring on its own pages (#11, WCAG 2.4.7 and 1.4.11), as
+   experience-base.css gives the portfolio: Chromium's own is a 1px orange
+   ring on phones. It lives here, which only Studio's layout loads, so no
+   site or preview document carries a host-chrome selector (#7). */
+@layer reset {
+  .host-chrome :focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
+  }
 }

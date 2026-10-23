@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A ring set well out, known-good</title>
+    <!-- A 2px ring at a 4px offset reaches 6px past the box: the clip has to reach it too. -->
+    <style>
+      body {
+        background: #fff;
+      }
+      button {
+        font: 16px system-ui;
+        padding: 4px 12px;
+        margin: 16px;
+      }
+      button:focus-visible {
+        outline: 2px solid #000;
+        outline-offset: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>A button with a ring set out</h1>
+      <button type="button">Save</button>
+    </main>
+  </body>
+</html>

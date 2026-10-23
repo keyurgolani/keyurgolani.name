@@ -1,9 +1,14 @@
 // The checks every quality cell test runs (run-cell.ts) and every visual
 // test runs (visual.spec.ts), which each lists in an annotation, and which
 // the run's verdict holds every passing one to (verdict.ts): a test that
-// passed without one of its kind's checks fails the run.
+// passed without one of its kind's checks fails the run. Slice 2's suites
+// run by row and viewport: requiredChecks() says which a cell test owes, and
+// run-cell.ts runs what it says.
 
-export const CELL_CHECKS = ['status', 'emulation', 'clock', 'axe'] as const;
+import { VIEWPORTS } from './matrix';
+import type { PreferenceMode } from './vocabulary';
+
+export const CELL_CHECKS = ['status', 'emulation', 'clock', 'axe', 'contrast'] as const;
 export type CellCheck = (typeof CELL_CHECKS)[number];
 
 export const VISUAL_CHECKS = ['fonts', 'status', 'screenshot'] as const;
@@ -15,6 +20,50 @@ export type PerfCheck = (typeof PERF_CHECKS)[number];
 
 /** The test kind perf.spec.ts's tests carry. */
 export const PERF_KIND = 'perf';
+/** Slice 2's suites, each a gate of part A's EXCEPTION_GATES but overlays, which are the keyboard gate's. */
+export type SuiteCheck =
+  | 'keyboard'
+  | 'focus'
+  | 'occlusion'
+  | 'landscape-occlusion'
+  | 'overlays'
+  | 'hover'
+  | 'reflow'
+  | 'inventory'
+  | 'enhancement'
+  | 'motion'
+  | 'transparency';
+
+/** What each row adds to every cell test of it. */
+const ROW_CHECKS: Readonly<Record<PreferenceMode, readonly SuiteCheck[]>> = {
+  default: ['keyboard', 'focus', 'occlusion', 'overlays'],
+  'reduced-motion': ['motion'],
+  'forced-colors': ['keyboard', 'focus'],
+  'contrast-more': ['keyboard', 'focus'],
+  'high-contrast': ['keyboard', 'focus'],
+  'reduced-transparency': ['transparency'],
+  print: ['inventory'],
+  'no-javascript': ['keyboard'],
+};
+
+/**
+ * The checks a cell test at `viewport` in `row` owes. In the default row,
+ * hover parity runs at the pointer viewports; the reflow, inventory, and
+ * enhancement conditions, which reload the page several times, once a cell,
+ * at the first viewport, where the plan says the cell takes them
+ * (PlannedTest.conditions); and the landscape occlusion pass at the phone's.
+ */
+export function requiredChecks(row: string, viewport: string, conditions = true): string[] {
+  const at = VIEWPORTS.find((each) => each.id === viewport);
+  const checks: string[] = [...CELL_CHECKS, ...(ROW_CHECKS[row as PreferenceMode] ?? [])];
+  if (row === 'default' && at) {
+    if (at.inputMode === 'mouse') checks.push('hover');
+    if (conditions && at === VIEWPORTS[0]) checks.push('reflow', 'inventory', 'enhancement');
+    if (at === VIEWPORTS.find((each) => each.inputMode === 'touch'))
+      checks.push('landscape-occlusion');
+  }
+  return checks;
+}
 
 /** The annotation a test lists the checks it ran in. */
 export const CHECKS_ANNOTATION = 'quality-checks';

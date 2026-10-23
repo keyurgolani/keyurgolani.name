@@ -59,7 +59,7 @@ export default defineConfig({
   projects: RUN_ENGINES[plan.mode].flatMap((engine) => [
     {
       name: `${engine} harness`,
-      testMatch: ['harness.spec.ts', 'canary.spec.ts'],
+      testMatch: ['harness.spec.ts', 'canary.spec.ts', 'a11y.spec.ts'],
       use: { ...engineUse(engine), cellServer: HARNESS_SERVER },
     },
     ...planServers(plan).map(({ id, label, server }) => ({

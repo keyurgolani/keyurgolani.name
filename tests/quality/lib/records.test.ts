@@ -180,9 +180,15 @@ test("a server's id is stable, names its project, and tags only its own cells' t
   const other: Cell = { ...CELL, state: 'sparse', source: 'sparse' };
   const servers = planServers({
     tests: [
-      { cell: CELL, viewport: CONTEXT.viewport, row: CONTEXT.row, engineSkips: {} },
-      { cell: CELL, viewport: VIEWPORTS[0]!, row: CONTEXT.row, engineSkips: {} },
-      { cell: other, viewport: VIEWPORTS[0]!, row: CONTEXT.row, engineSkips: {} },
+      {
+        cell: CELL,
+        viewport: CONTEXT.viewport,
+        row: CONTEXT.row,
+        engineSkips: {},
+        conditions: true,
+      },
+      { cell: CELL, viewport: VIEWPORTS[0]!, row: CONTEXT.row, engineSkips: {}, conditions: true },
+      { cell: other, viewport: VIEWPORTS[0]!, row: CONTEXT.row, engineSkips: {}, conditions: true },
     ],
   });
   assert.equal(servers.length, 2, 'one per server, however many tests share it');

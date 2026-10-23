@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Faint focus indicator, known-bad</title>
+    <!-- A ring of the right width, in a color nobody sees on white: under 3:1. -->
+    <style>
+      body {
+        background: #fff;
+      }
+      button {
+        font: 16px system-ui;
+        padding: 4px 12px;
+      }
+      button:focus-visible {
+        outline: 3px solid #eeeeee;
+        outline-offset: 2px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>A button with a faint ring</h1>
+      <button type="button">Save</button>
+    </main>
+  </body>
+</html>

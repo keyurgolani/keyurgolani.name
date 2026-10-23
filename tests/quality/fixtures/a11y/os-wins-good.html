@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>The OS over the boundary, known-good</title>
+    <!-- As #19's platform stylesheet does: the OS preference reduces the tokens too. -->
+    <style>
+      [data-appearance-boundary] {
+        --ui-state-hover-transform: translateY(-2px);
+        --ui-state-active-transform: scale(0.98);
+        --ui-motion-emphasis: pulse;
+      }
+      [data-appearance-boundary][data-motion='reduced'] {
+        --ui-state-hover-transform: none;
+        --ui-state-active-transform: none;
+        --ui-motion-emphasis: none;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        [data-appearance-boundary] {
+          --ui-state-hover-transform: none;
+          --ui-state-active-transform: none;
+          --ui-motion-emphasis: none;
+        }
+      }
+      [data-appearance-boundary] a {
+        display: inline-block;
+        transition: color 150ms;
+      }
+      [data-appearance-boundary] a:hover {
+        transform: var(--ui-state-hover-transform);
+        color: #000;
+      }
+    </style>
+  </head>
+  <body>
+    <div data-appearance-boundary="document" data-motion="full" data-enhancement="on">
+      <main>
+        <h1>Motion the OS stops</h1>
+        <p><a href="#one">A link that only darkens on hover</a></p>
+      </main>
+    </div>
+  </body>
+</html>

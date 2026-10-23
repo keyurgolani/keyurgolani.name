@@ -627,6 +627,8 @@ test('DataDisplay is a captioned table with headed rows, numbers marked, and bar
     />,
   );
   assert.equal(one(markup, 'data-display').tag, 'figure');
+  // A keyboard reaches it, so it can scroll a table wider than its column (#11, 2.1.1).
+  assert.equal(one(markup, 'data-display').attributes.tabindex, '0');
   assert.equal(one(markup, 'data-display.caption').tag, 'figcaption');
   const headers = slotted(markup, 'data-display.header');
   assert.deepEqual(

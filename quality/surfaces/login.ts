@@ -52,4 +52,10 @@ export const interactions: readonly Interaction[] = [
 
 export const primaryActions: readonly string[] = ['Sign in'];
 
-export const notApplicable: readonly NotApplicable[] = [];
+export const notApplicable: readonly NotApplicable[] = [
+  {
+    match: { row: 'high-contrast' },
+    reason:
+      'The sign-in page renders outside any presentation boundary, so a display mode has nothing to apply to.',
+  },
+];

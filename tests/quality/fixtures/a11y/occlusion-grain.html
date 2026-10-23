@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>A grain overlay, known-good</title>
+    <!-- A full-viewport grain at 3%, pointer-events: none, over every control. It tints them and hides none. -->
+    <style>
+      body {
+        margin: 0;
+        font:
+          16px/1.5 system-ui,
+          sans-serif;
+        color: #111;
+        background: #fff;
+      }
+      main {
+        padding: 1rem;
+      }
+      :focus-visible {
+        outline: 2px solid #000;
+        outline-offset: 2px;
+      }
+      .grain {
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        opacity: 0.03;
+        background: repeating-linear-gradient(45deg, #000 0 1px, #fff 1px 3px);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Links under a grain</h1>
+      <p><a href="#one">The first link</a></p>
+      <p><a href="#two">The second link</a></p>
+      <p><button type="button">A button</button></p>
+    </main>
+    <div class="grain"></div>
+  </body>
+</html>

@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Frame loop under reduce, known-bad</title>
+  </head>
+  <body>
+    <main>
+      <h1>A frame loop that never stops</h1>
+      <p id="clock">0</p>
+    </main>
+    <script>
+      // It never asks whether motion is reduced.
+      const clock = document.getElementById('clock');
+      const tick = (time) => {
+        clock.dataset.time = String(Math.round(time));
+        requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    </script>
+  </body>
+</html>

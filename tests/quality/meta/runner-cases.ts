@@ -21,7 +21,7 @@ import { fileURLToPath } from 'node:url';
 import type { Summary, SummaryTest } from '../reporter';
 import { plantCanary, scanArtifacts, scrubArtifacts, writeZip } from '../lib/artifacts.mjs';
 import { CANARY_FORMS, everyForm, UNKNOWN_FORM } from '../lib/canary-forms.mjs';
-import { CELL_CHECKS, VISUAL_CHECKS } from '../lib/checks';
+import { requiredChecks, VISUAL_CHECKS } from '../lib/checks';
 import { checkEmulation } from '../lib/emulation';
 import { egressFailure, installBrowserPolicy, serverEgressFailure } from '../lib/egress';
 import { PREFERENCE_ROWS } from '../lib/matrix';
@@ -47,6 +47,8 @@ const RUNS: VerdictTest = {
   engineSkips: {},
 };
 const ALSO_RUNS: VerdictTest = { ...RUNS, viewport: { id: '1024x768' } };
+/** A Slice 2 row's test, which owes the row's own checks. */
+const REDUCED_MOTION: VerdictTest = { ...RUNS, row: { id: 'reduced-motion' } };
 const SKIPS: VerdictTest = { ...RUNS, viewport: { id: '390x844' }, skip: STAND_IN };
 
 /** A passing cell test of the fallback composition, as the reporter lists one. */
@@ -67,7 +69,7 @@ function cellTest(planned: VerdictTest = RUNS, overrides: Partial<SummaryTest> =
     expectedStatus: 'passed',
     status: 'passed',
     skipReason: null,
-    checks: [...CELL_CHECKS],
+    checks: requiredChecks('default', '1440x900'),
     canaryProbe: false,
     errors: [],
     records: 0,
@@ -533,7 +535,52 @@ export const RUNNER_CASES: readonly MetaCase[] = [
     'fail',
     {
       summary: cleanWith((tests) => [
-        cellTest(RUNS, { checks: CELL_CHECKS.filter((check) => check !== 'axe') }),
+        cellTest(RUNS, {
+          checks: requiredChecks('default', '1440x900').filter((check) => check !== 'axe'),
+        }),
+        ...tests.slice(1),
+      ]),
+    },
+  ),
+  verdictCase(
+    'unchecked-cell',
+    'no-motion',
+    'a passing reduced-motion cell test that never ran its motion check (#11, Slice 2)',
+    'fail',
+    {
+      plan: { ...PLAN, tests: [...PLAN.tests, REDUCED_MOTION] },
+      summary: cleanWith((tests) => [
+        ...tests,
+        cellTest(REDUCED_MOTION, {
+          checks: requiredChecks('reduced-motion', '1440x900').filter(
+            (check) => check !== 'motion',
+          ),
+        }),
+      ]),
+    },
+  ),
+  verdictCase(
+    'unchecked-cell',
+    'row-checks',
+    'a passing reduced-motion cell test that ran every check its row owes',
+    'pass',
+    {
+      plan: { ...PLAN, tests: [...PLAN.tests, REDUCED_MOTION] },
+      summary: cleanWith((tests) => [
+        ...tests,
+        cellTest(REDUCED_MOTION, { checks: requiredChecks('reduced-motion', '1440x900') }),
+      ]),
+    },
+  ),
+  verdictCase(
+    'unchecked-cell',
+    'no-conditions-planned',
+    "a passing default cell test without the reload conditions, which the PR plan doesn't give its cell",
+    'pass',
+    {
+      plan: { ...PLAN, tests: [{ ...RUNS, conditions: false }, ALSO_RUNS, SKIPS] },
+      summary: cleanWith((tests) => [
+        cellTest(RUNS, { checks: requiredChecks('default', '1440x900', false) }),
         ...tests.slice(1),
       ]),
     },

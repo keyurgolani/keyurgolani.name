@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Dialog that drops focus, known-bad</title>
+    <style>
+      :focus-visible {
+        outline: 2px solid #000;
+        outline-offset: 2px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>A dialog that loses the place</h1>
+      <button type="button" aria-haspopup="dialog" id="open">Open</button>
+      <button type="button" id="elsewhere">Elsewhere</button>
+      <dialog id="dialog" aria-label="Settings"><button type="button">Close</button></dialog>
+    </main>
+    <script>
+      const dialog = document.getElementById('dialog');
+      document.getElementById('open').addEventListener('click', () => dialog.showModal());
+      // Once closed, focus goes somewhere other than the control that opened it.
+      dialog.addEventListener('close', () =>
+        setTimeout(() => document.getElementById('elsewhere').focus()),
+      );
+    </script>
+  </body>
+</html>

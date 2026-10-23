@@ -14,9 +14,12 @@
 // `pr` plans the sentinels: each composition's published default
 // appearance, each tier fixture pack on the fallback composition, each
 // state fixture, and each surface's default state, at every viewport in the
-// default row, plus every other row once, on the first composition at
-// 1440x900. `full` plans every cell in every row. Slice 4 adds the 40-cell
-// cap and change mapping.
+// default row, plus every other row once at 1440x900, on the first
+// composition and on each tier pack's sentinel, so each tier's packs meet
+// the contrast, focus, forced-colors, reduced-motion, and
+// reduced-transparency rows on every PR (#11, Slice 2, the owner's [37]).
+// `full` plans every cell in every row. Slice 4 adds the 40-cell cap and
+// change mapping.
 
 // First: readBuildMeta() loads the generated registry, which imports
 // `server-only`; #73's shim resolves it to its empty module, as Next's
@@ -116,6 +119,13 @@ export interface PlannedTest {
   readonly skip?: string;
   /** Why it doesn't apply on an engine, by engine: the project running it skips with this. */
   readonly engineSkips: Readonly<Record<string, string>>;
+  /**
+   * Whether the default row's reload conditions (the content inventory,
+   * reflow, and failed enhancement) run here. A full run plans them on
+   * every cell; a PR run only on the first composition's default and each
+   * tier pack's sentinel, leaving the other state fixtures to the full run.
+   */
+  readonly conditions: boolean;
 }
 
 export interface Plan {
@@ -390,7 +400,7 @@ export function planCells({ meta, registrations, mode }: PlanInput): Plan {
         const planned =
           mode === 'full' ||
           row === DEFAULT_ROW ||
-          (cell === firstDefault && viewport === VIEWPORTS[0]);
+          ((cell === firstDefault || cell.pack !== undefined) && viewport === VIEWPORTS[0]);
         if (!planned) continue;
         const fields = { route: cell.route, state: cell.state, viewport: viewport.id, row: row.id };
         const exclusions = exclusionsFor(cell);
@@ -404,7 +414,14 @@ export function planCells({ meta, registrations, mode }: PlanInput): Plan {
             engineSkips[engine] ??= each.reason;
           }
         }
-        tests.push({ cell, viewport, row, skip: cell.pending ?? exclusion?.reason, engineSkips });
+        tests.push({
+          cell,
+          viewport,
+          row,
+          skip: cell.pending ?? exclusion?.reason,
+          engineSkips,
+          conditions: mode === 'full' || cell === firstDefault || cell.pack !== undefined,
+        });
       }
     }
   }

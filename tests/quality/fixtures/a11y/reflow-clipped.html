@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Clipped content, known-bad</title>
+    <!-- A card of fixed height that hides what doesn't fit once the text wraps or grows. -->
+    <style>
+      body {
+        margin: 0;
+        font:
+          16px/1.5 system-ui,
+          sans-serif;
+      }
+      .card {
+        height: 3rem;
+        overflow: hidden;
+        padding: 0 0.5rem;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>A card that cuts its text</h1>
+      <div class="card">
+        <p>
+          A description long enough to wrap onto several lines once the viewport narrows to a
+          phone's or the text doubles in size.
+        </p>
+      </div>
+    </main>
+  </body>
+</html>
