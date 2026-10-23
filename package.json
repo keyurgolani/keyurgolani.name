@@ -21,8 +21,9 @@
     "format:check": "prettier --check .",
     "lint": "eslint --max-warnings=0 .",
     "typecheck": "pnpm -r typecheck && tsc -p tests --noEmit",
-    "test": "pnpm -r test && pnpm test:scripts",
+    "test": "pnpm -r test && pnpm test:scripts && pnpm test:quality",
     "test:scripts": "node --test 'ci/**/*.test.mjs' 'skills/**/*.test.mjs' 'tests/harness/**/*.test.mjs'",
+    "test:quality": "tsx --test 'tests/quality/**/*.test.ts'",
     "test:routes": "playwright test --config tests/routes/playwright.config.ts",
     "test:variants": "playwright test --config tests/variants/playwright.config.ts",
     "test:appearance": "playwright test --config tests/appearance/playwright.config.ts",
@@ -38,6 +39,8 @@
     "check:workflows": "node ci/check-workflows.mjs",
     "check:source-maps": "node ci/check-source-maps.mjs",
     "check:standalone": "node ci/check-standalone.mjs",
+    "quality:exceptions": "tsx tests/quality/exceptions.ts",
+    "quality:meta": "tsx tests/quality/meta/run.ts",
     "ci:format": "node ci/run.mjs format -- pnpm format:check",
     "ci:lint": "node ci/run.mjs lint -- pnpm lint",
     "ci:typecheck": "node ci/run.mjs typecheck -- pnpm typecheck",
@@ -77,6 +80,7 @@
     "prettier": "3.9.10",
     "tsx": "^4.21.0",
     "typescript": "^5.7.2",
-    "yaml": "^2.8.4"
+    "yaml": "^2.8.4",
+    "zod": "3.25.76"
   }
 }

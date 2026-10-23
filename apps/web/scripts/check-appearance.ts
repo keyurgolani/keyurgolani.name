@@ -1,4 +1,4 @@
-// `pnpm check:appearance [--fixture <name>]` (#19, Slice 2, item 8). It reads
+// `pnpm check:appearance [--fixture <name>] [--thresholds <file>]` (#19, Slice 2, item 8). It reads
 // the registry as build:registry does, writing nothing, and runs the
 // computed gate over every registered combination of design language, color
 // scheme, typography, and display mode; the hierarchy check; and the layer
@@ -11,6 +11,14 @@
 // --fixture <name> instead runs the gate with that one known-bad input
 // registered beside the build's packs, and fails when the gate does, as
 // `pnpm check:appearance --fixture bad-contrast` must.
+//
+// The gate's targets come from quality/thresholds.json (#11, AC5), through
+// appearance-targets.ts. --thresholds <file> reads them from another copy of
+// that file instead, so a test can show the gate follows the file; no CI
+// command passes it. Fixture packs are skipped, except those a flag in
+// GATED_FIXTURE_FLAGS admits: #11's tier fixtures stand in for Stable,
+// Extended, and Experimental packs, so they're gated as shipping packs, and
+// QUALITY_FIXTURES=meta's known-bad pack fails here for its reason.
 
 import path from 'node:path';
 import {
@@ -31,16 +39,54 @@ import {
   type AppearanceCheck,
   type KnownBadExpectation,
 } from '@portfolio/appearance/node';
-import { formatRegistryDiagnostics, registryMeta } from '@portfolio/variant-contract/node';
+import {
+  formatRegistryDiagnostics,
+  registryMeta,
+  type RegistryResult,
+} from '@portfolio/variant-contract/node';
+import type { GateTargets } from '@portfolio/appearance';
+import { loadThresholds } from '../../../quality/thresholds';
+import { appearanceTargets } from './appearance-targets';
 import { generateRegistry, PACK_OUT, plural, renderOptions, REPO_ROOT } from './registry-options';
 
-const USAGE = 'Usage: tsx scripts/check-appearance.ts [--fixture <name>]\n';
+const USAGE = 'Usage: tsx scripts/check-appearance.ts [--fixture <name>] [--thresholds <file>]\n';
 const TAG = '[check:appearance]';
 
-function parse(args: readonly string[]): { fixture?: string } | null {
-  if (args.length === 0) return {};
-  if (args.length === 2 && args[0] === '--fixture' && args[1]) return { fixture: args[1] };
-  return null;
+/**
+ * The fixture flags whose packs the gate checks as shipping packs: #11's
+ * QUALITY_FIXTURES, whose tier fixtures stand in for Stable, Extended, and
+ * Experimental packs. Every other fixture pack is skipped.
+ */
+const GATED_FIXTURE_FLAGS: ReadonlySet<string> = new Set(['QUALITY_FIXTURES']);
+
+/** The packages of the fixture packs `result` admitted under a gated flag. */
+function gatedFixturePackages(result: RegistryResult): Set<string> {
+  return new Set(
+    result.fixtures
+      .filter(({ flag, admitted }) => admitted && GATED_FIXTURE_FLAGS.has(flag))
+      .map(({ packageName }) => packageName),
+  );
+}
+
+interface Options {
+  fixture?: string;
+  /** A thresholds file to read the targets from, in place of quality/thresholds.json. */
+  thresholds?: string;
+}
+
+/** The options in `args`, each flag at most once with its value, or null. */
+function parse(args: readonly string[]): Options | null {
+  const options: Options = {};
+  for (let i = 0; i < args.length; i += 2) {
+    const flag = args[i];
+    const value = args[i + 1];
+    if (!value) return null;
+    if (flag === '--fixture' && options.fixture === undefined) options.fixture = value;
+    else if (flag === '--thresholds' && options.thresholds === undefined)
+      options.thresholds = value;
+    else return null;
+  }
+  return options;
 }
 
 const relative = (file: string) => path.relative(REPO_ROOT, file).split(path.sep).join('/');
@@ -74,7 +120,11 @@ function expectation(item: KnownBadExpectation): string {
 }
 
 /** The known-bad inputs the gate didn't fail as each names, with what it missed. */
-function knownBadMisses(registry: AppearanceRegistry, meta: AppearanceMeta): string[] {
+function knownBadMisses(
+  registry: AppearanceRegistry,
+  meta: AppearanceMeta,
+  targets: GateTargets,
+): string[] {
   const misses: string[] = [];
   for (const name of knownBadNames()) {
     const read = readKnownBadFixture(name, registry);
@@ -82,7 +132,7 @@ function knownBadMisses(registry: AppearanceRegistry, meta: AppearanceMeta): str
       misses.push(`${name}: ${read.problem}`);
       continue;
     }
-    const run = runKnownBad(read.fixture, meta);
+    const run = runKnownBad(read.fixture, meta, { targets });
     const unmet = unmetExpectations(read.fixture, run);
     if (read.fixture.expect.length === 0) misses.push(`${name}: it names nothing it expects.`);
     else if (unmet.length > 0) {
@@ -97,6 +147,16 @@ async function main(): Promise<number> {
   if (!options) {
     process.stderr.write(USAGE);
     return 2;
+  }
+  let targets: GateTargets;
+  try {
+    targets = appearanceTargets(
+      options.thresholds ? loadThresholds(path.resolve(options.thresholds)) : undefined,
+    );
+  } catch (error) {
+    process.stderr.write(`${TAG} ${(error as Error).message}\n`);
+    process.stderr.write(`${TAG} The thresholds don't load, so nothing was checked.\n`);
+    return 1;
   }
   const { result, packs } = await generateRegistry(process.env, { write: false });
   if (!result.ok) {
@@ -120,7 +180,7 @@ async function main(): Promise<number> {
       process.stderr.write(`${TAG} ${read.problem}\n`);
       return 2;
     }
-    const run = runKnownBad(read.fixture, meta);
+    const run = runKnownBad(read.fixture, meta, { targets });
     const lines = run.check ? describe(run.check) : run.problems;
     for (const line of lines) process.stderr.write(`${TAG} ${line}\n`);
     if (lines.length === 0) {
@@ -133,7 +193,11 @@ async function main(): Promise<number> {
     return 1;
   }
 
-  const check = checkAppearance(registry);
+  const gated = gatedFixturePackages(result);
+  const check = checkAppearance(registry, {
+    targets,
+    gateFixture: ({ packageName }) => gated.has(packageName),
+  });
   const compiled = (packs ?? [])
     .filter(({ name }) => name.endsWith('.css'))
     .map((file) => ({
@@ -143,7 +207,7 @@ async function main(): Promise<number> {
   const sources = stylesheetsUnder(REPO_ROOT, ['apps', 'packages']);
   const unordered = layerOrderProblems([...compiled, ...sources]);
   const layered = [...compiled, ...sources].filter(({ css }) => /@layer\b/.test(css)).length;
-  const misses = knownBadMisses(registry, meta);
+  const misses = knownBadMisses(registry, meta, targets);
 
   for (const { axis, id, reason } of check.skipped)
     process.stdout.write(`${TAG} Skipped ${axis} ${id}: ${reason}.\n`);

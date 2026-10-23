@@ -1,0 +1,14 @@
+# Known bad (#11, Slice 1, item 13): an issue_comment trigger, which runs with
+# the base repository's secrets when anyone comments on a pull request. Its job
+# is otherwise fine, so it fails for the trigger alone.
+name: command
+on:
+  issue_comment:
+    types: [created]
+permissions:
+  contents: read
+jobs:
+  command:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: echo command

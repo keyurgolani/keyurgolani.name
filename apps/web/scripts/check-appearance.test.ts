@@ -1,21 +1,42 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import fs from 'node:fs';
 import { createRequire } from 'node:module';
+import os from 'node:os';
+import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { FIXTURE_FLAG } from '../../../ci/lib/fixture-flags.mjs';
+import { THRESHOLDS_FILE } from '../../../quality/thresholds';
 
 // `pnpm check:appearance` (#19, Slice 2, item 8): it passes on the packs this
 // build registers, fails on a bad-contrast input, and writes nothing, so it
-// runs beside anything else that reads the registry.
+// runs beside anything else that reads the registry. It gates #11's tier
+// fixtures as shipping packs (#11, Slice 1, item 9): the nine pass, and
+// QUALITY_FIXTURES=meta's known-bad scheme fails for its light text-muted.
 
 const SCRIPT = fileURLToPath(new URL('./check-appearance.ts', import.meta.url));
 const TSX = createRequire(import.meta.url).resolve('tsx/cli');
 
+/** The script's run with `flags` and no other fixture flag. */
 function check(args: readonly string[], flags: Record<string, string> = {}) {
-  const env: NodeJS.ProcessEnv = { ...process.env, ...flags };
-  if (!('APPEARANCE_FIXTURES' in flags)) delete env.APPEARANCE_FIXTURES;
-  return spawnSync(process.execPath, [TSX, SCRIPT, ...args], { encoding: 'utf8', env });
+  const env: NodeJS.ProcessEnv = { ...process.env };
+  for (const name of Object.keys(env)) if (FIXTURE_FLAG.test(name)) delete env[name];
+  return spawnSync(process.execPath, [TSX, SCRIPT, ...args], {
+    encoding: 'utf8',
+    env: { ...env, ...flags },
+  });
 }
+
+/** Its finding lines on stderr, without the count that ends them. */
+const findings = (stderr: string) =>
+  stderr
+    .split('\n')
+    .filter((line) => line.startsWith('[check:appearance] ') && !/ \d+ findings?\.$/.test(line));
+
+const TIER_PACKS = ['language', 'scheme', 'typography'].flatMap((axis) =>
+  ['stable', 'extended', 'experimental'].map((tier) => `fixture-${axis}-${tier}`),
+);
 
 test('it passes on the fallback packs, and says what it checked', () => {
   const run = check([]);
@@ -40,6 +61,57 @@ test('with APPEARANCE_FIXTURES=1 it skips the fixture packs, which no production
   );
 });
 
+test('with QUALITY_FIXTURES=1 it gates the nine tier fixtures as shipping packs, and they pass', () => {
+  const run = check([], { QUALITY_FIXTURES: '1' });
+  assert.equal(run.status, 0, run.stderr);
+  assert.doesNotMatch(run.stdout, /Skipped/);
+  // The fallback pack and the three tiers on each axis: 4 x 4 x 4 tuples, in 4 modes.
+  assert.match(
+    run.stdout,
+    /4 design languages, 4 color schemes, and 4 typography profiles: 256 combinations and \d+ pairs checked, none failing; the hierarchy holds;/,
+  );
+});
+
+test("with APPEARANCE_FIXTURES=1 too, it still skips #19's fixture packs and gates #11's", () => {
+  const run = check([], { APPEARANCE_FIXTURES: '1', QUALITY_FIXTURES: '1' });
+  assert.equal(run.status, 0, run.stderr);
+  for (const id of ['fixture-translucent', 'fixture-dark-only', 'fixture-seed', 'fixture-font']) {
+    assert.match(run.stdout, new RegExp(`Skipped \\w+ ${id}: a fixture pack`));
+  }
+  for (const id of TIER_PACKS) assert.doesNotMatch(run.stdout, new RegExp(`Skipped \\w+ ${id}:`));
+  assert.match(
+    run.stdout,
+    /4 design languages, 4 color schemes, and 4 typography profiles: 256 combinations/,
+  );
+});
+
+test("with QUALITY_FIXTURES=meta it fails on the low-contrast scheme's light text-muted, and nothing else", () => {
+  const run = check([], { QUALITY_FIXTURES: 'meta' });
+  assert.equal(run.status, 1, run.stdout);
+  const lines = findings(run.stderr);
+  assert.ok(lines.length > 0, run.stderr);
+  for (const line of lines) {
+    assert.match(
+      line,
+      /^\[check:appearance\] [a-z-]+ \+ fixture-scheme-experimental-low-contrast \+ [a-z-]+ \(system, light, dark\), light: text-muted on (?:canvas|surface-[a-z]+) is \d\.\d+:1, under 4\.5:1 \(text\)\.$/,
+    );
+  }
+  // On the canvas and on every surface.
+  for (const ground of [
+    'canvas',
+    'surface-subtle',
+    'surface-default',
+    'surface-prominent',
+    'surface-overlay',
+  ]) {
+    assert.ok(
+      lines.some((line) => line.includes(`text-muted on ${ground} is`)),
+      ground,
+    );
+  }
+  assert.match(run.stderr, new RegExp(`\\[check:appearance\\] ${lines.length} findings\\.`));
+});
+
 test('it fails on a bad-contrast input, naming the pair, its ratio, and the modes that render it', () => {
   const run = check(['--fixture', 'bad-contrast']);
   assert.equal(run.status, 1, run.stdout);
@@ -62,5 +134,52 @@ test('an input that is not there, or an argument it does not take, is a usage er
   );
   const usage = check(['--bogus']);
   assert.equal(usage.status, 2);
-  assert.match(usage.stderr, /^Usage: tsx scripts\/check-appearance\.ts \[--fixture <name>\]/);
+  assert.match(
+    usage.stderr,
+    /^Usage: tsx scripts\/check-appearance\.ts \[--fixture <name>\] \[--thresholds <file>\]/,
+  );
+  for (const args of [
+    ['--thresholds'],
+    ['--fixture', 'bad-contrast', '--fixture', 'bad-contrast'],
+    ['--thresholds', THRESHOLDS_FILE, '--thresholds', THRESHOLDS_FILE],
+  ]) {
+    assert.equal(check(args).status, 2, args.join(' '));
+  }
+});
+
+test('its targets are the thresholds file it reads, and a file that does not load checks nothing', (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'check-appearance-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const thresholds = JSON.parse(fs.readFileSync(THRESHOLDS_FILE, 'utf8'));
+  const copy = (name: string, value: unknown) => {
+    const file = path.join(dir, name);
+    fs.writeFileSync(file, JSON.stringify(value));
+    return file;
+  };
+
+  // A copy of quality/thresholds.json passes, as the file does.
+  const same = check(['--thresholds', copy('same.json', thresholds)]);
+  assert.equal(same.status, 0, same.stderr);
+
+  // A 7:1 text floor fails light and dark pairs that 4.5:1 passes.
+  const raised = check([
+    '--thresholds',
+    copy('raised.json', { ...thresholds, contrast: { ...thresholds.contrast, text: 7 } }),
+  ]);
+  assert.equal(raised.status, 1, raised.stdout);
+  assert.ok(
+    findings(raised.stderr).some((line) =>
+      /\), (?:light|dark): .+ is \d+\.\d+:1, under 7:1 \(text\)\.$/.test(line),
+    ),
+    raised.stderr,
+  );
+
+  // A ratio over 21:1 is no ratio, so the gate stops before it checks anything.
+  const broken = check([
+    '--thresholds',
+    copy('broken.json', { ...thresholds, contrast: { ...thresholds.contrast, text: 22 } }),
+  ]);
+  assert.equal(broken.status, 1);
+  assert.match(broken.stderr, /The thresholds don't load, so nothing was checked\./);
+  assert.doesNotMatch(broken.stderr, / findings?\./);
 });

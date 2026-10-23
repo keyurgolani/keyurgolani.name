@@ -35,6 +35,7 @@ function language(tokens: Partial<LanguageTokens> = {}): GateLanguage {
 const find = (pairs: readonly GatePair[], foreground: string, ground: string) =>
   pairs.find((pair) => pair.foreground === foreground && pair.ground === ground)!;
 
+// apps/web/scripts/appearance-targets.test.ts holds these to quality/thresholds.json.
 test('the targets are the refined body and #11 targets', () => {
   assert.deepEqual(
     { ...GATE_TARGETS },
@@ -47,8 +48,25 @@ test('the targets are the refined body and #11 targets', () => {
       highContrastNonText: 4.5,
       textureRaise: 1.1,
       focusWidth: 2,
+      largeTextPt: 18,
+      largeBoldTextPt: 14,
+      largeBoldWeight: 700,
     },
   );
+});
+
+test('a caller can pass targets of its own, as check:appearance passes the thresholds file', () => {
+  const strict = { ...GATE_TARGETS, text: 21 };
+  const light = gateSet(SETS.light!, 'light', language(), SMALL_SIGNATURE, strict);
+  assert.equal(find(light, 'text-primary', 'canvas').target, 21);
+  assert.equal(find(light, 'text-primary', 'canvas').passes, false);
+  assert.equal(find(light, 'focus', 'canvas').target, GATE_TARGETS.nonText);
+  // Large text is the targets' too: 1.25rem (15pt) is large once 15pt is.
+  const role = { ...HUMANIST_UI.roles.body, 'font-size': '1.25rem', 'font-weight': 400 };
+  assert.equal(isLargeText(role), false);
+  assert.equal(isLargeText(role, { ...GATE_TARGETS, largeTextPt: 15 }), true);
+  const report = contrastReport(SETS, NEUTRAL_LANGUAGE, SMALL_SIGNATURE, strict);
+  assert.equal(report.passes, false);
 });
 
 test('the fallback trio passes every pair in every set it renders', () => {

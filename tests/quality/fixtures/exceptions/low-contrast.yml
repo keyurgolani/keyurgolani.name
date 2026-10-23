@@ -1,0 +1,23 @@
+# Known bad (#11, VR2): an exception for fixture-scheme-experimental-low-contrast's
+# text contrast failure, which can't be excepted: text contrast is WCAG AA, and
+# an Experimental tier waives nothing.
+version: 1
+exceptions:
+  - id: low-contrast-muted-text
+    kind: above-aa
+    gate: contrast
+    rule: text
+    owner: keyurgolani
+    rationale: The scheme is Experimental, so its muted text may read at 2.68:1.
+    affectedUsers: Low-vision readers.
+    fallback: None.
+    trackingIssue: '#11'
+    created: '2026-10-20'
+    expires: '2026-12-15'
+    scope:
+      surface: fallback
+      route: /
+      tuple: platform-neutral/fixture-scheme-experimental-low-contrast/humanist-ui/light
+      viewport: 1440x900
+      preferenceMode: default
+falsePositives: []

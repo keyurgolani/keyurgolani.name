@@ -89,6 +89,7 @@ export {
   type ContrastReport,
   type GateLanguage,
   type GatePair,
+  type GateTargets,
   type GateTypography,
 } from './gate';
 export {

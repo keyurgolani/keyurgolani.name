@@ -1,0 +1,33 @@
+{
+  "id": "fixture-scheme-extended",
+  "name": "Fixture Scheme Extended",
+  "description": "A tier fixture: an Extended color scheme, forest green with a bark-brown secondary, in light and dark, for the quality gates to run as a shipping Extended pack.",
+  "tokenContract": 1,
+  "tier": "extended",
+  "provenance": {
+    "source": {
+      "name": "Keyur Golani portfolio platform"
+    },
+    "license": "first-party",
+    "researchedAt": "2026-10-22",
+    "maintainer": "keyurgolani",
+    "derivation": "anchor-v1 from forest anchors in light and dark.",
+    "caveats": ["A test fixture: it registers only when QUALITY_FIXTURES is 1 or meta."]
+  },
+  "derivation": "anchor-v1",
+  "anchors": {
+    "light": {
+      "canvas": "#f1f4ec",
+      "text": "#1e2a1f",
+      "accent": "#3d7a3a",
+      "secondary": "#8a5a2b"
+    },
+    "dark": {
+      "canvas": "#172018",
+      "text": "#e3ecdf",
+      "accent": "#8fd18a",
+      "secondary": "#e0b07d"
+    }
+  },
+  "swatches": ["#f1f4ec", "#1e2a1f", "#3d7a3a", "#8a5a2b"]
+}

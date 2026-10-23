@@ -1,0 +1,11 @@
+{
+  "name": "@portfolio/quality-fixtures-schemes-meta",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The known-bad color-scheme tier fixture (#11): fixture-scheme-experimental-low-contrast, which pnpm quality:meta needs check:appearance to fail. It registers only when QUALITY_FIXTURES=meta, so it has a package of its own: the fixture gate admits packages, not packs.",
+  "portfolio": {
+    "kind": "color-scheme",
+    "packs": "./packs",
+    "fixture": true
+  }
+}

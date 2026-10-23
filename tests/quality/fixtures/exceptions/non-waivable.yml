@@ -1,0 +1,22 @@
+# Known bad: an exception for axe's color-contrast, a WCAG AA rule, on essential
+# content. No kind but decorative applies to it, and this one claims above-aa.
+version: 1
+exceptions:
+  - id: fallback-body-contrast
+    kind: above-aa
+    gate: axe
+    rule: color-contrast
+    owner: keyurgolani
+    rationale: The body text is 4.2:1 in the Experimental scheme, and the pack is Experimental.
+    affectedUsers: Low-vision readers.
+    fallback: None.
+    trackingIssue: '#11'
+    created: '2026-10-20'
+    expires: '2026-12-15'
+    scope:
+      surface: fallback
+      route: /
+      tuple: platform-neutral/fixture-scheme-experimental/humanist-ui/light
+      viewport: 1440x900
+      preferenceMode: default
+falsePositives: []

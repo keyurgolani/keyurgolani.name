@@ -18,7 +18,11 @@ export function failuresDir() {
   return path.join(reportsDir(), 'failures');
 }
 
-/** Builds a record, dropping empty fields so optional ones stay absent. */
+/**
+ * Builds a record, dropping empty fields so optional ones stay absent. It's
+ * written against SCHEMA_VERSION unless `fields` names another, as #11's
+ * quality records name 1.1 (tests/quality/lib/failure-records.ts).
+ */
 export function failureRecord(fields) {
   const record = { schemaVersion: SCHEMA_VERSION };
   for (const [key, value] of Object.entries(fields)) {

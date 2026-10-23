@@ -13,7 +13,7 @@ import {
   fixtureRow,
   type FixtureRow,
 } from './fixture-gate';
-import { packHooks } from './registry-options';
+import { packHooks, registryOptions } from './registry-options';
 
 // The fixture gate (#7, item 10; built in #19, Slice 2): a table of which flag
 // admits each fixture package by its directory, which #7, #6, and #11 extend
@@ -72,8 +72,128 @@ test('every fixture package in the workspace maps to a row of the table', () => 
     'appearance-fixtures-languages',
     'appearance-fixtures-schemes',
     'appearance-fixtures-typography',
+    'quality-fixtures-languages',
+    'quality-fixtures-schemes',
+    'quality-fixtures-schemes-meta',
+    'quality-fixtures-typography',
   ]);
   for (const dir of marked) assert.ok(fixtureRow(`packages/${dir}`), dir);
+});
+
+test('pnpm check:registry runs under every value a row admits, and with none', () => {
+  // ci/check-registry.mjs can't import this table, so it lists the states
+  // itself; a row's value it doesn't list would go unchecked.
+  const source = fs.readFileSync(path.join(REPO_ROOT, 'ci', 'check-registry.mjs'), 'utf8');
+  for (const { flag, values } of FIXTURE_ROWS) {
+    for (const value of values) {
+      assert.ok(
+        source.includes(`${flag}: '${value}'`),
+        `check:registry runs no state with ${flag}=${value}`,
+      );
+    }
+  }
+  assert.match(source, /label: 'without a fixture flag', env: unflagged/);
+});
+
+const QUALITY_DIRS = [
+  'quality-fixtures-languages',
+  'quality-fixtures-schemes',
+  'quality-fixtures-typography',
+  'quality-fixtures-schemes-meta',
+];
+
+test('QUALITY_FIXTURES=1 admits the nine tier packs, and meta the low-contrast scheme too', () => {
+  const decide = (value: string | undefined, dir: string) => {
+    const decision = fixtureGate({ QUALITY_FIXTURES: value })({
+      name: `@portfolio/${dir}`,
+      dir: path.join(REPO_ROOT, 'packages', dir),
+    });
+    assert.ok(decision.mapped, dir);
+    assert.equal(decision.flag, 'QUALITY_FIXTURES', dir);
+    return decision.admitted;
+  };
+  assert.deepEqual(
+    QUALITY_DIRS.map((dir) => decide('1', dir)),
+    [true, true, true, false],
+  );
+  assert.deepEqual(
+    QUALITY_DIRS.map((dir) => decide('meta', dir)),
+    [true, true, true, true],
+  );
+  for (const value of [undefined, '', '0', 'true', 'META', ' 1', '1,meta', 'all']) {
+    assert.deepEqual(
+      QUALITY_DIRS.map((dir) => decide(value, dir)),
+      [false, false, false, false],
+      String(value),
+    );
+  }
+  // The rows name their directories outright, so a new quality-fixtures-*
+  // directory maps to no row and its fixture fails generation.
+  assert.equal(fixtureRow('packages/quality-fixtures-variants'), undefined);
+  assert.equal(fixtureRow('packages/quality-fixtures'), undefined);
+});
+
+test("QUALITY_FIXTURES admits nothing APPEARANCE_FIXTURES does, and the reverse, so neither changes the other's packs", () => {
+  const admitted = (env: Record<string, string>) =>
+    [
+      'appearance-fixtures-languages',
+      'appearance-fixtures-schemes',
+      'appearance-fixtures-typography',
+      ...QUALITY_DIRS,
+    ].filter((dir) => {
+      const decision = fixtureGate(env)({
+        name: `@portfolio/${dir}`,
+        dir: path.join(REPO_ROOT, 'packages', dir),
+      });
+      return decision.mapped && decision.admitted;
+    });
+  assert.deepEqual(admitted({ APPEARANCE_FIXTURES: '1' }), [
+    'appearance-fixtures-languages',
+    'appearance-fixtures-schemes',
+    'appearance-fixtures-typography',
+  ]);
+  assert.deepEqual(admitted({ QUALITY_FIXTURES: '1' }), QUALITY_DIRS.slice(0, 3));
+  assert.deepEqual(admitted({ QUALITY_FIXTURES: 'meta' }), QUALITY_DIRS);
+  assert.deepEqual(admitted({ APPEARANCE_FIXTURES: '1', QUALITY_FIXTURES: '1' }), [
+    'appearance-fixtures-languages',
+    'appearance-fixtures-schemes',
+    'appearance-fixtures-typography',
+    ...QUALITY_DIRS.slice(0, 3),
+  ]);
+});
+
+test('the host registers the tier packs only under QUALITY_FIXTURES, and the low-contrast one only under meta', async () => {
+  const tier = ['language', 'scheme', 'typography'].flatMap((axis) =>
+    ['stable', 'extended', 'experimental'].map((name) => `fixture-${axis}-${name}`),
+  );
+  const low = 'fixture-scheme-experimental-low-contrast';
+  const registered = async (env: Record<string, string | undefined>) => {
+    const result = await readRegistry(registryOptions(env));
+    assert.ok(result.ok, JSON.stringify(result.diagnostics, null, 2));
+    // Each quality fixture package is decided, admitted or not, every time.
+    assert.deepEqual(
+      result.fixtures
+        .filter(({ flag }) => flag === 'QUALITY_FIXTURES')
+        .map(({ packageName }) => packageName.replace('@portfolio/', '')),
+      [...QUALITY_DIRS.slice(0, 2), QUALITY_DIRS[3], QUALITY_DIRS[2]],
+    );
+    return result.packs
+      .map(({ manifest }) => manifest.id)
+      .filter((id) => tier.includes(id) || id === low)
+      .sort();
+  };
+  assert.deepEqual(await registered({}), []);
+  assert.deepEqual(await registered({ QUALITY_FIXTURES: '1' }), [...tier].sort());
+  assert.deepEqual(await registered({ QUALITY_FIXTURES: 'meta' }), [...tier, low].sort());
+  // A tier pack keeps its tier, so the gates read Stable, Extended, and Experimental from it.
+  const result = await readRegistry(registryOptions({ QUALITY_FIXTURES: 'meta' }));
+  for (const { manifest } of result.packs) {
+    const id = manifest.id;
+    const tierName = /^fixture-(?:language|scheme|typography)-(stable|extended|experimental)/.exec(
+      id,
+    )?.[1];
+    if (tierName) assert.equal((manifest as { tier?: string }).tier, tierName, id);
+  }
 });
 
 test("the gate reads a fixture package's real directory, relative to its workspace's root", () => {
@@ -152,13 +272,30 @@ test("the gate reads a fixture package's real directory, relative to its workspa
 });
 
 test('FIXTURE_FLAGS has one boolean per flag, true when its value admits any of its rows', () => {
-  assert.deepEqual(fixtureFlags({}), { appearance: false });
-  assert.deepEqual(fixtureFlags({ APPEARANCE_FIXTURES: '1' }), { appearance: true });
-  assert.deepEqual(fixtureFlags({ APPEARANCE_FIXTURES: 'yes' }), { appearance: false });
-  assert.deepEqual(
-    FIXTURE_ROWS.map(({ key }) => key),
-    [...new Set(FIXTURE_ROWS.map(({ key }) => key))],
-  );
+  assert.deepEqual(fixtureFlags({}), { appearance: false, quality: false });
+  assert.deepEqual(fixtureFlags({ APPEARANCE_FIXTURES: '1' }), {
+    appearance: true,
+    quality: false,
+  });
+  assert.deepEqual(fixtureFlags({ APPEARANCE_FIXTURES: 'yes' }), {
+    appearance: false,
+    quality: false,
+  });
+  // quality is true under either value, since each admits quality fixture packs into the build.
+  assert.deepEqual(fixtureFlags({ QUALITY_FIXTURES: '1' }), { appearance: false, quality: true });
+  assert.deepEqual(fixtureFlags({ QUALITY_FIXTURES: 'meta' }), {
+    appearance: false,
+    quality: true,
+  });
+  assert.deepEqual(fixtureFlags({ QUALITY_FIXTURES: 'yes' }), {
+    appearance: false,
+    quality: false,
+  });
+  // A flag has one key and a key one flag, however many rows the flag has.
+  const keys = new Map<string, Set<string>>();
+  for (const { flag, key } of FIXTURE_ROWS) keys.set(key, (keys.get(key) ?? new Set()).add(flag));
+  for (const [key, flags] of keys) assert.equal(flags.size, 1, key);
+  assert.equal(new Set(FIXTURE_ROWS.map(({ flag }) => flag)).size, keys.size);
 
   // A flag whose values admit different fixtures, as #6's BUDGET_FIXTURES will: a row per value.
   const rows: FixtureRow[] = [
@@ -178,14 +315,17 @@ test('FIXTURE_FLAGS has one boolean per flag, true when its value admits any of 
   ];
   assert.deepEqual(fixtureFlags({ BUDGET_FIXTURES: '1' }, rows), {
     appearance: false,
+    quality: false,
     budget: true,
   });
   assert.deepEqual(fixtureFlags({ BUDGET_FIXTURES: 'over' }, rows), {
     appearance: false,
+    quality: false,
     budget: true,
   });
   assert.deepEqual(fixtureFlags({ BUDGET_FIXTURES: '2' }, rows), {
     appearance: false,
+    quality: false,
     budget: false,
   });
 

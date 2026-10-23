@@ -1,0 +1,4 @@
+/* The focused surface takes the focus color; the compiler scopes this to fixture-language-experimental. */
+[data-ui-slot='surface']:focus-within {
+  border-color: var(--color-focus);
+}

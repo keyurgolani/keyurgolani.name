@@ -1,0 +1,90 @@
+{
+  "version": 1,
+  "description": "Every limit #11's quality gates and #19's computed contrast gate use (AC5). quality/thresholds.ts validates this file with zod, and gate code reads its limits only from here: pnpm check:appearance hands the contrast and focus limits to #19's gate, whose browser default, GATE_TARGETS, a test holds to this file. #6's budgets stay in runtime-budgets.json.",
+  "conformance": {
+    "description": "WCAG 2.2 AA for public portfolios, both Studios, and every shipping pack, the same in every tier. axe runs these tags.",
+    "standard": "WCAG 2.2",
+    "level": "AA",
+    "axeTags": ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"]
+  },
+  "contrast": {
+    "description": "Contrast ratios, measured at rendered size. Large text is 18pt (24px), or 14pt (18.66px) at weight 700 or more. highContrast holds under displayMode: high-contrast and prefers-contrast: more. print is on white paper with backgrounds removed, unless print-color-adjust: exact is set. A textured design language raises the targets on canvas and surfaces by textureRaise, while pairs on fills keep theirs (#19).",
+    "text": 4.5,
+    "largeText": 3,
+    "nonText": 3,
+    "largeTextPt": 18,
+    "largeBoldTextPt": 14,
+    "largeBoldWeight": 700,
+    "highContrast": { "text": 7, "largeText": 4.5, "nonText": 4.5 },
+    "print": { "text": 4.5, "paper": "#ffffff" },
+    "textureRaise": 1.1
+  },
+  "focus": {
+    "description": "Non-text focus contrast is contrast.nonText against adjacent colors. The focus change covers at least perimeterPx, in CSS px, also under forced colors.",
+    "perimeterPx": 2
+  },
+  "targets": {
+    "description": "Target sizes in CSS px, measured on the padded hit area by hit-testing. minimumPx everywhere (2.5.8: its spacing exception allowed, inline text links exempt). narrowPx for non-inline targets at narrowMaxWidth or narrower. primaryPx at any density for fixed or sticky controls, computed on the control or an ancestor, and for primary touch controls: those inside the #19 Navigation primitive, or in a registration's primaryActions.",
+    "minimumPx": 24,
+    "narrowPx": 32,
+    "narrowMaxWidth": 768,
+    "primaryPx": 44
+  },
+  "viewports": {
+    "description": "Each is WIDTHxHEIGHT in CSS px. every runs for every check, occlusionAndTargets adds a landscape phone for occlusion and targets, reflow is the narrow reflow check, zoom is 200% zoom by deviceScaleFactor, rootText is 200% root text, and textSpacing is where the 1.4.12 override runs.",
+    "every": ["1440x900", "1024x768", "390x844"],
+    "occlusionAndTargets": ["844x390"],
+    "reflow": ["320x568"],
+    "zoom": [{ "viewport": "640x400", "deviceScaleFactor": 2 }],
+    "rootText": [{ "viewport": "1024x768", "scale": 2 }],
+    "textSpacing": ["390x844", "1440x900"]
+  },
+  "textSpacing": {
+    "description": "The 1.4.12 override, in multiples of the font size: line height, paragraph spacing, letter spacing, and word spacing.",
+    "lineHeight": 1.5,
+    "paragraphSpacing": 2,
+    "letterSpacing": 0.12,
+    "wordSpacing": 0.16
+  },
+  "reducedMotion": {
+    "description": "While motion is reduced, static, hidden, or offscreen: no animated transform, scale, rotate, or position; opacity and color transitions up to transitionMs; and at most rafCallbacks requestAnimationFrame callbacks from rafWindowMs[0] to rafWindowMs[1] after load.",
+    "transitionMs": 200,
+    "rafWindowMs": [1000, 4000],
+    "rafCallbacks": 0
+  },
+  "vitals": {
+    "description": "Lab vitals, for every tier. TBT stands in for INP. A canvas-led cell, with a canvas in the first viewport, makes a server-rendered poster image or headline text its LCP element within lcpMs. A missing LCP entry fails.",
+    "lcpMs": 2500,
+    "cls": 0.1,
+    "tbtMs": 200
+  },
+  "idle": {
+    "description": "TaskDuration over windowMs, starting startMs after load, visible, at default motion, on the default path, by performanceTier. The forced software-WebGL path is report-only.",
+    "startMs": 2000,
+    "windowMs": 5000,
+    "taskDurationMs": { "light": 50, "medium": 500, "heavy": 500 }
+  },
+  "memory": {
+    "description": "JSHeapUsedSize at sampleMs, in MiB (1,048,576 bytes), by performanceTier, and its growth from growthWindowMs[0] to growthWindowMs[1].",
+    "sampleMs": 10000,
+    "heapMiB": { "light": 16, "medium": 32, "heavy": 64 },
+    "growthWindowMs": [5000, 15000],
+    "growthMiB": 1
+  },
+  "timing": {
+    "description": "Vitals, idle work, and memory take the median of runs. Pull request and scheduled runs report it as a trend. Release-candidate runs fail a median more than releaseTolerance over its ceiling.",
+    "runs": 5,
+    "releaseTolerance": 0.1
+  },
+  "exceptions": {
+    "description": "An exception expires at most maxDays after it's created, and a flake quarantine at most quarantineMaxDays after. Scheduled runs warn warnDays before an exception expires.",
+    "maxDays": 90,
+    "quarantineMaxDays": 14,
+    "warnDays": 14
+  },
+  "flakes": {
+    "description": "limit flakes of one test within windowDays fail scheduled and main runs, unless a quarantine exception owned by the surface's owner exists. Pull request runs only report flakes.",
+    "limit": 2,
+    "windowDays": 7
+  }
+}

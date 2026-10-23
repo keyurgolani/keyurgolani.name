@@ -3,8 +3,9 @@
 // path views, and the fallback composition declares none.
 //
 // It copies the workspace, the root files, apps/, and packages/, as the
-// checkout has them, with what sits beside the bundled sample pair (#10), into
-// a temporary directory. Each fixture package from
+// checkout has them, with what sits beside the bundled sample pair (#10) and
+// the quality thresholds the build's scripts import (#11), into a temporary
+// directory. Each fixture package from
 // tests/fixtures/variants/ goes inside the copy's apps/web, under
 // fixture-variants/, and becomes a `link:` dependency of its @portfolio/web,
 // the way `pnpm --filter @portfolio/web add link:<dir>` adds one. A fixture
@@ -54,7 +55,7 @@ export function fixtureHostWeb() {
 }
 
 /** What pnpm install and the build read at the root. */
-const ROOT_FILES = [
+export const ROOT_FILES = [
   'package.json',
   'pnpm-lock.yaml',
   'pnpm-workspace.yaml',
@@ -63,8 +64,14 @@ const ROOT_FILES = [
   'portfolio.example.yml',
   'site.example.yml',
 ];
-/** What sits beside the bundled sample pair (#10): its snapshots, and its media sources. */
-const ROOT_DIRS = ['snapshots', 'example-media'];
+/**
+ * The root directories the copy needs: what sits beside the bundled sample
+ * pair (#10), its snapshots and media sources, and quality/, whose
+ * thresholds apps/web/scripts/appearance-targets.ts imports (#11), so the
+ * copy's `next build` type-checks it. fixture-host.test.mjs fails when a
+ * build source imports a root directory this list leaves out.
+ */
+export const ROOT_DIRS = ['snapshots', 'example-media', 'quality'];
 /** Directories never copied, wherever they are: installs and build output. */
 const SKIPPED_DIRS = new Set(['node_modules', '.next', '.turbo', 'dist', 'coverage']);
 /** What registry generation writes, which the copy's build writes again. */

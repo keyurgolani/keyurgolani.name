@@ -47,6 +47,99 @@ test('gate and reproCommand are required', () => {
 
 test('only known schema versions are accepted', () => {
   assert.equal(validate({ ...minimal, schemaVersion: '2.0' }), false);
+  assert.equal(validate({ ...minimal, schemaVersion: '1.2' }), false);
+  assert.equal(
+    validate({ ...minimal, schemaVersion: '1.1' }),
+    true,
+    JSON.stringify(validate.errors),
+  );
+});
+
+// Version 1.1 (#11, Slice 1, item 10): the quality gates' fields.
+const quality = {
+  schemaVersion: '1.1',
+  gate: 'quality-pr',
+  reproCommand: 'pnpm quality:pr',
+  test: 'axe on fallback',
+  variant: 'fallback',
+  route: '/',
+  viewport: '390x844',
+  inputMode: 'touch',
+  semanticRole: 'link',
+  rule: 'color-contrast',
+  preferenceMode: 'reduced-motion',
+  tuple: 'platform-neutral/warm-parchment/humanist-ui/light',
+  uiSlot: 'action',
+  accessibleName: 'Read the case study',
+  exceptionId: 'decorative-hero-caption',
+  tokenRole: 'text-muted',
+  expected: 4.5,
+  actual: 3.1,
+};
+
+test('a 1.1 record takes the quality fields', () => {
+  assert.equal(validate(quality), true, JSON.stringify(validate.errors));
+  for (const tokenRole of ['hard-coded', 'accent-text']) {
+    assert.equal(validate({ ...quality, tokenRole }), true, tokenRole);
+  }
+  for (const preferenceMode of [
+    'default',
+    'forced-colors',
+    'contrast-more',
+    'high-contrast',
+    'reduced-transparency',
+    'print',
+    'no-javascript',
+  ]) {
+    assert.equal(validate({ ...quality, preferenceMode }), true, preferenceMode);
+  }
+});
+
+test('1.0 records stay valid, and a 1.0 record carries no 1.1 field', () => {
+  assert.equal(
+    validate({ ...minimal, inputMode: 'pointer' }),
+    true,
+    JSON.stringify(validate.errors),
+  );
+  for (const field of [
+    'rule',
+    'preferenceMode',
+    'tuple',
+    'uiSlot',
+    'accessibleName',
+    'exceptionId',
+    'tokenRole',
+  ]) {
+    assert.equal(validate({ ...minimal, [field]: quality[field] }), false, field);
+  }
+});
+
+test('a 1.1 record takes inputMode as mouse, keyboard, or touch alone', () => {
+  for (const inputMode of ['mouse', 'keyboard', 'touch']) {
+    assert.equal(validate({ ...quality, inputMode }), true, inputMode);
+  }
+  for (const inputMode of ['pointer', 'Mouse', 'stylus', '']) {
+    assert.equal(validate({ ...quality, inputMode }), false, inputMode);
+  }
+});
+
+test("a 1.1 record's tuple, preference mode, exception id, and token role keep their grammar", () => {
+  for (const [field, value] of [
+    ['tuple', 'platform-neutral/warm-parchment/humanist-ui'],
+    ['tuple', 'platform-neutral/warm-parchment/humanist-ui/sepia'],
+    ['tuple', '*/warm-parchment/humanist-ui/light'],
+    ['tuple', 'fallback/platform-neutral/warm-parchment/humanist-ui/light'],
+    ['preferenceMode', 'reduce'],
+    ['preferenceMode', 'any'],
+    ['exceptionId', 'X'],
+    ['exceptionId', 'has spaces'],
+    ['tokenRole', 'Text-Muted'],
+    ['tokenRole', '#a595a6'],
+    ['rule', ''],
+    ['accessibleName', ''],
+  ]) {
+    assert.equal(validate({ ...quality, [field]: value }), false, `${field} ${value}`);
+  }
 });
 
 test('reproCommand must be a pnpm command that needs no secrets', () => {
@@ -111,4 +204,27 @@ test('renderMarkdown escapes table syntax and shows the local command', () => {
   assert.match(markdown, /route=\//);
   assert.match(markdown, /<code>pnpm ci:unit<\/code>/);
   assert.equal(renderMarkdown([]), '');
+});
+
+test("renderMarkdown shows a 1.1 record's rule, preference row, tuple, and element", () => {
+  const markdown = renderMarkdown([quality]);
+  for (const part of [
+    'rule=color-contrast',
+    'preferenceMode=reduced-motion',
+    'tuple=platform-neutral/warm-parchment/humanist-ui/light',
+    'uiSlot=action',
+    'accessibleName=Read the case study',
+    'tokenRole=text-muted',
+    'exceptionId=decorative-hero-caption',
+  ]) {
+    assert.ok(markdown.includes(part), part);
+  }
+});
+
+test('failureRecord writes the version a writer names, 1.0 unless it says 1.1', () => {
+  assert.equal(failureRecord({ gate: 'unit', reproCommand: 'pnpm ci:unit' }).schemaVersion, '1.0');
+  const record = failureRecord({ ...quality, route: '' });
+  assert.equal(record.schemaVersion, '1.1');
+  assert.equal('route' in record, false);
+  assert.equal(validate(record), true, JSON.stringify(validate.errors));
 });
