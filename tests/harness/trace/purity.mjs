@@ -344,7 +344,8 @@ const label = (unit) => `${unit.kind} ${unit.id}`;
  *   every chunk attributed, downloaded or only referenced
  * @param {readonly string[]} page.withoutMap the chunks attribution had no map for
  * @param {ReturnType<typeof documentReferences>} page.references
- * @param {{ boundary: Record<string, string> | null, links: readonly string[], stylesheets: readonly string[], styleElements: readonly number[] }} page.dom
+ * @param {{ boundary: Record<string, string> | null, links: readonly string[], stylesheets: readonly string[], scripts?: readonly string[], styleElements: readonly number[] }} page.dom
+ *   `scripts` are the settled DOM's script sources and script preloads
  * @param {ReadonlyArray<{ glob: string, pattern: RegExp }>} page.forbidden forbiddenRules()'s rules
  * @param {readonly string[]} [page.forbiddenProblems] forbiddenRules()'s problems
  * @returns {{ selected: { units: string[], platform: string | null }, problems: string[] }}
@@ -463,8 +464,22 @@ export function purityProblems(page) {
     }
   }
 
-  // A chunk with no map can't be checked, so it fails the page.
-  const named = new Set([...page.references.chunks, ...page.requests.map(({ url }) => url)]);
+  // A page's code is evidence only once attributed: with no JS chunk
+  // attributed, nothing above saw it, and the page fails rather than passes.
+  if (!page.chunks.some((chunk) => chunk.kind === 'js' && chunk.modules.length > 0)) {
+    problems.add(
+      "No JS chunk was attributed, so none of the page's code was checked: trace a PORTFOLIO_ANALYZE=1 build.",
+    );
+  }
+
+  // A chunk with no map can't be checked, so it fails the page, and so does
+  // a script the HTML, the payload, the DOM, or a request names that isn't
+  // among the attributed chunks.
+  const named = new Set([
+    ...page.references.chunks,
+    ...page.requests.map(({ url }) => url),
+    ...(dom.scripts ?? []),
+  ]);
   for (const url of [...withoutMap, ...[...named].filter((url) => !chunks.has(url))]) {
     const pathname = pathOn(url, appOrigin);
     if (pathname === null || !pathname.startsWith(NEXT_STATIC)) continue;

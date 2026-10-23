@@ -118,6 +118,7 @@ function lightPage(overrides = {}) {
       boundary: { 'data-variant': 'fixture-variant-light' },
       links: [`${APP}/`, `${APP}/work/tide-tables`, 'https://example.org/studio'],
       stylesheets: [BASE_CHUNK, LIGHT_SHEET],
+      scripts: [APP_CHUNK],
       styleElements: [],
     },
     forbidden: RULES,
@@ -451,6 +452,50 @@ test('a third-party request and a link to Studio or /admin, in any case or encod
     'A link to /admin/: no public page links to Studio or /admin.',
     'A link to /%73tudio/sign-in: no public page links to Studio or /admin.',
   ]);
+});
+
+test('a page with no attributed JS chunk fails, since nothing checked its code', () => {
+  const page = lightPage();
+  const NO_JS =
+    "No JS chunk was attributed, so none of the page's code was checked: trace a PORTFOLIO_ANALYZE=1 build.";
+  const cssOnly = page.chunks.filter((chunk) => chunk.kind === 'css');
+  assert.deepEqual(
+    purityProblems({
+      ...page,
+      chunks: cssOnly,
+      requests: page.requests.filter((entry) => entry.kind !== 'script'),
+      references: { ...page.references, chunks: [BASE_CHUNK] },
+      dom: { ...page.dom, scripts: [] },
+    }).problems,
+    [NO_JS],
+  );
+  // A JS chunk whose map placed no module is no evidence either.
+  assert.deepEqual(
+    purityProblems({
+      ...page,
+      chunks: [...cssOnly, { url: APP_CHUNK, kind: 'js', modules: [] }],
+    }).problems,
+    [NO_JS],
+  );
+});
+
+test('a script the settled DOM runs or preloads has to be among the attributed chunks', () => {
+  const page = lightPage();
+  const late = `${APP}/_next/static/chunks/late.js`;
+  assert.deepEqual(
+    purityProblems({ ...page, dom: { ...page.dom, scripts: [APP_CHUNK, late] } }).problems,
+    [
+      "/_next/static/chunks/late.js has no source map, so its modules can't be checked: build with PORTFOLIO_ANALYZE=1.",
+    ],
+  );
+  assert.deepEqual(
+    purityProblems({
+      ...page,
+      chunks: [...page.chunks, { url: late, kind: 'js', modules: page.chunks[1].modules }],
+      dom: { ...page.dom, scripts: [APP_CHUNK, late] },
+    }).problems,
+    [],
+  );
 });
 
 test("a chunk with no source map fails the page, since its modules can't be checked, but a unit file is matched by its URL", () => {

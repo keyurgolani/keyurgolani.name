@@ -22,6 +22,17 @@ test(
       'data-variant',
       'fixture-chapters',
     );
+    // The link is a client navigation (#6, Slice 2): Next's router fetches
+    // the view's payload, which the rewrite serves from the variant's
+    // segment, and the document stays the one that loaded.
+    await page.evaluate(() => {
+      (window as unknown as { kgnLoaded?: boolean }).kgnLoaded = true;
+    });
+    const payload = page.waitForResponse(
+      (response) =>
+        response.request().headers()['rsc'] === '1' &&
+        new URL(response.url()).pathname === '/sample/chapters/about',
+    );
     await page
       .getByRole('navigation', { name: 'Chapters' })
       .getByRole('link', { name: 'About', exact: true })
@@ -29,6 +40,16 @@ test(
     await expect(page).toHaveURL(`${app.origin}/sample/chapters/about${CHAPTERS}`);
     const heading = page.getByRole('heading', { level: 1 });
     await expect(heading).toHaveText('About');
+    const flight = await payload;
+    expect(flight.status()).toBe(200);
+    expect(flight.headers()['x-nextjs-rewritten-path']).toBe(
+      '/_experience/fixture-chapters/sample/chapters/about',
+    );
+    expect(flight.headers()['x-nextjs-rewritten-query'] ?? '').toBe('');
+    expect(
+      await page.evaluate(() => (window as unknown as { kgnLoaded?: boolean }).kgnLoaded),
+      'no document load',
+    ).toBe(true);
     expect((await page.reload())?.status()).toBe(200);
     await expect(heading).toHaveText('About');
     await expect(page.locator('head link[rel="canonical"]')).toHaveAttribute(
