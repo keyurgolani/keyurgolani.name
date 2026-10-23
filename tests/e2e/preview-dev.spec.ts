@@ -133,10 +133,11 @@ test(
     await open(page, `${path}?motion=system`);
     await expect(page.locator('[data-variant]')).not.toHaveAttribute('data-motion', /.*/);
     expect(await violations(page)).toEqual([]);
-    // next dev answers a path no route matches with Next's own 404 document,
-    // where a production build renders the app's (the profile matrix checks
-    // that one), so each is held to what /no-such-page gets here.
-    const notFound = /<meta name="next-error" content="not-found"\/>/;
+    // next dev answers a path no route matches with the app's 404 page, as a
+    // production build does, now that no visitor page has a catch-all route
+    // of its own for it to fall through to (#6, Slice 2). Each is held to
+    // what /no-such-page gets here.
+    const notFound = /<h1>Page not found<\/h1>/;
     const unknown = await page.request.get(`${app.origin}/no-such-page`, { maxRedirects: 0 });
     expect(unknown.status()).toBe(404);
     expect(await unknown.text()).toMatch(notFound);

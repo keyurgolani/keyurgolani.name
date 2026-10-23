@@ -3,13 +3,17 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
+import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import {
   attributeChunk,
   attributeCode,
   decodeMappings,
   flattenMap,
+  frameworkChunk,
   gzipBytes,
   inlineSourceMap,
+  NEXT_POLYFILL,
   normalizeSource,
   packageOf,
   sourceMapUrl,
@@ -436,4 +440,25 @@ test('a long non-ASCII line attributes in one pass, not one pass per mapping', (
   assert.equal(sources.get('b.js'), 6000 * Buffer.byteLength(unit));
   // Reading each mapping's column from the line start again takes seconds here.
   assert.ok(elapsed < 500, `took ${Math.round(elapsed)} ms`);
+});
+
+test("next's legacy-browser polyfills are next's, byte for byte, with no map, and no other chunk without one is anyone's (#6, Slice 2)", () => {
+  const polyfill = readFileSync(
+    createRequire(path.join(REPO_ROOT, 'apps', 'web', 'package.json')).resolve(NEXT_POLYFILL),
+    'utf8',
+  );
+  const url = 'http://127.0.0.1:3000/_next/static/chunks/03~yq9q893hmn.js';
+  const chunk = frameworkChunk({ url, code: polyfill, polyfill });
+  assert.ok(chunk);
+  const bytes = Buffer.byteLength(polyfill);
+  assert.equal(chunk.bytes, bytes);
+  assert.equal(chunk.unmappedBytes, 0);
+  assert.equal(chunk.gzipBytes, gzipBytes(polyfill));
+  assert.deepEqual(chunk.modules, [
+    { source: NEXT_POLYFILL, package: 'next', bytes, gzipBytes: gzipBytes(polyfill) },
+  ]);
+  assert.deepEqual(chunk.packages, [{ package: 'next', bytes, gzipBytes: gzipBytes(polyfill) }]);
+  // One byte off, or a variant's chunk, is no framework file.
+  assert.equal(frameworkChunk({ url, code: `${polyfill};`, polyfill }), null);
+  assert.equal(frameworkChunk({ url, code: 'self.acmeTiles=1;', polyfill }), null);
 });

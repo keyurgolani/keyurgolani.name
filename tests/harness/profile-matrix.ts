@@ -447,13 +447,27 @@ function withoutNonce(body: string, nonce: string | undefined): string {
 }
 
 /**
+ * An RSC payload with the id Next makes for each request it renders one for
+ * taken out. It keys the payload's viewport and metadata by it, as `<id>v`
+ * and `<id>m` (getFlightViewportKey and getFlightMetadataKey in Next's
+ * app-render), so two requests' payloads differ there and nowhere else.
+ */
+function withoutFlightRequestId(body: string): string {
+  const id = /"([A-Za-z0-9_-]{21})v"/.exec(body)?.[1];
+  return id && body.includes(`"${id}m"`) ? body.split(id).join('<request>') : body;
+}
+
+/**
  * A response as the checks that compare two paths' answers see it: its
  * status, its headers but the date and the request ID, and its body, with a
- * 404 page's own path taken out of Next's payload.
+ * 404 page's own path taken out of Next's payload, and an RSC payload's
+ * request id.
  */
 async function shape(response: APIResponse, target: string) {
   const text = await response.text();
-  const page = /^text\/html/.test(response.headers()['content-type'] ?? '') && text !== '';
+  const type = response.headers()['content-type'] ?? '';
+  const page = /^text\/html/.test(type) && text !== '';
+  const flight = /^text\/x-component/.test(type);
   return {
     status: response.status(),
     headers: Object.fromEntries(
@@ -461,7 +475,7 @@ async function shape(response: APIResponse, target: string) {
         ([name]) => !['date', 'x-request-id'].includes(name),
       ),
     ),
-    body: page ? withoutOwnPath(text, target) : text,
+    body: page ? withoutOwnPath(text, target) : flight ? withoutFlightRequestId(text) : text,
   };
 }
 

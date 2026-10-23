@@ -15,6 +15,7 @@
 //   of every chunk the page downloaded or its document names, fetching the
 //   ones it didn't download (tests/harness/trace/purity.mjs).
 import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -22,8 +23,10 @@ import type { Browser, Page, Request } from '@playwright/test';
 import { expect, test as harness, type App } from '../harness/fixtures';
 import {
   attributeChunk,
+  frameworkChunk,
   gzipBytes,
   inlineSourceMap,
+  NEXT_POLYFILL,
   sourceMapUrl,
   workspacePackages,
 } from '../harness/trace/attribution.mjs';
@@ -203,14 +206,27 @@ export function watchRequests(page: Page, appOrigin: string, policy: TracePolicy
   };
 }
 
+/** next's legacy-browser polyfills, as the app under test's next package holds them. */
+const nextPolyfill = (() => {
+  let text: string | undefined;
+  return () => {
+    text ??= readFileSync(
+      createRequire(path.join(WEB, 'package.json')).resolve(NEXT_POLYFILL),
+      'utf8',
+    );
+    return text;
+  };
+})();
+
 /**
  * Each downloaded chunk's bytes by module and package, from the map its
  * sourceMappingURL names on the app's own origin, fetched with no redirect
  * followed. A build without maps attributes nothing, and lists each chunk
- * under withoutMap. Every map is fetched, one request after the other,
- * before any is parsed or attributed: a request sent right after a long
- * synchronous step can go out on a keep-alive connection the server closed
- * meanwhile.
+ * under withoutMap, but for next's legacy-browser polyfills, which Next
+ * ships whole with no map in every build (frameworkChunk). Every map is
+ * fetched, one request after the other, before any is parsed or attributed:
+ * a request sent right after a long synchronous step can go out on a
+ * keep-alive connection the server closed meanwhile.
  */
 export async function attribute(page: Page, downloads: readonly Download[]) {
   const bodies: (Buffer | null)[] = [];
@@ -238,7 +254,13 @@ export async function attribute(page: Page, downloads: readonly Download[]) {
       }
     }
     if (!map) {
-      withoutMap.push(download.url);
+      const framework = frameworkChunk({
+        url: download.url,
+        code: download.code,
+        polyfill: nextPolyfill(),
+      });
+      if (framework) chunks.push({ kind: download.kind, ...framework });
+      else withoutMap.push(download.url);
       return;
     }
     chunks.push({

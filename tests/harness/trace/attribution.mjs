@@ -375,6 +375,35 @@ export function attributeChunk({ url, code, map, workspace = {} }) {
   };
 }
 
+/** Where Next keeps the legacy-browser polyfills it ships whole, in its own package. */
+export const NEXT_POLYFILL = 'next/dist/build/polyfills/polyfill-nomodule.js';
+
+/**
+ * The attribution of a chunk Next ships whole from its own package, with no
+ * map: its legacy-browser polyfills, which a document names in a <script
+ * nomodule> that a browser running modules never fetches (#6, Slice 2). It
+ * matches `polyfill`, that file's text in the app's next package, byte for
+ * byte, and all of it is next's. Null for any other chunk.
+ *
+ * @param {object} options
+ * @param {string} options.url
+ * @param {string} options.code the chunk, as served
+ * @param {string} options.polyfill next's polyfill-nomodule.js
+ */
+export function frameworkChunk({ url, code, polyfill }) {
+  if (code !== polyfill) return null;
+  const bytes = Buffer.byteLength(code);
+  const gzip = gzipBytes(code);
+  return {
+    url,
+    bytes,
+    gzipBytes: gzip,
+    unmappedBytes: 0,
+    modules: [{ source: NEXT_POLYFILL, package: 'next', bytes, gzipBytes: gzip }],
+    packages: [{ package: 'next', bytes, gzipBytes: gzip }],
+  };
+}
+
 /**
  * Bytes and gzip bytes per package over `entries`, largest first.
  *
