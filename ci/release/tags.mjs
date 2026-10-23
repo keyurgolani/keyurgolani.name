@@ -8,7 +8,14 @@
 // writes kind (rc or final), version, rc-tag (the image tag an RC gets), and
 // image (ghcr.io/<owner>/<repo>, lowercased) to $GITHUB_OUTPUT.
 //
+//   TAG=v1.2.0 node ci/release/tags.mjs --targets
+//
+// writes targets: the image tags promoting TAG moves, from the tags in the
+// checkout right now (fetch-depth: 0), which promote reads again just
+// before it moves them.
+//
 // Pure Node with no dependencies, so the job that runs it needs no install.
+import { execFileSync } from 'node:child_process';
 import { appendFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -77,9 +84,19 @@ export function ghcrImage(repository) {
   return `ghcr.io/${repository.toLowerCase()}`;
 }
 
-function main() {
+function main(argv) {
   const tag = process.env.TAG ?? '';
   const release = parseReleaseTag(tag);
+  if (release && argv.includes('--targets')) {
+    const tags = execFileSync('git', ['tag', '--list', 'v*'], { encoding: 'utf8' }).split('\n');
+    const line = `targets=${promotionTargets(
+      tag,
+      tags.map((t) => t.trim()),
+    ).join(',')}`;
+    if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `${line}\n`);
+    console.log(line);
+    return 0;
+  }
   if (!release) {
     console.log(
       `::error title=release::${tag} is not a release tag. Push vX.Y.Z-rc.N for a release candidate or vX.Y.Z to promote one (docs/releasing.md).`,
@@ -99,5 +116,5 @@ function main() {
 }
 
 if (path.resolve(process.argv[1] ?? '') === fileURLToPath(import.meta.url)) {
-  process.exit(main());
+  process.exit(main(process.argv.slice(2)));
 }

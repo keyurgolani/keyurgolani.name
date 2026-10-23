@@ -129,14 +129,23 @@ test('no release job reads or writes a cache', () => {
   assert.doesNotMatch(JSON.stringify(WORKFLOW), /cache-from|cache-to|type=gha|actions\/cache/);
 });
 
-test('only promote moves latest, through the targets promote-verify computed', () => {
+test('only promote moves latest, one at a time, through targets it reads again just before', () => {
   const retags = Object.entries(JOBS)
     .filter(([, job]) => job.steps.some((s) => /ci\/release\/retag\.mjs/.test(s.run ?? '')))
     .map(([id]) => id)
     .sort();
   assert.deepEqual(retags, ['dry-run', 'promote', 'rc-tag']);
   const step = (id) => stepsOf(id).find((s) => /retag\.mjs/.test(s.run ?? ''));
-  assert.equal(step('promote').env.TARGETS, '${{ needs.promote-verify.outputs.targets }}');
+  const steps = stepsOf('promote');
+  const recheck = steps.findIndex((s) => s.id === 'targets');
+  assert.match(steps[recheck].run, /node ci\/release\/tags\.mjs --targets/);
+  assert.equal(recheck, steps.indexOf(step('promote')) - 1, 'read right before the retag');
+  assert.equal(step('promote').env.TARGETS, '${{ steps.targets.outputs.targets }}');
+  assert.equal(uses('promote', 'actions/checkout')[0].with['fetch-depth'], 0, 'it sees every tag');
+  assert.deepEqual(JOBS.promote.concurrency, {
+    group: 'release-promote',
+    'cancel-in-progress': false,
+  });
   assert.equal(step('rc-tag').env.RC_TAG, '${{ needs.classify.outputs.rc-tag }}');
   // Of the jobs that log in to GHCR, only promote names latest or the targets.
   for (const [id, job] of Object.entries(JOBS)) {
@@ -180,6 +189,77 @@ test('no run: block expands an expression, so no tag name or input reaches a she
   for (const [id, job] of Object.entries(JOBS)) {
     for (const step of job.steps) {
       if (step.run) assert.doesNotMatch(step.run, /\$\{\{/, `${id}: ${step.name}`);
+    }
+  }
+});
+
+test('scan findings upload for one day only, and the logs get counts from scan-gate', () => {
+  const uploads = Object.entries(JOBS).flatMap(([id, job]) =>
+    job.steps
+      .filter((s) => (s.uses ?? '').startsWith('actions/upload-artifact@'))
+      .map((s) => ({ id, ...s.with })),
+  );
+  const reports = uploads.filter((u) => u.path === 'reports/');
+  assert.deepEqual(reports.map((u) => u.name).sort(), [
+    'reports-release-dry-run',
+    'reports-release-promote-scan',
+    'reports-release-scan',
+  ]);
+  for (const upload of reports) assert.equal(upload['retention-days'], 1, upload.name);
+  // Nothing else uploads the reports directory, where Grype's JSON goes.
+  for (const upload of uploads) {
+    if (upload.path !== 'reports/') assert.doesNotMatch(upload.path, /^reports/, upload.name);
+  }
+  for (const [id, job] of Object.entries(JOBS)) {
+    for (const step of job.steps) {
+      const run = step.run ?? '';
+      // Grype writes its JSON under $REPORTS and prints nothing else.
+      for (const call of run.match(/^\s*grype .*$/gm) ?? []) {
+        assert.match(call, /^\s*grype -q /, `${id}: ${call}`);
+        assert.match(call, /--file "\$REPORTS\//, `${id}: ${call}`);
+      }
+      // Every verdict writes its full report to the one-day directory.
+      for (const call of run.match(/scan-gate\.mjs (image|deps) .*$/gm) ?? []) {
+        assert.match(call, /--report="\$REPORTS\//, `${id}: ${call}`);
+      }
+    }
+  }
+});
+
+test('release tags can be created only by an admin, and by nobody moved or deleted', () => {
+  const ruleset = (name) =>
+    JSON.parse(
+      readFileSync(new URL(`../../.github/rulesets/${name}.json`, import.meta.url), 'utf8'),
+    );
+  const tags = ruleset('release-tags');
+  const creation = ruleset('release-tag-creation');
+  for (const set of [tags, creation]) {
+    assert.equal(set.target, 'tag');
+    assert.equal(set.enforcement, 'active');
+    assert.deepEqual(set.conditions.ref_name.include, ['refs/tags/v[0-9]*']);
+  }
+  // The rules that keep a tag fixed have no bypass at all.
+  assert.deepEqual(tags.bypass_actors, []);
+  assert.deepEqual(tags.rules.map((r) => r.type).sort(), [
+    'deletion',
+    'non_fast_forward',
+    'update',
+  ]);
+  // Creation is its own ruleset, so its admin bypass reaches no other rule.
+  assert.deepEqual(creation.rules, [{ type: 'creation' }]);
+  assert.deepEqual(creation.bypass_actors, [
+    { actor_id: 5, actor_type: 'RepositoryRole', bypass_mode: 'always' },
+  ]);
+});
+
+test('every setup-buildx pins its buildx version, and no build uploads a build record', () => {
+  const buildx = Object.keys(JOBS).flatMap((id) => uses(id, 'docker/setup-buildx-action'));
+  assert.ok(buildx.length >= 4);
+  for (const step of buildx) assert.match(step.with.version, /^v\d+\.\d+\.\d+$/);
+  assert.equal(new Set(buildx.map((s) => s.with.version)).size, 1);
+  for (const id of ['dry-run', 'rc-build']) {
+    for (const step of uses(id, 'docker/build-push-action')) {
+      assert.equal(step.env.DOCKER_BUILD_RECORD_UPLOAD, 'false', id);
     }
   }
 });

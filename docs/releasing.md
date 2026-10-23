@@ -22,7 +22,7 @@ Pushing `vX.Y.Z` on the newest candidate's commit runs:
 1. **classify**, as above.
 2. **promote-verify** refuses unless a candidate for `X.Y.Z` exists, the newest one (the highest `N`) is on this commit, and its release run passed `rc-scan` and `rc-tag` ([`ci/release/promote-check.mjs`](../ci/release/promote-check.mjs)). An older candidate never promotes. Cut a new one on the commit you want instead.
 3. **promote-scan** resolves the candidate's GHCR tag to its digest, then verifies that digest's provenance attestation: signed by this repository's `release.yml`, on a GitHub-hosted runner, for the candidate's tag and this commit. Whatever the GHCR tag says, only the digest that run built gets through. It checks the provenance and SBOMs again and scans the image again, with that day's vulnerability database.
-4. **promote** points `X.Y.Z` at the digest with `docker buildx imagetools create`, which copies the index by reference and builds nothing. It moves `X.Y`, `X`, and `latest` too, unless a final release already out is newer in that line, so a patch to an older line never moves them backwards ([`ci/release/tags.mjs`](../ci/release/tags.mjs)). It's the only job that moves `latest`.
+4. **promote** points `X.Y.Z` at the digest with `docker buildx imagetools create`, which copies the index by reference and builds nothing. It moves `X.Y`, `X`, and `latest` too, unless a final release already out is newer in that line, so a patch to an older line never moves them backwards ([`ci/release/tags.mjs`](../ci/release/tags.mjs)). It reads the tags again right before it moves anything, and runs one at a time across every final tag (the `release-promote` concurrency group), so two promotions never race for `latest`. It's the only job that moves `latest`.
 5. **promote-release** creates the GitHub Release with the same notes.
 
 ## Permissions
@@ -49,8 +49,21 @@ Grype downloads its vulnerability database on the runner. The dry run is not a r
 
 [`ci/release/scan-gate.mjs`](../ci/release/scan-gate.mjs) reads Grype's JSON and decides. Grype itself is pinned by version and SHA-256 ([`ci/release/install-grype.mjs`](../ci/release/install-grype.mjs)), and [`.grype.yaml`](../.grype.yaml) refuses a database more than five days old.
 
-- **The image** fails on a Critical or High finding that has a fix, on either platform. A finding with no fix yet is listed in the summary and doesn't fail.
-- **Production dependencies** are apps/web's run-time tree, read from `pnpm-lock.yaml` ([`ci/release/prod-deps.mjs`](../ci/release/prod-deps.mjs)): its dependencies, the workspace packages it links and theirs, and none of anyone's devDependencies. The scan fails on a High or Critical finding there that the baseline doesn't have, fixable or not. The baseline is the PR's base on a dry run, and the previous final release on a candidate. Before the first final release there's no baseline, so every High or Critical finding is new.
+- **The image** fails on a Critical or High finding that has a fix, on either platform. A finding with no fix yet is counted in the summary and doesn't fail.
+- **Production dependencies** are apps/web's run-time tree, read from `pnpm-lock.yaml` ([`ci/release/prod-deps.mjs`](../ci/release/prod-deps.mjs)): its dependencies, the workspace packages it links and theirs, and none of anyone's devDependencies. The scan fails on a High or Critical finding there that the baseline doesn't have, fixable or not. The baseline is the PR's base on a dry run. On a candidate it's the newest `vX.Y.Z` tag before the commit that has a published GitHub Release ([`ci/release/baseline.mjs`](../ci/release/baseline.mjs)), so a stray tag such as `v2.0.0-beta.1` never becomes one.
+
+**The first candidate.** Before the first final release there's no baseline, so every High or Critical finding in the production dependencies counts as new, and so does every fixable one in the image. The runtime-refresh PR has to land before the first `v1.0.0-rc.1`.
+
+Exceptions live in one place. `.grype.yaml` sets the app-update and database checks and nothing else, and `scan-gate` refuses a report in which Grype ignored a match by its own rules.
+
+### What the logs show
+
+Run logs, job summaries, and annotations are public, on tag runs too. They show pass or fail and a count per category (failing, let through by an exception, no fix yet, already in the baseline) and per severity, never a finding's id, package, version, or fix. The full report, with Grype's JSON, goes to the run's `reports-release-*` artifact, kept for one day. To see the findings after that, run Grype against the digest with your own Grype install, logged in to GHCR while the package is private:
+
+```sh
+grype ghcr.io/<owner>/<repo>@sha256:<digest> --platform linux/amd64
+grype ghcr.io/<owner>/<repo>@sha256:<digest> --platform linux/arm64
+```
 
 ### Scan exceptions
 
@@ -76,7 +89,9 @@ An entry matches a finding by its id, or one of the aliases Grype lists, in the 
   git push origin v1.0.0-rc.1
   ```
 
-  After the candidate's release run passes, tag the same commit `v1.0.0` and push that. The `release-tags` ruleset ([`.github/rulesets/release-tags.json`](../.github/rulesets/release-tags.json)) keeps `v*` tags from moving or being deleted once it's applied.
+  After the candidate's release run passes, tag the same commit `v1.0.0` and push that.
+
+- **Apply the two tag rulesets.** [`release-tags.json`](../.github/rulesets/release-tags.json) keeps `v*` tags from moving or being deleted, with no bypass. [`release-tag-creation.json`](../.github/rulesets/release-tag-creation.json) lets only a repository admin create one. They're separate so the admin bypass on creation never reaches the other rules.
 
 - **Decide GHCR visibility.** The package is private, so every pull, the notes' included, needs `docker login ghcr.io` with a token that has `read:packages`. Making it public in the package's settings lets anyone pull by digest.
 - **Environments.** The release jobs don't use one. To require an approval before an image is published, add a `release` environment with required reviewers and name it on `rc-build` and `promote`.

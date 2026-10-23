@@ -86,3 +86,26 @@ test('candidate runs are ci.yml push runs on main for the exact commit that succ
   assert.equal(gatePassed(FAILED), false);
   assert.equal(gatePassed([{ name: 'selected', conclusion: 'success' }]), false);
 });
+
+test('each way a run can miss refuses the candidate on its own, with gate passing', () => {
+  const good = RUNS.find((run) => run.id === 105);
+  const variants = {
+    'a pull_request run on main for the commit': { event: 'pull_request' },
+    'a run that has not completed': { status: 'in_progress' },
+    'a push run on another branch': { head_branch: 'next' },
+    'a run of another workflow': { path: '.github/workflows/release.yml' },
+    'a run on another commit': { head_sha: '2'.repeat(40) },
+    'a run that did not succeed': { conclusion: 'cancelled' },
+  };
+  // The good run alone is eligible, so each refusal below is its variant's.
+  assert.equal(evaluateRc(input({ runs: [good], jobsByRun: { 105: PASSED } })).ok, true);
+  for (const [label, change] of Object.entries(variants)) {
+    const run = { ...good, ...change };
+    const verdict = evaluateRc(input({ runs: [run], jobsByRun: { 105: PASSED } }));
+    assert.equal(verdict.ok, false, label);
+    assert.match(verdict.reasons.join(), /no green complete ci run/, label);
+  }
+  // A skipped gate, as when changes failed, doesn't count either.
+  const skipped = fixture('ci-jobs-gate-skipped').jobs;
+  assert.equal(evaluateRc(input({ runs: [good], jobsByRun: { 105: skipped } })).ok, false);
+});

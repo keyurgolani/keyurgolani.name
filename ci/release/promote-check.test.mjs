@@ -107,3 +107,21 @@ test('candidates are the RC tags for the version, newest first', () => {
     [202],
   );
 });
+
+test("each way the candidate's run can miss refuses promotion on its own", () => {
+  const good = RUNS.find((run) => run.id === 202);
+  const variants = {
+    'a run on another head_sha': { head_sha: OTHER },
+    'a pull_request run': { event: 'pull_request' },
+    'a run of another workflow': { path: '.github/workflows/ci.yml' },
+    'a run that has not completed': { status: 'in_progress' },
+    'a run that did not succeed': { conclusion: 'failure' },
+    "another candidate's run": { head_branch: 'v1.2.0-rc.1' },
+  };
+  assert.equal(evaluatePromotion(input({ runs: [good] })).ok, true);
+  for (const [label, change] of Object.entries(variants)) {
+    const verdict = evaluatePromotion(input({ runs: [{ ...good, ...change }] }));
+    assert.equal(verdict.ok, false, label);
+    assert.match(verdict.reasons.join(), /has no passed release run/, label);
+  }
+});

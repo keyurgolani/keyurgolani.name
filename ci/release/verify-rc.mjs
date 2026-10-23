@@ -23,7 +23,7 @@ export const CI_WORKFLOW = '.github/workflows/ci.yml';
 const SHA = /^[0-9a-f]{40}$/;
 
 /**
- * Whether `compare` (GET compare/{sha}...main) puts the commit on main: main
+ * Whether `compare` (GET compare/{sha}...heads/main) puts the commit on main: main
  * is the commit, or is ahead of it with the commit as the merge base.
  */
 export function onMain(sha, compare) {
@@ -89,7 +89,7 @@ async function main() {
   if (!SHA.test(sha)) throw new Error(`SHA ${sha} is not a full commit SHA`);
   const [owner, repo] = repository();
   const base = `/repos/${owner}/${repo}`;
-  const compare = await githubGet(`${base}/compare/${sha}...main`);
+  const compare = await githubGet(`${base}/compare/${sha}...heads/main`);
   const listed = await githubGet(
     `${base}/actions/workflows/ci.yml/runs?branch=main&event=push&head_sha=${sha}&status=completed&per_page=100`,
   );

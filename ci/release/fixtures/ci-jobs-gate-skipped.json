@@ -1,0 +1,8 @@
+{
+  "total_count": 3,
+  "jobs": [
+    { "id": 1, "name": "changes", "status": "completed", "conclusion": "failure" },
+    { "id": 2, "name": "static", "status": "completed", "conclusion": "skipped" },
+    { "id": 3, "name": "gate", "status": "completed", "conclusion": "skipped" }
+  ]
+}

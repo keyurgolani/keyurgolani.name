@@ -7,8 +7,11 @@
 
 const API = process.env.GITHUB_API_URL ?? 'https://api.github.com';
 
-/** GET `route` (a path under the API, with its query) and parse the JSON. */
-export async function githubGet(route, { token = process.env.GITHUB_TOKEN } = {}) {
+/**
+ * GET `route` (a path under the API, with its query) and parse the JSON.
+ * With `missing: null`, a 404 answers null instead of throwing.
+ */
+export async function githubGet(route, { token = process.env.GITHUB_TOKEN, missing } = {}) {
   if (!token) throw new Error('GITHUB_TOKEN is not set');
   const response = await fetch(`${API}${route}`, {
     headers: {
@@ -18,6 +21,7 @@ export async function githubGet(route, { token = process.env.GITHUB_TOKEN } = {}
     },
     signal: AbortSignal.timeout(30_000),
   });
+  if (response.status === 404 && missing === null) return null;
   if (!response.ok) throw new Error(`GET ${route} answered HTTP ${response.status}`);
   return response.json();
 }
