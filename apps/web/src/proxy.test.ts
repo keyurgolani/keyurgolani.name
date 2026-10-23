@@ -74,6 +74,7 @@ function grantsPort(admitted = new Set([ACTIVE])) {
     },
     open: () => assert.fail('proxy.ts opens no grant'),
     channel: () => assert.fail("proxy.ts reads no grant's channel"),
+    asset: () => assert.fail("proxy.ts reads no grant's media"),
     previewable: () => assert.fail('proxy.ts offers nothing to preview'),
   };
   return { port, checked };
@@ -258,7 +259,15 @@ test("while the catalog can't serve, visitor pages are a static 503 page, and th
   deploy(t, 'read-only');
   setServable(false);
   t.after(() => setServable(true));
-  for (const path of ['/', '/feed.xml', '/sitemap.xml', '/robots.txt', '/opengraph-image-12o0cb']) {
+  for (const path of [
+    '/',
+    '/feed.xml',
+    '/sitemap.xml',
+    '/robots.txt',
+    '/opengraph-image-12o0cb',
+    // #10's renditions are the live revision's too.
+    `/media/fixture-garden-cover/${'a'.repeat(64)}/w480-a1.webp`,
+  ]) {
     const response = await proxy(request(path));
     assert.equal(response.status, 503, path);
     assert.equal(response.headers.get('retry-after'), '120', path);
@@ -855,7 +864,7 @@ const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
  */
 const previewPolicy = (ancestors: string) =>
   new RegExp(
-    `^default-src 'none'; script-src 'nonce-([A-Za-z0-9+/]{22}==)' 'strict-dynamic'; style-src 'self' 'nonce-\\1'; style-src-attr 'unsafe-inline'; font-src 'self'; img-src 'self' https: data:; media-src 'self' https:; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors ${escape(ancestors)}$`,
+    `^default-src 'none'; script-src 'nonce-([A-Za-z0-9+/]{22}==)' 'strict-dynamic'; style-src 'self' 'nonce-\\1'; style-src-attr 'unsafe-inline'; font-src 'self'; img-src 'self' data:; media-src 'self'; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors ${escape(ancestors)}$`,
   );
 
 /** Preview paths, in any case and percent-encoded, as next.config.ts and the route table read them. */
@@ -1098,6 +1107,7 @@ test('a port that fails to check a grant admits nothing (#7)', async (t) => {
     admit: () => Promise.reject(new Error('the data directory is gone')),
     open: () => assert.fail('proxy.ts opens no grant'),
     channel: () => assert.fail("proxy.ts reads no grant's channel"),
+    asset: () => assert.fail("proxy.ts reads no grant's media"),
     previewable: () => assert.fail('proxy.ts offers nothing to preview'),
   });
   await assertStatusDocument(await proxy(loaded(`/preview/${ACTIVE}`, 'iframe')), 'failed check');
@@ -1343,6 +1353,26 @@ test('any other method to a visitor page is a plain 405 with the methods it take
   setServable(false);
   t.after(() => setServable(true));
   assert.equal((await proxy(visitor('/', 'POST'))).status, 503);
+});
+
+test("#10's /media takes GET and HEAD alone: any other method is the same plain 405, in every profile, and GET goes on to its route", async (t) => {
+  const rendition = `/media/fixture-garden-cover/${'a'.repeat(64)}/w480-a1.webp`;
+  for (const profile of PROFILES) {
+    deploy(t, profile);
+    for (const method of ['POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS']) {
+      const what = `${profile} ${method}`;
+      const response = await proxy(visitor(rendition, method));
+      assert.equal(response.status, 405, what);
+      assert.equal(response.headers.get('allow'), 'GET, HEAD', what);
+      assert.equal(response.headers.get('cache-control'), 'no-store', what);
+      assert.equal(await response.text(), 'Method not allowed.', what);
+    }
+    for (const method of ['GET', 'HEAD']) {
+      const response = await proxy(visitor(rendition, method));
+      assert.equal(response.headers.get('x-middleware-next'), '1', `${profile} ${method}`);
+      assert.equal(segment(response), null, `${profile} ${method}`);
+    }
+  }
 });
 
 test("a request for an experience segment's own path, in any spelling and to any method, is a path no route matches (#6, Slice 2)", async (t) => {

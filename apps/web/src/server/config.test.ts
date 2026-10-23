@@ -677,6 +677,23 @@ test('the source directory is required for owner and read-only, and resolves aga
   assert.equal(relative.ok && relative.config.sourceDir, '/srv/app/config');
 });
 
+test('the media root is optional for owner and read-only, and resolves against cwd', () => {
+  const owner = {
+    PORTFOLIO_PROFILE: 'owner',
+    PORTFOLIO_DATA_DIR: '/var/lib/portfolio',
+    PORTFOLIO_AUTH_PASSWORD_HASH: 'test-hash',
+  };
+  for (const env of [{ ...BASE }, { ...BASE, ...owner }]) {
+    const unset = read(env);
+    assert.equal(unset.ok, true, env.PORTFOLIO_PROFILE);
+    assert.equal(unset.ok && unset.config.mediaRoot, undefined, env.PORTFOLIO_PROFILE);
+    const set = read({ ...env, PORTFOLIO_MEDIA_ROOT: '/media' });
+    assert.equal(set.ok && set.config.mediaRoot, '/media', env.PORTFOLIO_PROFILE);
+  }
+  const relative = read({ ...BASE, PORTFOLIO_MEDIA_ROOT: '../assets' });
+  assert.equal(relative.ok && relative.config.mediaRoot, '/srv/assets');
+});
+
 test('an unknown PORTFOLIO_ key is a warning', () => {
   const result = read({ ...BASE, PORTFOLIO_ORGIN: 'https://typo.test' });
   assert.equal(result.ok, true);

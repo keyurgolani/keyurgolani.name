@@ -191,6 +191,40 @@ test('verify names each kind of damage with its file, and only notes what repair
   assert.equal((await readLive(nodeFs, storePaths(store.root)))?.revisionId, store.live);
 });
 
+test("verify reads a draft's media document by shape too: a blob it names that's gone is a problem, whatever the checks make of it (#10)", async (t) => {
+  const store = await newStore(t);
+  const { sha256: kept } = await store.assets.put(Buffer.from('a rendition'), 'image/webp');
+  const gone = `${'d'.repeat(64)}`;
+  // #10's shape, with a field the checks' own reading doesn't know: the
+  // test checks read only `blobs`, so the shape alone names these.
+  const media = {
+    assets: [
+      {
+        assetId: 'cover',
+        sha256: gone,
+        renditions: [{ sha256: kept.slice('sha256:'.length) }],
+        fromANewerBuild: true,
+      },
+    ],
+  };
+  const draft = await store.drafts.create(
+    {
+      documents: {
+        ...pairInput('engineering'),
+        media: { format: 'json', sourceText: `${JSON.stringify(media)}\n` },
+      },
+    },
+    'owner',
+  );
+  assert.equal(draft.kind, 'saved', JSON.stringify(draft));
+  const report = await verify(store.paths.root);
+  const missing = report.problems.filter(({ code }) => code === 'blob_missing');
+  assert.deepEqual(
+    missing.map(({ path: file }) => file),
+    [`assets/sha256/dd/${gone}`],
+  );
+});
+
 test("verify names a restore that didn't finish: its claim, and the log it staged", async (t) => {
   const { root } = await seeded(t);
   writeFileSync(path.join(root, RESTORE_CLAIM), '{}\n');

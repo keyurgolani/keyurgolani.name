@@ -1,3 +1,4 @@
+import type { Readable } from 'node:stream';
 import type { CatalogReader } from './catalog-port';
 import type { DeploymentConfig } from './config';
 import type { PreviewGrantsPort } from './preview-port';
@@ -24,6 +25,12 @@ export interface DeploymentState {
   readonly dataDirectory?: () => Promise<boolean>;
   /** Owner only: lets the data directory's server claim go, at once (#3). register() runs it as the process exits. */
   readonly release?: () => void;
+  /**
+   * Owner only: a blob of the live media, from the data directory's
+   * AssetStore (#10), or null when it isn't stored. read-only and demo read
+   * their startup media cache instead.
+   */
+  readonly mediaBlobs?: (hash: `sha256:${string}`) => Promise<Readable | null>;
 }
 
 export const NOT_LOADED =

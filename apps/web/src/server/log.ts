@@ -44,6 +44,12 @@ const FINDING = [
  */
 const GRANT = ['grantRef', 'sessionRef', 'count'] as const;
 
+/**
+ * Media ingestion's events (#10): the asset's id, the source revision's
+ * SHA-256, and why a source wasn't used. Never its path or URL.
+ */
+const MEDIA = ['assetId', 'sha256', 'reason'] as const;
+
 /** What particular events add. */
 const EXTRA: Readonly<Record<string, readonly string[]>> = {
   'config.fatal': FINDING,
@@ -54,6 +60,12 @@ const EXTRA: Readonly<Record<string, readonly string[]>> = {
   'preview.grant.mark_failed': GRANT,
   'preview.grant.read_failed': GRANT,
   'preview.render_failed': GRANT,
+  'media.asset.derived': MEDIA,
+  'media.source.unused': MEDIA,
+  'media.startup.asset': MEDIA,
+  'media.blob.missing': MEDIA,
+  'media.startup.derived': ['count'],
+  'media.private.ingested': ['count', 'unused'],
   'deployment.config': [
     'origin',
     'previewOrigin',

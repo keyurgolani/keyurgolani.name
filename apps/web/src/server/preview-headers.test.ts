@@ -47,7 +47,7 @@ test("only next dev's policy adds eval, inline styles, and same-origin connectio
   });
   assert.equal(
     production,
-    "default-src 'none'; script-src 'nonce-bm9uY2Vub25jZW5vbmNlMQ==' 'strict-dynamic'; style-src 'self' 'nonce-bm9uY2Vub25jZW5vbmNlMQ=='; style-src-attr 'unsafe-inline'; font-src 'self'; img-src 'self' https: data:; media-src 'self' https:; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors https://rowan.test",
+    "default-src 'none'; script-src 'nonce-bm9uY2Vub25jZW5vbmNlMQ==' 'strict-dynamic'; style-src 'self' 'nonce-bm9uY2Vub25jZW5vbmNlMQ=='; style-src-attr 'unsafe-inline'; font-src 'self'; img-src 'self' data:; media-src 'self'; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors https://rowan.test",
   );
   const development = previewCsp('bm9uY2Vub25jZW5vbmNlMQ==', {
     mode: 'development',

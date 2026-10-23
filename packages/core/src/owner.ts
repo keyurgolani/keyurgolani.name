@@ -238,11 +238,36 @@ export {
   type ServingState,
 } from './store/publication';
 // The mounted pair as an import reads it, and owner's first-start import
-// (#3, item 24).
+// (#3, item 24), with its media ingested (#10).
 export {
   importAtFirstStart,
   importRefusal,
+  liveMedia,
   mountedSource,
+  withMountedMedia,
+  type MountedMedia,
   type MountedSource,
   type SourceFile,
 } from './store/source';
+
+// Media ingestion (#10, items 5 and 6): owner's draft saves derive image
+// renditions with sharp into the AssetStore. read-only and demo never load it.
+export {
+  mediaIngestion,
+  type IngestInput,
+  type IngestResult,
+  type MediaFinding,
+  type MediaIngestion,
+  type MediaIngestionOptions,
+  type MediaLogEntry,
+} from './catalog/media/ingest';
+export { localMediaRoot, type LocalMediaRoot } from './catalog/media/local';
+export {
+  remoteImageFetcher,
+  type RemoteFetcher,
+  type RemoteFetcherOptions,
+  type RemoteTransport,
+  type Resolve,
+} from './catalog/media/remote';
+export { ALGORITHM_VERSION, loadSharp, type SharpLoad } from './catalog/media/derive';
+export { MEDIA_LIMITS, MediaSourceError } from './catalog/media/limits';

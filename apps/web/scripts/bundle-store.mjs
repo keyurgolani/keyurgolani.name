@@ -23,6 +23,9 @@ export async function bundleStore(outfile = DEFAULT_OUT) {
     format: 'esm',
     target: 'node22',
     conditions: ['react-server'],
+    // sharp is native: import() finds it at run time, from the server's
+    // build in the image (packages/core's loadSharp), never in the bundle.
+    external: ['sharp'],
     // A CommonJS dependency's require() of a Node built-in, from ESM.
     banner: {
       js: "import { createRequire as __bundleRequire } from 'node:module';\nconst require = __bundleRequire(import.meta.url);",

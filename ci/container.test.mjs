@@ -22,6 +22,7 @@ import {
   PROBE_SNIPPET,
   REQUESTS_SNIPPET,
   SCAN_SNIPPET,
+  SHARP_SNIPPET,
   TREE_SNIPPET,
   WRITABLE_SNIPPET,
   WRITE_SNIPPET,
@@ -128,9 +129,17 @@ test('each Compose example runs its profile from the one image, on loopback', ()
     assert.match(web.environment.PORTFOLIO_ORIGIN, /^\$\{PORTFOLIO_ORIGIN:\?.+\}$/, file);
     for (const port of web.ports) assert.match(port, /^127\.0\.0\.1:/, file);
     assert.equal('profiles' in web, false, `${file}: no Compose profiles`);
-    // A read-only root with a tmpfs for Next's cache, under every profile.
+    // A read-only root with a tmpfs for Next's cache, under every profile,
+    // and for read-only and demo the media cache they derive into (#10),
+    // the server user's own.
     assert.equal(web.read_only, true, file);
-    assert.deepEqual(web.tmpfs, ['/app/apps/web/.next/cache'], file);
+    assert.deepEqual(
+      web.tmpfs,
+      profile === 'owner'
+        ? ['/app/apps/web/.next/cache']
+        : ['/app/apps/web/.next/cache', '/tmp/portfolio-media:uid=1001,gid=1001,mode=0700'],
+      file,
+    );
     // No capabilities and no privileges to gain, as smoke:profiles runs it (#12).
     assert.deepEqual(web.cap_drop, ['ALL'], file);
     assert.deepEqual(web.security_opt, ['no-new-privileges:true'], file);
@@ -141,7 +150,14 @@ test('each Compose example runs its profile from the one image, on loopback', ()
     } else {
       assert.equal(web.environment.PORTFOLIO_SOURCE_DIR, '/config', file);
       assert.ok(volumes.includes(`${dir}/config:/config:ro`), file);
-      assert.ok(volumes.includes(`${dir}/assets:/app/apps/web/public/assets:ro`), file);
+      // Nothing mounts into public/ (#10): renditions serve from /media.
+      assert.ok(
+        volumes.every((volume) => !String(volume).includes(':/app/apps/web/public')),
+        file,
+      );
+      // The media root (#10): the same files, read-only, where sources resolve.
+      assert.ok(volumes.includes(`${dir}/assets:/media:ro`), file);
+      assert.equal(web.environment.PORTFOLIO_MEDIA_ROOT, '/media', file);
     }
     if (profile === 'owner') {
       // One writable named volume at the data directory, for one replica.
@@ -344,6 +360,42 @@ test('the ownership check lists what a user could change in a tree', async () =>
     assert.deepEqual((await check(stranger[0], gid)).writable.sort(), ['apps/web', 'server.js']);
   } finally {
     rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("the sharp check loads the build's one sharp external from the server's chunks, and derives with it (#10)", async () => {
+  const app = mkdtempSync(path.join(tmpdir(), 'image-sharp-'));
+  try {
+    const check = async () =>
+      JSON.parse((await runNode(['-e', SHARP_SNIPPET, app], {})).stdout || '{}');
+    // No build output: nothing to load.
+    assert.deepEqual(await check(), {
+      ok: false,
+      error: '0 sharp externals under .next/node_modules',
+    });
+    // The link a build makes, to the sharp @portfolio/core depends on.
+    mkdirSync(path.join(app, '.next', 'node_modules'), { recursive: true });
+    symlinkSync(
+      path.join(ROOT, 'packages', 'core', 'node_modules', 'sharp'),
+      path.join(app, '.next', 'node_modules', 'sharp-0123abcd'),
+    );
+    const loaded = await check();
+    assert.equal(loaded.ok, true, JSON.stringify(loaded));
+    assert.equal(loaded.name, 'sharp-0123abcd');
+    // The version @portfolio/core pins.
+    const pinned = JSON.parse(
+      readFileSync(path.join(ROOT, 'packages', 'core', 'package.json'), 'utf8'),
+    ).dependencies.sharp;
+    assert.equal(loaded.sharp, pinned);
+    assert.deepEqual([loaded.format, loaded.width], ['webp', 32]);
+    // Two externals is a build this check can't read.
+    symlinkSync(
+      path.join(ROOT, 'packages', 'core', 'node_modules', 'sharp'),
+      path.join(app, '.next', 'node_modules', 'sharp-4567cdef'),
+    );
+    assert.equal((await check()).ok, false);
+  } finally {
+    rmSync(app, { recursive: true, force: true });
   }
 });
 

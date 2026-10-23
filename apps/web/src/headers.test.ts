@@ -50,7 +50,7 @@ async function configHeaders(pathname: string): Promise<Record<string, string>> 
 const BASELINE = {
   'x-content-type-options': 'nosniff',
   'referrer-policy': 'strict-origin-when-cross-origin',
-  'content-security-policy': "frame-ancestors 'none'",
+  'content-security-policy': "frame-ancestors 'none'; img-src 'self' data:; media-src 'self'",
 };
 
 test('every path outside Studio and preview gets the baseline headers', async () => {

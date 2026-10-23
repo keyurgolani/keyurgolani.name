@@ -16,7 +16,7 @@
 export const BASELINE_HEADERS = Object.freeze({
   'x-content-type-options': 'nosniff',
   'referrer-policy': 'strict-origin-when-cross-origin',
-  'content-security-policy': "frame-ancestors 'none'",
+  'content-security-policy': "frame-ancestors 'none'; img-src 'self' data:; media-src 'self'",
 });
 
 /** A Studio page's CSP in production, with its nonce: 16 random bytes in base64. */
@@ -28,7 +28,7 @@ export const STUDIO_CSP =
  * and styles alike, and one origin, Studio's, that may frame it.
  */
 export const PREVIEW_CSP =
-  /^default-src 'none'; script-src 'nonce-([A-Za-z0-9+/]{22}==)' 'strict-dynamic'; style-src 'self' 'nonce-\1'; style-src-attr 'unsafe-inline'; font-src 'self'; img-src 'self' https: data:; media-src 'self' https:; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors (https?:\/\/[a-z0-9.-]+(?::\d+)?)$/;
+  /^default-src 'none'; script-src 'nonce-([A-Za-z0-9+/]{22}==)' 'strict-dynamic'; style-src 'self' 'nonce-\1'; style-src-attr 'unsafe-inline'; font-src 'self'; img-src 'self' data:; media-src 'self'; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors (https?:\/\/[a-z0-9.-]+(?::\d+)?)$/;
 
 /** What every preview response carries besides its CSP (#7). */
 export const PREVIEW_HEADERS = Object.freeze({

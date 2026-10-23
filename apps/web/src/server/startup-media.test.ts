@@ -1,0 +1,322 @@
+import test, { type TestContext } from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { crc32, deflateSync } from 'node:zlib';
+import { remoteImageFetcher, type CatalogReader, type RemoteFetcher } from '@portfolio/core';
+import { parsePortfolio, parseSite } from '@portfolio/schema';
+import { GET } from '../app/(site)/media/[...path]/route';
+import { readDeploymentConfig } from './config';
+import { setDeploymentState } from './config-store';
+import { getPublicView } from './public-view';
+import { startStartupMedia, startupMedia } from './startup-media';
+
+// read-only's and demo's startup media (#10, Risk 3): derived once, in the
+// background, into the media cache, with each asset's hash in the log.
+// demo reads the bundled sample's media and fetches nothing; read-only reads
+// PORTFOLIO_MEDIA_ROOT and fetches https sources; owner derives nothing here.
+
+const REPO = fileURLToPath(new URL('../../../../', import.meta.url));
+
+function solidPng(width: number, height: number): Buffer {
+  const chunk = (type: string, data: Buffer) => {
+    const length = Buffer.alloc(4);
+    length.writeUInt32BE(data.length);
+    const body = Buffer.concat([Buffer.from(type, 'latin1'), data]);
+    const crc = Buffer.alloc(4);
+    crc.writeUInt32BE(crc32(body) >>> 0);
+    return Buffer.concat([length, body, crc]);
+  };
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(width, 0);
+  header.writeUInt32BE(height, 4);
+  header.set([8, 2, 0, 0, 0], 8);
+  const row = Buffer.concat([
+    Buffer.from([0]),
+    Buffer.from(Array(width).fill([10, 20, 30]).flat()),
+  ]);
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    chunk('IHDR', header),
+    chunk('IDAT', deflateSync(Buffer.concat(Array(height).fill(row)))),
+    chunk('IEND', Buffer.alloc(0)),
+  ]);
+}
+
+/** A reader serving a pair whose portfolio has these media entries. */
+function reader(media: { id: string; source: string }[]): CatalogReader {
+  return {
+    getLive: async () => ({
+      state: 'live',
+      revisionId: 'source',
+      unitHash: 'sha256:x',
+      unit: {
+        portfolio: { media: media.map((entry) => ({ ...entry, kind: 'image' })) },
+        site: {},
+        snapshots: {},
+      },
+    }),
+  } as unknown as CatalogReader;
+}
+
+function setup(t: TestContext) {
+  const base = mkdtempSync(path.join(tmpdir(), 'startup-media-'));
+  t.after(() => rmSync(base, { recursive: true, force: true }));
+  const root = path.join(base, 'media');
+  mkdirSync(root);
+  writeFileSync(path.join(root, 'cover.png'), solidPng(500, 250));
+  const lines: Record<string, unknown>[] = [];
+  t.mock.method(console, 'log', (text: string) => {
+    try {
+      lines.push(JSON.parse(text) as Record<string, unknown>);
+    } catch {
+      // Not a log line.
+    }
+  });
+  return { base, root, cache: path.join(base, 'cache'), lines };
+}
+
+test("read-only derives from PORTFOLIO_MEDIA_ROOT and logs each asset's hash", async (t) => {
+  const { root, cache, lines } = setup(t);
+  const derived = await startStartupMedia({
+    profile: 'read-only',
+    reader: reader([{ id: 'cover', source: 'cover.png' }]),
+    mediaRoot: root,
+    options: { cacheDir: cache },
+  });
+  assert.ok(derived);
+  assert.equal(await startupMedia(), derived, 'the route half reads what started');
+  const [record] = derived.document.assets;
+  assert.equal(record?.assetId, 'cover');
+  assert.ok(
+    lines.some(
+      (line) =>
+        line.event === 'media.startup.asset' &&
+        line.assetId === 'cover' &&
+        line.sha256 === record?.sha256,
+    ),
+  );
+  assert.ok(lines.some((line) => line.event === 'media.startup.derived' && line.count === 1));
+  // No path or URL reaches the log.
+  assert.ok(!JSON.stringify(lines).includes(root));
+});
+
+test('read-only fetches https sources through its fetcher; demo never fetches, whatever it names', async (t) => {
+  const { root, cache } = setup(t);
+  const png = solidPng(64, 64);
+  let fetches = 0;
+  const fetchRemote: RemoteFetcher = async () => {
+    fetches++;
+    return new Uint8Array(png);
+  };
+  const media = [{ id: 'remote', source: 'https://images.example.net/a.png' }];
+  const readOnly = await startStartupMedia({
+    profile: 'read-only',
+    reader: reader(media),
+    options: { cacheDir: cache, fetchRemote },
+  });
+  assert.equal(fetches, 1);
+  assert.equal(readOnly?.document.assets[0]?.assetId, 'remote');
+
+  const demo = await startStartupMedia({
+    profile: 'demo',
+    reader: reader([...media, { id: 'cover', source: 'cover.png' }]),
+    sampleMedia: root,
+    options: { cacheDir: path.join(cache, 'demo'), fetchRemote },
+  });
+  assert.equal(fetches, 1, 'demo fetched nothing');
+  assert.deepEqual(
+    demo?.document.assets.map(({ assetId }) => assetId),
+    ['cover'],
+  );
+  assert.deepEqual(
+    demo?.findings.map(({ assetId, code }) => [assetId, code]),
+    [['remote', 'fetch_denied']],
+  );
+});
+
+test('with nothing to derive from, read-only skips; owner never derives here; a failure never throws', async (t) => {
+  const { cache, lines } = setup(t);
+  const skipped = await startStartupMedia({
+    profile: 'read-only',
+    reader: reader([{ id: 'cover', source: 'cover.png' }]),
+    options: { cacheDir: cache },
+  });
+  assert.equal(skipped, null);
+  assert.ok(lines.some((line) => line.event === 'media.startup.skipped'));
+  const owner = await startStartupMedia({
+    profile: 'owner',
+    reader: reader([{ id: 'cover', source: 'cover.png' }]),
+    mediaRoot: cache,
+  });
+  assert.equal(owner, null);
+  const broken = await startStartupMedia({
+    profile: 'demo',
+    reader: {
+      getLive: async () => Promise.reject(new Error('unreadable')),
+    } as unknown as CatalogReader,
+    sampleMedia: cache,
+  });
+  assert.equal(broken, null);
+  assert.ok(lines.some((line) => line.event === 'media.startup.failed'));
+});
+
+test("demo's bundled sample derives from example-media, every image of it", async (t) => {
+  const { cache, lines } = setup(t);
+  const sample = [
+    { id: 'portrait', source: 'anamika/portrait.png' },
+    { id: 'small-traces', source: 'work/small-traces.png' },
+  ];
+  const derived = await startStartupMedia({
+    profile: 'demo',
+    reader: reader(sample),
+    sampleMedia: path.join(REPO, 'example-media'),
+    options: { cacheDir: cache },
+  });
+  assert.deepEqual(
+    derived?.document.assets.map(({ assetId }) => assetId),
+    ['portrait', 'small-traces'],
+  );
+  assert.deepEqual(derived?.findings, []);
+  assert.equal(lines.filter((line) => line.event === 'media.startup.asset').length, 2);
+});
+
+test("once read-only's derivation finishes, its view shows the image ready and /media serves it from the cache", async (t) => {
+  const { root, cache } = setup(t);
+  const pairs = path.join(REPO, 'packages/schema/src/__fixtures__/pairs/photography/yaml');
+  const portfolio = parsePortfolio(
+    readFileSync(path.join(pairs, 'portfolio.yml'), 'utf8').replace(
+      'source: images/mateo.jpg',
+      'source: cover.png',
+    ),
+    'yaml',
+  );
+  const site = parseSite(readFileSync(path.join(pairs, 'site.yml'), 'utf8'), 'yaml');
+  assert.ok(portfolio.ok && site.ok);
+  const unit = { portfolio: portfolio.value, site: site.value, snapshots: {} };
+  const catalog = {
+    getLive: async () => ({ state: 'live', revisionId: 'source', unitHash: 'sha256:x', unit }),
+  } as unknown as CatalogReader;
+  const read = readDeploymentConfig(
+    {
+      NODE_ENV: 'production',
+      PORTFOLIO_PROFILE: 'read-only',
+      PORTFOLIO_ORIGIN: 'https://rowan.test',
+      PORTFOLIO_SOURCE_DIR: '/srv/portfolio',
+    },
+    { cwd: '/' },
+  );
+  assert.ok(read.ok);
+  setDeploymentState({
+    config: read.config,
+    catalog: catalog as never,
+    dispatch: () => assert.fail('no dispatch here'),
+    degraded: [],
+  });
+  t.after(() => setDeploymentState(undefined));
+
+  const running = startStartupMedia({
+    profile: 'read-only',
+    reader: catalog,
+    mediaRoot: root,
+    options: { cacheDir: cache },
+  });
+  // Until it finishes, the portrait renders as unavailable.
+  assert.equal((await getPublicView()).media.portrait?.derived.state, 'unavailable');
+  assert.ok(await running);
+  await new Promise((resolve) => setImmediate(resolve));
+
+  const derived = (await getPublicView()).media.portrait?.derived;
+  assert.equal(derived?.state, 'ready');
+  const rendition = derived.value.renditions[0]!;
+  assert.match(rendition.url, /^\/media\/portrait\/[0-9a-f]{64}\//);
+  const response = await GET(new Request(`https://rowan.test${rendition.url}`), {
+    params: Promise.resolve({ path: rendition.url.split('/').slice(2) }),
+  } as never);
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('content-type'), rendition.mime);
+  assert.equal(response.headers.get('cache-control'), 'public, max-age=31536000, immutable');
+  assert.equal((await response.arrayBuffer()).byteLength, rendition.bytes);
+});
+
+test("the contract fixture's remote source renders only from /media, and its remote host reaches no view, fetched or refused", async (t) => {
+  // `complete` names https://images.rowan.test/project-shot.png. What the
+  // page renders is the view: under the narrowed img-src 'self', it must
+  // name a /media rendition for that asset, or nothing.
+  const { root, cache } = setup(t);
+  const fixture = path.join(REPO, 'packages/variant-contract/fixtures', 'complete');
+  const portfolio = parsePortfolio(
+    readFileSync(path.join(fixture, 'portfolio.yml'), 'utf8'),
+    'yaml',
+  );
+  const site = parseSite(readFileSync(path.join(fixture, 'site.yml'), 'utf8'), 'yaml');
+  assert.ok(portfolio.ok && site.ok);
+  const read = readDeploymentConfig(
+    {
+      NODE_ENV: 'production',
+      PORTFOLIO_PROFILE: 'read-only',
+      PORTFOLIO_ORIGIN: 'https://rowan.test',
+      PORTFOLIO_SOURCE_DIR: '/srv/portfolio',
+    },
+    { cwd: '/' },
+  );
+  assert.ok(read.ok);
+  const REMOTE = 'https://images.rowan.test/project-shot.png';
+
+  for (const fetched of [false, true]) {
+    // A unit of its own each time, so the view is built again.
+    const unit = { portfolio: portfolio.value, site: site.value, snapshots: {} };
+    const catalog = {
+      getLive: async () => ({ state: 'live', revisionId: 'source', unitHash: 'sha256:x', unit }),
+    } as unknown as CatalogReader;
+    setDeploymentState({
+      config: read.config,
+      catalog: catalog as never,
+      dispatch: () => assert.fail('no dispatch here'),
+      degraded: [],
+    });
+    t.after(() => setDeploymentState(undefined));
+    const urls: string[] = [];
+    // The real fetcher refuses a .test host before any lookup, as read-only
+    // does; a stub stands in for a host that answers.
+    const real = remoteImageFetcher();
+    const fetchRemote: RemoteFetcher = async (url) => {
+      urls.push(url);
+      return fetched ? new Uint8Array(solidPng(640, 320)) : real(url);
+    };
+    const derivation = await startStartupMedia({
+      profile: 'read-only',
+      reader: catalog,
+      mediaRoot: root,
+      options: { cacheDir: path.join(cache, String(fetched)), fetchRemote },
+    });
+    assert.ok(derivation, 'the derivation ran');
+    const finding = derivation.findings.find(({ assetId }) => assetId === 'project-shot');
+    assert.deepEqual(
+      finding && [finding.reason, finding.code],
+      fetched ? undefined : ['refused', 'host_reserved'],
+    );
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(urls, [REMOTE], 'ingestion asked for the remote source once');
+
+    const view = await getPublicView();
+    const text = JSON.stringify(view);
+    assert.ok(!text.includes('images.rowan.test'), `fetched: ${fetched}`);
+    const derived = view.media['project-shot']?.derived;
+    assert.ok(derived, 'the view keeps the asset');
+    if (fetched) {
+      assert.equal(derived.state, 'ready');
+      assert.ok(derived.value.renditions.length > 0);
+      for (const rendition of derived.value.renditions) {
+        assert.match(
+          rendition.url,
+          /^\/media\/project-shot\/[0-9a-f]{64}\/[a-z0-9-]+\.(?:webp|jpg|png)$/,
+        );
+      }
+    } else {
+      assert.equal(derived.state, 'unavailable');
+    }
+  }
+});

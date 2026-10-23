@@ -137,6 +137,9 @@ import {
   inspectProblems,
   leakProblems,
   maskCommands,
+  mediaCacheFor,
+  MEDIA_PATTERN,
+  mediaMissProblems,
   newAuditRecords,
   partsOf,
   persistenceProblems,
@@ -144,6 +147,8 @@ import {
   processProblems,
   redact,
   redactArtifacts,
+  renditionIn,
+  renditionProblems,
   reproFor,
   signedInLeaks,
   sourceProblems,
@@ -466,6 +471,13 @@ function plan(profile, leaks, origin) {
           ...(UUID.test(response.headers['x-request-id'] ?? '') ? [] : ['no x-request-id']),
         ];
       });
+    } else if (access !== 'absent' && entry.pattern === MEDIA_PATTERN) {
+      // #10's renditions: the probe path names none, so it's the plain
+      // 404, never cached. demo also loads a real one (demoRendition).
+      add('GET', concrete(entry.pattern), (response) => [
+        ...mediaMissProblems(response),
+        ...(UUID.test(response.headers['x-request-id'] ?? '') ? [] : ['no x-request-id']),
+      ]);
     } else if (access !== 'absent') {
       add('GET', concrete(entry.pattern), (response) => [
         ...status(200)(response),
@@ -543,6 +555,26 @@ function send(name, requests) {
     throw new Error(`the in-container requests failed: ${(result.stderr || '').trim()}`);
   }
   return responses;
+}
+
+/**
+ * demo's sample images (#10): it derives them once it starts, in the
+ * background, and then / names their renditions. Loads the first one / names,
+ * once it does, and returns what's wrong with it, or that none showed.
+ */
+async function demoRendition(name) {
+  const deadline = Date.now() + 60_000;
+  for (;;) {
+    const [home] = send(name, [{ method: 'GET', path: '/' }]);
+    const rendition = renditionIn(home?.body);
+    if (rendition) {
+      const [response] = send(name, [{ method: 'GET', path: rendition }]);
+      console.log(`[profiles] demo: GET ${rendition} ${response.status}`);
+      return renditionProblems(rendition, response).map((problem) => `GET ${rendition} ${problem}`);
+    }
+    if (Date.now() > deadline) return ['GET / names no /media rendition 60 s after it started'];
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
 }
 
 /** JSON log lines among a container's output. */
@@ -733,7 +765,9 @@ async function profileRun(
   { env, mounts = [], secrets = [], paths = [], then, restarted },
 ) {
   const name = `${run}-${profile}`;
-  const started = startServer(name, { env, mounts });
+  // read-only and demo derive their media into a tmpfs of their own, as
+  // the Compose examples give them (#10).
+  const started = startServer(name, { env, mounts: [...mediaCacheFor(profile), ...mounts] });
   if (started.status !== 0) {
     fail(profile, `the container did not start: ${(started.stderr || '').trim()}`);
     return;
@@ -765,6 +799,11 @@ async function profileRun(
     const expectedName = profile === 'demo' ? 'Anamika Devi' : FIXTURE_NAME;
     if (!home?.body?.includes(expectedName)) fail(profile, `GET / doesn't show ${expectedName}`);
     console.log(`[profiles] ${profile}: ${requests.length} requests checked`);
+    if (profile === 'demo') {
+      for (const problem of await demoRendition(name)) {
+        fail(`${profile}: media`, problem, { profile, route: MEDIA_PATTERN });
+      }
+    }
     for (const problem of spoofed(name, profile, env.PORTFOLIO_ORIGIN)) {
       fail(`${profile}: proxy trust`, problem);
     }

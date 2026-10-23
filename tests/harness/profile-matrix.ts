@@ -200,6 +200,9 @@ function routeFileSpellings(): string[] {
  * method the proxy's plain 404, as an absent route does. A grant page's
  * /preview/probe is a grant, never a view (#7).
  */
+/** The live media's renditions (#10). */
+const MEDIA_PATTERN = '/media/[...path]';
+
 const namesNothing = (entry: Routes.RouteEntry) =>
   entry.kind === 'page' && entry.grant === undefined && concrete(entry.pattern).includes('probe');
 
@@ -560,23 +563,46 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
     const statusDocument = !served && hasGrantRoutes(profile) && isPreviewPath(entry.pattern);
     const gated = entry.kind === 'page' && access === 'session' && !grant;
     const missing = namesNothing(entry) || unbuilt(entry);
-    const state = grant
-      ? 'served only to an active grant, and the status document to anything else'
-      : statusDocument
-        ? 'the status document to every method, as every preview path no grant admits'
-        : missing
-          ? unbuilt(entry)
-            ? 'in no profile of this build, the 404 page'
-            : 'missing there, the 404 page'
-          : served
-            ? gated
-              ? 'served to a session, and sends a visitor to sign-in'
-              : 'served'
-            : 'absent, 404 for every method';
+    // /media (#10): every profile serves it, and a path that names no
+    // rendition the live view keeps, as the probe doesn't, is its plain 404.
+    const rendition = served && entry.pattern === MEDIA_PATTERN;
+    const state = rendition
+      ? 'served, a 404 that is never cached for a rendition the live view lacks, and a 405 to anything but GET and HEAD'
+      : grant
+        ? 'served only to an active grant, and the status document to anything else'
+        : statusDocument
+          ? 'the status document to every method, as every preview path no grant admits'
+          : missing
+            ? unbuilt(entry)
+              ? 'in no profile of this build, the 404 page'
+              : 'missing there, the 404 page'
+            : served
+              ? gated
+                ? 'served to a session, and sends a visitor to sign-in'
+                : 'served'
+              : 'absent, 404 for every method';
     test(
       `${entry.pattern} is ${state}`,
       { annotation: [{ type: 'route', description: entry.pattern }, annotation] },
       async ({ app, request }) => {
+        if (rendition) {
+          const response = await request.get(concrete(entry.pattern), { maxRedirects: 0 });
+          expect(response.status()).toBe(404);
+          expect(response.headers()['content-type']).toMatch(/^text\/plain/);
+          expect(response.headers()['cache-control']).toBe('no-store');
+          expect(response.headers()['x-request-id']).toMatch(UUID);
+          expectProfileHeaders(profile, response, 'GET');
+          // GET and HEAD alone: anything else is the proxy's 405.
+          for (const method of ['POST', 'PUT']) {
+            const refused = await request.fetch(concrete(entry.pattern), {
+              method,
+              maxRedirects: 0,
+            });
+            expect(refused.status(), method).toBe(405);
+            expect(refused.headers()['allow'], method).toBe('GET, HEAD');
+          }
+          return;
+        }
         if (grant || statusDocument) {
           // No grant is active here, so every method gets the status
           // document, and none goes to sign-in.

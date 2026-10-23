@@ -1,4 +1,10 @@
-import { detectFormat } from '@portfolio/schema';
+import {
+  detectFormat,
+  parseMediaDocument,
+  parseSource,
+  type MediaDocument,
+} from '@portfolio/schema';
+import type { MediaFinding, MediaIngestion } from '../catalog/media/ingest';
 import { recordOwnerModule } from '../load-trace';
 import type { Sha256 } from './layout';
 import type { PublicationOutcome } from './publication';
@@ -18,8 +24,10 @@ import {
 // and the CLI's entry may import, so they pass the reader in. This turns
 // what it read into a unit's input and the import's sourceHash, over each
 // file's name and the hash of its bytes as read. Owner's first-start import
-// goes through here too. Until #10 there is no media document: the
-// ./assets mount stays outside the store.
+// goes through here too. An import ingests the pair's media as a draft save
+// does (#10): the media document is derived from the portfolio's media
+// entries, over the live revision's records, so an unchanged source keeps
+// its revision and a lost one keeps its last.
 
 recordOwnerModule('core/store/source');
 
@@ -99,4 +107,65 @@ export function importAtFirstStart(
   mounted: MountedSource,
 ): Promise<PublicationOutcome> {
   return store.publication.importSource({ ...mounted, expectedLiveRevisionId: null }, 'operator');
+}
+
+/** The live revision's media document, or null when nothing is live or it has none that checks. */
+export async function liveMedia(store: Store): Promise<MediaDocument | null> {
+  const { liveRevisionId } = await store.publication.status();
+  if (liveRevisionId === null) return null;
+  const read = await store.revisions.read(liveRevisionId);
+  const model = read.ok ? read.revision.unit.media?.model : undefined;
+  if (model === undefined || model === null) return null;
+  const parsed = parseMediaDocument(model);
+  return parsed.ok ? parsed.value : null;
+}
+
+export interface MountedMedia {
+  /** The mounted pair with its derived media document, when it has any asset. */
+  readonly mounted: MountedSource;
+  readonly findings: readonly MediaFinding[];
+  /** The assets that derived a new revision. */
+  readonly derived: readonly string[];
+}
+
+/**
+ * The mounted pair with the media document an import publishes: ingestion's,
+ * from the portfolio's media entries and `previous`, the live revision's.
+ * The sourceHash stays the pair's own.
+ */
+export async function withMountedMedia(
+  mounted: MountedSource,
+  {
+    ingestion,
+    previous,
+    fetchRemote,
+  }: {
+    readonly ingestion: MediaIngestion;
+    readonly previous: MediaDocument | null;
+    readonly fetchRemote: boolean;
+  },
+): Promise<MountedMedia> {
+  const { portfolio, site } = mounted.documents;
+  const parsed = parseSource(portfolio.sourceText, portfolio.format);
+  const result = await ingestion.ingest({
+    portfolio: parsed.ok ? parsed.data : null,
+    previous,
+    fetchRemote,
+  });
+  const documents =
+    result.document.assets.length > 0
+      ? {
+          portfolio,
+          site,
+          media: {
+            format: 'json' as const,
+            sourceText: `${JSON.stringify(result.document, null, 2)}\n`,
+          },
+        }
+      : { portfolio, site };
+  return {
+    mounted: { documents, sourceHash: mounted.sourceHash },
+    findings: result.findings,
+    derived: result.derived,
+  };
 }

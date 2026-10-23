@@ -1,5 +1,6 @@
 import path from 'node:path';
 import { recordOwnerModule } from '../load-trace';
+import { scanMediaBlobs } from './blob-refs';
 import { asDraft } from './drafts';
 import type { FsPort } from './fs-port';
 import {
@@ -285,6 +286,8 @@ export async function verifyStore({
     if (base !== null && !present.has(base)) problem('draft_base_missing', full);
     const media = draft.documents.media?.model;
     if (media !== undefined && media !== null) {
+      // By shape too (#10): a document a newer build wrote still names its blobs.
+      for (const blob of scanMediaBlobs(media) ?? []) referenced.set(blob, full);
       for (const blob of checks.referencedBlobs?.(media) ?? []) referenced.set(blob, full);
     }
   }

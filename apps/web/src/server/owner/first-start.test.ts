@@ -14,6 +14,7 @@ import {
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { crc32, deflateSync } from 'node:zlib';
 import type { UnitChecks } from '@portfolio/core';
 import { mountedSource, openStore, preflight, type RevisionId } from '@portfolio/core/owner';
 import { readPairBytes } from '@portfolio/schema/node';
@@ -636,4 +637,71 @@ test("a first start imports nothing while another server holds the data director
   await new Promise((resolve) => setTimeout(resolve, 200));
   assert.equal(existsSync(livePath(site.dataDir)), false, 'nothing was imported');
   assert.deepEqual(eventsIn(site.dataDir), []);
+});
+
+/** A solid 640 x 320 PNG, written out by hand. */
+function solidPng(): Buffer {
+  const chunk = (type: string, data: Buffer) => {
+    const length = Buffer.alloc(4);
+    length.writeUInt32BE(data.length);
+    const body = Buffer.concat([Buffer.from(type, 'latin1'), data]);
+    const crc = Buffer.alloc(4);
+    crc.writeUInt32BE(crc32(body) >>> 0);
+    return Buffer.concat([length, body, crc]);
+  };
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(640, 0);
+  header.writeUInt32BE(320, 4);
+  header.set([8, 2, 0, 0, 0], 8);
+  const row = Buffer.concat([Buffer.from([0]), Buffer.from(Array(640).fill([40, 120, 60]).flat())]);
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    chunk('IHDR', header),
+    chunk('IDAT', deflateSync(Buffer.concat(Array(320).fill(row)))),
+    chunk('IEND', Buffer.alloc(0)),
+  ]);
+}
+
+test("the first-start import ingests the pair's media from PORTFOLIO_MEDIA_ROOT, as a draft save does (#10)", async (t) => {
+  t.mock.method(console, 'log', () => {});
+  const media = mkdtempSync(path.join(tmpdir(), 'first-start-media-'));
+  t.after(() => rmSync(media, { recursive: true, force: true }));
+  writeFileSync(path.join(media, 'fixture-garden.png'), solidPng());
+  const local = PORTFOLIO.replace(
+    'source: https://media.rowan.test/fixture-garden.png',
+    'source: fixture-garden.png',
+  );
+  assert.notEqual(local, PORTFOLIO);
+  const site = deployment(t, { ...PAIR, 'portfolio.yml': local }, { PORTFOLIO_MEDIA_ROOT: media });
+  const composed = await start(t, site);
+  assert.ok(composed.ok, JSON.stringify(composed.ok ? [] : composed.issues));
+  const live = await composed.state.catalog.getLive();
+  assert.equal(live.state, 'live');
+  const assets = (live.unit?.media as { assets?: Record<string, unknown>[] } | undefined)?.assets;
+  assert.equal(assets?.length, 1);
+  assert.equal(assets?.[0]?.assetId, 'fixture-garden-cover');
+  assert.deepEqual([assets?.[0]?.width, assets?.[0]?.height], [640, 320]);
+  assert.deepEqual(assets?.[0]?.source, { kind: 'local', path: 'fixture-garden.png' });
+  // The revision keeps its blobs.
+  const store = sideStore(site);
+  const manifest = await store.revisions.manifest(live.revisionId as RevisionId);
+  assert.ok((manifest?.blobs.length ?? 0) >= 3, 'the source and its renditions');
+  for (const blob of manifest?.blobs ?? []) assert.ok(await store.assets.has(blob), blob);
+});
+
+test('the first-start import fetches no special-use name, so the browser fixture makes no DNS query', async (t) => {
+  const logged = t.mock.method(console, 'log', () => {});
+  const site = deployment(t, PAIR);
+  const composed = await start(t, site);
+  assert.ok(composed.ok, JSON.stringify(composed.ok ? [] : composed.issues));
+  const live = await composed.state.catalog.getLive();
+  assert.equal(live.unit?.media, undefined, 'nothing derived');
+  assert.ok(
+    logLines(logged).some(
+      (line) =>
+        line.event === 'media.source.unused' &&
+        line.assetId === 'fixture-garden-cover' &&
+        line.code === 'host_reserved',
+    ),
+  );
 });

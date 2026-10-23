@@ -12,13 +12,13 @@ import {
   type RevisionId,
   type SessionHold,
 } from '@portfolio/core/owner';
-import { assertAuthorized } from '../authorize';
+import { assertAuthorized, authorize, type Authorized } from '../authorize';
 import type { Capability } from '../capabilities';
 import type { Handler, HandlerContext } from '../dispatcher';
 import { recordOwnerModule } from '../load-trace';
 import { PAGE_LIMIT } from '../store-schemas';
 import { errorResult, type StudioResult } from '../studio-result';
-import type { OwnerMoveContext, StudioStore } from './store';
+import type { MediaGrant, OwnerMoveContext, StudioStore } from './store';
 
 // The revision store's operations for Studio (#3, item 22), each checking
 // its authorize() token first. The store makes the version checks, under
@@ -152,15 +152,28 @@ function moveAnswer(outcome: PublicationOutcome, ended: () => StudioResult | nul
 /** A handler that checks its token for `capability`, then runs, with a StoreError answered by its code. */
 function handler(
   capability: Capability,
-  run: (input: never, context: HandlerContext) => Promise<unknown>,
+  run: (input: never, context: HandlerContext, authorized: Authorized) => Promise<unknown>,
 ): Handler {
   return async (authorized, input, context) => {
     assertAuthorized(authorized, capability);
     try {
-      return await run(input as never, context);
+      return await run(input as never, context, authorized);
     } catch (error) {
       return storeFailure(error);
     }
+  };
+}
+
+/**
+ * What a draft write's session may do with media (#10), asked of #1's
+ * policy for the same session: media.ingest to derive renditions, and
+ * media.fetchRemote, on top of it, to fetch an https source.
+ */
+export function mediaGrant(authorized: Pick<Authorized, 'session'>): MediaGrant {
+  const ingest = authorize('media.ingest', authorized.session) !== null;
+  return {
+    ingest,
+    fetchRemote: ingest && authorize('media.fetchRemote', authorized.session) !== null,
   };
 }
 
@@ -221,8 +234,10 @@ export function storeHandlers(studio: StudioStore): Readonly<Record<string, Hand
       async (input: Parameters<StudioStore['createDraft']>[0]) =>
         draftAnswer(await studio.createDraft(input)),
     ),
-    'draft.save': handler('draft.write', async (input: Parameters<StudioStore['saveDraft']>[0]) =>
-      draftAnswer(await studio.saveDraft(input)),
+    'draft.save': handler(
+      'draft.write',
+      async (input: Parameters<StudioStore['saveDraft']>[0], _context, authorized) =>
+        draftAnswer(await studio.saveDraft(input, mediaGrant(authorized))),
     ),
     'draft.applyEdits': handler(
       'draft.write',
@@ -231,8 +246,8 @@ export function storeHandlers(studio: StudioStore): Readonly<Record<string, Hand
     ),
     'draft.rebase': handler(
       'draft.write',
-      async (input: Parameters<StudioStore['rebaseDraft']>[0]) =>
-        draftAnswer(await studio.rebaseDraft(input)),
+      async (input: Parameters<StudioStore['rebaseDraft']>[0], _context, authorized) =>
+        draftAnswer(await studio.rebaseDraft(input, mediaGrant(authorized))),
     ),
     'draft.discard': handler(
       'draft.write',

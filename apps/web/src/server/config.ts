@@ -23,6 +23,7 @@ export const DEPLOYMENT_KEYS = {
   PORTFOLIO_PROFILE: PROFILES,
   PORTFOLIO_ORIGIN: PROFILES,
   PORTFOLIO_SOURCE_DIR: ['owner', 'read-only'],
+  PORTFOLIO_MEDIA_ROOT: ['owner', 'read-only'],
   PORTFOLIO_TRUSTED_PROXY_HOPS: PROFILES,
   PORTFOLIO_PREVIEW_ORIGIN: ['owner', 'demo'],
   PORTFOLIO_DATA_DIR: ['owner'],
@@ -93,6 +94,12 @@ export interface DeploymentConfig {
   readonly origin: string;
   /** Absolute PORTFOLIO_SOURCE_DIR (`owner`, `read-only`). */
   readonly sourceDir?: string;
+  /**
+   * Absolute PORTFOLIO_MEDIA_ROOT (`owner`, `read-only`), the read-only
+   * directory local media sources resolve under (#10). Unset, no local
+   * source can be read.
+   */
+  readonly mediaRoot?: string;
   /** How many X-Forwarded-For entries, from the right, come from trusted proxies. */
   readonly trustedProxyHops: number;
   /** Origin for isolated previews (`owner`, `demo`). */
@@ -424,6 +431,12 @@ export function readDeploymentConfig(env: Env, options: ReadConfigOptions): Read
     );
   }
 
+  const mediaValue = resolveFor('PORTFOLIO_MEDIA_ROOT');
+  const mediaRoot =
+    mediaValue.state === 'set'
+      ? path.resolve(/*turbopackIgnore: true*/ options.cwd, mediaValue.value)
+      : undefined;
+
   const dataValue = resolveFor('PORTFOLIO_DATA_DIR');
   const dataDefault =
     dataValue.state === 'unset' &&
@@ -515,6 +528,7 @@ export function readDeploymentConfig(env: Env, options: ReadConfigOptions): Read
     origin,
     trustedProxyHops,
     ...(sourceDir !== undefined ? { sourceDir } : {}),
+    ...(mediaRoot !== undefined ? { mediaRoot } : {}),
     ...(previewOrigin !== undefined ? { previewOrigin } : {}),
     ...(dataDir !== undefined
       ? { dataDir: path.resolve(/*turbopackIgnore: true*/ options.cwd, dataDir) }

@@ -118,6 +118,7 @@ export interface ViewMediaAsset {
   readonly kind: MediaKind;
   readonly alt?: string;
   readonly credit?: string;
+  readonly rights?: MediaAsset['rights'];
   readonly focalPoint?: FocalPoint;
   readonly decorative?: boolean;
   readonly derived: Derived<ViewMediaValue>;
@@ -518,6 +519,9 @@ function viewMedia(
       kind: asset.kind,
       alt: asset.alt,
       credit: asset.credit,
+      rights: asset.rights
+        ? (withoutUnregistered(asset.rights, registry) as MediaAsset['rights'])
+        : undefined,
       focalPoint: asset.focalPoint
         ? (withoutUnregistered(asset.focalPoint, registry) as FocalPoint)
         : undefined,

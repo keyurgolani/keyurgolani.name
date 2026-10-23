@@ -297,6 +297,7 @@ test('owner loads its modules only through the composition root', () => {
     'server/owner/data-directory',
     'server/owner/first-start',
     'server/owner/index',
+    'server/owner/media',
     'server/owner/preview',
     'server/owner/revision-integrity',
     'server/owner/session-mint',

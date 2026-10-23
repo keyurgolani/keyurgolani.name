@@ -17,6 +17,7 @@ import {
 } from 'node:fs';
 import path from 'node:path';
 import { test, type TestContext } from 'node:test';
+import { mediaBlobs, parseMediaDocument, type MediaDocument } from '@portfolio/schema';
 import { readPairBytes } from '@portfolio/schema/node';
 import { nodeFs, type FsPort } from './store/fs-port';
 import { RESTORE_CLAIM, type RevisionId } from './store/layout';
@@ -27,6 +28,8 @@ import { openStore } from './store/store';
 import { importSourceHash, sha256, type UnitInput } from './catalog/unit';
 import { cli, line } from './store/test-support/cli';
 import { startChild } from './store/test-support/spawn';
+import { jpeg } from './store/test-support/images';
+import type { RemoteFetcher } from './catalog/media/remote';
 import {
   contentVariant,
   filesUnder,
@@ -820,4 +823,96 @@ test('verify prints no path the operator did not give, even over a link loop', a
   assert.equal(run.code, 1, run.out);
   assert.match(run.out + run.err, new RegExp(`revisions/${live}/documents/loop`));
   assert.ok(!`${run.out}${run.err}`.includes(store.paths.root), 'no absolute path');
+});
+
+/** The live revision's media document. */
+async function liveMediaOf(root: string): Promise<MediaDocument | null> {
+  const store = openStore({ dataDir: root, checks: testChecks({ referencedBlobs: mediaBlobs }) });
+  const live = await readLive(nodeFs, store.paths);
+  if (!live) return null;
+  const read = await store.revisions.read(live.revisionId);
+  assert.ok(read.ok);
+  const parsed = parseMediaDocument(read.revision.unit.media?.model);
+  return parsed.ok ? parsed.value : null;
+}
+
+test("import ingests the pair's media from PORTFOLIO_MEDIA_ROOT, keeps unchanged revisions, and keeps a lost one", async (t) => {
+  const store = await newStore(t, { checks: testChecks({ referencedBlobs: mediaBlobs }) });
+  const source = mounted(t, pairInput('photography'));
+  const root = tempDir(t, 'store-media-');
+  mkdirSync(path.join(root, 'images'));
+  for (const [file, width] of [
+    ['mateo.jpg', 600],
+    ['harbor-1.jpg', 900],
+    ['harbor-2.jpg', 700],
+  ] as const) {
+    writeFileSync(path.join(root, 'images', file), await jpeg({ width, height: 400 }));
+  }
+  let fetches = 0;
+  const fetchRemote: RemoteFetcher = async () => {
+    fetches++;
+    throw new Error('no remote source here');
+  };
+  const call = {
+    dataDir: store.paths.root,
+    readSource,
+    checks: testChecks({ referencedBlobs: mediaBlobs }),
+    env: { PORTFOLIO_MEDIA_ROOT: root },
+    fetchRemote,
+  };
+  const first = await cli(['import', '--from', source], call);
+  assert.equal(first.code, 0, first.err);
+  const media = await liveMediaOf(store.paths.root);
+  assert.deepEqual(
+    media?.assets.map(({ assetId, width }) => [assetId, width]),
+    [
+      ['portrait', 600],
+      ['ferry-at-dawn', 900],
+      ['nets-on-the-quay', 700],
+    ],
+  );
+  // The revision keeps every blob it names: sources and renditions.
+  const live = await readLive(nodeFs, store.paths);
+  assert.deepEqual(
+    (await readManifest(nodeFs, store.paths, live!.revisionId))?.blobs,
+    mediaBlobs(media),
+  );
+  assert.equal(fetches, 0);
+
+  // Nothing changed: the same revision, nothing derived again.
+  const again = await cli(['import', '--from', source], call);
+  assert.equal(again.code, 0, again.err);
+  assert.match(again.out, /is the live revision already/);
+
+  // A lost source keeps its last revision, and the import says so.
+  rmSync(path.join(root, 'images', 'harbor-1.jpg'));
+  const lost = await cli(['import', '--from', source], call);
+  assert.equal(lost.code, 0, lost.err);
+  assert.match(
+    lost.out,
+    /^media ferry-at-dawn: source missing \(not_found\); kept its last revision\.$/m,
+  );
+  const after = await liveMediaOf(store.paths.root);
+  assert.equal(
+    after?.assets.find(({ assetId }) => assetId === 'ferry-at-dawn')?.sha256,
+    media?.assets.find(({ assetId }) => assetId === 'ferry-at-dawn')?.sha256,
+  );
+  // It names no path from the media root.
+  assert.equal(lost.out.includes(root), false);
+});
+
+test('import with no PORTFOLIO_MEDIA_ROOT says each local source is unreachable, and imports the pair', async (t) => {
+  const store = await newStore(t, { checks: testChecks({ referencedBlobs: mediaBlobs }) });
+  const source = mounted(t, pairInput('photography'));
+  const imported = await cli(['import', '--from', source], {
+    dataDir: store.paths.root,
+    readSource,
+    checks: testChecks({ referencedBlobs: mediaBlobs }),
+  });
+  assert.equal(imported.code, 0, imported.err);
+  assert.match(
+    imported.out,
+    /^media portrait: source unreachable \(root_unset\); no revision yet\.$/m,
+  );
+  assert.equal(await liveMediaOf(store.paths.root), null);
 });

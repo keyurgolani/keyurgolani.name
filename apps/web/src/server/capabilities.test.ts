@@ -57,6 +57,8 @@ const TABLE: ReadonlyArray<readonly [Capability, owner: Cell, demo: Cell, readOn
   ['publish', 'session', 'absent', 'absent'],
   ['rollback', 'session', 'absent', 'absent'],
   ['asset.write', 'session', 'absent', 'absent'],
+  ['media.ingest', 'session', 'absent', 'absent'],
+  ['media.fetchRemote', 'session', 'absent', 'absent'],
   ['preview.grant', 'session', 'absent', 'absent'],
   ['appearance.fixtures', ...fixtureCells('appearance.fixtures')],
 ];

@@ -1286,6 +1286,8 @@ test("what every profile serves, with #2's Studio pages under owner alone", () =
     '/api/health',
     '/api/ready',
     '/api/studio/[name]',
+    // The live media's renditions (#10), for whatever the profile's catalog serves.
+    '/media/[...path]',
     '/opengraph-image-12o0cb',
     '/robots.txt',
     '/sitemap.xml',
@@ -1598,19 +1600,10 @@ function composePublicMounts(): { file: string; name: string }[] {
   return mounts;
 }
 
-test('every directory a Compose file mounts into public/ is a name no view or route takes', () => {
-  const mounts = composePublicMounts();
-  // The owner's assets, which docker-compose.yml and compose.owner.yml mount.
-  assert.ok(
-    mounts.some(({ name }) => name === 'assets'),
-    JSON.stringify(mounts),
-  );
-  const owned = ownedFirstSegments();
-  for (const { file, name } of mounts) {
-    assert.ok(isReservedSegment(name), `${file} mounts public/${name}, which a view could take`);
-    assert.ok(!owned.has(name), `a route answers before ${file}'s public/${name}`);
-  }
-  // A file there, extension or not, is missing, so Next serves it.
+test('no Compose file mounts anything into public/, and /assets answers 404 in every profile (#10)', () => {
+  // Media sources mount read-only at /media, and renditions serve from
+  // /media; a file in public/ would serve as it is, original and all.
+  assert.deepEqual(composePublicMounts(), []);
   for (const profile of PROFILES) {
     for (const pathname of ['/assets/me.jpg', '/assets/notes', '/assets']) {
       assert.equal(fixtureEntry(profile, pathname), 'missing', `${profile} ${pathname}`);

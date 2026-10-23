@@ -365,3 +365,24 @@ test('retention keeps a blob an upload just brought in again, however old the fi
   assert.ok(existsSync(store.paths.blob(again.sha256)), 'the blob uploaded again stays');
   assert.equal(existsSync(store.paths.blob(once.sha256)), false, 'the old one goes');
 });
+
+test("a draft media document of no shape either reading knows keeps every blob, since what it keeps can't be told (#10)", async (t) => {
+  const store = await newStore(t);
+  const orphan = await store.assets.put(Buffer.from('nobody names this'), 'image/png');
+  const draft = await store.drafts.create(
+    {
+      documents: {
+        ...pairInput('engineering'),
+        media: { format: 'json', sourceText: '{"items":[{"hash":"x"}]}\n' },
+      },
+    },
+    'owner',
+  );
+  assert.equal(draft.kind, 'saved', JSON.stringify(draft));
+  const outcome = await retention(store, {}, Date.now() + DAY + 60 * 60_000);
+  assert.equal(outcome.kind, 'done');
+  if (outcome.kind !== 'done') return;
+  assert.equal(outcome.report.blobsKept, 'draft_unreadable');
+  assert.deepEqual(outcome.report.removedBlobs, []);
+  assert.ok(existsSync(store.paths.blob(orphan.sha256)));
+});

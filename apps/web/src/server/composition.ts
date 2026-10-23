@@ -232,6 +232,16 @@ export const STARTUP_REQUIREMENTS: readonly StartupRequirement[] = [
     failure: 'fatal',
     load: () => import('./owner/first-start').then((module) => module.check),
   },
+  // Media renditions (#10, Risk 1): sharp loads, and the media root is a
+  // directory the server only reads. Warnings: without sharp, draft saves
+  // derive nothing new, and every rendition already derived keeps serving.
+  {
+    id: 'media.renditions',
+    issue: '#10',
+    profiles: ['owner'],
+    failure: 'degraded',
+    load: () => import('./owner/media').then((module) => module.check),
+  },
 ];
 
 interface Checked {
@@ -438,6 +448,8 @@ export async function compose(input: CompositionInput): Promise<Composition> {
         ...(previews ? { previews: previews.port } : {}),
         dataDirectory: () => store.probe(),
         release: () => store.release(),
+        // The live media's blobs, for /media (#10).
+        mediaBlobs: (hash) => store.store.assets.open(hash),
       });
     }
   }
@@ -503,6 +515,8 @@ interface Built {
   readonly dataDirectory?: () => Promise<boolean>;
   /** Owner only: lets the data directory's server claim go as the process exits (#3). */
   readonly release?: () => void;
+  /** Owner only: the live media's blobs, from the AssetStore (#10). */
+  readonly mediaBlobs?: DeploymentState['mediaBlobs'];
 }
 
 /** The readers recordingLive() made. */
@@ -555,6 +569,7 @@ function built(config: DeploymentConfig, parts: Built): Composition {
     ...(parts.previews ? { previews: parts.previews } : {}),
     ...(parts.dataDirectory ? { dataDirectory: parts.dataDirectory } : {}),
     ...(parts.release ? { release: parts.release } : {}),
+    ...(parts.mediaBlobs ? { mediaBlobs: parts.mediaBlobs } : {}),
   });
   return { ok: true, state, issues: parts.issues, summary: configSummary(config, parts.adapter) };
 }

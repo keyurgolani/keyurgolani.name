@@ -470,10 +470,20 @@ const MEDIA_DOCUMENT = {
       aspectRatio: 1600 / 900,
       dominantColor: '#334455',
       renditions: [
-        { name: 'w960-a1', ext: 'webp', mime: 'image/webp', bytes: 900, width: 960, height: 540 },
+        {
+          name: 'w960-a1',
+          ext: 'webp',
+          mime: 'image/webp',
+          bytes: 900,
+          width: 960,
+          height: 540,
+          sha256: 'c'.repeat(64),
+        },
       ],
       derivedAt: '2026-10-01T12:00:00Z',
       algorithmVersion: 1,
+      source: { kind: 'local', path: 'atlas/cover.png' },
+      availability: { state: 'available' },
     },
   ],
 };

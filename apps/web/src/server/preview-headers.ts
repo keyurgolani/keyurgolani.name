@@ -44,9 +44,9 @@ export interface PreviewPolicyOptions {
 }
 
 /**
- * The policy for one preview response. `img-src` and `media-src` allow
- * https: while content still hot-links remote media; #10 narrows them to
- * 'self'. `style-src-attr` covers React's style props.
+ * The policy for one preview response. Images and media load from the
+ * grant's own /preview-assets alone, or a data: URL (#10): never a remote
+ * host. `style-src-attr` covers React's style props.
  */
 export function previewCsp(nonce: string, { mode, studioOrigin }: PreviewPolicyOptions): string {
   const development = mode === 'development';
@@ -59,8 +59,8 @@ export function previewCsp(nonce: string, { mode, studioOrigin }: PreviewPolicyO
     `style-src 'self' ${development ? "'unsafe-inline'" : `'nonce-${nonce}'`}`,
     "style-src-attr 'unsafe-inline'",
     "font-src 'self'",
-    "img-src 'self' https: data:",
-    "media-src 'self' https:",
+    "img-src 'self' data:",
+    "media-src 'self'",
     // Hot reloading's socket and the dev overlay's requests, under next dev only.
     `connect-src ${development ? "'self'" : "'none'"}`,
     "frame-src 'none'",

@@ -73,7 +73,12 @@ test('the bundle needs Node and nothing else: it runs from a directory outside t
   for (const [, specifier] of imports) {
     assert.match(specifier, /^node:/, `the bundle imports ${specifier}`);
   }
-  assert.doesNotMatch(text, /\bimport\(\s*["'](?!node:)/, 'nor loads anything else later');
+  // Later, it loads only sharp, a native module, for an import's media
+  // (#10): from the server's build in the image, and never from the bundle.
+  const later = [...text.matchAll(/\bimport\(\s*["']([^"']+)["']/g)]
+    .map(([, specifier]) => specifier)
+    .filter((specifier) => !specifier.startsWith('node:'));
+  assert.deepEqual([...new Set(later)], ['sharp'], 'nor loads anything else later');
   const app = scratch(t, 'store-app-');
   mkdirSync(path.join(app, 'bin'));
   const bin = path.join(app, 'bin', 'portfolio-store.mjs');

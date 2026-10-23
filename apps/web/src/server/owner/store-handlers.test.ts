@@ -421,6 +421,8 @@ test('Studio acts as the owner only: every call names the owner, and a pointer m
     };
   const fake = {
     drafts: {
+      // A save reads the draft first, for the media document it has (#10).
+      get: async () => null,
       create: record({ kind: 'saved' }),
       save: record({ kind: 'saved' }),
       applyEdits: record({ kind: 'saved' }),

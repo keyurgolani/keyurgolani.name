@@ -1,5 +1,6 @@
 import path from 'node:path';
 import { recordOwnerModule } from '../load-trace';
+import { scanMediaBlobs } from './blob-refs';
 import { storageError, StoreError, type StoreActor } from './common';
 import { draftIds } from './drafts';
 import type { FsPort } from './fs-port';
@@ -51,8 +52,11 @@ export interface RetentionReport {
   /** The protected revisions, and why each one is. */
   readonly protected: ReadonlyMap<RevisionId, Protection>;
   readonly removedBlobs: readonly Sha256[];
-  /** Why no blob was considered, when none was: a revision whose manifest can't be read. */
-  readonly blobsKept?: 'manifest_unreadable';
+  /**
+   * Why no blob was considered, when none was: a revision whose manifest
+   * can't be read, or a draft whose file or media document can't be (#10).
+   */
+  readonly blobsKept?: 'manifest_unreadable' | 'draft_unreadable';
   /** The audit files removed, by name, such as 2025-08.jsonl. */
   readonly removedAudit: readonly string[];
   /** Why it stopped before it was done, when it did: another process took the lock. */
@@ -139,26 +143,43 @@ async function draftBase(fs: FsPort, file: string): Promise<RevisionId | null> {
   }
 }
 
-/** The blobs a draft's media document, or its previous version's, references. */
+/**
+ * The blobs a draft's media document, or its previous version's,
+ * references, or null when a draft's can't be told: a file that's there but
+ * won't read or parse, or a media document that isn't one's shape. Like an
+ * unreadable manifest, that keeps every blob (#10): what only that draft
+ * names would otherwise go for good. The references are read by shape
+ * (scanMediaBlobs), and by the unit checks' own reading too.
+ */
 async function draftBlobs(
   fs: FsPort,
   paths: StorePaths,
   checks: Pick<UnitChecks, 'referencedBlobs'>,
-): Promise<Set<Sha256>> {
+): Promise<Set<Sha256> | null> {
   const blobs = new Set<Sha256>();
   for (const id of await draftIds(fs, paths)) {
     for (const file of [paths.draft(id), paths.draftPrevious(id)]) {
+      let text: string;
+      try {
+        text = (await fs.readFile(file)).toString('utf8');
+      } catch (error) {
+        // A draft with no previous version has no file for it.
+        if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') continue;
+        return null;
+      }
       let media: unknown;
       try {
-        const draft = JSON.parse((await fs.readFile(file)).toString('utf8')) as {
-          documents?: { media?: { model?: unknown } };
-        };
+        const draft = JSON.parse(text) as { documents?: { media?: { model?: unknown } } };
         media = draft?.documents?.media?.model;
       } catch {
-        continue;
+        return null;
       }
       if (media === undefined || media === null) continue;
-      for (const blob of checks.referencedBlobs?.(media) ?? []) blobs.add(blob);
+      const scanned = scanMediaBlobs(media);
+      const checked = checks.referencedBlobs?.(media) ?? [];
+      // Neither reading finds what it keeps: nothing can be said, so nothing goes.
+      if (!scanned && checked.length === 0) return null;
+      for (const blob of [...(scanned ?? []), ...checked]) blobs.add(blob);
     }
   }
   return blobs;
@@ -249,9 +270,10 @@ export async function runRetention(
       // Blobs: what's left of the revisions, and every draft, keep theirs.
       const gone = dryRun ? removing : removed;
       const remaining = live.filter((id) => !gone.includes(id));
-      const referenced = await draftBlobs(fs, paths, checks);
-      let blobsKept: RetentionReport['blobsKept'];
-      for (const id of remaining) {
+      const drafted = await draftBlobs(fs, paths, checks);
+      const referenced = drafted ?? new Set<Sha256>();
+      let blobsKept: RetentionReport['blobsKept'] = drafted ? undefined : 'draft_unreadable';
+      for (const id of blobsKept ? [] : remaining) {
         const manifest = await readManifest(fs, paths, id);
         if (!manifest) {
           blobsKept = 'manifest_unreadable';

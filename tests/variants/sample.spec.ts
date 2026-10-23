@@ -6,8 +6,22 @@ import { DEMO, FALLBACK_ID, FIXED_TIME, projectTarget } from './target';
 // A registered composition on the bundled sample (#5, Slice 6), under demo
 // at /sample, in every mode: the sample site's own selection for the
 // fallback composition, which stands in for it until #13, and
-// ?variant=<id> for every other. The sample's images have no rendition
-// until #10's second slice, so the page asks no host for one.
+// ?variant=<id> for every other. demo derives the sample's images from
+// example-media/ once it starts, in the background (#10), and the page
+// loads their renditions from /media, so every check waits for that first:
+// a screenshot taken before it would show them unavailable.
+
+/** Whether the server's log says its startup media derivation finished. */
+const derived = (log: string) =>
+  readFileSync(log, 'utf8')
+    .split('\n')
+    .some((line) => line.startsWith('{') && line.includes('"event":"media.startup.derived"'));
+
+test.beforeAll(async ({ app }) => {
+  await expect
+    .poll(() => derived(app.log), { message: 'startup media derived', timeout: 60_000 })
+    .toBe(true);
+});
 
 test(
   'the server runs on the fixed clock: every line it logs says 2026-01-01',

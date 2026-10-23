@@ -117,9 +117,20 @@ const RECORD = {
   sha256: SHA,
   mime: 'image/png',
   bytes: 10,
-  renditions: [{ name: 'w960-a1', ext: 'webp', mime: 'image/webp', bytes: 5, width: 960 }],
+  renditions: [
+    {
+      name: 'w960-a1',
+      ext: 'webp',
+      mime: 'image/webp',
+      bytes: 5,
+      width: 960,
+      sha256: 'c'.repeat(64),
+    },
+  ],
   derivedAt: '2026-10-01T12:00:00Z',
   algorithmVersion: 1,
+  source: { kind: 'local', path: 'atlas/cover.png' },
+  availability: { state: 'available' },
 };
 
 test('a media document holds one record per asset, each rendition named once', () => {

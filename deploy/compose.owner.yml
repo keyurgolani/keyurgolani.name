@@ -24,6 +24,8 @@ services:
       PORTFOLIO_ORIGIN: ${PORTFOLIO_ORIGIN:?set PORTFOLIO_ORIGIN in .env to the origin visitors use}
       PORTFOLIO_SOURCE_DIR: /config
       PORTFOLIO_DATA_DIR: /var/lib/portfolio
+      # Where media sources resolve, read-only (#10).
+      PORTFOLIO_MEDIA_ROOT: /media
       # A file, never the hash itself: Compose reads $ in environment values
       # and .env as a variable, which breaks a PHC string.
       PORTFOLIO_AUTH_PASSWORD_HASH_FILE: /run/secrets/owner_password_hash
@@ -46,7 +48,8 @@ services:
       - /app/apps/web/.next/cache
     volumes:
       - ../config:/config:ro
-      - ../assets:/app/apps/web/public/assets:ro
+      # The files the portfolio's media sources name. The server only reads them.
+      - ../assets:/media:ro
       # Drafts and revisions (#2, #3). Back it up with portfolio-store backup,
       # which leaves out ephemeral/, where sessions live, so restoring one
       # brings back none. A file-level copy of the whole volume holds

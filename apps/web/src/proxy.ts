@@ -101,10 +101,11 @@ import {
 // `variant` parameter. next.config.ts rewrites the request to
 // /_experience/<id> and the path once Next has looked in public/, and drops
 // nothing from its query. Any other method to a visitor page gets a 405,
-// since the page exists for GET. A request for an experience segment's own
-// path, in any spelling and to any method, answers as a path no route
-// matches, and a client's own x-portfolio-experience goes no further than
-// here.
+// since the page exists for GET, and so does any other method to a
+// read-only route, such as #10's /media. A request for an experience
+// segment's own path, in any spelling and to any method, answers as a path
+// no route matches, and a client's own x-portfolio-experience goes no
+// further than here.
 //
 // For Studio (#2), under a profile with a Studio page, it sends the nonce
 // CSP, Referrer-Policy: same-origin, and Cross-Origin-Resource-Policy:
@@ -253,9 +254,11 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
     return unknownPath(request, requestId, extra, { csp, preview });
   }
 
-  // A visitor page exists for GET and HEAD, which go to its experience segment.
+  // A visitor page exists for GET and HEAD, which go to its experience
+  // segment, and so does a read-only route, such as #10's renditions.
   const experience = decision.status === 'served' && decision.entry.experience === true;
-  if (experience && !pageLoad) return methodNotAllowed(requestId, extra);
+  const readOnly = decision.status === 'served' && decision.entry.readOnly === true;
+  if ((experience || readOnly) && !pageLoad) return methodNotAllowed(requestId, extra);
 
   const headers = forwarded(request, requestId, { csp, preview });
   // The table's decision, in place of anything the client sent.
@@ -282,9 +285,10 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
 }
 
 /**
- * A visitor page asked for with a method other than GET or HEAD (#6, Slice
- * 2): plain text, as an operation called with the wrong method gets, with
- * the methods the page takes.
+ * A visitor page (#6, Slice 2), or a read-only route such as #10's
+ * renditions, asked for with a method other than GET or HEAD: plain text,
+ * as an operation called with the wrong method gets, with the methods the
+ * route takes.
  */
 function methodNotAllowed(requestId: string, extra: Record<string, string>): NextResponse {
   return plain(405, 'Method not allowed.', requestId, { ...extra, allow: 'GET, HEAD' });

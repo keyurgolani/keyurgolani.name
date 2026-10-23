@@ -55,6 +55,16 @@ test("every core module but the public entry's records its own name in the owner
 test('the public entry reaches no owner module, and loading it records nothing in the trace', () => {
   const reached = [...PUBLIC].map((file) => path.relative(SRC, file)).sort();
   assert.deepEqual(reached, [
+    // #10's media pipeline, which read-only and demo run at startup.
+    'catalog/media/address.ts',
+    'catalog/media/derive.ts',
+    'catalog/media/ingest.ts',
+    'catalog/media/limits.ts',
+    'catalog/media/local.ts',
+    'catalog/media/remote.ts',
+    'catalog/media/resolve.ts',
+    'catalog/media/sniff.ts',
+    'catalog/media/startup.ts',
     'catalog/port.ts',
     'catalog/source.ts',
     'catalog/unit.ts',

@@ -244,7 +244,8 @@ test(
       );
     }
     await expectStatusDocument(await request.post(frameUrl, { headers: asFrame }), 'POST');
-    // A draft-only asset: until #10, every one is the status document too.
+    // An asset the grant's media doesn't hold, under any destination, is the
+    // status document too. media.spec.ts serves one it does (#10).
     const asset = `/preview-assets/${grant}/a1/${'0'.repeat(64)}/large.webp`;
     for (const destination of ['image', 'font', 'iframe']) {
       await expectStatusDocument(

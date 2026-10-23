@@ -1,0 +1,507 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
+import { once } from 'node:events';
+import net from 'node:net';
+import { fileURLToPath } from 'node:url';
+import { isPublicAddress } from './address';
+import { MediaSourceError } from './limits';
+import {
+  httpsTransport,
+  isSpecialUseName,
+  pinnedLookup,
+  remoteImageFetcher,
+  type RemoteResponse,
+  type RemoteTransport,
+  type Resolve,
+} from './remote';
+
+// Remote sources (#10, slice 2 item 3, SSRF). Every test runs against local
+// stubs: a resolver that answers from a table and a transport that records
+// what it was asked to connect to. Nothing here reaches the internet; the
+// one socket test listens on 127.0.0.1 and talks to itself.
+
+const IMAGE = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4]);
+
+interface Hop {
+  readonly status: number;
+  readonly headers?: Record<string, string>;
+  readonly body?: readonly Uint8Array[];
+  /** Never answers until the fetch gives up. */
+  readonly hang?: boolean;
+}
+
+function stubs(dns: Record<string, readonly string[]>, answers: Record<string, Hop>) {
+  const connections: { url: string; address: string }[] = [];
+  const resolved: string[] = [];
+  const resolve: Resolve = async (hostname) => {
+    resolved.push(hostname);
+    const found = dns[hostname];
+    if (!found) throw Object.assign(new Error('not found'), { code: 'ENOTFOUND' });
+    return found.map((address) => ({ address, family: address.includes(':') ? 6 : 4 }));
+  };
+  const transport: RemoteTransport = async ({ url, address, signal }) => {
+    connections.push({ url: url.href, address });
+    const hop = answers[url.href];
+    if (!hop) throw new Error(`no stub answers ${url.href}`);
+    if (hop.hang) {
+      await new Promise((_, reject) =>
+        signal.addEventListener('abort', () => reject(signal.reason)),
+      );
+    }
+    let cancelled = false;
+    const response: RemoteResponse = {
+      status: hop.status,
+      headers: hop.headers ?? {},
+      body: (async function* () {
+        for (const chunk of hop.body ?? []) {
+          if (cancelled) return;
+          yield chunk;
+        }
+      })(),
+      cancel: () => {
+        cancelled = true;
+      },
+    };
+    return response;
+  };
+  return { resolve, transport, connections, resolved };
+}
+
+const refusal = (reason: string, code?: string) => (error: unknown) => {
+  assert.ok(error instanceof MediaSourceError, String(error));
+  assert.equal(error.reason, reason);
+  if (code !== undefined) assert.equal(error.code, code);
+  return true;
+};
+
+test('an https image is fetched from the address its host resolved to', async () => {
+  const stub = stubs(
+    { 'images.example.net': ['93.184.216.34'] },
+    {
+      'https://images.example.net/a.jpg': {
+        status: 200,
+        body: [IMAGE.subarray(0, 4), IMAGE.subarray(4)],
+      },
+    },
+  );
+  const fetch = remoteImageFetcher(stub);
+  assert.deepEqual(await fetch('https://images.example.net/a.jpg'), IMAGE);
+  assert.deepEqual(stub.connections, [
+    { url: 'https://images.example.net/a.jpg', address: '93.184.216.34' },
+  ]);
+});
+
+test('127.0.0.1, 169.254.169.254, and every other blocked address are refused before connecting', async () => {
+  const stub = stubs(
+    {
+      'loopback.example.net': ['127.0.0.1'],
+      'metadata.example.net': ['169.254.169.254'],
+      'private.example.net': ['10.0.0.5'],
+      'mixed.example.net': ['93.184.216.34', '192.168.1.10'],
+      'v6-loopback.example.net': ['::1'],
+      'v6-metadata.example.net': ['fd00:ec2::254'],
+      'v6-mapped.example.net': ['::ffff:127.0.0.1'],
+    },
+    {},
+  );
+  const fetch = remoteImageFetcher(stub);
+  for (const url of [
+    'https://127.0.0.1/a.jpg',
+    'https://169.254.169.254/latest/meta-data/',
+    'https://[::1]/a.jpg',
+    'https://[::ffff:169.254.169.254]/a.jpg',
+    'https://0.0.0.0/a.jpg',
+    'https://loopback.example.net/a.jpg',
+    'https://metadata.example.net/latest/meta-data/',
+    'https://private.example.net/a.jpg',
+    'https://mixed.example.net/a.jpg',
+    'https://v6-loopback.example.net/a.jpg',
+    'https://v6-metadata.example.net/a.jpg',
+    'https://v6-mapped.example.net/a.jpg',
+  ]) {
+    await assert.rejects(fetch(url), refusal('refused', 'address_blocked'), url);
+  }
+  assert.deepEqual(stub.connections, [], 'nothing was connected to');
+});
+
+test('a redirect to a private address is refused, checked again after DNS', async () => {
+  const stub = stubs(
+    { 'images.example.net': ['93.184.216.34'], 'internal.example.net': ['10.1.2.3'] },
+    {
+      'https://images.example.net/a.jpg': {
+        status: 302,
+        headers: { location: 'https://internal.example.net/secret.jpg' },
+      },
+      'https://images.example.net/b.jpg': {
+        status: 301,
+        headers: { location: 'https://169.254.169.254/latest/meta-data/' },
+      },
+    },
+  );
+  const fetch = remoteImageFetcher(stub);
+  await assert.rejects(
+    fetch('https://images.example.net/a.jpg'),
+    refusal('refused', 'address_blocked'),
+  );
+  await assert.rejects(
+    fetch('https://images.example.net/b.jpg'),
+    refusal('refused', 'address_blocked'),
+  );
+  assert.deepEqual(
+    stub.connections.map(({ address }) => address),
+    ['93.184.216.34', '93.184.216.34'],
+    'only the public first hops were connected to',
+  );
+  assert.ok(
+    stub.resolved.includes('internal.example.net'),
+    "the redirect's host was resolved and checked",
+  );
+});
+
+test('a host is resolved and checked on every hop, so a rebinding host is caught', async () => {
+  let calls = 0;
+  const stub = stubs(
+    {},
+    {
+      'https://rebind.example.net/a.jpg': { status: 307, headers: { location: '/b.jpg' } },
+      'https://rebind.example.net/b.jpg': { status: 200, body: [IMAGE] },
+    },
+  );
+  // Public the first time, loopback the second.
+  const resolve: Resolve = async () => {
+    calls++;
+    return [{ address: calls === 1 ? '93.184.216.34' : '127.0.0.1', family: 4 }];
+  };
+  const fetch = remoteImageFetcher({ ...stub, resolve });
+  await assert.rejects(
+    fetch('https://rebind.example.net/a.jpg'),
+    refusal('refused', 'address_blocked'),
+  );
+  assert.equal(calls, 2);
+  assert.equal(stub.connections.length, 1);
+});
+
+test('three redirects are followed, a fourth is refused', async () => {
+  const hops: Record<string, Hop> = {};
+  for (let i = 0; i < 4; i++) {
+    hops[`https://images.example.net/${i}`] = { status: 302, headers: { location: `/${i + 1}` } };
+  }
+  hops['https://images.example.net/4'] = { status: 200, body: [IMAGE] };
+  hops['https://images.example.net/3'] = { status: 200, body: [IMAGE] };
+  const stub = stubs({ 'images.example.net': ['93.184.216.34'] }, hops);
+  const fetch = remoteImageFetcher(stub);
+  // 0 → 1 → 2 → 3: three redirects.
+  assert.deepEqual(await fetch('https://images.example.net/0'), IMAGE);
+  hops['https://images.example.net/3'] = { status: 302, headers: { location: '/4' } };
+  await assert.rejects(fetch('https://images.example.net/0'), refusal('refused', 'redirects'));
+});
+
+test('http, credentials, a port but 443, and a redirect off https are refused', async () => {
+  const stub = stubs(
+    { 'images.example.net': ['93.184.216.34'] },
+    {
+      'https://images.example.net/down': {
+        status: 302,
+        headers: { location: 'http://images.example.net/a.jpg' },
+      },
+      'https://images.example.net/ported': {
+        status: 302,
+        headers: { location: 'https://images.example.net:8443/a.jpg' },
+      },
+      'https://images.example.net/a.jpg': { status: 200, body: [IMAGE] },
+      'https://images.example.net/file': {
+        status: 302,
+        headers: { location: 'file:///etc/passwd' },
+      },
+    },
+  );
+  const fetch = remoteImageFetcher(stub);
+  await assert.rejects(fetch('http://images.example.net/a.jpg'), refusal('refused', 'scheme'));
+  await assert.rejects(fetch('ftp://images.example.net/a.jpg'), refusal('refused', 'scheme'));
+  await assert.rejects(
+    fetch('https://user:pw@images.example.net/a.jpg'),
+    refusal('refused', 'credentials'),
+  );
+  await assert.rejects(fetch('https://images.example.net/down'), refusal('refused', 'scheme'));
+  await assert.rejects(fetch('https://images.example.net/file'), refusal('refused', 'scheme'));
+  await assert.rejects(fetch('not a url'), refusal('refused'));
+  await assert.rejects(fetch('https://images.example.net:8443/a.jpg'), refusal('refused', 'port'));
+  await assert.rejects(fetch('https://images.example.net/ported'), refusal('refused', 'port'));
+  // 443 named outright is the default, and fine.
+  assert.deepEqual(await fetch('https://images.example.net:443/a.jpg'), IMAGE);
+  assert.ok(stub.connections.every(({ url }) => !url.includes(':8443')));
+});
+
+test('the whole fetch stops at its time limit', async () => {
+  const stub = stubs(
+    { 'images.example.net': ['93.184.216.34'] },
+    { 'https://images.example.net/slow.jpg': { status: 200, hang: true } },
+  );
+  const fetch = remoteImageFetcher({ ...stub, timeoutMs: 50 });
+  const started = Date.now();
+  await assert.rejects(
+    fetch('https://images.example.net/slow.jpg'),
+    refusal('unreachable', 'timeout'),
+  );
+  assert.ok(Date.now() - started < 2000);
+  // A resolver that never answers counts against the same limit.
+  const stuck = remoteImageFetcher({
+    ...stub,
+    resolve: () => new Promise(() => {}),
+    timeoutMs: 50,
+  });
+  await assert.rejects(
+    stuck('https://images.example.net/slow.jpg'),
+    refusal('unreachable', 'timeout'),
+  );
+});
+
+test('more than the cap is refused, by its length or as it streams', async () => {
+  const stub = stubs(
+    { 'images.example.net': ['93.184.216.34'] },
+    {
+      'https://images.example.net/declared': {
+        status: 200,
+        headers: { 'content-length': '65' },
+        body: [new Uint8Array(65)],
+      },
+      'https://images.example.net/streamed': {
+        status: 200,
+        body: [new Uint8Array(40), new Uint8Array(40)],
+      },
+      'https://images.example.net/gzip': {
+        status: 200,
+        headers: { 'content-encoding': 'gzip' },
+        body: [IMAGE],
+      },
+      'https://images.example.net/fits': { status: 200, body: [new Uint8Array(64)] },
+    },
+  );
+  const fetch = remoteImageFetcher({ ...stub, maxBytes: 64 });
+  await assert.rejects(
+    fetch('https://images.example.net/declared'),
+    refusal('refused', 'too_large'),
+  );
+  await assert.rejects(
+    fetch('https://images.example.net/streamed'),
+    refusal('refused', 'too_large'),
+  );
+  await assert.rejects(
+    fetch('https://images.example.net/gzip'),
+    refusal('refused', 'content_encoding'),
+  );
+  assert.equal((await fetch('https://images.example.net/fits')).byteLength, 64);
+});
+
+test('a gone source is missing; an error or a refused connection is unreachable', async () => {
+  const stub = stubs(
+    { 'images.example.net': ['93.184.216.34'] },
+    {
+      'https://images.example.net/404': { status: 404 },
+      'https://images.example.net/410': { status: 410 },
+      'https://images.example.net/500': { status: 500 },
+      'https://images.example.net/403': { status: 403 },
+      // A success that isn't the whole image: a partial or a proxy's rewrite.
+      'https://images.example.net/206': { status: 206, body: [IMAGE] },
+      'https://images.example.net/203': { status: 203, body: [IMAGE] },
+    },
+  );
+  const fetch = remoteImageFetcher(stub);
+  await assert.rejects(fetch('https://images.example.net/404'), refusal('missing'));
+  await assert.rejects(fetch('https://images.example.net/410'), refusal('missing'));
+  await assert.rejects(fetch('https://images.example.net/500'), refusal('unreachable', 'status'));
+  await assert.rejects(fetch('https://images.example.net/403'), refusal('unreachable', 'status'));
+  await assert.rejects(fetch('https://images.example.net/206'), refusal('unreachable', 'status'));
+  await assert.rejects(fetch('https://images.example.net/203'), refusal('unreachable', 'status'));
+  await assert.rejects(
+    fetch('https://nowhere.example.net/a.jpg'),
+    refusal('missing', 'host_not_found'),
+  );
+  await assert.rejects(
+    fetch('https://images.example.net/unknown'),
+    refusal('unreachable', 'connect_failed'),
+  );
+});
+
+test('the address rules: public addresses pass, everything special does not', () => {
+  for (const address of ['93.184.216.34', '8.8.8.8', '2606:4700:4700::1111', '[2606:4700::1]']) {
+    assert.ok(isPublicAddress(address), address);
+  }
+  // A zone index ties even a public-looking address to a local link.
+  for (const address of ['2606:4700:4700::1111%eth0', '[2606:4700::1%25en0]']) {
+    assert.equal(isPublicAddress(address), false, address);
+  }
+  for (const address of [
+    '127.0.0.1',
+    '127.255.255.254',
+    '10.0.0.1',
+    '172.16.0.1',
+    '172.31.255.255',
+    '192.168.0.1',
+    '169.254.169.254',
+    '169.254.0.1',
+    '100.64.0.1',
+    '100.100.100.200',
+    '0.0.0.0',
+    '192.0.0.192',
+    '192.0.2.1',
+    '198.18.0.1',
+    '198.51.100.1',
+    '203.0.113.1',
+    '224.0.0.1',
+    '240.0.0.1',
+    '255.255.255.255',
+    '::',
+    '::1',
+    '[::1]',
+    '::ffff:127.0.0.1',
+    '::ffff:8.8.8.8',
+    '::127.0.0.1',
+    '64:ff9b::a00:1',
+    '2002:a00:1::',
+    '2001:0:4136:e378::1',
+    '2001:db8::1',
+    'fc00::1',
+    'fd00:ec2::254',
+    'fe80::1',
+    'fe80::1%en0',
+    'fec0::1',
+    'ff02::1',
+    'localhost',
+    'images.example.net',
+    '',
+  ]) {
+    assert.ok(!isPublicAddress(address), address);
+  }
+});
+
+test('the https transport connects to the checked address, naming the host for TLS', async (t) => {
+  // A TCP listener on loopback stands in for the host: it reads the TLS
+  // ClientHello, whose server name is the URL's host, and hangs up.
+  const server = net.createServer();
+  const hello = new Promise<Buffer>((resolve) => {
+    server.on('connection', (socket) => {
+      socket.once('data', (data) => {
+        resolve(data);
+        socket.destroy();
+      });
+    });
+  });
+  server.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  t.after(() => server.close());
+  const { port } = server.address() as net.AddressInfo;
+  // The name resolves nowhere: the transport must use the address it was given.
+  const url = new URL(`https://pinned-host.invalid:${port}/a.jpg`);
+  await assert.rejects(
+    httpsTransport({ url, address: '127.0.0.1', family: 4, signal: AbortSignal.timeout(5000) }),
+  );
+  // A transport that ignored the address would fail DNS and never connect: fail fast.
+  const clientHello = await Promise.race([
+    hello,
+    new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error('nothing connected to the checked address')), 5000).unref();
+    }),
+  ]);
+  assert.equal(clientHello[0], 0x16, 'a TLS handshake record');
+  assert.ok(clientHello.includes(Buffer.from('pinned-host.invalid')), 'SNI names the host');
+});
+
+test('the https transport never goes through a proxy the environment names', async (t) => {
+  // Node's own env proxy support, on: a proxy would resolve the host itself,
+  // past the address check and the pin. A loopback listener stands in for
+  // the proxy and counts what connects; another stands in for the host.
+  const listen = async (onConnection: (socket: net.Socket) => void) => {
+    const server = net.createServer(onConnection);
+    server.listen(0, '127.0.0.1');
+    await once(server, 'listening');
+    t.after(() => server.close());
+    return (server.address() as net.AddressInfo).port;
+  };
+  let proxied = 0;
+  const proxyPort = await listen((socket) => {
+    proxied += 1;
+    socket.destroy();
+  });
+  let hello: Buffer | undefined;
+  const hostPort = await listen((socket) => {
+    socket.once('data', (data) => {
+      hello = data;
+      socket.destroy();
+    });
+  });
+  const proxy = `http://127.0.0.1:${proxyPort}`;
+  const env: NodeJS.ProcessEnv = { ...process.env };
+  for (const key of ['NO_PROXY', 'no_proxy']) delete env[key];
+  const child = spawn(
+    process.execPath,
+    ['--import', 'tsx', '--input-type=module', '-e', PROXY_CHILD],
+    {
+      cwd: fileURLToPath(new URL('../../..', import.meta.url)),
+      env: {
+        ...env,
+        NODE_USE_ENV_PROXY: '1',
+        HTTPS_PROXY: proxy,
+        https_proxy: proxy,
+        HTTP_PROXY: proxy,
+        http_proxy: proxy,
+        REMOTE_URL: new URL('./remote.ts', import.meta.url).href,
+        HOST_PORT: String(hostPort),
+      },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    },
+  );
+  let output = '';
+  child.stdout.setEncoding('utf8').on('data', (chunk: string) => (output += chunk));
+  child.stderr.setEncoding('utf8').on('data', (chunk: string) => (output += chunk));
+  const [status] = (await once(child, 'exit')) as [number | null];
+  assert.equal(status, 0, output);
+  assert.match(output, /transport ended/);
+  assert.equal(proxied, 0, 'nothing connected to the proxy');
+  assert.ok(hello?.includes(Buffer.from('pinned-host.invalid')), 'the host got the handshake');
+});
+
+/** The child's half: one request through the real transport, which the stand-in host hangs up on. */
+const PROXY_CHILD = `
+const { httpsTransport } = await import(process.env.REMOTE_URL);
+const url = new URL('https://pinned-host.invalid:' + process.env.HOST_PORT + '/a.jpg');
+await httpsTransport({ url, address: '127.0.0.1', family: 4, signal: AbortSignal.timeout(5000) })
+  .then(() => {}, () => {});
+console.log('transport ended');
+`;
+
+test('a pinned lookup answers with its one address, in either form', async () => {
+  const lookup = pinnedLookup('93.184.216.34', 4);
+  const single = await new Promise<unknown[]>((resolve) =>
+    lookup('anything.test', {}, (...args: unknown[]) => resolve(args)),
+  );
+  assert.deepEqual(single, [null, '93.184.216.34', 4]);
+  const all = await new Promise<unknown[]>((resolve) =>
+    lookup('anything.test', { all: true }, (...args: unknown[]) => resolve(args)),
+  );
+  assert.deepEqual(all, [null, [{ address: '93.184.216.34', family: 4 }]]);
+});
+
+test('a special-use name is refused before any lookup, so a test fixture makes no DNS query', async () => {
+  const stub = stubs({}, {});
+  const fetch = remoteImageFetcher(stub);
+  for (const url of [
+    'https://localhost/a.jpg',
+    'https://cdn.localhost/a.jpg',
+    'https://media.rowan.test/fixture-garden.png',
+    'https://printer.local/a.jpg',
+    'https://images.example/a.jpg',
+    'https://nowhere.invalid/a.jpg',
+    'https://metadata.internal/a.jpg',
+    'https://nas.home.arpa/a.jpg',
+    'https://LOCALHOST./a.jpg',
+  ]) {
+    await assert.rejects(fetch(url), refusal('refused', 'host_reserved'), url);
+  }
+  assert.deepEqual(stub.resolved, [], 'nothing was looked up');
+  assert.deepEqual(stub.connections, []);
+  // A public name that only looks like one is fine.
+  assert.equal(isSpecialUseName('images.testing.example.net'), false);
+  assert.equal(isSpecialUseName('local.example.net'), false);
+});
