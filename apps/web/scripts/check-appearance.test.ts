@@ -1,9 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import fs from 'node:fs';
 import { createRequire } from 'node:module';
+import os from 'node:os';
+import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { FIXTURE_FLAG } from '../../../ci/lib/fixture-flags.mjs';
+import { THRESHOLDS_FILE } from '../../../quality/thresholds';
 
 // `pnpm check:appearance` (#19, Slice 2, item 8): it passes on the packs this
 // build registers, fails on a bad-contrast input, and writes nothing, so it
@@ -130,5 +134,52 @@ test('an input that is not there, or an argument it does not take, is a usage er
   );
   const usage = check(['--bogus']);
   assert.equal(usage.status, 2);
-  assert.match(usage.stderr, /^Usage: tsx scripts\/check-appearance\.ts \[--fixture <name>\]/);
+  assert.match(
+    usage.stderr,
+    /^Usage: tsx scripts\/check-appearance\.ts \[--fixture <name>\] \[--thresholds <file>\]/,
+  );
+  for (const args of [
+    ['--thresholds'],
+    ['--fixture', 'bad-contrast', '--fixture', 'bad-contrast'],
+    ['--thresholds', THRESHOLDS_FILE, '--thresholds', THRESHOLDS_FILE],
+  ]) {
+    assert.equal(check(args).status, 2, args.join(' '));
+  }
+});
+
+test('its targets are the thresholds file it reads, and a file that does not load checks nothing', (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'check-appearance-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const thresholds = JSON.parse(fs.readFileSync(THRESHOLDS_FILE, 'utf8'));
+  const copy = (name: string, value: unknown) => {
+    const file = path.join(dir, name);
+    fs.writeFileSync(file, JSON.stringify(value));
+    return file;
+  };
+
+  // A copy of quality/thresholds.json passes, as the file does.
+  const same = check(['--thresholds', copy('same.json', thresholds)]);
+  assert.equal(same.status, 0, same.stderr);
+
+  // A 7:1 text floor fails light and dark pairs that 4.5:1 passes.
+  const raised = check([
+    '--thresholds',
+    copy('raised.json', { ...thresholds, contrast: { ...thresholds.contrast, text: 7 } }),
+  ]);
+  assert.equal(raised.status, 1, raised.stdout);
+  assert.ok(
+    findings(raised.stderr).some((line) =>
+      /\), (?:light|dark): .+ is \d+\.\d+:1, under 7:1 \(text\)\.$/.test(line),
+    ),
+    raised.stderr,
+  );
+
+  // A ratio over 21:1 is no ratio, so the gate stops before it checks anything.
+  const broken = check([
+    '--thresholds',
+    copy('broken.json', { ...thresholds, contrast: { ...thresholds.contrast, text: 22 } }),
+  ]);
+  assert.equal(broken.status, 1);
+  assert.match(broken.stderr, /The thresholds don't load, so nothing was checked\./);
+  assert.doesNotMatch(broken.stderr, / findings?\./);
 });
