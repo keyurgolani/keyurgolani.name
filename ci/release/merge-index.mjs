@@ -12,10 +12,13 @@
 // --unattested is for ci.yml's publish-merge alone. Its sha-<short> legs
 // build with provenance off and no SBOM, so the merged index must hold
 // exactly one image per platform and nothing else. It needs --purpose
-// sha-publish with it, refuses to run in any workflow but ci.yml, and logs
-// that it ran unattested. Without it the merge is the release merge, with
-// every attestation check. ci/workflows.test.mjs fails if release.yml, or
-// any job but publish-merge, passes it.
+// sha-publish with it, and logs that it ran unattested. In Actions it runs
+// only for a push to main in this repository's ci.yml, as
+// GITHUB_WORKFLOW_REF names it exactly, and refuses to run when that's
+// unset. Without it the merge is the release merge, with every attestation
+// check. ci/workflows.test.mjs fails if any workflow job but publish-merge,
+// any package.json script, or any file under ci/ but this one and its test
+// names it.
 //
 // `docker buildx imagetools create` does the merge, and copies every
 // manifest from both indexes, each platform's attestation manifest included.
@@ -38,10 +41,17 @@ const REFERENCE_DIGEST = 'vnd.docker.reference.digest';
 const isAttestation = (m) => m.annotations?.[REFERENCE_TYPE] === 'attestation-manifest';
 const platformOf = (m) => `${m.platform?.os}/${m.platform?.architecture}`;
 
+/** The media types an image manifest has, OCI's and Docker's v2. */
+export const IMAGE_MANIFEST_TYPES = [
+  'application/vnd.oci.image.manifest.v1+json',
+  'application/vnd.docker.distribution.manifest.v2+json',
+];
+
 /**
  * Why the merged index falls short, one line each, or none. It must hold
  * exactly one image for each of `platforms` and none for any other, and
- * exactly one attestation manifest for each image.
+ * exactly one attestation manifest for each image, and nothing else: an
+ * attestation that names no image of the index is refused too.
  */
 export function indexProblems(index, platforms = PLATFORMS) {
   const manifests = Array.isArray(index?.manifests) ? index.manifests : [];
@@ -69,21 +79,41 @@ export function indexProblems(index, platforms = PLATFORMS) {
       );
     }
   }
+  const imageDigests = new Set(images.map((m) => m.digest));
+  const orphans = manifests.filter(
+    (m) => isAttestation(m) && !imageDigests.has(m.annotations?.[REFERENCE_DIGEST]),
+  );
+  if (orphans.length > 0) {
+    problems.push(
+      `the merged index has ${orphans.length} attestation manifests for no image of its own`,
+    );
+  }
   return problems;
 }
 
 /**
  * Why an unattested merge falls short: each platform needs exactly one
- * image, and the index may hold nothing but those images.
+ * image, each an image manifest, and the index may hold nothing but those
+ * images: no attestation manifest, whatever platform it claims.
  */
 export function plainIndexProblems(index, platforms = PLATFORMS) {
   const manifests = Array.isArray(index?.manifests) ? index.manifests : [];
   const problems = [];
+  const attestations = manifests.filter(isAttestation).length;
+  if (attestations > 0) {
+    problems.push(`the unattested index has ${attestations} attestation manifests`);
+  }
+  for (const m of manifests) {
+    if (!isAttestation(m) && !IMAGE_MANIFEST_TYPES.includes(m.mediaType)) {
+      problems.push(`the unattested index has a ${m.mediaType ?? 'typeless'} entry, not an image`);
+    }
+  }
   const images = [];
   for (const platform of platforms) {
     const [os, architecture] = platform.split('/');
     const matches = manifests.filter(
-      (m) => m.platform?.os === os && m.platform?.architecture === architecture,
+      (m) =>
+        !isAttestation(m) && m.platform?.os === os && m.platform?.architecture === architecture,
     );
     if (matches.length !== 1) {
       problems.push(`the merged index has ${matches.length} ${platform} images, not 1`);
@@ -100,16 +130,19 @@ const docker = (args) => execFileSync('docker', args, { encoding: 'utf8' });
 /** The one reason a merge may skip attestations: ci.yml's sha-<short> images. */
 export const UNATTESTED_PURPOSES = ['sha-publish'];
 
-/** The only workflow that may merge unattested, as GITHUB_WORKFLOW_REF names it. */
-const UNATTESTED_WORKFLOW = /^[^/]+\/[^/]+\/\.github\/workflows\/ci\.yml@/;
+/** The only workflow run that may merge unattested: ci.yml, for a push to main, in `repository`. */
+export const unattestedWorkflowRef = (repository) =>
+  `${repository}/.github/workflows/ci.yml@refs/heads/main`;
 
 const UNATTESTED_FLAGS = ['--unattested', '--purpose'];
 
 /**
  * Splits the merge arguments. `--unattested --purpose <purpose>` must lead,
- * the purpose must be one of UNATTESTED_PURPOSES, and when
- * GITHUB_WORKFLOW_REF is set it must name ci.yml. Without the flag, the
- * arguments are the release merge's, unchanged.
+ * and the purpose must be one of UNATTESTED_PURPOSES. In Actions
+ * (GITHUB_ACTIONS=true), or wherever GITHUB_WORKFLOW_REF is set, the run
+ * must be a push, and the ref exactly this repository's ci.yml on main; an
+ * Actions run with no ref fails closed. Without the flag, the arguments are
+ * the release merge's, unchanged.
  */
 export function parseMergeArgs(argv, env = process.env) {
   if (argv[0] !== '--unattested') {
@@ -127,8 +160,17 @@ export function parseMergeArgs(argv, env = process.env) {
     throw new Error('--unattested --purpose <purpose> is given once');
   }
   const ref = env.GITHUB_WORKFLOW_REF;
-  if (ref !== undefined && !UNATTESTED_WORKFLOW.test(ref)) {
-    throw new Error(`--unattested runs only in ci.yml, not ${ref}`);
+  if (ref === undefined && env.GITHUB_ACTIONS === 'true') {
+    throw new Error('--unattested in Actions needs GITHUB_WORKFLOW_REF, and it is unset');
+  }
+  if (ref !== undefined) {
+    const repository = env.GITHUB_REPOSITORY;
+    if (!repository || ref !== unattestedWorkflowRef(repository)) {
+      throw new Error(`--unattested runs only in ci.yml on main, not ${ref}`);
+    }
+    if (env.GITHUB_EVENT_NAME !== 'push') {
+      throw new Error(`--unattested runs only for a push, not ${env.GITHUB_EVENT_NAME}`);
+    }
   }
   return { image, digests, unattested: purpose };
 }

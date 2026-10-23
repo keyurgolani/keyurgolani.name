@@ -42,6 +42,8 @@ test('publish reads no cache: no cache action, no shared install, no setup-node 
   assert.ok(build);
   assert.equal(build.with['cache-from'], undefined);
   assert.equal(build.with['cache-to'], undefined);
+  // And uploads no build record, which holds the build's logs, as release.yml's legs don't.
+  assert.equal(build.env.DOCKER_BUILD_RECORD_UPLOAD, 'false');
 });
 
 test('publish runs only on a push to main, and only its own jobs follow gate', () => {
@@ -133,7 +135,31 @@ test('only ci.yml publish-merge merges --unattested, and no release job ever doe
     const text = readFileSync(path.join(ROOT, '.github/actions', action, 'action.yml'), 'utf8');
     assert.doesNotMatch(text, /unattested|sha-publish/i, action);
   }
+  // Nor does anything a workflow could reach it through: a package.json
+  // script, or a file under ci/ but the merge itself, its test, and this one.
+  const pkg = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
+  for (const [name, script] of Object.entries(pkg.scripts ?? {})) {
+    assert.doesNotMatch(script, /unattested|sha-publish/i, `package.json scripts.${name}`);
+  }
+  assert.deepEqual(unattestedMentionsIn('ci'), [
+    'ci/release/merge-index.mjs',
+    'ci/release/merge-index.test.mjs',
+    'ci/workflows.test.mjs',
+  ]);
 });
+
+/** Every file under `dir`, from the root, that names the unattested merge, sorted. */
+function unattestedMentionsIn(dir) {
+  const found = [];
+  for (const entry of readdirSync(path.join(ROOT, dir), { recursive: true, withFileTypes: true })) {
+    if (!entry.isFile() || entry.parentPath.includes('node_modules')) continue;
+    const file = path.relative(ROOT, path.join(entry.parentPath, entry.name));
+    if (/unattested|sha-publish/i.test(readFileSync(path.join(ROOT, file), 'utf8'))) {
+      found.push(file.split(path.sep).join('/'));
+    }
+  }
+  return found.sort();
+}
 
 test('publish merges the legs with the release helper, and tags only the merged digest', () => {
   const merge = CI.jobs['publish-merge'].steps.find((s) => s.id === 'merge');

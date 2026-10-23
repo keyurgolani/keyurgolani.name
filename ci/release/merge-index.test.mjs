@@ -13,12 +13,13 @@ const IMAGE = 'ghcr.io/owner/repo.name';
 const AMD64 = `sha256:${'a'.repeat(64)}`;
 const ARM64 = `sha256:${'b'.repeat(64)}`;
 const digestOf = (n) => `sha256:${String(n).repeat(64)}`;
+const OCI_MANIFEST = 'application/vnd.oci.image.manifest.v1+json';
 
 /** One platform's image manifest and the attestation manifest that names it. */
 const leg = (architecture, image, attestation) => [
-  { mediaType: 'oci.manifest', digest: image, platform: { os: 'linux', architecture } },
+  { mediaType: OCI_MANIFEST, digest: image, platform: { os: 'linux', architecture } },
   {
-    mediaType: 'oci.manifest',
+    mediaType: OCI_MANIFEST,
     digest: attestation,
     platform: { os: 'unknown', architecture: 'unknown' },
     annotations: {
@@ -107,6 +108,23 @@ test('a merge without exactly one attested image per platform fails before anyth
       [amd64Image, amd64Attestation, ...arm64, ...leg('386', digestOf(8), digestOf(9))],
       /a linux\/386 image, which no leg builds/,
     ],
+    // An attestation for no image of the index, beside every one that's right.
+    [
+      [
+        amd64Image,
+        amd64Attestation,
+        ...arm64,
+        {
+          ...amd64Attestation,
+          digest: digestOf(5),
+          annotations: {
+            ...amd64Attestation.annotations,
+            'vnd.docker.reference.digest': digestOf(6),
+          },
+        },
+      ],
+      /1 attestation manifests for no image of its own/,
+    ],
   ];
   for (const [manifests, reason] of cases) {
     const docker = fakeDocker({ index: JSON.stringify({ manifests }) });
@@ -167,6 +185,11 @@ test("an unattested merge (ci.yml's sha-publish) takes plain images, and says it
   assert.equal(logged.length, 1);
   assert.match(logged[0], /^::warning title=merge::merged .* unattested \(--purpose sha-publish\)/);
   assert.deepEqual(plainIndexProblems(JSON.parse(PLAIN)), []);
+  // Docker's v2 image manifest is an image too.
+  const docker2 = JSON.parse(PLAIN);
+  for (const m of docker2.manifests)
+    m.mediaType = 'application/vnd.docker.distribution.manifest.v2+json';
+  assert.deepEqual(plainIndexProblems(docker2), []);
 });
 
 test('without --unattested the merge is the release merge: plain images fail, and nothing is logged', () => {
@@ -190,9 +213,40 @@ test('an unattested merge refuses another purpose, a missing platform, or attest
     );
     assert.equal(docker.calls.length, 0);
   }
+  const [, arm64Image] = JSON.parse(PLAIN).manifests;
   const cases = [
     [JSON.stringify({ manifests: [amd64Image] }), /0 linux\/arm64 images, not 1/],
-    [MERGED, /2 other manifests/],
+    [MERGED, /2 attestation manifests/],
+    // An attestation dressed as an image of a platform the legs build.
+    [
+      JSON.stringify({
+        manifests: [
+          amd64Image,
+          {
+            ...arm64Image,
+            annotations: {
+              'vnd.docker.reference.type': 'attestation-manifest',
+              'vnd.docker.reference.digest': amd64Image.digest,
+            },
+          },
+        ],
+      }),
+      /1 attestation manifests/,
+    ],
+    // A nested index, or an entry of no type, where an image belongs.
+    [
+      JSON.stringify({
+        manifests: [
+          amd64Image,
+          { ...arm64Image, mediaType: 'application/vnd.oci.image.index.v1+json' },
+        ],
+      }),
+      /a application\/vnd\.oci\.image\.index\.v1\+json entry, not an image/,
+    ],
+    [
+      JSON.stringify({ manifests: [amd64Image, { ...arm64Image, mediaType: undefined }] }),
+      /a typeless entry, not an image/,
+    ],
   ];
   for (const [index, reason] of cases) {
     const docker = fakeDocker({ index });
@@ -204,11 +258,21 @@ test('an unattested merge refuses another purpose, a missing platform, or attest
   }
 });
 
-test('--unattested needs --purpose sha-publish first, and runs only in ci.yml', () => {
-  const CI_REF = { GITHUB_WORKFLOW_REF: 'owner/repo/.github/workflows/ci.yml@refs/heads/main' };
+test('--unattested needs --purpose sha-publish first, and runs only in ci.yml for a push to main', () => {
+  const ACTIONS = {
+    GITHUB_ACTIONS: 'true',
+    GITHUB_REPOSITORY: 'owner/repo',
+    GITHUB_EVENT_NAME: 'push',
+  };
+  const CI_REF = {
+    ...ACTIONS,
+    GITHUB_WORKFLOW_REF: 'owner/repo/.github/workflows/ci.yml@refs/heads/main',
+  };
   const RELEASE_REF = {
+    ...ACTIONS,
     GITHUB_WORKFLOW_REF: 'owner/repo/.github/workflows/release.yml@refs/tags/v1.0.0-rc.1',
   };
+  const ref = (value) => ({ ...ACTIONS, GITHUB_WORKFLOW_REF: value });
   const FLAGS = ['--unattested', '--purpose', 'sha-publish'];
   assert.deepEqual(parseMergeArgs([IMAGE, AMD64, ARM64], RELEASE_REF), {
     image: IMAGE,
@@ -225,9 +289,56 @@ test('--unattested needs --purpose sha-publish first, and runs only in ci.yml', 
     [['--purpose', 'sha-publish', IMAGE, AMD64, ARM64], {}, /must come first/],
     [[IMAGE, AMD64, ARM64, '--unattested'], {}, /must come first/],
     [[...FLAGS, '--unattested', IMAGE, AMD64, ARM64], {}, /given once/],
-    [[...FLAGS, IMAGE, AMD64, ARM64], RELEASE_REF, /runs only in ci\.yml/],
+    [[...FLAGS, IMAGE, AMD64, ARM64], RELEASE_REF, /runs only in ci\.yml on main/],
+    // ci.yml itself, anywhere but a push to main in this repository.
+    [
+      [...FLAGS, IMAGE, AMD64, ARM64],
+      ref('owner/repo/.github/workflows/ci.yml@refs/pull/7/merge'),
+      /on main/,
+    ],
+    [
+      [...FLAGS, IMAGE, AMD64, ARM64],
+      ref('owner/repo/.github/workflows/ci.yml@refs/heads/next'),
+      /on main/,
+    ],
+    [
+      [...FLAGS, IMAGE, AMD64, ARM64],
+      ref('owner/repo/.github/workflows/ci.yml@refs/tags/v1.0.0'),
+      /on main/,
+    ],
+    [
+      [...FLAGS, IMAGE, AMD64, ARM64],
+      ref('fork/repo/.github/workflows/ci.yml@refs/heads/main'),
+      /on main/,
+    ],
+    [
+      [...FLAGS, IMAGE, AMD64, ARM64],
+      ref('owner/repo/.github/workflows/ci.yml@refs/heads/main-x'),
+      /on main/,
+    ],
+    [
+      [...FLAGS, IMAGE, AMD64, ARM64],
+      ref('owner/repo/x/.github/workflows/ci.yml@refs/heads/main'),
+      /on main/,
+    ],
+    [[...FLAGS, IMAGE, AMD64, ARM64], { ...CI_REF, GITHUB_REPOSITORY: undefined }, /on main/],
+    // The right ref, for an event that isn't a push.
+    [
+      [...FLAGS, IMAGE, AMD64, ARM64],
+      { ...CI_REF, GITHUB_EVENT_NAME: 'pull_request' },
+      /for a push/,
+    ],
+    [[...FLAGS, IMAGE, AMD64, ARM64], { ...CI_REF, GITHUB_EVENT_NAME: undefined }, /for a push/],
+    // In Actions with no ref at all, it fails closed.
+    [[...FLAGS, IMAGE, AMD64, ARM64], { ...ACTIONS }, /GITHUB_WORKFLOW_REF, and it is unset/],
   ];
   for (const [argv, env, reason] of refused) {
-    assert.throws(() => parseMergeArgs(argv, env), reason, argv.join(' '));
+    assert.throws(
+      () => parseMergeArgs(argv, env),
+      reason,
+      `${argv.join(' ')} ${JSON.stringify(env)}`,
+    );
   }
+  // Outside Actions, as a person or a test runs it, there's no ref to check.
+  assert.equal(parseMergeArgs([...FLAGS, IMAGE, AMD64, ARM64], {}).unattested, 'sha-publish');
 });
