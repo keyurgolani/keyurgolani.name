@@ -15,7 +15,18 @@
 // - what it ran under: browser, viewport, device pixel ratio, WebGL, load;
 // - on a PORTFOLIO_ANALYZE=1 build, which ships source maps, each
 //   downloaded chunk's bytes by source module and package
-//   (tests/harness/trace/attribution.mjs).
+//   (tests/harness/trace/attribution.mjs);
+// - on the app under test, the purity assertion's verdict (#6, Slice 2):
+//   from the document's HTML and RSC payload, the settled DOM, and the
+//   attribution of every chunk the page downloaded or its document names,
+//   whether the page loads or names anything but the selected units and
+//   experience-base.css, a forbidden module, a third-party file, or a link
+//   to Studio (tests/harness/trace/purity.mjs). It needs source maps, so
+//   it fails on a build without them.
+//
+// A second test per selection loads the public pages / links to, and a
+// 404 page, once each at the desktop viewport, and holds each to the same
+// assertion; its pages go into the report's `purity` list.
 //
 // The trace loads the route with a GET and does nothing else: no click, no
 // input, no form. fixtures.ts says how the network policy keeps it on the
@@ -38,8 +49,10 @@ import {
   attribute,
   expect,
   installProbe,
+  linkedPages,
   nextFrames,
   options,
+  purityOf,
   readProbes,
   startProbes,
   test,
@@ -50,6 +63,22 @@ import type { TraceTarget } from './targets';
 
 /** The routes each selection is traced on. */
 const ROUTES = ['/'];
+
+/** How many of the pages / links to the purity test loads, in path order, besides / and a 404. */
+const LINKED_PAGES = 12;
+
+/** A path no route matches, whose 404 page renders in the site's boundary. */
+const NOT_FOUND = '/no-such-page';
+
+/** The purity assertion's problems as one error, page by page. */
+function impurity(pages: readonly { route: string; problems: readonly string[] }[]): string | null {
+  const lines = pages.flatMap(({ route, problems }) =>
+    problems.map((problem) => `${route}: ${problem}`),
+  );
+  return lines.length === 0
+    ? null
+    : `The public pages aren't pure (#6, Slice 2):\n- ${lines.join('\n- ')}`;
+}
 
 /** The viewports, as the variant specs' desktop and mobile modes set them. */
 const VIEWPORTS = [
@@ -86,6 +115,7 @@ for (const route of ROUTES) {
           requests.markNavigation();
           const response = await page.goto(route, { waitUntil: 'load' });
           expect(response?.status(), `GET ${route}`).toBe(200);
+          const html = (await response?.text()) ?? '';
           // Long tasks count until 5 s after load, all of it throttled.
           await page.waitForTimeout(LONG_TASK_WINDOW_MS);
           await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
@@ -111,6 +141,18 @@ for (const route of ROUTES) {
           expect(probe.visibility, 'the idle window is visible').toBe('visible');
 
           const { records, downloads } = await requests.done();
+          const attribution = await attribute(page, downloads);
+          const appOrigin = new URL(app.origin).origin;
+          const purity = target.composition
+            ? await purityOf(page, {
+                html,
+                composition: target.composition,
+                appOrigin,
+                records,
+                downloads,
+                attribution,
+              })
+            : null;
           const entry = {
             route,
             viewport: viewport.size,
@@ -132,7 +174,8 @@ for (const route of ROUTES) {
               networkIdle,
             },
             probe,
-            attribution: await attribute(page, downloads),
+            attribution,
+            purity,
             // What the app under test's server tried to reach since it
             // started: the harness's egress trap refused each. An outside
             // server's egress is its own runner's evidence.
@@ -144,8 +187,61 @@ for (const route of ROUTES) {
           });
           const failure = thirdPartyFailure(records, options);
           if (failure) throw new Error(failure);
+          const impure = purity ? impurity([{ route, problems: purity.problems }]) : null;
+          if (impure) throw new Error(impure);
         },
       );
     });
   }
 }
+
+test(
+  'every public page / links to, and a 404 page, loads and names nothing but the selected units and experience-base.css (#6, Slice 2)',
+  { annotation: [{ type: 'route', description: 'the pages / links to, and a 404' }] },
+  async ({ page, app, policy }, testInfo) => {
+    const target = testInfo.project.metadata as unknown as TraceTarget;
+    test.skip(!target.composition, 'an outside server: the trace knows no selection to hold it to');
+    const appOrigin = new URL(app.origin).origin;
+    const home = await page.goto('/', { waitUntil: 'load' });
+    expect(home?.status(), 'GET /').toBe(200);
+    const linked = (await linkedPages(page, appOrigin)).slice(0, LINKED_PAGES);
+    const pages = [];
+    for (const route of [...linked, NOT_FOUND]) {
+      const requests = watchRequests(page, appOrigin, policy);
+      requests.markNavigation();
+      const response = await page.goto(route, { waitUntil: 'load' });
+      await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => undefined);
+      const html = (await response?.text()) ?? '';
+      const { records, downloads } = await requests.done();
+      const attribution = await attribute(page, downloads);
+      const verdict = await purityOf(page, {
+        html,
+        composition: target.composition!,
+        appOrigin,
+        records,
+        downloads,
+        attribution,
+      });
+      pages.push({ route, status: response?.status() ?? null, ...verdict });
+    }
+    await testInfo.attach('purity-pages.json', {
+      body: JSON.stringify(
+        {
+          selection: target.selection,
+          composition: target.composition,
+          profile: target.profile,
+          fixture: target.fixture,
+          pages,
+        },
+        null,
+        2,
+      ),
+      contentType: 'application/json',
+    });
+    for (const { route, status } of pages) {
+      expect(status, `GET ${route}`).toBe(route === NOT_FOUND ? 404 : 200);
+    }
+    const impure = impurity(pages);
+    if (impure) throw new Error(impure);
+  },
+);

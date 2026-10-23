@@ -3,8 +3,9 @@
 // environment. Everything after `--`, and anything it doesn't know, goes
 // to Playwright as is.
 //
-//   pnpm test:trace                          the app under test, each registered selection
+//   pnpm test:trace                          the app under test, each registered selection, read-only and owner
 //   pnpm test:trace --selection <id>         one registered selection, by variant id or as the site names it
+//   pnpm test:trace --profile <profile>      the app under test under one of them, read-only or owner
 //   pnpm test:trace --base-url <url> [--selection <label>] [--allow-third-party]
 //                                            a server it didn't start, on this machine only
 //
@@ -16,10 +17,14 @@ export const ENV = {
   baseUrl: 'PORTFOLIO_TRACE_BASE_URL',
   allowThirdParty: 'PORTFOLIO_TRACE_ALLOW_THIRD_PARTY',
   selection: 'PORTFOLIO_TRACE_SELECTION',
+  profile: 'PORTFOLIO_TRACE_PROFILE',
   command: 'PORTFOLIO_TRACE_COMMAND',
 };
 
 const LOOPBACK = new Set(['127.0.0.1', 'localhost']);
+
+/** The profiles the trace starts the app under test in (#6, Slice 2): the two whose public pages the purity assertion covers. */
+export const TRACE_PROFILES = ['read-only', 'owner'];
 
 /**
  * A base URL the trace may visit: http or https on this machine, the
@@ -52,10 +57,16 @@ export function checkBaseUrl(value) {
  * Splits the command line into the trace's options and Playwright's arguments.
  *
  * @param {string[]} argv
- * @returns {{ baseUrl: string | null, allowThirdParty: boolean, selection: string | null, playwright: string[] }}
+ * @returns {{ baseUrl: string | null, allowThirdParty: boolean, selection: string | null, profile: string | null, playwright: string[] }}
  */
 export function parseTraceArgs(argv) {
-  const options = { baseUrl: null, allowThirdParty: false, selection: null, playwright: [] };
+  const options = {
+    baseUrl: null,
+    allowThirdParty: false,
+    selection: null,
+    profile: null,
+    playwright: [],
+  };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg === '--') {
@@ -72,6 +83,7 @@ export function parseTraceArgs(argv) {
     };
     if (name === '--base-url') options.baseUrl = checkBaseUrl(value());
     else if (name === '--selection') options.selection = value();
+    else if (name === '--profile') options.profile = value();
     else if (name === '--allow-third-party') {
       if (inline !== undefined) throw new Error('--allow-third-party takes no value');
       options.allowThirdParty = true;
@@ -85,7 +97,21 @@ export function parseTraceArgs(argv) {
   if (options.selection !== null && !/^[a-z0-9][a-z0-9-]*$/.test(options.selection)) {
     throw new Error(`--selection is an id, such as editorial; got ${options.selection}`);
   }
+  checkProfile(options.profile, options.baseUrl);
   return options;
+}
+
+/** A --profile the trace can start the app under test in, which an outside server doesn't take. */
+function checkProfile(profile, baseUrl) {
+  if (profile === null) return;
+  if (baseUrl) {
+    throw new Error(
+      "--profile picks the app under test's profile; a --base-url server runs its own",
+    );
+  }
+  if (!TRACE_PROFILES.includes(profile)) {
+    throw new Error(`--profile is ${TRACE_PROFILES.join(' or ')}; got ${profile}`);
+  }
 }
 
 /** The environment that carries `options` to the workers. */
@@ -94,6 +120,7 @@ export function traceEnv(options, command) {
     [ENV.baseUrl]: options.baseUrl ?? '',
     [ENV.allowThirdParty]: options.allowThirdParty ? '1' : '',
     [ENV.selection]: options.selection ?? '',
+    [ENV.profile]: options.profile ?? '',
     [ENV.command]: command,
   };
 }
@@ -108,10 +135,13 @@ export function readTraceEnv(env = process.env) {
   const baseUrl = env[ENV.baseUrl] ? checkBaseUrl(env[ENV.baseUrl]) : null;
   const allowThirdParty = env[ENV.allowThirdParty] === '1';
   if (allowThirdParty && !baseUrl) throw new Error(`${ENV.allowThirdParty} needs ${ENV.baseUrl}`);
+  const profile = env[ENV.profile] || null;
+  checkProfile(profile, baseUrl);
   return {
     baseUrl,
     allowThirdParty,
     selection: env[ENV.selection] || null,
+    profile,
     command: env[ENV.command] || 'pnpm test:trace',
   };
 }

@@ -337,8 +337,9 @@ export function counterSummary(probe) {
  * @param {{ commit: string | null, dirty: boolean | null, trees: Record<string, string | null> }} fields.checkout
  *   the checkout the trace ran from, and its apps, packages, and tests trees at HEAD
  * @param {string} fields.command
- * @param {{ baseUrl: string | null, allowThirdParty: boolean, selection: string | null }} fields.options
+ * @param {{ baseUrl: string | null, allowThirdParty: boolean, selection: string | null, profile?: string | null }} fields.options
  * @param {string[]} [fields.failures] titles of the cases that failed
+ * @param {object[]} [fields.purity] the purity test's pages, one set per selection and profile (#6, Slice 2)
  * @param {string} [fields.generatedAt]
  */
 export function buildReport(fields) {
@@ -351,11 +352,14 @@ export function buildReport(fields) {
     options: fields.options,
     method: METHOD,
     cases: [...fields.cases].sort((a, b) => caseKey(a).localeCompare(caseKey(b))),
+    purity: [...(fields.purity ?? [])].sort((a, b) => setKey(a).localeCompare(setKey(b))),
     failures: fields.failures ?? [],
   };
 }
 
-const caseKey = (entry) => `${entry.selection}\u0000${entry.route}\u0000${entry.viewport}`;
+const caseKey = (entry) =>
+  `${entry.selection}\u0000${entry.profile ?? ''}\u0000${entry.route}\u0000${entry.viewport}`;
+const setKey = (entry) => `${entry.selection}\u0000${entry.profile ?? ''}`;
 
 /**
  * One case, in brief, as the calibration block keeps it.
@@ -427,6 +431,12 @@ export function calibrationEntry(report, meta) {
   if (selections.length !== 1) {
     throw new Error(
       `A calibration entry is one selection; the report has ${selections.length} on ${route}.`,
+    );
+  }
+  const profiles = [...new Set(cases.map((entry) => entry.profile ?? null))];
+  if (profiles.length !== 1) {
+    throw new Error(
+      `A calibration entry is one profile; the report has ${profiles.length} on ${route}: trace with --profile.`,
     );
   }
   const [first] = cases;

@@ -11,6 +11,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { gzipSync } from 'node:zlib';
 import type { AssetFileRef, AssetManifest, AssetUnit, StylesheetRef } from '../asset-manifest';
+import { FALLBACK_ID, MISSING_VARIANT_ID } from '../ids';
 import type { VariantRegistry } from '../registry';
 import type { PackFile, PackKind, RegistryResult } from './registry';
 import type { ServedFile } from './variant-stylesheet';
@@ -104,8 +105,10 @@ export interface AssetManifestFile {
 
 /**
  * One selection #6's trace renders: a registered unit, and the selection
- * written into the contract fixture's site document to render it. Slice 3
- * adds pack entries, and the traceFixtures list a fixture unit needs.
+ * written into the contract fixture's site document to render it, which for
+ * the fallback composition is an id no package registers, since a site
+ * can't select the fallback itself. Slice 3 adds pack entries, and the
+ * traceFixtures list a fixture unit needs.
  */
 export interface TraceMatrixEntry {
   readonly kind: AssetUnit['kind'];
@@ -330,7 +333,7 @@ export const ENHANCEMENT_LOADERS: Readonly<Record<string, EnhancementLoader>> = 
       packageName: unit.packageName,
       fixture: unit.fixture,
       performanceTier: unit.performanceTier,
-      selection: { variant: unit.id },
+      selection: { variant: unit.id === FALLBACK_ID ? MISSING_VARIANT_ID : unit.id },
     })),
   };
   files.set('trace-matrix.json', `${json(matrix)}\n`);

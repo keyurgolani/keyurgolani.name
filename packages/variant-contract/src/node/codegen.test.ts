@@ -441,7 +441,7 @@ test('ASSET_MANIFEST lists each unit with its files, variants first, then packs 
   assert.match(file.platform!.url, /^\/_portfolio\/pack\/_platform\.[0-9a-f]{12}\.css$/);
 });
 
-test('trace-matrix.json lists one selection per registered variant', async () => {
+test('trace-matrix.json lists one selection per registered variant, an unregistered id for the fallback composition', async () => {
   const matrix = JSON.parse(
     renderRegistry(await withStylesheets()).get('trace-matrix.json')!,
   ) as TraceMatrixFile;
@@ -462,7 +462,7 @@ test('trace-matrix.json lists one selection per registered variant', async () =>
         packageName: '@portfolio/fallback-composition',
         fixture: false,
         performanceTier: 'light',
-        selection: { variant: 'fallback' },
+        selection: { variant: 'missing-variant' },
       },
     ],
   });
