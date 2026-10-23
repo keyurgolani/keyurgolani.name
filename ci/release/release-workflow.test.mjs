@@ -25,7 +25,7 @@ const writes = (job) =>
     .map(([scope]) => scope)
     .sort();
 
-test('release runs on v* tag pushes and on pull requests, with no manual trigger', () => {
+test('release runs on v[0-9]* tag pushes and on pull requests, with no manual trigger', () => {
   assert.deepEqual(Object.keys(WORKFLOW.on).sort(), ['pull_request', 'push']);
   assert.deepEqual(WORKFLOW.on.push, { tags: ['v[0-9]*'] });
   assert.ok(!('branches' in WORKFLOW.on.push), 'no branch push publishes');
@@ -263,6 +263,16 @@ test('every setup-buildx pins its buildx version, and no build uploads a build r
       // buildx's metadata provenance prints the event payload in the log.
       assert.equal(step.env.BUILDX_METADATA_PROVENANCE, 'disabled', id);
     }
+    // The builder that makes the image never hands BuildKit the event
+    // payload, which every provenance would otherwise carry.
+    const [builder] = uses(id, 'docker/setup-buildx-action');
+    assert.ok(
+      String(builder.with['driver-opts'])
+        .split(/[\n,]/)
+        .map((opt) => opt.trim())
+        .includes('provenance-add-gha=false'),
+      id,
+    );
   }
   // The raw provenance may carry the event payload too, so it stays on the
   // runner, outside every uploaded directory.

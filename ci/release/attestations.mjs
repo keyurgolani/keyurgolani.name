@@ -19,6 +19,9 @@ export const PLATFORMS = ['linux/amd64', 'linux/arm64'];
 /** The file name a platform's SPDX document gets: sbom-linux-amd64.spdx.json. */
 export const sbomFileName = (platform) => `sbom-${platform.replaceAll('/', '-')}.spdx.json`;
 
+/** The GitHub event payload's key, which a provenance must never carry. */
+export const EVENT_PAYLOAD_KEY = 'github_event_payload';
+
 /** Whether `value` holds a `key` anywhere inside it. */
 function holdsKey(value, key) {
   if (!value || typeof value !== 'object') return false;
@@ -40,10 +43,18 @@ export function attestationProblems(provenance, sbom, platforms = PLATFORMS) {
     const slsa = provenance?.[platform]?.SLSA;
     if (!slsa || typeof slsa !== 'object') {
       problems.push(`${platform} has no provenance attestation`);
-    } else if (!holdsKey(slsa, 'buildConfig')) {
-      problems.push(
-        `${platform}'s provenance has no buildConfig, so it wasn't built with mode=max`,
-      );
+    } else {
+      if (!holdsKey(slsa, 'buildConfig')) {
+        problems.push(
+          `${platform}'s provenance has no buildConfig, so it wasn't built with mode=max`,
+        );
+      }
+      // Named by key only: its value is the event's text.
+      if (holdsKey(slsa, EVENT_PAYLOAD_KEY)) {
+        problems.push(
+          `${platform}'s provenance carries ${EVENT_PAYLOAD_KEY}. Set provenance-add-gha=false in the builder's driver-opts`,
+        );
+      }
     }
     const spdx = sbom?.[platform]?.SPDX;
     if (!spdx || typeof spdx !== 'object') {

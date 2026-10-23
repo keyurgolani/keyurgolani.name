@@ -285,6 +285,13 @@ test('every way the CLI stops fails closed and names no finding, package, versio
     const covering = yaml([entry(), entry({ id: 'CVE-2026-1003', package: 'cross-spawn' })]);
     const cases = [
       ['malformed JSON', ['image', malformed], 1, /malformed\.json isn't JSON/],
+      // Bare text, which V8's own message would quote back in full.
+      [
+        'bare text',
+        ['image', write('bare.json', leaky)],
+        1,
+        /^::error title=scan::bare\.json isn't JSON$/,
+      ],
       ["Grype's own ignores", ['image', ignored], 1, /Grype ignored 1 match/],
       ['an empty report', ['image', empty], 1, /empty\.json isn't JSON/],
       ['an empty object', ['image', write('object.json', '{}')], 1, /isn't Grype JSON/],

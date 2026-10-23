@@ -19,6 +19,17 @@ test('mode=min provenance fails: it records no build configuration', () => {
   ]);
 });
 
+test('a provenance that carries the GitHub event payload fails, named by its key only', () => {
+  const provenance = fixture('provenance-max');
+  const payload = 'commit message text that must not be printed';
+  provenance['linux/arm64'].SLSA.invocation.environment = { github_event_payload: payload };
+  const problems = attestationProblems(provenance, fixture('sbom'));
+  assert.deepEqual(problems, [
+    "linux/arm64's provenance carries github_event_payload. Set provenance-add-gha=false in the builder's driver-opts",
+  ]);
+  assert.ok(!problems.join().includes(payload));
+});
+
 test('a platform with no provenance or no SBOM fails', () => {
   assert.deepEqual(attestationProblems(fixture('provenance-max'), fixture('sbom-amd64-only')), [
     'linux/arm64 has no SBOM attestation',

@@ -56,7 +56,7 @@ Grype downloads its vulnerability database on the runner. The dry run is not a r
 - **The image** fails on a Critical or High finding that has a fix, on either platform. A finding with no fix yet is counted in the summary and doesn't fail.
 - **Production dependencies** are apps/web's run-time tree, read from `pnpm-lock.yaml` ([`ci/release/prod-deps.mjs`](../ci/release/prod-deps.mjs)): its dependencies, the workspace packages it links and theirs, and none of anyone's devDependencies. The scan fails on a High or Critical finding there that the baseline doesn't have, fixable or not. The baseline is the PR's base on a dry run. On a candidate it's the newest `vX.Y.Z` tag before the commit that has a published GitHub Release ([`ci/release/baseline.mjs`](../ci/release/baseline.mjs)), so a stray tag such as `v2.0.0-beta.1` never becomes one.
 
-The image scan never uses a baseline: it always fails on a fixable Critical or High finding.
+The image scan never uses a baseline: it always fails on a fixable Critical or High finding, unless an unexpired exception covers it.
 
 **The first candidate.** Before the first final release the dependency scan has no baseline, so every High or Critical finding in the production dependencies counts as new. The runtime-refresh PR has to land before the first `v1.0.0-rc.1`.
 
