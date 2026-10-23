@@ -61,7 +61,15 @@ const CLASSES = [
       'packages/appearance-fixtures-schemes/packs/high-contrast/pack.json',
       'packages/quality-fixtures-schemes/packs/stable/pack.json',
     ],
-    jobs: ['static', 'unit', 'build', 'appearance-browser', 'quality-pr', 'quality-meta'],
+    jobs: [
+      'static',
+      'unit',
+      'build',
+      'appearance-browser',
+      'quality-pr',
+      'quality-pr-verdict',
+      'quality-meta',
+    ],
   },
   {
     name: 'one variant',
@@ -78,6 +86,7 @@ const CLASSES = [
       'preview-fixtures-browser',
       'trace',
       'quality-pr',
+      'quality-pr-verdict',
     ],
   },
   {
@@ -93,6 +102,7 @@ const CLASSES = [
       'profiles',
       'preview-fixtures-browser',
       'quality-pr',
+      'quality-pr-verdict',
     ],
   },
   {
@@ -176,6 +186,7 @@ const CLASSES = [
       'preview-fixtures-browser',
       'trace',
       'quality-pr',
+      'quality-pr-verdict',
     ],
   },
 ];
@@ -306,6 +317,18 @@ test('every rule that selects profiles selects image, whose saved image profiles
     if (rule.complete || !rule.jobs.includes('profiles')) continue;
     assert.ok(rule.jobs.includes('image'), `${rule.class} (${rule.paths[0]}) leaves out image`);
   }
+});
+
+test('every rule that selects quality-pr selects quality-pr-verdict, which judges its shards, and back', () => {
+  for (const rule of RULES) {
+    if (rule.complete) continue;
+    assert.equal(
+      rule.jobs.includes('quality-pr'),
+      rule.jobs.includes('quality-pr-verdict'),
+      `${rule.class} (${rule.paths[0]}) selects one without the other`,
+    );
+  }
+  assert.ok(draft(['tests/quality/run.ts']).jobs.includes('quality-pr-verdict'));
 });
 
 test('every rule names only known jobs, and every check job has a rule or the complete run', () => {

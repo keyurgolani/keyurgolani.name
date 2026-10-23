@@ -17,3 +17,18 @@ export function runCanary(env: NodeJS.ProcessEnv = process.env): string {
   if (!canary) throw new Error('No canary was planted. Run the cells with pnpm quality:pr.');
   return canary;
 }
+
+/**
+ * The PR run's shard, <n>/<m>, which run.ts hands its Playwright processes
+ * for `pnpm quality:pr -- --shard=<n>/<m>` (lib/pr-shards.ts), or null for a
+ * whole run. quality:full shards through Playwright's own --shard instead.
+ */
+export function runShard(env: NodeJS.ProcessEnv = process.env): string | null {
+  const shard = env.QUALITY_SHARD;
+  if (shard === undefined || shard === '') return null;
+  const match = /^(\d+)\/(\d+)$/.exec(shard);
+  if (!match || Number(match[1]) < 1 || Number(match[1]) > Number(match[2])) {
+    throw new Error(`QUALITY_SHARD is ${shard}, not <n>/<m> with 1 <= n <= m.`);
+  }
+  return shard;
+}

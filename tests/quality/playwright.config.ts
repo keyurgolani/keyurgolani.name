@@ -10,14 +10,24 @@
 // takes. The harness's own checks get a project per engine too. Tests of
 // one project share its server, so they run in order on one worker; two
 // projects run at once. Nothing retries: accessibility and performance
-// assertions never do.
+// assertions never do. A quality:pr shard runs only its own spec files in
+// each project (lib/pr-shards.ts).
 import path from 'node:path';
 import { defineConfig, devices } from '@playwright/test';
 import { reportsDir } from '../../ci/lib/reports.mjs';
 import base from '../../playwright.config';
 import { TRACE_LAUNCH_ARGS } from '../harness/trace/policy.mjs';
-import { runCanary } from './lib/env';
+import { runCanary, runShard } from './lib/env';
 import { RUN_ENGINES, type Engine } from './lib/matrix';
+import {
+  CELL_SPEC,
+  HARNESS_SPECS,
+  harnessProject,
+  PERF_SPEC,
+  prShard,
+  serverProject,
+  shardFiles,
+} from './lib/pr-shards';
 import { HARNESS_SERVER, planServers } from './lib/server';
 import { loadPlan } from './plan';
 
@@ -41,11 +51,15 @@ const engineUse = (engine: Engine) => ({
 });
 
 // perf.spec.ts runs each target's representative cell on the same servers (#11, 11-3).
-const cellSpecs = [
-  'cells.spec.ts',
-  'perf.spec.ts',
-  ...(plan.mode === 'full' ? ['visual.spec.ts'] : []),
-];
+const cellSpecs = [CELL_SPEC, PERF_SPEC, ...(plan.mode === 'full' ? ['visual.spec.ts'] : [])];
+
+// A PR shard (lib/pr-shards.ts) keeps every project, so each shard's
+// summary lists them all, and runs only the spec files it was given in each.
+const shard = runShard();
+if (shard && plan.mode !== 'pr') throw new Error("QUALITY_SHARD is for quality:pr's shards.");
+const assigned = shard ? shardFiles(prShard(plan, RUN_ENGINES[plan.mode], shard)) : null;
+const specsFor = (project: string, specs: readonly string[]) =>
+  assigned ? specs.filter((file) => assigned.get(project)?.includes(file)) : [...specs];
 
 export default defineConfig({
   ...base,
@@ -58,13 +72,13 @@ export default defineConfig({
   use: { ...base.use, trace: 'retain-on-failure', screenshot: 'only-on-failure' },
   projects: RUN_ENGINES[plan.mode].flatMap((engine) => [
     {
-      name: `${engine} harness`,
-      testMatch: ['harness.spec.ts', 'canary.spec.ts', 'a11y.spec.ts'],
+      name: harnessProject(engine),
+      testMatch: specsFor(harnessProject(engine), HARNESS_SPECS),
       use: { ...engineUse(engine), cellServer: HARNESS_SERVER },
     },
     ...planServers(plan).map(({ id, label, server }) => ({
-      name: `${engine} ${id}`,
-      testMatch: cellSpecs,
+      name: serverProject(engine, id),
+      testMatch: specsFor(serverProject(engine, id), cellSpecs),
       grep: new RegExp(`@server-${id}(?![0-9a-f])`),
       use: { ...engineUse(engine), cellServer: server },
       metadata: { server: label },

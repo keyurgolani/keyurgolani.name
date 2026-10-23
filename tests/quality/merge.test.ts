@@ -9,6 +9,7 @@ import { mergeShards, readShards } from './lib/shards';
 import { OVER, releaseOutcome, WITHIN } from './meta/release-cases';
 import {
   PERF_PLAN,
+  PR_SHARDS,
   SHARD_1,
   SHARD_2,
   SHARD_CASES,
@@ -248,5 +249,55 @@ test('perf-coverage is judged once, on the joined summary, never carried from a 
     );
   } finally {
     rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("quality-pr's verdict fails a cancelled shard whose artifact is missing as both shard-job and missing-shard", () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'quality-merge-pr-'));
+  try {
+    // Shard 3 was cancelled before its upload: only shards 1 and 2 are here.
+    writeShards(root, PR_SHARDS.slice(0, 2));
+    const verdict = mergeShards(readShards(root), { expected: 3, mode: 'pr', jobs: 'cancelled' });
+    assert.equal(verdict.ok, false);
+    const rules = new Set(verdict.failures.map(({ rule }) => rule));
+    assert.ok(rules.has('shard-job'), JSON.stringify(verdict.failures));
+    assert.ok(rules.has('missing-shard'), JSON.stringify(verdict.failures));
+    assert.ok(
+      verdict.failures.some(
+        ({ message }) => message === 'Shard 3/3 left no report, so its tests are unaccounted for.',
+      ),
+    );
+    // The same three shards, every job a success, pass.
+    rmSync(root, { recursive: true, force: true });
+    writeShards(root, PR_SHARDS);
+    const whole = mergeShards(readShards(root), { expected: 3, mode: 'pr', jobs: 'success' });
+    assert.equal(whole.ok, true, JSON.stringify(whole.failures));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("quality:merge takes the mode and the shard jobs' result, as quality-pr-verdict passes them", () => {
+  assert.deepEqual(
+    parseMergeArgs(['--', 'shards', '--shards', '3', '--mode', 'pr', '--jobs', 'failure']),
+    {
+      dir: path.resolve('shards'),
+      expected: 3,
+      mode: 'pr',
+      jobs: 'failure',
+    },
+  );
+  // needs never gives an empty result; taken, it fails the merge as shard-job.
+  assert.equal(parseMergeArgs(['shards', '--jobs', '']).jobs, '');
+  assert.equal(
+    mergeShards([], { jobs: '' }).failures.some(({ rule }) => rule === 'shard-job'),
+    true,
+  );
+  for (const bad of [
+    ['shards', '--mode', 'nightly'],
+    ['shards', '--jobs'],
+    ['shards', '--jobs', 'Bad Result'],
+  ]) {
+    assert.throws(() => parseMergeArgs(bad), /usage: pnpm quality:merge/, bad.join(' '));
   }
 });

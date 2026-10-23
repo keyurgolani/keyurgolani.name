@@ -80,11 +80,14 @@ export interface ShardInput {
   readonly rawVerdict?: string;
   /** Its artifact's directory, when not the one its shard index names. */
   readonly dir?: string;
+  /** The mode it ran: full unless it says, as quality-full's shards; pr for quality-pr's. */
+  readonly mode?: RunMode;
 }
 
 /** One shard's reports, as run.ts writes them. */
 function shardFiles(input: ShardInput) {
-  const shardSummary: Summary = summary(input.tests, { mode: 'full', shard: input.shard });
+  const mode = input.mode ?? 'full';
+  const shardSummary: Summary = summary(input.tests, { mode, shard: input.shard });
   const verdict: RunVerdict | null =
     input.verdict === null
       ? null
@@ -93,13 +96,14 @@ function shardFiles(input: ShardInput) {
           failures: [],
           flaky: [],
           counts: { collected: input.tests.length },
-          mode: 'full',
+          mode,
           shard: input.shard,
           engines: ['chromium'],
           canary: { before: [], after: [] },
           ...input.verdict,
         };
-  return { plan: input.plan === undefined ? PLAN : input.plan, summary: shardSummary, verdict };
+  const plan = input.plan === undefined ? (mode === 'pr' ? PR_PLAN : PLAN) : input.plan;
+  return { plan, summary: shardSummary, verdict };
 }
 
 /** Each shard's reports under `root`, one directory each, as download-artifact leaves them. */
@@ -107,7 +111,8 @@ export function writeShards(root: string, shards: readonly ShardInput[]): void {
   for (const input of shards) {
     const dir = path.join(
       root,
-      input.dir ?? `reports-quality-full-${input.shard.split('/')[0]}`,
+      input.dir ??
+        `reports-${input.mode === 'pr' ? 'quality-pr-shard' : 'quality-full'}-${input.shard.split('/')[0]}`,
       'quality',
     );
     mkdirSync(dir, { recursive: true });
@@ -126,11 +131,12 @@ function mergedOutcome(
   shards: readonly ShardInput[],
   expected?: number,
   mode?: RunMode,
+  jobs?: string,
 ): MetaOutcome {
   const root = mkdtempSync(path.join(tmpdir(), 'quality-meta-shards-'));
   try {
     writeShards(root, shards);
-    const verdict = mergeShards(readShards(root), { expected, mode });
+    const verdict = mergeShards(readShards(root), { expected, mode, jobs });
     return {
       passed: verdict.ok,
       findings: verdict.failures.map(({ rule, message }) => `${rule}: ${message}`),
@@ -154,7 +160,7 @@ function mergedCase(
   input: string,
   expect: MetaCase['expect'],
   shards: readonly ShardInput[],
-  options: { expected?: number; reason?: RegExp; mode?: RunMode } = {},
+  options: { expected?: number; reason?: RegExp; mode?: RunMode; jobs?: string } = {},
 ): MetaCase {
   return {
     id: `${GATE}/${rule}${slug ? `-${slug}` : ''}`,
@@ -162,9 +168,59 @@ function mergedCase(
     input,
     expect,
     reason: expect === 'fail' ? (options.reason ?? new RegExp(`^${rule}: `)) : undefined,
-    run: () => mergedOutcome(shards, options.expected, options.mode),
+    run: () => mergedOutcome(shards, options.expected, options.mode, options.jobs),
   };
 }
+
+/** quality-pr's three shards (lib/pr-shards.ts), each planning the whole PR set and running its own groups. */
+const PR_PLAN: PlanRecord = { ...PERF_PLAN, mode: 'pr' };
+export const PR_SHARDS: readonly ShardInput[] = [
+  { ...SHARD_1, shard: '1/3', mode: 'pr' },
+  { ...SHARD_2, shard: '2/3', mode: 'pr' },
+  { shard: '3/3', mode: 'pr', tests: [PERF_TEST] },
+];
+const PR_RUN = { expected: 3, mode: 'pr' as const, jobs: 'success' };
+
+/** quality-pr's merged verdict (#11): its shard jobs' own result beside the shards' reports. */
+const PR_CASES: readonly MetaCase[] = [
+  mergedCase(
+    'pr',
+    'whole-run',
+    "quality-pr's three shards, every job a success",
+    'pass',
+    PR_SHARDS,
+    PR_RUN,
+  ),
+  ...(['failure', 'cancelled', 'skipped'] as const).map((jobs) =>
+    mergedCase(
+      'shard-job',
+      jobs,
+      `quality-pr's three shards, the shard jobs ${jobs}`,
+      'fail',
+      PR_SHARDS,
+      { ...PR_RUN, jobs },
+    ),
+  ),
+  // Its perf test with it: the merge names the missing shard, and what it held.
+  ...(['skipped', 'cancelled'] as const).map((jobs) =>
+    mergedCase(
+      'missing-shard',
+      `pr-${jobs}`,
+      `quality-pr's shard 3 ${jobs} before its upload, so its artifact is missing`,
+      'fail',
+      PR_SHARDS.slice(0, 2),
+      { ...PR_RUN, jobs, reason: /^(shard-job|missing-shard|perf-coverage): / },
+    ),
+  ),
+  mergedCase(
+    'shard-mismatch',
+    'pr-count',
+    "quality-pr's three shards, one of them run as 3/4",
+    'fail',
+    [PR_SHARDS[0]!, PR_SHARDS[1]!, { ...PR_SHARDS[2]!, shard: '3/4' }],
+    { ...PR_RUN, reason: /^(shard-mismatch|missing-shard): / },
+  ),
+];
 
 export const SHARD_CASES: readonly MetaCase[] = [
   mergedCase(
@@ -339,4 +395,5 @@ export const SHARD_CASES: readonly MetaCase[] = [
     ],
     { reason: /^artifact-unreadable: shard 2\/2: results\/x\.zip was deleted\.$/ },
   ),
+  ...PR_CASES,
 ];

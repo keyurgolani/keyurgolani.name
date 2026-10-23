@@ -84,6 +84,16 @@ test('gate fails a complete run with a skipped, failed, or timed-out job', () =>
   }
 });
 
+test("gate and selected fail when quality-pr's shards passed and quality-pr-verdict was skipped", () => {
+  const jobs = ['static', 'quality-pr', 'quality-pr-verdict'];
+  const results = { static: 'success', 'quality-pr': 'success', 'quality-pr-verdict': 'skipped' };
+  const gate = evaluateGate(run({ complete: true, jobs }, results));
+  assert.equal(gate.ok, false);
+  assert.deepEqual(gate.failed, [{ job: 'quality-pr-verdict', result: 'skipped' }]);
+  // A draft that selected both gets the same answer from selected.
+  assert.equal(evaluateSelected(run({ complete: false, jobs }, results)).ok, false);
+});
+
 test('gate fails a complete run whose selection left out a needed job', () => {
   const verdict = evaluateGate(
     run({ complete: true, jobs: ['static'] }, { static: 'success', unit: 'success' }),

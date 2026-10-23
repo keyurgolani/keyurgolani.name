@@ -18,6 +18,11 @@
 // - shard-mismatch: the reports aren't one run's: two say different shard
 //   counts, modes, or engines, two hold different plans, or one shard
 //   reported twice.
+// - shard-job: the caller says the shard jobs didn't all succeed
+//   (quality-pr-verdict passes `needs`' result).
+//
+// quality:pr's shards (lib/pr-shards.ts) merge the same way: each lists
+// every project and plans the whole PR set, and runs only its own groups.
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -259,10 +264,19 @@ const parseShard = (shard: string | null | undefined) => {
  */
 export function mergeShards(
   shards: readonly ShardReport[],
-  options: { readonly expected?: number; readonly mode?: RunMode } = {},
+  options: { readonly expected?: number; readonly mode?: RunMode; readonly jobs?: string } = {},
 ): MergedVerdict {
   const failures: Failure[] = [];
   const fail = (rule: string, message: string) => failures.push({ rule, message });
+  // The shard jobs' own result, as `needs` gives it: a shard whose job
+  // failed, was cancelled, or was skipped fails the run, whatever its
+  // reports say, since a job can end badly after its verdict.
+  if (options.jobs !== undefined && options.jobs !== 'success') {
+    fail(
+      'shard-job',
+      `The shard jobs ended ${options.jobs || 'with no result'}, not success, so a shard failed, was cancelled, or was skipped.`,
+    );
+  }
   const listed = shards.map((each) => ({
     shard: each.verdict?.shard ?? each.summary?.shard ?? null,
     dir: each.dir,

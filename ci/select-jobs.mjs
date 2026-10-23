@@ -50,8 +50,11 @@ export const CHECK_JOBS = [
   // The profile containers (#12), on the image job's saved image.
   'profiles',
   'docs',
-  // #11's quality cells and the quality gates' own proof (#74).
+  // #11's quality cells and the quality gates' own proof (#74). quality-pr
+  // runs in shards, and quality-pr-verdict judges them whole, so every rule
+  // that selects one selects the other.
   'quality-pr',
+  'quality-pr-verdict',
   'quality-meta',
   // On open branches, mapped ahead of their merge: #7's preview fixture
   // renders (#71), and #6's trace job (6-3).
@@ -184,7 +187,14 @@ export const RULES = [
     // Fixture packs register only under APPEARANCE_FIXTURES=1 or #11's
     // QUALITY_FIXTURES, and build's standalone check proves they stay out.
     class: 'fixture pack',
-    jobs: ['unit', 'build', 'appearance-browser', 'quality-pr', 'quality-meta'],
+    jobs: [
+      'unit',
+      'build',
+      'appearance-browser',
+      'quality-pr',
+      'quality-pr-verdict',
+      'quality-meta',
+    ],
     paths: ['packages/appearance-fixtures-*/**', 'packages/quality-fixtures-*/**'],
   },
   // Before the variant rule: packages/variant-contract isn't a variant.
@@ -206,6 +216,7 @@ export const RULES = [
       'preview-fixtures-browser',
       'trace',
       'quality-pr',
+      'quality-pr-verdict',
     ],
     paths: ['packages/variant-*/**', 'packages/fallback-composition/**'],
   },
@@ -224,6 +235,7 @@ export const RULES = [
       'profiles',
       'preview-fixtures-browser',
       'quality-pr',
+      'quality-pr-verdict',
     ],
     paths: [
       'apps/web/src/app/(studio)/**',
@@ -264,7 +276,7 @@ export const RULES = [
   },
   {
     class: 'quality',
-    jobs: ['unit', 'quality-pr', 'quality-meta'],
+    jobs: ['unit', 'quality-pr', 'quality-pr-verdict', 'quality-meta'],
     paths: ['tests/quality/**', 'quality/**'],
   },
   // Every browser suite and the image share the harness and the fixtures.

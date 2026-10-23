@@ -17,6 +17,7 @@ import type {
   TestError,
 } from '@playwright/test/reporter';
 import { currentGate, REPO_ROOT, reportsDir, writeFailureRecord } from '../../ci/lib/reports.mjs';
+import { runShard } from './lib/env';
 import { writeCellFailures, type CellFailure } from './lib/failure-records';
 import { RECORDS_ATTACHMENT } from './lib/records';
 import { CHECKS_ANNOTATION, KIND_ANNOTATION } from './lib/checks';
@@ -136,11 +137,12 @@ export default class QualityReporter implements Reporter {
         perf: attachment(test, 'perf.json'),
       };
     });
+    // Playwright's --shard for quality:full, run.ts's own for quality:pr (lib/pr-shards.ts).
     const shard = this.config?.shard;
     const summary: Summary = {
       schemaVersion: 1,
       mode: process.env.QUALITY_MODE ?? 'pr',
-      shard: shard ? `${shard.current}/${shard.total}` : null,
+      shard: shard ? `${shard.current}/${shard.total}` : runShard(),
       status: result.status,
       projects: (this.config?.projects ?? []).map((project) => ({
         name: project.name,

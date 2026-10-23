@@ -1,74 +1,15 @@
 import assert from 'node:assert/strict';
-import { existsSync } from 'node:fs';
-import path from 'node:path';
 import test from 'node:test';
-import { fileURLToPath } from 'node:url';
 import { parse } from 'yaml';
-import { createAppearanceRegistry, type MetaPack } from '../../packages/appearance/src/index';
+import { createAppearanceRegistry } from '../../packages/appearance/src/index';
 import { contractFixture } from '../../packages/variant-contract/src/node/fixtures';
-import {
-  accepts,
-  defaultTuple,
-  planCells,
-  readBuildMeta,
-  siteTextFor,
-  workRoutes,
-  type BuildMeta,
-} from './cells';
+import { accepts, defaultTuple, planCells, siteTextFor, workRoutes, type BuildMeta } from './cells';
 import { tupleKey } from './coverage';
 import { isReason } from './lib/checks';
 import { requiredChecks } from './lib/checks';
 import { PREFERENCE_ROWS, VIEWPORTS } from './lib/matrix';
 import { loadRegistrations, type Registrations } from './lib/registration';
-
-const WEB = fileURLToPath(new URL('../../apps/web/', import.meta.url));
-
-/** This checkout's registry metadata, which pnpm --filter @portfolio/web build:registry writes. */
-function checkoutMeta(): BuildMeta {
-  const file = path.join(WEB, 'src', 'lib', 'generated', 'registry.meta.ts');
-  assert.ok(existsSync(file), 'run pnpm --filter @portfolio/web build:registry first');
-  return readBuildMeta(WEB);
-}
-
-const TIERS = ['stable', 'extended', 'experimental'] as const;
-
-/** A pack like `base`, renamed `id`, in `tier`, and a fixture or not. */
-function clone(base: MetaPack, id: string, tier: string, fixture: boolean): MetaPack {
-  return {
-    ...base,
-    fixture,
-    manifest: { ...base.manifest, id, name: id, tier },
-  } as MetaPack;
-}
-
-/**
- * The checkout's metadata with the nine tier packs Part A adds, a dark-only
- * scheme that isn't a fixture, and a fixture scheme that isn't a tier pack.
- */
-function withTierPacks(meta: BuildMeta): BuildMeta {
-  const packs = meta.PACKS ?? [];
-  const base = (kind: string) => packs.find((pack) => pack.kind === kind && !pack.fixture)!;
-  const scheme = base('color-scheme');
-  const darkOnly = (id: string, fixture: boolean) => {
-    const pack = clone(scheme, id, 'stable', fixture) as MetaPack & { kind: 'color-scheme' };
-    const { light: _light, ...anchors } = pack.manifest.anchors as Record<string, unknown>;
-    void _light;
-    return { ...pack, manifest: { ...pack.manifest, anchors } } as MetaPack;
-  };
-  return {
-    ...meta,
-    PACKS: [
-      ...packs,
-      ...TIERS.map((tier) =>
-        clone(base('design-language'), `fixture-language-${tier}`, tier, true),
-      ),
-      ...TIERS.map((tier) => clone(scheme, `fixture-scheme-${tier}`, tier, true)),
-      ...TIERS.map((tier) => clone(base('typography'), `fixture-typography-${tier}`, tier, true)),
-      darkOnly('night-only', false),
-      darkOnly('fixture-dark-only', true),
-    ],
-  };
-}
+import { checkoutMeta, clone, TIERS, withTierPacks } from './plan-fixtures';
 
 let registrations: Registrations;
 test.before(async () => {

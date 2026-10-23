@@ -26,7 +26,10 @@ interface Job {
   readonly permissions?: unknown;
   readonly container?: { readonly image?: string };
   readonly env?: Record<string, string>;
-  readonly strategy?: { readonly matrix?: { readonly shard?: readonly number[] } };
+  readonly strategy?: {
+    readonly 'fail-fast'?: boolean;
+    readonly matrix?: { readonly shard?: readonly number[] };
+  };
   readonly steps: readonly Step[];
 }
 interface Workflow {
@@ -167,6 +170,86 @@ test("quality-pr keeps the merge's base tip and names it, so the PR set takes th
   const job = CI.jobs['quality-pr']!;
   const checkout = step(job, (each) => /^actions\/checkout@/.test(each.uses ?? ''), 'checkout');
   assert.equal(checkout.with?.['fetch-depth'], 2);
-  const run = step(job, (each) => each.run === 'pnpm ci:quality-pr', 'the run step');
+  const run = step(job, (each) => /pnpm ci:quality-pr /.test(each.run ?? ''), 'the run step');
   assert.equal(run.env?.QUALITY_CHANGED_BASE, 'HEAD^1');
+});
+
+test('quality-pr shards quality:pr in the pinned image, scrubs however it ended, and uploads only a clean scrub', () => {
+  const job = CI.jobs['quality-pr']!;
+  assert.equal(job.container?.image, VISUAL_IMAGE);
+  assert.equal(job.env?.QUALITY_CONTAINER, VISUAL_IMAGE);
+  assert.equal(job.permissions, undefined, "it keeps the workflow's contents: read");
+  assert.equal(job.strategy?.['fail-fast'], false, 'one shard failing never cancels another');
+  const shards = job.strategy?.matrix?.shard ?? [];
+  assert.ok(shards.length > 1, 'it shards');
+  assert.deepEqual(
+    shards,
+    shards.map((_, index) => index + 1),
+  );
+  const total = shards.length;
+  assert.equal(job.name, `quality-pr (\${{ matrix.shard }}/${total})`);
+  const run = step(job, (each) => /pnpm ci:quality-pr /.test(each.run ?? ''), 'the run step');
+  assert.equal(run.run, 'pnpm ci:quality-pr "--shard=$SHARD"');
+  assert.equal(run.env?.SHARD, `\${{ matrix.shard }}/${total}`);
+  assert.equal(
+    run.env?.CI_REPRO_COMMAND,
+    `pnpm ci:quality-pr --shard=\${{ matrix.shard }}/${total}`,
+  );
+  assert.equal(SCRIPTS['ci:quality-pr'], 'node ci/run.mjs quality-pr -- pnpm quality:pr');
+
+  const scrub = step(job, (each) => each.id === 'scrub', 'the scrub step');
+  assert.equal(scrub.run, 'node tests/quality/scrub.mjs');
+  assert.equal(scrub.if, '${{ always() }}');
+  assert.deepEqual(scrub.env, {
+    QUALITY_CANARY_FILE: run.env?.QUALITY_CANARY_FILE,
+    QUALITY_SECRETS_FILE: run.env?.QUALITY_SECRETS_FILE,
+  });
+  const uploads = job.steps.filter((each) => /^actions\/upload-artifact@/.test(each.uses ?? ''));
+  assert.equal(uploads.length, 1, 'one upload, the scrubbed reports');
+  assert.equal(uploads[0]!.if, "${{ always() && steps.scrub.outcome == 'success' }}");
+  assert.equal(uploads[0]!.with?.name, 'reports-quality-pr-shard-${{ matrix.shard }}');
+  assert.ok(job.steps.indexOf(scrub) < job.steps.indexOf(uploads[0]!));
+  assert.doesNotMatch(JSON.stringify(job), /secrets\./);
+});
+
+test("quality-pr-verdict judges quality-pr's shards whole, however they ended, from their own directory", () => {
+  const job = CI.jobs['quality-pr-verdict'];
+  assert.ok(job, 'ci.yml has quality-pr-verdict');
+  assert.deepEqual(job.needs, ['changes', 'quality-pr']);
+  assert.equal(
+    job.if,
+    // A failed or skipped shard still reaches it; a cancelled run, such as a superseded push, skips it.
+    "${{ !cancelled() && contains(fromJSON(needs.changes.outputs.jobs), 'quality-pr-verdict') }}",
+  );
+  assert.equal(job.permissions, undefined);
+  assert.equal(job.container, undefined, 'it runs no browser');
+  const total = CI.jobs['quality-pr']!.strategy!.matrix!.shard!.length;
+  const download = step(
+    job,
+    (each) => /^actions\/download-artifact@/.test(each.uses ?? ''),
+    'the download step',
+  );
+  // The shards' artifacts only: never the verdict's own, which a rerun would find.
+  assert.equal(download.with?.pattern, 'reports-quality-pr-shard-*');
+  assert.equal(download.with?.path, '${{ runner.temp }}/quality-shards');
+  const merge = step(job, (each) => /pnpm ci:quality-pr-verdict/.test(each.run ?? ''), 'the merge');
+  assert.equal(merge.env?.SHARDS, download.with?.path);
+  assert.equal(merge.env?.SHARD_JOBS, '${{ needs.quality-pr.result }}');
+  assert.equal(
+    merge.run,
+    `pnpm ci:quality-pr-verdict "$SHARDS" --shards ${total} --mode pr --jobs "$SHARD_JOBS"`,
+  );
+  assert.equal(
+    SCRIPTS['ci:quality-pr-verdict'],
+    'node ci/run.mjs quality-pr-verdict -- pnpm quality:merge --',
+  );
+  assert.ok(job.steps.indexOf(download) < job.steps.indexOf(merge));
+  assert.equal(merge.if, undefined, 'the merge runs whether or not the download found anything');
+  const upload = step(
+    job,
+    (each) => /^actions\/upload-artifact@/.test(each.uses ?? ''),
+    'the upload step',
+  );
+  assert.equal(upload.with?.name, 'reports-quality-pr-verdict');
+  assert.doesNotMatch(JSON.stringify(job), /secrets\.|GITHUB_TOKEN|github\.token/);
 });
