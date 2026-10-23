@@ -86,14 +86,32 @@ test('the public entry reaches no owner module, and loading it records nothing i
   assert.deepEqual(JSON.parse(child.stdout.trim().split('\n').pop()!), []);
 });
 
-// Both entries are server code (#3, item 19). Each imports server-only, which
+/** Every file package.json's exports map names, under any condition. */
+function entries(): string[] {
+  const manifest = JSON.parse(readFileSync(path.resolve(SRC, '..', 'package.json'), 'utf8')) as {
+    exports: unknown;
+  };
+  const files = (value: unknown): string[] =>
+    typeof value === 'string'
+      ? [value]
+      : value && typeof value === 'object'
+        ? Object.values(value).flatMap(files)
+        : [];
+  return [...new Set(files(manifest.exports))].map((file) => path.resolve(SRC, '..', file));
+}
+
+// Every entry is server code (#3, item 19). Each imports server-only, which
 // throws outside the react-server condition Next's server runs under, so a
-// client bundle that reached either fails to build. The preview specs open a
+// client bundle that reached one fails to build. The preview specs open a
 // store through the owner entry in a child under that condition
 // (tests/harness/preview-store.ts), not in the browser suite's own process.
-test('both entries import server-only', () => {
-  for (const entry of ['index.ts', 'owner.ts']) {
-    const file = path.join(SRC, entry);
+test('every entry in the exports map imports server-only', () => {
+  const found = entries();
+  for (const known of ['index.ts', 'owner.ts']) {
+    assert.ok(found.includes(path.join(SRC, known)), `the exports map names ${known}`);
+  }
+  for (const file of found) {
+    const entry = path.relative(SRC, file);
     const source = ts.createSourceFile(file, readFileSync(file, 'utf8'), ts.ScriptTarget.Latest);
     const imports = source.statements.filter(ts.isImportDeclaration);
     assert.ok(
