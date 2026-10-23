@@ -47,6 +47,95 @@ test(
 );
 
 test(
+  "on the preview origin, where a frame's document has an origin and so the Navigation API, the guard's backstop cancels what no click showed it, a link in a closed shadow root, a script's location.assign(), and a pushState() or replaceState() outside the grant, shows each to the owner as a link, and lets a reload, the grant's own paths, and Studio's own loads go on (#7, Slices 3 and 4)",
+  { annotation: [PAGE] },
+  async ({ page, app, blockedRequests }) => {
+    const { frame } = await openPreview(page, app, secret.password, 'Backstop Origin Person');
+    const frameUrl = frame.url();
+    const grantPath = new URL(frameUrl).pathname;
+    const target = page.locator('.preview-surface__href');
+    // A link in a closed shadow root, which a click doesn't show the guard.
+    await frame.evaluate(() => {
+      const host = document.createElement('div');
+      host.id = 'closed-host';
+      const root = host.attachShadow({ mode: 'closed' });
+      const link = document.createElement('a');
+      link.href = 'https://example.test/shadow';
+      link.textContent = 'A link in a closed shadow root';
+      // The whole host, so a click on it is on the link.
+      link.style.display = 'block';
+      root.append(link);
+      document.body.prepend(host);
+    });
+    await frame.locator('#closed-host').click();
+    await expect(page.getByText('The preview tried to open another site:')).toBeVisible();
+    await expect(target).toHaveText('https://example.test/shadow');
+    // A script's own navigation.
+    await frame.evaluate(() => location.assign('https://example.test/assign'));
+    await expect(target).toHaveText('https://example.test/assign');
+    // A history change outside the grant, which a reload would load next:
+    // the frame's URL stays the grant's, and the owner sees where it went,
+    // as the site's own page.
+    for (const [change, path] of [
+      ['pushState', '/studio'],
+      ['replaceState', '/studio/drafts'],
+    ] as const) {
+      const after = await frame.evaluate(
+        ([how, to]) => {
+          try {
+            history[how](null, '', to);
+          } catch {
+            // A cancelled change may throw. Either way the URL stays.
+          }
+          return location.pathname;
+        },
+        [change, path] as const,
+      );
+      expect(after, change).toBe(grantPath);
+      await expect(page.getByText('The preview tried to open a page of this site:')).toBeVisible();
+      await expect(target).toHaveText(`${app.origin}${path}`);
+    }
+    expect(blockedRequests.filter((url) => url.startsWith('https://example.test/'))).toEqual([]);
+    expect(frame.url()).toBe(frameUrl);
+    await expect(stage(page)).toHaveAttribute('data-phase', 'ready');
+
+    // A reload, and the grant's own path, load as before, each a new document.
+    const marked = () =>
+      frame.evaluate(() => {
+        (window as unknown as { kept?: boolean }).kept = true;
+      });
+    const reloaded = () =>
+      expect
+        .poll(() =>
+          frame
+            .evaluate(() => (window as unknown as { kept?: boolean }).kept ?? false)
+            .catch(() => true),
+        )
+        .toBe(false);
+    await marked();
+    await frame.evaluate(() => {
+      setTimeout(() => location.reload(), 0);
+    });
+    await reloaded();
+    await expect(stage(page)).toHaveAttribute('data-phase', 'ready');
+    await marked();
+    await frame.evaluate((href) => {
+      setTimeout(() => location.assign(href), 0);
+    }, grantPath);
+    await reloaded();
+    await expect(stage(page)).toHaveAttribute('data-phase', 'ready');
+    expect(new URL(frame.url()).pathname).toBe(grantPath);
+
+    // Studio's own load of a new grant, from another origin than the
+    // frame's, isn't the frame's to cancel.
+    await page.getByRole('button', { name: 'Refresh' }).click();
+    await expect.poll(() => new URL(frame.url()).pathname).not.toBe(grantPath);
+    await expect(stage(page)).toHaveAttribute('data-phase', 'ready');
+    expect(new URL(frame.url()).origin).toBe(app.previewOrigin);
+  },
+);
+
+test(
   'the preview origin serves /preview, /preview-assets, /_next/static, and /_portfolio alone, by its Host, and everything else there is the 404 an unknown path gets (#7, Slice 4)',
   { annotation: [PAGE] },
   async ({ app }) => {

@@ -1,9 +1,9 @@
 import { gzipSync } from 'node:zlib';
-import type { Page } from '@playwright/test';
+import type { Page, Request } from '@playwright/test';
 import { AGENT_MARKER, scriptsDuring } from '../harness/agent-chunks';
 import { expect, test } from '../harness/fixtures';
 import { ownerSecret } from '../harness/owner-secret.mjs';
-import { seedDraft, signIn } from '../harness/preview-grants';
+import { command, seedDraft, signIn } from '../harness/preview-grants';
 import { ownerApp } from '../harness/profile-matrix';
 import {
   environmentIn,
@@ -16,6 +16,7 @@ import {
   recordGrantCommands,
   stage,
 } from '../harness/studio-preview';
+import { recordPorts } from '../harness/studio-channel-page';
 
 // The owner's /studio/preview (#7, Slice 4), against the built server with
 // the password provider: the working draft in a frame with Studio's
@@ -434,6 +435,96 @@ test(
     await expect(page).toHaveURL(new RegExp(`${PREVIEW_PAGE}$`));
     await expect(page.getByText('The preview tried to open')).toHaveCount(0);
     expect(await opened()).toHaveLength(1);
+  },
+);
+
+test(
+  "through PreviewSurface, nothing the frame sends Studio, over the port or between the windows, makes a Studio request from any page of the context, even past the surface's longest timer, ends its grant, or signs the owner out (#7, Slice 4, AC7)",
+  { annotation: [PAGE, { type: 'route', description: '/api/studio/[name]' }] },
+  async ({ page, app }) => {
+    test.setTimeout(60_000);
+    await recordPorts(page);
+    // The page keeps the nonce of each hello it hears, for the frame to use.
+    await page.addInitScript(() => {
+      addEventListener('message', (event) => {
+        const data = event.data as { type?: string; payload?: { nonce?: string } } | null;
+        if (data?.type === 'hello' && data.payload?.nonce) {
+          (window as unknown as { nonce?: string }).nonce = data.payload.nonce;
+        }
+      });
+    });
+    const { csrf, frame } = await openPreview(page, app, secret.password, 'Surface Command Person');
+    const grant = new URL(frame.url()).pathname.split('/')[2]!;
+    const nonce = await page.evaluate(() => (window as unknown as { nonce?: string }).nonce);
+    expect(nonce).toBeTruthy();
+    // Every Studio request from here on, from any page, frame, or worker of the context.
+    const requests: Request[] = [];
+    let recording = true;
+    page.context().on('request', (request) => {
+      if (recording && new URL(request.url()).pathname.startsWith('/api/studio/')) {
+        requests.push(request);
+      }
+    });
+    await frame.evaluate(async (key) => {
+      const port = window.__kgnPort;
+      if (!port) throw new Error('The frame kept no port.');
+      let seq = 100;
+      const message = (type: string, payload: unknown, extra: object = {}) => ({
+        protocol: 'kgn-preview',
+        version: 1,
+        seq: ++seq,
+        type,
+        payload,
+        ...extra,
+      });
+      for (const each of [
+        message('ready', { renderedVersion: 1, route: '/' }),
+        message('navigated', { route: '/work/a' }),
+        message('scrolled', { anchor: 'about', progress: 0.5 }),
+        message('link', { href: 'https://example.test/talk', kind: 'external' }),
+        message('link', { href: '/studio/drafts', kind: 'live' }),
+        message('rect', { anchor: 'about', rect: { x: 0, y: 0, width: 10, height: 10 } }),
+        message('status', { state: 'render_failed', correlationId: 'abc123' }),
+        message('status', { state: 'unavailable' }),
+        message('command', { name: 'auth.logout', input: {} }),
+        message('preview.grant.revoke', { grant: 'x' }),
+        message('navigate', { route: '/' }),
+        message('hello', { nonce: key, instance: 'AAAAAAAAAAAAAAAAAAAAAA' }),
+        message('ready', { renderedVersion: 1, route: '/' }, { version: 2 }),
+        message('navigated', { route: '/', pad: 'x'.repeat(70 * 1024) }),
+        { type: 'refresh' },
+        { type: 'auth.logout', name: 'auth.logout', input: {} },
+        'auth.logout',
+      ]) {
+        port.postMessage(each);
+      }
+      for (const each of [
+        { type: 'refresh' },
+        { type: 'auth.logout', name: 'auth.logout', input: {} },
+        message('command', { name: 'auth.logout' }),
+        message('preview.grant.mint', { subject: {} }),
+        message('ready', { renderedVersion: 1, route: '/' }),
+        message('hello', { nonce: 'BBBBBBBBBBBBBBBBBBBBBB', instance: 'CCCCCCCCCCCCCCCCCCCCCC' }),
+        message('hello', { nonce: key, instance: 'CCCCCCCCCCCCCCCCCCCCCC' }, { version: 2 }),
+        'auth.logout',
+      ]) {
+        window.parent.postMessage(each, '*');
+      }
+    }, nonce);
+    // Past the surface's longest timer, the 10 seconds a load has to say
+    // ready, so a request any of it scheduled would have gone out.
+    await page.waitForTimeout(10_500);
+    recording = false;
+    expect(requests.map((request) => request.url())).toEqual([]);
+    // The page stays where it was, the grant is still active, and the owner
+    // is still signed in.
+    await expect(page).toHaveURL(new RegExp(`${PREVIEW_PAGE}$`));
+    const status = await command(page, csrf, 'preview.grant.status', { grant });
+    expect(status.body.data).toEqual({ status: 'active' });
+    const session = await page.evaluate(
+      async () => (await fetch('/api/studio/auth.session')).status,
+    );
+    expect(session).toBe(200);
   },
 );
 
