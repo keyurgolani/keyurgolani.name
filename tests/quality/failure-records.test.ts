@@ -166,6 +166,9 @@ test('a viewport, input mode, preference mode, surface, or route it cannot name 
     [{ surface: 'Login Page' }, /surface "Login Page" isn't a registry id/],
     [{ route: 'studio/login' }, /route "studio\/login" isn't a path/],
     [{ check: 'Axe' }, /check "Axe" isn't a check id/],
+    // One record per failing rule: a record with no rule isn't one.
+    [{ rule: '' }, /rule "" isn't the id of the rule that failed/],
+    [{ rule: ' color-contrast' }, /rule " color-contrast" isn't the id of the rule that failed/],
   ] as const) {
     assert.throws(
       () => cellFailureRecord({ ...FAILURE, ...(change as Partial<CellFailure>) }, GATE),

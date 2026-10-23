@@ -82,6 +82,9 @@ function failureProblem(failure: CellFailure): string | null {
   if (!failure.check || !/^[a-z][a-z0-9-]*$/.test(failure.check)) {
     return `check ${JSON.stringify(failure.check)} isn't a check id, such as axe.`;
   }
+  if (!failure.rule || failure.rule.trim() !== failure.rule) {
+    return `rule ${JSON.stringify(failure.rule)} isn't the id of the rule that failed, such as color-contrast.`;
+  }
   if (!ID.test(failure.surface))
     return `surface ${JSON.stringify(failure.surface)} isn't a registry id.`;
   if (!failure.route.startsWith('/')) return `route ${JSON.stringify(failure.route)} isn't a path.`;
