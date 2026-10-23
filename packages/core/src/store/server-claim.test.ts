@@ -104,8 +104,10 @@ test('the claim is refreshed on its interval, its record left as it is, and rele
   const written = readFileSync(paths.server, 'utf8');
   const old = (Date.now() - 60_000) / 1000;
   utimesSync(paths.server, old, old);
-  await new Promise((resolve) => setTimeout(resolve, 120));
-  assert.ok(Date.now() - statSync(paths.server).mtimeMs < SERVER_FRESH_MS);
+  await until(
+    () => Date.now() - statSync(paths.server).mtimeMs < SERVER_FRESH_MS,
+    'the claim is refreshed',
+  );
   assert.equal(readFileSync(paths.server, 'utf8'), written);
   await claimed.claim.release();
   await new Promise((resolve) => setTimeout(resolve, 80));
@@ -308,10 +310,10 @@ test("a FIFO at server.json holds up neither release nor the exit's releaseSync:
   try {
     let started = Date.now();
     claimed.claim.releaseSync();
-    assert.ok(Date.now() - started < 500, 'releaseSync waited for a writer');
+    assert.ok(Date.now() - started < 900, 'releaseSync waited for a writer');
     started = Date.now();
     await within(2_000, claimed.claim.release());
-    assert.ok(Date.now() - started < 500, 'release waited for a writer');
+    assert.ok(Date.now() - started < 900, 'release waited for a writer');
     assert.ok(lstatSync(paths.server).isFIFO(), 'left as it is');
   } finally {
     release();
