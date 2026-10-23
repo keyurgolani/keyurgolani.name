@@ -241,6 +241,7 @@ test('the tree check reports a legacy/ path in code that the tree no longer has'
       'cat legacy/variant-old/README.md',
       '```',
       'Globs such as `legacy/**` name no one file.',
+      'Placeholders such as `legacy/variant-<id>/src`, `legacy/variant-{editorial,kinetic}/src` and `legacy/variant-old/*.md` name none either.',
     ].join('\n'),
     'legacy/variant-kept/src/here.tsx': 'x',
   });

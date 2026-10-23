@@ -166,10 +166,17 @@ const PNPM_COMMANDS = new Set([
 /**
  * The paths under legacy/ a piece of code names, such as
  * legacy/variant-editorial/src/index.ts. The v1 copies there retire one
- * issue at a time, so a doc that points at one has to follow it out.
+ * issue at a time, so a doc that points at one has to follow it out. A
+ * placeholder or pattern, such as legacy/variant-<id>/ or
+ * legacy/variant-{a,b}/, names no one file, so it's left alone.
  */
 export function legacyPaths(code) {
-  return [...code.matchAll(/(?<![\w./-])legacy\/[\w./-]*[\w-]/g)].map(([named]) => named);
+  return [...code.matchAll(/(?<![\w./-])legacy\/[\w./-]*[\w-]/g)]
+    .filter(
+      ({ 0: named, index }) =>
+        !named.endsWith('-') && !/^\/?[<{*[]/.test(code.slice(index + named.length)),
+    )
+    .map(([named]) => named);
 }
 
 /** `pnpm` invocations in a piece of code: { filter, script }. */
