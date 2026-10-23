@@ -6,6 +6,7 @@ import type { Frame, Page, Request } from '@playwright/test';
 import {
   AGENT_MARKER,
   isPreviewFrame,
+  QUIET_MS,
   scriptsDuring,
   STUDIO_HALF_MARKER,
 } from '../harness/agent-chunks';
@@ -666,5 +667,36 @@ test(
       `The preview agent's own chunks: ${agentOnly.length}, ${gzipped} bytes gzipped.\n${each.join('\n')}`,
     );
     expect(gzipped).toBeGreaterThan(0);
+  },
+);
+
+test(
+  'what a frame loads is all counted when the Studio page went quiet before the frame mounted, and counting it ends a quiet window after the last request (#7, Slice 3)',
+  { annotation: [GRANT] },
+  async ({ page, app }) => {
+    await recordDrops(page);
+    let loaded = 0;
+    const frameScripts = await scriptsDuring(
+      page,
+      async () => {
+        const csrf = await openStudioPage(page, app, secret.password);
+        const draft = await seedDraft(app, 'Gap Person');
+        const { grant, nonce } = await mintFrame(page, csrf, {
+          draft: draft.draftId,
+          version: draft.version,
+        });
+        // Longer than Playwright's networkidle window, so the page has gone
+        // network idle before the frame exists.
+        await page.waitForTimeout(1_500);
+        await mount(page, `/preview/${grant}`, nonce);
+        await expect.poll(() => eventsOf(page, 'ready')).toHaveLength(1);
+        loaded = Date.now();
+      },
+      isPreviewFrame,
+    );
+    const waited = Date.now() - loaded;
+    expect(waited).toBeGreaterThanOrEqual(QUIET_MS);
+    expect(waited).toBeLessThan(5_000);
+    expect([...frameScripts.values()].some((body) => body.includes(AGENT_MARKER))).toBe(true);
   },
 );
