@@ -69,6 +69,37 @@ function requestsFromInside(requests) {
 }
 
 /**
+ * Sends each request in `requests`, a JSON array of { method, path,
+ * headers }, to the app inside its own container with node:http, which
+ * sends the Host header a request names, as fetch can't. Prints a JSON
+ * array with one { status, headers, body } or { error } per request. Reads
+ * the array from stdin, as requestsFromInside does.
+ */
+function hostRequestsFromInside(requests) {
+  const http = process.getBuiltinModule('node:http');
+  const h = process.env.HOSTNAME;
+  const host = !h || h === '0.0.0.0' || h === '::' ? '127.0.0.1' : h;
+  const port = Number(process.env.PORT || 3000);
+  const one = ({ method, path, headers = {} }) =>
+    new Promise((resolve) => {
+      const request = http.request({ host, port, method, path, headers, timeout: 15000 }, (res) => {
+        let body = '';
+        res.setEncoding('utf8');
+        res.on('data', (chunk) => (body += chunk));
+        res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, body }));
+      });
+      request.on('timeout', () => request.destroy(new Error('timeout')));
+      request.on('error', (error) => resolve({ error: String(error.code ?? error.message) }));
+      request.end();
+    });
+  (async () => {
+    const results = [];
+    for (const request of JSON.parse(requests)) results.push(await one(request));
+    process.stdout.write(JSON.stringify(results));
+  })();
+}
+
+/**
  * Reads every regular file under `root` that the container's user can read.
  * Prints JSON: { files }, each file's text by its path under `root`.
  */
@@ -216,6 +247,7 @@ function writeFromInside(dirs) {
 export const PROBE_SNIPPET = `(${probeFromInside.toString()})(process.argv[1])`;
 export const WRITABLE_SNIPPET = `(${writableFromInside.toString()})(process.argv[1], Number(process.argv[2]), Number(process.argv[3]))`;
 export const REQUESTS_SNIPPET = `(${requestsFromInside.toString()})(process.getBuiltinModule('node:fs').readFileSync(0, 'utf8'))`;
+export const HOST_REQUESTS_SNIPPET = `(${hostRequestsFromInside.toString()})(process.getBuiltinModule('node:fs').readFileSync(0, 'utf8'))`;
 export const SCAN_SNIPPET = `process.stdout.write(JSON.stringify((${scanTree.toString()})(process.argv[1])))`;
 export const MAPS_SNIPPET = `(${sourceMapsFromInside.toString()})(process.argv[1])`;
 export const TREE_SNIPPET = `(${treeFromInside.toString()})(process.argv[1])`;

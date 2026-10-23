@@ -778,7 +778,8 @@ jobs:
         id: image
         run: pnpm ci:image
       # The image this job built and checked, for profiles, so nothing builds
-      # it twice. Kept for a day, and nothing publishes it.
+      # it twice. Any signed-in GitHub user can download it for a day, and it
+      # holds only what the public source builds. Nothing publishes it.
       - name: Save the image for profiles
         id: save
         if: ${{ !cancelled() && steps.image.outcome == 'success' }}

@@ -18,6 +18,7 @@ import { fileURLToPath } from 'node:url';
 import { parse as parseYaml } from 'yaml';
 import {
   assessRoutes,
+  HOST_REQUESTS_SNIPPET,
   PROBE_SNIPPET,
   REQUESTS_SNIPPET,
   SCAN_SNIPPET,
@@ -88,6 +89,8 @@ async function withServer(host, fn) {
       res.setHeader('content-type', 'application/json');
       res.setHeader('x-seen-type', req.headers['content-type'] ?? 'none');
       res.setHeader('x-seen-origin', req.headers.origin ?? 'none');
+      res.setHeader('x-seen-host', req.headers.host ?? 'none');
+      res.setHeader('x-seen-forwarded-host', req.headers['x-forwarded-host'] ?? 'none');
       if (req.url === '/cookies') res.setHeader('set-cookie', ['a=1; Path=/', 'b=2; Path=/']);
       res.statusCode = req.url === '/missing' ? 404 : 200;
       res.end(JSON.stringify({ ok: true, path: req.url, method: req.method, body }));
@@ -553,6 +556,40 @@ test('the in-container requests take their batch on stdin, however long, and not
     [JSON.parse(results[0].body).path, JSON.parse(results[399].body).path],
     ['/page-0', '/page-399'],
   );
+});
+
+test('the in-container host requests send the Host header each request names, in order', async () => {
+  await withServer('127.0.0.1', async (port) => {
+    const requests = [
+      {
+        method: 'GET',
+        path: '/a',
+        headers: { host: 'rowan.test', 'x-forwarded-host': 'preview.rowan.test' },
+      },
+      { method: 'GET', path: '/missing', headers: { host: 'preview.rowan.test' } },
+    ];
+    const output = await runNode(
+      ['-e', HOST_REQUESTS_SNIPPET],
+      { HOSTNAME: '127.0.0.1', PORT: String(port) },
+      JSON.stringify(requests),
+    );
+    const [first, second] = JSON.parse(output.stdout);
+    assert.equal(first.status, 200);
+    assert.equal(first.headers['x-seen-host'], 'rowan.test');
+    assert.equal(first.headers['x-seen-forwarded-host'], 'preview.rowan.test');
+    assert.equal(JSON.parse(first.body).path, '/a');
+    assert.equal(second.status, 404);
+    assert.equal(second.headers['x-seen-host'], 'preview.rowan.test');
+  });
+});
+
+test('the in-container host requests report a connection error per request', async () => {
+  const output = await runNode(
+    ['-e', HOST_REQUESTS_SNIPPET],
+    { HOSTNAME: '127.0.0.1', PORT: '9' },
+    JSON.stringify([{ method: 'GET', path: '/', headers: { host: 'rowan.test' } }]),
+  );
+  assert.match(JSON.parse(output.stdout)[0].error, /ECONNREFUSED/);
 });
 
 test('the in-container tree read gives the text of every file under the root', () => {

@@ -7,26 +7,34 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { CANARY_BODY, encodings, SUMMARY_FIELDS } from '../tests/harness/canaries.mjs';
 import {
+  ARTIFACT_LIMIT,
   CACHE_DIR,
   composeProblems,
   DATA_DIR,
   HARDENING,
   hermeticProblems,
+  HOST_PROBES,
+  hostProblems,
   inspectProblems,
+  leakProblems,
   isDurable,
   maskCommands,
   newAuditRecords,
   partsOf,
   persistenceProblems,
+  PREVIEW_ORIGIN,
   processProblems,
   redact,
   redactArtifacts,
   reproFor,
+  signedInLeaks,
   sourceProblems,
   SPOOFED_HOST,
   spoofProblems,
   stopProblems,
+  successSourceProblems,
   WRITE_TARGETS,
   writeProblems,
 } from './lib/profile-checks.mjs';
@@ -448,7 +456,10 @@ test('artifacts: a report holding a run secret is named and redacted in place', 
   mkdirSync(path.join(dir, 'failures'), { recursive: true });
   writeFileSync(path.join(dir, 'profiles', 'owner.log'), 'line canary-run-0123 and more');
   writeFileSync(path.join(dir, 'failures', 'profiles-1.json'), '{"actual":"clean"}');
-  assert.deepEqual(redactArtifacts(dir, ['canary-run-0123']), ['profiles/owner.log']);
+  assert.deepEqual(redactArtifacts(dir, ['canary-run-0123']), {
+    redacted: ['profiles/owner.log'],
+    unchecked: [],
+  });
   assert.equal(
     readFileSync(path.join(dir, 'profiles', 'owner.log'), 'utf8'),
     'line [run secret] and more',
@@ -457,8 +468,15 @@ test('artifacts: a report holding a run secret is named and redacted in place', 
     readFileSync(path.join(dir, 'failures', 'profiles-1.json'), 'utf8'),
     '{"actual":"clean"}',
   );
-  assert.deepEqual(redactArtifacts(dir, ['canary-run-0123']), [], 'nothing left to find');
-  assert.deepEqual(redactArtifacts(path.join(dir, 'absent'), ['x']), []);
+  assert.deepEqual(
+    redactArtifacts(dir, ['canary-run-0123']),
+    { redacted: [], unchecked: [] },
+    'nothing left to find',
+  );
+  assert.deepEqual(redactArtifacts(path.join(dir, 'absent'), ['x']), {
+    redacted: [],
+    unchecked: [],
+  });
 });
 
 test('masking: each run secret gets ::add-mask:: in Actions, and nothing elsewhere', () => {
@@ -493,4 +511,98 @@ test("spoofed headers: demo's empty sitemap passes, and lists only canonical URL
   assert.deepEqual(spoofProblems(foreign, ORIGIN, '/sitemap.xml', { indexable: false }), [
     'the sitemap lists https://elsewhere.test/',
   ]);
+});
+
+test('artifacts: a report too large to read fails unread, and is left as it is', (t) => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'profile-artifacts-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  writeFileSync(path.join(dir, 'big.log'), `${'x'.repeat(64)} canary-run-0123`);
+  writeFileSync(path.join(dir, 'small.log'), 'fine');
+  assert.deepEqual(redactArtifacts(dir, ['canary-run-0123'], 32), {
+    redacted: [],
+    unchecked: ['big.log'],
+  });
+  assert.match(readFileSync(path.join(dir, 'big.log'), 'utf8'), /canary-run-0123/);
+  assert.equal(ARTIFACT_LIMIT, 64 * 1024 * 1024);
+});
+
+test("signed-in leaks: the run's secrets, owner's, and the data directory, but not the summary", () => {
+  const runSecrets = encodings('canary-run-0123');
+  const leaks = signedInLeaks('/app/apps/web', ['the-password'], runSecrets);
+  for (const value of ['canary-run-0123', 'the-password', DATA_DIR, CANARY_BODY, '/app/apps/web']) {
+    assert.ok(leaks.includes(value), value);
+  }
+  for (const field of SUMMARY_FIELDS) assert.ok(!leaks.includes(field), field);
+});
+
+test('leaks: a canary in a header or the body is found, and a clean answer passes', () => {
+  const leaks = ['canary-run-0123'];
+  assert.deepEqual(leakProblems({ headers: { a: 'b' }, body: 'clean' }, leaks), []);
+  assert.deepEqual(
+    leakProblems(
+      { headers: { 'set-cookie': 'x=canary-run-0123' }, body: 'canary-run-0123' },
+      leaks,
+    ),
+    ['a header carries canary-run-0123', 'the body carries canary-run-0123'],
+  );
+  assert.deepEqual(leakProblems(undefined, leaks), []);
+});
+
+test('the spoofed sign-in: unknown at 0 hops, the last X-Forwarded-For entry at 1', () => {
+  const succeeded = (source) => ({ type: 'login_succeeded', refs: { source } });
+  assert.deepEqual(successSourceProblems([succeeded('unknown')], 0), []);
+  assert.deepEqual(successSourceProblems([succeeded('203.0.113.0/24')], 1), []);
+  assert.deepEqual(successSourceProblems([succeeded('198.51.100.0/24')], 1), [
+    'at 1 hops, the sign-in came from 198.51.100.0/24, not 203.0.113.0/24',
+  ]);
+  assert.deepEqual(successSourceProblems([succeeded('203.0.113.0/24')], 0), [
+    'at 0 hops, the sign-in came from 203.0.113.0/24, not unknown',
+  ]);
+  assert.deepEqual(successSourceProblems([{ type: 'login_failed', refs: {} }], 0), [
+    'the audit log holds no sign-in',
+  ]);
+});
+
+const STATUS_DOCUMENT = '<!doctype html><title>Preview</title>';
+const answer = (status, body, type = 'text/html; charset=utf-8') => ({
+  status,
+  headers: { 'content-type': type },
+  body,
+});
+
+test('host rule: each probe sets X-Forwarded-Host to the other origin, and Host decides', () => {
+  assert.equal(new URL(PREVIEW_ORIGIN).host, 'preview.rowan.test');
+  for (const probe of HOST_PROBES) assert.notEqual(probe.host, probe.forwarded);
+  const expects = new Set(HOST_PROBES.map((probe) => probe.expect));
+  assert.deepEqual([...expects].sort(), ['plain', 'site', 'status', 'unknown']);
+  assert.ok(
+    HOST_PROBES.some((p) => p.host === 'rowan.test' && p.forwarded === 'preview.rowan.test'),
+  );
+  assert.ok(
+    HOST_PROBES.some((p) => p.host === 'preview.rowan.test' && p.forwarded === 'rowan.test'),
+  );
+});
+
+test('host rule: the answers the rule gives pass, and the ones a header-led rule gives fail', () => {
+  const expected = { fixtureName: 'Rowan Fixture', statusDocument: STATUS_DOCUMENT };
+  const right = {
+    site: answer(200, '<h1>Rowan Fixture</h1>'),
+    unknown: answer(404, '<h1>Page not found</h1>'),
+    status: answer(404, STATUS_DOCUMENT),
+    plain: answer(404, 'Not found.', 'text/plain; charset=utf-8'),
+  };
+  for (const probe of HOST_PROBES) {
+    assert.deepEqual(hostProblems(probe, right[probe.expect], expected), [], probe.path);
+  }
+  const [main, , previewHome, , previewFrame, other] = HOST_PROBES;
+  // The main host treated as the preview origin.
+  assert.equal(hostProblems(main, right.unknown, expected).length, 1);
+  // The preview host given the whole site.
+  assert.equal(hostProblems(previewHome, right.site, expected).length, 1);
+  // The preview host refused even what a frame loads.
+  assert.equal(hostProblems(previewFrame, right.unknown, expected).length, 1);
+  // A host the deployment doesn't name given a page.
+  assert.equal(hostProblems(other, right.site, expected).length, 1);
+  assert.equal(hostProblems(other, right.unknown, expected).length, 1);
+  assert.match(hostProblems(main, { error: 'ECONNRESET' }, expected)[0], /no answer/);
 });

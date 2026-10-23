@@ -7,6 +7,7 @@
 // check passes.
 import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { canaries } from '../../tests/harness/canaries.mjs';
 
 /** Owner's data directory, where deploy/compose.owner.yml mounts it. */
 export const DATA_DIR = '/var/lib/portfolio';
@@ -379,16 +380,22 @@ export function redact(text, secrets) {
   return out;
 }
 
+/** The largest report redactArtifacts reads. A larger one fails the run unread. */
+export const ARTIFACT_LIMIT = 64 * 1024 * 1024;
+
 /**
  * Every file under `dir` that holds a per-run secret, each then redacted in
- * place, so the uploaded artifact never carries one. The run fails on each.
+ * place, so the uploaded artifact never carries one, and every file too
+ * large to read and check. The run fails on each.
  *
  * @param {string} dir
  * @param {readonly string[]} secrets
- * @returns {string[]} the files, relative to `dir`
+ * @param {number} [limit]
+ * @returns {{ redacted: string[], unchecked: string[] }} the files, relative to `dir`
  */
-export function redactArtifacts(dir, secrets) {
+export function redactArtifacts(dir, secrets, limit = ARTIFACT_LIMIT) {
   const found = [];
+  const unchecked = [];
   const walk = (current) => {
     let entries;
     try {
@@ -399,7 +406,9 @@ export function redactArtifacts(dir, secrets) {
     for (const entry of entries) {
       const full = path.join(current, entry.name);
       if (entry.isDirectory()) walk(full);
-      else if (entry.isFile() && statSync(full).size < 64 * 1024 * 1024) {
+      else if (entry.isFile() && statSync(full).size > limit) {
+        unchecked.push(path.relative(dir, full));
+      } else if (entry.isFile()) {
         const text = readFileSync(full, 'latin1');
         if (secrets.some((secret) => secret && text.includes(secret))) {
           writeFileSync(full, redact(text, secrets), 'latin1');
@@ -409,7 +418,104 @@ export function redactArtifacts(dir, secrets) {
     }
   };
   walk(dir);
-  return found.sort();
+  return { redacted: found.sort(), unchecked: unchecked.sort() };
+}
+
+/**
+ * What no response to a signed-in owner may carry: the fixed canaries but
+ * the config summary, which config.status gives an owner session, the
+ * run's own secrets and canary, owner's password and hash, and the data
+ * directory's path.
+ *
+ * @param {string} serverDir the server's own directory
+ * @param {readonly string[]} secrets owner's password and hash
+ * @param {readonly string[]} runSecrets every per-run secret, encoded
+ */
+export const signedInLeaks = (serverDir, secrets, runSecrets) =>
+  canaries(serverDir, { secrets: [...secrets, ...runSecrets, DATA_DIR], summary: false });
+
+/**
+ * The canaries in `leaks` a response carries, in a header or the body, as
+ * problems.
+ *
+ * @param {{ headers?: Record<string, string>, body?: string }} response
+ * @param {readonly string[]} leaks
+ * @returns {string[]}
+ */
+export function leakProblems(response, leaks) {
+  const problems = [];
+  const headers = Object.entries(response?.headers ?? {})
+    .map(([name, value]) => `${name}: ${value}`)
+    .join('\n');
+  for (const canary of leaks) {
+    if (headers.includes(canary)) problems.push(`a header carries ${canary}`);
+    if ((response?.body ?? '').includes(canary)) problems.push(`the body carries ${canary}`);
+  }
+  return problems;
+}
+
+/**
+ * Problems with the sources the audit log gives the spoofed sign-in that
+ * succeeded, sent with X-Forwarded-For `198.51.100.7, 203.0.113.9`. A
+ * success is written at once, never gathered into the minute's record, so
+ * it shows the source directly: unknown at 0 hops, 203.0.113.0/24 at 1.
+ *
+ * @param {readonly Record<string, any>[]} records the audit records the sign-in added
+ * @param {number} hops
+ * @returns {string[]}
+ */
+export function successSourceProblems(records, hops) {
+  const sources = records
+    .filter((record) => record.type === 'login_succeeded')
+    .map((record) => String(record.refs?.source));
+  if (sources.length === 0) return ['the audit log holds no sign-in'];
+  const expected = hops === 0 ? 'unknown' : '203.0.113.0/24';
+  const wrong = sources.filter((source) => source !== expected);
+  return wrong.length === 0
+    ? []
+    : [`at ${hops} hops, the sign-in came from ${[...new Set(wrong)].join(', ')}, not ${expected}`];
+}
+
+/** The preview origin owner's host-rule probe sets (#7, Slice 4). */
+export const PREVIEW_ORIGIN = 'https://preview.rowan.test';
+
+/**
+ * Requests with an explicit Host header and an X-Forwarded-Host that names
+ * the other origin, to a server whose PORTFOLIO_PREVIEW_ORIGIN is
+ * PREVIEW_ORIGIN. The Host header alone decides the host rule (#7): `site`
+ * is the whole site, `unknown` what a path no route matches gets, `status`
+ * the preview's status document, and `plain` the plain 404 of a host the
+ * deployment doesn't name.
+ */
+export const HOST_PROBES = [
+  { host: 'rowan.test', forwarded: 'preview.rowan.test', path: '/', expect: 'site' },
+  { host: 'rowan.test', forwarded: 'preview.rowan.test', path: '/robots.txt', expect: 'site' },
+  { host: 'preview.rowan.test', forwarded: 'rowan.test', path: '/', expect: 'unknown' },
+  { host: 'preview.rowan.test', forwarded: 'rowan.test', path: '/robots.txt', expect: 'unknown' },
+  { host: 'preview.rowan.test', forwarded: 'rowan.test', path: '/preview/probe', expect: 'status' },
+  { host: 'spoofed-origin.test', forwarded: 'rowan.test', path: '/', expect: 'plain' },
+];
+
+/**
+ * Problems with one host-rule probe's answer.
+ *
+ * @param {(typeof HOST_PROBES)[number]} probe
+ * @param {{ status?: number, headers?: Record<string, string>, body?: string, error?: string }} response
+ * @param {{ fixtureName: string, statusDocument: string }} expected
+ * @returns {string[]}
+ */
+export function hostProblems(probe, response, { fixtureName, statusDocument }) {
+  const what = `Host ${probe.host} with X-Forwarded-Host ${probe.forwarded}, GET ${probe.path}`;
+  if (!response || response.error) return [`${what}: no answer (${response?.error})`];
+  const type = response.headers?.['content-type'] ?? '';
+  const body = response.body ?? '';
+  const ok = {
+    site: response.status === 200 && (probe.path !== '/' || body.includes(fixtureName)),
+    unknown: response.status === 404 && !body.includes(fixtureName) && body !== statusDocument,
+    status: response.status === 404 && body === statusDocument,
+    plain: response.status === 404 && /^text\/plain/.test(type) && !body.includes(fixtureName),
+  }[probe.expect];
+  return ok ? [] : [`${what}: answered ${response.status}, not as ${probe.expect}`];
 }
 
 /**

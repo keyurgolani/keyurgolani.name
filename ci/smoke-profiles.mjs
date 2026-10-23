@@ -117,6 +117,7 @@ import {
 } from '../tests/harness/startup-rows.mjs';
 import {
   assessRoutes,
+  HOST_REQUESTS_SNIPPET,
   PROBE_SNIPPET,
   REQUESTS_SNIPPET,
   SCAN_SNIPPET,
@@ -128,20 +129,26 @@ import {
   composeProblems,
   HARDENING,
   hermeticProblems,
+  HOST_PROBES,
+  hostProblems,
   inspectProblems,
+  leakProblems,
   maskCommands,
   newAuditRecords,
   partsOf,
   persistenceProblems,
+  PREVIEW_ORIGIN,
   processProblems,
   redact,
   redactArtifacts,
   reproFor,
+  signedInLeaks,
   sourceProblems,
   SPOOFED_HEADERS,
   SPOOFED_HOST,
   spoofProblems,
   stopProblems,
+  successSourceProblems,
   WRITE_TARGETS,
   writeProblems,
 } from './lib/profile-checks.mjs';
@@ -360,19 +367,6 @@ function scanTargets() {
   ];
 }
 
-/** The canaries a response or a header carries, as problems. */
-function leaksIn(response, leaks) {
-  const problems = [];
-  const headers = Object.entries(response.headers ?? {})
-    .map(([name, value]) => `${name}: ${value}`)
-    .join('\n');
-  for (const canary of leaks) {
-    if (headers.includes(canary)) problems.push(`a header carries ${canary}`);
-    if ((response.body ?? '').includes(canary)) problems.push(`the body carries ${canary}`);
-  }
-  return problems;
-}
-
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
 function parse(body) {
@@ -509,7 +503,7 @@ function plan(profile, leaks, origin) {
       if (response.error) return [`no answer (${response.error})`];
       const problems = [
         ...own(response),
-        ...leaksIn(response, leaks),
+        ...leakProblems(response, leaks),
         ...headerProblems(
           new URL(request.path, 'http://unset.invalid').pathname,
           response.headers,
@@ -809,7 +803,7 @@ async function profileRun(
       .split('\n')
       .filter((line) => line.includes(SELECTED[profile]))
       .map((line) => parse(line)?.event ?? 'a line that is not JSON')
-      .filter((event) => event !== 'store.render-drift');
+      .filter((event) => !(profile === 'owner' && event === 'store.render-drift'));
     if (naming.length > 0) {
       fail(profile, `the log names the selected variant, in ${[...new Set(naming)].join(', ')}`);
     }
@@ -895,11 +889,11 @@ function signedIn(name, { password, secrets }) {
     { method: 'POST', path: '/api/studio/auth.logout', headers, body: {} },
     session,
   ]);
-  const leaks = canaries(SERVER_DIR, { secrets: [...secrets, DATA_DIR], summary: false });
+  const leaks = signedInLeaks(SERVER_DIR, secrets, runSecrets);
   requests.forEach((request, index) => {
     const response = responses[index];
     if (response.error) problems.push(`signed in, ${request.method} ${request.path}: no answer`);
-    for (const problem of leaksIn(response, leaks)) {
+    for (const problem of leakProblems(response, leaks)) {
       problems.push(`signed in, ${request.method} ${request.path} ${problem}`);
     }
   });
@@ -946,8 +940,10 @@ function signedIn(name, { password, secrets }) {
  * source the hop count allows: none at 0, and at 1 the last
  * X-Forwarded-For entry, never one the client wrote. Returns the problems.
  */
-function ownerTrust(name, hops, password) {
+function ownerTrust(name, hops, { password, secrets }) {
   const problems = [];
+  const leaks = signedInLeaks(SERVER_DIR, secrets, runSecrets);
+  const answers = [];
   const xff = { 'x-forwarded-for': '198.51.100.7, 203.0.113.9' };
   const login = (body, headers) => ({
     method: 'POST',
@@ -958,6 +954,7 @@ function ownerTrust(name, hops, password) {
   const before = readTree(name, DATA_DIR);
   if (!before) return [`at ${hops} trusted hops: the data directory could not be read`];
   const [signIn] = send(name, [login({ password }, { origin: ORIGIN })]);
+  answers.push(['the spoofed sign-in', signIn]);
   const token = signIn.cookies?.length === 1 ? SESSION_COOKIE.exec(signIn.cookies[0])?.[1] : null;
   const csrf = parse(signIn.body ?? '')?.data?.csrfToken;
   if (signIn.status !== 200 || !token) {
@@ -965,7 +962,7 @@ function ownerTrust(name, hops, password) {
       `a spoofed sign-in answered ${signIn.status ?? signIn.error} without one __Host- Secure cookie (${signIn.cookies?.length ?? 0} set)`,
     );
   }
-  const [described] = send(name, [
+  const trusted = send(name, [
     login({ password }, { origin: `https://${SPOOFED_HOST}`, 'x-forwarded-proto': 'https' }),
     ...(token
       ? [
@@ -983,6 +980,9 @@ function ownerTrust(name, hops, password) {
         ]
       : []),
   ]);
+  const [described] = trusted;
+  answers.push(['the sign-in from the spoofed origin', described]);
+  if (trusted[1]) answers.push(['the sign-out', trusted[1]]);
   if (
     described.status !== 403 ||
     parse(described.body ?? '')?.error?.code !== 'request_origin_rejected'
@@ -996,6 +996,7 @@ function ownerTrust(name, hops, password) {
     login({ password: 'not the password' }, { origin: ORIGIN }),
   ]);
   for (const answer of wrong) {
+    answers.push(['a wrong password', answer]);
     if (parse(answer.body ?? '')?.error?.code !== 'credentials_rejected') {
       problems.push(`a wrong password answered ${answer.status ?? answer.error}`);
     }
@@ -1006,9 +1007,14 @@ function ownerTrust(name, hops, password) {
   // log holds the rest only at the minute's end: every record counts. At 1,
   // in a new process, only the ones these attempts added.
   problems.push(...sourceProblems(newAuditRecords(hops === 0 ? {} : before, after ?? {}), hops));
+  // The success, written at once, shows its source at either count.
+  problems.push(...successSourceProblems(newAuditRecords(before, after ?? {}), hops));
+  for (const [what, answer] of answers) {
+    for (const problem of leakProblems(answer, leaks)) problems.push(`${what}: ${problem}`);
+  }
   if (problems.length === 0) {
     console.log(
-      `[profiles] owner: at ${hops} trusted hops, spoofed forwarded headers move no cookie flag, origin check, or sign-in source`,
+      `[profiles] owner: at ${hops} trusted hops, spoofed forwarded headers move no cookie flag, origin check, or sign-in source, and no answer carries a canary`,
     );
   }
   return problems.map((problem) => `at ${hops} trusted hops: ${problem}`);
@@ -1017,9 +1023,10 @@ function ownerTrust(name, hops, password) {
 /**
  * Owner's data volume under a new container: the old one stops on SIGTERM
  * and goes, and a new one on the same volume, trusting one hop, starts
- * with every durable file the old one left, then passes ownerTrust at 1.
+ * with every durable file the old one left, then passes spoofed() and
+ * ownerTrust at 1.
  */
-async function ownerReplacement(name, { env, mounts, password, leaks }) {
+async function ownerReplacement(name, { env, mounts, password, secrets, leaks }) {
   const problems = [];
   const before = readTree(name, DATA_DIR);
   if (!before) return ['the data directory could not be read before the new container'];
@@ -1046,7 +1053,8 @@ async function ownerReplacement(name, { env, mounts, password, leaks }) {
         `[profiles] owner: a new container on the data volume has its ${Object.keys(before).length} files`,
       );
     }
-    problems.push(...ownerTrust(next, 1, password));
+    problems.push(...spoofed(next, 'owner', ORIGIN).map((p) => `at 1 trusted hop: ${p}`));
+    problems.push(...ownerTrust(next, 1, { password, secrets }));
     const text = output(next);
     if (leaks.some((secret) => text.includes(secret))) {
       problems.push(
@@ -1059,6 +1067,69 @@ async function ownerReplacement(name, { env, mounts, password, leaks }) {
     saveLogs(next, redact(output(next), runSecrets));
   } finally {
     container(['rm', '-f', next]);
+  }
+  return problems;
+}
+
+/**
+ * Owner with a preview origin (#7, Slice 4), on the same data volume once
+ * the other containers are gone: the host rule follows the Host header
+ * alone. With X-Forwarded-Host naming the other origin, the main host still
+ * gets the whole site, the preview host still gets only what a frame loads,
+ * and a host the deployment doesn't name gets the plain 404.
+ */
+async function ownerPreviewHost({ env, mounts, leaks }) {
+  const name = `${run}-owner-preview`;
+  const started = startServer(name, {
+    env: { ...env, PORTFOLIO_PREVIEW_ORIGIN: PREVIEW_ORIGIN },
+    mounts,
+  });
+  if (started.status !== 0) {
+    return [`the preview-origin container did not start: ${(started.stderr || '').trim()}`];
+  }
+  const problems = [];
+  try {
+    await waitHealthy(name, 'owner with a preview origin');
+    const requests = HOST_PROBES.map((probe) => ({
+      method: 'GET',
+      path: probe.path,
+      headers: { host: probe.host, 'x-forwarded-host': probe.forwarded },
+    }));
+    const result = container(['exec', '-i', name, 'node', '-e', HOST_REQUESTS_SNIPPET], {
+      input: JSON.stringify(requests),
+      maxBuffer: 64 * 1024 * 1024,
+    });
+    const responses = parse(result.stdout ?? '');
+    if (!Array.isArray(responses) || responses.length !== requests.length) {
+      throw new Error(`the in-container host requests failed: ${(result.stderr || '').trim()}`);
+    }
+    HOST_PROBES.forEach((probe, index) => {
+      problems.push(
+        ...hostProblems(probe, responses[index], {
+          fixtureName: FIXTURE_NAME,
+          statusDocument: PREVIEW_STATUS_DOCUMENT,
+        }).map((p) => `preview host rule: ${p}`),
+        ...leakProblems(responses[index], leaks).map((p) => `preview host rule: ${p}`),
+      );
+    });
+    const text = output(name);
+    if (leaks.some((secret) => text.includes(secret))) {
+      problems.push(
+        "with a preview origin, the log holds the password, the hash, or the run's canary",
+      );
+    }
+    if (problems.length === 0) {
+      console.log(
+        `[profiles] owner: with a preview origin, the Host header alone picks the host, whatever X-Forwarded-Host says (${HOST_PROBES.length} requests)`,
+      );
+    } else {
+      saveLogs(name, redact(text, runSecrets));
+    }
+  } catch (error) {
+    problems.push(error.message);
+    saveLogs(name, redact(output(name), runSecrets));
+  } finally {
+    container(['rm', '-f', name]);
   }
   return problems;
 }
@@ -1144,15 +1215,22 @@ async function ownerProfileRun(source, secret) {
     paths: [DATA_DIR],
     then: (name) => [
       ...signedIn(name, { password: secret.password, secrets }),
-      ...ownerTrust(name, 0, secret.password),
+      ...ownerTrust(name, 0, { password: secret.password, secrets }),
     ],
-    restarted: (name) =>
-      ownerReplacement(name, {
+    restarted: async (name) => [
+      ...(await ownerReplacement(name, {
         env,
         mounts,
         password: secret.password,
+        secrets,
         leaks: [...secrets, ...runSecrets],
-      }),
+      })),
+      ...(await ownerPreviewHost({
+        env,
+        mounts,
+        leaks: signedInLeaks(SERVER_DIR, secrets, runSecrets),
+      })),
+    ],
   });
 }
 
@@ -1326,12 +1404,14 @@ function ownerRun() {
   const fatal = logEntries(output).filter((entry) => entry.event === 'config.fatal');
   const keys = fatal.map((entry) => `${entry.key}:${entry.code}`);
   // The data directory passes preflight. The first-start import of the
-  // fixture's unregistered variant refuses too, until #13 (#3).
-  if (
-    code !== 1 ||
-    !keys.includes('PORTFOLIO_AUTH_PASSWORD_HASH_FILE:required') ||
-    fatal.some((entry) => entry.key === 'PORTFOLIO_DATA_DIR' && /^data_dir_/.test(entry.code))
-  ) {
+  // fixture's unregistered variant refuses too, until #13 registers a
+  // composition (#3): 12-5 drops the two import lines then.
+  const expected = [
+    'PORTFOLIO_AUTH_PASSWORD_HASH_FILE:required',
+    'PORTFOLIO_DATA_DIR:store_import_failed',
+    'PORTFOLIO_SOURCE_DIR:variant.unavailable',
+  ];
+  if (code !== 1 || !same([...keys].sort(), expected)) {
     fail(test, `exit ${code}, ${JSON.stringify(keys)}: not the missing-hash refusal`);
   } else {
     console.log('[profiles] owner: refuses to start without a password hash, on its data volume');
@@ -1559,8 +1639,14 @@ try {
 // What this run uploads holds none of its secrets: a file that does is
 // redacted before the upload, and fails the run.
 part = 'rows';
-for (const file of redactArtifacts(reportsDir(), runSecrets)) {
+const artifacts = redactArtifacts(reportsDir(), runSecrets);
+for (const file of artifacts.redacted) {
   fail('artifacts', `reports/${file} held a run secret, now redacted`, { artifacts: [file] });
+}
+for (const file of artifacts.unchecked) {
+  fail('artifacts', `reports/${file} is too large to check for a run secret`, {
+    artifacts: [file],
+  });
 }
 if (failures.length > 0) {
   exitCode = 1;
