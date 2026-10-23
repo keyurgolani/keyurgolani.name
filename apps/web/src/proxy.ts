@@ -102,10 +102,10 @@ import {
 // /_experience/<id> and the path once Next has looked in public/, and drops
 // nothing from its query. Any other method to a visitor page gets a 405,
 // since the page exists for GET, and so does any other method to a
-// read-only route, such as #10's /media. A request for an experience segment's own
-// path, in any spelling and to any method, answers as a path no route
-// matches, and a client's own x-portfolio-experience goes no further than
-// here.
+// read-only route, such as #10's /media. A request for an experience
+// segment's own path, in any spelling and to any method, answers as a path
+// no route matches, and a client's own x-portfolio-experience goes no
+// further than here.
 //
 // For Studio (#2), under a profile with a Studio page, it sends the nonce
 // CSP, Referrer-Policy: same-origin, and Cross-Origin-Resource-Policy:
