@@ -132,6 +132,20 @@ export const MANUAL_RUN_CASES: readonly MetaCase[] = [
       return recordOutcome(nameFor(first!.surface), first!.text);
     },
   },
+  ...(
+    [
+      ['todo-upper', 'TODO'],
+      ['todo-spaced', ' todo '],
+      ['todo-later', 'todo later'],
+    ] as const
+  ).map(([slug, tester]) =>
+    badCase(
+      slug,
+      `a record whose tester is still ${JSON.stringify(tester)}`,
+      /is still a template: tester is todo\.$/,
+      (run) => ({ run: { ...run, tester } }),
+    ),
+  ),
   badCase('missing-tester', 'a record with no tester', /: tester: Required$/, (run) => {
     const { tester: _tester, ...rest } = run;
     void _tester;

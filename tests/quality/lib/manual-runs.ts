@@ -87,7 +87,10 @@ export interface ManualRunContext {
 
 /** Every path in `value` whose string is still the template's placeholder. */
 function placeholders(value: unknown, at = ''): string[] {
-  if (value === TODO) return [at || '(record)'];
+  // However it's written: TODO, " todo ", or "todo later" is still the placeholder.
+  if (typeof value === 'string' && new RegExp(`^${TODO}\\b`, 'i').test(value.trim())) {
+    return [at || '(record)'];
+  }
   if (Array.isArray(value))
     return value.flatMap((each, index) => placeholders(each, `${at}[${index}]`));
   if (value && typeof value === 'object') {
