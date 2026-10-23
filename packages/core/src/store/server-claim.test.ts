@@ -21,6 +21,19 @@ import { fifoAt, newStore, pairInput, tempDir, within } from './test-support/fix
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/**
+ * Waits for `check` to hold, looking every 10 ms, and fails after `ms`. The
+ * claim refreshes on a timer, so a test waits for what a refresh does, not
+ * for a time a busy runner may not keep.
+ */
+async function until(check: () => boolean, what: string, ms = 5_000): Promise<void> {
+  const deadline = Date.now() + ms;
+  while (!check()) {
+    if (Date.now() > deadline) assert.fail(`${what} within ${ms} ms`);
+    await sleep(10);
+  }
+}
+
 async function pathsIn(t: { after(fn: () => void): void }) {
   const dataDir = tempDir(t);
   assert.equal(await preflight({ dataDir }), null);
@@ -160,8 +173,7 @@ test('a claim another server took over is lost at its next refresh: it stops, an
     nonce: 'theirs',
   };
   writeFileSync(store.paths.server, JSON.stringify(theirs));
-  await sleep(100);
-  assert.equal(claimed.claim.lost, true);
+  await until(() => claimed.claim.lost, 'the claim is lost at a refresh');
   assert.deepEqual(
     logs.map((entry) => [entry.level, entry.event]),
     [['error', 'store.server.claim_lost']],
@@ -214,8 +226,7 @@ test('a lost claim stays lost while the other server runs, and a new claim, once
     nonce: 'theirs',
   };
   writeFileSync(store.paths.server, JSON.stringify(theirs));
-  await sleep(100);
-  assert.equal(claimed.claim.lost, true);
+  await until(() => claimed.claim.lost, 'the claim is lost at a refresh');
   const file = readFileSync(store.paths.server, 'utf8');
   // While theirs is fresh, a new claim is refused, and their file is left as it is.
   const refused = await claimServer({ paths: store.paths, lock: store.lock });
