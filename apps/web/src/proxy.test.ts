@@ -29,13 +29,19 @@ import { PREVIEW_STATUS_DOCUMENT } from './preview/status';
 // experience segment, which next.config.ts rewrites it to, and any other
 // method to it is a 405 (#6, Slice 2).
 
-function deploy(t: TestContext, profile: Profile, previews?: PreviewGrantsPort): void {
+function deploy(
+  t: TestContext,
+  profile: Profile,
+  previews?: PreviewGrantsPort,
+  env: Record<string, string> = {},
+): void {
   const read = readDeploymentConfig(
     {
       NODE_ENV: 'production',
       PORTFOLIO_PROFILE: profile,
       PORTFOLIO_ORIGIN: 'https://rowan.test',
       ...(profile === 'demo' ? {} : { PORTFOLIO_SOURCE_DIR: '/srv/config' }),
+      ...env,
     },
     { cwd: '/' },
   );
@@ -64,6 +70,7 @@ function grantsPort(admitted = new Set([ACTIVE])) {
     },
     open: () => assert.fail('proxy.ts opens no grant'),
     channel: () => assert.fail("proxy.ts reads no grant's channel"),
+    previewable: () => assert.fail('proxy.ts offers nothing to preview'),
   };
   return { port, checked };
 }
@@ -1087,6 +1094,7 @@ test('a port that fails to check a grant admits nothing (#7)', async (t) => {
     admit: () => Promise.reject(new Error('the data directory is gone')),
     open: () => assert.fail('proxy.ts opens no grant'),
     channel: () => assert.fail("proxy.ts reads no grant's channel"),
+    previewable: () => assert.fail('proxy.ts offers nothing to preview'),
   });
   await assertStatusDocument(await proxy(loaded(`/preview/${ACTIVE}`, 'iframe')), 'failed check');
 });
@@ -1349,5 +1357,121 @@ test("a request for an experience segment's own path, in any spelling and to any
       assert.equal(response.headers.get('x-middleware-request-x-portfolio-not-found'), '1', path);
       assert.equal(segment(response), null, path);
     }
+  }
+});
+
+/** A request for `path` that came to `host`, as its Host header names it. */
+function toHost(
+  host: string,
+  path: string,
+  method = 'GET',
+  headers: Record<string, string> = {},
+): NextRequest {
+  return new NextRequest(`https://rowan.test${path}`, { method, headers: { ...headers, host } });
+}
+
+const PREVIEW_HOST = 'preview.rowan.test';
+
+/** What the preview origin turns away: every path but a frame's and what it loads. */
+const OFF_PREVIEW = [
+  '/',
+  '/studio',
+  '/studio/sign-in',
+  '/studio/preview',
+  '/%73tudio',
+  '/api/studio/auth.session',
+  '/api/health',
+  '/api/ready',
+  '/sample',
+  '/robots.txt',
+  '/sitemap.xml',
+  '/feed.xml',
+  '/favicon.ico',
+  '/_next/image?url=%2Fx.png&w=64&q=75',
+  '/work/tide-tables',
+  '/no-such-page',
+  '/previews',
+  '/preview-assetsx/x',
+  '/_nextx/static/x',
+  '/_portfolios/x',
+];
+
+test('on the preview origin only a frame and what it loads go on, and every other path gets what a path no route matches gets, by the Host header alone (#7, Slice 4)', async (t) => {
+  const { port } = grantsPort();
+  deploy(t, 'owner', port, { PORTFOLIO_PREVIEW_ORIGIN: `https://${PREVIEW_HOST}` });
+  for (const host of [PREVIEW_HOST, 'PREVIEW.Rowan.TEST', `${PREVIEW_HOST}:443`]) {
+    for (const method of ['GET', 'HEAD']) {
+      for (const path of OFF_PREVIEW) {
+        const response = await proxy(toHost(host, path, method));
+        const what = `${host} ${method} ${path}`;
+        assert.equal(response.headers.get('x-middleware-next'), '1', what);
+        assert.equal(response.headers.get('x-middleware-request-x-portfolio-not-found'), '1', what);
+        assert.equal(response.headers.get('cache-control'), UNKNOWN_PATH_CACHE_CONTROL, what);
+        noStudioHeaders(response, what);
+      }
+    }
+    for (const method of ['POST', 'PUT', 'DELETE', 'OPTIONS']) {
+      for (const path of OFF_PREVIEW) {
+        const response = await proxy(toHost(host, path, method));
+        const what = `${host} ${method} ${path}`;
+        assert.equal(response.status, 404, what);
+        assert.equal(await response.text(), 'Not found.', what);
+        noStudioHeaders(response, what);
+      }
+    }
+  }
+  // A frame's document, its assets, and the build's files go on there as
+  // they do on the deployment's own origin, in any spelling.
+  const asFrame = { 'sec-fetch-dest': 'iframe' };
+  const frame = await proxy(toHost(PREVIEW_HOST, `/preview/${ACTIVE}`, 'GET', asFrame));
+  assert.equal(frame.headers.get('x-middleware-next'), '1');
+  assert.equal(frame.headers.get('x-middleware-request-x-portfolio-not-found'), null);
+  assert.match(
+    frame.headers.get('content-security-policy') ?? '',
+    /frame-ancestors https:\/\/rowan\.test$/,
+  );
+  for (const path of [
+    `/preview/${ACTIVE}`,
+    `/PREVIEW/${ACTIVE}`,
+    `/%70review/${ACTIVE}`,
+    `/preview/${ENDED}`,
+    '/preview',
+    '/preview-assets/AAAAAAAAAAAAAAAAAAAAAA/media/x.png',
+    '/_next/static/chunks/app.js',
+    '/_NEXT/static/chunks/app.js',
+    '/_portfolio/pack/0123456789ab.css',
+  ]) {
+    for (const method of ['GET', 'POST']) {
+      const there = await proxy(toHost(PREVIEW_HOST, path, method, asFrame));
+      const here = await proxy(toHost('rowan.test', path, method, asFrame));
+      const what = `${method} ${path}`;
+      assert.equal(there.status, here.status, what);
+      assert.equal(decision(there), decision(here), what);
+      assert.equal(
+        there.headers.get('x-middleware-request-x-portfolio-not-found'),
+        here.headers.get('x-middleware-request-x-portfolio-not-found'),
+        what,
+      );
+    }
+  }
+  // Any other host is the deployment's own, as before: Studio keeps its
+  // headers, and frames its own origin and the preview origin alone.
+  for (const host of ['rowan.test', `${PREVIEW_HOST}:8443`, 'elsewhere.test']) {
+    const own = await proxy(toHost(host, '/studio/sign-in'));
+    assert.equal(own.headers.get('x-middleware-request-x-portfolio-not-found'), null, host);
+    assert.match(
+      own.headers.get('content-security-policy') ?? '',
+      /; frame-src 'self' https:\/\/preview\.rowan\.test; frame-ancestors 'none';/,
+      host,
+    );
+  }
+});
+
+test('without a preview origin a Host header changes nothing, and Studio frames its own origin alone (#7, Slice 4)', async (t) => {
+  deploy(t, 'owner');
+  for (const host of [PREVIEW_HOST, 'rowan.test']) {
+    const response = await proxy(toHost(host, '/studio/sign-in'));
+    assert.match(response.headers.get('content-security-policy') ?? '', STUDIO_CSP, host);
+    assert.equal(response.headers.get('x-middleware-request-x-portfolio-not-found'), null, host);
   }
 });
