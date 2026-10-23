@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { Dialog } from '@portfolio/appearance/primitives';
 import { VisitorControlSlot } from '@portfolio/kit/sections';
 import type { VariantRenderInput } from '@portfolio/variant-contract';
+import { ChromeFrame, ChromeMotionControl } from './chrome-frame';
 import { MenuLink } from './menu-link';
 
 // The chrome (#14): one navigation landmark, always on screen. On a large
@@ -12,7 +13,9 @@ import { MenuLink } from './menu-link';
 // the tab order only while it shows: the stylesheet hides the other with
 // display: none. Every section that renders and has a title is linked, with
 // no cap, and it's all there from the server's first paint, for keyboard
-// and touch, with no pointer movement needed.
+// and touch, with no pointer movement needed. During passive viewing the
+// links recede, and any input brings them back (chrome-frame.tsx); beside
+// the visitor control is the pause for the page's motion.
 
 export interface ChromeLink {
   readonly id: string;
@@ -81,7 +84,7 @@ export function Chrome({
   const labelId = `${ids.prefix}kc--sections`;
   const href = (link: ChromeLink) => `#${ids.prefix}${link.id}`;
   return (
-    <header className="kc-chrome">
+    <ChromeFrame>
       {links.length > 0 ? (
         <nav
           className="kc-chrome__nav"
@@ -122,7 +125,10 @@ export function Chrome({
           </div>
         </nav>
       ) : null}
-      <VisitorControlSlot />
-    </header>
+      <div className="kc-chrome__controls">
+        <VisitorControlSlot />
+        <ChromeMotionControl policy={input.presentation.motionPolicy} />
+      </div>
+    </ChromeFrame>
   );
 }
