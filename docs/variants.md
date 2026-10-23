@@ -225,7 +225,7 @@ The variant specs check a variant's contract. #11's quality cells check that it 
 ```sh
 pnpm exec playwright install chromium               # once
 pnpm quality:pr                                     # the PR set, as CI's quality-pr job runs it
-QUALITY_CHANGED_BASE=origin/next pnpm quality:pr    # plus the cells your branch's changes direct
+QUALITY_CHANGED_BASE=origin/next pnpm quality:pr    # plus the cells your changes since the merge base direct
 pnpm quality:checklist -- my-id                     # the manual checklist for your composition
 ```
 

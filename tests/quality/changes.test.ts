@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
-import { existsSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -94,6 +96,50 @@ test("a changed path maps to its variant's package, its language's pack, or its 
       'designLanguage platform-neutral packages/appearance-languages/packs/platform-neutral/tokens.json',
     ],
   );
+});
+
+test("a git base's changes are from the merge base, and a rename counts as both its paths", () => {
+  const repo = mkdtempSync(path.join(tmpdir(), 'quality-changes-git-'));
+  const git = (...args: string[]) =>
+    execFileSync(
+      'git',
+      ['-c', 'user.name=Quality Test', '-c', 'user.email=quality@example.test', ...args],
+      { cwd: repo, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
+    );
+  const write = (file: string, text: string) => {
+    mkdirSync(path.dirname(path.join(repo, file)), { recursive: true });
+    writeFileSync(path.join(repo, file), text);
+  };
+  try {
+    git('init', '-q', '-b', 'base');
+    write('packages/fallback-composition/src/moved.ts', 'export const moved = 1;\n');
+    git('add', '-A');
+    git('commit', '-q', '-m', 'base');
+    git('switch', '-q', '-c', 'branch');
+    // A file moved out of the variant, whole, which git would read as a rename.
+    mkdirSync(path.join(repo, 'packages', 'kit', 'src'), { recursive: true });
+    git('mv', 'packages/fallback-composition/src/moved.ts', 'packages/kit/src/moved.ts');
+    git('commit', '-q', '-m', 'move');
+    // The base moves on: a three-dot diff from the merge base leaves its change out.
+    git('switch', '-q', 'base');
+    write('packages/appearance-languages/package.json', '{}\n');
+    git('add', '-A');
+    git('commit', '-q', '-m', 'base moves on');
+    git('switch', '-q', 'branch');
+
+    const changed = changedFiles({ QUALITY_CHANGED_BASE: 'base' }, repo);
+    assert.deepEqual(changed, {
+      source: 'git diff base...HEAD',
+      files: ['packages/fallback-composition/src/moved.ts', 'packages/kit/src/moved.ts'],
+    });
+    // The old path still directs the variant it left.
+    assert.deepEqual(
+      mapChanges(changed!.files, checkoutMeta()).map(({ axis, id }) => `${axis} ${id}`),
+      ['variant fallback'],
+    );
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
 });
 
 test('the changed paths come from QUALITY_CHANGED_FILES, else a git base, else none, and a base git cannot read fails', () => {

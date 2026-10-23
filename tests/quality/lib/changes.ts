@@ -6,9 +6,11 @@
 //
 // The paths come from QUALITY_CHANGED_FILES (a JSON array, which run.ts
 // sets once so every Playwright process plans the same cells), else from
-// `git diff --name-only <QUALITY_CHANGED_BASE> HEAD`. CI's quality-pr job
-// sets the base to HEAD^1, the base branch's tip under the PR's merge
-// commit. With neither set, nothing is change-directed and the plan is the
+// `git diff --name-only --no-renames <QUALITY_CHANGED_BASE>...HEAD`: from
+// the merge base, so a base branch that has moved on adds nothing, and a
+// rename as its old path and its new one, so a file moved out of a variant
+// still directs it. CI's quality-pr job sets the base to HEAD^1, the base
+// branch's tip under the PR's merge commit, its own merge base. With neither set, nothing is change-directed and the plan is the
 // sentinels alone. A base git can't read fails the plan, so a run that was
 // asked for change-directed cells never quietly runs without them.
 //
@@ -67,7 +69,7 @@ export function changedFiles(
   if (!base) return null;
   let out: string;
   try {
-    out = execFileSync('git', ['diff', '--name-only', '--no-renames', '-z', base, 'HEAD'], {
+    out = execFileSync('git', ['diff', '--name-only', '--no-renames', '-z', `${base}...HEAD`], {
       cwd: root,
       encoding: 'utf8',
       maxBuffer: 64 << 20,
@@ -80,7 +82,7 @@ export function changedFiles(
     );
   }
   return {
-    source: `git diff ${base} HEAD`,
+    source: `git diff ${base}...HEAD`,
     files: out.split('\0').filter((file) => file !== ''),
   };
 }
