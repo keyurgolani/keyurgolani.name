@@ -19,7 +19,7 @@ import type {
 import { currentGate, REPO_ROOT, reportsDir, writeFailureRecord } from '../../ci/lib/reports.mjs';
 import { writeCellFailures, type CellFailure } from './lib/failure-records';
 import { RECORDS_ATTACHMENT } from './lib/records';
-import { CHECKS_ANNOTATION } from './lib/checks';
+import { CHECKS_ANNOTATION, KIND_ANNOTATION } from './lib/checks';
 
 // Playwright colors its messages; summaries and records hold plain text.
 const ANSI = /\u001b\[[0-9;]*m/g;
@@ -31,6 +31,10 @@ export interface SummaryTest {
   readonly file: string;
   readonly line: number;
   readonly project: string;
+  /** The project's engine: chromium, firefox, or webkit. */
+  readonly engine?: string;
+  /** cell or visual, for a cell test or a visual test; none for the harness's own. */
+  readonly kind?: string;
   readonly cell?: string;
   /** kind:id of the composition or surface it's a cell of. */
   readonly target?: string;
@@ -39,6 +43,8 @@ export interface SummaryTest {
   readonly row?: string;
   /** expected, unexpected, flaky, or skipped. */
   readonly outcome: string;
+  /** What Playwright expected it to end as: passed, or failed for test.fail(), or skipped. */
+  readonly expectedStatus: string;
   /** The last result's status, or `not run`. */
   readonly status: string;
   /** For a skipped test: the reason it gave, or null for none. */
@@ -107,12 +113,15 @@ export default class QualityReporter implements Reporter {
         file: path.relative(REPO_ROOT, test.location.file),
         line: test.location.line,
         project: test.parent.project()?.name ?? '',
+        engine: (test.parent.project()?.use as { browserName?: string } | undefined)?.browserName,
+        kind: annotation(test, KIND_ANNOTATION),
         cell: annotation(test, 'cell'),
         target: annotation(test, 'target'),
         route: annotation(test, 'route'),
         viewport: annotation(test, 'viewport'),
         row: annotation(test, 'row'),
         outcome: test.outcome(),
+        expectedStatus: test.expectedStatus,
         status,
         skipReason: skipped
           ? (annotation(test, 'skip') ?? annotation(test, 'fixme') ?? null)

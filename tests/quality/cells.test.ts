@@ -16,6 +16,7 @@ import {
   type BuildMeta,
 } from './cells';
 import { tupleKey } from './coverage';
+import { isReason } from './lib/checks';
 import { PREFERENCE_ROWS, VIEWPORTS } from './lib/matrix';
 import { loadRegistrations, type Registrations } from './lib/registration';
 
@@ -101,6 +102,7 @@ test('the PR plan: each sentinel at every viewport in the default row, and every
     'unavailable',
   ]);
   for (const each of skipped) assert.ok(plan.reasons.includes(each.skip!), each.skip);
+  for (const reason of plan.reasons) assert.ok(isReason(reason), reason);
   assert.deepEqual(plan.targets, [
     { kind: 'composition', id: 'fallback' },
     { kind: 'surface', id: 'login' },

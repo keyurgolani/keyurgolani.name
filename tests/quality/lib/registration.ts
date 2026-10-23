@@ -10,6 +10,7 @@
 import { readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { isReason } from './checks';
 
 export const PROFILES = ['owner', 'demo', 'read-only'] as const;
 export type Profile = (typeof PROFILES)[number];
@@ -177,7 +178,11 @@ function notApplicable(value: unknown, problems: string[]): void {
     }
     const unknown = Object.keys(item).filter((key) => !['match', 'reason'].includes(key));
     if (unknown.length > 0) problems.push(`${at} has unknown fields: ${unknown.join(', ')}`);
-    if (!isString(item.reason)) problems.push(`${at}.reason says why the cells don't apply`);
+    if (!isReason(item.reason)) {
+      problems.push(
+        `${at}.reason says why the cells don't apply, in a sentence of three words or more`,
+      );
+    }
     const match = item.match as Record<string, unknown> | undefined;
     if (match === null || typeof match !== 'object' || Object.keys(match).length === 0) {
       problems.push(`${at}.match names at least one of ${CELL_FIELDS.join(', ')}`);

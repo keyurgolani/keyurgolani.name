@@ -1,6 +1,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { reportsDir } from '../../ci/lib/reports.mjs';
+import { CHECKS_ANNOTATION, KIND_ANNOTATION, type VisualCheck } from './lib/checks';
 import { cellServer, serverTag } from './lib/server';
 import { VIEWPORTS } from './lib/matrix';
 import {
@@ -59,6 +60,7 @@ test.describe('visual', () => {
             {
               tag,
               annotation: [
+                { type: KIND_ANNOTATION, description: 'visual' },
                 { type: 'route', description: cell.route },
                 { type: 'cell', description: cell.id },
                 { type: 'target', description: `${cell.kind}:${cell.target}` },
@@ -66,18 +68,23 @@ test.describe('visual', () => {
               ],
             },
             async ({ page }, testInfo) => {
+              const ran: VisualCheck[] = [];
               expect(checkFonts(), "the image's fonts against fonts.txt").toEqual({
                 missing: [],
                 extra: [],
               });
+              ran.push('fonts');
               await page.addInitScript(seedRandomScript, RANDOM_SEED);
               const response = await page.goto(cell.path);
               expect(response?.status()).toBe(cell.expectedStatus);
+              ran.push('status');
               await page.evaluate(() => document.fonts.ready);
               await testInfo.attach('screenshot.png', {
                 body: await page.screenshot({ fullPage: true, animations: 'disabled' }),
                 contentType: 'image/png',
               });
+              ran.push('screenshot');
+              testInfo.annotations.push({ type: CHECKS_ANNOTATION, description: ran.join(' ') });
             },
           );
         });

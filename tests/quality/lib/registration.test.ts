@@ -126,6 +126,11 @@ test('an exclusion names exact cells with a reason, never a wildcard', () => {
     exclude([{ match: { tuple: 'x' }, reason: 'x' }]).some((p) => p.includes("isn't a cell field")),
   );
   assert.ok(exclude([{ match: { row: 'default' } }]).some((p) => p.includes('reason says why')));
+  for (const reason of [' ', 'n/a', ' Not on phones yet.', 'Not on phones yet'])
+    assert.ok(
+      exclude([{ match: { row: 'default' }, reason }]).some((p) => p.includes('reason says why')),
+      JSON.stringify(reason),
+    );
 });
 
 test('a unit exports only interactions, primaryActions, and notApplicable', () => {

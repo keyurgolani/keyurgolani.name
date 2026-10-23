@@ -35,6 +35,8 @@ const DEVICES: Readonly<Record<Engine, (typeof devices)[string]>> = {
 /** Each engine's device, and for Chromium, #6's trace policy: no name but loopback resolves, and no proxy is used. */
 const engineUse = (engine: Engine) => ({
   ...DEVICES[engine],
+  // Named outright, so summary.json can say which engine each test ran on.
+  browserName: engine,
   ...(engine === 'chromium' ? { launchOptions: { args: [...TRACE_LAUNCH_ARGS] } } : {}),
 });
 

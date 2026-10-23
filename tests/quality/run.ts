@@ -8,8 +8,10 @@
 //   3. A canary is planted (lib/artifacts.mjs), and Playwright runs the
 //      cells with QUALITY_WEB, QUALITY_MODE, and QUALITY_CANARY.
 //   4. However that ended, every artifact under the reports directory is
-//      scrubbed of cookies, Authorization, and CSRF values, and scanned for
-//      the canary before and after.
+//      scrubbed of cookies, Authorization, and CSRF values by rule, and of
+//      the secrets the run recorded by value, but never of the canary by its
+//      value, and scanned for the canary before and after. A file the scrub
+//      can't read is deleted and fails the run.
 //   5. The verdict (lib/verdict.ts) reads summary.json against the plan and
 //      fails closed; it goes into summary.json and verdict.json, and under
 //      ci/run.mjs each failure is a failure record.
@@ -31,9 +33,10 @@ import {
   writeFailureRecord,
 } from '../../ci/lib/reports.mjs';
 import type { Plan, RunMode } from './cells';
-import { canaryPassword, plantCanary, scanArtifacts, scrubArtifacts } from './lib/artifacts.mjs';
+import { plantCanary, readSecrets, scanArtifacts, scrubArtifacts } from './lib/artifacts.mjs';
 import { missingBrowsers } from './lib/browsers.mjs';
 import { buildQualityHost, QUALITY_BUILD_ENV } from './lib/build.mjs';
+import { cleanupOnInterrupt } from './lib/interrupt.mjs';
 import { buildReferenceHost, installReference, removeReference } from '../external-variant/run.mjs';
 import { RUN_ENGINES } from './lib/matrix';
 import { RECORD_VERSION } from './lib/failure-records';
@@ -96,12 +99,25 @@ export function parseRunArgs(argv: readonly string[]): RunOptions {
  */
 function externalVariantHost(): { web: string; remove: () => void } {
   const work = mkdtempSync(path.join(tmpdir(), 'portfolio-quality-external-'));
-  try {
-    const { host } = installReference(work);
-    buildReferenceHost(host, { ...QUALITY_BUILD_ENV });
-    return { web: path.join(host, 'apps', 'web'), remove: () => removeReference(work) };
-  } catch (error) {
+  // Ctrl-C mid-run removes the worktree and the installed variant too.
+  const stop = cleanupOnInterrupt(() => removeReference(work));
+  const remove = () => {
+    stop();
     removeReference(work);
+  };
+  let added = false;
+  try {
+    const { host } = installReference(work, {
+      onAdded: () => {
+        added = true;
+      },
+    });
+    buildReferenceHost(host, { ...QUALITY_BUILD_ENV });
+    return { web: path.join(host, 'apps', 'web'), remove };
+  } catch (error) {
+    if (added)
+      console.error('[quality] the reference variant was still installed when the run stopped.');
+    remove();
     throw error;
   }
 }
@@ -174,6 +190,14 @@ async function main(argv: readonly string[]): Promise<number> {
   if (process.env.QUALITY_CANARY_FILE) {
     writeFileSync(process.env.QUALITY_CANARY_FILE, canary, { mode: 0o600 });
   }
+  // The secrets the scrub takes out by value, such as a test session's
+  // cookies, which lib/session.ts records here. CI names the file, so its
+  // scrub step reads them too; otherwise it's a scratch file this removes.
+  const scratch = process.env.QUALITY_SECRETS_FILE
+    ? null
+    : mkdtempSync(path.join(tmpdir(), 'portfolio-quality-secrets-'));
+  const secretsFile = process.env.QUALITY_SECRETS_FILE ?? path.join(scratch!, 'secrets');
+  writeFileSync(secretsFile, '', { mode: 0o600 });
   const setup: Failure[] = [];
   let plan: Plan | null = null;
   let host: { remove: () => void } | null = null;
@@ -195,6 +219,7 @@ async function main(argv: readonly string[]): Promise<number> {
       QUALITY_WEB: web,
       QUALITY_MODE: options.mode,
       QUALITY_CANARY: canary,
+      QUALITY_SECRETS_FILE: secretsFile,
     };
     plan = await loadPlan(env);
     writeFileSync(
@@ -233,14 +258,24 @@ async function main(argv: readonly string[]): Promise<number> {
     host?.remove();
   }
 
+  // The canary goes only by the scrub's rules, never by its value, so a
+  // credential in a form no rule knows is still there for the scan after.
   const canaries = [{ label: 'the run canary', value: canary }];
   const before = await scanArtifacts(reportsDir(), canaries);
-  await scrubArtifacts(reportsDir(), [canary, canaryPassword(canary)]);
+  const scrub = await scrubArtifacts(reportsDir(), readSecrets(secretsFile));
+  if (scratch) rmSync(scratch, { recursive: true, force: true });
+  for (const { file, reason } of scrub.removed) {
+    setup.push({
+      rule: 'artifact-unreadable',
+      message: `${path.relative(reportsDir(), file)} was deleted, since the scrub couldn't read it: ${reason}`,
+    });
+  }
   const after = await scanArtifacts(reportsDir(), canaries);
 
   const summary = missing.length === 0 ? readSummary() : null;
   const judged = judge({
-    plan: plan ?? { targets: [], reasons: [] },
+    plan: plan ?? { targets: [], tests: [] },
+    engines,
     summary,
     missingBrowsers: missing,
     canary: { before, after },

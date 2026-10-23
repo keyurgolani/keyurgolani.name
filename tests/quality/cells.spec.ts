@@ -1,3 +1,4 @@
+import { KIND_ANNOTATION } from './lib/checks';
 import { runCell } from './lib/run-cell';
 import { cellServer, serverTag } from './lib/server';
 import { expect, test } from './fixtures';
@@ -37,6 +38,7 @@ for (const cell of plan.cells) {
           {
             tag,
             annotation: [
+              { type: KIND_ANNOTATION, description: 'cell' },
               { type: 'route', description: cell.route },
               { type: 'profile', description: cell.profile },
               { type: 'cell', description: cell.id },

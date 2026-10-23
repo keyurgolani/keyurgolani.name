@@ -2,8 +2,9 @@
 // 8, and 11): a known-bad and a known-good input for each fail-closed rule,
 // appended to META_CASES (cases.ts). Each runs the check the quality runs
 // use, not a copy: the verdict over summary.json (lib/verdict.ts), the
-// missing-browser launch, the emulation check, the browser policy, the socket guard beside the egress trap, and the artifact
-// scan. A verdict case's findings are every failure the verdict gives, so a
+// missing-browser launch, the emulation check, the browser policy, the
+// socket guard beside the egress trap, and the artifact scrub and scan. A
+// verdict case's findings are every failure the verdict gives, so a
 // known-bad input is built to break its one rule and no other: take the
 // rule away and the case goes the wrong way. The cases marked `browser`
 // launch Chromium; pnpm test runs quality:meta with --no-browser, since the
@@ -12,38 +13,58 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { createServer, type Server } from 'node:http';
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Summary, SummaryTest } from '../reporter';
 import { plantCanary, scanArtifacts, scrubArtifacts, writeZip } from '../lib/artifacts.mjs';
-import { CELL_CHECKS } from '../lib/checks';
+import { CANARY_FORMS, everyForm, UNKNOWN_FORM } from '../lib/canary-forms.mjs';
+import { CELL_CHECKS, VISUAL_CHECKS } from '../lib/checks';
 import { checkEmulation } from '../lib/emulation';
 import { egressFailure, installBrowserPolicy, serverEgressFailure } from '../lib/egress';
 import { PREFERENCE_ROWS } from '../lib/matrix';
-import { judge as verdictOf, type VerdictInput } from '../lib/verdict';
+import { judge as verdictOf, type VerdictInput, type VerdictTest } from '../lib/verdict';
 import { startEgressTrap } from '../../harness/egress-trap.mjs';
+import { TRACE_LAUNCH_ARGS } from '../../harness/trace/policy.mjs';
 import type { MetaCase, MetaOutcome } from './cases';
 
 const QUALITY = fileURLToPath(new URL('../', import.meta.url));
 const GATE = 'runner';
 
+const HARNESS = 'chromium harness';
+const CELLS = 'chromium c946a80325';
+const CELL =
+  'composition:fallback complete / fallback/platform-neutral/warm-parchment/humanist-ui/system';
+const STAND_IN = 'Stand-in until #1 and #3 can make a revision unavailable on demand.';
+
+/** Three planned tests of one cell: two that run, and one whose state skips it. */
+const RUNS: VerdictTest = {
+  cell: { id: CELL },
+  viewport: { id: '1440x900' },
+  row: { id: 'default' },
+  engineSkips: {},
+};
+const ALSO_RUNS: VerdictTest = { ...RUNS, viewport: { id: '1024x768' } };
+const SKIPS: VerdictTest = { ...RUNS, viewport: { id: '390x844' }, skip: STAND_IN };
+
 /** A passing cell test of the fallback composition, as the reporter lists one. */
-function cellTest(overrides: Partial<SummaryTest> = {}): SummaryTest {
+function cellTest(planned: VerdictTest = RUNS, overrides: Partial<SummaryTest> = {}): SummaryTest {
   return {
-    title:
-      'composition:fallback complete / > 1440x900 default > fallback complete / at 1440x900, default',
+    title: `fallback complete / at ${planned.viewport.id}, ${planned.row.id}`,
     file: 'tests/quality/cells.spec.ts',
     line: 35,
-    project: 'chromium c946a80325',
-    cell: 'composition:fallback complete / fallback/platform-neutral/warm-parchment/humanist-ui/system',
+    project: CELLS,
+    engine: 'chromium',
+    kind: 'cell',
+    cell: planned.cell.id,
     target: 'composition:fallback',
     route: '/',
-    viewport: '1440x900',
-    row: 'default',
+    viewport: planned.viewport.id,
+    row: planned.row.id,
     outcome: 'expected',
+    expectedStatus: 'passed',
     status: 'passed',
     skipReason: null,
     checks: [...CELL_CHECKS],
@@ -54,13 +75,47 @@ function cellTest(overrides: Partial<SummaryTest> = {}): SummaryTest {
   };
 }
 
+const SKIPPED = { outcome: 'skipped', status: 'skipped', expectedStatus: 'skipped' } as const;
+
+/** The planned skip, with its own reason. */
+const skippedTest = (overrides: Partial<SummaryTest> = {}) =>
+  cellTest(SKIPS, { ...SKIPPED, skipReason: STAND_IN, ...overrides });
+
+/** The canary probe, passed. */
+const PROBE: SummaryTest = {
+  ...cellTest(),
+  title: 'every request the page makes carries the canary',
+  file: 'tests/quality/canary.spec.ts',
+  project: HARNESS,
+  kind: undefined,
+  cell: undefined,
+  target: undefined,
+  viewport: undefined,
+  row: undefined,
+  checks: [],
+  canaryProbe: true,
+};
+
+/** A visual test of the cell, passed with its checks. */
+const VISUAL: SummaryTest = {
+  ...cellTest(),
+  title: 'fallback complete at 1440x900, seeded, in the pinned image',
+  file: 'tests/quality/visual.spec.ts',
+  kind: 'visual',
+  row: undefined,
+  checks: [...VISUAL_CHECKS],
+};
+
 function summary(tests: readonly SummaryTest[], overrides: Partial<Summary> = {}): Summary {
   return {
     schemaVersion: 1,
     mode: 'pr',
     shard: null,
     status: 'passed',
-    projects: [{ name: 'chromium c946a80325' }],
+    projects: [
+      { name: HARNESS, browserName: 'chromium' },
+      { name: CELLS, browserName: 'chromium' },
+    ],
     tests,
     errors: [],
     ...overrides,
@@ -69,16 +124,29 @@ function summary(tests: readonly SummaryTest[], overrides: Partial<Summary> = {}
 
 const PLAN: VerdictInput['plan'] = {
   targets: [{ kind: 'composition', id: 'fallback' }],
-  reasons: ['Stand-in until #1 and #3 can make a revision unavailable on demand.'],
+  tests: [RUNS, ALSO_RUNS, SKIPS],
 };
 
-/** A run that's fine: one target, its one cell test passed with every check, no canary probe. */
+const HELD = { file: 'results/canary/trace.zip', entry: 'trace.network', canary: 'the run canary' };
+
+/**
+ * A run that's fine: one target, its planned tests each run once on
+ * Chromium with every check or skipped with its own reason, the canary
+ * probe passed, and its trace held the canary until the scrub.
+ */
 const CLEAN: VerdictInput = {
   plan: PLAN,
-  summary: summary([cellTest()]),
+  engines: ['chromium'],
+  summary: summary([cellTest(), cellTest(ALSO_RUNS), skippedTest(), PROBE]),
   missingBrowsers: [],
-  canary: { before: [], after: [] },
+  canary: { before: [HELD], after: [] },
 };
+
+/** CLEAN's tests with `change` made, the probe kept. */
+const cleanWith = (
+  change: (tests: SummaryTest[]) => SummaryTest[],
+  overrides: Partial<Summary> = {},
+) => summary(change([cellTest(), cellTest(ALSO_RUNS), skippedTest()]).concat(PROBE), overrides);
 
 /** The verdict on `input`, every failure a finding. */
 function verdictOutcome(input: Partial<VerdictInput>): MetaOutcome {
@@ -126,15 +194,20 @@ function launchOutcome(env: Record<string, string>): MetaOutcome {
   });
 }
 
-/** A loopback server that answers every request with `html`. */
-async function standInHost(html: string): Promise<{ origin: string; server: Server }> {
-  const server = createServer((_request, response) => {
-    response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
-    response.end(html);
-  });
+/** A loopback server that answers every request with `answer`. */
+async function standInHost(
+  answer: (request: IncomingMessage, response: ServerResponse) => void,
+): Promise<{ origin: string; server: Server }> {
+  const server = createServer(answer);
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   return { origin: `http://127.0.0.1:${(server.address() as AddressInfo).port}`, server };
 }
+
+/** A host's answer: `html`. */
+const page = (html: string) => (_request: IncomingMessage, response: ServerResponse) => {
+  response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+  response.end(html);
+};
 
 const PAGE =
   '<!doctype html><html lang="en"><head><title>Stand-in</title></head><body><main><h1>Stand-in</h1></main></body></html>';
@@ -145,31 +218,30 @@ async function emulationOutcome(emulated: boolean): Promise<MetaOutcome> {
   const browser = await chromium.launch();
   try {
     const context = await browser.newContext(emulated ? { reducedMotion: 'reduce' } : {});
-    const page = await context.newPage();
-    await page.setContent(PAGE);
+    const tab = await context.newPage();
+    await tab.setContent(PAGE);
     const row = PREFERENCE_ROWS.find((each) => each.id === 'reduced-motion')!;
-    const problems = await checkEmulation(page, row);
+    const problems = await checkEmulation(tab, row);
     return { passed: problems.length === 0, findings: problems };
   } finally {
     await browser.close();
   }
 }
 
-/** The browser policy on a page from a loopback host that asks for an outside image, or doesn't. */
-async function browserEgressOutcome(outside: boolean): Promise<MetaOutcome> {
+/** The browser policy on a page from a loopback host, as the quality config launches Chromium. */
+async function browserEgressOutcome(
+  answer: (request: IncomingMessage, response: ServerResponse) => void,
+): Promise<MetaOutcome> {
   const { chromium } = await import('playwright');
-  const { origin, server } = await standInHost(
-    `<!doctype html><html lang="en"><body>${outside ? '<img src="https://fonts.example.test/x.png" alt="">' : ''}</body></html>`,
-  );
-  const browser = await chromium.launch({
-    args: ['--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE 127.0.0.1, EXCLUDE localhost'],
-  });
+  const { origin, server } = await standInHost(answer);
+  const browser = await chromium.launch({ args: [...TRACE_LAUNCH_ARGS] });
   try {
     const context = await browser.newContext();
     const blocked = await installBrowserPolicy(context, origin);
-    const page = await context.newPage();
-    await page.goto(`${origin}/`);
-    await page.waitForLoadState('load');
+    const tab = await context.newPage();
+    // A redirect off the machine fails to load, since Chromium resolves no outside name.
+    await tab.goto(`${origin}/`).catch(() => undefined);
+    await tab.waitForLoadState('load').catch(() => undefined);
     const failure = egressFailure(blocked);
     return { passed: failure === null, findings: failure ? [failure.split('\n')[0]!] : [] };
   } finally {
@@ -215,8 +287,13 @@ async function serverEgressOutcome(outside: boolean): Promise<MetaOutcome> {
   return { passed: failure === null, findings: failure ? [failure] : [] };
 }
 
-/** The artifact scan, fed to the verdict, on a trace and a log that hold the canary, scrubbed first or not. */
-async function canaryOutcome(scrubbed: boolean): Promise<MetaOutcome> {
+/**
+ * The scrub, by its rules alone, and the scan, fed to the verdict: a trace,
+ * a server log, and summary.json holding the canary in every form a run
+ * writes one (lib/canary-forms.mjs), and, for `unknown`, once more in a form
+ * no rule knows.
+ */
+async function canaryOutcome(scrub: 'none' | 'rules' | 'unknown'): Promise<MetaOutcome> {
   const dir = mkdtempSync(path.join(tmpdir(), 'quality-meta-canary-'));
   try {
     const canary = plantCanary();
@@ -224,56 +301,158 @@ async function canaryOutcome(scrubbed: boolean): Promise<MetaOutcome> {
     await writeZip(path.join(dir, 'results', 'trace.zip'), [
       {
         name: 'trace.network',
-        bytes: Buffer.from(
-          JSON.stringify({ headers: [{ name: 'authorization', value: `Bearer ${canary}` }] }),
-        ),
+        bytes: Buffer.from(CANARY_FORMS['header-pair']![0]!(canary)),
         mtime: new Date(0),
       },
+      { name: 'trace.trace', bytes: Buffer.from(everyForm(canary)), mtime: new Date(0) },
     ]);
-    writeFileSync(path.join(dir, 'server.log'), `cookie: quality_canary=${canary}\n`);
-    if (scrubbed) await scrubArtifacts(dir, [canary]);
-    const after = await scanArtifacts(dir, [{ label: 'the run canary', value: canary }]);
-    return verdictOutcome({ canary: { before: [], after } });
+    writeFileSync(
+      path.join(dir, 'server.log'),
+      `${CANARY_FORMS['header-line']![0]!(canary)}${scrub === 'unknown' ? UNKNOWN_FORM(canary) : ''}`,
+    );
+    writeFileSync(path.join(dir, 'summary.json'), CANARY_FORMS['header-line']![4]!(canary));
+    const canaries = [{ label: 'the run canary', value: canary }];
+    const before = await scanArtifacts(dir, canaries);
+    // Never the canary's own value: only the rules may take it out.
+    if (scrub !== 'none') await scrubArtifacts(dir);
+    const after = await scanArtifacts(dir, canaries);
+    return verdictOutcome({ canary: { before, after } });
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
 }
 
-const SKIPPED = { outcome: 'skipped', status: 'skipped' } as const;
-const PROBE = cellTest({ cell: undefined, target: undefined, canaryProbe: true });
-
 export const RUNNER_CASES: readonly MetaCase[] = [
-  // zero collected tests. With no target planned, nothing else catches it.
+  // zero collected tests. With no target or test planned, nothing else catches it.
   verdictCase(
     'zero-tests',
     'none',
-    'a run that collected no test, with no target to miss',
+    'a run that collected no test, with nothing planned to miss',
     'fail',
     {
-      plan: { ...PLAN, targets: [] },
+      plan: { targets: [], tests: [] },
       summary: summary([]),
     },
   ),
-  verdictCase('zero-tests', 'one', 'a run that collected one passing cell test', 'pass', {}),
+  verdictCase('zero-tests', 'some', 'a run that collected its planned tests', 'pass', {}),
 
-  // a skip without a declared reason
-  verdictCase('undeclared-skip', 'no-reason', 'a cell test skipped with no reason', 'fail', {
-    summary: summary([cellTest(), cellTest({ ...SKIPPED, skipReason: null })]),
+  // what ran against the plan
+  verdictCase('plan-coverage', 'dropped', 'a planned cell test that never ran', 'fail', {
+    summary: cleanWith((tests) => tests.filter((test) => test.viewport !== '1024x768')),
+  }),
+  verdictCase('plan-coverage', 'twice', 'a planned cell test that ran twice', 'fail', {
+    summary: cleanWith((tests) => [...tests, cellTest()]),
+  }),
+  verdictCase('plan-coverage', 'unplanned', 'a cell test the plan has no entry for', 'fail', {
+    summary: cleanWith((tests) => [...tests, cellTest({ ...RUNS, row: { id: 'forced-colors' } })]),
+  }),
+  verdictCase(
+    'plan-coverage',
+    'one-engine',
+    'a run planning Chromium and Firefox whose tests ran on Chromium alone',
+    'fail',
+    { engines: ['chromium', 'firefox'] },
+  ),
+  verdictCase(
+    'plan-coverage',
+    'sharded',
+    "a shard holding only some of the plan's tests, each once",
+    'pass',
+    { summary: cleanWith((tests) => tests.slice(0, 1), { shard: '1/2' }) },
+  ),
+  verdictCase(
+    'plan-coverage',
+    'once',
+    'every planned test ran once on the planned engine',
+    'pass',
+    {},
+  ),
+  verdictCase('empty-project', 'none-collected', 'a project that collected no test', 'fail', {
+    summary: cleanWith((tests) => tests, {
+      projects: [
+        { name: HARNESS, browserName: 'chromium' },
+        { name: CELLS, browserName: 'chromium' },
+        { name: 'chromium 0123456789', browserName: 'chromium' },
+      ],
+    }),
+  }),
+  verdictCase('empty-project', 'each-collected', 'every project collected a test', 'pass', {}),
+  verdictCase(
+    'canary-probe-missing',
+    'never-ran',
+    'an unsharded run whose canary probe never ran',
+    'fail',
+    {
+      summary: summary([cellTest(), cellTest(ALSO_RUNS), skippedTest()], {
+        projects: [{ name: CELLS, browserName: 'chromium' }],
+      }),
+    },
+  ),
+  verdictCase('canary-probe-missing', 'passed', 'a run whose canary probe passed', 'pass', {}),
+
+  // a test expected to fail
+  verdictCase(
+    'expected-failure',
+    'test-fail',
+    'a cell test marked test.fail(), which failed as expected',
+    'fail',
+    {
+      summary: cleanWith((tests) => [
+        cellTest(RUNS, { expectedStatus: 'failed', status: 'failed' }),
+        ...tests.slice(1),
+      ]),
+    },
+  ),
+  verdictCase(
+    'expected-failure',
+    'expected-pass',
+    'every test expected to pass or to skip',
+    'pass',
+    {},
+  ),
+
+  // a skip without its own declared reason
+  verdictCase('undeclared-skip', 'no-reason', 'the planned skip, with no reason', 'fail', {
+    summary: cleanWith((tests) => [...tests.slice(0, 2), skippedTest({ skipReason: null })]),
+  }),
+  verdictCase('undeclared-skip', 'blank-reason', 'the planned skip, with a blank reason', 'fail', {
+    summary: cleanWith((tests) => [...tests.slice(0, 2), skippedTest({ skipReason: ' ' })]),
   }),
   verdictCase(
     'undeclared-skip',
-    'undeclared-reason',
-    'a cell test skipped with a reason neither the plan nor the harness declares',
+    'generic-reason',
+    'the planned skip, with "n/a" for a reason',
     'fail',
-    { summary: summary([cellTest(), cellTest({ ...SKIPPED, skipReason: 'Flaky today.' })]) },
+    {
+      summary: cleanWith((tests) => [...tests.slice(0, 2), skippedTest({ skipReason: 'n/a' })]),
+    },
   ),
   verdictCase(
     'undeclared-skip',
-    'declared-reason',
-    "a cell test skipped with the plan's declared reason",
-    'pass',
-    { summary: summary([cellTest(), cellTest({ ...SKIPPED, skipReason: PLAN.reasons[0]! })]) },
+    'undeclared-reason',
+    'the planned skip, with a sentence nothing declares',
+    'fail',
+    {
+      summary: cleanWith((tests) => [
+        ...tests.slice(0, 2),
+        skippedTest({ skipReason: 'It was flaky today, so it skipped.' }),
+      ]),
+    },
   ),
+  verdictCase(
+    'undeclared-skip',
+    'borrowed-reason',
+    "a cell test the plan runs, skipped with another test's declared reason",
+    'fail',
+    {
+      summary: cleanWith((tests) => [
+        tests[0]!,
+        cellTest(ALSO_RUNS, { ...SKIPPED, skipReason: STAND_IN }),
+        tests[2]!,
+      ]),
+    },
+  ),
+  verdictCase('undeclared-skip', 'own-reason', 'the planned skip, with its own reason', 'pass', {}),
 
   // a missing browser
   verdictCase(
@@ -320,23 +499,23 @@ export const RUNNER_CASES: readonly MetaCase[] = [
     'composition-uncollected',
     'a registered composition none of whose tests was collected',
     'fail',
-    { summary: summary([cellTest({ target: 'surface:login' })]) },
+    {
+      summary: cleanWith((tests) => tests.map((test) => ({ ...test, target: 'surface:login' }))),
+    },
   ),
   verdictCase(
     'target-without-results',
     'surface-uncollected',
     'a registered surface none of whose tests was collected',
     'fail',
-    {
-      plan: { ...PLAN, targets: [...PLAN.targets, { kind: 'surface', id: 'login' }] },
-    },
+    { plan: { ...PLAN, targets: [...PLAN.targets, { kind: 'surface', id: 'login' }] } },
   ),
   verdictCase(
     'target-without-results',
     'all-skipped',
-    'a registered composition whose every test skipped, each with a declared reason',
+    'a registered composition whose one planned test skipped, with its own reason',
     'fail',
-    { summary: summary([cellTest({ ...SKIPPED, skipReason: PLAN.reasons[0]! })]) },
+    { plan: { ...PLAN, tests: [SKIPS] }, summary: summary([skippedTest(), PROBE]) },
   ),
   verdictCase(
     'target-without-results',
@@ -346,13 +525,37 @@ export const RUNNER_CASES: readonly MetaCase[] = [
     {},
   ),
 
-  // a cell test that passed without every check
+  // a test that passed without every check its kind runs
   verdictCase(
     'unchecked-cell',
     'no-axe',
     'a passing cell test that never ran its axe check',
     'fail',
-    { summary: summary([cellTest({ checks: CELL_CHECKS.filter((check) => check !== 'axe') })]) },
+    {
+      summary: cleanWith((tests) => [
+        cellTest(RUNS, { checks: CELL_CHECKS.filter((check) => check !== 'axe') }),
+        ...tests.slice(1),
+      ]),
+    },
+  ),
+  verdictCase(
+    'unchecked-cell',
+    'visual-no-screenshot',
+    'a passing visual test that took no screenshot',
+    'fail',
+    {
+      summary: cleanWith((tests) => [
+        ...tests,
+        { ...VISUAL, checks: VISUAL_CHECKS.filter((check) => check !== 'screenshot') },
+      ]),
+    },
+  ),
+  verdictCase(
+    'unchecked-cell',
+    'visual-every-check',
+    "a passing visual test that ran its own checks, not a cell test's",
+    'pass',
+    { summary: cleanWith((tests) => [...tests, VISUAL]) },
   ),
   verdictCase(
     'unchecked-cell',
@@ -364,7 +567,11 @@ export const RUNNER_CASES: readonly MetaCase[] = [
 
   // a failed test, and an error outside any test
   verdictCase('tests-failed', 'one-failed', 'a cell test that failed', 'fail', {
-    summary: summary([cellTest(), cellTest({ outcome: 'unexpected', status: 'failed' })]),
+    summary: cleanWith((tests) => [
+      tests[0]!,
+      cellTest(ALSO_RUNS, { outcome: 'unexpected', status: 'failed' }),
+      tests[2]!,
+    ]),
   }),
   verdictCase('tests-failed', 'none-failed', 'every cell test passed', 'pass', {}),
   verdictCase(
@@ -373,7 +580,7 @@ export const RUNNER_CASES: readonly MetaCase[] = [
     "a worker's late server egress, outside any test",
     'fail',
     {
-      summary: summary([cellTest()], {
+      summary: cleanWith((tests) => tests, {
         errors: [
           'The app under test tried to reach 1 host(s) outside the machine: tcp://192.0.2.9:443',
         ],
@@ -413,7 +620,26 @@ export const RUNNER_CASES: readonly MetaCase[] = [
     reason:
       /^The page requested 1 URL\(s\) outside the app: https:\/\/fonts\.example\.test\/x\.png$/,
     browser: true,
-    run: () => browserEgressOutcome(true),
+    run: () =>
+      browserEgressOutcome(
+        page(
+          '<!doctype html><html lang="en"><body><img src="https://fonts.example.test/x.png" alt=""></body></html>',
+        ),
+      ),
+  },
+  {
+    id: `${GATE}/browser-egress-redirect`,
+    gate: GATE,
+    input: "a loopback page that answers 302 to an outside host, a hop routing doesn't see",
+    expect: 'fail',
+    reason:
+      /^The page requested 1 URL\(s\) outside the app: https:\/\/outside\.example\.test\/landing$/,
+    browser: true,
+    run: () =>
+      browserEgressOutcome((_request, response) => {
+        response.writeHead(302, { location: 'https://outside.example.test/landing' });
+        response.end();
+      }),
   },
   {
     id: `${GATE}/browser-egress-app-only`,
@@ -421,7 +647,7 @@ export const RUNNER_CASES: readonly MetaCase[] = [
     input: 'a page that asks only for the app',
     expect: 'pass',
     browser: true,
-    run: () => browserEgressOutcome(false),
+    run: () => browserEgressOutcome(page(PAGE)),
   },
   {
     id: `${GATE}/server-egress-outside`,
@@ -444,38 +670,40 @@ export const RUNNER_CASES: readonly MetaCase[] = [
   {
     id: `${GATE}/canary-leaked-unscrubbed`,
     gate: GATE,
-    input: 'a trace and a server log that keep the canary, unscrubbed',
+    input:
+      'a trace, a server log, and summary.json holding the canary in every form a run writes, unscrubbed',
     expect: 'fail',
     reason: /^canary-leaked: .* holds the run canary after the scrub\.$/,
-    run: () => canaryOutcome(false),
+    run: () => canaryOutcome('none'),
+  },
+  {
+    id: `${GATE}/canary-leaked-unknown-form`,
+    gate: GATE,
+    input: 'the same, scrubbed, with the canary once more in a header no rule knows',
+    expect: 'fail',
+    reason: /^canary-leaked: .*server\.log holds the run canary after the scrub\.$/,
+    run: () => canaryOutcome('unknown'),
   },
   {
     id: `${GATE}/canary-leaked-scrubbed`,
     gate: GATE,
-    input: 'the same trace and log, scrubbed',
+    input:
+      'the same trace, log, and summary.json, scrubbed by the rules, never by the canary itself',
     expect: 'pass',
-    run: () => canaryOutcome(true),
+    run: () => canaryOutcome('rules'),
   },
   verdictCase(
     'canary-unproven',
     'never-held',
     'a canary probe that ran, with no artifact holding the canary before the scrub',
     'fail',
-    { summary: summary([cellTest(), PROBE]), canary: { before: [], after: [] } },
+    { canary: { before: [], after: [] } },
   ),
   verdictCase(
     'canary-unproven',
     'held',
     'a canary probe whose trace held the canary until the scrub',
     'pass',
-    {
-      summary: summary([cellTest(), PROBE]),
-      canary: {
-        before: [
-          { file: 'results/canary/trace.zip', entry: 'trace.network', canary: 'the run canary' },
-        ],
-        after: [],
-      },
-    },
+    {},
   ),
 ];

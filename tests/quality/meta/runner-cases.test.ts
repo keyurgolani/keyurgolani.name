@@ -13,6 +13,10 @@ const RULES = [
   'missing-browser',
   'target-without-results',
   'ignored-media-emulation',
+  'plan-coverage',
+  'empty-project',
+  'canary-probe-missing',
+  'expected-failure',
   'unchecked-cell',
   'tests-failed',
   'run-errors',
@@ -38,28 +42,44 @@ test('every fail-closed rule of the runner has a known-bad case and a known-good
       `${id} names no rule`,
     );
   }
+  // The forms the review found: a redirect hop, a credential no rule knows,
+  // a borrowed or blank skip reason, and a passing visual test.
+  for (const id of [
+    'runner/browser-egress-redirect',
+    'runner/canary-leaked-unknown-form',
+    'runner/undeclared-skip-borrowed-reason',
+    'runner/undeclared-skip-blank-reason',
+    'runner/unchecked-cell-visual-every-check',
+  ]) {
+    assert.ok(
+      RUNNER_CASES.some((each) => each.id === id),
+      id,
+    );
+  }
 });
 
 test("a launch error inside a test's result fails the run as a missing browser, beside the test failure", () => {
   const verdict = judge({
-    plan: { targets: [], reasons: [] },
+    plan: { targets: [], tests: [] },
+    engines: ['chromium'],
     summary: {
       schemaVersion: 1,
       mode: 'pr',
       shard: null,
       status: 'failed',
-      projects: [],
+      projects: [{ name: 'chromium harness' }],
       tests: [
         {
-          title: 'a cell',
-          file: 'tests/quality/cells.spec.ts',
+          title: 'the canary probe',
+          file: 'tests/quality/canary.spec.ts',
           line: 1,
-          project: 'chromium',
+          project: 'chromium harness',
           outcome: 'unexpected',
+          expectedStatus: 'passed',
           status: 'failed',
           skipReason: null,
           checks: [],
-          canaryProbe: false,
+          canaryProbe: true,
           errors: ["browserType.launch: Executable doesn't exist at /x\nmore"],
           records: 0,
         },
@@ -71,7 +91,7 @@ test("a launch error inside a test's result fails the run as a missing browser, 
   });
   assert.deepEqual(
     verdict.failures.map(({ rule }) => rule),
-    ['missing-browser', 'tests-failed'],
+    ['missing-browser', 'canary-probe-missing', 'tests-failed'],
   );
   assert.equal(verdict.failures[0]?.message, "browserType.launch: Executable doesn't exist at /x");
 });
