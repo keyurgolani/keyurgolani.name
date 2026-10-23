@@ -195,6 +195,30 @@ test('draft.save derives the media document from the media entries, and ignores 
   assert.equal(anonymous.status, 401);
 });
 
+test('a draft with no media entries keeps no media document, even one the caller sends', async (t) => {
+  const { draft, send } = await setup(t);
+  const bare = {
+    portfolio: {
+      format: 'yaml' as const,
+      sourceText: portfolioText('images/harbor.png').replace(/media:\n(?: {2}.*\n)+/, ''),
+    },
+    site: documents('x').site,
+  };
+  assert.ok(!bare.portfolio.sourceText.includes('media:'));
+  const forged = {
+    format: 'json',
+    sourceText: JSON.stringify({ assets: [{ assetId: 'harbor', sha256: 'f'.repeat(64) }] }),
+  };
+  const response = await send('draft.save', {
+    draftId: draft.draftId,
+    expectedVersion: draft.version,
+    documents: { ...bare, media: forged },
+  });
+  assert.equal(response.status, 200, await response.clone().text());
+  const saved = ((await response.json()) as { data: { draft: SavedDraft } }).data.draft;
+  assert.equal(saved.documents.media, undefined);
+});
+
 test('a save without media.ingest keeps the media document the draft had, whatever the caller sends', async (t) => {
   const { owner, draft, send } = await setup(t);
   const first = await send('draft.save', {
