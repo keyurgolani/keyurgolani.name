@@ -164,6 +164,7 @@ function planRecord(plan: Plan) {
       row: test.row.id,
       skip: test.skip ?? null,
       engineSkips: test.engineSkips,
+      conditions: test.conditions,
     })),
     perf: plannedPerf(plan),
   };

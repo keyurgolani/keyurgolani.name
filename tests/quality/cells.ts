@@ -119,6 +119,13 @@ export interface PlannedTest {
   readonly skip?: string;
   /** Why it doesn't apply on an engine, by engine: the project running it skips with this. */
   readonly engineSkips: Readonly<Record<string, string>>;
+  /**
+   * Whether the default row's reload conditions (the content inventory,
+   * reflow, and failed enhancement) run here. A full run plans them on
+   * every cell; a PR run only on the first composition's default and each
+   * tier pack's sentinel, leaving the other state fixtures to the full run.
+   */
+  readonly conditions: boolean;
 }
 
 export interface Plan {
@@ -407,7 +414,14 @@ export function planCells({ meta, registrations, mode }: PlanInput): Plan {
             engineSkips[engine] ??= each.reason;
           }
         }
-        tests.push({ cell, viewport, row, skip: cell.pending ?? exclusion?.reason, engineSkips });
+        tests.push({
+          cell,
+          viewport,
+          row,
+          skip: cell.pending ?? exclusion?.reason,
+          engineSkips,
+          conditions: mode === 'full' || cell === firstDefault || cell.pack !== undefined,
+        });
       }
     }
   }

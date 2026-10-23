@@ -47,11 +47,12 @@ import { VISUAL_SKIP } from './visual';
 export const HARNESS_SKIPS: readonly string[] = [];
 
 /** A planned test, as the verdict reads one. */
-export type VerdictTest = Pick<PlannedTest, 'skip' | 'engineSkips'> & {
-  readonly cell: Pick<PlannedTest['cell'], 'id'>;
-  readonly viewport: Pick<PlannedTest['viewport'], 'id'>;
-  readonly row: Pick<PlannedTest['row'], 'id'>;
-};
+export type VerdictTest = Pick<PlannedTest, 'skip' | 'engineSkips'> &
+  Partial<Pick<PlannedTest, 'conditions'>> & {
+    readonly cell: Pick<PlannedTest['cell'], 'id'>;
+    readonly viewport: Pick<PlannedTest['viewport'], 'id'>;
+    readonly row: Pick<PlannedTest['row'], 'id'>;
+  };
 
 export interface ArtifactHit {
   readonly file: string;
@@ -225,7 +226,7 @@ export function judge({ plan, engines, summary, missingBrowsers, canary }: Verdi
     if (!test.kind || test.status !== 'passed') continue;
     const owed =
       test.kind === 'cell' && test.row && test.viewport
-        ? requiredChecks(test.row, test.viewport)
+        ? requiredChecks(test.row, test.viewport, plannedFor(test)?.conditions ?? true)
         : KIND_CHECKS[test.kind as TestKind];
     const missing = owed.filter((check) => !test.checks.includes(check));
     if (missing.length > 0) {

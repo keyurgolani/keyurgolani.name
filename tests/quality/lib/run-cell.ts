@@ -74,6 +74,8 @@ export interface CellRun {
   readonly cell: Cell;
   readonly viewport: Viewport;
   readonly row: PreferenceRow;
+  /** The default row's reload conditions run here (PlannedTest.conditions). */
+  readonly conditions: boolean;
   readonly testInfo: TestInfo;
   readonly expect: typeof import('@playwright/test').expect;
 }
@@ -225,10 +227,18 @@ async function audit(page: Page, row: PreferenceRow) {
 /** A cell test does a lot: the default row reloads under every condition. */
 const CELL_TIMEOUT_MS = 240_000;
 
-export async function runCell({ page, cell, viewport, row, testInfo, expect }: CellRun) {
+export async function runCell({
+  page,
+  cell,
+  viewport,
+  row,
+  conditions,
+  testInfo,
+  expect,
+}: CellRun) {
   testInfo.setTimeout(CELL_TIMEOUT_MS);
   const ran = new Set<string>();
-  const owed = new Set(requiredChecks(row.id, viewport.id));
+  const owed = new Set(requiredChecks(row.id, viewport.id, conditions));
   // The print row compares the page in print with the page on screen, so it loads on screen first.
   const printRow = row.context.media === 'print';
   await applyRow(page, printRow ? { ...row, context: { ...row.context, media: undefined } } : row);

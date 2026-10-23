@@ -17,6 +17,7 @@ import {
 } from './cells';
 import { tupleKey } from './coverage';
 import { isReason } from './lib/checks';
+import { requiredChecks } from './lib/checks';
 import { PREFERENCE_ROWS, VIEWPORTS } from './lib/matrix';
 import { loadRegistrations, type Registrations } from './lib/registration';
 
@@ -155,6 +156,40 @@ test('the full plan: the covering array on complete, and every other route and s
   ]);
   assert.equal(plan.tests.length, plan.cells.length * VIEWPORTS.length * PREFERENCE_ROWS.length);
   assert.equal(new Set(plan.cells.map((cell) => cell.id)).size, plan.cells.length);
+  // Every cell takes the default row's reload conditions in a full run.
+  assert.ok(plan.tests.every((each) => each.conditions));
+  const firstViewport = plan.tests.filter(
+    (each) => each.row.id === 'default' && each.viewport === VIEWPORTS[0],
+  );
+  assert.equal(firstViewport.length, plan.cells.length);
+  for (const each of firstViewport) {
+    const owed = requiredChecks(each.row.id, each.viewport.id, each.conditions);
+    for (const check of ['inventory', 'reflow', 'enhancement']) assert.ok(owed.includes(check));
+  }
+});
+
+test('a PR run takes the reload conditions on the first default and the tier sentinels alone', () => {
+  const plan = planCells({ meta: withTierPacks(checkoutMeta()), registrations, mode: 'pr' });
+  const taking = new Set(plan.tests.filter((each) => each.conditions).map((each) => each.cell));
+  const first = plan.cells.find(
+    (cell) =>
+      cell.kind === 'composition' &&
+      cell.state === 'complete' &&
+      cell.path === '/' &&
+      cell.tuple.displayMode === 'system' &&
+      !cell.pack,
+  );
+  assert.deepEqual(
+    [...taking].map((cell) => cell.id).sort(),
+    [first!, ...plan.cells.filter((cell) => cell.pack)].map((cell) => cell.id).sort(),
+  );
+  // The rest, such as sparse and the 404 page, owe none of them.
+  const sparse = plan.tests.find(
+    (each) => each.cell.state === 'sparse' && each.viewport === VIEWPORTS[0],
+  )!;
+  assert.ok(
+    !requiredChecks('default', sparse.viewport.id, sparse.conditions).includes('inventory'),
+  );
 });
 
 test('each tier pack has a sentinel on the fallback composition, and other fixture packs stay out', () => {

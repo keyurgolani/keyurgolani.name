@@ -574,6 +574,19 @@ export const RUNNER_CASES: readonly MetaCase[] = [
   ),
   verdictCase(
     'unchecked-cell',
+    'no-conditions-planned',
+    "a passing default cell test without the reload conditions, which the PR plan doesn't give its cell",
+    'pass',
+    {
+      plan: { ...PLAN, tests: [{ ...RUNS, conditions: false }, ALSO_RUNS, SKIPS] },
+      summary: cleanWith((tests) => [
+        cellTest(RUNS, { checks: requiredChecks('default', '1440x900', false) }),
+        ...tests.slice(1),
+      ]),
+    },
+  ),
+  verdictCase(
+    'unchecked-cell',
     'visual-no-screenshot',
     'a passing visual test that took no screenshot',
     'fail',

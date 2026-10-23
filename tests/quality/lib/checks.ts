@@ -50,14 +50,15 @@ const ROW_CHECKS: Readonly<Record<PreferenceMode, readonly SuiteCheck[]>> = {
  * The checks a cell test at `viewport` in `row` owes. In the default row,
  * hover parity runs at the pointer viewports; the reflow, inventory, and
  * enhancement conditions, which reload the page several times, once a cell,
- * at the first viewport; and the landscape occlusion pass at the phone's.
+ * at the first viewport, where the plan says the cell takes them
+ * (PlannedTest.conditions); and the landscape occlusion pass at the phone's.
  */
-export function requiredChecks(row: string, viewport: string): string[] {
+export function requiredChecks(row: string, viewport: string, conditions = true): string[] {
   const at = VIEWPORTS.find((each) => each.id === viewport);
   const checks: string[] = [...CELL_CHECKS, ...(ROW_CHECKS[row as PreferenceMode] ?? [])];
   if (row === 'default' && at) {
     if (at.inputMode === 'mouse') checks.push('hover');
-    if (at === VIEWPORTS[0]) checks.push('reflow', 'inventory', 'enhancement');
+    if (conditions && at === VIEWPORTS[0]) checks.push('reflow', 'inventory', 'enhancement');
     if (at === VIEWPORTS.find((each) => each.inputMode === 'touch'))
       checks.push('landscape-occlusion');
   }
