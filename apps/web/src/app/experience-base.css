@@ -89,9 +89,12 @@ html[data-theme='dark'] ::selection {
 /* The focus ring every portfolio document starts from (#11, WCAG 2.4.7 and
    1.4.11): Chromium's own is a 1px orange ring on phones, under 3:1 on the
    neutral canvas. It sits in the reset layer, so a variant's own focus style,
-   unlayered, and #19's accessibility layer both win over it. */
+   unlayered, and #19's accessibility layer both win over it. It reaches only
+   the portfolio inside its boundary and the skip link before it: Studio loads
+   this file too, and keeps its own focus styles. */
 @layer reset {
-  :focus-visible {
+  :where([data-variant]) :focus-visible,
+  .host-skip-link:focus-visible {
     outline: 2px solid currentColor;
     outline-offset: 2px;
   }
