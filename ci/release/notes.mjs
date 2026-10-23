@@ -20,7 +20,17 @@ const DIGEST = /^sha256:[0-9a-f]{64}$/;
  * @param {{ tag: string, image: string, digest: string, sha: string, repository: string,
  *   runUrl?: string, candidate?: string, targets?: string[], dryRun?: boolean }} input
  */
-export function renderNotes({ tag, image, digest, sha, repository, runUrl, candidate, targets, dryRun }) {
+export function renderNotes({
+  tag,
+  image,
+  digest,
+  sha,
+  repository,
+  runUrl,
+  candidate,
+  targets,
+  dryRun,
+}) {
   const release = parseReleaseTag(tag);
   if (!release) throw new Error(`${tag} is not a release tag`);
   if (!DIGEST.test(String(digest ?? ''))) throw new Error(`${digest} is not a sha256 digest`);
@@ -53,13 +63,13 @@ export function renderNotes({ tag, image, digest, sha, repository, runUrl, candi
     '',
     '## Verify',
     '',
-    'The build provenance is signed by this repository\'s release workflow:',
+    "The build provenance is signed by this repository's release workflow:",
     '',
     '```sh',
     `gh attestation verify oci://${source} --repo ${repository}`,
     '```',
     '',
-    'The image index also carries BuildKit\'s SLSA provenance (mode=max) and an SPDX SBOM for each platform:',
+    "The image index also carries BuildKit's SLSA provenance (mode=max) and an SPDX SBOM for each platform:",
     '',
     '```sh',
     `docker buildx imagetools inspect ${source} --format '{{ json .Provenance }}'`,

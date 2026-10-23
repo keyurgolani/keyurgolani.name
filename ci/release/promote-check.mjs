@@ -140,7 +140,8 @@ async function main() {
     `source-ref=refs/tags/${verdict.candidate}`,
     `targets=${verdict.targets.join(',')}`,
   ];
-  if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `${outputs.join('\n')}\n`);
+  if (process.env.GITHUB_OUTPUT)
+    appendFileSync(process.env.GITHUB_OUTPUT, `${outputs.join('\n')}\n`);
   return 0;
 }
 

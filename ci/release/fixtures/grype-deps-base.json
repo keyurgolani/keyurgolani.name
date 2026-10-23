@@ -32,9 +32,7 @@
         "namespace": "github:language:javascript",
         "severity": "Low",
         "fix": {
-          "versions": [
-            "3.3.12"
-          ],
+          "versions": ["3.3.12"],
           "state": "fixed"
         }
       },

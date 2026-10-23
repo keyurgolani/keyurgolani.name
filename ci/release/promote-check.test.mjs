@@ -85,7 +85,10 @@ test('promotion is refused unless the candidate passed its scan', () => {
 });
 
 test('only a final tag is promoted', () => {
-  assert.match(evaluatePromotion(input({ tag: 'v1.2.0-rc.2' })).reasons.join(), /not a vX\.Y\.Z tag/);
+  assert.match(
+    evaluatePromotion(input({ tag: 'v1.2.0-rc.2' })).reasons.join(),
+    /not a vX\.Y\.Z tag/,
+  );
 });
 
 test('candidates are the RC tags for the version, newest first', () => {

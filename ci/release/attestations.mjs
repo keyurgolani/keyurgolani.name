@@ -41,7 +41,9 @@ export function attestationProblems(provenance, sbom, platforms = PLATFORMS) {
     if (!slsa || typeof slsa !== 'object') {
       problems.push(`${platform} has no provenance attestation`);
     } else if (!holdsKey(slsa, 'buildConfig')) {
-      problems.push(`${platform}'s provenance has no buildConfig, so it wasn't built with mode=max`);
+      problems.push(
+        `${platform}'s provenance has no buildConfig, so it wasn't built with mode=max`,
+      );
     }
     const spdx = sbom?.[platform]?.SPDX;
     if (!spdx || typeof spdx !== 'object') {
@@ -65,7 +67,9 @@ function main(argv) {
   }
   const [provenance, sbom] = positional.map((file) => JSON.parse(readFileSync(file, 'utf8')));
   const problems = attestationProblems(provenance, sbom, platforms);
-  const sbomDir = argv.find((arg) => arg.startsWith('--write-sboms='))?.slice('--write-sboms='.length);
+  const sbomDir = argv
+    .find((arg) => arg.startsWith('--write-sboms='))
+    ?.slice('--write-sboms='.length);
   if (sbomDir && problems.length === 0) {
     mkdirSync(sbomDir, { recursive: true });
     for (const platform of platforms) {

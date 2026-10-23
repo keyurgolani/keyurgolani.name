@@ -16,7 +16,9 @@ test('candidate notes name the pull source by digest, the GHCR login, and verifi
   assert.match(notes, /Release candidate 3 for 1\.2\.0/);
   assert.ok(notes.includes(`docker pull ghcr.io/owner/repo@${DIGEST}`));
   assert.match(notes, /private for now, so pulling needs a login/);
-  assert.ok(notes.includes(`gh attestation verify oci://ghcr.io/owner/repo@${DIGEST} --repo owner/repo`));
+  assert.ok(
+    notes.includes(`gh attestation verify oci://ghcr.io/owner/repo@${DIGEST} --repo owner/repo`),
+  );
   assert.match(notes, /`1\.2\.0-rc\.3` points at the same digest\. `latest` doesn't move/);
   assert.match(notes, /## Upgrade/);
   assert.match(notes, /## Roll back/);

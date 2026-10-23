@@ -7,9 +7,7 @@
         "namespace": "alpine:distro:alpine:3.22",
         "severity": "Critical",
         "fix": {
-          "versions": [
-            "3.5.2-r0"
-          ],
+          "versions": ["3.5.2-r0"],
           "state": "fixed"
         }
       },
@@ -59,9 +57,7 @@
         "namespace": "github:language:javascript",
         "severity": "High",
         "fix": {
-          "versions": [
-            "7.0.5"
-          ],
+          "versions": ["7.0.5"],
           "state": "fixed"
         }
       },
@@ -91,9 +87,7 @@
         "namespace": "alpine:distro:alpine:3.22",
         "severity": "Medium",
         "fix": {
-          "versions": [
-            "1.3.1-r3"
-          ],
+          "versions": ["1.3.1-r3"],
           "state": "fixed"
         }
       },

@@ -7,10 +7,14 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { parse } from 'yaml';
 
-const SOURCE = readFileSync(new URL('../../.github/workflows/release.yml', import.meta.url), 'utf8');
+const SOURCE = readFileSync(
+  new URL('../../.github/workflows/release.yml', import.meta.url),
+  'utf8',
+);
 const WORKFLOW = parse(SOURCE);
 const JOBS = WORKFLOW.jobs;
-const TAG_IF = /^\$\{\{ github\.ref_type == 'tag'( && needs\.classify\.outputs\.kind == '(rc|final)')? \}\}$/;
+const TAG_IF =
+  /^\$\{\{ github\.ref_type == 'tag'( && needs\.classify\.outputs\.kind == '(rc|final)')? \}\}$/;
 const RC_JOBS = ['rc-verify', 'rc-build', 'rc-scan', 'rc-tag', 'rc-release'];
 const FINAL_JOBS = ['promote-verify', 'promote-scan', 'promote', 'promote-release'];
 const stepsOf = (id) => JOBS[id].steps ?? [];
@@ -111,9 +115,14 @@ test('no release job reads or writes a cache', () => {
     for (const step of job.steps) {
       const action = (step.uses ?? '').split('@')[0];
       assert.doesNotMatch(action, /^actions\/cache/, id);
-      assert.ok(!action.startsWith('./'), `${id} uses no local action, the shared install's cache included`);
-      if (action === 'actions/setup-node') assert.equal(step.with['package-manager-cache'], false, id);
-      if (action === 'docker/setup-buildx-action') assert.equal(step.with['cache-binary'], false, id);
+      assert.ok(
+        !action.startsWith('./'),
+        `${id} uses no local action, the shared install's cache included`,
+      );
+      if (action === 'actions/setup-node')
+        assert.equal(step.with['package-manager-cache'], false, id);
+      if (action === 'docker/setup-buildx-action')
+        assert.equal(step.with['cache-binary'], false, id);
       if (action === 'docker/setup-qemu-action') assert.equal(step.with['cache-image'], false, id);
     }
   }
@@ -147,7 +156,12 @@ test('each step waits on the one before it', () => {
   assert.deepEqual(needs('promote-verify'), ['classify']);
   assert.deepEqual(needs('promote-scan'), ['classify', 'promote-verify']);
   assert.deepEqual(needs('promote'), ['classify', 'promote-scan', 'promote-verify']);
-  assert.deepEqual(needs('promote-release'), ['classify', 'promote', 'promote-scan', 'promote-verify']);
+  assert.deepEqual(needs('promote-release'), [
+    'classify',
+    'promote',
+    'promote-scan',
+    'promote-verify',
+  ]);
   // promote-verify's names for rc-scan and rc-tag are these jobs' names.
   assert.equal(JOBS['rc-scan'].name, 'rc-scan');
   assert.equal(JOBS['rc-tag'].name, 'rc-tag');

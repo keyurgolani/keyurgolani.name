@@ -36,7 +36,9 @@ export function parseDate(value) {
   const [year, month, day] = match.slice(1).map(Number);
   const date = Date.UTC(year, month - 1, day);
   const back = new Date(date);
-  return back.getUTCFullYear() === year && back.getUTCMonth() === month - 1 && back.getUTCDate() === day
+  return back.getUTCFullYear() === year &&
+    back.getUTCMonth() === month - 1 &&
+    back.getUTCDate() === day
     ? date
     : null;
 }
@@ -72,7 +74,9 @@ export function readExceptions(text, { on = today() } = {}) {
       return;
     }
     const label = `${at} (${entry.id ?? 'no id'} in ${entry.package ?? 'no package'})`;
-    const missing = FIELDS.filter((field) => typeof entry[field] !== 'string' || !entry[field].trim());
+    const missing = FIELDS.filter(
+      (field) => typeof entry[field] !== 'string' || !entry[field].trim(),
+    );
     const unknown = Object.keys(entry).filter((key) => !FIELDS.includes(key));
     if (missing.length) problems.push(`${label} lacks ${missing.join(', ')}`);
     if (unknown.length) problems.push(`${label} has unknown keys: ${unknown.join(', ')}`);
@@ -205,13 +209,21 @@ export function renderSummary(title, verdict, exceptionProblems) {
     `### ${title}: ${ok ? 'passed' : 'failed'}`,
     '',
     ...(exceptionProblems.length
-      ? ['**Scan exceptions** (ci/release/scan-exceptions.yml)', '', ...exceptionProblems.map((p) => `- ${p}.`), '']
+      ? [
+          '**Scan exceptions** (ci/release/scan-exceptions.yml)',
+          '',
+          ...exceptionProblems.map((p) => `- ${p}.`),
+          '',
+        ]
       : []),
     ...table('Failing', verdict.failing ?? []),
     ...table('Let through by an exception', verdict.excepted ?? []),
     ...table('Unfixable, reported only', verdict.unfixable ?? []),
     ...table('Already in the baseline', verdict.known ?? []),
-    ...(ok && !(verdict.excepted ?? []).length && !(verdict.unfixable ?? []).length && !(verdict.known ?? []).length
+    ...(ok &&
+    !(verdict.excepted ?? []).length &&
+    !(verdict.unfixable ?? []).length &&
+    !(verdict.known ?? []).length
       ? ['No Critical or High finding.', '']
       : []),
   ].join('\n');
@@ -235,10 +247,17 @@ function main(argv) {
     verdict = { ok: true };
   } else if (mode === 'image' && files.length > 0) {
     title = `image scan (${files.map((f) => path.basename(f)).join(', ')})`;
-    verdict = evaluateImage(files.flatMap((f) => findingsOf(readJson(f))), exceptions);
+    verdict = evaluateImage(
+      files.flatMap((f) => findingsOf(readJson(f))),
+      exceptions,
+    );
   } else if (mode === 'deps' && files.length === 2) {
     title = 'production dependency scan';
-    verdict = evaluateDeps(findingsOf(readJson(files[0])), findingsOf(readJson(files[1])), exceptions);
+    verdict = evaluateDeps(
+      findingsOf(readJson(files[0])),
+      findingsOf(readJson(files[1])),
+      exceptions,
+    );
   } else {
     console.error(
       'usage: node ci/release/scan-gate.mjs exceptions | image <grype.json>... | deps <head.json> <base.json>',
@@ -246,7 +265,8 @@ function main(argv) {
     return 2;
   }
   const summary = renderSummary(title, verdict, problems);
-  if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${summary}\n`);
+  if (process.env.GITHUB_STEP_SUMMARY)
+    appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${summary}\n`);
   console.log(summary);
   for (const problem of problems) console.log(`::error title=scan exceptions::${problem}`);
   for (const f of verdict.failing ?? []) {

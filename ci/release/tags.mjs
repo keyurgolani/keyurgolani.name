@@ -58,7 +58,8 @@ export function promotionTargets(tag, finalTags) {
   const others = finalTags
     .map(parseReleaseTag)
     .filter((other) => other && other.kind === 'final' && other.version !== release.version);
-  const newer = (inLine) => others.some((other) => inLine(other) && compareVersions(other, release) > 0);
+  const newer = (inLine) =>
+    others.some((other) => inLine(other) && compareVersions(other, release) > 0);
   const targets = [release.version];
   if (!newer((o) => o.major === release.major && o.minor === release.minor)) {
     targets.push(`${release.major}.${release.minor}`);

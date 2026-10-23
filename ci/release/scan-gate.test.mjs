@@ -13,9 +13,7 @@ import {
 } from './scan-gate.mjs';
 
 const grype = (name) =>
-  findingsOf(
-    JSON.parse(readFileSync(new URL(`./fixtures/${name}.json`, import.meta.url), 'utf8')),
-  );
+  findingsOf(JSON.parse(readFileSync(new URL(`./fixtures/${name}.json`, import.meta.url), 'utf8')));
 const ON = parseDate('2026-10-23');
 const entry = (fields = {}) => ({
   id: 'CVE-2026-1001',
@@ -127,7 +125,10 @@ test('the exceptions file must be a list under exceptions:', () => {
     /unknown top-level keys: ignore/,
   );
   assert.match(readExceptions('exceptions: [', { on: ON }).problems.join(), /isn't valid YAML/);
-  assert.deepEqual(readExceptions('exceptions: []\n', { on: ON }), { exceptions: [], problems: [] });
+  assert.deepEqual(readExceptions('exceptions: []\n', { on: ON }), {
+    exceptions: [],
+    problems: [],
+  });
 });
 
 test('the committed exceptions file reads with no problem', () => {

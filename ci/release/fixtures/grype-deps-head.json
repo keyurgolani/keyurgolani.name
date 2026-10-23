@@ -57,9 +57,7 @@
         "namespace": "github:language:javascript",
         "severity": "Critical",
         "fix": {
-          "versions": [
-            "16.2.5"
-          ],
+          "versions": ["16.2.5"],
           "state": "fixed"
         }
       },
@@ -84,9 +82,7 @@
         "namespace": "github:language:javascript",
         "severity": "Medium",
         "fix": {
-          "versions": [
-            "19.2.6"
-          ],
+          "versions": ["19.2.6"],
           "state": "fixed"
         }
       },

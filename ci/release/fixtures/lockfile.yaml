@@ -5,7 +5,6 @@ settings:
   excludeLinksFromLockfile: false
 
 importers:
-
   .:
     devDependencies:
       prettier:
@@ -58,21 +57,20 @@ importers:
         version: 1.3.0
 
 packages:
-
   '@playwright/test@1.58.2':
-    resolution: {integrity: sha512-test}
+    resolution: { integrity: sha512-test }
 
   '@swc/helpers@0.5.15':
-    resolution: {integrity: sha512-test}
+    resolution: { integrity: sha512-test }
 
   ansi-regex@5.0.1:
-    resolution: {integrity: sha512-test}
+    resolution: { integrity: sha512-test }
 
   left-pad@1.3.0:
-    resolution: {integrity: sha512-test}
+    resolution: { integrity: sha512-test }
 
   next@16.2.4:
-    resolution: {integrity: sha512-test}
+    resolution: { integrity: sha512-test }
     peerDependencies:
       '@playwright/test': ^1.51.1
       react: ^19.0.0
@@ -81,31 +79,30 @@ packages:
         optional: true
 
   prettier@3.9.10:
-    resolution: {integrity: sha512-test}
+    resolution: { integrity: sha512-test }
 
   react@19.2.5:
-    resolution: {integrity: sha512-test}
+    resolution: { integrity: sha512-test }
 
   server-only@0.0.1:
-    resolution: {integrity: sha512-test}
+    resolution: { integrity: sha512-test }
 
   sharp@0.34.5:
-    resolution: {integrity: sha512-test}
+    resolution: { integrity: sha512-test }
 
   string-width@4.2.3:
-    resolution: {integrity: sha512-test}
+    resolution: { integrity: sha512-test }
 
   strip-ansi@6.0.1:
-    resolution: {integrity: sha512-test}
+    resolution: { integrity: sha512-test }
 
   typescript@5.9.3:
-    resolution: {integrity: sha512-test}
+    resolution: { integrity: sha512-test }
 
   zod@3.25.76:
-    resolution: {integrity: sha512-test}
+    resolution: { integrity: sha512-test }
 
 snapshots:
-
   '@playwright/test@1.58.2': {}
 
   '@swc/helpers@0.5.15': {}

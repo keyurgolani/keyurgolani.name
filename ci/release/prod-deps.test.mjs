@@ -45,7 +45,10 @@ test("the repository's own lockfile reads, and its inventory has no dev tooling"
 test('an unreadable lockfile is refused', () => {
   assert.throws(() => productionPackages(''), /empty/);
   assert.throws(() => productionPackages("lockfileVersion: '6.0'\n"), /not 9\.x/);
-  assert.throws(() => productionPackages("lockfileVersion: '9.0'\nimporters: {}\n"), /no importer apps\/web/);
+  assert.throws(
+    () => productionPackages("lockfileVersion: '9.0'\nimporters: {}\n"),
+    /no importer apps\/web/,
+  );
   assert.throws(
     () =>
       productionPackages(
