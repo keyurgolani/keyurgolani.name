@@ -1,13 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { REGISTRY_ID_PATTERN } from '@portfolio/schema';
 import { setLiveComposition } from './config-store';
-import {
-  EXPERIENCE_SEGMENT,
-  experiencePattern,
-  isExperiencePath,
-  SAMPLE_PATTERN,
-  segmentFor,
-} from './experience';
+import { experiencePattern, isExperiencePath, SAMPLE_PATTERN, segmentFor } from './experience';
+import { EXPERIENCE_ID, EXPERIENCE_SEGMENT } from './route-header';
 
 // Which experience segment a visitor page renders in (#6, Slice 2), from
 // memory alone: the live composition config-store holds, and under demo,
@@ -22,9 +18,12 @@ const REGISTERED = [
 
 const query = (text = '') => new URLSearchParams(text);
 
-test('an experience segment sits at /_experience/<id>, its route catching every path below', () => {
+test('an experience segment sits at /_experience/<id>, its route catching every path below, for any id the registry takes', () => {
   assert.equal(EXPERIENCE_SEGMENT, '_experience');
   assert.equal(experiencePattern('acme-tiles'), '/_experience/acme-tiles/[[...route]]');
+  // next.config.ts matches proxy.ts's mark of one whole against EXPERIENCE_ID.
+  assert.equal(`^${EXPERIENCE_ID}$`, REGISTRY_ID_PATTERN.source);
+  assert.equal(REGISTRY_ID_PATTERN.flags, '');
 });
 
 test("an experience segment's own path is one in any case or encoding, and nothing else is", () => {

@@ -249,11 +249,12 @@ module.exports = {
         'reads a session. A grant path is checked through the port the owner composition binds ' +
         'into the frozen config, which reads the grant and its session by digest, never a cookie. ' +
         "A visitor page's experience segment (#6, Slice 2) comes from server/experience.ts, " +
-        'which reads only the live composition config-store holds and the query.',
+        'which reads only the live composition config-store holds and the query, and goes on ' +
+        'in the header server/route-header.ts names, which next.config.ts reads too.',
       from: { path: '^apps/web/src/proxy\\.ts$' },
       to: {
         pathNot: [
-          '^apps/web/src/server/(capabilities|routes|config-store|ready-starting|experience)\\.ts$',
+          '^apps/web/src/server/(capabilities|routes|route-header|config-store|ready-starting|experience)\\.ts$',
           '^apps/web/src/server/(studio-headers|session-cookie|return-to|preview-headers)\\.ts$',
           '^apps/web/src/preview/status\\.ts$',
           '^node_modules/(\\.pnpm/next@|next/)',

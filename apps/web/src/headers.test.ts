@@ -5,9 +5,14 @@ import {
   RSC_HEADER,
 } from 'next/dist/client/components/app-router-headers';
 import { modifyRouteRegex } from 'next/dist/lib/redirect-status';
+import { parseUrl } from 'next/dist/shared/lib/router/utils/parse-url';
 import { getPathMatch } from 'next/dist/shared/lib/router/utils/path-match';
-import { matchHas } from 'next/dist/shared/lib/router/utils/prepare-destination';
+import {
+  matchHas,
+  prepareDestination,
+} from 'next/dist/shared/lib/router/utils/prepare-destination';
 import config from '../next.config';
+import { EXPERIENCE_HEADER } from './server/route-header';
 import { NOT_FOUND_HEADER } from './server/studio-headers';
 
 // The headers next.config.ts sends (#1 item 22, #2), path by path, matched
@@ -23,7 +28,8 @@ import { NOT_FOUND_HEADER } from './server/studio-headers';
 // preview's own CSP and Referrer-Policy there, and only the build's assets
 // and /_portfolio allow any origin. Then the rewrite proxy.ts uses to send a
 // path to Next's 404 page: a Studio page under a profile with none, or a
-// route spelled with a fixed segment percent-encoded.
+// route spelled with a fixed segment percent-encoded, and the one that sends
+// a visitor page to its experience segment (#6, Slice 2).
 
 /** The headers next.config.ts gives `pathname`, lowercased, the last entry winning as in Next. */
 async function configHeaders(pathname: string): Promise<Record<string, string>> {
@@ -187,8 +193,8 @@ test("any path proxy.ts marks goes to Next's 404 page, before Next looks anywher
     assert.deepEqual(match(path), {}, path);
   }
   // afterFiles holds #5's rewrite of a missing path, which proxy.test.ts
-  // checks, and the router prefetch rule for /_next/, which the test below
-  // checks.
+  // checks, the router prefetch rule for /_next/, and the experience
+  // segments' rule (#6, Slice 2), which the tests below check.
   assert.deepEqual(rewrites.fallback, []);
 });
 
@@ -245,4 +251,121 @@ test("a request with Next's router prefetch header and no RSC header goes to Nex
   }
   // A build file: Next serves it before afterFiles, and beforeFiles leaves it alone.
   assert.deepEqual(applied(beforeFiles, '/_next/static/chunks/app.js', prefetch), []);
+});
+
+test('a visitor page proxy.ts marks with its experience segment goes there, its path below the segment and its query as sent, and a prefetch with no RSC header still goes to the 404 page (#6, Slice 2)', async () => {
+  const rewrites = await config.rewrites?.();
+  assert.ok(rewrites && !Array.isArray(rewrites), 'rewrites in phases');
+  const { beforeFiles, afterFiles } = rewrites;
+  assert.ok(beforeFiles && afterFiles);
+  type Rule = NonNullable<typeof beforeFiles>[number];
+  type At = { pathname: string; query: ReturnType<typeof parseUrl>['query'] };
+  // `rule` on `at`, as Next's router matches it, the source and then has and
+  // missing, with the path and query it builds from the destination, or null.
+  const rewrite = (rule: Rule, at: At, headers: Record<string, string>): At | null => {
+    const params = getPathMatch(rule.source, {
+      strict: true,
+      removeUnnamedParams: true,
+      regexModifier: (regex) => modifyRouteRegex(regex),
+      sensitive: false,
+    })(at.pathname);
+    const matched = params && matchHas({ headers } as never, at.query, rule.has, rule.missing);
+    if (!params || !matched) return null;
+    const { parsedDestination } = prepareDestination({
+      appendParamsToQuery: true,
+      destination: rule.destination,
+      params: { ...params, ...matched },
+      query: at.query,
+    });
+    return {
+      pathname: parsedDestination.pathname ?? '',
+      query: { ...at.query, ...parsedDestination.query },
+    };
+  };
+  // The 404 page's route has a file at its own path; each segment's catch-all
+  // answers the paths below /_experience/<id>.
+  const file = (pathname: string) => pathname === '/_not-found';
+  const segment = (pathname: string) =>
+    /^\/_experience\/[a-z][a-z0-9-]{1,47}(?:\/|$)/.test(pathname);
+  // Where Next's router sends `url` with `headers`, as resolve-routes walks
+  // the phases: each beforeFiles rule that matches, on the path the one
+  // before it left, then a file at that exact path, then each afterFiles rule
+  // that matches until one leads to a route, then the dynamic routes. Null
+  // when none of those is one of the routes above.
+  const routed = (url: string, headers: Record<string, string>): At | null => {
+    const { pathname, query } = parseUrl(url);
+    let at: At = { pathname, query };
+    for (const rule of beforeFiles) at = rewrite(rule, at, headers) ?? at;
+    if (file(at.pathname)) return at;
+    for (const rule of afterFiles) {
+      const next = rewrite(rule, at, headers);
+      if (!next) continue;
+      at = next;
+      if (file(at.pathname) || segment(at.pathname)) return at;
+    }
+    return segment(at.pathname) ? at : null;
+  };
+  const mark = (id: string) => ({ [EXPERIENCE_HEADER]: id });
+  // The path below the segment, spelled as sent, and the query as sent, with
+  // no parameter of the rule's added to it.
+  const sent: [url: string, pathname: string, query: Record<string, string>][] = [
+    ['/', '/_experience/fallback', {}],
+    [
+      '/?utm=x&experience=y&path=z',
+      '/_experience/fallback',
+      { utm: 'x', experience: 'y', path: 'z' },
+    ],
+    ['/about', '/_experience/fallback/about', {}],
+    [
+      '/sample/about?variant=acme-tiles',
+      '/_experience/fallback/sample/about',
+      { variant: 'acme-tiles' },
+    ],
+    ['/work/tide-tables/notes', '/_experience/fallback/work/tide-tables/notes', {}],
+    ['/caf%C3%A9/a%2Fb', '/_experience/fallback/caf%C3%A9/a%2Fb', {}],
+  ];
+  for (const [url, pathname, query] of sent) {
+    assert.deepEqual(routed(url, mark('fallback')), { pathname, query }, url);
+  }
+  // Next's router asks for a page's payload, and prefetches it, with RSC: 1.
+  const router: Record<string, string>[] = [
+    { [RSC_HEADER]: '1' },
+    { [RSC_HEADER]: '1', [NEXT_ROUTER_PREFETCH_HEADER]: '1' },
+  ];
+  for (const headers of router) {
+    assert.deepEqual(routed('/about', { ...mark('acme-tiles'), ...headers }), {
+      pathname: '/_experience/acme-tiles/about',
+      query: {},
+    });
+  }
+  // A prefetch with no RSC header, which Next's router never sends, gets the
+  // 404 page (#1), and the mark takes it no further.
+  const prefetch: Record<string, string>[] = [
+    { [NEXT_ROUTER_PREFETCH_HEADER]: '1' },
+    { [NEXT_ROUTER_PREFETCH_HEADER]: '1', [RSC_HEADER]: '' },
+  ];
+  for (const path of ['/', '/about', '/sample/about?variant=acme-tiles']) {
+    for (const headers of prefetch) {
+      assert.equal(
+        routed(path, { ...mark('fallback'), ...headers })?.pathname,
+        '/_not-found',
+        path,
+      );
+    }
+  }
+  // The mark is an id, whole, so it spells no path; without one, nothing here moves the request.
+  for (const value of [
+    '',
+    'a',
+    `a${'b'.repeat(48)}`,
+    'Fallback',
+    '../studio',
+    'fallback/../../studio',
+    'fallback?x=1',
+    'fallback%2F..',
+    'fallback, acme-tiles',
+  ]) {
+    assert.equal(routed('/about', mark(value)), null, value);
+  }
+  assert.equal(routed('/about', {}), null);
 });

@@ -15,15 +15,16 @@ import { resolveRoute } from './routes';
 // experience segment of the variant it renders: registry generation writes
 // app/(site)/%5Fexperience/<id>/[[...route]]/page.tsx for each registered
 // variant, which hands this its own loader and its own client host modules,
-// and proxy.ts rewrites every GET or HEAD of a visitor page there. The
-// segments below /_experience/<id> are the path the visitor asked for.
+// and next.config.ts rewrites every GET or HEAD of a visitor page there, to
+// the segment proxy.ts names. The segments below /_experience/<id> are the
+// path the visitor asked for, and the query is theirs as sent.
 //
 // The page asks the route table about that path again, as proxy.ts did, and
 // reads the live revision. Then it asks segmentFor() which segment the
 // request belongs in, which reads the live composition config-store holds:
 // the value proxy.ts read, which the reader has just refreshed. When the
 // revision changed in between, or its composition isn't this segment's, it
-// answers a 307 to the same URL, and proxy.ts sends that request to the
+// answers a 307 to the same URL, and proxy.ts marks that request for the
 // right segment. Otherwise it renders the route: a view of the composition,
 // a 307 to the canonical route of a view only another installed variant
 // declares, or the 404 page.

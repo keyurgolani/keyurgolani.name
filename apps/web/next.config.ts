@@ -1,7 +1,12 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import type { NextConfig } from 'next';
-import { ROUTE_HEADER } from './src/server/route-header';
+import {
+  EXPERIENCE_HEADER,
+  EXPERIENCE_ID,
+  EXPERIENCE_SEGMENT,
+  ROUTE_HEADER,
+} from './src/server/route-header';
 
 /**
  * The registered variant and content extension packages, which
@@ -118,7 +123,7 @@ const config: NextConfig = {
       // this renders the 404 page through the same /_not-found route, from
       // the server and with its 404 status. As an afterFiles rewrite it runs
       // once Next has looked in public/, so a file there is still served, and
-      // before the dynamic routes, so the views catch-all never sees the path.
+      // before the dynamic routes, so none of them sees the path.
       // Its source is an unnamed group: Next adds a named parameter, such as
       // /:path*'s, to the 404 page's query, which a path no route matches
       // never has.
@@ -136,6 +141,27 @@ const config: NextConfig = {
           has: [{ type: 'header' as const, key: 'next-router-prefetch', value: '.*' }],
           missing: [{ type: 'header' as const, key: 'rsc' }],
           destination: '/_not-found',
+        },
+        // A visitor page (#6, Slice 2): proxy.ts names the experience segment
+        // it renders in, x-portfolio-experience (EXPERIENCE_HEADER in
+        // server/route-header.ts), and this sends the request there, with its
+        // path below the segment and its query as sent. Next adds a parameter
+        // to the query only when the destination uses none, and this one uses
+        // both, and the value pattern takes an id whole, so the header spells
+        // no path. It's an afterFiles rule because Next applies each
+        // beforeFiles rule that matches to the path the one before it left:
+        // there it would send /_not-found, where the router prefetch rule
+        // sends a prefetch with no RSC header, on to a segment.
+        {
+          source: '/:path*',
+          has: [
+            {
+              type: 'header' as const,
+              key: EXPERIENCE_HEADER,
+              value: `(?<experience>${EXPERIENCE_ID})`,
+            },
+          ],
+          destination: `/${EXPERIENCE_SEGMENT}/:experience/:path*`,
         },
       ],
       fallback: [],

@@ -252,8 +252,8 @@ function unbuiltSpellings(): string[] {
 
 /**
  * The visitor pages `profile` serves at a path that names one (#6, Slice 2):
- * each renders in its composition's experience segment, through proxy.ts's
- * rewrite, and exists for GET and HEAD alone.
+ * each renders in its composition's experience segment, which proxy.ts names
+ * and next.config.ts rewrites it to, and exists for GET and HEAD alone.
  */
 const visitorPages = (profile: Profile) =>
   listRoutes()
@@ -268,8 +268,8 @@ const visitorPages = (profile: Profile) =>
  * Slice 2), with what a path no route matches answers it the same: as
  * written, deeper, with a query and with `_rsc`, in another case, with a
  * fixed segment percent-encoded, %5F among them, with its slashes encoded,
- * and with an `.rsc` suffix. Only proxy.ts's own rewrite reaches one, so each
- * answers every method as its counterpart under /no-such-page does.
+ * and with an `.rsc` suffix. Only a request proxy.ts marks reaches one, so
+ * each answers every method as its counterpart under /no-such-page does.
  */
 function experienceSpellings(): (readonly [target: string, unknown: string])[] {
   return listExperienceRoutes().flatMap(({ pattern }) => {
@@ -811,7 +811,7 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
           expect(await response.text(), what).toBe('Method not allowed.');
         }
         // Next's router asks for the page's payload, and prefetches it, with
-        // RSC: 1; the rewrite serves both from the same segment.
+        // RSC: 1; both render in the same segment.
         const router: Record<string, string>[] = [
           { rsc: '1' },
           { rsc: '1', 'next-router-prefetch': '1' },
@@ -828,7 +828,7 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
   );
 
   test(
-    "no request reaches an experience segment but proxy.ts's own rewrite: its path, in any spelling and to any method, answers as /no-such-page does, and with a trailing slash gets the same 308 (#6, Slice 2)",
+    "no request reaches an experience segment but one proxy.ts marks: its path, in any spelling and to any method, answers as /no-such-page does, with a trailing slash it gets the same 308, and a client's own mark changes nothing (#6, Slice 2)",
     {
       annotation: [
         ...listExperienceRoutes().map(({ pattern }) => ({ type: 'route', description: pattern })),
@@ -861,6 +861,20 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
           expect(response.status(), what).toBe(308);
           expect(response.headers()['location'], what).toBe(concrete(pattern));
           expectProfileHeaders(profile, response, what);
+        }
+      }
+      // A mark of the client's own, naming a segment this build has, goes no
+      // further than proxy.ts: a path no route matches is still the global
+      // 404 page, not a segment's.
+      const mark = { 'x-portfolio-experience': 'fallback' };
+      for (const target of ['/no-such-page', '/no-such-page/work/tide-tables?view=all']) {
+        for (const method of ['GET', 'HEAD'] as const) {
+          const what = `${method} ${target} with a mark of the client's`;
+          const options = { method, maxRedirects: 0 };
+          const marked = await request.fetch(target, { ...options, headers: mark });
+          const plain = await request.fetch(target, options);
+          expect(marked.status(), what).toBe(404);
+          expect(await shape(marked, target), what).toEqual(await shape(plain, target));
         }
       }
     },

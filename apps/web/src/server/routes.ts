@@ -70,14 +70,14 @@ export interface RouteEntry {
   /**
    * A visitor page that renders in the experience segment of the
    * composition it shows (#6, Slice 2), so it has no route file of its own:
-   * proxy.ts rewrites each GET or HEAD for it to that segment, and answers
-   * any other method with a 405.
+   * proxy.ts marks each GET or HEAD for it with that segment, which
+   * next.config.ts rewrites it to, and answers any other method with a 405.
    */
   readonly experience?: true;
   /**
    * An experience segment's own route, a file registry generation writes,
-   * which only proxy.ts's rewrite reaches (#6, Slice 2). listRoutes() leaves
-   * them out: a request for one's own path names nothing.
+   * which only the rewrite of a request proxy.ts marks reaches (#6, Slice 2).
+   * listRoutes() leaves them out: a request for one's own path names nothing.
    */
   readonly internal?: true;
   /**
@@ -256,7 +256,8 @@ const ROUTES = [
  * Each registered variant's experience segment (#6, Slice 2), the fallback
  * composition's included: the route file registry generation writes at
  * app/(site)/%5Fexperience/<id>/[[...route]]/page.tsx, which every profile
- * serves through proxy.ts's rewrite of a visitor page, and only through it.
+ * serves to a visitor page proxy.ts marks for it, through next.config.ts's
+ * rewrite, and to nothing else.
  */
 const EXPERIENCE_ROUTES = VARIANTS.map(
   ({ manifest }) =>
@@ -311,7 +312,7 @@ export function listRoutes(): readonly RouteEntry[] {
   return ROUTES;
 }
 
-/** The experience segments' routes (#6, Slice 2), which only proxy.ts's rewrite reaches. */
+/** The experience segments' routes (#6, Slice 2), which only a request proxy.ts marks reaches. */
 export function listExperienceRoutes(): readonly RouteEntry[] {
   return EXPERIENCE_ROUTES;
 }
@@ -430,8 +431,8 @@ const ROUTE_FILE_PATHS: ReadonlySet<string> = new Set([
  * path whose slashes are encoded, as `/studio%2Fsign-in` decodes to
  * `/studio/sign-in`. The table reads such a path segment by segment and
  * finds it names nothing, but Next's file check finds the route file before
- * the afterFiles rewrite runs, and the views catch-all answers it with a 404
- * that needs JavaScript. proxy.ts sends it through the beforeFiles rewrite.
+ * the afterFiles rewrite runs. proxy.ts sends it through the beforeFiles
+ * rewrite.
  */
 export function spellsRouteFile(pathname: string): boolean {
   if (ROUTE_FILE_PATHS.has(pathname)) return true;

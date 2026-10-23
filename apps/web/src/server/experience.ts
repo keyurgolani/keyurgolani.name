@@ -3,6 +3,7 @@ import { VARIANTS } from '../lib/generated/registry.meta';
 import type { RegisteredIds } from '../lib/sample';
 import type { Profile } from './capabilities';
 import { liveComposition } from './config-store';
+import { EXPERIENCE_SEGMENT } from './route-header';
 
 // The experience segments (#6, Slice 2). Registry generation writes one route
 // segment per registered variant, the fallback composition's included:
@@ -12,18 +13,15 @@ import { liveComposition } from './config-store';
 // of every client module its server graph reaches, so one page that could
 // load any variant put every variant's client code on every visitor's wire.
 //
-// proxy.ts rewrites each GET or HEAD of a visitor page to the segment of
-// the composition that renders, from segmentFor(), which reads memory only:
-// the live composition config-store holds, which the composition root's
-// reader writes on every getLive(), and the request's own query. The page
-// there reads the same value again, after it has read the live revision,
-// and answers a 307 to the same URL when the revision changed in between.
-// A request for a segment's own path, in any spelling, answers as a path no
-// route matches. This module imports nothing that reads a request or a file,
-// so proxy.ts can.
-
-/** The first segment of every experience segment's path, which the contract reserves. */
-export const EXPERIENCE_SEGMENT = '_experience';
+// proxy.ts marks each GET or HEAD of a visitor page with the segment of the
+// composition that renders, from segmentFor(), which reads memory only: the
+// live composition config-store holds, which the composition root's reader
+// writes on every getLive(), and the request's own query. next.config.ts
+// rewrites the request there. The page there reads the same value again,
+// after it has read the live revision, and answers a 307 to the same URL
+// when the revision changed in between. A request for a segment's own path,
+// in any spelling, answers as a path no route matches. This module imports
+// nothing that reads a request or a file, so proxy.ts can.
 
 /** The route table's pattern for the experience segment of the registered variant `id`. */
 export function experiencePattern<Id extends string>(id: Id) {
@@ -36,8 +34,8 @@ export const SAMPLE_PATTERN = '/sample/[[...path]]';
 /**
  * Whether a request's path is an experience segment's, however it's spelled:
  * in any case, percent-encoded, %5F and an encoded slash included, or with
- * a `.rsc` suffix. Nobody asks for one but proxy.ts's own rewrite, which
- * never comes back through proxy.ts.
+ * a `.rsc` suffix. Only next.config.ts's rewrite of a request proxy.ts
+ * marked reaches one, and it rewrites after proxy.ts has run.
  */
 export function isExperiencePath(pathname: string): boolean {
   let decoded = pathname;

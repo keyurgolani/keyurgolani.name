@@ -7,8 +7,9 @@
 // the chunks of a page that renders it hold no other variant's code and
 // name no other variant's enhancement: Turbopack gives every page one
 // client chunk group of every client module its server graph reaches.
-// proxy.ts rewrites each visitor page to the segment of the composition
-// that renders it (server/experience.ts).
+// proxy.ts marks each visitor page with the segment of the composition
+// that renders it (server/experience.ts), and next.config.ts rewrites the
+// request there.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -35,8 +36,9 @@ export function renderExperienceSegments(result: RegistryResult): Map<string, st
       `${id}/[[...route]]/page.tsx`,
       `${HEADER}
 //
-// ${id}'s experience segment (#6, Slice 2): proxy.ts rewrites each visitor
-// page that renders ${id} here. It imports no other variant.
+// ${id}'s experience segment (#6, Slice 2): each visitor page that renders
+// ${id} comes here, through the rewrite of proxy.ts's mark in next.config.ts.
+// It imports no other variant.
 
 import { experiencePage } from '~/server/experience-page';
 import { servedPage } from '~/server/page-guard';
