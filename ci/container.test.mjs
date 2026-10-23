@@ -198,7 +198,7 @@ function dockerfileStages() {
   return stages;
 }
 
-test('the runner stage removes the package managers the base image bundles, and the builder keeps them', () => {
+test('the runner stage upgrades its Alpine packages and removes the package managers the base image bundles, and the builder keeps them', () => {
   const { deps, builder, runner } = dockerfileStages();
   // One RUN, its continuation lines joined.
   const runs = runner
@@ -214,6 +214,9 @@ test('the runner stage removes the package managers the base image bundles, and 
   // Before the stage drops to the server's user, who couldn't remove them.
   const removal = runner.search(/^RUN rm -rf /m);
   assert.ok(removal >= 0 && removal < runner.search(/^USER /m), 'the removal runs as root');
+  // The Alpine packages move to their current releases first, as root too.
+  const upgrade = runner.search(/^RUN apk upgrade --no-cache$/m);
+  assert.ok(upgrade >= 0 && upgrade < removal, 'the runner stage runs apk upgrade first');
   // The build still installs through corepack and pnpm.
   for (const stage of [deps, builder]) {
     assert.match(stage, /^RUN corepack enable$/m);

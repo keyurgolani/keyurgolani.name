@@ -25,3 +25,7 @@ ignoredBuiltDependencies:
   # dependency (@unrs/resolver-binding-*). The script only downloads one when
   # it is missing.
   - unrs-resolver
+
+# Exact floors for packages that arrive only through other dependencies.
+overrides:
+  source-map-js: 1.2.2

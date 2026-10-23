@@ -49,6 +49,9 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 
+# The base image's Alpine packages, at their current releases.
+RUN apk upgrade --no-cache
+
 RUN addgroup -g 1001 -S nodejs && adduser -S nextjs -u 1001 -G nodejs
 
 # The server, its HEALTHCHECK, and both CLIs run on node alone, so the package
