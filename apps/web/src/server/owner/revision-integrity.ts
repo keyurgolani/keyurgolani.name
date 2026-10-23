@@ -8,8 +8,8 @@ import { ownerStoreOf } from './store';
 // the live revision as it serves it, every hash checked, and decides the
 // state, logging any render drift. A damaged live revision is served as the
 // last known good; with none, visitors get 503 and owner still starts, so
-// Studio can recover. #3's Slice 3 adds the first-start import and source
-// drift (item 24) here. Typed by shape, so this module doesn't import the
+// Studio can recover. The first-start import runs after it, in
+// first-start.ts. Typed by shape, so this module doesn't import the
 // composition root.
 
 recordOwnerModule('server/owner/revision-integrity');

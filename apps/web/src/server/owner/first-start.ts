@@ -8,8 +8,8 @@ import { ownerStoreOf } from './store';
 // an empty store it's the first-start import: the mounted pair goes live as
 // revision 1, and a pair that can't (one that doesn't serve, an old-format
 // one, or the bundled sample in production) stops startup. Once a revision
-// exists, the data directory is authoritative, and the pair's findings,
-// source drift among them, only warn. A busy lock never stops it: the
+// exists, the data directory is authoritative, and the pair's findings
+// only warn. A busy lock never stops it: the
 // import waits for the lock in the background, and visitors get 503 until
 // it commits. Typed by shape, so this module doesn't import the composition
 // root.

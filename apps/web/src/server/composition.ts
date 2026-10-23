@@ -222,7 +222,7 @@ export const STARTUP_REQUIREMENTS: readonly StartupRequirement[] = [
   // The mounted pair under owner (#3, item 24), after the repair. An empty
   // store imports it at first start, and one that can't go live stops
   // startup, as documents.pair stops read-only; once a revision exists, its
-  // findings and source drift only warn, since the store is what serves.
+  // findings only warn, since the store is what serves.
   {
     id: 'documents.shape',
     issue: '#3',
