@@ -324,6 +324,50 @@ test(
 );
 
 test(
+  "leaving /studio/preview while its frame's mint is out revokes the grant the mint made, so none is left active (#7, Slice 4)",
+  { annotation: [PAGE, { type: 'route', description: '/studio' }] },
+  async ({ page, app }) => {
+    await seedDraft(app, 'Leaving Person');
+    const csrf = await signIn(page, app, secret.password);
+    // The mint goes through, and its answer waits until the page has left.
+    let release!: () => void;
+    const left = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let minted: string | undefined;
+    await page.route('**/api/studio/preview.grant.mint', async (route) => {
+      const response = await route.fetch();
+      const body = (await response.json()) as { data?: { grant?: string } };
+      minted = body.data?.grant;
+      await left;
+      await route.fulfill({ response, json: body });
+    });
+    const revoked: string[] = [];
+    page.on('request', (request) => {
+      if (new URL(request.url()).pathname === '/api/studio/preview.grant.revoke') {
+        revoked.push((JSON.parse(request.postData() ?? '{}') as { grant?: string }).grant ?? '');
+      }
+    });
+    await page.goto(PREVIEW_PAGE);
+    await expect.poll(() => minted).toBeTruthy();
+    // Away within Studio, as its own links go: the surface unmounts, and the
+    // page's script goes on, so the mint's answer still comes.
+    await page.evaluate(() =>
+      (window as unknown as { next: { router: { push(href: string): void } } }).next.router.push(
+        '/studio',
+      ),
+    );
+    await expect(page).toHaveURL(/\/studio$/);
+    await expect(page.locator('.preview-surface')).toHaveCount(0);
+    release();
+    await expect.poll(() => revoked).toContain(minted);
+    // The server agrees: the grant is no longer active.
+    const status = await command(page, csrf, 'preview.grant.status', { grant: minted });
+    expect(status.body.data?.status).not.toBe('active');
+  },
+);
+
+test(
   'a grant whose status says its session ended does the same, and tells every other Studio tab, which no 401 has (#7, Slice 4)',
   { annotation: [PAGE, { type: 'route', description: '/studio' }] },
   async ({ page, app }) => {

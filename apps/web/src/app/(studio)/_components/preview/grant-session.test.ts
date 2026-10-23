@@ -166,7 +166,7 @@ test('a load with no valid hello asks for the status, and an active grant is lef
 });
 
 test('preview_blocked never mints again: the frame keeps its grant until the next save asks (#7, Slice 4)', async () => {
-  const { session, names, states } = setup({
+  const { session, names, states, timers, sent } = setup({
     'preview.grant.mint': [
       {
         status: 200,
@@ -191,11 +191,94 @@ test('preview_blocked never mints again: the frame keeps its grant until the nex
   });
   // Nothing revoked the kept grant, and nothing mints until the next save.
   assert.deepEqual(names(), ['preview.grant.mint', 'preview.grant.mint']);
-  await new Promise((resolve) => setTimeout(resolve, 20));
-  assert.deepEqual(names(), ['preview.grant.mint', 'preview.grant.mint']);
+  // The one timer left is the kept grant's heartbeat. Run as the clock
+  // would, it renews that grant and mints nothing, and it leaves none.
+  const pending = timers.filter(({ cleared }) => !cleared);
+  assert.equal(pending.length, 1);
+  for (const each of pending) {
+    each.cleared = true;
+    each.run();
+  }
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  assert.deepEqual(names(), ['preview.grant.mint', 'preview.grant.mint', 'preview.grant.renew']);
+  assert.deepEqual(sent.at(-1)?.body, { grant: grantOf(7) }, 'the renewal is of the kept grant');
   await session.mint({ ...saved, subject: { draft: `drf_${'a'.repeat(32)}`, version: 5 } });
   assert.equal(states.at(-1)?.kind, 'active');
-  assert.deepEqual(names().slice(2), ['preview.grant.mint', 'preview.grant.revoke']);
+  assert.deepEqual(names().slice(3), ['preview.grant.mint', 'preview.grant.revoke']);
+});
+
+/** A studioFetch stand-in whose answers wait until the test lets each go. */
+function heldCalls() {
+  const calls: Array<{ name: string; body: unknown; answer: (reply: unknown) => void }> = [];
+  const call = (name: string, { body }: { body?: unknown }) =>
+    new Promise<Response>((resolve) => {
+      calls.push({
+        name,
+        body,
+        answer: (data) => resolve(new Response(JSON.stringify({ data }), { status: 200 })),
+      });
+    });
+  const active = (n: number) => ({
+    status: 'active',
+    grant: grantOf(n),
+    nonce: nonceOf(n),
+    idleExpiresAt: IDLE,
+    absoluteExpiresAt: IDLE,
+  });
+  return { calls, call, active };
+}
+
+const settled = () => new Promise((resolve) => setTimeout(resolve, 5));
+
+test('a mint answered after the frame has gone has its grant revoked, never left to idle out (#7, Slice 4)', async () => {
+  const { calls, call, active } = heldCalls();
+  const states: GrantState[] = [];
+  const session = createGrantSession({ call, csrfToken: 'csrf', onState: (s) => states.push(s) });
+  const minting = session.mint(REQUEST);
+  // The frame unmounts while its mint is out.
+  session.stop();
+  calls[0]!.answer(active(1));
+  await minting;
+  await settled();
+  assert.deepEqual(
+    calls.map(({ name, body }) => [name, name === 'preview.grant.revoke' ? body : null]),
+    [
+      ['preview.grant.mint', null],
+      ['preview.grant.revoke', { grant: grantOf(1) }],
+    ],
+  );
+  // The surface hears nothing after it stopped.
+  assert.deepEqual(states, [{ kind: 'minting' }]);
+});
+
+test('of two mints that overlap, the older answer has its grant revoked, whichever comes back first (#7, Slice 4)', async () => {
+  for (const order of ['older last', 'older first'] as const) {
+    const { calls, call, active } = heldCalls();
+    const states: GrantState[] = [];
+    const session = createGrantSession({ call, csrfToken: 'csrf', onState: (s) => states.push(s) });
+    const older = session.mint(REQUEST);
+    const newer = session.mint({
+      ...REQUEST,
+      environment: { ...REQUEST.environment, enhancement: 'off' },
+    });
+    const [first, second] = order === 'older last' ? [1, 0] : [0, 1];
+    calls[first]!.answer(active(first + 1));
+    await settled();
+    calls[second]!.answer(active(second + 1));
+    await Promise.all([older, newer]);
+    await settled();
+    // The newer grant is the frame's, and the older one is revoked.
+    assert.deepEqual(
+      states.filter(({ kind }) => kind === 'active'),
+      [{ kind: 'active', grant: grantOf(2), nonce: nonceOf(2) }],
+      order,
+    );
+    const revoked = calls
+      .filter(({ name }) => name === 'preview.grant.revoke')
+      .map(({ body }) => body);
+    assert.deepEqual(revoked, [{ grant: grantOf(1) }], order);
+    session.stop();
+  }
 });
 
 test('a 401 or session_ended ends the session, and nothing more goes out, and only session_ended is news for the other tabs (#7, Slice 4)', async () => {

@@ -146,8 +146,15 @@ export function createGrantSession(options: GrantSessionOptions): GrantSession {
     timer = setTimer(() => void renew(held), renewalDelay(held.idleExpiresAt, now()));
   };
 
+  /**
+   * Revokes `held`, even once the frame has gone, so a grant nobody holds
+   * never stays active. Once the session ends, the server has ended them all.
+   */
   const revoke = (held: HeldGrant | null) => {
-    if (held) void send('preview.grant.revoke', { grant: held.grant });
+    if (!held || ended) return;
+    void call('preview.grant.revoke', { body: { grant: held.grant }, csrfToken }).catch(
+      () => undefined,
+    );
   };
 
   async function mint(next: MintRequest): Promise<void> {
@@ -155,10 +162,17 @@ export function createGrantSession(options: GrantSessionOptions): GrantSession {
     const mine = ++turn;
     set({ kind: 'minting' });
     const answer = await send('preview.grant.mint', next);
-    if (!answer || mine !== turn) return;
-    if (answer.status === 401) return endSession(false);
+    if (!answer) return;
     const data = answer.data;
-    if (answer.status === 200 && data?.status === 'active') {
+    const active = answer.status === 200 && data?.status === 'active';
+    // An answer nothing waits for now, since a newer mint took its turn or the
+    // frame has gone: the grant it made is revoked, never left to idle out.
+    if (mine !== turn || stopped) {
+      if (active) revoke({ grant: data.grant as string, nonce: data.nonce as string });
+      return;
+    }
+    if (answer.status === 401) return endSession(false);
+    if (active) {
       revoke(current);
       current = {
         grant: data.grant as string,

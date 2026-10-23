@@ -322,7 +322,7 @@ export function PreviewSurface(props: PreviewSurfaceProps) {
 
   const retry = () => {
     setPhase('loading');
-    void session.current?.mint(latest.current.props.request);
+    void session.current?.mint(heldRequest(latest.current.props.request));
   };
   const openLink = () => {
     if (link) window.open(link.href, '_blank', 'noopener,noreferrer');
