@@ -563,22 +563,26 @@ export function parseBareOrigin(value: string): URL | null {
 
 /**
  * How a preview origin's host sits beside the deployment's (#7): the same
- * host, whatever the ports; the same site, when one host is under the
- * other or both are under one parent domain, such as preview.jane.name
- * beside jane.name or www.jane.name; or neither, null. With no public suffix
- * list, two hosts under one suffix such as co.uk count as one site too,
- * which only errs toward refusing. An IP address has no parent domain.
+ * host, whatever the ports and a trailing dot; the same site, when one host
+ * is under the other or their last two labels match, such as
+ * preview.studio.jane.name beside www.jane.name; or neither, null. An IP
+ * address has no parent domain.
+ *
+ * With no public suffix list the rule over-matches: a.github.io and
+ * b.github.io, or two names under co.uk, count as one site. That's safe,
+ * since a same-site preview origin is only a warning over https, and owner
+ * runs over http only on a loopback origin.
  */
 export function siteRelation(origin: URL, preview: URL): 'same-host' | 'same-site' | null {
-  const a = origin.hostname.toLowerCase();
-  const b = preview.hostname.toLowerCase();
+  const host = (url: URL) => url.hostname.toLowerCase().replace(/\.$/, '');
+  const a = host(origin);
+  const b = host(preview);
   if (a === b) return 'same-host';
   if (a.endsWith(`.${b}`) || b.endsWith(`.${a}`)) return 'same-site';
-  const ip = (host: string) => /^\d{1,3}(?:\.\d{1,3}){3}$/.test(host) || host.startsWith('[');
+  const ip = (name: string) => /^\d{1,3}(?:\.\d{1,3}){3}$/.test(name) || name.startsWith('[');
   if (ip(a) || ip(b)) return null;
-  const parent = (host: string) => host.split('.').slice(1).join('.');
-  const shared = parent(a);
-  return shared.includes('.') && shared === parent(b) ? 'same-site' : null;
+  const site = (name: string) => name.split('.').slice(-2).join('.');
+  return a.includes('.') && b.includes('.') && site(a) === site(b) ? 'same-site' : null;
 }
 
 export function isLoopback(hostname: string): boolean {

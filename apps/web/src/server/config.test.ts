@@ -509,29 +509,43 @@ test("a preview origin on the deployment's own host is refused on any port, and 
     });
     assert.deepEqual(findings(result), ['PORTFOLIO_PREVIEW_ORIGIN:same_host'], preview);
   }
-  // The same site: a subdomain, the parent, or a sibling under one parent.
+  // The same host with a trailing dot.
+  const dotted = read({
+    ...owner,
+    PORTFOLIO_ORIGIN: 'https://jane.name',
+    PORTFOLIO_PREVIEW_ORIGIN: 'https://jane.name.',
+  });
+  assert.deepEqual(findings(dotted), ['PORTFOLIO_PREVIEW_ORIGIN:same_host']);
+  // The same site: a subdomain, the parent, or hosts whose last two labels
+  // match, however deep, and with a trailing dot.
   const sameSite = [
     ['jane.test', 'preview.jane.test'],
     ['preview.jane.test', 'jane.test'],
     ['www.jane.test', 'preview.jane.test'],
     ['localhost', 'preview.localhost'],
+    ['www.jane.name', 'preview.studio.jane.name'],
+    ['studio.jane.name', 'p.x.jane.name'],
+    ['a.b.jane.co.uk', 'c.jane.co.uk'],
+    ['jane.name', 'preview.jane.name.'],
   ] as const;
-  // Over http, which only a loopback origin may use, refused: a frame there
-  // can set cookies for Studio's host.
+  // Over http on either side, which only a loopback origin may use, refused:
+  // a frame there can set cookies for Studio's host, or Studio's cookie
+  // goes over http to begin with.
   for (const [canonical, preview] of [
-    ['localhost:3000', 'preview.localhost:3000'],
-    ['preview.localhost:3000', 'localhost:3001'],
+    ['http://localhost:3000', 'http://preview.localhost:3000'],
+    ['http://preview.localhost:3000', 'http://localhost:3001'],
+    ['http://localhost:3000', 'https://preview.localhost'],
   ] as const) {
     const plain = read({
       ...owner,
       NODE_ENV: 'development',
-      PORTFOLIO_ORIGIN: `http://${canonical}`,
-      PORTFOLIO_PREVIEW_ORIGIN: `http://${preview}`,
+      PORTFOLIO_ORIGIN: canonical,
+      PORTFOLIO_PREVIEW_ORIGIN: preview,
     });
     assert.deepEqual(
       findings(plain).filter((each) => each.startsWith('PORTFOLIO_PREVIEW')),
       ['PORTFOLIO_PREVIEW_ORIGIN:same_site'],
-      `http ${preview}`,
+      `${canonical} with ${preview}`,
     );
   }
   for (const [canonical, preview] of sameSite) {
