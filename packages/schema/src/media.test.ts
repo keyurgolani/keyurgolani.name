@@ -11,6 +11,13 @@ import { resolvePortfolioView } from './view';
 
 const hex = (digit: string) => digit.repeat(64);
 
+/** `value` without `key`. */
+function omit<T extends object>(value: T, key: keyof T): Partial<T> {
+  const copy: Partial<T> = { ...value };
+  delete copy[key];
+  return copy;
+}
+
 const RECORD: MediaRecord = {
   assetId: 'atlas-cover',
   sha256: hex('a'),
@@ -62,11 +69,9 @@ test('a record names its source, local or remote, and whether it was there', () 
       reason,
     );
   }
-  const { source: _source, ...withoutSource } = RECORD;
-  const { availability: _availability, ...withoutAvailability } = RECORD;
   for (const bad of [
-    withoutSource,
-    withoutAvailability,
+    omit(RECORD, 'source'),
+    omit(RECORD, 'availability'),
     { ...RECORD, source: { kind: 'local', path: '/etc/passwd' } },
     { ...RECORD, source: { kind: 'local', path: '../outside.jpg' } },
     { ...RECORD, source: { kind: 'remote', url: 'http://images.test/a.jpg' } },
@@ -83,8 +88,7 @@ test("each rendition names its own blob, and never the source's", () => {
   const ok = (renditions: unknown) =>
     parseMediaDocument({ assets: [{ ...RECORD, renditions }] }).ok;
   const [webp, jpeg] = RECORD.renditions;
-  const { sha256: _sha256, ...unhashed } = webp!;
-  assert.equal(ok([unhashed]), false);
+  assert.equal(ok([omit(webp!, 'sha256')]), false);
   assert.equal(ok([{ ...webp, sha256: 'B'.repeat(64) }]), false);
   const original = parseMediaDocument({
     assets: [{ ...RECORD, renditions: [webp, { ...jpeg, sha256: RECORD.sha256 }] }],

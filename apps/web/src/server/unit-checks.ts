@@ -1,5 +1,6 @@
 import type { RenderDrift, Rendering, UnitChecks } from '@portfolio/core';
 import {
+  mediaBlobs,
   resolvePortfolioView,
   validatePublicationUnit,
   type ContentExtension,
@@ -23,9 +24,9 @@ import { createAppearanceCatalog } from './appearance-catalog';
 // validator with the build's context, twice, as a publish checks a unit
 // (an unregistered variant blocks) and as serving checks the live one (it
 // only warns, and the fallback composition renders); #5's controls as the
-// `controls` snapshot; the blobs #10's media document references, none
-// until #10; and what the build renders a pair with, for the manifest and
-// for drift. It imports nothing server-only and nothing from Next, since the
+// `controls` snapshot; the blobs #10's media document references; and
+// what the build renders a pair with, for the manifest and for drift. It
+// imports nothing server-only and nothing from Next, since the
 // CLI bundles it with esbuild.
 
 export interface UnitChecksInput {
@@ -89,7 +90,10 @@ export function buildUnitChecks({
         },
       };
     },
-    referencedBlobs: () => [],
+    // Every source and rendition blob the media document names (#10), so a
+    // draft or a publish that names one the AssetStore lacks fails with
+    // asset_missing, and each manifest lists the blobs its revision keeps.
+    referencedBlobs: (media) => mediaBlobs(media),
     rendering(pair: ParsedPair): Rendering {
       const registered = selected(pair);
       return {

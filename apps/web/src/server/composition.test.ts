@@ -130,7 +130,7 @@ test('demo builds the bundled sample and loads no owner module', async (t) => {
   }
 });
 
-test('the tagged startup rows are named requirements for #2, #3, and #4', () => {
+test('the tagged startup rows are named requirements for #2, #3, #4, and #10', () => {
   assert.deepEqual(
     STARTUP_REQUIREMENTS.map((requirement) => [
       requirement.id,
@@ -147,6 +147,7 @@ test('the tagged startup rows are named requirements for #2, #3, and #4', () => 
       ['documents.pair', '#4', 'read-only', 'fatal', 'check'],
       ['revision.integrity', '#3', 'owner', 'degraded', 'owner check'],
       ['documents.shape', '#3', 'owner', 'fatal', 'owner check'],
+      ['media.renditions', '#10', 'owner', 'degraded', 'owner check'],
     ],
   );
 });

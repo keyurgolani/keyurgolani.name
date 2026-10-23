@@ -69,6 +69,10 @@ export const CAPABILITY_MATRIX = {
   publish: { owner: 'session' },
   rollback: { owner: 'session' },
   'asset.write': { owner: 'session' },
+  // #10: deriving media at a draft save, and fetching a remote image source
+  // for it. Never a visitor's: demo and read-only fetch nothing this way.
+  'media.ingest': { owner: 'session' },
+  'media.fetchRemote': { owner: 'session' },
   'preview.grant': { owner: 'session' }, // #7
   // /_fixtures/appearance (#19, Slice 3), only in a build with APPEARANCE_FIXTURES=1.
   'appearance.fixtures': fixtureGrants('appearance.fixtures'),

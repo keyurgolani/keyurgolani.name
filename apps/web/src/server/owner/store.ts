@@ -1,7 +1,14 @@
 import 'server-only';
 import { readFileSync, realpathSync } from 'node:fs';
 import path from 'node:path';
-import type { CatalogStatus, RenderDrift, Rendering, UnitChecks } from '@portfolio/core';
+import type {
+  CatalogStatus,
+  DocumentInput,
+  RenderDrift,
+  Rendering,
+  UnitChecks,
+} from '@portfolio/core';
+import { parseMediaDocument, parseSource, type MediaDocument } from '@portfolio/schema';
 import {
   claimServer,
   filesystemAuditSink,
@@ -18,6 +25,7 @@ import {
   type DraftEdit,
   type DraftId,
   type DraftOutcome,
+  type MediaIngestion,
   type ListPage,
   type MountedSource,
   type PreflightCode,
@@ -45,6 +53,7 @@ import type { ConfigIssue, DeploymentConfig } from '../config';
 import type { WriteState } from '../operations';
 import { recordOwnerModule } from '../load-trace';
 import { log } from '../log';
+import { ownerMedia } from './media';
 
 // Owner's revision store (#3, items 19, 21, and 24), over PORTFOLIO_DATA_DIR,
 // and the reader owner's visitors are served through. The data directory is
@@ -108,6 +117,19 @@ export interface OwnerStoreInput {
   };
 }
 
+/**
+ * What a draft save's session may do with media (#10), as #1's policy
+ * decided for the request: derive renditions (media.ingest), and fetch an
+ * https source for them (media.fetchRemote). Without media.ingest a save
+ * keeps the media document the draft had.
+ */
+export interface MediaGrant {
+  readonly ingest: boolean;
+  readonly fetchRemote: boolean;
+}
+
+export const NO_MEDIA: MediaGrant = Object.freeze({ ingest: false, fetchRemote: false });
+
 /** A pointer move's context: the request, and the owner's session held through the move. */
 export interface OwnerMoveContext {
   readonly requestId?: string;
@@ -127,22 +149,34 @@ export interface StudioStore {
     readonly expectedVersion?: number;
     readonly fromRevisionId?: RevisionId;
   }): Promise<DraftOutcome>;
-  saveDraft(input: {
-    readonly draftId: DraftId;
-    readonly expectedVersion: number;
-    readonly documents: UnitInput;
-  }): Promise<DraftOutcome>;
+  /**
+   * Saves the draft's portfolio and site. Its media document is derived
+   * here, never taken from the caller: ingestion's, when `media` allows it,
+   * or the one the draft had.
+   */
+  saveDraft(
+    input: {
+      readonly draftId: DraftId;
+      readonly expectedVersion: number;
+      readonly documents: UnitInput;
+    },
+    media?: MediaGrant,
+  ): Promise<DraftOutcome>;
   applyEdits(input: {
     readonly draftId: DraftId;
     readonly expectedVersion: number;
     readonly edits: readonly DraftEdit[];
   }): Promise<DraftOutcome>;
-  rebaseDraft(input: {
-    readonly draftId: DraftId;
-    readonly expectedVersion: number;
-    readonly documents: UnitInput;
-    readonly baseRevisionId: RevisionId | null;
-  }): Promise<DraftOutcome>;
+  /** Rebases the draft, its media document derived as saveDraft() derives it. */
+  rebaseDraft(
+    input: {
+      readonly draftId: DraftId;
+      readonly expectedVersion: number;
+      readonly documents: UnitInput;
+      readonly baseRevisionId: RevisionId | null;
+    },
+    media?: MediaGrant,
+  ): Promise<DraftOutcome>;
   discardDraft(input: {
     readonly draftId: DraftId;
     readonly expectedVersion?: number;
@@ -356,17 +390,80 @@ function refusedImport(
   ];
 }
 
+/** A draft's media document as a model, or null when it has none that checks. */
+function draftMedia(draft: Draft | null): MediaDocument | null {
+  const model = draft?.documents.media?.model;
+  if (model === undefined || model === null) return null;
+  const parsed = parseMediaDocument(model);
+  return parsed.ok ? parsed.value : null;
+}
+
+/** A media document as the store keeps one: JSON text. */
+const mediaInput = (document: MediaDocument): DocumentInput => ({
+  format: 'json',
+  sourceText: `${JSON.stringify(document, null, 2)}\n`,
+});
+
+/** The media document is derived: an edit to it is refused, as one that doesn't apply. */
+const MEDIA_EDIT: DraftOutcome = Object.freeze({
+  kind: 'rejected',
+  code: 'validation_failed',
+  diagnostics: Object.freeze([
+    Object.freeze({
+      code: 'media.derived',
+      severity: 'blocks-preview',
+      document: 'media',
+      pointer: '',
+      message: 'The media document is derived from the media entries when the draft is saved.',
+      remediation: "Edit the portfolio's media entries, then save the draft.",
+    }),
+  ]),
+}) as DraftOutcome;
+
 /**
  * The store as the owner, and only as the owner: no method takes an actor,
  * and every pointer move needs the session hold. `writable` runs before
- * each write.
+ * each write. A save or a rebase derives the draft's media document with
+ * `media`, the AssetStore's ingestion (#10); a caller's own media document
+ * is never written, and no edit reaches it.
  */
 export function studioStore(
   store: Store,
   reader: RevisionCatalogReader,
   writable: () => Promise<void>,
+  media?: MediaIngestion,
 ): StudioStore {
   const { drafts, publication } = store;
+  /**
+   * `documents` with the media document derived for the draft: ingestion's,
+   * from its portfolio and the records the draft had, or those records as
+   * they were. A document with no asset in it is left out.
+   */
+  async function withMedia(
+    draftId: DraftId,
+    documents: UnitInput,
+    grant: MediaGrant,
+  ): Promise<UnitInput> {
+    // The caller's media document, if it sent one, is never written.
+    const authored: UnitInput = { portfolio: documents.portfolio, site: documents.site };
+    const draft = await drafts.get(draftId);
+    // No draft: the save answers not_found, and nothing is ingested for it.
+    if (!draft) return authored;
+    const previous = draftMedia(draft);
+    let document = previous;
+    if (grant.ingest && media) {
+      const parsed = parseSource(authored.portfolio.sourceText, authored.portfolio.format);
+      const result = await media.ingest({
+        portfolio: parsed.ok ? parsed.data : null,
+        previous,
+        fetchRemote: grant.fetchRemote,
+      });
+      document = result.document;
+    }
+    return document && document.assets.length > 0
+      ? { ...authored, media: mediaInput(document) }
+      : authored;
+  }
   const write =
     <I, O>(run: (input: I) => Promise<O>) =>
     async (input: I): Promise<O> => {
@@ -396,13 +493,21 @@ export function studioStore(
     createDraft: write((input: Parameters<StudioStore['createDraft']>[0]) =>
       drafts.create(input, OWNER),
     ),
-    saveDraft: write((input: Parameters<StudioStore['saveDraft']>[0]) => drafts.save(input, OWNER)),
+    saveDraft: async (input: Parameters<StudioStore['saveDraft']>[0], grant = NO_MEDIA) => {
+      await writable();
+      const documents = await withMedia(input.draftId, input.documents, grant);
+      return drafts.save({ ...input, documents }, OWNER);
+    },
     applyEdits: write((input: Parameters<StudioStore['applyEdits']>[0]) =>
-      drafts.applyEdits(input, OWNER),
+      input.edits.some((edit) => edit.document === 'media')
+        ? Promise.resolve(MEDIA_EDIT)
+        : drafts.applyEdits(input, OWNER),
     ),
-    rebaseDraft: write((input: Parameters<StudioStore['rebaseDraft']>[0]) =>
-      drafts.rebase(input, OWNER),
-    ),
+    rebaseDraft: async (input: Parameters<StudioStore['rebaseDraft']>[0], grant = NO_MEDIA) => {
+      await writable();
+      const documents = await withMedia(input.draftId, input.documents, grant);
+      return drafts.rebase({ ...input, documents }, OWNER);
+    },
     discardDraft: write((input: Parameters<StudioStore['discardDraft']>[0]) =>
       drafts.discard(input, OWNER),
     ),
@@ -652,7 +757,7 @@ export function ownerStore({
   const owner: OwnerStore = Object.freeze({
     store,
     reader,
-    studio: studioStore(store, reader, writable),
+    studio: studioStore(store, reader, writable, ownerMedia({ config, assets: store.assets })),
     async checkDirectory() {
       const problem = await preflight({ dataDir, sourceDir: config.sourceDir });
       if (problem) return [finding(problem)];

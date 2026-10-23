@@ -125,6 +125,32 @@ test("a preview grant's events add its ref, its session's, and a count, and no o
   ]);
 });
 
+test("media ingestion's events add the asset, its hash, and a reason, never a path or a URL (#10)", () => {
+  const fields = { assetId: 'atlas-cover', sha256: 'a'.repeat(64), reason: 'missing', code: 'x' };
+  for (const event of ['media.asset.derived', 'media.source.unused']) {
+    const line = parse(
+      logLine(
+        {
+          level: 'warn',
+          event,
+          ...fields,
+          path: 'private/canary.jpg',
+          url: 'https://canary.test/a.jpg',
+          source: 'private/canary.jpg',
+        },
+        NOW,
+      ),
+    );
+    assert.deepEqual(line, { ts: line.ts, level: 'warn', event, ...fields }, event);
+  }
+  assert.deepEqual(Object.keys(parse(logLine({ level: 'info', event: 'other', ...fields }))), [
+    'ts',
+    'level',
+    'event',
+    'code',
+  ]);
+});
+
 test('an empty field is left out', () => {
   assert.deepEqual(
     Object.keys(parse(logLine({ level: 'warn', event: 'x', requestId: undefined, code: 'c' }))),

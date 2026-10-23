@@ -232,6 +232,16 @@ export const STARTUP_REQUIREMENTS: readonly StartupRequirement[] = [
     failure: 'fatal',
     load: () => import('./owner/first-start').then((module) => module.check),
   },
+  // Media renditions (#10, Risk 1): sharp loads, and the media root is a
+  // directory the server only reads. Warnings: without sharp, draft saves
+  // derive nothing new, and every rendition already derived keeps serving.
+  {
+    id: 'media.renditions',
+    issue: '#10',
+    profiles: ['owner'],
+    failure: 'degraded',
+    load: () => import('./owner/media').then((module) => module.check),
+  },
 ];
 
 interface Checked {
