@@ -36,6 +36,18 @@ module.exports = {
       to: { circular: true },
     },
     {
+      name: 'not-to-unresolvable',
+      severity: 'error',
+      comment:
+        "Every import in the web app's source resolves, so the rules below see where it goes. " +
+        'An import this cruise leaves unresolved is an edge no rule checks: every ~/ alias was ' +
+        'one until apps/web/tsconfig.json got its baseUrl, so the preview and owner-code rules ' +
+        'passed alias imports they exist to refuse (#7). check:deps generates the registry ' +
+        'first, so its modules resolve too.',
+      from: { path: '^apps/web/src/' },
+      to: { couldNotResolve: true },
+    },
+    {
       name: 'packages-not-to-apps',
       severity: 'error',
       comment: 'Shared packages must not depend on an app; apps depend on packages.',
@@ -182,13 +194,14 @@ module.exports = {
       severity: 'error',
       comment:
         'A preview document (#7) shows what a visitor gets, so nothing in app/(preview) or ' +
-        "src/preview imports Studio's route group or host-chrome.css, whose sentinel and " +
-        'markup would reach the frame (threat preview-9). Tests may.',
+        "src/preview reaches Studio's route group or host-chrome.css, whose sentinel and " +
+        'markup would reach the frame (threat preview-9): not by an import of its own, and ' +
+        'not through a shared module that imports one. Tests may.',
       from: {
         path: '^apps/web/src/(?:app/\\(preview\\)/|preview/)',
         pathNot: '\\.test\\.tsx?$',
       },
-      to: { path: ['^apps/web/src/app/\\(studio\\)/', 'host-chrome\\.css$'] },
+      to: { path: ['^apps/web/src/app/\\(studio\\)/', 'host-chrome\\.css$'], reachable: true },
     },
     {
       name: 'preview-protocol-imports-zod-and-ids-only',
@@ -311,7 +324,11 @@ module.exports = {
     // Workspace packages resolve through their pnpm symlinks to packages/*.
     preserveSymlinks: false,
     tsPreCompilationDeps: true,
-    // Absolute, so the tsconfig's own `extends` resolves from apps/web.
+    // Absolute, so the tsconfig's own `extends` resolves from apps/web. Its
+    // `~/` paths resolve here only because it sets baseUrl: without one,
+    // dependency-cruiser maps them from the directory the cruise runs in, the
+    // repository root, which has no src/, so every alias went unresolved.
+    // not-to-unresolvable fails that now.
     tsConfig: { fileName: require('node:path').join(__dirname, 'apps/web/tsconfig.json') },
     enhancedResolveOptions: {
       exportsFields: ['exports'],
