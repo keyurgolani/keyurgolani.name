@@ -975,17 +975,11 @@ export function profileMatrix(profile: Profile, { secrets = [] }: MatrixOptions 
           ? `${bare.replace(/\/[^/]+$/, '/nowhere')}${query}`
           : `/no-such-page${bare.endsWith('.rsc') ? '.rsc' : ''}${query}`;
       };
-      await expectUnknown(
-        request,
-        profile,
-        spellings,
-        {},
-        hasStudio(profile) ? nowhere : '/no-such-page',
-      );
+      const counterparts = hasStudio(profile) ? nowhere : spellings.map(reference);
+      await expectUnknown(request, profile, spellings, {}, counterparts);
       // As Next's router asks for its RSC payload, and as it prefetches one:
       // the answer its counterpart gets, Next's not-found payload, a 200
       // to an RSC request, never the route's.
-      const counterparts = hasStudio(profile) ? nowhere : spellings.map(reference);
       const asked: Record<string, string>[] = [
         { rsc: '1' },
         { rsc: '1', 'next-router-prefetch': '1' },
