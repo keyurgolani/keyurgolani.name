@@ -137,7 +137,8 @@ jobs:
   dry-run:
     name: dry-run
     needs: [dry-run-build]
-    # After a failed leg too, so the dependency scan still reports.
+    # After a failed leg too: Grype still installs, and the dependency scan
+    # still reports.
     if: ${{ !cancelled() && github.event_name == 'pull_request' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 45

@@ -76,9 +76,13 @@ test('the workflow token is contents: read, and each write is a tag-gated job of
 
 test('the dry run holds contents: read, no secret, and never reaches GHCR', () => {
   assert.equal(JOBS['dry-run-build'].if, "${{ github.event_name == 'pull_request' }}");
-  // After a failed leg too, so the dependency scan still reports.
+  // After a failed leg too: Grype still installs, and the dependency scan
+  // still reports.
   assert.deepEqual(JOBS['dry-run'].needs, ['dry-run-build']);
   assert.equal(JOBS['dry-run'].if, "${{ !cancelled() && github.event_name == 'pull_request' }}");
+  const step = (name) => stepsOf('dry-run').find((s) => s.name === name);
+  assert.equal(step('Install Grype').if, '${{ !cancelled() }}');
+  assert.match(step('Scan the production dependencies against the base').if, /!cancelled\(\)/);
   for (const id of DRY_RUN_JOBS) {
     const text = JSON.stringify(JOBS[id]);
     assert.equal(JOBS[id].permissions, undefined, `${id} keeps the workflow's contents: read`);
