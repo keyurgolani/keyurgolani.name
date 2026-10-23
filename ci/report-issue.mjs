@@ -6,9 +6,14 @@
 // didn't succeed, it opens the issue, or comments on the open one, with each
 // failed job, its result, its local command, and the failure records the
 // jobs uploaded. A job that timed out, was cancelled, or was skipped counts
-// as failed, so nothing ages silently. When every job passed, it comments
-// and closes the open issue, if any. The issue is found by a marker in its
-// body, among open issues github-actions opened.
+// as failed, so nothing ages silently, with one exception: a job named in
+// EXPECTED_SKIPS (comma- or space-separated) that skipped, as the workflow
+// skips links on the nights it doesn't run. A named job that ran and didn't
+// succeed still fails, any other skip still fails, and EXPECTED_SKIPS naming
+// a job outside report's needs is an error. When every job passed, it
+// comments and closes the open issue, if any, but only when every job ran:
+// a run with an expected skip never closes it. The issue is found by a
+// marker in its body, among open issues github-actions opened.
 //
 // Only this job holds `issues: write`. Pure Node with no dependencies.
 import { readdirSync, readFileSync, statSync } from 'node:fs';
@@ -30,13 +35,30 @@ const RESULT_TEXT = {
   skipped: 'was skipped, so it never ran',
 };
 
-/** The jobs that didn't succeed: [{ job, result }], by name. */
-export function failedJobs(needs) {
+/** EXPECTED_SKIPS as a list of job names: comma- or space-separated, empty for none. */
+export function parseExpectedSkips(text) {
+  return [
+    ...new Set(
+      String(text ?? '')
+        .split(/[\s,]+/)
+        .filter(Boolean),
+    ),
+  ];
+}
+
+/**
+ * The jobs that didn't succeed: [{ job, result }], by name. A job in
+ * `expectedSkips` that skipped doesn't count; any other result of it does.
+ */
+export function failedJobs(needs, expectedSkips = []) {
   const rows = Object.entries(needs ?? {}).map(([job, v]) => ({
     job,
     result: v?.result ?? 'unknown',
   }));
-  return rows.filter((r) => r.result !== 'success').sort((a, b) => a.job.localeCompare(b.job));
+  return rows
+    .filter((r) => r.result !== 'success')
+    .filter((r) => !(r.result === 'skipped' && expectedSkips.includes(r.job)))
+    .sort((a, b) => a.job.localeCompare(b.job));
 }
 
 /** Failure records under a directory of downloaded report artifacts. */
@@ -141,8 +163,16 @@ export function renderReport({ failed, records, runUrl, date }) {
  * What to do, given the jobs' results and the open issues: a list of
  * { kind: 'create' | 'comment' | 'close', issue?, title?, body? }.
  */
-export function decide({ needs, openIssues, records = [], runUrl, date }) {
-  const failed = failedJobs(needs);
+export function decide({ needs, openIssues, records = [], runUrl, date, expectedSkips = [] }) {
+  const unknown = expectedSkips.filter((job) => !Object.hasOwn(needs ?? {}, job));
+  if (unknown.length > 0) {
+    throw new Error(
+      `EXPECTED_SKIPS names ${unknown.join(', ')}, which report doesn't need, so no skip of it can be expected.`,
+    );
+  }
+  const failed = failedJobs(needs, expectedSkips);
+  // A job skipped by design: the run passed, without every job running.
+  const skipped = expectedSkips.filter((job) => needs?.[job]?.result === 'skipped');
   const rolling = (openIssues ?? [])
     .filter((i) => !i.pull_request && i.user?.login === BOT && (i.body ?? '').includes(MARKER))
     .sort((a, b) => a.number - b.number)[0];
@@ -161,7 +191,8 @@ export function decide({ needs, openIssues, records = [], runUrl, date }) {
       },
     ];
   }
-  if (!rolling) return [];
+  // Only a run in which every job ran can say every check passed.
+  if (!rolling || skipped.length > 0) return [];
   return [
     {
       kind: 'comment',
@@ -222,12 +253,17 @@ export async function report({ env, argv, fetchImpl = fetch, now = new Date() })
     records,
     runUrl,
     date: now.toISOString().slice(0, 10),
+    expectedSkips: parseExpectedSkips(env.EXPECTED_SKIPS),
   });
   for (const action of actions) {
     await client.apply(action);
     console.log(`[report] ${action.kind}${action.issue ? ` #${action.issue}` : ''}`);
   }
-  if (actions.length === 0) console.log('[report] every scheduled check passed; no open report');
+  if (actions.length === 0) {
+    console.log(
+      '[report] every scheduled check that ran passed; nothing to open, update, or close',
+    );
+  }
   return actions;
 }
 

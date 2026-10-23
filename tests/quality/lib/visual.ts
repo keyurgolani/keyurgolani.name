@@ -26,6 +26,61 @@ export function inPinnedImage(env: NodeJS.ProcessEnv = process.env): boolean {
 /** The fonts the image must have. */
 export const FONTS_FILE = fileURLToPath(new URL('../container/fonts.txt', import.meta.url));
 
+/**
+ * fonts.txt's header, which fonts.observed.txt starts with too, so the
+ * observed file is committed byte for byte (#11, 11-4). The list starts
+ * empty: the first scheduled run in the image writes it, and its visual
+ * cells fail until it's committed.
+ */
+export const FONTS_HEADER = [
+  '# The fonts the pinned Playwright image has (#11, Slice 1, item 7), as',
+  '# `fc-list : file family style` prints them, one per line, sorted. Every',
+  "# visual cell fails when the image's list differs from this one, so a",
+  '# screenshot never compares across font sets. Each visual run in the image',
+  '# writes what it found, this header included, to',
+  '# reports/quality/fonts.observed.txt. `pnpm quality:fonts -- <that file>`',
+  '# checks a downloaded copy, and with --write copies it here byte for byte',
+  '# (CONTRIBUTING.md, "The nightly quality matrix"). Until this file lists a',
+  '# font, every visual cell fails in the image.',
+].join('\n');
+
+/** fonts.observed.txt for `fonts`: the header, then the list, as fonts.txt keeps it. */
+export function observedFontsText(fonts: readonly string[]): string {
+  return `${FONTS_HEADER}\n${fonts.map((font) => `${font}\n`).join('')}`;
+}
+
+/** One `fc-list : file family style` line: an absolute font file, its families, and its styles. */
+const FONT_LINE = /^\/[^:\n]+: [^:\n]+(?::style=[^\n]+)?$/;
+
+/**
+ * Why `text`, a downloaded fonts.observed.txt, can't become fonts.txt, one
+ * line each, or none: it must be fonts.txt's header, then at least one font
+ * in fc-list's form, sorted, each once, ending in a newline.
+ */
+export function observedFontsProblems(text: string): string[] {
+  if (!text.startsWith(`${FONTS_HEADER}\n`)) {
+    return [
+      "It doesn't start with fonts.txt's header, so it isn't a visual run's fonts.observed.txt.",
+    ];
+  }
+  const problems: string[] = [];
+  if (!text.endsWith('\n')) problems.push("It doesn't end in a newline.");
+  const lines = text.slice(FONTS_HEADER.length + 1).split('\n');
+  if (lines.at(-1) === '') lines.pop();
+  if (lines.length === 0) problems.push('It lists no font.');
+  lines.forEach((line, index) => {
+    if (!FONT_LINE.test(line)) {
+      problems.push(
+        `Line ${index + 1} of the list isn't an fc-list font line: ${JSON.stringify(line)}.`,
+      );
+    }
+  });
+  if (normalizeFonts(lines.join('\n')).join('\n') !== lines.join('\n')) {
+    problems.push("The list isn't sorted with each font once, as a visual run writes it.");
+  }
+  return problems;
+}
+
 /** A font list as fonts.txt keeps it: one `file: family:style` per line, sorted, without comments. */
 export function normalizeFonts(text: string): string[] {
   return [

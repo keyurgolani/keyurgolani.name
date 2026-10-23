@@ -73,7 +73,7 @@ export const GOOD_STATIC: PerfSample['static'] = {
 };
 
 /** Five of `run`: what perf.spec.ts takes at default motion. */
-const five = (run: PerfRun = GOOD_RUN): PerfRun[] => [run, run, run, run, run];
+export const five = (run: PerfRun = GOOD_RUN): PerfRun[] => [run, run, run, run, run];
 
 const sample = (
   runs: readonly PerfRun[] = five(),
@@ -231,7 +231,10 @@ export const COVERAGE_CASES: readonly MetaCase[] = [
 // ---- timing: the release run's medians -------------------------------------
 
 /** A passing perf test in summary.json, with the timing perf.spec.ts would write for `runs`. */
-function perfTest(runs: readonly PerfRun[], overrides: Partial<SummaryTest> = {}): SummaryTest {
+export function perfTest(
+  runs: readonly PerfRun[],
+  overrides: Partial<SummaryTest> = {},
+): SummaryTest {
   return {
     title: 'fallback complete /, performance at 390x844 (light)',
     file: 'tests/quality/perf.spec.ts',
@@ -267,7 +270,7 @@ const timingOutcome = (summary: Pick<Summary, 'tests'> | null): MetaOutcome => {
   };
 };
 
-const lcp = (ms: number): PerfRun => ({ ...GOOD_RUN, lcpMs: ms });
+export const lcp = (ms: number): PerfRun => ({ ...GOOD_RUN, lcpMs: ms });
 
 export const TIMING_CASES: readonly MetaCase[] = [
   {

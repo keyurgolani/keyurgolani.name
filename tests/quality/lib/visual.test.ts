@@ -7,8 +7,11 @@ import {
   expectedFonts,
   fontDifference,
   FONTS_FILE,
+  FONTS_HEADER,
   inPinnedImage,
   normalizeFonts,
+  observedFontsProblems,
+  observedFontsText,
   RANDOM_SEED,
   seedRandomScript,
   VISUAL_IMAGE,
@@ -58,6 +61,38 @@ test('fonts.txt reads as a font list, and an empty one fails against any image, 
     missing: [],
     extra: ['/usr/share/fonts/x.ttf: X:style=Regular'],
   });
+});
+
+test('fonts.observed.txt is fonts.txt as a visual run writes it, so the first scheduled run bootstraps the list byte for byte', () => {
+  // The committed list starts as the header alone: no font is made up before the image lists its own.
+  assert.equal(readFileSync(FONTS_FILE, 'utf8'), `${FONTS_HEADER}\n`);
+  assert.deepEqual(expectedFonts(FONTS_FILE), []);
+  const fonts = [
+    '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf: DejaVu Sans:style=Book',
+    '/usr/share/fonts/truetype/liberation/LiberationMono-Bold.ttf: Liberation Mono:style=Bold',
+  ];
+  const observed = observedFontsText(fonts);
+  assert.deepEqual(observedFontsProblems(observed), []);
+  // Committed as it is, it reads back as the same list, with nothing left to differ.
+  assert.deepEqual(fontDifference(normalizeFonts(observed), fonts), { missing: [], extra: [] });
+  assert.deepEqual(observedFontsProblems(observedFontsText([])), ['It lists no font.']);
+  assert.match(
+    observedFontsProblems(fonts.join('\n'))[0]!,
+    /doesn't start with fonts\.txt's header/,
+  );
+  assert.match(
+    observedFontsProblems(observedFontsText([...fonts].reverse()))[0]!,
+    /isn't sorted with each font once/,
+  );
+  assert.match(
+    observedFontsProblems(observedFontsText([fonts[0]!, fonts[0]!]))[0]!,
+    /isn't sorted with each font once/,
+  );
+  assert.match(
+    observedFontsProblems(observedFontsText(['relative.ttf: X:style=Bold']))[0]!,
+    /Line 1 of the list isn't an fc-list font line/,
+  );
+  assert.deepEqual(observedFontsProblems(observed.slice(0, -1)), ["It doesn't end in a newline."]);
 });
 
 test('the seeded Math.random gives the same sequence each load, in [0, 1)', () => {

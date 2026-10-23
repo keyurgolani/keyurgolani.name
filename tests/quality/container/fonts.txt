@@ -1,8 +1,9 @@
 # The fonts the pinned Playwright image has (#11, Slice 1, item 7), as
 # `fc-list : file family style` prints them, one per line, sorted. Every
 # visual cell fails when the image's list differs from this one, so a
-# screenshot never compares across font sets. The list comes from the image
-# itself: a visual cell's run in it writes what it found to
-# reports/quality/fonts.observed.txt, which replaces the lines below. Only CI
-# runs the image, so until the first run there, no font is listed and every
-# visual cell fails in it.
+# screenshot never compares across font sets. Each visual run in the image
+# writes what it found, this header included, to
+# reports/quality/fonts.observed.txt. `pnpm quality:fonts -- <that file>`
+# checks a downloaded copy, and with --write copies it here byte for byte
+# (CONTRIBUTING.md, "The nightly quality matrix"). Until this file lists a
+# font, every visual cell fails in the image.

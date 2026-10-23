@@ -232,5 +232,195 @@
     "bodyIncludes": [
       "| ` refs ` | ``` @user &#64;user #12 &#35;12 GH-12 owner/repo#12 owner/repo&#35;12 https://github.com/o/r/issues/12 0123456789abcdef0123456789abcdef01234567 deadbeef https://x.dev www.x.dev a@b.org &amp;#64;user ``tick`` ``` |"
     ]
+  },
+  {
+    "name": "expected skip",
+    "description": "links skipped on a night it doesn't run, and EXPECTED_SKIPS names it: nothing failed, nothing to do.",
+    "needs": {
+      "links": {
+        "result": "skipped",
+        "outputs": {}
+      },
+      "quality-full": {
+        "result": "success",
+        "outputs": {}
+      }
+    },
+    "expectedSkips": ["links"],
+    "openIssues": [],
+    "expected": [],
+    "bodyIncludes": [],
+    "bodyExcludes": []
+  },
+  {
+    "name": "unexpected skip",
+    "description": "A job EXPECTED_SKIPS doesn't name skipped, as one does when its needs failed: it fails.",
+    "needs": {
+      "links": {
+        "result": "skipped",
+        "outputs": {}
+      },
+      "quality-full": {
+        "result": "failure",
+        "outputs": {}
+      },
+      "quality-verdict": {
+        "result": "skipped",
+        "outputs": {}
+      }
+    },
+    "expectedSkips": ["links"],
+    "openIssues": [],
+    "expected": [
+      {
+        "kind": "create"
+      }
+    ],
+    "bodyIncludes": [
+      "| ` quality-verdict ` | was skipped, so it never ran | ` pnpm ci:quality-verdict ` |",
+      "| ` quality-full ` | failed |"
+    ],
+    "bodyExcludes": ["| ` links ` | was skipped"]
+  },
+  {
+    "name": "expected skip that ran and failed",
+    "description": "A job EXPECTED_SKIPS names that ran and didn't succeed still fails.",
+    "needs": {
+      "links": {
+        "result": "failure",
+        "outputs": {}
+      },
+      "quality-full": {
+        "result": "success",
+        "outputs": {}
+      }
+    },
+    "expectedSkips": ["links"],
+    "openIssues": [],
+    "expected": [
+      {
+        "kind": "create"
+      }
+    ],
+    "bodyIncludes": ["| ` links ` | failed |"],
+    "bodyExcludes": []
+  },
+  {
+    "name": "expected skip that was cancelled",
+    "description": "A job EXPECTED_SKIPS names that was cancelled or timed out still fails.",
+    "needs": {
+      "links": {
+        "result": "cancelled",
+        "outputs": {}
+      },
+      "quality-full": {
+        "result": "success",
+        "outputs": {}
+      }
+    },
+    "expectedSkips": ["links"],
+    "openIssues": [],
+    "expected": [
+      {
+        "kind": "create"
+      }
+    ],
+    "bodyIncludes": ["| ` links ` | was cancelled or timed out |"],
+    "bodyExcludes": []
+  },
+  {
+    "name": "expected skip with a report open",
+    "description": "Every job that ran passed, but links didn't run: the report stays open until a run where every job ran passes.",
+    "needs": {
+      "links": {
+        "result": "skipped",
+        "outputs": {}
+      },
+      "quality-full": {
+        "result": "success",
+        "outputs": {}
+      }
+    },
+    "expectedSkips": ["links"],
+    "openIssues": [
+      {
+        "number": 60,
+        "user": {
+          "login": "github-actions[bot]"
+        },
+        "body": "<!-- scheduled-checks-report -->"
+      }
+    ],
+    "expected": [],
+    "bodyIncludes": [],
+    "bodyExcludes": []
+  },
+  {
+    "name": "expected skip with a failure and a report open",
+    "description": "A run with an expected skip still updates the open report when a job fails.",
+    "needs": {
+      "links": {
+        "result": "skipped",
+        "outputs": {}
+      },
+      "quality-full": {
+        "result": "failure",
+        "outputs": {}
+      }
+    },
+    "expectedSkips": ["links"],
+    "openIssues": [
+      {
+        "number": 60,
+        "user": {
+          "login": "github-actions[bot]"
+        },
+        "body": "<!-- scheduled-checks-report -->"
+      }
+    ],
+    "expected": [
+      {
+        "kind": "comment",
+        "issue": 60
+      }
+    ],
+    "bodyIncludes": ["| ` quality-full ` | failed |"],
+    "bodyExcludes": ["| ` links ` | was skipped"]
+  },
+  {
+    "name": "every job ran, with a report open",
+    "description": "On a Monday EXPECTED_SKIPS is empty, and every job ran and passed: comment, then close it.",
+    "needs": {
+      "links": {
+        "result": "success",
+        "outputs": {}
+      },
+      "quality-full": {
+        "result": "success",
+        "outputs": {}
+      }
+    },
+    "expectedSkips": [],
+    "openIssues": [
+      {
+        "number": 60,
+        "user": {
+          "login": "github-actions[bot]"
+        },
+        "body": "<!-- scheduled-checks-report -->"
+      }
+    ],
+    "expected": [
+      {
+        "kind": "comment",
+        "issue": 60
+      },
+      {
+        "kind": "close",
+        "issue": 60
+      }
+    ],
+    "bodyIncludes": ["Every scheduled check passed on 2026-10-26"],
+    "bodyExcludes": []
   }
 ]

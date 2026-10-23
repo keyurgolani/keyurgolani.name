@@ -18,6 +18,8 @@
 //      to its perf cells too (lib/perf/plan.ts), and summary.json gets the
 //      timing medians, which only a release run gates (lib/perf/timing.ts),
 //      and #6's budget results when the job has them (lib/perf/budgets.ts).
+//      A shard's verdict.json also keeps what `pnpm quality:merge` needs
+//      to judge the shards whole (lib/shards.ts).
 //
 // Anything after the mode, or after `--`, goes to Playwright, such as
 // --shard=1/3 or --grep. The quality host is removed once the run is done.
@@ -47,10 +49,12 @@ import type { Plan, RunMode } from './cells';
 import { plantCanary, readSecrets, scanArtifacts, scrubArtifacts } from './lib/artifacts.mjs';
 import { missingBrowsers } from './lib/browsers.mjs';
 import { buildQualityHost, QUALITY_BUILD_ENV } from './lib/build.mjs';
+import { changedFiles } from './lib/changes';
 import { cleanupOnInterrupt } from './lib/interrupt.mjs';
 import { buildReferenceHost, installReference, removeReference } from '../external-variant/run.mjs';
 import { RUN_ENGINES } from './lib/matrix';
 import { RECORD_VERSION } from './lib/failure-records';
+import { planRecord, type RunVerdict } from './lib/shards';
 import { judge, type Failure, type Verdict } from './lib/verdict';
 import { budgetResults } from './lib/perf/budgets';
 import { plannedPerf } from './lib/perf/plan';
@@ -144,32 +148,6 @@ function readSummary(): Summary | null {
   }
 }
 
-/** What the plan says, without its cells' file contents: what plan.json keeps. */
-function planRecord(plan: Plan) {
-  return {
-    mode: plan.mode,
-    cells: plan.cells.length,
-    tests: plan.tests.length,
-    targets: plan.targets,
-    reasons: plan.reasons,
-    coverage: {
-      rows: plan.coverage.rows,
-      tuples: plan.coverage.tuples,
-      accepted: plan.coverage.accepted,
-      uncoverable: plan.coverage.uncoverable,
-    },
-    planned: plan.tests.map((test) => ({
-      cell: test.cell.id,
-      viewport: test.viewport.id,
-      row: test.row.id,
-      skip: test.skip ?? null,
-      engineSkips: test.engineSkips,
-      conditions: test.conditions,
-    })),
-    perf: plannedPerf(plan),
-  };
-}
-
 function print(verdict: Verdict, options: RunOptions): void {
   const counts = Object.entries(verdict.counts)
     .map(([key, value]) => `${key} ${value}`)
@@ -244,12 +222,18 @@ async function main(argv: readonly string[]): Promise<number> {
       host = built;
       web = built.web;
     }
+    // The changed paths, read once, so every Playwright process plans the same cells.
+    const changed = options.mode === 'pr' ? changedFiles() : null;
+    if (changed) {
+      console.log(`[quality] ${changed.files.length} changed path(s), from ${changed.source}`);
+    }
     const env = {
       ...process.env,
       QUALITY_WEB: web,
       QUALITY_MODE: options.mode,
       QUALITY_CANARY: canary,
       QUALITY_SECRETS_FILE: secretsFile,
+      ...(changed ? { QUALITY_CHANGED_FILES: JSON.stringify(changed.files) } : {}),
     };
     plan = await loadPlan(env);
     writeFileSync(
@@ -257,6 +241,12 @@ async function main(argv: readonly string[]): Promise<number> {
       `${JSON.stringify(planRecord(plan), null, 2)}\n`,
     );
     console.log(`[quality] ${plan.cells.length} cells, ${plan.tests.length} tests planned`);
+    for (const { axis, id } of plan.changes) {
+      const cells = plan.cells.filter((cell) =>
+        cell.changed?.some((by) => by.axis === axis && by.id === id),
+      ).length;
+      console.log(`[quality] the [37] rule: ${axis} ${id} changed, in ${cells} cell(s)`);
+    }
     if (missing.length === 0) {
       const result = spawnSync(
         process.execPath,
@@ -307,7 +297,15 @@ async function main(argv: readonly string[]): Promise<number> {
   });
   const failures = [...setup, ...judged.failures];
   const verdict: Verdict = { ...judged, ok: failures.length === 0, failures };
-  writeFileSync(path.join(quality, 'verdict.json'), `${JSON.stringify(verdict, null, 2)}\n`);
+  // With what a merge of the shards needs (lib/shards.ts): the canary hits are labels, never the value.
+  const record: RunVerdict = {
+    ...verdict,
+    mode: options.mode,
+    shard: options.shard,
+    engines,
+    canary: { before, after },
+  };
+  writeFileSync(path.join(quality, 'verdict.json'), `${JSON.stringify(record, null, 2)}\n`);
   // The timing medians, reported and never gating here, and #6's budget
   // results when this job has them, read-only: the trace job gates those.
   const timing = summary ? timingTrend(summary) : null;

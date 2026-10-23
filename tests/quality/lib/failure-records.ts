@@ -51,6 +51,10 @@ export interface CellFailure {
   readonly surface: string;
   /** It's a registered composition, so the record names it as its variant. */
   readonly composition?: boolean;
+  /** The changed axis that brought a change-directed cell in (the owner's [37] rule). */
+  readonly axis?: 'variant' | 'designLanguage';
+  /** The changed design language, for a cell the language's change brought in. */
+  readonly pack?: string;
   readonly route: string;
   readonly tuple?: AppearanceTuple;
   /** WIDTHxHEIGHT in CSS px. */
@@ -109,6 +113,8 @@ export function cellFailureRecord(failure: CellFailure, gate: RecordGate): Recor
     gate: gate.gate,
     test: `${failure.check} on ${failure.surface}`,
     variant: failure.composition ? failure.surface : undefined,
+    axis: failure.axis,
+    pack: failure.pack,
     profile: failure.profile,
     route: failure.route,
     viewport: failure.viewport,

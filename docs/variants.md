@@ -218,6 +218,19 @@ The throw-switch run waits for the page to go idle, for up to about 15 s while i
 
 Desktop and mobile each take a screenshot of the whole page once every image on it has loaded or failed, lazy ones made eager first, attached to the report in `reports/variants/html/`. CI compares them against the baselines in `tests/variants/__screenshots__/`, pixel for pixel, and only in the pinned Playwright image (`PORTFOLIO_SCREENSHOTS=compare`) and for the platform's own `@portfolio/*` packages; a third-party variant gets the assertions alone. #11 sets the thresholds. Baselines come from CI's own run, not from a local one: when one is missing, the variants job writes it, fails, and uploads `tests/variants/__screenshots__/` as its shard's `variants-screenshots-1` or `variants-screenshots-2` artifact, and the new file is committed from there. A change that moves a first-party screenshot deletes its baseline and commits the one that run writes.
 
+## The quality gates
+
+The variant specs check a variant's contract. #11's quality cells check that it stays usable: every registered composition and surface, through axe at WCAG 2.2 AA and the keyboard, focus, occlusion, overlay, hover, reflow, content, enhancement, motion, transparency, and contrast checks, in each viewport and preference row the plan gives it, against a host built with the tier fixture packs.
+
+```sh
+pnpm exec playwright install chromium               # once
+pnpm quality:pr                                     # the PR set, as CI's quality-pr job runs it
+QUALITY_CHANGED_BASE=origin/next pnpm quality:pr    # plus the cells your changes since the merge base direct
+pnpm quality:checklist -- my-id                     # the manual checklist for your composition
+```
+
+A change under your variant's package runs it against every stable design language, and a change to a design-language pack runs that language against every stable variant (the owner's [37] rule), at every viewport in the default row and in every row at 1440x900. Those cells' failure records name the changed axis, and their messages name the tokens the page's presentation boundaries resolved, with the `resolved-tokens.json` that keeps every one. The complete matrix, `pnpm quality:full`, runs nightly in six shards, and `pnpm quality:release` runs it whole for a release candidate. [CONTRIBUTING.md](../CONTRIBUTING.md#the-quality-cells) has every command and option, and how manual runs are recorded in `quality/manual-runs/`.
+
 ## A variant from outside this repository
 
 A variant published on its own ships in this format, which [`tests/external-variant/`](../tests/external-variant/) follows:
