@@ -658,6 +658,10 @@ test('a grant serves the renditions of the media it pinned, private and no-store
   await refused(await get(grant, `portrait/${original}/w480-a1.webp`), 'superseded');
   assert.equal((await get(next, `portrait/${'c'.repeat(64)}/w480-a1.webp`)).status, 200);
 
+  // A rendition whose blob is gone is the status document, as any refusal is.
+  rmSync(store.paths.blob(blob));
+  await refused(await get(next, `portrait/${'c'.repeat(64)}/w480-a1.webp`), 'the blob gone');
+
   // The session ends, and the grant with it.
   await endSession();
   await refused(await get(next, `portrait/${'c'.repeat(64)}/w480-a1.webp`), 'after the session');

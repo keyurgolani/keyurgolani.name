@@ -259,7 +259,15 @@ test("while the catalog can't serve, visitor pages are a static 503 page, and th
   deploy(t, 'read-only');
   setServable(false);
   t.after(() => setServable(true));
-  for (const path of ['/', '/feed.xml', '/sitemap.xml', '/robots.txt', '/opengraph-image-12o0cb']) {
+  for (const path of [
+    '/',
+    '/feed.xml',
+    '/sitemap.xml',
+    '/robots.txt',
+    '/opengraph-image-12o0cb',
+    // #10's renditions are the live revision's too.
+    `/media/fixture-garden-cover/${'a'.repeat(64)}/w480-a1.webp`,
+  ]) {
     const response = await proxy(request(path));
     assert.equal(response.status, 503, path);
     assert.equal(response.headers.get('retry-after'), '120', path);

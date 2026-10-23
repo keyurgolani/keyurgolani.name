@@ -135,6 +135,8 @@ test('a private, unknown, or superseded asset, an original, or any other path is
     const response = await get(path);
     assert.equal(response.status, 404, path);
     assert.equal(response.headers.get('cache-control'), 'no-store', path);
+    // next.config.ts sends nosniff on every path too; the route doesn't lean on it.
+    assert.equal(response.headers.get('x-content-type-options'), 'nosniff', path);
     assert.equal(await response.text(), 'Not found.', path);
   }
   assert.deepEqual(opened, [], 'no blob was opened for any of them');
