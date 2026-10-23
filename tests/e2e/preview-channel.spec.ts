@@ -263,6 +263,9 @@ test(
       response.url().endsWith('/studio/sign-in'),
     );
     await frame.evaluate(() => {
+      // A raw navigation from a script in the frame is the case under test.
+      // The rule is for app code, not a test's page script.
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
       setTimeout(() => location.assign('/studio/sign-in'), 0);
     });
     const response = await studioLoad;

@@ -1,7 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import http from 'node:http';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -15,6 +23,7 @@ import {
   TREE_SNIPPET,
   WRITABLE_SNIPPET,
 } from './lib/container.mjs';
+import { MANAGER_COMMANDS, MANAGERS_SNIPPET, REMOVED_PATHS } from './lib/package-managers.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -177,6 +186,111 @@ test('the runner stage copies the app owned by root, so the server cannot change
   for (const line of copies) assert.doesNotMatch(line, /--chown/, line);
   // The one thing the server's user owns: the data directory.
   assert.deepEqual(runner.match(/chown [^&\n]+/g), ['chown nextjs:nodejs /var/lib/portfolio ']);
+});
+
+/** The Dockerfile's stages by name, each from its FROM line to the next. */
+function dockerfileStages() {
+  const text = readFileSync(path.join(ROOT, 'Dockerfile'), 'utf8');
+  const stages = {};
+  for (const part of text.split(/^(?=FROM )/m).slice(1)) {
+    stages[/^FROM .* AS (\S+)$/m.exec(part)[1]] = part;
+  }
+  return stages;
+}
+
+test('the runner stage upgrades its Alpine packages and removes the package managers the base image bundles, and the builder keeps them', () => {
+  const { deps, builder, runner } = dockerfileStages();
+  // One RUN, its continuation lines joined.
+  const runs = runner
+    .replace(/\\\n\s*/g, ' ')
+    .split('\n')
+    .filter((line) => /^RUN rm -rf /.test(line));
+  assert.equal(runs.length, 1, runs.join('\n'));
+  const removed = runs[0].slice('RUN rm -rf '.length).trim().split(/\s+/);
+  assert.deepEqual(removed, REMOVED_PATHS);
+  for (const name of ['npm', 'npx', 'corepack', 'yarn', 'yarnpkg']) {
+    assert.ok(removed.includes(`/usr/local/bin/${name}`), `the runner stage removes ${name}`);
+  }
+  // Before the stage drops to the server's user, who couldn't remove them.
+  const removal = runner.search(/^RUN rm -rf /m);
+  assert.ok(removal >= 0 && removal < runner.search(/^USER /m), 'the removal runs as root');
+  // The Alpine packages move to their current releases first, as root too.
+  const upgrade = runner.search(/^RUN apk upgrade --no-cache$/m);
+  assert.ok(upgrade >= 0 && upgrade < removal, 'the runner stage runs apk upgrade first');
+  // The build still installs through corepack and pnpm.
+  for (const stage of [deps, builder]) {
+    assert.match(stage, /^RUN corepack enable$/m);
+    assert.doesNotMatch(stage, /rm -rf \/usr\/local/);
+  }
+});
+
+test('nothing the image or a Compose example runs needs a package manager', () => {
+  const { runner } = dockerfileStages();
+  const managers = new RegExp(`\\b(${MANAGER_COMMANDS.join('|')})\\b`);
+  const commands = runner
+    .replace(/\\\n\s*/g, ' ')
+    .split('\n')
+    .filter((line) => /^(CMD|ENTRYPOINT|HEALTHCHECK) /.test(line));
+  assert.ok(
+    commands.some((line) => line.startsWith('CMD ["node", ')),
+    commands.join('\n'),
+  );
+  assert.ok(
+    commands.some((line) => line.startsWith('HEALTHCHECK ')),
+    commands.join('\n'),
+  );
+  for (const line of commands) assert.doesNotMatch(line, managers, line);
+  assert.deepEqual(dockerfileHealthcheck()[0], 'node');
+  for (const file of Object.values(EXAMPLES)) {
+    for (const [service, spec] of Object.entries(compose(file).services)) {
+      for (const key of ['command', 'entrypoint']) {
+        if (spec[key] !== undefined) {
+          assert.doesNotMatch(JSON.stringify(spec[key]), managers, `${file} ${service}.${key}`);
+        }
+      }
+      if (spec.healthcheck) {
+        assert.doesNotMatch(
+          JSON.stringify(spec.healthcheck.test),
+          managers,
+          `${file} ${service}.healthcheck`,
+        );
+      }
+    }
+  }
+});
+
+test('the package-manager check finds each one the base image bundles, even a dangling link', async () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'image-managers-'));
+  const check = async () =>
+    JSON.parse(
+      (await runNode(['-e', MANAGERS_SNIPPET, root], { PATH: '/usr/local/bin:/usr/bin' })).stdout,
+    ).found;
+  try {
+    mkdirSync(path.join(root, 'usr/local/bin'), { recursive: true });
+    mkdirSync(path.join(root, 'usr/bin'), { recursive: true });
+    writeFileSync(path.join(root, 'usr/local/bin/node'), '');
+    assert.deepEqual(await check(), []);
+    for (const dir of ['npm', 'corepack']) {
+      mkdirSync(path.join(root, 'usr/local/lib/node_modules', dir), { recursive: true });
+    }
+    mkdirSync(path.join(root, 'opt/yarn-v1.22.22'), { recursive: true });
+    for (const name of ['npm', 'npx', 'corepack', 'yarn']) {
+      symlinkSync(`/nowhere/${name}`, path.join(root, 'usr/local/bin', name));
+    }
+    writeFileSync(path.join(root, 'usr/bin/pnpm'), '');
+    assert.deepEqual(await check(), [
+      '/opt/yarn-v1.22.22',
+      '/usr/bin/pnpm',
+      '/usr/local/bin/corepack',
+      '/usr/local/bin/npm',
+      '/usr/local/bin/npx',
+      '/usr/local/bin/yarn',
+      '/usr/local/lib/node_modules/corepack',
+      '/usr/local/lib/node_modules/npm',
+    ]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test('a command given no input gets no stdin, so nothing is written to a child that has gone', async () => {

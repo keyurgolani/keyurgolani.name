@@ -80,6 +80,12 @@ const config: NextConfig = {
   // no route matches gets app/global-not-found.tsx, which brings its own
   // document. Without the flag, next build exits.
   experimental: { globalNotFound: true },
+  // next build runs tsc over the whole project it's given, test files
+  // included. Tests import from tests/ and ci/, which the image and the
+  // fixture host don't have, so the build checks tsconfig.build.json: the
+  // app's tsconfig without its test files. pnpm typecheck still checks them
+  // through tsconfig.json.
+  typescript: { tsconfigPath: 'tsconfig.build.json' },
   // Next's own 308 for a trailing slash goes out before proxy.ts and these
   // headers, with none of them, so a preview grant path would get a
   // cacheable answer (#7, Slice 2). proxy.ts sends the same 308 instead,

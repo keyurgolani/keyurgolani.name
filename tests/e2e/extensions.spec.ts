@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { DEFAULT_PORTFOLIO } from '../harness/app-server.mjs';
 import { expect, test } from '../harness/fixtures';
+import { withRscHash } from '../harness/rsc';
 
 // Data from content extensions the host doesn't register (#4, item 11). The
 // server starts, logs a config.warning for each use, and keeps every
@@ -59,7 +60,8 @@ test(
     expect(html).toContain('application/ld+json');
     expect(html).not.toContain(MARKER);
 
-    const rsc = await request.get('/', { headers: { RSC: '1' } });
+    const headers = { RSC: '1' };
+    const rsc = await request.get(await withRscHash('/', headers), { headers, maxRedirects: 0 });
     expect(rsc.status()).toBe(200);
     expect(rsc.headers()['content-type']).toContain('text/x-component');
     const payload = await rsc.text();

@@ -1,4 +1,5 @@
 import { expect, test } from '../harness/fixtures';
+import { withRscHash } from '../harness/rsc';
 import { DEMO, DEMO_APP, expectNotFoundPage, PUBLIC_FILE } from './apps';
 
 // The bundled sample's routes under /sample, in demo (#5, Slice 4).
@@ -30,8 +31,9 @@ test(
     const heading = page.getByRole('heading', { level: 1 });
     await expect(heading).toHaveText('About');
     // A variant's links are plain anchors, so that was a document load. Next's
-    // router asks for the same view's payload with RSC: 1 when it navigates
-    // or prefetches, and the rewrite serves it from the variant's segment
+    // router asks for the same view's payload with RSC: 1 and the `_rsc` hash
+    // when it navigates or prefetches, and the rewrite serves it from the
+    // variant's segment
     // (#6, Slice 2): x-nextjs-rewritten-path names the segment and the view,
     // never the query, which the router keeps from the URL it asked for.
     const router: Record<string, string>[] = [
@@ -39,10 +41,10 @@ test(
       { rsc: '1', 'next-router-prefetch': '1' },
     ];
     for (const headers of router) {
-      const flight = await page.request.get(`/sample/chapters/about${CHAPTERS}`, {
-        headers,
-        maxRedirects: 0,
-      });
+      const flight = await page.request.get(
+        await withRscHash(`/sample/chapters/about${CHAPTERS}`, headers),
+        { headers, maxRedirects: 0 },
+      );
       expect(flight.status()).toBe(200);
       expect(flight.headers()['content-type']).toMatch(/^text\/x-component/);
       expect(flight.headers()['x-nextjs-rewritten-path']).toBe(

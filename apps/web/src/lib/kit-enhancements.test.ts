@@ -71,6 +71,26 @@ function flight(tree: unknown): Promise<string> {
   });
 }
 
+/**
+ * The client references a payload imports, each as [module id, chunks,
+ * export], from its `I` rows. React may write a repeated string once, in a
+ * row of its own, and point at it as "$<row>"; this resolves those.
+ */
+function clientReferences(payload: string): unknown[] {
+  const rows = new Map<string, string>();
+  for (const line of payload.split('\n')) {
+    const at = line.indexOf(':');
+    if (at > 0) rows.set(line.slice(0, at), line.slice(at + 1));
+  }
+  const text = (value: unknown) => {
+    const row = typeof value === 'string' ? /^\$([0-9a-f]+)$/.exec(value)?.[1] : undefined;
+    return row === undefined ? value : JSON.parse(rows.get(row)!);
+  };
+  return [...rows.values()]
+    .filter((row) => row.startsWith('I['))
+    .map((row) => (JSON.parse(row.slice(1)) as unknown[]).map(text));
+}
+
 const kit = RSDW.createClientModuleProxy('@portfolio/kit/enhancements');
 const INPUT = { variant: 'kit-shared', ids: { prefix: '', main: 'main' } };
 
@@ -94,7 +114,7 @@ test('a server component renders <Enhancement>, which reaches the browser as a r
     );
   }
   const payload = await flight(React.createElement(Variant));
-  assert.match(payload, /I\["@portfolio\/kit\/enhancements",\[\],"Enhancement"\]/);
+  assert.deepEqual(clientReferences(payload), [['@portfolio/kit/enhancements', [], 'Enhancement']]);
   // Its props cross as JSON.
   assert.match(payload, /"input":\{"variant":"kit-shared"/);
   assert.match(payload, /"id":"orbit"/);
