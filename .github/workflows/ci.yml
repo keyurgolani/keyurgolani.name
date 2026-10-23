@@ -1077,6 +1077,8 @@ jobs:
         timeout-minutes: 25
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         env:
+          # The build record artifact holds the build's logs; it isn't needed.
+          DOCKER_BUILD_RECORD_UPLOAD: 'false'
           # buildx's metadata provenance would print the event payload in
           # this step's log.
           BUILDX_METADATA_PROVENANCE: disabled
