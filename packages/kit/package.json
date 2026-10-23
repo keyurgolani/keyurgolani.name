@@ -9,7 +9,10 @@
     ".": "./src/index.ts",
     "./pretext": "./src/pretext/index.ts",
     "./theme": "./src/theme.tsx",
-    "./markdown": "./src/markdown.ts",
+    "./markdown": {
+      "react-server": "./src/markdown.server.ts",
+      "default": "./src/markdown.ts"
+    },
     "./sections": "./src/sections/index.ts",
     "./sections/styles.css": "./src/sections/styles.css",
     "./enhancements": "./src/enhancements/index.tsx",
@@ -34,6 +37,7 @@
     "@react-three/postprocessing": "^3.0.0",
     "clsx": "^2.1.1",
     "marked": "^15.0.6",
+    "sanitize-html": "2.18.1",
     "three": "^0.170.0"
   },
   "peerDependencies": {

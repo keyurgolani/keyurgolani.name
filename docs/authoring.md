@@ -169,6 +169,7 @@ Long text, such as a lede's `body` or an item's `description`, takes Markdown. T
 - A heading of level 1 or 2 renders at level 3, since the page owns the top two levels.
 - A link takes the same URLs as a `url` field (see [configuration.md](configuration.md#files-and-formats)), and a link to anything else shows its text alone. Write a space in a URL as `%20`. With a raw space, `[docs](https://example.com/a b)` isn't a link. It shows as you typed it, and only the bare URL before the space links.
 - A table becomes a paragraph per row, and a numbered list starts at 1. Strikethrough shows as plain text, and task-list boxes and link titles are dropped.
+- A character reference such as `&copy;` or `&#169;` shows its character, except a name longer than 20 characters, such as `&CounterClockwiseContourIntegral;`, which shows as you typed it.
 
 ## Validation
 
