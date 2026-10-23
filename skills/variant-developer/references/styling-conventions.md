@@ -131,7 +131,8 @@ Reduced motion comes from the presentation boundary, not from a media query in y
 
 /* Motion of your own: script starts it, and the boundary stops it. */
 [data-variant='acme-ocean'] .ao-drift.is-moving {
-  animation: ao-drift 12s linear infinite;
+  /* A literal time here is the audit's timing finding: the duration is a token. */
+  animation: ao-drift var(--ui-motion-slow) ease-in-out infinite alternate;
 }
 
 [data-variant='acme-ocean']:is([data-motion='reduced'], [data-motion='static']) .ao-drift {
