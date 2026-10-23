@@ -16,9 +16,10 @@ import type {
   TestCase,
   TestError,
 } from '@playwright/test/reporter';
-import { currentGate, REPO_ROOT, reportsDir } from '../../ci/lib/reports.mjs';
+import { currentGate, REPO_ROOT, reportsDir, writeFailureRecord } from '../../ci/lib/reports.mjs';
 import { HOST_MARKERS } from './lib/markers';
-import { RECORDS_ATTACHMENT, writeRecords, type RecordFields } from './lib/records';
+import { writeCellFailures, type CellFailure } from './lib/failure-records';
+import { RECORDS_ATTACHMENT } from './lib/records';
 import { CHECKS_ANNOTATION } from './lib/checks';
 
 // Playwright colors its messages; summaries and records hold plain text.
@@ -98,12 +99,12 @@ export default class QualityReporter implements Reporter {
     this.errors.push(plain(error.message ?? error.value ?? 'unknown error'));
   }
 
-  onEnd(result: FullResult) {
+  async onEnd(result: FullResult) {
     const tests = (this.suite?.allTests() ?? []).map((test): SummaryTest => {
       const last = test.results.at(-1);
       const status = last?.status ?? 'not run';
       const skipped = test.outcome() === 'skipped';
-      const records = (attachment(test, RECORDS_ATTACHMENT) as RecordFields[] | undefined) ?? [];
+      const records = (attachment(test, RECORDS_ATTACHMENT) as CellFailure[] | undefined) ?? [];
       return {
         title: test.titlePath().slice(3).join(' > ') || test.title,
         file: path.relative(REPO_ROOT, test.location.file),
@@ -153,30 +154,28 @@ export default class QualityReporter implements Reporter {
       const artifacts = (last?.attachments ?? [])
         .filter((each) => each.path)
         .map((each) => path.relative(reportsDir(), each.path!));
-      const records = (attachment(test, RECORDS_ATTACHMENT) as RecordFields[] | undefined) ?? [];
-      const repro = `${gate.reproCommand} ${file}:${test.location.line}`;
-      if (records.length > 0) {
-        writeRecords(
-          records.map((record) => ({ ...record, artifacts })),
-          { gate: gate.gate, reproCommand: repro },
+      const failures = (attachment(test, RECORDS_ATTACHMENT) as CellFailure[] | undefined) ?? [];
+      const reproCommand = `${gate.reproCommand} ${file}:${test.location.line}`;
+      if (failures.length > 0) {
+        // Part A's writer checks each against the schema, 1.1, before it writes any.
+        await writeCellFailures(
+          failures.map((failure) => ({ ...failure, artifacts, reproCommand })),
+          { gate },
         );
       } else {
+        // A test that failed before it had any, such as on a timeout, or a
+        // harness check: one record of the failure, as the browser suite's.
         const message = plain(last?.errors[0]?.message ?? last?.error?.message);
-        writeRecords(
-          [
-            {
-              test: `${file} > ${test.titlePath().slice(3).join(' > ') || test.title}`,
-              rule: 'test-failed',
-              route: annotation(test, 'route'),
-              profile: annotation(test, 'profile'),
-              viewport: annotation(test, 'viewport'),
-              preferenceMode: annotation(test, 'row'),
-              actual: message.split('\n')[0] || last?.status,
-              artifacts,
-            },
-          ],
-          { gate: gate.gate, reproCommand: repro },
-        );
+        writeFailureRecord({
+          ...gate,
+          test: `${file} > ${test.titlePath().slice(3).join(' > ') || test.title}`,
+          route: annotation(test, 'route'),
+          profile: annotation(test, 'profile'),
+          viewport: annotation(test, 'viewport'),
+          actual: message.split('\n')[0] || last?.status,
+          artifacts,
+          reproCommand,
+        });
       }
     }
   }

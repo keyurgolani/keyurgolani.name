@@ -21,7 +21,7 @@ for (const cell of plan.cells) {
           viewport: { width: viewport.width, height: viewport.height },
           isMobile: viewport.isMobile ?? false,
           hasTouch: viewport.hasTouch ?? false,
-          colorScheme: row.context.colorScheme ?? 'light',
+          colorScheme: 'light',
           contextOptions: {
             ...(row.context.reducedMotion ? { reducedMotion: row.context.reducedMotion } : {}),
             ...(row.context.forcedColors ? { forcedColors: row.context.forcedColors } : {}),

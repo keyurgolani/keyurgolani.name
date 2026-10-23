@@ -36,7 +36,6 @@
     "quality:pr": "tsx tests/quality/run.ts pr",
     "quality:full": "tsx tests/quality/run.ts full",
     "quality:checklist": "tsx tests/quality/checklist.ts",
-    "quality:meta": "tsx tests/quality/meta/run-runner-cases.ts",
     "check:skills": "node skills/scripts/sync-checks.mjs",
     "check:registry": "node ci/check-registry.mjs",
     "check:variants": "pnpm --filter @portfolio/web check:variants",

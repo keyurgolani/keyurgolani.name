@@ -36,13 +36,13 @@ test('the default row fails when anything is emulated, or a query goes unread', 
   }));
   assert.deepEqual(emulationProblems(DEFAULT_ROW, readings), []);
   const leaked = readings.map((reading) =>
-    reading.query === '(prefers-color-scheme: dark)'
+    reading.query === '(forced-colors: active)'
       ? { ...reading, script: true, style: true }
       : reading,
   );
   assert.equal(emulationProblems(DEFAULT_ROW, leaked).length, 2);
-  assert.deepEqual(emulationProblems(row('dark-scheme'), []), [
-    "dark-scheme: (prefers-color-scheme: dark) wasn't read",
+  assert.deepEqual(emulationProblems(row('contrast-more'), []), [
+    "contrast-more: (prefers-contrast: more) wasn't read",
   ]);
 });
 

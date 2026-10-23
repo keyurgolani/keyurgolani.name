@@ -1,12 +1,18 @@
 // What each cell runs over (#11, Slice 1, item 3): the viewports, the
-// preference rows, and the engines. A preference row says which media
-// features it emulates and what the page must then match, so a row whose
-// emulation didn't take fails (emulation.ts) instead of passing as the
-// default. Slice 2 adds the keyboard, print, no-JavaScript, and contrast
-// rows it gates on; Slice 4 adds Firefox and WebKit to scheduled runs.
+// preference rows, and the engines. The viewports come from
+// quality/thresholds.json (AC5); one narrower than its narrow width is a
+// phone, with touch. A preference row says which media features it emulates
+// and what the page must then match, so a row whose emulation didn't take
+// fails (emulation.ts) instead of passing as the default. Slice 2 adds the
+// high-contrast, reduced-transparency, print, and no-JavaScript rows it
+// gates on; Slice 4 adds Firefox and WebKit to scheduled runs. Row ids and
+// input modes are the failure records' and the exceptions' own words
+// (vocabulary.ts).
 
-/** How a cell's input reaches the page, as failure records name it. */
-export type InputMode = 'mouse' | 'keyboard' | 'touch';
+import { loadThresholds, viewportSize } from '../../../quality/thresholds';
+import type { InputMode, PreferenceMode } from './vocabulary';
+
+export type { InputMode };
 
 export interface Viewport {
   /** WIDTHxHEIGHT, as failure records name it. */
@@ -18,16 +24,18 @@ export interface Viewport {
   readonly inputMode: InputMode;
 }
 
-/** The Thresholds table's viewports for every check: 1440x900, 1024x768, and 390x844. */
-export const VIEWPORTS: readonly Viewport[] = [
-  { id: '1440x900', width: 1440, height: 900, inputMode: 'mouse' },
-  { id: '1024x768', width: 1024, height: 768, inputMode: 'mouse' },
-  { id: '390x844', width: 390, height: 844, isMobile: true, hasTouch: true, inputMode: 'touch' },
-];
+const thresholds = loadThresholds();
+
+/** The Thresholds table's viewports for every check: a phone below the narrow width, a desktop otherwise. */
+export const VIEWPORTS: readonly Viewport[] = thresholds.viewports.every.map((id) => {
+  const { width, height } = viewportSize(id);
+  return width < thresholds.targets.narrowMaxWidth
+    ? { id, width, height, isMobile: true, hasTouch: true, inputMode: 'touch' as const }
+    : { id, width, height, inputMode: 'mouse' as const };
+});
 
 /** The browser context options a row sets, as Playwright names them. */
 export interface RowContext {
-  readonly colorScheme?: 'light' | 'dark';
   readonly reducedMotion?: 'reduce' | 'no-preference';
   readonly forcedColors?: 'active' | 'none';
   readonly contrast?: 'more' | 'no-preference';
@@ -35,7 +43,7 @@ export interface RowContext {
 
 export interface PreferenceRow {
   /** Its name, as failure records' preferenceMode gives it. */
-  readonly id: string;
+  readonly id: PreferenceMode;
   readonly context: RowContext;
   /** Media queries and whether the page must match each under this row. */
   readonly media: Readonly<Record<string, boolean>>;
@@ -44,19 +52,13 @@ export interface PreferenceRow {
 const REDUCE = '(prefers-reduced-motion: reduce)';
 const FORCED = '(forced-colors: active)';
 const MORE = '(prefers-contrast: more)';
-const DARK = '(prefers-color-scheme: dark)';
 
-/** Every row. `default` emulates nothing, so the page must match none of the others' features. */
+/** Every row so far. `default` emulates nothing, so the page must match none of the others' features. */
 export const PREFERENCE_ROWS: readonly PreferenceRow[] = [
-  {
-    id: 'default',
-    context: {},
-    media: { [REDUCE]: false, [FORCED]: false, [MORE]: false, [DARK]: false },
-  },
+  { id: 'default', context: {}, media: { [REDUCE]: false, [FORCED]: false, [MORE]: false } },
   { id: 'reduced-motion', context: { reducedMotion: 'reduce' }, media: { [REDUCE]: true } },
   { id: 'forced-colors', context: { forcedColors: 'active' }, media: { [FORCED]: true } },
   { id: 'contrast-more', context: { contrast: 'more' }, media: { [MORE]: true } },
-  { id: 'dark-scheme', context: { colorScheme: 'dark' }, media: { [DARK]: true } },
 ];
 
 export const DEFAULT_ROW = PREFERENCE_ROWS[0]!;

@@ -27,14 +27,14 @@ import {
 } from './markers';
 import type { PreferenceRow, Viewport } from './matrix';
 import { elementDetailsScript, resolvedTokensScript, type ElementDetails } from './probes';
+import type { CellFailure } from './failure-records';
 import {
-  axeRecords,
+  axeFailures,
   colorPropertyFor,
-  harnessRecord,
   nodeSelector,
   RECORDS_ATTACHMENT,
+  runnerFailure,
   type CellContext,
-  type RecordFields,
 } from './records';
 import { readVitals } from './vitals';
 
@@ -98,31 +98,25 @@ export async function runCell({ page, cell, viewport, row, responses, testInfo, 
   await keep('vitals.json', vitals);
   await keep('resolved-tokens.json', tokens);
 
-  const context: CellContext = {
-    cell,
-    viewport,
-    row,
-    test: testInfo.titlePath.slice(1).join(' > '),
-    artifacts: written,
-  };
-  const records: RecordFields[] = [
-    ...axeRecords(context, results, details),
+  const context: CellContext = { cell, viewport, row, artifacts: written };
+  const failures: CellFailure[] = [
+    ...axeFailures(context, results, details),
     ...(status === cell.expectedStatus
       ? []
-      : [harnessRecord(context, 'status', `${status}, not ${cell.expectedStatus}`)]),
-    ...markers.map((problem) => harnessRecord(context, 'fixture-marker', problem)),
-    ...emulation.map((problem) => harnessRecord(context, 'media-emulation', problem)),
+      : [runnerFailure(context, 'status', `${status}, not ${cell.expectedStatus}`)]),
+    ...markers.map((problem) => runnerFailure(context, 'fixture-marker', problem)),
+    ...emulation.map((problem) => runnerFailure(context, 'media-emulation', problem)),
     ...(now === Date.parse(FIXED_TIME)
       ? []
       : [
-          harnessRecord(
+          runnerFailure(
             context,
             'fixed-clock',
             `${new Date(now).toISOString()}, not ${FIXED_TIME}`,
           ),
         ]),
   ];
-  await keep(RECORDS_ATTACHMENT, records);
+  await keep(RECORDS_ATTACHMENT, failures);
   testInfo.annotations.push(
     { type: CHECKS_ANNOTATION, description: ran.join(' ') },
     { type: 'quality-markers', description: HOST_MARKERS },

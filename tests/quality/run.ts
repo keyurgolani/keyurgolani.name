@@ -23,14 +23,20 @@ import { tmpdir } from 'node:os';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { currentGate, REPO_ROOT, reportError, reportsDir } from '../../ci/lib/reports.mjs';
+import {
+  currentGate,
+  REPO_ROOT,
+  reportError,
+  reportsDir,
+  writeFailureRecord,
+} from '../../ci/lib/reports.mjs';
 import type { Plan, RunMode } from './cells';
 import { canaryPassword, plantCanary, scanArtifacts, scrubArtifacts } from './lib/artifacts.mjs';
 import { missingBrowsers } from './lib/browsers.mjs';
 import { buildQualityHost, QUALITY_BUILD_ENV } from './lib/build.mjs';
 import { buildReferenceHost, installReference, removeReference } from '../external-variant/run.mjs';
 import { RUN_ENGINES } from './lib/matrix';
-import { writeRecords } from './lib/records';
+import { RECORD_VERSION } from './lib/failure-records';
 import { judge, type Failure, type Verdict } from './lib/verdict';
 import { loadPlan, RUN_MODES } from './plan';
 import { SUMMARY_FILE, type Summary } from './reporter';
@@ -250,15 +256,15 @@ async function main(argv: readonly string[]): Promise<number> {
     writeFileSync(SUMMARY_FILE(), `${JSON.stringify({ ...summary, verdict }, null, 2)}\n`);
   }
   const gate = currentGate();
-  if (gate && failures.length > 0) {
-    writeRecords(
-      failures.map(({ rule, message }) => ({
-        test: `quality ${options.mode}`,
-        rule,
-        actual: message,
-      })),
-      gate,
-    );
+  // The run's own failures, each a 1.1 record naming the rule it broke.
+  for (const { rule, message } of gate ? failures : []) {
+    writeFailureRecord({
+      ...gate!,
+      schemaVersion: RECORD_VERSION,
+      test: `quality:${options.mode} verdict`,
+      rule,
+      actual: message,
+    });
   }
   print(verdict, options);
   return verdict.ok ? 0 : 1;
