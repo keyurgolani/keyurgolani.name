@@ -607,6 +607,8 @@ test('the image scan flags the experiments, archive, and variant preview holding
       'experiments/variant-x',
       'archive/old',
       'apps/web/.variant-preview',
+      // A section or a package may have its own archive: only the root's is the pen.
+      'apps/web/archive',
       'node_modules/pkg/archive',
     ]) {
       mkdirSync(path.join(root, dir), { recursive: true });

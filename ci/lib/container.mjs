@@ -87,8 +87,8 @@ function treeFromInside(root) {
 /**
  * Lists what under `root` must not ship. Outside node_modules: any
  * portfolio.* except the example, a site document, .env*, .git, the
- * experiments/, archive/, and .variant-preview/ holding pens, a secrets
- * directory, and the tests, ci, and reports trees. Anywhere, node_modules
+ * root's experiments/ and archive/ holding pens and any .variant-preview/,
+ * a secrets directory, and the tests, ci, and reports trees. Anywhere, node_modules
  * too: the bundled sample's files anywhere but where it ships (#7), a
  * snapshot, snapshots/<kind>.json, outside the root's snapshots/, and
  * portfolio.example.yml or site.example.yml outside the root. Any other is
@@ -121,7 +121,8 @@ export function scanTree(root) {
             /^site\.(?:yml|yaml|json)$/.test(name) ||
             name.startsWith('.env') ||
             name === '.git' ||
-            ['experiments', 'archive', '.variant-preview'].includes(name) ||
+            (dir === root && ['experiments', 'archive'].includes(name)) ||
+            name === '.variant-preview' ||
             (entry.isDirectory() && ['tests', 'ci', 'reports', 'secrets'].includes(name))));
       if (banned) problems.push(path.relative(root, full));
       else if (entry.isDirectory()) walk(full, modules);
