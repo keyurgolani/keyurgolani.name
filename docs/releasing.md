@@ -2,7 +2,7 @@
 
 A release is two tags on one commit of `main`: a release candidate, `vX.Y.Z-rc.N`, which builds, attests, and scans the image, and a final tag, `vX.Y.Z`, which promotes that same image with no rebuild. Both run in [`.github/workflows/release.yml`](../.github/workflows/release.yml). Nothing else publishes a release, and the workflow has no manual trigger.
 
-Pushes to `main` keep publishing `sha-<short>` images after `gate` (`publish` in [`ci.yml`](../.github/workflows/ci.yml)). Those are builds, not releases: they never move a version tag or `latest`.
+Pushes to `main` keep publishing `sha-<short>` images after `gate` (the `publish` jobs in [`ci.yml`](../.github/workflows/ci.yml)). They build each platform natively, as `rc-build` does, merge the two with the same helper as `rc-merge`, smoke-test both platforms from the merged digest, and tag only that digest. Those are builds, not releases: they never move a version tag or `latest`, and they carry no provenance or SBOM.
 
 ## A release candidate
 
