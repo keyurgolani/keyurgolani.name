@@ -29,6 +29,11 @@ import {
 // and the new document says hello again. Fragments scroll in place. Every
 // other link is cancelled and sent to Studio as `link`: other sites,
 // mailto: and tel:, downloads, and the site's own pages outside the grant.
+// The guard reads clicks and middle clicks on window, in the capture phase,
+// so no listener in the page can keep a link from it. Where the frame's
+// document has the Navigation API, which an opaque origin doesn't, its
+// `navigate` event backs the guard up for what a click doesn't show: a link
+// in a closed shadow root, and a script's own navigation.
 
 export interface FrameChannelOptions {
   readonly mode: 'server' | 'local';
@@ -41,6 +46,15 @@ export interface FrameChannelOptions {
   /** What `ready` says the frame renders: a draft grant's pinned version, or null. */
   readonly renderedVersion: number | null;
 }
+
+/**
+ * When the agent says hello again, in milliseconds after its first, whether
+ * or not a connect came. Studio closes its port on every load of the frame,
+ * so a connect that answered a hello before Studio saw this document's load
+ * is closed by it, and only a later hello opens another. Studio takes a
+ * hello from the document holding its open port as one it already answered.
+ */
+export const HELLO_AGAIN_MS: readonly number[] = Object.freeze([250, 750, 1750, 3750]);
 
 /** The event #6's runtime listens for on window to pause and resume: its detail is the lifecycle. */
 export const LIFECYCLE_EVENT = 'kgn-preview-lifecycle';
@@ -127,7 +141,12 @@ export function routeOf(pathname: string, linkBase: string): string {
 
 const XLINK = 'http://www.w3.org/1999/xlink';
 
-/** The link a click went to, from the innermost element out, through shadow roots too. */
+/**
+ * The link a click went to, from the innermost element out, through open
+ * shadow roots too: an HTML or SVG `<a>`, by `href` or SVG's `xlink:href`,
+ * or an image map's `<area>`. A closed shadow root hides its nodes from the
+ * path, so the `navigate` backstop is what sees a link in one.
+ */
 function linkOf(event: Event): { readonly href: string; readonly download: boolean } | null {
   for (const node of event.composedPath()) {
     const element = node as Partial<Element>;
@@ -137,6 +156,24 @@ function linkOf(event: Event): { readonly href: string; readonly download: boole
     return { href, download: element.hasAttribute?.('download') ?? false };
   }
   return null;
+}
+
+/**
+ * Whether a click on a link asks for it somewhere other than the frame: a
+ * middle click, or a click with a modifier key, each of which opens a tab
+ * or a window, or downloads, where a plain click would scroll in place.
+ */
+const elsewhere = (event: MouseEvent) =>
+  event.type === 'auxclick' || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey;
+
+/**
+ * The Navigation API's `navigate` event, as the backstop reads it, where
+ * the browser has one. TypeScript's DOM types don't have it yet.
+ */
+interface NavigateEventLike extends Event {
+  readonly navigationType: string;
+  readonly destination: { readonly url: string; readonly sameDocument: boolean };
+  readonly downloadRequest: string | null;
 }
 
 /** The element of the section `anchor` names, found by its data-section-id. */
@@ -312,7 +349,10 @@ export function startFrameChannel(win: Window, options: FrameChannelOptions): ((
     announce();
   };
 
+  /** What a click or a middle click on a link does: the same for both, in the capture phase. */
   const onClick = (event: MouseEvent) => {
+    // A middle click opens a link; a click of another button opens nothing.
+    if (event.type === 'auxclick' && event.button !== 1) return;
     if (event.defaultPrevented) return;
     const link = linkOf(event);
     if (!link) return;
@@ -328,11 +368,46 @@ export function startFrameChannel(win: Window, options: FrameChannelOptions): ((
       studioOrigin,
       download: link.download,
     });
-    if (kind === 'fragment') return;
+    if (kind === 'fragment') {
+      // A plain click scrolls in place. Anything else would open the
+      // grant's page in a tab or a window of its own.
+      if (elsewhere(event)) event.preventDefault();
+      return;
+    }
     event.preventDefault();
     if (kind === 'internal') return load(url);
     if (kind !== 'unsupported') send('link', { href: url.href, kind });
   };
+
+  /**
+   * The backstop: a navigation of the frame that no click the guard saw
+   * started, such as a link in a closed shadow root or a script's
+   * location.assign(). It goes on to the grant's own paths, and else is
+   * cancelled and sent to Studio as a link, as a click on it would be. Back,
+   * forward, a reload, and a move within the document go where the frame
+   * already is or has been.
+   */
+  const onNavigate = (event: Event) => {
+    const { navigationType, destination, downloadRequest } = event as NavigateEventLike;
+    if (navigationType === 'traverse' || navigationType === 'reload') return;
+    if (destination.sameDocument) return;
+    let url: URL;
+    try {
+      url = new URL(destination.url);
+    } catch {
+      return;
+    }
+    const kind = classifyLink(url, {
+      here: new URL(win.location.href),
+      linkBase,
+      studioOrigin,
+      download: downloadRequest !== null,
+    });
+    if (kind === 'internal' || kind === 'fragment' || !event.cancelable) return;
+    event.preventDefault();
+    if (kind !== 'unsupported') send('link', { href: url.href, kind });
+  };
+  const navigation = (win as unknown as { readonly navigation?: EventTarget }).navigation;
 
   const hello = () => {
     if (stopped || nonce === null || !TOKEN.test(nonce)) return;
@@ -343,22 +418,31 @@ export function startFrameChannel(win: Window, options: FrameChannelOptions): ((
       // A Studio origin that isn't one gets no hello.
     }
   };
-  const helloAfterLoad = () => setTimeout(hello, 0);
+  const helloTimers: Array<ReturnType<typeof setTimeout>> = [];
+  const helloAfterLoad = () => {
+    for (const delay of [0, ...HELLO_AGAIN_MS]) helloTimers.push(setTimeout(hello, delay));
+  };
 
   win.addEventListener('message', fromWindow);
   win.addEventListener('click', onClick, true);
+  win.addEventListener('auxclick', onClick, true);
+  navigation?.addEventListener('navigate', onNavigate);
   win.addEventListener('scroll', onScroll, { passive: true });
   statusListeners.add(onStatus);
   // After the document's own load, so the frame's load event in Studio's
-  // window comes first nearly always; the channel copes either way.
+  // window comes first nearly always. When it doesn't, the hellos after it
+  // open the channel again.
   if (win.document.readyState === 'complete') helloAfterLoad();
   else win.addEventListener('load', helloAfterLoad, { once: true });
 
   return () => {
     stopped = true;
     if (trailing !== undefined) clearTimeout(trailing);
+    for (const timer of helloTimers) clearTimeout(timer);
     win.removeEventListener('message', fromWindow);
     win.removeEventListener('click', onClick, true);
+    win.removeEventListener('auxclick', onClick, true);
+    navigation?.removeEventListener('navigate', onNavigate);
     win.removeEventListener('scroll', onScroll);
     win.removeEventListener('load', helloAfterLoad);
     statusListeners.delete(onStatus);

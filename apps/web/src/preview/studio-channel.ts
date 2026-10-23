@@ -1,6 +1,7 @@
 import {
   DROP_REASONS,
   envelope,
+  nonceOf,
   readMessage,
   reportDrop,
   SCROLLED_PER_SECOND,
@@ -21,10 +22,17 @@ import {
 // /api/studio: nothing the frame sends leads to a Studio query or command.
 //
 // A frame's document can change without Studio: a link the agent follows,
-// a reload. Each document says hello with an id of its own once it has
-// loaded, and the frame's `load` event comes before or after that hello, so
-// the channel goes by the id. A load whose document isn't the one holding
-// the port closes it, and nothing goes out until that document's hello.
+// a reload. Studio can't tell which document a `load` event is for, so
+// every load closes the port, and nothing goes out until a hello after it.
+// Each document says hello with an id of its own once it has loaded, and
+// again on a bounded schedule, since its first hello can come before the
+// frame's load event does. A hello from the document holding the open port
+// changes nothing; one from another document replaces the port.
+//
+// A message in another version shows `version_mismatch`, for Studio to
+// offer a reload, only when it comes over the port or carries the frame's
+// current nonce, and once a load at most, so nothing else in the frame can
+// raise it.
 
 /** What the frame tells Studio, as callbacks. */
 export interface StudioChannelEvents {
@@ -77,10 +85,8 @@ export function openStudioChannel(options: StudioChannelOptions): StudioChannel 
   let port: MessagePort | null = null;
   /** The id of the document holding the port. */
   let portInstance: string | null = null;
-  /** The id of the document the last `load` was for, once it said hello. */
-  let loadInstance: string | null = null;
-  /** A `load` came whose document hasn't said hello yet. */
-  let loadPending = false;
+  /** Whether `version_mismatch` went out since the frame's last load. */
+  let mismatchShown = false;
   let open = true;
   const scrolledAt: number[] = [];
   const dropped = Object.fromEntries(DROP_REASONS.map((reason) => [reason, 0])) as Record<
@@ -88,11 +94,20 @@ export function openStudioChannel(options: StudioChannelOptions): StudioChannel 
     number
   >;
 
-  const drop = (reason: DropReason, type?: string) => {
+  /**
+   * Drops a message, and counts it. `trusted` says it came from the frame's
+   * current document, over the port or with its nonce: only such a message
+   * in another version shows `version_mismatch`.
+   */
+  const drop = (reason: DropReason, type?: string, trusted = false) => {
     dropped[reason] += 1;
     reportDrop({ side: 'studio', reason, ...(type === undefined ? {} : { type }) });
-    // The frame speaks another version: Studio shows it, with a reload, and takes nothing.
-    if (reason === 'version') on.status?.({ state: 'version_mismatch' });
+    // The frame speaks another version: Studio shows it once a load, with a
+    // reload, and takes nothing.
+    if (reason === 'version' && trusted && !mismatchShown) {
+      mismatchShown = true;
+      on.status?.({ state: 'version_mismatch' });
+    }
   };
 
   const closePort = () => {
@@ -105,14 +120,13 @@ export function openStudioChannel(options: StudioChannelOptions): StudioChannel 
   };
 
   const connect = (instance: string) => {
+    // The document holding the port says hello again on its schedule: it
+    // already has its answer.
+    if (port && portInstance === instance) return;
     closePort();
     const channel = new MessageChannel();
     port = channel.port1;
     portInstance = instance;
-    if (loadPending) {
-      loadInstance = instance;
-      loadPending = false;
-    }
     port.onmessage = (event: MessageEvent) => fromPort(event.data);
     // The frame's origin is opaque, so no target origin names it: the window
     // and the nonce said which frame this is, and the port goes to it.
@@ -123,14 +137,14 @@ export function openStudioChannel(options: StudioChannelOptions): StudioChannel 
   const fromWindow = (event: MessageEvent) => {
     if (event.source === null || event.source !== iframe.contentWindow) return drop('source');
     const read = readMessage(event.data, STUDIO_HANDSHAKE);
-    if (!read.ok) return drop(read.reason, read.type);
+    if (!read.ok) return drop(read.reason, read.type, nonceOf(event.data) === nonce);
     if (read.message.payload.nonce !== nonce) return drop('nonce', 'hello');
     connect(read.message.payload.instance);
   };
 
   const fromPort = (data: unknown) => {
     const read = readMessage(data, TO_STUDIO);
-    if (!read.ok) return drop(read.reason, read.type);
+    if (!read.ok) return drop(read.reason, read.type, true);
     const { message } = read;
     switch (message.type) {
       case 'ready':
@@ -153,18 +167,10 @@ export function openStudioChannel(options: StudioChannelOptions): StudioChannel 
     }
   };
 
+  /** A load, whoever started it: the document holding the port may be gone. */
   const onLoad = () => {
-    if (!port) {
-      loadPending = true;
-    } else if (loadInstance !== null && portInstance === loadInstance) {
-      // The port is the last load's document's: this load replaced it.
-      closePort();
-      loadPending = true;
-    } else {
-      // Its document said hello before its own load event got here.
-      loadInstance = portInstance;
-      loadPending = false;
-    }
+    mismatchShown = false;
+    closePort();
   };
 
   host.addEventListener('message', fromWindow);
@@ -190,6 +196,7 @@ export function openStudioChannel(options: StudioChannelOptions): StudioChannel 
     },
     reset(next) {
       nonce = next;
+      mismatchShown = false;
       closePort();
     },
     close() {

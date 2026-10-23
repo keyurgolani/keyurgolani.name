@@ -4,6 +4,7 @@ import { setTimeout as wait } from 'node:timers/promises';
 import { envelope, LIMITS, type PreviewDrop } from './protocol';
 import {
   classifyLink,
+  HELLO_AGAIN_MS,
   LIFECYCLE_EVENT,
   LIFECYCLE_STATE,
   nonceFromFragment,
@@ -39,6 +40,36 @@ class SizedBlob extends Blob {
 
 type Listener = (event: unknown) => void;
 
+/** An event target that keeps its listeners in order, each with its capture flag. */
+class FakeTarget {
+  readonly listeners = new Map<string, Array<{ listener: Listener; capture: boolean }>>();
+  addEventListener(type: string, listener: Listener, options?: boolean | { capture?: boolean }) {
+    const capture = typeof options === 'boolean' ? options : (options?.capture ?? false);
+    const each = this.listeners.get(type) ?? [];
+    if (!each.some((entry) => entry.listener === listener && entry.capture === capture)) {
+      each.push({ listener, capture });
+    }
+    this.listeners.set(type, each);
+  }
+  removeEventListener(type: string, listener: Listener, options?: boolean | { capture?: boolean }) {
+    const capture = typeof options === 'boolean' ? options : (options?.capture ?? false);
+    const each = this.listeners.get(type) ?? [];
+    const kept = each.filter((entry) => entry.listener !== listener || entry.capture !== capture);
+    if (kept.length > 0) this.listeners.set(type, kept);
+    else this.listeners.delete(type);
+  }
+  /**
+   * Delivers `event`: the capture listeners first, then the rest, unless
+   * `stoppedBelow` says a listener between the target and here stopped it.
+   */
+  fire(type: string, event: unknown = {}, { stoppedBelow = false } = {}) {
+    const each = this.listeners.get(type) ?? [];
+    for (const { listener } of each.filter((entry) => entry.capture)) listener(event);
+    if (stoppedBelow) return;
+    for (const { listener } of each.filter((entry) => !entry.capture)) listener(event);
+  }
+}
+
 /** A section on the page, at `top` in the viewport, `height` tall. */
 interface FakeSection {
   readonly id: string;
@@ -47,8 +78,7 @@ interface FakeSection {
 }
 
 /** The frame's window, with what the channel does to it recorded. */
-class FakeFrame {
-  readonly listeners = new Map<string, Set<Listener>>();
+class FakeFrame extends FakeTarget {
   readonly parent = {
     posted: [] as Array<{ message: unknown; targetOrigin: string }>,
     postMessage(message: unknown, targetOrigin: string) {
@@ -71,7 +101,10 @@ class FakeFrame {
   scrollY = 0;
   url: URL;
   readonly sections: FakeSection[] = [];
+  /** The Navigation API, where a test gives the frame one: an opaque origin has none. */
+  navigation?: FakeTarget;
   constructor(href: string) {
+    super();
     this.url = new URL(href);
   }
   get document() {
@@ -104,16 +137,6 @@ class FakeFrame {
       assign: (to: string) => this.assigned.push(to),
     };
   }
-  addEventListener(type: string, listener: Listener) {
-    if (!this.listeners.has(type)) this.listeners.set(type, new Set());
-    this.listeners.get(type)!.add(listener);
-  }
-  removeEventListener(type: string, listener: Listener) {
-    this.listeners.get(type)?.delete(listener);
-  }
-  fire(type: string, event: unknown = {}) {
-    for (const listener of this.listeners.get(type) ?? []) listener(event);
-  }
   dispatchEvent(event: CustomEvent) {
     this.events.push(event);
     return true;
@@ -126,23 +149,62 @@ class FakeFrame {
   }
 }
 
-/** A click on a link to `href`, from the anchor out. */
-function click(href: string | null, attributes: Record<string, string> = {}) {
-  const anchor = {
-    localName: 'a',
-    getAttribute: (name: string) => (name === 'href' ? href : (attributes[name] ?? null)),
-    getAttributeNS: () => null,
+const XLINK = 'http://www.w3.org/1999/xlink';
+
+/**
+ * A link to `href` as composedPath() holds it: an HTML `<a>`, an image
+ * map's `<area>`, or an SVG `<a>` that has only `xlink:href`.
+ */
+function linkElement(
+  href: string | null,
+  {
+    localName = 'a',
+    attributes = {},
+    xlink = false,
+  }: { localName?: string; attributes?: Record<string, string>; xlink?: boolean } = {},
+) {
+  return {
+    localName,
+    getAttribute: (name: string) =>
+      name === 'href' ? (xlink ? null : href) : (attributes[name] ?? null),
+    getAttributeNS: (namespace: string | null, name: string) =>
+      xlink && namespace === XLINK && name === 'href' ? href : null,
     hasAttribute: (name: string) => name in attributes,
   };
+}
+
+/** How a link is clicked: a click or a middle click's auxclick, with its button and modifier keys. */
+interface ClickInit {
+  readonly type?: 'click' | 'auxclick';
+  readonly button?: number;
+  readonly ctrlKey?: boolean;
+  readonly metaKey?: boolean;
+  readonly shiftKey?: boolean;
+  readonly altKey?: boolean;
+}
+
+/** A click on `element`, from the innermost element out. */
+function clickOn(element: object, init: ClickInit = {}) {
   const event = {
+    type: 'click',
+    button: 0,
+    ctrlKey: false,
+    metaKey: false,
+    shiftKey: false,
+    altKey: false,
+    ...init,
     defaultPrevented: false,
     preventDefault() {
       event.defaultPrevented = true;
     },
-    composedPath: () => [{ localName: 'span' }, anchor, { localName: 'main' }],
+    composedPath: () => [{ localName: 'span' }, element, { localName: 'main' }],
   };
   return event;
 }
+
+/** A click on a link to `href`, from the anchor out. */
+const click = (href: string | null, attributes: Record<string, string> = {}, init?: ClickInit) =>
+  clickOn(linkElement(href, { attributes }), init);
 
 const SERVER: FrameChannelOptions = {
   mode: 'server',
@@ -152,9 +214,19 @@ const SERVER: FrameChannelOptions = {
   renderedVersion: 4,
 };
 
-/** A framed document at `href`, its channel started, the drop hook set. */
-function setup(t: TestContext, options: FrameChannelOptions = SERVER, href = `${STUDIO}${BASE}`) {
+/**
+ * A framed document at `href`, its channel started, the drop hook set. With
+ * `navigation`, the frame has the Navigation API, as a document with an
+ * origin of its own does.
+ */
+function setup(
+  t: TestContext,
+  options: FrameChannelOptions = SERVER,
+  href = `${STUDIO}${BASE}`,
+  { navigation = false } = {},
+) {
   const win = new FakeFrame(href);
+  if (navigation) win.navigation = new FakeTarget();
   win.sections.push({ id: 'about', top: 0, height: 600 }, { id: 'contact', top: 600, height: 400 });
   const drops: PreviewDrop[] = [];
   globalThis.__kgnPreviewDrop = (drop) => drops.push(drop);
@@ -192,6 +264,51 @@ function setup(t: TestContext, options: FrameChannelOptions = SERVER, href = `${
 
 const reasons = (drops: readonly PreviewDrop[]) => drops.map(({ reason, type }) => [reason, type]);
 
+/** A port that records what the frame sends over it, and whether the frame closed it. */
+function recordingPort() {
+  const port = {
+    sent: [] as Array<{ type: string }>,
+    closed: false,
+    onmessage: null as unknown,
+    postMessage(message: { type: string }) {
+      port.sent.push(message);
+    },
+    close() {
+      port.closed = true;
+    },
+  };
+  return port;
+}
+
+/** The Navigation API's navigate event, for a navigation to `url`. */
+function navigateEvent(
+  url: string,
+  {
+    navigationType = 'push',
+    sameDocument = false,
+    downloadRequest = null,
+    cancelable = true,
+  }: {
+    navigationType?: string;
+    sameDocument?: boolean;
+    downloadRequest?: string | null;
+    cancelable?: boolean;
+  } = {},
+) {
+  const event = {
+    type: 'navigate',
+    navigationType,
+    destination: { url, sameDocument },
+    downloadRequest,
+    cancelable,
+    defaultPrevented: false,
+    preventDefault() {
+      event.defaultPrevented = true;
+    },
+  };
+  return event;
+}
+
 test("the agent does nothing in a document that isn't framed, so the dev fixture route still renders top level (#7, Slice 3)", () => {
   const win = new FakeFrame(`${STUDIO}/preview/dev/fallback/complete`);
   Object.defineProperty(win, 'parent', { value: win });
@@ -223,6 +340,70 @@ test("the agent says hello to Studio's origin alone, after its own load, with th
   ];
   assert.equal(second.message.payload.instance, message.payload.instance);
   stop?.();
+});
+
+test('the agent says hello again four times over the next 3.75 seconds, whether or not a connect came, takes each new port, and says no more once stopped (#7, Slice 3)', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  assert.deepEqual(HELLO_AGAIN_MS, [250, 750, 1750, 3750]);
+  const win = new FakeFrame(`${STUDIO}${BASE}`);
+  const stop = startFrameChannel(win as unknown as Window, SERVER);
+  t.after(() => stop?.());
+  const hellos = () => win.parent.posted.length;
+  let at = 0;
+  const until = (ms: number) => {
+    t.mock.timers.tick(ms - at);
+    at = ms;
+  };
+  const connect = (port: ReturnType<typeof recordingPort>) =>
+    win.fire('message', {
+      data: envelope('connect', {}, 1),
+      source: win.parent,
+      origin: STUDIO,
+      ports: [port],
+    });
+  until(0);
+  assert.equal(hellos(), 1);
+  // Studio answers the first hello, and the agent goes on saying hello: a
+  // connect that came before Studio saw the frame's load is closed by it.
+  const first = recordingPort();
+  connect(first);
+  assert.deepEqual(
+    first.sent.map(({ type }) => type),
+    ['ready'],
+  );
+  until(249);
+  assert.equal(hellos(), 1);
+  until(250);
+  assert.equal(hellos(), 2);
+  // Studio closed its port at the load, and answers this hello with another.
+  const second = recordingPort();
+  connect(second);
+  assert.equal(first.closed, true);
+  assert.deepEqual(
+    second.sent.map(({ type }) => type),
+    ['ready'],
+  );
+  until(750);
+  assert.equal(hellos(), 3);
+  until(1750);
+  assert.equal(hellos(), 4);
+  until(3750);
+  assert.equal(hellos(), 5);
+  until(60_000);
+  assert.equal(hellos(), 5, 'and no more after that');
+  // Each is the same document's hello, with the grant's nonce.
+  const sent = win.parent.posted.map(
+    ({ message }) => (message as { payload: { nonce: string; instance: string } }).payload,
+  );
+  assert.equal(new Set(sent.map(({ instance }) => instance)).size, 1);
+  assert.ok(sent.every(({ nonce }) => nonce === NONCE));
+  // A channel stopped says no more.
+  const again = new FakeFrame(`${STUDIO}${BASE}`);
+  const stopAgain = startFrameChannel(again as unknown as Window, SERVER);
+  t.mock.timers.tick(0);
+  stopAgain?.();
+  t.mock.timers.tick(10_000);
+  assert.equal(again.parent.posted.length, 1);
 });
 
 test("the agent takes connect only from its parent window, from Studio's origin, after its hello, with one port (#7, Slice 3)", async (t) => {
@@ -487,6 +668,142 @@ test("the link guard cancels every link but a fragment and the grant's own paths
   await wait(5);
   assert.deepEqual(win.assigned, [`${STUDIO}${BASE}/work/b`]);
   assert.deepEqual(received.at(-1)!.payload, { route: '/work/b' });
+});
+
+test("the guard reads an image map's area and an SVG link's xlink:href, and listens on window in the capture phase, so a page's listener that stops a click can't keep a link from it (#7, Slice 3)", async (t) => {
+  const { win, received, connect } = setup(t, SERVER, `${STUDIO}${BASE}/work/a`);
+  await wait(5);
+  connect();
+  await wait(5);
+  received.length = 0;
+  const area = clickOn(linkElement('https://example.test/map', { localName: 'area' }));
+  win.fire('click', area);
+  const svg = clickOn(linkElement('https://example.test/svg', { xlink: true }));
+  win.fire('click', svg);
+  assert.deepEqual([area.defaultPrevented, svg.defaultPrevented], [true, true]);
+  // A listener on the document or the link stops each of these on its way
+  // up, before window's own listeners would see it.
+  const stopped = click('https://example.test/stopped');
+  win.fire('click', stopped, { stoppedBelow: true });
+  const stoppedMiddle = click(
+    'https://example.test/stopped-middle',
+    {},
+    { type: 'auxclick', button: 1 },
+  );
+  win.fire('auxclick', stoppedMiddle, { stoppedBelow: true });
+  assert.deepEqual([stopped.defaultPrevented, stoppedMiddle.defaultPrevented], [true, true]);
+  await wait(5);
+  assert.deepEqual(
+    received.map(({ payload }) => payload),
+    [
+      { href: 'https://example.test/map', kind: 'external' },
+      { href: 'https://example.test/svg', kind: 'external' },
+      { href: 'https://example.test/stopped', kind: 'external' },
+      { href: 'https://example.test/stopped-middle', kind: 'external' },
+    ],
+  );
+});
+
+test('a middle click and a click with a modifier key go through the guard too, a fragment link included, and a click of another button is left alone (#7, Slice 3)', async (t) => {
+  const { win, received, connect } = setup(t, SERVER, `${STUDIO}${BASE}/work/a`);
+  await wait(5);
+  connect();
+  await wait(5);
+  received.length = 0;
+  const middle = { type: 'auxclick', button: 1 } as const;
+  const outcomes: Array<[string, boolean]> = [];
+  for (const [label, href, init] of [
+    ['middle, another site', 'https://example.test/talk', middle],
+    ["middle, the site's own page", '/', middle],
+    ['middle, a fragment', '#contact', middle],
+    ["middle, the grant's own path", `${BASE}/work/b`, middle],
+    ['ctrl, a fragment', '#contact', { ctrlKey: true }],
+    ['meta, a fragment', '#contact', { metaKey: true }],
+    ['shift, a fragment', '#contact', { shiftKey: true }],
+    ['alt, a fragment', '#contact', { altKey: true }],
+    ['ctrl, another site', 'https://example.test/x', { ctrlKey: true }],
+    ['the right button', 'https://example.test/right', { type: 'auxclick', button: 2 }],
+    ['plain, a fragment', '#contact', {}],
+  ] as const) {
+    const event = click(href, {}, init);
+    win.fire(event.type, event);
+    outcomes.push([label, event.defaultPrevented]);
+  }
+  await wait(5);
+  assert.deepEqual(outcomes, [
+    ['middle, another site', true],
+    ["middle, the site's own page", true],
+    ['middle, a fragment', true],
+    ["middle, the grant's own path", true],
+    ['ctrl, a fragment', true],
+    ['meta, a fragment', true],
+    ['shift, a fragment', true],
+    ['alt, a fragment', true],
+    ['ctrl, another site', true],
+    ['the right button', false],
+    ['plain, a fragment', false],
+  ]);
+  // Outside links go to Studio, the grant's own path loads the frame, and a
+  // fragment goes nowhere.
+  assert.deepEqual(
+    received.map(({ type, payload }) => [type, payload]),
+    [
+      ['link', { href: 'https://example.test/talk', kind: 'external' }],
+      ['link', { href: `${STUDIO}/`, kind: 'live' }],
+      ['navigated', { route: '/work/b' }],
+      ['link', { href: 'https://example.test/x', kind: 'external' }],
+    ],
+  );
+  assert.deepEqual(win.assigned, [`${STUDIO}${BASE}/work/b`]);
+});
+
+test('where the frame has the Navigation API, a navigation no click showed the guard goes on under the grant, and anywhere else is cancelled and sent to Studio as a link (#7, Slice 3)', async (t) => {
+  const { win, received, connect, stop } = setup(t, SERVER, `${STUDIO}${BASE}/work/a`, {
+    navigation: true,
+  });
+  await wait(5);
+  connect();
+  await wait(5);
+  received.length = 0;
+  const outcomes: Array<[string, boolean]> = [];
+  for (const [label, url, init] of [
+    ['another site', 'https://example.test/assign', {}],
+    ["the site's own page", `${STUDIO}/`, {}],
+    ["the grant's own path", `${STUDIO}${BASE}/work/b`, {}],
+    ['a download', `${STUDIO}${BASE}/paper.pdf`, { downloadRequest: 'paper.pdf' }],
+    ['a data: document', 'data:text/html,hi', {}],
+    ['back', 'https://example.test/back', { navigationType: 'traverse', cancelable: false }],
+    ['a reload', `${STUDIO}${BASE}/work/a`, { navigationType: 'reload' }],
+    ['a fragment', `${STUDIO}${BASE}/work/a#contact`, { sameDocument: true }],
+    ['one it may not cancel', 'https://example.test/late', { cancelable: false }],
+  ] as const) {
+    const event = navigateEvent(url, init);
+    win.navigation!.fire('navigate', event);
+    outcomes.push([label, event.defaultPrevented]);
+  }
+  await wait(5);
+  assert.deepEqual(outcomes, [
+    ['another site', true],
+    ["the site's own page", true],
+    ["the grant's own path", false],
+    ['a download', true],
+    ['a data: document', true],
+    ['back', false],
+    ['a reload', false],
+    ['a fragment', false],
+    ['one it may not cancel', false],
+  ]);
+  assert.deepEqual(
+    received.map(({ type, payload }) => [type, payload]),
+    [
+      ['link', { href: 'https://example.test/assign', kind: 'external' }],
+      ['link', { href: `${STUDIO}/`, kind: 'live' }],
+      ['link', { href: `${STUDIO}${BASE}/paper.pdf`, kind: 'download' }],
+    ],
+  );
+  // Stopped, the channel leaves the Navigation API as it found it.
+  stop?.();
+  assert.equal(win.navigation!.listeners.size, 0);
 });
 
 test('links are fragments, internal, or never followed, by origin and link base (#7, Slice 3)', () => {

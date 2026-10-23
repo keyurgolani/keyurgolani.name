@@ -147,8 +147,15 @@ test("Studio takes hello only from its frame's own window with the frame's curre
   assert.equal(posted[0]!.ports.length, 1);
   assert.deepEqual(calls.connection, [true]);
   for (const port of posted[0]!.ports) port.close();
-  hello();
-  assert.equal(calls.connection.length, 3, 'a second hello replaces the port');
+  // The same document's hello again, as it says it on its schedule: it has
+  // its answer, so nothing changes.
+  hello(NONCE, DOC_A);
+  assert.equal(iframe.contentWindow.posted.length, 1);
+  assert.deepEqual(calls.connection, [true]);
+  // Another document's: a new port in place of the old one.
+  hello(NONCE, DOC_B);
+  assert.equal(iframe.contentWindow.posted.length, 2);
+  assert.deepEqual(calls.connection, [true, false, true]);
   for (const port of iframe.contentWindow.posted.at(-1)!.ports) port.close();
   await tick();
 });
@@ -176,9 +183,46 @@ test("Studio drops a handshake that isn't one: another protocol, version, or typ
       ['payload', 2],
     ],
   );
-  // Another version says so, for Studio to show a reload; nothing else does.
+  // Another version with the frame's nonce says so, for Studio to show a
+  // reload; nothing else does.
   assert.deepEqual(calls.status, [{ state: 'version_mismatch' }]);
   await tick();
+});
+
+test("another version shows version_mismatch only with the frame's current nonce or over the port, and once a load at most (#7, Slice 3)", async (t) => {
+  const { iframe, channel, calls, fromFrame, hello, lastPort } = setup(t);
+  const later = (nonce: unknown) => ({
+    ...envelope('hello', { nonce, instance: DOC_A }, 1),
+    version: 2,
+  });
+  // From the frame's window with another nonce, none, or one where hello
+  // doesn't keep it: whatever sent it, there's nothing to show.
+  fromFrame(later(OTHER_NONCE));
+  fromFrame(later(undefined));
+  fromFrame({ ...later(NONCE), payload: NONCE });
+  fromFrame({ protocol: 'kgn-preview', version: 2, type: 'hello' });
+  assert.deepEqual(calls.status, []);
+  assert.equal(channel.dropped.version, 4);
+  // With it, it shows, and only once until the frame loads again.
+  fromFrame(later(NONCE));
+  fromFrame(later(NONCE));
+  assert.deepEqual(calls.status, [{ state: 'version_mismatch' }]);
+  iframe.fire('load');
+  fromFrame(later(NONCE));
+  assert.equal(calls.status.length, 2);
+  // Over the port, which only a hello with the nonce opened: the same.
+  iframe.fire('load');
+  hello(NONCE, DOC_B);
+  const port = lastPort()!;
+  port.postMessage({ ...envelope('ready', { renderedVersion: 1, route: '/' }, 1), version: 3 });
+  port.postMessage({ ...envelope('ready', { renderedVersion: 1, route: '/' }, 2), version: 3 });
+  await tick();
+  await tick();
+  const mismatch = { state: 'version_mismatch' };
+  assert.deepEqual(calls.status, [mismatch, mismatch, mismatch]);
+  assert.equal(channel.dropped.version, 9);
+  assert.deepEqual(calls.ready, []);
+  assert.equal(iframe.contentWindow.posted.length, 1, 'only the hello in this version opened one');
 });
 
 test("Studio reads the frame's messages over the port, drops what the protocol refuses with no callback, and takes at most 10 scrolled a second (#7, Slice 3)", async (t) => {
@@ -254,7 +298,7 @@ test('Studio sends a frame only what the protocol takes, and nothing before a ha
   ]);
 });
 
-test("a load whose document isn't the one holding the port closes it, and Studio sends nothing until that document says hello, in either order (#7, Slice 3)", async (t) => {
+test('every load of the frame closes the port, whoever started it, and Studio sends nothing until a hello after it, whichever comes first (#7, Slice 3)', async (t) => {
   const { iframe, channel, calls, hello, lastPort } = setup(t);
   // The first document: its load, then its hello.
   iframe.fire('load');
@@ -274,19 +318,41 @@ test("a load whose document isn't the one holding the port closes it, and Studio
   first.postMessage(envelope('ready', { renderedVersion: null, route: '/' }, 1));
   await tick();
   assert.deepEqual(calls.ready, []);
-  // A reload whose hello comes before its own load: the port stays, since
-  // it's the new document's.
+  // A reload whose hello comes before its own load: the load closes that
+  // port too, and the document's next hello opens another.
   hello(NONCE, DOC_C);
-  const third = lastPort()!;
+  const early = lastPort()!;
   iframe.fire('load');
+  assert.equal(channel.connected, false);
+  early.postMessage(envelope('ready', { renderedVersion: null, route: '/' }, 1));
+  await tick();
+  assert.deepEqual(calls.ready, []);
+  hello(NONCE, DOC_C);
   assert.equal(channel.connected, true);
+  const third = lastPort()!;
   third.postMessage(envelope('ready', { renderedVersion: null, route: '/' }, 1));
   await tick();
   assert.deepEqual(calls.ready, [{ renderedVersion: null, route: '/' }]);
-  // Then a navigation the usual way round closes it again.
+  assert.deepEqual(calls.connection, [true, false, true, false, true, false, true]);
+});
+
+test("a document that says hello under two ids can't keep a port open across the next load (#7, Slice 3)", async (t) => {
+  const { iframe, channel, calls, hello, lastPort } = setup(t);
+  iframe.fire('load');
+  hello(NONCE, DOC_A);
+  lastPort();
+  // The same document again under another id: the port moves to that id.
+  hello(NONCE, DOC_B);
+  const kept = lastPort()!;
+  assert.equal(channel.connected, true);
+  // The frame loads another document: whatever said hello, the port closes.
   iframe.fire('load');
   assert.equal(channel.connected, false);
-  assert.deepEqual(calls.connection, [true, false, true, false, true, false]);
+  assert.equal(channel.send('lifecycle', { state: 'visible', focused: false }), false);
+  kept.postMessage(envelope('ready', { renderedVersion: null, route: '/' }, 1));
+  await tick();
+  assert.deepEqual(calls.ready, []);
+  assert.deepEqual(calls.connection, [true, false, true, false]);
 });
 
 test('reset takes the new nonce and closes the channel until the frame says hello with it (#7, Slice 3)', async (t) => {

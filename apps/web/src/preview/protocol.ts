@@ -11,11 +11,11 @@ import { isSectionId } from '@portfolio/schema/ids';
 // frame by the window instead: on every load the agent posts `hello` to
 // window.parent, for Studio's origin alone, with the frame's channel nonce
 // (the grant's, which the server renders, or the one Studio put in a local
-// shell's fragment) and an id its document makes for itself. Studio takes it
-// only from that frame's own contentWindow, with that frame's current nonce,
-// and answers `connect` with a MessagePort. The agent takes `connect` only
-// from window.parent, from Studio's origin. Everything else goes over the
-// port.
+// shell's fragment) and an id its document makes for itself, and posts it
+// again a few times over the next seconds. Studio takes it only from that
+// frame's own contentWindow, with that frame's current nonce, and answers
+// `connect` with a MessagePort. The agent takes `connect` only from
+// window.parent, from Studio's origin. Everything else goes over the port.
 //
 // Each side drops what it doesn't take, with no side effect, and counts it:
 // a message from the wrong window or origin, with the wrong nonce, not this
@@ -294,6 +294,16 @@ export type Read<T extends Table> =
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
+
+/**
+ * The nonce a window message carries where `hello` has it, in any version,
+ * or undefined. A later version keeps it there, so Studio can tell another
+ * version's hello from its frame's current document apart from a message
+ * anything else in the frame sent.
+ */
+export function nonceOf(data: unknown): unknown {
+  return isRecord(data) && isRecord(data.payload) ? data.payload.nonce : undefined;
+}
 
 /**
  * Reads `data`, a message as it arrived, against `table`, the types this
