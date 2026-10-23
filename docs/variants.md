@@ -254,7 +254,7 @@ A content extension package sets `"portfolio": { "kind": "content-extension" }` 
 
 ## Retired variants
 
-`legacy/` holds the v1 Editorial and Kinetic Cosmos packages, their screenshots, and their browser specs, outside the workspace: nothing installs, builds, lints, or tests them. #13 and #14 rebuild them on contract 2.0 as `editorial-evidence` and `kinetic-cosmos`, with their palettes and fonts moving to #19's packs. Read them for inventory; never import them.
+`legacy/` holds the v1 Editorial and Kinetic Cosmos packages, their screenshots, and their browser specs, outside the workspace: nothing installs, builds, lints, or tests them. #13 and #14 rebuild them on contract 2.0 as `editorial-evidence` and `kinetic-cosmos`, with their palettes and fonts moving to #19's packs. Read them for inventory; never import them. `packages/variant-editorial-evidence` is #13's rebuild, which no host registers until #13's second pull request: its own tests validate its manifest, run the source audit on it, and render it on every contract fixture.
 
 ## Visual companion
 

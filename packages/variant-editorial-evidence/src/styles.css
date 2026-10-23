@@ -50,6 +50,10 @@
   color: inherit;
 }
 
+[data-variant='editorial-evidence'] .ee-nav {
+  margin-inline-start: auto;
+}
+
 [data-variant='editorial-evidence'] .ee-nav ul {
   display: flex;
   flex-wrap: wrap;
@@ -115,25 +119,18 @@
 
 [data-variant='editorial-evidence'] .ee-plate {
   display: grid;
-  grid-template-areas: 'body' 'artifact' 'notes';
   gap: var(--layout-stack);
   align-content: start;
 }
 
 [data-variant='editorial-evidence'] .ee-plate__body {
-  grid-area: body;
   display: grid;
   gap: var(--layout-tight);
   align-content: start;
 }
 
 [data-variant='editorial-evidence'] .ee-plate__artifact {
-  grid-area: artifact;
   min-inline-size: 0;
-}
-
-[data-variant='editorial-evidence'] .ee-plate__notes {
-  grid-area: notes;
 }
 
 [data-variant='editorial-evidence'] .ee-plate__label,
@@ -167,6 +164,15 @@
   gap: var(--layout-tight);
   margin: 0;
   padding: 0;
+  list-style: none;
+}
+
+/* A quoted note or proof sits flush with the rest, its rule doing the setting off. */
+[data-variant='editorial-evidence'] .ee-plate__notes blockquote,
+[data-variant='editorial-evidence'] .ee-proof__list blockquote,
+[data-variant='editorial-evidence'] .ee-plate__notes figure,
+[data-variant='editorial-evidence'] .ee-proof__list figure {
+  margin-inline: 0;
 }
 
 [data-variant='editorial-evidence'] .ee-plate__notes .pf-item {
@@ -188,6 +194,7 @@
   gap: var(--layout-stack);
   margin: 0;
   padding: 0;
+  list-style: none;
 }
 
 [data-variant='editorial-evidence'] .ee-proof__list > .pf-item {
@@ -218,6 +225,18 @@
   max-inline-size: 48rem;
 }
 
+[data-variant='editorial-evidence'] .ee-work-page .pf-evidence {
+  display: grid;
+  gap: var(--layout-tight);
+  padding: 0;
+  list-style: none;
+}
+
+[data-variant='editorial-evidence'] .ee-work-page .pf-evidence blockquote,
+[data-variant='editorial-evidence'] .ee-work-page .pf-evidence figure {
+  margin-inline: 0;
+}
+
 [data-variant='editorial-evidence'] .ee-work-page__back {
   margin-block-start: var(--layout-region);
 }
@@ -231,6 +250,18 @@
   [data-variant='editorial-evidence'] .ee-opening {
     grid-template-columns: minmax(0, 3fr) minmax(12rem, 1fr);
     align-items: end;
+  }
+
+  [data-variant='editorial-evidence'] .ee-plate--signature > .ee-plate__body {
+    grid-area: body;
+  }
+
+  [data-variant='editorial-evidence'] .ee-plate--signature > .ee-plate__artifact {
+    grid-area: artifact;
+  }
+
+  [data-variant='editorial-evidence'] .ee-plate--signature > .ee-plate__notes {
+    grid-area: notes;
   }
 
   [data-variant='editorial-evidence'] .ee-plate--signature {

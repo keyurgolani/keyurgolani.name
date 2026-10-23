@@ -66,7 +66,7 @@ test('the mixed fixture, right to left, keeps the composition words marked Engli
   const { pair, unit } = contractUnit('mixed');
   const html = render(pair, { unit });
   assert.equal(pair.portfolio.direction, 'rtl');
-  for (const word of ['Work', 'Proof', 'Archive', 'Signature work']) {
+  for (const word of ['Selected work', 'Proof', 'Archive', 'Signature work']) {
     if (!html.includes(`>${word}<`)) continue;
     assert.match(html, new RegExp(`<span lang="en">${word}</span>`), word);
   }

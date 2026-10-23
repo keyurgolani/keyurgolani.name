@@ -13,8 +13,8 @@ import type { VariantRenderInput } from '@portfolio/variant-contract';
 //   2. Work: the signature on the largest plate, then the featured works on
 //      smaller ones, in the owner's order.
 //   3. Proof: the proof strip's evidence.
-//   4. The reading order, without what the opening and the plates already
-//      show, and without the archive's works.
+//   4. The reading order, without what the opening, the plates, and the
+//      proof strip already show, and without the archive's works.
 //   5. The archive, behind a disclosure.
 
 export type Portfolio = VariantRenderInput['portfolio'];
@@ -39,10 +39,15 @@ export interface HomeModel {
   /**
    * Sections the page folds into its own regions, by where they went, so a
    * link to one, such as a hero's `#work`, still lands: the thesis section
-   * on the opening's thesis, and a works section the plates show whole on
-   * the Work region.
+   * on the opening's thesis, a works section the plates show whole on the
+   * Selected work region, and an evidence section the proof strip shows
+   * whole on the Proof region.
    */
-  readonly folded: { readonly thesis: readonly string[]; readonly work: readonly string[] };
+  readonly folded: {
+    readonly thesis: readonly string[];
+    readonly work: readonly string[];
+    readonly proof: readonly string[];
+  };
 }
 
 /** Whether `text` has something to show. */
@@ -69,7 +74,9 @@ export function homeModel(input: Pick<VariantRenderInput, 'portfolio'>): HomeMod
   const archive = worksByIds(portfolio.archive, input).filter((work) => !plated.has(work.id));
   const archived = new Set(archive.map(({ id }) => id));
 
-  const folded = { thesis: [] as string[], work: [] as string[] };
+  const proof = evidenceByIds(portfolio.proof, input);
+  const proven = new Set(proof.map(({ id }) => id));
+  const folded = { thesis: [] as string[], work: [] as string[], proof: [] as string[] };
   const sections = portfolio.sections.flatMap((section): ViewSection[] => {
     if (section === hero) return [];
     // The opening already shows the thesis.
@@ -85,6 +92,14 @@ export function homeModel(input: Pick<VariantRenderInput, 'portfolio'>): HomeMod
       folded.work.push(section.id);
       return [];
     }
+    if (section.kind === 'evidence' && proven.size > 0) {
+      const items = section.items.filter((id) => !proven.has(id));
+      if (items.length === section.items.length) return [section];
+      const rest = { ...section, items } as ViewSection;
+      if (items.length > 0 && sectionShows(rest, input)) return [rest];
+      folded.proof.push(section.id);
+      return [];
+    }
     return [section];
   });
 
@@ -94,7 +109,7 @@ export function homeModel(input: Pick<VariantRenderInput, 'portfolio'>): HomeMod
     tagline,
     signature,
     flagships,
-    proof: evidenceByIds(portfolio.proof, input),
+    proof,
     sections,
     archive,
     folded,

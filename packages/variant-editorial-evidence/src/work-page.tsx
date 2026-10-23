@@ -32,7 +32,7 @@ export function WorkPage({ input, slug }: { input: VariantRenderInput; slug: str
       ? homeRegion(input, workRegion)
       : home;
   const destinations = [
-    ...(hasWork ? [{ label: 'Work', id: workRegion, ui: true }] : []),
+    ...(hasWork ? [{ label: 'Selected work', id: workRegion, ui: true }] : []),
     ...(model.archive.length > 0
       ? [{ label: 'Archive', id: regionId(input, 'archive'), ui: true }]
       : []),
@@ -56,7 +56,7 @@ export function WorkPage({ input, slug }: { input: VariantRenderInput; slug: str
             {hasWork ? (
               <li>
                 <a href={homeRegion(input, workRegion)}>
-                  <Words input={input}>Work</Words>
+                  <Words input={input}>Selected work</Words>
                 </a>
               </li>
             ) : null}

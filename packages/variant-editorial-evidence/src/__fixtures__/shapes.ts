@@ -64,7 +64,7 @@ export const CURATED = {
   sections: [
     { kind: 'practice', id: 'thesis', part: 'thesis' },
     { kind: 'works', id: 'work', title: 'Work', items: ['ledger', 'atlas', 'harbor', 'kiln', 'notes', 'old-site'] },
-    { kind: 'evidence', id: 'evidence', title: 'Evidence', items: ['paper', 'talk'] },
+    { kind: 'evidence', id: 'evidence', title: 'Evidence', items: ['uptime', 'paper', 'talk'] },
     { kind: 'contact', id: 'contact', title: 'Contact' },
   ],
 };

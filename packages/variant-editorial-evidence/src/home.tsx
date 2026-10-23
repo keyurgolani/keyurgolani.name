@@ -80,7 +80,7 @@ export function Home({ input }: { input: VariantRenderInput }) {
   const shown = new Set(sections.map((element) => element.key));
   const destinations: Destination[] = [
     ...(model.signature || model.flagships.length > 0
-      ? [{ label: 'Work', id: work, ui: true }]
+      ? [{ label: 'Selected work', id: work, ui: true }]
       : []),
     ...(model.proof.length > 0 ? [{ label: 'Proof', id: proof, ui: true }] : []),
     ...model.sections
@@ -103,7 +103,7 @@ export function Home({ input }: { input: VariantRenderInput }) {
           <Region
             id={work}
             headingId={`${work}-heading`}
-            heading={<Words input={input}>Work</Words>}
+            heading={<Words input={input}>Selected work</Words>}
             className="ee-region ee-work"
           >
             <Anchors input={input} ids={model.folded.work} />
@@ -126,6 +126,7 @@ export function Home({ input }: { input: VariantRenderInput }) {
             heading={<Words input={input}>Proof</Words>}
             className="ee-region ee-proof"
           >
+            <Anchors input={input} ids={model.folded.proof} />
             <ul className="pf-evidence ee-proof__list" role="list">
               {model.proof.map((entry) => (
                 <EvidenceEntry

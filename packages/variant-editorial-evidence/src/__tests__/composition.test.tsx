@@ -53,11 +53,15 @@ test('the signature plate precedes the flagships, the proof strip, and every sup
   assert.equal(count(notes, /<li\b/g), 3);
 });
 
-test('a work the plates or the archive show is left out of the reading order, which keeps the rest', () => {
+test('what the plates, the proof strip, or the archive show is left out of the reading order, which keeps the rest', () => {
   const model = homeModel(inputFor(pairOf(CURATED)));
   const work = model.sections.find(({ id }) => id === 'work');
   assert.ok(work && work.kind === 'works');
   assert.deepEqual(work.items, ['notes']);
+  // Nor does the proof strip's evidence repeat in an evidence section.
+  const evidence = model.sections.find(({ id }) => id === 'evidence');
+  assert.ok(evidence && evidence.kind === 'evidence');
+  assert.deepEqual(evidence.items, ['paper', 'talk']);
   assert.deepEqual(
     model.sections.map(({ id }) => id),
     ['work', 'evidence', 'contact'],
@@ -86,7 +90,7 @@ test('one navigation list names each destination by text, and every fragment it 
   assert.deepEqual(
     [...nav.matchAll(/<a href="([^"]+)"[^>]*>([^<]+)<\/a>/g)].map(([, href, text]) => [href, text]),
     [
-      ['#ee--work', 'Work'],
+      ['#ee--work', 'Selected work'],
       ['#ee--proof', 'Proof'],
       ['#work', 'Work'],
       ['#evidence', 'Evidence'],
@@ -142,9 +146,9 @@ test("a case study's page: the breadcrumb, the work's title as its one h1, its f
   const crumbs = /<nav class="ee-breadcrumb"[\s\S]*?<\/nav>/.exec(html)?.[0] ?? '';
   assert.deepEqual(
     [...crumbs.matchAll(/<li>([\s\S]*?)<\/li>/g)].map(([, item]) => item!.replace(/<[^>]+>/g, '')),
-    ['Home', 'Work', 'Ledger'],
+    ['Home', 'Selected work', 'Ledger'],
   );
-  assert.match(crumbs, /<a href="\/#ee--work">Work<\/a>/);
+  assert.match(crumbs, /<a href="\/#ee--work">Selected work<\/a>/);
   assert.match(crumbs, /aria-current="page"/);
   for (const field of ['Challenge', 'Decisions', 'Rationale', 'Evidence', 'Outcomes']) {
     assert.match(html, new RegExp(`>${field}<`), field);
