@@ -15,12 +15,58 @@
 //   more): the signature fill is solid text-primary and emphasis-glow none.
 // - Print: opaque, and still. Each scheme's stylesheet prints its light set
 //   or its light high-contrast set, since only it has the values.
+// - Focus (Slice 3): every focusable [data-ui-slot] part draws its ring here,
+//   from the focus tokens and --color-focus, so no language stylesheet can
+//   remove or hide it. A language shapes the ring through --ui-focus-*
+//   alone, and forced colors map its color to Highlight.
+//
+// The shared primitives' rules (Slice 3, ../primitives/styles.css) join the
+// reset and utilities layers here, so they read the same tokens and every
+// setting above reaches them.
 
+import { readFileSync } from 'node:fs';
 import { LAYER_ORDER } from '../layers';
 import type { ColorRole } from '../tokens';
 import { packFile, type PackFile } from './compile';
 
+/**
+ * The shared primitives' stylesheet (#19, Slice 3), whose reset and
+ * utilities rules join the platform's, so every boundary links one file and
+ * the accessibility layer, last in LAYER_ORDER, overrides them too.
+ */
+const PRIMITIVES = readFileSync(new URL('../primitives/styles.css', import.meta.url), 'utf8');
+
+/**
+ * The rules of a stylesheet's `@layer <name> { ... }` block, one indent
+ * less, for wrap() to put back inside the platform's own block. It throws
+ * when the stylesheet has no such block.
+ */
+export function layerRules(css: string, layer: 'reset' | 'utilities'): string {
+  // Comments blanked to spaces, so a brace in one can't end the block.
+  const text = css.replace(/\/\*[\s\S]*?\*\//g, (comment) => comment.replace(/[^\n]/g, ' '));
+  const opening = `\n@layer ${layer} {\n`;
+  const start = text.indexOf(opening);
+  if (start < 0) throw new Error(`The stylesheet has no @layer ${layer} block.`);
+  let depth = 1;
+  let index = start + opening.length;
+  for (; index < text.length && depth > 0; index += 1) {
+    if (text[index] === '{') depth += 1;
+    else if (text[index] === '}') depth -= 1;
+  }
+  if (depth !== 0) throw new Error(`The stylesheet's @layer ${layer} block never closes.`);
+  return `${css
+    .slice(start + opening.length, index - 1)
+    .split('\n')
+    .map((line) => (line.startsWith('  ') ? line.slice(2) : line))
+    .join('\n')
+    .trim()}\n`;
+}
+
 const BOUNDARY = '[data-appearance-boundary]';
+
+/** What can take focus: links, form controls, summaries, frames, and anything with a tabindex. */
+const FOCUSABLE =
+  'a[href], area[href], button, input, select, textarea, summary, iframe, [tabindex], [contenteditable]';
 
 /** Each role in forced colors: actions as buttons, focus and selection as highlights, the rest as canvas and text. */
 const FORCED_COLORS: Readonly<Record<ColorRole, string>> = {
@@ -66,6 +112,12 @@ const FORCED_COLORS: Readonly<Record<ColorRole, string>> = {
 };
 
 const SOLID_TEXT = 'linear-gradient(var(--color-text-primary), var(--color-text-primary))';
+
+/** The focus ring: the language's focus geometry, in the scheme's focus color. */
+const FOCUS_RING = {
+  outline: 'var(--ui-focus-width) var(--ui-focus-style) var(--color-focus)',
+  'outline-offset': 'var(--ui-focus-offset)',
+};
 
 /** Reduced motion: feedback stays, movement stops, entrances and exits fade. */
 const REDUCED = {
@@ -150,6 +202,12 @@ export function platformStylesheet(): string {
       color: 'var(--color-text-primary)',
       'background-color': 'var(--color-selection)',
     }),
+    // A variant with sticky chrome sets --layout-sticky-offset, so whatever a
+    // fragment link or focus brings into view lands below the chrome (#19,
+    // Slice 3).
+    block([`${BOUNDARY} :is([id], ${FOCUSABLE})`], {
+      'scroll-margin-top': 'var(--layout-sticky-offset, 0px)',
+    }),
   ].join('');
   // Hidden stays hidden whatever display a variant or language gives the element.
   const utilities = block([`${BOUNDARY} [hidden]:not([hidden="until-found"])`], {
@@ -159,6 +217,7 @@ export function platformStylesheet(): string {
     Object.entries(FORCED_COLORS).map(([role, color]) => [`--color-${role}`, color]),
   );
   const accessibility = [
+    block([`${BOUNDARY} [data-ui-slot]:focus-visible`], FOCUS_RING),
     wrap('@media (prefers-reduced-motion: reduce)', block([BOUNDARY], REDUCED)),
     block([`${BOUNDARY}[data-motion="reduced"]`], REDUCED),
     block([`${BOUNDARY}[data-motion="static"]`], STATIC),
@@ -178,8 +237,8 @@ export function platformStylesheet(): string {
   return [
     LAYER_ORDER,
     '/* The platform stylesheet, compiled by @portfolio/appearance. */',
-    wrap('@layer reset', reset).trimEnd(),
-    wrap('@layer utilities', utilities).trimEnd(),
+    wrap('@layer reset', `${reset}\n${layerRules(PRIMITIVES, 'reset')}`).trimEnd(),
+    wrap('@layer utilities', `${utilities}\n${layerRules(PRIMITIVES, 'utilities')}`).trimEnd(),
     wrap('@layer accessibility', accessibility),
   ].join('\n');
 }

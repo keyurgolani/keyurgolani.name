@@ -3,8 +3,8 @@
 // @portfolio/variant-contract's browser-safe root: no React, no Node, and
 // no next/*, so the host, #7's preview frames, and #9's Demo Studio in the
 // browser resolve the same way. So does ./generators. The compiler and the
-// contrast check are ./node (Slice 2); the boundary and primitives
-// (./react, ./primitives) arrive in Slice 3.
+// contrast check are ./node (Slice 2). The boundary and the visitor control
+// (./react) and the primitives (./primitives) peer on React (Slice 3).
 
 export {
   APPEARANCE_AXES,
@@ -164,3 +164,44 @@ export {
 export { validateAppearance, type AppearanceValidatorOptions } from './validator';
 export { legacyAppearanceRemediation } from './remediation';
 export { coversScript, scriptOf } from './scripts';
+export {
+  ACTION_EMPHASES,
+  PRIMITIVES,
+  SLOT_VALUES,
+  SLOTS,
+  STATUSES,
+  SURFACE_EMPHASES,
+  type ActionEmphasis,
+  type SlotName,
+  type SlotValue,
+  type Status,
+  type SurfaceEmphasis,
+} from './slots';
+export { boundaryId, localIdProblem, partId, prefixedId, type BoundaryIds } from './ids';
+export {
+  attributeAxis,
+  BOUNDARY_KINDS,
+  boundaryAttributes,
+  diagnosticCodes,
+  lowerMotion,
+  registryStylesheets,
+  stylesheetHrefs,
+  type AppearanceStylesheets,
+  type BoundaryAppearance,
+  type BoundaryAttributes,
+  type BoundaryKind,
+} from './boundary';
+export {
+  APPEARANCE_PREFERENCE_ROUTE,
+  AXIS_LABELS,
+  DISPLAY_MODE_LABELS,
+  TIER_LABELS,
+  VISITOR_TIERS,
+  visitorAppearanceModel,
+  type VisitorAppearanceModel,
+  type VisitorAxisControl,
+  type VisitorChoice,
+  type VisitorChoiceGroup,
+  type VisitorModelInput,
+  type VisitorTier,
+} from './visitor-model';

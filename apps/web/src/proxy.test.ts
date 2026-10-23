@@ -2,7 +2,8 @@ import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import { NextRequest } from 'next/server';
 import { proxy } from './proxy';
-import type { Profile } from './server/capabilities';
+import { fixtureFlags } from '../scripts/fixture-gate';
+import { PROFILES, type Profile } from './server/capabilities';
 import { readDeploymentConfig } from './server/config';
 import { setDeploymentState, setServable } from './server/config-store';
 import type { PreviewGrantsPort } from './server/preview-port';
@@ -401,6 +402,66 @@ test("under a profile with no Studio page, every Studio path is as unknown as an
           assert.equal(response.headers.get(name), unknown.headers.get(name), `${what}: ${name}`);
         }
         noStudioHeaders(response, what);
+      }
+    }
+  }
+});
+
+test('a route no profile of this build serves, as the appearance fixtures are without APPEARANCE_FIXTURES=1, is as unknown as any path in every profile (#19, Slice 3)', async (t) => {
+  // The page and its spellings the table reads as the page, which go to the
+  // 404 page ahead of Next's file check, and paths beside it, which go on
+  // marked missing, as /no-such-page does.
+  const listed = [
+    '/_fixtures/appearance',
+    '/%5Ffixtures/appearance',
+    '/_fixtures/%61ppearance',
+    '/_fixtures%2Fappearance',
+  ];
+  const beside = ['/_FIXTURES/appearance', '/_fixtures/appearance/x', '/_fixtures'];
+  for (const profile of PROFILES) {
+    deploy(t, profile);
+    // What this run's environment asked registry generation for, never the code under test.
+    if (fixtureFlags(process.env).appearance) {
+      // A build made with the flag serves the page, to anyone, in every profile.
+      assert.equal(decision(await proxy(request('/_fixtures/appearance'))), 'served', profile);
+      continue;
+    }
+    for (const method of ['GET', 'HEAD']) {
+      const unknown = await proxy(request('/no-such-page', method));
+      assert.equal(decision(unknown), 'missing');
+      for (const path of listed) {
+        const response = await proxy(request(path, method));
+        const what = `${profile} ${method} ${path}`;
+        assert.equal(response.headers.get('x-middleware-next'), '1', what);
+        assert.equal(response.headers.get('x-middleware-request-x-portfolio-not-found'), '1', what);
+        assert.equal(decision(response), null, what);
+        assert.equal(response.headers.get('cache-control'), UNKNOWN_PATH_CACHE_CONTROL, what);
+        assert.equal(response.headers.get('x-robots-tag'), unknown.headers.get('x-robots-tag'));
+      }
+      for (const path of beside) {
+        const response = await proxy(request(path, method));
+        const what = `${profile} ${method} ${path}`;
+        assert.equal(decision(response), 'missing', what);
+        for (const name of [
+          'cache-control',
+          'x-robots-tag',
+          'x-middleware-request-x-portfolio-not-found',
+        ]) {
+          assert.equal(response.headers.get(name), unknown.headers.get(name), `${what}: ${name}`);
+        }
+      }
+    }
+    // Any other method gets the plain 404 /no-such-page gets.
+    for (const method of ['POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS']) {
+      const unknown = await proxy(request('/no-such-page', method));
+      for (const path of [...listed, ...beside]) {
+        const response = await proxy(request(path, method));
+        const what = `${profile} ${method} ${path}`;
+        assert.equal(response.status, 404, what);
+        assert.equal(await response.text(), 'Not found.', what);
+        for (const name of ['content-type', 'cache-control', 'x-robots-tag']) {
+          assert.equal(response.headers.get(name), unknown.headers.get(name), `${what}: ${name}`);
+        }
       }
     }
   }

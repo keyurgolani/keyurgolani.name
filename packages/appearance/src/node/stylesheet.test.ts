@@ -222,6 +222,17 @@ test('selectors target only [data-ui-slot] parts and state attributes', () => {
   refuses(':is([data-ui-slot="a"], [data-state="b"]) { border-radius: 0; }', /every part/);
 });
 
+test('a selector may test the kind a primitive renders as, its data-emphasis and data-status (Slice 3)', () => {
+  const sheet = read(`
+    [data-ui-slot="action"][data-emphasis="primary"] { border-radius: 0; }
+    [data-ui-slot="surface"]:not([data-emphasis="subtle"]) { border-radius: 0; }
+    [data-ui-slot="badge"][data-status~="danger"] { border-radius: 0; }
+  `);
+  assert.ok(sheet.ok, JSON.stringify(sheet));
+  refuses('[data-emphasis="primary"] { border-radius: 0; }', /every part/);
+  refuses('[data-ui-slot][data-tone="danger"] { border-radius: 0; }', /tests \[data-tone\]/);
+});
+
 test('declarations can only use tokens for type, motion, and color', () => {
   const slot = '[data-ui-slot="action"]';
   refuses(`${slot} { --ui-radius-control: 0; }`, /defines a custom property/);

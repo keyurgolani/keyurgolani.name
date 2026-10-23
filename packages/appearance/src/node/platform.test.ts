@@ -1,8 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { LAYER_ORDER } from '../layers';
 import { COLOR_ROLES, LANGUAGE_KEYS } from '../tokens';
-import { compilePlatform, platformStylesheet } from './platform';
+import { compilePlatform, layerRules, platformStylesheet } from './platform';
 import { readLanguageStylesheet } from './stylesheet';
 
 // The platform stylesheet (#19, Slice 2, item 3): the reset, utilities, and
@@ -40,6 +41,41 @@ test('the reset paints each boundary from its tokens', () => {
   assert.equal(reset.get('background-color'), 'var(--color-canvas)');
   assert.equal(reset.get('font-family'), 'var(--type-body-font-family)');
   assert.equal(reset.get('line-height'), 'var(--type-body-line-height)');
+});
+
+test("the reset puts every id and focusable element below a variant's sticky chrome (Slice 3)", () => {
+  const offset = declarations(
+    '  [data-appearance-boundary] :is([id], a[href], area[href], button, input, select, textarea, summary, iframe, [tabindex], [contenteditable])',
+    '@layer reset',
+  );
+  assert.deepEqual(Object.fromEntries(offset), {
+    'scroll-margin-top': 'var(--layout-sticky-offset, 0px)',
+  });
+});
+
+test("the primitives' rules join the platform's reset and utilities layers, under the accessibility layer (Slice 3)", () => {
+  const primitives = readFileSync(new URL('../primitives/styles.css', import.meta.url), 'utf8');
+  const reset = css.slice(css.indexOf('@layer reset {'), css.indexOf('@layer utilities {'));
+  const utilities = css.slice(
+    css.indexOf('@layer utilities {'),
+    css.indexOf('@layer accessibility {'),
+  );
+  assert.ok(reset.includes("  [data-ui-slot='action'] {\n"), 'an action renders from the tokens');
+  assert.ok(reset.includes("  [data-ui-slot='surface'][data-emphasis='prominent'] {\n"));
+  assert.ok(
+    utilities.includes('  [data-appearance-boundary] :focus-visible {\n'),
+    'focus is an outline',
+  );
+  assert.ok(utilities.includes('  @keyframes fade-rise {\n'));
+  // Every rule of theirs is here, once, in its own layer.
+  for (const layer of ['reset', 'utilities'] as const) {
+    const within = layer === 'reset' ? reset : utilities;
+    for (const line of layerRules(primitives, layer).split('\n')) {
+      if (/^\S.*\{$/.test(line)) assert.ok(within.includes(`\n  ${line}\n`), `${layer}: ${line}`);
+    }
+  }
+  assert.equal(css.split('@layer reset {').length, 2, 'still one reset block');
+  assert.throws(() => layerRules('@layer reset {}', 'utilities'), /no @layer utilities block/);
 });
 
 test('reduced motion keeps motion-fast feedback and stops or fades the rest', () => {
@@ -156,6 +192,37 @@ test('every token a language may move, blur, or fade a part through is one the a
     for (const token of blurs) assert.equal(block.get(token), '0px', `${within} ${token}`);
     assert.equal(block.get('--ui-surface-opacity'), '100%', within);
   }
+});
+
+test('every focusable part draws its focus ring in the accessibility layer, past anything a language sets (Slice 3)', () => {
+  const ring = declarations(
+    '  [data-appearance-boundary] [data-ui-slot]:focus-visible',
+    '@layer accessibility',
+  );
+  assert.deepEqual(Object.fromEntries(ring), {
+    outline: 'var(--ui-focus-width) var(--ui-focus-style) var(--color-focus)',
+    'outline-offset': 'var(--ui-focus-offset)',
+  });
+  // A language may set the outline a focused part draws, even none, and the
+  // compiler puts its rules in the language layer, which comes before the
+  // accessibility layer: the ring wins, and the language shapes it only
+  // through the focus tokens. tests/appearance renders the same case.
+  for (const hiding of [
+    '[data-ui-slot]:focus-visible { outline-style: none; }',
+    "[data-ui-slot='action']:focus-visible { outline: none; }",
+  ]) {
+    assert.ok(readLanguageStylesheet(hiding).ok, hiding);
+  }
+  const order = LAYER_ORDER.replace(/^@layer |;$/g, '').split(', ');
+  assert.ok(order.indexOf('language') < order.indexOf('accessibility'));
+  assert.equal(order.at(-1), 'accessibility');
+  // Forced colors give the ring the system highlight.
+  assert.equal(
+    declarations('    [data-appearance-boundary]', '@media (forced-colors: active)').get(
+      '--color-focus',
+    ),
+    'Highlight',
+  );
 });
 
 test('print is opaque and still', () => {

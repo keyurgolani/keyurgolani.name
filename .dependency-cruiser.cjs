@@ -82,17 +82,39 @@ module.exports = {
         "@portfolio/appearance's root entry runs in browsers too, in #7's preview frames and #9's " +
         'Demo Studio, and so do its ./generators, so they import only zod, the browser-safe ' +
         "@portfolio/schema, and @portfolio/variant-contract's root: no React, no Node, no next/*, " +
-        'and not the Node-only ./node (#19, Slices 1 and 2). It imports the token contract version ' +
-        'from that root, which the rule above keeps from importing back. ./generators loads no ' +
-        'package at all, which its own test holds it to. Tests and their test support may import ' +
-        'anything.',
+        'not the Node-only ./node (#19, Slices 1 and 2), and not the React entries, ./react and ' +
+        './primitives (Slice 3). It imports the token contract version from that root, which the ' +
+        'rule above keeps from importing back. ./generators loads no package at all, which its ' +
+        'own test holds it to. Tests and their test support may import anything.',
       from: {
         path: '^packages/appearance/src/',
         pathNot: [
-          '\\.test\\.ts$',
+          '\\.test\\.tsx?$',
           '^packages/appearance/src/test-support/',
-          '^packages/appearance/src/node/',
+          '^packages/appearance/src/(node|react|primitives)/',
         ],
+      },
+      to: {
+        pathNot: [
+          '^packages/appearance/src/(?!test-support/|node/|react/|primitives/)',
+          '^packages/variant-contract/src/(?!node/)',
+          '^packages/schema/src/(?!node\\.ts$|migrate/)',
+          '^node_modules/(\\.pnpm/zod@|zod/)',
+        ],
+      },
+    },
+    {
+      name: 'appearance-react-entries-stay-browser-safe',
+      severity: 'error',
+      comment:
+        "@portfolio/appearance's ./react and ./primitives render on the server and in the browser, " +
+        "in #7's frames and #9's Demo Studio too, so they import what the root may, each other, and " +
+        'React itself, and nothing from Node, next/*, react-dom/server, or the Node-only ./node ' +
+        '(#19, Slice 3). The host passes VisitorAppearance its refresh. Tests and their test ' +
+        'support may import anything.',
+      from: {
+        path: '^packages/appearance/src/(react|primitives)/',
+        pathNot: ['\\.test\\.tsx?$'],
       },
       to: {
         pathNot: [
@@ -100,6 +122,8 @@ module.exports = {
           '^packages/variant-contract/src/(?!node/)',
           '^packages/schema/src/(?!node\\.ts$|migrate/)',
           '^node_modules/(\\.pnpm/zod@|zod/)',
+          '^node_modules/\\.pnpm/react@[^/]+/node_modules/react/',
+          '^node_modules/\\.pnpm/react-dom@[^/]+/node_modules/react-dom/(?!server)',
         ],
       },
     },

@@ -91,6 +91,9 @@ test('the route is the table pattern, whatever form of route path Next reports',
     ['/(site)/opengraph-image-12o0cb/route', 'route', '/opengraph-image-12o0cb'],
     ['/(site)/page', 'render', '/'],
     ['/(studio)/studio/sign-in/page', 'render', '/studio/sign-in'],
+    // A %5F folder serves an underscore, however Next spells it (#19, Slice 3).
+    ['/(fixtures)/_fixtures/appearance/page', 'render', '/_fixtures/appearance'],
+    ['/(fixtures)/%5Ffixtures/appearance/page', 'render', '/_fixtures/appearance'],
   ];
   for (const [routePath, routeType, route] of cases) {
     assert.equal((await logged(t, routePath, routeType)).route, route, routePath);

@@ -1,7 +1,14 @@
 import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
+import { fixtureFlags } from '../../scripts/fixture-gate';
 import { assertAuthorized, authorize, type Authorized } from './authorize';
-import { accessIn, CAPABILITIES, PROFILES, type Profile } from './capabilities';
+import {
+  accessIn,
+  CAPABILITIES,
+  FIXTURE_CAPABILITIES,
+  PROFILES,
+  type Profile,
+} from './capabilities';
 import type { DeploymentConfig } from './config';
 import { setDeploymentState } from './config-store';
 import { mintSession } from './owner/session-mint';
@@ -54,6 +61,13 @@ test('the summary names each granted capability and its access, and nothing else
     owner.capabilities.some((entry) => entry.id === 'publish' && entry.access === 'session'),
   );
   const readOnly = capabilityPolicy('read-only').summary();
+  // A fixture capability is there when this run's environment asks registry
+  // generation for its flag (#19, Slice 3), as APPEARANCE_FIXTURES=1 pnpm
+  // test does: read from the environment, never from the code under test.
+  const asked = fixtureFlags(process.env);
+  const fixtures = Object.entries(FIXTURE_CAPABILITIES)
+    .filter(([, { key }]) => asked[key] === true)
+    .map(([id]) => ({ id, access: 'public' }));
   assert.deepEqual(readOnly, {
     profile: 'read-only',
     capabilities: [
@@ -61,6 +75,7 @@ test('the summary names each granted capability and its access, and nothing else
       { id: 'feed.read', access: 'public' },
       { id: 'health.read', access: 'public' },
       { id: 'ready.read', access: 'public' },
+      ...fixtures,
     ],
   });
 });

@@ -61,11 +61,17 @@ const MAX_GROUP_DEPTH = 3;
 /** Every character the subset uses. Anything else is refused before reading. */
 const CHARACTERS = /[A-Za-z0-9 \t\r\n\-_[\]="':().>+~,*%/{};@#<]/;
 
-/** The attributes a selector may test: the slot, and the state primitives show it through. */
+/**
+ * The attributes a selector may test: the slot, the state primitives show
+ * it through, and the kind a primitive renders as, data-emphasis (an
+ * action's or a surface's) and data-status (#19, Slice 3).
+ */
 const ATTRIBUTES: ReadonlySet<string> = new Set([
   'data-ui-slot',
   'data-state',
   'data-orientation',
+  'data-emphasis',
+  'data-status',
   'aria-busy',
   'aria-checked',
   'aria-current',

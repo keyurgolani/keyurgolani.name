@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // `pnpm --filter @portfolio/web test:profiles` (#1, Verification item 2,
-// and #2). Builds the app once with no deployment setting in the
-// environment, then boots the standalone server under read-only
+// and #2). Builds the app once with no deployment setting and no fixture
+// flag in the environment, then boots the standalone server under read-only
 // (tests/e2e/profiles.spec.ts), demo (tests/e2e/demo.spec.ts), and owner
 // with the password provider (tests/e2e/owner.spec.ts) for the route matrix
 // and the canary scan: GET and POST to every route and operation, with no
@@ -15,14 +15,19 @@
 //   TEST_PROFILES_WORKERS  Playwright workers (default 2)
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
+import { FIXTURE_FLAG } from './lib/fixture-flags.mjs';
 import { REPO_ROOT } from './lib/reports.mjs';
 
 const WEB = path.join(REPO_ROOT, 'apps', 'web');
 const PLAYWRIGHT = path.join(REPO_ROOT, 'node_modules', '@playwright', 'test', 'cli.js');
 // Every deployment setting, so nothing set in the caller's shell reaches the build.
 const DEPLOYMENT = /^(PORTFOLIO_|GITHUB_TOKEN(_FILE)?$|NEXT_PUBLIC_BASE_URL$)/;
+// The test fixtures' build-time flags, such as APPEARANCE_FIXTURES (#19): the
+// matrix runs against a build without them, where no fixture page serves.
 const env = Object.fromEntries(
-  Object.entries(process.env).filter(([name]) => !DEPLOYMENT.test(name)),
+  Object.entries(process.env).filter(
+    ([name]) => !DEPLOYMENT.test(name) && !FIXTURE_FLAG.test(name),
+  ),
 );
 const workers = `--workers=${process.env.TEST_PROFILES_WORKERS || '2'}`;
 // pnpm when this runs as a pnpm script; the one on PATH otherwise.

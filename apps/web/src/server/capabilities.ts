@@ -1,13 +1,49 @@
 // The deployment profiles and what each may do (#1, item 9). Pure data with
 // stable IDs: later issues, the route table, the operation registry, and
 // proxy.ts all key off this matrix, never off route names. A capability a
-// profile doesn't list is absent there.
+// profile doesn't list is absent there. A test fixture's capability is the
+// one that depends on the build: on in every profile, or in none, by the
+// fixture flags registry generation wrote.
+
+import { FIXTURE_FLAGS } from '../lib/generated/registry.meta';
 
 export const PROFILES = ['owner', 'demo', 'read-only'] as const;
 export type Profile = (typeof PROFILES)[number];
 
 /** `public`: anyone. `session`: only with an owner session (#2). */
 export type Access = 'public' | 'session';
+
+/**
+ * The test fixtures' capabilities (#19, Slice 3; #7's preview fixtures add
+ * theirs), each with the build-time flag that turns it on and the flag's key
+ * in the generated FIXTURE_FLAGS: a row of scripts/fixture-gate.ts. Only a
+ * test build sets one, so a build with the flag grants the capability to
+ * anyone in every profile. A build without it grants it in none, and its
+ * routes answer as a path no route matches does. The flag counts only when
+ * the app is built: set when the server starts, it changes nothing.
+ */
+export const FIXTURE_CAPABILITIES = {
+  'appearance.fixtures': { flag: 'APPEARANCE_FIXTURES', key: 'appearance' },
+} as const satisfies Record<string, { readonly flag: string; readonly key: string }>;
+
+/** What a fixture capability grants in a build with its flag: anyone, in every profile. */
+export const FIXTURE_ACCESS = Object.freeze({
+  owner: 'public',
+  demo: 'public',
+  'read-only': 'public',
+} as const satisfies Record<Profile, Access>);
+
+/** Whether registry generation ran with the fixture flag whose FIXTURE_FLAGS key is `key`. */
+export function builtWithFixtures(key: string): boolean {
+  const flags: Readonly<Record<string, boolean | undefined>> = FIXTURE_FLAGS;
+  return flags[key] === true;
+}
+
+function fixtureGrants(
+  capability: keyof typeof FIXTURE_CAPABILITIES,
+): Partial<Record<Profile, Access>> {
+  return builtWithFixtures(FIXTURE_CAPABILITIES[capability].key) ? FIXTURE_ACCESS : {};
+}
 
 export const CAPABILITY_MATRIX = {
   // owner: the live revision; demo: the bundled sample; read-only: the
@@ -34,6 +70,8 @@ export const CAPABILITY_MATRIX = {
   rollback: { owner: 'session' },
   'asset.write': { owner: 'session' },
   'preview.grant': { owner: 'session' }, // #7
+  // /_fixtures/appearance (#19, Slice 3), only in a build with APPEARANCE_FIXTURES=1.
+  'appearance.fixtures': fixtureGrants('appearance.fixtures'),
 } as const satisfies Record<string, Partial<Record<Profile, Access>>>;
 
 export type Capability = keyof typeof CAPABILITY_MATRIX;

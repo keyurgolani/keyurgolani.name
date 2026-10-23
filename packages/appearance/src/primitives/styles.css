@@ -1,0 +1,935 @@
+@layer reset, scheme, language, typography, variant-layout, utilities, accessibility;
+
+/*
+ * The shared primitives' stylesheet (#19, Slice 3, item 2). It renders every
+ * primitive from the tokens alone: colors from var(--color-*), geometry,
+ * materials, states, and timing from var(--ui-*), and text from var(--type-*),
+ * so a design language with no stylesheet of its own still renders every
+ * slot, and one with a stylesheet restyles them in the language layer above.
+ * No palette, font, radius, shadow, blur, or timing literal appears here.
+ *
+ * The reset layer holds the primitives' defaults, under every pack. The
+ * utilities layer holds what no language or variant may undo: focus is an
+ * outline, never a shadow alone, so forced colors keep it, and every control
+ * keeps its touch target whatever its language's control height.
+ */
+
+@layer reset {
+  [data-ui-slot],
+  [data-ui-slot]::before,
+  [data-ui-slot]::after {
+    box-sizing: border-box;
+  }
+
+  /* A plate previews another selection inside a page: contained and still. */
+  [data-appearance-boundary='plate'] {
+    contain: layout paint;
+    isolation: isolate;
+  }
+
+  /* A modal dialog stops the page behind it from scrolling. */
+  :root:has([data-ui-slot='dialog']:modal) {
+    overflow: hidden;
+  }
+
+  /* Type roles, for text a variant or a page sets in one. */
+  [data-type-role='display'] {
+    font-family: var(--type-display-font-family);
+    font-size: var(--type-display-font-size);
+    font-weight: var(--type-display-font-weight);
+    line-height: var(--type-display-line-height);
+    letter-spacing: var(--type-display-letter-spacing);
+    font-variation-settings: var(--type-display-font-variation-settings);
+  }
+
+  [data-type-role='headline'] {
+    font-family: var(--type-headline-font-family);
+    font-size: var(--type-headline-font-size);
+    font-weight: var(--type-headline-font-weight);
+    line-height: var(--type-headline-line-height);
+    letter-spacing: var(--type-headline-letter-spacing);
+    font-variation-settings: var(--type-headline-font-variation-settings);
+  }
+
+  [data-type-role='title'],
+  [data-ui-slot='tabs.heading'],
+  [data-ui-slot='dialog.title'] {
+    font-family: var(--type-title-font-family);
+    font-size: var(--type-title-font-size);
+    font-weight: var(--type-title-font-weight);
+    line-height: var(--type-title-line-height);
+    letter-spacing: var(--type-title-letter-spacing);
+    font-variation-settings: var(--type-title-font-variation-settings);
+  }
+
+  [data-type-role='body'] {
+    max-inline-size: var(--type-measure-body);
+    font-family: var(--type-body-font-family);
+    font-size: var(--type-body-font-size);
+    font-weight: var(--type-body-font-weight);
+    line-height: var(--type-body-line-height);
+    letter-spacing: var(--type-body-letter-spacing);
+    font-variation-settings: var(--type-body-font-variation-settings);
+  }
+
+  [data-type-role='body-compact'],
+  [data-ui-slot='field.control'],
+  [data-ui-slot='select.control'],
+  [data-ui-slot='field.error'],
+  [data-ui-slot='select.error'],
+  [data-ui-slot='dialog.description'],
+  [data-ui-slot='toast.message'],
+  [data-ui-slot='data-display.cell'] {
+    font-family: var(--type-body-compact-font-family);
+    font-size: var(--type-body-compact-font-size);
+    font-weight: var(--type-body-compact-font-weight);
+    line-height: var(--type-body-compact-line-height);
+    letter-spacing: var(--type-body-compact-letter-spacing);
+    font-variation-settings: var(--type-body-compact-font-variation-settings);
+  }
+
+  [data-type-role='body-compact'] {
+    max-inline-size: var(--type-measure-compact);
+  }
+
+  [data-type-role='label'],
+  [data-ui-slot='skip-link'],
+  [data-ui-slot='action.label'],
+  [data-ui-slot='navigation.link'],
+  [data-ui-slot='field.label'],
+  [data-ui-slot='select.label'],
+  [data-ui-slot='checkbox.label'],
+  [data-ui-slot='radio.legend'],
+  [data-ui-slot='radio.label'],
+  [data-ui-slot='badge'],
+  [data-ui-slot='tabs.tab'],
+  [data-ui-slot='disclosure.summary'],
+  [data-ui-slot='data-display.caption'],
+  [data-ui-slot='data-display.header'] {
+    font-family: var(--type-label-font-family);
+    font-size: var(--type-label-font-size);
+    font-weight: var(--type-label-font-weight);
+    line-height: var(--type-label-line-height);
+    letter-spacing: var(--type-label-letter-spacing);
+    font-variation-settings: var(--type-label-font-variation-settings);
+  }
+
+  [data-type-role='caption'],
+  [data-ui-slot='field.description'],
+  [data-ui-slot='select.description'],
+  [data-ui-slot='checkbox.description'],
+  [data-ui-slot='radio.description'],
+  [data-ui-slot='radio.reason'],
+  [data-ui-slot='tooltip'],
+  [data-ui-slot='media.caption'],
+  [data-ui-slot='appearance-control.status'] {
+    font-family: var(--type-caption-font-family);
+    font-size: var(--type-caption-font-size);
+    font-weight: var(--type-caption-font-weight);
+    line-height: var(--type-caption-line-height);
+    letter-spacing: var(--type-caption-letter-spacing);
+    font-variation-settings: var(--type-caption-font-variation-settings);
+  }
+
+  [data-type-role='quote'] {
+    font-family: var(--type-quote-font-family);
+    font-size: var(--type-quote-font-size);
+    font-weight: var(--type-quote-font-weight);
+    line-height: var(--type-quote-line-height);
+    letter-spacing: var(--type-quote-letter-spacing);
+    font-variation-settings: var(--type-quote-font-variation-settings);
+  }
+
+  [data-type-role='code'] {
+    font-family: var(--type-code-font-family);
+    font-size: var(--type-code-font-size);
+    font-weight: var(--type-code-font-weight);
+    line-height: var(--type-code-line-height);
+    letter-spacing: var(--type-code-letter-spacing);
+    font-variation-settings: var(--type-code-font-variation-settings);
+  }
+
+  [data-type-role='numeric'],
+  [data-ui-slot='data-display.cell'][data-state='numeric'] {
+    font-family: var(--type-numeric-font-family);
+    font-size: var(--type-numeric-font-size);
+    font-weight: var(--type-numeric-font-weight);
+    line-height: var(--type-numeric-line-height);
+    letter-spacing: var(--type-numeric-letter-spacing);
+    font-variation-settings: var(--type-numeric-font-variation-settings);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Links in a boundary take the scheme's link color. */
+  [data-appearance-boundary] :where(a[href]) {
+    color: var(--color-accent-text);
+    text-underline-offset: 0.2em;
+  }
+
+  /* Skip link: out of sight until it has focus, then in the flow at the top. */
+  [data-ui-slot='skip-link']:not(:focus) {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  [data-ui-slot='skip-link']:focus {
+    display: inline-flex;
+    align-items: center;
+    padding-block: var(--ui-space-control-block);
+    padding-inline: var(--ui-space-control-inline);
+    color: var(--color-on-accent);
+    background-color: var(--color-accent);
+    border-radius: var(--ui-radius-control);
+  }
+
+  /* Action: a button, or a link that navigates. */
+  [data-ui-slot='action'] {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: calc(var(--ui-space-control-inline) / 2);
+    min-block-size: var(--ui-control-height);
+    padding-block: var(--ui-space-control-block);
+    padding-inline: var(--ui-space-control-inline);
+    color: var(--color-text-primary);
+    background-color: var(--color-surface-default);
+    border: var(--ui-border-control);
+    border-radius: var(--ui-radius-control);
+    font: inherit;
+    text-align: center;
+    text-decoration: none;
+    cursor: pointer;
+    transition-property: background-color, border-color, color, transform, opacity;
+    transition-duration: var(--ui-motion-fast);
+    transition-timing-function: var(--ui-motion-easing);
+  }
+
+  [data-ui-slot='action'][data-emphasis='primary'] {
+    color: var(--color-on-accent);
+    background-color: var(--color-accent);
+    border-color: var(--color-accent);
+  }
+
+  [data-ui-slot='action'][data-emphasis='quiet'] {
+    color: var(--color-accent-text);
+    background-color: transparent;
+    border-color: transparent;
+  }
+
+  [data-ui-slot='action']:hover:not(:disabled, [aria-disabled='true']) {
+    transform: var(--ui-state-hover-transform);
+  }
+
+  [data-ui-slot='action'][data-emphasis='secondary']:hover:not(:disabled, [aria-disabled='true']) {
+    background-color: var(--color-surface-prominent);
+  }
+
+  [data-ui-slot='action'][data-emphasis='quiet']:hover:not(:disabled, [aria-disabled='true']) {
+    background-color: var(--color-surface-subtle);
+  }
+
+  [data-ui-slot='action'][data-emphasis='primary']:hover:not(:disabled, [aria-disabled='true']) {
+    background-color: var(--color-accent-hover);
+    border-color: var(--color-accent-hover);
+  }
+
+  [data-ui-slot='action']:active:not(:disabled, [aria-disabled='true']) {
+    transform: var(--ui-state-active-transform);
+  }
+
+  [data-ui-slot='action'][data-emphasis='primary']:active:not(:disabled, [aria-disabled='true']) {
+    background-color: var(--color-accent-active);
+    border-color: var(--color-accent-active);
+  }
+
+  /* Pressed: an inset ring and the accent's text, never color alone. */
+  [data-ui-slot='action'][aria-pressed='true'] {
+    color: var(--color-accent-text);
+    border-color: var(--color-accent);
+    outline: var(--ui-state-selected-emphasis) solid var(--color-accent);
+    outline-offset: calc(var(--ui-state-selected-emphasis) * -1);
+  }
+
+  [data-ui-slot='action']:disabled,
+  [data-ui-slot='action'][aria-disabled='true'] {
+    opacity: var(--ui-state-disabled-opacity);
+    cursor: not-allowed;
+  }
+
+  [data-ui-slot='action'][data-state='loading'] {
+    opacity: var(--ui-state-loading-opacity);
+    cursor: progress;
+  }
+
+  [data-ui-slot='action.icon'],
+  [data-ui-slot='badge.icon'] {
+    display: inline-flex;
+    flex: none;
+  }
+
+  [data-ui-slot] svg {
+    fill: var(--ui-icon-fill);
+    stroke-width: var(--ui-icon-stroke-width);
+  }
+
+  /*
+   * The loading indicator: a ring that pulses with the language's emphasis
+   * motion, so reduced motion, a paused boundary, and print, which set that
+   * to none, leave it still. aria-busy and the label say it's working.
+   */
+  [data-ui-slot='action.spinner'] {
+    flex: none;
+    inline-size: 1em;
+    block-size: 1em;
+    border: var(--ui-border-control);
+    border-color: currentcolor;
+    border-inline-end-color: transparent;
+    border-radius: var(--ui-radius-badge);
+    animation: var(--ui-motion-emphasis) var(--ui-motion-slow) var(--ui-motion-easing) infinite;
+  }
+
+  /* Surface: the level's color at the language's opacity, over its material. */
+  [data-ui-slot='surface'] {
+    padding-block: var(--ui-space-surface-block);
+    padding-inline: var(--ui-space-surface-inline);
+    color: var(--color-text-primary);
+    background-color: transparent;
+    background-image:
+      var(--ui-texture),
+      linear-gradient(
+        color-mix(in srgb, var(--color-surface-default) var(--ui-surface-opacity), transparent),
+        color-mix(in srgb, var(--color-surface-default) var(--ui-surface-opacity), transparent)
+      ),
+      var(--ui-surface-material);
+    border: var(--ui-border-card);
+    border-radius: var(--ui-radius-card);
+    box-shadow: var(--ui-shadow-card);
+  }
+
+  [data-ui-slot='surface'][data-emphasis='subtle'] {
+    background-image:
+      var(--ui-texture),
+      linear-gradient(
+        color-mix(in srgb, var(--color-surface-subtle) var(--ui-surface-opacity), transparent),
+        color-mix(in srgb, var(--color-surface-subtle) var(--ui-surface-opacity), transparent)
+      ),
+      var(--ui-surface-material);
+    box-shadow: none;
+  }
+
+  [data-ui-slot='surface'][data-emphasis='prominent'] {
+    background-image:
+      var(--ui-texture),
+      linear-gradient(
+        color-mix(in srgb, var(--color-surface-prominent) var(--ui-surface-opacity), transparent),
+        color-mix(in srgb, var(--color-surface-prominent) var(--ui-surface-opacity), transparent)
+      ),
+      var(--ui-surface-material);
+    box-shadow: var(--ui-shadow-raised);
+  }
+
+  [data-ui-slot='surface'][data-emphasis='overlay'] {
+    background-image:
+      var(--ui-texture),
+      linear-gradient(
+        color-mix(in srgb, var(--color-surface-overlay) var(--ui-surface-opacity), transparent),
+        color-mix(in srgb, var(--color-surface-overlay) var(--ui-surface-opacity), transparent)
+      ),
+      var(--ui-surface-material);
+    border-radius: var(--ui-radius-overlay);
+    box-shadow: var(--ui-shadow-overlay);
+  }
+
+  /* Navigation: a list of links, the current one marked by more than color. */
+  [data-ui-slot='navigation.list'] {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--ui-space-control-block);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  [data-ui-slot='navigation'][data-orientation='vertical'] [data-ui-slot='navigation.list'] {
+    flex-direction: column;
+  }
+
+  [data-ui-slot='navigation.link'] {
+    display: inline-flex;
+    align-items: center;
+    padding-block: calc(var(--ui-space-control-block) / 2);
+    color: var(--color-text-secondary);
+    text-decoration-line: underline;
+    text-decoration-color: var(--color-border-strong);
+    text-underline-offset: 0.25em;
+  }
+
+  [data-ui-slot='navigation.link']:hover,
+  [data-ui-slot='navigation.link'][aria-current] {
+    color: var(--color-text-primary);
+    text-decoration-color: var(--color-accent);
+  }
+
+  [data-ui-slot='navigation.link'][aria-current] {
+    text-decoration-thickness: var(--ui-state-selected-emphasis);
+  }
+
+  /* Field and Select: a labelled control, its help, and its error. */
+  [data-ui-slot='field'],
+  [data-ui-slot='select'] {
+    display: grid;
+    gap: calc(var(--ui-space-control-block) / 2);
+    justify-items: start;
+  }
+
+  [data-ui-slot='field.control'],
+  [data-ui-slot='select.control'] {
+    inline-size: 100%;
+    min-block-size: var(--ui-control-height);
+    padding-block: var(--ui-space-control-block);
+    padding-inline: var(--ui-space-control-inline);
+    color: var(--color-text-primary);
+    background-color: var(--color-surface-subtle);
+    border: var(--ui-border-control);
+    border-radius: var(--ui-radius-control);
+    caret-color: var(--color-accent-text);
+    transition-property: border-color, background-color;
+    transition-duration: var(--ui-motion-fast);
+    transition-timing-function: var(--ui-motion-easing);
+  }
+
+  [data-ui-slot='field.control'][aria-invalid='true'],
+  [data-ui-slot='select.control'][aria-invalid='true'] {
+    border-color: var(--color-danger);
+    border-width: var(--ui-state-validation-emphasis);
+  }
+
+  [data-ui-slot='field.control']:disabled,
+  [data-ui-slot='select.control']:disabled {
+    opacity: var(--ui-state-disabled-opacity);
+    cursor: not-allowed;
+  }
+
+  [data-ui-slot='field.control']::placeholder {
+    color: var(--color-text-muted);
+  }
+
+  [data-ui-slot='field.description'],
+  [data-ui-slot='select.description'],
+  [data-ui-slot='checkbox.description'],
+  [data-ui-slot='radio.description'],
+  [data-ui-slot='radio.reason'] {
+    margin: 0;
+    color: var(--color-text-secondary);
+  }
+
+  [data-ui-slot='field.error'],
+  [data-ui-slot='select.error'] {
+    margin: 0;
+    padding-block: calc(var(--ui-space-control-block) / 2);
+    padding-inline: var(--ui-space-control-block);
+    color: var(--color-on-status);
+    background-color: var(--color-danger);
+    border-radius: var(--ui-radius-control);
+  }
+
+  /* Checkbox and Radio: the native controls, in the accent, inside their labels. */
+  [data-ui-slot='checkbox'],
+  [data-ui-slot='radio'] {
+    display: grid;
+    gap: calc(var(--ui-space-control-block) / 2);
+    margin: 0;
+    padding: 0;
+    border: 0;
+    accent-color: var(--color-accent);
+  }
+
+  [data-ui-slot='radio.legend'] {
+    margin-block-end: calc(var(--ui-space-control-block) / 2);
+    padding: 0;
+  }
+
+  [data-ui-slot='radio'][data-orientation='horizontal'] {
+    grid-auto-flow: column;
+    justify-content: start;
+  }
+
+  [data-ui-slot='checkbox.label'],
+  [data-ui-slot='radio.label'] {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--ui-space-control-block);
+    cursor: pointer;
+  }
+
+  [data-ui-slot='checkbox.control'],
+  [data-ui-slot='radio.control'] {
+    flex: none;
+    margin: 0;
+    cursor: inherit;
+  }
+
+  [data-ui-slot='radio.control']:disabled,
+  [data-ui-slot='checkbox.control']:disabled {
+    cursor: not-allowed;
+  }
+
+  [data-ui-slot='radio.option'] {
+    display: grid;
+  }
+
+  [data-ui-slot='radio.option']:has(:disabled) [data-ui-slot='radio.label'] {
+    opacity: var(--ui-state-disabled-opacity);
+    cursor: not-allowed;
+  }
+
+  /* Badge: a status in words, its fill the status's color. */
+  [data-ui-slot='badge'] {
+    display: inline-flex;
+    align-items: center;
+    inline-size: fit-content;
+    gap: calc(var(--ui-space-control-block) / 2);
+    padding-block: calc(var(--ui-space-control-block) / 2);
+    padding-inline: var(--ui-space-control-block);
+    color: var(--color-text-secondary);
+    background-color: var(--color-surface-subtle);
+    border: var(--ui-border-control);
+    border-color: var(--color-border-default);
+    border-radius: var(--ui-radius-badge);
+  }
+
+  [data-ui-slot='badge'][data-status='positive'],
+  [data-ui-slot='toast'][data-status='positive'] {
+    color: var(--color-on-status);
+    background-color: var(--color-positive);
+    border-color: var(--color-positive);
+  }
+
+  [data-ui-slot='badge'][data-status='warning'],
+  [data-ui-slot='toast'][data-status='warning'] {
+    color: var(--color-on-status);
+    background-color: var(--color-warning);
+    border-color: var(--color-warning);
+  }
+
+  [data-ui-slot='badge'][data-status='danger'],
+  [data-ui-slot='toast'][data-status='danger'] {
+    color: var(--color-on-status);
+    background-color: var(--color-danger);
+    border-color: var(--color-danger);
+  }
+
+  [data-ui-slot='badge'][data-status='information'],
+  [data-ui-slot='toast'][data-status='information'] {
+    color: var(--color-on-status);
+    background-color: var(--color-information);
+    border-color: var(--color-information);
+  }
+
+  /* Tabs: the selected tab marked by its fill and border, not color alone. */
+  [data-ui-slot='tabs'] {
+    display: grid;
+    gap: var(--ui-space-control-block);
+  }
+
+  [data-ui-slot='tabs.list'] {
+    display: flex;
+    flex-wrap: wrap;
+    gap: calc(var(--ui-space-control-block) / 2);
+  }
+
+  [data-ui-slot='tabs'][data-orientation='vertical'] [data-ui-slot='tabs.list'] {
+    flex-direction: column;
+  }
+
+  [data-ui-slot='tabs.tab'] {
+    display: inline-flex;
+    align-items: center;
+    min-block-size: var(--ui-control-height);
+    padding-inline: var(--ui-space-control-inline);
+    color: var(--color-text-secondary);
+    background-color: transparent;
+    border: var(--ui-border-control);
+    border-color: transparent;
+    border-radius: var(--ui-radius-control);
+    cursor: pointer;
+    transition-property: background-color, border-color, color;
+    transition-duration: var(--ui-motion-fast);
+    transition-timing-function: var(--ui-motion-easing);
+  }
+
+  [data-ui-slot='tabs.tab']:hover {
+    color: var(--color-text-primary);
+  }
+
+  [data-ui-slot='tabs.tab'][aria-selected='true'] {
+    color: var(--color-text-primary);
+    background-color: var(--color-surface-prominent);
+    border-color: var(--color-border-strong);
+  }
+
+  [data-ui-slot='tabs.heading'] {
+    margin-block: 0 calc(var(--ui-space-control-block) / 2);
+  }
+
+  /* Disclosure: a native details element. */
+  [data-ui-slot='disclosure'] {
+    padding-block: var(--ui-space-control-block);
+    border-block: var(--ui-border-divider);
+  }
+
+  [data-ui-slot='disclosure.summary'] {
+    display: flex;
+    align-items: center;
+    gap: var(--ui-space-control-block);
+    min-block-size: var(--ui-control-height);
+    cursor: pointer;
+  }
+
+  [data-ui-slot='disclosure.content'] {
+    padding-block: var(--ui-space-control-block);
+  }
+
+  /* Dialog: a native modal dialog over a scrim. */
+  [data-ui-slot='dialog'] {
+    inline-size: min(100% - 2 * var(--ui-space-surface-inline), 36rem);
+    max-block-size: calc(100% - 2 * var(--ui-space-surface-block));
+    padding-block: var(--ui-space-surface-block);
+    padding-inline: var(--ui-space-surface-inline);
+    color: var(--color-text-primary);
+    background-color: var(--color-surface-overlay);
+    border: var(--ui-border-card);
+    border-radius: var(--ui-radius-overlay);
+    box-shadow: var(--ui-shadow-overlay);
+    overscroll-behavior: contain;
+  }
+
+  [data-ui-slot='dialog'][open] {
+    display: grid;
+    gap: var(--ui-space-control-block);
+    animation: var(--ui-motion-enter) var(--ui-motion-standard) var(--ui-motion-easing);
+  }
+
+  /*
+   * The page behind a modal dialog, under the scheme's scrim and the
+   * language's blur, which reduced transparency takes to 0px. The 62% is the
+   * approved prototype's backdrop; no contract-1 token carries scrim
+   * opacity; slice 5 records it in audit-exceptions.json.
+   */
+  [data-ui-slot='dialog']::backdrop {
+    background-color: color-mix(in srgb, var(--color-scrim) 62%, transparent);
+    -webkit-backdrop-filter: blur(var(--ui-backdrop-blur));
+    backdrop-filter: blur(var(--ui-backdrop-blur));
+  }
+
+  [data-ui-slot='dialog.title'],
+  [data-ui-slot='dialog.description'] {
+    margin: 0;
+  }
+
+  [data-ui-slot='dialog.description'] {
+    color: var(--color-text-secondary);
+  }
+
+  [data-ui-slot='dialog.actions'],
+  [data-ui-slot='toast.actions'],
+  [data-ui-slot='appearance-control.actions'] {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--ui-space-control-block);
+    justify-content: end;
+  }
+
+  /* Tooltip: a hint popover beside the action it describes. */
+  [data-ui-slot='tooltip.anchor'] {
+    display: inline-flex;
+  }
+
+  /*
+   * Shown with its action as the source, it sits above the action, or below
+   * when there's no room. Without anchor positioning it keeps its own place
+   * in the flow, just after the action.
+   */
+  [data-ui-slot='tooltip'] {
+    position-area: block-start span-inline-end;
+    position-try-fallbacks: flip-block;
+    inset: auto;
+    inline-size: max-content;
+    max-inline-size: min(18rem, 100vw - 2 * var(--ui-space-control-inline));
+    margin: 0;
+    margin-block-end: calc(var(--ui-space-control-block) / 2);
+    padding-block: calc(var(--ui-space-control-block) / 2);
+    padding-inline: var(--ui-space-control-block);
+    color: var(--color-text-primary);
+    background-color: var(--color-surface-overlay);
+    border: var(--ui-border-control);
+    border-radius: var(--ui-radius-control);
+    box-shadow: var(--ui-shadow-raised);
+  }
+
+  [data-ui-slot='tooltip']:popover-open {
+    animation: var(--ui-motion-enter) var(--ui-motion-fast) var(--ui-motion-easing);
+  }
+
+  /* Toast: a status message, its region a stack of them. */
+  [data-ui-slot='toast.region'] {
+    display: grid;
+    gap: var(--ui-space-control-block);
+  }
+
+  [data-ui-slot='toast'] {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--ui-space-control-block);
+    padding-block: var(--ui-space-control-block);
+    padding-inline: var(--ui-space-control-inline);
+    border: var(--ui-border-card);
+    border-radius: var(--ui-radius-card);
+    box-shadow: var(--ui-shadow-raised);
+    animation: var(--ui-motion-enter) var(--ui-motion-standard) var(--ui-motion-easing);
+  }
+
+  [data-ui-slot='toast.message'] {
+    flex: 1 1 12rem;
+    margin: 0;
+  }
+
+  /* Media: an image, or its placeholder, and the caption. */
+  [data-ui-slot='media'] {
+    display: grid;
+    gap: calc(var(--ui-space-control-block) / 2);
+    margin: 0;
+  }
+
+  [data-ui-slot='media.image'],
+  [data-ui-slot='media.placeholder'] {
+    display: block;
+    inline-size: 100%;
+    block-size: auto;
+    border: var(--ui-border-card);
+    border-radius: var(--ui-radius-media);
+  }
+
+  [data-ui-slot='media.placeholder'] {
+    min-block-size: calc(var(--ui-control-height) * 3);
+    background-image: linear-gradient(var(--color-surface-subtle), var(--color-surface-prominent));
+  }
+
+  [data-ui-slot='media.caption'] {
+    color: var(--color-text-secondary);
+  }
+
+  /* DataDisplay: a captioned table, numbers aligned, bars from their values. */
+  [data-ui-slot='data-display'] {
+    display: grid;
+    gap: calc(var(--ui-space-control-block) / 2);
+    margin: 0;
+    max-inline-size: 100%;
+    overflow-x: auto;
+  }
+
+  [data-ui-slot='data-display.table'] {
+    inline-size: 100%;
+    border-collapse: collapse;
+  }
+
+  [data-ui-slot='data-display.header'],
+  [data-ui-slot='data-display.cell'] {
+    padding-block: calc(var(--ui-space-control-block) / 2);
+    padding-inline: var(--ui-space-control-block);
+    text-align: start;
+    vertical-align: baseline;
+    border-block-end: var(--ui-border-divider);
+  }
+
+  [data-ui-slot='data-display.header'] {
+    color: var(--color-text-secondary);
+  }
+
+  [data-ui-slot='data-display.header'][data-state='numeric'],
+  [data-ui-slot='data-display.cell'][data-state='numeric'] {
+    text-align: end;
+  }
+
+  [data-ui-slot='data-display.bar'] {
+    display: block;
+    /* Where typed attr() is missing, the bar has no length, and the number stays. */
+    inline-size: 0%;
+    inline-size: attr(data-value type(<percentage>), 0%);
+    block-size: calc(var(--ui-space-control-block) / 2);
+    margin-block-start: calc(var(--ui-space-control-block) / 4);
+    margin-inline-start: auto;
+    background-color: var(--color-data-categorical-1);
+    border-radius: var(--ui-radius-badge);
+  }
+
+  [data-ui-slot='data-display.bar'][data-series='2'] {
+    background-color: var(--color-data-categorical-2);
+  }
+
+  [data-ui-slot='data-display.bar'][data-series='3'] {
+    background-color: var(--color-data-categorical-3);
+  }
+
+  [data-ui-slot='data-display.bar'][data-series='4'] {
+    background-color: var(--color-data-categorical-4);
+  }
+
+  [data-ui-slot='data-display.bar'][data-series='5'] {
+    background-color: var(--color-data-categorical-5);
+  }
+
+  [data-ui-slot='data-display.bar'][data-series='6'] {
+    background-color: var(--color-data-categorical-6);
+  }
+
+  [data-ui-slot='data-display.bar'][data-series='start'] {
+    background-color: var(--color-data-sequential-start);
+  }
+
+  [data-ui-slot='data-display.bar'][data-series='middle'] {
+    background-color: var(--color-data-sequential-middle);
+  }
+
+  [data-ui-slot='data-display.bar'][data-series='end'] {
+    background-color: var(--color-data-sequential-end);
+  }
+
+  /* The visitor's appearance control. */
+  [data-ui-slot='appearance-control.form'] {
+    display: grid;
+    gap: var(--ui-space-control-inline);
+  }
+
+  [data-ui-slot='appearance-control.status'] {
+    margin: 0;
+    color: var(--color-text-secondary);
+  }
+}
+
+@layer utilities {
+  /*
+   * The language's motion names, as keyframes: --ui-motion-enter and
+   * --ui-motion-exit name one, and `none` names none. A name with no
+   * keyframes here moves nothing. They sit above variant-layout, so a
+   * variant's keyframes of the same name can't replace them.
+   */
+  @keyframes fade {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @keyframes fade-rise {
+    from {
+      opacity: 0;
+      translate: 0 calc(var(--ui-space-control-block) / 2);
+    }
+  }
+
+  @keyframes fade-scale {
+    from {
+      opacity: 0;
+      scale: 0.96;
+    }
+  }
+
+  @keyframes pulse-once {
+    50% {
+      opacity: var(--ui-state-loading-opacity);
+    }
+  }
+
+  /* A hidden part stays hidden, whatever display its slot's rules give it. */
+  [data-ui-slot][hidden]:not([hidden='until-found']) {
+    display: none;
+  }
+
+  /*
+   * Focus is an outline in the language's geometry and the scheme's color,
+   * on whatever takes focus in a boundary, such as a variant's own links. The
+   * platform's accessibility layer draws it again on every slot part, where
+   * no language stylesheet can undo it.
+   */
+  [data-appearance-boundary] :focus-visible {
+    outline: var(--ui-focus-width) var(--ui-focus-style) var(--color-focus);
+    outline-offset: var(--ui-focus-offset);
+  }
+
+  /*
+   * Touch targets: 24 by 24 CSS pixels, 32 by 32 at 768 pixels wide or less,
+   * and 44 by 44 for pinned chrome and for a primary action on a touch screen,
+   * whatever the language's control height.
+   */
+  :is(
+    [data-ui-slot='action'],
+    [data-ui-slot='skip-link'],
+    [data-ui-slot='navigation.link'],
+    [data-ui-slot='field.control'],
+    [data-ui-slot='select.control'],
+    [data-ui-slot='checkbox.label'],
+    [data-ui-slot='radio.label'],
+    [data-ui-slot='tabs.tab'],
+    [data-ui-slot='disclosure.summary']
+  ) {
+    min-block-size: max(24px, var(--ui-control-height, 0px));
+    min-inline-size: 24px;
+  }
+
+  :is(
+    [data-ui-slot='checkbox.label'],
+    [data-ui-slot='radio.label'],
+    [data-ui-slot='navigation.link']
+  ) {
+    min-block-size: 24px;
+  }
+
+  @media (max-width: 768px) {
+    :is(
+      [data-ui-slot='action'],
+      [data-ui-slot='skip-link'],
+      [data-ui-slot='navigation.link'],
+      [data-ui-slot='field.control'],
+      [data-ui-slot='select.control'],
+      [data-ui-slot='checkbox.label'],
+      [data-ui-slot='radio.label'],
+      [data-ui-slot='tabs.tab'],
+      [data-ui-slot='disclosure.summary']
+    ) {
+      min-block-size: max(32px, var(--ui-control-height, 0px));
+      min-inline-size: 32px;
+    }
+
+    :is(
+      [data-ui-slot='checkbox.label'],
+      [data-ui-slot='radio.label'],
+      [data-ui-slot='navigation.link']
+    ) {
+      min-block-size: 32px;
+    }
+  }
+
+  [data-pinned]
+    :is(
+      [data-ui-slot='action'],
+      [data-ui-slot='navigation.link'],
+      [data-ui-slot='select.control'],
+      [data-ui-slot='tabs.tab'],
+      [data-ui-slot='disclosure.summary']
+    ) {
+    min-block-size: 44px;
+    min-inline-size: 44px;
+  }
+
+  @media (pointer: coarse) {
+    [data-ui-slot='action'][data-emphasis='primary'] {
+      min-block-size: 44px;
+      min-inline-size: 44px;
+    }
+  }
+}

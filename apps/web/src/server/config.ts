@@ -1,7 +1,7 @@
 import 'server-only';
 import fs from 'node:fs';
 import path from 'node:path';
-import { PROFILES, type Profile } from './capabilities';
+import { builtWithFixtures, FIXTURE_CAPABILITIES, PROFILES, type Profile } from './capabilities';
 import { logLine } from './log';
 
 // The deployment configuration. This is the only module that reads
@@ -445,6 +445,22 @@ export function readDeploymentConfig(env: Env, options: ReadConfigOptions): Read
         `${name} isn't a deployment setting. Check the name against .env.example.`,
       );
     }
+  }
+
+  // A test fixture's flag counts when the app is built (#19, Slice 3):
+  // registry generation reads it, and the fixture capabilities follow what it
+  // wrote. Set when the server starts, on a build made without it, it changes
+  // nothing, which startup says once.
+  const unbuilt = new Set<string>();
+  for (const { flag, key } of Object.values(FIXTURE_CAPABILITIES)) {
+    if (isSet(env[flag]) && !builtWithFixtures(key)) unbuilt.add(flag);
+  }
+  for (const flag of unbuilt) {
+    warn(
+      flag,
+      'build_time_only',
+      `${flag} is read when the app is built, not when it starts. This build was made without it, so it changes nothing.`,
+    );
   }
 
   if (!profile || origin === undefined || issues.some((issue) => issue.severity === 'fatal')) {
