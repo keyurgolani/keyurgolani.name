@@ -54,6 +54,8 @@ export interface OpenedGrant {
   readonly environment: PreviewEnvironment;
   /** The channel nonce Studio got at mint, for the agent's handshake (Slice 3). */
   readonly nonce: string;
+  /** The version the agent's `ready` says the frame renders: a draft grant's pinned version, or null. */
+  readonly renderedVersion: number | null;
   /** What a log line calls the grant: the first 8 hex characters of its digest. */
   readonly ref: string;
 }
@@ -73,4 +75,17 @@ export interface PreviewGrantsPort {
    * render failure.
    */
   open(grant: string): Promise<OpenedGrant | null>;
+  /**
+   * The same check, and what the agent's channel needs (Slice 3), without
+   * reading what the grant renders: null when the grant isn't active. A
+   * frame whose content fails to render still opens its channel, to tell
+   * Studio so with the log's reference.
+   */
+  channel(grant: string): Promise<GrantChannel | null>;
+}
+
+/** What a frame's agent needs to open its channel to Studio. */
+export interface GrantChannel {
+  readonly nonce: string;
+  readonly renderedVersion: number | null;
 }

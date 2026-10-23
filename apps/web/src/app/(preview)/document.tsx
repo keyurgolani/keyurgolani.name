@@ -4,6 +4,7 @@ import type { PublicView } from '@portfolio/schema';
 import { experienceHead } from '~/lib/experience-head';
 import '~/lib/experience-styles';
 import { PreviewAgent } from '~/preview/agent';
+import type { FrameChannelOptions } from '~/preview/frame-channel';
 
 // A preview document (#7, Slice 1, item 3): the root layout of each preview
 // route in this group renders it around its page, which renders
@@ -27,11 +28,18 @@ export function previewMetadata(unit: PublicView, origin: string): Metadata {
 export function PreviewDocument({
   unit,
   origin,
+  channel,
   children,
 }: {
   readonly unit: PublicView;
   /** The deployment's canonical origin, which the JSON-LD's URLs start with. */
   readonly origin: string;
+  /**
+   * What the agent's channel to Studio starts from (#7, Slice 3): a grant's
+   * nonce and link base. A document with none, such as the dev fixture
+   * route's, opens no channel.
+   */
+  readonly channel?: FrameChannelOptions;
   readonly children: ReactNode;
 }) {
   const { jsonLd } = experienceHead(unit, origin);
@@ -44,7 +52,7 @@ export function PreviewDocument({
       </head>
       <body>
         {children}
-        <PreviewAgent />
+        <PreviewAgent {...(channel ? { channel } : {})} />
       </body>
     </html>
   );

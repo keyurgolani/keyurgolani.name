@@ -191,6 +191,63 @@ module.exports = {
       to: { path: ['^apps/web/src/app/\\(studio\\)/', 'host-chrome\\.css$'] },
     },
     {
+      name: 'preview-protocol-imports-zod-and-ids-only',
+      severity: 'error',
+      comment:
+        "The preview's message protocol (#7, Slice 3) is read by both sides and by Node tests, " +
+        'so it imports zod and the browser-safe @portfolio/schema/ids and nothing else: no ' +
+        'React, no Next, no server code.',
+      from: { path: '^apps/web/src/preview/protocol\\.ts$' },
+      to: {
+        pathNot: ['^node_modules/(\\.pnpm/zod@|zod/)', '^packages/schema/src/ids\\.ts$'],
+      },
+    },
+    {
+      name: 'preview-studio-channel-imports-protocol-only',
+      severity: 'error',
+      comment:
+        "Studio's half of the preview channel (#7, Slice 3) imports the protocol and nothing " +
+        "else, so nothing a frame sends can reach Studio's transport through it (threat " +
+        'preview-3), and Slice 4 wraps it without its UI. depcruise resolves relative and ' +
+        "package imports, not ~/ ones: protocol.test.ts walks those, and the browser spec's " +
+        'chunk check covers what reaches a page.',
+      from: { path: '^apps/web/src/preview/studio-channel\\.ts$' },
+      to: { pathNot: '^apps/web/src/preview/protocol\\.ts$' },
+    },
+    {
+      name: 'preview-agent-imports-the-frame-channel-only',
+      severity: 'error',
+      comment:
+        'The preview agent (#7, Slice 3) runs in every preview document, so it, the status ' +
+        "report, and the frame's half of the channel import that half, the protocol, and React, " +
+        "and nothing else: never Studio's half, which would ship in the frame (threat " +
+        'preview-3). An allowlist, so an import spelled with ~/, which depcruise leaves ' +
+        'unresolved, fails it too.',
+      from: { path: '^apps/web/src/preview/(?:agent|report-status|frame-channel)\\.tsx?$' },
+      to: {
+        pathNot: [
+          '^apps/web/src/preview/(?:frame-channel|protocol)\\.ts$',
+          '^node_modules/(?:\\.pnpm/react@|react/)',
+        ],
+      },
+    },
+    {
+      name: 'preview-documents-import-only-the-agent-side',
+      severity: 'error',
+      comment:
+        "A preview document (#7, Slice 3) loads the agent's side of the channel and never " +
+        "Studio's: from src/preview, app/(preview) imports the agent, the status report and " +
+        "texts, and the frame channel's types, and nothing else. An allowlist within " +
+        "src/preview, in either spelling, so an import of Studio's half written with ~/ fails " +
+        'it too. Tests may import anything.',
+      from: { path: '^apps/web/src/app/\\(preview\\)/', pathNot: '\\.test\\.tsx?$' },
+      to: {
+        path: '^(?:apps/web/src/|~/)preview/',
+        pathNot:
+          '^(?:apps/web/src/|~/)preview/(?:agent|report-status|status|frame-channel)(?:\\.ts|\\.tsx)?$',
+      },
+    },
+    {
       name: 'store-test-support-only-from-tests',
       severity: 'error',
       comment:
