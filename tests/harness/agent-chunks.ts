@@ -24,7 +24,8 @@ export function isPreviewFrame(frame: Frame): boolean {
 /**
  * Every script the page or its frames loaded while `load` ran, by URL, with
  * its body: those from a frame `from` takes, or all of them. Once `load`
- * resolves it waits until every script request it counts has finished, and
+ * resolves it waits until every request from those frames has finished, of
+ * any kind, since a document or a fetch can start the next script, and
  * until QUIET_MS have passed since `load` resolved and since the last of them
  * started or finished, which it times itself. Playwright's networkidle marks
  * a page once and never again, so a page that went quiet before its frame
@@ -41,7 +42,7 @@ export async function scriptsDuring(
   let changed = Date.now();
   const counted = (request: Request) => {
     try {
-      return request.resourceType() === 'script' && from(request.frame());
+      return from(request.frame());
     } catch {
       return false;
     }
@@ -56,7 +57,8 @@ export async function scriptsDuring(
     changed = Date.now();
   };
   const record = (response: Response) => {
-    if (counted(response.request())) {
+    const request = response.request();
+    if (request.resourceType() === 'script' && counted(request)) {
       scripts.set(
         response.url(),
         response.text().catch(() => ''),
