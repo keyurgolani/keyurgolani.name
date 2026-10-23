@@ -2,6 +2,7 @@ import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import { setTimeout as wait } from 'node:timers/promises';
 import { isDeepStrictEqual } from 'node:util';
+import { environmentAttributes } from '../lib/environment';
 import { envelope, LIMITS, type PreviewDrop } from './protocol';
 import {
   classifyLink,
@@ -104,6 +105,8 @@ class FakeFrame extends FakeTarget {
   readonly sections: FakeSection[] = [];
   /** The Navigation API, where a test gives the frame one: an opaque origin has none. */
   navigation?: FakeTarget;
+  /** The presentation boundary's attributes, as the channel sets them. */
+  readonly boundary: Record<string, string> = {};
   constructor(href: string) {
     super();
     this.url = new URL(href);
@@ -112,6 +115,14 @@ class FakeFrame extends FakeTarget {
     return {
       readyState: 'complete',
       baseURI: this.url.href,
+      querySelector: (selector: string) => {
+        assert.equal(selector, '[data-variant]');
+        return {
+          setAttribute: (name: string, value: string) => {
+            this.boundary[name] = value;
+          },
+        };
+      },
       querySelectorAll: (selector: string) => {
         assert.equal(selector, '[data-section-id]');
         return this.sections.map((section) => ({
@@ -471,6 +482,32 @@ test("the agent takes connect only from its parent window, from Studio's origin,
   assert.deepEqual(received, [{ ...envelope('ready', { renderedVersion: 4, route: '/' }, 2) }]);
 });
 
+test("Studio's environment goes on the boundary through environmentAttributes, against what the grant's site publishes, so motion only reduces (#7, Slice 4)", async (t) => {
+  const selection = { displayMode: 'light', motionPolicy: 'reduce' } as const;
+  const { win, connect, send } = setup(t, { ...SERVER, selection });
+  await wait(5);
+  const port = connect();
+  await wait(5);
+  for (const environment of [
+    { displayMode: 'system', contrast: 'system', motion: 'system', enhancement: 'on' },
+    { displayMode: 'high-contrast', contrast: 'more', motion: 'reduce', enhancement: 'off' },
+  ] as const) {
+    send(port, 'environment', environment);
+    await wait(5);
+    assert.deepEqual(win.boundary, environmentAttributes(selection, environment));
+  }
+  // The site reduces motion, so system keeps it reduced, and system keeps the published mode.
+  send(port, 'environment', {
+    displayMode: 'system',
+    contrast: 'system',
+    motion: 'system',
+    enhancement: 'on',
+  });
+  await wait(5);
+  assert.equal(win.boundary['data-motion'], 'reduced');
+  assert.equal(win.boundary['data-display-mode'], 'light');
+});
+
 test("the agent reads Studio's messages over the port, and drops what the protocol refuses with no side effect (#7, Slice 3)", async (t) => {
   const { win, drops, received, send, handshake } = setup(t);
   const port = await handshake();
@@ -518,6 +555,7 @@ test("the agent reads Studio's messages over the port, and drops what the protoc
   assert.equal(win.scrolls.length, 0);
   assert.equal(win.events.length, 0);
   assert.equal(received.length, 0);
+  assert.deepEqual(win.boundary, {});
   // And each valid one does what it says.
   send(port, 'environment', {
     displayMode: 'dark',
@@ -530,6 +568,13 @@ test("the agent reads Studio's messages over the port, and drops what the protoc
   send(port, 'navigate', { route: '/work/small-traces' });
   await until(() => received.length >= 2, 'rect and navigated');
   assert.equal(drops.length, 11);
+  // The environment on the boundary, against the system's own display mode and motion (Slice 4).
+  assert.deepEqual(win.boundary, {
+    'data-display-mode': 'dark',
+    'data-contrast': 'more',
+    'data-motion': 'reduced',
+    'data-enhancement': 'off',
+  });
   assert.equal(win.events.length, 1);
   assert.equal(win.events[0]!.type, LIFECYCLE_EVENT);
   assert.deepEqual(win.events[0]!.detail, { state: 'hidden', focused: false });

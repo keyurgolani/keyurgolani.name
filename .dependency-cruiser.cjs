@@ -306,17 +306,37 @@ module.exports = {
       severity: 'error',
       comment:
         'The preview agent (#7, Slice 3) runs in every preview document, so it, the status ' +
-        "report, and the frame's half of the channel import that half, the protocol, and React, " +
-        "and nothing else: never Studio's half, which would ship in the frame (threat " +
-        'preview-3). An allowlist, so an import of anything else fails it, relative or ' +
-        'spelled with ~/.',
+        "report, and the frame's half of the channel import that half, the protocol, React, " +
+        "and Slice 4's environment function, and nothing else: never Studio's half, which " +
+        'would ship in the frame (threat preview-3). An allowlist, so an import of anything ' +
+        'else fails it, relative or spelled with ~/.',
       from: { path: '^apps/web/src/preview/(?:agent|report-status|frame-channel)\\.tsx?$' },
       to: {
         pathNot: [
           '^apps/web/src/preview/(?:frame-channel|protocol)\\.ts$',
+          '^apps/web/src/lib/environment\\.ts$',
           '^node_modules/(?:\\.pnpm/react@|react/)',
         ],
       },
+    },
+    {
+      name: 'environment-imports-schema-types-only',
+      severity: 'error',
+      comment:
+        'The environment function (#7, Slice 4) runs in the preview agent and in Studio, so ' +
+        "it imports the schema's types and nothing at run time.",
+      from: { path: '^apps/web/src/lib/environment\\.ts$' },
+      to: {
+        pathNot: '^packages/schema/src/(?!node\\.ts$|migrate/)',
+      },
+    },
+    {
+      name: 'environment-imports-nothing-at-run-time',
+      severity: 'error',
+      comment:
+        'What the environment function imports from the schema is types alone (#7, Slice 4).',
+      from: { path: '^apps/web/src/lib/environment\\.ts$' },
+      to: { dependencyTypesNot: ['type-only'] },
     },
     {
       name: 'preview-documents-import-only-the-agent-side',

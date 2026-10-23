@@ -3,7 +3,7 @@ import type { VariantComponent } from '@portfolio/kit/sections';
 import type { MotionPolicy, PublicView } from '@portfolio/schema';
 import { buildRenderInput, type RouteTarget } from '@portfolio/variant-contract';
 import './host-modules';
-import type { EnvironmentAttributes } from './preview-environment';
+import type { EnvironmentAttributes } from './environment';
 import { variantStylesheet, type Composition } from './variants';
 
 // The portfolio a document shows (#5, Slice 3, item 6, and #7, Slice 1, item

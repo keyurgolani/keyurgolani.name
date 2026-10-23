@@ -1,12 +1,9 @@
 import { notFound } from 'next/navigation';
+import { environmentAttributes, environmentSelection } from '~/lib/environment';
 import { ExperienceDocument } from '~/lib/experience-document';
 import { ClientHostModules } from '~/lib/host-modules-client';
 import { variantLoader } from '~/lib/variant-loaders';
-import {
-  environmentAttributes,
-  environmentQuery,
-  environmentValues,
-} from '~/lib/preview-environment';
+import { environmentQuery, environmentValues } from '~/lib/preview-environment';
 import { requireDeploymentConfig } from '~/server/config-store';
 import { servedPage } from '~/server/page-guard';
 import { devFixture } from '~/server/preview-dev';
@@ -41,7 +38,7 @@ export default servedPage(
       selection: composition,
       load: variantLoader(composition.rendered.manifest.id),
       hostModules: ClientHostModules,
-      environment: environmentAttributes(values),
+      environment: environmentAttributes(environmentSelection(view.site), values),
       linkBase: { basePath: `/preview/dev/${variant}/${fixture}`, query: environmentQuery(values) },
       route: { route: 'home' },
       origin: requireDeploymentConfig().origin,

@@ -16,10 +16,17 @@ import {
   type ToStudioPayload,
   type ToStudioType,
 } from './protocol';
+import {
+  DEFAULT_SELECTION,
+  ENVIRONMENT_ATTRIBUTES,
+  environmentAttributes,
+  type EnvironmentSelection,
+} from '../lib/environment';
 
 // The frame's half of the preview channel (#7, Slice 3), which the preview
-// agent runs: the handshake, the port, the link guard, scrolling, and the
-// lifecycle state, with no DOM, CSS, or UI of its own. It does nothing when
+// agent runs: the handshake, the port, the link guard, scrolling, the
+// lifecycle state, and the environment Studio's controls set on the
+// presentation boundary (Slice 4), with no DOM, CSS, or UI of its own. It does nothing when
 // the document isn't in a frame, so the dev fixture route still renders top
 // level. It reads its settings from what the server rendered, and in local
 // mode the nonce from the fragment Studio set, never from the query.
@@ -45,6 +52,12 @@ export interface FrameChannelOptions {
   readonly nonce?: string;
   /** What `ready` says the frame renders: a draft grant's pinned version, or null. */
   readonly renderedVersion: number | null;
+  /**
+   * What the frame's site publishes, which Studio's `environment` sets the
+   * boundary against (Slice 4). Without one, the system's own display mode
+   * and motion.
+   */
+  readonly selection?: EnvironmentSelection;
 }
 
 /**
@@ -176,6 +189,23 @@ interface NavigateEventLike extends Event {
   readonly downloadRequest: string | null;
 }
 
+/**
+ * Sets the environment Studio's controls chose on the document's
+ * presentation boundary, the outermost element with data-variant, through
+ * environmentAttributes(), as the server rendered the grant's. A document
+ * with no boundary, such as a status page, has nothing to set.
+ */
+export function setEnvironment(
+  document: Document,
+  selection: EnvironmentSelection,
+  environment: ToFramePayload<'environment'>,
+): void {
+  const boundary = document.querySelector('[data-variant]');
+  if (!boundary) return;
+  const attributes = environmentAttributes(selection, environment);
+  for (const name of ENVIRONMENT_ATTRIBUTES) boundary.setAttribute(name, attributes[name]);
+}
+
 /** The element of the section `anchor` names, found by its data-section-id. */
 function sectionOf(document: Document, anchor: string): Element | null {
   for (const element of document.querySelectorAll('[data-section-id]')) {
@@ -305,8 +335,11 @@ export function startFrameChannel(win: Window, options: FrameChannelOptions): ((
     if (LOCAL_ONLY.has(message.type) && mode !== 'local') return drop('type', message.type);
     switch (message.type) {
       case 'environment':
-        // Slice 4 applies it to the presentation boundary.
-        return;
+        return setEnvironment(
+          win.document,
+          options.selection ?? DEFAULT_SELECTION,
+          message.payload,
+        );
       case 'scroll-to':
         return scrollTo(message.payload);
       case 'navigate': {

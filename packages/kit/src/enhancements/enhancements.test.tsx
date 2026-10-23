@@ -7,7 +7,7 @@ import type { VariantRenderInput } from '@portfolio/variant-contract';
 import { registerHostModules } from '../sections';
 import * as entry from '.';
 import { Enhancement } from '.';
-import { EnhancementBoundary, loadModule, moduleFor } from './load';
+import { EnhancementBoundary, enhancementsOff, loadModule, moduleFor } from './load';
 
 // @portfolio/kit/enhancements (#5, Slice 2). What a browser does with it,
 // loading, failing, and the throw switch, is Slice 6's harness to check in a
@@ -118,6 +118,31 @@ test('registering host modules again starts over, so nothing loaded before is re
   } finally {
     registerHostModules({});
   }
+});
+
+test("a boundary with data-enhancement off turns every enhancement off, as a preview's environment asks (#7, Slice 4)", () => {
+  const page = (attributes: Record<string, string> | null) => ({
+    querySelector: (selector: string) => {
+      assert.equal(selector, '[data-variant]');
+      return attributes === null
+        ? null
+        : { getAttribute: (name: string) => attributes[name] ?? null };
+    },
+  });
+  assert.equal(
+    enhancementsOff(page({ 'data-variant': 'kit-shared', 'data-enhancement': 'off' })),
+    true,
+  );
+  const others: Array<Record<string, string> | null> = [
+    { 'data-variant': 'kit-shared', 'data-enhancement': 'on' },
+    { 'data-variant': 'kit-shared' },
+    null,
+  ];
+  for (const attributes of others) {
+    assert.equal(enhancementsOff(page(attributes)), false, JSON.stringify(attributes));
+  }
+  // On the server there's no document, and nothing is off.
+  assert.equal(enhancementsOff(undefined), false);
 });
 
 test('a failure below the boundary leaves nothing in its place', () => {
