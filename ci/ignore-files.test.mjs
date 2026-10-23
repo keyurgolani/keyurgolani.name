@@ -102,3 +102,15 @@ test("next dev's data directory stays out of commits and out of the image", () =
   // Only the root's: a .data deeper down is someone else's.
   assert.deepEqual(gitIgnored(['packages/core/.data/x']), []);
 });
+
+test('the image build context leaves out the holding pens the image scan refuses (#12)', () => {
+  // The root's experiments/ and archive/, and a .variant-preview/ at any depth.
+  for (const file of [
+    'experiments/variant-x/package.json',
+    'archive/old/notes.md',
+    '.variant-preview/index.html',
+    'apps/web/.variant-preview/index.html',
+  ]) {
+    assert.ok(ignored(file), file);
+  }
+});

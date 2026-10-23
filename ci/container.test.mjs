@@ -5,6 +5,7 @@ import {
   chmodSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   symlinkSync,
@@ -17,11 +18,13 @@ import { fileURLToPath } from 'node:url';
 import { parse as parseYaml } from 'yaml';
 import {
   assessRoutes,
+  HOST_REQUESTS_SNIPPET,
   PROBE_SNIPPET,
   REQUESTS_SNIPPET,
   SCAN_SNIPPET,
   TREE_SNIPPET,
   WRITABLE_SNIPPET,
+  WRITE_SNIPPET,
 } from './lib/container.mjs';
 import { MANAGER_COMMANDS, MANAGERS_SNIPPET, REMOVED_PATHS } from './lib/package-managers.mjs';
 
@@ -86,6 +89,8 @@ async function withServer(host, fn) {
       res.setHeader('content-type', 'application/json');
       res.setHeader('x-seen-type', req.headers['content-type'] ?? 'none');
       res.setHeader('x-seen-origin', req.headers.origin ?? 'none');
+      res.setHeader('x-seen-host', req.headers.host ?? 'none');
+      res.setHeader('x-seen-forwarded-host', req.headers['x-forwarded-host'] ?? 'none');
       if (req.url === '/cookies') res.setHeader('set-cookie', ['a=1; Path=/', 'b=2; Path=/']);
       res.statusCode = req.url === '/missing' ? 404 : 200;
       res.end(JSON.stringify({ ok: true, path: req.url, method: req.method, body }));
@@ -126,6 +131,9 @@ test('each Compose example runs its profile from the one image, on loopback', ()
     // A read-only root with a tmpfs for Next's cache, under every profile.
     assert.equal(web.read_only, true, file);
     assert.deepEqual(web.tmpfs, ['/app/apps/web/.next/cache'], file);
+    // No capabilities and no privileges to gain, as smoke:profiles runs it (#12).
+    assert.deepEqual(web.cap_drop, ['ALL'], file);
+    assert.deepEqual(web.security_opt, ['no-new-privileges:true'], file);
     const volumes = web.volumes ?? [];
     if (profile === 'demo') {
       assert.equal(web.environment.PORTFOLIO_SOURCE_DIR, undefined, file);
@@ -550,6 +558,40 @@ test('the in-container requests take their batch on stdin, however long, and not
   );
 });
 
+test('the in-container host requests send the Host header each request names, in order', async () => {
+  await withServer('127.0.0.1', async (port) => {
+    const requests = [
+      {
+        method: 'GET',
+        path: '/a',
+        headers: { host: 'rowan.test', 'x-forwarded-host': 'preview.rowan.test' },
+      },
+      { method: 'GET', path: '/missing', headers: { host: 'preview.rowan.test' } },
+    ];
+    const output = await runNode(
+      ['-e', HOST_REQUESTS_SNIPPET],
+      { HOSTNAME: '127.0.0.1', PORT: String(port) },
+      JSON.stringify(requests),
+    );
+    const [first, second] = JSON.parse(output.stdout);
+    assert.equal(first.status, 200);
+    assert.equal(first.headers['x-seen-host'], 'rowan.test');
+    assert.equal(first.headers['x-seen-forwarded-host'], 'preview.rowan.test');
+    assert.equal(JSON.parse(first.body).path, '/a');
+    assert.equal(second.status, 404);
+    assert.equal(second.headers['x-seen-host'], 'preview.rowan.test');
+  });
+});
+
+test('the in-container host requests report a connection error per request', async () => {
+  const output = await runNode(
+    ['-e', HOST_REQUESTS_SNIPPET],
+    { HOSTNAME: '127.0.0.1', PORT: '9' },
+    JSON.stringify([{ method: 'GET', path: '/', headers: { host: 'rowan.test' } }]),
+  );
+  assert.match(JSON.parse(output.stdout)[0].error, /ECONNREFUSED/);
+});
+
 test('the in-container tree read gives the text of every file under the root', () => {
   const root = mkdtempSync(path.join(tmpdir(), 'image-tree-'));
   try {
@@ -574,6 +616,49 @@ test('the in-container requests report a connection error per request', async ()
   );
   const [result] = JSON.parse(output.stdout);
   assert.match(result.error, /ECONNREFUSED/);
+});
+
+test('the write probe creates and removes a file where it can, and names the error where it cannot', async (t) => {
+  const root = mkdtempSync(path.join(tmpdir(), 'write-probe-'));
+  t.after(() => {
+    chmodSync(path.join(root, 'locked'), 0o755);
+    rmSync(root, { recursive: true, force: true });
+  });
+  mkdirSync(path.join(root, 'open'));
+  mkdirSync(path.join(root, 'locked'));
+  chmodSync(path.join(root, 'locked'), 0o555);
+  const dirs = ['open', 'locked', 'absent'].map((name) => path.join(root, name));
+  const output = await runNode(['-e', WRITE_SNIPPET, JSON.stringify(dirs)], {});
+  const result = JSON.parse(output.stdout);
+  assert.equal(result[dirs[0]], 'written');
+  // Root ignores the mode bits, so only a non-root run sees EACCES.
+  if (process.getuid?.() !== 0) assert.equal(result[dirs[1]], 'EACCES');
+  assert.equal(result[dirs[2]], 'ENOENT');
+  assert.deepEqual(readdirSync(path.join(root, 'open')), [], 'the probe file is gone');
+});
+
+test('the image scan flags the experiments, archive, and variant preview holding pens (#12)', async () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'image-scan-'));
+  try {
+    for (const dir of [
+      'experiments/variant-x',
+      'archive/old',
+      'apps/web/.variant-preview',
+      // A section or a package may have its own archive: only the root's is the pen.
+      'apps/web/archive',
+      'node_modules/pkg/archive',
+    ]) {
+      mkdirSync(path.join(root, dir), { recursive: true });
+    }
+    const output = await runNode(['-e', SCAN_SNIPPET, root], {});
+    assert.deepEqual(JSON.parse(output.stdout).problems.sort(), [
+      'apps/web/.variant-preview',
+      'archive',
+      'experiments',
+    ]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test('the image scan flags personal data, env files, git, secrets, and test trees', async () => {

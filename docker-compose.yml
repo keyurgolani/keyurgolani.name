@@ -20,6 +20,12 @@ services:
       NODE_ENV: production
     # Nothing in the container is writable but Next's cache.
     read_only: true
+    # No capabilities, and no way to gain privileges: the server needs
+    # neither (threat row deploy-2).
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     tmpfs:
       - /app/apps/web/.next/cache
     volumes:

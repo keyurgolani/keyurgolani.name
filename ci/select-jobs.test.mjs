@@ -90,6 +90,7 @@ const CLASSES = [
       'browser',
       'routes',
       'image',
+      'profiles',
       'preview-fixtures-browser',
       'quality-pr',
     ],
@@ -97,13 +98,29 @@ const CLASSES = [
   {
     name: 'container',
     files: ['deploy/compose.owner.yml', 'docker-compose.yml', 'ci/image-smoke.mjs'],
+    jobs: ['static', 'unit', 'image', 'profiles'],
+  },
+  {
+    name: 'image smoke only',
+    files: ['ci/image-smoke.mjs', 'ci/test-security-proxy.mjs'],
     jobs: ['static', 'unit', 'image'],
   },
   {
     name: 'container helpers check-standalone imports',
     files: ['ci/lib/container.mjs'],
-    jobs: ['static', 'unit', 'build', 'image'],
+    jobs: ['static', 'unit', 'build', 'image', 'profiles'],
   },
+  {
+    name: 'profile smoke',
+    files: ['ci/smoke-profiles.mjs', 'ci/lib/profile-checks.mjs', 'ci/profile-checks.test.mjs'],
+    jobs: ['static', 'unit', 'image', 'profiles'],
+  },
+  {
+    name: 'one Compose example under deploy/',
+    files: ['deploy/compose.demo.yml'],
+    jobs: ['static', 'unit', 'image', 'profiles'],
+  },
+  { name: 'Dockerignore', files: ['.dockerignore'], jobs: ALL, complete: true },
   {
     name: 'proxy stack the security suite uses',
     files: ['tests/harness/proxy-stack.mjs'],
@@ -262,6 +279,32 @@ test('gate and selected need every check job in ci.yml, and changes', () => {
       .filter(Boolean);
     assert.ok(needs, `${control} lists its needs`);
     assert.deepEqual(sorted(needs), sorted(['changes', ...jobs]), control);
+  }
+});
+
+test('the image, the Dockerfile, .dockerignore, deploy/, the profile smoke, and the container helpers select profiles', () => {
+  for (const file of [
+    'apps/web/src/server/config.ts',
+    'apps/web/src/server/owner/auth-secret.ts',
+    'packages/core/src/store/store.ts',
+    'tests/harness/startup-rows.mjs',
+    'Dockerfile',
+    '.dockerignore',
+    'deploy/compose.owner.yml',
+    'docker-compose.yml',
+    'ci/smoke-profiles.mjs',
+    'ci/lib/profile-checks.mjs',
+    'ci/lib/container.mjs',
+  ]) {
+    const selection = draft([file]);
+    assert.ok(selection.jobs.includes('profiles'), `${file} selects ${selection.jobs.join(', ')}`);
+  }
+});
+
+test('every rule that selects profiles selects image, whose saved image profiles loads', () => {
+  for (const rule of RULES) {
+    if (rule.complete || !rule.jobs.includes('profiles')) continue;
+    assert.ok(rule.jobs.includes('image'), `${rule.class} (${rule.paths[0]}) leaves out image`);
   }
 });
 
