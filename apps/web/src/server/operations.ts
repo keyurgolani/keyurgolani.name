@@ -23,7 +23,6 @@ import {
   RevisionDetailSchema,
   RevisionIdSchema,
   RevisionListSchema,
-  ServingRevisionIdSchema,
   ServingStateSchema,
 } from './store-schemas';
 
@@ -169,14 +168,14 @@ export const VariantHealthSchema = z.union([
 
 /**
  * What serves (#3, item 23): the state, the revision the pointer names, the
- * one served (the mounted documents' `doc-` one while the store is empty),
- * and where the live manifest's rendering differs from the build's.
+ * one served, and where the live manifest's rendering differs from the
+ * build's.
  */
 export const CatalogStatusSchema = z
   .object({
     state: ServingStateSchema,
     liveRevisionId: RevisionIdSchema.nullable(),
-    servingRevisionId: ServingRevisionIdSchema.nullable(),
+    servingRevisionId: RevisionIdSchema.nullable(),
     renderDrift: z
       .array(
         z
@@ -454,7 +453,7 @@ const STORE_OPERATIONS: readonly Operation[] = [
     DraftOutputSchema,
     ['not_found'],
   ),
-  // draft.write. draft.importSource is Slice 3's.
+  // draft.write
   storeCommand(
     'draft.create',
     'draft.write',

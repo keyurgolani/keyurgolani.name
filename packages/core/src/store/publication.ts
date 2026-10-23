@@ -14,6 +14,7 @@ import {
   type StoreLog,
 } from './common';
 import {
+  checkedInput,
   draftInput,
   readDraft,
   removeDraft,
@@ -24,6 +25,7 @@ import {
 import type { FsPort } from './fs-port';
 import {
   isRevisionId,
+  isSha256,
   newRevisionId,
   type DraftId,
   type RevisionId,
@@ -31,6 +33,7 @@ import {
   type StorePaths,
 } from './layout';
 import {
+  placeLog,
   reconcileEvents,
   writeLive,
   writeLiveEvent,
@@ -41,6 +44,7 @@ import { healthCache, type HealthVerdict } from './health-cache';
 import { LOCK_STALE_MS, LockLostError, type PublicationLock } from './lock';
 import {
   DamagedPointerError,
+  hasHistory,
   isIdempotencyKey,
   readEvent,
   readEvents,
@@ -57,18 +61,23 @@ import {
   type Unit,
   type UnitChecks,
   type UnitDiagnostic,
+  type UnitInput,
 } from '../catalog/unit';
 
-// The PublicationService (#3, items 11 to 14): the only code that moves the
-// published pointer. Publish, rollback, and recover each run under the
-// publication lock and commit by renaming a new live.json over the old one.
+// The PublicationService (#3, items 11 to 14 and 24): the only code that
+// moves the published pointer. Publish, rollback, recover, and import each
+// run under the publication lock and commit by renaming a new live.json over
+// the old one.
 //
 // Publish: (1) read live.json, making the log agree with it, and check the
 // idempotency key and the caller's expectations; (2) validate the draft; (3)
 // write the revision through its staging directory; (4) move the pointer,
 // the commit point; (5) write the event file, append the audit line, delete
 // the draft, and tell the process. Rollback and recover run step 1, check
-// the target, then steps 4 and 5 without the draft delete. Nothing after the
+// the target, then steps 4 and 5 without the draft delete. Import runs all
+// five on the mounted documents, without a draft, and where step 2 would
+// find nothing to publish it skips step 3 and moves the pointer to the live
+// revision again, so only the seq and the event change. Nothing after the
 // commit undoes it: a failure there is logged, and startup repair finishes
 // the step. For the owner, the pointer move alone runs inside #2's
 // commitWithSession(), through the holdSession() the caller passes, so a
@@ -82,6 +91,23 @@ import {
 // request's event it is idempotency_conflict.
 
 recordOwnerModule('core/store/publication');
+
+/**
+ * A backup's or a restore's publication log (#3, item 26), written under
+ * `staged`, a directory in `root` whose name starts with a dot, and put in
+ * place as `root`'s publication/ in one rename, through commit.ts, the one
+ * module that moves the pointer's paths. `root` is a backup's own
+ * directory, or the empty one a restore fills, never a store a server runs
+ * on: only the service's own operations move a store's pointer.
+ */
+export function placeCopiedLog(
+  fs: FsPort,
+  staged: string,
+  root: string,
+  operation: 'backup' | 'restore',
+): Promise<void> {
+  return placeLog(fs, staged, root, operation);
+}
 
 /** How many recent events an idempotency key is looked up in. */
 export const IDEMPOTENCY_WINDOW = 100;
@@ -221,6 +247,17 @@ export interface RecoverInput {
   readonly reason?: string;
 }
 
+export interface ImportInput {
+  /** The mounted documents, as read: the pair, and #10's media document once it has one. */
+  readonly documents: UnitInput;
+  /** What was mounted: the hash over each file's name and the hash of its bytes (item 6). */
+  readonly sourceHash: Sha256;
+  /** The revision the importer read live when it started, or null for an empty store. */
+  readonly expectedLiveRevisionId: RevisionId | null;
+  readonly idempotencyKey?: string;
+  readonly reason?: string;
+}
+
 export interface PublicationService {
   publish(
     input: PublishInput,
@@ -239,6 +276,18 @@ export interface PublicationService {
     actor: StoreActor,
     context?: PublicationContext,
   ): Promise<PublicationOutcome>;
+  /**
+   * `import` (item 24): publishes the mounted documents with an `import`
+   * event carrying their sourceHash. When they are live's already, by
+   * unitHash and every document's sourceHash, it writes no revision and
+   * moves the pointer to the live revision again: only the seq and the
+   * event change.
+   */
+  importSource(
+    input: ImportInput,
+    actor: StoreActor,
+    context?: PublicationContext,
+  ): Promise<PublicationOutcome>;
   status(): Promise<LiveStatus>;
   /**
    * Every event, in seq order. A page reads only its own events: seq
@@ -254,6 +303,14 @@ export interface PublicationService {
   revision(revisionId: RevisionId): Promise<RevisionDetail | null>;
   /** The most recently live revision this build can serve, or null. */
   lastKnownGood(): Promise<RevisionId | null>;
+  /**
+   * Whether the store is empty: no live.json, and no history, which is an
+   * event, a moved-aside one, or a tombstone (hasHistory()). A revision
+   * alone was never live, as a first publish that crashed leaves one. Only
+   * an empty store takes owner's first-start import, and the reader serves
+   * nothing from it.
+   */
+  isEmpty(): Promise<boolean>;
   /** Startup repair, under the lock: what a crash left behind. */
   repair(): Promise<RepairReport>;
 }
@@ -403,6 +460,23 @@ export function filesystemPublicationService({
 
   async function hashOf(id: RevisionId | null): Promise<Sha256 | null> {
     return id === null ? null : ((await readManifest(fs, paths, id))?.unitHash ?? null);
+  }
+
+  /** Whether `unit` is the live revision's: its unitHash and every document's sourceHash. */
+  async function matchesLive(live: RevisionId | null, unit: Unit): Promise<boolean> {
+    if (live === null) return false;
+    const current = await readManifest(fs, paths, live);
+    return (
+      current?.unitHash === unit.unitHash &&
+      DOCUMENT_NAMES.every((name) => current.documents[name]?.sourceHash === unit[name]?.sourceHash)
+    );
+  }
+
+  /** The referenced blobs the AssetStore doesn't hold, as asset_missing, or null. */
+  async function missingBlobs(manifest: Manifest): Promise<PublicationRejection | null> {
+    const missing: Sha256[] = [];
+    for (const blob of manifest.blobs) if (!(await assets.has(blob))) missing.push(blob);
+    return missing.length > 0 ? rejected('asset_missing', [], { blobs: missing }) : null;
   }
 
   async function liveConflict(
@@ -568,7 +642,7 @@ export function filesystemPublicationService({
 
   /** Runs an operation under the lock, logging how it ended, by stage, never with content. */
   async function run(
-    operation: 'publish' | 'rollback' | 'recover',
+    operation: 'publish' | 'rollback' | 'recover' | 'import',
     body: (stage: (name: string) => void) => Promise<PublicationOutcome>,
   ): Promise<PublicationOutcome> {
     const started = performance.now();
@@ -839,18 +913,9 @@ export function filesystemPublicationService({
           },
         };
         const manifest = manifestFor(unit, manifestFields, checks, rendering);
-        const missing: Sha256[] = [];
-        for (const blob of manifest.blobs) if (!(await assets.has(blob))) missing.push(blob);
-        if (missing.length > 0) return rejected('asset_missing', [], { blobs: missing });
-        if (live !== null) {
-          const current = await readManifest(fs, paths, live);
-          const same =
-            current?.unitHash === unit.unitHash &&
-            DOCUMENT_NAMES.every(
-              (name) => current.documents[name]?.sourceHash === unit[name]?.sourceHash,
-            );
-          if (same) return rejected('nothing_to_publish');
-        }
+        const missing = await missingBlobs(manifest);
+        if (missing) return missing;
+        if (await matchesLive(live, unit)) return rejected('nothing_to_publish');
 
         stage('stage');
         try {
@@ -887,6 +952,82 @@ export function filesystemPublicationService({
 
     recover(input, actor, context = {}) {
       return movePointer('recover', input, actor, context);
+    },
+
+    importSource(input, actor, context = {}) {
+      requireHold(actor, context);
+      checkOptional(input);
+      const expected = expectation(input.expectedLiveRevisionId);
+      if (!isSha256(input.sourceHash)) throw new TypeError('Not a source hash.');
+      const documents = checkedInput(input.documents);
+      return run('import', async (stage) => {
+        const pointer = await livePointer('import');
+        // The key's event is this request's when it imported these very
+        // files, from the revision this request expects.
+        const seen = await seenKey(
+          pointer,
+          input.idempotencyKey,
+          async (event) =>
+            event.type === 'import' &&
+            event.previousRevisionId === expected &&
+            event.sourceHash === input.sourceHash,
+        );
+        if (seen) return seen;
+        const live = pointer?.revisionId ?? null;
+        // The live revision the importer read when it started: one another
+        // process moved since then is a race this import lost.
+        if (expected !== live) return liveConflict(pointer, expected);
+
+        stage('validate');
+        const checked = checkUnit(documents, checks);
+        if (!checked.ok) return rejected('validation_failed', checked.diagnostics);
+        const { unit, rendering } = checked;
+        const manifest = manifestFor(
+          unit,
+          {
+            revisionId: newRevisionId(),
+            parentRevisionId: live,
+            createdAt: stamp(),
+            createdBy: actor,
+            source: { kind: 'import', sourceHash: input.sourceHash },
+          },
+          checks,
+          rendering,
+        );
+        const missing = await missingBlobs(manifest);
+        if (missing) return missing;
+
+        // Where publish finds nothing to publish, the import still records
+        // itself: the pointer moves to the live revision again.
+        let revisionId = manifest.revisionId;
+        if (live !== null && (await matchesLive(live, unit))) {
+          revisionId = live;
+        } else {
+          stage('stage');
+          try {
+            await writeRevision(fs, paths, { manifest, unit }, 'import');
+          } catch (error) {
+            await fs
+              .remove(paths.staging(manifest.revisionId), 'import.staging.remove')
+              .catch(() => {});
+            throw error;
+          }
+        }
+
+        stage('commit');
+        const event: PublicationEvent = {
+          seq: (pointer?.seq ?? 0) + 1,
+          type: 'import',
+          revisionId,
+          previousRevisionId: live,
+          actor,
+          at: stamp(),
+          ...(input.reason === undefined ? {} : { reason: input.reason }),
+          ...(input.idempotencyKey === undefined ? {} : { idempotencyKey: input.idempotencyKey }),
+          sourceHash: input.sourceHash,
+        };
+        return commit('import', event, unit.unitHash, context);
+      });
     },
 
     async status() {
@@ -1007,6 +1148,21 @@ export function filesystemPublicationService({
     async lastKnownGood() {
       try {
         return await walkLastKnownGood(await readPointer());
+      } catch (error) {
+        throw storageError(error);
+      }
+    },
+
+    async isEmpty() {
+      try {
+        try {
+          if (await readLive(fs, paths)) return false;
+        } catch (error) {
+          // There, and unreadable: a damaged pointer, never an empty store.
+          if (error instanceof DamagedPointerError) return false;
+          throw error;
+        }
+        return !(await hasHistory(fs, paths));
       } catch (error) {
         throw storageError(error);
       }

@@ -199,7 +199,6 @@ test("owner's readiness lists data-directory, and runs its probe at most every 3
       validate: (pair) => validatePublicationUnit(pair, { canonicalOrigin: 'https://rowan.test' }),
       appVersion: 'test',
     },
-    documents: { getLive: async () => assert.fail('readiness reads the catalog it is given') },
     setServable: () => {},
     now: () => clock,
   });

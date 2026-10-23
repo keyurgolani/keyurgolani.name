@@ -59,7 +59,17 @@ export function filesystemAssetStore({
       }
       const hash = sha256(bytes);
       const found = await stat(hash);
-      if (found && found.size === bytes.byteLength) return found;
+      if (found && found.size === bytes.byteLength) {
+        // An upload of bytes the store holds already is a new upload too:
+        // retention's 24 hour grace for a blob nothing references yet
+        // counts from now (#3, item 26).
+        try {
+          await fs.touch(paths.blob(hash), 'asset.touch');
+        } catch (error) {
+          throw storageError(error);
+        }
+        return found;
+      }
       const file = paths.blob(hash);
       const dir = path.dirname(file);
       const temp = tempBeside(file);

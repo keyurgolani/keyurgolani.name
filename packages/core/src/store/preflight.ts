@@ -3,7 +3,7 @@ import { realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { recordOwnerModule } from '../load-trace';
 import { nodeFs, type FsPort } from './fs-port';
-import { STORE_LAYOUT, storePaths, tempBeside, type StorePaths } from './layout';
+import { isRestoreLeftover, STORE_LAYOUT, storePaths, tempBeside, type StorePaths } from './layout';
 
 // The owner startup preflight for the data directory (#3, item 3): it's
 // there, only the server's user can write it, it sits outside the source
@@ -29,7 +29,13 @@ export type PreflightCode =
   /** A store directory in it, such as drafts/, is a symbolic link. */
   | 'data_dir_linked'
   /** store.json names a layout this build doesn't read. */
-  | 'store_layout_unsupported';
+  | 'store_layout_unsupported'
+  /**
+   * A restore into it never finished: its claim, or the publication log it
+   * stages, is still there (#3, item 26). Restore again, into an empty
+   * directory.
+   */
+  | 'data_dir_restore_incomplete';
 
 export interface PreflightOptions {
   readonly dataDir: string;
@@ -109,6 +115,12 @@ export async function preflight({
   } catch {
     return 'data_dir_unreachable';
   }
+  // A restore that never finished leaves part of a store, which would read
+  // as an empty one and take a first-start import (the PR's review, F2).
+  // Checked before anything is laid out, and again at the end, for one that
+  // claimed the directory meanwhile.
+  const restoring = await restoreLeftover(fs, paths);
+  if (restoring) return restoring;
   try {
     for (const dir of storeDirectories(paths)) await fs.mkdir(dir, 'preflight.mkdir');
   } catch {
@@ -135,7 +147,18 @@ export async function preflight({
     await fs.remove(renamed, 'preflight.probe.remove').catch(() => {});
   }
 
-  return storeLayout(fs, paths);
+  return (await storeLayout(fs, paths)) ?? (await restoreLeftover(fs, paths));
+}
+
+/** data_dir_restore_incomplete when a restore's claim or staged log is at the top of the store. */
+async function restoreLeftover(fs: FsPort, paths: StorePaths): Promise<PreflightCode | null> {
+  try {
+    return (await fs.readdir(paths.root)).some(isRestoreLeftover)
+      ? 'data_dir_restore_incomplete'
+      : null;
+  } catch {
+    return 'data_dir_unreachable';
+  }
 }
 
 /** Checks store.json, writing it into a store that has none yet. */

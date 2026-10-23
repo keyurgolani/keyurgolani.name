@@ -124,6 +124,30 @@ export async function writeLive(
   }
 }
 
+/**
+ * Puts a copied publication log in place (#3, item 26): `staged`, a
+ * directory in `root` whose name starts with a dot, holding live.json and
+ * events/, renamed to `root`'s publication/ in one move, and `root`
+ * synced. `root` is a backup's own directory, or the empty one a restore
+ * fills, never a store a server runs on, and the caller wrote and synced
+ * everything in `staged`.
+ */
+export async function placeLog(
+  fs: FsPort,
+  staged: string,
+  root: string,
+  operation: string,
+): Promise<void> {
+  if (
+    path.dirname(path.resolve(staged)) !== path.resolve(root) ||
+    !path.basename(staged).startsWith('.')
+  ) {
+    throw new TypeError('A copied log is staged in a dot directory of its own root.');
+  }
+  await fs.rename(staged, path.join(root, 'publication'), `${operation}.log.rename`, PASS);
+  await fs.fsync(root, `${operation}.log.fsync`);
+}
+
 export class EventMismatchError extends Error {
   constructor(seq: number) {
     super(`publication/events/${seq}.json holds another event than the published pointer.`);

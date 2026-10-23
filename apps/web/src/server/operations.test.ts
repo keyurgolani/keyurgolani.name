@@ -473,18 +473,15 @@ test('config.status takes no input and returns the redacted summary', () => {
   ]) {
     assert.equal(status.output.safeParse({ ...summary, writes }).success, false);
   }
-  // The documents serve an empty store, and a path or a reason never passes.
+  // An empty store serves nothing, and never the mounted documents: a
+  // doc- revision, a path, or a reason never passes.
   const empty = {
     ...summary,
-    catalog: {
-      state: 'live',
-      liveRevisionId: null,
-      servingRevisionId: 'doc-0123456789ab',
-      renderDrift: null,
-    },
+    catalog: { state: 'empty', liveRevisionId: null, servingRevisionId: null, renderDrift: null },
   };
   assert.equal(status.output.safeParse(empty).success, true);
   for (const catalog of [
+    { ...empty.catalog, state: 'live', servingRevisionId: 'doc-0123456789ab' },
     { ...summary.catalog, reason: 'damaged:hash_mismatch' },
     { ...summary.catalog, servingRevisionId: '/srv/data/revisions/x' },
     { ...summary.catalog, state: 'broken' },

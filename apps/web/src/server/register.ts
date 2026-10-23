@@ -1,5 +1,6 @@
 import 'server-only';
 import path from 'node:path';
+import type { UnitChecks } from '@portfolio/core';
 import { CONTENT_EXTENSIONS, liveContext, REGISTRY } from '~/lib/variants';
 import webPackage from '../../package.json';
 import { issueLogLine, type ConfigIssue, type Profile } from './config';
@@ -8,6 +9,20 @@ import { log } from './log';
 import type { Registration } from './start-or-exit';
 import { runStartup, type StartupResult } from './startup';
 import { buildUnitChecks, renderDrift } from './unit-checks';
+
+/**
+ * What a revision is checked with in this deployment, published and served
+ * (#3), on its canonical origin. portfolio-store builds the same from the
+ * same registry, so a revision either writes records one rendering.
+ */
+export function deploymentUnitChecks(origin: string): UnitChecks {
+  return buildUnitChecks({
+    registry: REGISTRY,
+    extensions: CONTENT_EXTENSIONS,
+    origin,
+    appVersion: webPackage.version,
+  });
+}
 
 /**
  * Validates the deployment. When it can start, stores the result, logs any
@@ -36,14 +51,7 @@ export async function registerDeployment(): Promise<Registration> {
     report: (issue) => {
       console.log(issueLogLine(issue, result.profile));
     },
-    // What a revision is checked with, published and served (#3).
-    unitChecks: (origin) =>
-      buildUnitChecks({
-        registry: REGISTRY,
-        extensions: CONTENT_EXTENSIONS,
-        origin,
-        appVersion: webPackage.version,
-      }),
+    unitChecks: deploymentUnitChecks,
     renderDrift: (rendering) => renderDrift(REGISTRY, rendering),
     // `next dev` keeps owner's data in the workspace root's .data (#3).
     devDataDir: path.resolve(/*turbopackIgnore: true*/ cwd, '..', '..', '.data'),

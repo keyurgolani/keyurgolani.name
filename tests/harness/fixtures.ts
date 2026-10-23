@@ -50,6 +50,12 @@ export interface AppOptions {
   /** A data directory made under the app's root, mode 0700, as PORTFOLIO_DATA_DIR. */
   dataName?: string;
   /**
+   * With `dataName`, the source pair published into it as revision 1 first
+   * (owner-store.mjs), since owner's first start refuses a site whose variant
+   * this build doesn't register. Default true.
+   */
+  seed?: boolean;
+  /**
    * Run the fixture host's build (fixture-host.mjs), which registers the test
    * variants or fixture packs its suite asks for, in place of this checkout's.
    * The route and appearance specs build one.

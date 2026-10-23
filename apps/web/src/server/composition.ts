@@ -24,8 +24,8 @@ import { liveVariantHealth } from './variant-health';
 // The composition root (#1, item 14). It builds what one profile needs and
 // nothing else: read-only reads its mounted documents through
 // @portfolio/core's SourceCatalogReader, demo the bundled sample, and owner
-// the revision store through RevisionCatalogReader (#3), which serves the
-// mounted documents while the store is empty. Only the owner branch loads
+// the revision store through RevisionCatalogReader (#3), into which owner's
+// first start imports the mounted documents. Only the owner branch loads
 // owner code, through import(). startup.ts imports this module in every
 // profile, so check:deps fails any import of owner code here that isn't an
 // import(). Around that it runs the named startup requirements, the hook #2,
@@ -101,10 +101,10 @@ export interface RequirementContext {
   readonly config: DeploymentConfig;
   readonly authProviders: readonly AuthProviderFactory[];
   /**
-   * The mounted document pair, opened once for the profiles that serve it
-   * (owner and read-only), before any requirement runs. The documents.pair
-   * requirement reports its findings, and the profile's branch serves it, so
-   * the pair is checked once.
+   * The mounted document pair, opened once for owner and read-only, before
+   * any requirement runs, so the pair is checked once. read-only serves it,
+   * and its documents.pair requirement reports the findings; owner imports
+   * it at first start, and its documents.shape requirement reports them.
    */
   readonly documents?: OpenDocumentsResult;
   /**
@@ -202,19 +202,14 @@ export const STARTUP_REQUIREMENTS: readonly StartupRequirement[] = [
   // old-format one, and every record validatePublicationUnit finds. Startup
   // treats the pair as live, so a blocks-preview or blocks-publish record
   // stops it, and warnings are logged. It covers the matrix's invalid-document
-  // and old-shape rows for both profiles; there's no second check.
+  // and old-shape rows for read-only; documents.shape covers them for owner.
   {
     id: 'documents.pair',
     issue: '#4',
-    profiles: ['owner', 'read-only'],
+    profiles: ['read-only'],
     failure: 'fatal',
     check: async ({ documents }) => documents?.issues ?? [],
   },
-  // Old-shape documents with no valid revision to fall back on: #3 adds the
-  // revision check for owner, on top of documents.pair.
-  // #3's Slice 3 implements this one, with the first-start import, once
-  // documents.pair turns into a drift warning for a store with a revision.
-  { id: 'documents.shape', issue: '#3', profiles: ['owner'], failure: 'fatal' },
   // The store's repair, then the live revision as served (#3, item 21): a
   // damaged one serves the last known good, and owner starts degraded.
   {
@@ -223,6 +218,17 @@ export const STARTUP_REQUIREMENTS: readonly StartupRequirement[] = [
     profiles: ['owner'],
     failure: 'degraded',
     load: () => import('./owner/revision-integrity').then((module) => module.check),
+  },
+  // The mounted pair under owner (#3, item 24), after the repair. An empty
+  // store imports it at first start, and one that can't go live stops
+  // startup, as documents.pair stops read-only; once a revision exists, its
+  // findings only warn, since the store is what serves.
+  {
+    id: 'documents.shape',
+    issue: '#3',
+    profiles: ['owner'],
+    failure: 'fatal',
+    load: () => import('./owner/first-start').then((module) => module.check),
   },
 ];
 
@@ -307,8 +313,7 @@ export async function compose(input: CompositionInput): Promise<Composition> {
   const { config } = input;
   const authProviders = input.authProviders ?? AUTH_PROVIDERS;
   const requirements = input.requirements ?? STARTUP_REQUIREMENTS;
-  // read-only serves them, and owner's empty store does until #3's Slice 3
-  // imports them at first start.
+  // read-only serves them, and owner imports them into an empty store.
   const documents =
     config.profile === 'owner' || config.profile === 'read-only' ? openDocuments(input) : undefined;
   const context: RequirementContext = { config, authProviders, documents };
@@ -345,17 +350,19 @@ export async function compose(input: CompositionInput): Promise<Composition> {
       });
     }
     case 'owner': {
-      if (!documents?.ok) return refusedDocuments(early.issues, documents);
+      // The mounted pair's findings are documents.shape's to report: fatal
+      // only for a first-start import, since a store with a revision serves.
       let issues = early.issues;
       // The one place owner code loads.
       const owner = await import('./owner/index');
-      // The revision store (#3), which the owner requirements check and
-      // claim, and the reader visitors are served through. While the store
-      // is empty it serves the mounted documents, as owner did before it.
+      // The revision store (#3), which the owner requirements check, claim,
+      // and import the mounted pair into, and the reader visitors are served
+      // through. An empty store serves nothing, and visitors get 503.
       const store = owner.ownerStore({
         config,
         checks: unitChecks(input),
-        documents: documents.reader,
+        examples: input.examples,
+        pairContext: { catalog: input.catalog, extensions: input.extensions },
         ...(input.renderDrift ? { renderDrift: input.renderDrift } : {}),
         setServable,
       });
