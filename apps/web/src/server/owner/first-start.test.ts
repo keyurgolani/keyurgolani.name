@@ -580,3 +580,60 @@ test("once a revision is live, the pair's startup findings only warn, and the st
     assert.equal(eventsIn(site.dataDir).length, 1, code);
   }
 });
+
+test('in production, a pair that went away while the import waited never brings in the bundled examples', async (t) => {
+  const logged = t.mock.method(console, 'log', () => {});
+  const site = deployment(t, PAIR);
+  // register() passes the examples in every mode, for next dev.
+  const owner = ownerStore({
+    config: site.config,
+    checks: registered(ORIGIN),
+    examples: EXAMPLES,
+    setServable: () => {},
+    timing: { lockWaitMs: 50, claimRetryMs: [20, 40] },
+  });
+  t.after(() => owner.release());
+  assert.equal(await preflight({ dataDir: site.dataDir }), null);
+  const lock = path.join(site.dataDir, 'publication', 'lock');
+  const cli = { pid: 1, startTime: 'x', hostname: 'another-host', holder: 'cli:backup' };
+  writeFileSync(lock, JSON.stringify({ ...cli, at: new Date().toISOString(), nonce: 'cli' }));
+  await owner.checkDirectory();
+  await owner.checkIntegrity();
+  assert.deepEqual(findings(await check({ documents: { ok: true, issues: [] }, owner })), [
+    'warning store_import_waiting',
+  ]);
+  // Both documents leave config/ before the background import reads them again.
+  rmSync(path.join(site.sourceDir, 'portfolio.yml'));
+  rmSync(path.join(site.sourceDir, 'site.yml'));
+  rmSync(lock);
+  const failed = () =>
+    logLines(logged).filter((line) => line.event === 'store.import.failed').length;
+  await until(() => failed() === 1);
+  assert.equal((await owner.reader.getLive()).state, 'empty');
+  assert.deepEqual(eventsIn(site.dataDir), [], 'nothing was imported, the examples least of all');
+});
+
+test("a first start imports nothing while another server holds the data directory's claim, even with the lock free", async (t) => {
+  t.mock.method(console, 'log', () => {});
+  const site = deployment(t, PAIR);
+  assert.equal(await preflight({ dataDir: site.dataDir }), null);
+  // Another owner server, on another host, holds the directory and keeps its claim fresh.
+  const server = path.join(site.dataDir, 'publication', 'server.json');
+  const record = { pid: 1, startTime: 'x', hostname: 'another-host', nonce: 'other-server' };
+  writeFileSync(server, JSON.stringify({ ...record, at: new Date().toISOString() }));
+  const owner = ownerStore({
+    config: site.config,
+    checks: registered(ORIGIN),
+    setServable: () => {},
+    timing: { lockWaitMs: 50, claimRetryMs: [20, 40] },
+  });
+  t.after(() => owner.release());
+  assert.ok(
+    findings(await owner.checkDirectory()).some((line) => line.endsWith('data_dir_in_use')),
+  );
+  await owner.checkIntegrity();
+  await check({ documents: { ok: true, issues: [] }, owner });
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  assert.equal(existsSync(livePath(site.dataDir)), false, 'nothing was imported');
+  assert.deepEqual(eventsIn(site.dataDir), []);
+});
