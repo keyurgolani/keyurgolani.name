@@ -224,8 +224,22 @@ export function remoteImageFetcher({
   }
 
   return async (source) => {
-    let url = httpsUrl(source);
-    const signal = AbortSignal.timeout(timeoutMs);
+    const url = httpsUrl(source);
+    // A timer of its own, which holds the process open the way a socket
+    // does: AbortSignal.timeout's doesn't, so a fetch stuck on a lookup in
+    // a process with nothing else to do would end it before the limit.
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const signal = controller.signal;
+    try {
+      return await fetchFrom(url, signal);
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+
+  async function fetchFrom(start: URL, signal: AbortSignal): Promise<Uint8Array> {
+    let url = start;
     for (let hop = 0; ; hop++) {
       const { address, family } = await addressOf(url, signal);
       let response: RemoteResponse;
@@ -265,5 +279,5 @@ export function remoteImageFetcher({
         throw unreachable('read_failed', "The source's answer couldn't be read.");
       }
     }
-  };
+  }
 }

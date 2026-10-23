@@ -124,7 +124,7 @@ test('a cache another user owns is refused, as one made first in a shared temp d
   const cache = path.join(base, 'theirs');
   mkdirSync(cache, { mode: 0o700 });
   // The server runs as someone else than the cache's owner.
-  t.mock.method(process, 'getuid', () => 4242424);
+  t.mock.method(process as unknown as { getuid(): number }, 'getuid', () => 4242424);
   await assert.rejects(
     deriveStartupMedia({ portfolio: portfolio(), root: localMediaRoot(root), cacheDir: cache }),
     MediaCacheError,
