@@ -306,8 +306,8 @@ test(
     expect(routeIn(second)).toBe('/');
 
     // Back home, where the frame's agent is: neither composition has another
-    // page that renders until #10 resolves works, and a work's path is the
-    // frame's 404 document, which says nothing of where it goes next.
+    // page that renders, since a frame renders no case study yet (#10b), and
+    // a work's path is the frame's 404 document, which says nothing of where it goes next.
     const frames = [first, second];
     await back(page, frames);
 

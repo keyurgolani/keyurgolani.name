@@ -110,7 +110,7 @@ test.describe('without JavaScript', () => {
         `/sample/work/tide-tables/credits${CHAPTERS}`,
         '/sample/chapters/about?variant=fallback',
         '/sample?variant=canary-variant',
-        // A path no installed variant declares, and no slug names a work until #10.
+        // A path no installed variant declares, and a slug the live revision doesn't route.
         '/no-such-view',
         '/work/tide-tables',
       ]) {

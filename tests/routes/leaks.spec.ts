@@ -8,7 +8,7 @@ import { expectNoLeaks, SEEDED, sectionsOf, type View } from './leaks';
 // its source directory at a canary path too. fixture-chapters declares
 // chapters/{chapter} under home and credits under work, and fixture-notes
 // declares notes under home: each harness section renders through its
-// chapter view, notes is a 307 home, and credits is the 404 page until #10.
+// chapter view, notes is a 307 home, and credits under a slug no case study has is the 404 page.
 
 test.use({
   appOptions: { ...readOnlyApp('fixture-chapters'), sourceName: CANARY_SOURCE, envFiles: SEEDED },

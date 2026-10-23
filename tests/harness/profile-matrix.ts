@@ -206,8 +206,8 @@ function routeFileSpellings(): string[] {
 
 /**
  * A page whose concrete path names nothing it can render: no installed
- * variant declares a view at /probe, and no slug names a work until #10
- * (#5, Slice 4). The route table calls it missing in every profile, so a
+ * variant declares a view at /probe, and no live revision routes a case
+ * study at /work/probe (#5, Slice 4; #10b). The route table calls it missing in every profile, so a
  * GET gets the app's 404 page, rendered from the server, and any other
  * method the proxy's plain 404, as an absent route does. A grant page's
  * /preview/probe is a grant, never a view (#7).
@@ -518,7 +518,7 @@ async function shape(response: APIResponse, target: string) {
  * `reference` names another path to answer as, or one per target, each sent
  * as is.
  */
-async function expectUnknown(
+export async function expectUnknown(
   request: APIRequestContext,
   profile: Profile,
   targets: readonly string[],
