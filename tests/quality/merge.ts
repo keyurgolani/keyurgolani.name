@@ -9,7 +9,9 @@
 // calls it as `pnpm ci:quality-verdict "$DIR" --shards <m> --mode <mode>`:
 // --mode fails a shard that ran another mode, and --shards one outside 1..m
 // or missing. Reports it can't read fail the merge, which still writes its
-// verdict and records.
+// verdict and records. quality-pr-verdict adds --jobs <result>, the shard
+// jobs' result from `needs`, so a shard job that failed, was cancelled, or
+// was skipped fails the verdict too.
 //
 // Point it only at a new, empty directory the shards' artifacts were
 // downloaded into: it reads every quality/ directory under it.
@@ -38,26 +40,31 @@ export interface MergeArgs {
   readonly expected?: number;
   /** The mode the shards must have run: full for the nightly and release runs, pr for a sharded PR run. */
   readonly mode?: RunMode;
+  /** The shard jobs' result, as quality-pr-verdict's `needs` gives it: anything but success fails. */
+  readonly jobs?: string;
 }
 
 export function parseMergeArgs(argv: readonly string[]): MergeArgs {
   const args = argv[0] === '--' ? argv.slice(1) : [...argv];
-  const usage = `usage: pnpm quality:merge -- <shard reports dir> [--shards <m>] [--mode <${RUN_MODES.join('|')}>]`;
+  const usage = `usage: pnpm quality:merge -- <shard reports dir> [--shards <m>] [--mode <${RUN_MODES.join('|')}>] [--jobs <result>]`;
   const take = (flag: string, valid: (value: string) => boolean): string | undefined => {
     const at = args.indexOf(flag);
     if (at === -1) return undefined;
     const value = args[at + 1];
-    if (!value || !valid(value)) throw new Error(usage);
+    if (value === undefined || !valid(value)) throw new Error(usage);
     args.splice(at, 2);
     return value;
   };
   const shards = take('--shards', (value) => /^[1-9]\d*$/.test(value));
   const mode = take('--mode', (value) => (RUN_MODES as readonly string[]).includes(value));
+  // An empty result, which `needs` never gives, is taken and fails the merge as shard-job.
+  const jobs = take('--jobs', (value) => value === '' || /^[a-z_]+$/.test(value));
   if (args.length !== 1 || args[0]!.startsWith('-')) throw new Error(usage);
   return {
     dir: path.resolve(args[0]!),
     ...(shards === undefined ? {} : { expected: Number(shards) }),
     ...(mode === undefined ? {} : { mode: mode as RunMode }),
+    ...(jobs === undefined ? {} : { jobs }),
   };
 }
 
@@ -67,12 +74,13 @@ export function mergeRun(
   expected?: number,
   test = 'quality:full merged verdict',
   mode?: RunMode,
+  jobs?: string,
 ) {
   let shards: ShardReport[] = [];
   let verdict: MergedVerdict;
   try {
     shards = readShards(dir);
-    verdict = mergeShards(shards, { expected, mode });
+    verdict = mergeShards(shards, { expected, mode, jobs });
   } catch (error) {
     // Whatever the reports hold, the merge says so and fails, with its record.
     shards = [];
@@ -131,7 +139,8 @@ function main(argv: readonly string[]): number {
     console.error(`[quality] ${(error as Error).message}`);
     return 2;
   }
-  return mergeRun(options.dir, options.expected, undefined, options.mode).ok ? 0 : 1;
+  const test = `quality:${options.mode ?? 'full'} merged verdict`;
+  return mergeRun(options.dir, options.expected, test, options.mode, options.jobs).ok ? 0 : 1;
 }
 
 if (path.resolve(process.argv[1] ?? '') === fileURLToPath(import.meta.url)) {
