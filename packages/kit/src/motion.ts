@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from 'react';
 import type { MotionPolicy } from '@portfolio/schema';
-import { documentInputs, SERVER_INPUTS, subscribeDocument } from './runtime/store';
+import { documentInputs, subscribeDocument } from './runtime/store';
 
 export type ResolvedMotion = 'reduce' | 'full';
 
@@ -38,7 +38,10 @@ export function useProvidedMotionPolicy(): MotionPolicy {
 // The OS's preference comes from the kit runtime's one document store
 // (runtime/store.ts), so every hook and effect on the page reads the same value.
 const osPrefersReducedMotion = () => documentInputs().osReduced;
-const serverPrefersReducedMotion = () => SERVER_INPUTS.osReduced;
+// Before the page knows the visitor's preference, on the server and in the
+// first client render, motion counts as reduced (#6): nothing starts moving
+// before the OS can say no.
+const preferenceUnknown = () => true;
 
 /**
  * Resolve the effective motion mode for a session.
@@ -52,10 +55,10 @@ const serverPrefersReducedMotion = () => SERVER_INPUTS.osReduced;
  * No policy turns motion on past an OS reduce preference. The policy is the
  * one MotionPolicyProvider gives (else `respect-os`), and a component's own
  * `policy` can only add a `reduce` to it: either one at `reduce` reduces, so
- * a component's `respect-os` default never undoes a site's `reduce`. Defaults
- * to `full` during SSR and hydration to avoid layout-shift (unless the policy
- * is `reduce`); the OS value takes over right after hydration and follows
- * later changes.
+ * a component's `respect-os` default never undoes a site's `reduce`. It's
+ * `reduce` on the server and while hydrating, so the first render is the
+ * still; the OS value takes over right after hydration and follows later
+ * changes.
  *
  * This is the preference, not whether an effect may run now: an effect
  * runs on useEnhancementRuntime from `@portfolio/kit/runtime`, which also
@@ -67,7 +70,7 @@ export function useMotionPreference(policy?: MotionPolicy): ResolvedMotion {
   const osReduce = useSyncExternalStore(
     subscribeDocument,
     osPrefersReducedMotion,
-    serverPrefersReducedMotion,
+    preferenceUnknown,
   );
   const reduce = policy === 'reduce' || provided === 'reduce';
 

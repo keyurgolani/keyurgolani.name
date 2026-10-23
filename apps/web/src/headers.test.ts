@@ -103,6 +103,8 @@ test('only the build assets and /_portfolio allow any origin, never a page, an A
     '/_next/static/css/site.css',
     '/_portfolio/generated/0123456789ab.css',
     '/_portfolio/fonts/serif.woff2',
+    // #6's typography fonts, which an opaque preview frame loads cross-origin.
+    '/_portfolio/font/humanist-ui.0123456789ab.woff2',
   ]) {
     assert.deepEqual(await configHeaders(path), shared, path);
   }
