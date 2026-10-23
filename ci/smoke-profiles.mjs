@@ -275,10 +275,10 @@ const concrete = (pattern) =>
  * What a dynamic pattern's made-up path answers, by DYNAMIC_ROUTES (#12),
  * or undefined for a static pattern. `not-found` is a path that names
  * nothing it can render: no installed variant declares a view at /probe,
- * and no work has the slug probe (#5, Slice 4). The route table calls it
- * missing in every profile, so a GET gets the app's 404 page, rendered from
- * the server, and any other method the proxy's plain 404, as an absent
- * route does.
+ * and no live revision routes a case study at /work/probe (#5, Slice 4;
+ * #10b). The route table calls it missing in every profile, so a GET gets
+ * the app's 404 page, rendered from the server, and any other method the
+ * proxy's plain 404, as an absent route does.
  */
 const madeUpOf = (entry) =>
   isDynamic(entry.pattern) ? DYNAMIC_ROUTES[entry.pattern]?.madeUp : undefined;

@@ -42,10 +42,28 @@ export function listCanonicalUrls(view: PublicView, options: CanonicalUrlOptions
 export function routedWorks(view: PublicView): Map<string, string> {
   const routes = new Map<string, string>();
   for (const work of view.portfolio.works) {
-    if (work.caseStudy !== undefined && work.slug !== undefined)
-      routes.set(work.id, workPath(work.slug));
+    if (isRouted(work)) routes.set(work.id, workPath(work.slug));
   }
   return routes;
+}
+
+/**
+ * The slugs `/work/<slug>` serves (#10b): each public work in the view with
+ * a case study and a slug, which routedWorks() names. A private work, and
+ * one no visible section or curation list reaches, isn't in the view, so
+ * its slug never is.
+ */
+export function routedSlugs(view: PublicView): ReadonlySet<string> {
+  const slugs = new Set<string>();
+  for (const work of view.portfolio.works) if (isRouted(work)) slugs.add(work.slug);
+  return slugs;
+}
+
+/** Whether a work in the view has its own route: a case study, at its slug. */
+function isRouted<W extends { caseStudy?: unknown; slug?: string }>(
+  work: W,
+): work is W & { slug: string } {
+  return work.caseStudy !== undefined && work.slug !== undefined;
 }
 
 /** The ids of the works a document keeps private, for planUrls(). */

@@ -8,6 +8,7 @@ import { VARIANTS } from '../lib/generated/registry.meta';
 import { environmentValues } from '../lib/preview-environment';
 import { sampleSelection } from '../lib/sample';
 import { accessIn, PROFILES, type Access, type Capability, type Profile } from './capabilities';
+import { liveCaseStudies } from './config-store';
 import { experiencePattern } from './experience';
 
 // The route table (#1, item 13): every page, route handler, and metadata
@@ -16,7 +17,10 @@ import { experiencePattern } from './experience';
 // route files, and the server-built navigation all decide from this table
 // and the capability matrix, never from a route's name. Which paths name
 // anything comes from the installed variants' manifests (#5, Slice 4),
-// never from the live site, so it holds whatever the site selects.
+// never from the live site, so it holds whatever the site selects. The one
+// exception is /work/<slug> (#10b): a slug names a page only while the live
+// revision's public view routes it, which the composition root's reader
+// records in memory as it serves (config-store's liveCaseStudies()).
 
 export type RouteKind = 'page' | 'handler' | 'metadata';
 
@@ -126,16 +130,43 @@ function declaresView(
 }
 
 /**
- * Whether `segments`, below the site root or /sample, name a page: home, or
- * a view some installed variant declares, which renders, or redirects to its
- * canonical route. A reserved first segment is never a view, and no slug
- * names a work until #10 (the case-study model).
+ * No slug: a preview frame renders no case study yet, so a work's path there
+ * is missing, as it was before #10b.
  */
-function namesPage(installed: Installed, segments: readonly string[]): boolean {
+const NO_SLUGS: ReadonlySet<string> = new Set();
+
+/**
+ * Whether `segments`, below the site root or /sample, name a page: home, a
+ * case study at `work/<slug>` and the views under it, or a view some
+ * installed variant declares, which renders, or redirects to its canonical
+ * route. A reserved first segment is never a view.
+ */
+function namesPage(
+  installed: Installed,
+  segments: readonly string[],
+  slugs: ReadonlySet<string> = liveCaseStudies(),
+): boolean {
   const [first] = segments;
   if (first === undefined) return true;
+  if (first === 'work') return namesWork(installed, segments.slice(1), slugs);
   if (isReservedSegment(first)) return false;
   return declaresView(installed, 'home', segments);
+}
+
+/**
+ * Whether `[slug, ...rest]`, below /work, names a page: a slug `slugs`
+ * holds, and either nothing below it or a view under `work` some installed
+ * variant declares. A private work's slug, an unknown one, and one whose
+ * work no visible section reaches are never in the live set, so each is
+ * missing, as any unknown path is.
+ */
+function namesWork(
+  installed: Installed,
+  [slug, ...rest]: readonly string[],
+  slugs: ReadonlySet<string>,
+) {
+  if (slug === undefined || !slugs.has(slug)) return false;
+  return rest.length === 0 || declaresView(installed, 'work', rest);
 }
 
 /** /sample's `variant` parameter as a page reads it: absent, one value, or several. */
@@ -203,7 +234,7 @@ const ROUTES = [
     profiles: SITE_PROFILES,
     visitor: true,
     experience: true,
-    names: () => false,
+    names: ({ segments }, installed) => namesPage(installed, segments),
   },
   {
     pattern: '/work/[slug]/[...view]',
@@ -212,7 +243,7 @@ const ROUTES = [
     profiles: SITE_PROFILES,
     visitor: true,
     experience: true,
-    names: () => false,
+    names: ({ segments }, installed) => namesPage(installed, segments),
   },
   {
     pattern: '/sample/[[...path]]',
@@ -245,7 +276,7 @@ const ROUTES = [
     kind: 'page',
     capability: 'preview.grant',
     grant: 'document',
-    names: ({ segments }, installed) => namesPage(installed, segments.slice(2)),
+    names: ({ segments }, installed) => namesPage(installed, segments.slice(2), NO_SLUGS),
   },
   {
     pattern: '/preview-assets/[grant]/[...path]',

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { resolvePortfolioView, type PublicView, type Site } from '@portfolio/schema';
+import { resolvePortfolioView, routedSlugs, type PublicView, type Site } from '@portfolio/schema';
 import { readPair } from '@portfolio/schema/node';
 import {
   FALLBACK_ID,
@@ -10,6 +10,7 @@ import {
   type RouteTarget,
   type VariantRegistry,
 } from '@portfolio/variant-contract';
+import { setLiveCaseStudies } from '../server/config-store';
 import { listRoutes, RETIRED_PATTERNS, routeResolver } from '../server/routes';
 import { sampleSelection } from './sample';
 import { REGISTRY } from './variants';
@@ -53,6 +54,17 @@ function viewFor(variant: string, routes?: Site['routes']): PublicView {
   const site = { ...PAIR.site, appearance: { ...PAIR.site.appearance, variant }, routes };
   return resolvePortfolioView({ portfolio: PAIR.portfolio, site }, {}, { mediaBase: '/media' });
 }
+
+/** The example's one case study: its signature work, which a visible works section lists. */
+const SLUG = 'postmortem-template-kit';
+
+/** The hidden fixture's public view: its case studies are a private work's and an unreached one's. */
+const HIDDEN = (() => {
+  const dir = fileURLToPath(new URL('../../../../tests/fixtures/hidden/', import.meta.url));
+  const result = readPair({ portfolio: `${dir}portfolio.yml`, site: `${dir}site.yml` });
+  assert.ok(result.ok);
+  return resolvePortfolioView(result.pair, {}, { mediaBase: '/media' });
+})();
 
 /** What `path` resolves to, and whether resolving it loaded the view. */
 async function resolve(
@@ -158,14 +170,68 @@ test('anything else is missing: an undeclared path, a bare view prefix, or a tur
   });
 });
 
-test('no work resolves until #10, so a work, its views, and redirects to one are missing', async () => {
-  for (const segments of [
-    ['work', 'tide-tables'],
-    ['work', 'tide-tables', 'credits'],
-    ['work', 'tide-tables', 'no-such-view'],
+test('a public case study renders at its slug, and its views as any view does (#10b)', async () => {
+  assert.deepEqual(rendered((await resolve({ segments: ['work', SLUG] })).route), [
+    'fixture-chapters',
+    { route: 'work', slug: SLUG },
+    undefined,
+  ]);
+  const credits = BUILD[1]!.manifest.routes.views.find((view) => view.id === 'credits')!;
+  assert.deepEqual(rendered((await resolve({ segments: ['work', SLUG, 'credits'] })).route), [
+    'fixture-chapters',
+    { route: 'view', view: credits, params: {}, slug: SLUG },
+    `/work/${SLUG}`,
+  ]);
+  // Only fixture-chapters declares credits: under fixture-notes, a 307 to the work.
+  assert.deepEqual(
+    (await resolve({ segments: ['work', SLUG, 'credits'] }, viewFor('fixture-notes'))).route,
+    { kind: 'redirect', location: `/work/${SLUG}` },
+  );
+  // Under /sample, the link base and ?variant= stay.
+  assert.deepEqual(
+    (
+      await resolve(
+        {
+          segments: ['work', SLUG, 'credits'],
+          basePath: '/sample',
+          selected: 'fixture-notes',
+          query: { variant: 'fixture-notes' },
+        },
+        viewFor('editorial-evidence'),
+      )
+    ).route,
+    { kind: 'redirect', location: `/sample/work/${SLUG}?variant=fixture-notes` },
+  );
+});
+
+test('any other work is missing, its views and redirects included: unknown, with no case study, private, or unreached (#10b)', async () => {
+  for (const slug of [
+    'tide-tables',
+    // A public work with no case study.
+    'small-traces',
+    'Postmortem-Template-Kit',
+    `${SLUG}-x`,
   ]) {
-    for (const view of [viewFor('fixture-chapters'), viewFor('fixture-notes')]) {
-      assert.deepEqual((await resolve({ segments }, view)).route, { kind: 'not-found' });
+    for (const segments of [
+      ['work', slug],
+      ['work', slug, 'credits'],
+      ['work', slug, 'no-such-view'],
+    ]) {
+      for (const view of [viewFor('fixture-chapters'), viewFor('fixture-notes')]) {
+        assert.deepEqual((await resolve({ segments }, view)).route, { kind: 'not-found' });
+      }
+    }
+  }
+  assert.deepEqual((await resolve({ segments: ['work'] })).route, { kind: 'not-found' });
+  // The hidden fixture's case studies: a private work's, and a public one
+  // only a hidden section reaches. Neither is in its view, so neither routes.
+  assert.deepEqual([...routedSlugs(HIDDEN)], []);
+  for (const slug of ['canary-hidden-private-slug', 'canary-hidden-record-slug']) {
+    for (const segments of [
+      ['work', slug],
+      ['work', slug, 'credits'],
+    ]) {
+      assert.deepEqual((await resolve({ segments }, HIDDEN)).route, { kind: 'not-found' }, slug);
     }
   }
 });
@@ -201,14 +267,22 @@ const PATHS: readonly string[][] = [
   ['no-such-view'],
   ['work', 'tide-tables'],
   ['work', 'tide-tables', 'credits'],
+  ['work', SLUG],
+  ['work', SLUG, 'credits'],
+  ['work', SLUG, 'notes'],
+  ['work', 'small-traces'],
+  ['work'],
   ['api', 'no-such'],
   ['favicon.ico'],
   // Under a Studio page's first segment, where no route lists it (#2).
   ['studio', 'nowhere'],
 ];
 
-test('the route table calls a path missing exactly when no visitor page renders or redirects it (#5, Slice 4)', async () => {
+test('the route table calls a path missing exactly when no visitor page renders or redirects it (#5, Slice 4)', async (t) => {
   const table = routeResolver(listRoutes(), RETIRED_PATTERNS, BUILD);
+  // The slugs the composition root's reader records from the same view (#10b).
+  t.after(() => setLiveCaseStudies(undefined));
+  setLiveCaseStudies(routedSlugs(viewFor('fixture-chapters')));
   // At the root, whichever variant the site selects.
   for (const segments of PATHS) {
     const pathname = `/${segments.join('/')}`;

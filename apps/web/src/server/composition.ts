@@ -1,6 +1,7 @@
 import 'server-only';
 import type { RenderDrift, Rendering, UnitChecks } from '@portfolio/core';
 import {
+  routedSlugs,
   validatePublicationUnit,
   type AppearanceCatalog,
   type ContentExtension,
@@ -10,15 +11,21 @@ import type { PairFiles } from '@portfolio/schema/node';
 import type { VariantRegistry } from '@portfolio/variant-contract';
 import { compositionFor, REGISTRY } from '~/lib/variants';
 import type { Profile } from './capabilities';
-import type { CatalogReader, LiveRevision } from './catalog-port';
+import type { CatalogReader, LiveRevision, PublicationUnit } from './catalog-port';
 import { openSampleCatalog } from './catalog-sample';
 import { openSourceCatalog, type OpenSourceCatalogResult } from './catalog-source';
 import type { ConfigIssue, DeploymentConfig } from './config';
 import { configSummary, type CatalogAdapter } from './config-summary';
-import { setLiveComposition, setServable, type DeploymentState } from './config-store';
+import {
+  setLiveCaseStudies,
+  setLiveComposition,
+  setServable,
+  type DeploymentState,
+} from './config-store';
 import { createDispatcher, NO_BINDINGS, type Handler, type StudioBindings } from './dispatcher';
 import { listOperations, type ConfigSummary } from './operations';
 import type { GrantSessionPort, PreviewFixture, PreviewGrantsPort } from './preview-port';
+import { publicViewOf } from './public-view';
 import type { Session } from './session';
 import type { StudioPages } from './studio-port';
 import { liveVariantHealth } from './variant-health';
@@ -519,6 +526,15 @@ interface Built {
   readonly mediaBlobs?: DeploymentState['mediaBlobs'];
 }
 
+/** The slugs a unit's public view routes, or none when the view won't build. */
+function caseStudiesOf(unit: PublicationUnit): ReadonlySet<string> | undefined {
+  try {
+    return routedSlugs(publicViewOf(unit));
+  } catch {
+    return undefined;
+  }
+}
+
 /** The readers recordingLive() made. */
 const RECORDING = new WeakSet<CatalogReader>();
 
@@ -533,7 +549,10 @@ const RECORDING = new WeakSet<CatalogReader>();
  * read-only's SourceCatalogReader, and demo's sample adapter. The id comes
  * from the unit this getLive() returned, so it's never another read's; with
  * nothing servable, an empty or incompatible store, it's unset, and
- * visitor pages answer 503 meanwhile. Tests pass a registry of their own.
+ * visitor pages answer 503 meanwhile. In the same step it records the slugs
+ * /work/<slug> serves (#10b): the routed case studies of that unit's public
+ * view, or none when there's no unit or its view won't build, so /work fails
+ * closed. Tests pass a registry of their own.
  */
 export function recordingLive(
   reader: CatalogReader,
@@ -550,6 +569,7 @@ export function recordingLive(
           ? compositionFor(live.unit.site.appearance.variant, registry).rendered.manifest.id
           : undefined,
       );
+      setLiveCaseStudies(live.unit ? caseStudiesOf(live.unit) : undefined);
       return live;
     },
   });

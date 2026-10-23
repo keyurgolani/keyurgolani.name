@@ -29,7 +29,9 @@ import { visitorPageAppearance } from './visitor-appearance';
 // answers a 307 to the same URL, and proxy.ts marks that request for the
 // right segment. Otherwise it renders the route: a view of the composition,
 // a 307 to the canonical route of a view only another installed variant
-// declares, or the 404 page.
+// declares, or the 404 page. demo's root shows the sample, and demo serves
+// the sample's routes under /sample alone, so the root's links, such as a
+// works list's to a case study (#10b), go there.
 
 interface ExperienceProps {
   readonly params: Promise<{ readonly route?: readonly string[] }>;
@@ -105,7 +107,10 @@ export function experiencePage(
       },
       load,
       hostModules,
-      linkBase: { basePath: path.basePath, query: path.query },
+      linkBase:
+        profile === 'demo' && !sample
+          ? { basePath: '/sample' }
+          : { basePath: path.basePath, query: path.query },
       route: route.target,
       origin,
       canonical: route.canonical,

@@ -9,7 +9,13 @@ import { REGISTRY } from '~/lib/variants';
 import type { LiveRevision } from './catalog-port';
 import { recordingLive } from './composition';
 import { readDeploymentConfig } from './config';
-import { liveComposition, setDeploymentState, setLiveComposition } from './config-store';
+import {
+  getDeploymentState,
+  liveComposition,
+  setDeploymentState,
+  setLiveCaseStudies,
+  setLiveComposition,
+} from './config-store';
 import { segmentFor } from './experience';
 import { experiencePage } from './experience-page';
 import { preferenceCookie } from './visitor-appearance';
@@ -81,6 +87,7 @@ function deploy(t: TestContext, live: () => LiveRevision) {
   t.after(() => {
     setDeploymentState(undefined);
     setLiveComposition(undefined);
+    setLiveCaseStudies(undefined);
   });
 }
 
@@ -154,5 +161,35 @@ test("a path the table doesn't serve as a visitor page is the 404 page, in any s
   for (const route of [['sample'], ['work', 'tide-tables'], ['studio'], ['api', 'health']]) {
     const answered = await answer('fixture-notes', route);
     assert.match(answered.digest ?? '', /^NEXT_HTTP_ERROR_FALLBACK;404$/, route.join('/'));
+  }
+});
+
+test('a case study a publish dropped after proxy.ts read the slugs is the 404 page, and every request after it too (#10b)', async (t) => {
+  // The example's one case study, its signature work.
+  const slug = 'postmortem-template-kit';
+  let current = revision('acme-gone');
+  deploy(t, () => current);
+  // The read register() makes at startup records the slugs, and the composition.
+  await getDeploymentState()!.catalog.getLive();
+  assert.ok((await answer(FALLBACK_ID, ['work', slug])).element);
+  // The next revision drops the case study: the page reads it, and answers 404.
+  const live = revision('acme-gone');
+  current = {
+    ...live,
+    unit: {
+      ...live.unit!,
+      portfolio: {
+        ...live.unit!.portfolio,
+        works: live.unit!.portfolio.works?.map((work) => {
+          const dropped = { ...work };
+          delete dropped.caseStudy;
+          return dropped;
+        }),
+      },
+    },
+  } as LiveRevision;
+  for (let request = 0; request < 2; request += 1) {
+    const answered = await answer(FALLBACK_ID, ['work', slug]);
+    assert.match(answered.digest ?? '', /^NEXT_HTTP_ERROR_FALLBACK;404$/, `request ${request}`);
   }
 });

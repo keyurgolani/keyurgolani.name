@@ -17,7 +17,7 @@ import { fixtureFlags } from '../../scripts/fixture-gate';
 import { VARIANTS } from '../lib/generated/registry.meta';
 import { CAPABILITIES, FIXTURE_CAPABILITIES, PROFILES, type Profile } from './capabilities';
 import type { DeploymentConfig } from './config';
-import { setDeploymentState } from './config-store';
+import { setDeploymentState, setLiveCaseStudies, setServable } from './config-store';
 import { servedPattern } from './route-guard';
 import {
   devPreviewRoute,
@@ -1338,7 +1338,7 @@ test('each table route resolves the way its capability says, in every profile', 
   for (const profile of PROFILES) {
     for (const entry of listRoutes()) {
       const pathname = instantiate(entry.pattern);
-      // No installed variant declares a view at /probe, and no slug names a work until #10.
+      // No installed variant declares a view at /probe, and no live slug is probe (#10b).
       const expected =
         entry.kind === 'page' && pathname.includes('probe')
           ? 'missing'
@@ -1550,7 +1550,7 @@ test('a root path names a view only when an installed variant declares it (#5, S
       '/api/nope',
       '/studio/nowhere',
       '/work',
-      // No slug names a work until #10, its views included.
+      // No slug names a work while the live revision routes none (#10b), its views included.
       '/work/tide-tables',
       '/work/tide-tables/credits',
     ]) {
@@ -1567,6 +1567,80 @@ test('a root path names a view only when an installed variant declares it (#5, S
   for (const pathname of ['/does-not-exist', '/chapters', '/work/tide-tables', '/favicon.ico']) {
     assert.equal(fixtureEntry('demo', pathname), 'missing', pathname);
   }
+});
+
+/** Routes `slugs` as the live revision's case studies for the rest of `t`, servable or not. */
+function liveSlugs(t: TestContext, slugs: readonly string[] | undefined, servable = true) {
+  t.after(() => {
+    setLiveCaseStudies(undefined);
+    setServable(true);
+  });
+  setLiveCaseStudies(slugs && new Set(slugs));
+  setServable(servable);
+}
+
+test('a slug names a case study only while the live revision routes it, from memory (#10b)', (t) => {
+  liveSlugs(t, ['tide-tables']);
+  for (const profile of ['owner', 'read-only'] as const) {
+    assert.equal(fixtureEntry(profile, '/work/tide-tables'), '/work/[slug]', profile);
+    // fixture-chapters declares credits under work.
+    assert.equal(
+      fixtureEntry(profile, '/work/tide-tables/credits'),
+      '/work/[slug]/[...view]',
+      profile,
+    );
+    for (const pathname of [
+      '/work',
+      // A slug the live revision doesn't route: a private work's, an
+      // unreached one's, one with no case study, or none at all.
+      '/work/canary-hidden-private-slug',
+      '/work/Tide-Tables',
+      '/work/tide-tables-x',
+      '/work/tide%2Dtables%2Fcredits',
+      // A view under work no installed variant declares, and one under home.
+      '/work/tide-tables/no-such-view',
+      '/work/tide-tables/notes',
+      '/work/tide-tables/credits/x',
+    ]) {
+      assert.equal(fixtureEntry(profile, pathname), 'missing', `${profile} ${pathname}`);
+    }
+  }
+  // Demo serves no work route at the root, and its sample's own under /sample.
+  assert.equal(fixtureEntry('demo', '/work/tide-tables'), 'absent');
+  assert.equal(
+    fixtureEntry('demo', '/sample/work/tide-tables?variant=fixture-chapters'),
+    '/sample/[[...path]]',
+  );
+  assert.equal(fixtureEntry('demo', '/sample/work/nowhere?variant=fixture-chapters'), 'missing');
+  // A preview frame renders no case study yet: a work's path there is missing.
+  assert.equal(fixtureEntry('owner', '/preview/g_7Hk-2/work/tide-tables'), 'missing');
+  // A new set is read on the next request, with no restart.
+  setLiveCaseStudies(new Set(['rowan']));
+  assert.equal(fixtureEntry('read-only', '/work/tide-tables'), 'missing');
+  assert.equal(fixtureEntry('read-only', '/work/rowan'), '/work/[slug]');
+});
+
+test('the live slug set fails closed: none before the first read, and none while nothing is servable (#10b)', (t) => {
+  liveSlugs(t, undefined);
+  for (const profile of ['owner', 'read-only'] as const) {
+    assert.equal(fixtureEntry(profile, '/work/tide-tables'), 'missing', profile);
+  }
+  assert.equal(
+    fixtureEntry('demo', '/sample/work/tide-tables?variant=fixture-chapters'),
+    'missing',
+  );
+  setLiveCaseStudies(new Set(['tide-tables']));
+  setServable(false);
+  for (const profile of ['owner', 'read-only'] as const) {
+    assert.equal(fixtureEntry(profile, '/work/tide-tables'), 'missing', profile);
+    assert.equal(fixtureEntry(profile, '/work/tide-tables/credits'), 'missing', profile);
+  }
+  assert.equal(
+    fixtureEntry('demo', '/sample/work/tide-tables?variant=fixture-chapters'),
+    'missing',
+  );
+  setServable(true);
+  assert.equal(fixtureEntry('read-only', '/work/tide-tables'), '/work/[slug]');
 });
 
 test('/sample serves what the page renders: a registered variant, at home or a declared view', () => {

@@ -1,4 +1,4 @@
-import type { PublicView } from '@portfolio/schema';
+import { routedSlugs, type PublicView } from '@portfolio/schema';
 import {
   dispatch,
   href,
@@ -13,7 +13,9 @@ import { compositionFor, REGISTRY, type Composition } from './variants';
 // and `/sample` with everything below it. dispatch() decides against the
 // composition that renders, so a view of the site's variant renders, a path
 // only another installed variant declares redirects to its canonical route,
-// and anything else is missing.
+// and anything else is missing. A work route, and everything under it,
+// exists only for a slug the view routes (#10b): a public work with a case
+// study that something visible reaches.
 
 /** A request for a visitor page. */
 export interface VisitorPath {
@@ -69,9 +71,9 @@ export async function resolveVisitorPath(
     basePath: path.basePath,
     query: path.query,
   });
-  // No slug names a work until #10 (the case-study model) resolves them, so
-  // a work, its views, and a redirect to one are all missing.
-  if (first === 'work') return NOT_FOUND;
+  // A work, its views, and a redirect to one exist only for a slug the view
+  // routes: never a private work's, an unknown one, or an unreached one's.
+  if (first === 'work' && !routedSlugs(view).has(path.segments[1] ?? '')) return NOT_FOUND;
   if (result.kind !== 'render') return result;
   const { target } = result;
   if (target.route !== 'view') return { kind: 'render', view, composition, target };

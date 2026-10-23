@@ -28,6 +28,15 @@ const NOTHING_SERVABLE = 'Nothing published can be served.';
 export async function getPublicView(): Promise<PublicView> {
   const { unit } = await getLive();
   if (!unit) throw new Error(NOTHING_SERVABLE);
+  return publicViewOf(unit);
+}
+
+/**
+ * `unit`'s public view, built once per unit and media document. The
+ * composition root's reader reads its case-study slugs from it (#10b), so
+ * the slugs /work serves and the page it renders come from one view.
+ */
+export function publicViewOf(unit: PublicationUnit): PublicView {
   const media = liveMediaDocument(unit);
   const cached = views.get(unit);
   if (cached && cached.media === media) return cached.view;

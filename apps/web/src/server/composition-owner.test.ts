@@ -566,8 +566,8 @@ test('the owner route matrix: each route as its capability says, and retired one
     pattern.replace(/\/\[\[\.\.\.[^\]]+\]\]/g, '').replace(/\[\.{0,3}[^\]]+\]/g, 'probe') || '/';
   for (const entry of listRoutes()) {
     const pathname = concrete(entry.pattern);
-    // No installed variant declares a view at /probe, and no slug names a
-    // work until #10. A grant route's probe is its grant, and the route's
+    // No installed variant declares a view at /probe, and no live slug is
+    // probe (#10b). A grant route's probe is its grant, and the route's
     // home is served (#7): proxy.ts checks the grant itself.
     const expected =
       entry.kind === 'page' && pathname.includes('probe') && !entry.grant
