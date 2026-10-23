@@ -66,7 +66,10 @@ export function judge({ plan, summary, missingBrowsers, canary }: VerdictInput):
     fail('missing-browser', `${engine} doesn't launch: ${error}`);
   }
   if (!summary) {
-    fail('no-summary', 'The run wrote no summary.json, so nothing says what ran.');
+    // A missing browser stops the run before Playwright, so no summary is by design then.
+    if (missingBrowsers.length === 0) {
+      fail('no-summary', 'The run wrote no summary.json, so nothing says what ran.');
+    }
     return { ok: false, failures, flaky: [], counts: {} };
   }
   const launch = [...summary.errors, ...summary.tests.flatMap((test) => test.errors)].find(

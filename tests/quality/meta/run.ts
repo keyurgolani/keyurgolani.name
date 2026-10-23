@@ -4,7 +4,9 @@
 // running anything when the table is empty, an id repeats, or a gate lacks a
 // known-bad or a known-good case (tableProblems in cases.ts). A case that
 // throws counts as an unexpected result. Under ci/run.mjs each unexpected
-// case also gets a failure record.
+// case also gets a failure record. With --no-browser, as pnpm test runs it
+// where no browser is installed, it leaves out the cases that launch one
+// and says how many.
 
 import { currentGate, writeFailureRecord } from '../../../ci/lib/reports.mjs';
 import { judge, META_CASES, tableProblems, type MetaOutcome } from './cases';
@@ -13,8 +15,9 @@ const TAG = '[quality:meta]';
 const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? '' : 's'}`;
 
 async function main(): Promise<number> {
-  if (process.argv.length > 2) {
-    process.stderr.write('Usage: pnpm quality:meta\n');
+  const args = process.argv.slice(2);
+  if (args.length > 1 || (args.length === 1 && args[0] !== '--no-browser')) {
+    process.stderr.write('Usage: pnpm quality:meta [--no-browser]\n');
     return 2;
   }
   // An empty table, a repeated id, or a gate without both kinds of case fails before anything runs.
@@ -23,9 +26,12 @@ async function main(): Promise<number> {
     for (const problem of table) process.stderr.write(`${TAG} ${problem}\n`);
     return 1;
   }
+  const cases = args.includes('--no-browser')
+    ? META_CASES.filter(({ browser }) => !browser)
+    : META_CASES;
   const gate = currentGate();
   const misses: string[] = [];
-  for (const metaCase of META_CASES) {
+  for (const metaCase of cases) {
     let outcome: MetaOutcome;
     try {
       outcome = await metaCase.run();
@@ -53,18 +59,24 @@ async function main(): Promise<number> {
       process.stdout.write(`${TAG} ok ${metaCase.id}: ${result}.\n`);
     }
   }
-  const bad = META_CASES.filter(({ expect }) => expect === 'fail').length;
-  const good = META_CASES.length - bad;
-  const gates = new Set(META_CASES.map(({ gate: name }) => name)).size;
+  const bad = cases.filter(({ expect }) => expect === 'fail').length;
+  const good = cases.length - bad;
+  const gates = new Set(cases.map(({ gate: name }) => name)).size;
+  const left = META_CASES.length - cases.length;
   if (misses.length > 0) {
     process.stderr.write(
-      `${TAG} ${plural(misses.length, 'case')} of ${META_CASES.length} went the wrong way.\n`,
+      `${TAG} ${plural(misses.length, 'case')} of ${cases.length} went the wrong way.\n`,
     );
     return 1;
   }
   process.stdout.write(
-    `${TAG} ${plural(META_CASES.length, 'case')} over ${plural(gates, 'gate')}: ${plural(bad, 'known-bad input')} failing for the reason each names, and ${plural(good, 'known-good input')} passing.\n`,
+    `${TAG} ${plural(cases.length, 'case')} over ${plural(gates, 'gate')}: ${plural(bad, 'known-bad input')} failing for the reason each names, and ${plural(good, 'known-good input')} passing.\n`,
   );
+  if (left > 0) {
+    process.stdout.write(
+      `${TAG} --no-browser left out ${plural(left, 'case')} that launch Chromium.\n`,
+    );
+  }
   return 0;
 }
 

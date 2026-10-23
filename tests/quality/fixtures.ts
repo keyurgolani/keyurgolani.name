@@ -20,7 +20,7 @@ import { test as base } from '../harness/fixtures';
 import { startApp } from '../harness/app-server.mjs';
 import { pinPageClock } from './lib/clock';
 import { qualityWeb, runCanary } from './lib/env';
-import { egressFailure, installBrowserPolicy } from './lib/egress';
+import { egressFailure, installBrowserPolicy, serverEgressFailure } from './lib/egress';
 import type { MarkedResponse } from './lib/markers';
 import { appOptionsFor, type CellServer } from './lib/server';
 import { recordVitals } from './lib/vitals';
@@ -56,12 +56,8 @@ export const test = base.extend<QualityTestFixtures, QualityWorkerFixtures>({
       await provide(app);
       await app.stop();
       // Read once the trap has closed, so nothing on its way in is missed.
-      const attempts = app.egress();
-      if (attempts.length > 0) {
-        throw new Error(
-          `The app under test tried to reach ${attempts.length} host(s) outside the machine: ${[...new Set(attempts)].join(', ')}`,
-        );
-      }
+      const failure = serverEgressFailure(app.egress());
+      if (failure) throw new Error(failure);
     },
     { scope: 'worker', timeout: 120_000 },
   ],

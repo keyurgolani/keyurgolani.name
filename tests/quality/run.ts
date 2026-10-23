@@ -245,11 +245,7 @@ async function main(argv: readonly string[]): Promise<number> {
     missingBrowsers: missing,
     canary: { before, after },
   });
-  // A missing browser stops the run before Playwright, so it writes no summary by design.
-  const failures = [
-    ...setup,
-    ...judged.failures.filter((failure) => !(missing.length > 0 && failure.rule === 'no-summary')),
-  ];
+  const failures = [...setup, ...judged.failures];
   const verdict: Verdict = { ...judged, ok: failures.length === 0, failures };
   writeFileSync(path.join(quality, 'verdict.json'), `${JSON.stringify(verdict, null, 2)}\n`);
   if (summary) {

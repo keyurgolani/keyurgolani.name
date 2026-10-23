@@ -62,3 +62,9 @@ export function egressFailure(blocked: readonly string[]): string | null {
     `Received: ${blocked.join(', ')}`,
   ].join('\n');
 }
+
+/** The failure for the hosts the app's server tried to reach, or null when it tried none. */
+export function serverEgressFailure(attempts: readonly string[]): string | null {
+  if (attempts.length === 0) return null;
+  return `The app under test tried to reach ${attempts.length} host(s) outside the machine: ${[...new Set(attempts)].join(', ')}`;
+}

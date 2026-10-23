@@ -1,43 +1,79 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { RUNNER_META_CASES, runRunnerCases } from './runner-cases';
+import { judge } from '../lib/verdict';
+import { RUNNER_CASES } from './runner-cases';
 
-// The runner's proving cases that need no browser, which pnpm test runs; the
-// browser ones run in pnpm quality:meta.
+// The runner's cases in pnpm quality:meta: their shape. meta.test.ts runs
+// the ones that need no browser; the quality-meta job runs them all.
+
+/** The fail-closed rules #11 names, and the verdict's and the fixtures' others. */
+const RULES = [
+  'zero-tests',
+  'undeclared-skip',
+  'missing-browser',
+  'target-without-results',
+  'missing-fixture-marker',
+  'ignored-media-emulation',
+  'unchecked-cell',
+  'tests-failed',
+  'run-errors',
+  'no-summary',
+  'browser-egress',
+  'server-egress',
+  'canary-leaked',
+  'canary-unproven',
+];
 
 test('every fail-closed rule of the runner has a known-bad case and a known-good one', () => {
-  const rules = new Map<string, Set<string>>();
-  for (const meta of RUNNER_META_CASES) {
-    rules.set(meta.rule, (rules.get(meta.rule) ?? new Set()).add(meta.expect));
-  }
-  for (const rule of [
-    'zero-tests',
-    'undeclared-skip',
-    'missing-browser',
-    'target-without-results',
-    'missing-fixture-marker',
-    'ignored-media-emulation',
-    'browser-egress',
-    'server-egress',
-    'canary-leaked',
-    'canary-unproven',
-    'unchecked-cell',
-  ]) {
-    assert.deepEqual([...(rules.get(rule) ?? [])].sort(), ['fail', 'pass'], rule);
-  }
-  assert.equal(
-    new Set(RUNNER_META_CASES.map((meta) => `${meta.rule} ${meta.id}`)).size,
-    RUNNER_META_CASES.length,
-  );
-});
-
-test('every case that needs no browser holds', async () => {
-  const results = await runRunnerCases((meta) => !meta.browser);
-  assert.ok(results.length > 10);
-  for (const { meta, held, failed, error } of results) {
-    assert.ok(
-      held,
-      `${meta.rule}: ${meta.id}: expected ${meta.expect}, ${error ?? (failed ? 'failed' : 'passed')}`,
+  for (const rule of RULES) {
+    const own = RUNNER_CASES.filter(({ id }) => id.startsWith(`runner/${rule}-`));
+    assert.deepEqual(
+      [...new Set(own.map(({ expect }) => expect))].sort(),
+      ['fail', 'pass'],
+      `${rule}: ${own.map(({ id }) => id).join(', ')}`,
     );
   }
+  for (const { id } of RUNNER_CASES) {
+    assert.ok(
+      RULES.some((rule) => id.startsWith(`runner/${rule}-`)),
+      `${id} names no rule`,
+    );
+  }
+});
+
+test("a launch error inside a test's result fails the run as a missing browser, beside the test failure", () => {
+  const verdict = judge({
+    plan: { targets: [], reasons: [] },
+    summary: {
+      schemaVersion: 1,
+      mode: 'pr',
+      shard: null,
+      status: 'failed',
+      markers: 'stand-in',
+      projects: [],
+      tests: [
+        {
+          title: 'a cell',
+          file: 'tests/quality/cells.spec.ts',
+          line: 1,
+          project: 'chromium',
+          outcome: 'unexpected',
+          status: 'failed',
+          skipReason: null,
+          checks: [],
+          canaryProbe: false,
+          errors: ["browserType.launch: Executable doesn't exist at /x\nmore"],
+          records: 0,
+        },
+      ],
+      errors: [],
+    },
+    missingBrowsers: [],
+    canary: null,
+  });
+  assert.deepEqual(
+    verdict.failures.map(({ rule }) => rule),
+    ['missing-browser', 'tests-failed'],
+  );
+  assert.equal(verdict.failures[0]?.message, "browserType.launch: Executable doesn't exist at /x");
 });

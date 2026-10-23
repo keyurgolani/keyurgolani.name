@@ -76,7 +76,7 @@ test('every gate so far has a known-bad case and a known-good one, and each id i
     if (metaCase.expect === 'fail') assert.ok(metaCase.reason, metaCase.id);
   }
   const gates = [...new Set(META_CASES.map(({ gate }) => gate))];
-  assert.deepEqual(gates, ['workflows', 'exceptions', 'appearance', 'fixture-gate']);
+  assert.deepEqual(gates, ['workflows', 'exceptions', 'appearance', 'fixture-gate', 'runner']);
   for (const gate of gates) {
     const cases = META_CASES.filter((metaCase) => metaCase.gate === gate);
     assert.ok(
@@ -115,24 +115,38 @@ test('every gate so far has a known-bad case and a known-good one, and each id i
     'appearance/low-contrast',
     'fixture-gate/production',
     'fixture-gate/leak',
+    // The runner's fail-closed rules, a known-bad input for each.
+    'runner/zero-tests-none',
+    'runner/undeclared-skip-no-reason',
+    'runner/missing-browser-not-installed',
+    'runner/target-without-results-surface-uncollected',
+    'runner/missing-fixture-marker-unmarked',
+    'runner/ignored-media-emulation-ignored',
   ]) {
     assert.ok(ids.includes(id), id);
   }
 });
 
-test('pnpm quality:meta passes on the repository, every case going the way it should', () => {
+// The unit job has no browser, so this runs the cases that need none; the
+// quality-meta job runs every case, in the Playwright image.
+test('pnpm quality:meta --no-browser passes on the repository, every case it runs going the way it should', () => {
   const tsx = createRequire(import.meta.url).resolve('tsx/cli');
   const script = fileURLToPath(new URL('./meta/run.ts', import.meta.url));
-  const run = spawnSync(process.execPath, [tsx, script], { encoding: 'utf8' });
+  const run = spawnSync(process.execPath, [tsx, script, '--no-browser'], { encoding: 'utf8' });
   assert.equal(run.status, 0, `${run.stdout}\n${run.stderr}`);
+  const cases = META_CASES.filter(({ browser }) => !browser);
+  const left = META_CASES.length - cases.length;
+  assert.ok(left > 0, 'some cases launch Chromium');
   const ok = run.stdout.split('\n').filter((line) => line.startsWith('[quality:meta] ok '));
-  assert.equal(ok.length, META_CASES.length);
+  assert.equal(ok.length, cases.length);
   assert.match(
     run.stdout,
     new RegExp(
-      `\\[quality:meta\\] ${META_CASES.length} cases over 4 gates: ${META_CASES.filter(({ expect }) => expect === 'fail').length} known-bad inputs failing for the reason each names, and ${META_CASES.filter(({ expect }) => expect === 'pass').length} known-good inputs passing\\.`,
+      `\\[quality:meta\\] ${cases.length} cases over 5 gates: ${cases.filter(({ expect }) => expect === 'fail').length} known-bad inputs failing for the reason each names, and ${cases.filter(({ expect }) => expect === 'pass').length} known-good inputs passing\\.\\n\\[quality:meta\\] --no-browser left out ${left} cases that launch Chromium\\.`,
     ),
   );
-  const usage = spawnSync(process.execPath, [tsx, script, '--all'], { encoding: 'utf8' });
-  assert.equal(usage.status, 2);
+  for (const args of [['--all'], ['--no-browser', '--all']]) {
+    const usage = spawnSync(process.execPath, [tsx, script, ...args], { encoding: 'utf8' });
+    assert.equal(usage.status, 2, args.join(' '));
+  }
 });
