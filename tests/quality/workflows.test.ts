@@ -6,6 +6,7 @@ import path from 'node:path';
 import {
   checkWorkflows,
   checkWorkflowSource,
+  expressionsIn,
   extraPermissions,
   ifLimitsToPushTagsOrSchedule,
   triggers,
@@ -75,7 +76,6 @@ test('a job is pull-request-proof only when its own if: needs a push, a tag, or 
     "${{ github.event_name == 'push' }}",
     "github.event_name == 'PUSH'",
     "'schedule' == github.event_name",
-    "github.event_name != 'pull_request'",
     "github.ref == 'refs/heads/main'",
     "github.ref == 'refs/tags/v1.0.0'",
     "startsWith(github.ref, 'refs/tags/')",
@@ -98,6 +98,9 @@ test('a job is pull-request-proof only when its own if: needs a push, a tag, or 
     "github.event_name == 'pull_request'",
     "github.event_name == 'workflow_dispatch'",
     "github.event_name != 'push'",
+    // Only a positive limit counts: the review events get through a !=.
+    "github.event_name != 'pull_request'",
+    "github.event_name != 'pull_request' && github.event_name != 'pull_request_review'",
     "github.event_name == 'push' || github.event_name == 'pull_request'",
     "github.event_name == 'push' || always()",
     "!(github.event_name == 'pull_request')",
@@ -195,6 +198,87 @@ test('any reference to secrets in a job pull requests run fails', () => {
     [],
   );
   assert.deepEqual(rules(PR_JOB('    env:\n      NOTE: secrets.txt\n')), []);
+});
+
+test('an expression ends at the first }} outside a quoted string, and a secrets token after any ${{ counts', () => {
+  assert.deepEqual(expressionsIn('a ${{ x }} b ${{ y }}'), [' x ', ' y ']);
+  assert.deepEqual(expressionsIn("${{ format('}}{0}', secrets.T) }}"), [
+    " format('}}{0}', secrets.T) ",
+  ]);
+  assert.deepEqual(expressionsIn("${{ 'it''s }}' }} after"), [" 'it''s }}' "]);
+  assert.deepEqual(expressionsIn('${{ no end'), [' no end']);
+  assert.deepEqual(expressionsIn('no expression'), []);
+  for (const value of [
+    `"\${{ format('}}{0}', secrets.DEPLOY_TOKEN) }}"`,
+    "${{ format('}}', secrets.T) }}",
+    "${{ 'it''s }}' && secrets.T }}",
+    '${{ github.sha }} }} secrets.T',
+    '${{ unterminated secrets.T',
+  ]) {
+    assert.deepEqual(rules(PR_JOB(`    env:\n      T: ${value}\n`)), ['secrets'], value);
+    const top = `on: pull_request\npermissions:\n  contents: read\nenv:\n  T: ${value}\njobs:\n  a:\n    runs-on: ubuntu-24.04\n    steps:\n      - run: echo\n`;
+    assert.deepEqual(rules(top), ['secrets'], `workflow env: ${value}`);
+  }
+  const run = `on: pull_request\npermissions:\n  contents: read\njobs:\n  a:\n    runs-on: ubuntu-24.04\n    steps:\n      - run: echo "\${{ format('}}{0}', secrets.DEPLOY_TOKEN) }}"\n`;
+  assert.deepEqual(rules(run), ['secrets']);
+});
+
+test('any %YAML directive refuses the file, naming its line, and the rest reads as YAML 1.2', () => {
+  const body =
+    'on:\n  pull_request_target:\npermissions: write-all\njobs:\n  a:\n    runs-on: ubuntu-24.04\n    env:\n      T: ${{ secrets.T }}\n    steps:\n      - run: echo\n';
+  for (const [source, line] of [
+    [`%YAML 1.1\n---\n${body}`, 1],
+    [`%YAML 1.2\n---\n${body}`, 1],
+    [`\uFEFF%YAML 1.1\n---\n${body}`, 1],
+    [`# a comment\n%YAML 1.1\n---\n${body}`, 2],
+  ] as const) {
+    const found = problems(source);
+    assert.deepEqual(
+      found.map(({ rule, line: at }) => [rule, at]),
+      [['yaml-directive', line]],
+      source,
+    );
+    assert.match(found[0]!.message, /^has a %YAML 1\.[12] directive/);
+    assert.equal(found[0]!.file, 'ci.yml');
+  }
+  // Without the directive, the same workflow fails every rule it breaks.
+  assert.deepEqual(rules(body), ['pull-request-target', 'permissions', 'secrets']);
+  // YAML 1.2's core schema: yes and on are strings, not booleans.
+  assert.deepEqual(
+    rules('on: [pull_request]\nyes: on\npermissions: write-all\njobs:\n  a:\n    runs-on: x\n'),
+    ['permissions'],
+  );
+});
+
+test('workflow_run and issue_comment fail however on: names them, and the review events count as pull requests', () => {
+  const job =
+    'permissions: {}\njobs:\n  a:\n    runs-on: ubuntu-24.04\n    steps:\n      - run: echo\n';
+  for (const [event, rule] of [
+    ['workflow_run', 'workflow-run'],
+    ['issue_comment', 'issue-comment'],
+  ] as const) {
+    for (const on of [`on: ${event}`, `on: [push, ${event}]`, `on:\n  ${event}:\n    types: [x]`]) {
+      assert.deepEqual(rules(`${on}\n${job}`), [rule], on);
+    }
+  }
+  for (const event of ['pull_request_review', 'pull_request_review_comment']) {
+    assert.deepEqual(
+      rules(
+        PR_JOB('    env:\n      T: ${{ secrets.T }}\n').replace('on: pull_request', `on: ${event}`),
+      ),
+      ['secrets'],
+      event,
+    );
+    assert.deepEqual(
+      rules(
+        PR_JOB(
+          "    if: github.event_name == 'push'\n    env:\n      T: ${{ secrets.T }}\n",
+        ).replace('on: pull_request', `on: ${event}`),
+      ),
+      [],
+      `${event}, limited to push`,
+    );
+  }
 });
 
 test("a workflow pull requests can't trigger is left alone, and a called workflow isn't", () => {

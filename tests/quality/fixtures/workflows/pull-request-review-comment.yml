@@ -1,0 +1,16 @@
+# Known bad (#11, Slice 1, item 13): a job a review comment runs, which gets
+# pull-requests: write, more than contents: read and actions: read.
+name: review-comment
+on:
+  pull_request_review_comment:
+    types: [created]
+permissions:
+  contents: read
+jobs:
+  reply:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - run: echo reply

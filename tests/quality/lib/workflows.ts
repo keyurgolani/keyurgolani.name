@@ -1,26 +1,35 @@
 // The static workflow check (#11, Slice 1, item 13), which pnpm quality:meta
 // runs: it keeps pull requests away from the repository's secrets. It reads
-// every .github/workflows/*.yml and *.yaml with the yaml package and fails:
+// every .github/workflows/*.yml and *.yaml with the yaml package, as YAML
+// 1.2 with the core schema and unique keys, as GitHub reads it, and fails:
 //
-//   - any pull_request_target trigger, which runs a fork's pull request with
-//     the base repository's secrets and a writable token;
+//   - any %YAML directive: under YAML 1.1, on: reads as the boolean true, so
+//     no trigger would show and every rule would be skipped;
+//   - any pull_request_target, workflow_run, or issue_comment trigger, each
+//     of which runs work a pull request can shape with the base repository's
+//     secrets and a writable token;
 //   - any job a pull request can run that gets more than contents: read and
 //     actions: read, or that references secrets.
 //
 // A pull request can run a job when the workflow triggers on pull_request,
-// or on workflow_call, since a called workflow runs with its caller's event,
-// and the job's own if: doesn't limit it to push, tags, or schedule. The if:
-// counts when its conditions joined by && include one of: github.event_name
-// == 'push' or 'schedule', github.event_name != 'pull_request', github.ref
-// == 'refs/heads/...' or 'refs/tags/...', startsWith(github.ref,
-// 'refs/heads/') or 'refs/tags/', or github.ref_type == 'tag'. An || counts
-// only when each side does, and anything else doesn't count, so a check that
-// can't read a condition reads it as letting pull requests in.
+// pull_request_review, pull_request_review_comment, or one of the triggers
+// above, or on workflow_call, since a called workflow runs with its caller's
+// event, and the job's own if: doesn't limit it to push, tags, or schedule.
+// Only a positive limit counts: an if: whose conditions joined by && include
+// one of github.event_name == 'push' or 'schedule', github.ref ==
+// 'refs/heads/...' or 'refs/tags/...', startsWith(github.ref, 'refs/heads/')
+// or 'refs/tags/', or github.ref_type == 'tag'. github.event_name !=
+// 'pull_request' doesn't, since the review events get through it. An ||
+// counts only when each side does, and anything else doesn't count, so a
+// check that can't read a condition reads it as letting pull requests in.
 //
 // A job's token is its own permissions, else the workflow's, else the
 // repository default, which may be write and so fails. A job references
 // secrets when any expression in it, or in the workflow's env, names the
 // secrets context, or when it passes `secrets: inherit` to a called workflow.
+// An expression ends at the first }} outside a '...' string, as the runner
+// reads it, and any secrets token after a ${{ in the same value counts
+// besides, so no string or stray }} can hide one.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -29,7 +38,14 @@ import { REPO_ROOT } from '../../../quality/thresholds';
 
 export const WORKFLOWS_DIR = path.join(REPO_ROOT, '.github', 'workflows');
 
-export type WorkflowRule = 'pull-request-target' | 'permissions' | 'secrets' | 'parse';
+export type WorkflowRule =
+  | 'pull-request-target'
+  | 'workflow-run'
+  | 'issue-comment'
+  | 'permissions'
+  | 'secrets'
+  | 'yaml-directive'
+  | 'parse';
 
 export interface WorkflowProblem {
   readonly file: string;
@@ -207,7 +223,34 @@ function compared(expression: Expression & { type: 'compare' }, name: string): s
 }
 
 const LIMITING_EVENTS = new Set(['push', 'schedule']);
-const PULL_REQUEST_EVENTS = new Set(['pull_request', 'pull_request_target']);
+
+/** Triggers that fail outright: each runs work a pull request can shape with the base repository's secrets and a writable token. */
+const FORBIDDEN_TRIGGERS: Readonly<Record<string, { rule: WorkflowRule; message: string }>> = {
+  pull_request_target: {
+    rule: 'pull-request-target',
+    message:
+      "triggers on pull_request_target, which runs a fork's pull request with the base repository's secrets and a writable token. Use pull_request.",
+  },
+  workflow_run: {
+    rule: 'workflow-run',
+    message:
+      "triggers on workflow_run, which runs with the base repository's secrets and a writable token on what a pull request's run leaves behind. Use pull_request, or run it on push or schedule.",
+  },
+  issue_comment: {
+    rule: 'issue-comment',
+    message:
+      "triggers on issue_comment, which runs with the base repository's secrets and a writable token when anyone comments on a pull request. Use pull_request, or run it on push or schedule.",
+  },
+};
+
+/** The events whose jobs a pull request can run: the pull request events, the forbidden triggers, and a called workflow's caller. */
+const PULL_REQUEST_EVENTS = new Set([
+  'pull_request',
+  'pull_request_review',
+  'pull_request_review_comment',
+  ...Object.keys(FORBIDDEN_TRIGGERS),
+  'workflow_call',
+]);
 
 /** Whether `expression`, true, means the event is a push, a tag, or a schedule, never a pull request. */
 function limits(expression: Expression): boolean {
@@ -218,12 +261,9 @@ function limits(expression: Expression): boolean {
       return limits(expression.left) && limits(expression.right);
     case 'compare': {
       // GitHub compares strings without regard to case.
+      // Only == names the event. A != lets every event it doesn't name through.
       const event = compared(expression, 'github.event_name');
-      if (event !== undefined) {
-        return expression.op === '=='
-          ? LIMITING_EVENTS.has(event)
-          : expression.op === '!=' && event === 'pull_request';
-      }
+      if (event !== undefined) return expression.op === '==' && LIMITING_EVENTS.has(event);
       const ref = compared(expression, 'github.ref');
       if (ref !== undefined && expression.op === '==') {
         return ref.startsWith('refs/heads/') || ref.startsWith('refs/tags/');
@@ -281,13 +321,50 @@ export function extraPermissions(permissions: unknown): string[] {
     .map(([scope, level]) => `${scope}: ${String(level)}`);
 }
 
+/**
+ * Each ${{ }} expression in `value`, as the runner reads it: an expression
+ * ends at the first }} outside a '...' string, where '' is a quote. One
+ * with no end runs to the end of the value.
+ */
+export function expressionsIn(value: string): string[] {
+  const found: string[] = [];
+  let start = value.indexOf('${{');
+  while (start !== -1) {
+    let at = start + 3;
+    let end = -1;
+    while (at < value.length) {
+      if (value[at] === "'") {
+        // Past the string: its closing quote, skipping each '' inside it.
+        at += 1;
+        while (at < value.length && !(value[at] === "'" && value[at + 1] !== "'")) {
+          at += value[at] === "'" ? 2 : 1;
+        }
+        at += 1;
+      } else if (value.startsWith('}}', at)) {
+        end = at;
+        break;
+      } else {
+        at += 1;
+      }
+    }
+    found.push(value.slice(start + 3, end === -1 ? value.length : end));
+    start = end === -1 ? -1 : value.indexOf('${{', end + 2);
+  }
+  return found;
+}
+
+const SECRETS = /(?<![\w.-])secrets\b/i;
+
 /** Whether any expression in `value` names the secrets context. */
 function referencesSecrets(value: unknown, isIf = false): boolean {
   if (typeof value === 'string') {
-    const expressions = [...value.matchAll(/\$\{\{([\s\S]*?)\}\}/g)].map((match) => match[1]!);
+    const expressions = expressionsIn(value);
     // An if: is an expression with or without ${{ }}.
     if (isIf) expressions.push(value);
-    return expressions.some((expression) => /(?<![\w.-])secrets\b/i.test(expression));
+    // Fail closed: a secrets token anywhere after a ${{ counts, however the expression reads.
+    const first = value.indexOf('${{');
+    if (first !== -1) expressions.push(value.slice(first));
+    return expressions.some((expression) => SECRETS.test(expression));
   }
   if (Array.isArray(value)) return value.some((item) => referencesSecrets(item));
   if (value && typeof value === 'object') {
@@ -324,8 +401,34 @@ function keyLine(map: unknown, key: string, counter: LineCounter): number | unde
 
 /** Every problem in one workflow's source. `file` names it in the problems. */
 export function checkWorkflowSource(file: string, source: string): WorkflowProblem[] {
+  // A directive refuses the file outright, before anything reads it.
+  const directive = /^\uFEFF?(%YAML\b.*)$/m.exec(source);
+  if (directive) {
+    return [
+      {
+        file,
+        line: source.slice(0, directive.index).split('\n').length,
+        rule: 'yaml-directive',
+        message: `has a ${directive[1]!.trim()} directive, which changes how the workflow reads: under YAML 1.1, on: is the boolean true and no trigger shows. Remove it, as GitHub reads YAML 1.2.`,
+      },
+    ];
+  }
   const counter = new LineCounter();
-  const document = parseDocument(source, { lineCounter: counter, uniqueKeys: true });
+  const document = parseDocument(source, {
+    lineCounter: counter,
+    schema: 'core',
+    uniqueKeys: true,
+  });
+  if (document.directives?.yaml.explicit) {
+    return [
+      {
+        file,
+        line: 1,
+        rule: 'yaml-directive',
+        message: `has a %YAML ${document.directives.yaml.version} directive, which changes how the workflow reads. Remove it, as GitHub reads YAML 1.2.`,
+      },
+    ];
+  }
   if (document.errors.length > 0) {
     return document.errors.map((error) => ({
       file,
@@ -344,22 +447,17 @@ export function checkWorkflowSource(file: string, source: string): WorkflowProbl
 
   const events = triggers(workflow.on);
   const onNode = node('on');
-  if (events.includes('pull_request_target')) {
-    const line = keyLine(onNode, 'pull_request_target', counter) ?? lineOf(onNode, counter);
-    problems.push({
-      file,
-      ...(line ? { line } : {}),
-      rule: 'pull-request-target',
-      message:
-        "triggers on pull_request_target, which runs a fork's pull request with the base repository's secrets and a writable token. Use pull_request.",
-    });
+  for (const event of events) {
+    const forbidden = Object.hasOwn(FORBIDDEN_TRIGGERS, event)
+      ? FORBIDDEN_TRIGGERS[event]
+      : undefined;
+    if (!forbidden) continue;
+    const line = keyLine(onNode, event, counter) ?? lineOf(onNode, counter);
+    problems.push({ file, ...(line ? { line } : {}), ...forbidden });
   }
 
   // A called workflow runs with its caller's event, which may be a pull request.
-  const reachable = events.some(
-    (event) => PULL_REQUEST_EVENTS.has(event) || event === 'workflow_call',
-  );
-  if (!reachable) return problems;
+  if (!events.some((event) => PULL_REQUEST_EVENTS.has(event))) return problems;
 
   const jobs = workflow.jobs;
   if (!jobs || typeof jobs !== 'object' || Array.isArray(jobs)) return problems;

@@ -1,0 +1,18 @@
+# Known bad (#11, Slice 1, item 13): a job whose if: only says the event isn't
+# pull_request, which a pull request review gets through. It references a
+# secret, and its token is fine, so it fails for the secret alone.
+name: deploy
+on:
+  pull_request_review:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  deploy:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    steps:
+      - run: ./deploy.sh
+        env:
+          TOKEN: ${{ secrets.DEPLOY_TOKEN }}

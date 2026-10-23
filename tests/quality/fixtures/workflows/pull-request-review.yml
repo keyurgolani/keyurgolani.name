@@ -1,0 +1,16 @@
+# Known bad (#11, Slice 1, item 13): a job a pull request review runs, which
+# references a secret. A review runs the pull request's workflow as
+# pull_request does. Its token is fine, so it fails for the secret alone.
+name: review
+on:
+  pull_request_review:
+    types: [submitted]
+permissions:
+  contents: read
+jobs:
+  review:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: ./on-review.sh
+        env:
+          TOKEN: ${{ secrets.REVIEW_TOKEN }}
