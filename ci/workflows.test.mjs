@@ -3,7 +3,7 @@
 // reads them, and the scheduled workflow's timeouts and permissions.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse } from 'yaml';
@@ -107,11 +107,39 @@ test('publish builds each platform natively, by digest, with a 25-minute step ti
   }
 });
 
+test('only ci.yml publish-merge merges --unattested, and no release job ever does', () => {
+  const RELEASE_SOURCE = readFileSync(path.join(ROOT, '.github/workflows/release.yml'), 'utf8');
+  assert.doesNotMatch(RELEASE_SOURCE, /unattested|sha-publish/i);
+  const files = readdirSync(path.join(ROOT, '.github/workflows')).filter((f) => /\.ya?ml$/.test(f));
+  const callers = [];
+  for (const file of files) {
+    const workflow = read(`.github/workflows/${file}`);
+    if (/unattested|sha-publish/i.test(JSON.stringify(workflow.env ?? {})))
+      callers.push(`${file}:env`);
+    for (const [id, job] of Object.entries(workflow.jobs)) {
+      // The job's env and every step's run and env, wherever a flag could hide.
+      if (/unattested|sha-publish/i.test(JSON.stringify(job.env ?? {})))
+        callers.push(`${file}:${id}:env`);
+      for (const step of job.steps ?? []) {
+        const text = JSON.stringify({ run: step.run, env: step.env, with: step.with });
+        if (/unattested|sha-publish/i.test(text))
+          callers.push(`${file}:${id}:${step.id ?? step.name}`);
+      }
+    }
+  }
+  assert.deepEqual(callers, ['ci.yml:publish-merge:merge']);
+  // And the shared actions never pass it either.
+  for (const action of readdirSync(path.join(ROOT, '.github/actions'))) {
+    const text = readFileSync(path.join(ROOT, '.github/actions', action, 'action.yml'), 'utf8');
+    assert.doesNotMatch(text, /unattested|sha-publish/i, action);
+  }
+});
+
 test('publish merges the legs with the release helper, and tags only the merged digest', () => {
   const merge = CI.jobs['publish-merge'].steps.find((s) => s.id === 'merge');
   assert.equal(
     merge.run,
-    'node ci/release/merge-index.mjs --unattested "$IMAGE_NAME" "$AMD64" "$ARM64"',
+    'node ci/release/merge-index.mjs --unattested --purpose sha-publish "$IMAGE_NAME" "$AMD64" "$ARM64"',
   );
   assert.equal(merge.env.AMD64, '${{ needs.publish-build.outputs.digest-amd64 }}');
   assert.equal(merge.env.ARM64, '${{ needs.publish-build.outputs.digest-arm64 }}');

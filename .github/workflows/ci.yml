@@ -1072,7 +1072,7 @@ jobs:
         env:
           AMD64: ${{ needs.publish-build.outputs.digest-amd64 }}
           ARM64: ${{ needs.publish-build.outputs.digest-arm64 }}
-        run: node ci/release/merge-index.mjs --unattested "$IMAGE_NAME" "$AMD64" "$ARM64"
+        run: node ci/release/merge-index.mjs --unattested --purpose sha-publish "$IMAGE_NAME" "$AMD64" "$ARM64"
 
   # Each platform, pulled from the merged digest, smoke-tested on its own runner.
   publish-smoke:
