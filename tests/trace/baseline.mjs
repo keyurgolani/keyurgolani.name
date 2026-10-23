@@ -25,7 +25,8 @@
 //    internet socket their process trees hold.
 // 6. Teardown, however the run ends, a signal or a step over its time limit
 //    among the ways: the running step's and the server's process groups
-//    stop, the trap closes, and the worktree and the temporary directory go.
+//    stop, and so does anything a finished step left running in its own,
+//    the trap closes, and the worktree and the temporary directory go.
 //
 // Each step runs in a process group of its own, so stopping it stops what
 // it started. The baseline's own scripts run pnpm through a shim that runs

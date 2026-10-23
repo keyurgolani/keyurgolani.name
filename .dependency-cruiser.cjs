@@ -259,6 +259,18 @@ module.exports = {
       to: { path: '^packages/core/src/store/test-support/' },
     },
     {
+      name: 'schema-test-support-only-from-tests',
+      severity: 'error',
+      comment:
+        "The schema package's test support, whose scratch directories remove themselves on a " +
+        'stop signal, is for tests: nothing but a test, or the test support itself, imports it ' +
+        '(#12).',
+      from: {
+        pathNot: ['\\.test\\.(?:tsx?|mjs)$', '^packages/schema/src/test-support/'],
+      },
+      to: { path: '^packages/schema/src/test-support/' },
+    },
+    {
       name: 'migration-only-from-its-command',
       severity: 'error',
       comment:

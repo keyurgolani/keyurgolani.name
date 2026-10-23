@@ -18,6 +18,7 @@ import {
   type Page,
   type TestInfo,
 } from '@playwright/test';
+import type { ContractFixtureName } from '../../packages/variant-contract/src/node/fixtures';
 import { runningAnimations } from '../harness/motion';
 import { COMPARE_SCREENSHOTS, firstParty, type RegisteredVariant } from './target';
 
@@ -292,25 +293,68 @@ export async function failEveryEnhancement(page: Page): Promise<() => number> {
 }
 
 /**
+ * The fewest enhancements the throw-switch run has to see mounted, so it
+ * can't pass by counting none: one on `complete`, which renders every
+ * kind, when the manifest declares an enhancement with no `requires`, and
+ * none anywhere else. One that needs a capability, such as `webgl2`, which
+ * headless Chromium may lack, may never mount, so it doesn't count.
+ */
+export function enhancementFloor(
+  manifest: Pick<RegisteredVariant['manifest'], 'enhancements'>,
+  fixture: ContractFixtureName | undefined,
+): number {
+  const unconditional = (manifest.enhancements ?? []).some(({ requires }) => requires.length === 0);
+  return fixture === 'complete' && unconditional ? 1 : 0;
+}
+
+/** How long an idle callback waits for the page to have time before it runs anyway. */
+const IDLE_TIMEOUT = 5_000;
+/** How long the idle wait arms them again, in all, while the page stays busy. */
+const IDLE_BOUND = 15_000;
+
+/**
+ * Resolves once `page` goes idle: once an idle callback runs because the
+ * page had time for it. One that runs because its timeout ran out, on a
+ * page still busy, is armed again, up to IDLE_BOUND in all, after which
+ * the check reads the page as it stands.
+ */
+async function idle(page: Page): Promise<void> {
+  await page.evaluate(
+    ({ timeout, bound }) =>
+      new Promise<void>((resolve) => {
+        const end = performance.now() + bound;
+        const arm = () =>
+          requestIdleCallback(
+            (deadline) => {
+              if (deadline.didTimeout && performance.now() < end) arm();
+              else resolve();
+            },
+            { timeout: Math.max(1, Math.min(timeout, end - performance.now())) },
+          );
+        arm();
+      }),
+    { timeout: IDLE_TIMEOUT, bound: IDLE_BOUND },
+  );
+}
+
+/**
  * That the throw switch failed every enhancement the kit has mounted on
  * `page`, and that the kit mounted `floor` at least. First the page goes
  * idle, which is when #6's islands mount theirs, and the counts have to
- * hold for a second, so one that mounts late is in them before the check
- * passes. With `settle: false` it reads them again, for one that mounted
- * since, without waiting for either.
+ * hold for a second, so one that mounts within about a second of idle is
+ * in them before the check passes. One that mounts later isn't, until #6
+ * slice 4's pending-mount count closes that gap. With `settle: false` it
+ * reads them again, for one that mounted since, without waiting for
+ * either. `timeout` bounds the reads, 10 s unless a test that expects a
+ * failure asks for less.
  */
 export async function expectEveryEnhancementFailed(
   page: Page,
   failed: () => number,
   floor = 0,
-  { settle = true }: { settle?: boolean } = {},
+  { settle = true, timeout = 10_000 }: { settle?: boolean; timeout?: number } = {},
 ): Promise<void> {
-  if (settle) {
-    await page.evaluate(
-      () =>
-        new Promise((resolve) => requestIdleCallback(() => resolve(undefined), { timeout: 5_000 })),
-    );
-  }
+  if (settle) await idle(page);
   const held = settle ? 1_000 : 0;
   let last: { mounted: number; failed: number } | undefined;
   let since = 0;
@@ -335,7 +379,7 @@ export async function expectEveryEnhancementFailed(
       {
         message: `enhancements the kit mounted, at least ${floor}, and the throw switch failed`,
         intervals: [100],
-        timeout: 10_000,
+        timeout,
       },
     )
     .toBe('every one failed');
@@ -397,8 +441,12 @@ export interface ModeCheck {
   readonly go: (page: Page) => Promise<unknown>;
   /** The screenshot's name, for desktop and mobile. */
   readonly shot: string;
-  /** The contract fixture the page renders, if it renders one. */
-  readonly fixture?: string;
+  /**
+   * The contract fixture the page renders, or undefined for the bundled
+   * sample. Every caller names it, even as undefined, since `complete` sets
+   * the throw-switch run's floor (enhancementFloor).
+   */
+  readonly fixture: ContractFixtureName | undefined;
   /** A resource the page may fail to load without a console error counting, such as a missing image. */
   readonly expectedFailure?: (url: string) => boolean;
 }
@@ -415,6 +463,12 @@ export async function checkMode(check: ModeCheck): Promise<void> {
 
 async function checkPage(check: ModeCheck, page: Page, run?: FailedRun): Promise<void> {
   const { mode, context } = check;
+  // The floor depends on the fixture the caller names, so a project that
+  // renders one has to name the same, or complete's floor drops to 0 unseen.
+  const named = (check.testInfo.project.metadata as { fixture?: string }).fixture;
+  if (named !== undefined) {
+    expect(check.fixture, "the fixture the check names is the project's").toBe(named);
+  }
   const errors = consoleErrors(
     page,
     check.expectedFailure ?? (() => false),
@@ -442,12 +496,7 @@ async function checkPage(check: ModeCheck, page: Page, run?: FailedRun): Promise
     }
     await expectEveryMode(page, check.request, check.variant, errors);
     if (run === 'blocked-chunks') expectScriptsAlone(blocked, sheets());
-    // complete renders every kind, so a composition that declares an
-    // enhancement mounts one there at least.
-    const floor =
-      check.fixture === 'complete' && (check.variant.manifest.enhancements?.length ?? 0) > 0
-        ? 1
-        : 0;
+    const floor = enhancementFloor(check.variant.manifest, check.fixture);
     if (failed) await expectEveryEnhancementFailed(page, failed, floor);
     if (mode === 'no-javascript' || mode === 'print' || mode === 'failed-enhancement') {
       await expectReadable(page);
