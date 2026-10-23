@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { parse as parseYaml } from 'yaml';
@@ -384,4 +385,175 @@ test('.pnpmfile.cjs changes no installed manifest but the resolver, and only by 
     assert.deepEqual(after, expected);
   }
   assert.ok(resolvers >= 1, 'the resolver is installed');
+});
+
+// .pnpmfile.cjs, byte for byte. pnpmfileChecksum only proves the lockfile
+// was written with this file. This fails the tests on any edit until a
+// reviewer has read the change and updates the hash in the same PR.
+const PNPMFILE_SHA256 = '501635a9849145fa426bc4ee5046d03b8abe9f0a463df1fc063e66cddbd3a24b';
+const PNPMFILE_SOURCE = readFileSync(new URL('../.pnpmfile.cjs', import.meta.url), 'utf8');
+
+test('.pnpmfile.cjs is the reviewed file, by its sha256', () => {
+  assert.equal(createHash('sha256').update(PNPMFILE_SOURCE).digest('hex'), PNPMFILE_SHA256);
+});
+
+/** espree, the parser eslint itself runs, resolved through the root's eslint. */
+const espree = createRequire(require.resolve('eslint'))('espree');
+
+/** Names the hook must never reach for: modules, the network, the environment, eval. */
+const FORBIDDEN_NAMES = new Set([
+  'require',
+  'process',
+  'globalThis',
+  'global',
+  'fetch',
+  'XMLHttpRequest',
+  'child_process',
+  'fs',
+  'net',
+  'http',
+  'https',
+  'eval',
+  'Function',
+  'constructor',
+  'Buffer',
+  'WebAssembly',
+]);
+const FORBIDDEN_MODULES =
+  /^(node:)?(child_process|fs|fs\/promises|net|http|https|http2|dgram|tls|os|vm|worker_threads)$/;
+
+/** Every node under `node`, depth first. */
+function* walk(node) {
+  yield node;
+  for (const value of Object.values(node)) {
+    for (const child of Array.isArray(value) ? value : [value]) {
+      if (child && typeof child === 'object' && typeof child.type === 'string') yield* walk(child);
+    }
+  }
+}
+
+/** A value with no side effect: literals, arrays and objects of them, and Object.freeze over them. */
+function inert(node) {
+  switch (node.type) {
+    case 'Literal':
+      return true;
+    case 'ArrayExpression':
+      return node.elements.every((element) => element && inert(element));
+    case 'ObjectExpression':
+      return node.properties.every((p) => p.type === 'Property' && !p.computed && inert(p.value));
+    case 'CallExpression':
+      return (
+        node.callee.type === 'MemberExpression' &&
+        !node.callee.computed &&
+        node.callee.object.name === 'Object' &&
+        node.callee.property.name === 'freeze' &&
+        node.arguments.length === 1 &&
+        inert(node.arguments[0])
+      );
+    default:
+      return false;
+  }
+}
+
+/**
+ * Why `source` isn't a script that only declares inert constants and
+ * functions and then sets module.exports to an object, or [].
+ */
+function pnpmfileProblems(source) {
+  const ast = espree.parse(source, { ecmaVersion: 'latest', sourceType: 'script', range: true });
+  const problems = [];
+  const at = (node) => `${node.type} at ${node.range[0]}`;
+  const body = [...ast.body];
+  if (body[0]?.directive === 'use strict') body.shift();
+  const last = body.pop();
+  const target = last?.expression?.left;
+  const exportsModule =
+    last?.type === 'ExpressionStatement' &&
+    last.expression.type === 'AssignmentExpression' &&
+    last.expression.operator === '=' &&
+    target.type === 'MemberExpression' &&
+    !target.computed &&
+    target.object.name === 'module' &&
+    target.property.name === 'exports' &&
+    last.expression.right.type === 'ObjectExpression';
+  if (!exportsModule) problems.push(`no module.exports = { … } at the end: ${last && at(last)}`);
+  for (const statement of body) {
+    const constant =
+      statement.type === 'VariableDeclaration' &&
+      statement.kind === 'const' &&
+      statement.declarations.every((d) => d.id.type === 'Identifier' && d.init && inert(d.init));
+    if (!constant && statement.type !== 'FunctionDeclaration') {
+      problems.push(
+        `a top-level statement that isn't an inert constant or a function: ${at(statement)}`,
+      );
+    }
+  }
+  for (const node of walk(ast)) {
+    if (['ImportExpression', 'ImportDeclaration', 'MetaProperty'].includes(node.type)) {
+      problems.push(`an import: ${at(node)}`);
+    } else if (node.type === 'Identifier' && FORBIDDEN_NAMES.has(node.name)) {
+      problems.push(`${node.name}: ${at(node)}`);
+    } else if (node.type === 'Identifier' && node.name === 'module' && node !== target?.object) {
+      problems.push(`module outside the export: ${at(node)}`);
+    } else if (
+      node.type === 'Literal' &&
+      typeof node.value === 'string' &&
+      FORBIDDEN_MODULES.test(node.value)
+    ) {
+      problems.push(`a core module's name, ${node.value}: ${at(node)}`);
+    } else if (
+      node.type === 'MemberExpression' &&
+      node.computed &&
+      node.property.type !== 'Identifier'
+    ) {
+      // obj['constructor'] and the like: only a variable indexes an object here.
+      problems.push(`a computed member: ${at(node)}`);
+    }
+  }
+  return problems;
+}
+
+test('.pnpmfile.cjs declares inert constants and a function and exports them: no imports, no I/O', () => {
+  assert.deepEqual(pnpmfileProblems(PNPMFILE_SOURCE), []);
+  // The check sees each way the file could grow.
+  const exportLine = 'module.exports = { hooks: { readPackage }, DROPPED_PEERS };';
+  const grown = {
+    require: "const fs = require('fs');\n",
+    'a dynamic import': "const loaded = import('node:fs');\n",
+    'a static import': "import fs from 'node:fs';\n",
+    process: 'const env = process.env;\n',
+    globalThis: 'const g = globalThis;\n',
+    fetch: 'const f = fetch;\n',
+    XMLHttpRequest: 'const x = XMLHttpRequest;\n',
+    eval: 'const e = eval;\n',
+    'Function(': "const make = Function('return 1');\n",
+    'a constructor chain': 'const make = readPackage.constructor;\n',
+    'a computed constructor': "const make = readPackage['constr' + 'uctor'];\n",
+    'a core module name': "const name = 'child_process';\n",
+    'a top-level call': "console.log('loaded');\n",
+    'a top-level let': 'let count = 0;\n',
+    'a computed initializer': 'const now = Date.now();\n',
+    'a second use of module': 'module.paths = [];\n',
+  };
+  for (const [name, line] of Object.entries(grown)) {
+    const source = PNPMFILE_SOURCE.replace(exportLine, `${line}${exportLine}`);
+    assert.notEqual(source, PNPMFILE_SOURCE, name);
+    let problems;
+    try {
+      problems = pnpmfileProblems(source);
+    } catch (error) {
+      // A static import doesn't parse as a script, which fails too.
+      problems = [error.message];
+    }
+    assert.notDeepEqual(problems, [], name);
+  }
+  // So do fs, net, http, and https named inside the hook.
+  for (const name of ['fs', 'net', 'http', 'https']) {
+    const source = PNPMFILE_SOURCE.replace(
+      '  return pkg;\n}',
+      `  pkg.x = '${name}';\n  return pkg;\n}`,
+    );
+    assert.notEqual(source, PNPMFILE_SOURCE, name);
+    assert.notDeepEqual(pnpmfileProblems(source), [], name);
+  }
 });
