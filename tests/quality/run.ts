@@ -168,6 +168,20 @@ function print(verdict: Verdict, options: RunOptions): void {
   console.log(`[quality] ${verdict.ok ? 'passed' : 'failed'}`);
 }
 
+/**
+ * The run's scrub: every artifact under `dir` scanned for `canary`, scrubbed
+ * by the rules and by the secrets `secretsFile` records, and scanned again.
+ * The canary is never one of the secrets: it goes only by the rules, so a
+ * credential in a form no rule knows is still there for the scan after.
+ */
+export async function scrubRun(dir: string, canary: string, secretsFile: string) {
+  const canaries = [{ label: 'the run canary', value: canary }];
+  const before = await scanArtifacts(dir, canaries);
+  const { removed } = await scrubArtifacts(dir, readSecrets(secretsFile));
+  const after = await scanArtifacts(dir, canaries);
+  return { before, after, removed };
+}
+
 async function main(argv: readonly string[]): Promise<number> {
   let options: RunOptions;
   try {
@@ -258,19 +272,14 @@ async function main(argv: readonly string[]): Promise<number> {
     host?.remove();
   }
 
-  // The canary goes only by the scrub's rules, never by its value, so a
-  // credential in a form no rule knows is still there for the scan after.
-  const canaries = [{ label: 'the run canary', value: canary }];
-  const before = await scanArtifacts(reportsDir(), canaries);
-  const scrub = await scrubArtifacts(reportsDir(), readSecrets(secretsFile));
+  const { before, after, removed } = await scrubRun(reportsDir(), canary, secretsFile);
   if (scratch) rmSync(scratch, { recursive: true, force: true });
-  for (const { file, reason } of scrub.removed) {
+  for (const { file, reason } of removed) {
     setup.push({
       rule: 'artifact-unreadable',
       message: `${path.relative(reportsDir(), file)} was deleted, since the scrub couldn't read it: ${reason}`,
     });
   }
-  const after = await scanArtifacts(reportsDir(), canaries);
 
   const summary = missing.length === 0 ? readSummary() : null;
   const judged = judge({

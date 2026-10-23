@@ -1,9 +1,13 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { FIXED_TIME } from './lib/clock';
-import { parseRunArgs } from './run';
+import { scrubRun, parseRunArgs } from './run';
+import { plantCanary } from './lib/artifacts.mjs';
+import { UNKNOWN_FORM } from './lib/canary-forms.mjs';
 
 test('quality:pr runs whole; quality:full takes a shard, and the rest goes to Playwright', () => {
   assert.deepEqual(parseRunArgs(['pr']), {
@@ -45,4 +49,31 @@ test("the page's fixed time is the server preload's, which can't be imported her
     'utf8',
   );
   assert.ok(preload.includes(`export const FIXED_TIME = '${FIXED_TIME}';`));
+});
+
+test("run.ts never scrubs by the canary's value: a form no rule knows keeps it for the scan to fail", async () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'quality-run-scrub-'));
+  try {
+    const canary = plantCanary();
+    const secrets = path.join(dir, 'secrets');
+    writeFileSync(secrets, `${JSON.stringify('session-cookie-value')}\n`);
+    const reports = path.join(dir, 'reports');
+    mkdirSync(reports);
+    writeFileSync(
+      path.join(reports, 'server.log'),
+      `${UNKNOWN_FORM(canary)}session-cookie-value\n`,
+    );
+    const { before, after, removed } = await scrubRun(reports, canary, secrets);
+    assert.equal(before.length, 1);
+    assert.deepEqual(
+      after.map(({ file }) => path.basename(file)),
+      ['server.log'],
+    );
+    assert.deepEqual(removed, []);
+    assert.ok(
+      !readFileSync(path.join(reports, 'server.log'), 'utf8').includes('session-cookie-value'),
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

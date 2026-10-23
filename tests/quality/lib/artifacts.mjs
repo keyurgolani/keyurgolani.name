@@ -38,7 +38,8 @@ export function plantCanary() {
 export const canaryPassword = (canary) => `${canary}-owner`;
 
 /** Headers whose values are credentials. */
-const SECRET_HEADERS = 'cookie|set-cookie|authorization|proxy-authorization|x-csrf-token';
+const SECRET_HEADERS =
+  'cookie|set-cookie|authorization|proxy-authorization|x-csrf-token|x-xsrf-token';
 /** JSON fields whose values are credentials: those headers, the app's CSRF token, and a password. */
 const SECRET_FIELDS = `${SECRET_HEADERS}|csrf_?token|password`;
 
@@ -88,6 +89,8 @@ export const RULES = Object.freeze({
       COOKIE_LIST,
       (_, start, list, end) => `${start}${replaceValues(COOKIE_VALUE)(list)}${end}`,
     ),
+  // A key=value spelling: authorization=..., cookie=..., csrfToken=..., up to a space, &, or quote.
+  'key-value': replaceValues(new RegExp(String.raw`(\b(?:${SECRET_FIELDS})=)([^\s&"']+)()`, 'gi')),
 });
 
 /**
@@ -255,10 +258,12 @@ async function scrubBytes(bytes, secrets, depth = 0) {
   }
   const opaque = opaqueFormat(bytes);
   if (opaque) throw new Unreadable(`a ${opaque} archive, which the scrub can't open`);
-  if (!isText(bytes)) return null;
-  const text = bytes.toString('utf8');
+  // Text that isn't valid UTF-8, such as a log with one stray byte, goes
+  // through the rules too, read byte for byte, so every other byte stays.
+  const encoding = isText(bytes) ? 'utf8' : 'latin1';
+  const text = bytes.toString(encoding);
   const clean = scrubText(text, secrets);
-  return clean === text ? null : Buffer.from(clean, 'utf8');
+  return clean === text ? null : Buffer.from(clean, encoding);
 }
 
 /**

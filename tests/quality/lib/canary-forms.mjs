@@ -25,6 +25,7 @@ export const CANARY_FORMS = Object.freeze({
     // A Playwright call log line, kept in a JSON string in trace.trace.
     (canary) => `{"type":"log","message":"  cookie: quality_canary=${canary}"}`,
     (canary) => `{"type":"log","message":"  x-csrf-token: ${canary}"}`,
+    (canary) => `x-xsrf-token: ${canary}\n`,
     // A header list in an error message.
     (canary) => `Request headers:\n  - authorization: Bearer ${canary}\n`,
     // An error with headers in it, as summary.json keeps it, JSON-escaped.
@@ -37,6 +38,11 @@ export const CANARY_FORMS = Object.freeze({
     // A trace's addCookies call.
     (canary) =>
       `{"method":"addCookies","params":{"cookies":[{"name":"quality_canary","value":"${canary}","url":"http://127.0.0.1"}]}}`,
+  ],
+  'key-value': [
+    (canary) => `GET /?authorization=${canary}&page=2`,
+    (canary) => `cookie=quality_canary=${canary} path=/`,
+    (canary) => `csrfToken=${canary}; next`,
   ],
 });
 

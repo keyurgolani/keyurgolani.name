@@ -239,6 +239,38 @@ test('a zip in a zip and a gzip are scrubbed inside, and a packed format the scr
   }
 });
 
+test("a log with a stray byte that isn't UTF-8 still goes through the rules, and keeps every other byte", async () => {
+  const dir = scratch();
+  try {
+    const canary = plantCanary();
+    const log = Buffer.concat([
+      Buffer.from('GET / 200 '),
+      Buffer.from([0xff, 0xfe]),
+      Buffer.from(`\nauthorization: Bearer ${canary}\n`),
+      Buffer.from([0xc3]),
+      Buffer.from('\n'),
+    ]);
+    assert.ok(!isText(log));
+    writeFileSync(at(dir, 'server.log'), log);
+    const { changed } = await scrubArtifacts(dir);
+    assert.equal(changed.length, 1);
+    assert.deepEqual(await scanArtifacts(dir, canaries(canary)), []);
+    assert.ok(
+      readFileSync(at(dir, 'server.log')).equals(
+        Buffer.concat([
+          Buffer.from('GET / 200 '),
+          Buffer.from([0xff, 0xfe]),
+          Buffer.from(`\nauthorization: ${SCRUBBED}\n`),
+          Buffer.from([0xc3]),
+          Buffer.from('\n'),
+        ]),
+      ),
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('text is valid UTF-8 without a NUL', () => {
   assert.ok(isText(Buffer.from('héllo')));
   assert.ok(!isText(PNG));
