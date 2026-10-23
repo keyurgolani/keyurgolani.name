@@ -37,7 +37,9 @@ const config: NextConfig = {
   // tree, through every workspace link: the contract fixtures' and the
   // schema's test snapshots, and tests/fixtures'. On their own, the two
   // directory globs walk only into the root's snapshots/ and example-media/.
-  // One route is enough to ship a file, and every build has these two.
+  // One route is enough to ship a file, and every build has these two. pnpm
+  // check:standalone fails a build whose output holds any other snapshot, or
+  // lacks the sample's.
   outputFileTracingIncludes: {
     '/api/health': ['../../portfolio.example.yml', '../../site.example.yml'],
     '/api/ready': ['../../snapshots/*.json', '../../example-media/**/*.png'],
