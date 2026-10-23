@@ -33,26 +33,29 @@ import type { MetaCase, MetaOutcome } from './cases';
 const QUALITY = fileURLToPath(new URL('../', import.meta.url));
 const GATE = 'runner';
 
-const HARNESS = 'chromium harness';
-const CELLS = 'chromium c946a80325';
-const CELL =
+export const HARNESS = 'chromium harness';
+export const CELLS = 'chromium c946a80325';
+export const CELL =
   'composition:fallback complete / fallback/platform-neutral/warm-parchment/humanist-ui/system';
 const STAND_IN = 'Stand-in until #1 and #3 can make a revision unavailable on demand.';
 
 /** Three planned tests of one cell: two that run, and one whose state skips it. */
-const RUNS: VerdictTest = {
+export const RUNS: VerdictTest = {
   cell: { id: CELL },
   viewport: { id: '1440x900' },
   row: { id: 'default' },
   engineSkips: {},
 };
-const ALSO_RUNS: VerdictTest = { ...RUNS, viewport: { id: '1024x768' } };
+export const ALSO_RUNS: VerdictTest = { ...RUNS, viewport: { id: '1024x768' } };
 /** A Slice 2 row's test, which owes the row's own checks. */
 const REDUCED_MOTION: VerdictTest = { ...RUNS, row: { id: 'reduced-motion' } };
 const SKIPS: VerdictTest = { ...RUNS, viewport: { id: '390x844' }, skip: STAND_IN };
 
 /** A passing cell test of the fallback composition, as the reporter lists one. */
-function cellTest(planned: VerdictTest = RUNS, overrides: Partial<SummaryTest> = {}): SummaryTest {
+export function cellTest(
+  planned: VerdictTest = RUNS,
+  overrides: Partial<SummaryTest> = {},
+): SummaryTest {
   return {
     title: `fallback complete / at ${planned.viewport.id}, ${planned.row.id}`,
     file: 'tests/quality/cells.spec.ts',
@@ -84,7 +87,7 @@ const skippedTest = (overrides: Partial<SummaryTest> = {}) =>
   cellTest(SKIPS, { ...SKIPPED, skipReason: STAND_IN, ...overrides });
 
 /** The canary probe, passed. */
-const PROBE: SummaryTest = {
+export const PROBE: SummaryTest = {
   ...cellTest(),
   title: 'every request the page makes carries the canary',
   file: 'tests/quality/canary.spec.ts',
@@ -108,7 +111,7 @@ const VISUAL: SummaryTest = {
   checks: [...VISUAL_CHECKS],
 };
 
-function summary(tests: readonly SummaryTest[], overrides: Partial<Summary> = {}): Summary {
+export function summary(tests: readonly SummaryTest[], overrides: Partial<Summary> = {}): Summary {
   return {
     schemaVersion: 1,
     mode: 'pr',
@@ -124,12 +127,16 @@ function summary(tests: readonly SummaryTest[], overrides: Partial<Summary> = {}
   };
 }
 
-const PLAN: VerdictInput['plan'] = {
+export const PLAN: VerdictInput['plan'] = {
   targets: [{ kind: 'composition', id: 'fallback' }],
   tests: [RUNS, ALSO_RUNS, SKIPS],
 };
 
-const HELD = { file: 'results/canary/trace.zip', entry: 'trace.network', canary: 'the run canary' };
+export const HELD = {
+  file: 'results/canary/trace.zip',
+  entry: 'trace.network',
+  canary: 'the run canary',
+};
 
 /**
  * A run that's fine: one target, its planned tests each run once on

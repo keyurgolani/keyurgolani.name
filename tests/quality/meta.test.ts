@@ -96,6 +96,7 @@ test('every gate so far has a known-bad case and a known-good one, and each id i
     'transparency',
     'contrast',
     'axe',
+    'merged-verdict',
   ]);
   for (const gate of gates) {
     const cases = META_CASES.filter((metaCase) => metaCase.gate === gate);
@@ -192,6 +193,12 @@ test('every gate so far has a known-bad case and a known-good one, and each id i
     'runner/no-javascript-scripting-media',
     'transparency/nav-over-image',
     'occlusion/grain-overlay',
+    // 11-4: what only a sharded run's shards together show.
+    'merged-verdict/whole-run',
+    'merged-verdict/zero-tests-every-shard',
+    'merged-verdict/plan-coverage-in-no-shard',
+    'merged-verdict/canary-probe-missing-in-no-shard',
+    'merged-verdict/missing-shard',
   ]) {
     assert.ok(ids.includes(id), id);
   }

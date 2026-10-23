@@ -35,6 +35,7 @@
     "test:shard": "node ci/shards.mjs run",
     "quality:pr": "tsx tests/quality/run.ts pr",
     "quality:full": "tsx tests/quality/run.ts full",
+    "quality:merge": "tsx tests/quality/merge.ts",
     "quality:checklist": "tsx tests/quality/checklist.ts",
     "check:skills": "node skills/scripts/sync-checks.mjs",
     "check:registry": "node ci/check-registry.mjs",

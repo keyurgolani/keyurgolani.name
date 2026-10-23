@@ -10,7 +10,8 @@
 // the fixture gate's leak check, the quality runner's fail-closed rules
 // (runner-cases.ts), the performance gates: the perf cells' deterministic
 // rules, the release timing gate, and #6's budget check over its fixtures
-// (perf-cases.ts), and Slice 2's accessibility suites (a11y-cases.ts).
+// (perf-cases.ts), Slice 2's accessibility suites (a11y-cases.ts), and
+// 11-4's merged verdict over a sharded run's shards (shard-cases.ts).
 
 import fs from 'node:fs';
 import { spawnSync } from 'node:child_process';
@@ -42,6 +43,7 @@ import { A11Y_CASES } from './a11y-cases';
 import { PERF_BROWSER_CASES } from './perf-browser-cases';
 import { PERFORMANCE_CASES } from './perf-cases';
 import { RUNNER_CASES } from './runner-cases';
+import { SHARD_CASES } from './shard-cases';
 
 /** What a gate said about one input. */
 export interface MetaOutcome {
@@ -417,4 +419,5 @@ export const META_CASES: readonly MetaCase[] = [
   ...PERFORMANCE_CASES,
   ...PERF_BROWSER_CASES,
   ...A11Y_CASES,
+  ...SHARD_CASES,
 ];
