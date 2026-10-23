@@ -192,6 +192,44 @@ test('a PR run takes the reload conditions on the first default and the tier sen
   );
 });
 
+test("a PR run takes the reload conditions on every change-directed cell, where a changed variant's content and enhancement regressions show", () => {
+  const meta = withTierPacks(checkoutMeta());
+  const language = meta.PACKS!.find((pack) => pack.kind === 'design-language' && !pack.fixture)!;
+  // A second shipping stable language, so the changed variant meets one that isn't the first default's.
+  const wider: BuildMeta = {
+    ...meta,
+    PACKS: [...meta.PACKS!, clone(language, 'second-language', 'stable', false)],
+  };
+  const plan = planCells({
+    meta: wider,
+    registrations,
+    mode: 'pr',
+    changes: [{ axis: 'variant', id: 'fallback', paths: ['packages/fallback-composition/x.ts'] }],
+  });
+  const directed = plan.cells.filter((cell) => cell.changed);
+  assert.deepEqual(directed.map((cell) => cell.tuple.designLanguage).sort(), [
+    'platform-neutral',
+    'second-language',
+  ]);
+  for (const cell of directed) {
+    const tests = plan.tests.filter((each) => each.cell === cell);
+    assert.ok(tests.length > 0, cell.id);
+    assert.ok(
+      tests.every((each) => each.conditions),
+      `${cell.id} runs the reload conditions`,
+    );
+    const first = tests.find(
+      (each) => each.row.id === 'default' && each.viewport === VIEWPORTS[0],
+    )!;
+    for (const check of ['inventory', 'enhancement']) {
+      assert.ok(
+        requiredChecks('default', first.viewport.id, first.conditions).includes(check),
+        check,
+      );
+    }
+  }
+});
+
 test('each tier pack has a sentinel on the fallback composition, and other fixture packs stay out', () => {
   const meta = withTierPacks(checkoutMeta());
   const plan = planCells({ meta, registrations, mode: 'pr' });

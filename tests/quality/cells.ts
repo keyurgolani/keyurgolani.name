@@ -550,7 +550,13 @@ export function planCells({ meta, registrations, mode, changes = [] }: PlanInput
           row,
           skip: cell.pending ?? exclusion?.reason,
           engineSkips,
-          conditions: mode === 'full' || cell === firstDefault || cell.pack !== undefined,
+          // A change-directed cell too: a changed variant or language is where
+          // content-inventory and failed-enhancement regressions show.
+          conditions:
+            mode === 'full' ||
+            cell === firstDefault ||
+            cell.pack !== undefined ||
+            cell.changed !== undefined,
         });
       }
     }
