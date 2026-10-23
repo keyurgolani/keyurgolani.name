@@ -11,8 +11,9 @@
 // It's also item 8's proof for the variant axis: each plate's frame is the
 // published revision's appearance with the variant alone switched to the
 // plate's, and each frame downloads its own variant's files, by
-// ASSET_MANIFEST, and no other unit's. The pack axes' half waits for #19's
-// Slice 4, which links the selected packs; no page links one before it.
+// ASSET_MANIFEST, and no other variant's. Its pack files are the packs its
+// own document boundary selects (#19, Slice 4), and the platform stylesheet
+// it links beside them, and no other pack's.
 //
 // It runs in fixture-variant-medium's owner project alone, since the page is
 // the owner's, with a session. The trace's policy lets through GET and HEAD
@@ -87,9 +88,14 @@ function portfolioFiles(requests: readonly Request[], frame: Frame): string[] {
   return [...new Set(paths)].sort();
 }
 
+/** The pack axes a document boundary names, by the unit kind ASSET_MANIFEST gives each. */
+const PACK_KINDS = ['design-language', 'color-scheme', 'typography'] as const;
+
 /**
  * A live frame's unit files, once its document has loaded: its variant's
- * stylesheet among them, and every one its variant's, no other unit's.
+ * stylesheet among them, its variant's files and the packs its document
+ * boundary selects, and the platform stylesheet it links at the appearance
+ * precedence, and nothing else.
  */
 async function expectOwnFiles(requests: readonly Request[], frame: Frame, variant: string) {
   await frame.waitForLoadState('load');
@@ -99,10 +105,25 @@ async function expectOwnFiles(requests: readonly Request[], frame: Frame, varian
     (unit) => unit.kind === 'variant' && unit.id === variant,
   );
   if (own?.stylesheet) expect(files, `${variant}'s frame`).toContain(own.stylesheet.url);
+  const boundary = frame.locator('[data-appearance-boundary="document"]');
+  await expect(boundary, `${variant}'s frame renders in a document boundary`).toHaveCount(1);
+  const allowed = new Set([`variant ${variant}`]);
+  for (const kind of PACK_KINDS) {
+    const id = await boundary.getAttribute(`data-${kind}`);
+    if (id) allowed.add(`${kind} ${id}`);
+  }
+  const appearanceLinks = await frame
+    .locator('link[rel="stylesheet"][data-precedence="appearance"]')
+    .evaluateAll((links) => links.map((link) => new URL((link as HTMLLinkElement).href).pathname));
+  const platform = appearanceLinks.filter((href) => !owners.has(href));
+  expect(platform, `${variant}'s frame links one platform stylesheet`).toHaveLength(1);
+  const strays = files
+    .map((file) => [file, owners.get(file) ?? (platform.includes(file) ? 'platform' : 'no unit')])
+    .filter(([, owner]) => owner !== 'platform' && !allowed.has(owner!));
   expect(
-    files.map((file) => [file, owners.get(file) ?? 'no unit']),
-    `${variant}'s frame downloads its own variant's files alone`,
-  ).toEqual(files.map((file) => [file, `variant ${variant}`]));
+    strays,
+    `${variant}'s frame downloads its own variant's files and its own packs alone`,
+  ).toEqual([]);
 }
 
 const plates = (page: Page) => page.locator('[data-plate]');
