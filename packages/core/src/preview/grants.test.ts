@@ -538,6 +538,27 @@ test("status, renewal, and revocation act only on the caller's own grant, and an
   }
 });
 
+test("a grant's ref revokes it only for its own session, once, and any other ref ends nothing, as an unknown token does (#7)", async (t) => {
+  const { store, sessions, grants } = await setup(t);
+  const mine = await signIn(sessions);
+  const theirs = await signIn(sessions);
+  const draft = await newDraft(store);
+  const { token, record } = await mintDraft(grants, mine.session, draft);
+  const ref = grantRef(record.digest);
+  // Another session's ref of it ends nothing.
+  assert.equal(await grants.revokeRef(ref, theirs.record.digest), false);
+  assert.equal(await grants.status(token, mine.record.digest), 'active');
+  // Nor does a ref of no grant, or anything that isn't a ref's shape.
+  for (const value of ['00000000', ref.toUpperCase(), `${ref}0`, '', token, record.digest]) {
+    assert.equal(await grants.revokeRef(value, mine.record.digest), false, value);
+  }
+  assert.equal(await grants.status(token, mine.record.digest), 'active');
+  // Its own session's ref ends it, as superseded, once.
+  assert.equal(await grants.revokeRef(ref, mine.record.digest), true);
+  assert.equal(await grants.status(token, mine.record.digest), 'superseded');
+  assert.equal(await grants.revokeRef(ref, mine.record.digest), false, 'once');
+});
+
 test(`a session holds at most ${MAX_ACTIVE_GRANTS} active grants, and a mint past that supersedes its oldest`, async (t) => {
   const { sessions, grants, advance } = await setup(t);
   const { session } = await signIn(sessions);

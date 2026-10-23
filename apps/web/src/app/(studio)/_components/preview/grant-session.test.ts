@@ -4,6 +4,7 @@ import {
   createGrantSession,
   renewalDelay,
   type GrantState,
+  type LeftGrant,
   type MintRequest,
 } from './grant-session';
 
@@ -19,17 +20,37 @@ const IDLE = new Date(AT + 900_000).toISOString();
 
 const grantOf = (n: number) => String(n).padStart(22, 'G');
 const nonceOf = (n: number) => String(n).padStart(22, 'N');
+const refOf = (n: number) => String(n).padStart(8, 'a');
+
+/** A tab's store of the refs a page left, as sessionStorage keeps them, with every keep recorded. */
+function tabStore() {
+  let kept: string[] = [];
+  const log: string[] = [];
+  const left: LeftGrant = {
+    keep(ref) {
+      log.push(`keep ${ref}`);
+      kept.push(ref);
+    },
+    take() {
+      const taken = kept;
+      kept = [];
+      return taken;
+    },
+  };
+  return { left, log, kept: () => kept };
+}
 
 type Reply = { status: number; data?: unknown } | Error;
 
 /** A session over a stand-in studioFetch that answers each operation from `replies`, in turn. */
-function setup(replies: Record<string, Reply[]>) {
+function setup(replies: Record<string, Reply[]>, left?: LeftGrant) {
   const sent: Array<{ name: string; body: unknown; csrfToken?: string; keepalive?: boolean }> = [];
   const states: GrantState[] = [];
   const timers: Array<{ run: () => void; ms: number; cleared: boolean }> = [];
   let minted = 0;
   const session = createGrantSession({
     csrfToken: 'csrf',
+    ...(left ? { left } : {}),
     call: async (name, { body, csrfToken, keepalive }) => {
       sent.push({
         name,
@@ -46,6 +67,7 @@ function setup(replies: Record<string, Reply[]>) {
           data: {
             status: 'active',
             grant: grantOf(minted),
+            ref: refOf(minted),
             nonce: nonceOf(minted),
             idleExpiresAt: IDLE,
             absoluteExpiresAt: IDLE,
@@ -330,6 +352,74 @@ test('the page going revokes the grant with a request that outlives it, and hold
   other.session.stop();
   await settled();
   assert.equal(other.sent.at(-1)?.keepalive, undefined);
+});
+
+test("the page going keeps its grant's ref before the keepalive revoke, and the tab's next page revokes that grant by ref, once, before its first mint (#7)", async () => {
+  const tab = tabStore();
+  const first = setup({}, tab.left);
+  await first.session.mint(REQUEST);
+  // The ref is kept as the page goes, before the keepalive that may be lost.
+  first.session.leave();
+  assert.deepEqual(tab.kept(), [refOf(1)]);
+  assert.deepEqual(first.sent.at(-1), {
+    name: 'preview.grant.revoke',
+    body: { grant: grantOf(1) },
+    csrfToken: 'csrf',
+    keepalive: true,
+  });
+  // The next page in the tab: its first mint revokes the left grant by ref first, and clears it.
+  const next = setup({}, tab.left);
+  await next.session.mint(REQUEST);
+  assert.deepEqual(
+    next.sent.map(({ name, body }) => [name, name === 'preview.grant.revoke' ? body : null]),
+    [
+      ['preview.grant.revoke', { ref: refOf(1) }],
+      ['preview.grant.mint', null],
+    ],
+  );
+  assert.equal(next.sent[0]!.csrfToken, 'csrf');
+  assert.equal(next.sent[0]!.keepalive, undefined);
+  assert.deepEqual(tab.kept(), []);
+  // Only once: another mint sends no revoke by ref.
+  await next.session.mint({
+    ...REQUEST,
+    environment: { ...REQUEST.environment, enhancement: 'off' },
+  });
+  assert.equal(
+    next.sent.filter(({ body }) => (body as { ref?: string })?.ref !== undefined).length,
+    1,
+  );
+  // A frame that goes with the page, or a session that ended, keeps nothing.
+  next.session.stop();
+  assert.deepEqual(tab.kept(), []);
+  const ended = setup({}, tab.left);
+  await ended.session.mint(REQUEST);
+  ended.session.end();
+  ended.session.leave();
+  assert.deepEqual(tab.log, [`keep ${refOf(1)}`]);
+  // A page back from the back-forward cache mints again, and its next mint
+  // revokes the grant it kept as it went.
+  const restored = setup({}, tab.left);
+  await restored.session.mint(REQUEST);
+  restored.session.leave();
+  assert.deepEqual(tab.kept(), [refOf(1)]);
+  await restored.session.mint(REQUEST);
+  assert.deepEqual(
+    restored.sent
+      .filter(({ body }) => (body as { ref?: string })?.ref !== undefined)
+      .map(({ body }) => body),
+    [{ ref: refOf(1) }],
+  );
+  assert.deepEqual(tab.kept(), []);
+});
+
+test("a session that ended revokes no kept ref on a later mint: the server ended the session's grants itself (#7)", async () => {
+  const tab = tabStore();
+  tab.left.keep(refOf(1));
+  const { session, sent } = setup({}, tab.left);
+  session.end();
+  await session.mint(REQUEST);
+  assert.deepEqual(sent, []);
 });
 
 test('a 401 or session_ended ends the session, and nothing more goes out, and only session_ended is news for the other tabs (#7, Slice 4)', async () => {

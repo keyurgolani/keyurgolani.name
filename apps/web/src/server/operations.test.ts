@@ -274,6 +274,18 @@ test('the grant commands need a session and preview.grant, take a grant only in 
       }
     }
   }
+  // revoke also takes a grant's ref (#7), 8 hex characters, and never both.
+  const revoke = entry('preview.grant.revoke');
+  assert.equal(revoke.input.safeParse({ ref: '0a1b2c3d' }).success, true);
+  for (const input of [
+    { ref: '0A1B2C3D' },
+    { ref: '0a1b2c3' },
+    { ref: '0a1b2c3d0' },
+    { ref: '0a1b2c3d', grant },
+    { ref: 12345678 },
+  ]) {
+    assert.equal(revoke.input.safeParse(input).success, false, JSON.stringify(input));
+  }
   assert.deepEqual(entry('preview.grant.mint').errors, [
     ...reachable(entry('preview.grant.mint')),
     'not_found',
@@ -313,11 +325,17 @@ test('the grant commands need a session and preview.grant, take a grant only in 
   const active = {
     status: 'active',
     grant,
+    ref: '0a1b2c3d',
     nonce: grant,
     idleExpiresAt: at,
     absoluteExpiresAt: at,
   };
   assert.equal(mint.output.safeParse(active).success, true);
+  // The ref, and never more of the digest than a log line gives.
+  const noRef: Record<string, unknown> = { ...active };
+  delete noRef.ref;
+  assert.equal(mint.output.safeParse(noRef).success, false);
+  assert.equal(mint.output.safeParse({ ...active, ref: 'a'.repeat(64) }).success, false);
   assert.equal(mint.output.safeParse({ status: 'preview_blocked', diagnostics: 2 }).success, true);
   assert.equal(mint.output.safeParse({ ...active, digest: 'a'.repeat(64) }).success, false);
   assert.equal(mint.output.safeParse({ status: 'preview_blocked', diagnostics: 0 }).success, false);
