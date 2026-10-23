@@ -12,25 +12,25 @@
 
 A portfolio is a body of work: records with ids, a few lists that curate them, and sections that place them in reading order.
 
-| Field           | Type                | Required | Use when                                                                                             |
-| --------------- | ------------------- | -------- | ---------------------------------------------------------------------------------------------------- |
-| `schemaVersion` | `3`                 | yes      | Always. The first line of the document.                                                              |
-| `locale`        | string              | yes      | Always. The content's BCP 47 language tag, such as `en` or `pt-BR`.                                  |
-| `direction`     | `ltr \| rtl`        | yes      | Always. `rtl` for Arabic, Hebrew, Persian, and other right-to-left scripts.                          |
-| `identity`      | object              | yes      | Always. Name, tagline, location, email, avatar.                                                      |
-| `links`         | `Link[]`            | optional | At least the primary contact link, usually.                                                          |
-| `meta`          | object              | optional | SEO: `title`, `description`, `ogImage`. Absolute URLs come from the deployment's `PORTFOLIO_ORIGIN`. |
-| `works`         | `Work[]`            | optional | Everything the person made that's worth showing.                                                     |
-| `evidence`      | `Evidence[]`        | optional | Checkable facts: metrics, testimonials, publications, talks, awards, press.                          |
-| `chronology`    | `ChronologyEntry[]` | optional | Roles, studies, and milestones, each with a period.                                                  |
-| `media`         | `MediaAsset[]`      | optional | Every image, audio, video, or document a placement shows.                                            |
-| `practice`      | object              | optional | A thesis, and groups of skills, tools, and services.                                                 |
-| `contact`       | object              | optional | A `message` and `links` the contact section places.                                                  |
-| `signature`     | work id             | optional | The one work to lead with.                                                                           |
-| `featured`      | work ids            | optional | Two to four flagships, in order.                                                                     |
-| `proof`         | evidence ids        | optional | The facts a composition shows up front.                                                              |
-| `archive`       | work ids            | optional | Older work still worth finding.                                                                      |
-| `sections`      | `Section[]`         | optional | The reading order; see curation.md.                                                                  |
+| Field           | Type                | Required | Use when                                                                                                                                                        |
+| --------------- | ------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `schemaVersion` | `3`                 | yes      | Always. The first line of the document.                                                                                                                         |
+| `locale`        | string              | yes      | Always. The content's BCP 47 language tag, such as `en` or `pt-BR`.                                                                                             |
+| `direction`     | `ltr \| rtl`        | yes      | Always. `rtl` for Arabic, Hebrew, Persian, and other right-to-left scripts.                                                                                     |
+| `identity`      | object              | yes      | Always. Name, tagline, location, email, avatar.                                                                                                                 |
+| `links`         | `Link[]`            | optional | At least the primary contact link, usually.                                                                                                                     |
+| `meta`          | object              | optional | SEO: `title`, `description`, and `ogImage`, which nothing shows yet: the share image is generated. Absolute URLs come from the deployment's `PORTFOLIO_ORIGIN`. |
+| `works`         | `Work[]`            | optional | Everything the person made that's worth showing.                                                                                                                |
+| `evidence`      | `Evidence[]`        | optional | Checkable facts: metrics, testimonials, publications, talks, awards, press.                                                                                     |
+| `chronology`    | `ChronologyEntry[]` | optional | Roles, studies, and milestones, each with a period.                                                                                                             |
+| `media`         | `MediaAsset[]`      | optional | Every image, audio, video, or document a placement shows.                                                                                                       |
+| `practice`      | object              | optional | A thesis, and groups of skills, tools, and services.                                                                                                            |
+| `contact`       | object              | optional | A `message` and `links` the contact section places.                                                                                                             |
+| `signature`     | work id             | optional | The one work to lead with.                                                                                                                                      |
+| `featured`      | work ids            | optional | Two to four flagships, in order.                                                                                                                                |
+| `proof`         | evidence ids        | optional | The facts a composition shows up front.                                                                                                                         |
+| `archive`       | work ids            | optional | Older work still worth finding.                                                                                                                                 |
+| `sections`      | `Section[]`         | optional | The reading order; see curation.md.                                                                                                                             |
 
 Every object is strict: a key not listed here or in the kind's fields is refused. The only other key any object takes is `extensions`, below.
 

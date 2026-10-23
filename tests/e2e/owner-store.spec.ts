@@ -181,6 +181,81 @@ test(
   },
 );
 
+/** Each metadata surface's bytes, by route, as the server answers them now. */
+async function surfaces(request: APIRequestContext, origin: string) {
+  const answers: Record<string, Buffer> = {};
+  for (const route of [
+    '/',
+    '/feed.xml',
+    '/robots.txt',
+    '/sitemap.xml',
+    '/opengraph-image-12o0cb',
+  ]) {
+    const response = await request.get(`${origin}${route}`);
+    expect(response.status(), route).toBe(200);
+    answers[route] = await response.body();
+  }
+  return answers;
+}
+
+test(
+  'a publish that renames the person shows on every metadata surface on the next request, and a rollback serves the earlier bytes exactly (#22)',
+  {
+    annotation: [
+      { type: 'route', description: '/' },
+      { type: 'route', description: '/feed.xml' },
+      { type: 'route', description: '/opengraph-image-12o0cb' },
+      OWNER,
+    ],
+  },
+  async ({ request }, testInfo) => {
+    const dataDir = dataDirFor(testInfo);
+    const [before] = await publish(dataDir, 'Rowan Before');
+    const app = await owner(dataDir);
+    try {
+      const first = await surfaces(request, app.origin);
+      expect(names(first['/']!.toString('utf8')).ld).toContain('Rowan Before');
+
+      const [after] = await publish(dataDir, 'Rowan Renamed');
+      const renamed = await surfaces(request, app.origin);
+      const page = names(renamed['/']!.toString('utf8'));
+      expect(page.title).toContain('Rowan Renamed');
+      expect(page.ld).toContain('Rowan Renamed');
+      expect(page.html).not.toContain('Rowan Before');
+      expect(renamed['/feed.xml']!.toString('utf8')).toContain('Rowan Renamed');
+      // The card is drawn from the live person, so it changed with them.
+      expect(renamed['/opengraph-image-12o0cb']!.equals(first['/opengraph-image-12o0cb']!)).toBe(
+        false,
+      );
+
+      const run = await runChild({
+        kind: 'run',
+        dataDir,
+        steps: [
+          {
+            op: 'rollback',
+            input: { targetRevisionId: before, expectedLiveRevisionId: after },
+          },
+        ],
+      } as never);
+      const { results } = (run.result ?? { results: [] }) as {
+        results: { ok: boolean; outcome?: { kind?: string } | null }[];
+      };
+      expect(results[0]?.outcome?.kind, JSON.stringify(run)).toBe('committed');
+
+      // Nothing to rebuild and nothing kept from the renamed revision.
+      const again = await surfaces(request, app.origin);
+      for (const route of Object.keys(first)) {
+        expect(again[route]!.equals(first[route]!), `${route} after the rollback`).toBe(true);
+      }
+      expect(app.egress()).toEqual([]);
+    } finally {
+      await app.stop();
+      rmSync(dataDir, { recursive: true, force: true });
+    }
+  },
+);
+
 test(
   'a damaged live revision serves the last known good, degraded, says so to the owner, and live.json stays as it was',
   { annotation: [{ type: 'route', description: '/' }, OWNER] },

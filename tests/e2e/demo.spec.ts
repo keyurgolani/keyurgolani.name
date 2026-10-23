@@ -67,14 +67,34 @@ test(
 );
 
 test(
-  'robots.txt disallows everything and the sitemap is empty',
+  'robots.txt lets crawlers fetch every page, so they see its noindex, names no sitemap, and the sitemap is empty (#22)',
   { annotation: [{ type: 'route', description: '/robots.txt' }, DEMO] },
   async ({ request }) => {
     const robots = await (await request.get('/robots.txt')).text();
-    expect(robots).toMatch(/Disallow: \/\s*$/m);
+    expect(robots).toMatch(/^Allow: \/\s*$/m);
+    expect(robots).not.toMatch(/Disallow/i);
     expect(robots).not.toMatch(/Sitemap:/i);
     const sitemap = await (await request.get('/sitemap.xml')).text();
     expect(sitemap).not.toContain('<url>');
+  },
+);
+
+test(
+  'no demo page carries JSON-LD, so the sample never passes for a real person (#22)',
+  { annotation: [{ type: 'route', description: '/sample' }, DEMO] },
+  async ({ request }) => {
+    const selectable = VARIANTS.map(({ manifest }) => manifest.id).filter(
+      (id) => id !== FALLBACK_ID,
+    );
+    for (const url of ['/', '/sample', ...selectable.map((id) => `/sample?variant=${id}`)]) {
+      const response = await request.get(url);
+      expect(response.status(), url).toBe(200);
+      expect(response.headers()['x-robots-tag'], url).toBe('noindex');
+      const html = await response.text();
+      expect(html, url).toContain(SAMPLE_NAME);
+      expect(html, url).not.toContain('application/ld+json');
+      expect(html, url).not.toContain('"@type":"Person"');
+    }
   },
 );
 

@@ -133,3 +133,41 @@ test('a site with features.feed: false serves no feed', async (t) => {
   assert.equal(response.status, 404);
   assert.equal(await response.text(), 'Not found.');
 });
+
+test('the feed links on the canonical origin, writes no <source> without its url, and caches for an hour with nothing stale after (#22)', async (t) => {
+  const live = revision('en', true);
+  const works = (live.unit.portfolio.works ?? []).map((work) => ({
+    ...work,
+    publication: 'Tide Quarterly',
+  }));
+  deploy(t, async () => ({
+    ...live,
+    unit: { ...live.unit, portfolio: { ...live.unit.portfolio, works } },
+  }));
+  const response = await GET(request());
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('cache-control'), 'public, max-age=3600');
+  const xml = await response.text();
+  assert.match(xml, /<link>https:\/\/rowan\.test<\/link>/);
+  assert.match(xml, /<atom:link href="https:\/\/rowan\.test\/feed\.xml" rel="self"/);
+  assert.ok(!xml.includes('<source'), xml);
+  assert.ok(!xml.includes('Tide Quarterly'), xml);
+  // The newest item's date, so the same revision answers the same bytes.
+  assert.match(xml, /<lastBuildDate>Fri, 02 Jan 2026 00:00:00 GMT<\/lastBuildDate>/);
+  assert.equal(await (await GET(request())).text(), xml);
+});
+
+test('a feed with no dated item names no build date, never the clock (#22)', async (t) => {
+  const live = revision('en', true);
+  const works = (live.unit.portfolio.works ?? []).map((work) => ({
+    ...work,
+    publishedAt: undefined,
+  }));
+  deploy(t, async () => ({
+    ...live,
+    unit: { ...live.unit, portfolio: { ...live.unit.portfolio, works } },
+  }));
+  const xml = await (await GET(request())).text();
+  assert.match(xml, /<title>First essay<\/title>/);
+  assert.ok(!xml.includes('lastBuildDate'), xml);
+});

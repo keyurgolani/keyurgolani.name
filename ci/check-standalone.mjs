@@ -11,6 +11,12 @@
 // least what the image's does, since .dockerignore keeps tests/ and the
 // rest out of the image's build.
 //
+// It also reads the build's .next/prerender-manifest.json (#22): no
+// metadata route or visitor page may be in it. One there was rendered at
+// build time, from whatever documents the build machine had, or none, and
+// would answer every deployment with that portfolio and origin. CI's build
+// runs with no documents, so the build passing is the other half.
+//
 //   node ci/check-standalone.mjs [standalone dir]
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -24,6 +30,38 @@ export const STANDALONE_DIR = path.join(REPO_ROOT, 'apps', 'web', '.next', 'stan
 /** The bundled sample the demo profile renders, which the scan needs. */
 const SAMPLE =
   'portfolio.example.yml, site.example.yml, snapshots/github.json, and example-media/work/small-traces.png';
+
+/**
+ * The routes no build may prerender (#22): the metadata routes, and the
+ * visitor pages whose head they feed. Each answers per request, from the
+ * deployment's origin and the live revision.
+ */
+const PER_REQUEST = [
+  /^\/(?:robots\.txt|sitemap\.xml|feed\.xml|manifest\.webmanifest)$/,
+  /(?:^|\/)(?:opengraph-image|twitter-image|icon|apple-icon)(?:[-.]|$)/,
+  /^\/(?:sample|work|_experience|%5Fexperience)(?:\/|$)/,
+  /^\/$/,
+];
+
+/**
+ * What the build prerendered that has to answer per request, by route:
+ * null when nothing did, else the message. The manifest has to be there.
+ *
+ * @param {string} nextDir the build's .next
+ */
+export function checkPrerender(nextDir) {
+  const file = path.join(nextDir, 'prerender-manifest.json');
+  const shown = path.relative(REPO_ROOT, file) || file;
+  if (!existsSync(file)) return `No prerender manifest at ${shown}. Run pnpm build first.`;
+  const manifest = JSON.parse(readFileSync(file, 'utf8'));
+  const routes = [
+    ...Object.keys(manifest.routes ?? {}),
+    ...Object.keys(manifest.dynamicRoutes ?? {}),
+  ];
+  const baked = routes.filter((route) => PER_REQUEST.some((pattern) => pattern.test(route))).sort();
+  if (baked.length === 0) return null;
+  return `${shown} lists ${baked.length} route(s) the build rendered, which answer per request: ${listed(baked)}. A metadata route or visitor page built ahead answers every deployment with the build's portfolio and origin. Give it export const dynamic = 'force-dynamic'.`;
+}
 
 /** Whether a path the scan refuses is a copy the tracer made under node_modules. */
 const inModules = (file) => file.split(path.sep).includes('node_modules');
@@ -127,10 +165,11 @@ export function checkStandalone(dir, env = process.env) {
 
 function main(argv) {
   const dir = path.resolve(argv[0] ?? STANDALONE_DIR);
-  const problem = checkStandalone(dir);
+  const problem =
+    [checkStandalone(dir), checkPrerender(path.dirname(dir))].filter(Boolean).join(' ') || null;
   if (!problem) {
     console.log(
-      `[standalone] the bundled sample and nothing the image must not ship under ${path.relative(REPO_ROOT, dir)}`,
+      `[standalone] the bundled sample and nothing the image must not ship under ${path.relative(REPO_ROOT, dir)}, and no metadata route prerendered`,
     );
     return 0;
   }

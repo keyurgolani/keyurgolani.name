@@ -41,12 +41,14 @@ What the platform can do today.
 
 ## SEO
 
-- **Metadata** generated from `identity` and `meta` (title, description, Open Graph, Twitter Card).
-- **Open Graph image** generated per request from the identity's name and tagline.
-- **Structured data (JSON-LD)** for Person, ProfilePage, and WebSite, from the published view: the current role and organization from the chronology, the practice's skills, and the signature and featured works, each with an `@id` from its record id.
+- **Metadata** generated from `identity` and `meta` (title, description, Open Graph, Twitter Card), per request from the live revision.
+- **A canonical link and `og:url`** on every page of the live site: `/` names itself, a view names its parent route, and neither ever carries a query string or visitor state. A preview names neither.
+- **Open Graph image** generated per request from the identity's name and tagline, with the site's host.
+- **Structured data (JSON-LD)** for Person, ProfilePage, and WebSite, from the published view: the current role and organization from the chronology, the practice's skills, and the signature and featured works, each with an `@id` from its record id. It never carries the identity's email.
 - **Feed** at `/feed.xml`, listing writing and audio and video works and publications newest first, each GUID made from its record id, with the portfolio's `locale` as its language. `features.feed: false` in the site document turns it off.
-- **`/robots.txt` and `/sitemap.xml`** generated server-side, per request.
-- **Absolute URLs** (Open Graph, sitemap, robots.txt, feed, JSON-LD) on `PORTFOLIO_ORIGIN`, the deployment's canonical origin.
+- **`/robots.txt` and `/sitemap.xml`** generated server-side, per request. Robots keeps crawlers out of Studio and `/api/` and names the sitemap.
+- **Absolute URLs** (canonical links, Open Graph, sitemap, robots.txt, feed, JSON-LD) on `PORTFOLIO_ORIGIN`, the deployment's canonical origin.
+- **The demo stays out of search.** Every demo response is `noindex`, robots lets crawlers fetch the pages to see it, the sitemap is empty, and no page carries JSON-LD, so the sample never passes for a real person.
 - **`<html lang dir>`** from the portfolio's `locale` and `direction`.
 - **Hidden content stays hidden.** Hidden sections, private records, what only they reach, and unregistered extension data never reach the page, its client payload, its JSON-LD, the feed, or the Open Graph image.
 

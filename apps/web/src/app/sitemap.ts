@@ -11,17 +11,16 @@ export const dynamic = 'force-dynamic';
 /**
  * Only routes the profile serves, on PORTFOLIO_ORIGIN: the home page and
  * each case study the live public view routes (#10b), and nothing under
- * demo until #9 and #22 decide what crawlers may see there. A variant's
- * path views stay out, since each is canonical to its parent route (#5,
- * Slice 4).
+ * demo, which keeps the sample out of search (#22). A variant's path views
+ * stay out, since each is canonical to its parent route (#5, Slice 4). No
+ * entry carries a `lastModified`: the same revision answers the same bytes,
+ * so a rollback reads exactly as before the publish.
  */
 export default servedPage('/sitemap.xml', async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const { origin, profile } = requireDeploymentConfig();
   if (!INDEXABLE[profile]) return [];
-  const lastModified = new Date();
   return listCanonicalUrls(await getPublicView()).map((path) => ({
     url: `${origin}${path}`,
-    lastModified,
     changeFrequency: 'weekly',
     priority: path === '/' ? 1 : 0.8,
   }));

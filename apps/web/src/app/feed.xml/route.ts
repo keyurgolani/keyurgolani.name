@@ -20,7 +20,9 @@ async function feed(request: Request): Promise<Response> {
     return new Response(xml, {
       headers: {
         'Content-Type': 'application/rss+xml; charset=utf-8',
-        'Cache-Control': 'public, max-age=3600, stale-while-revalidate=86400',
+        // No stale-while-revalidate (#22): a cache could keep serving an
+        // item a rollback took out for a day after the hour is up.
+        'Cache-Control': 'public, max-age=3600',
       },
     });
   } catch {

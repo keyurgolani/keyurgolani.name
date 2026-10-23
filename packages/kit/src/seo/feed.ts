@@ -10,7 +10,11 @@ export interface FeedEntry {
   isoDate: string | null;
   summary: string | null;
   category: 'writing' | 'publication' | 'episode';
-  /** Source venue/publication/show, used as `<source>` in RSS. */
+  /**
+   * Source venue/publication/show. The feed writes no `<source>` for it:
+   * RSS 2.0's requires the `url` of the venue's own feed, which no record
+   * carries (#22).
+   */
   venue: string | null;
 }
 
@@ -141,9 +145,9 @@ export function renderRssFeed(view: FeedSource, options: RenderRssOptions = {}):
 
   const entries = collectFeedEntries(view, { limit: options.limit ?? 50 });
   const items = entries.map((entry) => renderItem(entry, site)).join('\n');
-  const lastBuildDate = entries[0]?.isoDate
-    ? new Date(entries[0].isoDate).toUTCString()
-    : new Date().toUTCString();
+  // The newest item's date, or none: never the clock, so the same view
+  // renders the same feed (#22).
+  const lastBuildDate = entries[0]?.isoDate ? new Date(entries[0].isoDate).toUTCString() : null;
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/">
@@ -152,7 +156,7 @@ export function renderRssFeed(view: FeedSource, options: RenderRssOptions = {}):
     <link>${escapeXml(site)}</link>
     <description>${escapeXml(description)}</description>
     <language>${escapeXml(portfolio.locale)}</language>
-    <lastBuildDate>${lastBuildDate}</lastBuildDate>
+    ${lastBuildDate ? `<lastBuildDate>${lastBuildDate}</lastBuildDate>` : ''}
     ${feed ? `<atom:link href="${escapeXml(feed)}" rel="self" type="application/rss+xml" />` : ''}
 ${items}
   </channel>
@@ -174,7 +178,6 @@ function renderItem(entry: FeedEntry, site: string): string {
   const guid = `<guid isPermaLink="false">${escapeXml(feedGuid(entry.id, site))}</guid>`;
   const description = entry.summary ? `<description>${escapeXml(entry.summary)}</description>` : '';
   const category = `<category>${escapeXml(entry.category)}</category>`;
-  const source = entry.venue ? `<source>${escapeXml(entry.venue)}</source>` : '';
   const dateTag = pubDate ? `<pubDate>${pubDate}</pubDate>` : '';
 
   return [
@@ -184,7 +187,6 @@ function renderItem(entry: FeedEntry, site: string): string {
     `      ${guid}`,
     description ? `      ${description}` : '',
     `      ${category}`,
-    source ? `      ${source}` : '',
     dateTag ? `      ${dateTag}` : '',
     '    </item>',
   ]

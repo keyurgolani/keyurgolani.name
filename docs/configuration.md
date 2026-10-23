@@ -32,7 +32,7 @@ A portfolio is a body of work. Its records, the works, evidence, chronology entr
 | `direction`     | yes      | `ltr` or `rtl`. It sets `<html dir>`.                                                                                                 |
 | `identity`      | yes      | `name`, the one required field, and `tagline`, `pronouns`, `location`, `email`, and `avatar`, a [placement](#media) of an image.      |
 | `links`         | no       | `{ url, label?, platform? }` each, in display order. `platform` picks an icon, such as `github` or `website`.                         |
-| `meta`          | no       | `title`, `description`, and `ogImage`, a placement of an image, for the page's metadata.                                              |
+| `meta`          | no       | `title` and `description` for the page's metadata, and `ogImage`, a placement of an image, which nothing shows yet.                   |
 | `works`         | no       | [Works](#works): what you made.                                                                                                       |
 | `evidence`      | no       | [Evidence](#evidence): attributable facts about the work.                                                                             |
 | `chronology`    | no       | [Chronology entries](#chronology): roles, studies, projects, events, and milestones, each with a period.                              |
