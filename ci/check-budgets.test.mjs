@@ -1,8 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { buildChunks, enhancementEntries } from './check-budgets.mjs';
 import { OVER_BUDGET_METRICS, overBudgetProblems } from './budgets.mjs';
 import {
@@ -349,27 +351,106 @@ test('a declared budget over its ceiling is a record of its own', () => {
   assert.match(check([scheme], []).records[0].test, /over the color-scheme axis's ceiling/);
 });
 
-test("a remote @import, url(), or image-set() in a unit's CSS fails; its own files and data: URLs don't", () => {
+/**
+ * Each way a unit's stylesheet can name another host, written as CSS
+ * source: what the check must find in it, raw and once registry generation
+ * has compiled it. They resolve as a browser resolves them.
+ */
+const REMOTE_SPELLINGS = {
+  'a backslash the URL parser reads as a slash': [
+    '.a { background: url("/\\\\evil.example/a.png") }',
+  ],
+  'a tab, written as an escape, the URL parser strips': [
+    '.a { background: url("/\\9/evil.example/a.png") }',
+  ],
+  'a newline, written as an escape, the URL parser strips': [
+    '.a { background: url("/\\a/evil.example/a.png") }',
+  ],
+  'a raw tab the URL parser strips': ['.a { background: url("/\t/evil.example/a.png") }'],
+  'a backslash, written as an escape': ['.a { background: url("/\\5c evil.example/a.png") }'],
+  'an unquoted url() with an escaped scheme': [
+    '.a { background: url(\\68ttps://evil.example/a.png) }',
+  ],
+  'the second URL in image-set(), after a url()': [
+    '.a { background: image-set(url(./a.png) 1x, "https://evil.example/b.png" 2x) }',
+  ],
+  'the second URL in -webkit-image-set()': [
+    '.a { background: -webkit-image-set("./a.png" 1x, "//evil.example/b.png" 2x) }',
+  ],
+  'a url() nested in image-set()': [
+    '.a { background: image-set("./a.png" 1x, url(https://evil.example/c.png) 2x) }',
+  ],
+  'src()': ['.a { background: src("https://evil.example/d.png") }'],
+  'an escaped function name': ['.a { background: u\\72l(https://evil.example/e.png) }'],
+};
+
+/** What a unit's stylesheet may name: its own files, a data: URL, a fragment. */
+const LOCAL_CSS = [
+  '.a { background: url(./local.png) }',
+  '.b { background: url("/_portfolio/asset/x.png") }',
+  '.c { background: url(data:image/png;base64,AA==) }',
+  '.d { background: url( "data:image/svg+xml,%3Csvg%3E" ) }',
+  '.e { mask: url(#clip) }',
+  '.f { background: image-set("./a.png" 1x, url(./b.png) 2x) }',
+  '/* @import url(https://commented.example/out.css); */',
+].join('\n');
+
+/** `css` as registry generation compiles it into a variant's stylesheet, or its problems. */
+function compiledStylesheet(t, css) {
+  const dir = mkdtempSync(path.join(tmpdir(), 'budgets-css-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  writeFileSync(path.join(dir, 'styles.css'), css);
+  for (const file of ['local.png', 'a.png', 'b.png']) writeFileSync(path.join(dir, file), 'png');
+  const compiler = pathToFileURL(
+    path.join(REPO_ROOT, 'packages', 'variant-contract', 'src', 'node', 'variant-stylesheet.ts'),
+  ).href;
+  const run = spawnSync(
+    process.execPath,
+    [
+      '--import',
+      'tsx',
+      '--input-type=module',
+      '-e',
+      `const { compileVariantStylesheet } = await import(${JSON.stringify(compiler)});
+       const dir = ${JSON.stringify(dir)};
+       const result = compileVariantStylesheet({ id: 'acme', source: { dir, file: dir + '/styles.css' }, layerOrder: '@layer variant-layout;', layer: 'variant-layout' });
+       process.stdout.write(JSON.stringify(result.ok ? { css: new TextDecoder().decode(result.stylesheet.bytes) } : { problems: result.problems.map((problem) => problem.message) }));`,
+    ],
+    { cwd: REPO_ROOT, encoding: 'utf8' },
+  );
+  assert.equal(run.status, 0, run.stderr);
+  return JSON.parse(run.stdout);
+}
+
+test("a unit stylesheet that reaches another host fails, however it spells the URL, raw and compiled; its own files and data: URLs don't", (t) => {
+  for (const [spelling, [css]] of Object.entries(REMOTE_SPELLINGS)) {
+    const found = remoteReferences(css);
+    assert.equal(found.length, 1, `${spelling}: ${JSON.stringify(found)}`);
+    assert.equal(new URL(found[0], 'https://unit.invalid/').hostname, 'evil.example', spelling);
+    const compiled = compiledStylesheet(t, `[data-variant='acme'] ${css}`);
+    if (compiled.css !== undefined) {
+      assert.equal(remoteReferences(compiled.css).length, 1, `${spelling}, compiled`);
+    } else {
+      assert.ok(compiled.problems.length > 0, `${spelling}: compiles or is refused`);
+    }
+  }
+  assert.deepEqual(remoteReferences(LOCAL_CSS), []);
+  const local = compiledStylesheet(
+    t,
+    `[data-variant='acme'] { }\n${LOCAL_CSS.replace(/^\./gm, "[data-variant='acme'] .")}`,
+  );
+  assert.ok(local.css, JSON.stringify(local.problems));
+  assert.deepEqual(remoteReferences(local.css), []);
+  // @import, with and without url(), and every remote reference in a file, once each.
   assert.deepEqual(
     remoteReferences(
       [
         "@import url('https://a.example/x.css');",
         '@import "//b.example/y.css" layer(v);',
-        '.a { background: url(http://c.example/z.png) }',
-        '.b { background: image-set("https://d.example/1.png" 1x, "./2.png" 2x) }',
-        '.c { background: url(\\68ttps://e.example/escaped.png) }',
-        '/* @import url(https://commented.example/out.css); */',
-        '.d { background: url(./local.png), url("/_portfolio/asset/x.png"), url(data:image/png;base64,AA==) }',
-        '.e { mask: url(#clip) }',
+        '.a { background: url(http://c.example/z.png), url(http://c.example/z.png) }',
       ].join('\n'),
-    ).sort(),
-    [
-      'https://a.example/x.css',
-      '//b.example/y.css',
-      'http://c.example/z.png',
-      'https://e.example/escaped.png',
-      'https://d.example/1.png',
-    ].sort(),
+    ),
+    ['https://a.example/x.css', '//b.example/y.css', 'http://c.example/z.png'],
   );
   const scheme = pack('color-scheme', 'warm');
   const { records } = check([scheme], [], {
@@ -596,40 +677,69 @@ test('each record is a valid 1.1 failure record with a repro command and its art
   });
 });
 
-test("CI's proof of the over-budget fixture wants one record per metric, each naming its asset", () => {
-  const record = (metric, asset, test = metric) => ({
-    unit: { kind: 'variant', id: 'fixture-over-budget' },
-    metric,
-    asset,
-    test,
+test("CI's proof of the over-budget fixture wants one record per metric, each naming its asset, and each a valid failure record with its route", async () => {
+  const validate = await loadValidator();
+  const id = 'fixture-over-budget';
+  const over = variant(id, {
+    budgets: { js: 30720, css: 10240 },
+    stylesheet: {
+      url: `/_portfolio/variant/${id}.0123456789ab.css`,
+      bytes: 60000,
+      gzipBytes: 18000,
+      sha256: 'x',
+    },
   });
-  const css = '/_portfolio/variant/fixture-over-budget.0123456789ab.css';
-  const good = [
-    record('js', '/_next/static/chunks/0abc~x.js'),
-    record('css', css),
-    record(
-      'remote',
-      css,
-      'reaches another host: https://fonts.example.invalid/fixture-over-budget.css',
-    ),
-    { unit: { kind: 'variant', id: 'fallback' }, metric: 'js', asset: 'x', test: 'x' },
+  const fallback = variant('fallback');
+  const cases = [
+    traceCase(id, {
+      requests: [{ url: `${ORIGIN}${over.stylesheet.url}` }],
+      attribution: { chunks: [chunk('0abc~x', { [over.packageName]: 41000 })], withoutMap: [] },
+    }),
+    traceCase('fallback'),
   ];
+  const { records } = check([over, fallback], cases, {
+    css: {
+      [over.stylesheet.url]:
+        "@import url('https://fonts.example.invalid/fixture-over-budget.css') layer(variant-layout);",
+    },
+  });
+  const report = (list) => ({ records: list.map(reportRecord) });
   assert.deepEqual(Object.keys(OVER_BUDGET_METRICS), ['js', 'css', 'remote']);
-  assert.deepEqual(overBudgetProblems({ records: good }), []);
-  assert.deepEqual(overBudgetProblems({ records: good.filter((one) => one.metric !== 'css') }), [
+  assert.deepEqual(metrics(records), ['css', 'js', 'remote']);
+  assert.deepEqual(overBudgetProblems(report(records), validate), []);
+  // Every record has its route: the stylesheet's from the case that requested it.
+  for (const record of records) assert.equal(record.route, '/', record.metric);
+  const css = records.find((record) => record.metric === 'css');
+  assert.deepEqual(css.requestedOn, [{ route: '/', profile: 'read-only', viewport: '1440x900' }]);
+
+  const without = (metric) => records.filter((record) => record.metric !== metric);
+  assert.deepEqual(overBudgetProblems(report(without('css')), validate), [
     '0 css record(s) for fixture-over-budget, not 1',
   ]);
-  assert.deepEqual(
-    overBudgetProblems({ records: [...good, record('js', '/_next/static/chunks/b.js')] }),
-    ['2 js record(s) for fixture-over-budget, not 1'],
-  );
+  const js = records.find((record) => record.metric === 'js');
+  assert.deepEqual(overBudgetProblems(report([...records, js]), validate), [
+    '2 js record(s) for fixture-over-budget, not 1',
+  ]);
   assert.match(
-    overBudgetProblems({ records: [...good.slice(1), record('js', 'total')] })[0],
+    overBudgetProblems(report([...without('js'), { ...js, asset: 'total' }]), validate)[0],
     /names total, not the asset/,
   );
   assert.match(
-    overBudgetProblems({ records: [...good, record('unlisted', '/_portfolio/asset/x.png')] })[0],
+    overBudgetProblems(
+      report([...records, { ...js, metric: 'unlisted', asset: '/_portfolio/asset/x.png' }]),
+      validate,
+    )[0],
     /unexpected unlisted record/,
+  );
+  // A CSS record with no route, as a check that dropped it would write, fails the proof.
+  const routeless = { ...css, route: undefined, profile: undefined, viewport: undefined };
+  assert.deepEqual(overBudgetProblems(report([...without('css'), routeless]), validate), [
+    'the css record has no route',
+  ]);
+  // So does one the schema refuses.
+  assert.match(
+    overBudgetProblems(report([...without('css'), { ...css, viewport: '' }]), validate).join(),
+    /the css record isn't a valid failure record/,
   );
 });
 

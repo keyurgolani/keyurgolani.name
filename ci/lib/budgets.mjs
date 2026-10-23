@@ -89,30 +89,159 @@ function plainCss(css) {
     .replace(/\\([^\n\r\f])/g, '$1');
 }
 
-/** A URL a browser would fetch from another host: scheme-relative, or with any scheme but data:. */
-export function isRemote(target) {
-  const value = target.trim();
-  if (value.startsWith('//')) return true;
-  return /^[a-z][a-z0-9+.-]*:/i.test(value) && !/^data:/i.test(value);
+/** The origin every unit file resolves against, standing in for the site's own. */
+const UNIT_ORIGIN = 'https://unit.invalid';
+const UNIT_BASE = `${UNIT_ORIGIN}/_portfolio/x/`;
+
+/** The functions whose arguments a browser fetches: url(), src(), and both image-set()s. */
+const URL_FUNCTIONS = new Set(['url', 'src', 'image-set', '-webkit-image-set']);
+
+const HEX = /[0-9a-f]/i;
+const NAME = /[a-z0-9_\-\u0080-\uffff]/i;
+const SPACE = /[ \t\n\r\f]/;
+
+/**
+ * A CSS escape at `css[at]`, a backslash: what it stands for and where the
+ * text goes on. A backslash before a newline, in a string, continues the
+ * line and stands for nothing.
+ */
+function escapeAt(css, at) {
+  let end = at + 1;
+  if (end >= css.length) return { value: '�', end };
+  if (HEX.test(css[end])) {
+    let hex = '';
+    while (end < css.length && hex.length < 6 && HEX.test(css[end])) hex += css[end++];
+    if (end < css.length && SPACE.test(css[end]))
+      end += css[end] === '\r' && css[end + 1] === '\n' ? 2 : 1;
+    const point = Number.parseInt(hex, 16);
+    const valid = point > 0 && point <= 0x10ffff && !(point >= 0xd800 && point <= 0xdfff);
+    return { value: valid ? String.fromCodePoint(point) : '�', end };
+  }
+  if (css[end] === '\n' || css[end] === '\f') return { value: '', end: end + 1 };
+  if (css[end] === '\r') return { value: '', end: css[end + 1] === '\n' ? end + 2 : end + 1 };
+  return { value: css[end], end: end + 1 };
 }
 
 /**
- * Every remote URL `css` imports or fetches: each @import, url(), and
- * image-set() string a unit's stylesheet names that reaches another host.
- * A unit's files are its own, and a public page makes no third-party
- * request.
+ * The tokens of `css` the URL scan reads, as CSS Syntax tokenizes them:
+ * strings, unquoted url() contents, functions, at-keywords, and
+ * parentheses, with escapes decoded and comments dropped.
+ */
+export function cssTokens(css) {
+  const tokens = [];
+  let at = 0;
+  while (at < css.length) {
+    const char = css[at];
+    if (char === '/' && css[at + 1] === '*') {
+      const close = css.indexOf('*/', at + 2);
+      at = close === -1 ? css.length : close + 2;
+    } else if (char === '"' || char === "'") {
+      let value = '';
+      at += 1;
+      while (at < css.length && css[at] !== char && css[at] !== '\n') {
+        if (css[at] === '\\') {
+          const escape = escapeAt(css, at);
+          value += escape.value;
+          at = escape.end;
+        } else value += css[at++];
+      }
+      at += 1;
+      tokens.push({ type: 'string', value });
+    } else if (char === '(' || char === ')') {
+      tokens.push({ type: char });
+      at += 1;
+    } else if (NAME.test(char) || char === '\\' || char === '@') {
+      const keyword = char === '@';
+      if (keyword) at += 1;
+      let name = '';
+      while (at < css.length && (NAME.test(css[at]) || css[at] === '\\')) {
+        if (css[at] === '\\') {
+          const escape = escapeAt(css, at);
+          name += escape.value;
+          at = escape.end;
+        } else name += css[at++];
+      }
+      if (keyword) {
+        tokens.push({ type: 'at', name: name.toLowerCase() });
+      } else if (css[at] === '(') {
+        at += 1;
+        const lower = name.toLowerCase();
+        let ahead = at;
+        while (ahead < css.length && SPACE.test(css[ahead])) ahead += 1;
+        if (lower === 'url' && css[ahead] !== '"' && css[ahead] !== "'") {
+          // An unquoted url(): its contents up to the ), escapes decoded.
+          let value = '';
+          at = ahead;
+          while (at < css.length && css[at] !== ')') {
+            if (css[at] === '\\') {
+              const escape = escapeAt(css, at);
+              value += escape.value;
+              at = escape.end;
+            } else value += css[at++];
+          }
+          at += 1;
+          tokens.push({ type: 'url', value: value.replace(/[ \t\n\r\f]+$/, '') });
+        } else tokens.push({ type: 'function', name: lower });
+      }
+    } else at += 1;
+  }
+  return tokens;
+}
+
+/** Every URL `css` fetches: each @import's, and each string or url() inside a URL function, nested ones included. */
+export function urlTargets(css) {
+  const tokens = cssTokens(css);
+  const targets = [];
+  // How deep the parentheses of each open URL function go.
+  const open = [];
+  let depth = 0;
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    if (token.type === 'at' && token.name === 'import') {
+      const next = tokens[index + 1];
+      if (next?.type === 'string' || next?.type === 'url') targets.push(next.value);
+      continue;
+    }
+    if (token.type === 'function' || token.type === '(') {
+      depth += 1;
+      if (token.type === 'function' && URL_FUNCTIONS.has(token.name)) open.push(depth);
+      continue;
+    }
+    if (token.type === ')') {
+      if (open.at(-1) === depth) open.pop();
+      depth = Math.max(0, depth - 1);
+      continue;
+    }
+    if (token.type === 'url') targets.push(token.value);
+    else if (token.type === 'string' && open.length > 0) targets.push(token.value);
+  }
+  return targets;
+}
+
+/**
+ * Whether a browser fetching `target` from a unit's stylesheet reaches
+ * another host: resolved against the site's own origin, as the URL parser
+ * resolves it, it lands anywhere else. A data: URL fetches nothing.
+ */
+export function isRemote(target) {
+  if (/^[\t\n\r\f ]*data:/i.test(target)) return false;
+  try {
+    return new URL(target, UNIT_BASE).origin !== UNIT_ORIGIN;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Every URL a unit's stylesheet names that reaches another host: from an
+ * @import, url(), src(), image-set(), or -webkit-image-set(), each string
+ * in them read, resolved as a browser resolves it. A unit's files are its
+ * own, and a public page makes no third-party request.
  *
  * @param {string} css
  */
 export function remoteReferences(css) {
-  const text = plainCss(css);
-  const targets = [];
-  for (const [, , value] of text.matchAll(/@import\s+(["'])(.*?)\1/gi)) targets.push(value);
-  for (const [, , value] of text.matchAll(/url\(\s*(["']?)(.*?)\1\s*\)/gi)) targets.push(value);
-  for (const [, inner] of text.matchAll(/image-set\(([^)]*)\)/gi)) {
-    for (const [, , value] of inner.matchAll(/(["'])(.*?)\1/g)) targets.push(value);
-  }
-  return [...new Set(targets.filter(isRemote).map((target) => target.trim()))];
+  return [...new Set(urlTargets(css).filter(isRemote))];
 }
 
 /**
@@ -320,6 +449,38 @@ export function checkBudgets({
   const records = [];
   const checked = [];
   const cases = trace?.cases ?? [];
+  /**
+   * The trace cases that requested any of `assets`, by URL path, in the
+   * report's order: where a stylesheet, image, font, or chunk record's
+   * route comes from, since the build measures those once.
+   */
+  const requestedOn = (assets) => {
+    const paths = new Set(assets);
+    return cases
+      .filter((entry) =>
+        (entry.requests ?? []).some((request) =>
+          paths.has(pathOn(request.url, entry.origin ?? '') ?? ''),
+        ),
+      )
+      .map(({ route, profile, viewport }) => ({
+        route,
+        profile: profile ?? null,
+        viewport: viewport ?? null,
+      }));
+  };
+  /** A record's route, profile, and viewport: the first case that requested its asset, and every one in `requestedOn`. */
+  const where = (assets) => {
+    const on = requestedOn(assets);
+    const [first] = on;
+    return first
+      ? {
+          route: first.route,
+          profile: first.profile ?? undefined,
+          viewport: first.viewport ?? undefined,
+          requestedOn: on,
+        }
+      : {};
+  };
   for (const unit of units) {
     const row = ceilingsFor(unit, ceilings);
     const limits = limitsFor(unit, ceilings);
@@ -375,7 +536,7 @@ export function checkBudgets({
             : {}),
         });
         if (limit === null || entry.amount <= limit) continue;
-        const where = [
+        const place = [
           entry.enhancement ? ` in enhancement ${entry.enhancement}` : '',
           routed ? ` on ${key}` : '',
         ].join('');
@@ -383,10 +544,14 @@ export function checkBudgets({
         records.push({
           unit,
           metric: kind,
-          route: routed ? key : undefined,
-          profile: routed ? (entry.profile ?? undefined) : undefined,
-          viewport: routed ? (entry.viewport ?? undefined) : undefined,
-          test: `${label(unit)}'s ${kind}${where} is ${entry.amount}, over its ${against} of ${limit}; ${entry.assets[0]?.asset ?? 'no one asset'} carries ${entry.assets[0]?.amount ?? 0} of it`,
+          ...(routed
+            ? {
+                route: key,
+                profile: entry.profile ?? undefined,
+                viewport: entry.viewport ?? undefined,
+              }
+            : where(entry.assets.map(({ asset }) => asset))),
+          test: `${label(unit)}'s ${kind}${place} is ${entry.amount}, over its ${against} of ${limit}; ${entry.assets[0]?.asset ?? 'no one asset'} carries ${entry.assets[0]?.amount ?? 0} of it`,
           asset: entry.assets[0]?.asset ?? manifestOf(unit),
           actual: entry.amount,
           threshold: limit,
@@ -447,6 +612,7 @@ export function checkBudgets({
           records.push({
             unit,
             metric: 'remote',
+            ...where([unit.stylesheet.url]),
             test: `${label(unit)}'s stylesheet reaches another host, and a unit's CSS may fetch only its own files: ${remote.join(', ')}`,
             asset: unit.stylesheet.url,
             actual: remote.length,
@@ -501,7 +667,8 @@ export function failureFields(record, { gate, reproCommand: command, artifacts }
     schemaVersion: '1.1',
     gate,
     test: record.test,
-    package: unit?.packageName,
+    // A unit from ASSET_MANIFEST names its package packageName; one from the report, package.
+    package: unit?.packageName ?? unit?.package,
     variant: unit && !pack ? unit.id : undefined,
     pack: pack ? unit.id : undefined,
     axis: pack ? unit.kind : undefined,
