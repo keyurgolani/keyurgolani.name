@@ -40,6 +40,7 @@ import {
   sourceFiles,
 } from '../harness/trace/purity.mjs';
 import { WEB } from '../variants/target';
+import { PLATFORM_DEFAULTS } from '../../packages/appearance/src/axes';
 import {
   aggregateProbes,
   attributionSummary,
@@ -470,6 +471,12 @@ export async function purityOf(
     dom,
     forbidden: rules.rules,
     forbiddenProblems: [...rules.problems, ...extra.problems],
+    // The error page renders in the platform's fallback packs (#19, Slice 4).
+    errorPacks: {
+      'design-language': PLATFORM_DEFAULTS.designLanguage,
+      'color-scheme': PLATFORM_DEFAULTS.colorScheme,
+      typography: PLATFORM_DEFAULTS.typography,
+    },
   });
   return {
     ...verdict,

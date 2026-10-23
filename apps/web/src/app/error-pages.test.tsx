@@ -167,6 +167,65 @@ test("the global 404's document is in the portfolio's language and direction, in
   assert.match(html, /<h1>Page not found<\/h1>/);
 });
 
+test("a tampered or unregistered preference cookie renders the site's own appearance on that axis, never an error page, and never shows in the page (#19, Slice 4)", async (t) => {
+  t.after(() => setDeploymentState(undefined));
+  setDeploymentState({
+    config: {
+      profile: 'read-only',
+      mode: 'production',
+      origin: 'https://rowan.test',
+      trustedProxyHops: 0,
+      secrets: {},
+    },
+    catalog: {
+      getLive: async () =>
+        ({
+          revisionId: 'r1',
+          unit: {
+            portfolio: { locale: 'en', direction: 'ltr' },
+            site: {
+              appearance: { ...PLATFORM_DEFAULTS, variant: 'canary-variant', displayMode: 'dark' },
+              visitorControls: {
+                variant: 'locked',
+                designLanguage: 'locked',
+                colorScheme: 'selectable',
+                typography: 'locked',
+                displayMode: 'selectable',
+              },
+              sections: {},
+            },
+          },
+        }) as never,
+    },
+    dispatch: () => assert.fail('the 404 page runs no operation'),
+    degraded: [],
+  });
+  let cookie = '';
+  t.mock.method(preferenceCookie, 'read', async () => cookie);
+  for (const value of [
+    'scheme=nebula-canary',
+    'mode=dim-canary',
+    'mode=light&mode=dark&scheme=Nebula-Canary',
+    '<script>canary()</script>',
+    '%E0%A4%A&scheme=%ZZ',
+    `scheme=${'canary'.repeat(400)}`,
+  ]) {
+    cookie = value;
+    const html = renderToStaticMarkup(await NotFoundDocument({}));
+    assert.ok(html.startsWith('<html lang="en" dir="ltr">'), value);
+    assert.match(html, /<h1>Page not found<\/h1>/, value);
+    assert.match(html, / data-color-scheme="warm-parchment" /, value);
+    assert.doesNotMatch(html, /canary\(|nebula|dim-canary|canarycanary/i, value);
+    assert.ok(!html.includes('<script'), value);
+  }
+  // A well-formed mode beside a malformed scheme still sets the mode.
+  cookie = 'mode=light&scheme=Nebula-Canary';
+  assert.match(renderToStaticMarkup(await NotFoundDocument({})), / data-display-mode="light" /);
+  // And an unregistered id alone leaves the published mode.
+  cookie = 'scheme=nebula-canary';
+  assert.match(renderToStaticMarkup(await NotFoundDocument({})), / data-display-mode="dark" /);
+});
+
 test("the global 404's metadata resolves against the site's origin, and names none before startup", async (t) => {
   t.after(() => setDeploymentState(undefined));
   // It imports the site's stylesheets, which Next bundles; Node would read them as JavaScript.

@@ -146,17 +146,22 @@ test('with the OS reducing motion, the runtime stays static, and MotionControl i
   expect(await windowOf(page)).toMatchObject(NOTHING_RUNS);
 });
 
-test("under the site's reduce policy, the runtime stays static, and MotionControl isn't there", async ({
+test("with the boundary reduced, as the site's reduce policy renders it, the runtime stays static, and MotionControl is disabled and says so", async ({
   page,
 }) => {
   await load(page);
   // The document boundary renders the site's reduce policy as data-motion="reduced"
-  // (#19, Slice 4); the runtime follows it as it changes.
+  // (#19, Slice 4); the runtime follows it as it changes. Under the policy itself
+  // the fixture's MotionControl, given input.presentation.motionPolicy, renders
+  // nothing from the server, which the kit's runtime.test.tsx holds.
   await page.evaluate(() =>
     document.querySelector('[data-variant]')?.setAttribute('data-motion', 'reduced'),
   );
   await expect.poll(async () => (await stage(page)).activity).toBe('paused');
-  await expect(page.locator('[data-motion-control]')).toHaveCount(0);
+  await expect(page.locator('[data-motion-control] button')).toBeDisabled();
+  await expect(page.locator('[data-motion-control] [role="status"]')).toHaveText(
+    'Reduced by system',
+  );
   expect(await windowOf(page)).toMatchObject(NOTHING_RUNS);
 });
 

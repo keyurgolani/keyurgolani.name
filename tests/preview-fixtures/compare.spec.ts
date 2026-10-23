@@ -227,15 +227,17 @@ test(
 
     // The second frame's own appearance: fixture-environment, with installed packs.
     const group = secondAppearance(page);
-    // Each change is a new grant, which the refresh throttle may hold up to 2
+    // The change is a new grant, which the refresh throttle may hold up to 2
     // seconds: the frame counts as changed once it shows that grant, ready.
-    for (const [name, value] of [
-      ['Composition', 'fixture-environment'],
-      ['Color scheme', 'warm-parchment'],
-      ['Typography', 'humanist-ui'],
-    ] as const) {
-      await remints(page, 1, () => group.getByRole('combobox', { name }).selectOption(value));
-    }
+    await remints(page, 1, () =>
+      group.getByRole('combobox', { name: 'Composition' }).selectOption('fixture-environment'),
+    );
+    // The site is on the platform defaults (#19, Slice 4), the packs this
+    // build installs, so the override keeps them.
+    await expect(group.getByRole('combobox', { name: 'Color scheme' })).toHaveValue(
+      'warm-parchment',
+    );
+    await expect(group.getByRole('combobox', { name: 'Typography' })).toHaveValue('humanist-ui');
     await expect(frameElementAt(page, 1)).toHaveAttribute(
       'title',
       /^Preview — not live, fixture-environment, .*, second of two$/,

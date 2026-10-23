@@ -478,6 +478,23 @@ function plan(profile, leaks, origin) {
         ...mediaMissProblems(response),
         ...(UUID.test(response.headers['x-request-id'] ?? '') ? [] : ['no x-request-id']),
       ]);
+    } else if (access !== 'absent' && entry.methods !== undefined) {
+      // A handler that takes only the methods its entry lists, such as
+      // POST /api/appearance (#19, Slice 4): any other method is the plain
+      // 405 naming them, and its own, with no Origin, is a 403 that sets
+      // nothing.
+      for (const method of METHODS) {
+        const own = entry.methods.includes(method);
+        add(method, concrete(entry.pattern), (response) => [
+          ...status(own ? 403 : 405)(response),
+          ...noStore(response),
+          ...(own || response.headers.allow === entry.methods.join(', ')
+            ? []
+            : [`Allow is ${response.headers.allow}, not ${entry.methods.join(', ')}`]),
+          ...(response.headers['set-cookie'] === undefined ? [] : ['sets a cookie']),
+          ...(UUID.test(response.headers['x-request-id'] ?? '') ? [] : ['no x-request-id']),
+        ]);
+      }
     } else if (access !== 'absent') {
       add('GET', concrete(entry.pattern), (response) => [
         ...status(200)(response),

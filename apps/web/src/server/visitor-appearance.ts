@@ -9,7 +9,10 @@ import { requireDeploymentConfig } from './config-store';
 // own values on the axes it lets them choose, from the preference cookie
 // POST /api/appearance sets under owner and read-only, and from the query
 // under demo, never the other. Every page that reads it is rendered per
-// request, and proxy.ts marks its answer private and varying with Cookie.
+// request and answers private, no-store, so no cache keeps one visitor's
+// appearance for another: Next sets its own Vary on each page. A cookie
+// value that's malformed, or names an id this build doesn't register, falls
+// back on its axis to the site's own, and never shows in the page.
 
 /**
  * The request's preference cookie. A test outside a request, where Next has
