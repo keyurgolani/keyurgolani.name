@@ -7,9 +7,10 @@ import { generateRegistry, REPO_ROOT } from './registry-options';
 
 // What the appearance source audit reads (#19, Slice 5): every variant
 // package registry generation can register, under any fixture flag, is one
-// of the packages the audit finds, and each file a variant's stylesheet
-// compiles from is one the audit reads, so a skipped directory never hides
-// a stylesheet.
+// of the packages the audit finds, and the audit finds no other but one
+// @portfolio/web doesn't depend on yet, such as Editorial Evidence until #13
+// registers it. Each file a variant's stylesheet compiles from is one the
+// audit reads, so a skipped directory never hides a stylesheet.
 
 const real = (file: string) => fs.realpathSync(file);
 
@@ -30,7 +31,21 @@ test("the audit's variant packages are the ones generation registers, and it rea
   ]);
   const variants = runs.flat();
   const audited = variantPackageDirs(path.join(REPO_ROOT, 'packages')).map(real).sort();
-  assert.deepEqual([...new Set(variants.map(({ dir }) => real(dir)))].sort(), audited);
+  const registeredDirs = new Set(variants.map(({ dir }) => real(dir)));
+  for (const dir of registeredDirs) assert.ok(audited.includes(dir), `the audit misses ${dir}`);
+  const { dependencies = {}, devDependencies = {} } = JSON.parse(
+    fs.readFileSync(path.join(REPO_ROOT, 'apps', 'web', 'package.json'), 'utf8'),
+  ) as { dependencies?: Record<string, string>; devDependencies?: Record<string, string> };
+  for (const dir of audited.filter((each) => !registeredDirs.has(each))) {
+    const { name } = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8')) as {
+      name: string;
+    };
+    assert.ok(
+      !(name in dependencies) && !(name in devDependencies),
+      `${name} is a dependency of @portfolio/web that no run registers`,
+    );
+  }
+  assert.ok(registeredDirs.size >= 5, [...registeredDirs].join(' '));
   for (const variant of variants) {
     const dir = real(variant.dir);
     const read = new Set(auditedFiles(dir).map(real));
