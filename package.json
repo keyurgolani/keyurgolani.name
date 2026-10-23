@@ -75,7 +75,7 @@
     "ci:docs": "node ci/run.mjs docs -- node ci/docs-check.mjs",
     "ci:links": "node ci/run.mjs links -- node ci/docs-check.mjs --external",
     "ci:quality-pr": "node ci/run.mjs quality-pr -- pnpm quality:pr",
-    "ci:quality-meta": "node ci/run.mjs quality-meta -- node tests/quality/meta/when-changed.mjs -- pnpm quality:meta",
+    "ci:quality-meta": "node ci/run.mjs quality-meta -- pnpm quality:meta",
     "ci:image": "node ci/run.mjs image -- node ci/image-smoke.mjs",
     "ci:proxy": "node ci/run.mjs proxy -- node ci/proxy-smoke.mjs",
     "ci:security-proxy": "node ci/run.mjs security-proxy -- node ci/test-security-proxy.mjs",
