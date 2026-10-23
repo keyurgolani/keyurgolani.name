@@ -137,7 +137,12 @@ export function DataDisplay({ caption, columns, rows, bars, id, className }: Dat
   const [head, ...rest] = columns;
   if (!head) throw new TypeError('A data display has at least one column.');
   return (
-    <figure id={id} className={className} data-ui-slot="data-display">
+    // Focusable, as a table wider than its column scrolls, and a keyboard
+    // scrolls only what it can reach (WCAG 2.1.1). Its caption names it.
+    // Whether it overflows depends on the viewport, zoom, and type, which
+    // the server can't know, so it's always a stop; inside a plate, inert
+    // takes it out of the order.
+    <figure id={id} className={className} data-ui-slot="data-display" tabIndex={0}>
       <figcaption data-ui-slot="data-display.caption">{caption}</figcaption>
       <table data-ui-slot="data-display.table">
         <thead>
