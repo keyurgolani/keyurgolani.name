@@ -16,6 +16,7 @@ export * from './feed';
  *   - `knowsAbout`           the practice's skills, else its tools
  *   - `sameAs`               the portfolio's http(s) links
  *   - `image`                the avatar's rendition, once it has one
+ *   - never `email`, which the contact section shows where the owner puts it
  *   - `workExample`          the signature and featured works, each with an
  *                            `@id` made from its record id
  * #22 (published metadata) owns the rest.
@@ -72,7 +73,9 @@ function buildPersonSchema(view: StructuredDataSource, url: string | undefined):
   if (url) person.url = url;
   const image = avatarUrl(view, url);
   if (image) person.image = image;
-  if (identity.email) person.email = identity.email;
+  // Never the identity's email: an address in JSON-LD is one more place to
+  // harvest it, and the contact section already shows it where the owner
+  // chose to (#22).
 
   const role = currentRole(chronology);
   if (role) {

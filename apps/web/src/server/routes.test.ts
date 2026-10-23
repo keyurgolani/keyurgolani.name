@@ -358,6 +358,9 @@ const CONFIG_EXPORTS = new Set([
 /** Static metadata a page may export, as an object literal. */
 const STATIC_EXPORTS = new Set(['metadata', 'viewport']);
 
+/** A page's metadata from data, which only servedMetadata('<pattern>', metadata) may export (#22). */
+const METADATA_GUARD = 'servedMetadata';
+
 /** Whether `node` is `guard('<pattern>', handler)`. */
 function isGuard(node: ts.Expression | undefined, guard: string, pattern: string): boolean {
   if (!node || !ts.isCallExpression(node)) return false;
@@ -397,6 +400,17 @@ function guardProblems(route: RouteFile, text?: string): string[] {
     );
   });
   if (!imported) problems.push(`import { ${guard} } from '${from}'`);
+  const importsMetadataGuard = source.statements.some(
+    (statement) =>
+      ts.isImportDeclaration(statement) &&
+      ts.isStringLiteral(statement.moduleSpecifier) &&
+      statement.moduleSpecifier.text === '~/server/page-guard' &&
+      statement.importClause?.namedBindings !== undefined &&
+      ts.isNamedImports(statement.importClause.namedBindings) &&
+      statement.importClause.namedBindings.elements.some(
+        (item) => item.name.text === METADATA_GUARD && !item.propertyName,
+      ),
+  );
 
   let guarded = 0;
   for (const statement of source.statements) {
@@ -422,6 +436,16 @@ function guardProblems(route: RouteFile, text?: string): string[] {
       if (handlers && METHODS.includes(name)) {
         if (constant && isGuard(declaration.initializer, guard, route.pattern)) guarded++;
         else problems.push(`${name}: ${wrapped}`);
+      } else if (!handlers && name === 'generateMetadata') {
+        if (
+          !constant ||
+          !importsMetadataGuard ||
+          !isGuard(declaration.initializer, METADATA_GUARD, route.pattern)
+        ) {
+          problems.push(
+            `generateMetadata must be ${METADATA_GUARD}('${route.pattern}', metadata), imported from '~/server/page-guard'`,
+          );
+        }
       } else if (STATIC_EXPORTS.has(name)) {
         const value = declaration.initializer;
         if (!value || !ts.isObjectLiteralExpression(value)) {
@@ -467,9 +491,21 @@ test('the guard check refuses a skipped guard, a bare method, and a second ungua
     ),
     [],
   );
+  const guardedMetadata = "import { servedMetadata, servedPage } from '~/server/page-guard';\n";
+  assert.deepEqual(
+    check(
+      `${guardedMetadata}export default servedPage('/feed.xml', render);\nexport const generateMetadata = servedMetadata('/feed.xml', metadata);\n`,
+      'page',
+    ),
+    [],
+  );
   for (const text of [
     `${page}export default async function Page() {}\n`,
     `${page}export default servedPage('/feed.xml', render);\nexport async function generateMetadata() {}\n`,
+    `${page}export default servedPage('/feed.xml', render);\nexport const generateMetadata = metadata;\n`,
+    `${page}export default servedPage('/feed.xml', render);\nexport const generateMetadata = servedMetadata('/feed.xml', metadata);\n`,
+    `${guardedMetadata}export default servedPage('/feed.xml', render);\nexport const generateMetadata = servedMetadata('/api/health', metadata);\n`,
+    `${guardedMetadata}export default servedPage('/feed.xml', render);\nexport let generateMetadata = servedMetadata('/feed.xml', metadata);\n`,
     `${page}export default servedPage('/feed.xml', render);\nexport const metadata = load();\n`,
     `${page}export default render;\n`,
   ]) {

@@ -1,4 +1,4 @@
-import test from 'node:test';
+import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import Module from 'node:module';
@@ -12,6 +12,8 @@ import {
   type PublicView,
 } from '@portfolio/schema';
 import { experienceHead } from '~/lib/experience-head';
+import { readDeploymentConfig } from '~/server/config';
+import { setDeploymentState } from '~/server/config-store';
 
 // The preview document (#7, Slice 1, item 3): the previewed unit's language,
 // direction, and head, noindex, the page's tree, and an agent that adds
@@ -22,6 +24,27 @@ import { experienceHead } from '~/lib/experience-head';
 (Module as unknown as { _extensions: Record<string, () => void> })._extensions['.css'] = () => {};
 
 const ORIGIN = 'https://rowan.test';
+
+/** An owner deployment, the one profile with preview grants, for the test's length. */
+function owner(t: TestContext): void {
+  const read = readDeploymentConfig(
+    {
+      NODE_ENV: 'production',
+      PORTFOLIO_PROFILE: 'owner',
+      PORTFOLIO_ORIGIN: ORIGIN,
+      PORTFOLIO_SOURCE_DIR: '/srv/config',
+    },
+    { cwd: '/' },
+  );
+  assert.ok(read.ok, JSON.stringify(read.issues));
+  setDeploymentState({
+    config: read.config,
+    catalog: { getLive: () => assert.fail('the document reads no catalog') },
+    dispatch: () => assert.fail('the document runs no operation'),
+    degraded: [],
+  });
+  t.after(() => setDeploymentState(undefined));
+}
 
 /** A previewed unit unlike the live site: in Hebrew, right to left. */
 function unit(): PublicView {
@@ -70,7 +93,8 @@ function unit(): PublicView {
   );
 }
 
-test("a preview document is in the previewed unit's language and direction, with its JSON-LD, around the page and nothing else", async () => {
+test("a preview document is in the previewed unit's language and direction, with its JSON-LD, around the page and nothing else", async (t) => {
+  owner(t);
   const { PreviewDocument } = await import('./document');
   const view = unit();
   const html = renderToStaticMarkup(
@@ -93,7 +117,8 @@ test("a preview document is in the previewed unit's language and direction, with
   assert.ok(!html.includes('data-theme'), html);
 });
 
-test("a preview's metadata is the previewed unit's head, noindex", async () => {
+test("a preview's metadata is the previewed unit's head, noindex, and names no og:url", async (t) => {
+  owner(t);
   const { previewMetadata, PREVIEW_ROBOTS } = await import('./document');
   const view = unit();
   assert.deepEqual(previewMetadata(view, ORIGIN), {
@@ -103,9 +128,15 @@ test("a preview's metadata is the previewed unit's head, noindex", async () => {
   assert.deepEqual(PREVIEW_ROBOTS, { index: false, follow: false });
   // The head is the previewed portfolio's, not the live site's.
   assert.equal(previewMetadata(view, ORIGIN).title, 'Noa Preview — Portfolio');
+  // A preview frame isn't a route on the live site (#22).
+  assert.equal(
+    (previewMetadata(view, ORIGIN).openGraph as { url?: unknown } | undefined)?.url,
+    undefined,
+  );
 });
 
-test('the preview agent is a client module that renders nothing, with a channel or without (#7, Slice 3)', async () => {
+test('the preview agent is a client module that renders nothing, with a channel or without (#7, Slice 3)', async (t) => {
+  owner(t);
   const source = readFileSync(
     fileURLToPath(new URL('../../preview/agent.tsx', import.meta.url)),
     'utf8',

@@ -91,11 +91,11 @@ function rendered(route: VisitorRoute): [string, RouteTarget, string | undefined
   return [route.composition.rendered.manifest.id, route.target, route.canonical];
 }
 
-test("home and a path view of the site's variant render, the view canonical to home", async () => {
+test("home and a path view of the site's variant render, home its own canonical and the view canonical to home", async () => {
   assert.deepEqual(rendered((await resolve({ segments: [] })).route), [
     'fixture-chapters',
     { route: 'home' },
-    undefined,
+    '/',
   ]);
   assert.deepEqual(rendered((await resolve({ segments: ['chapters', 'about'] })).route), [
     'fixture-chapters',
@@ -144,6 +144,8 @@ test('under /sample, the variant ?variant= names renders its views, and links an
     kind: 'redirect',
     location: '/sample?variant=fixture-chapters',
   });
+  // /sample's home isn't the live site's, so it names no canonical (#22).
+  assert.equal(rendered((await resolve({ ...named, segments: [] }, sample)).route)[2], undefined);
   // Without ?variant=, the sample's own selection: the fallback, whose path is another's.
   assert.deepEqual(
     (await resolve({ basePath: '/sample', segments: ['chapters', 'about'] }, sample)).route,
