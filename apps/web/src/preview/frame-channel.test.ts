@@ -1,6 +1,7 @@
 import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import { setTimeout as wait } from 'node:timers/promises';
+import { isDeepStrictEqual } from 'node:util';
 import { envelope, LIMITS, type PreviewDrop } from './protocol';
 import {
   classifyLink,
@@ -259,10 +260,31 @@ function setup(
   let seq = 1;
   const send = (port: MessagePort, type: string, payload: unknown, extra: object = {}) =>
     port.postMessage({ ...envelope(type, payload, ++seq), ...extra });
-  return { win, stop, drops, received, fromParent, connect, send };
+  /** The agent's hello, then Studio's connect, then the frame's ready or status back over the port. */
+  const handshake = async () => {
+    await until(() => win.parent.posted.length > 0, 'the hello');
+    const port = connect();
+    await until(() => received.length > 0, 'the frame to announce itself');
+    return port;
+  };
+  return { win, stop, drops, received, fromParent, connect, send, handshake };
 }
 
 const reasons = (drops: readonly PreviewDrop[]) => drops.map(({ reason, type }) => [reason, type]);
+
+/**
+ * Waits until `done()` holds, or fails after 5 seconds. A message that goes
+ * from the test to the agent and back crosses two ports, each a turn of the
+ * event loop, so on a busy machine a fixed few milliseconds can end before
+ * the second turn.
+ */
+async function until(done: () => boolean, what: string) {
+  const end = Date.now() + 5000;
+  while (!done()) {
+    if (Date.now() > end) assert.fail(`timed out waiting for ${what}`);
+    await wait(5);
+  }
+}
 
 /** A port that records what the frame sends over it, and whether the frame closed it. */
 function recordingPort() {
@@ -319,8 +341,7 @@ test("the agent does nothing in a document that isn't framed, so the dev fixture
 test("the agent says hello to Studio's origin alone, after its own load, with the grant's nonce and its document's id (#7, Slice 3)", async (t) => {
   const { win } = setup(t);
   assert.equal(win.parent.posted.length, 0, 'not before the load is done');
-  await wait(5);
-  assert.equal(win.parent.posted.length, 1);
+  await until(() => win.parent.posted.length > 0, 'the hello');
   const [{ message, targetOrigin }] = win.parent.posted as unknown as [
     {
       message: { type: string; payload: { nonce: string; instance: string } };
@@ -334,7 +355,8 @@ test("the agent says hello to Studio's origin alone, after its own load, with th
   // A second start in the same document says hello with the same id.
   const again = new FakeFrame(`${STUDIO}${BASE}`);
   const stop = startFrameChannel(again as unknown as Window, SERVER);
-  await wait(5);
+  t.after(() => stop?.());
+  await until(() => again.parent.posted.length > 0, 'the second hello');
   const [second] = again.parent.posted as unknown as [
     { message: { payload: { instance: string } } },
   ];
@@ -407,7 +429,7 @@ test('the agent says hello again four times over the next 3.75 seconds, whether 
 });
 
 test("the agent takes connect only from its parent window, from Studio's origin, after its hello, with one port (#7, Slice 3)", async (t) => {
-  const { drops, received, fromParent, connect } = setup(t);
+  const { win, drops, received, fromParent, connect } = setup(t);
   const port = new MessageChannel();
   t.after(() => {
     port.port1.close();
@@ -416,7 +438,7 @@ test("the agent takes connect only from its parent window, from Studio's origin,
   const connectMessage = envelope('connect', {}, 1);
   // Before its hello: not yet.
   fromParent(connectMessage, { ports: [port.port2] });
-  await wait(5);
+  await until(() => win.parent.posted.length > 0, 'the hello');
   fromParent(connectMessage, { source: {}, ports: [port.port2] });
   fromParent(connectMessage, { origin: 'https://evil.test', ports: [port.port2] });
   fromParent(connectMessage, { origin: 'null', ports: [port.port2] });
@@ -445,15 +467,13 @@ test("the agent takes connect only from its parent window, from Studio's origin,
   port.port1.onmessage = () => assert.fail('a dropped connect opened its port');
   await wait(5);
   connect();
-  await wait(5);
+  await until(() => received.length > 0, 'ready');
   assert.deepEqual(received, [{ ...envelope('ready', { renderedVersion: 4, route: '/' }, 2) }]);
 });
 
 test("the agent reads Studio's messages over the port, and drops what the protocol refuses with no side effect (#7, Slice 3)", async (t) => {
-  const { win, drops, received, connect, send } = setup(t);
-  await wait(5);
-  const port = connect();
-  await wait(5);
+  const { win, drops, received, send, handshake } = setup(t);
+  const port = await handshake();
   received.length = 0;
   // Each refused, and nothing moves: another version, an unknown type, a
   // frame type, oversized, invalid payloads, a route out of the grant, and
@@ -480,7 +500,7 @@ test("the agent reads Studio's messages over the port, and drops what the protoc
     selection: {},
   });
   send(port, 'asset', { key: 'a.png', blob: new Blob(['x']) });
-  await wait(5);
+  await until(() => drops.length >= 11, 'the drops');
   assert.deepEqual(reasons(drops), [
     ['version', undefined],
     ['type', 'teleport'],
@@ -508,7 +528,7 @@ test("the agent reads Studio's messages over the port, and drops what the protoc
   send(port, 'lifecycle', { state: 'hidden', focused: false });
   send(port, 'scroll-to', { anchor: 'contact', progress: 0.5, seq: 9 });
   send(port, 'navigate', { route: '/work/small-traces' });
-  await wait(5);
+  await until(() => received.length >= 2, 'rect and navigated');
   assert.equal(drops.length, 11);
   assert.equal(win.events.length, 1);
   assert.equal(win.events[0]!.type, LIFECYCLE_EVENT);
@@ -543,7 +563,7 @@ test('a local frame takes documents and assets up to their limits and 100 MiB in
   );
   // The fragment's nonce leaves the URL once read; the query's never counted.
   assert.deepEqual(win.replaced, [`/preview/local?nonce=${'Q'.repeat(22)}`]);
-  await wait(5);
+  await until(() => win.parent.posted.length > 0, 'the hello');
   const [{ message }] = win.parent.posted as unknown as [
     { message: { payload: { nonce: string } } },
   ];
@@ -598,14 +618,12 @@ test('a local frame takes documents and assets up to their limits and 100 MiB in
 });
 
 test("the link guard cancels every link but a fragment and the grant's own paths, and sends Studio what it cancelled (#7, Slice 3)", async (t) => {
-  const { win, received, connect } = setup(t, SERVER, `${STUDIO}${BASE}/work/a`);
+  const { win, received, handshake } = setup(t, SERVER, `${STUDIO}${BASE}/work/a`);
   // Before the handshake, the frame still never follows an outside link.
   const early = click('https://example.test/');
   win.fire('click', early);
   assert.equal(early.defaultPrevented, true);
-  await wait(5);
-  connect();
-  await wait(5);
+  await handshake();
   received.length = 0;
   const outcomes: Array<[string, boolean]> = [];
   for (const [href, attributes] of [
@@ -632,7 +650,7 @@ test("the link guard cancels every link but a fragment and the grant's own paths
   win.fire('click', handled);
   // An element with no href is no link.
   win.fire('click', click(null));
-  await wait(5);
+  await until(() => received.length >= 8, 'the links');
   assert.deepEqual(outcomes, [
     ['https://example.test/talk', true],
     ['//example.test/x', true],
@@ -665,16 +683,14 @@ test("the link guard cancels every link but a fragment and the grant's own paths
   const internal = click(`${BASE}/work/b`);
   win.fire('click', internal);
   assert.equal(internal.defaultPrevented, true);
-  await wait(5);
+  await until(() => received.length >= 9, 'navigated');
   assert.deepEqual(win.assigned, [`${STUDIO}${BASE}/work/b`]);
   assert.deepEqual(received.at(-1)!.payload, { route: '/work/b' });
 });
 
 test("the guard reads an image map's area and an SVG link's xlink:href, and listens on window in the capture phase, so a page's listener that stops a click can't keep a link from it (#7, Slice 3)", async (t) => {
-  const { win, received, connect } = setup(t, SERVER, `${STUDIO}${BASE}/work/a`);
-  await wait(5);
-  connect();
-  await wait(5);
+  const { win, received, handshake } = setup(t, SERVER, `${STUDIO}${BASE}/work/a`);
+  await handshake();
   received.length = 0;
   const area = clickOn(linkElement('https://example.test/map', { localName: 'area' }));
   win.fire('click', area);
@@ -692,7 +708,7 @@ test("the guard reads an image map's area and an SVG link's xlink:href, and list
   );
   win.fire('auxclick', stoppedMiddle, { stoppedBelow: true });
   assert.deepEqual([stopped.defaultPrevented, stoppedMiddle.defaultPrevented], [true, true]);
-  await wait(5);
+  await until(() => received.length >= 4, 'the links');
   assert.deepEqual(
     received.map(({ payload }) => payload),
     [
@@ -705,10 +721,8 @@ test("the guard reads an image map's area and an SVG link's xlink:href, and list
 });
 
 test('a middle click and a click with a modifier key go through the guard too, a fragment link included, and a click of another button is left alone (#7, Slice 3)', async (t) => {
-  const { win, received, connect } = setup(t, SERVER, `${STUDIO}${BASE}/work/a`);
-  await wait(5);
-  connect();
-  await wait(5);
+  const { win, received, handshake } = setup(t, SERVER, `${STUDIO}${BASE}/work/a`);
+  await handshake();
   received.length = 0;
   const middle = { type: 'auxclick', button: 1 } as const;
   const outcomes: Array<[string, boolean]> = [];
@@ -729,7 +743,7 @@ test('a middle click and a click with a modifier key go through the guard too, a
     win.fire(event.type, event);
     outcomes.push([label, event.defaultPrevented]);
   }
-  await wait(5);
+  await until(() => received.length >= 4, 'the links and navigated');
   assert.deepEqual(outcomes, [
     ['middle, another site', true],
     ["middle, the site's own page", true],
@@ -758,12 +772,10 @@ test('a middle click and a click with a modifier key go through the guard too, a
 });
 
 test('where the frame has the Navigation API, a navigation no click showed the guard goes on under the grant, and anywhere else is cancelled and sent to Studio as a link (#7, Slice 3)', async (t) => {
-  const { win, received, connect, stop } = setup(t, SERVER, `${STUDIO}${BASE}/work/a`, {
+  const { win, received, handshake, stop } = setup(t, SERVER, `${STUDIO}${BASE}/work/a`, {
     navigation: true,
   });
-  await wait(5);
-  connect();
-  await wait(5);
+  await handshake();
   received.length = 0;
   const outcomes: Array<[string, boolean]> = [];
   for (const [label, url, init] of [
@@ -781,7 +793,7 @@ test('where the frame has the Navigation API, a navigation no click showed the g
     win.navigation!.fire('navigate', event);
     outcomes.push([label, event.defaultPrevented]);
   }
-  await wait(5);
+  await until(() => received.length >= 3, 'the links');
   assert.deepEqual(outcomes, [
     ['another site', true],
     ["the site's own page", true],
@@ -839,12 +851,10 @@ test('links are fragments, internal, or never followed, by origin and link base 
 });
 
 test('the frame reports its status in place of ready, and sends scrolled only while scroll sync is on, at most 10 a second (#7, Slice 3)', async (t) => {
-  const { win, received, connect, send } = setup(t);
+  const { win, drops, received, send, handshake } = setup(t);
   reportFrameStatus({ state: 'render_failed', correlationId: 'abc123' });
   t.after(() => reportFrameStatus({ state: 'ready' }));
-  await wait(5);
-  const port = connect();
-  await wait(5);
+  const port = await handshake();
   assert.deepEqual(
     received.map(({ type, payload }) => [type, payload]),
     [['status', { state: 'render_failed', correlationId: 'abc123' }]],
@@ -852,28 +862,34 @@ test('the frame reports its status in place of ready, and sends scrolled only wh
   received.length = 0;
   // Off, the frame sends nothing as it scrolls.
   win.fire('scroll');
-  await wait(5);
+  await wait(50);
   assert.equal(received.length, 0);
+  // A message the agent drops goes after sync, so once it's counted, sync
+  // has been read too.
   send(port, 'sync', { scroll: true });
-  await wait(5);
+  send(port, 'fence', {});
+  await until(() => drops.some(({ type }) => type === 'fence'), 'sync to be read');
   for (let i = 0; i < 25; i++) {
     win.clock += 10;
     win.scrollTo({ top: win.scrollY + 20 });
     win.fire('scroll');
   }
-  await wait(150);
-  const scrolled = received.filter(({ type }) => type === 'scrolled');
+  const scrolled = () => received.filter(({ type }) => type === 'scrolled');
+  // The last comes on the trailing timer, from where the scrolling stopped.
+  await until(
+    () => isDeepStrictEqual(scrolled().at(-1)?.payload, { anchor: 'about', progress: 500 / 600 }),
+    'the last scroll position',
+  );
   // 250 milliseconds of scrolling, at most one every 100 of them.
-  assert.ok(scrolled.length >= 2 && scrolled.length <= 4, String(scrolled.length));
-  assert.deepEqual(scrolled.at(-1)!.payload, { anchor: 'about', progress: 500 / 600 });
+  assert.ok(scrolled().length >= 2 && scrolled().length <= 4, String(scrolled().length));
   // A scroll Studio asked for isn't sent back.
   received.length = 0;
   win.clock += 1000;
   send(port, 'scroll-to', { anchor: 'contact', progress: 0, seq: 2 });
-  await wait(5);
+  await until(() => received.length > 0, 'the rect');
   win.clock += 10;
   win.fire('scroll');
-  await wait(5);
+  await wait(50);
   assert.deepEqual(
     received.map(({ type }) => type),
     ['rect'],
