@@ -47,8 +47,14 @@ test(
         headers,
         maxRedirects: 0,
       });
+      // An RSC request for a missing page answers as /no-such-page's does: 200, its not-found payload.
+      const unknown = await request.get(await withRscHash('/no-such-page', headers), {
+        headers,
+        maxRedirects: 0,
+      });
+      const status = { page: 404, rsc: unknown.status() };
       for (const [name, response] of Object.entries({ page, rsc })) {
-        expect(response.status(), `${path} ${name}`).toBe(404);
+        expect(response.status(), `${path} ${name}`).toBe(status[name as keyof typeof status]);
         // The 404 names the path it answers, so only the slug's own spelling of the marker may show.
         const text = (await response.text()).split(slug).join('<slug>');
         expect(text, `${path} ${name}`).not.toContain(HIDDEN_CANARY);

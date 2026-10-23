@@ -882,6 +882,15 @@ test('routedWork() is the work a work route names, with its case study, and null
   ] as const) {
     assert.equal(routedWork(input(route as never)), null, JSON.stringify(route));
   }
+  // A public work with a slug and no case study has no page.
+  const [first] = INPUT.portfolio.works;
+  const plain = { ...first!, id: 'plain-work', slug: 'plain-work' };
+  delete (plain as { caseStudy?: unknown }).caseStudy;
+  const portfolio = { ...INPUT.portfolio, works: [...INPUT.portfolio.works, plain] };
+  assert.equal(
+    routedWork({ portfolio, route: { route: 'work', slug: 'plain-work' } } as never),
+    null,
+  );
 });
 
 test('a record’s anchor is its id, on the first visible section that lists it, so no id repeats', () => {

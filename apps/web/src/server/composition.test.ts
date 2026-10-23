@@ -12,6 +12,7 @@ import type { LiveRevision, PublicationUnit } from './catalog-port';
 import {
   compose,
   recordingLive,
+  refreshingOnCommit,
   STARTUP_REQUIREMENTS,
   type StartupRequirement,
 } from './composition';
@@ -430,4 +431,30 @@ test('a publish that drops a case study, or makes its work private, turns its sl
   await reader.getLive();
   setServable(false);
   assert.equal(routes(SLUG), false);
+});
+
+test("a Studio publish that commits reads the live revision once before it answers, and a read that fails doesn't fail the publish (#10b)", async () => {
+  let reads = 0;
+  let fail = false;
+  const reader = {
+    async getLive() {
+      reads += 1;
+      if (fail) throw new Error('storage_unavailable');
+      return { state: 'empty' } as never;
+    },
+  };
+  const outcome = (kind: string) => async () => ({ kind, revisionId: 'rev_1' });
+  const studio = refreshingOnCommit(
+    { publish: outcome('committed'), rollback: outcome('conflict'), recover: outcome('committed') },
+    reader,
+  );
+  assert.deepEqual(await studio.publish(), { kind: 'committed', revisionId: 'rev_1' });
+  assert.equal(reads, 1);
+  // Nothing committed, nothing to read.
+  await studio.rollback();
+  assert.equal(reads, 1);
+  // The commit stands when the read after it fails.
+  fail = true;
+  assert.deepEqual(await studio.recover(), { kind: 'committed', revisionId: 'rev_1' });
+  assert.equal(reads, 2);
 });

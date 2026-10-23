@@ -549,7 +549,7 @@ type Move = (...args: never[]) => Promise<{ readonly kind: string }>;
  * reads memory alone. A publish from the CLI, outside this process, shows
  * on the next read instead. A read that fails leaves what was recorded.
  */
-function refreshingOnCommit<S extends Record<(typeof MOVES)[number], Move>>(
+export function refreshingOnCommit<S extends Record<(typeof MOVES)[number], Move>>(
   studio: S,
   reader: CatalogReader,
 ): S {

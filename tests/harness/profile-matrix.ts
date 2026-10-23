@@ -533,7 +533,9 @@ export async function expectUnknown(
       const options = { method, maxRedirects: 0, headers };
       const response = await request.fetch(target, options);
       const unknown = await request.fetch(unknownAt, options);
-      expect(response.status(), what).toBe(404);
+      // A page is a 404. An RSC request for a missing page Next answers 200
+      // with its not-found payload, so there the answer is /no-such-page's.
+      expect(response.status(), what).toBe('RSC' in headers ? unknown.status() : 404);
       expect(await response.text(), what).not.toContain('Password');
       expectProfileHeaders(profile, response, what);
       expect(await shape(response, target), what).toEqual(await shape(unknown, unknownAt));
