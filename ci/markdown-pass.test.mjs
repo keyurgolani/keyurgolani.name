@@ -40,7 +40,7 @@ const WIRED = {
   'server/app/(preview)/preview/[grant]/[[...route]]/page.js': page('b.js'),
   'server/app/(studio)/studio/page.js': page('c.js'),
   'server/chunks/ssr/a.js': '',
-  'server/chunks/ssr/a.js.map': map('../../../../packages/kit/src/markdown.ts'),
+  'server/chunks/ssr/a.js.map': map('../../../../packages/kit/src/sections/rich-text.tsx'),
   'server/chunks/ssr/b.js': '',
   'server/chunks/ssr/b.js.map': sectioned(
     PASS,
@@ -89,6 +89,27 @@ test('a page that loads the post-pass on demand, through a chunk it names, passe
     checkMarkdownPass(missing),
     /server\/app\/\(site\)\/page\.js loads no chunk with the Markdown post-pass/,
   );
+});
+
+test('a server chunk with the renderer and not the post-pass fails, whatever else the page loads (#6, Slice 2)', (t) => {
+  // e.js holds the renderer alone: the pages still load the pass through b.js,
+  // so only this assertion catches a render that would skip it.
+  const bare = nextTree(t, {
+    ...WIRED,
+    'server/chunks/ssr/e.js': '',
+    'server/chunks/ssr/e.js.map': map('../../../../packages/kit/src/markdown.ts', 'y.ts'),
+  });
+  assert.match(
+    checkMarkdownPass(bare),
+    /server\/chunks\/ssr\/e\.js holds the renderer \(packages\/kit\/src\/markdown\.ts\) without the post-pass/,
+  );
+  // The renderer beside the pass, as the build has it, passes.
+  const both = nextTree(t, {
+    ...WIRED,
+    'server/chunks/ssr/e.js': '',
+    'server/chunks/ssr/e.js.map': map('../../../../packages/kit/src/markdown.ts', PASS),
+  });
+  assert.equal(checkMarkdownPass(both), null);
 });
 
 test("sanitize-html's code or a map of it under static fails, and so does a missing build", (t) => {
