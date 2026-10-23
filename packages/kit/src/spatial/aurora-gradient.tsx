@@ -2,7 +2,7 @@
 
 import type { CSSProperties } from 'react';
 import type { MotionPolicy } from '@portfolio/schema';
-import { useEnhancementRuntime } from '../runtime';
+import { runtimeAnimation, useEnhancementRuntime } from '../runtime';
 
 interface AuroraGradientProps {
   motionPreference?: MotionPolicy;
@@ -44,8 +44,8 @@ export function AuroraGradient({
 }: AuroraGradientProps) {
   const runtime = useEnhancementRuntime({ motionPolicy: motionPreference });
   const { attachRoot } = runtime;
-  // Paused, the drift keeps its keyframes and its root's data-activity pauses them.
-  const animate = runtime.state !== 'static';
+  // Static, the layers stand still; paused, each holds where it is (runtime/animation.ts).
+  const { state } = runtime;
 
   const [c0, c1, c2, c3] = padColors(colors);
 
@@ -63,7 +63,7 @@ export function AuroraGradient({
     inset: '-25%',
     background: `radial-gradient(60% 80% at 30% 30%, ${c0} 0%, transparent 60%), radial-gradient(50% 70% at 70% 70%, ${c1} 0%, transparent 65%)`,
     filter: 'blur(40px)',
-    animation: animate ? `aurora-drift-a ${speed}s ease-in-out infinite` : undefined,
+    ...runtimeAnimation(state, { name: 'aurora-drift-a', seconds: speed, timing: 'ease-in-out' }),
   };
 
   const layerStyleB: CSSProperties = {
@@ -72,7 +72,11 @@ export function AuroraGradient({
     background: `radial-gradient(45% 65% at 65% 35%, ${c2} 0%, transparent 60%), radial-gradient(55% 75% at 25% 75%, ${c3} 0%, transparent 65%)`,
     filter: 'blur(60px)',
     mixBlendMode: blend,
-    animation: animate ? `aurora-drift-b ${speed * 1.4}s ease-in-out infinite` : undefined,
+    ...runtimeAnimation(state, {
+      name: 'aurora-drift-b',
+      seconds: speed * 1.4,
+      timing: 'ease-in-out',
+    }),
   };
 
   return (

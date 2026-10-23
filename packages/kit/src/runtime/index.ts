@@ -9,5 +9,7 @@ export type { MotionControlProps, MotionControlStatus } from './motion-control';
 export { useEnhancementRuntime } from './use-runtime';
 export type { EnhancementRuntime, RuntimeOptions } from './use-runtime';
 export { useFrameLoop } from './use-frame-loop';
+export { runtimeAnimation } from './animation';
+export type { RuntimeAnimation } from './animation';
 export type { FrameCallback } from './use-frame-loop';
 export type { RuntimeReason, RuntimeState } from './state';

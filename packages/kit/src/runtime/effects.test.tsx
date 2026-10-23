@@ -8,6 +8,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { AnimatedCounter } from '../animated-counter';
 import { MotionPolicyProvider } from '../motion';
 import { AuroraGradient, MagneticCursor, ScanlineOverlay } from '../spatial';
+import { hidesSystemCursor } from '../spatial/magnetic-cursor';
+import type { SpatialCanvasProps } from '../spatial-r3f/spatial-canvas';
 import { TypingAnimation } from '../typing-animation';
 
 // The kit compiles JSX with `preserve`, so tsx gives the components the classic runtime.
@@ -42,4 +44,22 @@ test('the counter and the cursor render as the server can know them', () => {
   assert.match(counter, />0\+</);
   // The server can't see a pointer, and the runtime is static there.
   assert.equal(renderToStaticMarkup(<MagneticCursor />), '');
+});
+
+test("a SpatialCanvas's frame loop is the runtime's, never a prop", () => {
+  const props: SpatialCanvasProps = {
+    children: null,
+    // @ts-expect-error frameloop isn't a SpatialCanvas prop: the runtime sets it.
+    frameloop: 'always',
+  };
+  assert.ok(props);
+});
+
+test('the custom cursor hides the system pointer only while it runs', () => {
+  assert.equal(hidesSystemCursor('active', false, true), true);
+  // Paused or static, the visitor keeps a pointer they can see.
+  assert.equal(hidesSystemCursor('paused', false, true), false);
+  assert.equal(hidesSystemCursor('static', false, true), false);
+  assert.equal(hidesSystemCursor('active', true, true), false);
+  assert.equal(hidesSystemCursor('active', false, false), false);
 });

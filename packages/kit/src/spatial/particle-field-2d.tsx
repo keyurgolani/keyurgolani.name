@@ -165,8 +165,14 @@ export function ParticleField2D({
       mouseY = -9999;
     }
 
+    // A resize clears the canvas, so the still frame draws again with it.
+    function onResize() {
+      resize();
+      step(false);
+    }
+
     resize();
-    window.addEventListener('resize', resize);
+    window.addEventListener('resize', onResize);
     window.addEventListener('pointermove', onMove, { passive: true });
     window.addEventListener('pointerleave', onLeave);
     step(false);
@@ -174,7 +180,7 @@ export function ParticleField2D({
 
     return () => {
       scene.current = null;
-      window.removeEventListener('resize', resize);
+      window.removeEventListener('resize', onResize);
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerleave', onLeave);
     };

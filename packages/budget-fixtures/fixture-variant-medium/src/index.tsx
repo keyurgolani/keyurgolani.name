@@ -24,7 +24,7 @@ export default function FixtureVariantMedium({
     <>
       <header className="fvm-header">
         <VisitorControlSlot />
-        <MotionControl className="fvm-motion" />
+        <MotionControl className="fvm-motion" policy={input.presentation.motionPolicy} />
       </header>
       {/* Focusable, so the host's skip link moves focus here. */}
       <main id={ids.main} className="fvm-main" tabIndex={-1}>

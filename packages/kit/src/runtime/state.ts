@@ -39,11 +39,13 @@ export interface LifecycleInput {
 export interface RuntimeInputs {
   /** False on the server and in the first client render. */
   readonly mounted: boolean;
+  /** Whether the boundary's data-motion-policy and data-motion have been read. */
+  readonly boundaryRead: boolean;
   /** `prefers-reduced-motion: reduce`. */
   readonly osReduced: boolean;
   /** The boundary's data-motion-policy: the site's motion policy. */
   readonly policy: string | null;
-  /** The boundary's data-motion: a preview environment's motion, `full` or `reduced`. */
+  /** The boundary's data-motion: a preview environment's motion, `full`, or `reduced` or `static`, which both reduce it. */
   readonly environmentMotion: string | null;
   readonly documentVisible: boolean;
   /** Whether the effect's root is within the viewport and its margin. */
@@ -62,7 +64,12 @@ export interface RuntimeStatus {
 export function motionReduced(
   inputs: Pick<RuntimeInputs, 'osReduced' | 'policy' | 'environmentMotion'>,
 ): boolean {
-  return inputs.osReduced || inputs.policy === 'reduce' || inputs.environmentMotion === 'reduced';
+  return (
+    inputs.osReduced ||
+    inputs.policy === 'reduce' ||
+    inputs.environmentMotion === 'reduced' ||
+    inputs.environmentMotion === 'static'
+  );
 }
 
 /**
@@ -71,7 +78,7 @@ export function motionReduced(
  * the page knows its preference, it's static.
  */
 export function resolveRuntime(inputs: RuntimeInputs): RuntimeStatus {
-  if (!inputs.mounted) return { state: 'static', reason: 'pending' };
+  if (!inputs.mounted || !inputs.boundaryRead) return { state: 'static', reason: 'pending' };
   if (motionReduced(inputs)) return { state: 'static', reason: 'reduced' };
   if (inputs.failed) return { state: 'static', reason: 'failed' };
   if (inputs.lifecycle && !(inputs.lifecycle.state === 'visible' && inputs.lifecycle.focused)) {

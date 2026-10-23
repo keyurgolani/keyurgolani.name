@@ -8,23 +8,10 @@
 // content or navigation in an island: an island adds to a page that already
 // works.
 
-import { Component, useEffect, useState, type ReactNode } from 'react';
+import { Component, useState, type ReactNode } from 'react';
 import type { VariantRenderInput } from '@portfolio/variant-contract';
 import { useEnhancementRuntime } from '../runtime/use-runtime';
 import { enhancementsOff, MountedEnhancement } from './load';
-
-declare global {
-  /**
-   * Set by tests to 0 to count the islands still waiting to load: each one
-   * adds 1 as it mounts and takes it back once it loads, fails, or unmounts.
-   */
-  var __portfolioPendingEnhancements: unknown;
-}
-
-function countPending(change: 1 | -1): void {
-  const pending = globalThis.__portfolioPendingEnhancements;
-  if (typeof pending === 'number') globalThis.__portfolioPendingEnhancements = pending + change;
-}
 
 /** The markup back in place once anything below it throws, with `onError` told once. */
 class IslandBoundary extends Component<
@@ -81,13 +68,6 @@ export function EnhancementIsland({
 
   // Once started, it stays started: a pause doesn't unload the enhancement.
   if (ready && !started) setStarted(true);
-
-  const waiting = !started && !failed;
-  useEffect(() => {
-    if (!waiting) return;
-    countPending(1);
-    return () => countPending(-1);
-  }, [waiting]);
 
   const off = started && enhancementsOff(globalThis.document);
   const live = started && !failed && !off;

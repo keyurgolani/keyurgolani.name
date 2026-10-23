@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useSyncExternalStore } from 'react';
 import type { MotionPolicy } from '@portfolio/schema';
-import { useEnhancementRuntime, useFrameLoop } from '../runtime';
+import { useEnhancementRuntime, useFrameLoop, type RuntimeState } from '../runtime';
 
 const COARSE_POINTER_QUERY = '(pointer: coarse)';
 
@@ -35,6 +35,18 @@ interface MagneticCursorProps {
   hideSystemCursor?: boolean;
 }
 
+/**
+ * Whether the custom cursor stands in for the system's: only while it's
+ * live, so a paused, reduced, or touch page keeps the system pointer.
+ */
+export function hidesSystemCursor(
+  state: RuntimeState,
+  coarsePointer: boolean,
+  hideSystemCursor: boolean,
+): boolean {
+  return hideSystemCursor && !coarsePointer && state === 'active';
+}
+
 interface Pointer {
   x: number;
   y: number;
@@ -50,8 +62,9 @@ interface Pointer {
  *
  * Hidden on touch devices, under reduced motion, and until the page has
  * mounted. It runs on the kit runtime, so it holds still while the document
- * is hidden or the visitor paused motion. It follows the whole page, so it
- * has no root of its own to go offscreen.
+ * is hidden or the visitor paused motion, and with `hideSystemCursor` the
+ * system pointer comes back whenever it isn't running. It follows the whole
+ * page, so it has no root of its own to go offscreen.
  */
 export function MagneticCursor({
   motionPreference = 'respect-os',
@@ -69,6 +82,7 @@ export function MagneticCursor({
   );
   const enabled = runtime.state !== 'static' && !coarsePointer;
   const active = enabled && runtime.state === 'active';
+  const hidden = hidesSystemCursor(runtime.state, coarsePointer, hideSystemCursor);
   const dotRef = useRef<HTMLDivElement>(null);
   const haloRef = useRef<HTMLDivElement>(null);
   // Where the pointer is and where the halo trails it, kept across pauses.
@@ -93,12 +107,12 @@ export function MagneticCursor({
   }, [active]);
 
   useEffect(() => {
-    if (!enabled || !hideSystemCursor) return;
+    if (!hidden) return;
     document.documentElement.style.cursor = 'none';
     return () => {
       document.documentElement.style.cursor = '';
     };
-  }, [enabled, hideSystemCursor]);
+  }, [hidden]);
 
   useFrameLoop({ state: enabled ? runtime.state : 'static' }, () => {
     const at = pointer.current;

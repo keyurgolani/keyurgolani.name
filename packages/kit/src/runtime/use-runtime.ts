@@ -8,7 +8,7 @@
 // data-activity="paused", which experience-base.css pauses CSS animations
 // below.
 
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import type { MotionPolicy } from '@portfolio/schema';
 import { useProvidedMotionPolicy } from '../motion';
 import { browserProbe, meetsRequirements } from './requirements';
@@ -42,16 +42,61 @@ export interface EnhancementRuntime extends RuntimeStatus {
 const noSubscription = () => () => {};
 
 /** The boundary's motion attributes: the site's policy and a preview's environment. */
-interface BoundaryMotion {
+export interface BoundaryMotion {
   readonly policy: string | null;
   readonly motion: string | null;
 }
 
 const NO_BOUNDARY: BoundaryMotion = { policy: null, motion: null };
 
+/** The boundary's two attributes as one string, so a snapshot that hasn't changed compares equal. */
+function boundaryKey(element: Element | null): string {
+  if (!element) return '';
+  return JSON.stringify([
+    element.getAttribute('data-motion-policy'),
+    element.getAttribute('data-motion'),
+  ]);
+}
+
+function boundaryFrom(key: string | null): BoundaryMotion | null {
+  if (key === null) return null;
+  if (key === '') return NO_BOUNDARY;
+  const [policy, motion] = JSON.parse(key) as [string | null, string | null];
+  return { policy, motion };
+}
+
 function boundaryOf(root: Element | null): Element | null {
   if (typeof document === 'undefined') return null;
   return root?.closest('[data-variant]') ?? document.querySelector('[data-variant]');
+}
+
+/**
+ * The motion attributes of `root`'s presentation boundary, or the page's
+ * when there's no root: null on the server and in the first client render,
+ * then read in the render that knows the page has mounted, and kept up to
+ * date as a preview's environment changes them.
+ */
+export function useBoundaryMotion(root: Element | null): BoundaryMotion | null {
+  const subscribe = useCallback(
+    (change: () => void) => {
+      const element = boundaryOf(root);
+      if (!element) return () => {};
+      const observer = new MutationObserver(change);
+      observer.observe(element, {
+        attributes: true,
+        attributeFilter: ['data-motion-policy', 'data-motion'],
+      });
+      return () => observer.disconnect();
+    },
+    [root],
+  );
+  return boundaryFrom(
+    useSyncExternalStore(
+      subscribe,
+      () => boundaryKey(boundaryOf(root)),
+      () => null,
+    ),
+  );
 }
 
 export function useEnhancementRuntime(options: RuntimeOptions = {}): EnhancementRuntime {
@@ -67,12 +112,18 @@ export function useEnhancementRuntime(options: RuntimeOptions = {}): Enhancement
   const inputs = useSyncExternalStore(subscribeDocument, documentInputs, () => SERVER_INPUTS);
   const [root, setRoot] = useState<Element | null>(null);
   const [observed, setObserved] = useState<{ root: Element; intersecting: boolean } | null>(null);
-  const [boundary, setBoundary] = useState<BoundaryMotion>(NO_BOUNDARY);
+  // The boundary's motion, as the server rendered it and as a preview changes
+  // it, read in the same render that knows the page has mounted: until it's
+  // read, the runtime stays pending, so no effect runs one commit under a
+  // site's or a preview's reduce.
+  const boundary = useBoundaryMotion(root);
   const [failed, setFailed] = useState(false);
   const provided = useProvidedMotionPolicy();
   // Any one policy at `reduce` reduces: none can undo another's.
   const policy =
-    options.motionPolicy === 'reduce' || provided === 'reduce' ? 'reduce' : boundary.policy;
+    options.motionPolicy === 'reduce' || provided === 'reduce'
+      ? 'reduce'
+      : (boundary?.policy ?? null);
 
   // In view, both ways, for as long as the effect is mounted. An effect
   // with no root, or a browser with no IntersectionObserver, counts as in
@@ -92,29 +143,12 @@ export function useEnhancementRuntime(options: RuntimeOptions = {}): Enhancement
     return () => observer.disconnect();
   }, [root, rootMargin]);
 
-  // The boundary's motion, as the server rendered it and as a preview changes it.
-  useEffect(() => {
-    const element = boundaryOf(root);
-    if (!element) return;
-    const read = () =>
-      setBoundary({
-        policy: element.getAttribute('data-motion-policy'),
-        motion: element.getAttribute('data-motion'),
-      });
-    read();
-    const observer = new MutationObserver(read);
-    observer.observe(element, {
-      attributes: true,
-      attributeFilter: ['data-motion-policy', 'data-motion'],
-    });
-    return () => observer.disconnect();
-  }, [root]);
-
   const status = resolveRuntime({
     mounted,
+    boundaryRead: boundary !== null,
     osReduced: inputs.osReduced,
     policy,
-    environmentMotion: boundary.motion,
+    environmentMotion: boundary?.motion ?? null,
     documentVisible: inputs.documentVisible,
     intersecting,
     visitorPaused: inputs.visitorPaused,
@@ -124,7 +158,7 @@ export function useEnhancementRuntime(options: RuntimeOptions = {}): Enhancement
   const reduced = motionReduced({
     osReduced: inputs.osReduced,
     policy,
-    environmentMotion: boundary.motion,
+    environmentMotion: boundary?.motion ?? null,
   });
   const eligible = useMemo(
     () =>

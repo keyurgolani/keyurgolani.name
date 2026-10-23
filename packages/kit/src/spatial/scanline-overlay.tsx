@@ -2,7 +2,7 @@
 
 import type { CSSProperties } from 'react';
 import type { MotionPolicy } from '@portfolio/schema';
-import { useEnhancementRuntime } from '../runtime';
+import { runtimeAnimation, useEnhancementRuntime } from '../runtime';
 
 interface ScanlineOverlayProps {
   motionPreference?: MotionPolicy;
@@ -49,8 +49,8 @@ export function ScanlineOverlay({
 }: ScanlineOverlayProps) {
   const runtime = useEnhancementRuntime({ motionPolicy: motionPreference });
   const { attachRoot } = runtime;
-  // Paused, the scroll keeps its keyframes and the overlay's data-activity pauses them.
-  const animate = runtime.state !== 'static';
+  // Static, the lines stand still; paused, they hold where they are (runtime/animation.ts).
+  const { state } = runtime;
 
   const overlayStyle: CSSProperties = {
     position: 'fixed',
@@ -59,7 +59,7 @@ export function ScanlineOverlay({
     zIndex,
     opacity,
     backgroundImage: `repeating-linear-gradient(0deg, transparent 0, transparent ${scanlineSpacing - 1}px, ${scanlineColor} ${scanlineSpacing - 1}px, ${scanlineColor} ${scanlineSpacing}px)`,
-    animation: animate ? `scanline-scroll ${scrollSpeed}s linear infinite` : undefined,
+    ...runtimeAnimation(state, { name: 'scanline-scroll', seconds: scrollSpeed }),
     mixBlendMode: 'screen',
   };
 

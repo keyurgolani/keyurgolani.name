@@ -7,7 +7,8 @@ import type { MotionPolicy } from '@portfolio/schema';
 import { useEnhancementRuntime } from '../runtime';
 import { SceneRuntimeContext } from './scene-runtime';
 
-interface SpatialCanvasProps extends Omit<CanvasProps, 'children'> {
+/** CanvasProps, but `frameloop`, which the runtime sets: a variant can't run frames past a pause. */
+export interface SpatialCanvasProps extends Omit<CanvasProps, 'children' | 'frameloop'> {
   motionPreference?: MotionPolicy;
   children: ReactNode;
   /** Maximum DPR. Lower = better mobile perf. */
@@ -54,12 +55,13 @@ export function SpatialCanvas({
 
   return (
     <Canvas
-      ref={attach}
-      frameloop={state === 'active' ? 'always' : 'demand'}
       dpr={dpr}
       gl={{ antialias: true, alpha: false, powerPreference: 'high-performance' }}
       camera={{ position: [0, 0, 5], fov: 50 }}
       {...rest}
+      ref={attach}
+      // After the rest, so nothing a caller passes outside the type runs frames past a pause.
+      frameloop={state === 'active' ? 'always' : 'demand'}
     >
       <SceneRuntimeContext.Provider value={state}>
         <PerformanceMonitor
