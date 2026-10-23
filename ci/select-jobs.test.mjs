@@ -90,6 +90,16 @@ const CLASSES = [
     files: ['deploy/compose.owner.yml', 'docker-compose.yml', 'ci/image-smoke.mjs'],
     jobs: ['static', 'unit', 'image'],
   },
+  {
+    name: 'container helpers check-standalone imports',
+    files: ['ci/lib/container.mjs'],
+    jobs: ['static', 'unit', 'build', 'image'],
+  },
+  {
+    name: 'proxy stack the security suite uses',
+    files: ['tests/harness/proxy-stack.mjs'],
+    jobs: ['static', 'unit', 'browser', 'image'],
+  },
   { name: 'release', files: ['Dockerfile'], jobs: ALL, complete: true },
   {
     name: 'workflow file',

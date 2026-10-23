@@ -95,6 +95,18 @@ export const RULES = [
   },
   { class: 'release', complete: true, paths: ['Dockerfile', '.dockerignore'] },
   {
+    // The container helpers check-standalone (build) and the browser
+    // security suite also import.
+    class: 'container',
+    jobs: ['unit', 'build', 'image'],
+    paths: ['ci/lib/container.mjs'],
+  },
+  {
+    class: 'container',
+    jobs: ['unit', 'browser', 'image'],
+    paths: ['tests/harness/proxy-stack.mjs'],
+  },
+  {
     class: 'container',
     jobs: ['unit', 'image'],
     paths: [
@@ -103,12 +115,10 @@ export const RULES = [
       'ci/image-smoke.mjs',
       'ci/proxy-smoke.mjs',
       'ci/smoke-profiles.mjs',
-      'ci/lib/container.mjs',
       'ci/container.test.mjs',
       'ci/test-security-proxy.mjs',
       'tests/proxy/**',
       'tests/harness/compose/**',
-      'tests/harness/proxy-stack.mjs',
     ],
   },
   {

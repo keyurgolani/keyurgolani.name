@@ -14,7 +14,7 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { renderMarkdown } from './summarize.mjs';
+import { CONTEXT_FIELDS } from './summarize.mjs';
 
 export const MARKER = '<!-- scheduled-checks-report -->';
 export const TITLE = 'Scheduled checks are failing';
@@ -68,6 +68,61 @@ export function readRecords(dir) {
   return records;
 }
 
+/**
+ * One table cell of free text for the issue body. A record's text comes
+ * from what a check saw, a page's title or a link's URL among it, so
+ * nothing in it may become HTML, a mention, an issue or PR reference, or a
+ * link: <, >, &, @, #, [, ], and the cell's own | and backticks become
+ * entities in one pass, and a line break becomes a space.
+ */
+const ENTITIES = {
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '@': '&#64;',
+  '#': '&#35;',
+  '[': '&#91;',
+  ']': '&#93;',
+  '`': '&#96;',
+  '\\': '&#92;',
+  '|': '&#124;',
+};
+
+export function issueCell(value) {
+  if (value === undefined || value === null || value === '') return '';
+  return String(value)
+    .replace(/[&<>@#[\]`\\|]/g, (c) => ENTITIES[c])
+    .replace(/\r?\n/g, ' ');
+}
+
+/** The failure records as a table for the issue, every cell escaped. */
+export function renderRecords(records) {
+  const lines = [
+    `### Failures (${records.length})`,
+    '',
+    '| Gate | Test | Context | Expected | Actual | Threshold | Artifacts | Reproduce |',
+    '| --- | --- | --- | --- | --- | --- | --- | --- |',
+  ];
+  for (const r of records) {
+    const context = CONTEXT_FIELDS.filter((f) => r[f] !== undefined)
+      .map((f) => `${f}=${r[f]}`)
+      .join(', ');
+    const cells = [
+      r.gate,
+      r.test,
+      context,
+      r.expected,
+      r.actual,
+      r.threshold,
+      Array.isArray(r.artifacts) ? r.artifacts.join(', ') : r.artifacts,
+    ].map(issueCell);
+    const repro = issueCell(r.reproCommand);
+    cells.push(repro ? `<code>${repro}</code>` : '');
+    lines.push(`| ${cells.join(' | ')} |`);
+  }
+  return lines.join('\n');
+}
+
 export function renderReport({ failed, records, runUrl, date }) {
   const lines = [
     `The scheduled checks failed on ${date}, in [this run](${runUrl}).`,
@@ -75,11 +130,12 @@ export function renderReport({ failed, records, runUrl, date }) {
     '| Job | Result | Run locally |',
     '| --- | --- | --- |',
     ...failed.map(
-      ({ job, result }) => `| ${job} | ${RESULT_TEXT[result] ?? result} | \`${commandFor(job)}\` |`,
+      ({ job, result }) =>
+        `| ${issueCell(job)} | ${issueCell(RESULT_TEXT[result] ?? result)} | \`${commandFor(job)}\` |`,
     ),
   ];
   const shown = records.slice(0, 50);
-  if (shown.length > 0) lines.push('', renderMarkdown(shown).trimEnd());
+  if (shown.length > 0) lines.push('', renderRecords(shown));
   if (records.length > shown.length) {
     lines.push(
       '',

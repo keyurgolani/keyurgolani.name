@@ -7,9 +7,9 @@
 # with no activity there. It has no manual trigger: test the reporter offline
 # with `node --test ci/report-issue.test.mjs`.
 #
-# Every job sets timeout-minutes. A job that hits it finishes cancelled, and
-# the reporter counts anything but success as a failure, so nothing hangs or
-# ages silently. Only `report` holds `issues: write`.
+# Every job sets timeout-minutes. A job that hits it is reported as
+# cancelled or as failure, and the reporter counts anything but success as a
+# failure, so nothing hangs or ages silently. Only `report` holds `issues: write`.
 #
 # Cross-product jobs join here: #11's full appearance validation, and #20's
 # report-only catalog provenance refresh once its catalog exists. Each one

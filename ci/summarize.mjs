@@ -8,7 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readFailureRecords, reportError, reportsDir, SCHEMA_PATH } from './lib/reports.mjs';
 
-const CONTEXT_FIELDS = [
+export const CONTEXT_FIELDS = [
   'package',
   'variant',
   'pack',

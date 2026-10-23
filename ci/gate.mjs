@@ -6,9 +6,9 @@
 // gate is the one required check. It passes only on a complete run, which
 // `changes` (ci/select-jobs.mjs) reports for every PR that's ready for
 // review, every PR into main, and every push, and only when every job it
-// needs succeeded. A job that failed, was cancelled, timed out (GitHub
-// reports that as a failure), or was skipped fails it, since a complete run
-// skips nothing. A draft PR's selected run always fails gate, so no
+// needs succeeded. A job that failed, was cancelled, hit its
+// timeout-minutes (GitHub reports that as cancelled or as failure), or was
+// skipped fails it, since a complete run skips nothing. A draft PR's selected run always fails gate, so no
 // selection can merge: GitHub refuses to merge a draft, and marking it ready
 // starts the complete run on the same head.
 //

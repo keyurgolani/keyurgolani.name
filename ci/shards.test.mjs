@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -132,6 +133,8 @@ test('a unit shard without the web package writes the registry before the root s
   const text = without.map((c) => c.join(' '));
   assert.equal(text.length, 3);
   assert.match(text[0], /--filter @portfolio\/core run test$/);
+  // One package at a time, so a timing test never shares the runner with another suite.
+  assert.match(text[0], / --workspace-concurrency=1 /);
   assert.match(text[1], /--filter @portfolio\/web run build:registry$/);
   assert.match(text[2], / test:scripts$/);
 
@@ -228,5 +231,69 @@ test('the measured durations cover the suites CI shards', () => {
   const durations = loadDurations();
   for (const suite of ['unit', 'browser', 'variants']) {
     assert.ok(Object.keys(durations[suite] ?? {}).length > 5, suite);
+  }
+});
+
+function workspace(yaml, dirs) {
+  const root = mkdtempSync(path.join(tmpdir(), 'shards-ws-'));
+  writeFileSync(path.join(root, 'pnpm-workspace.yaml'), yaml);
+  for (const [dir, manifest] of Object.entries(dirs)) {
+    mkdirSync(path.join(root, dir), { recursive: true });
+    if (manifest) writeFileSync(path.join(root, dir, 'package.json'), JSON.stringify(manifest));
+  }
+  return root;
+}
+
+test('workspace entries resolve in every quoting, as directories, globs, and excludes', () => {
+  const root = workspace(
+    [
+      'packages:',
+      "  - 'apps/*'",
+      '  - "packages/*"',
+      '  - tools/*',
+      '  - ./scripts/runner',
+      "  - '!packages/skip-me'",
+      "  - 'experiments/*'",
+      '',
+    ].join('\n'),
+    {
+      'apps/web': { name: '@x/web', scripts: { test: 't' } },
+      'packages/a': { name: '@x/a', scripts: { test: 't' } },
+      'packages/skip-me': { name: '@x/skip', scripts: { test: 't' } },
+      'packages/no-manifest': null,
+      'tools/lint': { name: '@x/lint' },
+      'scripts/runner': { name: '@x/runner', scripts: { test: 't' } },
+    },
+  );
+  try {
+    assert.deepEqual(workspacePackages(root), [
+      { dir: 'apps/web', name: '@x/web', test: true },
+      { dir: 'packages/a', name: '@x/a', test: true },
+      { dir: 'scripts/runner', name: '@x/runner', test: true },
+      { dir: 'tools/lint', name: '@x/lint', test: false },
+    ]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('a workspace entry the shards cannot resolve throws', () => {
+  for (const [entry, message] of [
+    ["'packages/**'", /can't resolve/],
+    ["'apps/{web,docs}'", /can't resolve/],
+    ["'missing/dir'", /no package\.json/],
+  ]) {
+    const root = workspace(`packages:\n  - ${entry}\n`, {});
+    try {
+      assert.throws(() => workspacePackages(root), message, entry);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+  const empty = workspace('strictDepBuilds: true\n', {});
+  try {
+    assert.throws(() => workspacePackages(empty), /lists no packages/);
+  } finally {
+    rmSync(empty, { recursive: true, force: true });
   }
 });

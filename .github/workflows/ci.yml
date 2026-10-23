@@ -190,17 +190,17 @@ jobs:
       - name: pnpm store cache hit
         if: ${{ steps.install.outputs.store-hit == 'true' }}
         run: echo "pnpm store restored under this lockfile's hash"
-      # Next's own cache, keyed by the lockfile and the hash of every build
-      # input, and only ever written by the plain build this job, browser,
-      # and variants run: no fixture flag, no analyze build. It never holds
-      # the generated registry, which each build writes fresh, and the image
-      # and publish never read it.
+      # Next's own cache, keyed by the lockfile and the hash of the build
+      # inputs. This job is its one writer, with the plain build: no fixture
+      # flag, no analyze build. browser and variants only restore it. It
+      # never holds the generated registry, which each build writes fresh,
+      # and the image and publish never read it.
       - name: Restore the Next build cache
         id: next-cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: apps/web/.next/cache
-          key: next-build-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('apps/web/src/**', 'apps/web/scripts/**', 'apps/web/public/**', 'apps/web/*.ts', 'apps/web/*.json', 'packages/*/src/**', 'packages/*/packs/**', 'packages/*/*.json', '*.example.yml', 'example-media/**', 'snapshots/**') }}
+          key: next-build-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('apps/web/src/**', 'apps/web/scripts/**', 'apps/web/public/**', 'apps/web/*.ts', 'apps/web/*.json', 'packages/*/src/**', 'packages/*/packs/**', 'packages/*/*.json', 'package.json', 'tsconfig.base.json', 'pnpm-workspace.yaml', '.npmrc', '*.example.yml', 'example-media/**', 'snapshots/**') }}
           restore-keys: next-build-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
       - name: Next build cache hit
         if: ${{ steps.next-cache.outputs.cache-hit == 'true' }}
@@ -265,13 +265,14 @@ jobs:
       - name: pnpm store cache hit
         if: ${{ steps.install.outputs.store-hit == 'true' }}
         run: echo "pnpm store restored under this lockfile's hash"
-      # The build job's Next cache (see there).
+      # The build job's Next cache (see there), restored only: build is its
+      # one writer.
       - name: Restore the Next build cache
         id: next-cache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: apps/web/.next/cache
-          key: next-build-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('apps/web/src/**', 'apps/web/scripts/**', 'apps/web/public/**', 'apps/web/*.ts', 'apps/web/*.json', 'packages/*/src/**', 'packages/*/packs/**', 'packages/*/*.json', '*.example.yml', 'example-media/**', 'snapshots/**') }}
+          key: next-build-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('apps/web/src/**', 'apps/web/scripts/**', 'apps/web/public/**', 'apps/web/*.ts', 'apps/web/*.json', 'packages/*/src/**', 'packages/*/packs/**', 'packages/*/*.json', 'package.json', 'tsconfig.base.json', 'pnpm-workspace.yaml', '.npmrc', '*.example.yml', 'example-media/**', 'snapshots/**') }}
           restore-keys: next-build-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
       - name: Next build cache hit
         if: ${{ steps.next-cache.outputs.cache-hit == 'true' }}
@@ -414,7 +415,8 @@ jobs:
   # canary and render parity, against this checkout's build. Screenshots
   # compare against tests/variants/__screenshots__/ here, in the pinned
   # image, and nowhere else. A missing baseline fails the job, which writes
-  # it and uploads it in the variants-screenshots artifact to be committed.
+  # it and uploads it in its shard's variants-screenshots-1 or -2 artifact
+  # to be committed.
   # In two shards, split by Playwright project (one per composition and
   # fixture, plus the modes' own checks) on measured durations.
   variants:
@@ -444,13 +446,14 @@ jobs:
       - name: pnpm store cache hit
         if: ${{ steps.install.outputs.store-hit == 'true' }}
         run: echo "pnpm store restored under this lockfile's hash"
-      # The build job's Next cache (see there).
+      # The build job's Next cache (see there), restored only: build is its
+      # one writer.
       - name: Restore the Next build cache
         id: next-cache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: apps/web/.next/cache
-          key: next-build-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('apps/web/src/**', 'apps/web/scripts/**', 'apps/web/public/**', 'apps/web/*.ts', 'apps/web/*.json', 'packages/*/src/**', 'packages/*/packs/**', 'packages/*/*.json', '*.example.yml', 'example-media/**', 'snapshots/**') }}
+          key: next-build-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('apps/web/src/**', 'apps/web/scripts/**', 'apps/web/public/**', 'apps/web/*.ts', 'apps/web/*.json', 'packages/*/src/**', 'packages/*/packs/**', 'packages/*/*.json', 'package.json', 'tsconfig.base.json', 'pnpm-workspace.yaml', '.npmrc', '*.example.yml', 'example-media/**', 'snapshots/**') }}
           restore-keys: next-build-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
       - name: Next build cache hit
         if: ${{ steps.next-cache.outputs.cache-hit == 'true' }}

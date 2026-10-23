@@ -8,13 +8,17 @@
 //     a pnpm command, and each `pnpm --filter <package> <script>` a script of
 //     that workspace package.
 // With --external it also requests each http(s) link once (HEAD, then GET),
-// which only the scheduled workflow does. It never requests a reserved or
-// local host, and never the live site, which CI doesn't probe. A 401, 403,
-// or 429 is reported but doesn't fail, since sites refuse automated clients.
+// which only the scheduled workflow does. It never requests a local or
+// reserved name, a loopback, private, or link-local address, or the live
+// site, which CI doesn't probe, and it follows redirects by hand, checking
+// each hop's host the same way, for at most 5 hops. A 401, 403, or 429, and
+// a link it won't request, are reported but don't fail, since sites refuse
+// automated clients.
 //
 // Pure Node with no dependencies. Each problem is a failure record when the
 // check runs under ci/run.mjs, and a row in the job summary.
 import { execFileSync } from 'node:child_process';
+import { lookup } from 'node:dns/promises';
 import { appendFileSync, existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -212,10 +216,56 @@ function workspaceScripts(root) {
   return packages;
 }
 
-const LOCAL_HOST =
-  /^(localhost|127\.\d+\.\d+\.\d+|\[::1\]|0\.0\.0\.0|[^/]*\.(test|localhost|example|invalid|local)|(?:[^/]*\.)?example\.(com|net|org))$/i;
-// The live site: CI never probes it.
-const LIVE_HOST = /^(?:[^/]*\.)?keyurgolani\.name$/i;
+// Names CI never requests: local and reserved names, and the live site,
+// which CI doesn't probe. Matched after a trailing dot is dropped.
+const REFUSED_NAME =
+  /^(?:localhost|.*\.(?:localhost|test|local|example|invalid|internal|home\.arpa)|(?:.*\.)?example\.(?:com|net|org)|(?:.*\.)?keyurgolani\.name)$/;
+
+/** Whether an IPv4 address is in a loopback, private, link-local, shared, or reserved range. */
+export function privateIPv4(address) {
+  const parts = address.split('.').map(Number);
+  if (parts.length !== 4 || parts.some((n) => !Number.isInteger(n) || n < 0 || n > 255))
+    return true;
+  const [a, b] = parts;
+  return (
+    a === 0 ||
+    a === 10 ||
+    a === 127 ||
+    (a === 100 && b >= 64 && b <= 127) ||
+    (a === 169 && b === 254) ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168) ||
+    (a === 192 && b === 0) ||
+    (a === 198 && (b === 18 || b === 19)) ||
+    a >= 224
+  );
+}
+
+/**
+ * Whether an IPv6 address is loopback, unspecified, unique-local,
+ * link-local, multicast, documentation, or carries an IPv4 address
+ * (mapped, compatible, NAT64, 6to4), any of which can reach a private host.
+ */
+export function privateIPv6(address) {
+  const a = address.replace(/^\[|\]$/g, '').toLowerCase();
+  if (a === '::' || a === '::1') return true;
+  if (a.includes('.') || /^::(ffff:)?[0-9a-f]{1,4}:[0-9a-f]{1,4}$/.test(a)) return true;
+  if (/^::ffff:/.test(a) || a.startsWith('64:ff9b:') || a.startsWith('2002:')) return true;
+  if (/^f[cd]/.test(a) || /^fe[89ab]/.test(a) || a.startsWith('ff') || a.startsWith('2001:db8'))
+    return true;
+  return false;
+}
+
+const isIPv4 = (host) => /^\d{1,3}(?:\.\d{1,3}){3}$/.test(host);
+
+/** Whether a host is one CI may request: no refused name, no private address. */
+export function publicHost(hostname) {
+  const host = hostname.toLowerCase().replace(/\.+$/, '');
+  if (host === '' || REFUSED_NAME.test(host)) return false;
+  if (host.startsWith('[')) return !privateIPv6(host);
+  if (isIPv4(host)) return !privateIPv4(host);
+  return true;
+}
 
 /** Whether --external requests this URL. */
 export function externallyChecked(url) {
@@ -226,8 +276,9 @@ export function externallyChecked(url) {
     return false;
   }
   if (!/^https?:$/.test(parsed.protocol)) return false;
+  if (parsed.username || parsed.password) return false;
   if (/[<>{}]|\$\{/.test(url)) return false;
-  return !LOCAL_HOST.test(parsed.hostname) && !LIVE_HOST.test(parsed.hostname);
+  return publicHost(parsed.hostname);
 }
 
 /** Checks the tree, or the files given. Returns { problems, warnings, links }. */
@@ -291,21 +342,58 @@ export function checkDocs({ root = REPO_ROOT, files = markdownFiles(root) } = {}
   return { problems, external, files };
 }
 
-/** Requests each external link once. fetchImpl is injectable for tests. */
+export const MAX_REDIRECTS = 5;
+
+/**
+ * Requests each external link once, HEAD and then GET where HEAD isn't
+ * answered. Redirects are followed by hand, and each hop's host goes through
+ * externallyChecked and a DNS lookup again, so a redirect or a name that
+ * resolves to a private address never gets a request. fetchImpl and
+ * lookupImpl are injectable for tests.
+ */
 export async function checkExternal(
   external,
-  { fetchImpl = fetch, concurrency = 4, timeoutMs = 15_000 } = {},
+  {
+    fetchImpl = fetch,
+    lookupImpl = (host) => lookup(host, { all: true, verbatim: true }),
+    concurrency = 4,
+    timeoutMs = 15_000,
+  } = {},
 ) {
   const problems = [];
   const warnings = [];
   const urls = [...external.keys()].filter(externallyChecked).sort();
-  const request = async (url, method) =>
-    fetchImpl(url, {
-      method,
-      redirect: 'follow',
-      signal: AbortSignal.timeout(timeoutMs),
-      headers: { 'user-agent': 'keyurgolani.name docs check (scheduled CI)' },
-    });
+
+  /** Throws a Refused when the URL's host may not be requested. */
+  const admit = async (url) => {
+    if (!externallyChecked(url)) throw new Refused(`${url} is a host CI doesn't request`);
+    const host = new URL(url).hostname.replace(/\.+$/, '');
+    if (host.startsWith('[') || isIPv4(host)) return;
+    const addresses = await lookupImpl(host);
+    for (const { address, family } of addresses) {
+      if (family === 6 ? privateIPv6(address) : privateIPv4(address)) {
+        throw new Refused(`${url} resolves to a private address`);
+      }
+    }
+  };
+
+  const request = async (start, method) => {
+    let url = start;
+    for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+      await admit(url);
+      const response = await fetchImpl(url, {
+        method,
+        redirect: 'manual',
+        signal: AbortSignal.timeout(timeoutMs),
+        headers: { 'user-agent': 'keyurgolani.name docs check (scheduled CI)' },
+      });
+      const location = response.headers?.get?.('location');
+      if (response.status < 300 || response.status >= 400 || !location) return response;
+      url = new URL(location, url).href;
+    }
+    throw new Error(`more than ${MAX_REDIRECTS} redirects`);
+  };
+
   const one = async (url) => {
     let status;
     let error;
@@ -320,11 +408,14 @@ export async function checkExternal(
         if (status < 500 && status !== 429) break;
       } catch (e) {
         error = e;
+        if (e instanceof Refused) break;
       }
     }
     const where = external.get(url);
     const entry = { url, where, status, message: '' };
-    if (error)
+    if (error instanceof Refused)
+      warnings.push({ ...entry, message: `${error.message}; not requested` });
+    else if (error)
       problems.push({ ...entry, message: `${url} failed: ${error.cause?.code ?? error.message}` });
     else if (status === 401 || status === 403 || status === 429)
       warnings.push({ ...entry, message: `${url} answered ${status}; not verifiable from CI` });
@@ -338,6 +429,8 @@ export async function checkExternal(
   );
   return { problems, warnings, checked: urls.length };
 }
+
+class Refused extends Error {}
 
 export function renderSummary({ title, problems, warnings = [], checked }) {
   const lines = [

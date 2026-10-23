@@ -7,6 +7,8 @@ import {
   anchorsOf,
   checkDocs,
   checkExternal,
+  privateIPv4,
+  privateIPv6,
   externallyChecked,
   extractLinks,
   pnpmProblem,
@@ -147,12 +149,36 @@ test('external checks skip local, reserved, and live hosts', () => {
     'https://www.keyurgolani.name/work',
     'https://<your-host>/x',
     'mailto:a@b.c',
+    // A trailing dot is the same host.
+    'https://keyurgolani.name./x',
+    'https://localhost./x',
+    'https://app.local/x',
+    'https://foo.localhost/x',
+    // Private, loopback, link-local, and shared ranges, and mapped IPv6.
+    'http://10.1.2.3/x',
+    'http://172.16.0.1/x',
+    'http://172.31.255.255/x',
+    'http://192.168.1.1/x',
+    'http://169.254.169.254/latest/meta-data',
+    'http://100.64.0.1/x',
+    'http://0.0.0.0/x',
+    'http://2130706433/x',
+    'http://[::1]/x',
+    'http://[::ffff:127.0.0.1]/x',
+    'http://[::ffff:10.0.0.1]/x',
+    'http://[fe80::1]/x',
+    'http://[fd00::1]/x',
+    'https://user:pass@github.com/x',
   ]) {
     assert.ok(!externallyChecked(url), url);
   }
 });
 
-const response = (status) => ({ status });
+const response = (status, location) => ({
+  status,
+  headers: { get: (name) => (name === 'location' ? (location ?? null) : null) },
+});
+const PUBLIC_DNS = async () => [{ address: '93.184.215.14', family: 4 }];
 
 test('external links fail on 4xx and 5xx and network errors, and only warn on 401, 403, and 429', async () => {
   const answers = {
@@ -177,7 +203,11 @@ test('external links fail on 4xx and 5xx and network errors, and only warn on 40
       ['README.md:1'],
     ]),
   );
-  const result = await checkExternal(external, { fetchImpl, concurrency: 2 });
+  const result = await checkExternal(external, {
+    fetchImpl,
+    lookupImpl: PUBLIC_DNS,
+    concurrency: 2,
+  });
   assert.equal(result.checked, 8);
   assert.deepEqual(result.problems.map((p) => p.message).sort(), [
     'https://dns.dev/ failed: ENOTFOUND',
@@ -201,4 +231,116 @@ test("the repository's own docs pass", () => {
     problems.map((p) => `${p.file}:${p.line} ${p.message}`),
     [],
   );
+});
+
+test('a redirect is followed by hand, and each hop is checked before it is requested', async () => {
+  const requested = [];
+  const hops = {
+    'https://a.dev/': response(301, '/moved'),
+    'https://a.dev/moved': response(302, 'https://b.dev/final'),
+    'https://b.dev/final': response(200),
+    'https://to-live.dev/': response(301, 'https://keyurgolani.name./studio'),
+    'https://to-metadata.dev/': response(302, 'http://169.254.169.254/latest/meta-data'),
+    'https://to-mapped.dev/': response(302, 'http://[::ffff:127.0.0.1]:3000/'),
+  };
+  const fetchImpl = async (url, init) => {
+    assert.equal(init.redirect, 'manual');
+    requested.push(url);
+    return hops[url] ?? response(500);
+  };
+  const external = new Map(
+    Object.keys(hops)
+      .filter((u) => !u.includes('moved') && !u.includes('final'))
+      .map((u) => [u, ['README.md:1']]),
+  );
+  const result = await checkExternal(external, {
+    fetchImpl,
+    lookupImpl: PUBLIC_DNS,
+    concurrency: 1,
+  });
+  assert.deepEqual(result.problems, []);
+  assert.deepEqual(result.warnings.map((w) => w.message).sort(), [
+    "http://169.254.169.254/latest/meta-data is a host CI doesn't request; not requested",
+    "http://[::ffff:7f00:1]:3000/ is a host CI doesn't request; not requested",
+    "https://keyurgolani.name./studio is a host CI doesn't request; not requested",
+  ]);
+  assert.ok(requested.includes('https://b.dev/final'));
+  assert.ok(
+    !requested.some((u) => /keyurgolani\.name|169\.254|\[::ffff/.test(u)),
+    requested.join(' '),
+  );
+});
+
+test('a redirect loop stops after 5 hops and fails', async () => {
+  let n = 0;
+  const fetchImpl = async () => response(302, `https://loop.dev/${++n}`);
+  const result = await checkExternal(new Map([['https://loop.dev/0', ['README.md:1']]]), {
+    fetchImpl,
+    lookupImpl: PUBLIC_DNS,
+  });
+  assert.deepEqual(
+    result.problems.map((p) => p.message),
+    ['https://loop.dev/0 failed: more than 5 redirects'],
+  );
+  // Two attempts of six requests each, never more.
+  assert.equal(n, 12);
+});
+
+test('a name that resolves to a private address is never requested', async () => {
+  const requested = [];
+  const fetchImpl = async (url) => {
+    requested.push(url);
+    return response(200);
+  };
+  const lookupImpl = async (host) =>
+    host === 'rebind.dev'
+      ? [
+          { address: '93.184.215.14', family: 4 },
+          { address: '10.0.0.5', family: 4 },
+        ]
+      : host === 'six.dev'
+        ? [{ address: '::ffff:192.168.0.1', family: 6 }]
+        : [{ address: '93.184.215.14', family: 4 }];
+  const external = new Map([
+    ['https://rebind.dev/', ['a.md:1']],
+    ['https://six.dev/', ['a.md:2']],
+    ['https://fine.dev/', ['a.md:3']],
+  ]);
+  const result = await checkExternal(external, { fetchImpl, lookupImpl });
+  assert.deepEqual(requested, ['https://fine.dev/']);
+  assert.deepEqual(result.problems, []);
+  assert.deepEqual(result.warnings.map((w) => w.url).sort(), [
+    'https://rebind.dev/',
+    'https://six.dev/',
+  ]);
+});
+
+test('address ranges', () => {
+  for (const a of [
+    '10.0.0.1',
+    '127.0.0.1',
+    '169.254.1.1',
+    '172.16.0.1',
+    '192.168.0.1',
+    '100.64.0.1',
+    '0.1.2.3',
+    '224.0.0.1',
+    '255.255.255.255',
+  ])
+    assert.ok(privateIPv4(a), a);
+  for (const a of ['8.8.8.8', '172.32.0.1', '93.184.215.14']) assert.ok(!privateIPv4(a), a);
+  for (const a of [
+    '::1',
+    '::',
+    '::ffff:127.0.0.1',
+    '::ffff:7f00:1',
+    'fe80::1',
+    'fd12::1',
+    'fc00::1',
+    '64:ff9b::a00:1',
+    '2002:a00:1::',
+    'ff02::1',
+  ])
+    assert.ok(privateIPv6(a), a);
+  assert.ok(!privateIPv6('2606:4700::1111'));
 });

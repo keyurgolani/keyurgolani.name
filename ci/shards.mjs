@@ -20,6 +20,7 @@ import { spawnSync } from 'node:child_process';
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parse as parseYaml } from 'yaml';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const DURATIONS_FILE = path.join(REPO_ROOT, 'ci', 'shard-durations.json');
@@ -84,32 +85,66 @@ export function unitItems(rootTestScript, packages) {
   return [...packages.filter((p) => p.test).map((p) => `pkg:${p.dir}`), ...scripts];
 }
 
-/** The workspace packages pnpm -r sees: { dir, name, test }. */
-export function workspacePackages(root = REPO_ROOT) {
-  const yaml = readFileSync(path.join(root, 'pnpm-workspace.yaml'), 'utf8');
-  const globs = [...yaml.matchAll(/^\s+-\s+'([^']+)\/\*'\s*$/gm)].map((m) => m[1]);
-  const packages = [];
-  for (const base of globs) {
-    let entries = [];
-    try {
-      entries = readdirSync(path.join(root, base), { withFileTypes: true });
-    } catch (error) {
-      if (error.code !== 'ENOENT') throw error;
-    }
-    for (const entry of entries) {
-      if (!entry.isDirectory()) continue;
-      const dir = `${base}/${entry.name}`;
-      let manifest;
-      try {
-        manifest = JSON.parse(readFileSync(path.join(root, dir, 'package.json'), 'utf8'));
-      } catch (error) {
-        if (error.code === 'ENOENT') continue;
-        throw error;
-      }
-      packages.push({ dir, name: manifest.name, test: Boolean(manifest.scripts?.test) });
-    }
+const readManifest = (root, dir) => {
+  try {
+    return JSON.parse(readFileSync(path.join(root, dir, 'package.json'), 'utf8'));
+  } catch (error) {
+    if (error.code === 'ENOENT') return null;
+    throw error;
   }
-  return packages.sort((a, b) => a.dir.localeCompare(b.dir));
+};
+
+/**
+ * The workspace packages pnpm -r sees: { dir, name, test }. Reads
+ * pnpm-workspace.yaml's `packages` list with the YAML parser, in any quoting.
+ * An entry is a directory, `<dir>/*`, or either behind `!` to exclude it; any
+ * other pattern throws, so a package is never silently left out of every
+ * shard. A `<dir>/*` whose directory doesn't exist yet (experiments/ outside
+ * a local checkout) matches nothing, as in pnpm. A plain directory without a
+ * package.json throws.
+ */
+export function workspacePackages(root = REPO_ROOT) {
+  const config = parseYaml(readFileSync(path.join(root, 'pnpm-workspace.yaml'), 'utf8')) ?? {};
+  const entries = config.packages ?? [];
+  if (!Array.isArray(entries) || entries.length === 0) {
+    throw new Error('pnpm-workspace.yaml lists no packages');
+  }
+  const resolve = (pattern) => {
+    const clean = String(pattern).replace(/^\.\//, '').replace(/\/+$/, '');
+    const star = /^([^*?{}[\]!]+)\/\*$/.exec(clean);
+    if (star) {
+      let children = [];
+      try {
+        children = readdirSync(path.join(root, star[1]), { withFileTypes: true });
+      } catch (error) {
+        if (error.code !== 'ENOENT') throw error;
+      }
+      return children
+        .filter((c) => c.isDirectory() && readManifest(root, `${star[1]}/${c.name}`))
+        .map((c) => `${star[1]}/${c.name}`);
+    }
+    if (/^[^*?{}[\]!]+$/.test(clean)) {
+      if (!readManifest(root, clean)) {
+        throw new Error(`pnpm-workspace.yaml names ${pattern}, which has no package.json`);
+      }
+      return [clean];
+    }
+    throw new Error(`pnpm-workspace.yaml entry ${pattern} is a pattern the shards can't resolve`);
+  };
+  const included = new Set();
+  const excluded = new Set();
+  for (const entry of entries) {
+    const text = String(entry);
+    if (text.startsWith('!')) for (const dir of resolve(text.slice(1))) excluded.add(dir);
+    else for (const dir of resolve(text)) included.add(dir);
+  }
+  return [...included]
+    .filter((dir) => !excluded.has(dir))
+    .sort()
+    .map((dir) => {
+      const manifest = readManifest(root, dir);
+      return { dir, name: manifest.name, test: Boolean(manifest.scripts?.test) };
+    });
 }
 
 // Playwright's default testMatch.
@@ -135,7 +170,11 @@ export function specFiles(dir, root = REPO_ROOT) {
 const VARIANTS_CONFIG = 'tests/variants/playwright.config.ts';
 const PLAYWRIGHT = path.join('node_modules', '.bin', 'playwright');
 
-/** pnpm as this process was started, so `corepack pnpm test:shard` works without pnpm on PATH. */
+/**
+ * pnpm as this process was started: under `corepack pnpm test:shard`,
+ * npm_execpath is Corepack's pnpm, so the shard's own pnpm commands work
+ * without pnpm on PATH. Run directly with node, it falls back to `pnpm`.
+ */
 const PNPM = process.env.npm_execpath?.includes('pnpm')
   ? [process.execPath, process.env.npm_execpath]
   : ['pnpm'];
@@ -230,8 +269,18 @@ export function commandsFor(suite, items, packages = []) {
     const nameOf = (dir) => packages.find((p) => p.dir === dir)?.name ?? dir;
     const commands = [];
     if (pkgs.length > 0) {
-      // pnpm runs filtered packages in dependency order, as pnpm -r does.
-      commands.push([...PNPM, ...pkgs.flatMap((dir) => ['--filter', nameOf(dir)]), 'run', 'test']);
+      // In dependency order, as pnpm -r does, and one package at a time:
+      // the weights add up as if run in turn, and a package's timing tests
+      // (kit's render bounds) never share the runner with another
+      // package's suite, such as core's password hashing, which plain
+      // `pnpm -r test` never ran beside kit.
+      commands.push([
+        ...PNPM,
+        '--workspace-concurrency=1',
+        ...pkgs.flatMap((dir) => ['--filter', nameOf(dir)]),
+        'run',
+        'test',
+      ]);
     }
     if (scripts.length > 0 && !pkgs.includes(WEB)) {
       commands.push([...PNPM, '--filter', nameOf(WEB), 'run', 'build:registry']);

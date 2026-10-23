@@ -52,7 +52,7 @@ test('only success counts as passing', () => {
 });
 
 test('records are read from failures/ directories of the downloaded artifacts only', () => {
-  assert.deepEqual(RECORDS.map((r) => r.gate).sort(), ['appearance', 'links']);
+  assert.deepEqual(RECORDS.map((r) => r.gate).sort(), ['appearance', 'links', 'links']);
   const dir = mkdtempSync(path.join(tmpdir(), 'report-records-'));
   try {
     mkdirSync(path.join(dir, 'reports-x', 'failures'), { recursive: true });
@@ -75,8 +75,8 @@ test('the record table escapes what a record says', () => {
     runUrl: RUN_URL,
     date: '2026-10-26',
   });
-  assert.ok(action.body.includes('a \\| b<br>c'));
-  assert.ok(action.body.includes('<code>pnpm &lt;x></code>'));
+  assert.ok(action.body.includes('a &#124; b c'));
+  assert.ok(action.body.includes('<code>pnpm &lt;x&gt;</code>'));
 });
 
 function fakeGitHub(openIssues) {

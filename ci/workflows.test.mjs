@@ -63,6 +63,13 @@ test('only jobs that build without fixture flags restore the Next cache', () => 
     .map(([id]) => id)
     .sort();
   assert.deepEqual(withNext, ['browser', 'build', 'variants']);
+  // build writes it; the others only restore.
+  const writers = withNext.filter((id) =>
+    CI.jobs[id].steps.some(
+      (s) => s.with?.path === 'apps/web/.next/cache' && /^actions\/cache@/.test(s.uses),
+    ),
+  );
+  assert.deepEqual(writers, ['build']);
   for (const id of withNext) {
     const env = JSON.stringify(CI.jobs[id].env ?? {});
     assert.doesNotMatch(env, /FIXTURES|PORTFOLIO_ANALYZE/, id);

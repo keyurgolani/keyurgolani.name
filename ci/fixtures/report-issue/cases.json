@@ -2,24 +2,42 @@
   {
     "name": "all passed, no report open",
     "description": "Nothing to do.",
-    "needs": { "links": { "result": "success", "outputs": {} } },
+    "needs": {
+      "links": {
+        "result": "success",
+        "outputs": {}
+      }
+    },
     "openIssues": [],
     "expected": []
   },
   {
     "name": "recovered",
     "description": "Every job passed with a report open: comment, then close it.",
-    "needs": { "links": { "result": "success", "outputs": {} } },
+    "needs": {
+      "links": {
+        "result": "success",
+        "outputs": {}
+      }
+    },
     "openIssues": [
       {
         "number": 41,
-        "user": { "login": "github-actions[bot]" },
+        "user": {
+          "login": "github-actions[bot]"
+        },
         "body": "<!-- scheduled-checks-report -->\nold"
       }
     ],
     "expected": [
-      { "kind": "comment", "issue": 41 },
-      { "kind": "close", "issue": 41 }
+      {
+        "kind": "comment",
+        "issue": 41
+      },
+      {
+        "kind": "close",
+        "issue": 41
+      }
     ],
     "bodyIncludes": ["Every scheduled check passed on 2026-10-26"]
   },
@@ -27,23 +45,37 @@
     "name": "first failure",
     "description": "A job failed and no report is open: open one. Another user's issue with the marker, and a PR, aren't the report.",
     "needs": {
-      "links": { "result": "failure", "outputs": {} },
-      "appearance": { "result": "success", "outputs": {} }
+      "links": {
+        "result": "failure",
+        "outputs": {}
+      },
+      "appearance": {
+        "result": "success",
+        "outputs": {}
+      }
     },
     "openIssues": [
       {
         "number": 7,
-        "user": { "login": "keyurgolani" },
+        "user": {
+          "login": "keyurgolani"
+        },
         "body": "<!-- scheduled-checks-report -->"
       },
       {
         "number": 8,
-        "user": { "login": "github-actions[bot]" },
+        "user": {
+          "login": "github-actions[bot]"
+        },
         "body": "<!-- scheduled-checks-report -->",
         "pull_request": {}
       }
     ],
-    "expected": [{ "kind": "create" }],
+    "expected": [
+      {
+        "kind": "create"
+      }
+    ],
     "bodyIncludes": [
       "<!-- scheduled-checks-report -->",
       "| links | failed | `pnpm check:docs && pnpm check:links` |",
@@ -54,31 +86,55 @@
   {
     "name": "still failing",
     "description": "A job failed with reports open: comment on the oldest.",
-    "needs": { "links": { "result": "failure", "outputs": {} } },
+    "needs": {
+      "links": {
+        "result": "failure",
+        "outputs": {}
+      }
+    },
     "openIssues": [
       {
         "number": 52,
-        "user": { "login": "github-actions[bot]" },
+        "user": {
+          "login": "github-actions[bot]"
+        },
         "body": "x <!-- scheduled-checks-report -->"
       },
       {
         "number": 50,
-        "user": { "login": "github-actions[bot]" },
+        "user": {
+          "login": "github-actions[bot]"
+        },
         "body": "<!-- scheduled-checks-report -->"
       }
     ],
-    "expected": [{ "kind": "comment", "issue": 50 }],
+    "expected": [
+      {
+        "kind": "comment",
+        "issue": 50
+      }
+    ],
     "bodyIncludes": ["| links | failed |"]
   },
   {
     "name": "timed out",
     "description": "A job that hit timeout-minutes finishes cancelled, and a hook job skipped after a failed dependency never ran: both are failures.",
     "needs": {
-      "links": { "result": "cancelled", "outputs": {} },
-      "catalog-provenance": { "result": "skipped", "outputs": {} }
+      "links": {
+        "result": "cancelled",
+        "outputs": {}
+      },
+      "catalog-provenance": {
+        "result": "skipped",
+        "outputs": {}
+      }
     },
     "openIssues": [],
-    "expected": [{ "kind": "create" }],
+    "expected": [
+      {
+        "kind": "create"
+      }
+    ],
     "bodyIncludes": [
       "| links | was cancelled or timed out | `pnpm check:docs && pnpm check:links` |",
       "| catalog-provenance | was skipped, so it never ran | `pnpm ci:catalog-provenance` |"
@@ -89,7 +145,33 @@
     "description": "A reporter that needs no jobs means the workflow lost its edges: report it.",
     "needs": {},
     "openIssues": [],
-    "expected": [{ "kind": "create" }],
+    "expected": [
+      {
+        "kind": "create"
+      }
+    ],
     "bodyIncludes": ["| report | needs no jobs |"]
+  },
+  {
+    "name": "hostile record text",
+    "description": "A record that carries HTML, a mention, an issue reference, and a Markdown link renders as plain text.",
+    "needs": {
+      "links": {
+        "result": "failure",
+        "outputs": {}
+      }
+    },
+    "openIssues": [],
+    "expected": [
+      {
+        "kind": "create"
+      }
+    ],
+    "bodyIncludes": [
+      "&lt;img src=x onerror=alert(1)&gt; &#64;keyurgolani see &#35;12 and &#91;this&#93;(https://evil.example/x) &#124; &#96;code&#96;",
+      "<code>pnpm ci:links &#64;owner &#35;1</code>",
+      "| &lt;script&gt; |"
+    ],
+    "bodyExcludes": ["<img", "@keyurgolani", "see #12", "[this]", "<script>", "@owner"]
   }
 ]
