@@ -7,11 +7,11 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 // pnpm check:deps sees every import in the web app's source (#7): the ~/
-// alias resolves through apps/web/tsconfig.json's baseUrl, an import the
-// cruise can't resolve fails it, and the preview rule follows a shared
-// module to what it imports. Each test cruises a small tree, at the paths
-// the rules name, with the repository's own .dependency-cruiser.cjs,
-// apps/web/tsconfig.json, and tsconfig.base.json.
+// alias resolves through the baseUrl in apps/web/tsconfig.depcruise.json,
+// an import the cruise can't resolve fails it, and the preview rule follows
+// a shared module to what it imports. Each test cruises a small tree, at the
+// paths the rules name, with the repository's own .dependency-cruiser.cjs
+// and tsconfigs.
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const CRUISER = path.join(
@@ -37,19 +37,20 @@ const BASE = {
 
 /**
  * The violations check:deps' config finds in a tree of BASE and `files`,
- * each { rule, from, to }. `tsconfig` rewrites apps/web/tsconfig.json.
+ * each { rule, from, to }. `tsconfig` rewrites apps/web/tsconfig.depcruise.json.
  */
 function cruise(t, files, { tsconfig = (text) => text } = {}) {
   const dir = mkdtempSync(path.join(tmpdir(), 'deps-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   // The config lists the variant packages under its own directory's packages/.
   mkdirSync(path.join(dir, 'packages'));
-  for (const file of ['.dependency-cruiser.cjs', 'tsconfig.base.json']) {
+  for (const file of ['.dependency-cruiser.cjs', 'tsconfig.base.json', 'apps/web/tsconfig.json']) {
+    mkdirSync(path.dirname(path.join(dir, file)), { recursive: true });
     cpSync(path.join(ROOT, file), path.join(dir, file));
   }
   const tree = {
-    'apps/web/tsconfig.json': tsconfig(
-      readFileSync(path.join(ROOT, 'apps', 'web', 'tsconfig.json'), 'utf8'),
+    'apps/web/tsconfig.depcruise.json': tsconfig(
+      readFileSync(path.join(ROOT, 'apps', 'web', 'tsconfig.depcruise.json'), 'utf8'),
     ),
     ...BASE,
     ...files,
@@ -157,7 +158,7 @@ test("check:deps fails an import in the web app's source it can't resolve, so no
   assert.deepEqual(of(violations, 'not-to-unresolvable'), [
     { rule: 'not-to-unresolvable', from: 'apps/web/src/lib/typo.ts', to: '~/lib/no-such-module' },
   ]);
-  // Without the tsconfig's baseUrl every alias is one, and fails the same way.
+  // Without tsconfig.depcruise.json's baseUrl every alias is one, and fails the same way.
   const withoutBaseUrl = (text) => {
     const config = JSON.parse(text);
     assert.equal(config.compilerOptions.baseUrl, '.');
