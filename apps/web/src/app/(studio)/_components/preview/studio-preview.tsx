@@ -1,26 +1,35 @@
 'use client';
 
-import { useCallback, useId, useRef, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore } from 'react';
+import type { AppearanceSelection } from '@portfolio/schema';
 import {
   customViewport,
   CUSTOM_WIDTH,
   frameTitle,
   REDUCED_MOTION,
+  renderedVariant,
+  type AppearanceOptions,
   viewportLabel,
   VIEWPORTS,
   type FrameSubjectKind,
   type Viewport,
 } from '~/lib/preview-frame';
 import type { MintRequest } from './grant-session';
-import { PreviewSurface } from './preview-surface';
+import { AppearanceControls } from './appearance-controls';
+import { createFrameLink, type FrameSide } from './frame-link';
+import { PreviewSurface, type PreviewSurfaceHandle } from './preview-surface';
 
 // /studio/preview's client part (#7, Slice 4, items 1 and 4): the controls,
-// before the frame in tab order and never over it, then one PreviewSurface.
-// The viewport is a width simulation; the display mode, contrast, and motion
-// change the frame in place; enhancements, JavaScript, the content, and
+// before the frame in tab order and never over it, then one PreviewSurface,
+// or two side by side to compare (item 7). The viewport is a width
+// simulation; the display mode, contrast, and motion change the frame in
+// place; enhancements, JavaScript, the content, an appearance override, and
 // Refresh load it again, and focus comes back to the control that did. Motion
 // only reduces: when the owner's system already reduces it, the control is
-// off and says so. #8's Studio shell takes these controls in.
+// off and says so. Compared, each frame has its own grant, nonce, port, and
+// appearance override, and linking their scrolling and navigation is off
+// until the owner turns it on (frame-link.ts). #8's Studio shell takes these
+// controls in.
 
 /** Something the content control offers: the draft, the live revision, or a fixture. */
 export interface PreviewChoice {
@@ -30,6 +39,8 @@ export interface PreviewChoice {
   readonly subject: MintRequest['subject'];
   /** The variant its site selects, which the frame's title names, or null when it names none. */
   readonly variant: string | null;
+  /** The appearance its site selects, which a frame's override starts from, or null. */
+  readonly appearance: AppearanceSelection | null;
 }
 
 export interface StudioPreviewProps {
@@ -38,6 +49,8 @@ export interface StudioPreviewProps {
   /** The frame's sandbox with JavaScript on, as the page decided it for this deployment. */
   readonly sandbox: string;
   readonly previewOrigin: string | null;
+  /** What this build registers for a frame's appearance override to select. */
+  readonly appearanceOptions: AppearanceOptions;
   /** Where "Sign in again" goes. */
   readonly signIn: string;
 }
@@ -65,6 +78,7 @@ export function StudioPreview({
   sandbox,
   previewOrigin,
   signIn,
+  appearanceOptions,
 }: StudioPreviewProps) {
   const ids = useId();
   const [choiceId, setChoiceId] = useState(choices[0]?.id ?? '');
@@ -87,6 +101,21 @@ export function StudioPreview({
     if (control && document.activeElement !== control) control.focus();
   }, []);
 
+  // Comparison (#7, item 7): a second frame with its own grant, nonce, port,
+  // and appearance override, and linking, off until the owner turns it on.
+  const [compare, setCompare] = useState(false);
+  const [linked, setLinked] = useState(false);
+  const [overrides, setOverrides] = useState<readonly (AppearanceSelection | null)[]>([null, null]);
+  const link = useRef(createFrameLink());
+  const first = useRef<PreviewSurfaceHandle | null>(null);
+  const second = useRef<PreviewSurfaceHandle | null>(null);
+  const handles = [first, second] as const;
+  const isLinked = compare && linked;
+  useEffect(() => {
+    link.current.setLinked(isLinked);
+  }, [isLinked]);
+  const other = (side: FrameSide) => handles[side === 0 ? 1 : 0].current;
+
   const choice = choices.find(({ id }) => id === choiceId) ?? choices[0];
   if (!choice) {
     return (
@@ -101,12 +130,31 @@ export function StudioPreview({
       : (VIEWPORTS.find(({ id }) => id === viewportId) ?? VIEWPORTS[0]!);
   // Motion only reduces: a system that reduces it holds the frame reduced.
   const motion = systemReduces ? 'reduce' : environment.motion;
-  const request: MintRequest = {
-    subject: choice.subject,
-    environment: { ...environment, motion },
+  const requestFor = (side: FrameSide): MintRequest => {
+    const appearance = overrides[side] ?? null;
+    return {
+      subject: choice.subject,
+      environment: { ...environment, motion },
+      ...(appearance ? { appearance } : {}),
+    };
   };
   const reloadFrom = (control: HTMLElement) => {
     cause.current = control;
+  };
+  const sides: readonly FrameSide[] = compare ? [0, 1] : [0];
+  const named = (side: FrameSide) =>
+    compare ? (side === 0 ? 'First preview' : 'Second preview') : 'Preview';
+  const titleOf = (side: FrameSide) => {
+    const selected = overrides[side]?.variant ?? choice.appearance?.variant ?? null;
+    const variant = overrides[side]
+      ? renderedVariant(selected, appearanceOptions.variants)
+      : choice.variant;
+    return frameTitle(
+      choice.kind,
+      variant,
+      viewport,
+      compare ? (side === 0 ? 'first' : 'second') : undefined,
+    );
   };
 
   return (
@@ -127,6 +175,8 @@ export function StudioPreview({
             onChange={(event) => {
               reloadFrom(event.currentTarget);
               setChoiceId(event.currentTarget.value);
+              // Another version starts from its own site's appearance.
+              setOverrides([null, null]);
             }}
           >
             {choices.map(({ id, label }) => (
@@ -287,22 +337,88 @@ export function StudioPreview({
             Refresh
           </button>
         </div>
+        <div className="studio-preview__field studio-preview__check">
+          <input
+            id={`${ids}-compare`}
+            type="checkbox"
+            checked={compare}
+            onChange={(event) => {
+              const on = event.currentTarget.checked;
+              setCompare(on);
+              if (!on) setLinked(false);
+            }}
+          />
+          <label className="studio-label" htmlFor={`${ids}-compare`}>
+            Compare two frames
+          </label>
+        </div>
+        <div className="studio-preview__field studio-preview__check">
+          <input
+            id={`${ids}-linked`}
+            type="checkbox"
+            checked={isLinked}
+            disabled={!compare}
+            aria-describedby={`${ids}-linked-note`}
+            onChange={(event) => setLinked(event.currentTarget.checked)}
+          />
+          <label className="studio-label" htmlFor={`${ids}-linked`}>
+            Link scrolling and navigation
+          </label>
+          <p id={`${ids}-linked-note`} className="studio-preview__note">
+            Off, each frame scrolls and moves on its own.
+          </p>
+        </div>
         <p id={`${ids}-widths`} className="studio-preview__note">
           Widths simulate a device&apos;s layout width; the frame scales to fit. Forced colors,
           print, and touch input can&apos;t be previewed here.
         </p>
       </form>
-      <PreviewSurface
-        csrfToken={csrfToken}
-        request={request}
-        sandbox={javascript ? sandbox : ''}
-        previewOrigin={previewOrigin}
-        viewport={viewport}
-        title={frameTitle(choice.kind, choice.variant, viewport)}
-        refresh={refresh}
-        signIn={signIn}
-        onSettled={onSettled}
-      />
+      <div className="studio-preview__frames" data-compare={compare ? 'true' : undefined}>
+        {sides.map((side) => (
+          <div key={side} className="studio-preview__frame">
+            <AppearanceControls
+              idPrefix={`${ids}-appearance-${side}`}
+              legend={
+                compare
+                  ? side === 0
+                    ? "First frame's appearance"
+                    : "Second frame's appearance"
+                  : 'Appearance'
+              }
+              own={choice.appearance}
+              value={overrides[side] ?? null}
+              options={appearanceOptions}
+              onChange={(next, control) => {
+                reloadFrom(control);
+                setOverrides((now) => now.map((each, at) => (at === side ? next : each)));
+              }}
+            />
+            <PreviewSurface
+              handle={handles[side]}
+              name={named(side)}
+              csrfToken={csrfToken}
+              request={requestFor(side)}
+              sandbox={javascript ? sandbox : ''}
+              previewOrigin={previewOrigin}
+              viewport={viewport}
+              title={titleOf(side)}
+              refresh={refresh}
+              signIn={signIn}
+              onSettled={onSettled}
+              scrollSync={isLinked}
+              onArrived={(route) => link.current.arrived(side, route)}
+              onNavigated={(route) => {
+                const to = link.current.navigated(side, route);
+                if (to !== null) other(side)?.navigate(to);
+              }}
+              onScrolled={(position) => {
+                const to = link.current.scrolled(side, position);
+                if (to !== null) other(side)?.scrollTo(to);
+              }}
+            />
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

@@ -6,6 +6,7 @@ import {
   resolvePortfolioView,
   validatePublicationUnit,
   type AppearanceCatalog,
+  type AppearanceSelection,
   type ContentExtension,
   type ParsedPair,
   type PublicView,
@@ -297,6 +298,22 @@ export function ownerPreviews({
   const renderedVersionOf = (record: GrantRecord) =>
     record.subject.kind === 'draft' ? record.subject.version : null;
 
+  /**
+   * The appearance a site document selects, when it's a whole selection a
+   * frame's override can start from (#7), or null.
+   */
+  const siteAppearance = (site: {
+    readonly format: 'yaml' | 'json';
+    readonly sourceText: string;
+  }): AppearanceSelection | null => {
+    const parsed = parseSource(site.sourceText, site.format);
+    if (!parsed.ok) return null;
+    const selection = AppearanceSelectionSchema.safeParse(
+      (parsed.data as { readonly appearance?: unknown }).appearance,
+    );
+    return selection.success ? (selection.data as AppearanceSelection) : null;
+  };
+
   /** What /studio/preview offers (Slice 4): the working draft's latest version, then the live revision. */
   async function previewable(session: Session | null): Promise<readonly Previewable[]> {
     if (!authorize('preview.grant', session)) return [];
@@ -307,6 +324,7 @@ export function ownerPreviews({
         kind: 'draft',
         subject: { draft: working.draftId, version: working.version },
         variant: selectedVariant(working.documents.site),
+        appearance: siteAppearance(working.documents.site),
       });
     }
     const live = store.publication ? (await store.publication.status()).liveRevisionId : null;
@@ -317,6 +335,7 @@ export function ownerPreviews({
           kind: 'revision',
           subject: { revision: live },
           variant: selectedVariant(read.revision.unit.site),
+          appearance: siteAppearance(read.revision.unit.site),
         });
       }
     }

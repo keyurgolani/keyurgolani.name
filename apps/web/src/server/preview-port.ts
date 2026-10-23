@@ -1,4 +1,4 @@
-import type { PublicView } from '@portfolio/schema';
+import type { AppearanceSelection, PublicView } from '@portfolio/schema';
 import type { Session } from './session';
 
 // Types for #7's preview grants that config-store.ts, the composition root,
@@ -106,9 +106,12 @@ export type Previewable =
       readonly kind: 'draft';
       readonly subject: { readonly draft: string; readonly version: number };
       readonly variant: string | null;
+      /** The appearance its site selects, which a frame's override starts from, or null. */
+      readonly appearance: AppearanceSelection | null;
     }
   | {
       readonly kind: 'revision';
       readonly subject: { readonly revision: string };
       readonly variant: string | null;
+      readonly appearance: AppearanceSelection | null;
     };

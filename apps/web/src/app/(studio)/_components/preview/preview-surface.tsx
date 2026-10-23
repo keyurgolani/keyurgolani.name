@@ -1,6 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useImperativeHandle,
+  useRef,
+  useState,
+  type Ref,
+} from 'react';
 import {
   fitScale,
   FRAME_ATTRIBUTES,
@@ -14,6 +22,8 @@ import {
 } from '~/lib/preview-frame';
 import { announceSignedOut, AUTH_REQUIRED, onSignedOut, studioFetch } from '~/lib/studio-fetch';
 import { openStudioChannel, type StudioChannel } from '~/preview/studio-channel';
+import type { ToFramePayload } from '~/preview/protocol';
+import type { ScrollPosition } from './frame-link';
 import { pageLifecycle, type FrameLifecycle } from './frame-lifecycle';
 import { createGrantSession, type GrantSession, type MintRequest } from './grant-session';
 import { createRefreshThrottle, type RefreshThrottle } from './refresh-throttle';
@@ -58,6 +68,28 @@ export interface PreviewSurfaceProps {
   readonly signIn: string;
   /** Called when the frame settles after a load: ready, or not loaded. */
   readonly onSettled?: () => void;
+  /**
+   * What the surface is called, in its region, its Skip link, and what its
+   * live region says: Preview, or First preview and Second preview side by
+   * side (#7, item 7).
+   */
+  readonly name?: string;
+  /** Whether the frame tells Studio as its reader scrolls, which a linked pair turns on. */
+  readonly scrollSync?: boolean;
+  /** The frame loaded `route`: its ready. */
+  readonly onArrived?: (route: string) => void;
+  /** The frame moved to `route` itself: its navigated, the frame's claim. */
+  readonly onNavigated?: (route: string) => void;
+  /** The frame's reader scrolled: its scrolled, the frame's claim. */
+  readonly onScrolled?: (position: ScrollPosition) => void;
+  /** What a linked pair asks of this frame. */
+  readonly handle?: Ref<PreviewSurfaceHandle>;
+}
+
+/** What a linked pair asks of a frame: false when it has no channel open to take it. */
+export interface PreviewSurfaceHandle {
+  navigate(route: string): boolean;
+  scrollTo(position: ScrollPosition): boolean;
 }
 
 type Phase = 'loading' | 'ready' | 'failed' | 'blocked' | 'outdated' | 'expired';
@@ -84,8 +116,31 @@ const heldRequest = (request: MintRequest): MintRequest => ({
   environment: heldToSystem(request.environment, window.matchMedia(REDUCED_MOTION).matches),
 });
 
+/**
+ * Sends a linked pair's move over `channel`: false with no channel open, or
+ * for a payload the protocol refuses, which reaches the frame never.
+ */
+function sendSafely<K extends 'navigate' | 'scroll-to'>(
+  channel: StudioChannel | null,
+  type: K,
+  payload: ToFramePayload<K>,
+): boolean {
+  try {
+    return channel?.send(type, payload) ?? false;
+  } catch {
+    return false;
+  }
+}
+
+/** `text`, as the live region of the surface called `name` says it. */
+const announced = (name: string, text: string) => (name === 'Preview' ? text : `${name}: ${text}`);
+
+/** `name` inside a sentence: First preview becomes first preview. */
+const lowered = (name: string) => `${name.charAt(0).toLowerCase()}${name.slice(1)}`;
+
 export function PreviewSurface(props: PreviewSurfaceProps) {
   const { request, sandbox, viewport, title } = props;
+  const name = props.name ?? 'Preview';
   const javascript = sandbox !== '';
   const after = useId();
   const stage = useRef<HTMLDivElement | null>(null);
@@ -139,7 +194,12 @@ export function PreviewSurface(props: PreviewSurfaceProps) {
             nonce: held.nonce,
             ...(origin === undefined ? {} : { frameOrigin: origin }),
             on: {
-              ready: () => settle('ready'),
+              ready: ({ route }) => {
+                settle('ready');
+                latest.current.props.onArrived?.(route);
+              },
+              navigated: ({ route }) => latest.current.props.onNavigated?.(route),
+              scrolled: (position) => latest.current.props.onScrolled?.(position),
               status: ({ state }) => {
                 if (state === 'ready') settle('ready');
                 else if (state === 'version_mismatch') settle('outdated');
@@ -153,6 +213,7 @@ export function PreviewSurface(props: PreviewSurfaceProps) {
                 if (!connected) return;
                 clearTimeout(timers.current.hello);
                 sendEnvironment();
+                channel.current?.send('sync', { scroll: latest.current.props.scrollSync ?? false });
                 if (lifecycle.current) {
                   channel.current?.send('lifecycle', lifecycle.current.current);
                 }
@@ -241,6 +302,28 @@ export function PreviewSurface(props: PreviewSurfaceProps) {
   useEffect(() => {
     sendEnvironment();
   }, [displayMode, contrast, motion, sendEnvironment]);
+
+  // Scroll sync, which a linked pair turns on and off: sent again after every handshake.
+  const scrollSync = props.scrollSync ?? false;
+  useEffect(() => {
+    channel.current?.send('sync', { scroll: scrollSync });
+  }, [scrollSync]);
+
+  // What a linked pair asks of this frame, over its own channel alone.
+  const scrollSteps = useRef(0);
+  useImperativeHandle(
+    props.handle,
+    () => ({
+      navigate: (route) => sendSafely(channel.current, 'navigate', { route }),
+      scrollTo: ({ anchor, progress }) =>
+        sendSafely(channel.current, 'scroll-to', {
+          anchor,
+          progress,
+          seq: (scrollSteps.current += 1),
+        }),
+    }),
+    [],
+  );
 
   // JavaScript on or off is a frame of its own, with its own sandbox, for the same grant.
   const wasJavaScript = useRef(javascript);
@@ -340,9 +423,9 @@ export function PreviewSurface(props: PreviewSurfaceProps) {
   };
 
   return (
-    <section className="preview-surface" aria-label="Preview">
+    <section className="preview-surface" aria-label={name}>
       <a className="preview-surface__skip" href={`#${after}`}>
-        Skip preview
+        Skip {lowered(name)}
       </a>
       <div
         ref={stage}
@@ -421,10 +504,10 @@ export function PreviewSurface(props: PreviewSurfaceProps) {
         </div>
       ) : null}
       <p id={after} className="preview-surface__after" tabIndex={-1}>
-        End of preview
+        End of {lowered(name)}
       </p>
       <p className="preview-surface__live" role="status" aria-live="polite">
-        {ANNOUNCEMENTS[phase]}
+        {announced(name, ANNOUNCEMENTS[phase])}
       </p>
     </section>
   );
