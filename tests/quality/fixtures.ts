@@ -6,7 +6,8 @@
 //   harness's serverEgress fails the test it happens in, and an attempt
 //   still on its way after the last test fails the worker as it stops.
 // - The browser reaches nothing but the app: every other request is
-//   aborted and logged, and any one fails the test, with no allowlist.
+//   aborted and logged, and any one fails the test, with no allowlist. A
+//   redirect hop counts, and the request fixture follows no redirect.
 // - The page's Date is pinned (page.clock.setFixedTime, never install), and
 //   web-vitals records from before its first script.
 // - Every request carries the run's canary, as a cookie, an Authorization
@@ -18,7 +19,12 @@ import { test as base } from '../harness/fixtures';
 import { startApp } from '../harness/app-server.mjs';
 import { pinPageClock } from './lib/clock';
 import { qualityWeb, runCanary } from './lib/env';
-import { egressFailure, installBrowserPolicy, serverEgressFailure } from './lib/egress';
+import {
+  egressFailure,
+  guardRequests,
+  installBrowserPolicy,
+  serverEgressFailure,
+} from './lib/egress';
 import { appOptionsFor, type CellServer } from './lib/server';
 import { recordVitals } from './lib/vitals';
 
@@ -68,6 +74,11 @@ export const test = base.extend<Record<never, never>, QualityWorkerFixtures>({
     await pinPageClock(page);
     await recordVitals(page);
     await provide(page);
+  },
+
+  // Follows no redirect, and fails a 3xx that leaves the app.
+  request: async ({ request, app }, provide) => {
+    await provide(guardRequests(request, app.origin));
   },
 
   // The harness's own is auto, and so is this, which replaces it.

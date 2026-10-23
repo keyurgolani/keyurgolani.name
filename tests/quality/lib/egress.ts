@@ -3,10 +3,13 @@
 // every WebSocket to another host, is aborted and listed, and any one fails
 // the cell: there's no allowlist. Chromium itself also resolves no name but
 // loopback (tests/harness/trace/policy.mjs's TRACE_LAUNCH_ARGS, which the
-// quality config launches with), so what routing never sees, such as a
-// redirect hop, fails to resolve instead of leaving the machine.
+// quality config launches with). Routing sees only a request's first URL,
+// so every request the context makes is listed too: a redirect hop to
+// another origin fails the cell, even though Chromium can't resolve it.
+// The `request` fixture follows no redirect (guardRequests), so an API call
+// can't be sent off the machine by a 3xx either.
 
-import type { BrowserContext } from '@playwright/test';
+import type { APIRequestContext, APIResponse, BrowserContext } from '@playwright/test';
 
 /** `url`'s origin, or null for one that doesn't parse. */
 function originOf(url: string): string | null {
@@ -26,19 +29,27 @@ export async function installBrowserPolicy(
   appOrigin: string,
 ): Promise<string[]> {
   const blocked: string[] = [];
+  const block = (url: string) => {
+    if (!blocked.includes(url)) blocked.push(url);
+  };
   const appHost = new URL(appOrigin).host;
   await context.route('**/*', async (route) => {
     const url = route.request().url();
     if (originOf(url) !== appOrigin) {
-      blocked.push(url);
+      block(url);
       return route.abort('blockedbyclient');
     }
     return route.continue();
   });
+  // Every request, a redirect's next hop included, which routing never sees.
+  context.on('request', (request) => {
+    const url = request.url();
+    if (/^(?:https?|wss?):/.test(url) && originOf(url) !== appOrigin) block(url);
+  });
   await context.routeWebSocket(/.*/, (ws) => {
     if (new URL(ws.url()).host === appHost) ws.connectToServer();
     else {
-      blocked.push(ws.url());
+      block(ws.url());
       ws.close();
     }
   });
@@ -60,4 +71,45 @@ export function egressFailure(blocked: readonly string[]): string | null {
 export function serverEgressFailure(attempts: readonly string[]): string | null {
   if (attempts.length === 0) return null;
   return `The app under test tried to reach ${attempts.length} host(s) outside the machine: ${[...new Set(attempts)].join(', ')}`;
+}
+
+const REQUEST_METHODS = ['fetch', 'get', 'post', 'put', 'patch', 'delete', 'head'] as const;
+
+/** Whether `location`, resolved against `base`, stays on `base`'s origin. */
+function staysOn(base: string, location: string): boolean {
+  try {
+    return new URL(location, base).origin === new URL(base).origin;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * `request` with redirects off: each call follows none, and a 3xx whose
+ * Location leaves the app throws, naming it. A test that wants the redirect
+ * reads the response's Location itself.
+ */
+export function guardRequests<T extends Pick<APIRequestContext, (typeof REQUEST_METHODS)[number]>>(
+  request: T,
+  appOrigin: string,
+): T {
+  return new Proxy(request, {
+    get(target, property, receiver) {
+      const value = Reflect.get(target, property, receiver) as unknown;
+      if (!(REQUEST_METHODS as readonly PropertyKey[]).includes(property)) return value;
+      const method = value as (url: unknown, options?: object) => Promise<APIResponse>;
+      return async (url: unknown, options: object = {}) => {
+        const response = await method.call(target, url, { ...options, maxRedirects: 0 });
+        const location = response.headers()['location'];
+        if (response.status() >= 300 && response.status() < 400 && location) {
+          if (!staysOn(response.url() || appOrigin, location)) {
+            throw new Error(
+              `${response.url()} redirected outside the app, to ${location}, and the request fixture follows no redirect.`,
+            );
+          }
+        }
+        return response;
+      };
+    },
+  });
 }
