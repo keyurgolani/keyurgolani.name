@@ -26,6 +26,6 @@ ignoredBuiltDependencies:
   # it is missing.
   - unrs-resolver
 
-# Exact floors for packages that arrive only through other dependencies.
+# Exact pins for packages that arrive only through other dependencies.
 overrides:
   source-map-js: 1.2.2
