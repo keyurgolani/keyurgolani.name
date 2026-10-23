@@ -342,11 +342,11 @@ async function idle(page: Page): Promise<void> {
  * `page`, and that the kit mounted `floor` at least. First the page goes
  * idle, which is when #6's islands mount theirs, and the counts have to
  * hold for a second, so one that mounts within about a second of idle is
- * in them before the check passes. One that mounts later isn't: #6 slice
- * 4's pending-mount count closes that gap. With `settle: false` it reads
- * them again, for one that mounted since, without waiting for either.
- * `timeout` bounds the reads, 10 s unless a test that expects a failure
- * asks for less.
+ * in them before the check passes. One that mounts later isn't, until #6
+ * slice 4's pending-mount count closes that gap. With `settle: false` it
+ * reads them again, for one that mounted since, without waiting for
+ * either. `timeout` bounds the reads, 10 s unless a test that expects a
+ * failure asks for less.
  */
 export async function expectEveryEnhancementFailed(
   page: Page,
