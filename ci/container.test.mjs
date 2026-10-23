@@ -5,6 +5,7 @@ import {
   chmodSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   symlinkSync,
@@ -22,6 +23,7 @@ import {
   SCAN_SNIPPET,
   TREE_SNIPPET,
   WRITABLE_SNIPPET,
+  WRITE_SNIPPET,
 } from './lib/container.mjs';
 import { MANAGER_COMMANDS, MANAGERS_SNIPPET, REMOVED_PATHS } from './lib/package-managers.mjs';
 
@@ -126,6 +128,9 @@ test('each Compose example runs its profile from the one image, on loopback', ()
     // A read-only root with a tmpfs for Next's cache, under every profile.
     assert.equal(web.read_only, true, file);
     assert.deepEqual(web.tmpfs, ['/app/apps/web/.next/cache'], file);
+    // No capabilities and no privileges to gain, as smoke:profiles runs it (#12).
+    assert.deepEqual(web.cap_drop, ['ALL'], file);
+    assert.deepEqual(web.security_opt, ['no-new-privileges:true'], file);
     const volumes = web.volumes ?? [];
     if (profile === 'demo') {
       assert.equal(web.environment.PORTFOLIO_SOURCE_DIR, undefined, file);
@@ -574,6 +579,47 @@ test('the in-container requests report a connection error per request', async ()
   );
   const [result] = JSON.parse(output.stdout);
   assert.match(result.error, /ECONNREFUSED/);
+});
+
+test('the write probe creates and removes a file where it can, and names the error where it cannot', async (t) => {
+  const root = mkdtempSync(path.join(tmpdir(), 'write-probe-'));
+  t.after(() => {
+    chmodSync(path.join(root, 'locked'), 0o755);
+    rmSync(root, { recursive: true, force: true });
+  });
+  mkdirSync(path.join(root, 'open'));
+  mkdirSync(path.join(root, 'locked'));
+  chmodSync(path.join(root, 'locked'), 0o555);
+  const dirs = ['open', 'locked', 'absent'].map((name) => path.join(root, name));
+  const output = await runNode(['-e', WRITE_SNIPPET, JSON.stringify(dirs)], {});
+  const result = JSON.parse(output.stdout);
+  assert.equal(result[dirs[0]], 'written');
+  // Root ignores the mode bits, so only a non-root run sees EACCES.
+  if (process.getuid?.() !== 0) assert.equal(result[dirs[1]], 'EACCES');
+  assert.equal(result[dirs[2]], 'ENOENT');
+  assert.deepEqual(readdirSync(path.join(root, 'open')), [], 'the probe file is gone');
+});
+
+test('the image scan flags the experiments, archive, and variant preview holding pens (#12)', async () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'image-scan-'));
+  try {
+    for (const dir of [
+      'experiments/variant-x',
+      'archive/old',
+      'apps/web/.variant-preview',
+      'node_modules/pkg/archive',
+    ]) {
+      mkdirSync(path.join(root, dir), { recursive: true });
+    }
+    const output = await runNode(['-e', SCAN_SNIPPET, root], {});
+    assert.deepEqual(JSON.parse(output.stdout).problems.sort(), [
+      'apps/web/.variant-preview',
+      'archive',
+      'experiments',
+    ]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test('the image scan flags personal data, env files, git, secrets, and test trees', async () => {
