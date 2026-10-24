@@ -1,6 +1,22 @@
 import type { StudioFetchOptions } from '~/lib/studio-fetch';
-import type { BackendFailure, ReadResult, SaveResult, StudioBackend } from './backend';
-import type { ConflictingDraft, LiveState, SourceDocuments, StudioDraft } from './documents';
+import type {
+  BackendFailure,
+  MoveResult,
+  Page,
+  PublicationEvent,
+  ReadResult,
+  RevisionDetail,
+  RevisionSummary,
+  SaveResult,
+  StudioBackend,
+} from './backend';
+import type {
+  ConflictingDraft,
+  DraftFinding,
+  LiveState,
+  SourceDocuments,
+  StudioDraft,
+} from './documents';
 
 // The owner adapter of the Studio shell's backend (#8, Slice 1): #3's store,
 // through #1's registry entries at /api/studio/<name> and #2's guard. Every
@@ -32,6 +48,16 @@ const MESSAGES: Readonly<Record<string, string>> = {
   validation_failed: "The draft couldn't be saved as it stands.",
   live_conflict: 'The live revision changed. Reload to start from it.',
   not_found: 'The working draft is gone. Reload to see the one there is now.',
+};
+
+/** Why the store refused a publish or a rollback, in words: in each, nothing moved. */
+const MOVE_MESSAGES: Readonly<Record<string, string>> = {
+  validation_failed: 'The draft has findings that block publishing.',
+  revision_incompatible: "That revision can't be made live by this build.",
+  nothing_to_publish: 'It is what is live already.',
+  asset_missing: 'Media the draft names is missing from the store.',
+  idempotency_conflict: 'That request was already used for something else. Start again.',
+  not_found: "That draft or revision isn't in the store any more.",
 };
 
 function failure(code: string, message?: unknown): BackendFailure {
@@ -73,8 +99,9 @@ export function ownerBackend(studioFetch: Fetch, csrfToken: string): StudioBacke
   async function read<T>(
     name: string,
     pick: (data: Record<string, unknown>) => T,
+    query?: Readonly<Record<string, string>>,
   ): Promise<ReadResult<T>> {
-    const sent = await send(name, {});
+    const sent = await send(name, query ? { query } : {});
     if ('kind' in sent) return sent;
     const { response, body } = sent;
     if (!response.ok || !body.data || typeof body.data !== 'object') {
@@ -105,6 +132,48 @@ export function ownerBackend(studioFetch: Fetch, csrfToken: string): StudioBacke
     return failure(code, body.error?.message);
   }
 
+  /** A pointer move, publish or rollback: what the store did, never what live is now. */
+  async function move(name: string, input: Record<string, unknown>): Promise<MoveResult> {
+    const sent = await send(name, { body: input, csrfToken });
+    if ('kind' in sent) return sent;
+    const { response, body } = sent;
+    const data = body.data as { revisionId?: unknown; seq?: unknown } | undefined;
+    if (response.ok) {
+      return typeof data?.revisionId === 'string' && Number.isSafeInteger(data.seq)
+        ? { kind: 'committed', revisionId: data.revisionId, seq: data.seq as number }
+        : failure('internal_error');
+    }
+    const code = String(body.error?.code ?? 'internal_error');
+    const details = (body.error?.details ?? {}) as Record<string, unknown>;
+    switch (code) {
+      case 'live_conflict':
+        return {
+          kind: 'live-moved',
+          liveRevisionId: typeof details.liveRevisionId === 'string' ? details.liveRevisionId : null,
+        };
+      case 'draft_conflict':
+        return Number.isSafeInteger(details.version)
+          ? { kind: 'draft-moved', version: details.version as number }
+          : failure(code);
+      case 'validation_failed':
+      case 'revision_incompatible':
+      case 'nothing_to_publish':
+      case 'asset_missing':
+      case 'idempotency_conflict':
+      case 'not_found':
+        return {
+          kind: 'refused',
+          code,
+          message: MOVE_MESSAGES[code]!,
+          ...(Array.isArray(details.diagnostics)
+            ? { findings: details.diagnostics as DraftFinding[] }
+            : {}),
+        };
+      default:
+        return failure(code, body.error?.message);
+    }
+  }
+
   return {
     async session() {
       const sent = await send('auth.session', {});
@@ -121,6 +190,38 @@ export function ownerBackend(studioFetch: Fetch, csrfToken: string): StudioBacke
       write('draft.applyEdits', { draftId, expectedVersion, edits }),
     saveDraft: ({ draftId, expectedVersion, documents }) =>
       write('draft.save', { draftId, expectedVersion, documents: documents as SourceDocuments }),
+    revisions: (offset = 0) =>
+      read<Page<RevisionSummary>>(
+        'revision.list',
+        (data) => ({
+          items: (data.revisions ?? []) as RevisionSummary[],
+          nextOffset: (data.nextOffset ?? null) as number | null,
+        }),
+        { offset: String(offset) },
+      ),
+    history: (offset = 0) =>
+      read<Page<PublicationEvent>>(
+        'history.list',
+        (data) => ({
+          items: (data.events ?? []) as PublicationEvent[],
+          nextOffset: (data.nextOffset ?? null) as number | null,
+        }),
+        { offset: String(offset) },
+      ),
+    async revision(revisionId) {
+      const found = await read<RevisionDetail>(
+        'revision.get',
+        (data) => data as unknown as RevisionDetail,
+        { revisionId },
+      );
+      return found.kind === 'failed' && found.code === 'not_found'
+        ? { kind: 'read', value: null }
+        : found;
+    },
+    publish: ({ draftId, draftVersion, expectedLiveRevisionId, idempotencyKey }) =>
+      move('publish', { draftId, draftVersion, expectedLiveRevisionId, idempotencyKey }),
+    rollback: ({ targetRevisionId, expectedLiveRevisionId, idempotencyKey }) =>
+      move('rollback', { targetRevisionId, expectedLiveRevisionId, idempotencyKey }),
     async signOut(choice) {
       const sent = await send('auth.logout', { body: {}, csrfToken, signOut: choice });
       return !('kind' in sent) && sent.response.ok;

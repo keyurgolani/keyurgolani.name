@@ -1,5 +1,6 @@
 import { findingsOf } from './documents';
 import { isDirty, type DraftSession } from './draft-session';
+import { publishBlocker } from './publication';
 
 // Studio's textual state model (#8, Slice 1; AC1): one line for each state
 // the owner has to tell apart, always on screen, each saying in words where
@@ -14,8 +15,8 @@ import { isDirty, type DraftSession } from './draft-session';
 //   published  the published revision the draft starts from
 //   live       the revision live now
 //
-// Publishing itself arrives with #8's fourth pull request, so the publish
-// line says when the draft is ready and that publishing isn't open yet.
+// The publish line says what the Publish history task's publish does: ready
+// only for the saved version #3 checked, with nothing unsaved over it.
 
 export type StateId = 'local' | 'draft' | 'preview' | 'checks' | 'publish' | 'published' | 'live';
 
@@ -28,9 +29,6 @@ export interface StateLine {
   /** How it's styled: `attention` for something the owner has to act on. */
   readonly tone: 'neutral' | 'ok' | 'attention';
 }
-
-/** Whether this build lets Studio publish: #8's fourth pull request opens it. */
-export const PUBLISHING_OPEN = false;
 
 const plural = (count: number, one: string, many = `${one}s`) =>
   `${count} ${count === 1 ? one : many}`;
@@ -103,23 +101,14 @@ export function stateLines(session: DraftSession): readonly StateLine[] {
           tone: 'ok',
         };
 
-  const why = !draft
-    ? 'there is no saved draft'
-    : conflict
-      ? 'a newer saved draft conflicts with your changes'
-      : dirty
-        ? 'it has unsaved changes'
-        : blocking > 0
-          ? 'validation failed'
-          : null;
+  // The publish task's own rule, so the line and the button never disagree.
+  const why = publishBlocker(session);
   const publish: StateLine =
     why === null
       ? {
           id: 'publish',
           label: 'Publish',
-          text: PUBLISHING_OPEN
-            ? `Ready to publish version ${draft!.version}.`
-            : `Ready to publish version ${draft!.version}. Publishing from Studio isn't open yet.`,
+          text: `Ready to publish version ${draft!.version}.`,
           tone: 'ok',
         }
       : { id: 'publish', label: 'Publish', text: `Not ready to publish: ${why}.`, tone: 'neutral' };
