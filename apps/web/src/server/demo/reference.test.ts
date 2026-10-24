@@ -104,6 +104,13 @@ async function refusal(dir: string, heldBytes?: number) {
   return result.issues;
 }
 
+/** `bytes` with its last bit flipped. */
+const flipped = (bytes: Buffer) => {
+  const copy = Buffer.from(bytes);
+  copy.writeUInt8(copy.readUInt8(copy.length - 1) ^ 1, copy.length - 1);
+  return copy;
+};
+
 const blobPath = (dir: string, hex: string) => path.join(dir, 'media', 'blobs', hex);
 const hexes = (dir: string) => readdirSync(path.join(dir, 'media', 'blobs'));
 
@@ -174,9 +181,7 @@ const TAMPERED: readonly [string, (dir: string) => void, string][] = [
     'a flipped byte in a blob nothing serves',
     (dir) => {
       const hex = record(dir, 'ref-unplaced').renditions[0]!.sha256;
-      const bytes = readFileSync(blobPath(dir, hex));
-      bytes[bytes.length - 1] ^= 1;
-      writeFileSync(blobPath(dir, hex), bytes);
+      writeFileSync(blobPath(dir, hex), flipped(readFileSync(blobPath(dir, hex))));
     },
     'reference_hash_mismatch',
   ],
@@ -184,9 +189,7 @@ const TAMPERED: readonly [string, (dir: string) => void, string][] = [
     'a flipped byte in the served rendition',
     (dir) => {
       const hex = record(dir, 'tide-tables-cover').renditions[0]!.sha256;
-      const bytes = readFileSync(blobPath(dir, hex));
-      bytes[bytes.length - 1] ^= 1;
-      writeFileSync(blobPath(dir, hex), bytes);
+      writeFileSync(blobPath(dir, hex), flipped(readFileSync(blobPath(dir, hex))));
     },
     'reference_hash_mismatch',
   ],
