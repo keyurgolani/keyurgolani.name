@@ -25,7 +25,10 @@ import {
   type Draft,
   type DraftEdit,
   type DraftId,
+  type DraftDiff,
   type DraftOutcome,
+  type GitHubAdapter,
+  type GitHubRefreshFinding,
   type MediaIngestion,
   type ListPage,
   type MountedSource,
@@ -109,6 +112,12 @@ export interface OwnerStoreInput {
   readonly setServable: (servable: boolean) => void;
   /** Where publication events join #2's audit log. Defaults to the data directory's. */
   readonly audit?: AuditSink;
+  /**
+   * The GitHub adapter (#10), built from GITHUB_TOKEN by the composition
+   * root, the one place the token goes. Without one, a refresh does nothing
+   * and says the token isn't set.
+   */
+  readonly github?: GitHubAdapter;
   readonly now?: () => number;
   /** Tests' timings, in place of the store's: the lock's wait, the claim's refresh, and its retries. */
   readonly timing?: {
@@ -182,10 +191,33 @@ export interface StudioStore {
     readonly draftId: DraftId;
     readonly expectedVersion?: number;
   }): Promise<DiscardOutcome>;
+  /**
+   * Refreshes the draft's GitHub sections through the adapter (#10), then
+   * records what it froze as a draft write with the version check. The
+   * fetches run before the write, outside the lock. With no token, or no
+   * GitHub section that answered, nothing is written: the draft as it is,
+   * and the findings saying why.
+   */
+  refreshSources(input: {
+    readonly draftId: DraftId;
+    readonly expectedVersion: number;
+  }): Promise<RefreshOutcome>;
+  /** Accepts or dismisses derived changes by id (#10), as a draft write. */
+  decideChanges(input: {
+    readonly draftId: DraftId;
+    readonly expectedVersion: number;
+    readonly changeIds: readonly string[];
+    readonly decision: 'accepted' | 'dismissed';
+  }): Promise<DraftOutcome>;
+  /** The draft's authored and derived changes from its base revision (#10, for #8). */
+  diffDraft(draftId: DraftId): Promise<DraftDiff | null>;
   publish(input: PublishInput, context: OwnerMoveContext): Promise<PublicationOutcome>;
   rollback(input: RollbackInput, context: OwnerMoveContext): Promise<PublicationOutcome>;
   recover(input: RecoverInput, context: OwnerMoveContext): Promise<PublicationOutcome>;
 }
+
+/** A refresh's answer: the draft write's, with what the adapter found. */
+export type RefreshOutcome = DraftOutcome & { readonly findings: readonly GitHubRefreshFinding[] };
 
 export interface OwnerStore {
   readonly store: Store;
@@ -433,6 +465,7 @@ export function studioStore(
   reader: RevisionCatalogReader,
   writable: () => Promise<void>,
   media?: MediaIngestion,
+  github?: GitHubAdapter,
 ): StudioStore {
   const { drafts, publication } = store;
   /**
@@ -512,6 +545,39 @@ export function studioStore(
     discardDraft: write((input: Parameters<StudioStore['discardDraft']>[0]) =>
       drafts.discard(input, OWNER),
     ),
+    refreshSources: async (
+      input: Parameters<StudioStore['refreshSources']>[0],
+    ): Promise<RefreshOutcome> => {
+      await writable();
+      const draft = await drafts.get(input.draftId);
+      if (!draft)
+        return { kind: 'rejected', code: 'not_found', diagnostics: [], findings: [] } as const;
+      const refreshed = github
+        ? await github.refresh(draft.documents.portfolio.model, draft.derived?.snapshots?.github)
+        : { snapshot: null, refreshed: [], findings: [{ code: 'token_unset' as const }] };
+      // Nothing fetched: the draft as it is, unwritten, with the findings.
+      if (refreshed.snapshot === null || refreshed.refreshed.length === 0) {
+        return draft.version === input.expectedVersion
+          ? ({ kind: 'saved', draft, findings: refreshed.findings } as const)
+          : ({
+              kind: 'conflict',
+              code: 'draft_conflict',
+              draftId: draft.draftId,
+              version: draft.version,
+              documents: draft.documents,
+              findings: refreshed.findings,
+            } as const);
+      }
+      const outcome = await drafts.refreshSources(
+        { ...input, snapshots: { github: refreshed.snapshot } },
+        OWNER,
+      );
+      return { ...outcome, findings: refreshed.findings };
+    },
+    decideChanges: write((input: Parameters<StudioStore['decideChanges']>[0]) =>
+      drafts.decideChanges(input, OWNER),
+    ),
+    diffDraft: (draftId: DraftId) => drafts.diff(draftId),
     publish: move<PublishInput>((input, actor, context) =>
       publication.publish(input, actor, context),
     ),
@@ -532,6 +598,7 @@ export function ownerStore({
   renderDrift,
   setServable,
   audit,
+  github,
   now,
   timing = {},
 }: OwnerStoreInput): OwnerStore {
@@ -767,7 +834,7 @@ export function ownerStore({
   const owner: OwnerStore = Object.freeze({
     store,
     reader,
-    studio: studioStore(store, reader, writable, media),
+    studio: studioStore(store, reader, writable, media, github),
     async checkDirectory() {
       const problem = await preflight({ dataDir, sourceDir: config.sourceDir });
       if (problem) return [finding(problem)];

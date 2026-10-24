@@ -40,6 +40,10 @@ test("the registry holds config.status, #2's auth entries, #3's store entries, a
       'draft.save',
       'draft.applyEdits',
       'draft.rebase',
+      'draft.diff',
+      'draft.refreshSources',
+      'draft.changes.accept',
+      'draft.changes.dismiss',
       'draft.discard',
       'publish',
       'rollback',
@@ -66,10 +70,19 @@ const STORE_ENTRIES: Record<string, { capability: string; kind: string; codes: E
     codes: ['storage_unavailable', 'not_found'],
   },
   ...Object.fromEntries(
-    ['draft.create', 'draft.save', 'draft.applyEdits', 'draft.rebase'].map((name) => [
+    [
+      'draft.create',
+      'draft.save',
+      'draft.applyEdits',
+      'draft.rebase',
+      // #10: refreshing the draft's sources, and deciding its derived changes.
+      'draft.refreshSources',
+      'draft.changes.accept',
+      'draft.changes.dismiss',
+    ].map((name) => [
       name,
       {
-        capability: 'draft.write',
+        capability: name === 'draft.refreshSources' ? 'source.refresh' : 'draft.write',
         kind: 'command',
         codes: [
           'draft_conflict',
@@ -87,6 +100,11 @@ const STORE_ENTRIES: Record<string, { capability: string; kind: string; codes: E
       },
     ]),
   ),
+  'draft.diff': {
+    capability: 'draft.read',
+    kind: 'query',
+    codes: ['storage_unavailable', 'not_found'],
+  },
   'draft.discard': {
     capability: 'draft.write',
     kind: 'command',

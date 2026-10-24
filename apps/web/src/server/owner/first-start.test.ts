@@ -17,6 +17,7 @@ import { fileURLToPath } from 'node:url';
 import { crc32, deflateSync } from 'node:zlib';
 import type { UnitChecks } from '@portfolio/core';
 import { mountedSource, openStore, preflight, type RevisionId } from '@portfolio/core/owner';
+import { validatePublicationUnit, withPublication, type Publication } from '@portfolio/schema';
 import { readPairBytes } from '@portfolio/schema/node';
 import { liveContext } from '~/lib/variants';
 import { compose, type AuthProviderFactory, type CompositionInput } from '../composition';
@@ -236,6 +237,34 @@ test('an empty store imports the mounted pair at first start as revision 1, by t
   const again = await start(t, site);
   assert.ok(again.ok, JSON.stringify(again.ok ? [] : again.issues));
   assert.equal(eventsIn(site.dataDir).length, 1);
+});
+
+test('the first-start import goes through the publish validators against an empty store, which leaves them nothing to hold (#10)', async (t) => {
+  t.mock.method(console, 'log', () => {});
+  const site = deployment(t, PAIR);
+  const seen: (Publication | undefined)[] = [];
+  const composed = await start(t, site, {
+    unitChecks: (origin) => ({
+      validate: (pair, publication) => {
+        seen.push(publication);
+        const context = { canonicalOrigin: origin };
+        return validatePublicationUnit(
+          pair,
+          publication ? withPublication(context, publication) : context,
+        );
+      },
+      appVersion: '',
+    }),
+  });
+  assert.ok(composed.ok, JSON.stringify(composed.ok ? [] : composed.issues));
+  assert.equal((await composed.state.catalog.getLive()).state, 'live');
+  // The import's check had the publication context: no live revision, and no derived block.
+  assert.ok(
+    seen.some(
+      (publication) =>
+        publication !== undefined && publication.live === null && publication.derived === undefined,
+    ),
+  );
 });
 
 test("a pair that can't go live stops a first start: a missing document, an invalid one, the old format, or the bundled sample in production", async (t) => {

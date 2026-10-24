@@ -427,6 +427,7 @@ test('Studio acts as the owner only: every call names the owner, and a pointer m
       save: record({ kind: 'saved' }),
       applyEdits: record({ kind: 'saved' }),
       rebase: record({ kind: 'saved' }),
+      decideChanges: record({ kind: 'saved' }),
       discard: record({ kind: 'discarded' }),
     },
     publication: {
@@ -446,6 +447,12 @@ test('Studio acts as the owner only: every call names the owner, and a pointer m
     documents: documents('x'),
     baseRevisionId: null,
   });
+  await studio.decideChanges({
+    draftId: DRAFT,
+    expectedVersion: 1,
+    changeIds: [`dch_${'0'.repeat(32)}`],
+    decision: 'accepted',
+  });
   await studio.discardDraft({ draftId: DRAFT });
   await studio.publish(PUBLISH as never, { holdSession });
   await studio.rollback(
@@ -453,11 +460,32 @@ test('Studio acts as the owner only: every call names the owner, and a pointer m
     { holdSession },
   );
   await studio.recover({ expectedLiveRevisionId: null }, { holdSession });
-  assert.deepEqual(actors, Array(8).fill('owner'));
+  assert.deepEqual(actors, Array(9).fill('owner'));
   for (const move of [studio.publish, studio.rollback, studio.recover]) {
     await assert.rejects(() => move(PUBLISH as never, {} as never), /holds the owner's session/);
   }
   t.diagnostic('no Studio call can name the operator');
+});
+
+test('with no GitHub token a refresh writes nothing and answers the draft as it is, with token_unset, never an error (#10)', async () => {
+  let writes = 0;
+  const draft = { draftId: DRAFT, version: 3, documents: {} };
+  const fake = {
+    drafts: {
+      get: async () => draft,
+      refreshSources: async () => {
+        writes += 1;
+        return { kind: 'saved', draft };
+      },
+    },
+  } as unknown as Store;
+  // No adapter, as a deployment with no GITHUB_TOKEN builds one that refreshes nothing.
+  const studio = studioStore(fake, {} as never, async () => {});
+  const outcome = await studio.refreshSources({ draftId: DRAFT, expectedVersion: 3 });
+  assert.deepEqual(outcome, { kind: 'saved', draft, findings: [{ code: 'token_unset' }] });
+  const stale = await studio.refreshSources({ draftId: DRAFT, expectedVersion: 2 });
+  assert.equal(stale.kind === 'conflict' && stale.code, 'draft_conflict');
+  assert.equal(writes, 0);
 });
 
 test("no app code outside the owner store's wrapper names the operator, so only the CLI acts as one", () => {

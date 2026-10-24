@@ -92,6 +92,9 @@ export const CAPABILITY_MATRIX = {
   // for it. Never a visitor's: demo and read-only fetch nothing this way.
   'media.ingest': { owner: 'session' },
   'media.fetchRemote': { owner: 'session' },
+  // #10: refreshing a draft's sources, GitHub's API with GITHUB_TOKEN, into
+  // the draft alone. Never a visitor's, and never at render time.
+  'source.refresh': { owner: 'session' },
   'preview.grant': { owner: 'session' }, // #7
   // /_fixtures/appearance (#19, Slice 3), only in a build with APPEARANCE_FIXTURES=1.
   'appearance.fixtures': fixtureGrants('appearance.fixtures'),

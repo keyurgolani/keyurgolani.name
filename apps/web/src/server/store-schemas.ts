@@ -45,7 +45,8 @@ const DiagnosticSchema = z
   .object({
     code: z.string(),
     severity: z.enum(['blocks-preview', 'blocks-publish', 'warning']),
-    document: DocumentNameSchema,
+    // A finding about a draft's adapter snapshot is on the snapshots beside its documents (#10).
+    document: z.enum(['portfolio', 'site', 'media', 'snapshots']),
     pointer: z.string(),
     stableId: z.string().optional(),
     line: z.number().int().optional(),
@@ -91,6 +92,35 @@ const DraftDocumentsSchema = z
     media: DraftDocumentSchema.optional(),
   })
   .strict();
+/** A derived change's subject (#10): a media asset, or one GitHub section's record. */
+const ChangeSubjectSchema = z.union([
+  z.object({ kind: z.literal('media'), assetId: z.string() }).strict(),
+  z
+    .object({ kind: z.literal('snapshot'), adapter: z.literal('github'), sectionId: z.string() })
+    .strict(),
+]);
+/** A derived change as a draft records it, with the owner's decision. */
+export const DerivedChangeSchema = z
+  .object({
+    id: z.string().regex(/^dch_[0-9a-f]{32}$/),
+    cause: z.enum(['source-moved', 'source-replaced', 'integration-refreshed']),
+    subject: ChangeSubjectSchema,
+    before: z.record(z.unknown()).nullable(),
+    after: z.record(z.unknown()),
+    fields: z.array(z.string()),
+    decision: z.union([
+      z.object({ state: z.literal('pending') }).strict(),
+      z.object({ state: z.enum(['accepted', 'dismissed']), at: Instant, by: Actor }).strict(),
+    ]),
+  })
+  .strict();
+/** A draft's derived block (#10): what its refreshes froze, and its derived changes. */
+const DraftDerivedSchema = z
+  .object({
+    snapshots: z.object({ github: z.unknown().optional() }).strict().optional(),
+    changes: z.array(DerivedChangeSchema),
+  })
+  .strict();
 export const DraftSchema = z
   .object({
     draftFormat: z.literal(1),
@@ -102,6 +132,7 @@ export const DraftSchema = z
     updatedBy: Actor,
     sourceHash: Sha256Schema.optional(),
     documents: DraftDocumentsSchema,
+    derived: DraftDerivedSchema.optional(),
   })
   .strict();
 
@@ -249,6 +280,47 @@ export const DraftRebaseInput = z
   .strict();
 export const DraftDiscardInput = z
   .object({ draftId: DraftIdSchema, expectedVersion: Version.optional() })
+  .strict();
+/** What a refresh found (#10): why a section, or the whole refresh, changed nothing. */
+const RefreshFindingSchema = z
+  .object({
+    code: z.enum(['token_unset', 'fetch_failed', 'data_invalid']),
+    sectionId: z.string().optional(),
+  })
+  .strict();
+export const DraftRefreshInput = z
+  .object({ draftId: DraftIdSchema, expectedVersion: Version })
+  .strict();
+export const DraftRefreshOutput = z
+  .object({ draft: DraftSchema, findings: z.array(RefreshFindingSchema) })
+  .strict();
+/** Accept or dismiss: the changes by id, at most 1,000 at once. */
+export const DraftChangesInput = z
+  .object({
+    draftId: DraftIdSchema,
+    expectedVersion: Version,
+    changeIds: z
+      .array(z.string().regex(/^dch_[0-9a-f]{32}$/))
+      .min(1)
+      .max(1000),
+  })
+  .strict();
+/** `diffDraft` for #8: the owner's edits by pointer, and the derived changes, apart. */
+export const DraftDiffOutput = z
+  .object({
+    authored: z.array(
+      z
+        .object({
+          document: z.enum(['portfolio', 'site']),
+          pointer: z.string(),
+          op: z.enum(['add', 'remove', 'replace']),
+          before: z.unknown().optional(),
+          after: z.unknown().optional(),
+        })
+        .strict(),
+    ),
+    derived: z.array(DerivedChangeSchema),
+  })
   .strict();
 export const PublishInputSchema = z
   .object({

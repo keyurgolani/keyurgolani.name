@@ -3,6 +3,7 @@ import {
   mediaBlobs,
   resolvePortfolioView,
   validatePublicationUnit,
+  withPublication,
   type ContentExtension,
   type Context,
   type ParsedPair,
@@ -26,7 +27,9 @@ import { appearanceCatalog, appearanceValidator } from '../lib/appearance-checks
 // (an unregistered variant blocks) and as serving checks the live one (it
 // only warns, and the fallback composition renders); #5's controls as the
 // `controls` snapshot; the blobs #10's media document references; and
-// what the build renders a pair with, for the manifest and for drift. It
+// what the build renders a pair with, for the manifest and for drift. At
+// publish and import, with what #3 knows beside the pair, the publish
+// validators run too: id.reused and derived.unapproved (#10). It
 // imports nothing server-only and nothing from Next, since the
 // CLI bundles it with esbuild.
 
@@ -70,7 +73,8 @@ export function buildUnitChecks({
     return id === FALLBACK_ID ? undefined : findVariant(registry, id);
   };
   const checks: UnitChecks = {
-    validate: (pair) => validatePublicationUnit(pair, publish),
+    validate: (pair, publication) =>
+      validatePublicationUnit(pair, publication ? withPublication(publish, publication) : publish),
     validateLive: (pair) => validatePublicationUnit(pair, served),
     snapshots(pair: ParsedPair) {
       const registered = selected(pair);
