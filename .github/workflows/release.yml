@@ -467,14 +467,13 @@ jobs:
           if-no-files-found: ignore
           retention-days: 1
 
-  # The release-candidate rehearsal (#12, ci/rehearsal.mjs), as ci.yml's
-  # rehearsal job runs it on a PR: the frozen old configs refused, the
-  # migration twice, import, publish, rollback, a backup during a publish and
-  # its restore into a clean directory, and a damaged revision serving the
-  # last known good, then the image refusing the old config. The image is
-  # the tagged commit's, built here with no cache and never pushed, so
-  # nothing comes from GHCR. rc-tag waits on it, so no candidate gets its tag
-  # without it. No token reaches it.
+  # The release-candidate rehearsal (#12, ci/rehearsal.mjs): the same script
+  # and rows as ci.yml's rehearsal job on a PR, which differ only in where
+  # the images come from. Here the image is the tagged commit's, built with
+  # no cache and never pushed, so nothing comes from GHCR, and the previous
+  # one, which the script builds the same way, is the newest final release
+  # before it. rc-tag waits on it, so no candidate gets its tag without it.
+  # No token reaches it.
   rc-rehearsal:
     name: rc-rehearsal
     needs: [classify, rc-verify]
@@ -487,6 +486,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          # Every tag, for the previous release the previous-digest row builds.
+          fetch-depth: 0
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -498,6 +499,12 @@ jobs:
       - name: Build the image from the tagged commit
         timeout-minutes: 25
         run: docker build --no-cache --pull --platform linux/amd64 -t "$REHEARSAL_IMAGE" .
+      # The newest final release before this commit, or its parent before
+      # the first one.
+      - name: Find the previous release
+        run: |
+          previous=$(git describe --tags --abbrev=0 --match 'v[0-9]*' --exclude '*-*' HEAD^ 2>/dev/null || git rev-parse HEAD^1)
+          echo "REHEARSAL_PREVIOUS_REF=$previous" >> "$GITHUB_ENV"
       - name: pnpm ci:rehearsal
         env:
           REHEARSAL_CONTAINER: required

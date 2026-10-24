@@ -31,13 +31,39 @@ export function defaultComposition(root = REPO_ROOT) {
   return match[1];
 }
 
-/** What each pending row's `waitsOn` means, and how to tell it has landed. */
+/**
+ * What each pending row's `waitsOn` means, and how to tell it has landed.
+ * `default-composition` goes by what the build does with the bundled sample
+ * pair, never by what site.example.yml names: it has landed once
+ * `portfolio-store import` publishes the sample (sampleImport()).
+ */
 export const LANDED = Object.freeze({
   'default-composition': {
-    what: 'the default composition, the one site.example.yml selects, registered (#13, #111)',
-    landed: ({ registered, defaultId }) => registered.includes(defaultId),
+    what: 'the bundled sample pair imports: the composition it selects is registered (#13, #111)',
+    landed: ({ sampleImports }) => sampleImports === true,
   },
 });
+
+/**
+ * What a `portfolio-store import` of the bundled sample pair into an empty
+ * store says about the default composition: { sampleImports: true } when it
+ * published, false when it refused the sample's variant alone, and an
+ * `error` for anything else, which fails the run, since then nothing tells
+ * whether a pending row can run.
+ */
+export function sampleImport({ status, out }) {
+  if (status === 0 && /^live revision: rev_/m.test(out)) return { sampleImports: true };
+  const codes = [...String(out).matchAll(/^\s+\S+: ([a-z_.-]+) \((blocks-[a-z]+)\)/gm)].map(
+    (m) => m[1],
+  );
+  if (status === 1 && codes.length > 0 && codes.every((code) => code === 'variant.unavailable')) {
+    return { sampleImports: false };
+  }
+  return {
+    sampleImports: false,
+    error: `the sample pair's import exited ${status}, refused for ${codes.join(', ') || 'no record'}, not only variant.unavailable`,
+  };
+}
 
 /** Problems with pending rows: one per row whose blocker has landed, and one per unknown blocker. */
 export function pendingProblems(rows, state) {

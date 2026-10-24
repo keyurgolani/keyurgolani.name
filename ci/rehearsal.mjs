@@ -3,12 +3,17 @@
 // clean data directory, in rows that run in order, each on what the one
 // before it left:
 //
+//   hermetic       A command connects to no public address, and the egress
+//                  guard is what refuses it; HOME is the run's own and
+//                  empty, and a token planted in this process never reaches
+//                  a command.
 //   old-config     Each frozen baseline config (ci/fixtures/rehearsal/
 //                  baseline/: 62a0f06's one-file portfolio as YAML and JSON,
 //                  and one in TOML) is refused with #4's legacy.document, or
 //                  as TOML, and nothing is published: the data directory
 //                  holds nothing but the empty layout, and `status` says
-//                  empty.
+//                  empty. The layout a refused import writes is stream B's
+//                  (#3) to remove, and EMPTY_LAYOUT_FILES allows it.
 //   migrate        `pnpm config:migrate` writes the new pair from the YAML
 //                  and the JSON one. A second run over the new pair is a
 //                  no-op that writes nothing, a second migration of the old
@@ -20,45 +25,49 @@
 //   backup         A publish is held in flight, holding the publication lock,
 //                  and `backup` started then gives up with lock_timeout and
 //                  leaves nothing behind. The publish is killed with SIGKILL,
-//                  as a crash would, and the live revision is the old one.
-//                  `backup` then succeeds, `restore` puts it in a clean
-//                  directory, which serves the same live revision and its
-//                  media, and `verify` passes there.
+//                  as a crash would: revision 1 is still live, and `verify`
+//                  passes on the store it died in. `backup` then succeeds,
+//                  and `restore` puts it in a clean directory, which serves
+//                  the same live revision and its media, and passes `verify`.
 //   damaged        In clean restores, the newest revision is damaged three
 //                  ways: a missing file, a bad hash, and a revision the
 //                  build's validator rejects (a color scheme that names its
-//                  typography pack). `status` serves the last known good, degraded,
-//                  with the reason, `verify` names the problem, and
-//                  `recover` makes the last known good live.
+//                  typography pack). `status` serves the last known good,
+//                  degraded, with the reason, and `recover` makes the last
+//                  known good live.
 //
 // The rows above need no container and run here and in CI alike. The
 // container rows run only where REHEARSAL_IMAGE names an image or
 // REHEARSAL_IMAGE_ARCHIVE a `docker save` archive of one, which CI's
-// rehearsal job and release.yml's rc-rehearsal give it:
+// rehearsal job and release.yml's rc-rehearsal give it, on an internal
+// network, hardened, never pulling (CONTAINER_ROWS): the network reaches
+// no public address; the image refuses the old config under owner and
+// read-only; its own portfolio-store imports and publishes the migrated
+// pair and owner reaches ready; the owner signs in and rolls back in the
+// app; owner restarts degraded on the last known good when the live
+// revision is damaged; and the previous image, from REHEARSAL_PREVIOUS_IMAGE
+// or built here from REHEARSAL_PREVIOUS_REF, serves the old site from its
+// pre-upgrade backup after the new image published.
 //
-//   image-old-config  The image under owner, on an empty data volume, and
-//                     under read-only, each with the frozen YAML config
-//                     mounted, exits non-zero with legacy.document, and
-//                     owner's volume holds nothing but the empty layout.
-//
-// Rows that need a ready owner, which needs the default composition
-// registered (#13 through #111), are pending (PENDING_ROWS). Each says what
-// it waits on, and the run fails once that has landed and a row is still
-// pending, so none stays pending past it.
+// The pair selects the default composition once the bundled sample pair
+// imports in this build, and a registered stand-in until then; the
+// `default-composition` pending row fails the run once the sample imports
+// (lib/pending.mjs), so the stand-in can't outlive #13.
 //
 // Hermetic: every command runs with an empty HOME and TMPDIR of its own,
 // TZ=UTC, the harness egress guard preloaded (which refuses any socket or
-// lookup outside loopback; a refusal fails the row), and no token. Every
-// container runs on an internal network with HARDENING. A per-run canary is
-// in every command's environment, and a content canary in revision 2's
-// tagline, and neither may reach any output, log, or report; nor may
-// owner's password or its hash, which the image's own hash-password
-// --stdin makes for the run and passes by _FILE only. Reports go to
-// reports/rehearsal/.
+// lookup outside loopback; a refusal fails the row), and no token. A
+// per-run canary is in every command's environment, and a content canary
+// in revision 2's tagline, and neither may reach any output, log, or
+// report; nor may owner's password or its hash, which the image's own
+// hash-password --stdin makes for the run and passes by _FILE only
+// (lib/verdict.mjs). Reports go to reports/rehearsal/.
 //
 // Environment:
 //   REHEARSAL_IMAGE           the image to run the container rows on (kept)
 //   REHEARSAL_IMAGE_ARCHIVE   load the image from this archive instead (removed after)
+//   REHEARSAL_PREVIOUS_IMAGE  the previous release's image, for previous-digest (kept)
+//   REHEARSAL_PREVIOUS_REF    or the commit to build it from, in a worktree (removed after)
 //   REHEARSAL_CONTAINER       `required`: fail when the container rows can't run, as CI does
 //   CONTAINER_CLI             docker (default)
 //   REHEARSAL_KEEP            keep the run's temporary directory, for a look after
@@ -80,14 +89,17 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseDocument } from 'yaml';
 import { buildRegistry } from './lib/registry.mjs';
-import { defaultComposition, LANDED, pendingProblems, registeredVariants } from './lib/pending.mjs';
+import { PROBE_SNIPPET, REQUESTS_SNIPPET } from './lib/container.mjs';
+import { hermeticProblems } from './lib/hermetic.mjs';
 import {
-  DATA_DIR,
-  fatalCodes,
-  HARDENING,
-  maskCommands,
-  redactArtifacts,
-} from './lib/profile-checks.mjs';
+  defaultComposition,
+  LANDED,
+  pendingProblems,
+  registeredVariants,
+  sampleImport,
+} from './lib/pending.mjs';
+import { DATA_DIR, fatalCodes, HARDENING, maskCommands } from './lib/profile-checks.mjs';
+import { finalVerdict } from './lib/verdict.mjs';
 import {
   currentGate,
   REPO_ROOT,
@@ -154,25 +166,9 @@ export function rehearsalComposition(registered, fallbackDefault) {
  */
 export const PENDING_ROWS = Object.freeze([
   {
-    id: 'in-app-rollback',
-    title: 'Studio publishes revision 2 and rolls back to revision 1 in the app, on a ready owner',
-    waitsOn: 'default-composition',
-  },
-  {
-    id: 'server-last-known-good',
+    id: 'default-composition',
     title:
-      'owner restarts on a damaged newest revision and serves the last known good, /api/ready degraded with the operator diagnostic',
-    waitsOn: 'default-composition',
-  },
-  {
-    id: 'previous-digest',
-    title: "the base commit's image, on the pre-upgrade backup, serves the old site",
-    waitsOn: 'default-composition',
-  },
-  {
-    id: 'image-import',
-    title:
-      "the image's own portfolio-store imports the migrated pair into owner's volume, and owner reaches ready on it",
+      'every row runs on the default composition, the one the bundled sample selects, instead of a registered stand-in',
     waitsOn: 'default-composition',
   },
 ]);
@@ -201,13 +197,14 @@ class Run {
   }
 
   /** The environment every command gets, and nothing else from this one. */
-  env(extra = {}) {
+  env(extra = {}, base = process.env) {
     return {
-      PATH: process.env.PATH ?? '/usr/bin:/bin',
+      PATH: base.PATH ?? '/usr/bin:/bin',
       HOME: this.home,
       XDG_CONFIG_HOME: path.join(this.home, '.config'),
       XDG_CACHE_HOME: path.join(this.home, '.cache'),
       XDG_DATA_HOME: path.join(this.home, '.local', 'share'),
+      XDG_STATE_HOME: path.join(this.home, '.local', 'state'),
       TMPDIR: this.tmp,
       TZ: 'UTC',
       NODE_OPTIONS: `--require ${EGRESS_GUARD}`,
@@ -302,11 +299,12 @@ export const EMPTY_LAYOUT_FILES = Object.freeze(['store.json']);
 
 const sha256 = (file) => createHash('sha256').update(readFileSync(file)).digest('hex');
 
-/** The pair in `dir`, with portfolio.yml's identity.tagline set to `tagline`, written into `into`. */
-function editedPair(dir, into, tagline) {
+/** The pair in `dir`, its portfolio.yml's identity given `tagline` or `name`, written into `into`. */
+function editedPair(dir, into, { tagline, name }) {
   mkdirSync(into, { recursive: true });
   const document = parseDocument(readFileSync(path.join(dir, 'portfolio.yml'), 'utf8'));
-  document.setIn(['identity', 'tagline'], tagline);
+  if (tagline !== undefined) document.setIn(['identity', 'tagline'], tagline);
+  if (name !== undefined) document.setIn(['identity', 'name'], name);
   writeFileSync(path.join(into, 'portfolio.yml'), document.toString());
   cpSync(path.join(dir, 'site.yml'), path.join(into, 'site.yml'));
   return into;
@@ -316,6 +314,45 @@ function editedPair(dir, into, tagline) {
 
 /** Each row: { id, title, run(context) }. They run in order, and a failed one stops the rest. */
 export const NATIVE_ROWS = [
+  {
+    id: 'hermetic',
+    title:
+      'every command runs with an empty HOME of its own and no token, and the egress guard refuses a request off the machine',
+    run(run) {
+      // The guard: a connection to a public address is refused, and says so.
+      const tried = spawnSync(process.execPath, ['-e', OUTSIDE_PROBE], {
+        env: run.env(),
+        encoding: 'utf8',
+        timeout: 30_000,
+      });
+      const out = `${tried.stdout ?? ''}${tried.stderr ?? ''}`;
+      const answer = JSON.parse(out.split('\n').find((l) => l.startsWith('{')) ?? 'null');
+      expect(answer?.reached === false, 'a command connects to no public address', out);
+      expect(egressRefusals(out).length > 0, 'the egress guard is what refused it', out);
+      // HOME and the token: a token planted in this process's environment
+      // never reaches a command, whose HOME is the run's own and empty.
+      const planted = run.env({}, { ...process.env, GITHUB_TOKEN: 'canary-planted-token' });
+      // Read directly, not through run.node: what it prints holds the run's canary.
+      const seen = spawnSync(
+        process.execPath,
+        [
+          '-e',
+          'process.stdout.write(JSON.stringify({home: require("node:os").homedir(), env: process.env}))',
+        ],
+        { env: run.env(), encoding: 'utf8', timeout: 30_000 },
+      );
+      const child = JSON.parse(seen.stdout || '{}');
+      const problems = [
+        ...hermeticProblems(planted, { home: run.home, listHome: () => readdirSync(run.home) }),
+        ...hermeticProblems(child.env ?? {}, {
+          home: run.home,
+          listHome: () => readdirSync(run.home),
+        }),
+      ];
+      if (child.home !== run.home) problems.push(`a command's home directory is ${child.home}`);
+      expect(problems.length === 0, problems.join('; '));
+    },
+  },
   {
     id: 'old-config',
     title: "each frozen baseline config is refused with #4's diagnostic, and nothing is published",
@@ -439,11 +476,9 @@ export const NATIVE_ROWS = [
         first.out,
       );
       state.rev1Hash = field(first.out, 'unit hash');
-      const edited = editedPair(
-        state.pair,
-        path.join(run.scratch, 'pair-2'),
-        state.secrets.contentCanary,
-      );
+      const edited = editedPair(state.pair, path.join(run.scratch, 'pair-2'), {
+        tagline: state.secrets.contentCanary,
+      });
       const second = run.store(dataDir, ['import', '--from', edited, '--expect', state.rev1]);
       expect(
         second.status === 0,
@@ -489,11 +524,9 @@ export const NATIVE_ROWS = [
       'a backup during a publish waits it out, and restores into a clean directory with the same live revision',
     async run(run, state) {
       const ready = path.join(run.scratch, 'publish-paused');
-      const third = editedPair(
-        state.pair,
-        path.join(run.scratch, 'pair-3'),
-        'A third tagline, never live',
-      );
+      const third = editedPair(state.pair, path.join(run.scratch, 'pair-3'), {
+        tagline: 'A third tagline, never live',
+      });
       // A publish from another process, stopped just before its pointer
       // moves, holding the publication lock, as an in-flight one does.
       const child = spawn(
@@ -572,6 +605,10 @@ export const NATIVE_ROWS = [
         'after the killed publish, revision 1 is still live',
         after.out,
       );
+      // Where the crash happened: every file and hash of what's there checks
+      // out, and revision 1 is one complete revision.
+      const crashed = run.store(state.dataDir, ['verify']);
+      expect(crashed.status === 0, 'verify passes on the store the publish died in', crashed.out);
       const out = path.join(run.scratch, 'backup');
       const backup = run.store(state.dataDir, ['backup', '--out', out]);
       expect(
@@ -640,7 +677,7 @@ export const NATIVE_ROWS = [
           const pair = editedPair(
             state.pair,
             path.join(run.scratch, `pair-${kind.replace(/ /g, '-')}`),
-            `Damaged later: ${kind}`,
+            { tagline: `Damaged later: ${kind}` },
           );
           const published = run.store(dir, ['import', '--from', pair, '--expect', state.rev1]);
           expect(
@@ -765,17 +802,49 @@ function publishRetired(run, dataDir, pairDir) {
 
 export const CONTAINER_ROWS = [
   {
+    id: 'image-hermetic',
+    title: 'a container on the rehearsal network reaches no public address',
+    run: imageHermetic,
+  },
+  {
     id: 'image-old-config',
     title:
       'the image refuses the frozen YAML config under owner and read-only, and writes nothing to the data volume',
+    run: imageOldConfig,
+  },
+  {
+    id: 'image-import',
+    title:
+      "the image's own portfolio-store imports the migrated pair into owner's volume and publishes revision 2, and owner reaches ready on it",
+    run: imageImport,
+  },
+  {
+    id: 'in-app-rollback',
+    title: 'the owner signs in and rolls back to revision 1 in the app, which then serves it',
+    run: inAppRollback,
+  },
+  {
+    id: 'server-last-known-good',
+    title:
+      'owner restarts on a damaged live revision and serves the last known good, /api/ready degraded, with the operator diagnostic',
+    run: serverLastKnownGood,
+  },
+  {
+    id: 'previous-digest',
+    title:
+      "the previous commit's image, restored from its pre-upgrade backup after the upgrade published, serves the old site",
+    run: previousDigest,
   },
 ];
+
+/** identity.name in the container rows' revision 2, which the old site never shows. */
+export const REVISION_TWO_NAME = 'Rowan Revision-Two';
 
 function containerCli() {
   return process.env.CONTAINER_CLI || 'docker';
 }
 
-/** Runs the container CLI, its output kept for the log. */
+/** Runs the container CLI, its output kept for the log unless `withheld`. */
 function container(run, args, { withheld = false, ...options } = {}) {
   const result = spawnSync(containerCli(), args, {
     encoding: 'utf8',
@@ -787,141 +856,514 @@ function container(run, args, { withheld = false, ...options } = {}) {
     ...options,
   });
   const out = `${result.stdout ?? ''}${result.stderr ?? ''}${result.error ? `\n${result.error.message}` : ''}`;
-  // hash-password's output is the hash: the log says only that it ran.
-  const logged = withheld ? '[output withheld: it is a per-run secret]\n' : out;
+  const logged = withheld ? `${withheld}\n` : out;
   run.log.push(
     `$ ${containerCli()} ${shown(args)}\n${logged}[exit ${result.status ?? result.signal}]\n`,
   );
   return { status: result.status, out, stdout: result.stdout ?? '' };
 }
 
-async function imageOldConfig(run, image) {
-  const prefix = `rehearsal-${randomBytes(4).toString('hex')}`;
-  const network = `${prefix}-net`;
-  const volume = `${prefix}-data`;
-  const names = [];
-  try {
-    expect(
-      container(run, ['network', 'create', '--internal', network]).status === 0,
-      'the internal network is created',
-    );
-    expect(
-      container(run, ['volume', 'create', volume]).status === 0,
-      "owner's data volume is created",
-    );
-    // owner's password, and its hash from the image's own hash-password --stdin, made for this run.
-    const password = `rehearsal-password-${randomBytes(12).toString('hex')}`;
-    const hasher = container(
-      run,
-      [
-        'run',
-        '--rm',
-        '-i',
-        '--network',
-        network,
-        ...HARDENING,
-        image,
-        'node',
-        'apps/web/bin/owner.mjs',
-        'hash-password',
-        '--stdin',
+/** `docker run` as every container here runs: never pulling, on the internal network, hardened. */
+function runArgs(
+  ctx,
+  { name, detach = false, rm = !name, mounts = [], env = {}, entrypoint, image = ctx.image },
+) {
+  return [
+    'run',
+    '--pull=never',
+    ...(detach ? ['-d'] : []),
+    ...(rm ? ['--rm'] : []),
+    ...(name ? ['--name', name] : []),
+    '--network',
+    ctx.network,
+    ...HARDENING,
+    ...mounts.flatMap((mount) => ['-v', mount]),
+    ...Object.entries(env).flatMap(([key, value]) => ['-e', `${key}=${value}`]),
+    '-e',
+    'CI_RUN_CANARY',
+    ...(entrypoint ? ['--entrypoint', entrypoint] : []),
+    image,
+  ];
+}
+
+/** The image's own portfolio-store on a data volume, with a pair at /config and the media at /media. */
+function imageStore(ctx, volume, args, { pair, image = ctx.image, mounts = [] } = {}) {
+  return container(ctx.run, [
+    ...runArgs(ctx, {
+      image,
+      mounts: [
+        `${volume}:${DATA_DIR}`,
+        ...(pair ? [`${pair}:/config:ro`] : []),
+        `${MEDIA_ROOT}:/media:ro`,
+        ...mounts,
       ],
-      { input: `${password}\n${password}\n`, withheld: true },
-    );
-    const hash = hasher.stdout.replace(/\n$/, '');
-    run.secrets.extra.push(password, hash);
-    for (const line of maskCommands([password, hash], process.env)) console.log(line);
-    expect(hasher.status === 0 && /^\$scrypt\$/.test(hash), 'hash-password --stdin made a hash');
-    const secrets = path.join(run.scratch, 'secrets');
-    mkdirSync(secrets, { recursive: true });
-    writeFileSync(path.join(secrets, 'owner_password_hash'), hash);
-    chmodSync(path.join(secrets, 'owner_password_hash'), 0o444);
-    const config = path.dirname(BASELINES[0].file);
-    for (const profile of ['owner', 'read-only']) {
-      const name = `${prefix}-${profile}`;
-      names.push(name);
-      const env = {
-        PORTFOLIO_PROFILE: profile,
+      env: {
+        PORTFOLIO_DATA_DIR: DATA_DIR,
+        PORTFOLIO_ORIGIN: ORIGIN,
+        PORTFOLIO_MEDIA_ROOT: '/media',
+        TZ: 'UTC',
+      },
+    }),
+    'node',
+    'bin/portfolio-store.mjs',
+    ...args,
+  ]);
+}
+
+/** Starts owner, detached, on `volume`, with the run's hash by _FILE. */
+function startOwner(ctx, name, volume, { pair, image = ctx.image }) {
+  ctx.names.push(name);
+  const started = container(
+    ctx.run,
+    runArgs(ctx, {
+      name,
+      detach: true,
+      rm: false,
+      image,
+      mounts: [
+        `${volume}:${DATA_DIR}`,
+        `${pair}:/config:ro`,
+        `${MEDIA_ROOT}:/media:ro`,
+        `${ctx.secretsDir}:/run/secrets:ro`,
+      ],
+      env: {
+        PORTFOLIO_PROFILE: 'owner',
         PORTFOLIO_ORIGIN: ORIGIN,
         PORTFOLIO_SOURCE_DIR: '/config',
+        PORTFOLIO_DATA_DIR: DATA_DIR,
+        PORTFOLIO_MEDIA_ROOT: '/media',
+        PORTFOLIO_AUTH_PASSWORD_HASH_FILE: '/run/secrets/owner_password_hash',
         NODE_ENV: 'production',
         TZ: 'UTC',
-        ...(profile === 'owner'
-          ? {
-              PORTFOLIO_DATA_DIR: DATA_DIR,
-              PORTFOLIO_AUTH_PASSWORD_HASH_FILE: '/run/secrets/owner_password_hash',
-            }
-          : {}),
-      };
-      const mounts = [
-        '-v',
-        `${config}:/config:ro`,
-        ...(profile === 'owner'
-          ? ['-v', `${volume}:${DATA_DIR}`, '-v', `${secrets}:/run/secrets:ro`]
-          : []),
-      ];
-      const started = container(
-        run,
-        [
-          'run',
-          '--name',
-          name,
-          '--network',
-          network,
-          ...HARDENING,
-          ...mounts,
-          ...Object.entries(env).flatMap(([key, value]) => ['-e', `${key}=${value}`]),
-          '-e',
-          'CI_RUN_CANARY',
-          image,
+      },
+    }),
+  );
+  expect(started.status === 0, `owner's container ${name} starts`, started.out);
+}
+
+const parseJson = (text) => {
+  try {
+    return JSON.parse(text ?? '');
+  } catch {
+    return null;
+  }
+};
+
+/** GETs `pathname` from inside the container: { status, body } or { error }. */
+function probe(ctx, name, pathname) {
+  const result = container(ctx.run, ['exec', name, 'node', '-e', PROBE_SNIPPET, pathname], {
+    withheld: `[GET ${pathname}]`,
+  });
+  return parseJson(result.stdout) ?? { error: result.out.slice(0, 500) };
+}
+
+/** Sends requests from inside the container. Their answers carry a session, so the log has statuses alone. */
+function send(ctx, name, requests) {
+  const result = container(ctx.run, ['exec', '-i', name, 'node', '-e', REQUESTS_SNIPPET], {
+    input: JSON.stringify(requests),
+    withheld: `[${requests.map((r) => `${r.method} ${r.path}`).join(', ')}]`,
+  });
+  const responses = parseJson(result.stdout);
+  expect(
+    Array.isArray(responses) && responses.length === requests.length,
+    'the in-container requests ran',
+    result.out.slice(0, 2000),
+  );
+  ctx.run.log.push(`  answered ${responses.map((r) => r.status ?? r.error).join(', ')}\n`);
+  return responses;
+}
+
+/** Waits for /api/health to answer 200 from inside the container. */
+async function waitHealthy(ctx, name) {
+  const deadline = Date.now() + 120_000;
+  while (Date.now() < deadline) {
+    const running = container(ctx.run, ['inspect', '--format', '{{.State.Running}}', name], {
+      withheld: '[inspect]',
+    });
+    expect(running.stdout.trim() === 'true', `${name} is running`, logsOf(ctx, name));
+    if (probe(ctx, name, '/api/health').status === 200) return;
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+  expect(false, `${name} answered /api/health within 120 s`, logsOf(ctx, name));
+}
+
+function logsOf(ctx, name) {
+  return container(ctx.run, ['logs', name]).out;
+}
+
+/** The live revision `portfolio-store status` names on `volume`, run by `image`. */
+function liveOn(ctx, volume, image = ctx.image) {
+  const status = imageStore(ctx, volume, ['status'], { image });
+  return { id: liveRevision(status.out), out: status.out };
+}
+
+function newVolume(ctx, label) {
+  const volume = `${ctx.prefix}-${label}`;
+  expect(
+    container(ctx.run, ['volume', 'create', volume]).status === 0,
+    `volume ${label} is created`,
+  );
+  ctx.volumes.push(volume);
+  return volume;
+}
+
+/** Revision 1 and 2 of the container rows: the migrated pair, then the same with REVISION_TWO_NAME. */
+function imagePairs(ctx) {
+  if (!ctx.pairs) {
+    const one = path.join(ctx.run.scratch, 'image-pair-1');
+    cpSync(ctx.state.pair, one, { recursive: true });
+    const two = editedPair(ctx.state.pair, path.join(ctx.run.scratch, 'image-pair-2'), {
+      name: REVISION_TWO_NAME,
+    });
+    ctx.pairs = { one, two };
+  }
+  return ctx.pairs;
+}
+
+/** Tries a public address from inside a container; prints { reached, code }. */
+export const OUTSIDE_PROBE =
+  "const s=require('node:net').connect({host:'1.1.1.1',port:443,timeout:8000});" +
+  "s.on('connect',()=>{console.log(JSON.stringify({reached:true}));s.destroy()});" +
+  "s.on('timeout',()=>{console.log(JSON.stringify({reached:false,code:'timeout'}));s.destroy()});" +
+  "s.on('error',(e)=>console.log(JSON.stringify({reached:false,code:e.code})))";
+
+async function imageHermetic(ctx) {
+  const tried = container(ctx.run, [...runArgs(ctx, { entrypoint: 'node' }), '-e', OUTSIDE_PROBE]);
+  const answer = parseJson(tried.stdout.split('\n').find((l) => l.startsWith('{')));
+  expect(
+    answer && answer.reached === false,
+    'a container on the internal network connects to no public address',
+    tried.out,
+  );
+  const inspected = container(ctx.run, [
+    'network',
+    'inspect',
+    '--format',
+    '{{.Internal}}',
+    ctx.network,
+  ]);
+  expect(inspected.stdout.trim() === 'true', 'the rehearsal network is internal', inspected.out);
+}
+
+async function imageOldConfig(ctx) {
+  const volume = newVolume(ctx, 'old-config');
+  const config = path.dirname(BASELINES[0].file);
+  for (const profile of ['owner', 'read-only']) {
+    const name = `${ctx.prefix}-old-${profile}`;
+    ctx.names.push(name);
+    const started = container(
+      ctx.run,
+      runArgs(ctx, {
+        name,
+        rm: false,
+        mounts: [
+          `${config}:/config:ro`,
+          ...(profile === 'owner'
+            ? [`${volume}:${DATA_DIR}`, `${ctx.secretsDir}:/run/secrets:ro`]
+            : []),
         ],
-        { timeout: 120_000 },
-      );
-      expect(
-        started.status !== 0 && started.status !== null,
-        `the ${profile} container exits non-zero, not ${started.status}`,
-        started.out,
-      );
-      const codes = fatalCodes(started.out);
-      expect(
-        codes.includes('PORTFOLIO_SOURCE_DIR:legacy.document'),
-        `the ${profile} container refuses with legacy.document, not ${codes.join(', ') || 'no config.fatal'}`,
-        started.out,
-      );
-    }
-    const listed = container(run, [
-      'run',
-      '--rm',
-      '--network',
-      network,
-      ...HARDENING,
-      '-v',
-      `${volume}:${DATA_DIR}:ro`,
-      '--entrypoint',
-      'node',
-      image,
-      '-e',
-      `const fs=require('node:fs'),p=require('node:path');const out=[];const w=(d)=>{for(const e of fs.readdirSync(d,{withFileTypes:true})){const f=p.join(d,e.name);e.isDirectory()?w(f):out.push(p.relative('${DATA_DIR}',f))}};w('${DATA_DIR}');process.stdout.write(JSON.stringify(out.sort()))`,
-    ]);
-    let files;
-    try {
-      files = JSON.parse(listed.stdout);
-    } catch {
-      files = null;
-    }
-    expect(Array.isArray(files), "owner's data volume could be listed", listed.out);
-    const published = files.filter(
-      (f) => /^(revisions|publication|drafts|assets)\//.test(f) && !f.endsWith('.keep'),
+        env: {
+          PORTFOLIO_PROFILE: profile,
+          PORTFOLIO_ORIGIN: ORIGIN,
+          PORTFOLIO_SOURCE_DIR: '/config',
+          NODE_ENV: 'production',
+          TZ: 'UTC',
+          ...(profile === 'owner'
+            ? {
+                PORTFOLIO_DATA_DIR: DATA_DIR,
+                PORTFOLIO_AUTH_PASSWORD_HASH_FILE: '/run/secrets/owner_password_hash',
+              }
+            : {}),
+        },
+      }),
+      { timeout: 120_000 },
     );
     expect(
-      published.length === 0,
-      `owner's data volume holds nothing published, not ${published.join(', ')}`,
+      started.status !== 0 && started.status !== null,
+      `the ${profile} container exits non-zero, not ${started.status}`,
+      started.out,
     );
-  } finally {
-    for (const name of names) container(run, ['rm', '-f', name]);
-    container(run, ['volume', 'rm', '-f', volume]);
-    container(run, ['network', 'rm', network]);
+    const codes = fatalCodes(started.out);
+    expect(
+      codes.includes('PORTFOLIO_SOURCE_DIR:legacy.document'),
+      `the ${profile} container refuses with legacy.document, not ${codes.join(', ') || 'no config.fatal'}`,
+      started.out,
+    );
   }
+  const listed = container(ctx.run, [
+    ...runArgs(ctx, { mounts: [`${volume}:${DATA_DIR}:ro`], entrypoint: 'node' }),
+    '-e',
+    `const fs=require('node:fs'),p=require('node:path');const out=[];const w=(d)=>{for(const e of fs.readdirSync(d,{withFileTypes:true})){const f=p.join(d,e.name);e.isDirectory()?w(f):out.push(p.relative('${DATA_DIR}',f))}};w('${DATA_DIR}');process.stdout.write(JSON.stringify(out.sort()))`,
+  ]);
+  const files = parseJson(listed.stdout);
+  expect(Array.isArray(files), "owner's data volume could be listed", listed.out);
+  const published = files.filter(
+    (f) => /^(revisions|publication|drafts|assets)\//.test(f) && !f.endsWith('.keep'),
+  );
+  expect(
+    published.length === 0,
+    `owner's data volume holds nothing published, not ${published.join(', ')}`,
+  );
+}
+
+async function imageImport(ctx) {
+  const { one, two } = imagePairs(ctx);
+  const volume = newVolume(ctx, 'owner');
+  ctx.ownerVolume = volume;
+  const first = imageStore(ctx, volume, ['import', '--from', '/config', '--expect', 'empty'], {
+    pair: one,
+  });
+  expect(first.status === 0, `the image's import exits 0, not ${first.status}`, first.out);
+  ctx.rev1 = liveRevision(first.out);
+  expect(ctx.rev1, 'the image import names revision 1', first.out);
+  const second = imageStore(ctx, volume, ['import', '--from', '/config', '--expect', ctx.rev1], {
+    pair: two,
+  });
+  expect(
+    second.status === 0,
+    `the image's publish of revision 2 exits 0, not ${second.status}`,
+    second.out,
+  );
+  ctx.rev2 = liveRevision(second.out);
+  expect(ctx.rev2 && ctx.rev2 !== ctx.rev1, 'revision 2 is a new revision', second.out);
+  ctx.owner = `${ctx.prefix}-owner`;
+  startOwner(ctx, ctx.owner, volume, { pair: two });
+  await waitHealthy(ctx, ctx.owner);
+  const ready = probe(ctx, ctx.owner, '/api/ready');
+  const body = parseJson(ready.body);
+  expect(
+    ready.status === 200 && body?.status === 'ready',
+    `owner is ready, not ${ready.status} ${ready.body ?? ready.error}`,
+    logsOf(ctx, ctx.owner),
+  );
+  const home = probe(ctx, ctx.owner, '/');
+  expect(
+    home.status === 200 && home.body.includes(REVISION_TWO_NAME),
+    'owner serves revision 2',
+    `${home.status}`,
+  );
+}
+
+async function inAppRollback(ctx) {
+  expect(ctx.owner && ctx.rev1 && ctx.rev2, 'image-import left owner running on revision 2');
+  const [login] = send(ctx, ctx.owner, [
+    {
+      method: 'POST',
+      path: '/api/studio/auth.login',
+      body: { password: ctx.run.secrets.password },
+      headers: { origin: ORIGIN },
+    },
+  ]);
+  const token = /__Host-studio_session=([^;]+)/.exec(login.cookies?.[0] ?? '')?.[1];
+  const csrf = parseJson(login.body)?.data?.csrfToken;
+  expect(
+    login.status === 200 && token && typeof csrf === 'string',
+    `the owner signs in, not ${login.status}`,
+  );
+  const headers = {
+    origin: ORIGIN,
+    cookie: `__Host-studio_session=${token}`,
+    'x-csrf-token': csrf,
+  };
+  const [rolled, live] = send(ctx, ctx.owner, [
+    {
+      method: 'POST',
+      path: '/api/studio/rollback',
+      body: { targetRevisionId: ctx.rev1, expectedLiveRevisionId: ctx.rev2 },
+      headers,
+    },
+    { method: 'GET', path: '/api/studio/live.get', headers },
+  ]);
+  expect(
+    rolled.status === 200,
+    `the in-app rollback answers 200, not ${rolled.status}: ${String(rolled.body).slice(0, 300)}`,
+  );
+  const state = parseJson(live.body)?.data;
+  expect(
+    state?.liveRevisionId === ctx.rev1,
+    `revision 1 is live after the rollback, not ${state?.liveRevisionId}`,
+  );
+  const home = probe(ctx, ctx.owner, '/');
+  expect(
+    home.status === 200 && !home.body.includes(REVISION_TWO_NAME),
+    'owner serves revision 1 again',
+    `${home.status}`,
+  );
+  send(ctx, ctx.owner, [{ method: 'POST', path: '/api/studio/auth.logout', headers, body: {} }]);
+  expect(
+    liveOn(ctx, ctx.ownerVolume).id === ctx.rev1,
+    'portfolio-store status agrees: revision 1 is live',
+  );
+}
+
+async function serverLastKnownGood(ctx) {
+  expect(ctx.owner && ctx.rev1, 'in-app-rollback left owner running on revision 1');
+  expect(container(ctx.run, ['stop', '-t', '10', ctx.owner]).status === 0, 'owner stops');
+  // Damage the live revision, revision 1: one of its documents goes.
+  const damaged = container(ctx.run, [
+    ...runArgs(ctx, { mounts: [`${ctx.ownerVolume}:${DATA_DIR}`], entrypoint: 'node' }),
+    '-e',
+    `require('node:fs').rmSync('${DATA_DIR}/revisions/${ctx.rev1}/documents/portfolio.yml')`,
+  ]);
+  expect(damaged.status === 0, "revision 1's portfolio document is removed", damaged.out);
+  const since = new Date().toISOString();
+  expect(container(ctx.run, ['start', ctx.owner]).status === 0, 'owner starts again');
+  await waitHealthy(ctx, ctx.owner);
+  const ready = probe(ctx, ctx.owner, '/api/ready');
+  const body = parseJson(ready.body);
+  const catalog = body?.checks?.find((check) => check.id === 'catalog')?.status;
+  expect(
+    ready.status === 200 && body?.status === 'degraded' && catalog === 'degraded',
+    `owner is degraded on the last known good, not ${ready.status} ${ready.body ?? ready.error}`,
+  );
+  const logs = container(ctx.run, ['logs', '--since', since, ctx.owner]).out;
+  expect(
+    /"event":"store\.catalog\.degraded"/.test(logs),
+    'the log names store.catalog.degraded for the operator',
+    logs,
+  );
+  const home = probe(ctx, ctx.owner, '/');
+  expect(
+    home.status === 200 && home.body.includes(REVISION_TWO_NAME),
+    'the last known good, revision 2, serves',
+    `${home.status}`,
+  );
+  container(ctx.run, ['rm', '-f', ctx.owner]);
+}
+
+async function previousDigest(ctx) {
+  const previous = ctx.previousImage;
+  expect(previous, 'a previous image: REHEARSAL_PREVIOUS_IMAGE or REHEARSAL_PREVIOUS_REF');
+  const { one, two } = imagePairs(ctx);
+  const before = newVolume(ctx, 'pre-upgrade');
+  const imported = imageStore(ctx, before, ['import', '--from', '/config', '--expect', 'empty'], {
+    pair: one,
+    image: previous,
+  });
+  expect(
+    imported.status === 0,
+    `the previous image imports the old site, not ${imported.status}`,
+    imported.out,
+  );
+  const old = liveRevision(imported.out);
+  const backups = path.join(ctx.run.scratch, 'backups');
+  mkdirSync(backups, { recursive: true });
+  const backup = imageStore(ctx, before, ['backup', '--out', '/backups/pre-upgrade'], {
+    image: previous,
+    mounts: [`${backups}:/backups`],
+  });
+  expect(
+    backup.status === 0,
+    `the previous image backs the store up, not ${backup.status}`,
+    backup.out,
+  );
+  // The upgrade: the new image publishes on the same store.
+  const upgraded = imageStore(ctx, before, ['import', '--from', '/config', '--expect', old], {
+    pair: two,
+  });
+  expect(
+    upgraded.status === 0,
+    `the new image publishes on the upgraded store, not ${upgraded.status}`,
+    upgraded.out,
+  );
+  // Going back: the previous image, with the pre-upgrade backup restored into a new volume.
+  const after = newVolume(ctx, 'rolled-back');
+  const restored = imageStore(
+    ctx,
+    after,
+    ['restore', '--from', '/backups/pre-upgrade', '--into', DATA_DIR],
+    {
+      image: previous,
+      mounts: [`${backups}:/backups:ro`],
+    },
+  );
+  expect(
+    restored.status === 0,
+    `the previous image restores the backup, not ${restored.status}`,
+    restored.out,
+  );
+  expect(liveOn(ctx, after, previous).id === old, 'the restore holds the old live revision');
+  const name = `${ctx.prefix}-previous`;
+  startOwner(ctx, name, after, { pair: two, image: previous });
+  await waitHealthy(ctx, name);
+  const ready = probe(ctx, name, '/api/ready');
+  expect(
+    ready.status === 200 && parseJson(ready.body)?.status === 'ready',
+    `the previous image is ready, not ${ready.status}`,
+    logsOf(ctx, name),
+  );
+  const home = probe(ctx, name, '/');
+  expect(
+    home.status === 200 && !home.body.includes(REVISION_TWO_NAME),
+    'the previous image serves the old site',
+    `${home.status}`,
+  );
+  container(ctx.run, ['rm', '-f', name]);
+}
+
+/**
+ * The previous image: REHEARSAL_PREVIOUS_IMAGE, or one built here from
+ * REHEARSAL_PREVIOUS_REF in a worktree of its own, never pulled.
+ */
+function previousImage(run) {
+  if (process.env.REHEARSAL_PREVIOUS_IMAGE) return process.env.REHEARSAL_PREVIOUS_IMAGE;
+  const ref = process.env.REHEARSAL_PREVIOUS_REF;
+  if (!ref) return null;
+  const dir = path.join(run.scratch, 'previous');
+  const git = (args) => spawnSync('git', args, { cwd: REPO_ROOT, encoding: 'utf8' });
+  const added = git(['worktree', 'add', '--detach', dir, ref]);
+  expect(
+    added.status === 0,
+    `a worktree of ${ref} is checked out`,
+    `${added.stdout}${added.stderr}`,
+  );
+  try {
+    const built = container(run, ['build', '--pull', '--no-cache', '-t', PREVIOUS_TAG, dir], {
+      timeout: 1_500_000,
+      withheld: '[the previous image builds]',
+    });
+    expect(built.status === 0, `the previous image builds from ${ref}`, built.out.slice(-4000));
+  } finally {
+    git(['worktree', 'remove', '--force', dir]);
+  }
+  return PREVIOUS_TAG;
+}
+
+const PREVIOUS_TAG = 'portfolio:rehearsal-previous';
+
+/** Makes what every container row shares: the internal network, owner's hash, and the previous image. */
+function containerContext(run, state, image) {
+  const prefix = `rehearsal-${randomBytes(4).toString('hex')}`;
+  const ctx = { run, state, image, prefix, network: `${prefix}-net`, names: [], volumes: [] };
+  expect(
+    container(run, ['network', 'create', '--internal', ctx.network]).status === 0,
+    'the internal network is created',
+  );
+  // owner's password, and its hash from the image's own hash-password --stdin, made for this run.
+  const password = `rehearsal-password-${randomBytes(12).toString('hex')}`;
+  run.secrets.password = password;
+  const hasher = container(
+    run,
+    [...runArgs(ctx, {}), 'node', 'apps/web/bin/owner.mjs', 'hash-password', '--stdin'],
+    { input: `${password}\n${password}\n`, withheld: '[output withheld: it is a per-run secret]' },
+  );
+  const hash = hasher.stdout.replace(/\n$/, '');
+  run.secrets.hash = hash;
+  for (const line of maskCommands([password, hash], process.env)) console.log(line);
+  expect(hasher.status === 0 && /^\$scrypt\$/.test(hash), 'hash-password --stdin made a hash');
+  ctx.secretsDir = path.join(run.scratch, 'secrets');
+  mkdirSync(ctx.secretsDir, { recursive: true });
+  writeFileSync(path.join(ctx.secretsDir, 'owner_password_hash'), hash);
+  chmodSync(path.join(ctx.secretsDir, 'owner_password_hash'), 0o444);
+  ctx.previousImage = previousImage(run);
+  return ctx;
+}
+
+function removeContainers(ctx) {
+  for (const name of ctx.names) container(ctx.run, ['rm', '-f', name]);
+  for (const volume of ctx.volumes) container(ctx.run, ['volume', 'rm', '-f', volume]);
+  container(ctx.run, ['network', 'rm', ctx.network]);
+  if (ctx.previousImage === PREVIOUS_TAG) container(ctx.run, ['rmi', '-f', PREVIOUS_TAG]);
 }
 
 // ---- the run -----------------------------------------------------------------
@@ -934,6 +1376,44 @@ export function renderSummary(results) {
   return `${lines.join('\n')}\n`;
 }
 
+/**
+ * Whether this build imports the bundled sample pair: portfolio-store on a
+ * new data directory, with the egress guard. It says whether the rows can
+ * run on the default composition, so it goes by what the build does with
+ * the sample, never by what site.example.yml names.
+ */
+function probeSampleImport(run) {
+  const source = path.join(run.scratch, 'sample-pair');
+  mkdirSync(source, { recursive: true });
+  cpSync(path.join(REPO_ROOT, 'portfolio.example.yml'), path.join(source, 'portfolio.yml'));
+  cpSync(path.join(REPO_ROOT, 'site.example.yml'), path.join(source, 'site.yml'));
+  return sampleImport(run.store(run.dataDir('sample-probe'), ['import', '--from', source]));
+}
+
+/** Runs rows in order, each on what the one before it left; one that fails stops the rest. */
+async function runRows(rows, call, { results, fail }) {
+  let stopped = false;
+  for (const row of rows) {
+    if (stopped) {
+      results.push({ id: row.id, title: row.title, outcome: 'not run: an earlier row failed' });
+      continue;
+    }
+    const started = Date.now();
+    try {
+      await call(row);
+      results.push({ id: row.id, title: row.title, outcome: 'passed' });
+      console.log(
+        `[rehearsal] PASS ${row.id} (${((Date.now() - started) / 1000).toFixed(1)}s): ${row.title}`,
+      );
+    } catch (error) {
+      stopped = true;
+      results.push({ id: row.id, title: row.title, outcome: 'failed' });
+      fail(row.id, error instanceof RowFailure ? error.message : String(error?.stack ?? error));
+    }
+  }
+  return !stopped;
+}
+
 async function main() {
   const reports = path.join(reportsDir(), 'rehearsal');
   rmSync(reports, { recursive: true, force: true });
@@ -941,7 +1421,6 @@ async function main() {
   const secrets = {
     runCanary: `canary-rehearsal-${randomBytes(12).toString('hex')}`,
     contentCanary: `canary-content-${randomBytes(12).toString('hex')}`,
-    extra: [],
   };
   for (const line of maskCommands([secrets.runCanary, secrets.contentCanary], process.env))
     console.log(line);
@@ -956,64 +1435,54 @@ async function main() {
     if (gate)
       writeFailureRecord({ ...gate, test: `rehearsal ${id}`, actual: message.split('\n')[0] });
   };
+  let landedState = { sampleImports: false };
+  let containersRan = false;
+  let ctx = null;
+  const image =
+    process.env.REHEARSAL_IMAGE ||
+    (process.env.REHEARSAL_IMAGE_ARCHIVE ? 'portfolio:rehearsal' : '');
 
   try {
     const line = buildRegistry();
     console.log(line.split('\n').pop());
-    const registered = registeredVariants();
+    landedState = probeSampleImport(run);
+    if (landedState.error) fail('pending', landedState.error);
     const defaultId = defaultComposition();
-    const composition = rehearsalComposition(registered, defaultId);
+    const composition = landedState.sampleImports
+      ? defaultId
+      : rehearsalComposition(registeredVariants(), defaultId);
     const state = { secrets, notes: [], composition };
     console.log(
-      `[rehearsal] composition: ${composition}${composition === defaultId ? '' : ` (a stand-in: this build doesn't register the default, ${defaultId})`}`,
+      `[rehearsal] composition: ${composition}${composition === defaultId ? '' : ` (a stand-in: the bundled sample's ${defaultId} doesn't import in this build)`}`,
     );
 
-    let stopped = false;
-    for (const row of NATIVE_ROWS) {
-      if (stopped) {
-        results.push({ id: row.id, title: row.title, outcome: 'not run: an earlier row failed' });
-        continue;
-      }
-      const started = Date.now();
-      try {
-        await row.run(run, state);
-        results.push({ id: row.id, title: row.title, outcome: 'passed' });
-        console.log(
-          `[rehearsal] PASS ${row.id} (${((Date.now() - started) / 1000).toFixed(1)}s): ${row.title}`,
-        );
-      } catch (error) {
-        stopped = true;
-        results.push({ id: row.id, title: row.title, outcome: 'failed' });
-        fail(row.id, error instanceof RowFailure ? error.message : String(error?.stack ?? error));
-      }
-    }
+    const native = await runRows(NATIVE_ROWS, (row) => row.run(run, state), { results, fail });
 
-    const image =
-      process.env.REHEARSAL_IMAGE ||
-      (process.env.REHEARSAL_IMAGE_ARCHIVE ? 'portfolio:rehearsal' : '');
-    for (const row of CONTAINER_ROWS) {
-      if (!image) {
-        const outcome = 'not run: needs REHEARSAL_IMAGE (CI)';
-        results.push({ id: row.id, title: row.title, outcome });
-        if (process.env.REHEARSAL_CONTAINER === 'required')
-          fail(row.id, 'REHEARSAL_CONTAINER=required, and no image was given');
-        else console.log(`[rehearsal] SKIP ${row.id}: ${outcome}`);
-        continue;
+    if (!image) {
+      for (const row of CONTAINER_ROWS) {
+        results.push({
+          id: row.id,
+          title: row.title,
+          outcome: 'not run: needs REHEARSAL_IMAGE (CI)',
+        });
       }
-      try {
-        if (process.env.REHEARSAL_IMAGE_ARCHIVE && !process.env.REHEARSAL_IMAGE) {
-          const loaded = container(run, ['load', '-i', process.env.REHEARSAL_IMAGE_ARCHIVE]);
-          expect(loaded.status === 0, 'the image archive loads', loaded.out);
-          const tagged = /Loaded image: (\S+)/.exec(loaded.out)?.[1];
-          if (tagged && tagged !== image) container(run, ['tag', tagged, image]);
-        }
-        await imageOldConfig(run, image);
-        results.push({ id: row.id, title: row.title, outcome: 'passed' });
-        console.log(`[rehearsal] PASS ${row.id}: ${row.title}`);
-      } catch (error) {
-        results.push({ id: row.id, title: row.title, outcome: 'failed' });
-        fail(row.id, error instanceof RowFailure ? error.message : String(error?.stack ?? error));
+      if (process.env.REHEARSAL_CONTAINER === 'required')
+        fail('containers', 'REHEARSAL_CONTAINER=required, and no image was given');
+      else console.log('[rehearsal] SKIP the container rows: they need REHEARSAL_IMAGE (CI)');
+    } else if (!native) {
+      for (const row of CONTAINER_ROWS) {
+        results.push({ id: row.id, title: row.title, outcome: 'not run: a native row failed' });
       }
+    } else {
+      if (process.env.REHEARSAL_IMAGE_ARCHIVE && !process.env.REHEARSAL_IMAGE) {
+        const loaded = container(run, ['load', '-i', process.env.REHEARSAL_IMAGE_ARCHIVE]);
+        expect(loaded.status === 0, 'the image archive loads', loaded.out);
+        const tagged = /Loaded image: (\S+)/.exec(loaded.out)?.[1];
+        if (tagged && tagged !== image) container(run, ['tag', tagged, image]);
+      }
+      containersRan = true;
+      ctx = containerContext(run, state, image);
+      await runRows(CONTAINER_ROWS, (row) => row.run(ctx), { results, fail });
     }
 
     for (const row of PENDING_ROWS) {
@@ -1024,12 +1493,11 @@ async function main() {
       });
       console.log(`[rehearsal] PENDING ${row.id}: ${row.title}`);
     }
-    for (const problem of pendingProblems(PENDING_ROWS, { registered, defaultId }))
-      fail('pending', problem);
     for (const note of state.notes) console.log(`[rehearsal] note: ${note}`);
   } catch (error) {
-    fail('setup', String(error?.stack ?? error));
+    fail('setup', error instanceof RowFailure ? error.message : String(error?.stack ?? error));
   } finally {
+    if (ctx) removeContainers(ctx);
     writeFileSync(path.join(reports, 'commands.log'), run.log.join('\n'));
     writeFileSync(path.join(reports, 'summary.md'), renderSummary(results));
     if (process.env.REHEARSAL_KEEP) console.log(`[rehearsal] kept ${scratch}`);
@@ -1039,12 +1507,17 @@ async function main() {
     }
   }
 
-  // No per-run secret in any report: each one that holds one is redacted, and fails the run.
-  const all = [secrets.runCanary, secrets.contentCanary, ...secrets.extra].filter(Boolean);
-  const { redacted, unchecked } = redactArtifacts(reportsDir(), all);
-  for (const file of redacted) fail('canary', `${file} held a per-run secret, now redacted`);
-  for (const file of unchecked)
-    fail('canary', `${file} was too large to check for a per-run secret`);
+  for (const problem of finalVerdict({
+    pendingRows: PENDING_ROWS,
+    landedState,
+    reports: reportsDir(),
+    secrets,
+    requiredSecrets: containersRan
+      ? ['runCanary', 'contentCanary', 'password', 'hash']
+      : ['runCanary', 'contentCanary'],
+  })) {
+    fail(problem.slice(0, problem.indexOf(':')), problem.slice(problem.indexOf(':') + 2));
+  }
   const summary = renderSummary(results);
   if (process.env.GITHUB_STEP_SUMMARY)
     writeFileSync(process.env.GITHUB_STEP_SUMMARY, summary, { flag: 'a' });
