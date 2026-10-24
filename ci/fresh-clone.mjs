@@ -548,7 +548,8 @@ class Clone {
     };
   }
 
-  sh(command, { env = {}, timeoutMs = 300_000, input, withheld = false } = {}) {
+  /** Runs `command` in the clone; `quiet` keeps a polling call out of the log. */
+  sh(command, { env = {}, timeoutMs = 300_000, input, withheld = false, quiet = false } = {}) {
     const result = spawnSync('sh', ['-c', command], {
       cwd: this.cwd,
       env: this.env(env),
@@ -558,9 +559,11 @@ class Clone {
       maxBuffer: 256 << 20,
     });
     const out = `${result.stdout ?? ''}${result.stderr ?? ''}${result.error ? `\n${result.error.message}` : ''}`;
-    this.log.push(
-      `$ ${command}\n${withheld ? '[output withheld]\n' : out}[exit ${result.status ?? result.signal}]\n`,
-    );
+    if (!quiet) {
+      this.log.push(
+        `$ ${command}\n${withheld ? '[output withheld]\n' : out}[exit ${result.status ?? result.signal}]\n`,
+      );
+    }
     return { status: result.status, out };
   }
 
@@ -731,15 +734,19 @@ function readSecret(clone, file) {
 
 /** One Compose run as the guide gives it: up, watched until it serves or refuses, then down. */
 async function composeStep(clone, step, command) {
-  const compose = (args) =>
-    clone.sh(`docker compose ${[...step.compose, ...args].join(' ')}`, { timeoutMs: 120_000 });
+  const compose = (args, quiet = false) =>
+    clone.sh(`docker compose ${[...step.compose, ...args].join(' ')}`, {
+      timeoutMs: 120_000,
+      quiet,
+    });
   const up = clone.start(command, {});
   try {
+    // The first run builds the image, which takes some minutes.
     const deadline = Date.now() + 900_000;
     if (step.kind === 'compose-refuse') {
       let codes = [];
       while (Date.now() < deadline) {
-        codes = fatalCodes(compose(['logs', '--no-color']).out);
+        codes = fatalCodes(compose(['logs', '--no-color', '--no-log-prefix'], true).out);
         if (codes.length > 0) break;
         expect(
           up.exited() === undefined,
@@ -748,7 +755,7 @@ async function composeStep(clone, step, command) {
         );
         await sleep(3000);
       }
-      const logs = compose(['logs', '--no-color']).out;
+      const logs = compose(['logs', '--no-color', '--no-log-prefix']).out;
       expect(codes.length > 0, `"${step.command}" refuses to start`, `${up.output()}\n${logs}`);
       for (const code of step.fatal)
         expect(codes.includes(code), `it refuses with ${code}, not ${codes.join(', ')}`, logs);
@@ -762,7 +769,7 @@ async function composeStep(clone, step, command) {
         expect(up.exited() === undefined, `"${step.command}" ended before it served`, up.output());
         await sleep(3000);
       }
-      const logs = compose(['logs', '--no-color']).out;
+      const logs = compose(['logs', '--no-color', '--no-log-prefix']).out;
       expect(
         response.status !== 0,
         `"${step.command}" serves ${step.path}`,
