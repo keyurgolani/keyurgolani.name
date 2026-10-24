@@ -3,6 +3,7 @@ import { Surface } from '@portfolio/appearance/primitives';
 import {
   EvidenceEntry,
   evidenceByIds,
+  hrefFor,
   isSignature,
   LinkText,
   MediaFigure,
@@ -53,7 +54,6 @@ export function Frame({
     .map((placement) => placedMedia(placement, ctx))
     .find((placed) => placed !== undefined && !placed.decorative);
   const evidence = evidenceByIds(work.evidence, input);
-  const nested = { ...ctx, level: level < 6 ? ((level + 1) as HeadingLevel) : level };
   const medium = mediumLabel(work);
   const meta = [work.role, work.organization].filter(present);
   const study =
@@ -61,6 +61,13 @@ export function Frame({
       ? routeHref(input, { route: 'work', slug: work.slug })
       : undefined;
   const links = [...(present(work.url) ? [{ url: work.url }] : []), ...(work.links ?? [])];
+  // Audio and video are links to their files: nothing plays in the page, so nothing autoplays.
+  const listen = (
+    [
+      ['Audio', work.audioUrl],
+      ['Video', work.videoUrl],
+    ] as const
+  ).filter((entry): entry is readonly ['Audio' | 'Video', string] => present(entry[1]));
 
   return (
     <article
@@ -107,11 +114,11 @@ export function Frame({
         {evidence.length > 0 ? (
           <ul className="pf-evidence hc-frame__evidence" role="list">
             {evidence.map((entry) => (
-              <EvidenceEntry key={entry.id} entry={entry} ctx={nested} />
+              <EvidenceEntry key={entry.id} entry={entry} ctx={ctx} />
             ))}
           </ul>
         ) : null}
-        {study !== undefined || links.length > 0 ? (
+        {study !== undefined || links.length > 0 || listen.length > 0 ? (
           <ul className="hc-frame__links" role="list">
             {study !== undefined ? (
               <li>
@@ -121,6 +128,13 @@ export function Frame({
                 </a>
               </li>
             ) : null}
+            {listen.map(([label, url]) => (
+              <li key={label}>
+                <a href={hrefFor(url, input)}>
+                  <Words lang={lang}>{label}</Words>
+                </a>
+              </li>
+            ))}
             {links.map((link, index) => (
               <li key={index}>
                 <LinkText link={link} ctx={ctx} />
