@@ -74,7 +74,7 @@ echo 'PORTFOLIO_ORIGIN=https://jane.name' > .env
 docker compose up --build
 ```
 
-Make the copy yours before the first start: `identity.name`, which a production server won't start on while it's the sample's, `meta.title`, and `meta.ogImage` ([Getting started](getting-started.md#1-create-configportfolioyml-and-configsiteyml)). This mounts `config/` read-only at `/config`, and `assets/` read-only at `/media`, the media root (`PORTFOLIO_MEDIA_ROOT`) the portfolio's media sources resolve under ([Media](#media)). Nothing mounts into the app's `public/`: images serve as renditions from `/media` ([Media](#media)), and `/assets/<file>` is a 404 in every profile. Nothing in the container is writable but a tmpfs at Next.js's cache, `/app/apps/web/.next/cache`, and one at the media cache `read-only` derives into, `/tmp/portfolio-media`, owned by the server's user.
+Make the copy yours before the first start: `identity.name`, which a production server won't start on while it's the sample's, `meta.title`, and `meta.ogImage`, which isn't rendered yet but places the sample's picture ([Getting started](getting-started.md#1-create-configportfolioyml-and-configsiteyml)). This mounts `config/` read-only at `/config`, and `assets/` read-only at `/media`, the media root (`PORTFOLIO_MEDIA_ROOT`) the portfolio's media sources resolve under ([Media](#media)). Nothing mounts into the app's `public/`: images serve as renditions from `/media` ([Media](#media)), and `/assets/<file>` is a 404 in every profile. Nothing in the container is writable but a tmpfs at Next.js's cache, `/app/apps/web/.next/cache`, and one at the media cache `read-only` derives into, `/tmp/portfolio-media`, owned by the server's user.
 
 ### `demo`
 
@@ -115,7 +115,7 @@ echo 'PORTFOLIO_ORIGIN=https://jane.name' > .env
 docker compose -f compose.owner.yml up --build
 ```
 
-Like every production server, it refuses to start while `identity.name` in `config/portfolio.yml` is the bundled sample's. Make `meta.title` and `meta.ogImage` yours in the same edit, or every page's title and the link previews keep the sample's ([Getting started](getting-started.md#1-create-configportfolioyml-and-configsiteyml)). Set `PORTFOLIO_TRUSTED_PROXY_HOPS` in `deploy/.env` to the number of proxies in front that append to `X-Forwarded-For`, usually `1`: `compose.owner.yml` passes it through, and leaves it at `0` when it's unset, which gives sign-in only its global limits ([Signing in](#signing-in)).
+Like every production server, it refuses to start while `identity.name` in `config/portfolio.yml` is the bundled sample's. Make `meta.title` yours in the same edit, or every page's title and the link previews' titles keep the sample's. Their picture is a card drawn from `identity.name`. `meta.ogImage` isn't rendered yet: point it at your own picture or delete it, so a release that renders it doesn't show the sample's ([Getting started](getting-started.md#1-create-configportfolioyml-and-configsiteyml)). Set `PORTFOLIO_TRUSTED_PROXY_HOPS` in `deploy/.env` to the number of proxies in front that append to `X-Forwarded-For`, usually `1`: `compose.owner.yml` passes it through, and leaves it at `0` when it's unset, which gives sign-in only its global limits ([Signing in](#signing-in)).
 
 ### What the image does
 

@@ -26,6 +26,7 @@ import {
   identityEdit,
   identityFields,
   identityForbidden,
+  identityInput,
   metaOgAsset,
   metaTitle,
   sampleLeftovers,
@@ -44,6 +45,7 @@ import {
 import { parse } from 'yaml';
 import { defaultComposition, LANDED, pendingProblems } from './lib/pending.mjs';
 import { finalVerdict } from './lib/verdict.mjs';
+import { identityProblems } from './lib/identity.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (doc) => readFileSync(path.join(ROOT, doc), 'utf8');
@@ -338,6 +340,88 @@ test("a guide that stops naming meta.title or meta.ogImage leaves the sample's i
     'asset: portrait',
   );
   assert.equal(sampleLeftovers(renamed, sample).length, 1);
+});
+
+test('every server the guide starts after an identity step is held to its identity, and each track edits before it serves', () => {
+  const first = STEPS.findIndex((s) => s.kind === 'identity');
+  const served = STEPS.slice(first).filter((s) => s.kind === 'serve' || s.kind === 'compose-serve');
+  assert.deepEqual(
+    served.map((s) => s.id),
+    [
+      'read-only-starts',
+      'demo-starts',
+      'compose-read-only-starts',
+      'compose-owner-ready',
+      'compose-demo-starts',
+    ],
+  );
+  for (const step of served) {
+    assert.ok(step.identity, `${step.id} carries an identity block`);
+    assert.equal(step.path, '/', step.id);
+    assert.equal(step.identity.profile === 'demo', step.id.includes('demo'), step.id);
+    if (step.identity.profile === 'demo') continue;
+    // Its own track's identity step comes after its last refusal and before it.
+    const at = STEPS.indexOf(step);
+    const before = STEPS.slice(0, at);
+    const refused = before.findLastIndex((s) => s.kind === 'refuse' || s.kind === 'compose-refuse');
+    const edited = before.findLastIndex((s) => s.kind === 'identity');
+    assert.ok(refused >= 0 && edited > refused, `${step.id}: an identity step after its refusal`);
+  }
+});
+
+test('both serve paths run the identity check while the server is up, and it reads the step', () => {
+  const source = read('ci/fresh-clone.mjs');
+  const body = (start, end) => {
+    const from = source.indexOf(start);
+    assert.ok(from >= 0, start);
+    return source.slice(from, source.indexOf(end, from + start.length));
+  };
+  const serve = body("    case 'serve': {", "\n    case '");
+  assert.match(
+    serve,
+    /await afterServed\(step, `http:\/\/127\.0\.0\.1:\$\{port\}`\);\n[\s\S]*finally \{\n\s*await server\.stop\(\);/,
+  );
+  const compose = body('async function composeStep(', '\n}\n');
+  assert.match(compose, /await afterServed\(step, 'http:\/\/127\.0\.0\.1:3000'\)/);
+  const after = body('async function afterServed(step, base) {', '\n}\n');
+  assert.match(after, /if \(step\.ready\)/);
+  assert.match(after, /if \(step\.identity\)/);
+  assert.match(
+    after,
+    /identityProblems\(\s*identityInput\(step, \{ page, sitemap, robots, feed, ogImage \}\)/,
+  );
+  assert.match(after, /expect\(problems\.length === 0/);
+});
+
+test("a serve step's identity input carries its title, forbids the persona, and needs the image to have answered", () => {
+  const step = STEPS.find((s) => s.id === 'read-only-starts');
+  const input = identityInput(step, { page: { status: 200, body: '' } });
+  assert.equal(input.title, FIXTURE_NAME);
+  assert.equal(input.name, FIXTURE_NAME);
+  assert.ok(input.forbidden.includes(SAMPLE_NAME));
+  assert.deepEqual(input.ogImage, { status: 0 });
+  const problems = identityProblems(
+    identityInput(step, {
+      page: { status: 200, body: '<title>x</title>' },
+      sitemap: { status: 200, body: '' },
+      robots: { status: 200, body: '' },
+      feed: { status: 200, body: '' },
+    }),
+  );
+  assert.ok(
+    problems.some((p) => p.startsWith('the Open Graph image answered 0')),
+    problems.join(' | '),
+  );
+  assert.ok(
+    problems.some((p) => p.startsWith('the title is "x"')),
+    problems.join(' | '),
+  );
+  const demo = identityInput(
+    STEPS.find((s) => s.id === 'demo-starts'),
+    {},
+  );
+  assert.equal(demo.title, undefined);
+  assert.ok(demo.forbidden.includes(FIXTURE_NAME));
 });
 
 test("owner's and read-only's servers may not name the sample's persona anywhere the identity checks read", () => {
