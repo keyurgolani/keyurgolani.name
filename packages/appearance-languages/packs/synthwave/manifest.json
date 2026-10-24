@@ -2,7 +2,7 @@
   "id": "synthwave",
   "name": "Synthwave",
   "description": "Square corners, strong borders, translucent surfaces, normal density, hard offset shadows, kinetic motion, and a grid texture.",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "tokenContract": 1,
   "tier": "experimental",
   "provenance": {
@@ -41,7 +41,8 @@
     "Translucent surfaces with a backdrop blur cost paint time on slower devices, and read less clearly over busy content.",
     "A decorative gradient texture sits behind surfaces.",
     "Expressive state motion: hovers and presses move more than in a quiet language.",
-    "Its enter motion, slide-cut, and emphasis motion, glitch-once, have no keyframes in the platform yet, so they don't animate."
+    "Its enter motion, slide-cut, and emphasis motion, glitch-once, have no keyframes in the platform yet, so they don't animate.",
+    "Ships opaque: its approved 92% translucent surfaces fall under the contrast targets with its texture over a black or white backdrop, so surfaces are 100% opaque, the orchestrator's call under the owner's delegation."
   ],
   "tokens": {
     "surface-material": "linear-gradient(color-mix(in srgb, var(--color-surface-default) 92%, transparent), color-mix(in srgb, var(--color-surface-default) 92%, transparent))",
@@ -57,7 +58,7 @@
     "shadow-overlay": "8px 8px 0 var(--color-border-strong)",
     "shadow-raised": "8px 8px 0 var(--color-border-strong)",
     "shadow-inset": "none",
-    "surface-opacity": "92%",
+    "surface-opacity": "100%",
     "backdrop-blur": "8px",
     "control-height": "2.5rem",
     "space-control-inline": "0.875rem",
@@ -85,5 +86,6 @@
     "texture": "linear-gradient(var(--color-border-subtle) 1px, transparent 1px), linear-gradient(90deg, var(--color-border-subtle) 1px, transparent 1px)",
     "signature-fill": "linear-gradient(90deg, var(--color-signature-start), var(--color-signature-end))",
     "emphasis-glow": "none"
-  }
+  },
+  "approvedSurfaceOpacity": "92%"
 }
