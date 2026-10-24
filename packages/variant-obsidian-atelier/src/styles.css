@@ -52,7 +52,9 @@
 /* At least 24 by 24 CSS px for each of the composition's own links. */
 [data-variant='obsidian-atelier'] :is(.oa-chrome a, .oa-pager a) {
   display: inline-flex;
-  align-items: center;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 0.5em;
   min-block-size: 1.5rem;
 }
 
