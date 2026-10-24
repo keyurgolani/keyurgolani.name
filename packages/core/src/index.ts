@@ -39,6 +39,14 @@ export {
   type UnitInput,
   type Versioned,
 } from './catalog/unit';
+// #10's generated schemes (10h): the generators a build hands the store in
+// UnitChecks.schemes. Types only, from a module that holds no code.
+export type {
+  GeneratorDeclaration,
+  SchemeGenerators,
+  SchemeInput,
+  SchemeRun,
+} from './catalog/schemes';
 
 // #10's media pipeline: startup derivation for read-only and demo, and what
 // it's made of, which owner's ingestion shares.

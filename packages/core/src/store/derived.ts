@@ -5,6 +5,7 @@ import {
   derivedChanges,
   isPlainObject,
   recordedChanges,
+  schemeEntries,
   snapshotRecords,
   type DerivedChange,
   type DerivedSide,
@@ -29,6 +30,11 @@ recordOwnerModule('core/store/derived');
 export interface DraftDerived {
   /** What the draft's refreshes froze, by adapter kind: `github`. */
   readonly snapshots?: Readonly<Record<string, unknown>>;
+  /**
+   * The generated color schemes its saves made, by scheme id (10h): each a
+   * DerivedScheme, frozen at publish as the revision's snapshots/schemes.json.
+   */
+  readonly schemes?: Readonly<Record<string, unknown>>;
   readonly changes: readonly RecordedChange[];
 }
 
@@ -47,8 +53,12 @@ export function asDraftDerived(value: unknown): DraftDerived | undefined {
         ),
       )
     : undefined;
+  const schemes = isPlainObject(value.schemes)
+    ? Object.fromEntries(schemeEntries(value.schemes))
+    : undefined;
   return {
     ...(snapshots ? { snapshots } : {}),
+    ...(schemes && Object.keys(schemes).length > 0 ? { schemes } : {}),
     changes: recordedChanges(value),
   };
 }
@@ -56,7 +66,9 @@ export function asDraftDerived(value: unknown): DraftDerived | undefined {
 const subjectKey = (change: DerivedChange) =>
   change.subject.kind === 'media'
     ? `media:${change.subject.assetId}`
-    : `snapshot:${change.subject.adapter}:${change.subject.sectionId}`;
+    : change.subject.kind === 'scheme'
+      ? `scheme:${change.subject.schemeId}`
+      : `snapshot:${change.subject.adapter}:${change.subject.sectionId}`;
 
 const isRecord = (value: unknown): value is Record<string, unknown> => isPlainObject(value);
 
@@ -85,6 +97,17 @@ function revertSnapshot(snapshot: unknown, base: unknown, sectionId: string): un
   return { ...snapshot, records };
 }
 
+/** `schemes` with `schemeId`'s entry put back to the base revision's, or left out when it had none. */
+function revertScheme(
+  schemes: Readonly<Record<string, unknown>> | undefined,
+  base: unknown,
+  schemeId: string,
+): Readonly<Record<string, unknown>> {
+  const rest = Object.fromEntries(Object.entries(schemes ?? {}).filter(([id]) => id !== schemeId));
+  const original = schemeEntries(base).get(schemeId);
+  return original ? { ...rest, [schemeId]: original } : rest;
+}
+
 export interface Reconciled {
   /** The draft's media model, with every dismissed change put back. */
   readonly media: unknown;
@@ -101,25 +124,32 @@ export function reconcileDerived({
   base,
   media,
   snapshots,
+  schemes,
   previous,
 }: {
   readonly base: DerivedSide | null;
   readonly media: unknown;
   readonly snapshots: Readonly<Record<string, unknown>> | undefined;
+  /** The draft's generated schemes, by scheme id (10h). */
+  readonly schemes?: Readonly<Record<string, unknown>> | undefined;
   readonly previous: readonly RecordedChange[];
 }): Reconciled {
   const recorded = new Map(previous.map((change) => [change.id, change]));
   let nextMedia = media;
   let nextSnapshots = snapshots;
+  let nextSchemes = schemes;
   const changes: RecordedChange[] = [];
   const raised = new Set<string>();
-  for (const change of derivedChanges(base, { media, snapshots })) {
+  const after = { media, snapshots: { ...snapshots, ...(schemes ? { schemes } : {}) } };
+  for (const change of derivedChanges(base, after)) {
     const id = changeId(change);
     const decision = recorded.get(id)?.decision ?? { state: 'pending' as const };
     raised.add(subjectKey(change));
     if (decision.state === 'dismissed') {
       if (change.subject.kind === 'media') {
         nextMedia = revertMedia(nextMedia, base?.media, change.subject.assetId);
+      } else if (change.subject.kind === 'scheme') {
+        nextSchemes = revertScheme(nextSchemes, base?.snapshots?.schemes, change.subject.schemeId);
       } else {
         nextSnapshots = {
           ...nextSnapshots,
@@ -147,6 +177,7 @@ export function reconcileDerived({
       ...(nextSnapshots && Object.keys(nextSnapshots).length > 0
         ? { snapshots: nextSnapshots }
         : {}),
+      ...(nextSchemes && Object.keys(nextSchemes).length > 0 ? { schemes: nextSchemes } : {}),
       changes,
     },
   };

@@ -6,6 +6,7 @@ import {
   isPlainObject,
   parseSnapshot,
   parseSource,
+  schemeEntries,
   type DerivedSide,
   type DocumentFormat,
 } from '@portfolio/schema';
@@ -33,6 +34,8 @@ import {
 import { LockLostError, type PublicationLock } from './lock';
 import { DamagedPointerError, readLive, type LivePointer } from './pointer';
 import { readManifest, readRevision } from './revisions';
+import { loadSharp, type SharpLoad } from '../catalog/media/derive';
+import { assetReader, deriveSchemes, pixelsSha256, schemeDiagnostic } from './schemes';
 import type { AssetStore } from './assets';
 import {
   asDraftDerived,
@@ -496,6 +499,8 @@ export interface DraftStoreOptions {
    * as the publish gate does. None by default.
    */
   readonly lastKnownGood?: (except: readonly RevisionId[]) => Promise<RevisionId | null>;
+  /** The media service's sharp, which decodes an image-derived scheme's asset (10h). */
+  readonly sharp?: () => Promise<SharpLoad>;
 }
 
 export function filesystemDraftStore({
@@ -507,7 +512,10 @@ export function filesystemDraftStore({
   now = Date.now,
   log = () => {},
   lastKnownGood = async () => null,
+  sharp = () => loadSharp(),
 }: DraftStoreOptions): DraftStore {
+  // An image-derived scheme's input is its decoded pixels' hash (10h).
+  const pixelHash = pixelsSha256(sharp);
   const stamp = () => new Date(now()).toISOString();
 
   async function live(): Promise<LivePointer | null> {
@@ -643,6 +651,15 @@ export function filesystemDraftStore({
     return kept.length > 0 ? Object.fromEntries(kept) : undefined;
   }
 
+  /** The revision's generated schemes, which a draft started from it holds until a save makes them again (10h). */
+  async function schemesOf(
+    revisionId: RevisionId | null,
+  ): Promise<Readonly<Record<string, unknown>> | undefined> {
+    const base = await baseSide(revisionId);
+    const entries = Object.fromEntries(schemeEntries(base?.snapshots?.schemes));
+    return Object.keys(entries).length > 0 ? entries : undefined;
+  }
+
   /**
    * `snapshots` with each GitHub record whose section `input`'s portfolio
    * still has, for the account it names (#10): a username edit drops the
@@ -669,13 +686,35 @@ export function filesystemDraftStore({
     input: UnitInput,
     baseRevisionId: RevisionId | null,
     derived: Partial<DraftDerived>,
-  ): Promise<{ readonly input: UnitInput; readonly derived: DraftDerived | undefined }> {
+  ): Promise<{
+    readonly input: UnitInput;
+    readonly derived: DraftDerived | undefined;
+    readonly diagnostics: readonly UnitDiagnostic[];
+  }> {
     const parsed = input.media ? parseSource(input.media.sourceText, input.media.format) : null;
     const media = parsed?.ok ? parsed.data : undefined;
+    // The generated schemes the site selects, made again from its inputs
+    // (10h). A build without generators keeps what the draft holds.
+    const siteParsed = parseSource(input.site.sourceText, input.site.format);
+    const site = siteParsed.ok ? siteParsed.data : null;
+    let schemes = derived.schemes;
+    const diagnostics: UnitDiagnostic[] = [];
+    if (checks.schemes) {
+      const made = await deriveSchemes({
+        site,
+        media,
+        generators: checks.schemes,
+        readAsset: assetReader(assets),
+        pixelHash,
+      });
+      schemes = made.schemes;
+      diagnostics.push(...made.problems.map((problem) => schemeDiagnostic(site, problem)));
+    }
     const reconciled = reconcileDerived({
       base: await baseSide(baseRevisionId),
       media,
       snapshots: currentSnapshots(input, derived.snapshots),
+      schemes,
       previous: derived.changes ?? [],
     });
     const next =
@@ -691,13 +730,14 @@ export function filesystemDraftStore({
     // A dismissal puts the base's record back, which may be for the account
     // the section named before.
     const snapshots = currentSnapshots(input, reconciled.derived.snapshots);
-    const { changes } = reconciled.derived;
+    const { changes, schemes: kept } = reconciled.derived;
     return {
       input: next,
       derived:
-        snapshots || changes.length > 0
-          ? { changes, ...(snapshots ? { snapshots } : {}) }
+        snapshots || kept || changes.length > 0
+          ? { changes, ...(snapshots ? { snapshots } : {}), ...(kept ? { schemes: kept } : {}) }
           : undefined,
+      diagnostics,
     };
   }
 
@@ -716,12 +756,20 @@ export function filesystemDraftStore({
   ): Promise<DraftOutcome> {
     const large = tooLarge(given);
     if (large) return large;
-    const { input, derived } = await withDerived(
+    const { input, derived, diagnostics } = await withDerived(
       given,
       fields.baseRevisionId,
       fields.derived ?? asDraftDerived(found?.draft.derived) ?? {},
     );
-    const documents = documentsOf(input);
+    const checked = documentsOf(input);
+    // A generated scheme that couldn't be made is a finding on the site document.
+    const documents =
+      diagnostics.length > 0
+        ? {
+            ...checked,
+            site: { ...checked.site, diagnostics: [...checked.site.diagnostics, ...diagnostics] },
+          }
+        : checked;
     const missing = await missingBlobs(documents);
     if (missing) return missing;
     const at = stamp();
@@ -813,12 +861,18 @@ export function filesystemDraftStore({
           input.documents === undefined
             ? (input.fromRevisionId ?? pointer?.revisionId)
             : pointer?.revisionId;
-        const snapshots = await adapterSnapshotsOf(from && isRevisionId(from) ? from : null);
+        const source = from && isRevisionId(from) ? from : null;
+        const snapshots = await adapterSnapshotsOf(source);
+        const schemes = await schemesOf(source);
         return commit('draft.create', working, documents, {
           baseRevisionId: pointer?.revisionId ?? null,
           ...(input.sourceHash === undefined ? {} : { sourceHash: input.sourceHash }),
           actor,
-          derived: { ...(snapshots ? { snapshots } : {}), changes: [] },
+          derived: {
+            ...(snapshots ? { snapshots } : {}),
+            ...(schemes ? { schemes } : {}),
+            changes: [],
+          },
         });
       });
     },

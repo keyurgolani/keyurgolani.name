@@ -66,6 +66,8 @@ test('the public entry reaches no owner module, and loading it records nothing i
     'catalog/media/sniff.ts',
     'catalog/media/startup.ts',
     'catalog/port.ts',
+    // 10h's scheme generator port, types alone.
+    'catalog/schemes.ts',
     'catalog/source.ts',
     'catalog/unit.ts',
     'catalog/view.ts',
