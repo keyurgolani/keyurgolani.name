@@ -97,6 +97,8 @@ test('every gate so far has a known-bad case and a known-good one, and each id i
     'contrast',
     'axe',
     'merged-verdict',
+    'sweep',
+    'sweep-isolation',
     'release',
     'manual-runs',
   ]);

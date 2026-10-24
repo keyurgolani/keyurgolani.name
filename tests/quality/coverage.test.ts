@@ -1,6 +1,14 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { pairwise, TUPLE_AXES, tupleKey, type CoverageInput, type Tuple } from './coverage';
+import type { PlannedTest } from './cells';
+import {
+  pairwise,
+  sweepCoverage,
+  TUPLE_AXES,
+  tupleKey,
+  type CoverageInput,
+  type Tuple,
+} from './coverage';
 
 const VALUES: CoverageInput['values'] = {
   variant: ['fallback', 'kinetic'],
@@ -111,4 +119,92 @@ test('an empty axis gives an empty array', () => {
   const coverage = pairwise({ ...INPUT, values: { ...VALUES, typography: [] }, fixturePacks: [] });
   assert.deepEqual(coverage.rows, []);
   assert.equal(coverage.tuples, 0);
+});
+
+// The [37] rule's coverage (sweepCoverage): every changed pack against every
+// variant, in each of the five checks, from the planned tests alone.
+
+const planned = (pack: string, variant: string, row: string, viewport = '1440x900') =>
+  ({
+    cell: { target: variant, changed: [{ axis: 'colorScheme', id: pack }] },
+    viewport: { id: viewport },
+    row: { id: row },
+    conditions: false,
+  }) as unknown as PlannedTest;
+const ROWS = ['default', 'forced-colors', 'reduced-motion', 'reduced-transparency'];
+const FIVE = ['contrast', 'focus', 'forced-colors', 'reduced-motion', 'reduced-transparency'];
+const PACKS = ['scheme-a', 'scheme-b'];
+const VARIANTS = ['fallback', 'kinetic'];
+const TESTS = PACKS.flatMap((pack) =>
+  VARIANTS.flatMap((variant) => ROWS.map((row) => planned(pack, variant, row))),
+);
+const CHANGES = PACKS.map((id) => ({ axis: 'colorScheme', id }));
+const missingWithout = (drop: (each: PlannedTest) => boolean) =>
+  sweepCoverage({
+    changes: CHANGES,
+    variants: VARIANTS,
+    tests: TESTS.filter((each) => !drop(each)),
+  }).missing;
+const packOf = (each: PlannedTest) => each.cell.changed![0]!.id;
+
+test('every changed pack, variant, and [37] check the tests plan is counted, and none is missing', () => {
+  const { planned: counted, missing } = sweepCoverage({
+    changes: CHANGES,
+    variants: VARIANTS,
+    tests: TESTS,
+  });
+  assert.equal(counted.length, PACKS.length * VARIANTS.length * FIVE.length);
+  assert.deepEqual(missing, []);
+  assert.ok(counted.includes('colorScheme scheme-a × kinetic × forced-colors'));
+});
+
+test('a pack, a variant, or a row the plan leaves out is missing, by pack, variant, and check', () => {
+  // A skipped pack: all five of its checks, on every variant.
+  assert.deepEqual(
+    missingWithout((each) => packOf(each) === 'scheme-b'),
+    VARIANTS.flatMap((variant) =>
+      FIVE.map((check) => `colorScheme scheme-b × ${variant} × ${check}`),
+    ),
+  );
+  // A variant one pack left out.
+  assert.equal(
+    missingWithout((each) => each.cell.target === 'kinetic' && packOf(each) === 'scheme-a').length,
+    FIVE.length,
+  );
+  // One row: its check alone.
+  assert.deepEqual(
+    missingWithout(
+      (each) =>
+        each.row.id === 'forced-colors' &&
+        each.cell.target === 'fallback' &&
+        packOf(each) === 'scheme-a',
+    ),
+    ['colorScheme scheme-a × fallback × forced-colors'],
+  );
+  // The rows at another viewport don't stand in for 1440x900.
+  assert.equal(
+    sweepCoverage({
+      changes: CHANGES.slice(0, 1),
+      variants: ['fallback'],
+      tests: ROWS.map((row) => planned('scheme-a', 'fallback', row, '390x844')),
+    }).missing.length,
+    FIVE.length,
+  );
+  // A changed variant's tests count for no pack, even the pack it met.
+  assert.equal(
+    sweepCoverage({
+      changes: CHANGES.slice(0, 1),
+      variants: ['fallback'],
+      tests: ROWS.map((row) => ({
+        ...planned('scheme-a', 'fallback', row),
+        cell: {
+          target: 'fallback',
+          changed: [
+            { axis: 'variant', id: 'fallback', pack: { axis: 'colorScheme', id: 'scheme-a' } },
+          ],
+        },
+      })) as unknown as PlannedTest[],
+    }).missing.length,
+    FIVE.length,
+  );
 });

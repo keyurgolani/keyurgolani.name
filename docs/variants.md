@@ -234,7 +234,7 @@ QUALITY_CHANGED_BASE=origin/next pnpm quality:pr    # plus the cells your change
 pnpm quality:checklist -- my-id                     # the manual checklist for your composition
 ```
 
-A change under your variant's package runs it against every stable design language, and a change to a design-language pack runs that language against every stable variant (the owner's [37] rule), at every viewport in the default row and in every row at 1440x900. Those cells' failure records name the changed axis, and their messages name the tokens the page's presentation boundaries resolved, with the `resolved-tokens.json` that keeps every one. The complete matrix, `pnpm quality:full`, runs nightly in six shards, and `pnpm quality:release` runs it whole for a release candidate. [CONTRIBUTING.md](../CONTRIBUTING.md#the-quality-cells) has every command and option, and how manual runs are recorded in `quality/manual-runs/`.
+A change under your variant's package runs it against every stable design language (the owner's [37] rule), at every viewport in the default row and in every row at 1440x900, and a change to a pack runs it against every registered variant in the pack sweep, in the rule's five checks at 1440x900. Those cells' failure records name the changed axis, and their messages name the tokens the page's presentation boundaries resolved, with the `resolved-tokens.json` that keeps every one. The complete matrix, `pnpm quality:full`, runs nightly in six shards, and `pnpm quality:release` runs it whole for a release candidate. [CONTRIBUTING.md](../CONTRIBUTING.md#the-quality-cells) has every command and option, and how manual runs are recorded in `quality/manual-runs/`.
 
 ## A variant from outside this repository
 

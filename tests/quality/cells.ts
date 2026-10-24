@@ -28,10 +28,13 @@
 // defaults on. A generator scheme pairs with nothing: it renders only
 // from a site's input. lib/changes.ts
 // maps a run's changed paths to the variants and packs they belong to. A PR
-// plans those cells beside the sentinels, at every viewport in the default
-// row and in every row at 1440x900, as the tier packs' sentinels run, and
-// each cell names the axis and the pack that brought it in, so its failures
-// do too. `full` plans them as if every variant and pack changed, so the
+// plans a changed variant's cells beside the sentinels, at every viewport
+// in the default row and in every row at 1440x900, as the tier packs'
+// sentinels run, and a changed pack's in the pack sweep (lib/sweep.ts): on
+// one server per variant, in the [37] rule's five checks at 1440x900. It
+// fails a plan that leaves out any changed pack, variant, and check
+// (coverage.ts's sweepCoverage). Each cell names the axis and the pack
+// that brought it in, so its failures do too. `full` plans them as if every variant and pack changed, so the
 // scheduled and release runs hold every pair a PR could. A stable language
 // is a shipping (non-fixture) one of the stable tier, and a shipping pack a
 // registered one outside a fixture package, in any tier; variants carry no
