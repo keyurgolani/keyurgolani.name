@@ -5,6 +5,7 @@ import {
   findPack,
   generatedSets,
   PLATFORM_DEFAULTS,
+  readDerivedSchemes,
   resolveAppearance,
   visitorAppearanceModel,
   type VisitorAppearanceModel,
@@ -16,7 +17,6 @@ import {
   type SelectionText,
 } from '@portfolio/appearance';
 import { APPEARANCE_REGISTRY } from './appearance-registry';
-import { readDerivedSchemes } from './derived-schemes';
 import type { EnvironmentOverride } from './environment';
 
 // What a document boundary renders (#19, Slice 4): resolveAppearance() for

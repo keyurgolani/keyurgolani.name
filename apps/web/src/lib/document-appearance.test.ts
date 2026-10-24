@@ -8,6 +8,7 @@ import {
   DEFAULT_VISITOR_CONTROLS,
   PLATFORM_DEFAULTS,
   resolveTokens,
+  type DerivedScheme,
   type GeneratedScheme,
   type Profile,
 } from '@portfolio/appearance';
@@ -207,17 +208,6 @@ test("the visitor control offers the site's selectable axes but the variant, and
     );
   assert.doesNotMatch(JSON.stringify(model), /_portfolio\/pack\//);
 });
-
-/**
- * B's DerivedScheme (#10's 10h), mirrored until it lands in
- * @portfolio/appearance: what a draft's derived.schemes and a revision's
- * snapshots/schemes.json hold for one generated scheme.
- */
-interface DerivedScheme {
-  readonly generator: { readonly id: string; readonly version: number };
-  readonly inputsHash: string;
-  readonly tokens: GeneratedScheme;
-}
 
 /** brand-seed's reference record (#20 PR 3) as the draft save would store it. */
 function brandSeed(): DerivedScheme {

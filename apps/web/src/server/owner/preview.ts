@@ -1,5 +1,4 @@
 import 'server-only';
-import { readDerivedSchemes } from '~/lib/derived-schemes';
 import {
   applyEdits,
   composeSchemas,
