@@ -399,8 +399,13 @@ export function browserPlan(
 export const REHEARSAL = {
   /** Shards of the two parts. */
   shards: 8,
-  /** Static smoke tuples a shard checks: its share of every tuple, about 14,300 at 8 shards. */
-  staticPerShard: 20_000,
+  /**
+   * Static smoke tuples a shard checks: its share of every tuple, 21,420 at
+   * 8 shards with the 6 variants of #128's catalog, generated schemes
+   * included. 30,000 holds 8 variants at this many packs, and at the
+   * measured rate it adds 2 seconds to a shard, which stays at 17 minutes.
+   */
+  staticPerShard: 30_000,
   /**
    * Browser smoke tuples a shard loads: the coverage sample (70 a shard at 35
    * languages) and a seeded draw. 136 keeps a shard at 17 minutes, so the
