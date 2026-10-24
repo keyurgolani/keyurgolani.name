@@ -1,4 +1,5 @@
-// A unified diff of two texts, for the migration's dry run. Myers'
+// A unified diff of two texts, for the migration's dry run and Studio's
+// publish history (#8), which shows a revision's authored changes. Myers'
 // algorithm finds the fewest added and removed lines; past MAX_EDITS of
 // them it stops, and the caller shows the new text whole instead.
 

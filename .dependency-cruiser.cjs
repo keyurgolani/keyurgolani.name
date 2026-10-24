@@ -295,14 +295,14 @@ module.exports = {
       severity: 'error',
       comment:
         'A preview document (#7) shows what a visitor gets, so nothing in app/(preview) or ' +
-        "src/preview reaches Studio's route group or host-chrome.css, whose sentinel and " +
+        "src/preview reaches Studio's route group, whose stylesheet's sentinel and " +
         'markup would reach the frame (threat preview-9): not by an import of its own, and ' +
         'not through a shared module that imports one. Tests may.',
       from: {
         path: '^apps/web/src/(?:app/\\(preview\\)/|preview/)',
         pathNot: '\\.test\\.tsx?$',
       },
-      to: { path: ['^apps/web/src/app/\\(studio\\)/', 'host-chrome\\.css$'], reachable: true },
+      to: { path: '^apps/web/src/app/\\(studio\\)/', reachable: true },
     },
     {
       name: 'preview-protocol-imports-zod-and-ids-only',

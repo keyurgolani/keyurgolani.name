@@ -21,8 +21,8 @@ import { expect, test } from './fixtures';
 //   link that starts every document boundary, the 404's included, rings in
 //   the platform stylesheet's ring, in the scheme's focus color, over the
 //   host's currentColor one (apps/web/src/app/experience-base.css), and a
-//   variant's own focus style, which is unlayered, wins over both. The host's own pages, which only
-//   Studio's layout styles, ring through host-chrome.css; an element outside
+//   variant's own focus style, which is unlayered, wins over both. Studio's own error and 404 pages
+//   ring through Studio's stylesheet; an element outside
 //   the boundary, as Studio's are, keeps the browser's own ring. A preview
 //   document is the same ExperienceDocument tree as /, so / stands for it.
 // - The Extended tier on a 320px phone: its display headline wraps, its
@@ -175,19 +175,19 @@ test.describe("the host's focus ring on a phone", () => {
   );
 
   test(
-    "the host's own pages, Studio's 404 and error pages, ring in host-chrome.css's ring",
+    "Studio's own 404 and error pages ring in Studio's stylesheet's ring",
     { annotation: [{ type: 'route', description: '/studio/[...]' }, READ_ONLY] },
     async ({ page }) => {
-      // Only Studio's layout loads host-chrome.css, and this read-only server
+      // Only Studio's layout loads studio.css, and this read-only server
       // serves no Studio, so the compiled sheet is loaded into a page of its
-      // own, with the markup Studio's not-found.tsx renders.
+      // own, with the markup Studio's not-found.tsx renders in its layout.
       const web = qualityWeb();
       const sheets = cssFiles(path.join(web, '.next', 'static'))
         .map((file) => readFileSync(file, 'utf8'))
         .filter((css) => css.includes('--studio-sentinel'));
-      expect(sheets.length, 'the compiled host-chrome.css').toBeGreaterThan(0);
+      expect(sheets.length, "Studio's compiled stylesheet").toBeGreaterThan(0);
       await page.setContent(
-        `<style>${sheets.join('\n')}</style><main class="host-chrome"><h1>Page not found</h1><p><a href="/">Go to the home page</a></p></main>`,
+        `<style>${sheets.join('\n')}</style><body class="studio"><main class="studio-chrome"><h1>Page not found</h1><p><a href="/">Go to the home page</a></p></main></body>`,
       );
       await page.keyboard.press('Tab');
       expect(await page.evaluate(() => document.activeElement?.textContent)).toBe(

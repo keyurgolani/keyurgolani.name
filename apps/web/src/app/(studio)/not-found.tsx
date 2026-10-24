@@ -6,7 +6,7 @@ import Link from 'next/link';
 // nothing, and links home as Studio's error page does.
 export default function StudioNotFound() {
   return (
-    <main className="host-chrome">
+    <main className="studio-chrome">
       <h1>Page not found</h1>
       <p>Nothing lives at this address.</p>
       <p>

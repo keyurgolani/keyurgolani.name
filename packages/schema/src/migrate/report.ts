@@ -1,7 +1,7 @@
 import { MIGRATE_COMMAND, shellQuote } from '../legacy';
 import { PORTFOLIO_SCHEMA_VERSION, SITE_SCHEMA_VERSION } from '../versions';
 import { SECRET_LABELS } from '../secrets';
-import { unifiedDiff } from './diff';
+import { unifiedDiff } from '../diff';
 import type { AssignedId } from './section-ids';
 import type { Change, Migration, MigrationPlan, SecretSpot, Target } from './types';
 

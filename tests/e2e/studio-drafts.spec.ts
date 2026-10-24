@@ -148,7 +148,7 @@ test(
         'variant.unavailable',
       );
       // A task a later pull request builds says so.
-      await page.getByRole('link', { name: 'Publish history' }).click();
+      await page.getByRole('link', { name: 'Media' }).click();
       await expect(page.locator('.studio-task__pending')).toContainText(
         'arrives with a later Studio release',
       );

@@ -1,4 +1,10 @@
-import type { ConflictingDraft, LiveState, SourceDocuments, StudioDraft } from './documents';
+import type {
+  ConflictingDraft,
+  DraftFinding,
+  LiveState,
+  SourceDocuments,
+  StudioDraft,
+} from './documents';
 
 // The Studio shell's storage interface (#8, Slice 1 items 4 and 5): what the
 // shell asks of a backend, apart from where it keeps things. Under owner the
@@ -30,6 +36,87 @@ export type SaveResult =
 export type ReadResult<T> =
   { readonly kind: 'read'; readonly value: T } | BackendFailure | BackendSignedOut;
 
+/** A revision as #3's revision.list gives it: whether this build can make it live, and why not. */
+export interface RevisionSummary {
+  readonly revisionId: string;
+  /** The seq of the last event that made it live, when one did. */
+  readonly seq?: number;
+  readonly createdAt: string | null;
+  /** Who made it, as #3 names its actor: the owner through Studio, or the CLI's. */
+  readonly createdBy: string | null;
+  /** False when #3 marks it incompatible: nothing may make it live. */
+  readonly compatible: boolean;
+  readonly reason?: string;
+}
+
+/** One of #3's publication events, as history.list gives it. */
+export interface PublicationEvent {
+  readonly seq: number;
+  readonly type: 'import' | 'publish' | 'rollback' | 'recover' | 'schema-migration';
+  readonly revisionId: string;
+  readonly previousRevisionId: string | null;
+  /** Who made it, as #3 names its actor. */
+  readonly actor: string;
+  readonly at: string;
+  readonly reason?: string;
+  readonly restoredFrom?: string;
+}
+
+/** A revision's documents, as authored, and the normalized model #4 parsed each to. */
+export interface RevisionDocument {
+  readonly format: 'yaml' | 'json';
+  readonly sourceText: string;
+  readonly model: unknown;
+}
+
+/** #3's revision.get, as far as Studio reads it: what a diff compares. */
+export interface RevisionDetail extends RevisionSummary {
+  readonly manifest: {
+    readonly parentRevisionId: string | null;
+    readonly source:
+      | { readonly kind: 'draft'; readonly draftId: string; readonly draftVersion: number }
+      | { readonly kind: 'import' };
+    readonly rendering: {
+      readonly variant: { readonly id: string; readonly version: string } | null;
+      readonly packs: readonly { readonly id: string; readonly version: string }[];
+    };
+    /** Each derived snapshot, by name, with the hash of what it holds. */
+    readonly snapshots: Readonly<Record<string, { readonly contentHash: string }>>;
+  };
+  readonly documents: {
+    readonly portfolio: RevisionDocument;
+    readonly site: RevisionDocument;
+    readonly media?: RevisionDocument;
+  };
+}
+
+/** A page of a list, and the offset of the next one, or null at the end. */
+export interface Page<T> {
+  readonly items: readonly T[];
+  readonly nextOffset: number | null;
+}
+
+/**
+ * A publish's or a rollback's outcome. `committed` names what the store
+ * moved the pointer to; the shell still reads live state from live.get,
+ * never from this.
+ */
+export type MoveResult =
+  | { readonly kind: 'committed'; readonly revisionId: string; readonly seq: number }
+  /** The live revision isn't the one the request expected: nothing moved. */
+  | { readonly kind: 'live-moved'; readonly liveRevisionId: string | null }
+  /** The draft has a newer version than the one asked to publish: nothing moved. */
+  | { readonly kind: 'draft-moved'; readonly version: number }
+  /** The store refused it, by its code, with why in words: nothing moved. */
+  | {
+      readonly kind: 'refused';
+      readonly code: string;
+      readonly message: string;
+      readonly findings?: readonly DraftFinding[];
+    }
+  | BackendFailure
+  | BackendSignedOut;
+
 export interface StudioBackend {
   /** Whether the session still counts, as a back-forward cache restore asks before anything shows. */
   session(): Promise<boolean>;
@@ -57,6 +144,44 @@ export interface StudioBackend {
   }): Promise<SaveResult>;
   /** Ends the session, telling the other tabs the owner's choice for the journal. True when the server ended it. */
   signOut(choice: 'keep' | 'discard'): Promise<boolean>;
+}
+
+/**
+ * The owner adapter's backend: everything a StudioBackend does, and #3's
+ * publication history and pointer moves, which only the owner's store has.
+ * #9's Demo Studio implements StudioBackend alone, so it has no publish or
+ * rollback to call, and the shell shows publish history only with one of
+ * these and a policy that grants it.
+ */
+export interface OwnerBackend extends StudioBackend {
+  readonly kind: 'owner';
+  /** A page of #3's revisions, the most recently live first. */
+  revisions(offset?: number): Promise<ReadResult<Page<RevisionSummary>>>;
+  /** A page of #3's publication events, by seq from `offset`. */
+  history(offset?: number): Promise<ReadResult<Page<PublicationEvent>>>;
+  /** One revision with its documents, or null when there's none by that ID. */
+  revision(revisionId: string): Promise<ReadResult<RevisionDetail | null>>;
+  /**
+   * Publishes version `draftVersion` of the draft over `expectedLiveRevisionId`,
+   * under `idempotencyKey`: a retry with the same key never publishes twice.
+   */
+  publish(input: {
+    readonly draftId: string;
+    readonly draftVersion: number;
+    readonly expectedLiveRevisionId: string | null;
+    readonly idempotencyKey: string;
+  }): Promise<MoveResult>;
+  /** Makes `targetRevisionId` live over `expectedLiveRevisionId`, under `idempotencyKey`. Never touches the draft. */
+  rollback(input: {
+    readonly targetRevisionId: string;
+    readonly expectedLiveRevisionId: string | null;
+    readonly idempotencyKey: string;
+  }): Promise<MoveResult>;
+}
+
+/** Whether `backend` is the owner's, with publication history and pointer moves. */
+export function isOwnerBackend(backend: StudioBackend): backend is OwnerBackend {
+  return (backend as Partial<OwnerBackend>).kind === 'owner';
 }
 
 /** What a page's policy grants the Studio shell, by capability, for the session it rendered with. */

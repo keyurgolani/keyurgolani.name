@@ -155,7 +155,7 @@ export function testWeight(
 
 /** Every test group the PR plan runs on `engines`, with its weight. */
 export function planGroups(
-  plan: Pick<Plan, 'cells' | 'tests' | 'targets'>,
+  plan: Pick<Plan, 'cells' | 'tests' | 'targets' | 'mode'>,
   engines: readonly Engine[],
   durations: ShardDurations = loadDurations(),
 ): ShardGroup[] {
@@ -330,7 +330,7 @@ export function pickShardCount(
 
 /** The shard `text` (<n>/<m>) names, of the PR plan on `engines`, its groups split as pickShardCount() splits them. */
 export function prShard(
-  plan: Pick<Plan, 'cells' | 'tests' | 'targets'>,
+  plan: Pick<Plan, 'cells' | 'tests' | 'targets' | 'mode'>,
   engines: readonly Engine[],
   text: string,
   durations: ShardDurations = loadDurations(),

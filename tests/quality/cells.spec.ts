@@ -21,6 +21,7 @@ for (const cell of plan.cells) {
       const { viewport, row } = planned;
       test.describe(`${viewport.id} ${row.id}`, () => {
         test.use({
+          cellAuth: cell.auth ?? 'none',
           viewport: { width: viewport.width, height: viewport.height },
           isMobile: viewport.isMobile ?? false,
           hasTouch: viewport.hasTouch ?? false,

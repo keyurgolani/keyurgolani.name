@@ -212,8 +212,11 @@ export const MANUAL_RUN_CASES: readonly MetaCase[] = [
   badCase(
     'unregistered-surface',
     'a record of a surface nothing registers',
-    /surface studio isn't registered\. Registered: /,
-    (run) => ({ name: `studio-${DATE}-safari-voiceover.yml`, run: { ...run, surface: 'studio' } }),
+    /surface demo-studio isn't registered\. Registered: /,
+    (run) => ({
+      name: `demo-studio-${DATE}-safari-voiceover.yml`,
+      run: { ...run, surface: 'demo-studio' },
+    }),
   ),
   badCase(
     'misnamed',

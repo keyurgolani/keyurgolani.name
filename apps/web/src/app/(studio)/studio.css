@@ -1,6 +1,13 @@
 /* Studio (#2): a quiet neutral canvas, strong status type, and thin rules.
    No state shows by color alone: every one has its text. */
 
+/* Only Studio's layout loads this file, and no site or preview document
+   does. The sentinel is how tests tell (#7): a document that never loaded
+   it has no --studio-sentinel on its root. */
+:root {
+  --studio-sentinel: present;
+}
+
 .studio {
   --studio-canvas: #f6f6f3;
   --studio-surface: #ffffff;
@@ -683,4 +690,166 @@
 .studio-appearance__preview {
   display: grid;
   gap: 0.75rem;
+}
+
+/* Publish history (#8, Slice 6): publish, the revisions with their
+   changes, and what happened, newest first. */
+.studio-history {
+  display: grid;
+  gap: 2rem;
+  min-width: 0;
+}
+
+.studio-history h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1.125rem;
+}
+
+.studio-history h4 {
+  margin: 1rem 0 0.5rem;
+  font-size: 1rem;
+}
+
+.studio-history__publish,
+.studio-history__revisions,
+.studio-history__events {
+  display: grid;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.studio-history__publish p,
+.studio-history__revision p {
+  margin: 0;
+}
+
+.studio-history__report:empty {
+  display: none;
+}
+
+.studio-history__report {
+  margin: 0;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--studio-ink);
+  background: var(--studio-surface);
+  font-weight: 600;
+}
+
+/* A diagnostic code, or an id, is one word: at 200% text a long one is wider than
+   the page, so it breaks, and the list keeps to the page. */
+.studio-history__list {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+  margin: 0;
+  padding-left: 1.5rem;
+  overflow-wrap: anywhere;
+}
+
+.studio-history__revision {
+  display: grid;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+/* At 200% text a revision's buttons, which name it, wrap rather than run past the page. */
+.studio-history__revision .studio-source__actions {
+  flex-wrap: wrap;
+}
+
+.studio-history__revision .studio-button {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.studio-history__incompatible {
+  font-weight: 600;
+}
+
+.studio-history__changes {
+  min-width: 0;
+}
+
+.studio-history__diff {
+  margin: 0 0 1rem;
+  min-width: 0;
+}
+
+.studio-history__diff figcaption {
+  font-weight: 600;
+}
+
+.studio-history__diff pre,
+.studio-history__table {
+  max-width: 100%;
+  max-height: 24rem;
+  overflow: auto;
+  margin: 0.25rem 0 0;
+  padding: 0.75rem;
+  border: 1px solid var(--studio-rule);
+  background: var(--studio-surface);
+}
+
+.studio-history__diff pre {
+  white-space: pre;
+  font-size: 0.875rem;
+}
+
+.studio-history__diff pre:focus-visible,
+.studio-history__table:focus-visible {
+  outline: 3px solid var(--studio-ink);
+  outline-offset: 2px;
+}
+
+.studio-history__table table {
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.studio-history__table th,
+.studio-history__table td {
+  padding: 0.25rem 0.75rem 0.25rem 0;
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+/* Studio's own error and not-found pages, inside its layout (#7, #8). */
+.studio-chrome {
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+  margin: 0;
+  padding: 3rem clamp(1.5rem, 4vw, 4rem);
+  line-height: 1.6;
+}
+
+.studio-chrome h1 {
+  font-size: 2rem;
+  margin: 0 0 0.5rem;
+  letter-spacing: -0.01em;
+}
+
+.studio-chrome p {
+  margin: 0 0 1rem;
+}
+
+.studio-chrome a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.studio-chrome__reference {
+  font-size: 0.875rem;
+  color: var(--studio-muted);
+}
+
+/* Their focus ring (#11, WCAG 2.4.7 and 1.4.11): Chromium's own is a 1px
+   orange ring on phones. */
+.studio-chrome :focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
 }

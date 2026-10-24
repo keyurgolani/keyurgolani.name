@@ -66,6 +66,8 @@ export interface PlannedPerf {
   /** kind:id of the composition or surface it stands for. */
   readonly target: string;
   readonly tier: string;
+  /** Why this plan leaves it to the full plan, when it does: it answers for its target, and doesn't run. */
+  readonly deferred?: string;
 }
 
 export interface VerdictInput {
@@ -290,12 +292,18 @@ export function perfCoverage(
     }
   }
   const ran = summary.tests.filter((test) => test.kind === PERF_KIND);
+  // A deferred cell answers for its target, and runs in the full plan only.
+  const runs = perf.filter((each) => each.deferred === undefined);
   for (const test of ran) {
-    if (!perf.some((each) => each.cell === test.cell)) {
-      fail(`${test.title} ran, and no perf cell is ${test.cell}.`);
+    if (!runs.some((each) => each.cell === test.cell)) {
+      fail(
+        perf.some((each) => each.cell === test.cell)
+          ? `${test.title} ran, and this plan leaves ${test.cell} to the full plan.`
+          : `${test.title} ran, and no perf cell is ${test.cell}.`,
+      );
     }
   }
-  for (const { cell } of perf) {
+  for (const { cell } of runs) {
     for (const engine of engines) {
       const count = ran.filter((test) => test.cell === cell && test.engine === engine).length;
       if (count > 1) fail(`The perf test of ${cell} ran ${count} times on ${engine}, not once.`);

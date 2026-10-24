@@ -1,11 +1,43 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { pageCacheHandlers } from './page-cache';
+import { clearJournal, readJournal, writeEntry, type JournalEntry } from './journal';
+import { pageCacheHandlers, restoredMayKeep } from './page-cache';
 
 // The shell around the back-forward cache (#8, Slice 1): a page going into
 // it hides before it's frozen, and a restored one stays hidden until its
-// session checks out. Headless Chromium doesn't restore reliably, so the
-// handlers are tested here, apart from the browser.
+// session checks out, then writes its text back only if nothing let it go
+// meanwhile. Headless Chromium doesn't restore reliably, so the handlers
+// are tested here, apart from the browser.
+
+test("a restored page whose session didn't check out writes its text back only while its own entry is still there", () => {
+  const items = new Map<string, string>();
+  const storage = {
+    getItem: (key: string) => items.get(key) ?? null,
+    setItem: (key: string, value: string) => void items.set(key, value),
+    removeItem: (key: string) => void items.delete(key),
+  };
+  const now = Date.UTC(2026, 9, 23, 12);
+  const entry: JournalEntry = {
+    tabId: 'tab-cached01',
+    draftId: `drf_${'a'.repeat(32)}`,
+    baseVersion: 2,
+    documents: {
+      portfolio: { format: 'yaml', sourceText: 'schemaVersion: 3\n# cached\n' },
+      site: { format: 'yaml', sourceText: 'schemaVersion: 2\n' },
+    },
+    savedAt: now - 1000,
+  };
+  // Going into the cache, the page wrote its entry; the session then ended on its own.
+  writeEntry(storage, entry, now);
+  assert.equal(restoredMayKeep(readJournal(storage, now), 'tab-cached01'), true);
+  // Another tab's discard at sign-out, which the cached page never heard, took every entry.
+  clearJournal(storage);
+  assert.equal(restoredMayKeep(readJournal(storage, now), 'tab-cached01'), false);
+  // Another tab's entry is never this one's.
+  writeEntry(storage, { ...entry, tabId: 'tab-another1' }, now);
+  assert.equal(restoredMayKeep(readJournal(storage, now), 'tab-cached01'), false);
+  assert.equal(restoredMayKeep(readJournal(storage, now), null), false);
+});
 
 function record() {
   const calls: string[] = [];

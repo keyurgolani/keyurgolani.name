@@ -195,9 +195,21 @@ test('each registered target gets one representative perf cell, on its first rou
     mode: 'pr',
   });
   const cells = perfCells(plan);
+  // A PR plan leaves the signed-in Studio's to the full plan, and names it so.
   assert.deepEqual(
     cells.map((cell) => `${cell.kind}:${cell.target}`),
+    plan.targets
+      .map((target) => `${target.kind}:${target.id}`)
+      .filter((key) => key !== 'surface:studio'),
+  );
+  const named = plannedPerf(plan);
+  assert.deepEqual(
+    named.map(({ target }) => target),
     plan.targets.map((target) => `${target.kind}:${target.id}`),
+  );
+  assert.deepEqual(
+    named.filter(({ deferred }) => deferred !== undefined).map(({ target }) => target),
+    ['surface:studio'],
   );
   for (const cell of cells) {
     assert.equal(cell.path, cell.route, `${cell.id} carries no state query`);
@@ -207,14 +219,21 @@ test('each registered target gets one representative perf cell, on its first rou
   assert.equal(fallback.path, '/');
   assert.equal(fallback.state, 'complete');
   assert.equal(fallback.tuple.displayMode, 'system');
-  // The full plan picks the same ones.
-  const full = perfCells(
-    planCells({ meta: readBuildMeta(WEB), registrations: await loadRegistrations(), mode: 'full' }),
-  );
+  // The full plan picks the same ones, and Studio's, which it runs, nightly and before release.
+  const fullPlan = planCells({
+    meta: readBuildMeta(WEB),
+    registrations: await loadRegistrations(),
+    mode: 'full',
+  });
+  const full = perfCells(fullPlan);
+  const studio = full.find((cell) => cell.target === 'studio');
+  assert.ok(studio, "the full plan runs Studio's perf cell");
+  assert.equal(studio.path, '/studio');
   assert.deepEqual(
-    full.map((cell) => cell.id),
+    full.filter((cell) => cell !== studio).map((cell) => cell.id),
     cells.map((cell) => cell.id),
   );
+  assert.ok(plannedPerf(fullPlan).every(({ deferred }) => deferred === undefined));
 });
 
 const perfSummaryTest = (cell: string, overrides: Partial<SummaryTest> = {}): SummaryTest => ({
@@ -245,7 +264,9 @@ test('perf coverage fails a perf cell that ran twice or not at all, one the plan
     mode: 'pr',
   });
   const perf = plannedPerf(plan);
-  const all = perf.map(({ cell }) => perfSummaryTest(cell));
+  const all = perf
+    .filter(({ deferred }) => deferred === undefined)
+    .map(({ cell }) => perfSummaryTest(cell));
   const rules = (tests: SummaryTest[], shard: string | null = null, planned = perf) =>
     perfCoverage(planned, plan.targets, ['chromium'], { tests, shard }).map(
       ({ message }) => message,
@@ -262,6 +283,21 @@ test('perf coverage fails a perf cell that ran twice or not at all, one the plan
     rules(all.slice(1), null, perf.slice(1)).some((message) =>
       /has no representative cell/.test(message),
     ),
+  );
+  // Studio's deferred cell answers for its target without running, and fails if it runs.
+  const studio = perf.find(({ target }) => target === 'surface:studio')!;
+  assert.ok(studio.deferred);
+  assert.deepEqual(rules(all), []);
+  assert.match(
+    rules([...all, perfSummaryTest(studio.cell)])[0]!,
+    /ran, and this plan leaves .* to the full plan\.$/,
+  );
+  assert.ok(
+    rules(
+      all,
+      null,
+      perf.filter((each) => each !== studio),
+    ).some((message) => /surface:studio has no representative cell/.test(message)),
   );
 });
 

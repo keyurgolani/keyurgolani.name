@@ -40,7 +40,7 @@ import { v3Step, type V3StepResult } from './v3-step';
 export type * from './types';
 export { SCHEMA_VERSIONS } from '../versions';
 export { formatMigration } from './report';
-export { unifiedDiff } from './diff';
+export { unifiedDiff } from '../diff';
 export { assignSectionIds, slugify, type AssignedId, type IdSource } from './section-ids';
 
 export interface MigrateOptions {

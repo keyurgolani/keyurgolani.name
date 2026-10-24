@@ -3,7 +3,7 @@
 
 /* What every portfolio document loads (#7, Slice 1): the site's layout, the
    preview's, and the 404 page a URL no route matches gets. Studio's layout
-   loads it too, under host-chrome.css, which nothing else loads. Every rule
+   loads it too, under its own studio.css, which nothing else loads. Every rule
    sits in the reset layer (#19, Slice 4), under the packs, the variant's
    layout, and the accessibility layer. It sets no color, font, or theme: the
    document boundary's packs do, from the platform stylesheet's :root:has()
@@ -44,7 +44,7 @@
      boundary, the error and 404 pages' included, and never on Studio's
      working UI, whose own focus styles win. The platform stylesheet's ring,
      in the scheme's focus color, is over it in a later layer, and alone on
-     the 503, which loads only the packs. host-chrome.css rings Studio's own
+     the 503, which loads only the packs. Studio's stylesheet rings its own
      error pages. The boundary's skip link is the first stop. */
   :where([data-variant]) :focus-visible,
   [data-ui-slot='skip-link']:focus-visible {

@@ -205,12 +205,7 @@ test("runtime-budgets.json's forbidden block holds Studio's and the preview's co
   assert.deepEqual(problems, []);
   assert.deepEqual(
     rules.map((rule) => rule.glob),
-    [
-      'apps/web/src/app/(studio)/**',
-      'apps/web/src/app/(preview)/**',
-      'apps/web/src/preview/**',
-      'apps/web/src/app/host-chrome.css',
-    ],
+    ['apps/web/src/app/(studio)/**', 'apps/web/src/app/(preview)/**', 'apps/web/src/preview/**'],
   );
 });
 

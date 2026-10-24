@@ -35,7 +35,11 @@ export const TAB_KEY = `${STUDIO_STORAGE_PREFIX}tab`;
 export const JOURNAL_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 /** How far in the future an entry's time may be, for a clock that drifts: 5 minutes. */
 export const JOURNAL_CLOCK_SKEW_MS = 5 * 60 * 1000;
-/** At most this many tabs' entries are kept: the oldest goes first. */
+/**
+ * At most this many tabs' entries are kept: the oldest goes first, and the
+ * shell says so when a write lets one go. Eight tabs of unsaved text is
+ * more than one owner keeps open, and a bound keeps the journal small.
+ */
 export const JOURNAL_MAX_ENTRIES = 8;
 
 /** One tab's unsaved text for one draft, and the draft version it was edited on. */
@@ -139,6 +143,19 @@ export function writeEntry(storage: JournalStorage, entry: JournalEntry, now: nu
   return store(storage, [entry, ...others].slice(0, JOURNAL_MAX_ENTRIES));
 }
 
+/**
+ * The entries writing `entry` would let go, oldest first: another tab's,
+ * past the JOURNAL_MAX_ENTRIES newest. The shell says so when there are any.
+ */
+export function dropsOnWrite(
+  storage: JournalStorage,
+  entry: JournalEntry,
+  now: number,
+): JournalEntry[] {
+  const others = readJournal(storage, now).filter((other) => other.tabId !== entry.tabId);
+  return others.slice(JOURNAL_MAX_ENTRIES - 1).reverse();
+}
+
 /** Removes the entry `tabId` wrote, and nothing else. */
 export function removeEntry(storage: JournalStorage, tabId: string, now: number): void {
   const entries = readJournal(storage, now);
@@ -177,18 +194,36 @@ export function entryFor(
   );
 }
 
+const randomId = () => crypto.randomUUID().replace(/-/g, '');
+
 /** This tab's id, from its sessionStorage, made the first time; one in memory where that throws. */
 export function tabId(
   session: Pick<Storage, 'getItem' | 'setItem'> | null,
-  random: () => string = () => crypto.randomUUID().replace(/-/g, ''),
+  random: () => string = randomId,
 ): string {
   try {
     const kept = session?.getItem(TAB_KEY);
     if (kept && TAB_ID.test(kept)) return kept;
-    const made = random();
-    session?.setItem(TAB_KEY, made);
-    return made;
   } catch {
     return random();
   }
+  return newTabId(session, random);
+}
+
+/**
+ * A new id for this tab, kept in its sessionStorage in place of the one
+ * there: for a duplicated tab, whose sessionStorage, and so whose id, is a
+ * copy of the tab it came from.
+ */
+export function newTabId(
+  session: Pick<Storage, 'setItem'> | null,
+  random: () => string = randomId,
+): string {
+  const made = random();
+  try {
+    session?.setItem(TAB_KEY, made);
+  } catch {
+    // Kept in memory alone: the tab still writes under it.
+  }
+  return made;
 }

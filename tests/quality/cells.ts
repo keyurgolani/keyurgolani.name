@@ -113,6 +113,8 @@ export interface Cell {
   readonly owner: string;
   readonly profile: Profile;
   readonly performanceTier: PerformanceTier;
+  /** `session` for a surface that needs a #2 test session: its page loads signed in. */
+  readonly auth?: 'session';
   readonly tuple: Tuple;
   /** The path the cell loads, its state's query included. */
   readonly path: string;
@@ -542,6 +544,7 @@ export function planCells({ meta, registrations, mode, changes = [] }: PlanInput
           owner: surface.owner,
           profile: surface.profile,
           performanceTier: surface.performanceTier,
+          ...(surface.auth === 'session' ? { auth: 'session' as const } : {}),
           tuple,
           path: query ? `${route}?${query}` : route,
           route,

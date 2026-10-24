@@ -36,6 +36,7 @@ test('the PR plan: each sentinel at every viewport in the default row, and every
     'login signed-out /studio/sign-in system',
     'obsidian-atelier complete / system',
     'spatial-bento complete / system',
+    'studio content /studio system',
   ]);
   const extraRows = PREFERENCE_ROWS.length - 1;
   assert.equal(plan.tests.length, plan.cells.length * VIEWPORTS.length + extraRows);
@@ -65,6 +66,7 @@ test('the PR plan: each sentinel at every viewport in the default row, and every
     { kind: 'composition', id: 'obsidian-atelier' },
     { kind: 'composition', id: 'spatial-bento' },
     { kind: 'surface', id: 'login' },
+    { kind: 'surface', id: 'studio' },
   ]);
 });
 

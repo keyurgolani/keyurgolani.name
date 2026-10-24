@@ -13,10 +13,16 @@
 // - Every request carries the run's canary, as a cookie, an Authorization
 //   header, and a CSRF header, so a trace or log that kept one would hold
 //   it, and run.ts fails the run if any artifact still does after the scrub.
+// - A cell whose surface registers `auth: session`, such as #8's Studio,
+//   loads signed in: its worker signs in once through the login API with
+//   the run's owner password, the first time a cell asks, and every such
+//   test's context starts with that session's cookies. The session's
+//   secrets go to the scrub's list before any test runs with them.
 
 import path from 'node:path';
 import { test as base } from '../harness/fixtures';
 import { startApp } from '../harness/app-server.mjs';
+import { canaryPassword } from './lib/artifacts.mjs';
 import { pinPageClock } from './lib/clock';
 import { qualityWeb, runCanary } from './lib/env';
 import {
@@ -26,6 +32,7 @@ import {
   serverEgressFailure,
 } from './lib/egress';
 import { appOptionsFor, type CellServer } from './lib/server';
+import { createAuthSession, recordSessionSecrets, type Session } from './lib/session';
 import { recordVitals } from './lib/vitals';
 
 export { expect } from '../harness/fixtures';
@@ -36,10 +43,36 @@ export const CANARY_COOKIE = 'quality_canary';
 interface QualityWorkerFixtures {
   /** The cell's server, or null for a test of the harness itself, which takes appOptions. */
   cellServer: CellServer | null;
+  /** The worker's #2 test session on its server, made the first time a cell needs one. */
+  ownerSession: () => Promise<Session>;
 }
 
-export const test = base.extend<Record<never, never>, QualityWorkerFixtures>({
+interface QualityTestFixtures {
+  /** Whether the cell's page loads signed in: `session` for a surface that registers it. */
+  cellAuth: 'none' | 'session';
+}
+
+export const test = base.extend<QualityTestFixtures, QualityWorkerFixtures>({
   cellServer: [null, { scope: 'worker', option: true }],
+  cellAuth: ['none', { option: true }],
+
+  ownerSession: [
+    async ({ app }, provide) => {
+      let made: Promise<Session> | undefined;
+      await provide(() => {
+        made ??= createAuthSession({
+          origin: app.origin,
+          password: canaryPassword(runCanary()),
+        }).then((session) => {
+          // The scrub knows its secrets before any test runs with them.
+          recordSessionSecrets(session, process.env.QUALITY_SECRETS_FILE);
+          return session;
+        });
+        return made;
+      });
+    },
+    { scope: 'worker' },
+  ],
 
   app: [
     async ({ cellServer, appOptions }, provide, workerInfo) => {
@@ -60,9 +93,12 @@ export const test = base.extend<Record<never, never>, QualityWorkerFixtures>({
     { scope: 'worker', timeout: 120_000 },
   ],
 
-  context: async ({ context, app }, provide) => {
+  context: async ({ context, app, cellAuth, ownerSession }, provide) => {
     const canary = runCanary();
     await context.addCookies([{ name: CANARY_COOKIE, value: canary, url: app.origin }]);
+    if (cellAuth === 'session') {
+      await context.addCookies([...(await ownerSession()).storageState.cookies]);
+    }
     await context.setExtraHTTPHeaders({
       authorization: `Bearer ${canary}`,
       'x-csrf-token': canary,
