@@ -27,6 +27,23 @@ test(
   },
 );
 
+test(
+  'the browser has no WebGL, so a shot is the document a device without a WebGL enhancement gets',
+  { annotation: [{ type: 'route', description: '/' }, READ_ONLY] },
+  async ({ page }) => {
+    // playwright.config.ts launches Chromium with --disable-3d-apis. A browser
+    // that ignored it would run a WebGL enhancement, whose canvas never
+    // holds two frames the same: this fails first, by name.
+    await page.setContent('<canvas></canvas>');
+    expect(
+      await page.evaluate(() => {
+        const canvas = document.querySelector('canvas')!;
+        return [canvas.getContext('webgl2'), canvas.getContext('webgl')].every((gl) => gl === null);
+      }),
+    ).toBe(true);
+  },
+);
+
 for (const mode of MODES) {
   test.describe(() => {
     const { reducedMotion, ...options } = mode.context;

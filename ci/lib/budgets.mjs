@@ -277,16 +277,25 @@ const isEntry = (source, entry) =>
   entry !== null && (source === entry || source.endsWith(`/${entry.replace(/^\.\//, '')}`));
 
 /**
- * The build's chunks that hold each of `unit`'s enhancements, with the
- * unit's own gzip bytes in each. `chunks` is the build's attributed chunks,
- * each with the path it's served at; `entries` maps an enhancement id to
- * the file its export resolves to in the package, or null for none.
+ * The build's chunks that load each of `unit`'s enhancements, with every
+ * gzip byte in each: the chunk that holds its entry, and every chunk its
+ * async group loads with it (`loadedWith`, which buildChunks reads from the
+ * build's loaders), so a library split into a chunk of its own counts too.
+ * The unit's own bytes and every package's beside them count, so a 3D
+ * library an enhancement loads counts against it. A chunk counts whole, its
+ * gzip size, or the sum of its modules' where only they are known.
+ * `chunks` is the build's attributed chunks, each with the path it's served
+ * at; `entries` maps an enhancement id to the file its export resolves to
+ * in the package, or null for none.
  *
  * @param {any} unit
- * @param {{ path: string, modules: { source: string, package: string, gzipBytes: number }[] }[]} chunks
+ * @param {{ path: string, gzipBytes?: number, loadedWith?: string[], modules: { source: string, package: string | null, gzipBytes: number }[] }[]} chunks
  * @param {Record<string, string | null>} entries
  */
 export function enhancementChunks(unit, chunks, entries) {
+  const byPath = new Map(chunks.map((chunk) => [chunk.path, chunk]));
+  const size = (chunk) =>
+    chunk.gzipBytes ?? chunk.modules.reduce((total, module) => total + module.gzipBytes, 0);
   return (unit.enhancements ?? []).map((enhancement) => {
     const entry = entries[enhancement.id] ?? null;
     const holding = chunks.filter((chunk) =>
@@ -294,15 +303,23 @@ export function enhancementChunks(unit, chunks, entries) {
         (module) => module.package === unit.packageName && isEntry(module.source, entry),
       ),
     );
+    // The chunks its import loads, each once: the ones holding its entry, then their group's others.
+    const loaded = new Map(holding.map((chunk) => [chunk.path, chunk]));
+    for (const chunk of holding) {
+      for (const other of chunk.loadedWith ?? []) {
+        const found = byPath.get(other);
+        if (found && !loaded.has(other)) loaded.set(other, found);
+      }
+    }
     return {
       id: enhancement.id,
       entry,
-      chunks: holding.map((chunk) => ({
-        path: chunk.path,
-        gzipBytes: chunk.modules
-          .filter((module) => module.package === unit.packageName)
-          .reduce((total, module) => total + module.gzipBytes, 0),
-      })),
+      // Everything it loads is the enhancement's to load: its own code, and the kit's,
+      // three.js's, or any library's beside it, which nothing else on the page needed.
+      chunks:
+        holding.length === 0
+          ? []
+          : [...loaded.values()].map((chunk) => ({ path: chunk.path, gzipBytes: size(chunk) })),
     };
   });
 }

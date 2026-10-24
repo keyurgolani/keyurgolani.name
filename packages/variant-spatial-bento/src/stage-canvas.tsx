@@ -1,0 +1,105 @@
+'use client';
+
+import { useMemo, useRef } from 'react';
+import { SpatialCanvas, useBoundaryColors, useFrame } from '@portfolio/kit/spatial-canvas';
+import type { VariantRenderInput } from '@portfolio/variant-contract';
+import { buildScene, SCENE_ROLES, type Scene, type SceneRole } from './scene';
+import { Slot, type StageCanvasProps } from './stage-slot';
+
+// The spatial stage (#16), loaded only once the policy lets it run: the
+// still's planes in three dimensions, drifting a little, with a field of
+// particles around them, on the kit's SpatialCanvas. Its colors are the
+// boundary's, read once and again on an appearance change, and it shows
+// nothing the page doesn't: the canvas is hidden from assistive technology,
+// takes no pointer or key, and no word is drawn in it. This module and the
+// three.js it brings are the stage's own chunk, never on the static path.
+
+/** How far the planes drift, in radians and scene units. */
+const DRIFT = { tilt: 0.04, float: 0.06 } as const;
+
+/** What the frame moves: the group that holds the planes and the field. */
+export interface Drifting {
+  rotation: { z: number };
+  position: { y: number };
+}
+
+/**
+ * One frame of the stage: the group's drift, from the frame's time alone.
+ * It's the whole of the frame callback, and it takes the scene so a test
+ * can hold it to constant work whatever the particles: it touches none, and
+ * nothing in it grows with them.
+ */
+export function driftFrame(scene: Scene, target: Drifting, elapsedMs: number): void {
+  // Under a frameloop of `never`, R3F keeps the frame's timestamp, in ms, as the elapsed time.
+  const t = elapsedMs / 1000;
+  target.rotation.z = -0.6 + Math.sin(t * 0.25) * DRIFT.tilt;
+  target.position.y = Math.sin(t * 0.4) * DRIFT.float;
+}
+
+function Planes({
+  scene,
+  colors,
+}: {
+  readonly scene: Scene;
+  readonly colors: Readonly<Record<SceneRole, string | null>>;
+}) {
+  const group = useRef<Drifting | null>(null);
+  useFrame(({ clock }) => {
+    if (group.current) driftFrame(scene, group.current, clock.elapsedTime);
+  });
+  return (
+    <group ref={group as never} rotation={[-0.95, 0, -0.6]}>
+      {scene.planes.map((plane) => (
+        <mesh key={plane.name} position={[...plane.position]}>
+          <boxGeometry args={[plane.size[0], plane.size[1], 0.04]} />
+          <meshStandardMaterial color={colors[plane.role] ?? undefined} roughness={0.8} />
+        </mesh>
+      ))}
+      <points>
+        <bufferGeometry>
+          <bufferAttribute attach="attributes-position" args={[scene.particles, 3]} />
+        </bufferGeometry>
+        <pointsMaterial
+          size={0.025}
+          color={colors['text-muted'] ?? undefined}
+          transparent
+          opacity={0.45}
+        />
+      </points>
+    </group>
+  );
+}
+
+export function StageCanvas({ state, seed, onFailure, onFirstFrame }: StageCanvasProps) {
+  const frame = useRef<HTMLDivElement | null>(null);
+  const colors = useBoundaryColors(frame, SCENE_ROLES);
+  const scene = useMemo(() => buildScene(seed), [seed]);
+  return (
+    <div ref={frame} className="sb-still__canvas">
+      <SpatialCanvas
+        state={state}
+        onFailure={onFailure}
+        onFirstFrame={onFirstFrame}
+        // A slow device's first frame is still a first frame: only none at all is a failure.
+        firstFrameMs={8000}
+        camera={{ fov: 40, position: [0, 0, 7] }}
+      >
+        <ambientLight intensity={0.8} />
+        <directionalLight position={[2, 4, 5]} intensity={1.2} />
+        {colors ? <Planes scene={scene} colors={colors} /> : null}
+      </SpatialCanvas>
+    </div>
+  );
+}
+
+/**
+ * The stage as the manifest declares it, the `stage` enhancement, so
+ * check:budgets charges this chunk with everything in it, three and R3F
+ * included. The opening's slot loads it, through StageCanvas, only once the
+ * policy lets the stage run. What an EnhancementIsland would mount is the
+ * whole slot, so the policy, the one stage a document, the exit, and the
+ * teardown hold however the stage comes to load.
+ */
+export default function StageEnhancement({ input }: { readonly input: VariantRenderInput }) {
+  return <Slot seed={input.env.seed} idPrefix={input.ids.prefix} Canvas={StageCanvas} />;
+}

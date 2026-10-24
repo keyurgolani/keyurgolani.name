@@ -562,6 +562,9 @@ importers:
 
   packages/variant-spatial-bento:
     dependencies:
+      '@portfolio/appearance':
+        specifier: workspace:*
+        version: link:../appearance
       '@portfolio/kit':
         specifier: workspace:*
         version: link:../kit
@@ -572,9 +575,6 @@ importers:
         specifier: workspace:*
         version: link:../variant-contract
     devDependencies:
-      '@portfolio/appearance':
-        specifier: workspace:*
-        version: link:../appearance
       '@types/react':
         specifier: ^19.0.0
         version: 19.2.14

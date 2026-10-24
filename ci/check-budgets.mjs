@@ -20,6 +20,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   attributeChunk,
+  gzipBytes,
   sourceMapUrl,
   workspacePackages,
 } from '../tests/harness/trace/attribution.mjs';
@@ -87,9 +88,34 @@ export function enhancementEntries(unit, web = WEB) {
 }
 
 /**
- * The build's chunks that may hold an enhancement, attributed through their
+ * Each async chunk group the build's loaders name: the chunks one dynamic
+ * import loads together, as Turbopack writes its loader,
+ * `Promise.all(["static/chunks/a.js", "static/chunks/b.js"].map(...))`,
+ * each as the path it's served at.
+ *
+ * @param {string} code a chunk's text
+ * @returns {string[][]}
+ */
+export function asyncGroups(code) {
+  const groups = [];
+  for (const [, list] of code.matchAll(
+    /Promise\.all\(\[((?:\s*["']static\/chunks\/[^"']+["']\s*,?)+)\]\s*\.map\(/g,
+  )) {
+    groups.push(
+      [...list.matchAll(/["'](static\/chunks\/[^"']+)["']/g)].map(([, chunk]) => `/_next/${chunk}`),
+    );
+  }
+  return groups;
+}
+
+/**
+ * The build's chunks that hold an enhancement, attributed through their
  * source maps: each JS chunk under `staticDir` whose map names one of
- * `files`. A chunk without a map can't be attributed, so it holds none.
+ * `files`, and every other chunk of the async group a loader loads it
+ * with, so a library split into a chunk of its own still counts. A chunk
+ * that holds an entry lists its group's others in `loadedWith`. A group's
+ * chunk with no map still counts, whole: its gzip bytes as one module no
+ * package claims, so a chunk the check can't attribute fails closed.
  *
  * @param {string[]} files the enhancement entries, as their packages name them
  */
@@ -97,30 +123,56 @@ export function buildChunks(files, staticDir = STATIC_DIR) {
   const suffixes = files.filter(Boolean).map((file) => `/${file.replace(/^\.\//, '')}`);
   if (suffixes.length === 0) return [];
   const workspace = workspacePackages(REPO_ROOT);
-  const found = [];
-  for (const file of scripts(path.join(staticDir, 'chunks'))) {
+  const all = scripts(path.join(staticDir, 'chunks')).map((file) => {
     const full = path.join(staticDir, 'chunks', file);
     const code = readFileSync(full, 'utf8');
+    const served = `/_next/static/chunks/${file.split(path.sep).join('/')}`;
     const named = sourceMapUrl(code, `http://build.invalid/_next/static/chunks/${file}`);
     const mapFile = named?.startsWith('http://build.invalid/')
       ? path.join(staticDir, '..', decodeURI(new URL(named).pathname).replace(/^\/_next\//, ''))
       : `${full}.map`;
-    if (!existsSync(mapFile)) continue;
-    let map;
+    let map = null;
     try {
-      map = readJson(mapFile);
+      if (existsSync(mapFile)) map = readJson(mapFile);
     } catch {
-      continue;
+      map = null;
     }
+    return { served, code, map };
+  });
+  const holds = ({ map }) => {
+    if (!map) return false;
     const sources = [
       ...(map.sources ?? []),
       ...(map.sections ?? []).flatMap((section) => section.map?.sources ?? []),
     ];
-    if (!sources.some((source) => suffixes.some((suffix) => source.endsWith(suffix)))) continue;
-    const served = `/_next/static/chunks/${file.split(path.sep).join('/')}`;
-    found.push({ path: served, ...attributeChunk({ url: served, code, map, workspace }) });
+    return sources.some((source) => suffixes.some((suffix) => source.endsWith(suffix)));
+  };
+  const groups = all.flatMap(({ code }) => asyncGroups(code));
+  const byPath = new Map(all.map((chunk) => [chunk.served, chunk]));
+  const attribute = ({ served, code, map }) =>
+    map
+      ? { path: served, ...attributeChunk({ url: served, code, map, workspace }) }
+      : {
+          path: served,
+          gzipBytes: gzipBytes(code),
+          modules: [{ source: served, package: null, gzipBytes: gzipBytes(code) }],
+        };
+  const found = new Map();
+  for (const chunk of all.filter(holds)) {
+    const others = [
+      ...new Set(
+        groups
+          .filter((group) => group.includes(chunk.served))
+          .flat()
+          .filter((other) => other !== chunk.served && byPath.has(other)),
+      ),
+    ];
+    found.set(chunk.served, { ...attribute(chunk), loadedWith: others });
+    for (const other of others) {
+      if (!found.has(other)) found.set(other, attribute(byPath.get(other)));
+    }
   }
-  return found;
+  return [...found.values()];
 }
 
 /** A stylesheet's text from the build's public/ tree, by the URL it's served at. */

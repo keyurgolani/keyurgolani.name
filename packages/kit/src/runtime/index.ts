@@ -12,4 +12,6 @@ export { useFrameLoop } from './use-frame-loop';
 export { runtimeAnimation } from './animation';
 export type { RuntimeAnimation } from './animation';
 export type { FrameCallback } from './use-frame-loop';
-export type { RuntimeReason, RuntimeState } from './state';
+export type { LifecycleInput, RuntimeReason, RuntimeState } from './state';
+// #7's lifecycle as the runtime reads it, for an enhancement that keeps its own state in a frame.
+export { LIFECYCLE_EVENT as PREVIEW_LIFECYCLE_EVENT, previewLifecycle } from './store';
