@@ -99,7 +99,9 @@ export function directoryFiles(dir: string): BundleFiles {
       const chunks: Buffer[] = [];
       let length = 0;
       const stream = createReadStream(at, {
-        flags: constants.O_RDONLY | constants.O_NOFOLLOW,
+        // node:fs opens with numeric flags as well as strings, which is all
+        // its types allow here: O_NOFOLLOW has no string form.
+        flags: (constants.O_RDONLY | constants.O_NOFOLLOW) as unknown as string,
         start: 0,
         end: limit,
       });
