@@ -224,6 +224,11 @@ jobs:
       # browser chunk carries sanitize-html (#10, ci/markdown-pass.test.mjs).
       - name: pnpm ci:markdown-pass
         run: pnpm ci:markdown-pass
+      # No Research record or id reaches the generated modules, ASSET_MANIFEST,
+      # any .next/static chunk, or the build output the image ships (#20,
+      # ci/check-catalog-build.test.mjs).
+      - name: pnpm ci:catalog-build
+        run: pnpm ci:catalog-build
       - name: Failure summary
         if: ${{ always() }}
         run: node ci/summarize.mjs

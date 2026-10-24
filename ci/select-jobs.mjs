@@ -160,6 +160,12 @@ export const RULES = [
     jobs: ['unit'],
     paths: ['ci/report-issue.mjs', 'ci/report-issue.test.mjs', 'ci/fixtures/report-issue/**'],
   },
+  {
+    // #20's production build check, which the build job runs after pnpm build.
+    class: 'catalog build check',
+    jobs: ['unit', 'build'],
+    paths: ['ci/check-catalog-build.mjs', 'ci/check-catalog-build.test.mjs'],
+  },
   { class: 'ci script', complete: true, paths: ['ci/**'] },
   {
     class: 'docs',
@@ -173,8 +179,17 @@ export const RULES = [
   // The schemas feed validation, every render, and startup in every profile.
   { class: 'schema', jobs: PRODUCT, paths: ['packages/schema/**'] },
   {
+    // #20's Research records never register, so they reach no render: the
+    // unit tests and static's check:appearance read them, and build's
+    // catalog-build check proves none reaches the build.
+    class: 'research',
+    jobs: ['unit', 'build'],
+    paths: ['packages/appearance-*/research/**'],
+  },
+  {
     // A shipped pack reaches every render, the image's compiled packs, and
-    // the trace's bytes, but no variant's source.
+    // the trace's bytes, but no variant's source. Its gates against every
+    // variant are quality-pr's change-directed cells (#20).
     class: 'pack',
     jobs: without(PRODUCT, 'check-variants'),
     paths: [
@@ -258,6 +273,8 @@ export const RULES = [
     paths: ['tests/routes/**', 'tests/fixtures/variants/**'],
   },
   { class: 'appearance specs', jobs: ['appearance-browser'], paths: ['tests/appearance/**'] },
+  // #20's scheduled cross-product: its spec runs only on schedule, and its plan's tests in unit.
+  { class: 'catalog cross-product', jobs: ['unit'], paths: ['tests/catalog/**'] },
   { class: 'variant specs', jobs: ['variants'], paths: ['tests/variants/**'] },
   {
     class: 'external variant',
@@ -413,7 +430,7 @@ export const LOCAL_COMMANDS = {
     'pnpm format:check && pnpm lint && pnpm typecheck && pnpm check:skills && pnpm check:registry && pnpm check:appearance && pnpm check:deps && pnpm check:pins && pnpm check:workflows',
   unit: 'pnpm test',
   build:
-    'pnpm build && pnpm check:source-maps && pnpm check:standalone && pnpm check:markdown-pass',
+    'pnpm build && pnpm check:source-maps && pnpm check:standalone && pnpm check:markdown-pass && pnpm check:catalog-build',
   browser: 'pnpm build && pnpm ci:browser',
   routes: 'pnpm test:routes',
   'appearance-browser': 'pnpm test:appearance',

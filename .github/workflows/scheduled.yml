@@ -1,5 +1,6 @@
 # Scheduled checks across the whole product, outside any PR: every night,
-# #11's quality matrix, and on Mondays, the links check too. A failure opens or
+# #11's quality matrix and #20's catalog cross-product, and on Mondays, the
+# links check too. A failure opens or
 # updates one rolling issue, and the first passing run in which every job ran,
 # a Monday's, closes it (ci/report-issue.mjs).
 #
@@ -15,8 +16,9 @@
 # `report` holds `issues: write`.
 #
 # Cross-product jobs join here: #11's quality matrix (quality-full, judged
-# whole by quality-verdict), and #20's report-only catalog provenance
-# refresh once its catalog exists. Each one
+# whole by quality-verdict), #20's catalog cross-product (catalog-full),
+# and #20's report-only catalog provenance refresh once its catalog
+# exists. Each one
 # sets timeout-minutes, uploads its reports as reports-<job>, runs its check
 # as `pnpm ci:<job>` (the reporter names that as its local command), and goes
 # into report's needs.
@@ -180,9 +182,55 @@ jobs:
           if-no-files-found: ignore
           retention-days: 30
 
+  # #20's cross-product: every registered variant against every shipping
+  # design language, color scheme, and typography profile in every display
+  # mode, as smoke tests on a plain production build under the demo
+  # profile, in four shards in the pinned Playwright image (tests/catalog).
+  # Each failing tuple is a record naming its pack, axis, variant, viewport,
+  # display mode, and tuple, and a sample of each shard's tuples, every
+  # failing one among them, takes a screenshot into its reports.
+  catalog-full:
+    name: catalog-full (${{ matrix.shard }}/4)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+      options: --user 1001 --ipc=host --init
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install
+        # The install action from this same checkout; actionlint rejects the `$/` form.
+        uses: ./.github/actions/install # zizmor: ignore[self-repository]
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: pnpm build
+        run: pnpm build
+      - name: pnpm ci:catalog-full (shard ${{ matrix.shard }}/4)
+        env:
+          CATALOG_SHARD: ${{ matrix.shard }}/4
+          CI_REPRO_COMMAND: CATALOG_SHARD=${{ matrix.shard }}/4 pnpm ci:catalog-full
+        run: pnpm ci:catalog-full
+      - name: Failure summary
+        if: ${{ always() }}
+        run: node ci/summarize.mjs
+      - name: Upload reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-catalog-full-${{ matrix.shard }}
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: 30
+
   report:
     name: report
-    needs: [links, quality-full, quality-verdict]
+    needs: [links, quality-full, quality-verdict, catalog-full]
     if: ${{ always() && github.event_name == 'schedule' }}
     runs-on: ubuntu-24.04
     # It downloads every job's reports, the six quality shards' among them.

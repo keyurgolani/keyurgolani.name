@@ -72,6 +72,20 @@ const CLASSES = [
     ],
   },
   {
+    // #20: a Research record never registers, so only unit, static's check:appearance, and build's check read it.
+    name: 'a research record',
+    files: [
+      'packages/appearance-schemes/research/nord.json',
+      'packages/appearance-fixtures-schemes/research/fixture-research.json',
+    ],
+    jobs: ['static', 'unit', 'build'],
+  },
+  {
+    name: "the catalog build check and the scheduled cross-product's plan",
+    files: ['ci/check-catalog-build.mjs', 'tests/catalog/plan.ts'],
+    jobs: ['static', 'unit', 'build'],
+  },
+  {
     name: 'one variant',
     files: ['packages/variant-aurora/src/layout.tsx', 'packages/variant-aurora/manifest.json'],
     jobs: [
