@@ -1,0 +1,215 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import * as React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { browserBackend } from '~/lib/demo/browser-backend';
+import { demoStore } from '~/lib/demo/storage';
+import { CATALOG, DEFAULTS, FakeStorage, SCHEME_MODES, UNIT } from '~/lib/demo/test-support';
+import { frameSource } from '~/lib/demo/url-state';
+import { VIEWPORTS } from '~/lib/preview-frame';
+import { DEMO_FRAME_SANDBOX, DemoFrame, isDemoFrameSource } from './demo-frame';
+import { DemoStudio, SandboxLine, type AxisPickerProps } from './demo-studio';
+
+// tsx compiles JSX to React.createElement calls, so the test supplies React.
+Object.assign(globalThis, { React });
+
+// Demo Studio's frame and body (#9, design note sections 1 and 2): a frame of
+// /sample sandboxed to scripts alone, with no grant, channel, or /preview
+// path; a body with no publish, draft, or sign-in; and none of it able to
+// reach Owner Studio's adapter.
+
+const SRC = path.dirname(fileURLToPath(import.meta.url));
+const WEB_SRC = path.resolve(SRC, '..', '..', '..', '..');
+
+function Picker({ axis, label, value }: AxisPickerProps) {
+  return (
+    <label data-axis={axis}>
+      {label} <output>{value}</output>
+    </label>
+  );
+}
+
+function backend() {
+  return browserBackend({
+    unit: UNIT,
+    catalog: CATALOG,
+    schemeModes: SCHEME_MODES,
+    defaults: DEFAULTS,
+    store: demoStore(new FakeStorage(), new FakeStorage()),
+    initial: { ...DEFAULTS, variant: 'kinetic-cosmos', displayMode: 'dark' },
+  });
+}
+
+/** Every attribute of the one iframe in `html`. */
+function frameAttributes(html: string): Record<string, string> {
+  const tag = /<iframe\b([^>]*)>/.exec(html)?.[1];
+  assert.ok(tag, 'an iframe');
+  return Object.fromEntries(
+    [...tag.matchAll(/([a-zA-Z-]+)="([^"]*)"/g)].map(([, name, value]) => [
+      name!.toLowerCase(),
+      value!,
+    ]),
+  );
+}
+
+test('a demo frame loads /sample, sandboxed to scripts alone, with no referrer and no permissions', () => {
+  const src = '/sample?variant=kinetic-cosmos&mode=dark';
+  const html = renderToStaticMarkup(
+    <DemoFrame src={src} title="Demo sample" viewport={VIEWPORTS[2]!} />,
+  );
+  const attributes = frameAttributes(html);
+  assert.equal(DEMO_FRAME_SANDBOX, 'allow-scripts');
+  assert.equal(attributes.sandbox, 'allow-scripts');
+  assert.equal(attributes.src, src.replace(/&/g, '&amp;'));
+  assert.equal(attributes.referrerpolicy, 'no-referrer');
+  assert.equal(attributes.allow, '');
+  assert.equal(attributes.title, 'Demo sample');
+  // Laid out at the viewport's width, hidden until it loads.
+  assert.match(attributes.style ?? '', /inline-size:390px/);
+  assert.match(attributes.style ?? '', /visibility:hidden/);
+  assert.doesNotMatch(html, /allow-same-origin|preview\/|grant/);
+});
+
+test('a demo frame loads nothing but a path under /sample on its own origin', () => {
+  for (const src of ['/sample', '/sample?mode=dark', '/sample/chapters/about?variant=x']) {
+    assert.equal(isDemoFrameSource(src), true, src);
+  }
+  for (const src of [
+    '/preview/AAAAAAAAAAAAAAAAAAAAAA',
+    '/preview/local',
+    '/samples',
+    '/studio',
+    '//evil.example/sample',
+    '/\\evil.example/sample',
+    'https://evil.example/sample',
+    'javascript:alert(1)',
+    'sample',
+    '/sample/../studio',
+    '',
+  ]) {
+    assert.equal(isDemoFrameSource(src), false, src);
+    const html = renderToStaticMarkup(<DemoFrame src={src} title="x" viewport={VIEWPORTS[0]!} />);
+    assert.doesNotMatch(html, /<iframe/, src);
+  }
+});
+
+test('every Demo Studio header shows the approved sandbox line', () => {
+  assert.equal(
+    renderToStaticMarkup(<SandboxLine />),
+    '<p class="studio-shell__signed-in">Demo sandbox — only you can see these changes</p>',
+  );
+});
+
+test('the Appearance task has a picker and a reset for each axis, a full reset, and the frame of the selection', () => {
+  const demo = backend();
+  const html = renderToStaticMarkup(
+    <DemoStudio
+      catalog={CATALOG}
+      schemeModes={SCHEME_MODES}
+      backend={demo}
+      task="appearance"
+      AxisPicker={Picker}
+    />,
+  );
+  for (const { axis, label } of CATALOG.axes) {
+    assert.match(html, new RegExp(`data-axis="${axis}"`), axis);
+    assert.ok(html.includes(`Reset ${label.toLowerCase()}`), label);
+  }
+  assert.ok(html.includes('>Reset demo<'));
+  assert.equal(
+    frameAttributes(html).src,
+    frameSource(demo.selection(), { catalog: CATALOG, schemeModes: SCHEME_MODES }).replace(
+      /&/g,
+      '&amp;',
+    ),
+  );
+  assert.match(html, /Composition: Kinetic Cosmos/);
+});
+
+test('the Preview task has the viewports, the display mode, and Follow system and Reduced motion', () => {
+  const html = renderToStaticMarkup(
+    <DemoStudio catalog={CATALOG} backend={backend()} task="preview" AxisPicker={Picker} />,
+  );
+  for (const viewport of VIEWPORTS) assert.ok(html.includes(`value="${viewport.id}"`), viewport.id);
+  assert.match(html, /data-axis="displayMode"/);
+  assert.match(
+    html,
+    /<option value="system"[^>]*>Follow system<\/option><option value="reduce">Reduced<\/option>/,
+  );
+  assert.equal((html.match(/<iframe\b/g) ?? []).length, 1);
+});
+
+test('no Demo Studio view offers publishing, a draft, signing in or out, or settings', () => {
+  for (const task of ['appearance', 'preview'] as const) {
+    const html = renderToStaticMarkup(
+      <DemoStudio catalog={CATALOG} backend={backend()} task={task} AxisPicker={Picker} />,
+    );
+    assert.doesNotMatch(
+      html,
+      /publish|rollback|roll back|draft|sign (?:in|out)|settings|history/i,
+      task,
+    );
+  }
+});
+
+test('before the page hands it a backend, the body only says it is loading', () => {
+  const html = renderToStaticMarkup(
+    <DemoStudio catalog={CATALOG} backend={null} task="appearance" AxisPicker={Picker} />,
+  );
+  assert.equal(html, '<p class="studio-state__waiting">Loading the demo…</p>');
+});
+
+/** Every import specifier `file` names, type-only ones included, and the file each resolves to under src/. */
+function importsOf(file: string): string[] {
+  const text = readFileSync(file, 'utf8');
+  const specifiers = [
+    ...text.matchAll(/^\s*(?:import|export)\s+(?:[^'";]*?\sfrom\s*)?['"]([^'"]+)['"]/gm),
+    ...text.matchAll(/\bimport\(\s*['"]([^'"]+)['"]\s*\)/g),
+  ].map(([, specifier]) => specifier!);
+  return specifiers.flatMap((specifier) => {
+    const base = specifier.startsWith('~/')
+      ? path.join(WEB_SRC, specifier.slice(2))
+      : specifier.startsWith('.')
+        ? path.resolve(path.dirname(file), specifier)
+        : null;
+    if (base === null) return [];
+    for (const candidate of [base, `${base}.ts`, `${base}.tsx`, path.join(base, 'index.ts')]) {
+      if (existsSync(candidate) && statSync(candidate).isFile()) return [candidate];
+    }
+    throw new Error(`${path.relative(WEB_SRC, file)} imports ${specifier}, which doesn't resolve`);
+  });
+}
+
+test("nothing Demo Studio loads reaches Owner Studio's adapter, its transport, or the server, type imports included", () => {
+  const roots = [
+    ...readdirSync(SRC)
+      .filter((name) => /\.tsx?$/.test(name) && !/\.test\.tsx?$/.test(name))
+      .map((name) => path.join(SRC, name)),
+    ...readdirSync(path.join(WEB_SRC, 'lib', 'demo'))
+      .filter(
+        (name) => /\.ts$/.test(name) && !/\.test\.ts$/.test(name) && name !== 'test-support.ts',
+      )
+      .map((name) => path.join(WEB_SRC, 'lib', 'demo', name)),
+  ];
+  assert.ok(roots.some((file) => file.endsWith('demo-studio.tsx')));
+  const seen = new Set<string>();
+  const queue = [...roots];
+  while (queue.length > 0) {
+    const file = queue.pop()!;
+    if (seen.has(file)) continue;
+    seen.add(file);
+    queue.push(...importsOf(file));
+  }
+  const reached = [...seen].map((file) => path.relative(WEB_SRC, file));
+  const forbidden = reached.filter((file) =>
+    /^(?:lib\/studio\/owner-backend\.ts|lib\/studio-fetch\.ts|server\/|app\/\(studio\)\/_components\/(?:shell|preview)\/)/.test(
+      file,
+    ),
+  );
+  assert.deepEqual(forbidden, []);
+  // The walk did follow imports into Studio's shared libraries.
+  assert.ok(reached.includes('lib/studio/appearance.ts'), reached.join(', '));
+});
