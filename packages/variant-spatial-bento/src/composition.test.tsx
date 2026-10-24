@@ -384,6 +384,16 @@ const RUNNING: Parameters<typeof decideStage>[0] = {
   started: false,
 };
 
+test('the declared enhancement is the whole slot, so however it loads, the policy decides', async () => {
+  const { default: StageEnhancement } = await import('./stage-canvas');
+  const { StageSlot } = await import('./stage-slot');
+  const input = fixtureInput('complete');
+  const enhancement = renderToStaticMarkup(<StageEnhancement input={input} />);
+  assert.equal(enhancement, renderToStaticMarkup(<StageSlot seed={input.env.seed} />));
+  assert.match(enhancement, /^<div class="sb-stage" data-stage-reason="pending">/);
+  assert.doesNotMatch(enhancement, /<canvas/);
+});
+
 test('the capability policy: a supported device runs the stage, and every reason it stays off does', () => {
   assert.deepEqual(decideStage(RUNNING), { mount: true, offered: true, reason: 'running' });
   // Hints the browser doesn't give count for nothing either way.

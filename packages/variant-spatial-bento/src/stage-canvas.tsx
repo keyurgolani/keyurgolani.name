@@ -8,7 +8,9 @@ import {
   useFrame,
   type SpatialFailure,
 } from '@portfolio/kit/spatial-canvas';
+import type { VariantRenderInput } from '@portfolio/variant-contract';
 import { buildScene, SCENE_ROLES, type Scene, type SceneRole } from './scene';
+import { StageSlot } from './stage-slot';
 
 // The spatial stage (#16), loaded only once the policy lets it run: the
 // still's planes in three dimensions, drifting a little, with a field of
@@ -68,7 +70,7 @@ export interface StageCanvasProps {
   readonly onFirstFrame: () => void;
 }
 
-export default function StageCanvas({ state, seed, onFailure, onFirstFrame }: StageCanvasProps) {
+export function StageCanvas({ state, seed, onFailure, onFirstFrame }: StageCanvasProps) {
   const frame = useRef<HTMLDivElement | null>(null);
   const colors = useBoundaryColors(frame, SCENE_ROLES);
   const scene = useMemo(() => buildScene(seed), [seed]);
@@ -88,4 +90,16 @@ export default function StageCanvas({ state, seed, onFailure, onFirstFrame }: St
       </SpatialCanvas>
     </div>
   );
+}
+
+/**
+ * The stage as the manifest declares it, the `stage` enhancement, so
+ * check:budgets charges this chunk with everything in it, three and R3F
+ * included. The opening's slot loads it, through StageCanvas, only once the
+ * policy lets the stage run. What an EnhancementIsland would mount is the
+ * whole slot, so the policy, the one stage a document, the exit, and the
+ * teardown hold however the stage comes to load.
+ */
+export default function StageEnhancement({ input }: { readonly input: VariantRenderInput }) {
+  return <StageSlot seed={input.env.seed} />;
 }

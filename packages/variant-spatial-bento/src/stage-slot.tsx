@@ -32,7 +32,9 @@ import { Runtime } from './runtime';
 // - It reads no storage, so a sandboxed preview frame, which blocks it,
 //   changes nothing.
 
-const StageCanvas = lazy(() => import('./stage-canvas'));
+const StageCanvas = lazy(() =>
+  import('./stage-canvas').then((stage) => ({ default: stage.StageCanvas })),
+);
 
 /** The planes the still draws, back to front. */
 const PLANES = ['far', 'middle', 'near', 'signature'] as const;
