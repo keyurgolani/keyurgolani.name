@@ -58,8 +58,7 @@ export interface SchemeGenerator {
 
 /** The stored input: a seed color, or an asset with the hash of the pixels it was decoded to. */
 export type RecordedInput =
-  | { readonly seedColor: string }
-  | { readonly sourceAsset: string; readonly pixelsSha256?: string };
+  { readonly seedColor: string } | { readonly sourceAsset: string; readonly pixelsSha256?: string };
 
 export interface GeneratorResult {
   readonly generator: { readonly id: string; readonly version: number };
@@ -72,7 +71,10 @@ export interface GeneratorResult {
   /** For #20's generators: the algorithm, what it chose, and every move it and anchor-v2 made. */
   readonly algorithm?: string;
   readonly extracted?: readonly ExtractedColor[];
-  readonly anchors?: { readonly picked: Composition['anchors']; readonly used: Composed['anchors'] };
+  readonly anchors?: {
+    readonly picked: Composition['anchors'];
+    readonly used: Composed['anchors'];
+  };
   readonly adjustments?: Composed['adjustments'];
   readonly notes?: readonly string[];
   /** What the report read: the language and typography it gated with. */
@@ -313,21 +315,32 @@ export function runGenerator(
     };
   }
   if (generator.input === 'asset' && generator.compose && !asset) {
-    return { ok: false, problem: `${declared.id} reads the asset's decoded pixels, and none came with it.` };
+    return {
+      ok: false,
+      problem: `${declared.id} reads the asset's decoded pixels, and none came with it.`,
+    };
   }
   const id = { id: generator.id, version: generator.version };
   if (!generator.compose) {
     const tokens = generator.generate(read);
     return {
       ok: true,
-      result: { generator: id, input: read, tokens, contrastReport: contrastReport(schemeSets(tokens)) },
+      result: {
+        generator: id,
+        input: read,
+        tokens,
+        contrastReport: contrastReport(schemeSets(tokens)),
+      },
     };
   }
   let composition: Composition;
   try {
     composition = generator.compose(read, asset?.raster);
   } catch (error) {
-    return { ok: false, problem: `${declared.id} can't read its input: ${(error as Error).message}` };
+    return {
+      ok: false,
+      problem: `${declared.id} can't read its input: ${(error as Error).message}`,
+    };
   }
   const solved = compose(composition);
   const tokens: GeneratedScheme =
