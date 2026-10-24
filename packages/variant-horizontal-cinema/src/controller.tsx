@@ -505,7 +505,10 @@ function LiveCinema(props: CinemaProps) {
       if (window.innerWidth === width && horizontal() === layout) return;
       width = window.innerWidth;
       layout = horizontal();
-      if (measure() !== position) align(position, 'instant');
+      // Horizontal, the stage realigns on the chapter whatever the new width; vertical, the page
+      // moves only when the chapter has left the window's middle.
+      const off = layout ? Math.abs(offsetOf(position)) >= 1 : measure() !== position;
+      if (off) align(position, 'instant');
       settledAt = Math.abs(stageElement.scrollLeft);
     };
 
