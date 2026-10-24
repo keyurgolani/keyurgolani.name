@@ -346,3 +346,50 @@ test('profiles loads the image the image job saved, builds nothing, and holds no
     assert.equal(checkout.with['persist-credentials'], false);
   }
 });
+
+test('rehearsal loads the image the image job saved, builds nothing, holds no token, and must run its container rows', () => {
+  const job = CI.jobs.rehearsal;
+  assert.ok(job, 'ci.yml has a rehearsal job');
+  assert.deepEqual(job.needs, ['changes', 'image']);
+  assert.match(job.if, /needs\.image\.outputs\.saved == 'true'/);
+  assert.match(job.if, /contains\(fromJSON\(needs\.changes\.outputs\.jobs\), 'rehearsal'\)/);
+  const download = job.steps.find((s) => /^actions\/download-artifact@/.test(s.uses ?? ''));
+  assert.equal(download.with.name, 'image-amd64');
+  const run = job.steps.find((s) => s.run === 'pnpm ci:rehearsal');
+  assert.ok(run, 'rehearsal runs pnpm ci:rehearsal');
+  assert.match(run.env.REHEARSAL_IMAGE_ARCHIVE, /portfolio-ci\.tar\.gz$/);
+  assert.equal(run.env.REHEARSAL_CONTAINER, 'required');
+  const text = JSON.stringify(job);
+  assert.doesNotMatch(text, /docker build|ci:image|build-push-action/);
+  assert.doesNotMatch(text, /secrets\.|GITHUB_TOKEN|github\.token/);
+  assert.equal(job.permissions, undefined, "rehearsal keeps the workflow's contents: read");
+  for (const checkout of job.steps.filter((s) => /^actions\/checkout@/.test(s.uses ?? ''))) {
+    assert.equal(checkout.with['persist-credentials'], false);
+  }
+  for (const control of ['gate', 'selected']) {
+    assert.ok(CI.jobs[control].needs.includes('rehearsal'), control);
+  }
+});
+
+test('fresh-clone reads no cache, installs nothing itself, holds no token, and runs the container steps', () => {
+  const job = CI.jobs['fresh-clone'];
+  assert.ok(job, 'ci.yml has a fresh-clone job');
+  assert.deepEqual(job.needs, ['changes']);
+  assert.match(job.if, /contains\(fromJSON\(needs\.changes\.outputs\.jobs\), 'fresh-clone'\)/);
+  assert.deepEqual(
+    job.steps.filter(usesCache).map((s) => s.name ?? s.uses),
+    [],
+  );
+  const text = JSON.stringify(job);
+  assert.doesNotMatch(text, /secrets\.|GITHUB_TOKEN|github\.token|pnpm install/);
+  assert.equal(job.permissions, undefined, "fresh-clone keeps the workflow's contents: read");
+  for (const checkout of job.steps.filter((s) => /^actions\/checkout@/.test(s.uses ?? ''))) {
+    assert.equal(checkout.with['persist-credentials'], false);
+  }
+  const run = job.steps.find((s) => /ci\/fresh-clone\.mjs/.test(s.run ?? ''));
+  assert.equal(run.run, 'node ci/run.mjs fresh-clone -- node ci/fresh-clone.mjs');
+  assert.equal(run.env.FRESH_CLONE_CONTAINERS, '1');
+  for (const control of ['gate', 'selected']) {
+    assert.ok(CI.jobs[control].needs.includes('fresh-clone'), control);
+  }
+});

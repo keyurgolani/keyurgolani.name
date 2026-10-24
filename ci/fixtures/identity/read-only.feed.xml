@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+  <channel>
+    <title>Jane Rehearsal — Portfolio</title>
+    <link>https://jane-rehearsal.test</link>
+    <description>Distributed-systems engineer, technology essayist, and conference speaker.</description>
+    <language>en</language>
+    <lastBuildDate>Thu, 12 Mar 2026 00:00:00 GMT</lastBuildDate>
+    <atom:link href="https://jane-rehearsal.test/feed.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>The 2010 BlackBerry Outage Was Not About BlackBerry</title>
+      <link>https://example.com/incident-history/24</link>
+      <guid isPermaLink="false">https://jane-rehearsal.test/#the-2010-blackberry-outage-was-not-about-blackberry</guid>
+      <description>Three days in October 2011 when the world&apos;s most secure messaging platform went silent — and what an obscure SAN failure has to teach us about modern multi-region replication.</description>
+      <category>episode</category>
+      <pubDate>Thu, 12 Mar 2026 00:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>The Quiet Cost of Legible Systems</title>
+      <link>https://anamika.example.com/essays/legible-systems</link>
+      <guid isPermaLink="false">https://jane-rehearsal.test/#the-quiet-cost-of-legible-systems</guid>
+      <description>On how observability turns engineering trade-offs into political ones, and what to do about it.</description>
+      <category>writing</category>
+      <pubDate>Sun, 08 Feb 2026 00:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>Knight Capital, Twelve Years On</title>
+      <link>https://example.com/incident-history/23</link>
+      <guid isPermaLink="false">https://jane-rehearsal.test/#knight-capital-twelve-years-on</guid>
+      <description>A re-reading of the 45-minute trading-floor meltdown that erased a company, with new attention to the deployment script that did it.</description>
+      <category>episode</category>
+      <pubDate>Sun, 08 Feb 2026 00:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>The S3 Console Day</title>
+      <link>https://example.com/incident-history/22</link>
+      <guid isPermaLink="false">https://jane-rehearsal.test/#the-s3-console-day</guid>
+      <description>Why the 2017 S3 outage made us all rethink &quot;static&quot; status pages.</description>
+      <category>episode</category>
+      <pubDate>Sun, 14 Dec 2025 00:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>A Brief History of the Phrase &quot;Cattle, Not Pets&quot;</title>
+      <link>https://anamika.example.com/essays/cattle-not-pets</link>
+      <guid isPermaLink="false">https://jane-rehearsal.test/#a-brief-history-of-the-phrase-cattle-not-pets</guid>
+      <description>A short etymology of the most-quoted phrase in modern infrastructure, with a defense of pets.</description>
+      <category>writing</category>
+      <pubDate>Sat, 22 Nov 2025 00:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>Postmortems Are an Editing Problem</title>
+      <link>https://example.com/srecon-2024-anamika</link>
+      <guid isPermaLink="false">https://jane-rehearsal.test/#postmortems-are-an-editing-problem</guid>
+      <description>How to get an honest postmortem out of a reluctant team — borrow from the rules of essay editing.</description>
+      <category>writing</category>
+      <pubDate>Tue, 04 Jun 2024 00:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>A Survey of Anti-Entropy Mechanisms in Production Systems</title>
+      <link>https://example.com/csur-anti-entropy</link>
+      <guid isPermaLink="false">https://jane-rehearsal.test/#a-survey-of-anti-entropy-mechanisms-in-production-systems</guid>
+      <description>A practitioner-oriented survey of anti-entropy techniques (Merkle trees, gossip, hinted handoff) used in production deployments of the largest distributed databases of the past decade.</description>
+      <category>publication</category>
+      <pubDate>Mon, 01 Mar 2021 00:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>Probabilistic Model Checking of Eventually-Consistent Stores</title>
+      <link>https://example.com/fsttcs-2016</link>
+      <guid isPermaLink="false">https://jane-rehearsal.test/#probabilistic-model-checking-of-eventually-consistent-stores</guid>
+      <description>We show that the verification of bounded staleness in a class of eventually-consistent stores reduces to a probabilistic model checking problem with polynomial-time decidability.</description>
+      <category>publication</category>
+      <pubDate>Mon, 12 Dec 2016 00:00:00 GMT</pubDate>
+    </item>
+  </channel>
+</rss>

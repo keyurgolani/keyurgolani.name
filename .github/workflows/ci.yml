@@ -989,6 +989,99 @@ jobs:
           if-no-files-found: ignore
           retention-days: ${{ env.REPORT_RETENTION_DAYS }}
 
+  # The release-candidate rehearsal's PR run (#12, ci/rehearsal.mjs): from a
+  # clean data directory, the frozen old configs refused, config:migrate twice,
+  # import, publish, and rollback, a backup during a publish and its restore,
+  # and a damaged revision serving the last known good, natively; then, on
+  # the image the image job built and checked, on an internal network with
+  # HARDENING: the old config refused, the image's own import, owner ready,
+  # an in-app rollback, a restart into the last known good, and the base
+  # tip's image, built here, serving the old site from its pre-upgrade
+  # backup. release.yml's rc-rehearsal runs the same script and rows on
+  # every release candidate. No token, and a canary scan over every report.
+  rehearsal:
+    name: rehearsal
+    needs: [changes, image]
+    if: ${{ !cancelled() && contains(fromJSON(needs.changes.outputs.jobs), 'rehearsal') && needs.image.outputs.saved == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      IMAGE_TAG: portfolio:ci
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # The merge commit and its first parent, the base tip, whose image
+          # the previous-digest row builds.
+          fetch-depth: 2
+      - name: Install
+        id: install
+        uses: ./.github/actions/install
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: pnpm store cache hit
+        if: ${{ steps.install.outputs.store-hit == 'true' }}
+        run: echo "pnpm store restored under this lockfile's hash"
+      - name: Download the image
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: image-amd64
+          path: ${{ runner.temp }}/image
+      - name: pnpm ci:rehearsal
+        env:
+          REHEARSAL_IMAGE_ARCHIVE: ${{ runner.temp }}/image/portfolio-ci.tar.gz
+          REHEARSAL_CONTAINER: required
+          REHEARSAL_PREVIOUS_REF: HEAD^1
+        run: pnpm ci:rehearsal
+      - name: Failure summary
+        if: ${{ always() }}
+        run: node ci/summarize.mjs
+      - name: Upload reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-rehearsal
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: ${{ env.REPORT_RETENTION_DAYS }}
+
+  # The public guide from a fresh clone (#12, ci/fresh-clone.mjs): the
+  # commit under test cloned into an empty directory, with an empty HOME and
+  # XDG directories, no token, and no cache, then the guide's own commands
+  # from docs/getting-started.md, README.md, and docs/deployment.md, natively
+  # and then in Compose: production read-only and owner refuse the untouched
+  # sample and get past it after the guide's identity step, and demo serves
+  # the sample. The runner's Node and Corepack are the guide's prerequisites;
+  # this job installs nothing else, and the clone's install is the guide's.
+  fresh-clone:
+    name: fresh-clone
+    needs: [changes]
+    if: ${{ contains(fromJSON(needs.changes.outputs.jobs), 'fresh-clone') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - name: Enable pnpm
+        run: corepack enable
+      - name: pnpm ci:fresh-clone
+        env:
+          FRESH_CLONE_CONTAINERS: '1'
+        run: node ci/run.mjs fresh-clone -- node ci/fresh-clone.mjs
+      - name: Upload reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reports-fresh-clone
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: ${{ env.REPORT_RETENTION_DAYS }}
+
   # A draft's feedback: every selected job succeeded and the rest were
   # skipped. Never required; gate is.
   selected:
@@ -1014,6 +1107,8 @@ jobs:
         trace,
         image,
         profiles,
+        rehearsal,
+        fresh-clone,
         docs,
       ]
     runs-on: ubuntu-24.04
@@ -1053,6 +1148,8 @@ jobs:
         trace,
         image,
         profiles,
+        rehearsal,
+        fresh-clone,
         docs,
       ]
     runs-on: ubuntu-24.04
