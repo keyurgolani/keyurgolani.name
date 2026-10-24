@@ -257,6 +257,7 @@ A content extension package sets `"portfolio": { "kind": "content-extension" }` 
 
 - **Kinetic Cosmos** (`packages/variant-kinetic-cosmos`, #14): an orbital opening, evidence that opens in place, and a chronology in its authored lanes.
 - **Obsidian Atelier** (`packages/variant-obsidian-atelier`, #15): a night gallery of chapters. The chapters are the signature and the featured works, or the works sections' works when the owner curated none. Each is a full-bleed room whose treatment follows the work's `medium`, with its premise and artifact in view and the rest of the case behind Unfold the case, a native `details`. A quiet index, each chapter's position, and previous and next are plain fragment links, so nothing needs a script, hover, or motion. The color scheme supplies the dark: it never forces a mode. A work's page is the host's shared one. Its [README](../packages/variant-obsidian-atelier/README.md) has the details.
+- **Spatial Bento** (`packages/variant-spatial-bento`, #16): the portfolio as a bento of tiles in content order, with a still of its spatial stage, which a later pull request enhances on capable devices.
 
 ## The fallback composition
 
