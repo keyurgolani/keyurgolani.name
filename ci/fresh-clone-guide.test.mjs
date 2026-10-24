@@ -29,6 +29,11 @@ import {
   firewallRules,
   hermeticProblems,
   rejectedPackets,
+  firewallProblem,
+  pathCommands,
+  sectionCommands,
+  sectionProblems,
+  verdictInput,
 } from './fresh-clone.mjs';
 import { parse } from 'yaml';
 import { defaultComposition, LANDED, pendingProblems } from './lib/pending.mjs';
@@ -384,4 +389,145 @@ test('the final verdict fails on a planted canary, a lost owner secret, and a pe
     ).length,
     1,
   );
+});
+
+const DEPLOYMENT = read('docs/deployment.md');
+/** deployment.md's owner section, its fence's lines in `lines` instead. */
+function withOwnerFence(lines) {
+  const start = DEPLOYMENT.indexOf('### `owner`');
+  const open = DEPLOYMENT.indexOf('```sh\n', start) + '```sh\n'.length;
+  const close = DEPLOYMENT.indexOf('\n```', open);
+  return `${DEPLOYMENT.slice(0, open)}${lines.join('\n')}${DEPLOYMENT.slice(close)}`;
+}
+const ownerLines = () => {
+  const start = DEPLOYMENT.indexOf('### `owner`');
+  const open = DEPLOYMENT.indexOf('```sh\n', start) + '```sh\n'.length;
+  return DEPLOYMENT.slice(open, DEPLOYMENT.indexOf('\n```', open)).split('\n');
+};
+
+test("each deployment.md profile section is its path's commands, in order, both ways", () => {
+  assert.deepEqual(sectionProblems(DEPLOYMENT), []);
+  const paths = pathCommands();
+  assert.deepEqual(
+    paths.map((p) => [p.id, p.section]),
+    [
+      ['read-only-path', '### `read-only`'],
+      ['owner-path', '### `owner`'],
+      ['demo-path', '### `demo`'],
+    ],
+  );
+  for (const { section, commands } of paths) {
+    assert.deepEqual(sectionCommands(DEPLOYMENT, section), commands, section);
+  }
+  // Every root step names its section.
+  for (const step of STEPS.filter((s) => s.kind === 'root')) assert.ok(step.section, step.id);
+});
+
+test('a section that loses, moves, or gains a command fails the run, though another section still has it', () => {
+  const lines = ownerLines();
+  const fails = (text, why) => {
+    const problems = sectionProblems(text);
+    assert.equal(problems.length, 1, why);
+    assert.match(problems[0], /^owner-path doesn't follow docs\/deployment\.md's ### `owner`/, why);
+  };
+  // `cd deploy` gone from the owner section: the demo section still has it.
+  fails(withOwnerFence(lines.filter((l) => l !== 'cd deploy')), 'the cd went');
+  // The build moved after the hash.
+  const build = lines.indexOf('docker build -t portfolio:latest ..');
+  const moved = [...lines];
+  moved.splice(build, 1);
+  moved.splice(
+    moved.findIndex((l) => l.startsWith('echo ')),
+    0,
+    'docker build -t portfolio:latest ..',
+  );
+  fails(withOwnerFence(moved), 'the build moved');
+  // An owner-only command the run never takes.
+  fails(
+    withOwnerFence([
+      ...lines.slice(0, -1),
+      'docker compose -f compose.owner.yml pull',
+      lines.at(-1),
+    ]),
+    'a command was added',
+  );
+  // And guideProblems carries it.
+  assert.ok(
+    guideProblems((doc) =>
+      doc === 'docs/deployment.md'
+        ? withOwnerFence(lines.filter((l) => l !== 'cd deploy'))
+        : read(doc),
+    ).some((p) => p.startsWith('owner-path')),
+  );
+});
+
+test('egress-firewall comes right after the first Compose run, and every later Compose step runs behind it', () => {
+  const ids = STEPS.map((s) => s.id);
+  const firstCompose = STEPS.findIndex((s) => s.kind.startsWith('compose-'));
+  assert.equal(ids[firstCompose + 1], 'egress-firewall');
+  assert.equal(STEPS.filter((s) => s.kind === 'firewall').length, 1);
+  // The first run, which builds the image, has no baseline yet; any later one without it fails.
+  assert.equal(firewallProblem({ composeRunsBefore: 0, baseline: undefined }), null);
+  assert.match(
+    firewallProblem({ composeRunsBefore: 1, baseline: undefined }),
+    /the egress firewall isn't up, after 1 Compose run/,
+  );
+  assert.equal(firewallProblem({ composeRunsBefore: 3, baseline: 4, now: 4 }), null);
+  assert.equal(
+    firewallProblem({ composeRunsBefore: 3, baseline: 0, now: 0 }),
+    null,
+    'a baseline of 0 is a baseline',
+  );
+  assert.match(firewallProblem({ composeRunsBefore: 3, baseline: 4, now: 6 }), /2 packets refused/);
+});
+
+test("the verdict's input requires the owner's secrets once the hash step passed, and keeps what the probe found", () => {
+  const secrets = { runCanary: 'c' };
+  const passed = [{ id: 'hash', outcome: 'passed (scripted: ...)' }];
+  assert.deepEqual(
+    verdictInput({ results: passed, secrets, landedState: null, reports: '/r' }).requiredSecrets,
+    ['runCanary', 'password', 'hash'],
+  );
+  for (const results of [
+    [],
+    [{ id: 'hash', outcome: 'not run: needs FRESH_CLONE_CONTAINERS=1 and Docker (CI)' }],
+    [{ id: 'hash', outcome: 'failed' }],
+  ]) {
+    assert.deepEqual(
+      verdictInput({ results, secrets, landedState: null, reports: '/r' }).requiredSecrets,
+      ['runCanary'],
+    );
+  }
+  const landed = { sampleImports: true };
+  const input = verdictInput({ results: passed, secrets, landedState: landed, reports: '/r' });
+  assert.equal(input.landedState, landed);
+  assert.equal(input.pendingRows, PENDING);
+  assert.equal(input.reports, '/r');
+  assert.equal(input.secrets, secrets);
+  assert.deepEqual(
+    verdictInput({ results: [], secrets, landedState: null, reports: '/r' }).landedState,
+    { sampleImports: false },
+  );
+  // And the verdict over it fails a run whose owner ran but whose scan lost the hash.
+  assert.ok(
+    finalVerdict({ ...input, landedState: { sampleImports: false } }).includes(
+      'canary: the scan has no hash to look for',
+    ),
+  );
+});
+
+test('both scripts judge their run with finalVerdict over verdictInput, once', () => {
+  for (const file of ['./fresh-clone.mjs', './rehearsal.mjs']) {
+    const source = readFileSync(new URL(file, import.meta.url), 'utf8');
+    const calls =
+      source.match(
+        /finalVerdict\(\s*verdictInput\(\{ results, secrets, landedState, reports: reportsDir\(\) \}\),?\s*\)/g,
+      ) ?? [];
+    assert.equal(calls.length, 1, file);
+    assert.equal(
+      (source.match(/finalVerdict\(/g) ?? []).length,
+      1,
+      `${file} calls finalVerdict once`,
+    );
+  }
 });

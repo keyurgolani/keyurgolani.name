@@ -247,6 +247,8 @@ export const STEPS = [
     id: 'read-only-path',
     kind: 'root',
     harness: 'each deployment.md profile starts from the repository',
+    // The section of deployment.md this path follows, command for command.
+    section: '### `read-only`',
     container: true,
   },
   {
@@ -310,6 +312,8 @@ export const STEPS = [
     id: 'owner-path',
     kind: 'root',
     harness: 'each deployment.md profile starts from the repository',
+    // The section of deployment.md this path follows, command for command.
+    section: '### `owner`',
     container: true,
   },
   {
@@ -404,6 +408,8 @@ export const STEPS = [
     id: 'demo-path',
     kind: 'root',
     harness: 'each deployment.md profile starts from the repository',
+    // The section of deployment.md this path follows, command for command.
+    section: '### `demo`',
     container: true,
   },
   {
@@ -474,6 +480,7 @@ export function guideProblems(read = (doc) => readFileSync(path.join(REPO_ROOT, 
       problems.push(`${step.doc} has no sh command "${step.command}", which step ${step.id} runs`);
     }
   }
+  problems.push(...sectionProblems(read('docs/deployment.md')));
   for (const doc of COVERED_DOCS) {
     const skipped = SKIPPED[doc] ?? {};
     for (const { text, line } of of(doc)) {
@@ -487,6 +494,66 @@ export function guideProblems(read = (doc) => readFileSync(path.join(REPO_ROOT, 
     for (const text of Object.keys(skipped)) {
       if (!of(doc).some((c) => c.text === text))
         problems.push(`${doc} no longer has "${text}", which SKIPPED names`);
+    }
+  }
+  return problems;
+}
+
+/**
+ * The sh commands under a heading of a Markdown document, up to the next
+ * heading of its level or above, in order.
+ */
+export function sectionCommands(text, heading) {
+  const lines = text.split(/\r?\n/);
+  const start = lines.findIndex((line) => line.trim() === heading);
+  if (start < 0) return null;
+  const level = /^#+/.exec(heading)[0].length;
+  let end = lines.length;
+  for (let i = start + 1; i < lines.length; i++) {
+    const marker = /^(#+)\s/.exec(lines[i]);
+    if (marker && marker[1].length <= level) {
+      end = i;
+      break;
+    }
+  }
+  // Fences inside the section only: shCommands reads them from the slice.
+  return shCommands(lines.slice(start, end).join('\n')).map((c) => c.text);
+}
+
+/**
+ * The deployment.md commands each profile path takes, in order: the steps
+ * from its `root` step to the next one, one command each, with a step that
+ * runs the command before it again (a Compose run after the identity step)
+ * counted once.
+ */
+export function pathCommands(steps = STEPS) {
+  const paths = [];
+  for (const step of steps) {
+    if (step.kind === 'root') paths.push({ id: step.id, section: step.section, commands: [] });
+    else if (paths.length > 0 && step.doc === 'docs/deployment.md') {
+      const { commands } = paths.at(-1);
+      if (commands.at(-1) !== step.command) commands.push(step.command);
+    }
+  }
+  return paths;
+}
+
+/**
+ * Problems between deployment.md's profile sections and the paths that
+ * follow them: each section's commands, in its order, are its path's, and
+ * nothing more or less, so a command a section gains, loses, or moves
+ * fails the run.
+ */
+export function sectionProblems(text, steps = STEPS) {
+  const problems = [];
+  for (const { id, section, commands } of pathCommands(steps)) {
+    const expected = section ? sectionCommands(text, section) : null;
+    if (!expected) {
+      problems.push(`docs/deployment.md has no section ${section}, which ${id} follows`);
+    } else if (JSON.stringify(expected) !== JSON.stringify(commands)) {
+      problems.push(
+        `${id} doesn't follow docs/deployment.md's ${section} command for command: the section has ${JSON.stringify(expected)}, the run takes ${JSON.stringify(commands)}`,
+      );
     }
   }
   return problems;
@@ -808,21 +875,34 @@ const parseJson = (text) => {
   }
 };
 
-/** Fails when a container reached for a host off the runner since the firewall's baseline. */
+/**
+ * What's wrong with a Compose step's egress, or null: after the first
+ * Compose run, which builds the image, every one runs behind the firewall,
+ * so a step with no baseline then fails, as one does whose reject counter
+ * moved.
+ */
+export function firewallProblem({ composeRunsBefore, baseline, now }) {
+  if (baseline === undefined) {
+    return composeRunsBefore === 0
+      ? null
+      : `the egress firewall isn't up, after ${composeRunsBefore} Compose run${composeRunsBefore === 1 ? '' : 's'}: egress-firewall must follow the first`;
+  }
+  return now === baseline
+    ? null
+    : `tried to reach a host off the runner: ${now - baseline} packets refused`;
+}
+
+/** Fails when a Compose step ran unguarded, or a container reached for a host off the runner. */
 function firewallHeld(clone, what) {
-  if (!clone.firewall?.baseline) return;
-  const now = rejectedNow();
-  if (now !== clone.firewall.baseline) {
+  const baseline = clone.firewall?.baseline;
+  const now = baseline === undefined ? undefined : rejectedNow();
+  const problem = firewallProblem({ composeRunsBefore: clone.composeRuns ?? 0, baseline, now });
+  if (baseline !== undefined) clone.firewall.baseline = now;
+  if (problem) {
     const log = spawnSync('sudo', ['sh', '-c', `dmesg | grep ${RULE_COMMENT} | tail -n 20`], {
       encoding: 'utf8',
     });
-    const refused = now - clone.firewall.baseline;
-    clone.firewall.baseline = now;
-    expect(
-      false,
-      `${what} tried to reach a host off the runner: ${refused} packets refused`,
-      log.stdout,
-    );
+    expect(false, `${what}: ${problem}`, log.stdout);
   }
 }
 
@@ -1022,6 +1102,7 @@ async function composeStep(clone, step, command) {
     }
     firewallHeld(clone, `"${step.command}"`);
   } finally {
+    clone.composeRuns = (clone.composeRuns ?? 0) + 1;
     compose(['down', '--volumes', '--timeout', '10']);
     await up.stop();
     clone.log.push(`$ ${command}\n${up.output()}\n`);
@@ -1036,6 +1117,23 @@ export function renderSummary(results) {
       `| \`${r.id}\` | ${r.outcome} | \`${r.command.replace(/\s*\\\n\s*/g, ' ').replace(/\|/g, '\\|')}\` |`,
     );
   return `${lines.join('\n')}\n`;
+}
+
+/**
+ * What the run's final verdict judges (lib/verdict.mjs): the pending rows
+ * against what the sample probe found, and the reports against every
+ * per-run secret, owner's password and hash required once the hash step
+ * passed, since the owner runs used them then.
+ */
+export function verdictInput({ results, secrets, landedState, reports }) {
+  const ownerRan = results.some((r) => r.id === 'hash' && r.outcome.startsWith('passed'));
+  return {
+    pendingRows: PENDING,
+    landedState: landedState ?? { sampleImports: false },
+    reports,
+    secrets,
+    requiredSecrets: ownerRan ? ['runCanary', 'password', 'hash'] : ['runCanary'],
+  };
 }
 
 /**
@@ -1164,14 +1262,9 @@ async function main() {
     else rmSync(scratch, { recursive: true, force: true });
   }
 
-  const ownerRan = results.some((r) => r.id === 'hash' && r.outcome.startsWith('passed'));
-  for (const problem of finalVerdict({
-    pendingRows: PENDING,
-    landedState: landedState ?? { sampleImports: false },
-    reports: reportsDir(),
-    secrets,
-    requiredSecrets: ownerRan ? ['runCanary', 'password', 'hash'] : ['runCanary'],
-  })) {
+  for (const problem of finalVerdict(
+    verdictInput({ results, secrets, landedState, reports: reportsDir() }),
+  )) {
     fail(problem.slice(0, problem.indexOf(':')), problem.slice(problem.indexOf(':') + 2));
   }
   const summary = renderSummary(results);

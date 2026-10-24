@@ -214,7 +214,7 @@ Add `includeSubDomains` only when every subdomain serves HTTPS.
 
 `hash-password` asks for the password twice, with echo off, and prints its hash, one line starting `$scrypt$ln=17,r=8,p=1$`. The password takes 15 to 256 characters, and it's compared after Unicode NFKC normalization, so the same password typed on another keyboard still matches. The command never takes the password as an argument, and reads it only from a terminal. Its `--stdin` flag, which reads both entries as two lines of standard input, is for tests.
 
-From `deploy/`, write the hash where `compose.owner.yml` reads it, with the image you run. `docker build -t portfolio:latest ..` builds it, as the [`owner`](#owner) sequence does: `compose.owner.yml` runs the image of that name.
+From `deploy/`, write the hash where `compose.owner.yml` reads it, with the image you run: `portfolio:latest`, which `docker build -t portfolio:latest ..` builds as the [`owner`](#owner) sequence does, or the image reference you deploy.
 
 ```sh
 mkdir -m 0700 secrets && sudo chown 1001:1001 secrets
