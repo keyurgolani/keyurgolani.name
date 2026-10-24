@@ -50,13 +50,13 @@ async function main(): Promise<number> {
     process.stderr.write(`[quality-pr-plan] ${(error as Error).message}\n`);
     return 1;
   }
-  const { count, slowest, shards, sweepShards, max } = picked;
+  const { count, slowest, shards, directedShards, sweepShards, variantShards, max } = picked;
   console.log(
     `[quality-pr-plan] ${plan.tests.length} tests in ${count} shard(s), the slowest about ${Math.round(slowest)}s of ${SHARD_CEILING}s`,
   );
-  if (sweepShards > 0) {
+  if (directedShards > 0) {
     console.log(
-      `[quality-pr-plan] The pack sweep alone needs ${sweepShards} shard(s), so the most is ${max}${count > MAX_SHARDS ? `, and this PR takes ${count}, over the usual ${MAX_SHARDS}` : ''}.`,
+      `[quality-pr-plan] The directed load alone needs ${directedShards} shard(s), the pack sweep's ${sweepShards} and the changed variants' ${variantShards}, so the most is ${max}${count > MAX_SHARDS ? `, and this PR takes ${count}, over the usual ${MAX_SHARDS}` : ''}.`,
     );
   }
   for (const shard of shards) {
