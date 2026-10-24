@@ -22,15 +22,23 @@
 // - sweep-isolation/shared-context: the same packs on one context, which
 //   the sweep never does. The good pack after the bad one fails, so the
 //   case above would catch a sweep that let one pack's state carry over.
+// - sweep-rows/either-order (C's): one test's rows on one page, a
+//   known-bad row (the focus ring gone under forced colors) after good
+//   rows and before them. Each good row finds nothing and the bad row
+//   finds its ring missing, in both orders.
+// - sweep-rows/no-reset: reduced transparency's media features left on
+//   for the default row, which emulateRow() never does. The default row's
+//   emulation check fails, so the case above would catch a leak.
 
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import type { Browser, BrowserContext } from '@playwright/test';
 import type { Cell } from '../cells';
 import { frames, keyboardFindings, type Finding } from '../lib/a11y/interaction';
-import { DEFAULT_ROW } from '../lib/matrix';
+import { checkEmulation } from '../lib/emulation';
+import { DEFAULT_ROW, PREFERENCE_ROWS } from '../lib/matrix';
 import { resolvedTokensScript } from '../lib/probes';
-import { audit } from '../lib/run-cell';
+import { audit, emulateRow } from '../lib/run-cell';
 import { APPEARANCE_COOKIE, packCookie, packFindings } from '../lib/sweep';
 import type { MetaCase, MetaOutcome } from './cases';
 
@@ -174,6 +182,87 @@ async function sweep(
 
 const INPUT = 'a loopback stand-in for a sweep server, its packs by the preference cookie';
 
+// The rows of one swept test, on one page (run-cell.ts's emulateRow): the
+// stand-in's focus ring goes under forced colors, so that row is known
+// bad and the others good. A row must report its own findings, whatever
+// row came before it, and its emulation must be its own.
+const ROWS_INPUT = 'one page of a loopback stand-in, its focus ring gone under forced colors';
+const BAD_ROW = 'forced-colors';
+
+const ROWS_PAGE = `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Sweep rows stand-in</title>
+    <style>
+      body { margin: 0; font: 16px/1.5 system-ui, sans-serif; color: #111; background: #fff; }
+      main { max-width: 40rem; margin: 0 auto; padding: 1rem; }
+      :focus-visible { outline: 2px solid #000; outline-offset: 2px; }
+      a, button { display: inline-block; min-width: 24px; min-height: 24px; }
+      @media (forced-colors: active) { :focus-visible { outline: none; } }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Rows on one page</h1>
+      <p><a href="/">A link</a> <button type="button">A button</button></p>
+    </main>
+  </body>
+</html>`;
+
+/**
+ * Each order's rows on one page, emulated one after another as a swept
+ * test does, each checked for its emulation and its focus ring. The good
+ * rows must find nothing, and the bad row its missing ring, every time.
+ */
+async function rows(orders: readonly (readonly string[])[], reset = true): Promise<MetaOutcome> {
+  const server = createServer((request, response) => {
+    const found = new URL(request.url ?? '/', 'http://stand-in').pathname === '/';
+    response.writeHead(found ? 200 : 404, { 'content-type': 'text/html; charset=utf-8' });
+    response.end(found ? ROWS_PAGE : 'Not found');
+  });
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  const { chromium } = await import('playwright');
+  const browser: Browser = await chromium.launch();
+  try {
+    const findings: string[] = [];
+    for (const order of orders) {
+      const context = await browser.newContext({
+        viewport: { width: 1440, height: 900 },
+        colorScheme: 'light',
+        baseURL: origin,
+      });
+      const tab = await context.newPage();
+      for (const id of order) {
+        const row = PREFERENCE_ROWS.find((each) => each.id === id)!;
+        await emulateRow(tab, row, { reset });
+        await tab.goto('/', { waitUntil: 'load' });
+        await frames(tab);
+        const own = [
+          ...(await checkEmulation(tab, row)).map(
+            (problem) => `runner media-emulation: ${problem}`,
+          ),
+          ...(await keyboardFindings(tab, { focus: true })).map(
+            (each) => `${each.gate} ${each.rule}: ${each.actual ?? ''}`,
+          ),
+        ];
+        if (id !== BAD_ROW) findings.push(...own.map((each) => `${id}: ${each}`));
+        else if (!own.some((each) => each.startsWith('focus '))) {
+          findings.push(
+            `${id}: the known-bad row found no missing focus ring after ${order.join(', ')}`,
+          );
+        }
+      }
+      await context.close();
+    }
+    return { passed: findings.length === 0, findings };
+  } finally {
+    await browser.close();
+    server.close();
+  }
+}
+
 export const SWEEP_CASES: readonly MetaCase[] = [
   {
     id: 'sweep/known-bad-pack',
@@ -217,5 +306,26 @@ export const SWEEP_CASES: readonly MetaCase[] = [
     ),
     browser: true,
     run: () => sweep([[BAD, GOOD]], (scheme) => scheme === GOOD, true),
+  },
+  {
+    id: 'sweep-rows/either-order',
+    gate: 'sweep-rows',
+    input: `${ROWS_INPUT}: the bad row after good ones, and good ones after it`,
+    expect: 'pass',
+    browser: true,
+    run: () =>
+      rows([
+        ['default', 'forced-colors', 'reduced-transparency', 'default'],
+        ['forced-colors', 'reduced-transparency', 'reduced-motion', 'default'],
+      ]),
+  },
+  {
+    id: 'sweep-rows/no-reset',
+    gate: 'sweep-rows',
+    input: `${ROWS_INPUT}: reduced transparency, then the default row without resetting its features`,
+    expect: 'fail',
+    reason: /^default: runner media-emulation: /,
+    browser: true,
+    run: () => rows([['reduced-transparency', 'default']], false),
   },
 ];
