@@ -91,13 +91,14 @@ export interface RouteEntry {
   readonly internal?: true;
   /**
    * A route a preview grant authorizes, by what it serves (#7, Slice 2): a
-   * frame's `document`, or a draft-only `asset`. The grant in the path is
+   * frame's `document`, a draft-only `asset`, or the `style` of a
+   * generated scheme its subject stored (#20). The grant in the path is
    * the authority, never a cookie: proxy.ts admits a request only as that
    * destination and for an active grant, answers everything else under the
    * preview prefixes with one status document, and never sends a grant path
    * to sign-in.
    */
-  readonly grant?: 'document' | 'asset';
+  readonly grant?: 'document' | 'asset' | 'style';
   /**
    * The methods a route handler takes, when it's fewer than every method.
    * proxy.ts answers any other with a 405 naming them, before Next does.
@@ -322,6 +323,16 @@ const ROUTES = [
     capability: 'preview.grant',
     grant: 'asset',
   },
+  // A generated scheme's stylesheet the grant's subject stored (#20):
+  // /preview-assets/<grant>/_appearance/<schemeId>.<sha256-12>.css. The
+  // fixed segment outranks [...path], so the asset route never sees it, and
+  // it's the only grant path a style load gets past proxy.ts for.
+  {
+    pattern: '/preview-assets/[grant]/_appearance/[file]',
+    kind: 'handler',
+    capability: 'preview.grant',
+    grant: 'style',
+  },
   { pattern: '/robots.txt', kind: 'metadata', capability: 'catalog.read', visitor: true },
   { pattern: '/sitemap.xml', kind: 'metadata', capability: 'catalog.read', visitor: true },
   // The site's share image, app/(site)/opengraph-image.tsx: Next gives a
@@ -338,6 +349,17 @@ const ROUTES = [
   // what its catalog serves, and anything the live view doesn't keep is 404.
   {
     pattern: '/media/[...path]',
+    kind: 'handler',
+    capability: 'catalog.read',
+    visitor: true,
+    readOnly: true,
+  },
+  // A live revision's generated scheme (#20, #19's Slice 4 route):
+  // /_portfolio/scheme/<schemeId>.<sha256-12>.css, compiled from its
+  // snapshots/schemes.json. Every profile serves it, for what its catalog
+  // serves, and any name the live revision's schemes don't compile to is 404.
+  {
+    pattern: '/_portfolio/scheme/[file]',
     kind: 'handler',
     capability: 'catalog.read',
     visitor: true,
